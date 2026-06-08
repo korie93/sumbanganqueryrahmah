@@ -383,6 +383,7 @@ const runtimeEnvironmentShape = {
   AI_GATE_QUEUE_WAIT_MS: optionalIntEnv("AI_GATE_QUEUE_WAIT_MS", { min: 1_000 }),
   AI_GATE_USER_LIMIT: optionalIntEnv("AI_GATE_USER_LIMIT", { min: 1 }),
   AI_GATE_ADMIN_LIMIT: optionalIntEnv("AI_GATE_ADMIN_LIMIT", { min: 1 }),
+  AI_GATE_MANAGER_LIMIT: optionalIntEnv("AI_GATE_MANAGER_LIMIT", { min: 1 }),
   AI_GATE_SUPERUSER_LIMIT: optionalIntEnv("AI_GATE_SUPERUSER_LIMIT", { min: 1 }),
   AI_LATENCY_STALE_AFTER_MS: optionalIntEnv("AI_LATENCY_STALE_AFTER_MS", { min: 5_000 }),
   AI_LATENCY_DECAY_HALF_LIFE_MS: optionalIntEnv("AI_LATENCY_DECAY_HALF_LIFE_MS", { min: 5_000 }),

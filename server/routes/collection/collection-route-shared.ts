@@ -20,8 +20,10 @@ export type CollectionRouteContext = {
   storage: PostgresStorage;
   collectionService: CollectionService;
   reportAccess: RequestHandler[];
+  recordMutationAccess: RequestHandler[];
   superuserReportAccess: RequestHandler[];
   adminSummaryAccess: RequestHandler[];
+  staffSummaryAccess: RequestHandler[];
   jsonRoute: (fallbackMessage: string, handler: CollectionJsonRouteHandler) => RequestHandler;
   jsonMutationRoute: (
     fallbackMessage: string,
@@ -39,6 +41,11 @@ export function createCollectionRouteContext(
 
   const reportAccess = [
     authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("collection-report"),
+  ];
+  const recordMutationAccess = [
+    authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("collection-report"),
   ];
@@ -52,14 +59,21 @@ export function createCollectionRouteContext(
     requireRole("admin", "superuser"),
     requireTabAccess("collection-report"),
   ];
+  const staffSummaryAccess = [
+    authenticateToken,
+    requireRole("admin", "manager", "superuser"),
+    requireTabAccess("collection-report"),
+  ];
 
   return {
     app,
     storage,
     collectionService,
     reportAccess,
+    recordMutationAccess,
     superuserReportAccess,
     adminSummaryAccess,
+    staffSummaryAccess,
     jsonRoute(fallbackMessage, handler) {
       return createCollectionJsonRouteHandler({ fallbackMessage, handler });
     },

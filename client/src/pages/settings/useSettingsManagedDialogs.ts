@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { ManagedUser } from "@/pages/settings/types";
+import type { ManageableUserRole } from "@shared/user-roles";
 
 export function useSettingsManagedDialogs() {
   const [managedDialogOpen, setManagedDialogOpen] = useState(false);
@@ -7,7 +8,7 @@ export function useSettingsManagedDialogs() {
   const [managedFullNameInput, setManagedFullNameInput] = useState("");
   const [managedEmailInput, setManagedEmailInput] = useState("");
   const [managedUsernameInput, setManagedUsernameInput] = useState("");
-  const [managedRoleInput, setManagedRoleInput] = useState<"admin" | "user">("user");
+  const [managedRoleInput, setManagedRoleInput] = useState<ManageableUserRole>("user");
   const [managedStatusInput, setManagedStatusInput] = useState<
     "pending_activation" | "active" | "suspended" | "disabled"
   >("active");
@@ -23,7 +24,9 @@ export function useSettingsManagedDialogs() {
     setManagedFullNameInput(user.fullName || "");
     setManagedEmailInput(user.email || "");
     setManagedUsernameInput(user.username);
-    setManagedRoleInput(user.role === "admin" ? "admin" : "user");
+    setManagedRoleInput(
+      user.role === "admin" || user.role === "manager" ? user.role : "user",
+    );
     setManagedStatusInput(
       (user.status as "pending_activation" | "active" | "suspended" | "disabled") || "active",
     );

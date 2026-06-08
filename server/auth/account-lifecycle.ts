@@ -1,5 +1,15 @@
-export const USER_ROLES = ["user", "admin", "superuser"] as const;
-export const MANAGEABLE_USER_ROLES = ["user", "admin"] as const;
+import {
+  USER_ROLES,
+  type ManageableUserRole,
+  type UserRole,
+} from "../../shared/user-roles";
+
+export {
+  MANAGEABLE_USER_ROLES,
+  USER_ROLES,
+  type ManageableUserRole,
+  type UserRole,
+} from "../../shared/user-roles";
 export const ACCOUNT_STATUSES = [
   "pending_activation",
   "active",
@@ -7,8 +17,6 @@ export const ACCOUNT_STATUSES = [
   "disabled",
 ] as const;
 
-export type UserRole = (typeof USER_ROLES)[number];
-export type ManageableUserRole = (typeof MANAGEABLE_USER_ROLES)[number];
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
 
 export type AccountLifecycleState = {
@@ -22,6 +30,7 @@ export type AccountLifecycleState = {
 export function normalizeUserRole(value: unknown, fallback: UserRole = "user"): UserRole {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "superuser") return "superuser";
+  if (normalized === "manager") return "manager";
   if (normalized === "admin") return "admin";
   if (normalized === "user") return "user";
   return fallback;
@@ -32,6 +41,7 @@ export function normalizeManageableUserRole(
   fallback: ManageableUserRole = "user",
 ): ManageableUserRole {
   const normalized = normalizeUserRole(value, fallback);
+  if (normalized === "manager") return "manager";
   return normalized === "admin" ? "admin" : "user";
 }
 
@@ -49,12 +59,12 @@ export function normalizeAccountStatus(
 
 export function isManageableUserRole(value: unknown): value is ManageableUserRole {
   const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "user" || normalized === "admin";
+  return normalized === "user" || normalized === "admin" || normalized === "manager";
 }
 
 export function isValidUserRole(value: unknown): value is UserRole {
   const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "user" || normalized === "admin" || normalized === "superuser";
+  return USER_ROLES.includes(normalized as UserRole);
 }
 
 export function isValidAccountStatus(value: unknown): value is AccountStatus {

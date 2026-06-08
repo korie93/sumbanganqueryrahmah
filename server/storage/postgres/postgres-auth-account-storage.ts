@@ -10,6 +10,7 @@ import type {
   PasswordResetTokenSummary,
   PendingPasswordResetRequestSummary,
 } from "../../storage-postgres";
+import type { ManageableUserRole } from "../../../shared/user-roles";
 import { PostgresStorageCore } from "./postgres-storage-core";
 
 export class PostgresAuthAccountStorage extends PostgresStorageCore {
@@ -33,7 +34,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     username: string;
     fullName?: string | null;
     email?: string | null;
-    role: "admin" | "user";
+    role: ManageableUserRole;
     passwordHash: string;
     status?: "pending_activation" | "active" | "suspended" | "disabled";
     mustChangePassword?: boolean;
@@ -61,7 +62,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     username?: string | undefined;
     fullName?: string | null | undefined;
     email?: string | null | undefined;
-    role?: "admin" | "user" | undefined;
+    role?: ManageableUserRole | undefined;
     status?: "pending_activation" | "active" | "suspended" | "disabled" | undefined;
     isBanned?: boolean | undefined;
     mustChangePassword?: boolean | undefined;
@@ -117,7 +118,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     page?: number | undefined;
     pageSize?: number | undefined;
     search?: string | undefined;
-    role?: "all" | "admin" | "user" | undefined;
+    role?: "all" | ManageableUserRole | undefined;
     status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned" | undefined;
   }): Promise<{
     users: ManagedUserAccount[];

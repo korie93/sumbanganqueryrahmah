@@ -230,6 +230,55 @@ function createManagedStorage(
   };
 }
 
+test("superuser can create a managed manager account", async () => {
+  const actor = buildSuperuserAuth();
+  const actorAccount = buildSuperuser();
+  const createdAccounts: Array<Parameters<ManagedStorage["createManagedUserAccount"]>[0]> = [];
+  const auditActions: string[] = [];
+  const operations = new AuthAccountManagedLifecycleOperations({
+    storage: createManagedStorage({
+      createManagedUserAccount: async (params) => {
+        createdAccounts.push(params);
+        return buildManagedTarget({
+          id: "manager-1",
+          username: params.username,
+          fullName: params.fullName ?? null,
+          email: params.email ?? null,
+          role: params.role,
+          status: params.status ?? "pending_activation",
+          passwordHash: params.passwordHash,
+          createdBy: params.createdBy,
+        });
+      },
+      createAuditLog: async (entry) => {
+        auditActions.push(String(entry.action || ""));
+        return buildAuditLog(entry);
+      },
+    }),
+    ensureUniqueIdentity: async () => undefined,
+    invalidateUserSessions: async () => [],
+    requireManageableTarget: async () => buildManagedTarget(),
+    requireManagedEmail: (email: string | null) => email || "",
+    requireSuperuser: async () => actorAccount,
+    sendActivationEmail: async () => ({ delivery: buildDelivery() }),
+    sendPasswordResetEmail: async () => buildDelivery(),
+    validateEmail: () => undefined,
+    validateUsername: () => undefined,
+  });
+
+  const result = await operations.createManagedUser(actor, {
+    username: "manager.one",
+    fullName: "Manager One",
+    email: "manager.one@example.com",
+    role: "manager",
+  });
+
+  assert.equal(result.user.role, "manager");
+  assert.equal(createdAccounts.length, 1);
+  assert.equal(createdAccounts[0].role, "manager");
+  assert.deepEqual(auditActions, ["ACCOUNT_CREATED"]);
+});
+
 test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword completes approved email-reset flow", async () => {
   const actor = buildSuperuserAuth();
   const actorAccount = buildSuperuser();
@@ -397,7 +446,7 @@ test("AuthAccountManagedRecoveryOperations.resendActivation rejects non-pending 
   );
 });
 
-test("AuthAccountManagedLifecycleOperations.updateManagedUserRole invalidates target sessions", async () => {
+test("AuthAccountManagedLifecycleOperations.updateManagedUserRole supports manager and invalidates target sessions", async () => {
   const actor = buildSuperuserAuth();
   const actorAccount = buildSuperuser();
   const target = buildManagedTarget({ role: "user" });
@@ -431,11 +480,11 @@ test("AuthAccountManagedLifecycleOperations.updateManagedUserRole invalidates ta
     validateUsername: () => undefined,
   });
 
-  const result = await operations.updateManagedUserRole(actor, target.id, "admin");
+  const result = await operations.updateManagedUserRole(actor, target.id, "manager");
 
-  assert.equal(result.user.role, "admin");
+  assert.equal(result.user.role, "manager");
   assert.deepEqual(result.closedSessionIds, ["activity-role-1"]);
-  assert.deepEqual(updatedAccounts, [{ userId: target.id, role: "admin" }]);
+  assert.deepEqual(updatedAccounts, [{ userId: target.id, role: "manager" }]);
   assert.deepEqual(invalidatedSessions, [
     { username: target.username, reason: "ROLE_CHANGED" },
   ]);

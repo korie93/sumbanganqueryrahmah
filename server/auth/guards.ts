@@ -926,7 +926,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         if (role === "superuser") {
           return next();
         }
-        if (role !== "admin" && role !== "user") {
+        if (role !== "admin" && role !== "manager" && role !== "user") {
           await recordAuthorizationDeniedAudit({
             action: "AUTHZ_PERMISSION_DENIED",
             req,

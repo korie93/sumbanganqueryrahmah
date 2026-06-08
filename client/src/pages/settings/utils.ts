@@ -79,7 +79,7 @@ export function getSettingActionTooltip(setting: SettingItem) {
 }
 
 export function getRoleSettingOrder(key: string) {
-  const match = key.match(/^tab_(admin|user)_(.+)_enabled$/);
+  const match = key.match(/^tab_(admin|manager|user)_(.+)_enabled$/);
   if (!match) return Number.MAX_SAFE_INTEGER;
   const suffix = match[2];
   const index = roleTabOrder.indexOf(suffix);

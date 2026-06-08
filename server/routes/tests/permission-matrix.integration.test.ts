@@ -19,7 +19,7 @@ import {
   stopTestServer,
 } from "./http-test-utils";
 
-type TestRole = "user" | "admin" | "superuser";
+type TestRole = "user" | "admin" | "manager" | "superuser";
 type RoleExpectationMatrix = {
   anonymous: number;
   user: number;
@@ -1277,5 +1277,154 @@ test("system monitor routes enforce monitor-access and chaos role boundaries con
     assert.equal(calls.rollupRebuild, 1);
   } finally {
     await stopTestServer(server);
+  }
+});
+
+test("manager role is read-only and limited to its approved backend modules", async () => {
+  const settings = createSettingsPermissionHarness();
+  const operations = createOperationsPermissionHarness();
+  const authAdmin = createAuthAdminPermissionHarness();
+  const collectionAdmin = createCollectionAdminPermissionHarness();
+  const activity = createActivityPermissionHarness();
+  const imports = createImportsPermissionHarness();
+  const ai = createAiPermissionHarness();
+  const search = createSearchPermissionHarness();
+  const system = createSystemPermissionHarness();
+  const harnesses = [
+    settings,
+    operations,
+    authAdmin,
+    collectionAdmin,
+    activity,
+    imports,
+    ai,
+    search,
+    system,
+  ];
+  const servers = await Promise.all(harnesses.map(({ app }) => startTestServer(app)));
+
+  try {
+    const [
+      settingsServer,
+      operationsServer,
+      authAdminServer,
+      collectionAdminServer,
+      activityServer,
+      importsServer,
+      aiServer,
+      searchServer,
+      systemServer,
+    ] = servers;
+
+    assert.equal(
+      (await sendMatrixRequest(
+        settingsServer.baseUrl,
+        { method: "GET", path: "/api/settings" },
+        "manager",
+      )).status,
+      403,
+    );
+
+    assert.equal(
+      (await sendMatrixRequest(
+        operationsServer.baseUrl,
+        { method: "GET", path: "/api/analytics/summary" },
+        "manager",
+      )).status,
+      200,
+    );
+    for (const path of ["/api/backups", "/api/audit-logs"]) {
+      assert.equal(
+        (await sendMatrixRequest(
+          operationsServer.baseUrl,
+          { method: "GET", path },
+          "manager",
+        )).status,
+        403,
+      );
+    }
+
+    assert.equal(
+      (await sendMatrixRequest(
+        authAdminServer.baseUrl,
+        { method: "GET", path: "/api/admin/users" },
+        "manager",
+      )).status,
+      403,
+    );
+    assert.equal(
+      (await sendMatrixRequest(
+        collectionAdminServer.baseUrl,
+        { method: "GET", path: "/api/collection/admins" },
+        "manager",
+      )).status,
+      403,
+    );
+    assert.equal(
+      (await sendMatrixRequest(
+        activityServer.baseUrl,
+        { method: "GET", path: "/api/activity/all" },
+        "manager",
+      )).status,
+      403,
+    );
+
+    assert.equal(
+      (await sendMatrixRequest(
+        importsServer.baseUrl,
+        {
+          method: "POST",
+          path: "/api/imports",
+          body: { name: "Manager import", filename: "manager.xlsx", rows: [] },
+        },
+        "manager",
+      )).status,
+      200,
+    );
+    assert.equal(
+      (await sendMatrixRequest(
+        importsServer.baseUrl,
+        { method: "GET", path: "/api/imports/import-1/analyze" },
+        "manager",
+      )).status,
+      200,
+    );
+    for (const request of [
+      { method: "GET", path: "/api/imports" },
+      { method: "PATCH", path: "/api/imports/import-1", body: { name: "Renamed" } },
+      { method: "DELETE", path: "/api/imports/import-1" },
+    ] as const) {
+      assert.equal(
+        (await sendMatrixRequest(importsServer.baseUrl, request, "manager")).status,
+        403,
+      );
+    }
+
+    assert.equal(
+      (await sendMatrixRequest(
+        aiServer.baseUrl,
+        { method: "GET", path: "/api/ai/config" },
+        "manager",
+      )).status,
+      200,
+    );
+    assert.equal(
+      (await sendMatrixRequest(
+        searchServer.baseUrl,
+        { method: "GET", path: "/api/search/columns" },
+        "manager",
+      )).status,
+      200,
+    );
+    assert.equal(
+      (await sendMatrixRequest(
+        systemServer.baseUrl,
+        { method: "GET", path: "/internal/system-health" },
+        "manager",
+      )).status,
+      403,
+    );
+  } finally {
+    await Promise.all(servers.map(({ server }) => stopTestServer(server)));
   }
 });

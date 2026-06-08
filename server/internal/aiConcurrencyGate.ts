@@ -1,7 +1,7 @@
 import type { NextFunction, RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 
-type AiRole = "user" | "admin" | "superuser";
+type AiRole = "user" | "admin" | "manager" | "superuser";
 type AiRoute = "search" | "chat";
 
 type AiGateLease = {
@@ -56,6 +56,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
   const roleLimits: AiRoleLimits = {
     user: normalizeGateLimit(options.roleLimits.user, 1, 1),
     admin: normalizeGateLimit(options.roleLimits.admin, 1, 1),
+    manager: normalizeGateLimit(options.roleLimits.manager, 1, 1),
     superuser: normalizeGateLimit(options.roleLimits.superuser, 1, 1),
   };
 
@@ -65,6 +66,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
   const inflightByRole: AiRoleLimits = {
     user: 0,
     admin: 0,
+    manager: 0,
     superuser: 0,
   };
   const queue: AiGateQueueItem[] = [];
@@ -81,6 +83,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
 
   const normalizeAiRole = (role: string | undefined): AiRole => {
     if (role === "superuser") return "superuser";
+    if (role === "manager") return "manager";
     if (role === "admin") return "admin";
     return "user";
   };

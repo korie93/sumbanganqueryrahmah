@@ -9,7 +9,9 @@ export type PendingResetStatusFilter = PendingResetRequestsQueryState["status"]
 
 export function normalizeManagedUserRoleFilter(value: unknown): ManagedUserRoleFilter {
   const normalized = String(value || "all").trim().toLowerCase()
-  return normalized === "admin" || normalized === "user" ? normalized : "all"
+  return normalized === "admin" || normalized === "manager" || normalized === "user"
+    ? normalized
+    : "all"
 }
 
 export function normalizeManagedUserStatusFilter(value: unknown): ManagedUserStatusFilter {

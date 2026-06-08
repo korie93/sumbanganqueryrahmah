@@ -23,35 +23,35 @@ export function registerAiRoutes(app: Express, deps: AiRouteDeps) {
   app.get(
     "/api/ai/config",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     asyncHandler(aiController.getConfig),
   );
 
   app.post(
     "/api/ai/search",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     withAiConcurrencyGate("search", aiController.search),
   );
 
   app.post(
     "/api/ai/index/import/:id",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     asyncHandler(aiController.indexImport),
   );
 
   app.post(
     "/api/ai/branches/import/:id",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     asyncHandler(aiController.importBranches),
   );
 
   app.post(
     "/api/ai/chat",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     withAiConcurrencyGate("chat", aiController.chat),
   );
 }

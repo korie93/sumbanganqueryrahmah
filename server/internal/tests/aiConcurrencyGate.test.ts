@@ -89,6 +89,7 @@ test("AI concurrency gate rejects immediately when queue limit is zero", async (
     roleLimits: {
       user: 1,
       admin: 1,
+      manager: 1,
       superuser: 1,
     },
   });
@@ -130,6 +131,7 @@ test("AI concurrency gate clears queued work and rejects new work after shutdown
     roleLimits: {
       user: 1,
       admin: 1,
+      manager: 1,
       superuser: 1,
     },
   });
@@ -193,6 +195,7 @@ test("AI concurrency gate clears a queued timeout when work acquires before the 
     roleLimits: {
       user: 1,
       admin: 1,
+      manager: 1,
       superuser: 1,
     },
   });
@@ -236,6 +239,7 @@ test("AI concurrency gate times out queued work once and never runs it after cap
     roleLimits: {
       user: 1,
       admin: 1,
+      manager: 1,
       superuser: 1,
     },
   });
@@ -291,6 +295,7 @@ test("AI concurrency gate forwards handler failures to next and releases the lea
     roleLimits: {
       user: 1,
       admin: 1,
+      manager: 1,
       superuser: 1,
     },
   });
@@ -359,6 +364,7 @@ test("AI concurrency gate clears every queued timer during shutdown under high q
       roleLimits: {
         user: 1,
         admin: 1,
+        manager: 1,
         superuser: 1,
       },
     });

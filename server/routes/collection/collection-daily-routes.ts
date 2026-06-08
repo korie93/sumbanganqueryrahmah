@@ -8,12 +8,13 @@ export function registerCollectionDailyRoutes(context: CollectionRouteContext) {
     reportAccess,
     superuserReportAccess,
     adminSummaryAccess,
+    staffSummaryAccess,
     jsonRoute,
   } = context;
 
   app.get(
     "/api/collection/daily/users",
-    ...adminSummaryAccess,
+    ...staffSummaryAccess,
     jsonRoute("Failed to load collection daily users.", (req) =>
       collectionService.listDailyUsers(req.user)),
   );

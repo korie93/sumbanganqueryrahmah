@@ -24,7 +24,7 @@ function isManagedUserStatusWithDirectMatch(value: string): value is
 
 export function buildManagedUsersWhereSql(params: ManagedUserListPageParams = {}): SQL {
   const filters = normalizeManagedUserListFilters(params);
-  const whereClauses: SQL[] = [sql`role IN ('admin', 'user')`];
+  const whereClauses: SQL[] = [sql`role IN ('admin', 'manager', 'user')`];
 
   if (filters.search) {
     const searchPattern = buildLikePattern(filters.search, "contains");
@@ -35,7 +35,11 @@ export function buildManagedUsersWhereSql(params: ManagedUserListPageParams = {}
     )`);
   }
 
-  if (filters.role === "admin" || filters.role === "user") {
+  if (
+    filters.role === "admin"
+    || filters.role === "manager"
+    || filters.role === "user"
+  ) {
     whereClauses.push(sql`role = ${filters.role}`);
   }
 

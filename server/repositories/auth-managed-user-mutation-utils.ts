@@ -18,7 +18,7 @@ export async function deleteManagedUserAccount(userId: string): Promise<boolean>
 
   const deleted = await db
     .delete(users)
-    .where(and(eq(users.id, normalizedId), inArray(users.role, ["admin", "user"])))
+    .where(and(eq(users.id, normalizedId), inArray(users.role, ["admin", "manager", "user"])))
     .returning({ id: users.id });
 
   return deleted.length > 0;

@@ -1,4 +1,5 @@
 import { apiRequest } from "../api-client";
+import type { ManageableUserRole } from "@shared/user-roles";
 import type {
   AuthUserForceLogoutResponse,
   AuthUserResponse,
@@ -37,7 +38,7 @@ export async function createManagedUserAccount(payload: {
   username: string;
   fullName?: string | null;
   email?: string | null;
-  role: "admin" | "user";
+  role: ManageableUserRole;
 }) {
   const response = await apiRequest("POST", "/api/admin/users", payload);
   return response.json() as Promise<ManagedAccountActivationResponse>;
@@ -64,7 +65,7 @@ export async function deleteManagedUserAccount(userId: string) {
   return response.json() as Promise<ManagedAccountDeleteResponse>;
 }
 
-export async function updateManagedUserRole(userId: string, role: "admin" | "user") {
+export async function updateManagedUserRole(userId: string, role: ManageableUserRole) {
   const response = await apiRequest(
     "PATCH",
     `/api/admin/users/${encodeURIComponent(userId)}/role`,

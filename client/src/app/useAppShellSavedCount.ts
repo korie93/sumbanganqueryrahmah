@@ -18,7 +18,7 @@ export function useAppShellSavedCount({
     const controller = new AbortController();
 
     const syncSavedCount = async () => {
-      if (!user || user.role === "user") {
+      if (!user || user.role === "user" || user.role === "manager") {
         if (!cancelled) {
           setSavedCount(0);
         }

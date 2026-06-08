@@ -6,6 +6,7 @@ export function registerCollectionNicknameRoutes(context: CollectionRouteContext
     app,
     collectionService,
     reportAccess,
+    recordMutationAccess,
     superuserReportAccess,
     jsonRoute,
   } = context;
@@ -19,19 +20,19 @@ export function registerCollectionNicknameRoutes(context: CollectionRouteContext
 
   app.post(
     "/api/collection/nickname-auth/check",
-    ...reportAccess,
+    ...recordMutationAccess,
     jsonRoute("Failed to validate nickname.", (req) => collectionService.checkNicknameAuth(req.user, req.body)),
   );
 
   app.post(
     "/api/collection/nickname-auth/setup-password",
-    ...reportAccess,
+    ...recordMutationAccess,
     jsonRoute("Failed to set nickname password.", (req) => collectionService.setupNicknamePassword(req.user, req.body)),
   );
 
   app.post(
     "/api/collection/nickname-auth/login",
-    ...reportAccess,
+    ...recordMutationAccess,
     jsonRoute("Failed to login nickname.", (req) => collectionService.loginNickname(req.user, req.body)),
   );
 

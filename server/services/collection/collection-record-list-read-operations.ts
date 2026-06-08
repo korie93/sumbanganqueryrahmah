@@ -20,6 +20,7 @@ import {
   parseCollectionReceiptValidationFilter,
   resolveUserOwnedCollectionRecordFilters,
 } from "./collection-record-read-shared";
+import { canViewAllStaff } from "../../../shared/user-roles";
 
 export class CollectionRecordListReadOperations extends CollectionServiceSupport {
   async listRecords(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: ListQuery) {
@@ -61,7 +62,7 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
     }
 
     let nicknameFilters: string[] | undefined;
-    if (user.role === "superuser") {
+    if (canViewAllStaff(user.role)) {
       if (requestedNicknameFilters.length > 0) {
         for (const requestedNickname of requestedNicknameFilters) {
           const isActiveNickname = await this.storage.isCollectionStaffNicknameActive(requestedNickname);

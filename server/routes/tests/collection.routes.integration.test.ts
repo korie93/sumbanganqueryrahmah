@@ -1747,6 +1747,87 @@ test("GET /api/collection/:id/receipt/view rejects receipt symlinks that escape 
   }
 });
 
+test("manager can read all collection staff records but cannot mutate collection records", async () => {
+  const {
+    storage,
+    listCalls,
+    summaryCalls,
+    createCalls,
+    updateCalls,
+    deleteCalls,
+  } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "manager-1",
+      username: "manager.user",
+      role: "manager",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const listResponse = await fetch(
+      `${baseUrl}/api/collection/list?from=2026-03-01&to=2026-03-31`,
+    );
+    assert.equal(listResponse.status, 200);
+    assert.equal(summaryCalls.length, 1);
+    assert.equal(summaryCalls[0].createdByLogin, undefined);
+    assert.equal(listCalls.length, 1);
+    assert.equal(listCalls[0].createdByLogin, undefined);
+
+    const createResponse = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Blocked Manager Create",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-MANAGER",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 100,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+    const updateResponse = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: 200 }),
+    });
+    const deleteResponse = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const nicknameLoginResponse = await fetch(
+      `${baseUrl}/api/collection/nickname-auth/login`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nickname: "Collector Alpha",
+          password: "ManagerMustNotAuthenticate",
+        }),
+      },
+    );
+
+    assert.equal(createResponse.status, 403);
+    assert.equal(updateResponse.status, 403);
+    assert.equal(deleteResponse.status, 403);
+    assert.equal(nicknameLoginResponse.status, 403);
+    assert.equal(createCalls.length, 0);
+    assert.equal(updateCalls.length, 0);
+    assert.equal(deleteCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/collection/:id/receipts/:receiptId/view does not fallback to legacy receipt_file when receiptId is unknown", async () => {
   const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
   const storedFileName = `route-test-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.pdf`;

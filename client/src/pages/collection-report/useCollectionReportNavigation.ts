@@ -19,28 +19,31 @@ import {
 
 type UseCollectionReportNavigationArgs = {
   canAccessNicknameSummary: boolean;
+  isReadOnlyManager: boolean;
   isSuperuser: boolean;
 };
 
 export function useCollectionReportNavigation({
   canAccessNicknameSummary,
+  isReadOnlyManager,
   isSuperuser,
 }: UseCollectionReportNavigationArgs) {
   const [subPage, setSubPage] = useState<CollectionSubPage>(() => {
-    if (typeof window === "undefined") return "save";
-    return getSubPageFromPath(window.location.pathname || "/collection/save");
+    if (typeof window === "undefined") return isReadOnlyManager ? "records" : "save";
+    const resolved = getSubPageFromPath(window.location.pathname || "/collection/save");
+    return isReadOnlyManager && resolved === "save" ? "records" : resolved;
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const sidebarItems = useMemo<CollectionSidebarItem[]>(() => {
     const items: CollectionSidebarItem[] = [
-      {
+      ...(!isReadOnlyManager ? [{
         key: "save",
         label: "Simpan Collection Individual",
         icon: FolderPlus,
         description: "Rekod kutipan individu dan resit berkaitan.",
-      },
+      } satisfies CollectionSidebarItem] : []),
       {
         key: "records",
         label: "View Rekod Collection",
@@ -83,7 +86,7 @@ export function useCollectionReportNavigation({
       });
     }
     return items;
-  }, [canAccessNicknameSummary, isSuperuser]);
+  }, [canAccessNicknameSummary, isReadOnlyManager, isSuperuser]);
 
   const activeSidebarItem = useMemo(
     () => sidebarItems.find((item) => item.key === subPage) || sidebarItems[0],
@@ -92,12 +95,16 @@ export function useCollectionReportNavigation({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (subPage === "save" && isReadOnlyManager) {
+      setSubPage("records");
+      return;
+    }
     if (subPage === "manage-nicknames" && !isSuperuser) {
-      setSubPage("save");
+      setSubPage(isReadOnlyManager ? "records" : "save");
       return;
     }
     if (subPage === "nickname-summary" && !canAccessNicknameSummary) {
-      setSubPage("save");
+      setSubPage(isReadOnlyManager ? "records" : "save");
       return;
     }
 
@@ -105,7 +112,7 @@ export function useCollectionReportNavigation({
     if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
       window.history.replaceState({}, "", targetPath);
     }
-  }, [canAccessNicknameSummary, isSuperuser, subPage]);
+  }, [canAccessNicknameSummary, isReadOnlyManager, isSuperuser, subPage]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);
@@ -115,19 +122,23 @@ export function useCollectionReportNavigation({
     if (typeof window === "undefined") return;
 
     const onPopState = () => {
-      setSubPage(getSubPageFromPath(window.location.pathname || "/collection/save"));
+      const resolved = getSubPageFromPath(window.location.pathname || "/collection/save");
+      setSubPage(isReadOnlyManager && resolved === "save" ? "records" : resolved);
     };
 
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [isReadOnlyManager]);
 
   const handleSelectSubPage = useCallback((nextSubPage: CollectionSubPage) => {
+    if (isReadOnlyManager && nextSubPage === "save") {
+      return;
+    }
     startTransition(() => {
       setSubPage(nextSubPage);
     });
     setMobileSidebarOpen(false);
-  }, []);
+  }, [isReadOnlyManager]);
 
   return {
     subPage,

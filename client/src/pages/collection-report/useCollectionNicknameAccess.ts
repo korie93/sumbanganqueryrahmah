@@ -23,15 +23,15 @@ import {
 } from "@shared/password-policy";
 
 interface UseCollectionNicknameAccessOptions {
+  bypassesNicknameAccess: boolean;
   currentUsername: string;
-  isSuperuser: boolean;
   requiresNicknamePassword: boolean;
   role: string;
 }
 
 export function useCollectionNicknameAccess({
+  bypassesNicknameAccess,
   currentUsername,
-  isSuperuser,
   requiresNicknamePassword,
   role,
 }: UseCollectionNicknameAccessOptions) {
@@ -59,7 +59,8 @@ export function useCollectionNicknameAccess({
   const [showSetupConfirmPassword, setShowSetupConfirmPassword] = useState(false);
   const [submittingNicknameAuth, setSubmittingNicknameAuth] = useState(false);
 
-  const canAccessCollection = isSuperuser ? true : Boolean(staffNickname && nicknameSessionVerified);
+  const canAccessCollection =
+    bypassesNicknameAccess || Boolean(staffNickname && nicknameSessionVerified);
 
   const resetDialogFields = useCallback((nextNickname = staffNickname) => {
     setDialogStep("nickname");
@@ -106,12 +107,18 @@ export function useCollectionNicknameAccess({
   }, [currentUsername, role]);
 
   useEffect(() => {
-    if (isSuperuser || !requiresNicknamePassword) return;
+    if (bypassesNicknameAccess || !requiresNicknamePassword) return;
     if (!nicknameSessionVerified) {
       resetDialogFields(staffNickname);
       setNicknameDialogOpen(true);
     }
-  }, [isSuperuser, nicknameSessionVerified, requiresNicknamePassword, resetDialogFields, staffNickname]);
+  }, [
+    bypassesNicknameAccess,
+    nicknameSessionVerified,
+    requiresNicknamePassword,
+    resetDialogFields,
+    staffNickname,
+  ]);
 
   const handleCheckNickname = useCallback(async () => {
     const normalized = String(nicknameInput || "").trim();

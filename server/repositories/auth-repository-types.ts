@@ -1,3 +1,5 @@
+import type { ManageableUserRole } from "../../shared/user-roles";
+
 export type ManagedUserRecord = {
   id: string;
   username: string;
@@ -80,7 +82,7 @@ export type ManagedUserListPageParams = {
   page?: number | undefined;
   pageSize?: number | undefined;
   search?: string | undefined;
-  role?: "all" | "admin" | "user" | undefined;
+  role?: "all" | ManageableUserRole | undefined;
   status?: ManagedUserListStatusFilter | undefined;
 };
 

@@ -21,6 +21,7 @@ import {
   normalizeCredentialUsername,
   validateCredentialUsername,
 } from "@/pages/settings/settings-credential-validation";
+import type { ManageableUserRole } from "@shared/user-roles";
 
 type UseSettingsManagedUserUpdateArgs = {
   isMountedRef: MutableRefObject<boolean>;
@@ -29,7 +30,7 @@ type UseSettingsManagedUserUpdateArgs = {
   managedEmailInput: string;
   managedFullNameInput: string;
   managedIsBanned: boolean;
-  managedRoleInput: "admin" | "user";
+  managedRoleInput: ManageableUserRole;
   managedSaving: boolean;
   managedSelectedUser: ManagedUser | null;
   managedStatusInput: ManagedAccountStatus;

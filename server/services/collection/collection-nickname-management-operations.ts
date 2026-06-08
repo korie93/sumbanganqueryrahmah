@@ -9,6 +9,7 @@ import {
   normalizeCollectionText,
   type CollectionNicknamePayload,
 } from "../../routes/collection.validation";
+import { canViewAllStaff } from "../../../shared/user-roles";
 import { CollectionServiceSupport } from "./collection-service-support";
 
 export class CollectionNicknameManagementOperations extends CollectionServiceSupport {
@@ -20,7 +21,7 @@ export class CollectionNicknameManagementOperations extends CollectionServiceSup
     const includeInactive = normalizeCollectionText(includeInactiveRaw) === "1";
 
     let nicknames: CollectionStaffNickname[];
-    if (user.role === "superuser") {
+    if (canViewAllStaff(user.role)) {
       nicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: !includeInactive });
     } else if (user.role === "admin") {
       const allowedValues = await getAdminGroupNicknameValues(this.storage, user);

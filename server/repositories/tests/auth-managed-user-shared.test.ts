@@ -13,6 +13,7 @@ type PendingPasswordResetListFiltersInput =
 
 test("auth managed user shared normalizes role and status filters safely", () => {
   assert.equal(normalizeManagedUserRoleFilter("ADMIN"), "admin");
+  assert.equal(normalizeManagedUserRoleFilter("MANAGER"), "manager");
   assert.equal(normalizeManagedUserRoleFilter("weird"), "all");
   assert.equal(normalizeManagedUserStatusFilter("LOCKED"), "locked");
   assert.equal(normalizeManagedUserStatusFilter("unknown"), "all");

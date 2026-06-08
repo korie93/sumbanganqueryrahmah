@@ -4,11 +4,13 @@ import type {
   PendingPasswordResetListPageParams,
 } from "./auth-repository-types";
 
-export type ManagedUserRoleFilter = "all" | "admin" | "user";
+export type ManagedUserRoleFilter = "all" | "admin" | "manager" | "user";
 
 export function normalizeManagedUserRoleFilter(value: unknown): ManagedUserRoleFilter {
   const normalized = String(value || "all").trim().toLowerCase();
-  return normalized === "admin" || normalized === "user" ? normalized : "all";
+  return normalized === "admin" || normalized === "manager" || normalized === "user"
+    ? normalized
+    : "all";
 }
 
 export function normalizeManagedUserStatusFilter(value: unknown): ManagedUserListStatusFilter {

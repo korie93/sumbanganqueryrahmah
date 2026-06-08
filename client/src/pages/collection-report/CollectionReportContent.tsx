@@ -76,6 +76,9 @@ export function CollectionReportContent({
   }
 
   if (subPage === "save") {
+    if (role === "manager") {
+      return renderCollectionSection("records", <CollectionRecordsPage role={role} />);
+    }
     return renderCollectionSection(
       "save",
       <SaveCollectionPage staffNickname={staffNickname} />,

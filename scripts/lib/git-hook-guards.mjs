@@ -24,6 +24,11 @@ const ALLOWED_HOOK_SECRET_VALUES = [
   /^process\.env\.[A-Z0-9_]+$/i,
 ];
 
+const NON_SECRET_STATUS_KEYS = new Set([
+  "must_change_password",
+  "password_reset_by_superuser",
+]);
+
 export const CONVENTIONAL_COMMIT_PATTERN =
   /^(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|security)(?:\([a-z0-9-]+\))?!?: .{1,120}$/;
 
@@ -84,6 +89,9 @@ export function findGenericSecretAssignments({ filePath, text }) {
     const key = match[1];
     const value = match[2];
     if (!isEnvStyleSecretKey(key)) {
+      continue;
+    }
+    if (NON_SECRET_STATUS_KEYS.has(key.toLowerCase())) {
       continue;
     }
     if (isAllowedHookSecretValue(value)) {

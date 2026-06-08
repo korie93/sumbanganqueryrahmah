@@ -15,13 +15,14 @@ import type {
   PendingResetRequestsQueryState,
 } from "@/pages/settings/useSettingsManagedUserData";
 import type { ManagedUserCreateFieldErrors } from "@/pages/settings/settings-managed-user-create-utils";
+import type { ManagedUserCreateRole } from "@/pages/settings/settings-managed-user-create-shared";
 
 export interface UserAccountManagementSectionProps {
   clearingDevMailOutbox: boolean;
   createEmailInput: string;
   createFieldErrors: ManagedUserCreateFieldErrors;
   createFullNameInput: string;
-  createRoleInput: "admin" | "user";
+  createRoleInput: ManagedUserCreateRole;
   createUsernameInput: string;
   creatingManagedUser: boolean;
   deletingDevMailOutboxId: string | null;
@@ -41,7 +42,7 @@ export interface UserAccountManagementSectionProps {
   onCreateFieldBlur: (field: keyof ManagedUserCreateFieldErrors) => void;
   onCreateFullNameInputChange: (value: string) => void;
   onCreateManagedUser: () => void;
-  onCreateRoleInputChange: (value: "admin" | "user") => void;
+  onCreateRoleInputChange: (value: ManagedUserCreateRole) => void;
   onCreateUsernameInputChange: (value: string) => void;
   onDeleteDevMailOutboxEntry: (previewId: string) => void;
   onDeleteManagedUser: (user: ManagedUser) => void;

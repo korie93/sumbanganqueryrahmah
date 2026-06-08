@@ -1,4 +1,5 @@
 import {
+  type ConfigurableRole,
   type RoleTabSetting,
   ROLE_TAB_SETTINGS,
   roleTabSettingKey,
@@ -238,7 +239,7 @@ export const MAINTENANCE_TYPE_OPTIONS = [
 export function buildSettingsSeedItems(): SettingsSeedItem[] {
   const settingsSeed = [...BASE_SETTINGS_SEED];
 
-  for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS) as Array<["admin" | "user", RoleTabSetting[]]>) {
+  for (const [role, tabSettings] of Object.entries(ROLE_TAB_SETTINGS) as Array<[ConfigurableRole, RoleTabSetting[]]>) {
     for (const tabSetting of tabSettings) {
       settingsSeed.push({
         categoryName: "Roles & Permissions",

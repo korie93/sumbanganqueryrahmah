@@ -107,6 +107,13 @@ export async function seedRoleSettingPermissions(
         can_view = EXCLUDED.can_view,
         can_edit = EXCLUDED.can_edit
     `);
+    await database.execute(sql`
+      INSERT INTO public.role_setting_permissions (role, setting_key, can_view, can_edit)
+      VALUES ('manager', ${setting.key}, false, false)
+      ON CONFLICT (role, setting_key) DO UPDATE SET
+        can_view = EXCLUDED.can_view,
+        can_edit = EXCLUDED.can_edit
+    `);
   }
 }
 

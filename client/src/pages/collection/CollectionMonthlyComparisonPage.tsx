@@ -15,7 +15,8 @@ function CollectionMonthlyComparisonPage({
   role,
   staffNickname = "",
 }: CollectionMonthlyComparisonPageProps) {
-  const canFilterByNickname = role === "admin" || role === "superuser";
+  const canFilterByNickname =
+    role === "admin" || role === "manager" || role === "superuser";
   const [nicknameOptions, setNicknameOptions] = useState<CollectionStaffNickname[]>([]);
   const [nicknameOptionsLoading, setNicknameOptionsLoading] = useState(canFilterByNickname);
   const [nicknameOptionsError, setNicknameOptionsError] = useState<string | null>(null);

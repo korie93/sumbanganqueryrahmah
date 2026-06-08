@@ -489,6 +489,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       roleLimits: {
         user: readInt("AI_GATE_USER_LIMIT", 2, { min: MIN_COUNT }),
         admin: readInt("AI_GATE_ADMIN_LIMIT", 1, { min: MIN_COUNT }),
+        manager: readInt("AI_GATE_MANAGER_LIMIT", 1, { min: MIN_COUNT }),
         superuser: readInt("AI_GATE_SUPERUSER_LIMIT", 1, { min: MIN_COUNT }),
       },
     },

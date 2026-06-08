@@ -13,7 +13,7 @@ export function registerImportsAnalysisRoutes(context: ImportsRouteContext) {
   app.get(
     "/api/imports/:id/analyze",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("analysis"),
     asyncHandler(importsController.analyzeImport),
   );
@@ -23,7 +23,7 @@ export function registerImportsAnalysisRoutes(context: ImportsRouteContext) {
   app.get(
     "/api/analyze/all",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("analysis"),
     asyncHandler(importsController.analyzeAll),
   );

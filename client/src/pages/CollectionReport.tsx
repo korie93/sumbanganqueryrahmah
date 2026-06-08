@@ -35,17 +35,21 @@ export default function CollectionReport() {
   const role = useMemo(() => getCurrentRole(), []);
   const currentUsername = useMemo(() => getCurrentUsername(), []);
   const isSuperuser = role === "superuser";
-  const canAccessNicknameSummary = role === "admin" || role === "superuser";
+  const isReadOnlyManager = role === "manager";
+  const bypassesNicknameAccess = isSuperuser || isReadOnlyManager;
+  const canAccessNicknameSummary =
+    role === "admin" || isReadOnlyManager || isSuperuser;
   const requiresNicknamePassword = role === "admin" || role === "user";
 
   const nicknameAccess = useCollectionNicknameAccess({
+    bypassesNicknameAccess,
     currentUsername,
-    isSuperuser,
     requiresNicknamePassword,
     role,
   });
   const navigation = useCollectionReportNavigation({
     canAccessNicknameSummary,
+    isReadOnlyManager,
     isSuperuser,
   });
 
@@ -62,7 +66,7 @@ export default function CollectionReport() {
       nicknameAccess.setNicknameDialogOpen(true);
       return;
     }
-    if (!isSuperuser && !nicknameAccess.canAccessCollection) {
+    if (!bypassesNicknameAccess && !nicknameAccess.canAccessCollection) {
       redirectToSearchTab();
       return;
     }
@@ -105,7 +109,8 @@ export default function CollectionReport() {
       : "Collection workspace for entry, records, summaries, and comparisons."
     : "Collection workspace for entry, records, summaries, and comparisons.";
   const shouldRenderNicknameDialog =
-    nicknameAccess.nicknameDialogOpen || (!isSuperuser && !nicknameAccess.canAccessCollection);
+    nicknameAccess.nicknameDialogOpen
+    || (!bypassesNicknameAccess && !nicknameAccess.canAccessCollection);
 
   return (
     <OperationalPage width="wide">

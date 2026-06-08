@@ -8,7 +8,7 @@ export async function normalizeUsersBootstrapRows(
     UPDATE public.users
     SET
       role = CASE
-        WHEN lower(trim(COALESCE(role, ''))) IN ('user', 'admin', 'superuser')
+        WHEN lower(trim(COALESCE(role, ''))) IN ('user', 'admin', 'manager', 'superuser')
           THEN lower(trim(COALESCE(role, '')))
         ELSE 'user'
       END,

@@ -20,6 +20,17 @@ function getRoleGuideContent(role: string, canManage: boolean, canEditCalendar: 
     };
   }
 
+  if (role === "manager") {
+    return {
+      icon: UsersRound,
+      label: "Manager read-only",
+      title: "Pantau prestasi semua staf tanpa mengubah rekod",
+      description:
+        "Pilih satu atau beberapa nickname untuk menilai target, kutipan dan butiran harian. Kawalan target dan calendar kekal dilindungi.",
+      facts: ["All staff view", "Target progress", "No mutations"],
+    };
+  }
+
   if (canManage) {
     return {
       icon: UserRoundCog,

@@ -30,10 +30,15 @@ test("settings bootstrap seed includes base categories and maintenance options",
 test("settings bootstrap seed includes generated role tab settings", () => {
   const seed = buildSettingsSeedItems();
   const keys = new Set(seed.map((setting) => setting.key));
-  const roleTabCount = ROLE_TAB_SETTINGS.admin.length + ROLE_TAB_SETTINGS.user.length;
+  const roleTabCount =
+    ROLE_TAB_SETTINGS.admin.length
+    + ROLE_TAB_SETTINGS.manager.length
+    + ROLE_TAB_SETTINGS.user.length;
 
   assert.ok(keys.has("maintenance_type"));
   assert.ok(keys.has(roleTabSettingKey("admin", "monitor")));
+  assert.ok(keys.has(roleTabSettingKey("manager", "dashboard")));
+  assert.ok(keys.has(roleTabSettingKey("manager", "settings")));
   assert.ok(keys.has(roleTabSettingKey("user", "general_search")));
   assert.equal(seed.filter((setting) => setting.categoryName === "Roles & Permissions").length, 2 + roleTabCount);
 });

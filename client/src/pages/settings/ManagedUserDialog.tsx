@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { ManagedUser } from "@/pages/settings/types";
+import type { ManageableUserRole } from "@shared/user-roles";
 
 export interface ManagedUserDialogProps {
   confirmCriticalOpen: boolean;
@@ -26,7 +27,7 @@ export interface ManagedUserDialogProps {
   managedEmailInput: string;
   managedFullNameInput: string;
   managedIsBanned: boolean;
-  managedRoleInput: "admin" | "user";
+  managedRoleInput: ManageableUserRole;
   managedSaving: boolean;
   managedSelectedUser: ManagedUser | null;
   managedStatusInput: "pending_activation" | "active" | "suspended" | "disabled";
@@ -38,7 +39,7 @@ export interface ManagedUserDialogProps {
   onManagedEmailInputChange: (value: string) => void;
   onManagedFullNameInputChange: (value: string) => void;
   onManagedIsBannedChange: (value: boolean) => void;
-  onManagedRoleInputChange: (value: "admin" | "user") => void;
+  onManagedRoleInputChange: (value: ManageableUserRole) => void;
   onManagedStatusInputChange: (
     value: "pending_activation" | "active" | "suspended" | "disabled",
   ) => void;
@@ -139,12 +140,17 @@ export function ManagedUserDialog({
                   name="managedUserRole"
                   value={managedRoleInput}
                   onChange={(event) =>
-                    onManagedRoleInputChange(event.target.value === "admin" ? "admin" : "user")
+                    onManagedRoleInputChange(
+                      event.target.value === "admin" || event.target.value === "manager"
+                        ? event.target.value
+                        : "user",
+                    )
                   }
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   disabled={managedSaving}
                 >
                   <option value="user">user</option>
+                  <option value="manager">manager</option>
                   <option value="admin">admin</option>
                 </select>
               </div>

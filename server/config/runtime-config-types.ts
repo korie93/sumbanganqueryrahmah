@@ -107,6 +107,7 @@ export type RuntimeConfig = {
       roleLimits: {
         user: number;
         admin: number;
+        manager: number;
         superuser: number;
       };
     };

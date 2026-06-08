@@ -46,7 +46,9 @@ export type RoleTabSetting = {
   defaultEnabled: boolean;
 };
 
-export const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
+export type ConfigurableRole = "admin" | "manager" | "user";
+
+export const ROLE_TAB_SETTINGS: Record<ConfigurableRole, RoleTabSetting[]> = {
   admin: [
     { pageId: "home", suffix: "home", label: "Admin Tab: Home", description: "Allow admin to open Home tab.", defaultEnabled: true },
     { pageId: "import", suffix: "import", label: "Admin Tab: Import", description: "Allow admin to open Import tab.", defaultEnabled: true },
@@ -61,6 +63,21 @@ export const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
     { pageId: "audit-logs", suffix: "audit_logs", label: "Admin Tab: Audit", description: "Allow admin to open Audit tab.", defaultEnabled: false },
     { pageId: "backup", suffix: "backup", label: "Admin Tab: Backup", description: "Allow admin to open Backup tab.", defaultEnabled: false },
     { pageId: "settings", suffix: "settings", label: "Admin Tab: Settings", description: "Allow admin to open Settings tab.", defaultEnabled: true },
+  ],
+  manager: [
+    { pageId: "home", suffix: "home", label: "Manager Tab: Home", description: "Allow manager to open Home tab.", defaultEnabled: true },
+    { pageId: "import", suffix: "import", label: "Manager Tab: Import", description: "Allow manager to open Import tab.", defaultEnabled: true },
+    { pageId: "saved", suffix: "saved", label: "Manager Tab: Saved", description: "Keep Saved imports unavailable to manager.", defaultEnabled: false },
+    { pageId: "viewer", suffix: "viewer", label: "Manager Tab: Viewer", description: "Keep Data Viewer unavailable to manager.", defaultEnabled: false },
+    { pageId: "general-search", suffix: "general_search", label: "Manager Tab: Search", description: "Allow manager to open Search tab.", defaultEnabled: true },
+    { pageId: "collection-report", suffix: "collection_report", label: "Manager Tab: Collection Report", description: "Allow manager read-only Collection access.", defaultEnabled: true },
+    { pageId: "analysis", suffix: "analysis", label: "Manager Tab: Analysis", description: "Allow manager to open Analysis tab.", defaultEnabled: true },
+    { pageId: "dashboard", suffix: "dashboard", label: "Manager Tab: Dashboard", description: "Allow manager to open the read-only login dashboard.", defaultEnabled: true },
+    { pageId: "monitor", suffix: "monitor", label: "Manager Tab: System Monitor", description: "Keep System Monitor unavailable to manager.", defaultEnabled: false },
+    { pageId: "activity", suffix: "activity", label: "Manager Tab: Activity", description: "Keep the destructive Activity module unavailable to manager.", defaultEnabled: false },
+    { pageId: "audit-logs", suffix: "audit_logs", label: "Manager Tab: Audit", description: "Keep Audit logs unavailable to manager.", defaultEnabled: false },
+    { pageId: "backup", suffix: "backup", label: "Manager Tab: Backup", description: "Keep Backup and Restore unavailable to manager.", defaultEnabled: false },
+    { pageId: "settings", suffix: "settings", label: "Manager Tab: Settings", description: "Keep Settings unavailable to manager.", defaultEnabled: false },
   ],
   user: [
     { pageId: "home", suffix: "home", label: "User Tab: Home", description: "Allow user to open Home tab.", defaultEnabled: false },
@@ -78,5 +95,5 @@ export const ROLE_TAB_SETTINGS: Record<"admin" | "user", RoleTabSetting[]> = {
   ],
 };
 
-export const roleTabSettingKey = (role: "admin" | "user", suffix: string): string =>
+export const roleTabSettingKey = (role: ConfigurableRole, suffix: string): string =>
   `tab_${role}_${suffix}_enabled`;

@@ -18,6 +18,7 @@ import { queryClient } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
+import { getCurrentRole } from "@/pages/collection/utils";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
 import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
 import { DashboardLoginFocusStrip } from "@/pages/dashboard/DashboardLoginFocusStrip";
@@ -37,6 +38,7 @@ import {
   DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS,
   resolveVisibleDashboardRefetchInterval,
 } from "@/pages/dashboard/refetch-visibility";
+import { canManageDashboardLoginLogs } from "@/pages/dashboard/dashboard-role-access";
 import type {
   LoginTrend,
   PeakHour,
@@ -66,6 +68,8 @@ function useDashboardRetryHandler(refetch: DashboardRefetch) {
 
 function DashboardContent() {
   const isMobile = useIsMobile();
+  const role = useMemo(() => getCurrentRole(), []);
+  const canManageLoginLogs = canManageDashboardLoginLogs(role);
   const shouldDeferSecondaryMobileSections =
     isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
   const [trendDays, setTrendDays] = useState(7);
@@ -582,11 +586,15 @@ function DashboardContent() {
           onRetryRoleDistribution={handleRetryRoles}
           onRetryTopUsers={handleRetryTopUsers}
           onRetryTrends={handleRetryTrends}
-          onCleanupEndedLoginActivities={handleCleanupEndedLoginActivities}
+          onCleanupEndedLoginActivities={
+            canManageLoginLogs ? handleCleanupEndedLoginActivities : undefined
+          }
           onClearRecentLoginActivityFilters={handleClearRecentLoginActivityFilters}
           onRecentLoginActivityDateFromChange={handleRecentLoginActivityDateFromChange}
           onRecentLoginActivityDateToChange={handleRecentLoginActivityDateToChange}
-          onDeleteEndedLoginActivity={handleDeleteEndedLoginActivity}
+          onDeleteEndedLoginActivity={
+            canManageLoginLogs ? handleDeleteEndedLoginActivity : undefined
+          }
           onRecentLoginActivityFilterChange={handleRecentLoginActivityFilterChange}
           onRecentLoginActivityPageChange={setRecentLoginActivityPageNumber}
           onRecentLoginActivityPageSizeChange={handleRecentLoginActivityPageSizeChange}

@@ -7,7 +7,7 @@ export function registerCollectionSummaryRoutes(context: CollectionRouteContext)
     collectionService,
     reportAccess,
     superuserReportAccess,
-    adminSummaryAccess,
+    staffSummaryAccess,
     jsonRoute,
   } = context;
 
@@ -47,7 +47,7 @@ export function registerCollectionSummaryRoutes(context: CollectionRouteContext)
 
   app.get(
     "/api/collection/nickname-summary",
-    ...adminSummaryAccess,
+    ...staffSummaryAccess,
     jsonRoute("Failed to load nickname summary.", (req) =>
       collectionService.getNicknameSummary(req.user, readQueryObject(req.query))),
   );

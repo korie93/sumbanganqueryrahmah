@@ -32,7 +32,8 @@ type CollectionSummaryPageProps = {
 };
 
 function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
-  const canFilterByNickname = role === "admin" || role === "superuser";
+  const canFilterByNickname =
+    role === "admin" || role === "manager" || role === "superuser";
   const isMobile = useIsMobile();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const summaryData = useCollectionSummaryData({ canFilterByNickname });

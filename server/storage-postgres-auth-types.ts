@@ -10,6 +10,7 @@ import type {
   PasswordResetTokenRecord,
   PendingPasswordResetRequestRecord,
 } from "./repositories/auth.repository";
+import type { ManageableUserRole } from "../shared/user-roles";
 
 export type ManagedUserAccount = ManagedUserRecord;
 export type PendingPasswordResetRequestSummary = PendingPasswordResetRequestRecord;
@@ -25,7 +26,7 @@ export interface AuthStorageContract {
     username: string;
     fullName?: string | null;
     email?: string | null;
-    role: "admin" | "user";
+    role: ManageableUserRole;
     passwordHash: string;
     status?: "pending_activation" | "active" | "suspended" | "disabled";
     mustChangePassword?: boolean;
@@ -47,7 +48,7 @@ export interface AuthStorageContract {
     username?: string;
     fullName?: string | null;
     email?: string | null;
-    role?: "admin" | "user";
+    role?: ManageableUserRole;
     status?: "pending_activation" | "active" | "suspended" | "disabled";
     isBanned?: boolean;
     mustChangePassword?: boolean;
@@ -89,7 +90,7 @@ export interface AuthStorageContract {
     page?: number | undefined;
     pageSize?: number | undefined;
     search?: string | undefined;
-    role?: "all" | "admin" | "user" | undefined;
+    role?: "all" | ManageableUserRole | undefined;
     status?:
       | "all"
       | "active"

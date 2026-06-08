@@ -8,7 +8,7 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
     app,
     collectionService,
     storage,
-    reportAccess,
+    recordMutationAccess,
     superuserReportAccess,
     jsonRoute,
     jsonMutationRoute,
@@ -20,7 +20,7 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
 
   app.post(
     "/api/collection",
-    ...reportAccess,
+    ...recordMutationAccess,
     collectionMultipartRoute,
     jsonMutationRoute(
       "Failed to create collection record.",
@@ -43,14 +43,14 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
 
   app.patch(
     "/api/collection/:id",
-    ...reportAccess,
+    ...recordMutationAccess,
     updateCollectionMultipartRoute,
     handleUpdateCollectionRecord,
   );
 
   app.put(
     "/api/collection/:id",
-    ...reportAccess,
+    ...recordMutationAccess,
     updateCollectionMultipartRoute,
     handleUpdateCollectionRecord,
   );
@@ -64,7 +64,7 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
 
   app.delete(
     "/api/collection/:id",
-    ...reportAccess,
+    ...recordMutationAccess,
     jsonMutationRoute(
       "Failed to delete collection record.",
       (req) => {

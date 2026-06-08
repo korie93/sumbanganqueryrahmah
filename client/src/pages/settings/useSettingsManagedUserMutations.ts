@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { ManagedUser } from "@/pages/settings/types";
+import type { ManageableUserRole } from "@shared/user-roles";
 import { useSettingsManagedUserActions } from "@/pages/settings/useSettingsManagedUserActions";
 import { useSettingsManagedUserCreate } from "@/pages/settings/useSettingsManagedUserCreate";
 import type {
@@ -17,7 +18,7 @@ type UseSettingsManagedUserMutationsArgs = {
   managedEmailInput: string;
   managedFullNameInput: string;
   managedIsBanned: boolean;
-  managedRoleInput: "admin" | "user";
+  managedRoleInput: ManageableUserRole;
   managedSaving: boolean;
   managedSelectedUser: ManagedUser | null;
   managedStatusInput: ManagedAccountStatus;

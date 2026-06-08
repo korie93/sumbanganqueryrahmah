@@ -29,6 +29,7 @@ export const MANAGED_ACCOUNT_ROLE_OPTIONS: Array<{
   { value: "all", label: "All roles" },
   { value: "user", label: "user" },
   { value: "admin", label: "admin" },
+  { value: "manager", label: "manager" },
 ];
 
 export const MANAGED_ACCOUNT_STATUS_OPTIONS: Array<{

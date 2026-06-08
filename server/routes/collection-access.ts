@@ -11,6 +11,7 @@ import {
   normalizeCollectionStringList,
   normalizeCollectionText,
 } from "./collection.validation";
+import { canViewAllStaff } from "../../shared/user-roles";
 
 export type CollectionNicknameAccessResolution =
   | { ok: true; profile: CollectionNicknameAuthProfile }
@@ -122,7 +123,7 @@ export async function canUserAccessCollectionRecord(
     return false;
   }
 
-  if (user.role === "superuser") return true;
+  if (canViewAllStaff(user.role)) return true;
 
   if (user.role === "user") {
     const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage, user);

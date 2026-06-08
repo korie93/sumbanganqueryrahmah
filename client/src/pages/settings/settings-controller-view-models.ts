@@ -2,6 +2,7 @@ import type { AccountSecuritySectionProps } from "@/pages/settings/AccountSecuri
 import type { ManagedSecretDialogProps } from "@/pages/settings/ManagedSecretDialog";
 import type { ManagedUserDialogProps } from "@/pages/settings/ManagedUserDialog";
 import type { ManagedUser } from "@/pages/settings/types";
+import type { ManageableUserRole } from "@shared/user-roles";
 
 type SecurityViewModelArgs = {
   confirmPasswordInput: string;
@@ -51,7 +52,7 @@ type ManagedDialogViewModelArgs = {
   managedEmailInput: string;
   managedFullNameInput: string;
   managedIsBanned: boolean;
-  managedRoleInput: "admin" | "user";
+  managedRoleInput: ManageableUserRole;
   managedSaving: boolean;
   managedSelectedUser: ManagedUser | null;
   managedStatusInput: "pending_activation" | "active" | "suspended" | "disabled";
@@ -63,7 +64,7 @@ type ManagedDialogViewModelArgs = {
   onManagedEmailInputChange: (value: string) => void;
   onManagedFullNameInputChange: (value: string) => void;
   onManagedIsBannedChange: (value: boolean) => void;
-  onManagedRoleInputChange: (value: "admin" | "user") => void;
+  onManagedRoleInputChange: (value: ManageableUserRole) => void;
   onManagedStatusInputChange: (
     value: "pending_activation" | "active" | "suspended" | "disabled",
   ) => void;

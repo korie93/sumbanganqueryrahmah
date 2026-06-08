@@ -15,6 +15,7 @@ import {
 } from "../../routes/collection.validation";
 import type { CollectionStoragePort } from "./collection-service-support";
 import { CollectionDailyOverviewService } from "./collection-daily-overview.service";
+import { canViewAllStaff } from "../../../shared/user-roles";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
 
@@ -30,8 +31,8 @@ export class CollectionDailyManagementOperations {
 
   async listDailyUsers(userInput: AuthenticatedUser | undefined) {
     const user = this.requireUser(userInput);
-    if (user.role !== "admin" && user.role !== "superuser") {
-      throw forbidden("Collection daily user list hanya untuk admin atau superuser.");
+    if (user.role !== "admin" && !canViewAllStaff(user.role)) {
+      throw forbidden("Collection daily user list hanya untuk admin, manager atau superuser.");
     }
     const users = await this.dailyOverviewService.listAvailableDailyUsers(user);
     return {

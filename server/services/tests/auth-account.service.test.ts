@@ -1021,6 +1021,26 @@ test("AuthAccountService.login resets failed attempt counters after a successful
   assert.ok(auditActions.includes("LOGIN_SUCCESS"));
 });
 
+test("AuthAccountService.login authenticates active manager accounts without role coercion", async () => {
+  const { service, user, activity, auditActions } = await createLockoutHarness({
+    role: "manager",
+  });
+
+  const result = await service.login({
+    username: user.username,
+    password: "Password123!",
+    browserName: "chrome",
+    fingerprint: "fp-manager",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(result.kind, "authenticated");
+  assert.equal(result.user.role, "manager");
+  assert.equal(result.activity.id, activity.id);
+  assert.ok(auditActions.includes("LOGIN_SUCCESS"));
+});
+
 test("AuthAccountService.login keeps invalid usernames generic and does not record failed-account lockout state", async () => {
   const auditActions: string[] = [];
   let recordFailedLoginAttemptCalled = false;

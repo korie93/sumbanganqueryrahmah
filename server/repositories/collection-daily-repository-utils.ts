@@ -160,7 +160,7 @@ export async function listCollectionDailyUsers(): Promise<CollectionDailyUser[]>
   const result = await db.execute(sql`
     SELECT id, username, role
     FROM public.users
-    WHERE role IN ('user', 'admin', 'superuser')
+    WHERE role IN ('user', 'admin', 'manager', 'superuser')
       AND COALESCE(is_banned, false) = false
       AND COALESCE(status, 'active') <> 'disabled'
     ORDER BY lower(username) ASC

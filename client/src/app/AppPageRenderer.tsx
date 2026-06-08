@@ -61,7 +61,7 @@ function AppPageRendererImpl({
         />
       );
     }
-    if (currentPage === "monitor") {
+    if (currentPage === "monitor" || user.role === "manager") {
       return <ForbiddenPage />;
     }
     return user.role === "user" ? (
@@ -142,6 +142,9 @@ function AppPageRendererImpl({
     case "forbidden":
       return <ForbiddenPage />;
     default:
+      if (user.role === "manager") {
+        return <ForbiddenPage />;
+      }
       return user.role === "user" ? (
         <GeneralSearchPage
           userRole={user.role}

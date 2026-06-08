@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseRequestBody } from "../../http/validation";
+import { MANAGEABLE_USER_ROLES } from "../../../shared/user-roles";
 
 const nullableString = z.union([z.string(), z.null(), z.undefined()]);
 const optionalString = z.union([z.string(), z.undefined()]);
@@ -8,7 +9,7 @@ const managedUserBodySchema = z.object({
   username: z.string().default(""),
   fullName: nullableString.transform((value) => (typeof value === "string" ? value : null)),
   email: nullableString.transform((value) => (typeof value === "string" ? value : null)),
-  role: z.string().default("user"),
+  role: z.enum(MANAGEABLE_USER_ROLES).default("user"),
 });
 
 const managedUserPatchBodySchema = z.object({
@@ -18,7 +19,7 @@ const managedUserPatchBodySchema = z.object({
 });
 
 const managedUserRoleBodySchema = z.object({
-  role: z.string().default(""),
+  role: z.enum(MANAGEABLE_USER_ROLES),
 });
 
 const managedUserStatusBodySchema = z.object({

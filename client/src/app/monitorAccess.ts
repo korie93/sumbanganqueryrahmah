@@ -22,6 +22,7 @@ export function canViewMonitorSection(
   tabVisibilityLoaded: boolean,
 ) {
   if (role === "superuser") return true;
+  if (role === "manager") return false;
   if (role === "admin") {
     if (!tabs) return true;
     return tabs.monitor !== false;
@@ -41,6 +42,7 @@ export function canViewDashboardSection(role: string | undefined, tabs: TabVisib
 
 export function canViewActivitySection(role: string | undefined, tabs: TabVisibility) {
   if (!role || role === "superuser") return true;
+  if (role === "manager") return false;
   if (!tabs) return true;
   return tabs.activity !== false;
 }
@@ -53,6 +55,7 @@ export function canViewAnalysisSection(role: string | undefined, tabs: TabVisibi
 
 export function canViewAuditSection(role: string | undefined, tabs: TabVisibility) {
   if (!role || role === "superuser") return true;
+  if (role === "manager") return false;
   if (!tabs) return true;
   if (Object.prototype.hasOwnProperty.call(tabs, "audit")) {
     return tabs.audit !== false;
@@ -98,6 +101,7 @@ export function getDefaultPageForRole(
 ) {
   if (isSuperuserFeatureOffMode(role, tabs, tabVisibilityLoaded)) return "general-search";
   if (role === "superuser") return "home";
+  if (role === "manager") return "home";
 
   const candidates = role === "user" ? ["general-search"] : ["home", "general-search", "saved"];
 
@@ -117,6 +121,25 @@ export function isPageEnabled(
   tabs: TabVisibility,
   tabVisibilityLoaded: boolean,
 ) {
+  if (role === "manager") {
+    if (page === "monitor") {
+      return (
+        canViewDashboardSection(role, tabs)
+        || canViewAnalysisSection(role, tabs)
+      );
+    }
+    if (page === "dashboard") return canViewDashboardSection(role, tabs);
+    if (page === "analysis") return canViewAnalysisSection(role, tabs);
+    return [
+      "home",
+      "import",
+      "general-search",
+      "collection-report",
+      "forbidden",
+      "maintenance",
+    ].includes(page);
+  }
+
   if (isSuperuserFeatureOffMode(role, tabs, tabVisibilityLoaded)) {
     return page === "general-search" || page === "forbidden" || page === "maintenance";
   }

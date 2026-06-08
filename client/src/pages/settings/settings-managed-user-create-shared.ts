@@ -2,7 +2,7 @@ import type { MutableRefObject } from "react";
 import type { ManagedSecretDialogParams, ToastFn } from "@/pages/settings/useSettingsManagedUserMutationShared";
 import type { ManagedUser } from "@/pages/settings/types";
 
-export type ManagedUserCreateRole = "admin" | "user";
+export type ManagedUserCreateRole = "admin" | "manager" | "user";
 
 export type ManagedUserCreateDraft = {
   createEmailInput: string;

@@ -20,7 +20,7 @@ test("auth managed user read helpers build managed-user WHERE clauses consistent
   const sqlText = collectSqlText(query).replace(/\s+/g, " ").trim();
   const boundValues = collectBoundValues(query);
 
-  assert.match(sqlText, /role IN \('admin', 'user'\)/);
+  assert.match(sqlText, /role IN \('admin', 'manager', 'user'\)/);
   assert.match(sqlText, /username ILIKE /);
   assert.match(sqlText, /role = /);
   assert.match(sqlText, /locked_at IS NOT NULL/);

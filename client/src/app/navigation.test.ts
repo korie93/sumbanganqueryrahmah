@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getVisibleNavigationGroups, resolveActiveNavigationItemId } from "@/app/navigation";
+import {
+  getVisibleNavItems,
+  getVisibleNavigationGroups,
+  resolveActiveNavigationItemId,
+} from "@/app/navigation";
 
 test("resolveActiveNavigationItemId maps monitor subsections to their specific nav entries", () => {
   assert.equal(resolveActiveNavigationItemId("monitor", { monitorSection: "dashboard" }), "dashboard");
@@ -40,5 +44,19 @@ test("getVisibleNavigationGroups keeps the settings group visible for superusers
   assert.deepEqual(
     settingsGroup.items.map((item) => item.id),
     ["settings", "backup"],
+  );
+});
+
+test("manager navigation exposes only the approved operational modules", () => {
+  const items = getVisibleNavItems("manager", null, false);
+
+  assert.deepEqual(
+    items.map((item) => item.id),
+    ["home", "general-search", "collection-report", "import", "dashboard", "analysis"],
+  );
+  assert.equal(
+    getVisibleNavigationGroups("manager", null, false)
+      .some((group) => group.id === "settings-menu"),
+    false,
   );
 });

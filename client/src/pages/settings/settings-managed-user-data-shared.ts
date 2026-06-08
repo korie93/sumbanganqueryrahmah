@@ -20,7 +20,7 @@ export type ManagedUsersQueryState = {
   page: number;
   pageSize: number;
   search: string;
-  role: "all" | "admin" | "user";
+  role: "all" | "admin" | "manager" | "user";
   status: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
 };
 

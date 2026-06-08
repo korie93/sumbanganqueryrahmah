@@ -21,7 +21,9 @@ type CollectionDailyDayRecord = CollectionDailyDayDetailsResponse["records"][num
 
 export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageModelOptions) {
   const now = useMemo(() => new Date(), []);
-  const canManage = role === "admin" || role === "superuser";
+  const canViewAllStaff =
+    role === "admin" || role === "manager" || role === "superuser";
+  const canMutateTargets = role === "admin" || role === "superuser";
   const currentUsername = useMemo(
     () => getCurrentCollectionStaffNickname() || getCurrentUsername(),
     [],
@@ -38,23 +40,24 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
     commitMonthInput,
   } = useCollectionDailyPeriod(now);
 
-  const usersData = useCollectionDailyUsersData({ canManage });
+  const usersData = useCollectionDailyUsersData({ canManage: canViewAllStaff });
 
   const userSelection = useCollectionDailyUserSelection({
-    canManage,
+    canManage: canViewAllStaff,
     currentUsername,
     users: usersData.users,
   });
+  const canEditTarget = canMutateTargets && userSelection.canEditTarget;
   const canEditCalendar = role === "superuser" && userSelection.canEditTarget;
 
   const data = useCollectionDailyData({
-    canManage,
+    canManage: canViewAllStaff,
     currentUsername,
     year,
     month,
     selectedUsernames: userSelection.selectedUsernames,
     selectedQueryUsers: userSelection.selectedQueryUsers,
-    canEditTarget: userSelection.canEditTarget,
+    canEditTarget,
     canEditCalendar,
   });
 
@@ -91,17 +94,17 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
   }, [data]);
 
   return {
-    canManage,
+    canManage: canViewAllStaff,
     currentUsername,
     overview: data.overview,
     roleGuideProps: {
       role,
       selectedUsersLabel: userSelection.selectedUsersLabel,
-      canManage,
+      canManage: canViewAllStaff,
       canEditCalendar,
     },
     filtersCardProps: {
-      canManage,
+      canManage: canViewAllStaff,
       currentUsername,
       yearInput,
       monthInput,
@@ -127,7 +130,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
       onRefresh: handleRefresh,
       monthlyTargetInput: data.monthlyTargetInput,
       onMonthlyTargetInputChange: data.setMonthlyTargetInput,
-      canEditTarget: userSelection.canEditTarget,
+      canEditTarget,
       savingTarget: data.savingTarget,
       onSaveTarget: handleSaveTarget,
       savingCalendar: data.savingCalendar,

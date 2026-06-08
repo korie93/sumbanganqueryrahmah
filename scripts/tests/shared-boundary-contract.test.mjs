@@ -27,6 +27,7 @@ const COMMON_SHARED_MODULES = new Set([
   "pagination-contracts",
   "password-policy",
   "trusted-types",
+  "user-roles",
   "web-vitals",
 ]);
 

@@ -130,7 +130,14 @@ export class SettingsRepository {
       return {};
     }
 
-    const roleKey = role === "admin" ? "admin" : role === "user" ? "user" : null;
+    const roleKey =
+      role === "admin"
+        ? "admin"
+        : role === "manager"
+          ? "manager"
+          : role === "user"
+            ? "user"
+            : null;
     if (!roleKey) {
       return {};
     }

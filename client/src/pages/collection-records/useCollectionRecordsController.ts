@@ -27,7 +27,8 @@ export function useCollectionRecordsController({
 }: UseCollectionRecordsControllerParams) {
   const canEdit = role === "user" || role === "admin" || role === "superuser";
   const canDeleteGlobal = role === "admin" || role === "superuser" || role === "user";
-  const canUseNicknameFilter = role === "admin" || role === "superuser";
+  const canUseNicknameFilter =
+    role === "admin" || role === "manager" || role === "superuser";
   const canPurgeOldRecords = role === "superuser";
 
   const {

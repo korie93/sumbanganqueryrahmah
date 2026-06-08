@@ -32,6 +32,8 @@ test("pre-commit guard allows normal source files without secrets", () => {
           "export const label = 'Selamat datang';",
           "const configuredSessionSecret = runtimeConfig.auth.sessionSecret;",
           "const params = { password: readDatabasePassword() };",
+          "must_change_password = COALESCE(must_change_password, false),",
+          "password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),",
           "<PasswordStrengthMeter",
           "  password={newPassword}",
           "/>",

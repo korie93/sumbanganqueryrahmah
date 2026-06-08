@@ -14,6 +14,7 @@ import {
   type SummaryQuery,
 } from "./collection-service-support";
 import { getCollectionReportFreshness } from "./collection-report-freshness";
+import { canViewAllStaff } from "../../../shared/user-roles";
 
 const COLLECTION_MONTHLY_COMPARISON_MAX_RANGE = 24;
 const COLLECTION_SHORT_MONTH_NAMES = [
@@ -129,7 +130,7 @@ export class CollectionRecordMonthlyComparisonOperations extends CollectionServi
     const requestedNickname = normalizeCollectionText(query.nickname);
     let reportNickname = "";
 
-    if (user.role === "superuser") {
+    if (canViewAllStaff(user.role)) {
       if (!requestedNickname) {
         throw badRequest("Staff nickname is required.");
       }

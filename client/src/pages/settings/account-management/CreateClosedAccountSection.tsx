@@ -5,19 +5,20 @@ import { Input } from "@/components/ui/input";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { cn } from "@/lib/utils";
 import type { ManagedUserCreateFieldErrors } from "@/pages/settings/settings-managed-user-create-utils";
+import type { ManagedUserCreateRole } from "@/pages/settings/settings-managed-user-create-shared";
 
 interface CreateClosedAccountSectionProps {
   createEmailInput: string;
   createFieldErrors: ManagedUserCreateFieldErrors;
   createFullNameInput: string;
-  createRoleInput: "admin" | "user";
+  createRoleInput: ManagedUserCreateRole;
   createUsernameInput: string;
   creatingManagedUser: boolean;
   onCreateEmailInputChange: (value: string) => void;
   onCreateFieldBlur: (field: keyof ManagedUserCreateFieldErrors) => void;
   onCreateFullNameInputChange: (value: string) => void;
   onCreateManagedUser: () => void;
-  onCreateRoleInputChange: (value: "admin" | "user") => void;
+  onCreateRoleInputChange: (value: ManagedUserCreateRole) => void;
   onCreateUsernameInputChange: (value: string) => void;
 }
 
@@ -129,14 +130,18 @@ export function CreateClosedAccountSection({
               id="create-closed-account-role"
               name="closedAccountRole"
               value={createRoleInput}
-              onChange={(event) =>
-                onCreateRoleInputChange(event.target.value === "admin" ? "admin" : "user")
-              }
+              onChange={(event) => {
+                const nextRole = event.target.value;
+                onCreateRoleInputChange(
+                  nextRole === "admin" || nextRole === "manager" ? nextRole : "user",
+                );
+              }}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               disabled={creatingManagedUser}
             >
               <option value="user">user</option>
               <option value="admin">admin</option>
+              <option value="manager">manager</option>
             </select>
           </div>
         </div>

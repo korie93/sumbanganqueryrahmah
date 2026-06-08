@@ -19,8 +19,18 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     asyncHandler(importsController.createImport),
   );
 
-  app.patch("/api/imports/:id", authenticateToken, asyncHandler(importsController.renameImport));
-  app.patch("/api/imports/:id/rename", authenticateToken, asyncHandler(importsController.renameImport));
+  app.patch(
+    "/api/imports/:id",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(importsController.renameImport),
+  );
+  app.patch(
+    "/api/imports/:id/rename",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    asyncHandler(importsController.renameImport),
+  );
 
   app.delete(
     "/api/imports/:id",

@@ -21,6 +21,7 @@ import {
   buildCollectionPaginationMeta,
   COLLECTION_NICKNAME_SUMMARY_RECORD_LIMIT,
 } from "./collection-record-read-shared";
+import { canViewAllStaff } from "../../../shared/user-roles";
 
 export class CollectionRecordNicknameSummaryOperations extends CollectionServiceSupport {
   async getNicknameSummary(
@@ -28,8 +29,8 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
     query: ListQuery,
   ) {
     const user = this.requireUser(userInput);
-    if (user.role !== "admin" && user.role !== "superuser") {
-      throw forbidden("Nickname summary hanya untuk admin atau superuser.");
+    if (user.role !== "admin" && !canViewAllStaff(user.role)) {
+      throw forbidden("Nickname summary hanya untuk admin, manager atau superuser.");
     }
 
     const from = normalizeCollectionText(query.from);
@@ -80,7 +81,7 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
     const resolvedPage = Math.floor(recordOffset / recordLimit) + 1;
 
     const nicknameFilters = normalizeCollectionStringList(requestedNicknameFilters);
-    if (user.role === "superuser") {
+    if (canViewAllStaff(user.role)) {
       for (const requestedNickname of nicknameFilters) {
         const isActiveNickname = await this.storage.isCollectionStaffNicknameActive(requestedNickname);
         if (!isActiveNickname) {

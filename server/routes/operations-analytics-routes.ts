@@ -13,7 +13,7 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   app.get(
     "/api/analytics/summary",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("dashboard"),
     asyncHandler(operationsController.getDashboardSummary),
   );
@@ -21,7 +21,7 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   app.get(
     "/api/analytics/login-trends",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("dashboard"),
     asyncHandler(operationsController.getLoginTrends),
   );
@@ -29,7 +29,7 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   app.get(
     "/api/analytics/top-users",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("dashboard"),
     asyncHandler(operationsController.getTopActiveUsers),
   );
@@ -37,7 +37,7 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   app.get(
     "/api/analytics/recent-login-activity",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("dashboard"),
     asyncHandler(operationsController.getRecentLoginActivity),
   );
@@ -45,7 +45,7 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   app.get(
     "/api/analytics/recent-login-activity-page",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("dashboard"),
     asyncHandler(operationsController.getRecentLoginActivityPage),
   );
@@ -53,7 +53,7 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   app.get(
     "/api/analytics/peak-hours",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("dashboard"),
     asyncHandler(operationsController.getPeakHours),
   );
@@ -61,7 +61,7 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   app.get(
     "/api/analytics/role-distribution",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("dashboard"),
     asyncHandler(operationsController.getRoleDistribution),
   );

@@ -16,6 +16,7 @@ import {
 } from "./collection-record-runtime-utils";
 import { getCollectionReportFreshness } from "./collection-report-freshness";
 import { resolveUserOwnedCollectionRecordFilters } from "./collection-record-read-shared";
+import { canViewAllStaff } from "../../../shared/user-roles";
 
 export class CollectionRecordSummaryReadOperations extends CollectionServiceSupport {
   async getSummary(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: SummaryQuery) {
@@ -32,7 +33,7 @@ export class CollectionRecordSummaryReadOperations extends CollectionServiceSupp
     }
 
     let nicknameFilters: string[] | undefined;
-    if (user.role === "superuser") {
+    if (canViewAllStaff(user.role)) {
       if (requestedNicknameFilters.length > 0) {
         const activeNicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: true });
         const activeSet = new Set(
