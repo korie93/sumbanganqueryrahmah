@@ -22,6 +22,10 @@ export interface ActivitySettingsStorageContract {
   getActiveActivities(): Promise<UserActivity[]>;
   getAllActivities(): Promise<UserActivity[]>;
   deleteActivity(id: string): Promise<boolean>;
+  deleteEndedActivitiesBefore(params: {
+    cutoff: Date;
+    limit: number;
+  }): Promise<string[]>;
   getFilteredActivities(filters: {
     status?: string[] | undefined;
     username?: string | undefined;

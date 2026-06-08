@@ -62,6 +62,13 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
     return this.activityRepository.deleteActivity(id);
   }
 
+  async deleteEndedActivitiesBefore(params: {
+    cutoff: Date;
+    limit: number;
+  }): Promise<string[]> {
+    return this.activityRepository.deleteEndedActivitiesBefore(params);
+  }
+
   async getFilteredActivities(filters: {
     status?: string[] | undefined;
     username?: string | undefined;

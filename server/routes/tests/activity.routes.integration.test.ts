@@ -132,6 +132,7 @@ function createActivityRouteHarness(options?: {
   const auditLogs: AuditEntry[] = [];
   const clearNicknameSessionCalls: string[] = [];
   const deleteActivityCalls: string[] = [];
+  const deleteEndedActivitiesBeforeCalls: Array<{ cutoff: Date; limit: number }> = [];
   const banVisitorCalls: Array<Record<string, unknown>> = [];
   const deactivateUserActivitiesCalls: Array<{ username: string; reason?: string | undefined }> = [];
   const updateUserBanCalls: Array<{ username: string; isBanned: boolean }> = [];
@@ -239,6 +240,25 @@ function createActivityRouteHarness(options?: {
       deleteActivityCalls.push(activityId);
       return activities.delete(activityId);
     },
+    deleteEndedActivitiesBefore: async (params: { cutoff: Date; limit: number }) => {
+      deleteEndedActivitiesBeforeCalls.push(params);
+      const deletedIds: string[] = [];
+      for (const [activityId, activity] of activities.entries()) {
+        if (deletedIds.length >= params.limit) {
+          break;
+        }
+        const activityTime =
+          activity.logoutTime?.getTime()
+          ?? activity.lastActivityTime?.getTime()
+          ?? activity.loginTime?.getTime()
+          ?? Number.POSITIVE_INFINITY;
+        if (activity.isActive === false && activityTime < params.cutoff.getTime()) {
+          activities.delete(activityId);
+          deletedIds.push(activityId);
+        }
+      }
+      return deletedIds;
+    },
     getActivityById: async (activityId: string) => activities.get(activityId),
     getAllActivities: async () => Array.from(activities.values()),
     getFilteredActivities: async (filters: Record<string, unknown>) => {
@@ -325,6 +345,7 @@ function createActivityRouteHarness(options?: {
     auditLogs,
     clearNicknameSessionCalls,
     deleteActivityCalls,
+    deleteEndedActivitiesBeforeCalls,
     banVisitorCalls,
     deactivateUserActivitiesCalls,
     updateUserBanCalls,
@@ -690,6 +711,127 @@ test("DELETE /api/activity/logs/bulk-delete audits failed batch delete attempts"
     assert.equal(auditDetails.requestedCount, 1);
     assert.equal(auditDetails.errorType, "Error");
     assert.equal(typeof auditDetails.durationMs, "number");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/activity/logs/cleanup-ended removes only old ended login logs", async () => {
+  const {
+    app,
+    activities,
+    auditLogs,
+    clearNicknameSessionCalls,
+    deleteEndedActivitiesBeforeCalls,
+  } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+  });
+  activities.set("ended-old", {
+    id: "ended-old",
+    userId: "user-2",
+    username: "regular.user",
+    role: "user",
+    isActive: false,
+    loginTime: new Date("2026-01-01T00:00:00.000Z"),
+    lastActivityTime: new Date("2026-01-01T00:05:00.000Z"),
+    logoutTime: new Date("2026-01-01T00:10:00.000Z"),
+    logoutReason: "USER_LOGOUT",
+  });
+  activities.set("ended-new", {
+    id: "ended-new",
+    userId: "user-2",
+    username: "regular.user",
+    role: "user",
+    isActive: false,
+    loginTime: new Date(),
+    lastActivityTime: new Date(),
+    logoutTime: new Date(),
+    logoutReason: "USER_LOGOUT",
+  });
+  activities.set("active-old", {
+    id: "active-old",
+    userId: "user-2",
+    username: "regular.user",
+    role: "user",
+    isActive: true,
+    loginTime: new Date("2026-01-01T00:00:00.000Z"),
+    lastActivityTime: new Date("2026-01-01T00:05:00.000Z"),
+    logoutTime: null,
+    logoutReason: null,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/logs/cleanup-ended`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        limit: 10,
+        olderThanDays: 30,
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.success, true);
+    assert.equal(payload.deletedCount, 1);
+    assert.equal(payload.limit, 10);
+    assert.equal(payload.olderThanDays, 30);
+    assert.match(String(payload.cutoff), /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(activities.has("ended-old"), false);
+    assert.equal(activities.has("ended-new"), true);
+    assert.equal(activities.has("active-old"), true);
+    assert.equal(deleteEndedActivitiesBeforeCalls.length, 1);
+    assert.equal(deleteEndedActivitiesBeforeCalls[0]?.limit, 10);
+    assert.deepEqual(clearNicknameSessionCalls, ["ended-old"]);
+    const lastAuditLog = auditLogs[auditLogs.length - 1];
+    assert.equal(lastAuditLog?.action, "DELETE_OLD_ACTIVITY_LOGS");
+    assert.equal(lastAuditLog?.performedBy, "admin.user");
+    const auditDetails = JSON.parse(String(lastAuditLog?.details));
+    assert.equal(auditDetails.deletedCount, 1);
+    assert.equal(auditDetails.limit, 10);
+    assert.equal(auditDetails.olderThanDays, 30);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/activity/logs/cleanup-ended rejects invalid retention bounds", async () => {
+  const { app, deleteEndedActivitiesBeforeCalls } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/logs/cleanup-ended`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        olderThanDays: 0,
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "olderThanDays must be an integer between 1 and 365",
+    });
+    assert.deepEqual(deleteEndedActivitiesBeforeCalls, []);
   } finally {
     await stopTestServer(server);
   }

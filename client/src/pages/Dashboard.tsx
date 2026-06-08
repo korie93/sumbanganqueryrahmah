@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import {
+  cleanupEndedActivityLogs,
   deleteActivityLog,
   getAnalyticsSummary,
   getLoginTrends,
@@ -46,6 +47,8 @@ import type {
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
 
 type DashboardRefetch = () => Promise<unknown>;
+const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
+const RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500;
 
 function getRejectedDashboardRefreshResults(results: PromiseSettledResult<unknown>[]) {
   return results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
@@ -269,12 +272,48 @@ function DashboardContent() {
       });
     },
   });
+  const cleanupEndedLoginActivityMutation = useMutation<
+    Awaited<ReturnType<typeof cleanupEndedActivityLogs>>,
+    Error,
+    void
+  >({
+    mutationFn: async () =>
+      cleanupEndedActivityLogs({
+        limit: RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT,
+        olderThanDays: RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS,
+      }),
+    onSuccess: async (result) => {
+      toast({
+        title: "Old login logs cleaned",
+        description:
+          result.deletedCount > 0
+            ? `${result.deletedCount} ended login logs older than ${result.olderThanDays} days were removed.`
+            : `No ended login logs older than ${result.olderThanDays} days were found.`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+    },
+    onError: (error) => {
+      logClientError("Failed to clean up ended login activity logs:", error, {
+        limit: RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT,
+        olderThanDays: RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS,
+      });
+      toast({
+        title: "Cleanup login logs failed",
+        description: error.message || "Unable to clean up old ended login activity logs.",
+        variant: "destructive",
+      });
+    },
+  });
   const handleDeleteEndedLoginActivity = useCallback(
     (activity: RecentLoginActivity) => {
       deleteRecentLoginActivityMutation.mutate(activity);
     },
     [deleteRecentLoginActivityMutation],
   );
+  const handleCleanupEndedLoginActivities = useCallback(() => {
+    cleanupEndedLoginActivityMutation.mutate();
+  }, [cleanupEndedLoginActivityMutation]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -441,6 +480,7 @@ function DashboardContent() {
           onRetryRoleDistribution={handleRetryRoles}
           onRetryTopUsers={handleRetryTopUsers}
           onRetryTrends={handleRetryTrends}
+          onCleanupEndedLoginActivities={handleCleanupEndedLoginActivities}
           onDeleteEndedLoginActivity={handleDeleteEndedLoginActivity}
           trends={trends ?? []}
           trendsErrorMessage={trendsErrorMessage}
@@ -451,6 +491,7 @@ function DashboardContent() {
           peakHoursLoading={!secondaryDashboardQueriesEnabled || peakHoursLoading}
           peakHoursRetrying={peakHoursFetching}
           recentLoginActivities={recentLoginActivities ?? []}
+          recentLoginActivityCleaningEndedLogs={cleanupEndedLoginActivityMutation.isPending}
           recentLoginActivityDeletingId={deleteRecentLoginActivityMutation.variables?.id ?? null}
           recentLoginActivityErrorMessage={recentLoginActivityErrorMessage}
           recentLoginActivityLoading={recentLoginActivityLoading}

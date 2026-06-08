@@ -24,6 +24,7 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
       }) as AuditRecord,
     deactivateUserActivities: async () => undefined,
     deleteActivity: async () => true,
+    deleteEndedActivitiesBefore: async () => [],
     getActiveActivities: async () => [],
     getActiveActivitiesByUsername: async () => [],
     getActivityById: async () => undefined,

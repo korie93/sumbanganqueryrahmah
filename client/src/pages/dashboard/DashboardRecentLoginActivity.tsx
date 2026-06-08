@@ -34,15 +34,19 @@ import {
 
 interface DashboardRecentLoginActivityProps {
   activities: RecentLoginActivity[] | undefined;
+  cleaningEndedActivityLogs?: boolean | undefined;
   deletingActivityId?: string | null | undefined;
   errorMessage: string | null;
   loading: boolean;
+  onCleanupEndedActivities?: (() => void) | undefined;
   onDeleteEndedActivity?: ((activity: RecentLoginActivity) => void) | undefined;
   onRetry: () => void;
   retrying: boolean;
 }
 
 const EMPTY_RECENT_LOGIN_ACTIVITIES: readonly RecentLoginActivity[] = [];
+const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
+const RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500;
 const RECENT_LOGIN_ACTIVITY_PAGE_SIZE = 4;
 const RECENT_LOGIN_FILTER_OPTIONS: readonly {
   readonly id: DashboardRecentLoginActivityFilter;
@@ -175,13 +179,16 @@ function DashboardRecentLoginActivitySkeleton() {
 
 function DashboardRecentLoginActivityImpl({
   activities,
+  cleaningEndedActivityLogs = false,
   deletingActivityId = null,
   errorMessage,
   loading,
+  onCleanupEndedActivities,
   onDeleteEndedActivity,
   onRetry,
   retrying,
 }: DashboardRecentLoginActivityProps) {
+  const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<DashboardRecentLoginActivityFilter>("all");
   const [selectedPage, setSelectedPage] = useState(1);
   const [selectedActivity, setSelectedActivity] = useState<RecentLoginActivity | null>(null);
@@ -227,6 +234,12 @@ function DashboardRecentLoginActivityImpl({
       setDeleteCandidate(null);
     }
   }, []);
+  const handleConfirmCleanup = useCallback(() => {
+    if (onCleanupEndedActivities) {
+      onCleanupEndedActivities();
+    }
+    setCleanupDialogOpen(false);
+  }, [onCleanupEndedActivities]);
   const handleConfirmDelete = useCallback(() => {
     if (deleteCandidate && onDeleteEndedActivity) {
       onDeleteEndedActivity(deleteCandidate);
@@ -252,9 +265,26 @@ function DashboardRecentLoginActivityImpl({
                 Latest access events with masked network details for fast operator review.
               </p>
             </div>
-            <Badge variant="outline" className="w-fit rounded-full">
-              {visibleActivities.length} shown
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="w-fit rounded-full">
+                {visibleActivities.length} shown
+              </Badge>
+              {onCleanupEndedActivities ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-full border-destructive/40 px-3 text-xs text-destructive hover:bg-destructive/10"
+                  onClick={() => setCleanupDialogOpen(true)}
+                  disabled={cleaningEndedActivityLogs}
+                  aria-label={`Clean up ended login activity logs older than ${RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS} days`}
+                  data-testid="button-recent-login-cleanup-ended"
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  {cleaningEndedActivityLogs ? "Cleaning..." : "Cleanup old logs"}
+                </Button>
+              ) : null}
+            </div>
           </div>
         </CardHeader>
         <CardContent aria-live="polite">
@@ -483,6 +513,26 @@ function DashboardRecentLoginActivityImpl({
               onClick={handleConfirmDelete}
             >
               Delete ended log
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clean up old ended login logs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes up to {RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT} ended login activity records older than{" "}
+              {RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS} days. Active sessions are never deleted by this cleanup.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="border border-destructive-border bg-destructive text-destructive-foreground"
+              onClick={handleConfirmCleanup}
+            >
+              Clean up ended logs
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

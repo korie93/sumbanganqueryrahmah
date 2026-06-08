@@ -224,6 +224,7 @@ type DashboardDeferredSectionsProps = {
   onRetryRoleDistribution: () => void;
   onRetryTopUsers: () => void;
   onRetryTrends: () => void;
+  onCleanupEndedLoginActivities?: (() => void) | undefined;
   onDeleteEndedLoginActivity?: ((activity: RecentLoginActivity) => void) | undefined;
   peakHoursErrorMessage: string | null;
   trends: LoginTrend[] | undefined;
@@ -234,6 +235,7 @@ type DashboardDeferredSectionsProps = {
   peakHoursLoading: boolean;
   peakHoursRetrying: boolean;
   recentLoginActivities: RecentLoginActivity[] | undefined;
+  recentLoginActivityCleaningEndedLogs?: boolean | undefined;
   recentLoginActivityDeletingId?: string | null | undefined;
   recentLoginActivityErrorMessage: string | null;
   recentLoginActivityLoading: boolean;
@@ -259,6 +261,7 @@ export function DashboardDeferredSections({
   onRetryRoleDistribution,
   onRetryTopUsers,
   onRetryTrends,
+  onCleanupEndedLoginActivities,
   onDeleteEndedLoginActivity,
   peakHoursErrorMessage,
   trends,
@@ -269,6 +272,7 @@ export function DashboardDeferredSections({
   peakHoursLoading,
   peakHoursRetrying,
   recentLoginActivities,
+  recentLoginActivityCleaningEndedLogs,
   recentLoginActivityDeletingId,
   recentLoginActivityErrorMessage,
   recentLoginActivityLoading,
@@ -415,9 +419,11 @@ export function DashboardDeferredSections({
                   >
                     <DashboardRecentLoginActivity
                       activities={recentLoginActivities}
+                      cleaningEndedActivityLogs={recentLoginActivityCleaningEndedLogs}
                       deletingActivityId={recentLoginActivityDeletingId}
                       errorMessage={recentLoginActivityErrorMessage}
                       loading={recentLoginActivityLoading}
+                      onCleanupEndedActivities={onCleanupEndedLoginActivities}
                       onDeleteEndedActivity={onDeleteEndedLoginActivity}
                       onRetry={onRetryRecentLoginActivity}
                       retrying={recentLoginActivityRetrying}

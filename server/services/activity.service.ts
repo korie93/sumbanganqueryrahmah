@@ -60,6 +60,15 @@ export class ActivityService {
     return this.sessionOperations.bulkDeleteActivityLogs(activityIds, performedBy);
   }
 
+  async cleanupEndedActivityLogs(params: {
+    cutoff: Date;
+    limit: number;
+    olderThanDays: number;
+    performedBy: string;
+  }) {
+    return this.sessionOperations.cleanupEndedActivityLogs(params);
+  }
+
   async kickActivity(activityId: string, performedBy: string): Promise<KickActivityResult> {
     return this.moderationOperations.kickActivity(activityId, performedBy);
   }

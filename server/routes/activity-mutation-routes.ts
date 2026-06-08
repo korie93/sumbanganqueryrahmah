@@ -1,13 +1,47 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
-import { readNonEmptyString, readRouteParam } from "../http/validation";
+import { parseStrictInteger, readNonEmptyString, readRouteParam } from "../http/validation";
 import {
   buildActivityErrorPayload,
   buildActivitySuccessPayload,
   readActivityBodyObject,
   type ActivityRouteContext,
 } from "./activity-route-context";
+
+const ACTIVITY_LOG_CLEANUP_DEFAULT_DAYS = 30;
+const ACTIVITY_LOG_CLEANUP_MAX_DAYS = 365;
+const ACTIVITY_LOG_CLEANUP_DEFAULT_LIMIT = 500;
+const ACTIVITY_LOG_CLEANUP_MAX_LIMIT = 5_000;
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+function readCleanupInteger(
+  value: unknown,
+  options: {
+    defaultValue: number;
+    label: string;
+    max: number;
+    min: number;
+  },
+): { ok: true; value: number } | { ok: false; message: string } {
+  if (value === undefined || value === null || value === "") {
+    return { ok: true, value: options.defaultValue };
+  }
+
+  const parsed = parseStrictInteger(value, {
+    max: options.max,
+    min: options.min,
+  });
+
+  if (parsed === null) {
+    return {
+      ok: false,
+      message: `${options.label} must be an integer between ${options.min} and ${options.max}`,
+    };
+  }
+
+  return { ok: true, value: parsed };
+}
 
 export function registerActivityMutationRoutes(context: ActivityRouteContext) {
   const {
@@ -61,6 +95,51 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
         requestedCount: activityIds.length,
         deletedCount,
         notFoundIds,
+      }));
+    }),
+  );
+
+  app.delete(
+    "/api/activity/logs/cleanup-ended",
+    authenticateToken,
+    adminDestructiveActionRateLimiter,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const body = readActivityBodyObject(req.body);
+      const olderThanDays = readCleanupInteger(body.olderThanDays, {
+        defaultValue: ACTIVITY_LOG_CLEANUP_DEFAULT_DAYS,
+        label: "olderThanDays",
+        max: ACTIVITY_LOG_CLEANUP_MAX_DAYS,
+        min: 1,
+      });
+      if (!olderThanDays.ok) {
+        return res.status(400).json(buildActivityErrorPayload(olderThanDays.message));
+      }
+
+      const limit = readCleanupInteger(body.limit, {
+        defaultValue: ACTIVITY_LOG_CLEANUP_DEFAULT_LIMIT,
+        label: "limit",
+        max: ACTIVITY_LOG_CLEANUP_MAX_LIMIT,
+        min: 1,
+      });
+      if (!limit.ok) {
+        return res.status(400).json(buildActivityErrorPayload(limit.message));
+      }
+
+      const cutoff = new Date(Date.now() - olderThanDays.value * DAY_MS);
+      const result = await activityService.cleanupEndedActivityLogs({
+        cutoff,
+        limit: limit.value,
+        olderThanDays: olderThanDays.value,
+        performedBy: req.user!.username,
+      });
+
+      return res.json(buildActivitySuccessPayload({
+        cutoff: result.cutoff,
+        deletedCount: result.deletedCount,
+        limit: limit.value,
+        olderThanDays: olderThanDays.value,
       }));
     }),
   );

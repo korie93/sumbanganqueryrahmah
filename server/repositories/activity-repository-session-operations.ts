@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lte, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
 import { auditLogs, collectionNicknameSessions, userActivity } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
@@ -208,6 +208,30 @@ export async function getAllActivities(): Promise<ActivityWithStatus[]> {
 export async function deleteActivity(id: string): Promise<boolean> {
   await db.delete(userActivity).where(eq(userActivity.id, id));
   return true;
+}
+
+export async function deleteEndedActivitiesBefore(params: {
+  cutoff: Date;
+  limit: number;
+}): Promise<string[]> {
+  const result = await db.execute(sql`
+    WITH cleanup_candidates AS (
+      SELECT id
+      FROM public.user_activity
+      WHERE is_active IS FALSE
+        AND COALESCE(logout_time, last_activity_time, login_time) < ${params.cutoff}
+      ORDER BY COALESCE(logout_time, last_activity_time, login_time) ASC NULLS LAST, id ASC
+      LIMIT ${params.limit}
+    )
+    DELETE FROM public.user_activity activity
+    USING cleanup_candidates
+    WHERE activity.id = cleanup_candidates.id
+    RETURNING activity.id
+  `);
+
+  return ((result.rows ?? []) as Array<{ id?: unknown }>)
+    .map((row) => String(row.id ?? "").trim())
+    .filter(Boolean);
 }
 
 export async function getFilteredActivities(filters: {

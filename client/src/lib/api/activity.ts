@@ -88,6 +88,24 @@ export async function deleteActivityLogsBulk(activityIds: string[]) {
   }>;
 }
 
+export async function cleanupEndedActivityLogs(options?: {
+  limit?: number | undefined;
+  olderThanDays?: number | undefined;
+}) {
+  const response = await apiRequest("DELETE", "/api/activity/logs/cleanup-ended", {
+    limit: options?.limit,
+    olderThanDays: options?.olderThanDays,
+  });
+  return response.json() as Promise<{
+    cutoff: string;
+    deletedCount: number;
+    limit: number;
+    ok: boolean;
+    olderThanDays: number;
+    success: boolean;
+  }>;
+}
+
 export async function kickUser(activityId: string) {
   const response = await apiRequest("POST", "/api/activity/kick", { activityId });
   return response.json();

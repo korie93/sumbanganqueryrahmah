@@ -17,6 +17,7 @@ export type ActivityStorage = Pick<
   | "createAuditLog"
   | "deactivateUserActivities"
   | "deleteActivity"
+  | "deleteEndedActivitiesBefore"
   | "getActiveActivities"
   | "getActiveActivitiesByUsername"
   | "getActivityById"

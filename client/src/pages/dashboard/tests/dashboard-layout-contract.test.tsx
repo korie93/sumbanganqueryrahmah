@@ -289,6 +289,7 @@ test("DashboardLoginSituationSummary explains the current login state in plain o
       recentLoginActivities: [
         {
           browser: "Chrome",
+          id: "activity-active",
           ipAddress: "10.42.x.x",
           lastActivityTime: "2026-05-06T02:30:00Z",
           loginTime: "2026-05-06T02:00:00Z",
@@ -348,6 +349,7 @@ test("DashboardLoginIncidentTimeline turns login signals into a short operator s
       recentLoginActivities: [
         {
           browser: "Chrome",
+          id: "activity-active-render",
           ipAddress: "10.42.x.x",
           lastActivityTime: "2026-05-06T02:30:00Z",
           loginTime: "2026-05-06T02:00:00Z",
@@ -493,6 +495,7 @@ test("DashboardActionQueue renders prioritized operator actions without lifecycl
         },
         {
           browser: "Edge",
+          id: "activity-ended",
           ipAddress: "10.43.x.x",
           lastActivityTime: "2026-05-06T04:30:00Z",
           loginTime: "2026-05-06T04:00:00Z",
@@ -581,6 +584,7 @@ test("DashboardSessionHealthStrip renders session freshness without lifecycle ef
         },
         {
           browser: "Edge",
+          id: "activity-ended-render",
           ipAddress: "10.43.x.x",
           lastActivityTime: null,
           loginTime: "2026-05-06T05:40:00Z",
@@ -794,6 +798,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
       activities: [
         {
           browser: "Chrome",
+          id: "activity-active-render",
           ipAddress: "10.42.x.x",
           lastActivityTime: "2026-05-06T02:30:00Z",
           loginTime: "2026-05-06T02:00:00Z",
@@ -805,6 +810,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
         },
         {
           browser: "Edge",
+          id: "activity-ended-render",
           ipAddress: "10.43.x.x",
           lastActivityTime: "2026-05-06T04:30:00Z",
           loginTime: "2026-05-06T04:00:00Z",
@@ -817,6 +823,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
       ],
       errorMessage: null,
       loading: false,
+      onCleanupEndedActivities: () => undefined,
       onDeleteEndedActivity: () => undefined,
       onRetry: () => undefined,
       retrying: false,
@@ -837,13 +844,20 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /Showing 1-2 of 2/);
   assert.match(markup, /button-login-activity-prev-page/);
   assert.match(markup, /button-login-activity-next-page/);
+  assert.match(markup, /Clean up ended login activity logs older than 30 days/);
+  assert.match(markup, /button-recent-login-cleanup-ended/);
+  assert.match(markup, /Cleanup old logs/);
   assert.match(source, /Delete ended login activity log for/);
+  assert.match(markup, /Delete ended login activity log for watch\.user/);
   assert.doesNotMatch(markup, /Delete ended login activity log for super\.user/);
   assert.match(markup, /Details/);
   assert.match(markup, /tabindex="0"/);
   assert.match(source, /RECENT_LOGIN_ACTIVITY_PAGE_SIZE = 4/);
   assert.match(source, /AlertDialog/);
   assert.match(source, /Delete ended login log\?/);
+  assert.match(source, /Clean up old ended login logs\?/);
+  assert.match(source, /RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30/);
+  assert.match(source, /RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500/);
   assert.match(source, /status === "ended"/);
   assert.match(source, /max-h-\[360px\]/);
   assert.match(source, /xl:grid-cols-1 2xl:grid-cols-2/);

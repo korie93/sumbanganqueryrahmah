@@ -135,6 +135,38 @@ function buildActivityBatchFailureAuditDetails(params: {
   });
 }
 
+function buildActivityRetentionCleanupAuditDetails(params: {
+  cutoffIso: string;
+  deletedCount: number;
+  durationMs: number;
+  limit: number;
+  olderThanDays: number;
+}) {
+  return JSON.stringify({
+    cutoffIso: params.cutoffIso,
+    deletedCount: params.deletedCount,
+    durationMs: params.durationMs,
+    limit: params.limit,
+    olderThanDays: params.olderThanDays,
+  });
+}
+
+function buildActivityRetentionCleanupFailureAuditDetails(params: {
+  cutoffIso: string;
+  durationMs: number;
+  errorType: string;
+  limit: number;
+  olderThanDays: number;
+}) {
+  return JSON.stringify({
+    cutoffIso: params.cutoffIso,
+    durationMs: params.durationMs,
+    errorType: params.errorType,
+    limit: params.limit,
+    olderThanDays: params.olderThanDays,
+  });
+}
+
 async function createBatchFailureAuditLog(params: {
   storage: ActivityStorage;
   performedBy: string;
@@ -157,6 +189,37 @@ async function createBatchFailureAuditLog(params: {
     logger.error("Activity batch operation failure audit failed", {
       event: "activity_batch_failure_audit_failed",
       action: "BULK_DELETE_ACTIVITY_LOGS_FAILED",
+      errorType: auditError instanceof Error ? auditError.name : "UnknownError",
+    });
+  }
+}
+
+async function createRetentionCleanupFailureAuditLog(params: {
+  cutoff: Date;
+  error: unknown;
+  limit: number;
+  olderThanDays: number;
+  performedBy: string;
+  startedAt: number;
+  storage: ActivityStorage;
+}) {
+  try {
+    await params.storage.createAuditLog({
+      action: "DELETE_OLD_ACTIVITY_LOGS_FAILED",
+      performedBy: params.performedBy,
+      targetResource: "activity_logs",
+      details: buildActivityRetentionCleanupFailureAuditDetails({
+        cutoffIso: params.cutoff.toISOString(),
+        durationMs: Date.now() - params.startedAt,
+        errorType: params.error instanceof Error ? params.error.name : "UnknownError",
+        limit: params.limit,
+        olderThanDays: params.olderThanDays,
+      }),
+    });
+  } catch (auditError) {
+    logger.error("Activity retention cleanup failure audit failed", {
+      event: "activity_retention_cleanup_failure_audit_failed",
+      action: "DELETE_OLD_ACTIVITY_LOGS_FAILED",
       errorType: auditError instanceof Error ? auditError.name : "UnknownError",
     });
   }
@@ -327,6 +390,53 @@ export function createActivitySessionOperations(
         deletedCount,
         notFoundIds,
       };
+    },
+
+    async cleanupEndedActivityLogs(params: {
+      cutoff: Date;
+      limit: number;
+      olderThanDays: number;
+      performedBy: string;
+    }) {
+      const startedAt = Date.now();
+
+      try {
+        const deletedIds = await storage.deleteEndedActivitiesBefore({
+          cutoff: params.cutoff,
+          limit: params.limit,
+        });
+
+        await Promise.all(deletedIds.map((activityId) => closeSocket(activityId)));
+
+        await storage.createAuditLog({
+          action: "DELETE_OLD_ACTIVITY_LOGS",
+          performedBy: params.performedBy,
+          targetResource: "activity_logs",
+          details: buildActivityRetentionCleanupAuditDetails({
+            cutoffIso: params.cutoff.toISOString(),
+            deletedCount: deletedIds.length,
+            durationMs: Date.now() - startedAt,
+            limit: params.limit,
+            olderThanDays: params.olderThanDays,
+          }),
+        });
+
+        return {
+          deletedCount: deletedIds.length,
+          cutoff: params.cutoff.toISOString(),
+        };
+      } catch (error) {
+        await createRetentionCleanupFailureAuditLog({
+          cutoff: params.cutoff,
+          error,
+          limit: params.limit,
+          olderThanDays: params.olderThanDays,
+          performedBy: params.performedBy,
+          startedAt,
+          storage,
+        });
+        throw error;
+      }
     },
 
     async heartbeat(activityId: string) {
