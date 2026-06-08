@@ -1227,6 +1227,7 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
     await createdBackupItem.waitFor({ state: "hidden", timeout: 60_000 });
     backupDeleted = true;
 
+    consumeExpectedRecoveredBackupListRateLimit(tracker);
     consumeExpectedBackupJobRateLimit(tracker);
     tracker.assertClean("backup restore UI flow");
     tracker.clear();
@@ -2164,6 +2165,23 @@ const consumeExpectedBackupRestoreBootstrapRateLimitNoise = (tracker) => {
 
     const isExpectedBootstrapPath = expectedPaths.some((pathFragment) => entry.includes(pathFragment));
     if (!isExpectedBootstrapPath) {
+      continue;
+    }
+
+    tracker.failedRequests.splice(index, 1);
+    consumed += 1;
+  }
+
+  return consumed;
+};
+
+const consumeExpectedRecoveredBackupListRateLimit = (tracker) => {
+  const pattern = "/api/backups?";
+  let consumed = 0;
+
+  for (let index = tracker.failedRequests.length - 1; index >= 0; index -= 1) {
+    const entry = String(tracker.failedRequests[index] || "");
+    if (!entry.includes("GET") || !entry.includes(pattern) || !entry.includes(":: 429")) {
       continue;
     }
 
