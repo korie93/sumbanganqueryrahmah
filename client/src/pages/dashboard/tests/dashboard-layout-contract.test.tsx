@@ -847,6 +847,11 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /Clean up ended login activity logs older than 30 days/);
   assert.match(markup, /button-recent-login-cleanup-ended/);
   assert.match(markup, /Cleanup old logs/);
+  assert.match(markup, /recent-login-retention-policy/);
+  assert.match(markup, /Cleanup threshold: 30 days/);
+  assert.match(markup, /Up to 500 ended logs/);
+  assert.match(markup, /Active sessions protected/);
+  assert.match(markup, /Login activity retention policy: ended logs older than 30 days can be cleaned in batches of 500/);
   assert.match(source, /Delete ended login activity log for/);
   assert.match(markup, /Delete ended login activity log for watch\.user/);
   assert.doesNotMatch(markup, /Delete ended login activity log for super\.user/);

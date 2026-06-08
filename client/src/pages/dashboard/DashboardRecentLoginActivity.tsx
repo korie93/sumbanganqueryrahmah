@@ -286,6 +286,26 @@ function DashboardRecentLoginActivityImpl({
               ) : null}
             </div>
           </div>
+          {onCleanupEndedActivities ? (
+            <div
+              className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-border/60 bg-muted/10 px-3 py-2 text-2xs text-muted-foreground"
+              aria-label={`Login activity retention policy: ended logs older than ${RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS} days can be cleaned in batches of ${RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT}; active sessions are protected`}
+              data-testid="recent-login-retention-policy"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-foreground" aria-hidden="true" />
+                Cleanup threshold: {RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS} days
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Trash2 className="h-3.5 w-3.5 text-foreground" aria-hidden="true" />
+                Up to {RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT} ended logs
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+                Active sessions protected
+              </span>
+            </div>
+          ) : null}
         </CardHeader>
         <CardContent aria-live="polite">
           {errorMessage ? (
