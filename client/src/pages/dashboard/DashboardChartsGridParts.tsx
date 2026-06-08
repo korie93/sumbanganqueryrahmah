@@ -1,6 +1,15 @@
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
-import { formatDashboardHour } from "@/pages/dashboard/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { LoginTrend, PeakHour } from "@/pages/dashboard/types";
+import { formatDashboardDate, formatDashboardHour } from "@/pages/dashboard/utils";
 import type { TooltipProps } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
@@ -25,6 +34,25 @@ type DashboardChartEmptyStateProps = {
   className: string;
 };
 
+export type DashboardChartMetric = {
+  label: string;
+  value: string;
+};
+
+type DashboardChartMetricStripProps = {
+  metrics: readonly DashboardChartMetric[];
+  wide?: boolean;
+};
+
+type DashboardLoginTrendDetailTableProps = {
+  trends: readonly LoginTrend[];
+};
+
+type DashboardPeakHoursDetailTableProps = {
+  peakHours: readonly PeakHour[];
+  totalLogins: number;
+};
+
 const LOGIN_TREND_LEGEND_ITEMS = [
   { label: "Logins", dotClassName: "bg-[hsl(var(--chart-1))]" },
   { label: "Logouts", dotClassName: "bg-[hsl(var(--chart-2))]" },
@@ -45,6 +73,145 @@ function formatTooltipValue(value: ValueType | undefined) {
 
 export function formatDashboardHourCompact(hour: number) {
   return formatDashboardHour(hour).replace(" AM", "a").replace(" PM", "p").replace(" ", "");
+}
+
+export function formatDashboardChartAverage(value: number) {
+  return value.toFixed(1).replace(/\.0$/u, "");
+}
+
+export function formatDashboardChartPercentage(value: number) {
+  return `${(value * 100).toFixed(1).replace(/\.0$/u, "")}%`;
+}
+
+export function DashboardChartMetricStrip({
+  metrics,
+  wide = false,
+}: DashboardChartMetricStripProps) {
+  return (
+    <dl className={`grid grid-cols-2 gap-x-4 gap-y-3 border-y border-border/60 py-3 ${wide ? "sm:grid-cols-4" : ""}`}>
+      {metrics.map((metric) => (
+        <div key={metric.label} className="min-w-0">
+          <dt className="text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">
+            {metric.label}
+          </dt>
+          <dd className="mt-1 truncate text-sm font-bold text-foreground sm:text-base" title={metric.value}>
+            {metric.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function DashboardLoginTrendDetailTable({
+  trends,
+}: DashboardLoginTrendDetailTableProps) {
+  return (
+    <section
+      className="min-h-0 overflow-hidden rounded-xl border border-border/60"
+      aria-labelledby="login-trend-detail-table-title"
+    >
+      <div className="border-b border-border/60 bg-muted/15 px-3 py-2.5">
+        <h3 id="login-trend-detail-table-title" className="text-sm font-semibold text-foreground">
+          Daily values
+        </h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Exact login, logout, and net session values.
+        </p>
+      </div>
+      <div className="max-h-[420px] overflow-auto">
+        <Table className="min-w-[360px] table-fixed">
+          <TableHeader className="sticky top-0 z-10 bg-background">
+            <TableRow>
+              <TableHead className="h-10 w-[37%] px-3 text-xs">Date</TableHead>
+              <TableHead className="h-10 w-[21%] px-2 text-right text-xs">Logins</TableHead>
+              <TableHead className="h-10 w-[21%] px-2 text-right text-xs">Logouts</TableHead>
+              <TableHead className="h-10 w-[21%] px-3 text-right text-xs">Net</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {trends.map((trend) => {
+              const netSessions = trend.logins - trend.logouts;
+              return (
+                <TableRow key={trend.date}>
+                  <TableCell className="px-3 py-2.5 text-xs font-medium">
+                    {formatDashboardDate(trend.date)}
+                  </TableCell>
+                  <TableCell className="px-2 py-2.5 text-right text-xs">
+                    {trend.logins.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="px-2 py-2.5 text-right text-xs">
+                    {trend.logouts.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="px-3 py-2.5 text-right text-xs font-semibold">
+                    {netSessions > 0 ? "+" : ""}
+                    {netSessions.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
+export function DashboardPeakHoursDetailTable({
+  peakHours,
+  totalLogins,
+}: DashboardPeakHoursDetailTableProps) {
+  const sortedPeakHours = [...peakHours].sort(
+    (left, right) => right.count - left.count || left.hour - right.hour,
+  );
+
+  return (
+    <section
+      className="min-h-0 overflow-hidden rounded-xl border border-border/60"
+      aria-labelledby="peak-hours-detail-table-title"
+    >
+      <div className="border-b border-border/60 bg-muted/15 px-3 py-2.5">
+        <h3 id="peak-hours-detail-table-title" className="text-sm font-semibold text-foreground">
+          Hour ranking
+        </h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Hours ranked by login volume and share.
+        </p>
+      </div>
+      <div className="max-h-[420px] overflow-auto">
+        <Table className="min-w-[340px] table-fixed">
+          <TableHeader className="sticky top-0 z-10 bg-background">
+            <TableRow>
+              <TableHead className="h-10 w-[18%] px-3 text-xs">Rank</TableHead>
+              <TableHead className="h-10 w-[34%] px-2 text-xs">Hour</TableHead>
+              <TableHead className="h-10 w-[24%] px-2 text-right text-xs">Logins</TableHead>
+              <TableHead className="h-10 w-[24%] px-3 text-right text-xs">Share</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedPeakHours.map((peakHour, index) => (
+              <TableRow key={peakHour.hour}>
+                <TableCell className="px-3 py-2.5 text-xs text-muted-foreground">
+                  {index + 1}
+                </TableCell>
+                <TableCell className="px-2 py-2.5 text-xs font-medium">
+                  {formatDashboardHour(peakHour.hour)}
+                </TableCell>
+                <TableCell className="px-2 py-2.5 text-right text-xs">
+                  {peakHour.count.toLocaleString()}
+                </TableCell>
+                <TableCell className="px-3 py-2.5 text-right text-xs font-semibold">
+                  {formatDashboardChartPercentage(
+                    totalLogins > 0 ? peakHour.count / totalLogins : 0,
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
 }
 
 export const CompactChartTooltip = memo(function CompactChartTooltip({
@@ -158,4 +325,3 @@ export function DashboardChartEmptyState({ className }: DashboardChartEmptyState
     </div>
   );
 }
-

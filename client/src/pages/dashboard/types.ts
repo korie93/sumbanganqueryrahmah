@@ -18,6 +18,15 @@ export interface LoginTrend {
   logouts: number;
 }
 
+export interface DashboardLoginTrendInsights {
+  averageDailyLogins: number;
+  netSessions: number;
+  peakDate: string | null;
+  peakLogins: number;
+  totalLogins: number;
+  totalLogouts: number;
+}
+
 export interface TopUser {
   username: string;
   role: string;
@@ -64,6 +73,14 @@ export interface RecentLoginActivityPageQuery {
 export interface PeakHour {
   hour: number;
   count: number;
+}
+
+export interface DashboardPeakHourInsights {
+  averageHourlyLogins: number;
+  peakCount: number;
+  peakHour: number | null;
+  peakShare: number;
+  totalLogins: number;
 }
 
 export interface RoleData {

@@ -14,11 +14,13 @@ import type {
   DashboardActionQueueItem,
   DashboardActionQueuePriority,
   DashboardAccessSignal,
+  DashboardLoginTrendInsights,
   DashboardLoginPatternSummary,
   DashboardLoginHealthScore,
   DashboardLoginRiskExplanation,
   DashboardLoginRiskInsight,
   DashboardLoginRiskSummary,
+  DashboardPeakHourInsights,
   DashboardSessionHealthItem,
   LoginTrend,
   PeakHour,
@@ -177,6 +179,70 @@ export function buildDashboardTrendTickDates(
   return Array.from(tickIndexes)
     .sort((left, right) => left - right)
     .map((index) => trends[index]!.date);
+}
+
+function normalizeDashboardChartCount(value: number) {
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+export function buildDashboardLoginTrendInsights(
+  trends: readonly LoginTrend[] | undefined,
+): DashboardLoginTrendInsights {
+  const rows = trends ?? [];
+  let totalLogins = 0;
+  let totalLogouts = 0;
+  let peakDate: string | null = null;
+  let peakLogins = 0;
+
+  for (const row of rows) {
+    const logins = normalizeDashboardChartCount(row.logins);
+    const logouts = normalizeDashboardChartCount(row.logouts);
+    totalLogins += logins;
+    totalLogouts += logouts;
+
+    if (peakDate === null || logins > peakLogins) {
+      peakDate = row.date;
+      peakLogins = logins;
+    }
+  }
+
+  return {
+    averageDailyLogins: rows.length > 0 ? totalLogins / rows.length : 0,
+    netSessions: totalLogins - totalLogouts,
+    peakDate,
+    peakLogins,
+    totalLogins,
+    totalLogouts,
+  };
+}
+
+export function buildDashboardPeakHourInsights(
+  peakHours: readonly PeakHour[] | undefined,
+): DashboardPeakHourInsights {
+  const validHours = (peakHours ?? []).filter(
+    (row) => Number.isInteger(row.hour) && row.hour >= 0 && row.hour <= 23,
+  );
+  let totalLogins = 0;
+  let peakHour: number | null = null;
+  let peakCount = 0;
+
+  for (const row of validHours) {
+    const count = normalizeDashboardChartCount(row.count);
+    totalLogins += count;
+
+    if (peakHour === null || count > peakCount || (count === peakCount && row.hour < peakHour)) {
+      peakHour = row.hour;
+      peakCount = count;
+    }
+  }
+
+  return {
+    averageHourlyLogins: validHours.length > 0 ? totalLogins / validHours.length : 0,
+    peakCount,
+    peakHour,
+    peakShare: totalLogins > 0 ? peakCount / totalLogins : 0,
+    totalLogins,
+  };
 }
 
 export function formatDashboardUserLastLogin(value: string | null | undefined) {

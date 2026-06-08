@@ -950,13 +950,63 @@ test("Dashboard manual refresh tolerates partial query failures", () => {
 
 test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
   const source = readFileSync(path.resolve(__dirname, "../DashboardChartsGrid.tsx"), "utf8");
+  const canvasSource = readFileSync(path.resolve(__dirname, "../DashboardChartsGridCanvases.tsx"), "utf8");
   const partsSource = readFileSync(path.resolve(__dirname, "../DashboardChartsGridParts.tsx"), "utf8");
 
   assert.match(partsSource, /const CompactChartTooltip = memo\(function CompactChartTooltip/);
+  assert.match(canvasSource, /const DashboardLoginTrendChart = memo\(function DashboardLoginTrendChart/);
+  assert.match(canvasSource, /const DashboardPeakHoursChart = memo\(function DashboardPeakHoursChart/);
+  assert.match(source, /const loginTrendInsights = useMemo\(/);
+  assert.match(source, /const peakHourInsights = useMemo\(/);
   assert.match(source, /const loginTrendTickDates = useMemo\(/);
+  assert.match(source, /const detailedLoginTrendTickDates = useMemo\(/);
   assert.match(source, /const renderLoginTrendTooltip = useCallback\(/);
   assert.match(source, /const renderPeakHoursTooltip = useCallback\(/);
   assert.match(source, /export const DashboardChartsGrid = memo\(DashboardChartsGridImpl\)/);
+});
+
+test("DashboardChartsGrid exposes larger detailed chart dialogs without unmanaged lifecycle work", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardChartsGrid.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardChartsGrid, {
+      onTrendDaysChange: () => undefined,
+      onRetryPeakHours: () => undefined,
+      onRetryTrends: () => undefined,
+      peakHoursErrorMessage: null,
+      peakHours: [
+        { hour: 8, count: 6 },
+        { hour: 9, count: 12 },
+      ],
+      peakHoursLoading: false,
+      peakHoursRetrying: false,
+      trendDays: 7,
+      trendsErrorMessage: null,
+      trends: [
+        { date: "2026-06-01", logins: 8, logouts: 3 },
+        { date: "2026-06-02", logins: 14, logouts: 6 },
+      ],
+      trendsLoading: false,
+      trendsRetrying: false,
+    }),
+  );
+
+  assert.match(markup, /button-expand-login-trends/);
+  assert.match(markup, /button-expand-peak-hours/);
+  assert.match(markup, /aria-haspopup="dialog"/);
+  assert.match(markup, /Full view/);
+  assert.match(markup, /Total logins/);
+  assert.match(markup, /Peak day/);
+  assert.match(markup, /Busiest hour/);
+  assert.match(source, /data-testid="dialog-dashboard-chart-detail"/);
+  assert.match(source, /h-\[clamp\(320px,54vh,620px\)\]/);
+  assert.match(source, /onCloseAutoFocus=\{handleExpandedChartCloseAutoFocus\}/);
+  assert.match(source, /expandedChartTriggerRef\.current\?\.focus\(\)/);
+  assert.match(source, /DashboardLoginTrendDetailTable/);
+  assert.match(source, /DashboardPeakHoursDetailTable/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
+  assert.doesNotMatch(source, /addEventListener\(/);
 });
 
 test("DashboardChartsGrid renders independent retryable error states", () => {

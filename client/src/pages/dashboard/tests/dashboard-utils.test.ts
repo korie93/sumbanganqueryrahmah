@@ -9,6 +9,8 @@ import {
   buildDashboardLoginPatternSummary,
   buildDashboardLoginRiskExplanation,
   buildDashboardLoginRiskInsights,
+  buildDashboardLoginTrendInsights,
+  buildDashboardPeakHourInsights,
   buildDashboardSessionHealthItems,
   buildDashboardTrendTickDates,
   buildSummaryCards,
@@ -784,4 +786,74 @@ test("buildDashboardTrendTickDates returns every date when the range is already 
     "2026-04-11",
     "2026-04-12",
   ]);
+});
+
+test("buildDashboardLoginTrendInsights summarizes exact chart review values", () => {
+  assert.deepEqual(
+    buildDashboardLoginTrendInsights([
+      { date: "2026-06-01", logins: 8, logouts: 3 },
+      { date: "2026-06-02", logins: 14, logouts: 6 },
+      { date: "2026-06-03", logins: 10, logouts: 4 },
+    ]),
+    {
+      averageDailyLogins: 32 / 3,
+      netSessions: 19,
+      peakDate: "2026-06-02",
+      peakLogins: 14,
+      totalLogins: 32,
+      totalLogouts: 13,
+    },
+  );
+});
+
+test("buildDashboardLoginTrendInsights handles empty and invalid counts safely", () => {
+  assert.deepEqual(buildDashboardLoginTrendInsights(undefined), {
+    averageDailyLogins: 0,
+    netSessions: 0,
+    peakDate: null,
+    peakLogins: 0,
+    totalLogins: 0,
+    totalLogouts: 0,
+  });
+
+  const invalidCounts = buildDashboardLoginTrendInsights([
+    { date: "2026-06-01", logins: Number.NaN, logouts: -2 },
+  ]);
+  assert.equal(invalidCounts.totalLogins, 0);
+  assert.equal(invalidCounts.totalLogouts, 0);
+  assert.equal(invalidCounts.averageDailyLogins, 0);
+});
+
+test("buildDashboardPeakHourInsights ranks the earliest tied peak and calculates share", () => {
+  assert.deepEqual(
+    buildDashboardPeakHourInsights([
+      { hour: 9, count: 12 },
+      { hour: 8, count: 12 },
+      { hour: 10, count: 6 },
+    ]),
+    {
+      averageHourlyLogins: 10,
+      peakCount: 12,
+      peakHour: 8,
+      peakShare: 0.4,
+      totalLogins: 30,
+    },
+  );
+});
+
+test("buildDashboardPeakHourInsights ignores invalid hours and normalizes invalid counts", () => {
+  assert.deepEqual(
+    buildDashboardPeakHourInsights([
+      { hour: 24, count: 100 },
+      { hour: 7, count: Number.POSITIVE_INFINITY },
+      { hour: 8, count: -1 },
+    ]),
+    {
+      averageHourlyLogins: 0,
+      peakCount: 0,
+      peakHour: 7,
+      peakShare: 0,
+      totalLogins: 0,
+    },
+  );
 });
