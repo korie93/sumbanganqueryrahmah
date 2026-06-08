@@ -109,3 +109,77 @@ test("AnalyticsRepository.getRecentLoginActivity returns sanitized recent access
     }).execute = originalExecute;
   }
 });
+
+test("AnalyticsRepository.getRecentLoginActivityPage returns bounded page metadata and sanitized rows", async () => {
+  const repository = new AnalyticsRepository();
+  const originalExecute = dbRead.execute;
+  let executeCallCount = 0;
+
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
+  }).execute = (async () => {
+    executeCallCount += 1;
+    if (executeCallCount === 1) {
+      return {
+        rows: [{
+          activeCount: 2,
+          allCount: 7,
+          attentionCount: 1,
+          endedCount: 5,
+        }],
+      };
+    }
+    return {
+      rows: [{
+        browser: "Mozilla/5.0 Edg/125.0",
+        id: "activity-page-1",
+        ipAddress: "10.42.7.9",
+        isActive: false,
+        lastActivityTime: new Date("2026-05-05T03:20:00.000Z"),
+        loginTime: new Date("2026-05-05T03:15:00.000Z"),
+        logoutReason: "IDLE_TIMEOUT",
+        logoutTime: new Date("2026-05-05T03:25:00.000Z"),
+        role: "admin",
+        username: "watch.user",
+      }],
+    };
+  }) as unknown as typeof dbRead.execute;
+
+  try {
+    const result = await repository.getRecentLoginActivityPage({
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-31",
+      page: 9,
+      pageSize: 4,
+      search: "watch%_user",
+      status: "ended",
+    });
+
+    assert.equal(executeCallCount, 2);
+    assert.deepEqual(result, {
+      activities: [{
+        browser: "Edge",
+        id: "activity-page-1",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-05T03:20:00.000Z",
+        loginTime: "2026-05-05T03:15:00.000Z",
+        logoutReason: "IDLE_TIMEOUT",
+        logoutTime: "2026-05-05T03:25:00.000Z",
+        role: "admin",
+        status: "ended",
+        username: "watch.user",
+      }],
+      filterCounts: { active: 2, all: 7, attention: 1, ended: 5 },
+      pagination: {
+        page: 2,
+        pageSize: 4,
+        totalItems: 5,
+        totalPages: 2,
+      },
+    });
+  } finally {
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
+    }).execute = originalExecute;
+  }
+});

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import {
@@ -9,6 +9,7 @@ import {
   getLoginTrends,
   getPeakHours,
   getRecentLoginActivity,
+  getRecentLoginActivityPage,
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api";
@@ -40,6 +41,8 @@ import type {
   LoginTrend,
   PeakHour,
   RecentLoginActivity,
+  RecentLoginActivityFilter,
+  RecentLoginActivityPage,
   RoleData,
   SummaryData,
   TopUser,
@@ -49,6 +52,7 @@ import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils
 type DashboardRefetch = () => Promise<unknown>;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500;
+const RECENT_LOGIN_ACTIVITY_DEFAULT_PAGE_SIZE = 4;
 
 function getRejectedDashboardRefreshResults(results: PromiseSettledResult<unknown>[]) {
   return results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
@@ -65,6 +69,15 @@ function DashboardContent() {
   const shouldDeferSecondaryMobileSections =
     isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
   const [trendDays, setTrendDays] = useState(7);
+  const [recentLoginActivityDateFrom, setRecentLoginActivityDateFrom] = useState("");
+  const [recentLoginActivityDateTo, setRecentLoginActivityDateTo] = useState("");
+  const [recentLoginActivityFilter, setRecentLoginActivityFilter] =
+    useState<RecentLoginActivityFilter>("all");
+  const [recentLoginActivityPageNumber, setRecentLoginActivityPageNumber] = useState(1);
+  const [recentLoginActivityPageSize, setRecentLoginActivityPageSize] =
+    useState(RECENT_LOGIN_ACTIVITY_DEFAULT_PAGE_SIZE);
+  const [recentLoginActivitySearch, setRecentLoginActivitySearch] = useState("");
+  const deferredRecentLoginActivitySearch = useDeferredValue(recentLoginActivitySearch.trim());
   const [exportingPdf, setExportingPdf] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -122,13 +135,52 @@ function DashboardContent() {
     dataUpdatedAt: recentLoginActivityUpdatedAt,
     error: recentLoginActivityError,
     isError: recentLoginActivityIsError,
-    isFetching: recentLoginActivityFetching,
     isLoading: recentLoginActivityLoading,
     refetch: refetchRecentLoginActivity,
   } = useQuery<RecentLoginActivity[]>({
     queryKey: ["/api/analytics/recent-login-activity"],
     queryFn: ({ signal }) => getRecentLoginActivity(8, { signal }),
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
+    refetchIntervalInBackground: false,
+  });
+
+  const recentLoginActivityPageQuery = useMemo(
+    () => ({
+      page: recentLoginActivityPageNumber,
+      pageSize: recentLoginActivityPageSize,
+      status: recentLoginActivityFilter,
+      ...(recentLoginActivityDateFrom ? { dateFrom: recentLoginActivityDateFrom } : {}),
+      ...(recentLoginActivityDateTo ? { dateTo: recentLoginActivityDateTo } : {}),
+      ...(deferredRecentLoginActivitySearch
+        ? { search: deferredRecentLoginActivitySearch }
+        : {}),
+    }),
+    [
+      deferredRecentLoginActivitySearch,
+      recentLoginActivityDateFrom,
+      recentLoginActivityDateTo,
+      recentLoginActivityFilter,
+      recentLoginActivityPageNumber,
+      recentLoginActivityPageSize,
+    ],
+  );
+  const {
+    data: recentLoginActivityPage,
+    error: recentLoginActivityPageError,
+    isError: recentLoginActivityPageIsError,
+    isFetching: recentLoginActivityPageFetching,
+    isLoading: recentLoginActivityPageLoading,
+    refetch: refetchRecentLoginActivityPage,
+  } = useQuery<RecentLoginActivityPage>({
+    queryKey: [
+      "/api/analytics/recent-login-activity-page",
+      recentLoginActivityPageQuery,
+    ],
+    queryFn: ({ signal }) =>
+      getRecentLoginActivityPage(recentLoginActivityPageQuery, { signal }),
+    placeholderData: keepPreviousData,
+    refetchInterval: () =>
+      resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
@@ -180,8 +232,12 @@ function DashboardContent() {
     [topUsersError, topUsersIsError],
   );
   const recentLoginActivityErrorMessage = useMemo(
-    () => (recentLoginActivityIsError ? getDashboardQueryErrorDetail(recentLoginActivityError) : null),
-    [recentLoginActivityError, recentLoginActivityIsError],
+    () => (
+      recentLoginActivityPageIsError
+        ? getDashboardQueryErrorDetail(recentLoginActivityPageError)
+        : null
+    ),
+    [recentLoginActivityPageError, recentLoginActivityPageIsError],
   );
   const peakHoursErrorMessage = useMemo(
     () => (peakHoursIsError ? getDashboardQueryErrorDetail(peakHoursError) : null),
@@ -242,7 +298,7 @@ function DashboardContent() {
   const handleRetrySummary = useDashboardRetryHandler(refetchSummary);
   const handleRetryTrends = useDashboardRetryHandler(refetchTrends);
   const handleRetryTopUsers = useDashboardRetryHandler(refetchTopUsers);
-  const handleRetryRecentLoginActivity = useDashboardRetryHandler(refetchRecentLoginActivity);
+  const handleRetryRecentLoginActivity = useDashboardRetryHandler(refetchRecentLoginActivityPage);
   const handleRetryPeakHours = useDashboardRetryHandler(refetchPeakHours);
   const handleRetryRoles = useDashboardRetryHandler(refetchRoles);
   const deleteRecentLoginActivityMutation = useMutation<unknown, Error, RecentLoginActivity>({
@@ -258,6 +314,9 @@ function DashboardContent() {
         description: `Ended login activity for ${activity.username} has been removed.`,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/analytics/recent-login-activity-page"],
+      });
       await queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
     },
     onError: (error, activity) => {
@@ -291,6 +350,9 @@ function DashboardContent() {
             : `No ended login logs older than ${result.olderThanDays} days were found.`,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/analytics/recent-login-activity-page"],
+      });
       await queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
     },
     onError: (error) => {
@@ -314,6 +376,44 @@ function DashboardContent() {
   const handleCleanupEndedLoginActivities = useCallback(() => {
     cleanupEndedLoginActivityMutation.mutate();
   }, [cleanupEndedLoginActivityMutation]);
+  const handleRecentLoginActivityFilterChange = useCallback((filter: RecentLoginActivityFilter) => {
+    setRecentLoginActivityFilter(filter);
+    setRecentLoginActivityPageNumber(1);
+  }, []);
+  const handleRecentLoginActivityPageSizeChange = useCallback((pageSize: number) => {
+    setRecentLoginActivityPageSize(pageSize);
+    setRecentLoginActivityPageNumber(1);
+  }, []);
+  const handleRecentLoginActivitySearchChange = useCallback((value: string) => {
+    setRecentLoginActivitySearch(value);
+    setRecentLoginActivityPageNumber(1);
+  }, []);
+  const handleRecentLoginActivityDateFromChange = useCallback((value: string) => {
+    setRecentLoginActivityDateFrom(value);
+    setRecentLoginActivityDateTo((current) =>
+      current && value && current < value ? value : current);
+    setRecentLoginActivityPageNumber(1);
+  }, []);
+  const handleRecentLoginActivityDateToChange = useCallback((value: string) => {
+    setRecentLoginActivityDateTo(value);
+    setRecentLoginActivityDateFrom((current) =>
+      current && value && current > value ? value : current);
+    setRecentLoginActivityPageNumber(1);
+  }, []);
+  const handleClearRecentLoginActivityFilters = useCallback(() => {
+    setRecentLoginActivityDateFrom("");
+    setRecentLoginActivityDateTo("");
+    setRecentLoginActivityFilter("all");
+    setRecentLoginActivityPageNumber(1);
+    setRecentLoginActivitySearch("");
+  }, []);
+
+  useEffect(() => {
+    const serverPage = recentLoginActivityPage?.pagination.page;
+    if (serverPage && serverPage !== recentLoginActivityPageNumber) {
+      setRecentLoginActivityPageNumber(serverPage);
+    }
+  }, [recentLoginActivityPage?.pagination.page, recentLoginActivityPageNumber]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -343,6 +443,7 @@ function DashboardContent() {
         refetchTrends(),
         refetchTopUsers(),
         refetchRecentLoginActivity(),
+        refetchRecentLoginActivityPage(),
         refetchPeakHours(),
         refetchRoles(),
       ]);
@@ -367,6 +468,7 @@ function DashboardContent() {
     isDashboardLifecycleActive,
     refetchPeakHours,
     refetchRecentLoginActivity,
+    refetchRecentLoginActivityPage,
     refetchRoles,
     refetchSummary,
     refetchTopUsers,
@@ -481,7 +583,14 @@ function DashboardContent() {
           onRetryTopUsers={handleRetryTopUsers}
           onRetryTrends={handleRetryTrends}
           onCleanupEndedLoginActivities={handleCleanupEndedLoginActivities}
+          onClearRecentLoginActivityFilters={handleClearRecentLoginActivityFilters}
+          onRecentLoginActivityDateFromChange={handleRecentLoginActivityDateFromChange}
+          onRecentLoginActivityDateToChange={handleRecentLoginActivityDateToChange}
           onDeleteEndedLoginActivity={handleDeleteEndedLoginActivity}
+          onRecentLoginActivityFilterChange={handleRecentLoginActivityFilterChange}
+          onRecentLoginActivityPageChange={setRecentLoginActivityPageNumber}
+          onRecentLoginActivityPageSizeChange={handleRecentLoginActivityPageSizeChange}
+          onRecentLoginActivitySearchChange={handleRecentLoginActivitySearchChange}
           trends={trends ?? []}
           trendsErrorMessage={trendsErrorMessage}
           trendsLoading={trendsLoading}
@@ -491,11 +600,27 @@ function DashboardContent() {
           peakHoursLoading={!secondaryDashboardQueriesEnabled || peakHoursLoading}
           peakHoursRetrying={peakHoursFetching}
           recentLoginActivities={recentLoginActivities ?? []}
+          recentLoginActivityDateFrom={recentLoginActivityDateFrom}
+          recentLoginActivityDateTo={recentLoginActivityDateTo}
+          recentLoginActivityFilter={recentLoginActivityFilter}
+          recentLoginActivityFilterCounts={recentLoginActivityPage?.filterCounts ?? {
+            active: 0,
+            all: 0,
+            attention: 0,
+            ended: 0,
+          }}
+          recentLoginActivityPage={recentLoginActivityPage?.pagination.page ?? recentLoginActivityPageNumber}
+          recentLoginActivityPageItems={recentLoginActivityPage?.activities ?? []}
+          recentLoginActivityPageSize={recentLoginActivityPage?.pagination.pageSize ?? recentLoginActivityPageSize}
+          recentLoginActivitySearch={recentLoginActivitySearch}
+          recentLoginActivityTotalItems={recentLoginActivityPage?.pagination.totalItems ?? 0}
+          recentLoginActivityTotalPages={recentLoginActivityPage?.pagination.totalPages ?? 1}
           recentLoginActivityCleaningEndedLogs={cleanupEndedLoginActivityMutation.isPending}
           recentLoginActivityDeletingId={deleteRecentLoginActivityMutation.variables?.id ?? null}
           recentLoginActivityErrorMessage={recentLoginActivityErrorMessage}
-          recentLoginActivityLoading={recentLoginActivityLoading}
-          recentLoginActivityRetrying={recentLoginActivityFetching}
+          recentLoginActivityLoading={recentLoginActivityPageLoading}
+          recentLoginActivityRetrying={recentLoginActivityPageFetching}
+          recentLoginActivitySnapshotLoading={recentLoginActivityLoading}
           roleDistribution={roleDistribution ?? []}
           roleErrorMessage={roleDistributionErrorMessage}
           roleLoading={!secondaryDashboardQueriesEnabled || roleLoading}

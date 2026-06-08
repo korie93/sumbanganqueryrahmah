@@ -26,6 +26,7 @@ export interface TopUser {
 }
 
 export type RecentLoginActivityStatus = "active" | "ended";
+export type RecentLoginActivityFilter = "all" | RecentLoginActivityStatus | "attention";
 
 export interface RecentLoginActivity {
   browser: string | null;
@@ -38,6 +39,26 @@ export interface RecentLoginActivity {
   role: string;
   status: RecentLoginActivityStatus;
   username: string;
+}
+
+export interface RecentLoginActivityPage {
+  activities: RecentLoginActivity[];
+  filterCounts: Record<RecentLoginActivityFilter, number>;
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}
+
+export interface RecentLoginActivityPageQuery {
+  dateFrom?: string;
+  dateTo?: string;
+  page: number;
+  pageSize: number;
+  search?: string;
+  status: RecentLoginActivityFilter;
 }
 
 export interface PeakHour {

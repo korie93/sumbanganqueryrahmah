@@ -96,6 +96,9 @@ function createOperationsRouteHarness(options?: {
   const cleanupCalls: Date[] = [];
   const topUserCalls: number[] = [];
   const recentLoginActivityCalls: number[] = [];
+  const recentLoginActivityPageCalls: Array<
+    Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0]
+  > = [];
   const createBackupCalls: CreateBackupData[] = [];
   const restoreCalls: unknown[] = [];
   const deleteBackupCalls: string[] = [];
@@ -180,6 +183,30 @@ function createOperationsRouteHarness(options?: {
         status: "active",
         username: "super.user",
       }];
+    },
+    getRecentLoginActivityPage: async (pageOptions) => {
+      recentLoginActivityPageCalls.push(pageOptions);
+      return {
+        activities: [{
+          browser: "Chrome",
+          id: "activity-2",
+          ipAddress: "127.0.x.x",
+          lastActivityTime: "2026-03-19T02:00:00.000Z",
+          loginTime: "2026-03-19T01:30:00.000Z",
+          logoutReason: "IDLE_TIMEOUT",
+          logoutTime: "2026-03-19T02:10:00.000Z",
+          role: "admin",
+          status: "ended",
+          username: "watch.user",
+        }],
+        filterCounts: { active: 2, all: 8, attention: 3, ended: 6 },
+        pagination: {
+          page: pageOptions.page,
+          pageSize: pageOptions.pageSize,
+          totalItems: 6,
+          totalPages: 2,
+        },
+      };
     },
     getPeakHours: async () => [{ hour: 9, count: 4 }],
     getRoleDistribution: async () => [{ role: "superuser", count: 1 }],
@@ -389,6 +416,7 @@ function createOperationsRouteHarness(options?: {
     cleanupCalls,
     topUserCalls,
     recentLoginActivityCalls,
+    recentLoginActivityPageCalls,
     createBackupCalls,
     restoreCalls,
     deleteBackupCalls,
@@ -558,6 +586,74 @@ test("GET /api/analytics/recent-login-activity rejects page-size values below on
     assert.equal(response.status, 400);
     assert.equal((await response.json()).message, "Page limit must be at least 1");
     assert.deepEqual(recentLoginActivityCalls, []);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/analytics/recent-login-activity-page forwards validated server filters", async () => {
+  const { app, recentLoginActivityPageCalls } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/analytics/recent-login-activity-page`
+      + "?page=2&pageSize=4&status=ended&search=watch.user"
+      + "&dateFrom=2026-03-01&dateTo=2026-03-31",
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(recentLoginActivityPageCalls, [{
+      dateFrom: "2026-03-01",
+      dateTo: "2026-03-31",
+      page: 2,
+      pageSize: 4,
+      search: "watch.user",
+      status: "ended",
+    }]);
+    assert.deepEqual(await response.json(), {
+      activities: [{
+        browser: "Chrome",
+        id: "activity-2",
+        ipAddress: "127.0.x.x",
+        lastActivityTime: "2026-03-19T02:00:00.000Z",
+        loginTime: "2026-03-19T01:30:00.000Z",
+        logoutReason: "IDLE_TIMEOUT",
+        logoutTime: "2026-03-19T02:10:00.000Z",
+        role: "admin",
+        status: "ended",
+        username: "watch.user",
+      }],
+      filterCounts: { active: 2, all: 8, attention: 3, ended: 6 },
+      pagination: {
+        page: 2,
+        pageSize: 4,
+        totalItems: 6,
+        totalPages: 2,
+      },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/analytics/recent-login-activity-page rejects invalid filters", async () => {
+  const { app, recentLoginActivityPageCalls } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const invalidQueries = [
+      "status=unknown",
+      "dateFrom=2026-02-30",
+      "dateFrom=2026-03-20&dateTo=2026-03-19",
+      "pageSize=0",
+    ];
+    for (const query of invalidQueries) {
+      const response = await fetch(
+        `${baseUrl}/api/analytics/recent-login-activity-page?${query}`,
+      );
+      assert.equal(response.status, 400);
+    }
+    assert.deepEqual(recentLoginActivityPageCalls, []);
   } finally {
     await stopTestServer(server);
   }

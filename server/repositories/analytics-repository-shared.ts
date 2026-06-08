@@ -25,6 +25,7 @@ export type TopActiveUserRow = {
 };
 
 export type RecentLoginActivityStatus = "active" | "ended";
+export type RecentLoginActivityFilter = "all" | RecentLoginActivityStatus | "attention";
 
 export type RecentLoginActivityRow = {
   browser: string | null;
@@ -50,6 +51,26 @@ export type RecentLoginActivity = {
   role: string;
   status: RecentLoginActivityStatus;
   username: string;
+};
+
+export type RecentLoginActivityPageOptions = {
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
+  page: number;
+  pageSize: number;
+  search?: string | undefined;
+  status: RecentLoginActivityFilter;
+};
+
+export type RecentLoginActivityPage = {
+  activities: RecentLoginActivity[];
+  filterCounts: Record<RecentLoginActivityFilter, number>;
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
 };
 
 export function buildAuditActionList(actions: readonly string[]) {

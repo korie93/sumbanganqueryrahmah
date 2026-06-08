@@ -1,4 +1,5 @@
 import { apiRequest } from "../api-client";
+import type { RecentLoginActivityPageQuery } from "@/pages/dashboard/types";
 
 type AnalyticsRequestOptions = {
   signal?: AbortSignal | undefined;
@@ -33,6 +34,27 @@ export async function getRecentLoginActivity(pageSize: number = 8, options?: Ana
   const response = await apiRequest(
     "GET",
     `/api/analytics/recent-login-activity?pageSize=${pageSize}`,
+    undefined,
+    options,
+  );
+  return response.json();
+}
+
+export async function getRecentLoginActivityPage(
+  query: RecentLoginActivityPageQuery,
+  options?: AnalyticsRequestOptions,
+) {
+  const params = new URLSearchParams({
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+    status: query.status,
+  });
+  if (query.search) params.set("search", query.search);
+  if (query.dateFrom) params.set("dateFrom", query.dateFrom);
+  if (query.dateTo) params.set("dateTo", query.dateTo);
+  const response = await apiRequest(
+    "GET",
+    `/api/analytics/recent-login-activity-page?${params.toString()}`,
     undefined,
     options,
   );

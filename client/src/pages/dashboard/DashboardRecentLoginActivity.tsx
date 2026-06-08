@@ -1,5 +1,6 @@
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Clock, Eye, Globe2, ShieldCheck, Trash2 } from "lucide-react";
+import { memo, useCallback, useState, type ReactNode } from "react";
+import { CalendarDays, Clock, Eye, Globe2, Search, ShieldCheck, Trash2, X } from "lucide-react";
+import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -22,13 +24,13 @@ import {
 } from "@/components/ui/sheet";
 import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import { buildDashboardRecentLoginActivityRowAriaLabel } from "@/pages/dashboard/dashboard-row-aria";
-import type { RecentLoginActivity } from "@/pages/dashboard/types";
+import type {
+  RecentLoginActivity,
+  RecentLoginActivityFilter,
+} from "@/pages/dashboard/types";
 import {
-  buildDashboardRecentLoginActivityFilterCounts,
-  filterDashboardRecentLoginActivities,
   formatDashboardRecentLoginTime,
   resolveDashboardRecentLoginRiskNote,
-  type DashboardRecentLoginActivityFilter,
   resolveDashboardRecentLoginStatusMeta,
 } from "@/pages/dashboard/utils";
 
@@ -36,20 +38,36 @@ interface DashboardRecentLoginActivityProps {
   activities: RecentLoginActivity[] | undefined;
   cleaningEndedActivityLogs?: boolean | undefined;
   deletingActivityId?: string | null | undefined;
+  dateFrom: string;
+  dateTo: string;
   errorMessage: string | null;
+  filterCounts: Record<RecentLoginActivityFilter, number>;
   loading: boolean;
   onCleanupEndedActivities?: (() => void) | undefined;
+  onClearFilters: () => void;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
   onDeleteEndedActivity?: ((activity: RecentLoginActivity) => void) | undefined;
+  onFilterChange: (filter: RecentLoginActivityFilter) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
   onRetry: () => void;
+  onSearchChange: (value: string) => void;
+  page: number;
+  pageSize: number;
   retrying: boolean;
+  search: string;
+  selectedFilter: RecentLoginActivityFilter;
+  totalItems: number;
+  totalPages: number;
 }
 
 const EMPTY_RECENT_LOGIN_ACTIVITIES: readonly RecentLoginActivity[] = [];
 const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500;
-const RECENT_LOGIN_ACTIVITY_PAGE_SIZE = 4;
+const RECENT_LOGIN_ACTIVITY_PAGE_SIZE_OPTIONS = [4, 8, 12] as const;
 const RECENT_LOGIN_FILTER_OPTIONS: readonly {
-  readonly id: DashboardRecentLoginActivityFilter;
+  readonly id: RecentLoginActivityFilter;
   readonly label: string;
 }[] = [
   { id: "all", label: "All" },
@@ -181,49 +199,39 @@ function DashboardRecentLoginActivityImpl({
   activities,
   cleaningEndedActivityLogs = false,
   deletingActivityId = null,
+  dateFrom,
+  dateTo,
   errorMessage,
+  filterCounts,
   loading,
   onCleanupEndedActivities,
+  onClearFilters,
+  onDateFromChange,
+  onDateToChange,
   onDeleteEndedActivity,
+  onFilterChange,
+  onPageChange,
+  onPageSizeChange,
   onRetry,
+  onSearchChange,
+  page,
+  pageSize,
   retrying,
+  search,
+  selectedFilter,
+  totalItems,
+  totalPages,
 }: DashboardRecentLoginActivityProps) {
   const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<DashboardRecentLoginActivityFilter>("all");
-  const [selectedPage, setSelectedPage] = useState(1);
   const [selectedActivity, setSelectedActivity] = useState<RecentLoginActivity | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<RecentLoginActivity | null>(null);
   const safeActivities = activities ?? EMPTY_RECENT_LOGIN_ACTIVITIES;
-  const filterCounts = useMemo(
-    () => buildDashboardRecentLoginActivityFilterCounts(safeActivities),
-    [safeActivities],
+  const pageStartIndex = (Math.max(1, page) - 1) * Math.max(1, pageSize);
+  const hasActiveFilters = Boolean(
+    selectedFilter !== "all" || search.trim() || dateFrom || dateTo,
   );
-  const visibleActivities = useMemo(
-    () => filterDashboardRecentLoginActivities(safeActivities, selectedFilter),
-    [safeActivities, selectedFilter],
-  );
-  const totalPages = Math.max(1, Math.ceil(visibleActivities.length / RECENT_LOGIN_ACTIVITY_PAGE_SIZE));
-  const activePage = Math.min(selectedPage, totalPages);
-  const pageStartIndex = (activePage - 1) * RECENT_LOGIN_ACTIVITY_PAGE_SIZE;
-  const pageEndIndex = Math.min(pageStartIndex + RECENT_LOGIN_ACTIVITY_PAGE_SIZE, visibleActivities.length);
-  const pagedActivities = useMemo(
-    () => visibleActivities.slice(pageStartIndex, pageEndIndex),
-    [pageEndIndex, pageStartIndex, visibleActivities],
-  );
-  const shownStart = visibleActivities.length > 0 ? pageStartIndex + 1 : 0;
-  const shownEnd = visibleActivities.length > 0 ? pageEndIndex : 0;
   const selectedFilterLabel =
     RECENT_LOGIN_FILTER_OPTIONS.find((option) => option.id === selectedFilter)?.label ?? "All";
-  const handleFilterSelect = useCallback((filter: DashboardRecentLoginActivityFilter) => {
-    setSelectedFilter(filter);
-    setSelectedPage(1);
-  }, []);
-  const handlePreviousPage = useCallback(() => {
-    setSelectedPage((page) => Math.max(1, page - 1));
-  }, []);
-  const handleNextPage = useCallback(() => {
-    setSelectedPage((page) => Math.min(totalPages, page + 1));
-  }, [totalPages]);
   const handleDetailSheetOpenChange = useCallback((open: boolean) => {
     if (!open) {
       setSelectedActivity(null);
@@ -267,7 +275,7 @@ function DashboardRecentLoginActivityImpl({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="w-fit rounded-full">
-                {visibleActivities.length} shown
+                {totalItems} matched
               </Badge>
               {onCleanupEndedActivities ? (
                 <Button
@@ -318,8 +326,65 @@ function DashboardRecentLoginActivityImpl({
             />
           ) : loading ? (
             <DashboardRecentLoginActivitySkeleton />
-          ) : safeActivities.length > 0 ? (
+          ) : safeActivities.length > 0 || hasActiveFilters ? (
             <div className="space-y-3">
+              <div className="grid gap-2 rounded-xl border border-border/60 bg-muted/10 p-2.5 lg:grid-cols-[minmax(180px,1fr)_auto_auto_auto] lg:items-end">
+                <div className="relative min-w-0">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    type="search"
+                    value={search}
+                    onChange={(event) => onSearchChange(event.target.value)}
+                    placeholder="Search username"
+                    aria-label="Search recent login activity by username"
+                    className="h-9 pl-9"
+                    data-testid="input-recent-login-search"
+                  />
+                </div>
+                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                    From
+                  </span>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(event) => onDateFromChange(event.target.value)}
+                    aria-label="Recent login activity start date"
+                    className="h-9 w-full lg:w-[150px]"
+                    data-testid="input-recent-login-date-from"
+                  />
+                </label>
+                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+                  <span>To</span>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={(event) => onDateToChange(event.target.value)}
+                    aria-label="Recent login activity end date"
+                    className="h-9 w-full lg:w-[150px]"
+                    data-testid="input-recent-login-date-to"
+                  />
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 justify-center rounded-lg px-3 text-xs"
+                  onClick={onClearFilters}
+                  disabled={!hasActiveFilters}
+                  aria-label="Clear recent login activity filters"
+                  data-testid="button-recent-login-clear-filters"
+                >
+                  <X className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Clear
+                </Button>
+              </div>
+
               <div
                 className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1 sm:grid-cols-4"
                 role="group"
@@ -334,7 +399,7 @@ function DashboardRecentLoginActivityImpl({
                       variant={active ? "default" : "ghost"}
                       size="sm"
                       className="h-8 justify-center rounded-lg px-2 text-xs"
-                      onClick={() => handleFilterSelect(option.id)}
+                      onClick={() => onFilterChange(option.id)}
                       aria-pressed={active ? "true" : "false"}
                       aria-label={`Show ${option.label.toLowerCase()} login activity, ${filterCounts[option.id]} records`}
                       data-testid={`button-login-activity-filter-${option.id}`}
@@ -348,51 +413,26 @@ function DashboardRecentLoginActivityImpl({
                 })}
               </div>
 
-              {visibleActivities.length > 0 ? (
+              {safeActivities.length > 0 ? (
                 <>
-                  <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/10 p-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                    <span>
-                      Showing {shownStart}-{shownEnd} of {visibleActivities.length}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 rounded-lg px-2"
-                        onClick={handlePreviousPage}
-                        disabled={activePage <= 1}
-                        aria-label="Show previous recent login activity page"
-                        data-testid="button-login-activity-prev-page"
-                      >
-                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                        Prev
-                      </Button>
-                      <span className="min-w-12 text-center font-medium text-foreground">
-                        {activePage}/{totalPages}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 rounded-lg px-2"
-                        onClick={handleNextPage}
-                        disabled={activePage >= totalPages}
-                        aria-label="Show next recent login activity page"
-                        data-testid="button-login-activity-next-page"
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </div>
-                  </div>
+                  <AppPaginationBar
+                    loading={retrying}
+                    page={page}
+                    totalPages={totalPages}
+                    pageSize={pageSize}
+                    pageSizeOptions={RECENT_LOGIN_ACTIVITY_PAGE_SIZE_OPTIONS}
+                    totalItems={totalItems}
+                    itemLabel="login records"
+                    onPageChange={onPageChange}
+                    onPageSizeChange={onPageSizeChange}
+                  />
                   <div
                     className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
                     role="region"
                     tabIndex={0}
                     aria-label={`${selectedFilterLabel} recent login activity list`}
                   >
-                    {pagedActivities.map((activity, index) => {
+                    {safeActivities.map((activity, index) => {
                       const statusMeta = resolveDashboardRecentLoginStatusMeta(activity.status);
                       const formattedLoginTime = formatDashboardRecentLoginTime(activity.loginTime);
                       const formattedLastActivityTime = formatDashboardRecentLoginTime(activity.lastActivityTime);
@@ -502,7 +542,7 @@ function DashboardRecentLoginActivityImpl({
                   role="status"
                   aria-label={`${selectedFilterLabel} login activity filter is empty`}
                 >
-                  No {selectedFilterLabel.toLowerCase()} login activity is available in the latest records.
+                  No {selectedFilterLabel.toLowerCase()} login activity matches the current server filters.
                 </div>
               )}
             </div>

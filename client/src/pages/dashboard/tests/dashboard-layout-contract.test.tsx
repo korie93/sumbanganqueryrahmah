@@ -821,12 +821,33 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
           username: "watch.user",
         },
       ],
+      dateFrom: "",
+      dateTo: "",
       errorMessage: null,
+      filterCounts: {
+        active: 1,
+        all: 10,
+        attention: 1,
+        ended: 9,
+      },
       loading: false,
       onCleanupEndedActivities: () => undefined,
+      onClearFilters: () => undefined,
+      onDateFromChange: () => undefined,
+      onDateToChange: () => undefined,
       onDeleteEndedActivity: () => undefined,
+      onFilterChange: () => undefined,
+      onPageChange: () => undefined,
+      onPageSizeChange: () => undefined,
       onRetry: () => undefined,
+      onSearchChange: () => undefined,
+      page: 1,
+      pageSize: 4,
       retrying: false,
+      search: "",
+      selectedFilter: "all",
+      totalItems: 10,
+      totalPages: 3,
     }),
   );
 
@@ -836,14 +857,21 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /watch\.user/);
   assert.match(markup, /10\.42\.x\.x/);
   assert.match(markup, /Chrome/);
+  assert.match(markup, /10 matched/);
+  assert.match(markup, /Search recent login activity by username/);
+  assert.match(markup, /Recent login activity start date/);
+  assert.match(markup, /Recent login activity end date/);
+  assert.match(markup, /Clear recent login activity filters/);
   assert.match(markup, /Filter recent login activity/);
   assert.match(markup, /button-login-activity-filter-all/);
   assert.match(markup, /Show attention login activity, 1 records/);
   assert.match(markup, /aria-label="All recent login activity list"/);
   assert.match(markup, /Open login activity details for super\.user/);
-  assert.match(markup, /Showing 1-2 of 2/);
-  assert.match(markup, /button-login-activity-prev-page/);
-  assert.match(markup, /button-login-activity-next-page/);
+  assert.match(markup, /Showing 1-4 of 10 login records/);
+  assert.match(markup, /Page 1 \/ 3/);
+  assert.match(markup, /Page size for login records/);
+  assert.match(markup, />Prev</);
+  assert.match(markup, />Next</);
   assert.match(markup, /Clean up ended login activity logs older than 30 days/);
   assert.match(markup, /button-recent-login-cleanup-ended/);
   assert.match(markup, /Cleanup old logs/);
@@ -857,7 +885,8 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.doesNotMatch(markup, /Delete ended login activity log for super\.user/);
   assert.match(markup, /Details/);
   assert.match(markup, /tabindex="0"/);
-  assert.match(source, /RECENT_LOGIN_ACTIVITY_PAGE_SIZE = 4/);
+  assert.match(source, /RECENT_LOGIN_ACTIVITY_PAGE_SIZE_OPTIONS = \[4, 8, 12\]/);
+  assert.match(source, /AppPaginationBar/);
   assert.match(source, /AlertDialog/);
   assert.match(source, /Delete ended login log\?/);
   assert.match(source, /Clean up old ended login logs\?/);
@@ -866,7 +895,6 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(source, /status === "ended"/);
   assert.match(source, /max-h-\[360px\]/);
   assert.match(source, /xl:grid-cols-1 2xl:grid-cols-2/);
-  assert.match(source, /useMemo\(/);
   assert.match(source, /DashboardRecentLoginActivityDetailSheet/);
   assert.match(source, /SheetContent/);
   assert.match(source, /resolveDashboardRecentLoginRiskNote/);
@@ -877,10 +905,31 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   const errorMarkup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {
       activities: [],
+      dateFrom: "",
+      dateTo: "",
       errorMessage: "Recent login API gagal.",
+      filterCounts: {
+        active: 0,
+        all: 0,
+        attention: 0,
+        ended: 0,
+      },
       loading: false,
+      onClearFilters: () => undefined,
+      onDateFromChange: () => undefined,
+      onDateToChange: () => undefined,
+      onFilterChange: () => undefined,
+      onPageChange: () => undefined,
+      onPageSizeChange: () => undefined,
       onRetry: () => undefined,
+      onSearchChange: () => undefined,
+      page: 1,
+      pageSize: 4,
       retrying: false,
+      search: "",
+      selectedFilter: "all",
+      totalItems: 0,
+      totalPages: 1,
     }),
   );
 

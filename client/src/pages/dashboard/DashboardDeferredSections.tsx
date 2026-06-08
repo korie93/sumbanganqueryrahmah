@@ -10,6 +10,7 @@ import type {
   LoginTrend,
   PeakHour,
   RecentLoginActivity,
+  RecentLoginActivityFilter,
   RoleData,
   SummaryData,
   TopUser,
@@ -225,7 +226,14 @@ type DashboardDeferredSectionsProps = {
   onRetryTopUsers: () => void;
   onRetryTrends: () => void;
   onCleanupEndedLoginActivities?: (() => void) | undefined;
+  onClearRecentLoginActivityFilters: () => void;
+  onRecentLoginActivityDateFromChange: (value: string) => void;
+  onRecentLoginActivityDateToChange: (value: string) => void;
   onDeleteEndedLoginActivity?: ((activity: RecentLoginActivity) => void) | undefined;
+  onRecentLoginActivityFilterChange: (filter: RecentLoginActivityFilter) => void;
+  onRecentLoginActivityPageChange: (page: number) => void;
+  onRecentLoginActivityPageSizeChange: (pageSize: number) => void;
+  onRecentLoginActivitySearchChange: (value: string) => void;
   peakHoursErrorMessage: string | null;
   trends: LoginTrend[] | undefined;
   trendsErrorMessage: string | null;
@@ -235,11 +243,22 @@ type DashboardDeferredSectionsProps = {
   peakHoursLoading: boolean;
   peakHoursRetrying: boolean;
   recentLoginActivities: RecentLoginActivity[] | undefined;
+  recentLoginActivityDateFrom: string;
+  recentLoginActivityDateTo: string;
+  recentLoginActivityFilter: RecentLoginActivityFilter;
+  recentLoginActivityFilterCounts: Record<RecentLoginActivityFilter, number>;
+  recentLoginActivityPage: number;
+  recentLoginActivityPageItems: RecentLoginActivity[] | undefined;
+  recentLoginActivityPageSize: number;
+  recentLoginActivitySearch: string;
+  recentLoginActivityTotalItems: number;
+  recentLoginActivityTotalPages: number;
   recentLoginActivityCleaningEndedLogs?: boolean | undefined;
   recentLoginActivityDeletingId?: string | null | undefined;
   recentLoginActivityErrorMessage: string | null;
   recentLoginActivityLoading: boolean;
   recentLoginActivityRetrying: boolean;
+  recentLoginActivitySnapshotLoading: boolean;
   roleDistribution: RoleData[] | undefined;
   roleErrorMessage: string | null;
   roleLoading: boolean;
@@ -262,7 +281,14 @@ export function DashboardDeferredSections({
   onRetryTopUsers,
   onRetryTrends,
   onCleanupEndedLoginActivities,
+  onClearRecentLoginActivityFilters,
+  onRecentLoginActivityDateFromChange,
+  onRecentLoginActivityDateToChange,
   onDeleteEndedLoginActivity,
+  onRecentLoginActivityFilterChange,
+  onRecentLoginActivityPageChange,
+  onRecentLoginActivityPageSizeChange,
+  onRecentLoginActivitySearchChange,
   peakHoursErrorMessage,
   trends,
   trendsErrorMessage,
@@ -272,11 +298,22 @@ export function DashboardDeferredSections({
   peakHoursLoading,
   peakHoursRetrying,
   recentLoginActivities,
+  recentLoginActivityDateFrom,
+  recentLoginActivityDateTo,
+  recentLoginActivityFilter,
+  recentLoginActivityFilterCounts,
+  recentLoginActivityPage,
+  recentLoginActivityPageItems,
+  recentLoginActivityPageSize,
+  recentLoginActivitySearch,
+  recentLoginActivityTotalItems,
+  recentLoginActivityTotalPages,
   recentLoginActivityCleaningEndedLogs,
   recentLoginActivityDeletingId,
   recentLoginActivityErrorMessage,
   recentLoginActivityLoading,
   recentLoginActivityRetrying,
+  recentLoginActivitySnapshotLoading,
   roleDistribution,
   roleErrorMessage,
   roleLoading,
@@ -331,13 +368,15 @@ export function DashboardDeferredSections({
     "recent-login-activity",
     recentLoginActivityLoading,
     recentLoginActivityErrorMessage ?? "ok",
-    recentLoginActivities?.length ?? 0,
+    recentLoginActivityPageItems?.length ?? 0,
+    recentLoginActivityPage,
+    recentLoginActivityFilter,
   ].join(":");
   const loginRiskBoundaryKey = [
     "login-risk-insights",
     summaryLoading,
     trendsLoading,
-    recentLoginActivityLoading,
+    recentLoginActivitySnapshotLoading,
     summary?.loginFailures24h ?? 0,
     recentLoginActivities?.length ?? 0,
   ].join(":");
@@ -349,7 +388,7 @@ export function DashboardDeferredSections({
     >
       <aside className="min-w-0 xl:sticky xl:top-4" aria-label="Dashboard login review sidebar">
         <DashboardLoginReviewSidebar
-          loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
+          loading={summaryLoading || trendsLoading || recentLoginActivitySnapshotLoading}
           peakHours={peakHours}
           recentLoginActivities={recentLoginActivities}
           summary={summary}
@@ -381,7 +420,7 @@ export function DashboardDeferredSections({
                     }
                   >
                     <DashboardLoginRiskInsights
-                      loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
+                      loading={summaryLoading || trendsLoading || recentLoginActivitySnapshotLoading}
                       recentLoginActivities={recentLoginActivities}
                       summary={summary}
                       trends={trends}
@@ -418,15 +457,31 @@ export function DashboardDeferredSections({
                     }
                   >
                     <DashboardRecentLoginActivity
-                      activities={recentLoginActivities}
+                      activities={recentLoginActivityPageItems}
                       cleaningEndedActivityLogs={recentLoginActivityCleaningEndedLogs}
                       deletingActivityId={recentLoginActivityDeletingId}
+                      dateFrom={recentLoginActivityDateFrom}
+                      dateTo={recentLoginActivityDateTo}
                       errorMessage={recentLoginActivityErrorMessage}
+                      filterCounts={recentLoginActivityFilterCounts}
                       loading={recentLoginActivityLoading}
                       onCleanupEndedActivities={onCleanupEndedLoginActivities}
+                      onClearFilters={onClearRecentLoginActivityFilters}
+                      onDateFromChange={onRecentLoginActivityDateFromChange}
+                      onDateToChange={onRecentLoginActivityDateToChange}
                       onDeleteEndedActivity={onDeleteEndedLoginActivity}
+                      onFilterChange={onRecentLoginActivityFilterChange}
+                      onPageChange={onRecentLoginActivityPageChange}
+                      onPageSizeChange={onRecentLoginActivityPageSizeChange}
                       onRetry={onRetryRecentLoginActivity}
+                      onSearchChange={onRecentLoginActivitySearchChange}
+                      page={recentLoginActivityPage}
+                      pageSize={recentLoginActivityPageSize}
                       retrying={recentLoginActivityRetrying}
+                      search={recentLoginActivitySearch}
+                      selectedFilter={recentLoginActivityFilter}
+                      totalItems={recentLoginActivityTotalItems}
+                      totalPages={recentLoginActivityTotalPages}
                     />
                   </Suspense>
                 </DashboardSectionRenderBoundary>

@@ -13,6 +13,7 @@ import {
   getLoginTrends,
   getPeakHours,
   getRecentLoginActivity,
+  getRecentLoginActivityPage,
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api/analytics";
@@ -637,6 +638,16 @@ test("analytics API wrappers forward AbortSignal", async () => {
     if (url === "/api/analytics/recent-login-activity?pageSize=6") {
       return jsonResponse([]);
     }
+    if (
+      url
+      === "/api/analytics/recent-login-activity-page?page=2&pageSize=4&status=attention&search=watch.user&dateFrom=2026-05-01&dateTo=2026-05-31"
+    ) {
+      return jsonResponse({
+        activities: [],
+        filterCounts: { active: 0, all: 0, attention: 0, ended: 0 },
+        pagination: { page: 2, pageSize: 4, totalItems: 0, totalPages: 1 },
+      });
+    }
     if (url === "/api/analytics/peak-hours") {
       return jsonResponse([]);
     }
@@ -652,13 +663,21 @@ test("analytics API wrappers forward AbortSignal", async () => {
     await getLoginTrends(14, { signal: controller.signal });
     await getTopActiveUsers(15, { signal: controller.signal });
     await getRecentLoginActivity(6, { signal: controller.signal });
+    await getRecentLoginActivityPage({
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-31",
+      page: 2,
+      pageSize: 4,
+      search: "watch.user",
+      status: "attention",
+    }, { signal: controller.signal });
     await getPeakHours({ signal: controller.signal });
     await getRoleDistribution({ signal: controller.signal });
   } finally {
     restoreFetch();
   }
 
-  assert.equal(requests.length, 6);
+  assert.equal(requests.length, 7);
   for (const request of requests) {
     assert.equal(request.signal, controller.signal);
   }
@@ -666,8 +685,13 @@ test("analytics API wrappers forward AbortSignal", async () => {
   assert.equal(requests[1]?.url, "/api/analytics/login-trends?days=14");
   assert.equal(requests[2]?.url, "/api/analytics/top-users?pageSize=15");
   assert.equal(requests[3]?.url, "/api/analytics/recent-login-activity?pageSize=6");
-  assert.equal(requests[4]?.url, "/api/analytics/peak-hours");
-  assert.equal(requests[5]?.url, "/api/analytics/role-distribution");
+  assert.equal(
+    requests[4]?.url,
+    "/api/analytics/recent-login-activity-page?page=2&pageSize=4&status=attention"
+    + "&search=watch.user&dateFrom=2026-05-01&dateTo=2026-05-31",
+  );
+  assert.equal(requests[5]?.url, "/api/analytics/peak-hours");
+  assert.equal(requests[6]?.url, "/api/analytics/role-distribution");
 });
 
 test("activity API wrappers forward AbortSignal", async () => {

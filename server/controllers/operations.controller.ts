@@ -30,6 +30,7 @@ type CreateOperationsControllerDeps = {
     | "getLoginTrends"
     | "getPeakHours"
     | "getRecentLoginActivity"
+    | "getRecentLoginActivityPage"
     | "getRoleDistribution"
     | "getTopActiveUsers"
   >;
@@ -92,6 +93,12 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   const getRecentLoginActivity = async (req: AuthenticatedRequest, res: Response) => {
     return res.json(
       await operationsAnalyticsService.getRecentLoginActivity(req.query.pageSize ?? req.query.limit),
+    );
+  };
+
+  const getRecentLoginActivityPage = async (req: AuthenticatedRequest, res: Response) => {
+    return res.json(
+      await operationsAnalyticsService.getRecentLoginActivityPage(readQueryObject(req.query)),
     );
   };
 
@@ -259,6 +266,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     getLoginTrends,
     getTopActiveUsers,
     getRecentLoginActivity,
+    getRecentLoginActivityPage,
     getPeakHours,
     getRoleDistribution,
     listBackups,

@@ -11,6 +11,10 @@ import type {
   MutationIdempotencyAcquireResult,
   MutationIdempotencyCompleteInput,
 } from "../../storage-postgres";
+import type {
+  RecentLoginActivityPage,
+  RecentLoginActivityPageOptions,
+} from "../../repositories/analytics-repository-shared";
 import { PostgresCollectionStorage } from "./postgres-collection-storage";
 
 export class PostgresOperationsStorage extends PostgresCollectionStorage {
@@ -162,6 +166,12 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
     }>
   > {
     return this.analyticsRepository.getRecentLoginActivity(limit);
+  }
+
+  async getRecentLoginActivityPage(
+    options: RecentLoginActivityPageOptions,
+  ): Promise<RecentLoginActivityPage> {
+    return this.analyticsRepository.getRecentLoginActivityPage(options);
   }
 
   async getPeakHours(): Promise<Array<{ hour: number; count: number }>> {

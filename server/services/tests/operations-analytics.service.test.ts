@@ -24,6 +24,16 @@ test("OperationsAnalyticsService proxies summary and distribution reads", async 
     getLoginTrends: async () => [],
     getTopActiveUsers: async () => [],
     getRecentLoginActivity: async () => [],
+    getRecentLoginActivityPage: async (options) => ({
+      activities: [],
+      filterCounts: { active: 0, all: 0, attention: 0, ended: 0 },
+      pagination: {
+        page: options.page,
+        pageSize: options.pageSize,
+        totalItems: 0,
+        totalPages: 1,
+      },
+    }),
     getPeakHours: async () => peakHours,
     getRoleDistribution: async () => roleDistribution,
   };
@@ -38,6 +48,9 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
   const loginTrendCalls: number[] = [];
   const topUserCalls: number[] = [];
   const recentLoginActivityCalls: number[] = [];
+  const recentLoginActivityPageCalls: Array<
+    Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0]
+  > = [];
   const analyticsRepository: OperationsAnalyticsRepository = {
     getDashboardSummary: async () => ({
       totalUsers: 0,
@@ -73,6 +86,19 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
         username: "super.user",
       }];
     },
+    getRecentLoginActivityPage: async (options) => {
+      recentLoginActivityPageCalls.push(options);
+      return {
+        activities: [],
+        filterCounts: { active: 0, all: 0, attention: 0, ended: 0 },
+        pagination: {
+          page: options.page,
+          pageSize: options.pageSize,
+          totalItems: 0,
+          totalPages: 1,
+        },
+      };
+    },
     getPeakHours: async () => [],
     getRoleDistribution: async () => [],
   };
@@ -81,13 +107,30 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
   const loginTrends = await service.getLoginTrends(0);
   const topUsers = await service.getTopActiveUsers(1);
   const recentLoginActivity = await service.getRecentLoginActivity(2);
+  const recentLoginActivityPage = await service.getRecentLoginActivityPage({
+    dateFrom: "2026-05-01",
+    dateTo: "2026-05-31",
+    page: "2",
+    pageSize: "100",
+    search: "  super.user  ",
+    status: "ENDED",
+  });
 
   assert.deepEqual(loginTrendCalls, [1]);
   assert.deepEqual(topUserCalls, [1]);
   assert.deepEqual(recentLoginActivityCalls, [2]);
+  assert.deepEqual(recentLoginActivityPageCalls, [{
+    dateFrom: "2026-05-01",
+    dateTo: "2026-05-31",
+    page: 2,
+    pageSize: 25,
+    search: "super.user",
+    status: "ended",
+  }]);
   assert.equal(loginTrends[0].logins, 1);
   assert.equal(topUsers[0].loginCount, 1);
   assert.equal(recentLoginActivity[0].username, "super.user");
+  assert.equal(recentLoginActivityPage.pagination.pageSize, 25);
 
   await assert.rejects(
     () => service.getTopActiveUsers(0),
@@ -95,6 +138,25 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
   );
   await assert.rejects(
     () => service.getRecentLoginActivity(0),
+    /Page limit must be at least 1/,
+  );
+  await assert.rejects(
+    () => service.getRecentLoginActivityPage({ status: "unknown" }),
+    /status must be one of/,
+  );
+  await assert.rejects(
+    () => service.getRecentLoginActivityPage({ dateFrom: "2026-02-30" }),
+    /valid calendar date/,
+  );
+  await assert.rejects(
+    () => service.getRecentLoginActivityPage({
+      dateFrom: "2026-06-02",
+      dateTo: "2026-06-01",
+    }),
+    /dateFrom must be before or equal to dateTo/,
+  );
+  await assert.rejects(
+    () => service.getRecentLoginActivityPage({ pageSize: 0 }),
     /Page limit must be at least 1/,
   );
 });

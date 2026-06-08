@@ -1,4 +1,4 @@
-import { count, eq, gte, sql } from "drizzle-orm";
+import { count, eq, gte, sql, type SQL } from "drizzle-orm";
 import { auditLogs, dataRows, imports, userActivity, users } from "../../shared/schema-postgres";
 import { dbRead } from "../db-postgres";
 import {
@@ -11,6 +11,9 @@ import {
   sanitizeAnalyticsShortText,
   summarizeAnalyticsBrowser,
   type RecentLoginActivity,
+  type RecentLoginActivityFilter,
+  type RecentLoginActivityPage,
+  type RecentLoginActivityPageOptions,
   type RecentLoginActivityRow,
   serializeAnalyticsTimestamp,
   type TopActiveUserRow,
@@ -19,6 +22,21 @@ import {
 export { serializeAnalyticsTimestamp } from "./analytics-repository-shared";
 
 export class AnalyticsRepository {
+  private mapRecentLoginActivityRow(row: RecentLoginActivityRow): RecentLoginActivity {
+    return {
+      browser: summarizeAnalyticsBrowser(row.browser),
+      id: row.id,
+      ipAddress: maskAnalyticsIpAddress(row.ipAddress),
+      lastActivityTime: serializeAnalyticsTimestamp(row.lastActivityTime),
+      loginTime: serializeAnalyticsTimestamp(row.loginTime),
+      logoutReason: sanitizeAnalyticsShortText(row.logoutReason),
+      logoutTime: serializeAnalyticsTimestamp(row.logoutTime),
+      role: row.role,
+      status: row.isActive ? "active" : "ended",
+      username: row.username,
+    };
+  }
+
   async getDashboardSummary(): Promise<{
     totalUsers: number;
     activeSessions: number;
@@ -171,18 +189,113 @@ export class AnalyticsRepository {
       LIMIT ${limit}
     `);
 
-    return (result.rows as RecentLoginActivityRow[]).map((row) => ({
-      browser: summarizeAnalyticsBrowser(row.browser),
-      id: row.id,
-      ipAddress: maskAnalyticsIpAddress(row.ipAddress),
-      lastActivityTime: serializeAnalyticsTimestamp(row.lastActivityTime),
-      loginTime: serializeAnalyticsTimestamp(row.loginTime),
-      logoutReason: sanitizeAnalyticsShortText(row.logoutReason),
-      logoutTime: serializeAnalyticsTimestamp(row.logoutTime),
-      role: row.role,
-      status: row.isActive ? "active" : "ended",
-      username: row.username,
-    }));
+    return (result.rows as RecentLoginActivityRow[]).map((row) =>
+      this.mapRecentLoginActivityRow(row));
+  }
+
+  async getRecentLoginActivityPage(
+    options: RecentLoginActivityPageOptions,
+  ): Promise<RecentLoginActivityPage> {
+    const attentionPattern = "banned|blocked|expired|forced|idle|kicked|locked|revoked|timeout";
+    const eventTimeSql = sql`COALESCE(login_time, last_activity_time, logout_time)`;
+    const baseConditions: SQL[] = [];
+    const normalizedSearch = options.search?.trim();
+
+    if (normalizedSearch) {
+      baseConditions.push(sql`POSITION(lower(${normalizedSearch}) IN lower(username)) > 0`);
+    }
+    if (options.dateFrom) {
+      baseConditions.push(sql`
+        (${eventTimeSql} AT TIME ZONE ${ANALYTICS_TZ})::date >= ${options.dateFrom}::date
+      `);
+    }
+    if (options.dateTo) {
+      baseConditions.push(sql`
+        (${eventTimeSql} AT TIME ZONE ${ANALYTICS_TZ})::date <= ${options.dateTo}::date
+      `);
+    }
+
+    const baseWhereSql = baseConditions.length > 0
+      ? sql`WHERE ${sql.join(baseConditions, sql` AND `)}`
+      : sql``;
+    const countResult = await dbRead.execute(sql`
+      SELECT
+        COUNT(*)::int AS "allCount",
+        COUNT(*) FILTER (WHERE is_active IS TRUE)::int AS "activeCount",
+        COUNT(*) FILTER (WHERE is_active IS NOT TRUE)::int AS "endedCount",
+        COUNT(*) FILTER (
+          WHERE COALESCE(logout_reason, '') ~* ${attentionPattern}
+        )::int AS "attentionCount"
+      FROM public.user_activity
+      ${baseWhereSql}
+    `);
+    const countRow = countResult.rows?.[0] as Record<string, unknown> | undefined;
+    const filterCounts: Record<RecentLoginActivityFilter, number> = {
+      active: Number(countRow?.activeCount ?? 0),
+      all: Number(countRow?.allCount ?? 0),
+      attention: Number(countRow?.attentionCount ?? 0),
+      ended: Number(countRow?.endedCount ?? 0),
+    };
+    const totalItems = filterCounts[options.status];
+    const totalPages = Math.max(1, Math.ceil(totalItems / options.pageSize));
+    const page = Math.min(options.page, totalPages);
+    const offset = (page - 1) * options.pageSize;
+    const statusCondition = this.buildRecentLoginActivityStatusCondition(
+      options.status,
+      attentionPattern,
+    );
+    const rowConditions = statusCondition
+      ? [...baseConditions, statusCondition]
+      : baseConditions;
+    const rowsWhereSql = rowConditions.length > 0
+      ? sql`WHERE ${sql.join(rowConditions, sql` AND `)}`
+      : sql``;
+    const rowsResult = await dbRead.execute(sql`
+      SELECT
+        id,
+        username,
+        role,
+        login_time AS "loginTime",
+        last_activity_time AS "lastActivityTime",
+        logout_time AS "logoutTime",
+        is_active AS "isActive",
+        browser,
+        ip_address AS "ipAddress",
+        logout_reason AS "logoutReason"
+      FROM public.user_activity
+      ${rowsWhereSql}
+      ORDER BY ${eventTimeSql} DESC NULLS LAST, username ASC, id ASC
+      LIMIT ${options.pageSize}
+      OFFSET ${offset}
+    `);
+
+    return {
+      activities: (rowsResult.rows as RecentLoginActivityRow[]).map((row) =>
+        this.mapRecentLoginActivityRow(row)),
+      filterCounts,
+      pagination: {
+        page,
+        pageSize: options.pageSize,
+        totalItems,
+        totalPages,
+      },
+    };
+  }
+
+  private buildRecentLoginActivityStatusCondition(
+    status: RecentLoginActivityFilter,
+    attentionPattern: string,
+  ) {
+    if (status === "active") {
+      return sql`is_active IS TRUE`;
+    }
+    if (status === "ended") {
+      return sql`is_active IS NOT TRUE`;
+    }
+    if (status === "attention") {
+      return sql`COALESCE(logout_reason, '') ~* ${attentionPattern}`;
+    }
+    return null;
   }
 
   async getPeakHours(): Promise<Array<{ hour: number; count: number }>> {
