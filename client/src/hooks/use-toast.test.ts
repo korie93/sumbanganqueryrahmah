@@ -8,6 +8,7 @@ import {
   subscribeToastState,
   toast,
   TOAST_LISTENER_LIMIT,
+  TOAST_OCCURRENCE_DISPLAY_LIMIT,
   TOAST_REMOVE_DELAY_MS,
   TOAST_TIMEOUT_LIMIT,
   type ToastInput,
@@ -141,6 +142,49 @@ test("dedupe keys update the existing toast instead of growing the queue", () =>
   assert.equal(state.toasts[0]?.title, "Ready");
   assert.equal(state.toasts[0]?.revision, 1);
   assert.equal(state.toasts[0]?.variant, "success");
+  assert.equal(state.toasts[0]?.occurrenceCount, 1);
+});
+
+test("repeated warning and error toasts expose a bounded occurrence count", () => {
+  resetToastStateForTests();
+
+  for (let index = 0; index < TOAST_OCCURRENCE_DISPLAY_LIMIT + 10; index += 1) {
+    toast({
+      dedupeKey: "dashboard-refresh-error",
+      title: "Refresh failed",
+      description: "The same request failed again.",
+      variant: "destructive",
+    });
+  }
+
+  const currentToast = getToastStateForTests().toasts[0];
+  assert.equal(currentToast?.occurrenceCount, TOAST_OCCURRENCE_DISPLAY_LIMIT + 1);
+  assert.equal(getToastStateForTests().toasts.length, 1);
+});
+
+test("dedupe occurrence count resets when a repeated error becomes successful", () => {
+  resetToastStateForTests();
+
+  toast({
+    dedupeKey: "dashboard-refresh",
+    title: "Refresh failed",
+    description: "Try again.",
+    variant: "destructive",
+  });
+  toast({
+    dedupeKey: "dashboard-refresh",
+    title: "Refresh failed",
+    description: "Try again.",
+    variant: "destructive",
+  });
+  toast({
+    dedupeKey: "dashboard-refresh",
+    title: "Refresh complete",
+    description: "Dashboard is current.",
+    variant: "success",
+  });
+
+  assert.equal(getToastStateForTests().toasts[0]?.occurrenceCount, 1);
 });
 
 test("bounded queue preserves the newest critical and normal notification", () => {

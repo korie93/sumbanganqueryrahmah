@@ -1,4 +1,7 @@
-import { useToastState } from "@/hooks/use-toast"
+import {
+  TOAST_OCCURRENCE_DISPLAY_LIMIT,
+  useToastState,
+} from "@/hooks/use-toast"
 import { ExpandableMessage } from "@/components/ExpandableMessage"
 import { ToastRequestReference } from "@/components/ui/ToastRequestReference"
 import {
@@ -39,6 +42,26 @@ function ToastStatusIcon({
   return <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
 }
 
+function ToastOccurrenceCount({ count }: { count: number }) {
+  if (count <= 1) {
+    return null
+  }
+
+  const countLabel = count > TOAST_OCCURRENCE_DISPLAY_LIMIT
+    ? `${TOAST_OCCURRENCE_DISPLAY_LIMIT}+ kali`
+    : `${count} kali`
+
+  return (
+    <span
+      className="shrink-0 rounded-md border border-current/20 bg-black/5 px-1.5 py-0.5 text-xs font-semibold dark:bg-white/10"
+      aria-label={`Notifikasi ini berlaku ${countLabel}`}
+      title={`Notifikasi ini berlaku ${countLabel}`}
+    >
+      {countLabel}
+    </span>
+  )
+}
+
 /**
  * Renders the shared toaster component used across SQR screens.
  */
@@ -50,6 +73,7 @@ export function Toaster() {
       {toasts.map(function ({
         id,
         revision,
+        occurrenceCount,
         title,
         description,
         action,
@@ -65,7 +89,12 @@ export function Toaster() {
               <div className="flex min-w-0 items-start gap-3">
                 <ToastStatusIcon loading={loading} variant={props.variant} />
                 <div className="grid min-w-0 flex-1 gap-1">
-                  {title && <ToastTitle>{title}</ToastTitle>}
+                  {title && (
+                    <div className="flex min-w-0 items-start gap-2">
+                      <ToastTitle className="min-w-0 flex-1">{title}</ToastTitle>
+                      <ToastOccurrenceCount count={occurrenceCount} />
+                    </div>
+                  )}
                   {description && (
                     <ToastDescription>
                       <ExpandableMessage>{description}</ExpandableMessage>

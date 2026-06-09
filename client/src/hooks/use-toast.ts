@@ -9,12 +9,15 @@ const TOAST_LIMIT = 2
 export const TOAST_TIMEOUT_LIMIT = TOAST_LIMIT
 export const TOAST_REMOVE_DELAY_MS = 5000
 export const TOAST_LISTENER_LIMIT = 50
+export const TOAST_OCCURRENCE_DISPLAY_LIMIT = 99
+const TOAST_OCCURRENCE_SENTINEL = TOAST_OCCURRENCE_DISPLAY_LIMIT + 1
 
 type ToastPriority = "normal" | "critical"
 
 type ToasterToast = ToastProps & {
   id: string
   revision: number
+  occurrenceCount: number
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
@@ -114,6 +117,24 @@ function resolveToastPriority(toast: Pick<ToasterToast, "priority" | "variant">)
     return toast.priority
   }
   return toast.variant === "destructive" ? "critical" : "normal"
+}
+
+function isRepeatableToastVariant(variant: ToasterToast["variant"]): boolean {
+  return variant === "destructive" || variant === "warning"
+}
+
+function resolveDedupeOccurrenceCount(
+  existingToast: ToasterToast,
+  incomingToast: ToastInput,
+): number {
+  if (
+    !isRepeatableToastVariant(incomingToast.variant)
+    || existingToast.variant !== incomingToast.variant
+  ) {
+    return 1
+  }
+
+  return Math.min(existingToast.occurrenceCount + 1, TOAST_OCCURRENCE_SENTINEL)
 }
 
 function selectBoundedToasts(toasts: ToasterToast[]): ToasterToast[] {
@@ -274,7 +295,7 @@ export function subscribeToastState(listener: (state: State) => void) {
   }
 }
 
-export type ToastInput = Omit<ToasterToast, "id" | "revision">
+export type ToastInput = Omit<ToasterToast, "id" | "revision" | "occurrenceCount">
 type ToastUpdate = Omit<Partial<ToastInput>, ToastTransientKey> & {
   action?: ToastActionElement | undefined
   loading?: boolean | undefined
@@ -288,31 +309,40 @@ export type ToastHandle = {
   update: (props: ToastUpdate) => void
 }
 
+function applyToastUpdate(
+  id: string,
+  props: ToastUpdate,
+  occurrenceCount = 1,
+): void {
+  clearToastTimeout(id)
+  const clearFields = (["action", "loading", "priority", "requestId"] as const)
+    .filter((field) => field in props && props[field] === undefined)
+  const {
+    action,
+    loading,
+    priority,
+    requestId,
+    ...persistentProps
+  } = props
+  dispatch({
+    type: "UPDATE_TOAST",
+    toast: {
+      ...persistentProps,
+      ...(action !== undefined ? { action } : {}),
+      ...(loading !== undefined ? { loading } : {}),
+      ...(priority !== undefined ? { priority } : {}),
+      ...(requestId !== undefined ? { requestId } : {}),
+      id,
+      occurrenceCount,
+      open: true,
+    },
+    clearFields,
+  })
+}
+
 function buildToastHandle(id: string): ToastHandle {
   const update = (props: ToastUpdate) => {
-    clearToastTimeout(id)
-    const clearFields = (["action", "loading", "priority", "requestId"] as const)
-      .filter((field) => field in props && props[field] === undefined)
-    const {
-      action,
-      loading,
-      priority,
-      requestId,
-      ...persistentProps
-    } = props
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: {
-        ...persistentProps,
-        ...(action !== undefined ? { action } : {}),
-        ...(loading !== undefined ? { loading } : {}),
-        ...(priority !== undefined ? { priority } : {}),
-        ...(requestId !== undefined ? { requestId } : {}),
-        id,
-        open: true,
-      },
-      clearFields,
-    })
+    applyToastUpdate(id, props)
   }
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
@@ -333,14 +363,18 @@ function toast({ ...props }: ToastInput): ToastHandle {
 
   if (existingToast) {
     const handle = buildToastHandle(existingToast.id)
-    handle.update({
-      action: undefined,
-      loading: false,
-      priority: undefined,
-      requestId: undefined,
-      ...props,
-      dedupeKey,
-    })
+    applyToastUpdate(
+      existingToast.id,
+      {
+        action: undefined,
+        loading: false,
+        priority: undefined,
+        requestId: undefined,
+        ...props,
+        dedupeKey,
+      },
+      resolveDedupeOccurrenceCount(existingToast, props),
+    )
     return handle
   }
 
@@ -353,6 +387,7 @@ function toast({ ...props }: ToastInput): ToastHandle {
       ...props,
       id,
       revision: 0,
+      occurrenceCount: 1,
       ...(dedupeKey ? { dedupeKey } : {}),
       open: true,
       onOpenChange: (open) => {

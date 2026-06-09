@@ -35,6 +35,7 @@ test("breadcrumb current page is not exposed as an inactive link", () => {
 
 test("toast notifications expose polite and assertive live-region semantics", () => {
   const toastSource = readSource("toast.tsx");
+  const toasterSource = readSource("toaster.tsx");
   const requestReferenceSource = readSource("ToastRequestReference.tsx");
 
   assert.match(toastSource, /role="presentation"/);
@@ -48,6 +49,7 @@ test("toast notifications expose polite and assertive live-region semantics", ()
   assert.match(requestReferenceSource, /type="button"/);
   assert.match(requestReferenceSource, /aria-label=\{copied \?/);
   assert.match(requestReferenceSource, /aria-live="polite"/);
+  assert.match(toasterSource, /aria-label=\{`Notifikasi ini berlaku \$\{countLabel\}`\}/);
 });
 
 test("icon buttons derive an accessible name from an explicit title fallback", () => {
