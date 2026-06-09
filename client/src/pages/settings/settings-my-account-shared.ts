@@ -1,11 +1,8 @@
 import type { MutableRefObject } from "react";
+import type { ToastFunction } from "@/hooks/use-toast";
 import type { CurrentUser } from "@/pages/settings/types";
 
-export type ToastFn = (payload: {
-  title: string;
-  description: string;
-  variant?: "default" | "destructive";
-}) => void;
+export type ToastFn = ToastFunction;
 
 export type UseSettingsMyAccountArgs = {
   isMountedRef: MutableRefObject<boolean>;

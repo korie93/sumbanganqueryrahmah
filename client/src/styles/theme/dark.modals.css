@@ -25,7 +25,7 @@
 .dark :where(
   .toast,
   [data-sonner-toast],
-  [data-slot="toast"]
+  [data-slot="toast"][data-variant="default"]
 ) {
   background: var(--dm-surface-elevated) !important;
   border-color: var(--dm-border) !important;

@@ -43,6 +43,6 @@ test("buildMutationSuccessToast preserves success metadata", () => {
   });
 
   assert.equal(toast.title, "Saved");
-  assert.equal(toast.variant, "default");
+  assert.equal(toast.variant, "success");
   assert.equal(toast.duration, 4000);
 });

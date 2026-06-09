@@ -4,7 +4,7 @@ import { getHttpStatusErrorMessage, isGenericApiErrorMessage, UNKNOWN_API_ERROR_
 export type MutationToastPayload = {
   title: string;
   description: string;
-  variant?: "default" | "destructive";
+  variant?: "default" | "destructive" | "info" | "success" | "warning";
   duration?: number;
 };
 
@@ -45,7 +45,7 @@ export function buildMutationSuccessToast(
   return {
     title: input.title,
     description: input.description,
-    variant: "default",
+    variant: "success",
     ...(typeof input.duration === "number" ? { duration: input.duration } : {}),
   };
 }

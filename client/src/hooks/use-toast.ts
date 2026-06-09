@@ -5,16 +5,22 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
+const TOAST_LIMIT = 2
 export const TOAST_TIMEOUT_LIMIT = TOAST_LIMIT
 export const TOAST_REMOVE_DELAY_MS = 5000
 export const TOAST_LISTENER_LIMIT = 50
 
+type ToastPriority = "normal" | "critical"
+
 type ToasterToast = ToastProps & {
   id: string
+  revision: number
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  dedupeKey?: string
+  loading?: boolean
+  priority?: ToastPriority
 }
 
 type ActionType = {
@@ -99,19 +105,46 @@ const addToRemoveQueue = (toastId: string) => {
   pruneToastTimeoutsForToastIds(new Set(memoryState.toasts.map((toast) => toast.id)))
 }
 
+function resolveToastPriority(toast: Pick<ToasterToast, "priority" | "variant">): ToastPriority {
+  if (toast.priority) {
+    return toast.priority
+  }
+  return toast.variant === "destructive" ? "critical" : "normal"
+}
+
+function selectBoundedToasts(toasts: ToasterToast[]): ToasterToast[] {
+  const criticalToast = toasts.find((item) => resolveToastPriority(item) === "critical")
+  const normalToast = toasts.find((item) => resolveToastPriority(item) === "normal")
+  const selectedIds = new Set(
+    [criticalToast?.id, normalToast?.id].filter((id): id is string => Boolean(id)),
+  )
+  return toasts.filter((item) => selectedIds.has(item.id)).slice(0, TOAST_LIMIT)
+}
+
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case "ADD_TOAST":
       return {
         ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+        toasts: selectBoundedToasts([
+          action.toast,
+          ...state.toasts.filter((item) => item.id !== action.toast.id),
+        ]),
       }
 
     case "UPDATE_TOAST":
       return {
         ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
+        toasts: selectBoundedToasts(
+          state.toasts.map((t) =>
+            t.id === action.toast.id
+              ? {
+                  ...t,
+                  ...action.toast,
+                  revision: t.revision + 1,
+                }
+              : t,
+          ),
         ),
       }
 
@@ -178,6 +211,10 @@ export function getToastListenerCountForTests() {
   return listeners.size
 }
 
+export function getToastStateForTests() {
+  return memoryState
+}
+
 export function resetToastStateForTests() {
   for (const toastId of Array.from(toastTimeouts.keys())) {
     clearToastTimeout(toastId)
@@ -204,38 +241,74 @@ export function subscribeToastState(listener: (state: State) => void) {
   }
 }
 
-type Toast = Omit<ToasterToast, "id">
+export type ToastInput = Omit<ToasterToast, "id" | "revision">
+type ToastUpdate = Partial<ToastInput>
 
-function toast({ ...props }: Toast) {
-  const id = genId()
+export type ToastHandle = {
+  id: string
+  dismiss: () => void
+  update: (props: ToastUpdate) => void
+}
 
-  const update = (props: ToasterToast) =>
+function buildToastHandle(id: string): ToastHandle {
+  const update = (props: ToastUpdate) => {
+    clearToastTimeout(id)
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
+      toast: {
+        ...props,
+        id,
+        open: true,
+      },
     })
+  }
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+
+  return {
+    id,
+    dismiss,
+    update,
+  }
+}
+
+export type ToastFunction = (props: ToastInput) => ToastHandle
+
+function toast({ ...props }: ToastInput): ToastHandle {
+  const dedupeKey = String(props.dedupeKey || "").trim()
+  const existingToast = dedupeKey
+    ? memoryState.toasts.find((item) => item.dedupeKey === dedupeKey)
+    : undefined
+
+  if (existingToast) {
+    const handle = buildToastHandle(existingToast.id)
+    handle.update({
+      ...props,
+      dedupeKey,
+    })
+    return handle
+  }
+
+  const id = genId()
+  const handle = buildToastHandle(id)
 
   dispatch({
     type: "ADD_TOAST",
     toast: {
       ...props,
       id,
+      revision: 0,
+      ...(dedupeKey ? { dedupeKey } : {}),
       open: true,
       onOpenChange: (open) => {
-        if (!open) dismiss()
+        if (!open) handle.dismiss()
       },
     },
   })
 
-  return {
-    id: id,
-    dismiss,
-    update,
-  }
+  return handle
 }
 
-function useToast() {
+function useToastState() {
   const [state, setState] = React.useState<State>(memoryState)
 
   React.useEffect(() => {
@@ -249,4 +322,13 @@ function useToast() {
   }
 }
 
-export { useToast, toast }
+const toastActions = {
+  toast,
+  dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+}
+
+function useToast() {
+  return toastActions
+}
+
+export { useToast, useToastState, toast }

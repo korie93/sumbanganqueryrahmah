@@ -1,11 +1,8 @@
 import type { ActivationDeliveryPayload } from "@/lib/api";
+import type { ToastFunction } from "@/hooks/use-toast";
 import { formatOperationalDateTime } from "@/lib/date-format";
 
-export type ToastFn = (payload: {
-  title: string;
-  description: string;
-  variant?: "default" | "destructive";
-}) => void;
+export type ToastFn = ToastFunction;
 
 export type ManagedAccountStatus = "pending_activation" | "active" | "suspended" | "disabled";
 

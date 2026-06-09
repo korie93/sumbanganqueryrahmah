@@ -484,6 +484,14 @@ function DashboardContent() {
 
     exportInFlightRef.current = true;
     setExportingPdf(true);
+    const exportToast = toast({
+      dedupeKey: "dashboard-pdf-export",
+      title: "Sedang menjana PDF",
+      description: "Dashboard sedang disusun dalam format PDF. Muat turun akan bermula apabila siap.",
+      variant: "info",
+      loading: true,
+      duration: 60_000,
+    });
     try {
       await exportDashboardToPdf(dashboardRef.current, {
         peakHours: peakHours ?? [],
@@ -492,13 +500,22 @@ function DashboardContent() {
         topUsers: topUsers ?? [],
         trends: trends ?? [],
       });
+      exportToast.update({
+        title: "PDF dashboard berjaya dijana",
+        description: "Fail telah dihantar ke folder muat turun pelayar anda.",
+        variant: "success",
+        loading: false,
+        duration: 5000,
+      });
     } catch (error: unknown) {
       const description = error instanceof Error ? error.message : "Unknown error. Try on desktop browser.";
       logClientError("Failed to export dashboard PDF:", error);
-      toast({
-        title: "Export PDF Failed",
+      exportToast.update({
+        title: "Gagal menjana PDF",
         description,
         variant: "destructive",
+        loading: false,
+        duration: 8000,
       });
     } finally {
       exportInFlightRef.current = false;

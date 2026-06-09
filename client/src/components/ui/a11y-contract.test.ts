@@ -42,6 +42,8 @@ test("toast notifications expose polite and assertive live-region semantics", ()
   assert.match(toastSource, /"aria-atomic": "true" as const/);
   assert.match(toastSource, /role: "status" as const/);
   assert.match(toastSource, /"aria-live": "polite" as const/);
+  assert.match(toastSource, /data-slot="toast"/);
+  assert.match(toastSource, /data-variant=\{resolvedVariant\}/);
 });
 
 test("icon buttons derive an accessible name from an explicit title fallback", () => {

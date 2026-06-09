@@ -30,11 +30,17 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-4 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
   {
     variants: {
       variant: {
         default: "border bg-background text-foreground",
+        info:
+          "border-blue-700/30 bg-blue-50 text-blue-950 dark:border-sky-400/40 dark:bg-sky-950 dark:text-sky-50",
+        success:
+          "border-emerald-700/30 bg-emerald-50 text-emerald-950 dark:border-green-400/40 dark:bg-green-950 dark:text-green-50",
+        warning:
+          "border-amber-700/30 bg-amber-50 text-amber-950 dark:border-yellow-400/40 dark:bg-yellow-950 dark:text-yellow-50",
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
       },
@@ -56,11 +62,14 @@ const Toast = React.forwardRef<
   const liveRegionProps = variant === "destructive"
     ? { role: "alert" as const, "aria-live": "assertive" as const, "aria-atomic": "true" as const }
     : { role: "status" as const, "aria-live": "polite" as const, "aria-atomic": "true" as const }
+  const resolvedVariant = variant ?? "default"
 
   return (
     <ToastPrimitives.Root
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
+      data-slot="toast"
+      data-variant={resolvedVariant}
       {...liveRegionProps}
       {...props}
     />

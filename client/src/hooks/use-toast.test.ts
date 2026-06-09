@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getToastListenerCountForTests,
+  getToastStateForTests,
   getToastTimeoutCountForTests,
   resetToastStateForTests,
   subscribeToastState,
@@ -101,4 +102,78 @@ test("toast subscriptions are deduplicated, capped, and removed on cleanup", () 
     unsubscribe();
   }
   assert.equal(getToastListenerCountForTests(), 0);
+});
+
+test("action-only toast dispatch does not register state listeners", () => {
+  resetToastStateForTests();
+  const listenerCountBefore = getToastListenerCountForTests();
+
+  toast({
+    title: "Action only",
+    description: "No component subscription is required.",
+  });
+
+  assert.equal(getToastListenerCountForTests(), listenerCountBefore);
+});
+
+test("dedupe keys update the existing toast instead of growing the queue", () => {
+  resetToastStateForTests();
+
+  const first = toast({
+    dedupeKey: "dashboard-export",
+    title: "Preparing",
+    description: "Generating PDF.",
+    loading: true,
+    variant: "info",
+  });
+  const second = toast({
+    dedupeKey: "dashboard-export",
+    title: "Ready",
+    description: "PDF generated.",
+    loading: false,
+    variant: "success",
+  });
+
+  const state = getToastStateForTests();
+  assert.equal(first.id, second.id);
+  assert.equal(state.toasts.length, 1);
+  assert.equal(state.toasts[0]?.title, "Ready");
+  assert.equal(state.toasts[0]?.revision, 1);
+  assert.equal(state.toasts[0]?.variant, "success");
+});
+
+test("bounded queue preserves the newest critical and normal notification", () => {
+  resetToastStateForTests();
+
+  toast({ title: "Normal 1", description: "Older status." });
+  toast({ title: "Normal 2", description: "Current status.", variant: "success" });
+  toast({ title: "Critical 1", description: "Older failure.", variant: "destructive" });
+  toast({ title: "Critical 2", description: "Current failure.", variant: "destructive" });
+
+  const titles = getToastStateForTests().toasts.map((item) => item.title);
+  assert.deepEqual(titles, ["Critical 2", "Normal 2"]);
+});
+
+test("progress toast updates reuse the same id and remain bounded", () => {
+  resetToastStateForTests();
+
+  const progress = toast({
+    dedupeKey: "import-progress",
+    title: "Importing",
+    description: "Please wait.",
+    loading: true,
+    variant: "info",
+  });
+  progress.update({
+    title: "Import complete",
+    description: "Rows are ready.",
+    loading: false,
+    variant: "success",
+  });
+
+  const state = getToastStateForTests();
+  assert.equal(state.toasts.length, 1);
+  assert.equal(state.toasts[0]?.id, progress.id);
+  assert.equal(state.toasts[0]?.loading, false);
+  assert.equal(state.toasts[0]?.variant, "success");
 });

@@ -1,21 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import type { ToastFunction } from "@/hooks/use-toast";
 import { getMe } from "@/lib/api";
 import { isSettingsAbortError } from "@/pages/settings/settings-request-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
-
-type ToastFn = (payload: {
-  title: string;
-  description: string;
-  variant?: "default" | "destructive";
-}) => void;
 
 type UseSettingsBootstrapArgs = {
   clearSettingsState: () => void;
   hydrateCurrentUser: (nextUser: CurrentUser) => void;
   isMountedRef: MutableRefObject<boolean>;
   loadSettings: () => Promise<void>;
-  toast: ToastFn;
+  toast: ToastFunction;
 };
 
 export function useSettingsBootstrap({

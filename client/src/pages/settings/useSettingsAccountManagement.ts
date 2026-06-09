@@ -1,18 +1,13 @@
 import type { MutableRefObject } from "react";
+import type { ToastFunction } from "@/hooks/use-toast";
 import { useSettingsDevMailOutbox } from "@/pages/settings/useSettingsDevMailOutbox";
 import { useSettingsManagedDialogs } from "@/pages/settings/useSettingsManagedDialogs";
 import { useSettingsManagedUserData } from "@/pages/settings/useSettingsManagedUserData";
 import { useSettingsManagedUserMutations } from "@/pages/settings/useSettingsManagedUserMutations";
 
-type ToastFn = (payload: {
-  title: string;
-  description: string;
-  variant?: "default" | "destructive";
-}) => void;
-
 type UseSettingsAccountManagementArgs = {
   isMountedRef: MutableRefObject<boolean>;
-  toast: ToastFn;
+  toast: ToastFunction;
 };
 
 export function useSettingsAccountManagement({

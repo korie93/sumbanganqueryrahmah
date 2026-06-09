@@ -1586,7 +1586,7 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
     await waitForCollectionRecordVisible(page, smokeRecord.accountNumber);
 
     consumeExpectedCollectionRecordsBootstrapRateLimitNoise(tracker, smokeRecord.accountNumber);
-    // A 429 from purge-summary is non-critical here and can replace the conflict toast due TOAST_LIMIT=1.
+    // A later critical 429 can replace the earlier critical conflict toast in the bounded toast queue.
     consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
     tracker.assertClean("collection records stale-delete conflict");
     tracker.clear();
