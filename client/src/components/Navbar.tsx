@@ -13,6 +13,7 @@ import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefet
 import type { MonitorSection, TabVisibility } from "@/app/types"
 import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation"
 import { NavbarMobileNavigation } from "@/components/NavbarMobileNavigation"
+import { NavbarNotificationCenter } from "@/components/NavbarNotificationCenter"
 import { NavbarBrandCluster, NavbarUserMenuDropdown } from "@/components/NavbarParts"
 import {
   buildDesktopNavLayoutKey,
@@ -21,6 +22,11 @@ import {
 } from "@/components/navbar-utils"
 import { useTheme } from "@/components/useTheme"
 import { useDesktopNavOverflowState } from "@/components/useDesktopNavOverflowState"
+import {
+  clearNotificationHistory,
+  markNotificationHistoryRead,
+  useNotificationHistoryState,
+} from "@/hooks/use-notification-history"
 import { translate } from "@/lib/i18n"
 import "./Navbar.css"
 
@@ -52,6 +58,7 @@ function NavbarImpl({
   const { theme, setTheme } = useTheme()
   const [routerLocation] = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const notificationHistory = useNotificationHistoryState()
   const navScrollerRef = useRef<HTMLDivElement>(null)
   const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
@@ -230,6 +237,13 @@ function NavbarImpl({
               <span className="hidden sm:inline">{translate("common.navbar.mobileMenuText")}</span>
             </button>
 
+            <NavbarNotificationCenter
+              {...notificationHistory}
+              variant="mobile"
+              onClear={clearNotificationHistory}
+              onMarkRead={markNotificationHistoryRead}
+            />
+
             <NavbarUserMenuDropdown
               variant="mobile"
               triggerRef={mobileUserMenuTriggerRef}
@@ -256,6 +270,13 @@ function NavbarImpl({
         />
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
+          <NavbarNotificationCenter
+            {...notificationHistory}
+            variant="desktop"
+            onClear={clearNotificationHistory}
+            onMarkRead={markNotificationHistoryRead}
+          />
+
           <NavbarUserMenuDropdown
             variant="desktop"
             triggerRef={desktopUserMenuTriggerRef}

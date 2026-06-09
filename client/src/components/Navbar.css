@@ -129,6 +129,7 @@
 
 .nav-pill:focus-visible,
 .nav-mobile-trigger:focus-visible,
+.nav-notification-trigger:focus-visible,
 .user-menu-trigger:focus-visible {
   outline: none;
   border-color: hsl(var(--ring));
@@ -197,6 +198,7 @@
 }
 
 .nav-mobile-trigger,
+.nav-notification-trigger,
 .user-menu-trigger {
   display: inline-flex;
   align-items: center;
@@ -216,7 +218,16 @@
     box-shadow 0.2s ease;
 }
 
+.nav-notification-trigger {
+  position: relative;
+  justify-content: center;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0;
+}
+
 .nav-mobile-trigger:hover,
+.nav-notification-trigger:hover,
 .user-menu-trigger:hover {
   background: hsl(var(--accent) / 0.42);
   border-color: hsl(var(--border));
@@ -286,6 +297,7 @@
 }
 
 .dark .nav-mobile-trigger,
+.dark .nav-notification-trigger,
 .dark .user-menu-trigger {
   background: hsl(var(--card) / 0.82);
   border-color: hsl(var(--border) / 0.85);
@@ -325,6 +337,7 @@
   }
 
   .nav-mobile-trigger:hover,
+  .nav-notification-trigger:hover,
   .user-menu-trigger:hover {
     background: hsl(var(--accent) / 0.92);
     border-color: hsl(var(--border) / 0.95);
@@ -336,6 +349,7 @@
   }
 
   .dark .nav-mobile-trigger:hover,
+  .dark .nav-notification-trigger:hover,
   .dark .user-menu-trigger:hover {
     background: hsl(var(--accent) / 0.9);
   }
@@ -354,6 +368,7 @@
   }
 
   .nav-mobile-trigger,
+  .nav-notification-trigger,
   .user-menu-trigger,
   .nav-pill {
     min-height: 2.5rem;
@@ -368,6 +383,7 @@
 
 @media (max-width: 767px) {
   .nav-mobile-trigger,
+  .nav-notification-trigger,
   .user-menu-trigger {
     min-height: 2.75rem;
     padding: 0.55rem 0.8rem;

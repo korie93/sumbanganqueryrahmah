@@ -13,6 +13,7 @@ function readSource(fileName: string) {
 test("navbar controls use Malay accessible labels and include username context", () => {
   const navbarSource = readSource("Navbar.tsx");
   const navbarPartsSource = readSource("NavbarParts.tsx");
+  const notificationCenterSource = readSource("NavbarNotificationCenter.tsx");
   const navbarCombinedSource = `${navbarSource}\n${navbarPartsSource}`;
   const homeButtonSource = readSource("NavbarHomeButton.tsx");
   const desktopNavigationSource = readSource("NavbarDesktopNavigation.tsx");
@@ -25,6 +26,15 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /\{translate\("common\.navbar\.mobileMenuText"\)\}/);
   assert.match(navbarSource, /<button[\s\S]*data-testid="button-open-mobile-nav"/);
   assert.doesNotMatch(navbarSource, /<div[^>]*data-testid="button-open-mobile-nav"/);
+  assert.match(navbarSource, /useNotificationHistoryState\(\)/);
+  assert.match(navbarSource, /variant="mobile"/);
+  assert.match(navbarSource, /variant="desktop"/);
+  assert.match(notificationCenterSource, /aria-label=\{triggerLabel\}/);
+  assert.match(notificationCenterSource, /aria-label="Pusat notifikasi"/);
+  assert.match(notificationCenterSource, /aria-label="Kosongkan sejarah notifikasi"/);
+  assert.match(notificationCenterSource, /aria-label="Sejarah notifikasi"/);
+  assert.match(notificationCenterSource, /onMarkRead\(\)/);
+  assert.doesNotMatch(notificationCenterSource, /localStorage|sessionStorage|setInterval|setTimeout/);
   assert.match(navbarCombinedSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreDesktopUserMenuFocus\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileUserMenuFocus\}/);
@@ -43,6 +53,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.doesNotMatch(navbarSource, /window\.location/);
   assert.match(homeButtonSource, /aria-label="Utama"/);
   assert.match(homeButtonSource, />Utama<\/span>/);
+  assert.match(homeButtonSource, /nav-home-pill !hidden lg:!inline-flex/);
   assert.match(desktopNavigationSource, /aria-label="Navigasi utama"/);
   assert.match(desktopNavigationSource, /aria-current=\{isActive \? "page" : undefined\}/);
   assert.match(desktopNavigationSource, /aria-current=\{active \? "page" : undefined\}/);

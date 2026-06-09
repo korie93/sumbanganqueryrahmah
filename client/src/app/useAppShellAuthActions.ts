@@ -24,6 +24,7 @@ import {
   type ResolvedRoute,
 } from "@/app/routing";
 import type { MonitorSection, User } from "@/app/types";
+import { clearNotificationHistory } from "@/hooks/use-notification-history";
 import { clearAppQueryCache } from "@/lib/query-client-runtime";
 
 type UseAppShellAuthActionsArgs = {
@@ -55,6 +56,7 @@ export function useAppShellAuthActions({
     for (const key of SESSION_STORAGE_KEYS_TO_CLEAR) {
       safeRemoveStorageItem(sessionStorage, key);
     }
+    clearNotificationHistory();
     clearAppQueryCache();
   }, []);
 

@@ -20,7 +20,7 @@ function NavbarHomeButtonImpl({
       onClick={() => onNavigate(HOME_NAV_ITEM.id)}
       onMouseEnter={() => onPrefetch(HOME_NAV_ITEM.id)}
       onFocus={() => onPrefetch(HOME_NAV_ITEM.id)}
-      className={`nav-pill nav-home-pill hidden lg:inline-flex${active ? " nav-pill-active" : ""}`}
+      className={`nav-pill nav-home-pill !hidden lg:!inline-flex${active ? " nav-pill-active" : ""}`}
       data-testid="nav-home"
       aria-label="Utama"
       aria-current={active ? "page" : undefined}

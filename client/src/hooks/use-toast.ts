@@ -4,6 +4,7 @@ import type {
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast"
+import { recordNotificationHistory } from "@/hooks/use-notification-history"
 
 const TOAST_LIMIT = 2
 export const TOAST_TIMEOUT_LIMIT = TOAST_LIMIT
@@ -338,6 +339,10 @@ function applyToastUpdate(
     },
     clearFields,
   })
+  const updatedToast = memoryState.toasts.find((toast) => toast.id === id)
+  if (updatedToast) {
+    recordNotificationHistory(updatedToast)
+  }
 }
 
 function buildToastHandle(id: string): ToastHandle {
@@ -395,6 +400,10 @@ function toast({ ...props }: ToastInput): ToastHandle {
       },
     },
   })
+  const addedToast = memoryState.toasts.find((toast) => toast.id === id)
+  if (addedToast) {
+    recordNotificationHistory(addedToast)
+  }
 
   return handle
 }

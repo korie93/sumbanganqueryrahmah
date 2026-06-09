@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { performAppLogout, performClientLogout } from "@/app/logout-flow";
+import {
+  getNotificationHistoryStateForTests,
+  recordNotificationHistory,
+  resetNotificationHistoryForTests,
+} from "@/hooks/use-notification-history";
 
 test("performClientLogout broadcasts first and clears local state without same-tab force events", () => {
+  resetNotificationHistoryForTests();
   const events: string[] = [];
+  recordNotificationHistory({
+    title: "Sensitive session notice",
+    occurrenceCount: 1,
+  });
 
   performClientLogout({
     applyLoggedOutClientState: () => {
@@ -15,6 +25,7 @@ test("performClientLogout broadcasts first and clears local state without same-t
   });
 
   assert.deepEqual(events, ["broadcast:other-tabs", "client:cleared"]);
+  assert.equal(getNotificationHistoryStateForTests().entries.length, 0);
 });
 
 test("performAppLogout waits for server logout before clearing client state", async () => {

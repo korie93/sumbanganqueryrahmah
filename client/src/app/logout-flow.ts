@@ -1,3 +1,5 @@
+import { clearNotificationHistory } from "@/hooks/use-notification-history";
+
 type PerformAppLogoutParams = {
   activityId?: string | undefined;
   activityLogout: (activityId?: string) => Promise<unknown>;
@@ -15,6 +17,7 @@ export function performClientLogout({
   applyLoggedOutClientState,
   broadcastLogoutToOtherTabs,
 }: PerformClientLogoutParams) {
+  clearNotificationHistory();
   broadcastLogoutToOtherTabs();
   applyLoggedOutClientState(true, false);
 }
