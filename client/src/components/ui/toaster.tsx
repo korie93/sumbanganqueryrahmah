@@ -1,5 +1,6 @@
 import { useToastState } from "@/hooks/use-toast"
 import { ExpandableMessage } from "@/components/ExpandableMessage"
+import { ToastRequestReference } from "@/components/ui/ToastRequestReference"
 import {
   Toast,
   ToastClose,
@@ -55,22 +56,26 @@ export function Toaster() {
         dedupeKey: _dedupeKey,
         loading,
         priority: _priority,
+        requestId,
         ...props
       }) {
         return (
           <Toast key={`${id}:${revision}`} {...props}>
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-              <ToastStatusIcon loading={loading} variant={props.variant} />
-              <div className="grid min-w-0 flex-1 gap-1">
-                {title && <ToastTitle>{title}</ToastTitle>}
-                {description && (
-                  <ToastDescription>
-                    <ExpandableMessage>{description}</ExpandableMessage>
-                  </ToastDescription>
-                )}
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-start gap-3">
+                <ToastStatusIcon loading={loading} variant={props.variant} />
+                <div className="grid min-w-0 flex-1 gap-1">
+                  {title && <ToastTitle>{title}</ToastTitle>}
+                  {description && (
+                    <ToastDescription>
+                      <ExpandableMessage>{description}</ExpandableMessage>
+                    </ToastDescription>
+                  )}
+                </div>
               </div>
+              {requestId && <ToastRequestReference requestId={requestId} />}
+              {action && <div className="mt-3 flex justify-end">{action}</div>}
             </div>
-            {action}
             <ToastClose />
           </Toast>
         )

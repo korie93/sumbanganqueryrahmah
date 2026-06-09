@@ -1,7 +1,9 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { OperationalPage } from "@/components/layout/OperationalPage";
+import { ToastAction } from "@/components/ui/toast";
 import {
   cleanupEndedActivityLogs,
   deleteActivityLog,
@@ -14,6 +16,7 @@ import {
   getTopActiveUsers,
 } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
+import { resolveMutationErrorDetails } from "@/lib/mutation-feedback";
 import { queryClient } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -87,6 +90,8 @@ function DashboardContent() {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const exportInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
+  const exportRetryRef = useRef<() => void>(() => undefined);
+  const refreshRetryRef = useRef<() => void>(() => undefined);
   const lifecycleAbortControllerRef = useRef<AbortController | null>(null);
 
   const {
@@ -456,10 +461,34 @@ function DashboardContent() {
         for (const failure of failures) {
           logClientError("Dashboard refresh query failed:", failure.reason);
         }
+        const primaryFailure = resolveMutationErrorDetails(
+          failures[0]?.reason,
+          "Sebahagian seksyen dashboard tidak dapat disegarkan.",
+        );
         toast({
-          title: "Refresh incomplete",
-          description: "Some dashboard sections could not refresh. Existing section error states remain available.",
+          dedupeKey: "dashboard-refresh",
+          title: "Refresh belum lengkap",
+          description: primaryFailure.message,
           variant: "destructive",
+          ...(primaryFailure.requestId ? { requestId: primaryFailure.requestId } : {}),
+          duration: 12_000,
+          action: (
+            <ToastAction
+              altText="Cuba semula menyegarkan dashboard"
+              onClick={() => refreshRetryRef.current()}
+            >
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              Cuba semula
+            </ToastAction>
+          ),
+        });
+      } else {
+        toast({
+          dedupeKey: "dashboard-refresh",
+          title: "Dashboard dikemas kini",
+          description: "Semua seksyen dashboard telah menerima data terkini.",
+          variant: "success",
+          duration: 4000,
         });
       }
     } finally {
@@ -505,6 +534,7 @@ function DashboardContent() {
         description: "Fail telah dihantar ke folder muat turun pelayar anda.",
         variant: "success",
         loading: false,
+        action: undefined,
         duration: 5000,
       });
     } catch (error: unknown) {
@@ -516,6 +546,15 @@ function DashboardContent() {
         variant: "destructive",
         loading: false,
         duration: 8000,
+        action: (
+          <ToastAction
+            altText="Cuba semula menjana PDF dashboard"
+            onClick={() => exportRetryRef.current()}
+          >
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            Cuba semula
+          </ToastAction>
+        ),
       });
     } finally {
       exportInFlightRef.current = false;
@@ -524,6 +563,20 @@ function DashboardContent() {
       }
     }
   }, [exportBlockReason, isDashboardLifecycleActive, peakHours, recentLoginActivities, summary, topUsers, trends]);
+
+  useEffect(() => {
+    refreshRetryRef.current = () => {
+      void handleRefreshAll();
+    };
+    exportRetryRef.current = () => {
+      void handleExportPdf();
+    };
+
+    return () => {
+      refreshRetryRef.current = () => undefined;
+      exportRetryRef.current = () => undefined;
+    };
+  }, [handleExportPdf, handleRefreshAll]);
 
   return (
     <OperationalPage width="content">

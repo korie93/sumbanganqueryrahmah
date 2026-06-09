@@ -21,7 +21,10 @@ type ToasterToast = ToastProps & {
   dedupeKey?: string
   loading?: boolean
   priority?: ToastPriority
+  requestId?: string
 }
+
+type ToastTransientKey = "action" | "loading" | "priority" | "requestId"
 
 type ActionType = {
   ADD_TOAST: "ADD_TOAST",
@@ -45,6 +48,7 @@ type Action =
   | {
       type: ActionType["UPDATE_TOAST"]
       toast: Partial<ToasterToast>
+      clearFields?: readonly ToastTransientKey[]
     }
   | {
       type: ActionType["DISMISS_TOAST"]
@@ -121,6 +125,32 @@ function selectBoundedToasts(toasts: ToasterToast[]): ToasterToast[] {
   return toasts.filter((item) => selectedIds.has(item.id)).slice(0, TOAST_LIMIT)
 }
 
+function clearTransientToastFields(
+  toast: ToasterToast,
+  clearFields: readonly ToastTransientKey[],
+): ToasterToast {
+  let nextToast = toast
+
+  if (clearFields.includes("action")) {
+    const { action: _action, ...rest } = nextToast
+    nextToast = rest
+  }
+  if (clearFields.includes("loading")) {
+    const { loading: _loading, ...rest } = nextToast
+    nextToast = rest
+  }
+  if (clearFields.includes("priority")) {
+    const { priority: _priority, ...rest } = nextToast
+    nextToast = rest
+  }
+  if (clearFields.includes("requestId")) {
+    const { requestId: _requestId, ...rest } = nextToast
+    nextToast = rest
+  }
+
+  return nextToast
+}
+
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case "ADD_TOAST":
@@ -138,11 +168,14 @@ export const reducer = (state: State, action: Action): State => {
         toasts: selectBoundedToasts(
           state.toasts.map((t) =>
             t.id === action.toast.id
-              ? {
-                  ...t,
-                  ...action.toast,
-                  revision: t.revision + 1,
-                }
+              ? clearTransientToastFields(
+                  {
+                    ...t,
+                    ...action.toast,
+                    revision: t.revision + 1,
+                  },
+                  action.clearFields ?? [],
+                )
               : t,
           ),
         ),
@@ -242,7 +275,12 @@ export function subscribeToastState(listener: (state: State) => void) {
 }
 
 export type ToastInput = Omit<ToasterToast, "id" | "revision">
-type ToastUpdate = Partial<ToastInput>
+type ToastUpdate = Omit<Partial<ToastInput>, ToastTransientKey> & {
+  action?: ToastActionElement | undefined
+  loading?: boolean | undefined
+  priority?: ToastPriority | undefined
+  requestId?: string | undefined
+}
 
 export type ToastHandle = {
   id: string
@@ -253,13 +291,27 @@ export type ToastHandle = {
 function buildToastHandle(id: string): ToastHandle {
   const update = (props: ToastUpdate) => {
     clearToastTimeout(id)
+    const clearFields = (["action", "loading", "priority", "requestId"] as const)
+      .filter((field) => field in props && props[field] === undefined)
+    const {
+      action,
+      loading,
+      priority,
+      requestId,
+      ...persistentProps
+    } = props
     dispatch({
       type: "UPDATE_TOAST",
       toast: {
-        ...props,
+        ...persistentProps,
+        ...(action !== undefined ? { action } : {}),
+        ...(loading !== undefined ? { loading } : {}),
+        ...(priority !== undefined ? { priority } : {}),
+        ...(requestId !== undefined ? { requestId } : {}),
         id,
         open: true,
       },
+      clearFields,
     })
   }
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
@@ -282,6 +334,10 @@ function toast({ ...props }: ToastInput): ToastHandle {
   if (existingToast) {
     const handle = buildToastHandle(existingToast.id)
     handle.update({
+      action: undefined,
+      loading: false,
+      priority: undefined,
+      requestId: undefined,
       ...props,
       dedupeKey,
     })

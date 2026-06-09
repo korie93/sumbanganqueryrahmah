@@ -10,6 +10,7 @@ import {
   TOAST_LISTENER_LIMIT,
   TOAST_REMOVE_DELAY_MS,
   TOAST_TIMEOUT_LIMIT,
+  type ToastInput,
 } from "@/hooks/use-toast";
 
 function latestToastCount(seenToastCounts: number[]) {
@@ -176,4 +177,29 @@ test("progress toast updates reuse the same id and remain bounded", () => {
   assert.equal(state.toasts[0]?.id, progress.id);
   assert.equal(state.toasts[0]?.loading, false);
   assert.equal(state.toasts[0]?.variant, "success");
+});
+
+test("dedupe replacement clears stale retry actions and request references", () => {
+  resetToastStateForTests();
+  const retryAction = {} as NonNullable<ToastInput["action"]>;
+
+  toast({
+    dedupeKey: "dashboard-refresh",
+    title: "Refresh failed",
+    description: "Try again.",
+    requestId: "req-refresh-1",
+    variant: "destructive",
+    action: retryAction,
+  });
+  toast({
+    dedupeKey: "dashboard-refresh",
+    title: "Refresh complete",
+    description: "Dashboard is current.",
+    variant: "success",
+  });
+
+  const currentToast = getToastStateForTests().toasts[0];
+  assert.equal(currentToast?.action, undefined);
+  assert.equal(currentToast?.requestId, undefined);
+  assert.equal(currentToast?.variant, "success");
 });
