@@ -14,6 +14,7 @@ import {
   formatCollectionNicknameSummaryMobileDateRange,
   getCollectionNicknameSummaryPreview,
 } from "@/pages/collection/collection-nickname-summary-page-utils";
+import { canViewCollectionNicknameSummary } from "@shared/user-roles";
 
 const CollectionNicknameBatchSections = lazy(() =>
   import("@/pages/collection-nickname-summary/CollectionNicknameBatchSections").then((module) => ({
@@ -26,7 +27,7 @@ type CollectionNicknameSummaryPageProps = {
 };
 
 function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPageProps) {
-  const canAccess = role === "admin" || role === "superuser";
+  const canAccess = canViewCollectionNicknameSummary(role);
   const isMobile = useIsMobile();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const summaryData = useCollectionNicknameSummaryData({ canAccess });
@@ -48,7 +49,7 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
   if (!canAccess) {
     return (
       <OperationalSectionCard contentClassName="py-10 text-center text-sm text-muted-foreground">
-        Nickname Summary hanya tersedia untuk admin dan superuser.
+        Nickname Summary hanya tersedia untuk admin, manager dan superuser.
       </OperationalSectionCard>
     );
   }

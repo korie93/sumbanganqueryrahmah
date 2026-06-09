@@ -22,6 +22,7 @@ import { CollectionReportContent } from "@/pages/collection-report/CollectionRep
 import { CollectionSidebar } from "@/pages/collection-report/CollectionSidebar";
 import { useCollectionNicknameAccess } from "@/pages/collection-report/useCollectionNicknameAccess";
 import { useCollectionReportNavigation } from "@/pages/collection-report/useCollectionReportNavigation";
+import { canViewCollectionNicknameSummary } from "@shared/user-roles";
 
 const CollectionNicknameDialog = lazy(() =>
   import("@/pages/collection-report/CollectionNicknameDialog").then((module) => ({
@@ -37,8 +38,7 @@ export default function CollectionReport() {
   const isSuperuser = role === "superuser";
   const isReadOnlyManager = role === "manager";
   const bypassesNicknameAccess = isSuperuser || isReadOnlyManager;
-  const canAccessNicknameSummary =
-    role === "admin" || isReadOnlyManager || isSuperuser;
+  const canAccessNicknameSummary = canViewCollectionNicknameSummary(role);
   const requiresNicknamePassword = role === "admin" || role === "user";
 
   const nicknameAccess = useCollectionNicknameAccess({

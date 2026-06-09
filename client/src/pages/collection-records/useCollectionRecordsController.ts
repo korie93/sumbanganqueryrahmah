@@ -15,6 +15,7 @@ import { useCollectionRecordEdit } from "@/pages/collection-records/useCollectio
 import { useCollectionRecordsData } from "@/pages/collection-records/useCollectionRecordsData";
 import { useCollectionReceiptPreview } from "@/pages/collection-records/useCollectionReceiptPreview";
 import { useCollectionViewAllRecords } from "@/pages/collection-records/useCollectionViewAllRecords";
+import { canMutateCollectionRecords } from "@shared/user-roles";
 
 type UseCollectionRecordsControllerParams = {
   role: string;
@@ -25,8 +26,8 @@ const COLLECTION_RECORDS_EXPORT_BATCH_SIZE = 200;
 export function useCollectionRecordsController({
   role,
 }: UseCollectionRecordsControllerParams) {
-  const canEdit = role === "user" || role === "admin" || role === "superuser";
-  const canDeleteGlobal = role === "admin" || role === "superuser" || role === "user";
+  const canEdit = canMutateCollectionRecords(role);
+  const canDeleteGlobal = canMutateCollectionRecords(role);
   const canUseNicknameFilter =
     role === "admin" || role === "manager" || role === "superuser";
   const canPurgeOldRecords = role === "superuser";

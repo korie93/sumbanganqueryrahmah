@@ -1815,11 +1815,36 @@ test("manager can read all collection staff records but cannot mutate collection
         }),
       },
     );
+    const purgeResponse = await fetch(`${baseUrl}/api/collection/purge-old`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "ManagerMustNotPurge" }),
+    });
+    const nicknameDeleteResponse = await fetch(
+      `${baseUrl}/api/collection/nicknames/nickname-1`,
+      { method: "DELETE" },
+    );
+    const dailyTargetResponse = await fetch(
+      `${baseUrl}/api/collection/daily/target`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: "Collector Alpha",
+          year: 2026,
+          month: 3,
+          monthlyTarget: 1000,
+        }),
+      },
+    );
 
     assert.equal(createResponse.status, 403);
     assert.equal(updateResponse.status, 403);
     assert.equal(deleteResponse.status, 403);
     assert.equal(nicknameLoginResponse.status, 403);
+    assert.equal(purgeResponse.status, 403);
+    assert.equal(nicknameDeleteResponse.status, 403);
+    assert.equal(dailyTargetResponse.status, 403);
     assert.equal(createCalls.length, 0);
     assert.equal(updateCalls.length, 0);
     assert.equal(deleteCalls.length, 0);
@@ -2488,6 +2513,67 @@ test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading
     assert.equal(nicknameSummaryCalls[0].from, "2026-03-01");
     assert.equal(nicknameSummaryCalls[0].to, "2026-03-31");
     assert.deepEqual(nicknameSummaryCalls[0].nicknames, ["Collector Alpha"]);
+    assert.equal(nicknameListCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("manager can list all active nicknames and view all-staff nickname summaries", async () => {
+  const {
+    storage,
+    nicknameActiveChecks,
+    nicknameSummaryCalls,
+    nicknameListCalls,
+  } = createCollectionSummaryStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "manager-1",
+      username: "manager.user",
+      role: "manager",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const nicknamesResponse = await fetch(`${baseUrl}/api/collection/nicknames`);
+    assert.equal(nicknamesResponse.status, 200);
+    const nicknamesPayload = await nicknamesResponse.json();
+    assert.deepEqual(
+      nicknamesPayload.nicknames.map((item: { nickname: string }) => item.nickname),
+      ["Collector Alpha", "Collector Beta"],
+    );
+
+    const summaryResponse = await fetch(
+      `${baseUrl}/api/collection/nickname-summary?from=2026-03-01&to=2026-03-31&nicknames=Collector%20Alpha,Collector%20Beta&summaryOnly=1`,
+    );
+    assert.equal(summaryResponse.status, 200);
+    const summaryPayload = await summaryResponse.json();
+    assert.equal(summaryPayload.ok, true);
+    assert.deepEqual(summaryPayload.nicknames, ["Collector Alpha", "Collector Beta"]);
+    assert.deepEqual(summaryPayload.nicknameTotals, [
+      {
+        nickname: "Collector Alpha",
+        totalRecords: 3,
+        totalAmount: 450.5,
+      },
+      {
+        nickname: "Collector Beta",
+        totalRecords: 0,
+        totalAmount: 0,
+      },
+    ]);
+    assert.deepEqual(nicknameActiveChecks, ["Collector Alpha", "Collector Beta"]);
+    assert.deepEqual(nicknameSummaryCalls, [{
+      from: "2026-03-01",
+      to: "2026-03-31",
+      nicknames: ["Collector Alpha", "Collector Beta"],
+    }]);
     assert.equal(nicknameListCalls.length, 0);
   } finally {
     await stopTestServer(server);

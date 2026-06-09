@@ -23,7 +23,26 @@ export function canManagerAccessModule(moduleId: string): moduleId is ManagerAll
   return MANAGER_ALLOWED_MODULES.includes(moduleId as ManagerAllowedModule);
 }
 
+function normalizeRole(role: unknown): string {
+  return String(role || "").trim().toLowerCase();
+}
+
+export function canViewAllStaffCollectionReports(role: unknown): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === "manager" || normalized === "superuser";
+}
+
+export function canViewCollectionNicknameSummary(role: unknown): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === "admin" || canViewAllStaffCollectionReports(normalized);
+}
+
+export function canMutateCollectionRecords(role: unknown): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === "user" || normalized === "admin" || normalized === "superuser";
+}
+
 export function canViewAllStaff(role: unknown): boolean {
   const normalized = String(role || "").trim().toLowerCase();
-  return normalized === "manager" || normalized === "superuser";
+  return canViewAllStaffCollectionReports(normalized);
 }
