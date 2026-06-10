@@ -6,6 +6,10 @@ import {
   normalizeManagedAccountsStatusFilter,
 } from "@/pages/settings/account-management/managed-accounts-utils";
 import {
+  MANAGED_ACCOUNT_ROLE_LABELS,
+  MANAGED_ACCOUNT_STATUS_LABELS,
+} from "@/pages/settings/account-management/managed-accounts-shared";
+import {
   ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
   hasNormalizedSearchChanged,
   normalizeSearchValue,
@@ -57,7 +61,7 @@ export function useManagedAccountsFilterState({
         roleFilter !== "all"
           ? {
               id: "managed-role",
-              label: `Role: ${roleFilter}`,
+              label: `Role: ${MANAGED_ACCOUNT_ROLE_LABELS[roleFilter]}`,
               onRemove: () => {
                 setRoleFilter("all");
                 onQueryChange({
@@ -70,7 +74,8 @@ export function useManagedAccountsFilterState({
         statusFilter !== "all"
           ? {
               id: "managed-status",
-              label: `Status: ${statusFilter}`,
+              label: `Status: ${MANAGED_ACCOUNT_STATUS_LABELS[statusFilter]}`,
+              tone: statusFilter === "banned" || statusFilter === "locked" ? "danger" : "warning",
               onRemove: () => {
                 setStatusFilter("all");
                 onQueryChange({

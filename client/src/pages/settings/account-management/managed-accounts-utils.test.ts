@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ManagedUser } from "@/pages/settings/types";
 import {
+  MANAGED_ACCOUNT_ATTENTION_FILTERS,
+  MANAGED_ACCOUNT_STATUS_LABELS,
+} from "@/pages/settings/account-management/managed-accounts-shared";
+import {
   buildManagedAccountDetailFacts,
   buildManagedAccountRiskSummary,
   buildManagedAccountTimeline,
@@ -52,6 +56,18 @@ test("normalizeManagedAccountsStatusFilter keeps supported values", () => {
 
 test("normalizeManagedAccountsStatusFilter falls back to all", () => {
   assert.equal(normalizeManagedAccountsStatusFilter("archived"), "all");
+});
+
+test("managed account status labels use user-facing copy", () => {
+  assert.equal(MANAGED_ACCOUNT_STATUS_LABELS.pending_activation, "Pending activation");
+  assert.equal(MANAGED_ACCOUNT_STATUS_LABELS.banned, "Banned");
+});
+
+test("managed account attention filters only include actionable statuses", () => {
+  assert.deepEqual(
+    MANAGED_ACCOUNT_ATTENTION_FILTERS.map((option) => option.value),
+    ["locked", "banned", "pending_activation", "suspended", "disabled"],
+  );
 });
 
 test("getManagedAccountsEmptyMessage returns loading copy", () => {

@@ -21,6 +21,10 @@ export type ManagedAccountsSectionProps = {
 
 export type ManagedAccountsRoleFilter = ManagedUsersQueryState["role"];
 export type ManagedAccountsStatusFilter = ManagedUsersQueryState["status"];
+export type ManagedAccountAttentionStatus = Exclude<
+  ManagedAccountsStatusFilter,
+  "all" | "active"
+>;
 
 export type ManagedAccountRiskSummary = {
   label: string;
@@ -42,25 +46,77 @@ export type ManagedAccountTimelineItem = {
   timestamp: string | null;
 };
 
+export const MANAGED_ACCOUNT_ROLE_LABELS: Record<ManagedAccountsRoleFilter, string> = {
+  all: "All roles",
+  admin: "Admin",
+  manager: "Manager",
+  user: "User",
+};
+
+export const MANAGED_ACCOUNT_STATUS_LABELS: Record<ManagedAccountsStatusFilter, string> = {
+  all: "All statuses",
+  active: "Active",
+  pending_activation: "Pending activation",
+  suspended: "Suspended",
+  disabled: "Disabled",
+  locked: "Locked",
+  banned: "Banned",
+};
+
 export const MANAGED_ACCOUNT_ROLE_OPTIONS: Array<{
   value: ManagedAccountsRoleFilter;
   label: string;
 }> = [
-  { value: "all", label: "All roles" },
-  { value: "user", label: "user" },
-  { value: "admin", label: "admin" },
-  { value: "manager", label: "manager" },
+  { value: "all", label: MANAGED_ACCOUNT_ROLE_LABELS.all },
+  { value: "user", label: MANAGED_ACCOUNT_ROLE_LABELS.user },
+  { value: "admin", label: MANAGED_ACCOUNT_ROLE_LABELS.admin },
+  { value: "manager", label: MANAGED_ACCOUNT_ROLE_LABELS.manager },
 ];
 
 export const MANAGED_ACCOUNT_STATUS_OPTIONS: Array<{
   value: ManagedAccountsStatusFilter;
   label: string;
 }> = [
-  { value: "all", label: "All statuses" },
-  { value: "active", label: "active" },
-  { value: "pending_activation", label: "pending_activation" },
-  { value: "suspended", label: "suspended" },
-  { value: "disabled", label: "disabled" },
-  { value: "locked", label: "locked" },
-  { value: "banned", label: "banned" },
+  { value: "all", label: MANAGED_ACCOUNT_STATUS_LABELS.all },
+  { value: "active", label: MANAGED_ACCOUNT_STATUS_LABELS.active },
+  {
+    value: "pending_activation",
+    label: MANAGED_ACCOUNT_STATUS_LABELS.pending_activation,
+  },
+  { value: "suspended", label: MANAGED_ACCOUNT_STATUS_LABELS.suspended },
+  { value: "disabled", label: MANAGED_ACCOUNT_STATUS_LABELS.disabled },
+  { value: "locked", label: MANAGED_ACCOUNT_STATUS_LABELS.locked },
+  { value: "banned", label: MANAGED_ACCOUNT_STATUS_LABELS.banned },
+];
+
+export const MANAGED_ACCOUNT_ATTENTION_FILTERS: Array<{
+  value: ManagedAccountAttentionStatus;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "locked",
+    label: MANAGED_ACCOUNT_STATUS_LABELS.locked,
+    description: "Accounts locked by security controls.",
+  },
+  {
+    value: "banned",
+    label: MANAGED_ACCOUNT_STATUS_LABELS.banned,
+    description: "Accounts blocked from signing in.",
+  },
+  {
+    value: "pending_activation",
+    label: MANAGED_ACCOUNT_STATUS_LABELS.pending_activation,
+    description: "Invited users who have not activated yet.",
+  },
+  {
+    value: "suspended",
+    label: MANAGED_ACCOUNT_STATUS_LABELS.suspended,
+    description: "Accounts paused by administrators.",
+  },
+  {
+    value: "disabled",
+    label: MANAGED_ACCOUNT_STATUS_LABELS.disabled,
+    description: "Accounts disabled from normal access.",
+  },
 ];

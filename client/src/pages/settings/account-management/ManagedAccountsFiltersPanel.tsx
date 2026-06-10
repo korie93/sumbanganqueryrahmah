@@ -1,7 +1,10 @@
-import { Search } from "lucide-react";
+import { AlertTriangle, Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
+  MANAGED_ACCOUNT_ATTENTION_FILTERS,
   MANAGED_ACCOUNT_ROLE_OPTIONS,
   MANAGED_ACCOUNT_STATUS_OPTIONS,
   type ManagedAccountsRoleFilter,
@@ -33,6 +36,49 @@ export function ManagedAccountsFiltersPanel({
 }: ManagedAccountsFiltersPanelProps) {
   return (
     <div className="space-y-3">
+      <section
+        className="rounded-lg border border-border/60 bg-muted/20 p-3"
+        aria-labelledby="managed-accounts-attention-filters-title"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+            <p id="managed-accounts-attention-filters-title" className="text-sm font-medium">
+              Needs attention
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Jump to accounts that usually need admin action.
+          </p>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {MANAGED_ACCOUNT_ATTENTION_FILTERS.map((option) => {
+            const isActive = statusFilter === option.value;
+
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                onClick={() => onStatusChange(isActive ? "all" : option.value)}
+                className={cn(
+                  "rounded-full px-3",
+                  !isActive && option.value === "banned"
+                    ? "text-destructive hover:text-destructive"
+                    : undefined,
+                  !isActive && option.value === "locked"
+                    ? "text-amber-800 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100"
+                    : undefined,
+                )}
+                title={option.description}
+              >
+                {option.label}
+              </Button>
+            );
+          })}
+        </div>
+      </section>
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
         <div className="space-y-2">
           <p className="text-sm font-medium">Search by user name</p>
