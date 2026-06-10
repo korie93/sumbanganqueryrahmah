@@ -59,6 +59,7 @@ const MIGRATION_TAGS = Object.freeze([
   "0039_settings_fk_not_null_idempotency_audit",
   "0041_pii_xor_check_constraints",
   "0042_debug_audit_log",
+  "0043_manager_role_permission_seed",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(

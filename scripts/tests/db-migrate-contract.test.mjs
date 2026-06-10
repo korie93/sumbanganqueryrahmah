@@ -22,6 +22,29 @@ test("backup payload chunk migration is safe for legacy runtime-created tables",
   assert.match(source, /confrelid = 'public\.backups'::regclass/);
 });
 
+test("manager role permission migration backfills missing production settings", () => {
+  const source = readFileSync(new URL("../../drizzle/0043_manager_role_permission_seed.sql", import.meta.url), "utf8");
+
+  for (const key of [
+    "tab_manager_home_enabled",
+    "tab_manager_import_enabled",
+    "tab_manager_general_search_enabled",
+    "tab_manager_collection_report_enabled",
+    "tab_manager_analysis_enabled",
+    "tab_manager_dashboard_enabled",
+    "tab_manager_settings_enabled",
+  ]) {
+    assert.match(source, new RegExp(key));
+  }
+
+  assert.match(source, /ON CONFLICT \(key\) DO UPDATE SET/);
+  assert.match(source, /\('superuser', true, true\)/);
+  assert.match(source, /\('admin', true, false\)/);
+  assert.match(source, /\('manager', false, false\)/);
+  assert.match(source, /\('user', false, false\)/);
+  assert.match(source, /ON CONFLICT \(role, setting_key\) DO UPDATE SET/);
+});
+
 test("drizzle journal includes every SQL migration file", () => {
   const drizzleDir = new URL("../../drizzle/", import.meta.url);
   const migrationTags = readdirSync(drizzleDir)

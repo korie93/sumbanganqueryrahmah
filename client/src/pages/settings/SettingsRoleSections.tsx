@@ -85,6 +85,14 @@ function getEnabledCount(settings: SettingItem[]) {
   return settings.filter(isEnabledSetting).length;
 }
 
+function getEmptyPermissionMessage(section: RolePermissionSection, rawQuery: string) {
+  if (section.settings.length === 0 && rawQuery.trim().length === 0) {
+    return `${section.shortLabel} permission settings are not installed yet. Run the latest database migration, then refresh this page.`;
+  }
+
+  return `No permissions match this search for ${section.shortLabel}.`;
+}
+
 export function SettingsRoleSections({
   renderSettingCard,
   roleSections,
@@ -216,7 +224,7 @@ export function SettingsRoleSections({
                     sectionFilteredSettings.map(renderSettingCard)
                   ) : (
                     <div className="rounded-lg border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
-                      No permissions match this search for {section.shortLabel}.
+                      {getEmptyPermissionMessage(section, searchQuery)}
                     </div>
                   )}
                 </CardContent>

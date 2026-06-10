@@ -22,4 +22,5 @@ test("settings role permission UI keeps manager separate from admin and user", (
   assert.match(source, /Read-focused operational access without superuser powers/);
   assert.match(source, /roleSections\.manager/);
   assert.match(source, /No permissions match this search/);
+  assert.match(source, /Run the latest database migration/);
 });
