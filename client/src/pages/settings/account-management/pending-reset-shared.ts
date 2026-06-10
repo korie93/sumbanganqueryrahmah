@@ -13,6 +13,12 @@ export type PendingPasswordResetSectionProps = {
   requests: PendingPasswordResetRequest[];
 };
 
+export type PendingResetEmptyStateContent = {
+  title: string;
+  description: string;
+  actionLabel?: string;
+};
+
 export const PENDING_RESET_STATUS_OPTIONS: Array<{
   value: PendingResetRequestsQueryState["status"];
   label: string;

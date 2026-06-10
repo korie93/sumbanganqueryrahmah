@@ -1,24 +1,31 @@
 import { Badge } from "@/components/ui/badge";
 import { buildPendingPasswordResetRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
+import { PendingPasswordResetEmptyState } from "@/pages/settings/account-management/PendingPasswordResetEmptyState";
+import type { PendingResetEmptyStateContent } from "@/pages/settings/account-management/pending-reset-shared";
 import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
 import type { PendingPasswordResetRequest } from "@/pages/settings/types";
 
 type PendingPasswordResetMobileListProps = {
-  emptyMessage: string;
+  emptyState: PendingResetEmptyStateContent;
   loading: boolean;
   requests: PendingPasswordResetRequest[];
+  onClearFilters?: (() => void) | undefined;
 };
 
 export function PendingPasswordResetMobileList({
-  emptyMessage,
+  emptyState,
   loading,
+  onClearFilters,
   requests,
 }: PendingPasswordResetMobileListProps) {
   if (loading || requests.length === 0) {
     return (
       <div className="space-y-3 p-3">
-        <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
-          {emptyMessage}
+        <div className="rounded-lg border border-border/60 bg-background/70">
+          <PendingPasswordResetEmptyState
+            state={emptyState}
+            onClearFilters={onClearFilters}
+          />
         </div>
       </div>
     );

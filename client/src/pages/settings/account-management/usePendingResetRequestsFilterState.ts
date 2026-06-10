@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
+  getPendingResetEmptyState,
   getPendingResetEmptyMessage,
   normalizePendingResetStatusFilter,
 } from "@/pages/settings/account-management/pending-reset-utils";
@@ -97,9 +98,20 @@ export function usePendingResetRequestsFilterState({
     [hasActiveFilters, loading, total],
   );
 
+  const emptyState = useMemo(
+    () =>
+      getPendingResetEmptyState({
+        hasActiveFilters,
+        loading,
+        total,
+      }),
+    [hasActiveFilters, loading, total],
+  );
+
   return {
     activeFilters,
     emptyMessage,
+    emptyState,
     hasActiveFilters,
     searchQuery,
     statusFilter,

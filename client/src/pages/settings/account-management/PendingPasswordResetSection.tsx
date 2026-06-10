@@ -78,14 +78,16 @@ export function PendingPasswordResetSection({
     >
       {isMobile ? (
         <PendingPasswordResetMobileList
-          emptyMessage={filterState.emptyMessage}
+          emptyState={filterState.emptyState}
           loading={loading}
+          onClearFilters={filterState.hasActiveFilters ? filterState.clearAllFilters : undefined}
           requests={requests}
         />
       ) : (
         <PendingPasswordResetDesktopTable
-          emptyMessage={filterState.emptyMessage}
+          emptyState={filterState.emptyState}
           loading={loading}
+          onClearFilters={filterState.hasActiveFilters ? filterState.clearAllFilters : undefined}
           requests={requests}
         />
       )}

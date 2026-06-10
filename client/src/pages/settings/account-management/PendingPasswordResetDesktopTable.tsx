@@ -1,18 +1,22 @@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { buildPendingPasswordResetRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
+import { PendingPasswordResetEmptyState } from "@/pages/settings/account-management/PendingPasswordResetEmptyState";
+import type { PendingResetEmptyStateContent } from "@/pages/settings/account-management/pending-reset-shared";
 import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
 import type { PendingPasswordResetRequest } from "@/pages/settings/types";
 
 type PendingPasswordResetDesktopTableProps = {
-  emptyMessage: string;
+  emptyState: PendingResetEmptyStateContent;
   loading: boolean;
   requests: PendingPasswordResetRequest[];
+  onClearFilters?: (() => void) | undefined;
 };
 
 export function PendingPasswordResetDesktopTable({
-  emptyMessage,
+  emptyState,
   loading,
+  onClearFilters,
   requests,
 }: PendingPasswordResetDesktopTableProps) {
   return (
@@ -28,8 +32,11 @@ export function PendingPasswordResetDesktopTable({
       <TableBody>
         {loading || requests.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center text-muted-foreground">
-              {emptyMessage}
+            <TableCell colSpan={4} className="p-0">
+              <PendingPasswordResetEmptyState
+                state={emptyState}
+                onClearFilters={onClearFilters}
+              />
             </TableCell>
           </TableRow>
         ) : (

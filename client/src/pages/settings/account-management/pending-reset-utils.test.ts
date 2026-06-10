@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getPendingResetEmptyState,
   getPendingResetEmptyMessage,
   normalizePendingResetStatusFilter,
 } from "@/pages/settings/account-management/pending-reset-utils";
@@ -44,5 +45,39 @@ test("getPendingResetEmptyMessage returns filtered empty copy", () => {
       total: 0,
     }),
     "No reset requests match the current filters.",
+  );
+});
+
+test("getPendingResetEmptyState gives actionable filtered-empty guidance", () => {
+  assert.deepEqual(
+    getPendingResetEmptyState({
+      hasActiveFilters: true,
+      loading: false,
+      total: 3,
+    }),
+    {
+      title: "No reset requests match the current filters.",
+      description: "Clear the active filters or adjust the search term to review more reset requests.",
+      actionLabel: "Clear filters",
+    },
+  );
+});
+
+test("getPendingResetEmptyState omits actions for loading and default-empty states", () => {
+  assert.equal(
+    getPendingResetEmptyState({
+      hasActiveFilters: false,
+      loading: true,
+      total: 0,
+    }).actionLabel,
+    undefined,
+  );
+  assert.equal(
+    getPendingResetEmptyState({
+      hasActiveFilters: false,
+      loading: false,
+      total: 0,
+    }).actionLabel,
+    undefined,
   );
 });
