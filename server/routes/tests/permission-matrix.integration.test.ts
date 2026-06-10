@@ -1088,6 +1088,14 @@ test("imports routes enforce analysis and delete permissions consistently", asyn
     );
     assert.equal(deniedAnalysisTab.status, 403);
 
+    const deniedImportTab = await sendMatrixRequest(
+      baseUrl,
+      { method: "GET", path: "/api/imports" },
+      "manager",
+      { "x-test-deny-tabs": "import" },
+    );
+    assert.equal(deniedImportTab.status, 403);
+
     assert.equal(calls.createImport, 3);
     assert.equal(calls.analyzeImport, 3);
     assert.equal(calls.analyzeAll, 3);
@@ -1390,7 +1398,6 @@ test("manager role is read-only and limited to its approved backend modules", as
       200,
     );
     for (const request of [
-      { method: "GET", path: "/api/imports" },
       { method: "PATCH", path: "/api/imports/import-1", body: { name: "Renamed" } },
       { method: "DELETE", path: "/api/imports/import-1" },
     ] as const) {
@@ -1399,6 +1406,14 @@ test("manager role is read-only and limited to its approved backend modules", as
         403,
       );
     }
+    assert.equal(
+      (await sendMatrixRequest(
+        importsServer.baseUrl,
+        { method: "GET", path: "/api/imports" },
+        "manager",
+      )).status,
+      200,
+    );
 
     assert.equal(
       (await sendMatrixRequest(

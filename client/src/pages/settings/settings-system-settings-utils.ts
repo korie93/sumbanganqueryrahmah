@@ -6,6 +6,7 @@ import {
 
 export type SettingsRoleSections = {
   admin: SettingItem[];
+  manager: SettingItem[];
   user: SettingItem[];
   other: SettingItem[];
 };
@@ -57,38 +58,45 @@ export function buildSettingsRoleSections(
   if (!isRolePermissionCategory || !currentCategory) return null;
 
   const isObsoleteAiToggle = (setting: SettingItem) =>
-    setting.key === "tab_admin_ai_enabled" || setting.key === "tab_user_ai_enabled";
+    setting.key === "tab_admin_ai_enabled"
+    || setting.key === "tab_manager_ai_enabled"
+    || setting.key === "tab_user_ai_enabled";
 
-  const admin = currentCategory.settings
-    .filter(
+  const sortRoleSettings = (settings: SettingItem[]) =>
+    settings
+      .filter((setting) => !isObsoleteAiToggle(setting))
+      .sort(
+        (left, right) =>
+          getRoleSettingOrder(left.key) - getRoleSettingOrder(right.key)
+          || left.label.localeCompare(right.label),
+      );
+
+  const admin = sortRoleSettings(
+    currentCategory.settings.filter(
       (setting) =>
         setting.key.startsWith("tab_admin_")
         || setting.key === "canViewSystemPerformance",
-    )
-    .filter((setting) => !isObsoleteAiToggle(setting))
-    .sort(
-      (left, right) =>
-        getRoleSettingOrder(left.key) - getRoleSettingOrder(right.key)
-        || left.label.localeCompare(right.label),
-    );
+    ),
+  );
 
-  const user = currentCategory.settings
-    .filter((setting) => setting.key.startsWith("tab_user_"))
-    .filter((setting) => !isObsoleteAiToggle(setting))
-    .sort(
-      (left, right) =>
-        getRoleSettingOrder(left.key) - getRoleSettingOrder(right.key)
-        || left.label.localeCompare(right.label),
-    );
+  const manager = sortRoleSettings(
+    currentCategory.settings.filter((setting) => setting.key.startsWith("tab_manager_")),
+  );
+
+  const user = sortRoleSettings(
+    currentCategory.settings.filter((setting) => setting.key.startsWith("tab_user_")),
+  );
 
   const other = currentCategory.settings
     .filter(
       (setting) =>
         !setting.key.startsWith("tab_admin_")
+        && !setting.key.startsWith("tab_manager_")
         && !setting.key.startsWith("tab_user_")
         && setting.key !== "canViewSystemPerformance",
     )
+    .filter((setting) => !isObsoleteAiToggle(setting))
     .sort((left, right) => left.label.localeCompare(right.label));
 
-  return { admin, user, other };
+  return { admin, manager, user, other };
 }

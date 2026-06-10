@@ -63,6 +63,8 @@ test("buildSettingsRoleSections filters obsolete AI toggles", () => {
       createCategory("roles", "Roles & Permissions", [
         "tab_admin_home_enabled",
         "tab_admin_ai_enabled",
+        "tab_manager_dashboard_enabled",
+        "tab_manager_ai_enabled",
         "tab_user_saved_enabled",
         "tab_user_ai_enabled",
         "canViewSystemPerformance",
@@ -75,6 +77,9 @@ test("buildSettingsRoleSections filters obsolete AI toggles", () => {
     assert.deepEqual(sections.admin.map((setting) => setting.key), [
       "tab_admin_home_enabled",
       "canViewSystemPerformance",
+    ]);
+    assert.deepEqual(sections.manager.map((setting) => setting.key), [
+      "tab_manager_dashboard_enabled",
     ]);
     assert.deepEqual(sections.user.map((setting) => setting.key), [
       "tab_user_saved_enabled",

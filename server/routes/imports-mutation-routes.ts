@@ -8,12 +8,15 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     authenticateToken,
     importsUploadRateLimiter,
     requireRole,
+    requireTabAccess,
     importsMultipartRoute,
   } = context;
 
   app.post(
     "/api/imports",
     authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
     importsUploadRateLimiter,
     importsMultipartRoute,
     asyncHandler(importsController.createImport),
@@ -23,12 +26,14 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     "/api/imports/:id",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
+    requireTabAccess("import"),
     asyncHandler(importsController.renameImport),
   );
   app.patch(
     "/api/imports/:id/rename",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
+    requireTabAccess("import"),
     asyncHandler(importsController.renameImport),
   );
 
@@ -36,6 +41,7 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     "/api/imports/:id",
     authenticateToken,
     requireRole("admin", "superuser"),
+    requireTabAccess("import"),
     asyncHandler(importsController.deleteImport),
   );
 }

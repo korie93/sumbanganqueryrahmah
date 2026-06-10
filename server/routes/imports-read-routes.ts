@@ -7,6 +7,7 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
     importsController,
     authenticateToken,
     requireRole,
+    requireTabAccess,
     searchRateLimiter,
   } = context;
 
@@ -14,19 +15,22 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
   app.get(
     "/api/imports",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
     asyncHandler(importsController.listImports),
   );
   app.get(
     "/api/imports/:id",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
     asyncHandler(importsController.getImport),
   );
   app.get(
     "/api/imports/:id/data",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
     searchRateLimiter,
     asyncHandler(importsController.getImportDataPage),
   );
