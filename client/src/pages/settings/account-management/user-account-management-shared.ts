@@ -68,6 +68,23 @@ export type UserAccountManagementBadgeSummary = {
   variant: "secondary" | "outline";
 };
 
+export type AccountHealthMetric = {
+  id: string;
+  label: string;
+  value: number;
+  description: string;
+  tone: "neutral" | "success" | "warning" | "danger";
+};
+
+export type AccountActionQueueItem = {
+  id: string;
+  label: string;
+  count: number;
+  description: string;
+  priority: "high" | "medium" | "low";
+  targetTab: UserAccountManagementTabId;
+};
+
 export type UserAccountManagementSectionState = {
   activeTab: UserAccountManagementTabId;
   isPending: boolean;
