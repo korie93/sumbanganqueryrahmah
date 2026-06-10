@@ -8,6 +8,7 @@ import {
 import {
   buildCategoryDirtyMap,
   buildSettingMap,
+  buildSettingChangeSummary,
 } from "@/pages/settings/settings-system-settings-utils";
 import type { SettingCategory, SettingItem } from "@/pages/settings/types";
 import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
@@ -43,6 +44,10 @@ export function useSettingsDraftState({
   const categoryDirtyMap = useMemo(
     () => buildCategoryDirtyMap(categories, dirtyKeys),
     [categories, dirtyKeys],
+  );
+  const changeSummary = useMemo(
+    () => buildSettingChangeSummary(settingMap, dirtyKeys, draftValues),
+    [dirtyKeys, draftValues, settingMap],
   );
 
   const clearSettingsDraftState = useCallback(() => {
@@ -185,6 +190,7 @@ export function useSettingsDraftState({
 
   return {
     categoryDirtyMap,
+    changeSummary,
     clearSettingsDraftState,
     confirmCriticalOpen,
     dirtyCount,

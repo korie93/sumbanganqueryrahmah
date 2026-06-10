@@ -43,6 +43,7 @@ export function useSettingsSystemSettings({
   });
   const {
     categoryDirtyMap,
+    changeSummary,
     clearSettingsDraftState,
     confirmCriticalOpen,
     dirtyCount,
@@ -62,6 +63,7 @@ export function useSettingsSystemSettings({
   return {
     categories,
     categoryDirtyMap,
+    changeSummary,
     clearSettingsState,
     confirmCriticalOpen,
     currentCategory,

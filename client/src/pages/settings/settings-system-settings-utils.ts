@@ -1,4 +1,8 @@
-import type { SettingCategory, SettingItem } from "@/pages/settings/types";
+import type {
+  SettingCategory,
+  SettingChangeSummary,
+  SettingItem,
+} from "@/pages/settings/types";
 import {
   getRoleSettingOrder,
   settingsCategoryOrder,
@@ -32,6 +36,41 @@ export function buildSettingMap(categories: SettingCategory[]) {
     }
   }
   return map;
+}
+
+function formatSettingSummaryValue(setting: SettingItem, value: unknown): string {
+  if (setting.type === "boolean") {
+    return String(value).trim().toLowerCase() === "true" ? "Enabled" : "Blocked";
+  }
+
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "Empty";
+
+  const option = setting.options.find((item) => item.value === normalized);
+  return option?.label ?? normalized;
+}
+
+export function buildSettingChangeSummary(
+  settingMap: Map<string, SettingItem>,
+  dirtyKeys: Set<string>,
+  draftValues: Record<string, string | number | boolean | null>,
+): SettingChangeSummary[] {
+  return Array.from(dirtyKeys)
+    .map((key) => {
+      const setting = settingMap.get(key);
+      if (!setting) return null;
+      const nextRawValue = Object.prototype.hasOwnProperty.call(draftValues, key)
+        ? draftValues[key]
+        : setting.value;
+
+      return {
+        key,
+        label: setting.label,
+        nextValue: formatSettingSummaryValue(setting, nextRawValue),
+        previousValue: formatSettingSummaryValue(setting, setting.value),
+      };
+    })
+    .filter((item): item is SettingChangeSummary => item !== null);
 }
 
 export function buildCategoryDirtyMap(categories: SettingCategory[], dirtyKeys: Set<string>) {

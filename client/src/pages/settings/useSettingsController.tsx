@@ -95,6 +95,7 @@ export function useSettingsController({
   const {
     categories,
     categoryDirtyMap,
+    changeSummary,
     clearSettingsState,
     confirmCriticalOpen,
     currentCategory,
@@ -217,11 +218,12 @@ export function useSettingsController({
     renderSettingCard,
     saveBar: useMemo(
       () => ({
+        changeSummary,
         dirtyCount,
         saving,
         onSave: () => void handleSave(),
       }),
-      [dirtyCount, handleSave, saving],
+      [changeSummary, dirtyCount, handleSave, saving],
     ),
     criticalSaveDialog: useMemo(
       () => ({

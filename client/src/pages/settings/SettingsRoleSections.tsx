@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import {
   BriefcaseBusiness,
+  CheckCircle2,
+  CircleMinus,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -23,6 +25,12 @@ type RolePermissionSection = {
   settings: SettingItem[];
 };
 
+type RoleComparisonRow = {
+  id: string;
+  label: string;
+  states: Record<RolePermissionId, boolean | null>;
+};
+
 interface SettingsRoleSectionsProps {
   renderSettingCard: (setting: SettingItem) => JSX.Element;
   roleSections: {
@@ -37,6 +45,21 @@ const roleOrder: RolePermissionId[] = ["manager", "admin", "user"];
 
 function isEnabledSetting(setting: SettingItem): boolean {
   return String(setting.value).trim().toLowerCase() === "true";
+}
+
+function parseRoleSettingKey(key: string): { role: RolePermissionId; suffix: string } | null {
+  const match = key.match(/^tab_(admin|manager|user)_(.+)_enabled$/);
+  if (!match) return null;
+  return {
+    role: match[1] as RolePermissionId,
+    suffix: match[2],
+  };
+}
+
+function getPermissionModuleLabel(setting: SettingItem, suffix: string): string {
+  const label = setting.label.replace(/^(Admin|Manager|User) Tab:\s*/i, "").trim();
+  if (label) return label;
+  return suffix.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function matchesPermissionSearch(setting: SettingItem, rawQuery: string): boolean {
@@ -85,6 +108,36 @@ function getEnabledCount(settings: SettingItem[]) {
   return settings.filter(isEnabledSetting).length;
 }
 
+function buildRoleComparisonRows(
+  sections: RolePermissionSection[],
+  rawQuery: string,
+): RoleComparisonRow[] {
+  const rows = new Map<string, RoleComparisonRow>();
+
+  for (const section of sections) {
+    for (const setting of section.settings) {
+      const parsed = parseRoleSettingKey(setting.key);
+      if (!parsed) continue;
+      if (!matchesPermissionSearch(setting, rawQuery)) continue;
+
+      const existing = rows.get(parsed.suffix) ?? {
+        id: parsed.suffix,
+        label: getPermissionModuleLabel(setting, parsed.suffix),
+        states: {
+          admin: null,
+          manager: null,
+          user: null,
+        },
+      };
+
+      existing.states[parsed.role] = isEnabledSetting(setting);
+      rows.set(parsed.suffix, existing);
+    }
+  }
+
+  return Array.from(rows.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
 function getEmptyPermissionMessage(section: RolePermissionSection, rawQuery: string) {
   if (section.settings.length === 0 && rawQuery.trim().length === 0) {
     return `${section.shortLabel} permission settings are not installed yet. Run the latest database migration, then refresh this page.`;
@@ -116,6 +169,10 @@ export function SettingsRoleSections({
   const totalPermissions = sections.reduce((total, section) => total + section.settings.length, 0)
     + (roleSections?.other.length ?? 0);
   const visiblePermissions = filteredSettings.length + otherSettings.length;
+  const comparisonRows = useMemo(
+    () => buildRoleComparisonRows(sections, searchQuery),
+    [searchQuery, sections],
+  );
 
   if (!roleSections || !activeSection) {
     return null;
@@ -168,6 +225,72 @@ export function SettingsRoleSections({
       </Card>
 
       <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as RolePermissionId)}>
+        <Card className="mb-4 border-border/60 bg-background/70">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Role Comparison</CardTitle>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Compare module access across Manager, Admin, and User before changing any toggle.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {comparisonRows.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <caption className="sr-only">
+                    Role permission comparison by module
+                  </caption>
+                  <thead className="border-b border-border/70 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th scope="col" className="py-2 pr-3 font-medium">Module</th>
+                      {roleOrder.map((roleId) => (
+                        <th key={roleId} scope="col" className="px-3 py-2 font-medium">
+                          {roleId.charAt(0).toUpperCase() + roleId.slice(1)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {comparisonRows.map((row) => (
+                      <tr key={row.id}>
+                        <th scope="row" className="py-3 pr-3 font-medium text-foreground">
+                          {row.label}
+                        </th>
+                        {roleOrder.map((roleId) => {
+                          const allowed = row.states[roleId];
+                          return (
+                            <td key={roleId} className="px-3 py-3">
+                              {allowed === null ? (
+                                <Badge variant="outline" className="gap-1 rounded-full">
+                                  <CircleMinus className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Not set
+                                </Badge>
+                              ) : allowed ? (
+                                <Badge variant="secondary" className="gap-1 rounded-full">
+                                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Allowed
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="gap-1 rounded-full">
+                                  <CircleMinus className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Blocked
+                                </Badge>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
+                No role comparison rows match this search.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1">
           {sections.map((section) => {
             const RoleIcon = section.icon;

@@ -101,3 +101,10 @@ export type NormalizedSettingsError = {
   requiresConfirmation?: boolean;
   code?: string;
 };
+
+export type SettingChangeSummary = {
+  key: string;
+  label: string;
+  nextValue: string;
+  previousValue: string;
+};

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCategoryDirtyMap,
+  buildSettingChangeSummary,
   buildSettingsRoleSections,
   sortSettingsCategories,
 } from "@/pages/settings/settings-system-settings-utils";
@@ -56,6 +57,43 @@ test("buildCategoryDirtyMap only counts dirty settings per category", () => {
   assert.equal(dirtyMap.get("general"), 1);
   assert.equal(dirtyMap.get("security"), 1);
   assert.equal(dirtyMap.has("missing"), false);
+});
+
+test("buildSettingChangeSummary formats dirty setting changes for save review", () => {
+  const category = createCategory("roles", "Roles & Permissions", [
+    "tab_manager_dashboard_enabled",
+    "system_name",
+  ]);
+  category.settings[0]!.value = "false";
+  category.settings[0]!.label = "Manager Tab: Dashboard";
+  category.settings[1]!.value = "SQR";
+  category.settings[1]!.label = "System Name";
+  category.settings[1]!.type = "text";
+
+  const settingMap = new Map(category.settings.map((setting) => [setting.key, setting]));
+  const summary = buildSettingChangeSummary(
+    settingMap,
+    new Set(["tab_manager_dashboard_enabled", "system_name", "missing"]),
+    {
+      tab_manager_dashboard_enabled: true,
+      system_name: "SQR Ops",
+    },
+  );
+
+  assert.deepEqual(summary, [
+    {
+      key: "tab_manager_dashboard_enabled",
+      label: "Manager Tab: Dashboard",
+      previousValue: "Blocked",
+      nextValue: "Enabled",
+    },
+    {
+      key: "system_name",
+      label: "System Name",
+      previousValue: "SQR",
+      nextValue: "SQR Ops",
+    },
+  ]);
 });
 
 test("buildSettingsRoleSections filters obsolete AI toggles", () => {

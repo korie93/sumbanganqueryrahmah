@@ -11,6 +11,11 @@ const source = readFileSync(
 test("settings role permission UI exposes compact manager-first controls", () => {
   assert.match(source, /Role permission workspace/);
   assert.match(source, /Search permission or module/);
+  assert.match(source, /Role Comparison/);
+  assert.match(source, /Compare module access across Manager, Admin, and User/);
+  assert.match(source, /Role permission comparison by module/);
+  assert.match(source, /Allowed/);
+  assert.match(source, /Blocked/);
   assert.match(source, /const roleOrder: RolePermissionId\[\] = \["manager", "admin", "user"\]/);
   assert.match(source, /useState<RolePermissionId>\("manager"\)/);
   assert.match(source, /sticky top-3/);
