@@ -32,6 +32,13 @@ type RoleComparisonRow = {
   states: Record<RolePermissionId, boolean | null>;
 };
 
+type RolePermissionGroup = {
+  id: string;
+  label: string;
+  description: string;
+  settings: SettingItem[];
+};
+
 interface SettingsRoleSectionsProps {
   renderSettingCard: (setting: SettingItem) => JSX.Element;
   rolePermissionImpacts: RolePermissionImpact[];
@@ -44,6 +51,44 @@ interface SettingsRoleSectionsProps {
 }
 
 const roleOrder: RolePermissionId[] = ["manager", "admin", "user"];
+const permissionGroupOrder = [
+  "dashboard",
+  "collection",
+  "monitoring",
+  "backup",
+  "settings",
+  "other",
+] as const;
+
+const permissionGroupMeta: Record<
+  (typeof permissionGroupOrder)[number],
+  { label: string; description: string }
+> = {
+  dashboard: {
+    label: "Dashboard & Home",
+    description: "Landing, dashboard, and insight pages that orient daily work.",
+  },
+  collection: {
+    label: "Collection",
+    description: "Import, saved data, viewer, search, and collection report access.",
+  },
+  monitoring: {
+    label: "Monitoring & Audit",
+    description: "System monitor, activity, and audit visibility controls.",
+  },
+  backup: {
+    label: "Backup & Restore",
+    description: "Protected recovery tools that should stay tightly controlled.",
+  },
+  settings: {
+    label: "Settings",
+    description: "Administrative settings and privileged configuration access.",
+  },
+  other: {
+    label: "Other",
+    description: "Permission controls that do not belong to a standard module group.",
+  },
+};
 
 function isEnabledSetting(setting: SettingItem): boolean {
   return String(setting.value).trim().toLowerCase() === "true";
@@ -62,6 +107,40 @@ function getPermissionModuleLabel(setting: SettingItem, suffix: string): string 
   const label = setting.label.replace(/^(Admin|Manager|User) Tab:\s*/i, "").trim();
   if (label) return label;
   return suffix.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getPermissionGroupId(setting: SettingItem): (typeof permissionGroupOrder)[number] {
+  const parsed = parseRoleSettingKey(setting.key);
+  const suffix = parsed?.suffix ?? setting.key;
+
+  if (suffix === "home" || suffix === "dashboard" || suffix === "analysis") {
+    return "dashboard";
+  }
+  if (
+    suffix === "import"
+    || suffix === "saved"
+    || suffix === "viewer"
+    || suffix === "general_search"
+    || suffix === "collection_report"
+  ) {
+    return "collection";
+  }
+  if (
+    suffix === "monitor"
+    || suffix === "activity"
+    || suffix === "audit_logs"
+    || setting.key === "canViewSystemPerformance"
+  ) {
+    return "monitoring";
+  }
+  if (suffix === "backup") {
+    return "backup";
+  }
+  if (suffix === "settings") {
+    return "settings";
+  }
+
+  return "other";
 }
 
 function matchesPermissionSearch(setting: SettingItem, rawQuery: string): boolean {
@@ -138,6 +217,27 @@ function buildRoleComparisonRows(
   }
 
   return Array.from(rows.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function buildPermissionGroups(settings: SettingItem[]): RolePermissionGroup[] {
+  const groups = new Map<(typeof permissionGroupOrder)[number], RolePermissionGroup>();
+
+  for (const setting of settings) {
+    const groupId = getPermissionGroupId(setting);
+    const existing = groups.get(groupId) ?? {
+      id: groupId,
+      label: permissionGroupMeta[groupId].label,
+      description: permissionGroupMeta[groupId].description,
+      settings: [],
+    };
+
+    existing.settings.push(setting);
+    groups.set(groupId, existing);
+  }
+
+  return permissionGroupOrder
+    .map((groupId) => groups.get(groupId))
+    .filter((group): group is RolePermissionGroup => group !== undefined);
 }
 
 function getEmptyPermissionMessage(section: RolePermissionSection, rawQuery: string) {
@@ -414,7 +514,33 @@ export function SettingsRoleSections({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {sectionFilteredSettings.length > 0 ? (
-                    sectionFilteredSettings.map(renderSettingCard)
+                    buildPermissionGroups(sectionFilteredSettings).map((group) => (
+                      <section
+                        key={group.id}
+                        className="space-y-3 rounded-xl border border-border/70 bg-background/55 p-3"
+                        aria-label={`${group.label} permission group`}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 space-y-1">
+                            <h4 className="text-sm font-semibold text-foreground">{group.label}</h4>
+                            <p className="text-xs leading-5 text-muted-foreground">
+                              {group.description}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary" className="rounded-full">
+                              {group.settings.length} item{group.settings.length === 1 ? "" : "s"}
+                            </Badge>
+                            <Badge variant="outline" className="rounded-full">
+                              {getEnabledCount(group.settings)} enabled
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {group.settings.map(renderSettingCard)}
+                        </div>
+                      </section>
+                    ))
                   ) : (
                     <div className="rounded-lg border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
                       {getEmptyPermissionMessage(section, searchQuery)}

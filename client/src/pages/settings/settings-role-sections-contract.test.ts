@@ -18,6 +18,10 @@ test("settings role permission UI exposes compact manager-first controls", () =>
   assert.match(source, /Will allow access/);
   assert.match(source, /Will block access/);
   assert.match(source, /Role permission comparison by module/);
+  assert.match(source, /Dashboard & Home/);
+  assert.match(source, /Monitoring & Audit/);
+  assert.match(source, /Backup & Restore/);
+  assert.match(source, /permission group/);
   assert.match(source, /Allowed/);
   assert.match(source, /Blocked/);
   assert.match(source, /const roleOrder: RolePermissionId\[\] = \["manager", "admin", "user"\]/);
