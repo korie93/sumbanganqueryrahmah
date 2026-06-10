@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   Bell,
   BellOff,
   CircleAlert,
@@ -7,6 +8,7 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import {
   formatNotificationHistoryTimestamp,
@@ -18,7 +20,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { NotificationHistoryState } from "@/hooks/use-notification-history";
+import type {
+  NotificationHistoryEntry,
+  NotificationHistoryState,
+  NotificationHistoryVariant,
+} from "@/hooks/use-notification-history";
 import { cn } from "@/lib/utils";
 
 type NavbarNotificationCenterProps = NotificationHistoryState & {
@@ -35,6 +41,43 @@ const notificationIcons = {
   warning: TriangleAlert,
 } as const;
 
+type NotificationHistoryFilter = "all" | "destructive" | "success" | "warning";
+
+const notificationFilters: ReadonlyArray<{
+  id: NotificationHistoryFilter;
+  label: string;
+  variants?: readonly NotificationHistoryVariant[];
+}> = [
+  { id: "all", label: "Semua" },
+  { id: "destructive", label: "Ralat", variants: ["destructive"] },
+  { id: "success", label: "Berjaya", variants: ["success"] },
+  { id: "warning", label: "Perhatian", variants: ["warning"] },
+];
+
+function matchesNotificationFilter(
+  entry: NotificationHistoryEntry,
+  filter: NotificationHistoryFilter,
+): boolean {
+  const option = notificationFilters.find((item) => item.id === filter);
+  return !option?.variants || option.variants.includes(entry.variant);
+}
+
+function getNotificationFilterCounts(entries: readonly NotificationHistoryEntry[]) {
+  return notificationFilters.reduce<Record<NotificationHistoryFilter, number>>(
+    (counts, option) => {
+      counts[option.id] = entries.filter((entry) =>
+        matchesNotificationFilter(entry, option.id)).length;
+      return counts;
+    },
+    {
+      all: 0,
+      destructive: 0,
+      success: 0,
+      warning: 0,
+    },
+  );
+}
+
 /**
  * Renders the bounded, session-only notification history from the navbar.
  */
@@ -45,9 +88,17 @@ export function NavbarNotificationCenter({
   unreadCount,
   variant,
 }: NavbarNotificationCenterProps) {
+  const [activeFilter, setActiveFilter] = useState<NotificationHistoryFilter>("all");
   const triggerLabel = unreadCount > 0
     ? `Buka pusat notifikasi, ${unreadCount} belum dibaca`
     : "Buka pusat notifikasi";
+  const filterCounts = useMemo(() => getNotificationFilterCounts(entries), [entries]);
+  const visibleEntries = useMemo(
+    () => entries.filter((entry) => matchesNotificationFilter(entry, activeFilter)),
+    [activeFilter, entries],
+  );
+  const filterPanelId = `notification-center-${variant}-panel`;
+  const activeFilterTabId = `notification-center-${variant}-filter-${activeFilter}`;
 
   return (
     <Popover
@@ -101,6 +152,49 @@ export function NavbarNotificationCenter({
           </Button>
         </div>
 
+        {entries.length > 0 ? (
+          <div
+            className="flex flex-wrap gap-1 border-b border-border bg-muted/20 px-3 py-2"
+            role="tablist"
+            aria-label="Tapis notifikasi"
+          >
+            {notificationFilters.map((filter) => {
+              const selected = activeFilter === filter.id;
+
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  id={`notification-center-${variant}-filter-${filter.id}`}
+                  role="tab"
+                  aria-controls={filterPanelId}
+                  aria-selected={selected}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    selected
+                      ? "border-primary/40 bg-primary text-primary-foreground"
+                      : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
+                  onClick={() => setActiveFilter(filter.id)}
+                >
+                  {filter.label}
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-2xs",
+                      selected
+                        ? "bg-primary-foreground/20 text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                    aria-hidden="true"
+                  >
+                    {filterCounts[filter.id]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         {entries.length === 0 ? (
           <div className="flex min-h-44 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -113,59 +207,95 @@ export function NavbarNotificationCenter({
               </p>
             </div>
           </div>
-        ) : (
-          <ol
-            className="max-h-[min(26rem,calc(100svh-8rem))] overflow-y-auto overscroll-contain"
-            aria-label="Sejarah notifikasi"
+        ) : visibleEntries.length === 0 ? (
+          <div
+            id={filterPanelId}
+            role="tabpanel"
+            aria-labelledby={activeFilterTabId}
+            className="flex min-h-44 flex-col items-center justify-center gap-3 px-6 py-8 text-center"
           >
-            {entries.map((entry) => {
-              const presentation = getNotificationHistoryPresentation(entry.variant);
-              const NotificationIcon = notificationIcons[entry.variant];
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <BellOff className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-medium text-foreground">Tiada notifikasi dalam filter ini</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Tukar filter untuk melihat sejarah sesi lain.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div
+            id={filterPanelId}
+            role="tabpanel"
+            aria-labelledby={activeFilterTabId}
+          >
+            <ol
+              className="max-h-[min(26rem,calc(100svh-8rem))] overflow-y-auto overscroll-contain"
+              aria-label="Sejarah notifikasi"
+            >
+              {visibleEntries.map((entry) => {
+                const presentation = getNotificationHistoryPresentation(entry.variant);
+                const NotificationIcon = notificationIcons[entry.variant];
 
-              return (
-                <li
-                  key={entry.id}
-                  className="flex gap-3 border-b border-border/70 px-4 py-3 last:border-b-0"
-                >
-                  <span
-                    className={cn(
-                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted",
-                      presentation.toneClassName,
-                    )}
-                    aria-hidden="true"
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex gap-3 border-b border-border/70 px-4 py-3 last:border-b-0"
                   >
-                    <NotificationIcon className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="min-w-0 break-words text-sm font-medium text-foreground">
-                        {entry.title}
+                    <span
+                      className={cn(
+                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted",
+                        presentation.toneClassName,
+                      )}
+                      aria-hidden="true"
+                    >
+                      <NotificationIcon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="min-w-0 break-words text-sm font-medium text-foreground">
+                          {entry.title}
+                        </p>
+                        <time
+                          className="shrink-0 whitespace-nowrap text-2xs text-muted-foreground"
+                          dateTime={new Date(entry.createdAt).toISOString()}
+                        >
+                          {formatNotificationHistoryTimestamp(entry.createdAt)}
+                        </time>
+                      </div>
+                      <p className={cn("mt-0.5 text-2xs font-semibold", presentation.toneClassName)}>
+                        {presentation.label}
                       </p>
-                      <time
-                        className="shrink-0 whitespace-nowrap text-2xs text-muted-foreground"
-                        dateTime={new Date(entry.createdAt).toISOString()}
-                      >
-                        {formatNotificationHistoryTimestamp(entry.createdAt)}
-                      </time>
+                      {entry.description ? (
+                        <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
+                          {entry.description}
+                        </p>
+                      ) : null}
+                      {entry.occurrenceCount > 1 ? (
+                        <span className="mt-2 inline-flex rounded-full bg-muted px-2 py-0.5 text-2xs font-semibold text-muted-foreground">
+                          Berlaku {entry.occurrenceCount > 99 ? "99+" : entry.occurrenceCount} kali
+                        </span>
+                      ) : null}
+                      {entry.action ? (
+                        <div className="mt-3">
+                          <Button asChild variant="outline" size="sm" className="min-h-8 px-2.5">
+                            <a
+                              href={entry.action.href}
+                              aria-label={`${entry.action.label}: ${entry.title}`}
+                            >
+                              {entry.action.label}
+                              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                            </a>
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
-                    <p className={cn("mt-0.5 text-2xs font-semibold", presentation.toneClassName)}>
-                      {presentation.label}
-                    </p>
-                    {entry.description ? (
-                      <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
-                        {entry.description}
-                      </p>
-                    ) : null}
-                    {entry.occurrenceCount > 1 ? (
-                      <span className="mt-2 inline-flex rounded-full bg-muted px-2 py-0.5 text-2xs font-semibold text-muted-foreground">
-                        Berlaku {entry.occurrenceCount > 99 ? "99+" : entry.occurrenceCount} kali
-                      </span>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         )}
       </PopoverContent>
     </Popover>

@@ -470,6 +470,10 @@ function DashboardContent() {
           title: "Refresh belum lengkap",
           description: primaryFailure.message,
           variant: "destructive",
+          historyAction: {
+            label: "Buka dashboard",
+            href: "/monitor?section=dashboard",
+          },
           ...(primaryFailure.requestId ? { requestId: primaryFailure.requestId } : {}),
           duration: 12_000,
           action: (
@@ -488,6 +492,10 @@ function DashboardContent() {
           title: "Dashboard dikemas kini",
           description: "Semua seksyen dashboard telah menerima data terkini.",
           variant: "success",
+          historyAction: {
+            label: "Lihat dashboard",
+            href: "/monitor?section=dashboard",
+          },
           duration: 4000,
         });
       }
@@ -535,6 +543,10 @@ function DashboardContent() {
         variant: "success",
         loading: false,
         action: undefined,
+        historyAction: {
+          label: "Lihat dashboard",
+          href: "/monitor?section=dashboard",
+        },
         duration: 5000,
       });
     } catch (error: unknown) {
@@ -545,6 +557,10 @@ function DashboardContent() {
         description,
         variant: "destructive",
         loading: false,
+        historyAction: {
+          label: "Buka dashboard",
+          href: "/monitor?section=dashboard",
+        },
         duration: 8000,
         action: (
           <ToastAction

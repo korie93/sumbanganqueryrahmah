@@ -4,6 +4,8 @@ export const NOTIFICATION_HISTORY_LIMIT = 20;
 export const NOTIFICATION_HISTORY_LISTENER_LIMIT = 20;
 const NOTIFICATION_TITLE_LIMIT = 120;
 const NOTIFICATION_DESCRIPTION_LIMIT = 240;
+const NOTIFICATION_ACTION_LABEL_LIMIT = 60;
+const NOTIFICATION_ACTION_HREF_LIMIT = 200;
 
 export type NotificationHistoryVariant =
   | "default"
@@ -20,7 +22,13 @@ export type NotificationHistoryEntry = {
   occurrenceCount: number;
   createdAt: number;
   unread: boolean;
+  action?: NotificationHistoryAction;
   dedupeKey?: string;
+};
+
+export type NotificationHistoryAction = {
+  label: string;
+  href: string;
 };
 
 export type NotificationHistoryState = {
@@ -33,6 +41,10 @@ type RecordNotificationHistoryInput = {
   description?: ReactNode | undefined;
   variant?: NotificationHistoryVariant | null | undefined;
   occurrenceCount: number;
+  historyAction?: {
+    label?: ReactNode | undefined;
+    href?: string | null | undefined;
+  } | null | undefined;
   loading?: boolean | undefined;
   dedupeKey?: string | undefined;
   createdAt?: number | undefined;
@@ -68,6 +80,36 @@ function normalizeHistoryVariant(
   return variant ?? "default";
 }
 
+function normalizeHistoryActionHref(value: string | null | undefined): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const href = value.trim().slice(0, NOTIFICATION_ACTION_HREF_LIMIT);
+  if (
+    !href.startsWith("/")
+    || href.startsWith("//")
+    || href.includes(":")
+    || href.includes("\\")
+    || /\s/.test(href)
+  ) {
+    return "";
+  }
+
+  return href;
+}
+
+function normalizeHistoryAction(
+  action: RecordNotificationHistoryInput["historyAction"],
+): NotificationHistoryAction | undefined {
+  const label = normalizeHistoryText(action?.label, NOTIFICATION_ACTION_LABEL_LIMIT);
+  const href = normalizeHistoryActionHref(action?.href);
+  if (!label || !href) {
+    return undefined;
+  }
+  return { label, href };
+}
+
 function emitHistoryState(nextEntries: NotificationHistoryEntry[]): void {
   historyState = {
     entries: nextEntries,
@@ -101,6 +143,7 @@ export function recordNotificationHistory(
 
   const variant = normalizeHistoryVariant(input.variant);
   const dedupeKey = String(input.dedupeKey || "").trim();
+  const action = normalizeHistoryAction(input.historyAction);
   const inputCreatedAt = Number(input.createdAt);
   const createdAt = Number.isFinite(inputCreatedAt)
     && !Number.isNaN(new Date(inputCreatedAt).getTime())
@@ -116,14 +159,17 @@ export function recordNotificationHistory(
     && newestEntry?.dedupeKey === dedupeKey
     && newestEntry.variant === variant
   ) {
+    const newestEntryWithoutAction = { ...newestEntry };
+    delete newestEntryWithoutAction.action;
     emitHistoryState([
       {
-        ...newestEntry,
+        ...newestEntryWithoutAction,
         title: title || newestEntry.title,
         description: description || newestEntry.description,
         occurrenceCount,
         createdAt,
         unread: true,
+        ...(action ? { action } : {}),
       },
       ...historyState.entries.slice(1),
     ]);
@@ -139,6 +185,7 @@ export function recordNotificationHistory(
       occurrenceCount,
       createdAt,
       unread: true,
+      ...(action ? { action } : {}),
       ...(dedupeKey ? { dedupeKey } : {}),
     },
     ...historyState.entries,

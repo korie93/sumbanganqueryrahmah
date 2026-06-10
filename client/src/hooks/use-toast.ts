@@ -14,6 +14,10 @@ export const TOAST_OCCURRENCE_DISPLAY_LIMIT = 99
 const TOAST_OCCURRENCE_SENTINEL = TOAST_OCCURRENCE_DISPLAY_LIMIT + 1
 
 type ToastPriority = "normal" | "critical"
+type ToastHistoryAction = {
+  label: string
+  href: string
+}
 
 type ToasterToast = ToastProps & {
   id: string
@@ -23,12 +27,13 @@ type ToasterToast = ToastProps & {
   description?: React.ReactNode
   action?: ToastActionElement
   dedupeKey?: string
+  historyAction?: ToastHistoryAction
   loading?: boolean
   priority?: ToastPriority
   requestId?: string
 }
 
-type ToastTransientKey = "action" | "loading" | "priority" | "requestId"
+type ToastTransientKey = "action" | "historyAction" | "loading" | "priority" | "requestId"
 
 type ActionType = {
   ADD_TOAST: "ADD_TOAST",
@@ -159,6 +164,10 @@ function clearTransientToastFields(
   }
   if (clearFields.includes("loading")) {
     const { loading: _loading, ...rest } = nextToast
+    nextToast = rest
+  }
+  if (clearFields.includes("historyAction")) {
+    const { historyAction: _historyAction, ...rest } = nextToast
     nextToast = rest
   }
   if (clearFields.includes("priority")) {
@@ -299,6 +308,7 @@ export function subscribeToastState(listener: (state: State) => void) {
 export type ToastInput = Omit<ToasterToast, "id" | "revision" | "occurrenceCount">
 type ToastUpdate = Omit<Partial<ToastInput>, ToastTransientKey> & {
   action?: ToastActionElement | undefined
+  historyAction?: ToastHistoryAction | undefined
   loading?: boolean | undefined
   priority?: ToastPriority | undefined
   requestId?: string | undefined
@@ -316,10 +326,11 @@ function applyToastUpdate(
   occurrenceCount = 1,
 ): void {
   clearToastTimeout(id)
-  const clearFields = (["action", "loading", "priority", "requestId"] as const)
+  const clearFields = (["action", "historyAction", "loading", "priority", "requestId"] as const)
     .filter((field) => field in props && props[field] === undefined)
   const {
     action,
+    historyAction,
     loading,
     priority,
     requestId,
@@ -330,6 +341,7 @@ function applyToastUpdate(
     toast: {
       ...persistentProps,
       ...(action !== undefined ? { action } : {}),
+      ...(historyAction !== undefined ? { historyAction } : {}),
       ...(loading !== undefined ? { loading } : {}),
       ...(priority !== undefined ? { priority } : {}),
       ...(requestId !== undefined ? { requestId } : {}),
@@ -372,6 +384,7 @@ function toast({ ...props }: ToastInput): ToastHandle {
       existingToast.id,
       {
         action: undefined,
+        historyAction: undefined,
         loading: false,
         priority: undefined,
         requestId: undefined,

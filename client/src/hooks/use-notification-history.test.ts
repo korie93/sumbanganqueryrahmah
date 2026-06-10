@@ -134,6 +134,72 @@ test("notification history normalizes invalid numeric metadata", () => {
   assert.equal(Number.isFinite(entry?.createdAt), true);
 });
 
+test("notification history stores only safe relative action links", () => {
+  resetNotificationHistoryForTests();
+
+  recordNotificationHistory({
+    title: "Export failed",
+    description: "Open the dashboard to retry.",
+    occurrenceCount: 1,
+    historyAction: {
+      label: "  Buka dashboard\n ",
+      href: "/monitor?section=dashboard",
+    },
+  });
+  recordNotificationHistory({
+    title: "External blocked",
+    occurrenceCount: 1,
+    historyAction: {
+      label: "Open external",
+      href: "https://evil.example",
+    },
+  });
+  recordNotificationHistory({
+    title: "Protocol-relative blocked",
+    occurrenceCount: 1,
+    historyAction: {
+      label: "Open external",
+      href: "//evil.example",
+    },
+  });
+
+  const [blockedProtocolRelative, blockedExternal, allowed] =
+    getNotificationHistoryStateForTests().entries;
+  assert.equal(blockedProtocolRelative?.action, undefined);
+  assert.equal(blockedExternal?.action, undefined);
+  assert.deepEqual(allowed?.action, {
+    label: "Buka dashboard",
+    href: "/monitor?section=dashboard",
+  });
+});
+
+test("notification history clears stale actions on dedupe status changes", () => {
+  resetNotificationHistoryForTests();
+
+  recordNotificationHistory({
+    title: "Export failed",
+    variant: "destructive",
+    occurrenceCount: 1,
+    dedupeKey: "dashboard-export",
+    historyAction: {
+      label: "Buka dashboard",
+      href: "/monitor?section=dashboard",
+    },
+  });
+  recordNotificationHistory({
+    title: "Export complete",
+    variant: "success",
+    occurrenceCount: 1,
+    dedupeKey: "dashboard-export",
+  });
+
+  const [success, failure] = getNotificationHistoryStateForTests().entries;
+  assert.equal(success?.variant, "success");
+  assert.equal(success?.action, undefined);
+  assert.equal(failure?.variant, "destructive");
+  assert.notEqual(failure?.action, undefined);
+});
+
 test("notification history subscriptions are bounded and removable", () => {
   resetNotificationHistoryForTests();
   const unsubscribers = Array.from(

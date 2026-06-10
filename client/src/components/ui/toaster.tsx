@@ -78,6 +78,7 @@ export function Toaster() {
         description,
         action,
         dedupeKey: _dedupeKey,
+        historyAction: _historyAction,
         loading,
         priority: _priority,
         requestId,
