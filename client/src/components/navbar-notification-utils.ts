@@ -5,8 +5,10 @@ import type {
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
+const NOTIFICATION_TIME_ZONE = "Asia/Kuala_Lumpur";
 
 const notificationDateTimeFormatter = new Intl.DateTimeFormat("ms-MY", {
+  timeZone: NOTIFICATION_TIME_ZONE,
   day: "2-digit",
   month: "short",
   hour: "2-digit",
@@ -14,8 +16,16 @@ const notificationDateTimeFormatter = new Intl.DateTimeFormat("ms-MY", {
 });
 
 const notificationTimeFormatter = new Intl.DateTimeFormat("ms-MY", {
+  timeZone: NOTIFICATION_TIME_ZONE,
   hour: "2-digit",
   minute: "2-digit",
+});
+
+const notificationDayFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: NOTIFICATION_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
 });
 
 export type NotificationHistoryPresentation = {
@@ -66,11 +76,9 @@ export function formatNotificationHistoryTimestamp(
   }
 
   const createdAt = new Date(timestamp);
-  const current = new Date(now);
   const isSameDay =
-    createdAt.getFullYear() === current.getFullYear()
-    && createdAt.getMonth() === current.getMonth()
-    && createdAt.getDate() === current.getDate();
+    notificationDayFormatter.format(createdAt)
+    === notificationDayFormatter.format(new Date(now));
 
   return isSameDay
     ? notificationTimeFormatter.format(createdAt)
