@@ -1,10 +1,14 @@
-import { ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { cn } from "@/lib/utils";
-import type { ManagedUserCreateFieldErrors } from "@/pages/settings/settings-managed-user-create-utils";
+import {
+  buildManagedUserCreateReadiness,
+  getManagedUserCreateRoleGuidance,
+  type ManagedUserCreateFieldErrors,
+} from "@/pages/settings/settings-managed-user-create-utils";
 import type { ManagedUserCreateRole } from "@/pages/settings/settings-managed-user-create-shared";
 
 interface CreateClosedAccountSectionProps {
@@ -38,7 +42,24 @@ export function CreateClosedAccountSection({
 }: CreateClosedAccountSectionProps) {
   const keyboardOpen = useMobileKeyboardState();
   const usernameErrorId = "create-closed-account-username-error";
+  const usernameHelpId = "create-closed-account-username-help";
   const emailErrorId = "create-closed-account-email-error";
+  const emailHelpId = "create-closed-account-email-help";
+  const roleDescriptionId = "create-closed-account-role-description";
+  const roleGuidance = getManagedUserCreateRoleGuidance(createRoleInput);
+  const readinessItems = buildManagedUserCreateReadiness({
+    createEmailInput,
+    createFullNameInput,
+    createRoleInput,
+    createUsernameInput,
+  });
+  const usernameDescription = createFieldErrors.createUsernameInput
+    ? `${usernameHelpId} ${usernameErrorId}`
+    : usernameHelpId;
+  const emailDescription = createFieldErrors.createEmailInput
+    ? `${emailHelpId} ${emailErrorId}`
+    : emailHelpId;
+  const RoleGuidanceIcon = roleGuidance.tone === "warning" ? AlertTriangle : Info;
 
   return (
     <Card className="border-border/60 bg-background/60">
@@ -85,10 +106,11 @@ export function CreateClosedAccountSection({
               autoCorrect="off"
               spellCheck={false}
               aria-invalid={createFieldErrors.createUsernameInput ? true : undefined}
-              aria-describedby={
-                createFieldErrors.createUsernameInput ? usernameErrorId : undefined
-              }
+              aria-describedby={usernameDescription}
             />
+            <p id={usernameHelpId} className="text-xs text-muted-foreground">
+              3-32 characters: letters, numbers, dot, underscore, or hyphen.
+            </p>
             {createFieldErrors.createUsernameInput ? (
               <p id={usernameErrorId} className="text-xs text-destructive" role="alert">
                 {createFieldErrors.createUsernameInput}
@@ -114,8 +136,11 @@ export function CreateClosedAccountSection({
               autoCorrect="off"
               spellCheck={false}
               aria-invalid={createFieldErrors.createEmailInput ? true : undefined}
-              aria-describedby={createFieldErrors.createEmailInput ? emailErrorId : undefined}
+              aria-describedby={emailDescription}
             />
+            <p id={emailHelpId} className="text-xs text-muted-foreground">
+              Activation email is required before first login.
+            </p>
             {createFieldErrors.createEmailInput ? (
               <p id={emailErrorId} className="text-xs text-destructive" role="alert">
                 {createFieldErrors.createEmailInput}
@@ -138,12 +163,53 @@ export function CreateClosedAccountSection({
               }}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               disabled={creatingManagedUser}
+              aria-describedby={roleDescriptionId}
             >
               <option value="user">user</option>
-              <option value="admin">admin</option>
               <option value="manager">manager</option>
+              <option value="admin">admin</option>
             </select>
           </div>
+        </div>
+
+        <div
+          id={roleDescriptionId}
+          className={cn(
+            "flex gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm",
+            roleGuidance.tone === "warning" && "border-amber-600/40 bg-amber-500/10",
+          )}
+        >
+          <RoleGuidanceIcon
+            className={cn(
+              "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground",
+              roleGuidance.tone === "warning" && "text-foreground",
+            )}
+            aria-hidden="true"
+          />
+          <div className="min-w-0 space-y-1">
+            <p className="font-medium text-foreground">{roleGuidance.label}</p>
+            <p className="text-muted-foreground">{roleGuidance.description}</p>
+          </div>
+        </div>
+
+        <div
+          className="grid gap-2 rounded-lg border border-dashed border-border/70 bg-background/40 p-3 text-sm sm:grid-cols-3"
+          aria-label="Create account readiness"
+        >
+          {readinessItems.map((item) => (
+            <div key={item.id} className="flex min-w-0 items-center gap-2">
+              <CheckCircle2
+                className={cn(
+                  "h-4 w-4 shrink-0",
+                  item.ready ? "text-emerald-700 dark:text-emerald-300" : "text-muted-foreground",
+                )}
+                aria-hidden="true"
+              />
+              <span className="truncate text-foreground">
+                {item.label}: {item.ready ? "Ready" : "Needed"}
+              </span>
+            </div>
+          ))}
         </div>
 
         <div

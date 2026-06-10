@@ -1,5 +1,10 @@
 import type { ManagedUser } from "@/pages/settings/types";
-import type { ManagedUserCreateDraft } from "@/pages/settings/settings-managed-user-create-shared";
+import type {
+  ManagedUserCreateDraft,
+  ManagedUserCreateReadinessItem,
+  ManagedUserCreateRole,
+  ManagedUserCreateRoleGuidance,
+} from "@/pages/settings/settings-managed-user-create-shared";
 import {
   MANAGED_USER_EMAIL_REQUIRED_MESSAGE,
   normalizeCredentialEmail,
@@ -44,6 +49,56 @@ export function validateManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
   const errors = validateManagedUserCreateDraftFields(draft);
 
   return errors.createUsernameInput ?? errors.createEmailInput ?? null;
+}
+
+export function getManagedUserCreateRoleGuidance(
+  role: ManagedUserCreateRole,
+): ManagedUserCreateRoleGuidance {
+  if (role === "admin") {
+    return {
+      description: "Administrative access. Use only for trusted operators who manage settings.",
+      label: "Admin access",
+      tone: "warning",
+    };
+  }
+
+  if (role === "manager") {
+    return {
+      description: "Read-focused operational access without superuser powers.",
+      label: "Manager access",
+      tone: "neutral",
+    };
+  }
+
+  return {
+    description: "Standard workspace access after the user completes activation.",
+    label: "User access",
+    tone: "neutral",
+  };
+}
+
+export function buildManagedUserCreateReadiness(
+  draft: ManagedUserCreateDraft,
+): ManagedUserCreateReadinessItem[] {
+  const normalized = normalizeManagedUserCreateDraft(draft);
+
+  return [
+    {
+      id: "username",
+      label: "Username ready",
+      ready: validateCredentialUsername(normalized.normalizedUsername) === null,
+    },
+    {
+      id: "email",
+      label: "Activation email ready",
+      ready: normalized.normalizedEmail.length > 0,
+    },
+    {
+      id: "role",
+      label: "Role selected",
+      ready: normalized.role === "admin" || normalized.role === "manager" || normalized.role === "user",
+    },
+  ];
 }
 
 export function findDuplicateManagedUser(options: {

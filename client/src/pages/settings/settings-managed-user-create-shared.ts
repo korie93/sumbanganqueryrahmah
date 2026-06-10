@@ -11,6 +11,18 @@ export type ManagedUserCreateDraft = {
   createUsernameInput: string;
 };
 
+export type ManagedUserCreateRoleGuidance = {
+  description: string;
+  label: string;
+  tone: "neutral" | "warning";
+};
+
+export type ManagedUserCreateReadinessItem = {
+  id: "email" | "role" | "username";
+  label: string;
+  ready: boolean;
+};
+
 export type UseSettingsManagedUserCreateArgs = {
   isMountedRef: MutableRefObject<boolean>;
   loadDevMailOutbox: () => Promise<unknown>;
