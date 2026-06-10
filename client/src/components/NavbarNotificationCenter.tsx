@@ -11,6 +11,7 @@ import {
 import { useMemo, useState } from "react";
 
 import {
+  formatNotificationOccurrenceDigest,
   formatNotificationHistoryTimestamp,
   getNotificationHistoryPresentation,
 } from "@/components/navbar-notification-utils";
@@ -320,6 +321,9 @@ export function NavbarNotificationCenter({
                   {group.entries.map((entry) => {
                     const presentation = getNotificationHistoryPresentation(entry.variant);
                     const NotificationIcon = notificationIcons[entry.variant];
+                    const occurrenceDigest = formatNotificationOccurrenceDigest(
+                      entry.occurrenceCount,
+                    );
 
                     return (
                       <li
@@ -355,9 +359,12 @@ export function NavbarNotificationCenter({
                               {entry.description}
                             </p>
                           ) : null}
-                          {entry.occurrenceCount > 1 ? (
-                            <span className="mt-2 inline-flex rounded-full bg-muted px-2 py-0.5 text-2xs font-semibold text-muted-foreground">
-                              Berlaku {entry.occurrenceCount > 99 ? "99+" : entry.occurrenceCount} kali
+                          {occurrenceDigest ? (
+                            <span
+                              className="mt-2 inline-flex rounded-full bg-muted px-2 py-0.5 text-2xs font-semibold text-foreground"
+                              aria-label={occurrenceDigest}
+                            >
+                              {occurrenceDigest}
                             </span>
                           ) : null}
                           {entry.action ? (

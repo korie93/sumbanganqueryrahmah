@@ -162,6 +162,62 @@ test("repeated warning and error toasts expose a bounded occurrence count", () =
   assert.equal(getToastStateForTests().toasts.length, 1);
 });
 
+test("duplicate success toasts quietly coalesce after dismissal", () => {
+  resetToastStateForTests();
+
+  const first = toast({
+    dedupeKey: "dashboard-refresh-success",
+    title: "Dashboard dikemas kini",
+    description: "Semua seksyen dashboard telah menerima data terkini.",
+    variant: "success",
+  });
+  first.dismiss();
+  const dismissedToast = getToastStateForTests().toasts[0];
+
+  assert.equal(dismissedToast?.open, false);
+  assert.equal(getToastTimeoutCountForTests(), 1);
+
+  const second = toast({
+    dedupeKey: "dashboard-refresh-success",
+    title: "Dashboard dikemas kini",
+    description: "Semua seksyen dashboard telah menerima data terkini.",
+    variant: "success",
+  });
+  const currentToast = getToastStateForTests().toasts[0];
+
+  assert.equal(second.id, first.id);
+  assert.equal(currentToast?.open, false);
+  assert.equal(currentToast?.revision, dismissedToast?.revision);
+  assert.equal(currentToast?.occurrenceCount, 2);
+  assert.equal(getToastTimeoutCountForTests(), 1);
+
+  resetToastStateForTests();
+});
+
+test("duplicate destructive toasts reopen even during the duplicate cooldown", () => {
+  resetToastStateForTests();
+
+  const first = toast({
+    dedupeKey: "dashboard-refresh-error",
+    title: "Refresh failed",
+    description: "Try again.",
+    variant: "destructive",
+  });
+  first.dismiss();
+
+  toast({
+    dedupeKey: "dashboard-refresh-error",
+    title: "Refresh failed",
+    description: "Try again.",
+    variant: "destructive",
+  });
+
+  const currentToast = getToastStateForTests().toasts[0];
+  assert.equal(currentToast?.open, true);
+  assert.equal(currentToast?.occurrenceCount, 2);
+  assert.equal(getToastTimeoutCountForTests(), 0);
+});
+
 test("dedupe occurrence count resets when a repeated error becomes successful", () => {
   resetToastStateForTests();
 

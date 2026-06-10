@@ -74,6 +74,7 @@ export function Toaster() {
         id,
         revision,
         occurrenceCount,
+        lastShownAt: _lastShownAt,
         title,
         description,
         action,

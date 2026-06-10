@@ -11,6 +11,7 @@ export const TOAST_TIMEOUT_LIMIT = TOAST_LIMIT
 export const TOAST_REMOVE_DELAY_MS = 5000
 export const TOAST_LISTENER_LIMIT = 50
 export const TOAST_OCCURRENCE_DISPLAY_LIMIT = 99
+export const TOAST_DUPLICATE_COOLDOWN_MS = 3000
 const TOAST_OCCURRENCE_SENTINEL = TOAST_OCCURRENCE_DISPLAY_LIMIT + 1
 
 type ToastPriority = "normal" | "critical"
@@ -24,6 +25,7 @@ type ToasterToast = ToastProps & {
   id: string
   revision: number
   occurrenceCount: number
+  lastShownAt: number
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
@@ -60,6 +62,7 @@ type Action =
       type: ActionType["UPDATE_TOAST"]
       toast: Partial<ToasterToast>
       clearFields?: readonly ToastTransientKey[]
+      preserveRevision?: boolean
     }
   | {
       type: ActionType["DISMISS_TOAST"]
@@ -127,6 +130,10 @@ function resolveToastPriority(toast: Pick<ToasterToast, "priority" | "variant">)
   return toast.variant === "destructive" ? "critical" : "normal"
 }
 
+function normalizeToastVariant(variant: ToasterToast["variant"]): NonNullable<ToasterToast["variant"]> {
+  return variant ?? "default"
+}
+
 function isRepeatableToastVariant(variant: ToasterToast["variant"]): boolean {
   return variant === "destructive" || variant === "warning"
 }
@@ -136,13 +143,60 @@ function resolveDedupeOccurrenceCount(
   incomingToast: ToastInput,
 ): number {
   if (
-    !isRepeatableToastVariant(incomingToast.variant)
-    || existingToast.variant !== incomingToast.variant
+    normalizeToastVariant(existingToast.variant) !== normalizeToastVariant(incomingToast.variant)
+    || existingToast.loading
+    || incomingToast.loading
   ) {
     return 1
   }
 
   return Math.min(existingToast.occurrenceCount + 1, TOAST_OCCURRENCE_SENTINEL)
+}
+
+function normalizePrimitiveToastContent(value: React.ReactNode): string | null {
+  if (value === null || value === undefined || typeof value === "boolean") {
+    return ""
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value).replace(/\s+/g, " ").trim()
+  }
+  return null
+}
+
+function hasSameVisibleToastContent(
+  existingToast: ToasterToast,
+  incomingToast: ToastInput,
+): boolean {
+  const existingTitle = normalizePrimitiveToastContent(existingToast.title)
+  const incomingTitle = normalizePrimitiveToastContent(incomingToast.title)
+  const existingDescription = normalizePrimitiveToastContent(existingToast.description)
+  const incomingDescription = normalizePrimitiveToastContent(incomingToast.description)
+
+  return existingTitle !== null
+    && incomingTitle !== null
+    && existingDescription !== null
+    && incomingDescription !== null
+    && existingTitle === incomingTitle
+    && existingDescription === incomingDescription
+}
+
+function shouldQuietDuplicateToast(
+  existingToast: ToasterToast,
+  incomingToast: ToastInput,
+  now: number,
+): boolean {
+  const incomingVariant = normalizeToastVariant(incomingToast.variant)
+  if (
+    isRepeatableToastVariant(incomingVariant)
+    || existingToast.loading
+    || incomingToast.loading
+    || (existingToast.open === false && !toastTimeouts.has(existingToast.id))
+    || !hasSameVisibleToastContent(existingToast, incomingToast)
+  ) {
+    return false
+  }
+
+  return now - existingToast.lastShownAt < TOAST_DUPLICATE_COOLDOWN_MS
 }
 
 function selectBoundedToasts(toasts: ToasterToast[]): ToasterToast[] {
@@ -209,7 +263,7 @@ export const reducer = (state: State, action: Action): State => {
                   {
                     ...t,
                     ...action.toast,
-                    revision: t.revision + 1,
+                    revision: action.preserveRevision ? t.revision : t.revision + 1,
                   },
                   action.clearFields ?? [],
                 )
@@ -311,7 +365,7 @@ export function subscribeToastState(listener: (state: State) => void) {
   }
 }
 
-export type ToastInput = Omit<ToasterToast, "id" | "revision" | "occurrenceCount">
+export type ToastInput = Omit<ToasterToast, "id" | "revision" | "occurrenceCount" | "lastShownAt">
 type ToastUpdate = Omit<Partial<ToastInput>, ToastTransientKey> & {
   action?: ToastActionElement | undefined
   historyAction?: ToastHistoryAction | undefined
@@ -331,8 +385,17 @@ function applyToastUpdate(
   id: string,
   props: ToastUpdate,
   occurrenceCount = 1,
+  options: {
+    reopen?: boolean
+    now?: number
+  } = {},
 ): void {
-  clearToastTimeout(id)
+  const currentToast = memoryState.toasts.find((toast) => toast.id === id)
+  const shouldReopen = options.reopen ?? true
+  const now = options.now ?? Date.now()
+  if (shouldReopen) {
+    clearToastTimeout(id)
+  }
   const clearFields = (["action", "historyAction", "historyModule", "loading", "priority", "requestId"] as const)
     .filter((field) => field in props && props[field] === undefined)
   const {
@@ -355,10 +418,12 @@ function applyToastUpdate(
       ...(priority !== undefined ? { priority } : {}),
       ...(requestId !== undefined ? { requestId } : {}),
       id,
+      lastShownAt: shouldReopen ? now : currentToast?.lastShownAt ?? now,
       occurrenceCount,
-      open: true,
+      open: shouldReopen ? true : currentToast?.open ?? true,
     },
     clearFields,
+    preserveRevision: !shouldReopen,
   })
   const updatedToast = memoryState.toasts.find((toast) => toast.id === id)
   if (updatedToast) {
@@ -389,6 +454,8 @@ function toast({ ...props }: ToastInput): ToastHandle {
 
   if (existingToast) {
     const handle = buildToastHandle(existingToast.id)
+    const now = Date.now()
+    const shouldReopen = !shouldQuietDuplicateToast(existingToast, props, now)
     applyToastUpdate(
       existingToast.id,
       {
@@ -402,6 +469,10 @@ function toast({ ...props }: ToastInput): ToastHandle {
         dedupeKey,
       },
       resolveDedupeOccurrenceCount(existingToast, props),
+      {
+        now,
+        reopen: shouldReopen,
+      },
     )
     return handle
   }
@@ -416,6 +487,7 @@ function toast({ ...props }: ToastInput): ToastHandle {
       id,
       revision: 0,
       occurrenceCount: 1,
+      lastShownAt: Date.now(),
       ...(dedupeKey ? { dedupeKey } : {}),
       open: true,
       onOpenChange: (open) => {

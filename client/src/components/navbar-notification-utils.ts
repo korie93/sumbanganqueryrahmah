@@ -6,6 +6,7 @@ import type {
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const NOTIFICATION_TIME_ZONE = "Asia/Kuala_Lumpur";
+const NOTIFICATION_OCCURRENCE_DISPLAY_LIMIT = 99;
 
 const notificationDateTimeFormatter = new Intl.DateTimeFormat("ms-MY", {
   timeZone: NOTIFICATION_TIME_ZONE,
@@ -89,4 +90,17 @@ export function getNotificationHistoryPresentation(
   variant: NotificationHistoryEntry["variant"],
 ): NotificationHistoryPresentation {
   return NOTIFICATION_PRESENTATION[variant];
+}
+
+export function formatNotificationOccurrenceDigest(count: number): string {
+  if (!Number.isFinite(count) || count <= 1) {
+    return "";
+  }
+
+  const normalizedCount = Math.trunc(count);
+  const countLabel = normalizedCount > NOTIFICATION_OCCURRENCE_DISPLAY_LIMIT
+    ? `${NOTIFICATION_OCCURRENCE_DISPLAY_LIMIT}+`
+    : String(normalizedCount);
+
+  return `Digest: ${countLabel} kejadian serupa`;
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  formatNotificationOccurrenceDigest,
   formatNotificationHistoryTimestamp,
   getNotificationHistoryPresentation,
 } from "@/components/navbar-notification-utils";
@@ -32,4 +33,10 @@ test("notification variants expose readable labels and token-based tones", () =>
     toneClassName: "text-destructive",
   });
   assert.equal(getNotificationHistoryPresentation("success").label, "Berjaya");
+});
+
+test("notification occurrence digest uses bounded readable labels", () => {
+  assert.equal(formatNotificationOccurrenceDigest(1), "");
+  assert.equal(formatNotificationOccurrenceDigest(5), "Digest: 5 kejadian serupa");
+  assert.equal(formatNotificationOccurrenceDigest(120), "Digest: 99+ kejadian serupa");
 });
