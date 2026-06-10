@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
   getLocalMailOutboxEmptyState,
   getLocalMailOutboxEmptyMessage,
@@ -49,6 +50,35 @@ export function useLocalMailOutboxState({
 
   const hasSearchFilter = normalizedDeferredEmailQuery.length > 0
     || normalizedDeferredSubjectQuery.length > 0;
+
+  const activeFilters = useMemo<ActiveFilterChip[]>(
+    () => {
+      const chips: Array<ActiveFilterChip | null> = [
+        normalizedDeferredEmailQuery
+          ? {
+              id: "local-mail-email",
+              label: `Email: ${deferredEmailQuery.trim()}`,
+              onRemove: () => setEmailQuery(""),
+            }
+          : null,
+        normalizedDeferredSubjectQuery
+          ? {
+              id: "local-mail-subject",
+              label: `Subject: ${deferredSubjectQuery.trim()}`,
+              onRemove: () => setSubjectQuery(""),
+            }
+          : null,
+      ];
+
+      return chips.filter((item): item is ActiveFilterChip => item !== null);
+    },
+    [
+      deferredEmailQuery,
+      deferredSubjectQuery,
+      normalizedDeferredEmailQuery,
+      normalizedDeferredSubjectQuery,
+    ],
+  );
 
   const emptyMessage = useMemo(
     () =>
@@ -123,6 +153,7 @@ export function useLocalMailOutboxState({
   };
 
   return {
+    activeFilters,
     clearAllOpen,
     emailQuery,
     emptyMessage,

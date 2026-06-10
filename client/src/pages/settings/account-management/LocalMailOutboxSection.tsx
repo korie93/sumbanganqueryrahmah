@@ -58,9 +58,12 @@ export function LocalMailOutboxSection({
         }
         filters={
           <LocalMailOutboxFiltersPanel
+            activeFilters={state.activeFilters}
             emailQuery={state.emailQuery}
+            hasActiveFilters={state.hasSearchFilter}
             sortDirection={state.sortDirection}
             subjectQuery={state.subjectQuery}
+            onClearAll={state.clearSearchFilters}
             onEmailQueryChange={state.onEmailQueryChange}
             onSortDirectionChange={state.onSortDirectionChange}
             onSubjectQueryChange={state.onSubjectQueryChange}
