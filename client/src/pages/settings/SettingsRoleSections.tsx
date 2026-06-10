@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   BriefcaseBusiness,
   CheckCircle2,
   CircleMinus,
@@ -12,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { SettingItem } from "@/pages/settings/types";
+import type { RolePermissionImpact, SettingItem } from "@/pages/settings/types";
 
 type RolePermissionId = "admin" | "manager" | "user";
 
@@ -33,6 +34,7 @@ type RoleComparisonRow = {
 
 interface SettingsRoleSectionsProps {
   renderSettingCard: (setting: SettingItem) => JSX.Element;
+  rolePermissionImpacts: RolePermissionImpact[];
   roleSections: {
     admin: SettingItem[];
     manager: SettingItem[];
@@ -148,6 +150,7 @@ function getEmptyPermissionMessage(section: RolePermissionSection, rawQuery: str
 
 export function SettingsRoleSections({
   renderSettingCard,
+  rolePermissionImpacts,
   roleSections,
 }: SettingsRoleSectionsProps) {
   const [activeRole, setActiveRole] = useState<RolePermissionId>("manager");
@@ -173,6 +176,10 @@ export function SettingsRoleSections({
     () => buildRoleComparisonRows(sections, searchQuery),
     [searchQuery, sections],
   );
+  const visibleImpacts = rolePermissionImpacts.slice(0, 4);
+  const grantImpactCount = rolePermissionImpacts.filter((impact) => impact.action === "grant").length;
+  const blockImpactCount = rolePermissionImpacts.filter((impact) => impact.action === "block").length;
+  const sensitiveImpactCount = rolePermissionImpacts.filter((impact) => impact.severity === "sensitive").length;
 
   if (!roleSections || !activeSection) {
     return null;
@@ -223,6 +230,69 @@ export function SettingsRoleSections({
           </div>
         </CardContent>
       </Card>
+
+      {rolePermissionImpacts.length > 0 ? (
+        <Card className="border-border/70 bg-background/80">
+          <CardContent className="p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-foreground" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-foreground">Pending permission impact</p>
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Review role access changes before saving so grants and blocks are intentional.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="rounded-full">
+                  {grantImpactCount} grant{grantImpactCount === 1 ? "" : "s"}
+                </Badge>
+                <Badge variant="outline" className="rounded-full">
+                  {blockImpactCount} block{blockImpactCount === 1 ? "" : "s"}
+                </Badge>
+                {sensitiveImpactCount > 0 ? (
+                  <Badge variant="destructive" className="rounded-full">
+                    {sensitiveImpactCount} sensitive
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+
+            <ul className="mt-3 grid gap-2" aria-label="Pending role permission changes">
+              {visibleImpacts.map((impact) => (
+                <li
+                  key={impact.key}
+                  className="flex flex-col gap-1 rounded-lg border border-border/70 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="min-w-0 font-medium text-foreground">
+                    {impact.role}: {impact.moduleLabel}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Badge
+                      variant={impact.action === "grant" ? "secondary" : "outline"}
+                      className="rounded-full"
+                    >
+                      {impact.action === "grant" ? "Will allow access" : "Will block access"}
+                    </Badge>
+                    {impact.severity === "sensitive" ? (
+                      <Badge variant="destructive" className="rounded-full">
+                        Sensitive
+                      </Badge>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {rolePermissionImpacts.length > visibleImpacts.length ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                +{rolePermissionImpacts.length - visibleImpacts.length} more pending permission change
+                {rolePermissionImpacts.length - visibleImpacts.length === 1 ? "" : "s"}.
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as RolePermissionId)}>
         <Card className="mb-4 border-border/60 bg-background/70">

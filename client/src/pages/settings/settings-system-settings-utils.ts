@@ -1,4 +1,5 @@
 import type {
+  RolePermissionImpact,
   SettingCategory,
   SettingChangeSummary,
   SettingItem,
@@ -14,6 +15,10 @@ export type SettingsRoleSections = {
   user: SettingItem[];
   other: SettingItem[];
 };
+
+const rolePermissionKeyPattern = /^tab_(admin|manager|user)_(.+)_enabled$/;
+const sensitivePermissionPattern =
+  /(account|backup|permission|restore|role|security|setting|system)/i;
 
 export function sortSettingsCategories(categories: SettingCategory[]) {
   return [...categories].sort((left, right) => {
@@ -71,6 +76,57 @@ export function buildSettingChangeSummary(
       };
     })
     .filter((item): item is SettingChangeSummary => item !== null);
+}
+
+function formatRoleLabel(role: string): RolePermissionImpact["role"] {
+  if (role === "admin") return "Admin";
+  if (role === "manager") return "Manager";
+  return "User";
+}
+
+function formatPermissionModuleLabel(setting: SettingItem, suffix: string): string {
+  const label = setting.label.replace(/^(Admin|Manager|User) Tab:\s*/i, "").trim();
+  if (label) return label;
+  return suffix.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export function buildRolePermissionImpacts(
+  settingMap: Map<string, SettingItem>,
+  dirtyKeys: Set<string>,
+  draftValues: Record<string, string | number | boolean | null>,
+): RolePermissionImpact[] {
+  return Array.from(dirtyKeys)
+    .map((key) => {
+      const setting = settingMap.get(key);
+      if (!setting) return null;
+
+      const parsed = key.match(rolePermissionKeyPattern);
+      if (!parsed) return null;
+
+      const previousAllowed = String(setting.value).trim().toLowerCase() === "true";
+      const nextValue = Object.prototype.hasOwnProperty.call(draftValues, key)
+        ? draftValues[key]
+        : setting.value;
+      const nextAllowed = String(nextValue).trim().toLowerCase() === "true";
+      if (previousAllowed === nextAllowed) return null;
+
+      const moduleLabel = formatPermissionModuleLabel(setting, parsed[2] ?? key);
+      const sensitiveText = `${moduleLabel} ${setting.description ?? ""}`;
+
+      return {
+        key,
+        role: formatRoleLabel(parsed[1] ?? "user"),
+        moduleLabel,
+        action: nextAllowed ? "grant" : "block",
+        severity: sensitivePermissionPattern.test(sensitiveText) ? "sensitive" : "standard",
+      };
+    })
+    .filter((item): item is RolePermissionImpact => item !== null)
+    .sort(
+      (left, right) =>
+        left.role.localeCompare(right.role)
+        || left.moduleLabel.localeCompare(right.moduleLabel),
+    );
 }
 
 export function buildCategoryDirtyMap(categories: SettingCategory[], dirtyKeys: Set<string>) {

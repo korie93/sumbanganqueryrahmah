@@ -108,3 +108,11 @@ export type SettingChangeSummary = {
   nextValue: string;
   previousValue: string;
 };
+
+export type RolePermissionImpact = {
+  key: string;
+  role: "Admin" | "Manager" | "User";
+  moduleLabel: string;
+  action: "grant" | "block";
+  severity: "standard" | "sensitive";
+};

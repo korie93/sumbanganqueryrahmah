@@ -108,6 +108,7 @@ export function useSettingsController({
     maintenanceSettingsSummary,
     persistChanges,
     renderSettingCard,
+    rolePermissionImpacts,
     roleSections,
     saving,
     selectedCategory,
@@ -216,6 +217,7 @@ export function useSettingsController({
     dirtyCount,
     saving,
     renderSettingCard,
+    rolePermissionImpacts,
     saveBar: useMemo(
       () => ({
         changeSummary,

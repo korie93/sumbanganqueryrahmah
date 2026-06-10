@@ -9,6 +9,7 @@ import {
   buildCategoryDirtyMap,
   buildSettingMap,
   buildSettingChangeSummary,
+  buildRolePermissionImpacts,
 } from "@/pages/settings/settings-system-settings-utils";
 import type { SettingCategory, SettingItem } from "@/pages/settings/types";
 import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
@@ -47,6 +48,10 @@ export function useSettingsDraftState({
   );
   const changeSummary = useMemo(
     () => buildSettingChangeSummary(settingMap, dirtyKeys, draftValues),
+    [dirtyKeys, draftValues, settingMap],
+  );
+  const rolePermissionImpacts = useMemo(
+    () => buildRolePermissionImpacts(settingMap, dirtyKeys, draftValues),
     [dirtyKeys, draftValues, settingMap],
   );
 
@@ -198,6 +203,7 @@ export function useSettingsDraftState({
     maintenanceSettingsSummary,
     persistChanges,
     renderSettingCard,
+    rolePermissionImpacts,
     saving,
     setConfirmCriticalOpen,
   };

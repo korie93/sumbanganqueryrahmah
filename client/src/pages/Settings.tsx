@@ -191,6 +191,7 @@ export default function SettingsPage({
                       <Suspense fallback={<SettingsSectionFallback label="Loading permission settings..." />}>
                         <SettingsRoleSections
                           renderSettingCard={controller.renderSettingCard}
+                          rolePermissionImpacts={controller.rolePermissionImpacts}
                           roleSections={controller.roleSections}
                         />
                       </Suspense>

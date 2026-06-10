@@ -51,6 +51,7 @@ export function useSettingsSystemSettings({
     maintenanceSettingsSummary,
     persistChanges,
     renderSettingCard,
+    rolePermissionImpacts,
     saving,
     setConfirmCriticalOpen,
   } = draftState;
@@ -76,6 +77,7 @@ export function useSettingsSystemSettings({
     maintenanceSettingsSummary,
     persistChanges,
     renderSettingCard,
+    rolePermissionImpacts,
     roleSections,
     saving,
     selectedCategory,

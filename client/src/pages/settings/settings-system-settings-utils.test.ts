@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCategoryDirtyMap,
+  buildRolePermissionImpacts,
   buildSettingChangeSummary,
   buildSettingsRoleSections,
   sortSettingsCategories,
@@ -92,6 +93,49 @@ test("buildSettingChangeSummary formats dirty setting changes for save review", 
       label: "System Name",
       previousValue: "SQR",
       nextValue: "SQR Ops",
+    },
+  ]);
+});
+
+test("buildRolePermissionImpacts summarizes pending grant and block changes", () => {
+  const category = createCategory("roles", "Roles & Permissions", [
+    "tab_manager_backup_enabled",
+    "tab_user_dashboard_enabled",
+    "system_name",
+  ]);
+  category.settings[0]!.value = "false";
+  category.settings[0]!.label = "Manager Tab: Backup & Restore";
+  category.settings[1]!.value = "true";
+  category.settings[1]!.label = "User Tab: Dashboard";
+  category.settings[2]!.value = "SQR";
+  category.settings[2]!.label = "System Name";
+  category.settings[2]!.type = "text";
+
+  const settingMap = new Map(category.settings.map((setting) => [setting.key, setting]));
+  const impacts = buildRolePermissionImpacts(
+    settingMap,
+    new Set(["tab_manager_backup_enabled", "tab_user_dashboard_enabled", "system_name"]),
+    {
+      tab_manager_backup_enabled: true,
+      tab_user_dashboard_enabled: false,
+      system_name: "SQR Ops",
+    },
+  );
+
+  assert.deepEqual(impacts, [
+    {
+      key: "tab_manager_backup_enabled",
+      role: "Manager",
+      moduleLabel: "Backup & Restore",
+      action: "grant",
+      severity: "sensitive",
+    },
+    {
+      key: "tab_user_dashboard_enabled",
+      role: "User",
+      moduleLabel: "Dashboard",
+      action: "block",
+      severity: "standard",
     },
   ]);
 });
