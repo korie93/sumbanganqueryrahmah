@@ -102,9 +102,12 @@ export function ManagedAccountsSection({
         {isMobile ? (
           <ManagedAccountsMobileList
             deletingManagedUserId={deletingManagedUserId}
-            emptyMessage={filterState.emptyMessage}
+            emptyState={filterState.emptyState}
             loading={loading}
             managedUsers={managedUsers}
+            onClearFilters={
+              filterState.hasActiveFilters ? filterState.clearAllFilters : undefined
+            }
             onBanToggle={filterState.openBanToggleDialog}
             onEditUser={onEditUser}
             onRequestDelete={filterState.openDeleteDialog}
@@ -115,9 +118,12 @@ export function ManagedAccountsSection({
         ) : (
           <ManagedAccountsDesktopTable
             deletingManagedUserId={deletingManagedUserId}
-            emptyMessage={filterState.emptyMessage}
+            emptyState={filterState.emptyState}
             loading={loading}
             managedUsers={managedUsers}
+            onClearFilters={
+              filterState.hasActiveFilters ? filterState.clearAllFilters : undefined
+            }
             onBanToggle={filterState.openBanToggleDialog}
             onEditUser={onEditUser}
             onRequestDelete={filterState.openDeleteDialog}

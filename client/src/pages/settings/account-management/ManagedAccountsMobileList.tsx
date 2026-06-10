@@ -2,12 +2,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { buildManagedAccountRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
+import { ManagedAccountsEmptyState } from "@/pages/settings/account-management/ManagedAccountsEmptyState";
+import type { ManagedAccountsEmptyStateContent } from "@/pages/settings/account-management/managed-accounts-shared";
 import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
 import type { ManagedUser } from "@/pages/settings/types";
 
 type ManagedAccountsMobileListProps = {
   deletingManagedUserId: string | null;
-  emptyMessage: string;
+  emptyState: ManagedAccountsEmptyStateContent;
   loading: boolean;
   managedUsers: ManagedUser[];
   onBanToggle: (user: ManagedUser) => void;
@@ -16,11 +18,12 @@ type ManagedAccountsMobileListProps = {
   onResetPassword: (user: ManagedUser) => void;
   onResendActivation: (user: ManagedUser) => void;
   onViewDetails: (user: ManagedUser) => void;
+  onClearFilters?: (() => void) | undefined;
 };
 
 export function ManagedAccountsMobileList({
   deletingManagedUserId,
-  emptyMessage,
+  emptyState,
   loading,
   managedUsers,
   onBanToggle,
@@ -29,12 +32,16 @@ export function ManagedAccountsMobileList({
   onResetPassword,
   onResendActivation,
   onViewDetails,
+  onClearFilters,
 }: ManagedAccountsMobileListProps) {
   if (loading || managedUsers.length === 0) {
     return (
       <div className="space-y-3 p-3">
-        <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
-          {emptyMessage}
+        <div className="rounded-lg border border-border/60 bg-background/70">
+          <ManagedAccountsEmptyState
+            state={emptyState}
+            onClearFilters={onClearFilters}
+          />
         </div>
       </div>
     );

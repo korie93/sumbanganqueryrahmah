@@ -3,6 +3,7 @@ import type {
   ManagedAccountAttentionSummary,
   ManagedAccountAttentionSummaryItem,
   ManagedAccountDetailFact,
+  ManagedAccountsEmptyStateContent,
   ManagedAccountRiskSummary,
   ManagedAccountTimelineItem,
   ManagedAccountsRoleFilter,
@@ -31,15 +32,33 @@ export function getManagedAccountsEmptyMessage(options: {
   total: number;
   hasActiveFilters: boolean;
 }) {
+  return getManagedAccountsEmptyState(options).title;
+}
+
+export function getManagedAccountsEmptyState(options: {
+  loading: boolean;
+  total: number;
+  hasActiveFilters: boolean;
+}): ManagedAccountsEmptyStateContent {
   if (options.loading) {
-    return "Loading users...";
+    return {
+      title: "Loading users...",
+      description: "Refreshing the managed account list.",
+    };
   }
 
   if (options.total === 0 && !options.hasActiveFilters) {
-    return "No managed accounts found.";
+    return {
+      title: "No managed accounts found.",
+      description: "Create a managed account when a user needs access to this workspace.",
+    };
   }
 
-  return "No managed accounts match the current filters.";
+  return {
+    title: "No managed accounts match the current filters.",
+    description: "Clear the active filters or adjust the search term to widen the result set.",
+    actionLabel: "Clear filters",
+  };
 }
 
 export function getManagedAccountAttentionStatus(

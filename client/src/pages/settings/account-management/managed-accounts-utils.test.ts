@@ -11,6 +11,7 @@ import {
   buildManagedAccountRiskSummary,
   buildManagedAccountTimeline,
   getManagedAccountsEmptyMessage,
+  getManagedAccountsEmptyState,
   getManagedAccountAttentionStatus,
   normalizeManagedAccountsRoleFilter,
   normalizeManagedAccountsStatusFilter,
@@ -102,6 +103,40 @@ test("getManagedAccountsEmptyMessage returns filtered empty copy", () => {
       hasActiveFilters: true,
     }),
     "No managed accounts match the current filters.",
+  );
+});
+
+test("getManagedAccountsEmptyState gives actionable filtered-empty guidance", () => {
+  assert.deepEqual(
+    getManagedAccountsEmptyState({
+      loading: false,
+      total: 5,
+      hasActiveFilters: true,
+    }),
+    {
+      title: "No managed accounts match the current filters.",
+      description: "Clear the active filters or adjust the search term to widen the result set.",
+      actionLabel: "Clear filters",
+    },
+  );
+});
+
+test("getManagedAccountsEmptyState omits actions for loading and default-empty states", () => {
+  assert.equal(
+    getManagedAccountsEmptyState({
+      loading: true,
+      total: 0,
+      hasActiveFilters: false,
+    }).actionLabel,
+    undefined,
+  );
+  assert.equal(
+    getManagedAccountsEmptyState({
+      loading: false,
+      total: 0,
+      hasActiveFilters: false,
+    }).actionLabel,
+    undefined,
   );
 });
 

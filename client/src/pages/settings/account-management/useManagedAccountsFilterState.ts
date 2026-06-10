@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
   getManagedAccountsEmptyMessage,
+  getManagedAccountsEmptyState,
   normalizeManagedAccountsRoleFilter,
   normalizeManagedAccountsStatusFilter,
 } from "@/pages/settings/account-management/managed-accounts-utils";
@@ -129,10 +130,20 @@ export function useManagedAccountsFilterState({
       }),
     [hasActiveFilters, loading, total],
   );
+  const emptyState = useMemo(
+    () =>
+      getManagedAccountsEmptyState({
+        loading,
+        total,
+        hasActiveFilters,
+      }),
+    [hasActiveFilters, loading, total],
+  );
 
   return {
     activeFilters,
     emptyMessage,
+    emptyState,
     hasActiveFilters,
     roleFilter,
     searchQuery,

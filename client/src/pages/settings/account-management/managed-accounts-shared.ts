@@ -59,6 +59,12 @@ export type ManagedAccountAttentionSummary = {
   items: ManagedAccountAttentionSummaryItem[];
 };
 
+export type ManagedAccountsEmptyStateContent = {
+  title: string;
+  description: string;
+  actionLabel?: string;
+};
+
 export const MANAGED_ACCOUNT_ROLE_LABELS: Record<ManagedAccountsRoleFilter, string> = {
   all: "All roles",
   admin: "Admin",

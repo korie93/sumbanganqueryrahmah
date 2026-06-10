@@ -1,10 +1,12 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ManagedAccountsEmptyState } from "@/pages/settings/account-management/ManagedAccountsEmptyState";
 import { ManagedAccountRow } from "@/pages/settings/account-management/ManagedAccountRow";
+import type { ManagedAccountsEmptyStateContent } from "@/pages/settings/account-management/managed-accounts-shared";
 import type { ManagedUser } from "@/pages/settings/types";
 
 type ManagedAccountsDesktopTableProps = {
   deletingManagedUserId: string | null;
-  emptyMessage: string;
+  emptyState: ManagedAccountsEmptyStateContent;
   loading: boolean;
   managedUsers: ManagedUser[];
   onBanToggle: (user: ManagedUser) => void;
@@ -13,11 +15,12 @@ type ManagedAccountsDesktopTableProps = {
   onResetPassword: (user: ManagedUser) => void;
   onResendActivation: (user: ManagedUser) => void;
   onViewDetails: (user: ManagedUser) => void;
+  onClearFilters?: (() => void) | undefined;
 };
 
 export function ManagedAccountsDesktopTable({
   deletingManagedUserId,
-  emptyMessage,
+  emptyState,
   loading,
   managedUsers,
   onBanToggle,
@@ -26,6 +29,7 @@ export function ManagedAccountsDesktopTable({
   onResetPassword,
   onResendActivation,
   onViewDetails,
+  onClearFilters,
 }: ManagedAccountsDesktopTableProps) {
   return (
     <Table className="min-w-[980px] text-sm">
@@ -41,8 +45,11 @@ export function ManagedAccountsDesktopTable({
       <TableBody>
         {loading || managedUsers.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center text-muted-foreground">
-              {emptyMessage}
+            <TableCell colSpan={5} className="p-0">
+              <ManagedAccountsEmptyState
+                state={emptyState}
+                onClearFilters={onClearFilters}
+              />
             </TableCell>
           </TableRow>
         ) : (
