@@ -6,10 +6,12 @@ import {
   MANAGED_ACCOUNT_STATUS_LABELS,
 } from "@/pages/settings/account-management/managed-accounts-shared";
 import {
+  buildManagedAccountAttentionSummary,
   buildManagedAccountDetailFacts,
   buildManagedAccountRiskSummary,
   buildManagedAccountTimeline,
   getManagedAccountsEmptyMessage,
+  getManagedAccountAttentionStatus,
   normalizeManagedAccountsRoleFilter,
   normalizeManagedAccountsStatusFilter,
 } from "@/pages/settings/account-management/managed-accounts-utils";
@@ -100,6 +102,57 @@ test("getManagedAccountsEmptyMessage returns filtered empty copy", () => {
       hasActiveFilters: true,
     }),
     "No managed accounts match the current filters.",
+  );
+});
+
+test("getManagedAccountAttentionStatus prioritizes enforced access restrictions", () => {
+  assert.equal(
+    getManagedAccountAttentionStatus(
+      createManagedUser({
+        isBanned: true,
+        lockedAt: "2026-01-03T00:00:00.000Z",
+        status: "pending_activation",
+      }),
+    ),
+    "banned",
+  );
+  assert.equal(
+    getManagedAccountAttentionStatus(
+      createManagedUser({
+        lockedAt: "2026-01-03T00:00:00.000Z",
+        status: "disabled",
+      }),
+    ),
+    "locked",
+  );
+  assert.equal(getManagedAccountAttentionStatus(createManagedUser()), null);
+});
+
+test("buildManagedAccountAttentionSummary counts visible attention statuses", () => {
+  const summary = buildManagedAccountAttentionSummary([
+    createManagedUser({ id: "active-1" }),
+    createManagedUser({ id: "locked-1", lockedAt: "2026-01-03T00:00:00.000Z" }),
+    createManagedUser({ id: "banned-1", isBanned: true }),
+    createManagedUser({
+      id: "pending-1",
+      activatedAt: null,
+      status: "pending_activation",
+    }),
+    createManagedUser({ id: "disabled-1", status: "disabled" }),
+    createManagedUser({ id: "suspended-1", status: "suspended" }),
+  ]);
+
+  assert.equal(summary.visibleCount, 6);
+  assert.equal(summary.totalAttentionCount, 5);
+  assert.deepEqual(
+    summary.items.map(({ status, count }) => ({ status, count })),
+    [
+      { status: "locked", count: 1 },
+      { status: "banned", count: 1 },
+      { status: "pending_activation", count: 1 },
+      { status: "suspended", count: 1 },
+      { status: "disabled", count: 1 },
+    ],
   );
 });
 

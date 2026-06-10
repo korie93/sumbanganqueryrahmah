@@ -1,17 +1,18 @@
-import { useState } from "react";
-import { RefreshCw, UserCog, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { RefreshCw, UserCog } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ManagedAccountActionDialogs } from "@/pages/settings/account-management/ManagedAccountActionDialogs";
 import { ManagedAccountDetailSheet } from "@/pages/settings/account-management/ManagedAccountDetailSheet";
+import { ManagedAccountsAttentionSummary } from "@/pages/settings/account-management/ManagedAccountsAttentionSummary";
 import { DeleteManagedAccountDialog } from "@/pages/settings/account-management/DeleteManagedAccountDialog";
 import { ManagedAccountsDesktopTable } from "@/pages/settings/account-management/ManagedAccountsDesktopTable";
 import { ManagedAccountsFiltersPanel } from "@/pages/settings/account-management/ManagedAccountsFiltersPanel";
 import { ManagedAccountsMobileList } from "@/pages/settings/account-management/ManagedAccountsMobileList";
 import type { ManagedAccountsSectionProps } from "@/pages/settings/account-management/managed-accounts-shared";
+import { buildManagedAccountAttentionSummary } from "@/pages/settings/account-management/managed-accounts-utils";
 import { ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE } from "@/pages/settings/account-management/utils";
 import { useManagedAccountsFilterState } from "@/pages/settings/account-management/useManagedAccountsFilterState";
 import type { ManagedUser } from "@/pages/settings/types";
@@ -38,6 +39,10 @@ export function ManagedAccountsSection({
     query,
     total: pagination.total,
   });
+  const attentionSummary = useMemo(
+    () => buildManagedAccountAttentionSummary(managedUsers),
+    [managedUsers],
+  );
 
   return (
     <>
@@ -65,13 +70,13 @@ export function ManagedAccountsSection({
           />
         }
         summary={
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
-            <div className="flex items-center gap-2 font-medium">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              Total users: {pagination.total}
-            </div>
-            <Badge variant="secondary">Current page {managedUsers.length}</Badge>
-          </div>
+          <ManagedAccountsAttentionSummary
+            activeStatus={filterState.statusFilter}
+            loading={loading}
+            summary={attentionSummary}
+            totalUsers={pagination.total}
+            onStatusChange={filterState.onStatusChange}
+          />
         }
         pagination={
           <AppPaginationBar

@@ -46,6 +46,19 @@ export type ManagedAccountTimelineItem = {
   timestamp: string | null;
 };
 
+export type ManagedAccountAttentionSummaryItem = {
+  status: ManagedAccountAttentionStatus;
+  label: string;
+  count: number;
+  tone: "warning" | "danger";
+};
+
+export type ManagedAccountAttentionSummary = {
+  totalAttentionCount: number;
+  visibleCount: number;
+  items: ManagedAccountAttentionSummaryItem[];
+};
+
 export const MANAGED_ACCOUNT_ROLE_LABELS: Record<ManagedAccountsRoleFilter, string> = {
   all: "All roles",
   admin: "Admin",

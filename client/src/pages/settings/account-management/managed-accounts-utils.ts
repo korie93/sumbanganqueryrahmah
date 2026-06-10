@@ -1,9 +1,15 @@
 import type {
+  ManagedAccountAttentionStatus,
+  ManagedAccountAttentionSummary,
+  ManagedAccountAttentionSummaryItem,
   ManagedAccountDetailFact,
   ManagedAccountRiskSummary,
   ManagedAccountTimelineItem,
   ManagedAccountsRoleFilter,
   ManagedAccountsStatusFilter,
+} from "@/pages/settings/account-management/managed-accounts-shared";
+import {
+  MANAGED_ACCOUNT_ATTENTION_FILTERS,
 } from "@/pages/settings/account-management/managed-accounts-shared";
 import { formatDateTime } from "@/pages/settings/account-management/utils";
 import {
@@ -34,6 +40,66 @@ export function getManagedAccountsEmptyMessage(options: {
   }
 
   return "No managed accounts match the current filters.";
+}
+
+export function getManagedAccountAttentionStatus(
+  user: ManagedUser,
+): ManagedAccountAttentionStatus | null {
+  if (user.isBanned) {
+    return "banned";
+  }
+
+  if (user.lockedAt) {
+    return "locked";
+  }
+
+  if (user.status === "banned" || user.status === "locked") {
+    return user.status;
+  }
+
+  if (
+    user.status === "pending_activation"
+    || user.status === "suspended"
+    || user.status === "disabled"
+  ) {
+    return user.status;
+  }
+
+  return null;
+}
+
+export function buildManagedAccountAttentionSummary(
+  users: ManagedUser[],
+): ManagedAccountAttentionSummary {
+  const counts = new Map<ManagedAccountAttentionStatus, number>();
+
+  for (const user of users) {
+    const attentionStatus = getManagedAccountAttentionStatus(user);
+    if (!attentionStatus) {
+      continue;
+    }
+    counts.set(attentionStatus, (counts.get(attentionStatus) || 0) + 1);
+  }
+
+  const items = MANAGED_ACCOUNT_ATTENTION_FILTERS.map((option) => {
+    const tone: ManagedAccountAttentionSummaryItem["tone"] =
+      option.value === "banned" || option.value === "locked"
+      ? "danger"
+      : "warning";
+
+    return {
+      status: option.value,
+      label: option.label,
+      count: counts.get(option.value) || 0,
+      tone,
+    };
+  });
+
+  return {
+    totalAttentionCount: items.reduce((total, item) => total + item.count, 0),
+    visibleCount: users.length,
+    items,
+  };
 }
 
 export function buildManagedAccountRiskSummary(user: ManagedUser): ManagedAccountRiskSummary {
