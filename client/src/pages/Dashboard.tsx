@@ -474,6 +474,7 @@ function DashboardContent() {
             label: "Buka dashboard",
             href: "/monitor?section=dashboard",
           },
+          historyModule: "Dashboard Login",
           ...(primaryFailure.requestId ? { requestId: primaryFailure.requestId } : {}),
           duration: 12_000,
           action: (
@@ -496,6 +497,7 @@ function DashboardContent() {
             label: "Lihat dashboard",
             href: "/monitor?section=dashboard",
           },
+          historyModule: "Dashboard Login",
           duration: 4000,
         });
       }
@@ -547,6 +549,7 @@ function DashboardContent() {
           label: "Lihat dashboard",
           href: "/monitor?section=dashboard",
         },
+        historyModule: "Dashboard Login",
         duration: 5000,
       });
     } catch (error: unknown) {
@@ -561,6 +564,7 @@ function DashboardContent() {
           label: "Buka dashboard",
           href: "/monitor?section=dashboard",
         },
+        historyModule: "Dashboard Login",
         duration: 8000,
         action: (
           <ToastAction

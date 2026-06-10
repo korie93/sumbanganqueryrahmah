@@ -21,12 +21,14 @@ test("notification history stores sanitized text without request metadata", () =
     variant: "destructive",
     occurrenceCount: 1,
     dedupeKey: "dashboard-export",
+    historyModule: "  Dashboard\u0000 Login  ",
     createdAt: 100,
   });
 
   const entry = getNotificationHistoryStateForTests().entries[0];
   assert.equal(entry?.title, "Export failed");
   assert.equal(entry?.description, "Try again");
+  assert.equal(entry?.module, "Dashboard Login");
   assert.equal(entry?.createdAt, 100);
   assert.equal(entry?.unread, true);
 });
@@ -185,6 +187,7 @@ test("notification history clears stale actions on dedupe status changes", () =>
       label: "Buka dashboard",
       href: "/monitor?section=dashboard",
     },
+    historyModule: "Dashboard Login",
   });
   recordNotificationHistory({
     title: "Export complete",
@@ -196,8 +199,10 @@ test("notification history clears stale actions on dedupe status changes", () =>
   const [success, failure] = getNotificationHistoryStateForTests().entries;
   assert.equal(success?.variant, "success");
   assert.equal(success?.action, undefined);
+  assert.equal(success?.module, undefined);
   assert.equal(failure?.variant, "destructive");
   assert.notEqual(failure?.action, undefined);
+  assert.equal(failure?.module, "Dashboard Login");
 });
 
 test("notification history subscriptions are bounded and removable", () => {

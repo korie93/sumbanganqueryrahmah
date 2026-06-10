@@ -6,6 +6,7 @@ const NOTIFICATION_TITLE_LIMIT = 120;
 const NOTIFICATION_DESCRIPTION_LIMIT = 240;
 const NOTIFICATION_ACTION_LABEL_LIMIT = 60;
 const NOTIFICATION_ACTION_HREF_LIMIT = 200;
+const NOTIFICATION_MODULE_LIMIT = 48;
 
 export type NotificationHistoryVariant =
   | "default"
@@ -23,6 +24,7 @@ export type NotificationHistoryEntry = {
   createdAt: number;
   unread: boolean;
   action?: NotificationHistoryAction;
+  module?: string;
   dedupeKey?: string;
 };
 
@@ -45,6 +47,7 @@ type RecordNotificationHistoryInput = {
     label?: ReactNode | undefined;
     href?: string | null | undefined;
   } | null | undefined;
+  historyModule?: ReactNode | undefined;
   loading?: boolean | undefined;
   dedupeKey?: string | undefined;
   createdAt?: number | undefined;
@@ -144,6 +147,7 @@ export function recordNotificationHistory(
   const variant = normalizeHistoryVariant(input.variant);
   const dedupeKey = String(input.dedupeKey || "").trim();
   const action = normalizeHistoryAction(input.historyAction);
+  const module = normalizeHistoryText(input.historyModule, NOTIFICATION_MODULE_LIMIT);
   const inputCreatedAt = Number(input.createdAt);
   const createdAt = Number.isFinite(inputCreatedAt)
     && !Number.isNaN(new Date(inputCreatedAt).getTime())
@@ -159,17 +163,19 @@ export function recordNotificationHistory(
     && newestEntry?.dedupeKey === dedupeKey
     && newestEntry.variant === variant
   ) {
-    const newestEntryWithoutAction = { ...newestEntry };
-    delete newestEntryWithoutAction.action;
+    const newestEntryWithoutTransientMetadata = { ...newestEntry };
+    delete newestEntryWithoutTransientMetadata.action;
+    delete newestEntryWithoutTransientMetadata.module;
     emitHistoryState([
       {
-        ...newestEntryWithoutAction,
+        ...newestEntryWithoutTransientMetadata,
         title: title || newestEntry.title,
         description: description || newestEntry.description,
         occurrenceCount,
         createdAt,
         unread: true,
         ...(action ? { action } : {}),
+        ...(module ? { module } : {}),
       },
       ...historyState.entries.slice(1),
     ]);
@@ -186,6 +192,7 @@ export function recordNotificationHistory(
       createdAt,
       unread: true,
       ...(action ? { action } : {}),
+      ...(module ? { module } : {}),
       ...(dedupeKey ? { dedupeKey } : {}),
     },
     ...historyState.entries,

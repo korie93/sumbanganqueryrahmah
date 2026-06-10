@@ -18,6 +18,7 @@ type ToastHistoryAction = {
   label: string
   href: string
 }
+type ToastHistoryModule = string
 
 type ToasterToast = ToastProps & {
   id: string
@@ -28,12 +29,13 @@ type ToasterToast = ToastProps & {
   action?: ToastActionElement
   dedupeKey?: string
   historyAction?: ToastHistoryAction
+  historyModule?: ToastHistoryModule
   loading?: boolean
   priority?: ToastPriority
   requestId?: string
 }
 
-type ToastTransientKey = "action" | "historyAction" | "loading" | "priority" | "requestId"
+type ToastTransientKey = "action" | "historyAction" | "historyModule" | "loading" | "priority" | "requestId"
 
 type ActionType = {
   ADD_TOAST: "ADD_TOAST",
@@ -168,6 +170,10 @@ function clearTransientToastFields(
   }
   if (clearFields.includes("historyAction")) {
     const { historyAction: _historyAction, ...rest } = nextToast
+    nextToast = rest
+  }
+  if (clearFields.includes("historyModule")) {
+    const { historyModule: _historyModule, ...rest } = nextToast
     nextToast = rest
   }
   if (clearFields.includes("priority")) {
@@ -309,6 +315,7 @@ export type ToastInput = Omit<ToasterToast, "id" | "revision" | "occurrenceCount
 type ToastUpdate = Omit<Partial<ToastInput>, ToastTransientKey> & {
   action?: ToastActionElement | undefined
   historyAction?: ToastHistoryAction | undefined
+  historyModule?: ToastHistoryModule | undefined
   loading?: boolean | undefined
   priority?: ToastPriority | undefined
   requestId?: string | undefined
@@ -326,11 +333,12 @@ function applyToastUpdate(
   occurrenceCount = 1,
 ): void {
   clearToastTimeout(id)
-  const clearFields = (["action", "historyAction", "loading", "priority", "requestId"] as const)
+  const clearFields = (["action", "historyAction", "historyModule", "loading", "priority", "requestId"] as const)
     .filter((field) => field in props && props[field] === undefined)
   const {
     action,
     historyAction,
+    historyModule,
     loading,
     priority,
     requestId,
@@ -342,6 +350,7 @@ function applyToastUpdate(
       ...persistentProps,
       ...(action !== undefined ? { action } : {}),
       ...(historyAction !== undefined ? { historyAction } : {}),
+      ...(historyModule !== undefined ? { historyModule } : {}),
       ...(loading !== undefined ? { loading } : {}),
       ...(priority !== undefined ? { priority } : {}),
       ...(requestId !== undefined ? { requestId } : {}),
@@ -385,6 +394,7 @@ function toast({ ...props }: ToastInput): ToastHandle {
       {
         action: undefined,
         historyAction: undefined,
+        historyModule: undefined,
         loading: false,
         priority: undefined,
         requestId: undefined,

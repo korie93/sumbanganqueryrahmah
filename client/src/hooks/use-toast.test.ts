@@ -238,6 +238,7 @@ test("dedupe replacement clears stale retry actions and request references", () 
       label: "Buka dashboard",
       href: "/monitor?section=dashboard",
     },
+    historyModule: "Dashboard Login",
   });
   toast({
     dedupeKey: "dashboard-refresh",
@@ -249,6 +250,7 @@ test("dedupe replacement clears stale retry actions and request references", () 
   const currentToast = getToastStateForTests().toasts[0];
   assert.equal(currentToast?.action, undefined);
   assert.equal(currentToast?.historyAction, undefined);
+  assert.equal(currentToast?.historyModule, undefined);
   assert.equal(currentToast?.requestId, undefined);
   assert.equal(currentToast?.variant, "success");
 });
