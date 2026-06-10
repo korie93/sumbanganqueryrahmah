@@ -22,6 +22,26 @@ export type ManagedAccountsSectionProps = {
 export type ManagedAccountsRoleFilter = ManagedUsersQueryState["role"];
 export type ManagedAccountsStatusFilter = ManagedUsersQueryState["status"];
 
+export type ManagedAccountRiskSummary = {
+  label: string;
+  description: string;
+  tone: "success" | "warning" | "danger";
+};
+
+export type ManagedAccountDetailFact = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+export type ManagedAccountTimelineItem = {
+  id: string;
+  label: string;
+  value: string;
+  description: string;
+  timestamp: string | null;
+};
+
 export const MANAGED_ACCOUNT_ROLE_OPTIONS: Array<{
   value: ManagedAccountsRoleFilter;
   label: string;

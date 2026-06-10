@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { RefreshCw, UserCog, Users } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
@@ -5,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ManagedAccountActionDialogs } from "@/pages/settings/account-management/ManagedAccountActionDialogs";
+import { ManagedAccountDetailSheet } from "@/pages/settings/account-management/ManagedAccountDetailSheet";
 import { DeleteManagedAccountDialog } from "@/pages/settings/account-management/DeleteManagedAccountDialog";
 import { ManagedAccountsDesktopTable } from "@/pages/settings/account-management/ManagedAccountsDesktopTable";
 import { ManagedAccountsFiltersPanel } from "@/pages/settings/account-management/ManagedAccountsFiltersPanel";
@@ -12,6 +14,7 @@ import { ManagedAccountsMobileList } from "@/pages/settings/account-management/M
 import type { ManagedAccountsSectionProps } from "@/pages/settings/account-management/managed-accounts-shared";
 import { ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE } from "@/pages/settings/account-management/utils";
 import { useManagedAccountsFilterState } from "@/pages/settings/account-management/useManagedAccountsFilterState";
+import type { ManagedUser } from "@/pages/settings/types";
 
 export function ManagedAccountsSection({
   deletingManagedUserId,
@@ -28,6 +31,7 @@ export function ManagedAccountsSection({
   onResendActivation,
 }: ManagedAccountsSectionProps) {
   const isMobile = useIsMobile();
+  const [detailUser, setDetailUser] = useState<ManagedUser | null>(null);
   const filterState = useManagedAccountsFilterState({
     loading,
     onQueryChange,
@@ -101,6 +105,7 @@ export function ManagedAccountsSection({
             onRequestDelete={filterState.openDeleteDialog}
             onResetPassword={filterState.openResetPasswordDialog}
             onResendActivation={onResendActivation}
+            onViewDetails={setDetailUser}
           />
         ) : (
           <ManagedAccountsDesktopTable
@@ -113,9 +118,21 @@ export function ManagedAccountsSection({
             onRequestDelete={filterState.openDeleteDialog}
             onResetPassword={filterState.openResetPasswordDialog}
             onResendActivation={onResendActivation}
+            onViewDetails={setDetailUser}
           />
         )}
       </SideTabDataPanel>
+
+      <ManagedAccountDetailSheet
+        deletingManagedUserId={deletingManagedUserId}
+        user={detailUser}
+        onBanToggle={filterState.openBanToggleDialog}
+        onClose={() => setDetailUser(null)}
+        onEditUser={onEditUser}
+        onRequestDelete={filterState.openDeleteDialog}
+        onResetPassword={filterState.openResetPasswordDialog}
+        onResendActivation={onResendActivation}
+      />
 
       <ManagedAccountActionDialogs
         banToggleUser={filterState.userToBanToggle}

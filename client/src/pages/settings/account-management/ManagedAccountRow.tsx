@@ -13,6 +13,7 @@ interface ManagedAccountRowProps {
   onEdit: (user: ManagedUser) => void;
   onResetPassword: (user: ManagedUser) => void;
   onResendActivation: (user: ManagedUser) => void;
+  onViewDetails: (user: ManagedUser) => void;
   user: ManagedUser;
 }
 
@@ -23,6 +24,7 @@ export const ManagedAccountRow = memo(function ManagedAccountRow({
   onEdit,
   onResetPassword,
   onResendActivation,
+  onViewDetails,
   user,
 }: ManagedAccountRowProps) {
   const formattedLastLoginAt = formatDateTime(user.lastLoginAt);
@@ -68,6 +70,9 @@ export const ManagedAccountRow = memo(function ManagedAccountRow({
       <TableCell>{formattedLastLoginAt}</TableCell>
       <TableCell className="text-right">
         <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => onViewDetails(user)}>
+            Details
+          </Button>
           <Button variant="outline" size="sm" onClick={() => onEdit(user)}>
             Edit
           </Button>

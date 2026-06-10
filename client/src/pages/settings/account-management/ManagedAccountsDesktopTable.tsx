@@ -12,6 +12,7 @@ type ManagedAccountsDesktopTableProps = {
   onRequestDelete: (user: ManagedUser) => void;
   onResetPassword: (user: ManagedUser) => void;
   onResendActivation: (user: ManagedUser) => void;
+  onViewDetails: (user: ManagedUser) => void;
 };
 
 export function ManagedAccountsDesktopTable({
@@ -24,6 +25,7 @@ export function ManagedAccountsDesktopTable({
   onRequestDelete,
   onResetPassword,
   onResendActivation,
+  onViewDetails,
 }: ManagedAccountsDesktopTableProps) {
   return (
     <Table className="min-w-[980px] text-sm">
@@ -53,6 +55,7 @@ export function ManagedAccountsDesktopTable({
               onEdit={onEditUser}
               onResetPassword={onResetPassword}
               onResendActivation={onResendActivation}
+              onViewDetails={onViewDetails}
               user={user}
             />
           ))

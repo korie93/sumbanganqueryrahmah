@@ -15,6 +15,7 @@ type ManagedAccountsMobileListProps = {
   onRequestDelete: (user: ManagedUser) => void;
   onResetPassword: (user: ManagedUser) => void;
   onResendActivation: (user: ManagedUser) => void;
+  onViewDetails: (user: ManagedUser) => void;
 };
 
 export function ManagedAccountsMobileList({
@@ -27,6 +28,7 @@ export function ManagedAccountsMobileList({
   onRequestDelete,
   onResetPassword,
   onResendActivation,
+  onViewDetails,
 }: ManagedAccountsMobileListProps) {
   if (loading || managedUsers.length === 0) {
     return (
@@ -61,6 +63,11 @@ export function ManagedAccountsMobileList({
             <MobileActionMenu
               contentLabel="Managed account actions"
               items={[
+                {
+                  id: `details-${user.id}`,
+                  label: "View Details",
+                  onSelect: () => onViewDetails(user),
+                },
                 {
                   id: `resend-${user.id}`,
                   label: "Resend Activation",
@@ -110,6 +117,9 @@ export function ManagedAccountsMobileList({
           </dl>
 
           <div className="grid gap-2 sm:flex sm:flex-row" data-floating-ai-avoid="true">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => onViewDetails(user)}>
+              Details
+            </Button>
             <Button variant="outline" className="w-full sm:w-auto" onClick={() => onEditUser(user)}>
               Edit
             </Button>
