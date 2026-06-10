@@ -1,16 +1,19 @@
 import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { Button } from "@/components/ui/button";
 import { buildLocalMailOutboxRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
+import { LocalMailOutboxEmptyState } from "@/pages/settings/account-management/LocalMailOutboxEmptyState";
+import type { LocalMailOutboxEmptyStateContent } from "@/pages/settings/account-management/local-mail-outbox-shared";
 import { formatDateTime } from "@/pages/settings/account-management/utils";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
 
 type LocalMailOutboxMobileListProps = {
   clearingDevMailOutbox: boolean;
   deletingDevMailOutboxId: string | null;
-  emptyMessage: string;
+  emptyState: LocalMailOutboxEmptyStateContent;
   entries: DevMailOutboxPreview[];
   loading: boolean;
   onCopyPreviewLink: (previewUrl: string) => Promise<void>;
+  onClearFilters?: (() => void) | undefined;
   onOpenDeleteDialog: (entry: DevMailOutboxPreview) => void;
   onOpenPreviewDialog: (entry: DevMailOutboxPreview) => void;
 };
@@ -18,9 +21,10 @@ type LocalMailOutboxMobileListProps = {
 export function LocalMailOutboxMobileList({
   clearingDevMailOutbox,
   deletingDevMailOutboxId,
-  emptyMessage,
+  emptyState,
   entries,
   loading,
+  onClearFilters,
   onCopyPreviewLink,
   onOpenDeleteDialog,
   onOpenPreviewDialog,
@@ -28,8 +32,11 @@ export function LocalMailOutboxMobileList({
   if (loading || entries.length === 0) {
     return (
       <div className="space-y-3 p-3">
-        <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
-          {emptyMessage}
+        <div className="rounded-lg border border-border/60 bg-background/70">
+          <LocalMailOutboxEmptyState
+            state={emptyState}
+            onClearFilters={onClearFilters}
+          />
         </div>
       </div>
     );

@@ -1,16 +1,19 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { buildLocalMailOutboxRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
+import { LocalMailOutboxEmptyState } from "@/pages/settings/account-management/LocalMailOutboxEmptyState";
+import type { LocalMailOutboxEmptyStateContent } from "@/pages/settings/account-management/local-mail-outbox-shared";
 import { formatDateTime } from "@/pages/settings/account-management/utils";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
 
 type LocalMailOutboxDesktopTableProps = {
   clearingDevMailOutbox: boolean;
   deletingDevMailOutboxId: string | null;
-  emptyMessage: string;
+  emptyState: LocalMailOutboxEmptyStateContent;
   entries: DevMailOutboxPreview[];
   loading: boolean;
   onCopyPreviewLink: (previewUrl: string) => Promise<void>;
+  onClearFilters?: (() => void) | undefined;
   onOpenDeleteDialog: (entry: DevMailOutboxPreview) => void;
   onOpenPreviewDialog: (entry: DevMailOutboxPreview) => void;
 };
@@ -18,9 +21,10 @@ type LocalMailOutboxDesktopTableProps = {
 export function LocalMailOutboxDesktopTable({
   clearingDevMailOutbox,
   deletingDevMailOutboxId,
-  emptyMessage,
+  emptyState,
   entries,
   loading,
+  onClearFilters,
   onCopyPreviewLink,
   onOpenDeleteDialog,
   onOpenPreviewDialog,
@@ -38,8 +42,11 @@ export function LocalMailOutboxDesktopTable({
       <TableBody>
         {loading || entries.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="text-center text-muted-foreground">
-              {emptyMessage}
+            <TableCell colSpan={4} className="p-0">
+              <LocalMailOutboxEmptyState
+                state={emptyState}
+                onClearFilters={onClearFilters}
+              />
             </TableCell>
           </TableRow>
         ) : (

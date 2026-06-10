@@ -18,6 +18,12 @@ export type LocalMailOutboxSectionProps = {
   onRefresh: () => void;
 };
 
+export type LocalMailOutboxEmptyStateContent = {
+  title: string;
+  description: string;
+  actionLabel?: string;
+};
+
 export const LOCAL_MAIL_OUTBOX_SORT_OPTIONS: Array<{
   value: DevMailOutboxQueryState["sortDirection"];
   label: string;

@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
+  getLocalMailOutboxEmptyState,
   getLocalMailOutboxEmptyMessage,
   normalizeLocalMailOutboxSortDirection,
 } from "@/pages/settings/account-management/local-mail-outbox-utils";
@@ -52,6 +53,16 @@ export function useLocalMailOutboxState({
   const emptyMessage = useMemo(
     () =>
       getLocalMailOutboxEmptyMessage({
+        hasSearchFilter,
+        loading,
+        total,
+      }),
+    [hasSearchFilter, loading, total],
+  );
+
+  const emptyState = useMemo(
+    () =>
+      getLocalMailOutboxEmptyState({
         hasSearchFilter,
         loading,
         total,
@@ -115,6 +126,8 @@ export function useLocalMailOutboxState({
     clearAllOpen,
     emailQuery,
     emptyMessage,
+    emptyState,
+    hasSearchFilter,
     previewEntry,
     previewToDelete,
     sortDirection,
@@ -126,6 +139,15 @@ export function useLocalMailOutboxState({
       setPreviewEntry(null);
     },
     copyPreviewLink,
+    clearSearchFilters: () => {
+      setEmailQuery("");
+      setSubjectQuery("");
+      onQueryChange({
+        page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
+        searchEmail: "",
+        searchSubject: "",
+      });
+    },
     onEmailQueryChange: (value: string) => {
       setEmailQuery(value);
     },

@@ -99,9 +99,10 @@ export function LocalMailOutboxSection({
           <LocalMailOutboxMobileList
             clearingDevMailOutbox={clearingDevMailOutbox}
             deletingDevMailOutboxId={deletingDevMailOutboxId}
-            emptyMessage={state.emptyMessage}
+            emptyState={state.emptyState}
             entries={entries}
             loading={loading}
+            onClearFilters={state.hasSearchFilter ? state.clearSearchFilters : undefined}
             onCopyPreviewLink={state.copyPreviewLink}
             onOpenDeleteDialog={state.openDeleteDialog}
             onOpenPreviewDialog={state.openPreviewDialog}
@@ -110,9 +111,10 @@ export function LocalMailOutboxSection({
           <LocalMailOutboxDesktopTable
             clearingDevMailOutbox={clearingDevMailOutbox}
             deletingDevMailOutboxId={deletingDevMailOutboxId}
-            emptyMessage={state.emptyMessage}
+            emptyState={state.emptyState}
             entries={entries}
             loading={loading}
+            onClearFilters={state.hasSearchFilter ? state.clearSearchFilters : undefined}
             onCopyPreviewLink={state.copyPreviewLink}
             onOpenDeleteDialog={state.openDeleteDialog}
             onOpenPreviewDialog={state.openPreviewDialog}
