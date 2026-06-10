@@ -7,6 +7,7 @@ import {
   Info,
   Trash2,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 type NavbarNotificationCenterProps = NotificationHistoryState & {
   onClear: () => void;
+  onDismissEntry: (entryId: string) => void;
   onMarkRead: () => void;
   variant: "desktop" | "mobile";
 };
@@ -50,6 +52,7 @@ type NotificationHistoryModuleGroup = {
 };
 
 const FALLBACK_NOTIFICATION_MODULE = "Sistem";
+const ACTION_REQUIRED_PREVIEW_LIMIT = 2;
 
 const notificationFilters: ReadonlyArray<{
   id: NotificationHistoryFilter;
@@ -120,12 +123,17 @@ function groupNotificationEntriesByModule(
   return groups;
 }
 
+function isActionRequiredNotification(entry: NotificationHistoryEntry): boolean {
+  return entry.variant === "destructive" || entry.variant === "warning";
+}
+
 /**
  * Renders the bounded, session-only notification history from the navbar.
  */
 export function NavbarNotificationCenter({
   entries,
   onClear,
+  onDismissEntry,
   onMarkRead,
   unreadCount,
   variant,
@@ -146,6 +154,14 @@ export function NavbarNotificationCenter({
   const groupedVisibleEntries = useMemo(
     () => groupNotificationEntriesByModule(visibleEntries),
     [visibleEntries],
+  );
+  const actionRequiredEntries = useMemo(
+    () => entries.filter(isActionRequiredNotification),
+    [entries],
+  );
+  const actionRequiredPreviewEntries = actionRequiredEntries.slice(
+    0,
+    ACTION_REQUIRED_PREVIEW_LIMIT,
   );
   const filterPanelId = `notification-center-${variant}-panel`;
   const activeFilterTabId = `notification-center-${variant}-filter-${activeFilter}`;
@@ -222,6 +238,70 @@ export function NavbarNotificationCenter({
               </div>
             ))}
           </div>
+        ) : null}
+
+        {actionRequiredEntries.length > 0 ? (
+          <section
+            className="border-b border-border bg-destructive/5 px-3 py-3"
+            aria-label="Notifikasi perlu tindakan"
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-label-xs text-foreground">
+                  Perlu tindakan
+                </p>
+                <p className="text-2xs text-muted-foreground">
+                  {actionRequiredEntries.length} isu aktif dalam sesi ini
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-2xs font-semibold text-foreground">
+                {actionRequiredEntries.length}
+              </span>
+            </div>
+            <ul className="grid gap-2" aria-label="Senarai notifikasi perlu tindakan">
+              {actionRequiredPreviewEntries.map((entry) => {
+                const presentation = getNotificationHistoryPresentation(entry.variant);
+                return (
+                  <li
+                    key={entry.id}
+                    className="rounded-lg border border-border bg-background px-3 py-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="break-words text-xs font-semibold text-foreground">
+                          {entry.title}
+                        </p>
+                        <p className={cn("mt-0.5 text-2xs font-semibold", presentation.toneClassName)}>
+                          {presentation.label} · {getNotificationEntryModule(entry)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7"
+                        onClick={() => onDismissEntry(entry.id)}
+                        aria-label={`Buang notifikasi: ${entry.title}`}
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </div>
+                    {entry.action ? (
+                      <Button asChild variant="outline" size="sm" className="mt-2 min-h-8 px-2.5">
+                        <a
+                          href={entry.action.href}
+                          aria-label={`${entry.action.label}: ${entry.title}`}
+                        >
+                          {entry.action.label}
+                          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        </a>
+                      </Button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         ) : null}
 
         {entries.length > 0 ? (
@@ -344,12 +424,24 @@ export function NavbarNotificationCenter({
                             <p className="min-w-0 break-words text-sm font-medium text-foreground">
                               {entry.title}
                             </p>
-                            <time
-                              className="shrink-0 whitespace-nowrap text-2xs text-muted-foreground"
-                              dateTime={new Date(entry.createdAt).toISOString()}
-                            >
-                              {formatNotificationHistoryTimestamp(entry.createdAt)}
-                            </time>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <time
+                                className="whitespace-nowrap text-2xs text-muted-foreground"
+                                dateTime={new Date(entry.createdAt).toISOString()}
+                              >
+                                {formatNotificationHistoryTimestamp(entry.createdAt)}
+                              </time>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7"
+                                onClick={() => onDismissEntry(entry.id)}
+                                aria-label={`Buang notifikasi: ${entry.title}`}
+                              >
+                                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                              </Button>
+                            </div>
                           </div>
                           <p className={cn("mt-0.5 text-2xs font-semibold", presentation.toneClassName)}>
                             {presentation.label}

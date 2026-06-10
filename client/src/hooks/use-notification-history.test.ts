@@ -8,6 +8,7 @@ import {
   NOTIFICATION_HISTORY_LIMIT,
   NOTIFICATION_HISTORY_LISTENER_LIMIT,
   recordNotificationHistory,
+  removeNotificationHistoryEntry,
   resetNotificationHistoryForTests,
   subscribeNotificationHistoryState,
 } from "@/hooks/use-notification-history";
@@ -120,6 +121,34 @@ test("notification history remains bounded and clears without retaining listener
   clearNotificationHistory();
   assert.equal(getNotificationHistoryStateForTests().entries.length, 0);
   assert.equal(getNotificationHistoryListenerCountForTests(), 0);
+});
+
+test("notification history removes a single entry and recalculates unread state", () => {
+  resetNotificationHistoryForTests();
+
+  recordNotificationHistory({
+    title: "Refresh failed",
+    variant: "destructive",
+    occurrenceCount: 1,
+  });
+  recordNotificationHistory({
+    title: "Export complete",
+    variant: "success",
+    occurrenceCount: 1,
+  });
+
+  const [newestEntry, oldestEntry] = getNotificationHistoryStateForTests().entries;
+  assert.equal(getNotificationHistoryStateForTests().unreadCount, 2);
+
+  removeNotificationHistoryEntry(newestEntry?.id ?? "");
+
+  const stateAfterRemove = getNotificationHistoryStateForTests();
+  assert.equal(stateAfterRemove.entries.length, 1);
+  assert.equal(stateAfterRemove.entries[0]?.id, oldestEntry?.id);
+  assert.equal(stateAfterRemove.unreadCount, 1);
+
+  removeNotificationHistoryEntry("missing-id");
+  assert.equal(getNotificationHistoryStateForTests().entries.length, 1);
 });
 
 test("notification history normalizes invalid numeric metadata", () => {

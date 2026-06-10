@@ -25,6 +25,7 @@ import { useDesktopNavOverflowState } from "@/components/useDesktopNavOverflowSt
 import {
   clearNotificationHistory,
   markNotificationHistoryRead,
+  removeNotificationHistoryEntry,
   useNotificationHistoryState,
 } from "@/hooks/use-notification-history"
 import { translate } from "@/lib/i18n"
@@ -241,6 +242,7 @@ function NavbarImpl({
               {...notificationHistory}
               variant="mobile"
               onClear={clearNotificationHistory}
+              onDismissEntry={removeNotificationHistoryEntry}
               onMarkRead={markNotificationHistoryRead}
             />
 
@@ -274,6 +276,7 @@ function NavbarImpl({
             {...notificationHistory}
             variant="desktop"
             onClear={clearNotificationHistory}
+            onDismissEntry={removeNotificationHistoryEntry}
             onMarkRead={markNotificationHistoryRead}
           />
 

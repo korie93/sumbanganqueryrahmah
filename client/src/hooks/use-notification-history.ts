@@ -217,6 +217,22 @@ export function clearNotificationHistory(): void {
   emitHistoryState([]);
 }
 
+export function removeNotificationHistoryEntry(entryId: string): void {
+  const normalizedEntryId = entryId.trim();
+  if (!normalizedEntryId || historyState.entries.length === 0) {
+    return;
+  }
+
+  const nextEntries = historyState.entries.filter(
+    (entry) => entry.id !== normalizedEntryId,
+  );
+  if (nextEntries.length === historyState.entries.length) {
+    return;
+  }
+
+  emitHistoryState(nextEntries);
+}
+
 export function subscribeNotificationHistoryState(
   listener: () => void,
 ): () => void {

@@ -33,6 +33,9 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(notificationCenterSource, /aria-label="Pusat notifikasi"/);
   assert.match(notificationCenterSource, /aria-label="Kosongkan sejarah notifikasi"/);
   assert.match(notificationCenterSource, /aria-label=\{`Sejarah notifikasi \$\{group\.module\}`\}/);
+  assert.match(notificationCenterSource, /aria-label="Notifikasi perlu tindakan"/);
+  assert.match(notificationCenterSource, /aria-label="Senarai notifikasi perlu tindakan"/);
+  assert.match(notificationCenterSource, /aria-label=\{`Buang notifikasi: \$\{entry\.title\}`\}/);
   assert.match(notificationCenterSource, /role="tablist"/);
   assert.match(notificationCenterSource, /aria-label="Tapis notifikasi"/);
   assert.match(notificationCenterSource, /role="tabpanel"/);
@@ -42,6 +45,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(notificationCenterSource, /Notifikasi \$\{group\.module\}/);
   assert.match(notificationCenterSource, /entry\.action\.href/);
   assert.match(notificationCenterSource, /onMarkRead\(\)/);
+  assert.match(navbarSource, /removeNotificationHistoryEntry/);
   assert.doesNotMatch(notificationCenterSource, /localStorage|sessionStorage|setInterval|setTimeout/);
   assert.match(navbarCombinedSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreDesktopUserMenuFocus\}/);
