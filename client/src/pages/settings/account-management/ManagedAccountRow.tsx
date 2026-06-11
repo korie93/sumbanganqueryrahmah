@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { buildManagedAccountRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
+import { buildManagedAccountNextActionHint } from "@/pages/settings/account-management/managed-accounts-utils";
 import type { ManagedUser } from "@/pages/settings/types";
 import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
 
@@ -29,6 +30,7 @@ export const ManagedAccountRow = memo(function ManagedAccountRow({
 }: ManagedAccountRowProps) {
   const formattedLastLoginAt = formatDateTime(user.lastLoginAt);
   const formattedLockedAt = user.lockedAt ? formatDateTime(user.lockedAt) : null;
+  const nextActionHint = buildManagedAccountNextActionHint(user);
 
   return (
     <TableRow
@@ -60,6 +62,20 @@ export const ManagedAccountRow = memo(function ManagedAccountRow({
             </Badge>
           ) : null}
           {user.mustChangePassword ? <Badge variant="outline">must change password</Badge> : null}
+        </div>
+        <div className="mt-2">
+          <Badge
+            variant={
+              nextActionHint.tone === "danger"
+                ? "destructive"
+                : nextActionHint.tone === "success"
+                  ? "default"
+                  : "secondary"
+            }
+            title={nextActionHint.description}
+          >
+            Next: {nextActionHint.label}
+          </Badge>
         </div>
         {user.lockedAt ? (
           <div className="mt-1 text-xs text-muted-foreground">

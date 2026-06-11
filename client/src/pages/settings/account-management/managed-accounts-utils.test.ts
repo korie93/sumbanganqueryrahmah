@@ -9,6 +9,7 @@ import {
   buildManagedAccountActionImpact,
   buildManagedAccountAttentionSummary,
   buildManagedAccountDetailFacts,
+  buildManagedAccountNextActionHint,
   buildManagedAccountRiskSummary,
   buildManagedAccountTimeline,
   getManagedAccountsEmptyMessage,
@@ -238,6 +239,82 @@ test("buildManagedAccountRiskSummary reports pending activation and healthy acco
     {
       label: "Healthy",
       description: "No visible access restrictions are active for this account.",
+      tone: "success",
+    },
+  );
+});
+
+test("buildManagedAccountNextActionHint prioritizes account restrictions", () => {
+  assert.deepEqual(
+    buildManagedAccountNextActionHint(
+      createManagedUser({
+        isBanned: true,
+        lockedAt: "2026-01-03T00:00:00.000Z",
+        status: "pending_activation",
+      }),
+    ),
+    {
+      label: "Review ban",
+      description: "Account is banned. Review whether access should stay blocked.",
+      tone: "danger",
+    },
+  );
+
+  assert.deepEqual(
+    buildManagedAccountNextActionHint(
+      createManagedUser({
+        lockedAt: "2026-01-03T00:00:00.000Z",
+        lockedReason: "Too many failed logins",
+      }),
+    ),
+    {
+      label: "Review lock",
+      description: "Too many failed logins",
+      tone: "danger",
+    },
+  );
+});
+
+test("buildManagedAccountNextActionHint reports activation and password follow-up", () => {
+  assert.deepEqual(
+    buildManagedAccountNextActionHint(
+      createManagedUser({
+        activatedAt: null,
+        status: "pending_activation",
+      }),
+    ),
+    {
+      label: "Send activation",
+      description: "Activation is still pending. Resend the activation email if needed.",
+      tone: "warning",
+    },
+  );
+
+  assert.deepEqual(
+    buildManagedAccountNextActionHint(createManagedUser({ mustChangePassword: true })),
+    {
+      label: "Password pending",
+      description: "User must complete the password change flow before normal sign-in.",
+      tone: "warning",
+    },
+  );
+});
+
+test("buildManagedAccountNextActionHint reports monitoring and healthy states", () => {
+  assert.deepEqual(
+    buildManagedAccountNextActionHint(createManagedUser({ failedLoginAttempts: 2 })),
+    {
+      label: "Watch sign-ins",
+      description: "Recent failed login attempts are visible. Monitor for repeated failures.",
+      tone: "neutral",
+    },
+  );
+
+  assert.deepEqual(
+    buildManagedAccountNextActionHint(createManagedUser()),
+    {
+      label: "No action",
+      description: "No visible access issue requires immediate follow-up.",
       tone: "success",
     },
   );

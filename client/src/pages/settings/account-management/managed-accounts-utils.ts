@@ -5,6 +5,7 @@ import type {
   ManagedAccountAttentionSummary,
   ManagedAccountAttentionSummaryItem,
   ManagedAccountDetailFact,
+  ManagedAccountNextActionHint,
   ManagedAccountsEmptyStateContent,
   ManagedAccountRiskSummary,
   ManagedAccountTimelineItem,
@@ -167,6 +168,62 @@ export function buildManagedAccountRiskSummary(user: ManagedUser): ManagedAccoun
   return {
     label: "Healthy",
     description: "No visible access restrictions are active for this account.",
+    tone: "success",
+  };
+}
+
+export function buildManagedAccountNextActionHint(user: ManagedUser): ManagedAccountNextActionHint {
+  if (user.isBanned) {
+    return {
+      label: "Review ban",
+      description: "Account is banned. Review whether access should stay blocked.",
+      tone: "danger",
+    };
+  }
+
+  if (user.lockedAt) {
+    return {
+      label: "Review lock",
+      description: user.lockedReason || "Account is locked and may need security review.",
+      tone: "danger",
+    };
+  }
+
+  if (user.status === "pending_activation") {
+    return {
+      label: "Send activation",
+      description: "Activation is still pending. Resend the activation email if needed.",
+      tone: "warning",
+    };
+  }
+
+  if (user.mustChangePassword || user.passwordResetBySuperuser) {
+    return {
+      label: "Password pending",
+      description: "User must complete the password change flow before normal sign-in.",
+      tone: "warning",
+    };
+  }
+
+  if (user.status === "disabled" || user.status === "suspended") {
+    return {
+      label: "Review status",
+      description: `Account is ${user.status}. Confirm whether this restriction is still intended.`,
+      tone: "warning",
+    };
+  }
+
+  if (user.failedLoginAttempts > 0) {
+    return {
+      label: "Watch sign-ins",
+      description: "Recent failed login attempts are visible. Monitor for repeated failures.",
+      tone: "neutral",
+    };
+  }
+
+  return {
+    label: "No action",
+    description: "No visible access issue requires immediate follow-up.",
     tone: "success",
   };
 }

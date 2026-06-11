@@ -32,6 +32,12 @@ export type ManagedAccountRiskSummary = {
   tone: "success" | "warning" | "danger";
 };
 
+export type ManagedAccountNextActionHint = {
+  description: string;
+  label: string;
+  tone: "danger" | "neutral" | "success" | "warning";
+};
+
 export type ManagedAccountDetailFact = {
   id: string;
   label: string;
