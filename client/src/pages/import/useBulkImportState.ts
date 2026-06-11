@@ -119,6 +119,7 @@ export function useBulkImportState({
       const nextPending: BulkFileResult = {
         id: existingResult?.id ?? `${currentFile.name}:${currentFile.size}:${currentFile.lastModified}:${index}`,
         filename: currentFile.name,
+        sizeBytes: existingResult?.sizeBytes ?? currentFile.size,
         status: "processing",
       };
 

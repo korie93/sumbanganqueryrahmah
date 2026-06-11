@@ -2,6 +2,7 @@ import { CheckCircle2, FileSpreadsheet, FolderOpen, Upload, XCircle } from "luci
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { formatImportUploadSize } from "@/pages/import/upload-limits";
 import type { BulkFileResult } from "@/pages/import/types";
 
 interface BulkImportPanelProps {
@@ -83,7 +84,7 @@ export function BulkImportPanel({
           ref={bulkInputRef}
           type="file"
           aria-label="Select bulk import files"
-          accept=".csv,.xlsx,.xls,.xlsb"
+          accept=".csv,.xlsx,.xlsb"
           multiple
           onChange={onBulkFileSelect}
           className="hidden"
@@ -96,7 +97,7 @@ export function BulkImportPanel({
           </div>
           <div>
             <p className="text-foreground font-medium">Click or drag multiple files here</p>
-            <p className="mt-1 text-sm text-muted-foreground">Select multiple CSV or Excel files at once</p>
+            <p className="mt-1 text-sm text-muted-foreground">Select multiple CSV, XLSX, or XLSB files at once</p>
             <p className="mt-1 text-xs text-muted-foreground">Maximum upload size per file: {maxUploadSizeLabel}</p>
           </div>
         </div>
@@ -202,6 +203,11 @@ export function BulkImportPanel({
                         >
                           {result.filename}
                         </p>
+                        {typeof result.sizeBytes === "number" ? (
+                          <p className="text-xs text-muted-foreground">
+                            {formatImportUploadSize(result.sizeBytes)}
+                          </p>
+                        ) : null}
                         {result.status === "success" && result.rowCount ? (
                           <p className="text-xs text-green-600 dark:text-green-400">{result.rowCount} rows imported</p>
                         ) : null}

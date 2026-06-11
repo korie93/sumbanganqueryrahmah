@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getImportPreviewRowKey } from "@/pages/import/import-preview-row-key";
+import { formatImportUploadSize } from "@/pages/import/upload-limits";
 import type { ImportRow } from "@/pages/import/types";
 
 interface SingleImportPanelProps {
@@ -99,7 +100,7 @@ export function SingleImportPanel({
             ref={fileInputRef}
             type="file"
             aria-label="Select single import file"
-            accept=".csv,.xlsx,.xls,.xlsb"
+            accept=".csv,.xlsx,.xlsb"
             onChange={onFileChange}
             className="hidden"
             data-testid="input-file"
@@ -112,7 +113,7 @@ export function SingleImportPanel({
             <div>
               <p className="text-foreground font-medium">Click or drag file here</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Supported: CSV, Excel (.xlsx, .xls, .xlsb)
+                Supported: CSV, XLSX, XLSB
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Maximum upload size per file: {maxUploadSizeLabel}
@@ -127,7 +128,9 @@ export function SingleImportPanel({
               <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-medium text-foreground">{file.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">File selected and ready for preview.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatImportUploadSize(file.size)} selected and ready for preview.
+                </p>
               </div>
               <button
                 type="button"

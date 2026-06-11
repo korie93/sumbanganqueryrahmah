@@ -1160,6 +1160,34 @@ test("runtime config accepts an explicit per-user import upload quota override",
   );
 });
 
+test("runtime config accepts IMPORT_MAX_FILE_SIZE_MB as the import upload limit", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      IMPORT_BODY_LIMIT: "5mb",
+      IMPORT_MAX_FILE_SIZE_MB: "50",
+      IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES: null,
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.bodyLimits.imports, "50mb");
+      assert.equal(runtimeModule.runtimeConfig.runtime.importPerUserActiveUploadBytes, 50 * 1024 * 1024);
+    },
+  );
+});
+
 test("runtime config keeps strict local development bootable when SMTP env vars are incomplete", async () => {
   await withEnv(
     {

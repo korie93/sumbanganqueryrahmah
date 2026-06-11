@@ -201,6 +201,7 @@ const runtimeEnvironmentShape = {
   PUBLIC_APP_URL: optionalEnvString("PUBLIC_APP_URL"),
   DEFAULT_BODY_LIMIT: optionalEnvString("DEFAULT_BODY_LIMIT", 64),
   IMPORT_BODY_LIMIT: optionalEnvString("IMPORT_BODY_LIMIT", 64),
+  IMPORT_MAX_FILE_SIZE_MB: optionalIntEnv("IMPORT_MAX_FILE_SIZE_MB", { min: 1, max: 512 }),
   IMPORT_CSV_MAX_ROWS: optionalIntEnv("IMPORT_CSV_MAX_ROWS", {
     min: 1,
     max: 1_000_000,

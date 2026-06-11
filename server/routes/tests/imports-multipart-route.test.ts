@@ -253,7 +253,7 @@ test("createImportsMultipartRoute rejects multipart requests without a file", as
     kind: "response",
     payload: {
       ok: false,
-      message: "Please select a CSV or Excel file to import.",
+      message: "Please select a CSV, XLSX, or XLSB file to import.",
     },
     statusCode: 400,
   });
@@ -279,7 +279,7 @@ test("createImportsMultipartRoute ignores file parts without filenames and still
     kind: "response",
     payload: {
       ok: false,
-      message: "Please select a CSV or Excel file to import.",
+      message: "Please select a CSV, XLSX, or XLSB file to import.",
     },
     statusCode: 400,
   });
@@ -329,7 +329,7 @@ test("createImportsMultipartRoute ignores file parts with unknown field names", 
     kind: "response",
     payload: {
       ok: false,
-      message: "Please select a CSV or Excel file to import.",
+      message: "Please select a CSV, XLSX, or XLSB file to import.",
     },
     statusCode: 400,
   });
@@ -355,9 +355,36 @@ test("createImportsMultipartRoute returns parser failures as safe client errors"
     kind: "response",
     payload: {
       ok: false,
-      message: "Please select a CSV or Excel file (.xlsx, .xls, .xlsb)",
+      message: "Please select a CSV, XLSX, or XLSB file.",
     },
     statusCode: 400,
+  });
+});
+
+test("createImportsMultipartRoute rejects oversized multipart files with the configured limit", async () => {
+  const handler = createImportsMultipartRoute(1024);
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "file",
+        filename: "customers.xlsx",
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        content: Buffer.alloc(2048),
+      },
+    ],
+    handler,
+  );
+
+  assert.deepEqual(result, {
+    kind: "response",
+    payload: {
+      ok: false,
+      message:
+        "The selected file is too large to import. Maximum upload size is 1 KB. Split it into smaller files or ask an administrator to raise the import upload limit.",
+    },
+    statusCode: 413,
   });
 });
 

@@ -11,8 +11,11 @@ import {
 } from "./runtime-env-schema";
 import { validateProductionConfig } from "./validate-env";
 import { resolveUploadsRootDir } from "./upload-paths";
-import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
-import { parseBodyLimitToBytes, DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "./body-limit";
+import {
+  DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+  parseBodyLimitToBytes,
+  resolveImportBodyLimit,
+} from "./body-limit";
 import {
   buildEphemeralSecret,
   normalizeHttpUrl,
@@ -139,8 +142,12 @@ const hstsHeaderConfig = resolveHstsHeaderConfig({
   }),
   preloadEnabled: readBoolean("HSTS_PRELOAD_ENABLED", false),
 });
+const resolvedImportBodyLimit = resolveImportBodyLimit(
+  readOptionalString("IMPORT_BODY_LIMIT"),
+  readOptionalString("IMPORT_MAX_FILE_SIZE_MB"),
+);
 const resolvedDefaultImportUploadLimitBytes = parseBodyLimitToBytes(
-  readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
+  resolvedImportBodyLimit,
   DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
 );
 
@@ -429,7 +436,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     },
     bodyLimits: {
       default: readString("DEFAULT_BODY_LIMIT", "2mb"),
-      imports: readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
+      imports: resolvedImportBodyLimit,
       collection: readString("COLLECTION_BODY_LIMIT", "8mb"),
     },
     corsAllowedOrigins,

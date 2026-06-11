@@ -1,8 +1,23 @@
 import { promises as fs } from "node:fs";
+import {
+  DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+  formatBodyLimitBytes,
+} from "../config/body-limit";
 import type { ParsedImportUploadResult } from "./import-upload-types";
 
-const SUPPORTED_IMPORT_UPLOAD_EXTENSION_PATTERN = /\.(csv|xlsx|xls|xlsb)$/i;
-export const IMPORT_UPLOAD_TOO_LARGE_MESSAGE = "The selected file is too large to import. Please split it into smaller files and try again.";
+const SUPPORTED_IMPORT_UPLOAD_EXTENSION_PATTERN = /\.(csv|xlsx|xlsb)$/i;
+export const UNSUPPORTED_IMPORT_UPLOAD_MESSAGE = "Please select a CSV, XLSX, or XLSB file.";
+
+export function buildImportUploadTooLargeMessage(
+  maxBytes: number = DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+) {
+  const safeMaxBytes = Number.isFinite(maxBytes) && maxBytes > 0
+    ? Math.floor(maxBytes)
+    : DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES;
+  return `The selected file is too large to import. Maximum upload size is ${formatBodyLimitBytes(safeMaxBytes)}. Split it into smaller files or ask an administrator to raise the import upload limit.`;
+}
+
+export const IMPORT_UPLOAD_TOO_LARGE_MESSAGE = buildImportUploadTooLargeMessage();
 
 export function isFileAccessError(error: unknown) {
   const code =
@@ -20,11 +35,11 @@ export function createUploadFileAccessError(): ParsedImportUploadResult {
   };
 }
 
-export function createUploadFileTooLargeError(): ParsedImportUploadResult {
+export function createUploadFileTooLargeError(maxBytes?: number): ParsedImportUploadResult {
   return {
     headers: [],
     rows: [],
-    error: IMPORT_UPLOAD_TOO_LARGE_MESSAGE,
+    error: buildImportUploadTooLargeMessage(maxBytes),
   };
 }
 
@@ -47,7 +62,7 @@ export async function validateUploadFileSize(
   }
 
   return stats.size > (maxBytes as number)
-    ? createUploadFileTooLargeError()
+    ? createUploadFileTooLargeError(maxBytes)
     : null;
 }
 

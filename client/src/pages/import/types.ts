@@ -6,6 +6,7 @@ export interface ImportProps {
 export interface BulkFileResult {
   id: string;
   filename: string;
+  sizeBytes?: number | undefined;
   status: "pending" | "processing" | "success" | "error";
   error?: string | undefined;
   rowCount?: number | undefined;

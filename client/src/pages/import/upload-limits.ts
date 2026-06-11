@@ -32,5 +32,5 @@ export function buildImportFileTooLargeMessage(
   importUploadLimitBytes?: number,
 ) {
   const limitBytes = resolveImportUploadLimitBytes(importUploadLimitBytes);
-  return `The selected file is ${formatImportUploadSize(fileSizeBytes)}, which exceeds the ${formatImportUploadSize(limitBytes)} upload limit. Split it into smaller files or increase the server upload limit.`;
+  return `The selected file is ${formatImportUploadSize(fileSizeBytes)}, which exceeds the ${formatImportUploadSize(limitBytes)} upload limit. Split it into smaller files or ask an administrator to raise the import upload limit.`;
 }

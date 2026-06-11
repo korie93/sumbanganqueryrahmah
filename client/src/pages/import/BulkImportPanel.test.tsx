@@ -25,3 +25,31 @@ test("BulkImportPanel exposes a programmatic label for the hidden bulk file inpu
   assert.match(markup, /id="bulk-import-file-input"/);
   assert.match(markup, /aria-label="Select bulk import files"/);
 });
+
+test("BulkImportPanel shows selected file sizes without reading file contents", () => {
+  const markup = renderToStaticMarkup(
+    createElement(BulkImportPanel, {
+      bulkFiles: [new File(["small"], "customers.csv")],
+      bulkInputRef: createRef<HTMLInputElement>(),
+      bulkProcessing: false,
+      bulkProgress: 0,
+      bulkResults: [
+        {
+          id: "customers.csv:5242880:1:0",
+          filename: "customers.csv",
+          sizeBytes: 5 * 1024 * 1024,
+          status: "pending",
+        },
+      ],
+      maxUploadSizeLabel: "10 MB",
+      onBulkDrop: () => undefined,
+      onBulkDragOver: () => undefined,
+      onBulkFileSelect: () => undefined,
+      onClearBulk: () => undefined,
+      onStartBulkImport: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /customers\.csv/);
+  assert.match(markup, /5\.0 MB/);
+});

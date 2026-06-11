@@ -368,7 +368,7 @@ export function createImportsMultipartRoute(
           });
       }
 
-      const failure = resolveImportMultipartFailure(error);
+      const failure = resolveImportMultipartFailure(error, undefined, safeMaxFileSizeBytes);
       fail(failure.statusCode, failure.message);
     });
 
@@ -378,7 +378,7 @@ export function createImportsMultipartRoute(
       }
 
       if (!fileTask) {
-        fail(400, "Please select a CSV or Excel file to import.");
+        fail(400, "Please select a CSV, XLSX, or XLSB file to import.");
         return;
       }
 
@@ -406,7 +406,7 @@ export function createImportsMultipartRoute(
           await cleanupPreparedMultipartImportUpload(responseLocals.multipartImportUpload as PreparedMultipartImportUpload);
           delete responseLocals.multipartImportUpload;
         }
-        const failure = resolveImportMultipartFailure(error);
+        const failure = resolveImportMultipartFailure(error, undefined, safeMaxFileSizeBytes);
         fail(failure.statusCode, failure.message);
       }
     });

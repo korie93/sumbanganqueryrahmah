@@ -5,7 +5,7 @@ import {
   isImportFileTooLarge,
 } from "@/pages/import/upload-limits";
 
-const SUPPORTED_IMPORT_FILE_PATTERN = /\.(csv|xlsx|xls|xlsb)$/i;
+const SUPPORTED_IMPORT_FILE_PATTERN = /\.(csv|xlsx|xlsb)$/i;
 
 export function isImportAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
@@ -25,6 +25,7 @@ export function buildBulkImportSelectionResults(
       ? {
           id,
           filename: selectedFile.name,
+          sizeBytes: selectedFile.size,
           status: "error",
           blocked: true,
           error: buildImportFileTooLargeMessage(selectedFile.size, importUploadLimitBytes),
@@ -32,6 +33,7 @@ export function buildBulkImportSelectionResults(
       : {
           id,
           filename: selectedFile.name,
+          sizeBytes: selectedFile.size,
           status: "pending",
         };
   });

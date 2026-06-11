@@ -9,7 +9,10 @@ import {
   parseImportUploadFile,
   stripImportUploadExtension,
 } from "../services/import-upload-parser";
-import { IMPORT_UPLOAD_TOO_LARGE_MESSAGE } from "../services/import-upload-file-utils";
+import {
+  buildImportUploadTooLargeMessage,
+  IMPORT_UPLOAD_TOO_LARGE_MESSAGE,
+} from "../services/import-upload-file-utils";
 
 export type MultipartImportBody = {
   name?: string;
@@ -36,6 +39,7 @@ const IMPORT_UPLOAD_TEMP_DIR_PREFIX = "sqr-import-upload-";
 type LimitAwareReadableStream = NodeJS.ReadableStream & {
   off?: (event: "limit", listener: () => void) => unknown;
   removeListener?: (event: "limit", listener: () => void) => unknown;
+  truncated?: boolean;
 };
 
 function removeLimitListener(file: NodeJS.ReadableStream, listener: () => void) {
@@ -81,7 +85,11 @@ export function normalizeImportName(rawValue: string | undefined, fallbackFilena
   return stripImportUploadExtension(fallbackFilename).slice(0, 160);
 }
 
-export function resolveImportMultipartFailure(error: unknown, fallbackMessage = "Failed to parse import upload.") {
+export function resolveImportMultipartFailure(
+  error: unknown,
+  fallbackMessage = "Failed to parse import upload.",
+  maxFileSizeBytes?: number,
+) {
   const message =
     error instanceof Error && error.message
       ? error.message
@@ -89,7 +97,7 @@ export function resolveImportMultipartFailure(error: unknown, fallbackMessage = 
 
   const statusCode = /too large|size limit/i.test(message) ? 413 : 400;
   return {
-    message: statusCode === 413 ? IMPORT_TOO_LARGE_MESSAGE : message,
+    message: statusCode === 413 ? buildImportUploadTooLargeMessage(maxFileSizeBytes) : message,
     statusCode,
   };
 }
@@ -114,7 +122,7 @@ export async function parseMultipartImportUpload(params: {
       fs.createWriteStream(tempFilePath, { flags: "wx" }),
     );
 
-    if (exceededSizeLimit) {
+    if (exceededSizeLimit || (file as LimitAwareReadableStream).truncated === true) {
       throw new Error(IMPORT_TOO_LARGE_MESSAGE);
     }
 
@@ -155,7 +163,7 @@ export async function prepareMultipartImportUpload(params: {
       fs.createWriteStream(tempFilePath, { flags: "wx" }),
     );
 
-    if (exceededSizeLimit) {
+    if (exceededSizeLimit || (file as LimitAwareReadableStream).truncated === true) {
       throw new Error(IMPORT_TOO_LARGE_MESSAGE);
     }
 

@@ -5,6 +5,7 @@ import { parseBodyLimitToBytes } from "../config/body-limit";
 import {
   isSupportedSpreadsheet,
   stripImportUploadExtension,
+  UNSUPPORTED_IMPORT_UPLOAD_MESSAGE,
 } from "./import-upload-file-utils";
 import type { ParsedImportUploadResult } from "./import-upload-types";
 export type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
@@ -20,7 +21,7 @@ export function parseImportUploadBuffer(filename: string, buffer: Buffer): Parse
   const maxBytes = resolveImportUploadMaxBytes();
   const maxRows = runtimeConfig.runtime.importCsvMaxRows;
   if (!isSupportedSpreadsheet(normalizedFilename)) {
-    return { headers: [], rows: [], error: "Please select a CSV or Excel file (.xlsx, .xls, .xlsb)" };
+    return { headers: [], rows: [], error: UNSUPPORTED_IMPORT_UPLOAD_MESSAGE };
   }
 
   if (normalizedFilename.endsWith(".csv")) {
@@ -35,7 +36,7 @@ export async function parseImportUploadFile(filename: string, filePath: string):
   const maxBytes = resolveImportUploadMaxBytes();
   const maxRows = runtimeConfig.runtime.importCsvMaxRows;
   if (!isSupportedSpreadsheet(normalizedFilename)) {
-    return { headers: [], rows: [], error: "Please select a CSV or Excel file (.xlsx, .xls, .xlsb)" };
+    return { headers: [], rows: [], error: UNSUPPORTED_IMPORT_UPLOAD_MESSAGE };
   }
 
   if (normalizedFilename.endsWith(".csv")) {

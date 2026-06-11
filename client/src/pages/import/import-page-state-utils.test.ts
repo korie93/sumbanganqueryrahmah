@@ -17,6 +17,7 @@ test("filterSupportedImportFiles keeps only supported spreadsheet uploads", () =
     createFile("alpha.csv"),
     createFile("beta.xlsx"),
     createFile("gamma.xlsb"),
+    createFile("legacy.xls"),
     createFile("notes.txt"),
   ];
 
@@ -36,8 +37,10 @@ test("buildBulkImportSelectionResults blocks oversized import files and keeps su
   assert.match(results[1].id, /^big\.csv:/);
   assert.equal(results[0].status, "pending");
   assert.equal(results[0].blocked, undefined);
+  assert.equal(results[0].sizeBytes, smallFile.size);
   assert.equal(results[1].status, "error");
   assert.equal(results[1].blocked, true);
+  assert.equal(results[1].sizeBytes, 10_000_000);
   assert.match(results[1].error ?? "", /upload limit/i);
 });
 

@@ -113,7 +113,7 @@ async function walkCsvFile(
   const sizeValidation = await validateUploadFileSize(filePath, options?.maxBytes);
   if (sizeValidation) {
     const sizeValidationError = sizeValidation.error
-      ?? createUploadFileTooLargeError().error
+      ?? createUploadFileTooLargeError(options?.maxBytes).error
       ?? "The selected file is too large to import. Please split it into smaller files and try again.";
     return {
       headers: [],
@@ -229,7 +229,7 @@ async function walkCsvFile(
 
 export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): ParsedImportUploadResult {
   if (Number.isFinite(options?.maxBytes) && (options?.maxBytes as number) > 0 && buffer.length > (options?.maxBytes as number)) {
-    return createUploadFileTooLargeError();
+    return createUploadFileTooLargeError(options?.maxBytes);
   }
 
   const maxRows = resolveCsvMaxRows(options);

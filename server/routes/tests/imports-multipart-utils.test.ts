@@ -23,12 +23,16 @@ test("normalizeImportName trims explicit names and falls back to the upload file
 
 test("resolveImportMultipartFailure upgrades size limit errors to the standard 413 payload", () => {
   assert.deepEqual(
-    resolveImportMultipartFailure(new Error("File too large for upload")),
+    resolveImportMultipartFailure(new Error("File too large for upload"), undefined, 5 * 1024 * 1024),
     {
-      message: IMPORT_TOO_LARGE_MESSAGE,
+      message: "The selected file is too large to import. Maximum upload size is 5.0 MB. Split it into smaller files or ask an administrator to raise the import upload limit.",
       statusCode: 413,
     },
   );
+});
+
+test("default multipart size errors include the standard import limit", () => {
+  assert.match(IMPORT_TOO_LARGE_MESSAGE, /96 MB/);
 });
 
 test("resolveImportMultipartFailure falls back cleanly for unknown error payloads", () => {
@@ -64,7 +68,7 @@ test("parseMultipartImportUpload rejects unsupported upload extensions", async (
         file,
         filename: "multipart-import.txt",
       }),
-    /csv or excel/i,
+    /csv, xlsx, or xlsb/i,
   );
 });
 

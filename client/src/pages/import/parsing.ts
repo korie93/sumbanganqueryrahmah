@@ -10,11 +10,11 @@ function createCsvRowLimitError() {
 }
 
 function isSupportedSpreadsheet(filename: string) {
-  return /\.(csv|xlsx|xls|xlsb)$/i.test(filename);
+  return /\.(csv|xlsx|xlsb)$/i.test(filename);
 }
 
 export function stripImportExtension(filename: string) {
-  return filename.replace(/\.(csv|xlsx|xls|xlsb)$/i, "");
+  return filename.replace(/\.(csv|xlsx|xlsb)$/i, "");
 }
 
 export function parseCsvLine(line: string): string[] {
@@ -190,7 +190,7 @@ async function parseExcelFile(file: File): Promise<ParsedPreviewResult> {
 export async function parseImportPreview(file: File): Promise<ParsedPreviewResult> {
   const fileName = file.name.toLowerCase();
   if (!isSupportedSpreadsheet(fileName)) {
-    return { headers: [], rows: [], error: "Please select a CSV or Excel file (.xlsx, .xls, .xlsb)" };
+    return { headers: [], rows: [], error: "Please select a CSV, XLSX, or XLSB file." };
   }
 
   return fileName.endsWith(".csv") ? parseCsvFile(file) : parseExcelFile(file);
@@ -199,7 +199,7 @@ export async function parseImportPreview(file: File): Promise<ParsedPreviewResul
 export async function parseImportFileForBulk(file: File): Promise<ParsedBulkResult> {
   const fileName = file.name.toLowerCase();
   if (!isSupportedSpreadsheet(fileName)) {
-    return { data: [], error: "Unsupported file format" };
+    return { data: [], error: "Please select a CSV, XLSX, or XLSB file." };
   }
 
   try {

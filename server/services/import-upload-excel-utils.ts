@@ -94,7 +94,7 @@ function parseWorkbookJsonData(jsonData: unknown[][], options?: ParseExcelOption
 
 export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): ParsedImportUploadResult {
   if (Number.isFinite(options?.maxBytes) && (options?.maxBytes as number) > 0 && buffer.length > (options?.maxBytes as number)) {
-    return createUploadFileTooLargeError();
+    return createUploadFileTooLargeError(options?.maxBytes);
   }
 
   let workbook;

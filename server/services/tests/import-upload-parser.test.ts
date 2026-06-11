@@ -54,7 +54,7 @@ test("parseImportUploadFile rejects unsupported upload extensions", async () => 
 
     const result = await parseImportUploadFile("customers.txt", filePath);
 
-    assert.match(String(result.error), /csv or excel/i);
+    assert.equal(result.error, "Please select a CSV, XLSX, or XLSB file.");
     assert.deepEqual(result.rows, []);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
