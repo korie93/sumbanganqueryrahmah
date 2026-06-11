@@ -8,6 +8,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ManagedAccountActionImpactList } from "@/pages/settings/account-management/ManagedAccountActionImpactList";
+import { buildManagedAccountActionImpact } from "@/pages/settings/account-management/managed-accounts-utils";
 import type { ManagedUser } from "@/pages/settings/types";
 
 type DeleteManagedAccountDialogProps = {
@@ -23,6 +25,8 @@ export function DeleteManagedAccountDialog({
   onClose,
   onDeleteUser,
 }: DeleteManagedAccountDialogProps) {
+  const deleteImpactItems = buildManagedAccountActionImpact("delete");
+
   return (
     <AlertDialog
       open={user !== null}
@@ -40,6 +44,7 @@ export function DeleteManagedAccountDialog({
             Existing login access will be removed immediately. Activity and audit history remain
             available.
           </AlertDialogDescription>
+          <ManagedAccountActionImpactList items={deleteImpactItems} />
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={Boolean(deletingManagedUserId)}>Cancel</AlertDialogCancel>

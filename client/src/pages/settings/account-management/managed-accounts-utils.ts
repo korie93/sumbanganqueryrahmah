@@ -1,4 +1,6 @@
 import type {
+  ManagedAccountActionImpactItem,
+  ManagedAccountActionType,
   ManagedAccountAttentionStatus,
   ManagedAccountAttentionSummary,
   ManagedAccountAttentionSummaryItem,
@@ -273,4 +275,104 @@ export function buildManagedAccountTimeline(user: ManagedUser): ManagedAccountTi
     if (!right.timestamp) return -1;
     return Date.parse(right.timestamp) - Date.parse(left.timestamp);
   });
+}
+
+export function resolveManagedAccountBanAction(
+  user: Pick<ManagedUser, "isBanned"> | null | undefined,
+): Extract<ManagedAccountActionType, "ban" | "unban"> {
+  return user?.isBanned ? "unban" : "ban";
+}
+
+export function buildManagedAccountActionImpact(
+  action: ManagedAccountActionType,
+): ManagedAccountActionImpactItem[] {
+  if (action === "reset-password") {
+    return [
+      {
+        id: "reset-email",
+        label: "Reset email is sent",
+        description: "The user receives a new password reset link through the configured mail flow.",
+        tone: "neutral",
+      },
+      {
+        id: "reset-user-action",
+        label: "User action is required",
+        description: "The password changes only after the user opens the link and chooses a new password.",
+        tone: "warning",
+      },
+      {
+        id: "reset-history",
+        label: "Audit history stays intact",
+        description: "Existing login and account activity records remain available for review.",
+        tone: "success",
+      },
+    ];
+  }
+
+  if (action === "unban") {
+    return [
+      {
+        id: "unban-sign-in",
+        label: "Ban flag is removed",
+        description: "The account can sign in again only if no other lock or disabled state blocks it.",
+        tone: "success",
+      },
+      {
+        id: "unban-controls",
+        label: "Other restrictions still apply",
+        description: "Locked, disabled, suspended, or pending activation states are not changed by unban.",
+        tone: "warning",
+      },
+      {
+        id: "unban-history",
+        label: "Audit history stays intact",
+        description: "Previous ban and account activity records remain available.",
+        tone: "neutral",
+      },
+    ];
+  }
+
+  if (action === "ban") {
+    return [
+      {
+        id: "ban-access",
+        label: "Future sign-ins are blocked",
+        description: "The account cannot authenticate again until a superuser unbans it.",
+        tone: "danger",
+      },
+      {
+        id: "ban-data",
+        label: "Account data is retained",
+        description: "Profile details and audit history remain available while access is blocked.",
+        tone: "neutral",
+      },
+      {
+        id: "ban-reversible",
+        label: "Action is reversible",
+        description: "A superuser can unban the account later if the restriction is no longer needed.",
+        tone: "success",
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "delete-access",
+      label: "Login access is removed",
+      description: "The managed account is deleted and can no longer be used to sign in.",
+      tone: "danger",
+    },
+    {
+      id: "delete-history",
+      label: "Audit history remains",
+      description: "Activity records stay available for compliance and investigation workflows.",
+      tone: "neutral",
+    },
+    {
+      id: "delete-recreate",
+      label: "Recreate if access is needed again",
+      description: "A new managed account must be created if the user needs future workspace access.",
+      tone: "warning",
+    },
+  ];
 }

@@ -6,6 +6,7 @@ import {
   MANAGED_ACCOUNT_STATUS_LABELS,
 } from "@/pages/settings/account-management/managed-accounts-shared";
 import {
+  buildManagedAccountActionImpact,
   buildManagedAccountAttentionSummary,
   buildManagedAccountDetailFacts,
   buildManagedAccountRiskSummary,
@@ -15,6 +16,7 @@ import {
   getManagedAccountAttentionStatus,
   normalizeManagedAccountsRoleFilter,
   normalizeManagedAccountsStatusFilter,
+  resolveManagedAccountBanAction,
 } from "@/pages/settings/account-management/managed-accounts-utils";
 
 function createManagedUser(overrides: Partial<ManagedUser> = {}): ManagedUser {
@@ -297,5 +299,51 @@ test("buildManagedAccountTimeline keeps untimed action flags after timestamped e
   assert.deepEqual(
     timeline.map((item) => item.id),
     ["created", "activation-pending", "password-change-required"],
+  );
+});
+
+test("resolveManagedAccountBanAction maps current ban state to the next action", () => {
+  assert.equal(resolveManagedAccountBanAction(createManagedUser({ isBanned: false })), "ban");
+  assert.equal(resolveManagedAccountBanAction(createManagedUser({ isBanned: true })), "unban");
+  assert.equal(resolveManagedAccountBanAction(null), "ban");
+});
+
+test("buildManagedAccountActionImpact explains reset and ban consequences", () => {
+  assert.deepEqual(
+    buildManagedAccountActionImpact("reset-password").map(({ id, tone }) => ({ id, tone })),
+    [
+      { id: "reset-email", tone: "neutral" },
+      { id: "reset-user-action", tone: "warning" },
+      { id: "reset-history", tone: "success" },
+    ],
+  );
+
+  assert.deepEqual(
+    buildManagedAccountActionImpact("ban").map(({ id, tone }) => ({ id, tone })),
+    [
+      { id: "ban-access", tone: "danger" },
+      { id: "ban-data", tone: "neutral" },
+      { id: "ban-reversible", tone: "success" },
+    ],
+  );
+});
+
+test("buildManagedAccountActionImpact explains unban and delete consequences", () => {
+  assert.deepEqual(
+    buildManagedAccountActionImpact("unban").map(({ id, tone }) => ({ id, tone })),
+    [
+      { id: "unban-sign-in", tone: "success" },
+      { id: "unban-controls", tone: "warning" },
+      { id: "unban-history", tone: "neutral" },
+    ],
+  );
+
+  assert.deepEqual(
+    buildManagedAccountActionImpact("delete").map(({ id, tone }) => ({ id, tone })),
+    [
+      { id: "delete-access", tone: "danger" },
+      { id: "delete-history", tone: "neutral" },
+      { id: "delete-recreate", tone: "warning" },
+    ],
   );
 });

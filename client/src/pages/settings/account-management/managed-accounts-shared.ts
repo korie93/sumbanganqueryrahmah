@@ -46,6 +46,15 @@ export type ManagedAccountTimelineItem = {
   timestamp: string | null;
 };
 
+export type ManagedAccountActionType = "ban" | "delete" | "reset-password" | "unban";
+
+export type ManagedAccountActionImpactItem = {
+  description: string;
+  id: string;
+  label: string;
+  tone: "danger" | "neutral" | "success" | "warning";
+};
+
 export type ManagedAccountAttentionSummaryItem = {
   status: ManagedAccountAttentionStatus;
   label: string;

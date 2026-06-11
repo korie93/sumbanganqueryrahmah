@@ -8,6 +8,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ManagedAccountActionImpactList } from "@/pages/settings/account-management/ManagedAccountActionImpactList";
+import {
+  buildManagedAccountActionImpact,
+  resolveManagedAccountBanAction,
+} from "@/pages/settings/account-management/managed-accounts-utils";
 import type { ManagedUser } from "@/pages/settings/types";
 
 type ManagedAccountActionDialogsProps = {
@@ -27,7 +32,10 @@ export function ManagedAccountActionDialogs({
   onConfirmBanToggle,
   onConfirmResetPassword,
 }: ManagedAccountActionDialogsProps) {
-  const nextBanAction = banToggleUser?.isBanned ? "Unban" : "Ban";
+  const banAction = resolveManagedAccountBanAction(banToggleUser);
+  const nextBanAction = banAction === "unban" ? "Unban" : "Ban";
+  const resetImpactItems = buildManagedAccountActionImpact("reset-password");
+  const banImpactItems = buildManagedAccountActionImpact(banAction);
 
   return (
     <>
@@ -47,6 +55,7 @@ export function ManagedAccountActionDialogs({
               <span className="font-medium">{resetPasswordUser?.username || "this user"}</span>?
               The user will need to follow the reset link before choosing a new password.
             </AlertDialogDescription>
+            <ManagedAccountActionImpactList items={resetImpactItems} />
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -82,6 +91,7 @@ export function ManagedAccountActionDialogs({
                 ? " This will restore the account's ability to sign in if the rest of the account state allows it."
                 : " This will block the account from signing in until it is unbanned."}
             </AlertDialogDescription>
+            <ManagedAccountActionImpactList items={banImpactItems} />
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
