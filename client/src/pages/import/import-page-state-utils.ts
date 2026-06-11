@@ -1,6 +1,10 @@
 import { stripImportExtension } from "@/pages/import/parsing";
 import type { BulkFileResult } from "@/pages/import/types";
 import {
+  buildImportMutationFingerprint,
+  createImportMutationIdempotencyKey,
+} from "@/lib/api/imports";
+import {
   buildImportFileTooLargeMessage,
   isImportFileTooLarge,
 } from "@/pages/import/upload-limits";
@@ -21,6 +25,9 @@ export function buildBulkImportSelectionResults(
 ): BulkFileResult[] {
   return files.map((selectedFile, index) => {
     const id = `${selectedFile.name}:${selectedFile.size}:${selectedFile.lastModified}:${index}`;
+    const importName = stripImportExtension(selectedFile.name);
+    const idempotencyKey = createImportMutationIdempotencyKey();
+    const idempotencyFingerprint = buildImportMutationFingerprint(importName, selectedFile);
     return isImportFileTooLarge(selectedFile, importUploadLimitBytes)
       ? {
           id,
@@ -29,14 +36,26 @@ export function buildBulkImportSelectionResults(
           status: "error",
           blocked: true,
           error: buildImportFileTooLargeMessage(selectedFile.size, importUploadLimitBytes),
+          idempotencyKey,
+          idempotencyFingerprint,
         }
       : {
           id,
           filename: selectedFile.name,
           sizeBytes: selectedFile.size,
           status: "pending",
+          idempotencyKey,
+          idempotencyFingerprint,
         };
   });
+}
+
+export function getRetryableBulkImportIndexes(results: BulkFileResult[]) {
+  return results.flatMap((result, index) => (
+    result.status === "pending" || (result.status === "error" && !result.blocked)
+      ? [index]
+      : []
+  ));
 }
 
 export function resolveNextImportName(currentImportName: string, filename: string) {

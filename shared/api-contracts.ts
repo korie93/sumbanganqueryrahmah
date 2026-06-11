@@ -83,6 +83,8 @@ export const importListItemSchema = importRecordSchema.extend({
   rowCount: nonNegativeIntSchema,
 });
 
+export const importMutationResultSchema = importListItemSchema;
+
 export const importsListResponseSchema = z.object({
   imports: z.array(importListItemSchema),
   pagination: cursorPaginationMetaSchema,

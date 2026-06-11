@@ -53,3 +53,41 @@ test("BulkImportPanel shows selected file sizes without reading file contents", 
   assert.match(markup, /customers\.csv/);
   assert.match(markup, /5\.0 MB/);
 });
+
+test("BulkImportPanel offers retry only when completed files include retryable failures", () => {
+  const markup = renderToStaticMarkup(
+    createElement(BulkImportPanel, {
+      bulkFiles: [
+        new File(["ok"], "success.csv"),
+        new File(["retry"], "failed.csv"),
+      ],
+      bulkInputRef: createRef<HTMLInputElement>(),
+      bulkProcessing: false,
+      bulkProgress: 100,
+      bulkResults: [
+        {
+          id: "success",
+          filename: "success.csv",
+          rowCount: 2,
+          status: "success",
+        },
+        {
+          id: "failed",
+          filename: "failed.csv",
+          error: "Temporary server error",
+          status: "error",
+        },
+      ],
+      maxUploadSizeLabel: "10 MB",
+      onBulkDrop: () => undefined,
+      onBulkDragOver: () => undefined,
+      onBulkFileSelect: () => undefined,
+      onClearBulk: () => undefined,
+      onStartBulkImport: () => undefined,
+    }),
+  );
+
+  assert.match(markup, />Retry Failed</);
+  assert.match(markup, /2 rows imported/);
+  assert.doesNotMatch(markup, />Start Import</);
+});

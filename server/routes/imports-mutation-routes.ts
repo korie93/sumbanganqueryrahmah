@@ -6,6 +6,7 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     app,
     importsController,
     authenticateToken,
+    importsIdempotencyMiddleware,
     importsUploadRateLimiter,
     requireRole,
     requireTabAccess,
@@ -18,6 +19,7 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("import"),
     importsUploadRateLimiter,
+    importsIdempotencyMiddleware,
     importsMultipartRoute,
     asyncHandler(importsController.createImport),
   );

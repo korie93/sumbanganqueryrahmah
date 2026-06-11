@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildBulkImportSelectionResults,
   filterSupportedImportFiles,
+  getRetryableBulkImportIndexes,
   resolveNextImportName,
   shouldSaveSingleImportFromOriginalFile,
   summarizeBulkImportResults,
@@ -38,10 +39,30 @@ test("buildBulkImportSelectionResults blocks oversized import files and keeps su
   assert.equal(results[0].status, "pending");
   assert.equal(results[0].blocked, undefined);
   assert.equal(results[0].sizeBytes, smallFile.size);
+  assert.match(results[0].idempotencyKey ?? "", /^import-/);
+  assert.doesNotThrow(() => JSON.parse(results[0].idempotencyFingerprint ?? ""));
   assert.equal(results[1].status, "error");
   assert.equal(results[1].blocked, true);
   assert.equal(results[1].sizeBytes, 10_000_000);
   assert.match(results[1].error ?? "", /upload limit/i);
+});
+
+test("getRetryableBulkImportIndexes excludes successful and blocked files", () => {
+  assert.deepEqual(
+    getRetryableBulkImportIndexes([
+      { id: "pending", filename: "pending.csv", status: "pending" },
+      { id: "success", filename: "success.csv", status: "success" },
+      { id: "failed", filename: "failed.csv", status: "error", error: "network" },
+      {
+        id: "blocked",
+        filename: "blocked.csv",
+        status: "error",
+        blocked: true,
+        error: "too large",
+      },
+    ]),
+    [0, 2],
+  );
 });
 
 test("resolveNextImportName preserves manual names and otherwise strips file extensions", () => {

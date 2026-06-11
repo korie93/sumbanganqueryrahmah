@@ -98,7 +98,10 @@ export class ImportsServiceMutationOperations {
       });
     }
 
-    return importRecord;
+    return {
+      ...importRecord,
+      rowCount: params.dataRows.length,
+    };
   }
 
   async createImportFromCsvFile(params: CreateImportFromCsvFileInput) {
@@ -171,7 +174,10 @@ export class ImportsServiceMutationOperations {
       });
     }
 
-    return importRecord;
+    return {
+      ...importRecord,
+      rowCount: parsed.rowCount,
+    };
   }
 
   async renameImport(importId: string, name: string, updatedBy?: string) {

@@ -1,8 +1,10 @@
 import { apiRequest } from "../api-client";
+import { createClientRandomId } from "../secure-id";
 import { parseApiJson } from "./contract";
 import {
   deleteImportResponseSchema,
   importDataPageResponseSchema,
+  importMutationResultSchema,
   importRecordSchema,
   importsListResponseSchema,
 } from "@shared/api-contracts";
@@ -18,6 +20,12 @@ type ImportRequestOptions = {
   signal?: AbortSignal | undefined;
 };
 
+type ImportMutationRequestOptions = ImportRequestOptions & {
+  headers?: Record<string, string>;
+  idempotencyFingerprint?: string;
+  idempotencyKey?: string;
+};
+
 export type ImportDataColumnFilter = {
   column: string;
   operator: "contains" | "equals" | "startsWith" | "endsWith" | "notEquals";
@@ -27,6 +35,60 @@ export type ImportDataColumnFilter = {
 type ImportDataRequestOptions = ImportRequestOptions & {
   columnFilters?: ImportDataColumnFilter[] | undefined;
 };
+
+function hashImportFingerprintInput(input: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= BigInt(input.charCodeAt(index));
+    hash = (hash * prime) & mask;
+  }
+
+  return hash.toString(16).padStart(16, "0");
+}
+
+function buildImportMutationHeaders(options?: ImportMutationRequestOptions) {
+  const headers = { ...(options?.headers ?? {}) };
+  const idempotencyKey = String(options?.idempotencyKey || "").trim();
+  const idempotencyFingerprint = String(options?.idempotencyFingerprint || "").trim();
+
+  if (idempotencyKey) {
+    headers["x-idempotency-key"] = idempotencyKey;
+  }
+  if (idempotencyFingerprint) {
+    headers["x-idempotency-fingerprint"] = idempotencyFingerprint;
+  }
+
+  return headers;
+}
+
+export function createImportMutationIdempotencyKey() {
+  return createClientRandomId("import");
+}
+
+export function buildImportMutationFingerprint(
+  name: string,
+  file: Pick<File, "lastModified" | "name" | "size" | "type">,
+) {
+  const canonicalFingerprint = JSON.stringify({
+    file: {
+      lastModified: Number(file.lastModified || 0),
+      name: String(file.name || ""),
+      size: Number(file.size || 0),
+      type: String(file.type || ""),
+    },
+    name: String(name || "").trim(),
+    operation: "create",
+  });
+
+  return JSON.stringify({
+    algorithm: "fnv1a64",
+    hash: hashImportFingerprintInput(canonicalFingerprint),
+    version: 1,
+  });
+}
 
 export async function getImports(options?: ImportRequestOptions) {
   const params = new URLSearchParams();
@@ -46,21 +108,24 @@ export async function createImport(
   name: string,
   filename: string,
   data: Array<Record<string, unknown>>,
-  options?: ImportRequestOptions,
+  options?: ImportMutationRequestOptions,
 ) {
   const response = await apiRequest(
     "POST",
     "/api/imports",
     { name, filename, data },
-    options,
+    {
+      ...options,
+      headers: buildImportMutationHeaders(options),
+    },
   );
-  return parseApiJson(response, importRecordSchema, "/api/imports");
+  return parseApiJson(response, importMutationResultSchema, "/api/imports");
 }
 
 export async function createImportFromFile(
   name: string,
   file: File,
-  options?: ImportRequestOptions,
+  options?: ImportMutationRequestOptions,
 ) {
   const formData = new FormData();
   formData.set("name", name);
@@ -72,11 +137,12 @@ export async function createImportFromFile(
     formData,
     {
       ...options,
+      headers: buildImportMutationHeaders(options),
       retry: false,
       timeoutMs: IMPORT_UPLOAD_TIMEOUT_MS,
     },
   );
-  return parseApiJson(response, importRecordSchema, "/api/imports");
+  return parseApiJson(response, importMutationResultSchema, "/api/imports");
 }
 
 export async function deleteImport(id: string, options?: ImportRequestOptions) {

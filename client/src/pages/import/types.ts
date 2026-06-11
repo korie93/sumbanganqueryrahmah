@@ -11,6 +11,8 @@ export interface BulkFileResult {
   error?: string | undefined;
   rowCount?: number | undefined;
   blocked?: boolean | undefined;
+  idempotencyKey?: string | undefined;
+  idempotencyFingerprint?: string | undefined;
 }
 
 export type ImportRow = Record<string, string>;

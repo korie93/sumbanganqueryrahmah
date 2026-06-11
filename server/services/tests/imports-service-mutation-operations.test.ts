@@ -119,6 +119,7 @@ test("createImportFromCsvFile streams rows and records the inspected row count i
     });
 
     assert.equal(created.name, "April Import");
+    assert.equal(created.rowCount, 2);
     assert.deepEqual(createdRows, [
       { amount: "10", name: "Alice" },
       { amount: "20", name: "Bob" },
@@ -301,7 +302,7 @@ test("createImport writes legacy JSON rows with bounded multi-row inserts", asyn
       },
     }));
 
-    await operations.createImport({
+    const created = await operations.createImport({
       name: "Legacy JSON Import",
       filename: "legacy.json",
       dataRows: [
@@ -313,6 +314,7 @@ test("createImport writes legacy JSON rows with bounded multi-row inserts", asyn
     });
 
     assert.deepEqual(batchSizes, [2, 1]);
+    assert.equal(created.rowCount, 3);
     assert.deepEqual(storedRows, [
       { name: "Alice" },
       { name: "Bob" },

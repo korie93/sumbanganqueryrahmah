@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createImport, createImportFromFile } from "@/lib/api";
+import {
+  buildImportMutationFingerprint,
+  createImport,
+  createImportFromFile,
+  createImportMutationIdempotencyKey,
+} from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -37,6 +42,10 @@ export function useSingleImportState({
   const singleParseRequestIdRef = useRef(0);
   const singleSaveInFlightRef = useRef(false);
   const singleSaveAbortControllerRef = useRef<AbortController | null>(null);
+  const singleSaveMutationIntentRef = useRef<{
+    fingerprint: string;
+    key: string;
+  } | null>(null);
   const isMountedRef = useRef(true);
   const { toast } = useToast();
 
@@ -47,6 +56,7 @@ export function useSingleImportState({
     setPreviewDeferred(false);
     setImportName("");
     setError("");
+    singleSaveMutationIntentRef.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -155,7 +165,18 @@ export function useSingleImportState({
         selectedFile
         && shouldSaveSingleImportFromOriginalFile(selectedFile, rowCount, previewDeferred)
       ) {
-        await createImportFromFile(savedName, selectedFile, { signal: controller.signal });
+        const fingerprint = buildImportMutationFingerprint(savedName, selectedFile);
+        if (singleSaveMutationIntentRef.current?.fingerprint !== fingerprint) {
+          singleSaveMutationIntentRef.current = {
+            fingerprint,
+            key: createImportMutationIdempotencyKey(),
+          };
+        }
+        await createImportFromFile(savedName, selectedFile, {
+          idempotencyFingerprint: singleSaveMutationIntentRef.current.fingerprint,
+          idempotencyKey: singleSaveMutationIntentRef.current.key,
+          signal: controller.signal,
+        });
       } else {
         await createImport(
           savedName,

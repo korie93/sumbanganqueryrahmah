@@ -244,6 +244,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       isDbProtected: getDbProtection,
       analysisRequestTimeoutMs: environmentRuntimeConfig.runtime.importAnalysisTimeoutMs,
     }),
+    mutationIdempotencyStorage: storage,
     authenticateToken,
     requireRole,
     requireTabAccess,

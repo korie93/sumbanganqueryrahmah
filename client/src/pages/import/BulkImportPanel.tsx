@@ -1,4 +1,4 @@
-import { CheckCircle2, FileSpreadsheet, FolderOpen, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, FolderOpen, RotateCcw, Upload, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -33,9 +33,13 @@ export function BulkImportPanel({
   onStartBulkImport,
 }: BulkImportPanelProps) {
   const blockedCount = bulkResults.filter((result) => result.blocked).length;
-  const hasImportableFiles = bulkResults.some((result) => !result.blocked);
-  const failedCount = bulkResults.filter((result) => result.status === "error").length;
+  const pendingCount = bulkResults.filter((result) => result.status === "pending").length;
+  const failedCount = bulkResults.filter(
+    (result) => result.status === "error" && !result.blocked,
+  ).length;
   const successCount = bulkResults.filter((result) => result.status === "success").length;
+  const hasRetryableFiles = pendingCount > 0 || failedCount > 0;
+  const isRetryMode = pendingCount === 0 && failedCount > 0;
   const roundedBulkProgress = Math.round(bulkProgress);
   const bulkBusyProps = bulkProcessing ? { "aria-busy": "true" as const } : {};
   const bulkDropzoneDisabledProps = bulkProcessing
@@ -131,7 +135,7 @@ export function BulkImportPanel({
               <Button variant="outline" onClick={onClearBulk} disabled={bulkProcessing} data-testid="button-clear-bulk">
                 Clear All
               </Button>
-              <Button onClick={onStartBulkImport} disabled={bulkProcessing || !hasImportableFiles} data-testid="button-start-bulk">
+              <Button onClick={onStartBulkImport} disabled={bulkProcessing || !hasRetryableFiles} data-testid="button-start-bulk">
                 {bulkProcessing ? (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
@@ -139,8 +143,8 @@ export function BulkImportPanel({
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <Upload className="w-4 h-4" />
-                    Start Import
+                    {isRetryMode ? <RotateCcw className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
+                    {isRetryMode ? "Retry Failed" : hasRetryableFiles ? "Start Import" : "Import Complete"}
                   </div>
                 )}
               </Button>
@@ -208,7 +212,7 @@ export function BulkImportPanel({
                             {formatImportUploadSize(result.sizeBytes)}
                           </p>
                         ) : null}
-                        {result.status === "success" && result.rowCount ? (
+                        {result.status === "success" && result.rowCount !== undefined ? (
                           <p className="text-xs text-green-600 dark:text-green-400">{result.rowCount} rows imported</p>
                         ) : null}
                         {result.status === "error" && result.error ? (

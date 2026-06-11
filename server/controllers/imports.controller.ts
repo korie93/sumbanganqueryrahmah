@@ -8,6 +8,10 @@ import {
   cleanupPreparedMultipartImportUpload,
   type PreparedMultipartImportUpload,
 } from "../routes/imports-multipart-utils";
+import {
+  completeImportMutationIdempotency,
+  releaseImportMutationIdempotency,
+} from "../routes/imports-idempotency";
 import { ImportUploadValidationError } from "../services/import-upload-file-utils";
 import type { ImportDataColumnFilter, ImportsService } from "../services/imports.service";
 
@@ -143,6 +147,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
           createdBy: req.user?.username,
         });
 
+        await completeImportMutationIdempotency(res, importRecord);
         return res.json(importRecord);
       }
 
@@ -159,8 +164,10 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         createdBy: req.user?.username,
       });
 
+      await completeImportMutationIdempotency(res, importRecord);
       return res.json(importRecord);
     } catch (error) {
+      await releaseImportMutationIdempotency(res);
       if (error instanceof ImportUploadValidationError) {
         throw badRequest(error.message, error.code);
       }

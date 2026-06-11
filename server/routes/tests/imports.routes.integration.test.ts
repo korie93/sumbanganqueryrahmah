@@ -5,6 +5,7 @@ import type { DataRow, Import } from "../../../shared/schema-postgres";
 import {
   deleteImportResponseSchema,
   importDataPageResponseSchema,
+  importMutationResultSchema,
   importRecordSchema,
   importsListResponseSchema,
 } from "../../../shared/api-contracts";
@@ -143,6 +144,12 @@ function createImportsRouteHarness(options?: {
     });
 
   const importRecords = new Map<string, Import>();
+  const mutationIdempotencyRows = new Map<string, {
+    fingerprint: string | null;
+    responseBody?: unknown;
+    responseStatus?: number;
+    state: "pending" | "completed";
+  }>();
   const seedImport: Import = {
     id: "import-1",
     name: "Customer Import",
@@ -242,6 +249,65 @@ function createImportsRouteHarness(options?: {
   };
 
   const storage = {
+    acquireMutationIdempotency: async (params: {
+      scope: string;
+      actor: string;
+      idempotencyKey: string;
+      requestFingerprint?: string | null;
+    }) => {
+      const key = `${params.scope}::${params.actor}::${params.idempotencyKey}`;
+      const existing = mutationIdempotencyRows.get(key);
+      if (!existing) {
+        mutationIdempotencyRows.set(key, {
+          fingerprint: params.requestFingerprint ?? null,
+          state: "pending",
+        });
+        return { status: "acquired" as const };
+      }
+      if (
+        params.requestFingerprint
+        && existing.fingerprint
+        && params.requestFingerprint !== existing.fingerprint
+      ) {
+        return { status: "payload_mismatch" as const };
+      }
+      if (existing.state === "completed" && existing.responseStatus) {
+        return {
+          status: "replay" as const,
+          responseBody: existing.responseBody,
+          responseStatus: existing.responseStatus,
+        };
+      }
+      return { status: "in_progress" as const };
+    },
+    completeMutationIdempotency: async (params: {
+      scope: string;
+      actor: string;
+      idempotencyKey: string;
+      responseBody: unknown;
+      responseStatus: number;
+    }) => {
+      const key = `${params.scope}::${params.actor}::${params.idempotencyKey}`;
+      const existing = mutationIdempotencyRows.get(key);
+      if (existing) {
+        mutationIdempotencyRows.set(key, {
+          ...existing,
+          responseBody: params.responseBody,
+          responseStatus: params.responseStatus,
+          state: "completed",
+        });
+      }
+    },
+    releaseMutationIdempotency: async (params: {
+      scope: string;
+      actor: string;
+      idempotencyKey: string;
+    }) => {
+      const key = `${params.scope}::${params.actor}::${params.idempotencyKey}`;
+      if (mutationIdempotencyRows.get(key)?.state === "pending") {
+        mutationIdempotencyRows.delete(key);
+      }
+    },
     searchDataRows: async (params: {
       importId: string;
       search?: string | null;
@@ -413,6 +479,7 @@ function createImportsRouteHarness(options?: {
       isDbProtected: () => options?.isDbProtected ?? false,
       analysisRequestTimeoutMs: options?.analysisRequestTimeoutMs,
       }),
+      mutationIdempotencyStorage: storage,
       authenticateToken: createTestAuthenticateToken({
         userId: "admin-1",
         username: "admin.user",
@@ -666,9 +733,10 @@ test("POST /api/imports creates an import, writes rows, and audits the import", 
 
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.doesNotThrow(() => importRecordSchema.parse(payload));
+    assert.doesNotThrow(() => importMutationResultSchema.parse(payload));
     assert.equal(payload.name, "March Import");
     assert.equal(payload.filename, "march.csv");
+    assert.equal(payload.rowCount, 25);
     assert.equal(createImportCalls.length, 1);
     assert.equal(createImportCalls[0].createdBy, "admin.user");
     assert.equal(createDataRowCalls.length, 25);
@@ -707,9 +775,10 @@ test("POST /api/imports accepts multipart file uploads for bulk-friendly imports
 
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.doesNotThrow(() => importRecordSchema.parse(payload));
+    assert.doesNotThrow(() => importMutationResultSchema.parse(payload));
     assert.equal(payload.name, "Multipart Import");
     assert.equal(payload.filename, "multipart-import.csv");
+    assert.equal(payload.rowCount, 2);
     assert.equal(createImportCalls.length, 1);
     assert.equal(createImportCalls[0].name, "Multipart Import");
     assert.equal(createDataRowCalls.length, 2);
@@ -773,6 +842,130 @@ test("POST /api/imports accepts multipart Excel uploads without leaking temp fil
     });
     assert.equal(auditLogs.length, 1);
     assert.match(String(auditLogs[0].details), /Imported 2 rows from multipart-import\.xlsx/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports replays a completed idempotent import without creating duplicate rows", async () => {
+  const { app, createImportCalls, createDataRowCalls, auditLogs } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  const headers = {
+    "Content-Type": "application/json",
+    "x-idempotency-key": "import-create-1",
+    "x-idempotency-fingerprint": JSON.stringify({ hash: "same-file", version: 1 }),
+  };
+  const body = JSON.stringify({
+    name: "Idempotent Import",
+    filename: "idempotent.csv",
+    data: [{ customer: "Alice" }, { customer: "Bob" }],
+  });
+
+  try {
+    const firstResponse = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      headers,
+      body,
+    });
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
+    const firstPayload = await firstResponse.json();
+    const secondPayload = await secondResponse.json();
+    assert.deepEqual(secondPayload, firstPayload);
+    assert.equal(firstPayload.rowCount, 2);
+    assert.equal(createImportCalls.length, 1);
+    assert.equal(createDataRowCalls.length, 2);
+    assert.equal(auditLogs.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports rejects reuse of an idempotency key for a different file fingerprint", async () => {
+  const { app, createImportCalls, createDataRowCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  const commonHeaders = {
+    "Content-Type": "application/json",
+    "x-idempotency-key": "import-create-2",
+  };
+
+  try {
+    const firstResponse = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      headers: {
+        ...commonHeaders,
+        "x-idempotency-fingerprint": JSON.stringify({ hash: "file-a", version: 1 }),
+      },
+      body: JSON.stringify({
+        name: "Import A",
+        filename: "a.csv",
+        data: [{ customer: "Alice" }],
+      }),
+    });
+    const secondResponse = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      headers: {
+        ...commonHeaders,
+        "x-idempotency-fingerprint": JSON.stringify({ hash: "file-b", version: 1 }),
+      },
+      body: JSON.stringify({
+        name: "Import B",
+        filename: "b.csv",
+        data: [{ customer: "Bob" }],
+      }),
+    });
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 409);
+    const secondPayload = await secondResponse.json();
+    assert.equal(secondPayload.error.code, ERROR_CODES.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH);
+    assert.equal(createImportCalls.length, 1);
+    assert.equal(createDataRowCalls.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports releases a failed idempotency reservation so the same file can be retried", async () => {
+  const { app, createImportCalls, createDataRowCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  const headers = {
+    "Content-Type": "application/json",
+    "x-idempotency-key": "import-create-retry",
+    "x-idempotency-fingerprint": JSON.stringify({ hash: "retry-file", version: 1 }),
+  };
+
+  try {
+    const failedResponse = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "Retry Import",
+        filename: "retry.csv",
+        data: [],
+      }),
+    });
+    const retryResponse = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "Retry Import",
+        filename: "retry.csv",
+        data: [{ customer: "Recovered" }],
+      }),
+    });
+
+    assert.equal(failedResponse.status, 400);
+    assert.equal(retryResponse.status, 200);
+    assert.equal((await retryResponse.json()).rowCount, 1);
+    assert.equal(createImportCalls.length, 1);
+    assert.equal(createDataRowCalls.length, 1);
   } finally {
     await stopTestServer(server);
   }

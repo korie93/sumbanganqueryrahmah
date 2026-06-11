@@ -459,6 +459,11 @@ function createImportsPermissionHarness() {
         return res.json({ success: true });
       },
     } as never,
+    mutationIdempotencyStorage: {
+      acquireMutationIdempotency: async () => ({ status: "acquired" as const }),
+      completeMutationIdempotency: async () => undefined,
+      releaseMutationIdempotency: async () => undefined,
+    },
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),

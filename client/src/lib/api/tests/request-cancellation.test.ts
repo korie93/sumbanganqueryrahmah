@@ -37,7 +37,16 @@ import {
   validateActivationToken,
 } from "@/lib/api/auth";
 import { getCollectionRecords } from "@/lib/api/collection";
-import { analyzeAll, analyzeImport, createImport, deleteImport, getImportData, getImports, renameImport } from "@/lib/api/imports";
+import {
+  analyzeAll,
+  analyzeImport,
+  createImport,
+  createImportFromFile,
+  deleteImport,
+  getImportData,
+  getImports,
+  renameImport,
+} from "@/lib/api/imports";
 import {
   autoHealRollupQueue,
   drainRollupQueue,
@@ -384,6 +393,7 @@ test("createImport forwards AbortSignal", async () => {
       createdAt: "2026-03-26T00:00:00.000Z",
       isDeleted: false,
       createdBy: "admin.user",
+      rowCount: 0,
     });
   }) as typeof fetch);
 
@@ -693,6 +703,47 @@ test("analytics API wrappers forward AbortSignal", async () => {
   );
   assert.equal(requests[5]?.url, "/api/analytics/peak-hours");
   assert.equal(requests[6]?.url, "/api/analytics/role-distribution");
+});
+
+test("createImportFromFile forwards stable idempotency headers", async () => {
+  const requests: Array<{ headers: Headers; url: string }> = [];
+  const restoreFetch = withMockFetch((async (input, init) => {
+    requests.push({
+      headers: new Headers(init?.headers),
+      url: String(input),
+    });
+
+    return jsonResponse({
+      id: "import-123",
+      name: "Sample Import",
+      filename: "sample.csv",
+      createdAt: "2026-03-26T00:00:00.000Z",
+      isDeleted: false,
+      createdBy: "admin.user",
+      rowCount: 1,
+    });
+  }) as typeof fetch);
+
+  try {
+    await createImportFromFile(
+      "Sample Import",
+      new File(["name\nAlice\n"], "sample.csv", { type: "text/csv" }),
+      {
+        idempotencyFingerprint: "{\"hash\":\"file-1\",\"version\":1}",
+        idempotencyKey: "import-key-1",
+      },
+    );
+  } finally {
+    restoreFetch();
+  }
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0]?.url, "/api/imports");
+  assert.equal(requests[0]?.headers.get("x-idempotency-key"), "import-key-1");
+  assert.equal(
+    requests[0]?.headers.get("x-idempotency-fingerprint"),
+    "{\"hash\":\"file-1\",\"version\":1}",
+  );
 });
 
 test("activity API wrappers forward AbortSignal", async () => {

@@ -1,9 +1,17 @@
 import type { Express, RequestHandler } from "express";
 import type { ImportsController } from "../controllers/imports.controller";
+import type { PostgresStorage } from "../storage-postgres";
+import { createImportMutationIdempotencyMiddleware } from "./imports-idempotency";
 import { createImportsMultipartRoute } from "./imports-multipart-route";
+
+type ImportMutationIdempotencyStorage = Pick<
+  PostgresStorage,
+  "acquireMutationIdempotency" | "completeMutationIdempotency" | "releaseMutationIdempotency"
+>;
 
 export type ImportsRouteDeps = {
   importsController: ImportsController;
+  mutationIdempotencyStorage: ImportMutationIdempotencyStorage;
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
@@ -21,6 +29,7 @@ export type ImportsRouteContext = {
   requireTabAccess: (tabId: string) => RequestHandler;
   searchRateLimiter: RequestHandler;
   importsUploadRateLimiter: RequestHandler;
+  importsIdempotencyMiddleware: RequestHandler;
   importsMultipartRoute: RequestHandler;
 };
 
@@ -36,6 +45,9 @@ export function createImportsRouteContext(
     requireTabAccess: deps.requireTabAccess,
     searchRateLimiter: deps.searchRateLimiter,
     importsUploadRateLimiter: deps.importsUploadRateLimiter ?? ((_req, _res, next) => next()),
+    importsIdempotencyMiddleware: createImportMutationIdempotencyMiddleware(
+      deps.mutationIdempotencyStorage,
+    ),
     importsMultipartRoute: createImportsMultipartRoute(
       deps.multipartMaxFileSizeBytes,
       deps.multipartPerUserQuotaBytes,

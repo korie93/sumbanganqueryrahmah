@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createImportFromFile } from "@/lib/api";
+import {
+  buildImportMutationFingerprint,
+  createImportFromFile,
+  createImportMutationIdempotencyKey,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   buildBulkImportSelectionResults,
   filterSupportedImportFiles,
+  getRetryableBulkImportIndexes,
   isImportAbortError,
   summarizeBulkImportResults,
 } from "@/pages/import/import-page-state-utils";
@@ -79,15 +84,16 @@ export function useBulkImportState({
       return;
     }
 
+    const retryableIndexes = getRetryableBulkImportIndexes(bulkResults);
     const blockedCount = bulkResults.filter((result) => result.blocked).length;
-    const hasImportableFiles = bulkResults.some((result) => !result.blocked);
-    if (!hasImportableFiles) {
+    if (retryableIndexes.length === 0) {
       toast({
-        title: "No Importable Files",
+        title: blockedCount === bulkResults.length ? "No Importable Files" : "Nothing to Retry",
         description: blockedCount > 0
+          && blockedCount === bulkResults.length
           ? `${blockedCount} selected file(s) exceed the ${maxUploadSizeLabel} upload limit.`
-          : "Please select at least one supported file to import.",
-        variant: "destructive",
+          : "All importable files have already completed successfully.",
+        variant: blockedCount === bulkResults.length ? "destructive" : "default",
       });
       return;
     }
@@ -101,44 +107,50 @@ export function useBulkImportState({
     setBulkProcessing(true);
     setBulkProgress(0);
 
-    const results: BulkFileResult[] = [];
+    const workingResults = bulkResults.map((result) => ({ ...result }));
+    let processedCount = 0;
 
-    for (let index = 0; index < bulkFiles.length; index += 1) {
+    for (const index of retryableIndexes) {
       if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
         break;
       }
       const currentFile = bulkFiles[index];
-      const existingResult = bulkResults[index];
-      if (existingResult?.blocked) {
-        results.push(existingResult);
-        if (isMountedRef.current) {
-          setBulkProgress(((index + 1) / bulkFiles.length) * 100);
-        }
-        continue;
-      }
+      const existingResult = workingResults[index];
+      const importName = stripImportExtension(currentFile.name);
+      const idempotencyKey = existingResult?.idempotencyKey
+        ?? createImportMutationIdempotencyKey();
+      const idempotencyFingerprint = existingResult?.idempotencyFingerprint
+        ?? buildImportMutationFingerprint(importName, currentFile);
       const nextPending: BulkFileResult = {
         id: existingResult?.id ?? `${currentFile.name}:${currentFile.size}:${currentFile.lastModified}:${index}`,
         filename: currentFile.name,
         sizeBytes: existingResult?.sizeBytes ?? currentFile.size,
         status: "processing",
+        idempotencyKey,
+        idempotencyFingerprint,
       };
+      workingResults[index] = nextPending;
 
       if (isMountedRef.current) {
-        setBulkResults((previous) => previous.map((result, resultIndex) => (
-          resultIndex === index ? { ...result, status: "processing" } : result
-        )));
+        setBulkResults(workingResults.map((result) => ({ ...result })));
       }
 
       try {
-        await createImportFromFile(
-          stripImportExtension(currentFile.name),
+        const importRecord = await createImportFromFile(
+          importName,
           currentFile,
-          { signal: controller.signal },
+          {
+            idempotencyFingerprint,
+            idempotencyKey,
+            signal: controller.signal,
+          },
         );
         if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
           break;
         }
         nextPending.status = "success";
+        nextPending.rowCount = importRecord.rowCount;
+        delete nextPending.error;
       } catch (bulkError: unknown) {
         if (isImportAbortError(bulkError) || controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
           break;
@@ -147,12 +159,11 @@ export function useBulkImportState({
         nextPending.error = bulkError instanceof Error ? bulkError.message : "Failed to import";
       }
 
-      results.push(nextPending);
+      workingResults[index] = nextPending;
+      processedCount += 1;
       if (isMountedRef.current) {
-        setBulkResults((previous) => previous.map((result, resultIndex) => (
-          resultIndex === index ? nextPending : result
-        )));
-        setBulkProgress(((index + 1) / bulkFiles.length) * 100);
+        setBulkResults(workingResults.map((result) => ({ ...result })));
+        setBulkProgress((processedCount / retryableIndexes.length) * 100);
       }
     }
 
@@ -170,7 +181,8 @@ export function useBulkImportState({
     }
 
     setBulkProcessing(false);
-    const { successCount, errorCount, blockedErrorCount } = summarizeBulkImportResults(results);
+    setBulkResults(workingResults);
+    const { successCount, errorCount, blockedErrorCount } = summarizeBulkImportResults(workingResults);
 
     toast({
       title: "Bulk Import Complete",
