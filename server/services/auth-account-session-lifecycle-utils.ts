@@ -8,6 +8,7 @@ import { resolveTimestampMs } from "../lib/timestamp";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { hashDeviceFingerprint } from "../auth/device-fingerprint";
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
+import { buildLoginFailureAuditDetails } from "../lib/login-audit";
 
 export async function getSuperuserSessionIdleWindowMs(
   storage: Pick<AuthAccountAuthenticationStorage, "getAppConfig">,
@@ -134,7 +135,19 @@ export async function createAuthenticatedSession(params: {
           await params.storage.createAuditLog({
             action: "LOGIN_BLOCKED_SINGLE_SESSION",
             performedBy: params.user.username,
-            details: `Superuser single-session policy blocked login. Active sessions: ${freshSessions.length}`,
+            targetUser: params.user.id,
+            details: buildLoginFailureAuditDetails({
+              actorId: params.user.id,
+              browserName: params.input.browserName,
+              failureReason: "single_session_policy",
+              ipAddress: params.input.ipAddress,
+              message: "Superuser single-session policy blocked login.",
+              metadata: {
+                active_count: freshSessions.length,
+              },
+              outcome: "blocked",
+              role: params.user.role,
+            }),
           });
           throw new AuthAccountError(
             409,

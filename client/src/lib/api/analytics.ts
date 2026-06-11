@@ -50,8 +50,11 @@ export async function getRecentLoginActivityPage(
     status: query.status,
   });
   if (query.search) params.set("search", query.search);
+  if (query.role) params.set("role", query.role);
   if (query.dateFrom) params.set("dateFrom", query.dateFrom);
   if (query.dateTo) params.set("dateTo", query.dateTo);
+  params.set("sortBy", query.sortBy ?? "eventTime");
+  params.set("sortOrder", query.sortOrder ?? "desc");
   const response = await apiRequest(
     "GET",
     `/api/analytics/recent-login-activity-page?${params.toString()}`,

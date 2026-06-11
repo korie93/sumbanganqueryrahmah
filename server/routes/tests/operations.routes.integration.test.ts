@@ -199,7 +199,7 @@ function createOperationsRouteHarness(options?: {
           status: "ended",
           username: "watch.user",
         }],
-        filterCounts: { active: 2, all: 8, attention: 3, ended: 6 },
+        filterCounts: { active: 2, all: 8, attention: 3, ended: 6, failed: 0 },
         pagination: {
           page: pageOptions.page,
           pageSize: pageOptions.pageSize,
@@ -605,9 +605,12 @@ test("GET /api/analytics/recent-login-activity-page forwards validated server fi
     assert.deepEqual(recentLoginActivityPageCalls, [{
       dateFrom: "2026-03-01",
       dateTo: "2026-03-31",
+      includeInternalReason: true,
       page: 2,
       pageSize: 4,
       search: "watch.user",
+      sortBy: "eventTime",
+      sortOrder: "desc",
       status: "ended",
     }]);
     assert.deepEqual(await response.json(), {
@@ -623,7 +626,7 @@ test("GET /api/analytics/recent-login-activity-page forwards validated server fi
         status: "ended",
         username: "watch.user",
       }],
-      filterCounts: { active: 2, all: 8, attention: 3, ended: 6 },
+      filterCounts: { active: 2, all: 8, attention: 3, ended: 6, failed: 0 },
       pagination: {
         page: 2,
         pageSize: 4,

@@ -13,6 +13,7 @@ import {
 } from "../../auth/two-factor";
 import { writeDevMailPreview } from "../../mail/dev-mail-outbox";
 import { logger } from "../../lib/logger";
+import { verifySecurityAuditDetails } from "../../lib/security-audit-log";
 import { registerAuthRoutes } from "../auth.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -852,11 +853,16 @@ test("POST /api/auth/login keeps unknown usernames generic without leaking accou
         message: "Invalid credentials",
       },
     });
-    assert.deepEqual(auditLogs, [{
-      action: "LOGIN_FAILED",
-      performedBy: "missing.user",
-      details: "User not found",
-    }]);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0]?.action, "LOGIN_FAILED");
+    assert.equal(auditLogs[0]?.performedBy, "missing.user");
+    const verifiedAudit = verifySecurityAuditDetails(auditLogs[0]?.details);
+    assert.equal(verifiedAudit.ok, true);
+    if (!verifiedAudit.ok) return;
+    assert.equal(verifiedAudit.entry.event, "AUTH_LOGIN_FAILURE");
+    assert.equal(verifiedAudit.entry.outcome, "failure");
+    assert.equal(verifiedAudit.entry.metadata.failure_reason, "user_not_found");
+    assert.doesNotMatch(auditLogs[0]?.details || "", /WrongPassword|password|token/i);
   } finally {
     await stopTestServer(server);
   }

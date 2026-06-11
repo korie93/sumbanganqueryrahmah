@@ -692,6 +692,7 @@ test("recent login utilities keep timestamps readable and status labels explicit
   assert.equal(formatDashboardRecentLoginTime(null), "Unknown");
   assert.equal(resolveDashboardRecentLoginStatusMeta("active").label, "Active");
   assert.equal(resolveDashboardRecentLoginStatusMeta("ended").label, "Ended");
+  assert.equal(resolveDashboardRecentLoginStatusMeta("failed").label, "Failed");
 });
 
 test("recent login activity filters count active, ended, and attention rows", () => {
@@ -737,6 +738,7 @@ test("recent login activity filters count active, ended, and attention rows", ()
     all: 3,
     attention: 1,
     ended: 2,
+    failed: 0,
   });
   assert.deepEqual(
     filterDashboardRecentLoginActivities(activities, "attention").map((activity) => activity.username),

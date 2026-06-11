@@ -640,11 +640,11 @@ test("analytics API wrappers forward AbortSignal", async () => {
     }
     if (
       url
-      === "/api/analytics/recent-login-activity-page?page=2&pageSize=4&status=attention&search=watch.user&dateFrom=2026-05-01&dateTo=2026-05-31"
+      === "/api/analytics/recent-login-activity-page?page=2&pageSize=4&status=attention&search=watch.user&dateFrom=2026-05-01&dateTo=2026-05-31&sortBy=eventTime&sortOrder=desc"
     ) {
       return jsonResponse({
         activities: [],
-        filterCounts: { active: 0, all: 0, attention: 0, ended: 0 },
+        filterCounts: { active: 0, all: 0, attention: 0, ended: 0, failed: 0 },
         pagination: { page: 2, pageSize: 4, totalItems: 0, totalPages: 1 },
       });
     }
@@ -688,7 +688,8 @@ test("analytics API wrappers forward AbortSignal", async () => {
   assert.equal(
     requests[4]?.url,
     "/api/analytics/recent-login-activity-page?page=2&pageSize=4&status=attention"
-    + "&search=watch.user&dateFrom=2026-05-01&dateTo=2026-05-31",
+      + "&search=watch.user&dateFrom=2026-05-01&dateTo=2026-05-31"
+      + "&sortBy=eventTime&sortOrder=desc",
   );
   assert.equal(requests[5]?.url, "/api/analytics/peak-hours");
   assert.equal(requests[6]?.url, "/api/analytics/role-distribution");

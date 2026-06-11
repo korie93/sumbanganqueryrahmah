@@ -26,7 +26,7 @@ test("OperationsAnalyticsService proxies summary and distribution reads", async 
     getRecentLoginActivity: async () => [],
     getRecentLoginActivityPage: async (options) => ({
       activities: [],
-      filterCounts: { active: 0, all: 0, attention: 0, ended: 0 },
+      filterCounts: { active: 0, all: 0, attention: 0, ended: 0, failed: 0 },
       pagination: {
         page: options.page,
         pageSize: options.pageSize,
@@ -90,7 +90,7 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
       recentLoginActivityPageCalls.push(options);
       return {
         activities: [],
-        filterCounts: { active: 0, all: 0, attention: 0, ended: 0 },
+        filterCounts: { active: 0, all: 0, attention: 0, ended: 0, failed: 0 },
         pagination: {
           page: options.page,
           pageSize: options.pageSize,
@@ -122,9 +122,12 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
   assert.deepEqual(recentLoginActivityPageCalls, [{
     dateFrom: "2026-05-01",
     dateTo: "2026-05-31",
+    includeInternalReason: false,
     page: 2,
     pageSize: 25,
     search: "super.user",
+    sortBy: "eventTime",
+    sortOrder: "desc",
     status: "ended",
   }]);
   assert.equal(loginTrends[0].logins, 1);
@@ -159,4 +162,70 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
     () => service.getRecentLoginActivityPage({ pageSize: 0 }),
     /Page limit must be at least 1/,
   );
+  await assert.rejects(
+    () => service.getRecentLoginActivityPage({ role: "root" }),
+    /role filter is invalid/,
+  );
+  await assert.rejects(
+    () => service.getRecentLoginActivityPage({ sortBy: "details" }),
+    /sortBy must be one of/,
+  );
+  await assert.rejects(
+    () => service.getRecentLoginActivityPage({ sortOrder: "sideways" }),
+    /sortOrder must be asc or desc/,
+  );
+});
+
+test("OperationsAnalyticsService exposes internal login failure reasons only to superusers", async () => {
+  const calls: Array<
+    Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0]
+  > = [];
+  const analyticsRepository = {
+    getDashboardSummary: async () => ({
+      totalUsers: 0,
+      activeSessions: 0,
+      loginsToday: 0,
+      totalDataRows: 0,
+      totalImports: 0,
+      bannedUsers: 0,
+      collectionRecordVersionConflicts24h: 0,
+      loginFailures24h: 0,
+      backupActions24h: 0,
+    }),
+    getLoginTrends: async () => [],
+    getTopActiveUsers: async () => [],
+    getRecentLoginActivity: async () => [],
+    getRecentLoginActivityPage: async (
+      options: Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0],
+    ) => {
+      calls.push(options);
+      return {
+        activities: [],
+        filterCounts: { active: 0, all: 0, attention: 0, ended: 0, failed: 0 },
+        pagination: {
+          page: options.page,
+          pageSize: options.pageSize,
+          totalItems: 0,
+          totalPages: 1,
+        },
+      };
+    },
+    getPeakHours: async () => [],
+    getRoleDistribution: async () => [],
+  } satisfies OperationsAnalyticsRepository;
+  const service = new OperationsAnalyticsService(analyticsRepository);
+
+  await service.getRecentLoginActivityPage({
+    role: "manager",
+    sortBy: "username",
+    sortOrder: "asc",
+    status: "failed",
+  }, "manager");
+  await service.getRecentLoginActivityPage({ status: "failed" }, "superuser");
+
+  assert.equal(calls[0]?.includeInternalReason, false);
+  assert.equal(calls[0]?.role, "manager");
+  assert.equal(calls[0]?.sortBy, "username");
+  assert.equal(calls[0]?.sortOrder, "asc");
+  assert.equal(calls[1]?.includeInternalReason, true);
 });

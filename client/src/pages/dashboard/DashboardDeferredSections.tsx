@@ -82,15 +82,14 @@ function DashboardChartsFallback({ labelPrefix }: { labelPrefix: string }) {
 
 function DashboardUserInsightsFallback({ labelPrefix }: { labelPrefix: string }) {
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
       <DashboardSectionFallback
-        className="lg:col-span-2"
         label={`${labelPrefix} top active users`}
-        visualClassName="h-[300px]"
+        visualClassName="h-[360px]"
       />
       <DashboardSectionFallback
         label={`${labelPrefix} user roles`}
-        visualClassName="h-[260px]"
+        visualClassName="h-[360px]"
       />
     </div>
   );
@@ -233,7 +232,9 @@ type DashboardDeferredSectionsProps = {
   onRecentLoginActivityFilterChange: (filter: RecentLoginActivityFilter) => void;
   onRecentLoginActivityPageChange: (page: number) => void;
   onRecentLoginActivityPageSizeChange: (pageSize: number) => void;
+  onRecentLoginActivityRoleChange: (role: string) => void;
   onRecentLoginActivitySearchChange: (value: string) => void;
+  onRecentLoginActivitySortChange: (value: string) => void;
   peakHoursErrorMessage: string | null;
   trends: LoginTrend[] | undefined;
   trendsErrorMessage: string | null;
@@ -250,7 +251,9 @@ type DashboardDeferredSectionsProps = {
   recentLoginActivityPage: number;
   recentLoginActivityPageItems: RecentLoginActivity[] | undefined;
   recentLoginActivityPageSize: number;
+  recentLoginActivityRole: string;
   recentLoginActivitySearch: string;
+  recentLoginActivitySort: string;
   recentLoginActivityTotalItems: number;
   recentLoginActivityTotalPages: number;
   recentLoginActivityCleaningEndedLogs?: boolean | undefined;
@@ -288,7 +291,9 @@ export function DashboardDeferredSections({
   onRecentLoginActivityFilterChange,
   onRecentLoginActivityPageChange,
   onRecentLoginActivityPageSizeChange,
+  onRecentLoginActivityRoleChange,
   onRecentLoginActivitySearchChange,
+  onRecentLoginActivitySortChange,
   peakHoursErrorMessage,
   trends,
   trendsErrorMessage,
@@ -305,7 +310,9 @@ export function DashboardDeferredSections({
   recentLoginActivityPage,
   recentLoginActivityPageItems,
   recentLoginActivityPageSize,
+  recentLoginActivityRole,
   recentLoginActivitySearch,
+  recentLoginActivitySort,
   recentLoginActivityTotalItems,
   recentLoginActivityTotalPages,
   recentLoginActivityCleaningEndedLogs,
@@ -473,13 +480,17 @@ export function DashboardDeferredSections({
                       onFilterChange={onRecentLoginActivityFilterChange}
                       onPageChange={onRecentLoginActivityPageChange}
                       onPageSizeChange={onRecentLoginActivityPageSizeChange}
+                      onRoleChange={onRecentLoginActivityRoleChange}
                       onRetry={onRetryRecentLoginActivity}
                       onSearchChange={onRecentLoginActivitySearchChange}
+                      onSortChange={onRecentLoginActivitySortChange}
                       page={recentLoginActivityPage}
                       pageSize={recentLoginActivityPageSize}
+                      role={recentLoginActivityRole}
                       retrying={recentLoginActivityRetrying}
                       search={recentLoginActivitySearch}
                       selectedFilter={recentLoginActivityFilter}
+                      sort={recentLoginActivitySort}
                       totalItems={recentLoginActivityTotalItems}
                       totalPages={recentLoginActivityTotalPages}
                     />

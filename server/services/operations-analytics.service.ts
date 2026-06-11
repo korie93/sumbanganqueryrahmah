@@ -10,6 +10,8 @@ import type { AnalyticsRepository } from "../repositories/analytics.repository";
 import type {
   RecentLoginActivityFilter,
   RecentLoginActivityPageOptions,
+  RecentLoginActivitySortBy,
+  RecentLoginActivitySortOrder,
 } from "../repositories/analytics-repository-shared";
 
 type OperationsAnalyticsRepository = Pick<
@@ -42,9 +44,12 @@ export class OperationsAnalyticsService {
     return this.analyticsRepository.getRecentLoginActivity(readPageLimit(limit, 8, 25));
   }
 
-  async getRecentLoginActivityPage(query: Record<string, unknown>) {
+  async getRecentLoginActivityPage(
+    query: Record<string, unknown>,
+    viewerRole?: string | null,
+  ) {
     return this.analyticsRepository.getRecentLoginActivityPage(
-      this.normalizeRecentLoginActivityPageQuery(query),
+      this.normalizeRecentLoginActivityPageQuery(query, viewerRole),
     );
   }
 
@@ -58,17 +63,19 @@ export class OperationsAnalyticsService {
 
   private normalizeRecentLoginActivityPageQuery(
     query: Record<string, unknown>,
+    viewerRole?: string | null,
   ): RecentLoginActivityPageOptions {
     const statusValue = readNonEmptyString(query.status, 20).toLowerCase() || "all";
     const allowedStatuses = new Set<RecentLoginActivityFilter>([
       "all",
       "active",
       "ended",
+      "failed",
       "attention",
     ]);
     if (!allowedStatuses.has(statusValue as RecentLoginActivityFilter)) {
       throw badRequest(
-        "Login activity status must be one of: all, active, ended, attention.",
+        "Login activity status must be one of: all, active, ended, failed, attention.",
         ERROR_CODES.REQUEST_BODY_INVALID,
       );
     }
@@ -82,10 +89,45 @@ export class OperationsAnalyticsService {
       );
     }
 
+    const roleValue = readOptionalString(query.role, 24)?.toLowerCase();
+    const allowedRoles = new Set(["admin", "manager", "superuser", "unknown", "user"]);
+    if (roleValue && !allowedRoles.has(roleValue)) {
+      throw badRequest(
+        "Login activity role filter is invalid.",
+        ERROR_CODES.REQUEST_BODY_INVALID,
+      );
+    }
+
+    const sortByValue = readNonEmptyString(query.sortBy, 20) || "eventTime";
+    const allowedSortFields = new Set<RecentLoginActivitySortBy>([
+      "eventTime",
+      "role",
+      "status",
+      "username",
+    ]);
+    if (!allowedSortFields.has(sortByValue as RecentLoginActivitySortBy)) {
+      throw badRequest(
+        "Login activity sortBy must be one of: eventTime, role, status, username.",
+        ERROR_CODES.REQUEST_BODY_INVALID,
+      );
+    }
+
+    const sortOrderValue = readNonEmptyString(query.sortOrder, 16).toLowerCase() || "desc";
+    if (sortOrderValue !== "asc" && sortOrderValue !== "desc") {
+      throw badRequest(
+        "Login activity sortOrder must be asc or desc.",
+        ERROR_CODES.REQUEST_BODY_INVALID,
+      );
+    }
+
     return {
       page: readPageLimit(query.page, 1, 100_000),
       pageSize: readPageLimit(query.pageSize ?? query.limit, 4, 25),
+      includeInternalReason: viewerRole === "superuser",
+      ...(roleValue ? { role: roleValue } : {}),
       search: readOptionalString(query.search, 80),
+      sortBy: sortByValue as RecentLoginActivitySortBy,
+      sortOrder: sortOrderValue as RecentLoginActivitySortOrder,
       status: statusValue as RecentLoginActivityFilter,
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),

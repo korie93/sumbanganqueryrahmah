@@ -15,6 +15,8 @@ import {
   type RecentLoginActivityPage,
   type RecentLoginActivityPageOptions,
   type RecentLoginActivityRow,
+  type RecentLoginActivitySortBy,
+  type RecentLoginActivitySortOrder,
   serializeAnalyticsTimestamp,
   type TopActiveUserRow,
 } from "./analytics-repository-shared";
@@ -22,19 +24,121 @@ import {
 export { serializeAnalyticsTimestamp } from "./analytics-repository-shared";
 
 export class AnalyticsRepository {
-  private mapRecentLoginActivityRow(row: RecentLoginActivityRow): RecentLoginActivity {
+  private mapRecentLoginActivityRow(
+    row: RecentLoginActivityRow,
+    options: { includeInternalReason?: boolean | undefined } = {},
+  ): RecentLoginActivity {
+    const status = row.status ?? (row.isActive ? "active" : "ended");
+    const eventType = row.eventType === "failure" || status === "failed" ? "failure" : "success";
+
     return {
       browser: summarizeAnalyticsBrowser(row.browser),
+      eventType,
+      failureReason: options.includeInternalReason
+        ? sanitizeAnalyticsShortText(row.failureReason, 80)
+        : null,
       id: row.id,
       ipAddress: maskAnalyticsIpAddress(row.ipAddress),
       lastActivityTime: serializeAnalyticsTimestamp(row.lastActivityTime),
       loginTime: serializeAnalyticsTimestamp(row.loginTime),
-      logoutReason: sanitizeAnalyticsShortText(row.logoutReason),
+      logoutReason: status === "failed"
+        ? "Login attempt rejected"
+        : sanitizeAnalyticsShortText(row.logoutReason),
       logoutTime: serializeAnalyticsTimestamp(row.logoutTime),
+      platform: sanitizeAnalyticsShortText(row.platform, 48),
       role: row.role,
-      status: row.isActive ? "active" : "ended",
+      status,
+      userAgentSummary: sanitizeAnalyticsShortText(row.userAgentSummary, 100),
       username: row.username,
     };
+  }
+
+  private buildRecentLoginEventsCte() {
+    return sql`
+      WITH login_events AS (
+        SELECT
+          id,
+          username,
+          role,
+          login_time AS "loginTime",
+          last_activity_time AS "lastActivityTime",
+          logout_time AS "logoutTime",
+          is_active AS "isActive",
+          browser,
+          ip_address AS "ipAddress",
+          logout_reason AS "logoutReason",
+          NULL::text AS "failureReason",
+          NULL::text AS platform,
+          browser AS "userAgentSummary",
+          'success'::text AS "eventType",
+          CASE WHEN is_active IS TRUE THEN 'active' ELSE 'ended' END::text AS status,
+          COALESCE(login_time, last_activity_time, logout_time) AS "eventTime"
+        FROM public.user_activity
+
+        UNION ALL
+
+        SELECT
+          'audit:' || failure.id AS id,
+          failure.performed_by AS username,
+          COALESCE(
+            NULLIF(failure.audit_data #>> '{security_audit,metadata,role}', ''),
+            matched_user.role,
+            'unknown'
+          ) AS role,
+          failure.timestamp AS "loginTime",
+          NULL::timestamptz AS "lastActivityTime",
+          NULL::timestamptz AS "logoutTime",
+          FALSE AS "isActive",
+          NULLIF(failure.audit_data #>> '{security_audit,metadata,browser}', '') AS browser,
+          NULLIF(failure.audit_data #>> '{security_audit,metadata,network}', '') AS "ipAddress",
+          NULL::text AS "logoutReason",
+          NULLIF(
+            failure.audit_data #>> '{security_audit,metadata,failure_reason}',
+            ''
+          ) AS "failureReason",
+          NULLIF(failure.audit_data #>> '{security_audit,metadata,platform}', '') AS platform,
+          NULLIF(
+            failure.audit_data #>> '{security_audit,metadata,user_agent_summary}',
+            ''
+          ) AS "userAgentSummary",
+          'failure'::text AS "eventType",
+          'failed'::text AS status,
+          failure.timestamp AS "eventTime"
+        FROM (
+          SELECT
+            id,
+            performed_by,
+            target_user,
+            timestamp,
+            CASE
+              WHEN details LIKE '{"security_audit":%'
+              THEN details::jsonb
+              ELSE NULL
+            END AS audit_data
+          FROM public.audit_logs
+          WHERE action IN (${buildAuditActionList(LOGIN_FAILURE_ACTIONS)})
+        ) failure
+        LEFT JOIN public.users matched_user
+          ON matched_user.id = failure.target_user
+        WHERE failure.audit_data IS NOT NULL
+      )
+    `;
+  }
+
+  private buildRecentLoginActivityOrderBy(
+    sortBy: RecentLoginActivitySortBy,
+    sortOrder: RecentLoginActivitySortOrder,
+  ) {
+    const direction = sortOrder === "asc" ? sql`ASC` : sql`DESC`;
+    const column = sortBy === "username"
+      ? sql`lower(username)`
+      : sortBy === "role"
+        ? sql`lower(role)`
+        : sortBy === "status"
+          ? sql`status`
+          : sql`"eventTime"`;
+
+    return sql`ORDER BY ${column} ${direction} NULLS LAST, "eventTime" DESC NULLS LAST, id ASC`;
   }
 
   async getDashboardSummary(): Promise<{
@@ -183,7 +287,9 @@ export class AnalyticsRepository {
         is_active AS "isActive",
         browser,
         ip_address AS "ipAddress",
-        logout_reason AS "logoutReason"
+        logout_reason AS "logoutReason",
+        'success'::text AS "eventType",
+        CASE WHEN is_active IS TRUE THEN 'active' ELSE 'ended' END::text AS status
       FROM public.user_activity
       ORDER BY COALESCE(login_time, last_activity_time, logout_time) DESC NULLS LAST, username ASC
       LIMIT ${limit}
@@ -197,21 +303,27 @@ export class AnalyticsRepository {
     options: RecentLoginActivityPageOptions,
   ): Promise<RecentLoginActivityPage> {
     const attentionPattern = "banned|blocked|expired|forced|idle|kicked|locked|revoked|timeout";
-    const eventTimeSql = sql`COALESCE(login_time, last_activity_time, logout_time)`;
     const baseConditions: SQL[] = [];
     const normalizedSearch = options.search?.trim();
 
     if (normalizedSearch) {
-      baseConditions.push(sql`POSITION(lower(${normalizedSearch}) IN lower(username)) > 0`);
+      baseConditions.push(sql`(
+        POSITION(lower(${normalizedSearch}) IN lower(username)) > 0
+        OR POSITION(lower(${normalizedSearch}) IN lower(COALESCE(browser, ''))) > 0
+        OR POSITION(lower(${normalizedSearch}) IN lower(COALESCE(platform, ''))) > 0
+      )`);
+    }
+    if (options.role) {
+      baseConditions.push(sql`lower(role) = lower(${options.role})`);
     }
     if (options.dateFrom) {
       baseConditions.push(sql`
-        (${eventTimeSql} AT TIME ZONE ${ANALYTICS_TZ})::date >= ${options.dateFrom}::date
+        ("eventTime" AT TIME ZONE ${ANALYTICS_TZ})::date >= ${options.dateFrom}::date
       `);
     }
     if (options.dateTo) {
       baseConditions.push(sql`
-        (${eventTimeSql} AT TIME ZONE ${ANALYTICS_TZ})::date <= ${options.dateTo}::date
+        ("eventTime" AT TIME ZONE ${ANALYTICS_TZ})::date <= ${options.dateTo}::date
       `);
     }
 
@@ -219,14 +331,17 @@ export class AnalyticsRepository {
       ? sql`WHERE ${sql.join(baseConditions, sql` AND `)}`
       : sql``;
     const countResult = await dbRead.execute(sql`
+      ${this.buildRecentLoginEventsCte()}
       SELECT
         COUNT(*)::int AS "allCount",
-        COUNT(*) FILTER (WHERE is_active IS TRUE)::int AS "activeCount",
-        COUNT(*) FILTER (WHERE is_active IS NOT TRUE)::int AS "endedCount",
+        COUNT(*) FILTER (WHERE status = 'active')::int AS "activeCount",
+        COUNT(*) FILTER (WHERE status = 'ended')::int AS "endedCount",
+        COUNT(*) FILTER (WHERE status = 'failed')::int AS "failedCount",
         COUNT(*) FILTER (
-          WHERE COALESCE(logout_reason, '') ~* ${attentionPattern}
+          WHERE status = 'failed'
+            OR COALESCE("logoutReason", '') ~* ${attentionPattern}
         )::int AS "attentionCount"
-      FROM public.user_activity
+      FROM login_events
       ${baseWhereSql}
     `);
     const countRow = countResult.rows?.[0] as Record<string, unknown> | undefined;
@@ -235,6 +350,7 @@ export class AnalyticsRepository {
       all: Number(countRow?.allCount ?? 0),
       attention: Number(countRow?.attentionCount ?? 0),
       ended: Number(countRow?.endedCount ?? 0),
+      failed: Number(countRow?.failedCount ?? 0),
     };
     const totalItems = filterCounts[options.status];
     const totalPages = Math.max(1, Math.ceil(totalItems / options.pageSize));
@@ -251,27 +367,35 @@ export class AnalyticsRepository {
       ? sql`WHERE ${sql.join(rowConditions, sql` AND `)}`
       : sql``;
     const rowsResult = await dbRead.execute(sql`
+      ${this.buildRecentLoginEventsCte()}
       SELECT
         id,
         username,
         role,
-        login_time AS "loginTime",
-        last_activity_time AS "lastActivityTime",
-        logout_time AS "logoutTime",
-        is_active AS "isActive",
+        "loginTime",
+        "lastActivityTime",
+        "logoutTime",
+        "isActive",
         browser,
-        ip_address AS "ipAddress",
-        logout_reason AS "logoutReason"
-      FROM public.user_activity
+        "ipAddress",
+        "logoutReason",
+        "failureReason",
+        platform,
+        "userAgentSummary",
+        "eventType",
+        status
+      FROM login_events
       ${rowsWhereSql}
-      ORDER BY ${eventTimeSql} DESC NULLS LAST, username ASC, id ASC
+      ${this.buildRecentLoginActivityOrderBy(options.sortBy, options.sortOrder)}
       LIMIT ${options.pageSize}
       OFFSET ${offset}
     `);
 
     return {
       activities: (rowsResult.rows as RecentLoginActivityRow[]).map((row) =>
-        this.mapRecentLoginActivityRow(row)),
+        this.mapRecentLoginActivityRow(row, {
+          includeInternalReason: options.includeInternalReason,
+        })),
       filterCounts,
       pagination: {
         page,
@@ -287,13 +411,16 @@ export class AnalyticsRepository {
     attentionPattern: string,
   ) {
     if (status === "active") {
-      return sql`is_active IS TRUE`;
+      return sql`status = 'active'`;
     }
     if (status === "ended") {
-      return sql`is_active IS NOT TRUE`;
+      return sql`status = 'ended'`;
+    }
+    if (status === "failed") {
+      return sql`status = 'failed'`;
     }
     if (status === "attention") {
-      return sql`COALESCE(logout_reason, '') ~* ${attentionPattern}`;
+      return sql`(status = 'failed' OR COALESCE("logoutReason", '') ~* ${attentionPattern})`;
     }
     return null;
   }

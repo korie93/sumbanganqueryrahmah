@@ -34,19 +34,25 @@ export interface TopUser {
   lastLogin: string | null;
 }
 
-export type RecentLoginActivityStatus = "active" | "ended";
+export type RecentLoginActivityStatus = "active" | "ended" | "failed";
 export type RecentLoginActivityFilter = "all" | RecentLoginActivityStatus | "attention";
+export type RecentLoginActivitySortBy = "eventTime" | "role" | "status" | "username";
+export type RecentLoginActivitySortOrder = "asc" | "desc";
 
 export interface RecentLoginActivity {
   browser: string | null;
+  eventType?: "failure" | "success";
+  failureReason?: string | null;
   id?: string | null;
   ipAddress: string | null;
   lastActivityTime: string | null;
   loginTime: string | null;
   logoutReason: string | null;
   logoutTime: string | null;
+  platform?: string | null;
   role: string;
   status: RecentLoginActivityStatus;
+  userAgentSummary?: string | null;
   username: string;
 }
 
@@ -66,7 +72,10 @@ export interface RecentLoginActivityPageQuery {
   dateTo?: string;
   page: number;
   pageSize: number;
+  role?: string;
   search?: string;
+  sortBy?: RecentLoginActivitySortBy;
+  sortOrder?: RecentLoginActivitySortOrder;
   status: RecentLoginActivityFilter;
 }
 

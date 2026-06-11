@@ -98,7 +98,10 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
 
   const getRecentLoginActivityPage = async (req: AuthenticatedRequest, res: Response) => {
     return res.json(
-      await operationsAnalyticsService.getRecentLoginActivityPage(readQueryObject(req.query)),
+      await operationsAnalyticsService.getRecentLoginActivityPage(
+        readQueryObject(req.query),
+        req.user?.role,
+      ),
     );
   };
 

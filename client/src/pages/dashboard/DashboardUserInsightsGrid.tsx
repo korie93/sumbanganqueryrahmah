@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Crown, Users } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -116,9 +116,13 @@ export function DashboardUserInsightsGrid({
 }: DashboardUserInsightsGridProps) {
   const isMobile = useIsMobile();
   const roleChartSurfaceRef = useRef<HTMLDivElement | null>(null);
-  const chartHeightClassName = isMobile ? "h-[220px]" : "h-[300px]";
-  const donutOuterRadius = isMobile ? 58 : 78;
-  const donutInnerRadius = isMobile ? 36 : 50;
+  const chartHeightClassName = isMobile ? "h-[260px]" : "h-[360px]";
+  const donutOuterRadius = isMobile ? 72 : 104;
+  const donutInnerRadius = isMobile ? 44 : 66;
+  const totalRoleUsers = useMemo(
+    () => (roleDistribution ?? []).reduce((total, item) => total + item.count, 0),
+    [roleDistribution],
+  );
 
   useEffect(() => {
     const container = roleChartSurfaceRef.current;
@@ -166,9 +170,9 @@ export function DashboardUserInsightsGrid({
   }, [isMobile, roleDistribution, roleLoading]);
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
       <Card
-        className="rounded-2xl border border-border/60 bg-background shadow-sm lg:col-span-2"
+        className="rounded-2xl border border-border/60 bg-background shadow-sm"
         data-testid="card-top-users"
         data-floating-ai-avoid="true"
       >
@@ -273,8 +277,8 @@ export function DashboardUserInsightsGrid({
           </CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
             {isMobile
-              ? "Role mix shown in a compact donut with quick counts."
-              : "Role mix shown in a smaller donut with a clearer breakdown for phone screens."}
+              ? "Role mix with a larger visual and direct account counts."
+              : "Larger role distribution view for faster comparison across access levels."}
           </p>
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">
@@ -297,6 +301,19 @@ export function DashboardUserInsightsGrid({
             </div>
           ) : roleDistribution && roleDistribution.length > 0 ? (
             <>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
+                <div>
+                  <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
+                    Total accounts
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-foreground">
+                    {totalRoleUsers.toLocaleString()}
+                  </p>
+                </div>
+                <Badge variant="outline" className="rounded-full">
+                  {roleDistribution.length} roles
+                </Badge>
+              </div>
               <div
                 ref={roleChartSurfaceRef}
                 className={`min-w-0 ${chartHeightClassName}`}
@@ -314,7 +331,7 @@ export function DashboardUserInsightsGrid({
                       innerRadius={donutInnerRadius}
                       outerRadius={donutOuterRadius}
                       paddingAngle={isMobile ? 3 : 2}
-                      label={!isMobile ? ({ role, count }) => `${role}: ${count}` : false}
+                      label={false}
                       labelLine={false}
                     >
                       {roleDistribution.map((entry, index) => (
@@ -328,7 +345,7 @@ export function DashboardUserInsightsGrid({
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {roleDistribution.map((item) => (
                   <div
                     key={item.role}

@@ -1043,6 +1043,7 @@ test("AuthAccountService.login authenticates active manager accounts without rol
 
 test("AuthAccountService.login keeps invalid usernames generic and does not record failed-account lockout state", async () => {
   const auditActions: string[] = [];
+  const auditDetails: string[] = [];
   let recordFailedLoginAttemptCalled = false;
 
   const service = createAuthAccountService({
@@ -1050,6 +1051,7 @@ test("AuthAccountService.login keeps invalid usernames generic and does not reco
     isVisitorBanned: async () => false,
     createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
+      auditDetails.push(String(entry?.details || ""));
       return buildAuditLog(entry);
     },
     recordFailedLoginAttempt: async () => {
@@ -1080,4 +1082,12 @@ test("AuthAccountService.login keeps invalid usernames generic and does not reco
 
   assert.equal(recordFailedLoginAttemptCalled, false);
   assert.deepEqual(auditActions, ["LOGIN_FAILED"]);
+  const failedLoginAudit = verifySecurityAuditDetails(auditDetails[0]);
+  assert.equal(failedLoginAudit.ok, true);
+  if (!failedLoginAudit.ok) return;
+  assert.equal(failedLoginAudit.entry.event, "AUTH_LOGIN_FAILURE");
+  assert.equal(failedLoginAudit.entry.metadata.failure_reason, "user_not_found");
+  assert.equal(failedLoginAudit.entry.metadata.network, "127.0.x.x");
+  assert.equal(failedLoginAudit.entry.metadata.browser, "chrome");
+  assert.doesNotMatch(auditDetails[0] || "", /WrongPassword|password|token/i);
 });

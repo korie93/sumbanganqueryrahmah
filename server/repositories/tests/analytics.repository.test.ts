@@ -59,7 +59,7 @@ test("analytics activity sanitizers mask network details and browser labels", ()
   assert.equal(maskAnalyticsIpAddress("10.42.7.9"), "10.42.x.x");
   assert.equal(maskAnalyticsIpAddress("2001:db8::1"), "2001:db8:...");
   assert.equal(maskAnalyticsIpAddress("not an ip"), "Unknown");
-  assert.equal(summarizeAnalyticsBrowser("Mozilla/5.0 Chrome/124.0 Safari/537.36"), "Chrome");
+  assert.equal(summarizeAnalyticsBrowser("Mozilla/5.0 Chrome/124.0 Safari/537.36"), "Chrome 124");
   assert.equal(summarizeAnalyticsBrowser("Known Browser"), "Known Browser");
   assert.equal(sanitizeAnalyticsShortText("manual logout\r\nSet-Cookie: evil"), "manual logout Set-Cookie: evil");
 });
@@ -91,15 +91,19 @@ test("AnalyticsRepository.getRecentLoginActivity returns sanitized recent access
     const result = await repository.getRecentLoginActivity(8);
     assert.deepEqual(result, [
       {
-        browser: "Firefox",
+        browser: "Firefox 126",
+        eventType: "success",
+        failureReason: null,
         id: "activity-1",
         ipAddress: "192.168.x.x",
         lastActivityTime: "2026-04-05T03:20:00.000Z",
         loginTime: "2026-04-05T03:15:00.000Z",
         logoutReason: null,
         logoutTime: null,
+        platform: null,
         role: "superuser",
         status: "active",
+        userAgentSummary: null,
         username: "super.user",
       },
     ]);
@@ -152,24 +156,30 @@ test("AnalyticsRepository.getRecentLoginActivityPage returns bounded page metada
       page: 9,
       pageSize: 4,
       search: "watch%_user",
+      sortBy: "eventTime",
+      sortOrder: "desc",
       status: "ended",
     });
 
     assert.equal(executeCallCount, 2);
     assert.deepEqual(result, {
       activities: [{
-        browser: "Edge",
+        browser: "Edge 125",
+        eventType: "success",
+        failureReason: null,
         id: "activity-page-1",
         ipAddress: "10.42.x.x",
         lastActivityTime: "2026-05-05T03:20:00.000Z",
         loginTime: "2026-05-05T03:15:00.000Z",
         logoutReason: "IDLE_TIMEOUT",
         logoutTime: "2026-05-05T03:25:00.000Z",
+        platform: null,
         role: "admin",
         status: "ended",
+        userAgentSummary: null,
         username: "watch.user",
       }],
-      filterCounts: { active: 2, all: 7, attention: 1, ended: 5 },
+      filterCounts: { active: 2, all: 7, attention: 1, ended: 5, failed: 0 },
       pagination: {
         page: 2,
         pageSize: 4,
@@ -177,6 +187,83 @@ test("AnalyticsRepository.getRecentLoginActivityPage returns bounded page metada
         totalPages: 2,
       },
     });
+  } finally {
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
+    }).execute = originalExecute;
+  }
+});
+
+test("AnalyticsRepository.getRecentLoginActivityPage maps failed attempts and redacts internal reasons", async () => {
+  const repository = new AnalyticsRepository();
+  const originalExecute = dbRead.execute;
+  let executeCallCount = 0;
+
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
+  }).execute = (async () => {
+    executeCallCount += 1;
+    if (executeCallCount % 2 === 1) {
+      return {
+        rows: [{
+          activeCount: 0,
+          allCount: 1,
+          attentionCount: 1,
+          endedCount: 0,
+          failedCount: 1,
+        }],
+      };
+    }
+    return {
+      rows: [{
+        browser: "Chrome 149",
+        eventType: "failure",
+        failureReason: "invalid_password",
+        id: "audit:failure-1",
+        ipAddress: "203.0.x.x",
+        isActive: false,
+        lastActivityTime: null,
+        loginTime: new Date("2026-06-11T06:10:00.000Z"),
+        logoutReason: null,
+        logoutTime: null,
+        platform: "Windows 10/11",
+        role: "manager",
+        status: "failed",
+        userAgentSummary: "Chrome 149 on Windows 10/11",
+        username: "manager.user",
+      }],
+    };
+  }) as unknown as typeof dbRead.execute;
+
+  const baseOptions = {
+    page: 1,
+    pageSize: 4,
+    sortBy: "eventTime" as const,
+    sortOrder: "desc" as const,
+    status: "failed" as const,
+  };
+
+  try {
+    const managerResult = await repository.getRecentLoginActivityPage({
+      ...baseOptions,
+      includeInternalReason: false,
+    });
+    const superuserResult = await repository.getRecentLoginActivityPage({
+      ...baseOptions,
+      includeInternalReason: true,
+    });
+
+    assert.equal(managerResult.activities[0]?.status, "failed");
+    assert.equal(managerResult.activities[0]?.failureReason, null);
+    assert.equal(managerResult.activities[0]?.ipAddress, "203.0.x.x");
+    assert.equal(managerResult.activities[0]?.platform, "Windows 10/11");
+    assert.equal(
+      managerResult.activities[0]?.userAgentSummary,
+      "Chrome 149 on Windows 10/11",
+    );
+    assert.equal(superuserResult.activities[0]?.failureReason, "invalid_password");
+    assert.equal(superuserResult.filterCounts.failed, 1);
+    assert.equal(superuserResult.filterCounts.attention, 1);
   } finally {
     (dbRead as unknown as {
       execute: typeof dbRead.execute;

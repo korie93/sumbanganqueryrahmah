@@ -59,3 +59,27 @@ export function parseBrowser(userAgent: string | null | undefined): string {
 
   return "Unknown";
 }
+
+export function parsePlatform(userAgent: string | null | undefined): string {
+  const normalized = String(userAgent || "").trim();
+  if (!normalized) return "Unknown";
+
+  if (/windows nt 10\.0/i.test(normalized)) return "Windows 10/11";
+  if (/windows/i.test(normalized)) return "Windows";
+  if (/iphone|ipad|ipod/i.test(normalized)) return "iOS";
+  if (/android/i.test(normalized)) return "Android";
+  if (/macintosh|mac os x/i.test(normalized)) return "macOS";
+  if (/cros/i.test(normalized)) return "ChromeOS";
+  if (/linux/i.test(normalized)) return "Linux";
+
+  return "Unknown";
+}
+
+export function summarizeUserAgent(userAgent: string | null | undefined): string {
+  const browser = parseBrowser(userAgent);
+  const platform = parsePlatform(userAgent);
+
+  if (browser === "Unknown") return platform;
+  if (platform === "Unknown") return browser;
+  return `${browser} on ${platform}`;
+}

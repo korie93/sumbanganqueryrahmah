@@ -37,6 +37,7 @@ import {
   getSystemFailedLoginLockoutStatus,
 } from "./auth-account-lockout-policy";
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
+import { buildLoginFailureAuditDetails } from "../lib/login-audit";
 import { t } from "../i18n/server";
 
 type AuthAccountAuthenticationDeps = {
@@ -112,7 +113,13 @@ export class AuthAccountAuthenticationOperations {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_FAILED",
         performedBy: username || "unknown",
-        details: "User not found",
+        details: buildLoginFailureAuditDetails({
+          browserName: input.browserName,
+          failureReason: "user_not_found",
+          ipAddress: input.ipAddress,
+          message: "Login failed because the supplied account was not found.",
+          role: "unknown",
+        }),
       });
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, t("auth.invalidCredentials"));
     }
@@ -130,7 +137,16 @@ export class AuthAccountAuthenticationOperations {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_FAILED_BANNED",
         performedBy: activeUser.username,
-        details: visitorBanned ? "Visitor is banned" : "User is banned",
+        targetUser: activeUser.id,
+        details: buildLoginFailureAuditDetails({
+          actorId: activeUser.id,
+          browserName: input.browserName,
+          failureReason: visitorBanned ? "visitor_banned" : "account_banned",
+          ipAddress: input.ipAddress,
+          message: "Login blocked because the account or visitor is banned.",
+          outcome: "blocked",
+          role: activeUser.role,
+        }),
       });
       throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, t("auth.accountBanned"), {
         banned: true,
@@ -144,7 +160,9 @@ export class AuthAccountAuthenticationOperations {
       if (blockReason === "locked") {
         await failLockedLogin(this.deps.storage, activeUser, {
           action: "LOGIN_BLOCKED_LOCKED_ACCOUNT",
+          browserName: input.browserName,
           details: "Login blocked because the account is locked after repeated failed password attempts.",
+          ipAddress: input.ipAddress,
           lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
         });
       }
@@ -153,7 +171,15 @@ export class AuthAccountAuthenticationOperations {
         action: "LOGIN_FAILED_ACCOUNT_STATE",
         performedBy: activeUser.username,
         targetUser: activeUser.id,
-        details: `Login blocked due to account state: ${blockReason}`,
+        details: buildLoginFailureAuditDetails({
+          actorId: activeUser.id,
+          browserName: input.browserName,
+          failureReason: `account_${blockReason}`,
+          ipAddress: input.ipAddress,
+          message: "Login blocked because the account state does not permit access.",
+          outcome: "blocked",
+          role: activeUser.role,
+        }),
       });
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, t("auth.invalidCredentials"));
     }
@@ -184,7 +210,15 @@ export class AuthAccountAuthenticationOperations {
         action: "LOGIN_BLOCKED_MAINTENANCE",
         performedBy: unlockedUser.username,
         targetUser: unlockedUser.id,
-        details: "Login blocked because hard maintenance mode is active.",
+        details: buildLoginFailureAuditDetails({
+          actorId: unlockedUser.id,
+          browserName: input.browserName,
+          failureReason: "maintenance_active",
+          ipAddress: input.ipAddress,
+          message: "Login blocked because hard maintenance mode is active.",
+          outcome: "blocked",
+          role: unlockedUser.role,
+        }),
       }).then(() => undefined),
     });
 
@@ -237,7 +271,15 @@ export class AuthAccountAuthenticationOperations {
         action: "LOGIN_2FA_FAILED_BANNED",
         performedBy: activeUser.username,
         targetUser: activeUser.id,
-        details: visitorBanned ? "Visitor is banned" : "User is banned",
+        details: buildLoginFailureAuditDetails({
+          actorId: activeUser.id,
+          browserName: input.browserName,
+          failureReason: visitorBanned ? "visitor_banned" : "account_banned",
+          ipAddress: input.ipAddress,
+          message: "Two-factor login blocked because the account or visitor is banned.",
+          outcome: "blocked",
+          role: activeUser.role,
+        }),
       });
       throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, t("auth.accountBanned"), {
         banned: true,
@@ -251,7 +293,9 @@ export class AuthAccountAuthenticationOperations {
       if (blockReason === "locked") {
         await failLockedLogin(this.deps.storage, activeUser, {
           action: "LOGIN_2FA_BLOCKED_LOCKED_ACCOUNT",
+          browserName: input.browserName,
           details: "Second-factor login blocked because the account is locked after repeated failed password attempts.",
+          ipAddress: input.ipAddress,
           lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
         });
       }
@@ -260,7 +304,15 @@ export class AuthAccountAuthenticationOperations {
         action: "LOGIN_2FA_FAILED_ACCOUNT_STATE",
         performedBy: activeUser.username,
         targetUser: activeUser.id,
-        details: `Second-factor login blocked due to account state: ${blockReason}`,
+        details: buildLoginFailureAuditDetails({
+          actorId: activeUser.id,
+          browserName: input.browserName,
+          failureReason: `account_${blockReason}`,
+          ipAddress: input.ipAddress,
+          message: "Two-factor login blocked because the account state does not permit access.",
+          outcome: "blocked",
+          role: activeUser.role,
+        }),
       });
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, t("auth.invalidCredentials"));
     }
@@ -272,7 +324,15 @@ export class AuthAccountAuthenticationOperations {
         action: "LOGIN_2FA_BLOCKED_MAINTENANCE",
         performedBy: activeUser.username,
         targetUser: activeUser.id,
-        details: "Second-factor login blocked because hard maintenance mode is active.",
+        details: buildLoginFailureAuditDetails({
+          actorId: activeUser.id,
+          browserName: input.browserName,
+          failureReason: "maintenance_active",
+          ipAddress: input.ipAddress,
+          message: "Second-factor login blocked because hard maintenance mode is active.",
+          outcome: "blocked",
+          role: activeUser.role,
+        }),
       }).then(() => undefined),
     });
 

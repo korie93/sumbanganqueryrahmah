@@ -48,6 +48,8 @@ import type {
   RecentLoginActivity,
   RecentLoginActivityFilter,
   RecentLoginActivityPage,
+  RecentLoginActivitySortBy,
+  RecentLoginActivitySortOrder,
   RoleData,
   SummaryData,
   TopUser,
@@ -83,7 +85,12 @@ function DashboardContent() {
   const [recentLoginActivityPageNumber, setRecentLoginActivityPageNumber] = useState(1);
   const [recentLoginActivityPageSize, setRecentLoginActivityPageSize] =
     useState(RECENT_LOGIN_ACTIVITY_DEFAULT_PAGE_SIZE);
+  const [recentLoginActivityRole, setRecentLoginActivityRole] = useState("all");
   const [recentLoginActivitySearch, setRecentLoginActivitySearch] = useState("");
+  const [recentLoginActivitySortBy, setRecentLoginActivitySortBy] =
+    useState<RecentLoginActivitySortBy>("eventTime");
+  const [recentLoginActivitySortOrder, setRecentLoginActivitySortOrder] =
+    useState<RecentLoginActivitySortOrder>("desc");
   const deferredRecentLoginActivitySearch = useDeferredValue(recentLoginActivitySearch.trim());
   const [exportingPdf, setExportingPdf] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -158,6 +165,9 @@ function DashboardContent() {
       page: recentLoginActivityPageNumber,
       pageSize: recentLoginActivityPageSize,
       status: recentLoginActivityFilter,
+      sortBy: recentLoginActivitySortBy,
+      sortOrder: recentLoginActivitySortOrder,
+      ...(recentLoginActivityRole !== "all" ? { role: recentLoginActivityRole } : {}),
       ...(recentLoginActivityDateFrom ? { dateFrom: recentLoginActivityDateFrom } : {}),
       ...(recentLoginActivityDateTo ? { dateTo: recentLoginActivityDateTo } : {}),
       ...(deferredRecentLoginActivitySearch
@@ -171,6 +181,9 @@ function DashboardContent() {
       recentLoginActivityFilter,
       recentLoginActivityPageNumber,
       recentLoginActivityPageSize,
+      recentLoginActivityRole,
+      recentLoginActivitySortBy,
+      recentLoginActivitySortOrder,
     ],
   );
   const {
@@ -179,6 +192,7 @@ function DashboardContent() {
     isError: recentLoginActivityPageIsError,
     isFetching: recentLoginActivityPageFetching,
     isLoading: recentLoginActivityPageLoading,
+    isPlaceholderData: recentLoginActivityPageIsPlaceholderData,
     refetch: refetchRecentLoginActivityPage,
   } = useQuery<RecentLoginActivityPage>({
     queryKey: [
@@ -397,6 +411,21 @@ function DashboardContent() {
     setRecentLoginActivitySearch(value);
     setRecentLoginActivityPageNumber(1);
   }, []);
+  const handleRecentLoginActivityRoleChange = useCallback((value: string) => {
+    setRecentLoginActivityRole(value);
+    setRecentLoginActivityPageNumber(1);
+  }, []);
+  const handleRecentLoginActivitySortChange = useCallback((value: string) => {
+    const [sortBy, sortOrder] = value.split(":");
+    if (
+      (sortBy === "eventTime" || sortBy === "role" || sortBy === "status" || sortBy === "username")
+      && (sortOrder === "asc" || sortOrder === "desc")
+    ) {
+      setRecentLoginActivitySortBy(sortBy);
+      setRecentLoginActivitySortOrder(sortOrder);
+      setRecentLoginActivityPageNumber(1);
+    }
+  }, []);
   const handleRecentLoginActivityDateFromChange = useCallback((value: string) => {
     setRecentLoginActivityDateFrom(value);
     setRecentLoginActivityDateTo((current) =>
@@ -414,15 +443,26 @@ function DashboardContent() {
     setRecentLoginActivityDateTo("");
     setRecentLoginActivityFilter("all");
     setRecentLoginActivityPageNumber(1);
+    setRecentLoginActivityRole("all");
     setRecentLoginActivitySearch("");
+    setRecentLoginActivitySortBy("eventTime");
+    setRecentLoginActivitySortOrder("desc");
   }, []);
 
   useEffect(() => {
     const serverPage = recentLoginActivityPage?.pagination.page;
-    if (serverPage && serverPage !== recentLoginActivityPageNumber) {
+    if (
+      !recentLoginActivityPageIsPlaceholderData
+      && serverPage
+      && serverPage !== recentLoginActivityPageNumber
+    ) {
       setRecentLoginActivityPageNumber(serverPage);
     }
-  }, [recentLoginActivityPage?.pagination.page, recentLoginActivityPageNumber]);
+  }, [
+    recentLoginActivityPage?.pagination.page,
+    recentLoginActivityPageIsPlaceholderData,
+    recentLoginActivityPageNumber,
+  ]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -688,7 +728,9 @@ function DashboardContent() {
           onRecentLoginActivityFilterChange={handleRecentLoginActivityFilterChange}
           onRecentLoginActivityPageChange={setRecentLoginActivityPageNumber}
           onRecentLoginActivityPageSizeChange={handleRecentLoginActivityPageSizeChange}
+          onRecentLoginActivityRoleChange={handleRecentLoginActivityRoleChange}
           onRecentLoginActivitySearchChange={handleRecentLoginActivitySearchChange}
+          onRecentLoginActivitySortChange={handleRecentLoginActivitySortChange}
           trends={trends ?? []}
           trendsErrorMessage={trendsErrorMessage}
           trendsLoading={trendsLoading}
@@ -706,11 +748,14 @@ function DashboardContent() {
             all: 0,
             attention: 0,
             ended: 0,
+            failed: 0,
           }}
-          recentLoginActivityPage={recentLoginActivityPage?.pagination.page ?? recentLoginActivityPageNumber}
+          recentLoginActivityPage={recentLoginActivityPageNumber}
           recentLoginActivityPageItems={recentLoginActivityPage?.activities ?? []}
-          recentLoginActivityPageSize={recentLoginActivityPage?.pagination.pageSize ?? recentLoginActivityPageSize}
+          recentLoginActivityPageSize={recentLoginActivityPageSize}
+          recentLoginActivityRole={recentLoginActivityRole}
           recentLoginActivitySearch={recentLoginActivitySearch}
+          recentLoginActivitySort={`${recentLoginActivitySortBy}:${recentLoginActivitySortOrder}`}
           recentLoginActivityTotalItems={recentLoginActivityPage?.pagination.totalItems ?? 0}
           recentLoginActivityTotalPages={recentLoginActivityPage?.pagination.totalPages ?? 1}
           recentLoginActivityCleaningEndedLogs={cleanupEndedLoginActivityMutation.isPending}

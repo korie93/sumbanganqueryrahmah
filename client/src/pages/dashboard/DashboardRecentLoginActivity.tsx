@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -51,13 +58,17 @@ interface DashboardRecentLoginActivityProps {
   onFilterChange: (filter: RecentLoginActivityFilter) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onRoleChange: (role: string) => void;
   onRetry: () => void;
   onSearchChange: (value: string) => void;
+  onSortChange: (value: string) => void;
   page: number;
   pageSize: number;
+  role: string;
   retrying: boolean;
   search: string;
   selectedFilter: RecentLoginActivityFilter;
+  sort: string;
   totalItems: number;
   totalPages: number;
 }
@@ -73,6 +84,7 @@ const RECENT_LOGIN_FILTER_OPTIONS: readonly {
   { id: "all", label: "All" },
   { id: "active", label: "Active" },
   { id: "ended", label: "Ended" },
+  { id: "failed", label: "Failed" },
   { id: "attention", label: "Attention" },
 ];
 
@@ -159,9 +171,16 @@ function DashboardRecentLoginActivityDetailSheet({
             <div className="grid gap-3 sm:grid-cols-2">
               <DetailBlock label="Browser">{activity.browser ?? "Unknown browser"}</DetailBlock>
               <DetailBlock label="Network">{activity.ipAddress ?? "Unknown network"}</DetailBlock>
+              <DetailBlock label="Platform">{activity.platform ?? "Unknown platform"}</DetailBlock>
+              <DetailBlock label="User agent summary">
+                {activity.userAgentSummary ?? activity.browser ?? "Unknown"}
+              </DetailBlock>
             </div>
 
             <DetailBlock label="Status note">{activity.logoutReason || "No logout reason recorded."}</DetailBlock>
+            {activity.failureReason ? (
+              <DetailBlock label="Internal failure reason">{activity.failureReason}</DetailBlock>
+            ) : null}
           </div>
         ) : null}
       </SheetContent>
@@ -212,13 +231,17 @@ function DashboardRecentLoginActivityImpl({
   onFilterChange,
   onPageChange,
   onPageSizeChange,
+  onRoleChange,
   onRetry,
   onSearchChange,
+  onSortChange,
   page,
   pageSize,
+  role,
   retrying,
   search,
   selectedFilter,
+  sort,
   totalItems,
   totalPages,
 }: DashboardRecentLoginActivityProps) {
@@ -228,7 +251,12 @@ function DashboardRecentLoginActivityImpl({
   const safeActivities = activities ?? EMPTY_RECENT_LOGIN_ACTIVITIES;
   const pageStartIndex = (Math.max(1, page) - 1) * Math.max(1, pageSize);
   const hasActiveFilters = Boolean(
-    selectedFilter !== "all" || search.trim() || dateFrom || dateTo,
+    selectedFilter !== "all"
+      || role !== "all"
+      || sort !== "eventTime:desc"
+      || search.trim()
+      || dateFrom
+      || dateTo,
   );
   const selectedFilterLabel =
     RECENT_LOGIN_FILTER_OPTIONS.find((option) => option.id === selectedFilter)?.label ?? "All";
@@ -386,7 +414,7 @@ function DashboardRecentLoginActivityImpl({
               </div>
 
               <div
-                className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1 sm:grid-cols-4"
+                className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1 sm:grid-cols-5"
                 role="group"
                 aria-label="Filter recent login activity"
               >
@@ -411,6 +439,46 @@ function DashboardRecentLoginActivityImpl({
                     </Button>
                   );
                 })}
+              </div>
+
+              <div className="grid gap-2 rounded-xl border border-border/60 bg-background/60 p-2.5 sm:grid-cols-2">
+                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+                  Role
+                  <Select value={role} onValueChange={onRoleChange}>
+                    <SelectTrigger
+                      className="h-9"
+                      aria-label="Filter recent login activity by role"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All roles</SelectItem>
+                      <SelectItem value="superuser">Superuser</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="unknown">Unknown account</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+                  Sort
+                  <Select value={sort} onValueChange={onSortChange}>
+                    <SelectTrigger
+                      className="h-9"
+                      aria-label="Sort recent login activity"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="eventTime:desc">Newest first</SelectItem>
+                      <SelectItem value="eventTime:asc">Oldest first</SelectItem>
+                      <SelectItem value="username:asc">Username A-Z</SelectItem>
+                      <SelectItem value="role:asc">Role A-Z</SelectItem>
+                      <SelectItem value="status:asc">Status A-Z</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
               </div>
 
               {safeActivities.length > 0 ? (
@@ -477,7 +545,9 @@ function DashboardRecentLoginActivityImpl({
 
                           <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                             <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
-                              <p className="font-medium text-foreground">Login</p>
+                              <p className="font-medium text-foreground">
+                                {activity.status === "failed" ? "Attempt" : "Login"}
+                              </p>
                               <p className="mt-1 leading-5">{formattedLoginTime}</p>
                             </div>
                             <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
@@ -490,7 +560,7 @@ function DashboardRecentLoginActivityImpl({
                             <span className="flex min-w-0 items-center gap-2">
                               <Globe2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                               <span className="truncate" title={browser}>
-                                {browser}
+                                {activity.platform ? `${browser} · ${activity.platform}` : browser}
                               </span>
                             </span>
                             <span className="shrink-0 font-medium text-foreground">{ipAddress}</span>

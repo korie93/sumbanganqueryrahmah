@@ -49,7 +49,12 @@ const DASHBOARD_PDF_FOOTER_HEIGHT_MM = 12;
 const DASHBOARD_PDF_ROW_GAP_MM = 3;
 const DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM = 10;
 export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
-export type DashboardRecentLoginActivityFilter = "all" | "active" | "ended" | "attention";
+export type DashboardRecentLoginActivityFilter =
+  | "all"
+  | "active"
+  | "ended"
+  | "failed"
+  | "attention";
 export type DashboardRecentLoginRiskTone = "success" | "warning" | "info";
 const DASHBOARD_ACTION_QUEUE_MAX_ITEMS = 4;
 const DASHBOARD_LOGIN_ACTION_QUEUE_MAX_ITEMS = 3;
@@ -263,6 +268,13 @@ export function resolveDashboardRecentLoginStatusMeta(status: RecentLoginActivit
     };
   }
 
+  if (status === "failed") {
+    return {
+      label: "Failed",
+      className: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+    };
+  }
+
   return {
     label: "Ended",
     className: "border-slate-400/40 bg-slate-500/10 text-slate-700 dark:text-slate-300",
@@ -270,6 +282,10 @@ export function resolveDashboardRecentLoginStatusMeta(status: RecentLoginActivit
 }
 
 export function isDashboardRecentLoginAttentionActivity(activity: RecentLoginActivity) {
+  if (activity.status === "failed") {
+    return true;
+  }
+
   const logoutReason = activity.logoutReason?.trim();
   if (!logoutReason) {
     return false;
@@ -301,6 +317,7 @@ export function buildDashboardRecentLoginActivityFilterCounts(
     all: activities.length,
     attention: activities.filter(isDashboardRecentLoginAttentionActivity).length,
     ended: activities.filter((activity) => activity.status === "ended").length,
+    failed: activities.filter((activity) => activity.status === "failed").length,
   };
 }
 
@@ -313,6 +330,14 @@ export function resolveDashboardRecentLoginRiskNote(activity: RecentLoginActivit
       label: "Active session",
       description: "Sesi ini masih aktif dalam rekod terbaru. Semak jika peranti atau lokasi kelihatan tidak biasa.",
       tone: "info",
+    };
+  }
+
+  if (activity.status === "failed") {
+    return {
+      label: "Rejected login",
+      description: "Cubaan login ini gagal. Semak akaun, masa, pelayar, dan rangkaian sebelum mengambil tindakan.",
+      tone: "warning",
     };
   }
 

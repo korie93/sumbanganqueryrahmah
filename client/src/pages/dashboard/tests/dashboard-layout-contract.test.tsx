@@ -829,6 +829,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
         all: 10,
         attention: 1,
         ended: 9,
+        failed: 0,
       },
       loading: false,
       onCleanupEndedActivities: () => undefined,
@@ -839,13 +840,17 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
       onFilterChange: () => undefined,
       onPageChange: () => undefined,
       onPageSizeChange: () => undefined,
+      onRoleChange: () => undefined,
       onRetry: () => undefined,
       onSearchChange: () => undefined,
+      onSortChange: () => undefined,
       page: 1,
       pageSize: 4,
+      role: "all",
       retrying: false,
       search: "",
       selectedFilter: "all",
+      sort: "eventTime:desc",
       totalItems: 10,
       totalPages: 3,
     }),
@@ -865,6 +870,9 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /Filter recent login activity/);
   assert.match(markup, /button-login-activity-filter-all/);
   assert.match(markup, /Show attention login activity, 1 records/);
+  assert.match(markup, /Show failed login activity, 0 records/);
+  assert.match(markup, /Filter recent login activity by role/);
+  assert.match(markup, /Sort recent login activity/);
   assert.match(markup, /aria-label="All recent login activity list"/);
   assert.match(markup, /Open login activity details for super\.user/);
   assert.match(markup, /Showing 1-4 of 10 login records/);
@@ -913,6 +921,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
         all: 0,
         attention: 0,
         ended: 0,
+        failed: 0,
       },
       loading: false,
       onClearFilters: () => undefined,
@@ -921,13 +930,17 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
       onFilterChange: () => undefined,
       onPageChange: () => undefined,
       onPageSizeChange: () => undefined,
+      onRoleChange: () => undefined,
       onRetry: () => undefined,
       onSearchChange: () => undefined,
+      onSortChange: () => undefined,
       page: 1,
       pageSize: 4,
+      role: "all",
       retrying: false,
       search: "",
       selectedFilter: "all",
+      sort: "eventTime:desc",
       totalItems: 0,
       totalPages: 1,
     }),
@@ -937,6 +950,21 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(errorMarkup, /Recent login API gagal\./);
   assert.match(errorMarkup, /Cuba lagi/);
   assert.doesNotMatch(errorMarkup, /No recent login activity is available yet/);
+});
+
+test("Dashboard recent-login pagination does not roll back while placeholder data is visible", () => {
+  const source = readFileSync(path.resolve(__dirname, "../../Dashboard.tsx"), "utf8");
+
+  assert.match(source, /isPlaceholderData: recentLoginActivityPageIsPlaceholderData/);
+  assert.match(
+    source,
+    /!recentLoginActivityPageIsPlaceholderData[\s\S]*serverPage !== recentLoginActivityPageNumber/,
+  );
+  assert.match(source, /recentLoginActivityPage=\{recentLoginActivityPageNumber\}/);
+  assert.doesNotMatch(
+    source,
+    /recentLoginActivityPage=\{recentLoginActivityPage\?\.pagination\.page/,
+  );
 });
 
 test("Dashboard manual refresh tolerates partial query failures", () => {
@@ -1063,6 +1091,11 @@ test("DashboardUserInsightsGrid keeps chart semantics grouped and the top-users 
   assert.match(markup, /tabindex="0"/);
   assert.match(markup, /role="img"/);
   assert.match(markup, /aria-label="User role distribution chart"/);
+  assert.match(markup, /Total accounts/);
+  assert.match(markup, /3 roles/);
+  assert.match(source, /label=\{false\}/);
+  assert.match(source, /h-\[360px\]/);
+  assert.match(source, /sm:grid-cols-2/);
   assert.match(source, /accessibilityLayer=\{false\}/);
   assert.match(source, /tabIndex=\{-1\}/);
   assert.match(source, /role="presentation"/);
