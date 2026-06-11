@@ -10,11 +10,15 @@ import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types"
 
 export const DEFAULT_IMPORT_CSV_MAX_ROWS = 100_000;
 export const DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS = 5_000;
+export const DEFAULT_IMPORT_MAX_COLUMNS = 300;
+export const DEFAULT_IMPORT_MAX_CELL_LENGTH = 5_000;
 
 type ParseCsvOptions = {
   maxRows?: number;
   maxBytes?: number;
   maxMaterializedRows?: number;
+  maxColumns?: number;
+  maxCellLength?: number;
 };
 
 type ReadlineErrorEmitter = {
@@ -35,6 +39,38 @@ function resolveCsvMaxRows(options?: ParseCsvOptions) {
   }
 
   return Math.max(1, Math.trunc(value));
+}
+
+function resolveCsvMaxColumns(options?: ParseCsvOptions) {
+  const value = options?.maxColumns;
+  if (value == null || !Number.isFinite(value)) {
+    return DEFAULT_IMPORT_MAX_COLUMNS;
+  }
+
+  return Math.max(1, Math.trunc(value));
+}
+
+function resolveCsvMaxCellLength(options?: ParseCsvOptions) {
+  const value = options?.maxCellLength;
+  if (value == null || !Number.isFinite(value)) {
+    return DEFAULT_IMPORT_MAX_CELL_LENGTH;
+  }
+
+  return Math.max(1, Math.trunc(value));
+}
+
+function validateCsvValues(values: string[], options?: ParseCsvOptions): string | null {
+  const maxColumns = resolveCsvMaxColumns(options);
+  if (values.length > maxColumns) {
+    return `CSV import exceeds the configured column limit of ${maxColumns.toLocaleString("en-US")} columns.`;
+  }
+
+  const maxCellLength = resolveCsvMaxCellLength(options);
+  if (values.some((value) => value.length > maxCellLength)) {
+    return `CSV import contains a cell longer than the configured ${maxCellLength.toLocaleString("en-US")} character limit.`;
+  }
+
+  return null;
 }
 
 function createCsvRowLimitError(maxRows: number): ParsedImportUploadResult {
@@ -165,6 +201,7 @@ async function walkCsvFile(
   let headerResolved = false;
   let rowCount = 0;
   let rowLimitExceeded = false;
+  let structureError: string | null = null;
 
   try {
     for await (const rawLine of lineReader) {
@@ -176,11 +213,24 @@ async function walkCsvFile(
 
       if (!headerResolved) {
         headers = parseCsvLine(normalizedLine);
+        structureError = validateCsvValues(headers, options);
+        if (structureError) {
+          closeLineReaderSafely();
+          destroyStreamSafely();
+          break;
+        }
         headerResolved = true;
         continue;
       }
 
-      const row = toParsedCsvRow(headers, parseCsvLine(normalizedLine));
+      const values = parseCsvLine(normalizedLine);
+      structureError = validateCsvValues(values, options);
+      if (structureError) {
+        closeLineReaderSafely();
+        destroyStreamSafely();
+        break;
+      }
+      const row = toParsedCsvRow(headers, values);
       if (Object.values(row).some((value) => value !== "")) {
         if (rowCount >= maxRows) {
           rowLimitExceeded = true;
@@ -212,6 +262,10 @@ async function walkCsvFile(
     lineReaderErrorEmitter.off("error", handleReaderError);
     closeLineReaderSafely();
     destroyStreamSafely();
+  }
+
+  if (structureError) {
+    return { headers: [], rowCount, error: structureError };
   }
 
   if (!headerResolved || headers.length === 0) {
@@ -247,13 +301,22 @@ export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): Parse
   }
 
   const headers = parseCsvLine(lines[headerLineIndex]);
+  const headerValidationError = validateCsvValues(headers, options);
+  if (headerValidationError) {
+    return { headers: [], rows: [], error: headerValidationError };
+  }
   const rows: ImportRow[] = [];
 
   for (let index = headerLineIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line.trim()) continue;
 
-    const row = toParsedCsvRow(headers, parseCsvLine(line));
+    const values = parseCsvLine(line);
+    const rowValidationError = validateCsvValues(values, options);
+    if (rowValidationError) {
+      return { headers: [], rows: [], error: rowValidationError };
+    }
+    const row = toParsedCsvRow(headers, values);
     if (Object.values(row).some((value) => value !== "")) {
       if (rows.length >= maxRows) {
         return createCsvRowLimitError(maxRows);

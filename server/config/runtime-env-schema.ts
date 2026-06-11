@@ -206,6 +206,12 @@ const runtimeEnvironmentShape = {
     min: 1,
     max: 1_000_000,
   }),
+  IMPORT_MAX_COLUMNS: optionalIntEnv("IMPORT_MAX_COLUMNS", { min: 1, max: 5_000 }),
+  IMPORT_MAX_SHEETS: optionalIntEnv("IMPORT_MAX_SHEETS", { min: 1, max: 100 }),
+  IMPORT_MAX_CELL_LENGTH: optionalIntEnv("IMPORT_MAX_CELL_LENGTH", {
+    min: 1,
+    max: 1_000_000,
+  }),
   IMPORT_INSERT_BATCH_SIZE: optionalIntEnv("IMPORT_INSERT_BATCH_SIZE", { min: 1, max: 5_000 }),
   IMPORT_MAX_ROW_BYTES: optionalIntEnv("IMPORT_MAX_ROW_BYTES", { min: 1_024, max: 1024 * 1024 }),
   IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES: optionalIntEnv("IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES", {

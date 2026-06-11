@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { Readable } from "node:stream";
 import {
   IMPORT_TOO_LARGE_MESSAGE,
@@ -15,6 +15,7 @@ import {
 } from "../imports-multipart-utils";
 import { DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS } from "../../services/import-upload-csv-utils";
 import { logger } from "../../lib/logger";
+import { ERROR_CODES } from "../../../shared/error-codes";
 
 test("normalizeImportName trims explicit names and falls back to the upload filename", () => {
   assert.equal(normalizeImportName("  March batch  ", "users.xlsx"), "March batch");
@@ -25,6 +26,7 @@ test("resolveImportMultipartFailure upgrades size limit errors to the standard 4
   assert.deepEqual(
     resolveImportMultipartFailure(new Error("File too large for upload"), undefined, 5 * 1024 * 1024),
     {
+      code: ERROR_CODES.IMPORT_FILE_TOO_LARGE,
       message: "The selected file is too large to import. Maximum upload size is 5.0 MB. Split it into smaller files or ask an administrator to raise the import upload limit.",
       statusCode: 413,
     },
@@ -39,6 +41,7 @@ test("resolveImportMultipartFailure falls back cleanly for unknown error payload
   assert.deepEqual(
     resolveImportMultipartFailure(null, "Multipart import failed."),
     {
+      code: ERROR_CODES.IMPORT_PARSE_FAILED,
       message: "Multipart import failed.",
       statusCode: 400,
     },
@@ -163,6 +166,30 @@ test("prepareMultipartImportUpload uses UPLOAD_TMP_DIR when it is configured", a
     } finally {
       await cleanupPreparedMultipartImportUpload(upload);
     }
+  } finally {
+    if (originalUploadTmpDir === undefined) {
+      delete process.env.UPLOAD_TMP_DIR;
+    } else {
+      process.env.UPLOAD_TMP_DIR = originalUploadTmpDir;
+    }
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("prepareMultipartImportUpload removes staged files after signature validation fails", async () => {
+  const originalUploadTmpDir = process.env.UPLOAD_TMP_DIR;
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "sqr-import-invalid-root-"));
+  process.env.UPLOAD_TMP_DIR = tempRoot;
+
+  try {
+    await assert.rejects(
+      () => prepareMultipartImportUpload({
+        file: Readable.from("not a spreadsheet"),
+        filename: "invalid.xlsx",
+      }),
+      /could not be verified/i,
+    );
+    assert.deepEqual(await readdir(tempRoot), []);
   } finally {
     if (originalUploadTmpDir === undefined) {
       delete process.env.UPLOAD_TMP_DIR;

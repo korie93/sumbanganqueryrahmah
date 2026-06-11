@@ -96,6 +96,20 @@ test("parseCsvBuffer rejects oversized uploads before parsing rows", () => {
   assert.deepEqual(result.rows, []);
 });
 
+test("parseCsvBuffer rejects payloads beyond configured column and cell limits", () => {
+  const tooManyColumns = parseCsvBuffer(
+    Buffer.from("a,b,c\n1,2,3\n", "utf8"),
+    { maxColumns: 2 },
+  );
+  assert.match(String(tooManyColumns.error), /column limit of 2/i);
+
+  const oversizedCell = parseCsvBuffer(
+    Buffer.from("name\nAlice\n", "utf8"),
+    { maxCellLength: 4 },
+  );
+  assert.match(String(oversizedCell.error), /4 character limit/i);
+});
+
 test("parseCsvFile stops reading and rejects rows beyond the configured CSV row limit", async (t) => {
   const fakeStream = new FakeReadableStream();
   const fakeLineReader = new FakeLineReader(["name,amount", "Alice,10", "Bob,20"]);
@@ -185,6 +199,21 @@ test("forEachCsvFileRow streams CSV rows to the caller one by one", async () => 
       { name: "Alice", amount: "10" },
       { name: "Bob", amount: "20" },
     ]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("inspectCsvFile stops streaming when a row exceeds configured structural limits", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const filePath = path.join(tempDir, "customers.csv");
+
+  try {
+    await writeFile(filePath, "name,amount,notes\nAlice,10,ok\n", "utf8");
+    const result = await inspectCsvFile(filePath, { maxColumns: 2 });
+
+    assert.match(String(result.error), /column limit of 2/i);
+    assert.equal(result.rowCount, 0);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

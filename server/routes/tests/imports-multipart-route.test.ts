@@ -11,6 +11,7 @@ import {
 } from "../imports-multipart-route";
 import { createActiveImportUploadQuotaTracker } from "../imports-upload-quota";
 import type { PreparedMultipartImportUpload } from "../imports-multipart-utils";
+import { ERROR_CODES, type ErrorCode } from "../../../shared/error-codes";
 
 type MultipartPart =
   | { kind: "field"; name: string; value: string }
@@ -21,6 +22,18 @@ type MultipartPart =
     contentType: string;
     content: Buffer | string;
   };
+
+function buildExpectedApiError(message: string, code: ErrorCode) {
+  return {
+    ok: false,
+    message,
+    code,
+    error: {
+      code,
+      message,
+    },
+  };
+}
 
 function buildMultipartBody(boundary: string, parts: MultipartPart[]) {
   const chunks: Buffer[] = [];
@@ -251,10 +264,10 @@ test("createImportsMultipartRoute rejects multipart requests without a file", as
 
   assert.deepEqual(result, {
     kind: "response",
-    payload: {
-      ok: false,
-      message: "Please select a CSV, XLSX, or XLSB file to import.",
-    },
+    payload: buildExpectedApiError(
+      "Please select a CSV, XLSX, or XLSB file to import.",
+      ERROR_CODES.IMPORT_UNSUPPORTED_FILE_TYPE,
+    ),
     statusCode: 400,
   });
 });
@@ -277,10 +290,10 @@ test("createImportsMultipartRoute ignores file parts without filenames and still
 
   assert.deepEqual(result, {
     kind: "response",
-    payload: {
-      ok: false,
-      message: "Please select a CSV, XLSX, or XLSB file to import.",
-    },
+    payload: buildExpectedApiError(
+      "Please select a CSV, XLSX, or XLSB file to import.",
+      ERROR_CODES.IMPORT_UNSUPPORTED_FILE_TYPE,
+    ),
     statusCode: 400,
   });
 });
@@ -327,10 +340,10 @@ test("createImportsMultipartRoute ignores file parts with unknown field names", 
 
   assert.deepEqual(result, {
     kind: "response",
-    payload: {
-      ok: false,
-      message: "Please select a CSV, XLSX, or XLSB file to import.",
-    },
+    payload: buildExpectedApiError(
+      "Please select a CSV, XLSX, or XLSB file to import.",
+      ERROR_CODES.IMPORT_UNSUPPORTED_FILE_TYPE,
+    ),
     statusCode: 400,
   });
 });
@@ -353,10 +366,64 @@ test("createImportsMultipartRoute returns parser failures as safe client errors"
 
   assert.deepEqual(result, {
     kind: "response",
-    payload: {
-      ok: false,
-      message: "Please select a CSV, XLSX, or XLSB file.",
-    },
+    payload: buildExpectedApiError(
+      "Please select a CSV, XLSX, or XLSB file.",
+      ERROR_CODES.IMPORT_UNSUPPORTED_FILE_TYPE,
+    ),
+    statusCode: 400,
+  });
+});
+
+test("createImportsMultipartRoute rejects mismatched upload MIME types before parsing", async () => {
+  const handler = createImportsMultipartRoute();
+  const message = "Please select a CSV, XLSX, or XLSB file.";
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "file",
+        filename: "customers.csv",
+        contentType: "application/pdf",
+        content: "name,amount\nAlice,12\n",
+      },
+    ],
+    handler,
+  );
+
+  assert.deepEqual(result, {
+    kind: "response",
+    payload: buildExpectedApiError(
+      message,
+      ERROR_CODES.IMPORT_UNSUPPORTED_FILE_TYPE,
+    ),
+    statusCode: 400,
+  });
+});
+
+test("createImportsMultipartRoute rejects dangerous executable double extensions", async () => {
+  const handler = createImportsMultipartRoute();
+  const message = "Please select a CSV, XLSX, or XLSB file.";
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "file",
+        filename: "payload.exe.csv",
+        contentType: "text/csv",
+        content: "name,amount\nAlice,12\n",
+      },
+    ],
+    handler,
+  );
+
+  assert.deepEqual(result, {
+    kind: "response",
+    payload: buildExpectedApiError(
+      message,
+      ERROR_CODES.IMPORT_UNSUPPORTED_FILE_TYPE,
+    ),
     statusCode: 400,
   });
 });
@@ -379,11 +446,10 @@ test("createImportsMultipartRoute rejects oversized multipart files with the con
 
   assert.deepEqual(result, {
     kind: "response",
-    payload: {
-      ok: false,
-      message:
-        "The selected file is too large to import. Maximum upload size is 1 KB. Split it into smaller files or ask an administrator to raise the import upload limit.",
-    },
+    payload: buildExpectedApiError(
+      "The selected file is too large to import. Maximum upload size is 1 KB. Split it into smaller files or ask an administrator to raise the import upload limit.",
+      ERROR_CODES.IMPORT_FILE_TOO_LARGE,
+    ),
     statusCode: 413,
   });
 });
@@ -409,11 +475,10 @@ test("createImportsMultipartRoute rejects multipart uploads that exceed the acti
 
   assert.deepEqual(result, {
     kind: "response",
-    payload: {
-      ok: false,
-      message:
-        "You already have an import upload in progress that uses your per-user upload quota. Please wait and try again.",
-    },
+    payload: buildExpectedApiError(
+      "You already have an import upload in progress that uses your per-user upload quota. Please wait and try again.",
+      ERROR_CODES.IMPORT_UPLOAD_RATE_LIMITED,
+    ),
     statusCode: 413,
   });
   quotaTracker.release("admin.user", 1024);

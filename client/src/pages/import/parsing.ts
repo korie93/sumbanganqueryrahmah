@@ -4,6 +4,11 @@ import type { ImportRow, ParsedBulkResult, ParsedPreviewResult } from "@/pages/i
 type XlsxModule = typeof import("xlsx");
 
 export const IMPORT_PREVIEW_MAX_CSV_ROWS = 100_000;
+export const IMPORT_PREVIEW_MAX_FILE_BYTES = 8 * 1024 * 1024;
+
+export function shouldDeferImportPreview(file: File) {
+  return file.size > IMPORT_PREVIEW_MAX_FILE_BYTES;
+}
 
 function createCsvRowLimitError() {
   return `CSV import exceeds the preview row limit of ${IMPORT_PREVIEW_MAX_CSV_ROWS.toLocaleString("en-US")} rows. Split the file into smaller uploads.`;

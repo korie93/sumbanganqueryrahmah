@@ -8,6 +8,7 @@ import {
   cleanupPreparedMultipartImportUpload,
   type PreparedMultipartImportUpload,
 } from "../routes/imports-multipart-utils";
+import { ImportUploadValidationError } from "../services/import-upload-file-utils";
 import type { ImportDataColumnFilter, ImportsService } from "../services/imports.service";
 
 type RuntimeSettings = {
@@ -159,6 +160,11 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       });
 
       return res.json(importRecord);
+    } catch (error) {
+      if (error instanceof ImportUploadValidationError) {
+        throw badRequest(error.message, error.code);
+      }
+      throw error;
     } finally {
       await cleanupPreparedMultipartImportUpload(multipartImportUpload);
       delete (res.locals as { multipartImportUpload?: PreparedMultipartImportUpload }).multipartImportUpload;

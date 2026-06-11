@@ -10,6 +10,10 @@ import {
   stripImportUploadExtension,
 } from "../import-upload-parser";
 import { DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS } from "../import-upload-csv-utils";
+import {
+  normalizeAndValidateImportUploadFilename,
+  validateImportUploadMimeType,
+} from "../import-upload-file-utils";
 
 test("parseImportUploadBuffer parses CSV uploads directly from memory", () => {
   const result = parseImportUploadBuffer(
@@ -90,6 +94,63 @@ test("parseImportUploadFile parses Excel uploads from a temporary file", async (
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("parseImportUploadBuffer parses XLSB uploads through the spreadsheet adapter", () => {
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(
+    workbook,
+    xlsx.utils.aoa_to_sheet([
+      ["name", "amount"],
+      ["Alice", 15],
+    ]),
+    "Sheet1",
+  );
+  const workbookBuffer = xlsx.write(workbook, {
+    type: "buffer",
+    bookType: "xlsb",
+  }) as Buffer;
+
+  const result = parseImportUploadBuffer("customers.xlsb", workbookBuffer);
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.rows, [{ name: "Alice", amount: "15" }]);
+});
+
+test("parseImportUploadBuffer rejects executable content disguised as CSV", () => {
+  const result = parseImportUploadBuffer(
+    "customers.csv",
+    Buffer.from("MZ\u0000\u0000fake executable payload", "utf8"),
+  );
+
+  assert.match(String(result.error), /could not be verified/i);
+  assert.deepEqual(result.rows, []);
+});
+
+test("parseImportUploadBuffer rejects non-ZIP content disguised as XLSX", () => {
+  const result = parseImportUploadBuffer(
+    "customers.xlsx",
+    Buffer.from("not a spreadsheet", "utf8"),
+  );
+
+  assert.match(String(result.error), /could not be verified/i);
+  assert.deepEqual(result.rows, []);
+});
+
+test("import upload metadata rejects traversal, dangerous double extensions, and MIME mismatches", () => {
+  assert.throws(
+    () => normalizeAndValidateImportUploadFilename("../customers.csv"),
+    /CSV, XLSX, or XLSB/i,
+  );
+  assert.throws(
+    () => normalizeAndValidateImportUploadFilename("payload.exe.csv"),
+    /CSV, XLSX, or XLSB/i,
+  );
+  assert.doesNotThrow(() => validateImportUploadMimeType("customers.xlsx", "application/octet-stream"));
+  assert.throws(
+    () => validateImportUploadMimeType("customers.csv", "application/pdf"),
+    /CSV, XLSX, or XLSB/i,
+  );
 });
 
 test("parseImportUploadFile returns a safe error when the uploaded file cannot be accessed", async () => {

@@ -11,8 +11,13 @@ import {
 } from "../services/import-upload-parser";
 import {
   buildImportUploadTooLargeMessage,
+  ImportUploadValidationError,
   IMPORT_UPLOAD_TOO_LARGE_MESSAGE,
+  normalizeAndValidateImportUploadFilename,
+  resolveImportUploadErrorCode,
+  validateImportUploadFileSignature,
 } from "../services/import-upload-file-utils";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export type MultipartImportBody = {
   name?: string;
@@ -97,6 +102,7 @@ export function resolveImportMultipartFailure(
 
   const statusCode = /too large|size limit/i.test(message) ? 413 : 400;
   return {
+    code: resolveImportUploadErrorCode(error),
     message: statusCode === 413 ? buildImportUploadTooLargeMessage(maxFileSizeBytes) : message,
     statusCode,
   };
@@ -106,7 +112,8 @@ export async function parseMultipartImportUpload(params: {
   file: NodeJS.ReadableStream;
   filename: string;
 }) {
-  const { file, filename } = params;
+  const { file } = params;
+  const filename = normalizeAndValidateImportUploadFilename(params.filename);
   const tempDir = await createImportUploadTempDir();
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;
@@ -125,10 +132,14 @@ export async function parseMultipartImportUpload(params: {
     if (exceededSizeLimit || (file as LimitAwareReadableStream).truncated === true) {
       throw new Error(IMPORT_TOO_LARGE_MESSAGE);
     }
+    await validateImportUploadFileSignature(filename, tempFilePath);
 
     const parsed = await parseImportUploadFile(filename, tempFilePath);
     if (parsed.error) {
-      throw new Error(parsed.error);
+      throw new ImportUploadValidationError(
+        parsed.error,
+        ERROR_CODES.IMPORT_PARSE_FAILED,
+      );
     }
 
     return {
@@ -146,7 +157,8 @@ export async function prepareMultipartImportUpload(params: {
   file: NodeJS.ReadableStream;
   filename: string;
 }): Promise<PreparedMultipartImportUpload> {
-  const { file, filename } = params;
+  const { file } = params;
+  const filename = normalizeAndValidateImportUploadFilename(params.filename);
   const tempDir = await createImportUploadTempDir();
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;
@@ -166,6 +178,7 @@ export async function prepareMultipartImportUpload(params: {
     if (exceededSizeLimit || (file as LimitAwareReadableStream).truncated === true) {
       throw new Error(IMPORT_TOO_LARGE_MESSAGE);
     }
+    await validateImportUploadFileSignature(filename, tempFilePath);
 
     if (String(filename || "").trim().toLowerCase().endsWith(".csv")) {
       keepStagedFile = true;
@@ -179,7 +192,10 @@ export async function prepareMultipartImportUpload(params: {
 
     const parsed = await parseImportUploadFile(filename, tempFilePath);
     if (parsed.error) {
-      throw new Error(parsed.error);
+      throw new ImportUploadValidationError(
+        parsed.error,
+        ERROR_CODES.IMPORT_PARSE_FAILED,
+      );
     }
 
     return {

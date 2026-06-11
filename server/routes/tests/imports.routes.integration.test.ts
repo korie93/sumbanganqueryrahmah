@@ -302,6 +302,12 @@ function createImportsRouteHarness(options?: {
       return record && !record.isDeleted ? record : undefined;
     },
     getDataRowsByImport: async (importId: string) => dataRowsByImport.get(importId) ?? [],
+    deleteDataRowsByImport: async (importId: string) => {
+      const deletedRows = dataRowsByImport.get(importId)?.length ?? 0;
+      dataRowsByImport.set(importId, []);
+      importRowCounts.set(importId, 0);
+      return deletedRows;
+    },
     updateImportName: async (id: string, name: string) => {
       renameCalls.push({ id, name });
       const record = importRecords.get(id);
@@ -744,6 +750,49 @@ test("POST /api/imports accepts multipart Excel uploads without leaking temp fil
     });
     assert.equal(auditLogs.length, 1);
     assert.match(String(auditLogs[0].details), /Imported 2 rows from multipart-import\.xlsx/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports returns a structured parse error for an excessively wide streamed CSV", async () => {
+  const {
+    app,
+    createImportCalls,
+    createDataRowCalls,
+    deleteCalls,
+    auditLogs,
+  } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const headers = Array.from({ length: 301 }, (_, index) => `column_${index + 1}`);
+    const values = Array.from({ length: 301 }, (_, index) => String(index + 1));
+    const formData = new FormData();
+    formData.set("name", "Wide CSV");
+    formData.append(
+      "file",
+      new File(
+        [`${headers.join(",")}\n${values.join(",")}\n`],
+        "wide-import.csv",
+        { type: "text/csv" },
+      ),
+    );
+
+    const response = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.code, ERROR_CODES.IMPORT_PARSE_FAILED);
+    assert.equal(payload.error?.code, ERROR_CODES.IMPORT_PARSE_FAILED);
+    assert.match(String(payload.message), /column limit of 300/i);
+    assert.equal(createImportCalls.length, 1);
+    assert.equal(createDataRowCalls.length, 0);
+    assert.equal(deleteCalls.length, 1);
+    assert.equal(auditLogs.length, 0);
   } finally {
     await stopTestServer(server);
   }

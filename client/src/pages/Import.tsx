@@ -16,6 +16,7 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
     setImportName,
     parsedData,
     headers,
+    previewDeferred,
     loading,
     error,
     fileInputRef,
@@ -92,6 +93,7 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
               onImportNameChange={setImportName}
               onSave={handleSave}
               parsedData={parsedData}
+              previewDeferred={previewDeferred}
             />
           </TabsContent>
 

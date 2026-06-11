@@ -63,6 +63,10 @@ test("shouldSaveSingleImportFromOriginalFile prefers the original spreadsheet up
     false,
   );
   assert.equal(
+    shouldSaveSingleImportFromOriginalFile(createFile("large.csv"), 0, true),
+    true,
+  );
+  assert.equal(
     shouldSaveSingleImportFromOriginalFile(null, 10),
     false,
   );

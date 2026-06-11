@@ -433,8 +433,9 @@ server {
     # HTTPS-only, includeSubDomains is acceptable for the whole domain tree,
     # and the domain is ready for manual submission to https://hstspreload.org.
 
-    # Keep this equal to or higher than IMPORT_BODY_LIMIT so Express can return
-    # application-level import validation errors instead of generic Nginx 413s.
+    # The app defaults to a 96 MiB import file limit. Keep this slightly higher
+    # to allow multipart framing so Express can return structured validation
+    # errors instead of a generic HTML Nginx 413 response.
     client_max_body_size 100M;
 
     # Login responses carry Helmet/CSP security headers plus auth cookies.
@@ -572,7 +573,12 @@ Aktifkan:
 sudo ln -s /etc/nginx/sites-available/sqr /etc/nginx/sites-enabled/sqr
 sudo nginx -t
 sudo systemctl reload nginx
+sudo nginx -T 2>/dev/null | grep -n "client_max_body_size"
 ```
+
+Output aktif mesti menunjukkan `client_max_body_size 100M;` dalam blok HTTPS
+yang mengendalikan domain SQR. Aplikasi menggunakan had fail `96 MiB`; baki
+ruang pada Nginx diperlukan untuk boundary dan metadata multipart.
 
 ## 12. HTTPS Dengan Let's Encrypt
 

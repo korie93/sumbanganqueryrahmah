@@ -1,4 +1,4 @@
-import { AlertCircle, FileSpreadsheet, Save, Upload, X } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, Save, ShieldCheck, Upload, X } from "lucide-react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ interface SingleImportPanelProps {
   onImportNameChange: (value: string) => void;
   onSave: () => void;
   parsedData: ImportRow[];
+  previewDeferred: boolean;
 }
 
 export function SingleImportPanel({
@@ -39,6 +40,7 @@ export function SingleImportPanel({
   onImportNameChange,
   onSave,
   parsedData,
+  previewDeferred,
 }: SingleImportPanelProps) {
   const loadingBusyProps = loading ? { "aria-busy": "true" as const } : {};
   const loadingDropzoneDisabledProps = loading
@@ -54,6 +56,10 @@ export function SingleImportPanel({
             {parsedData.length > 0 ? (
               <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-2xs">
                 {parsedData.length.toLocaleString()} rows ready
+              </Badge>
+            ) : previewDeferred ? (
+              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-2xs">
+                Server validation
               </Badge>
             ) : null}
           </div>
@@ -129,7 +135,8 @@ export function SingleImportPanel({
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-medium text-foreground">{file.name}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {formatImportUploadSize(file.size)} selected and ready for preview.
+                  {formatImportUploadSize(file.size)} selected and{" "}
+                  {previewDeferred ? "ready for secure server validation." : "ready for preview."}
                 </p>
               </div>
               <button
@@ -165,15 +172,17 @@ export function SingleImportPanel({
         ) : null}
       </div>
 
-      {parsedData.length > 0 ? (
+      {parsedData.length > 0 || previewDeferred ? (
         <div className="glass-wrapper p-4 sm:p-6" {...loadingBusyProps}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">
-                Data Preview ({parsedData.length} rows)
+                {previewDeferred ? "Ready for Server Validation" : `Data Preview (${parsedData.length} rows)`}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground sm:hidden">
-                Review the sample rows before saving this dataset.
+              <p className="mt-1 text-sm text-muted-foreground">
+                {previewDeferred
+                  ? "This large file is not opened in the browser. The server will validate its format, structure, and limits before saving any data."
+                  : "Review the sample rows before saving this dataset."}
               </p>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:flex sm:gap-2">
@@ -196,37 +205,50 @@ export function SingleImportPanel({
             </div>
           </div>
 
-          <HorizontalScrollHint className="rounded-lg border border-border" hint="Scroll preview">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th scope="col" className="p-3 text-left font-medium text-muted-foreground">#</th>
-                  {headers.map((header) => (
-                    <th key={header} scope="col" className="p-3 text-left font-medium text-muted-foreground">
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {parsedData.slice(0, 10).map((row, rowIndex) => (
-                  <tr key={getImportPreviewRowKey(row)} className="border-t border-border hover:bg-muted/50">
-                    <td className="p-3 text-muted-foreground">{rowIndex + 1}</td>
+          {previewDeferred ? (
+            <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Memory-safe upload mode</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No full browser preview is created, reducing memory usage for large CSV and Excel files.
+                  Invalid files are rejected without retaining partial imported rows.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <HorizontalScrollHint className="rounded-lg border border-border" hint="Scroll preview">
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th scope="col" className="p-3 text-left font-medium text-muted-foreground">#</th>
                     {headers.map((header) => (
-                      <td key={header} className="p-3 text-foreground">
-                        {row[header] || "-"}
-                      </td>
+                      <th key={header} scope="col" className="p-3 text-left font-medium text-muted-foreground">
+                        {header}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {parsedData.length > 10 ? (
-              <div className="bg-muted/30 p-3 text-center text-sm text-muted-foreground">
-                ... and {parsedData.length - 10} more rows
-              </div>
-            ) : null}
-          </HorizontalScrollHint>
+                </thead>
+                <tbody>
+                  {parsedData.slice(0, 10).map((row, rowIndex) => (
+                    <tr key={getImportPreviewRowKey(row)} className="border-t border-border hover:bg-muted/50">
+                      <td className="p-3 text-muted-foreground">{rowIndex + 1}</td>
+                      {headers.map((header) => (
+                        <td key={header} className="p-3 text-foreground">
+                          {row[header] || "-"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {parsedData.length > 10 ? (
+                <div className="bg-muted/30 p-3 text-center text-sm text-muted-foreground">
+                  ... and {parsedData.length - 10} more rows
+                </div>
+              ) : null}
+            </HorizontalScrollHint>
+          )}
         </div>
       ) : null}
     </>

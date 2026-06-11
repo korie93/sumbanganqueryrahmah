@@ -108,7 +108,23 @@ test("production Nginx import body limit stays aligned with Express import limit
     nginxBodyLimit >= expressImportLimit,
     "client_max_body_size must be >= IMPORT_BODY_LIMIT so Express can return app-level import errors",
   );
-  assert.match(nginxText, /Express can return\s+# application-level import validation errors/i);
+  assert.match(nginxText, /structured validation\s+# errors instead of a generic HTML Nginx 413 response/i);
+});
+
+test("production environment template keeps import limits aligned with the app contract", () => {
+  const envText = readText(envExamplePath);
+  const productionEnvText = readText(productionEnvTemplatePath);
+
+  for (const [name, text] of [
+    [".env.example", envText],
+    ["production template", productionEnvText],
+  ]) {
+    assert.equal(readAnyEnvValue(text, "IMPORT_MAX_FILE_SIZE_MB", name), "96");
+    assert.equal(readAnyEnvValue(text, "IMPORT_BODY_LIMIT", name), "96mb");
+    assert.equal(readAnyEnvValue(text, "IMPORT_MAX_COLUMNS", name), "300");
+    assert.equal(readAnyEnvValue(text, "IMPORT_MAX_SHEETS", name), "20");
+    assert.equal(readAnyEnvValue(text, "IMPORT_MAX_CELL_LENGTH", name), "5000");
+  }
 });
 
 test("production Nginx example does not emit conflicting Helmet-owned headers", () => {

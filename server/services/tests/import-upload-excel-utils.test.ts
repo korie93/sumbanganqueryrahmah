@@ -46,6 +46,43 @@ test("parseExcelBuffer rejects oversized Excel uploads before parsing the workbo
   assert.deepEqual(result.rows, []);
 });
 
+test("parseExcelBuffer rejects workbooks beyond configured sheet and column limits", () => {
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(
+    workbook,
+    xlsx.utils.aoa_to_sheet([["a", "b", "c"], ["1", "2", "3"]]),
+    "Sheet1",
+  );
+  xlsx.utils.book_append_sheet(
+    workbook,
+    xlsx.utils.aoa_to_sheet([["extra"]]),
+    "Sheet2",
+  );
+  const buffer = xlsx.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+  }) as Buffer;
+
+  const tooManySheets = parseExcelBuffer(buffer, { maxSheets: 1 });
+  assert.match(String(tooManySheets.error), /sheet limit of 1/i);
+
+  const tooManyColumns = parseExcelBuffer(buffer, { maxSheets: 2, maxColumns: 2 });
+  assert.match(String(tooManyColumns.error), /column limit of 2/i);
+});
+
+test("parseExcelBuffer rejects cells beyond the configured character limit", () => {
+  const result = parseExcelBuffer(
+    createWorkbookBuffer([
+      ["name"],
+      ["Alice"],
+    ]),
+    { maxCellLength: 4 },
+  );
+
+  assert.match(String(result.error), /4 character limit/i);
+  assert.deepEqual(result.rows, []);
+});
+
 test("parseExcelFile rejects oversized Excel files before reading them into memory", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-excel-utils-"));
   const filePath = path.join(tempDir, "customers.xlsx");

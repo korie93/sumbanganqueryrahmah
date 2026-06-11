@@ -5,7 +5,9 @@ import type {
 } from "./imports-service-types";
 import { runtimeConfig } from "../config/runtime";
 import { forEachCsvFileRow } from "./import-upload-csv-utils";
+import { ImportUploadValidationError } from "./import-upload-file-utils";
 import { normalizeImportRow } from "./imports-service-parsers";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 const IMPORT_INSERT_CHUNK_SIZE = 20;
 const DEFAULT_IMPORT_ROW_BYTE_BUDGET = 64 * 1024;
@@ -29,13 +31,17 @@ function assertImportRowByteBudget(row: unknown, maxBytes: number) {
   try {
     serialized = JSON.stringify(row ?? {});
   } catch {
-    throw new Error("Import row contains unsupported data.");
+    throw new ImportUploadValidationError(
+      "Import row contains unsupported data.",
+      ERROR_CODES.IMPORT_PARSE_FAILED,
+    );
   }
 
   const rowBytes = Buffer.byteLength(serialized, "utf8");
   if (rowBytes > maxBytes) {
-    throw new Error(
+    throw new ImportUploadValidationError(
       `Import row exceeds the configured ${maxBytes.toLocaleString("en-US")} byte safety limit. Split or trim oversized cells before uploading.`,
+      ERROR_CODES.IMPORT_PARSE_FAILED,
     );
   }
 }
@@ -127,11 +133,18 @@ export class ImportsServiceMutationOperations {
             await flushPendingRows();
           }
         },
-        { maxRows: runtimeConfig.runtime.importCsvMaxRows },
+        {
+          maxRows: runtimeConfig.runtime.importCsvMaxRows,
+          maxColumns: runtimeConfig.runtime.importMaxColumns,
+          maxCellLength: runtimeConfig.runtime.importMaxCellLength,
+        },
       );
 
       if (parsed.error) {
-        throw new Error(parsed.error);
+        throw new ImportUploadValidationError(
+          parsed.error,
+          ERROR_CODES.IMPORT_PARSE_FAILED,
+        );
       }
 
       await flushPendingRows();
@@ -144,7 +157,10 @@ export class ImportsServiceMutationOperations {
     if (parsed.rowCount <= 0) {
       await this.storage.deleteDataRowsByImport(importRecord.id);
       await this.storage.deleteImport(importRecord.id);
-      throw new Error("No data rows provided");
+      throw new ImportUploadValidationError(
+        "No data rows provided",
+        ERROR_CODES.IMPORT_PARSE_FAILED,
+      );
     }
 
     if (params.createdBy) {

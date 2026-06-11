@@ -188,6 +188,8 @@ test("createImportFromCsvFile rejects oversized streamed rows and rolls back the
   const filePath = path.join(tempDir, "oversized-row.csv");
   const deletedImportIds: string[] = [];
   const deletedRowImportIds: string[] = [];
+  const originalMaxCellLength = runtimeConfig.runtime.importMaxCellLength;
+  runtimeConfig.runtime.importMaxCellLength = 100_000;
 
   try {
     await writeFile(filePath, `name,notes\nAlice,${"x".repeat(70 * 1024)}\n`, "utf8");
@@ -217,6 +219,7 @@ test("createImportFromCsvFile rejects oversized streamed rows and rolls back the
     assert.equal(deletedImportIds.length, 1);
     assert.equal(deletedRowImportIds[0], deletedImportIds[0]);
   } finally {
+    runtimeConfig.runtime.importMaxCellLength = originalMaxCellLength;
     await rm(tempDir, { recursive: true, force: true });
   }
 });

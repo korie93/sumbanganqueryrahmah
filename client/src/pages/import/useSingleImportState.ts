@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createImport, createImportFromFile } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
-import { parseImportPreview } from "@/pages/import/parsing";
+import {
+  parseImportPreview,
+  shouldDeferImportPreview,
+} from "@/pages/import/parsing";
 import {
   isImportAbortError,
   resolveNextImportName,
@@ -27,6 +30,7 @@ export function useSingleImportState({
   const [importName, setImportName] = useState("");
   const [parsedData, setParsedData] = useState<ImportRow[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [previewDeferred, setPreviewDeferred] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,6 +44,7 @@ export function useSingleImportState({
     setFile(null);
     setParsedData([]);
     setHeaders([]);
+    setPreviewDeferred(false);
     setImportName("");
     setError("");
     if (fileInputRef.current) {
@@ -62,9 +67,16 @@ export function useSingleImportState({
     setFile(selectedFile);
     setParsedData([]);
     setHeaders([]);
+    setPreviewDeferred(false);
 
     if (isImportFileTooLarge(selectedFile, importUploadLimitBytes)) {
       setError(buildImportFileTooLargeMessage(selectedFile.size, importUploadLimitBytes));
+      return;
+    }
+
+    setImportName((currentName) => resolveNextImportName(currentName, selectedFile.name));
+    if (shouldDeferImportPreview(selectedFile)) {
+      setPreviewDeferred(true);
       return;
     }
 
@@ -76,12 +88,12 @@ export function useSingleImportState({
       if (parsed.error) {
         setError(parsed.error);
         setFile(null);
+        setPreviewDeferred(false);
         return;
       }
 
       setHeaders(parsed.headers);
       setParsedData(parsed.rows);
-      setImportName((currentName) => resolveNextImportName(currentName, selectedFile.name));
     } catch (parseError) {
       if (requestId !== singleParseRequestIdRef.current) {
         return;
@@ -123,7 +135,7 @@ export function useSingleImportState({
       return;
     }
 
-    if (parsedData.length === 0) {
+    if (parsedData.length === 0 && !previewDeferred) {
       setError("No data to save.");
       return;
     }
@@ -139,7 +151,10 @@ export function useSingleImportState({
       const rowCount = parsedData.length;
       const savedName = importName.trim();
       const selectedFile = file;
-      if (selectedFile && shouldSaveSingleImportFromOriginalFile(selectedFile, rowCount)) {
+      if (
+        selectedFile
+        && shouldSaveSingleImportFromOriginalFile(selectedFile, rowCount, previewDeferred)
+      ) {
         await createImportFromFile(savedName, selectedFile, { signal: controller.signal });
       } else {
         await createImport(
@@ -156,7 +171,9 @@ export function useSingleImportState({
       resetSingleImport();
       toast({
         title: "Success",
-        description: `Data "${savedName}" has been saved (${rowCount} rows).`,
+        description: previewDeferred
+          ? `File "${savedName}" has been validated and saved by the server.`
+          : `Data "${savedName}" has been saved (${rowCount} rows).`,
       });
       onNavigate("saved");
     } catch (saveError: unknown) {
@@ -173,7 +190,16 @@ export function useSingleImportState({
         setLoading(false);
       }
     }
-  }, [file, importName, loading, onNavigate, parsedData, resetSingleImport, toast]);
+  }, [
+    file,
+    importName,
+    loading,
+    onNavigate,
+    parsedData,
+    previewDeferred,
+    resetSingleImport,
+    toast,
+  ]);
 
   const resetSingleForInactiveTab = useCallback(() => {
     invalidateSinglePreview();
@@ -195,6 +221,7 @@ export function useSingleImportState({
     setImportName,
     parsedData,
     headers,
+    previewDeferred,
     loading,
     error,
     fileInputRef,

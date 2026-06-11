@@ -11,7 +11,14 @@ import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types"
 type ParseExcelOptions = {
   maxRows?: number;
   maxBytes?: number;
+  maxColumns?: number;
+  maxSheets?: number;
+  maxCellLength?: number;
 };
+
+const DEFAULT_IMPORT_MAX_COLUMNS = 300;
+const DEFAULT_IMPORT_MAX_SHEETS = 20;
+const DEFAULT_IMPORT_MAX_CELL_LENGTH = 5_000;
 
 function mapExcelReadError(error: unknown): ParsedImportUploadResult {
   const message = error instanceof Error ? error.message : "Failed to read Excel file";
@@ -21,7 +28,11 @@ function mapExcelReadError(error: unknown): ParsedImportUploadResult {
   if (message.includes("Unsupported") || message.includes("corrupt")) {
     return { headers: [], rows: [], error: "File is corrupted or unsupported format" };
   }
-  return { headers: [], rows: [], error: message };
+  return {
+    headers: [],
+    rows: [],
+    error: "The spreadsheet could not be parsed. Verify that it is a valid XLSX or XLSB file.",
+  };
 }
 
 function resolveExcelMaxRows(options?: ParseExcelOptions) {
@@ -41,9 +52,39 @@ function createSpreadsheetRowLimitError(maxRows: number): ParsedImportUploadResu
   };
 }
 
+function resolvePositiveLimit(value: number | undefined, fallback: number) {
+  if (value == null || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(1, Math.trunc(value));
+}
+
+function createSpreadsheetStructureError(message: string): ParsedImportUploadResult {
+  return {
+    headers: [],
+    rows: [],
+    error: message,
+  };
+}
+
 function parseWorkbookJsonData(jsonData: unknown[][], options?: ParseExcelOptions): ParsedImportUploadResult {
   if (jsonData.length === 0) {
     return { headers: [], rows: [], error: "Excel file is empty." };
+  }
+
+  const maxColumns = resolvePositiveLimit(options?.maxColumns, DEFAULT_IMPORT_MAX_COLUMNS);
+  const maxCellLength = resolvePositiveLimit(options?.maxCellLength, DEFAULT_IMPORT_MAX_CELL_LENGTH);
+  for (const row of jsonData) {
+    if (row.length > maxColumns) {
+      return createSpreadsheetStructureError(
+        `Spreadsheet import exceeds the configured column limit of ${maxColumns.toLocaleString("en-US")} columns.`,
+      );
+    }
+    if (row.some((cell) => String(cell ?? "").length > maxCellLength)) {
+      return createSpreadsheetStructureError(
+        `Spreadsheet import contains a cell longer than the configured ${maxCellLength.toLocaleString("en-US")} character limit.`,
+      );
+    }
   }
 
   let headerRowIndex = 0;
@@ -103,6 +144,7 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
     workbook = spreadsheetRuntime.readWorkbook(buffer, {
       type: "buffer",
       cellDates: true,
+      cellFormula: false,
       cellNF: false,
       cellText: false,
     });
@@ -110,23 +152,50 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
     return mapExcelReadError(error);
   }
 
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) {
-    return { headers: [], rows: [], error: "Excel file does not have any sheets." };
+  try {
+    const maxSheets = resolvePositiveLimit(options?.maxSheets, DEFAULT_IMPORT_MAX_SHEETS);
+    if (workbook.SheetNames.length > maxSheets) {
+      return createSpreadsheetStructureError(
+        `Spreadsheet import exceeds the configured sheet limit of ${maxSheets.toLocaleString("en-US")} sheets.`,
+      );
+    }
+
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      return { headers: [], rows: [], error: "Excel file does not have any sheets." };
+    }
+
+    const worksheet = workbook.Sheets[firstSheetName];
+    const worksheetRef = worksheet?.["!ref"];
+    if (worksheetRef) {
+      const range = spreadsheetRuntime.decodeRange(worksheetRef);
+      const declaredColumns = Math.max(0, range.e.c - range.s.c + 1);
+      const maxColumns = resolvePositiveLimit(options?.maxColumns, DEFAULT_IMPORT_MAX_COLUMNS);
+      if (declaredColumns > maxColumns) {
+        return createSpreadsheetStructureError(
+          `Spreadsheet import exceeds the configured column limit of ${maxColumns.toLocaleString("en-US")} columns.`,
+        );
+      }
+
+      const declaredRows = Math.max(0, range.e.r - range.s.r);
+      const maxRows = resolveExcelMaxRows(options);
+      if (Number.isFinite(maxRows) && declaredRows > maxRows + 5) {
+        return createSpreadsheetRowLimitError(maxRows);
+      }
+    }
+
+    const jsonData = spreadsheetRuntime.sheetToJson(worksheet, {
+      header: 1,
+      defval: "",
+      raw: false,
+    }) as unknown[][];
+
+    return parseWorkbookJsonData(jsonData, options);
+  } finally {
+    (workbook as { SheetNames?: unknown; Sheets?: unknown }).SheetNames = null;
+    (workbook as { SheetNames?: unknown; Sheets?: unknown }).Sheets = null;
+    workbook = null as never;
   }
-
-  const worksheet = workbook.Sheets[firstSheetName];
-  const jsonData = spreadsheetRuntime.sheetToJson(worksheet, {
-    header: 1,
-    defval: "",
-    raw: false,
-  }) as unknown[][];
-
-  (workbook as { SheetNames?: unknown; Sheets?: unknown }).SheetNames = null;
-  (workbook as { SheetNames?: unknown; Sheets?: unknown }).Sheets = null;
-  workbook = null as never;
-
-  return parseWorkbookJsonData(jsonData, options);
 }
 
 export async function parseExcelFile(

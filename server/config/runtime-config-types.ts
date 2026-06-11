@@ -137,6 +137,9 @@ export type RuntimeConfig = {
     backupOperationTimeoutMs: number;
     backupMaxPayloadBytes: number;
     importCsvMaxRows: number;
+    importMaxColumns: number;
+    importMaxSheets: number;
+    importMaxCellLength: number;
     importInsertBatchSize: number;
     importMaxRowBytes: number;
     importPerUserActiveUploadBytes: number;

@@ -50,8 +50,9 @@ export function resolveNextImportName(currentImportName: string, filename: strin
 export function shouldSaveSingleImportFromOriginalFile(
   file: File | null,
   parsedRowCount: number,
+  previewDeferred = false,
 ) {
-  if (!file || parsedRowCount < 1) {
+  if (!file || (parsedRowCount < 1 && !previewDeferred)) {
     return false;
   }
 

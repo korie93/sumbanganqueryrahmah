@@ -1188,6 +1188,35 @@ test("runtime config accepts IMPORT_MAX_FILE_SIZE_MB as the import upload limit"
   );
 });
 
+test("runtime config accepts bounded import parser structure limits", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      IMPORT_MAX_COLUMNS: "240",
+      IMPORT_MAX_SHEETS: "12",
+      IMPORT_MAX_CELL_LENGTH: "4096",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.importMaxColumns, 240);
+      assert.equal(runtimeModule.runtimeConfig.runtime.importMaxSheets, 12);
+      assert.equal(runtimeModule.runtimeConfig.runtime.importMaxCellLength, 4096);
+    },
+  );
+});
+
 test("runtime config keeps strict local development bootable when SMTP env vars are incomplete", async () => {
   await withEnv(
     {

@@ -536,6 +536,18 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       min: 1,
       max: 1_000_000,
     }),
+    importMaxColumns: readInt("IMPORT_MAX_COLUMNS", 300, {
+      min: 1,
+      max: 5_000,
+    }),
+    importMaxSheets: readInt("IMPORT_MAX_SHEETS", 20, {
+      min: 1,
+      max: 100,
+    }),
+    importMaxCellLength: readInt("IMPORT_MAX_CELL_LENGTH", 5_000, {
+      min: 1,
+      max: 1_000_000,
+    }),
     importInsertBatchSize: readInt("IMPORT_INSERT_BATCH_SIZE", 1_000, {
       min: 1,
       max: 5_000,

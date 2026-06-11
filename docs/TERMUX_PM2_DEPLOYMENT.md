@@ -156,13 +156,58 @@ pm2 save
 
 ## 5. Update Deploy Seterusnya
 
-Setiap kali pull kod baru:
+Setiap kali pull kod baru dari branch yang sedang dideploy:
 
 ```bash
-git pull origin main
+BRANCH=main
+git fetch origin --prune
+git switch "$BRANCH" 2>/dev/null || git switch --track "origin/$BRANCH"
+git pull --ff-only origin "$BRANCH"
 npm ci
 npm run build
 pm2 restart sqr --update-env
 ```
 
 Jika anda ubah `.env`, gunakan `--update-env` supaya process ambil nilai terbaru.
+
+Untuk branch pembaikan, tukar baris pertama sahaja, contohnya:
+
+```bash
+BRANCH=fix/task-13-split-theme-tokens
+```
+
+## 6. Elak Nginx 413 Untuk Import
+
+Tetapan aplikasi production yang disyorkan:
+
+```dotenv
+IMPORT_MAX_FILE_SIZE_MB=96
+IMPORT_BODY_LIMIT=96mb
+IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES=100663296
+IMPORT_CSV_MAX_ROWS=100000
+IMPORT_MAX_COLUMNS=300
+IMPORT_MAX_SHEETS=20
+IMPORT_MAX_CELL_LENGTH=5000
+```
+
+Nginx perlu sedikit lebih tinggi daripada had fail aplikasi kerana request
+multipart turut membawa boundary dan metadata. Dalam blok `server` HTTPS aktif,
+pastikan baris ini wujud:
+
+```nginx
+client_max_body_size 100M;
+```
+
+Semak konfigurasi aktif, uji, kemudian reload:
+
+```bash
+sudo nginx -T 2>/dev/null | grep -n "client_max_body_size"
+sudo nginx -t
+sudo systemctl reload nginx
+sudo nginx -T 2>/dev/null | grep -n "client_max_body_size"
+```
+
+Jika output masih menunjukkan `1m`, `1M`, atau nilai kecil pada blok domain
+SQR, edit fail yang dipaparkan oleh `sudo nginx -T`, bukan salinan config yang
+tidak diaktifkan. Selepas reload, uji import CSV, XLSX, dan XLSB menggunakan
+fail melebihi 1 MB tetapi di bawah 96 MB.

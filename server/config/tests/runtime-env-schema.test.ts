@@ -190,6 +190,9 @@ test("runtime env schema validates CSV import row limits", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({
       IMPORT_CSV_MAX_ROWS: "100000",
+      IMPORT_MAX_COLUMNS: "300",
+      IMPORT_MAX_SHEETS: "20",
+      IMPORT_MAX_CELL_LENGTH: "5000",
       IMPORT_INSERT_BATCH_SIZE: "1000",
       IMPORT_MAX_ROW_BYTES: "65536",
     });
@@ -202,6 +205,33 @@ test("runtime env schema validates CSV import row limits", () => {
       });
     },
     /IMPORT_CSV_MAX_ROWS.*at least 1/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        IMPORT_MAX_COLUMNS: "0",
+      });
+    },
+    /IMPORT_MAX_COLUMNS.*at least 1/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        IMPORT_MAX_SHEETS: "101",
+      });
+    },
+    /IMPORT_MAX_SHEETS.*at most 100/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        IMPORT_MAX_CELL_LENGTH: "0",
+      });
+    },
+    /IMPORT_MAX_CELL_LENGTH.*at least 1/i,
   );
 
   assert.throws(

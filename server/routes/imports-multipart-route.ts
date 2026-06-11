@@ -2,7 +2,13 @@ import Busboy from "busboy";
 import type { AuthenticatedRequest } from "../auth/guards";
 import type { RequestHandler } from "express";
 import { DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "../config/body-limit";
+import { buildApiErrorResponse } from "../http/api-error-response";
 import { logger } from "../lib/logger";
+import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
+import {
+  normalizeAndValidateImportUploadFilename,
+  validateImportUploadMimeType,
+} from "../services/import-upload-file-utils";
 import {
   cleanupPreparedMultipartImportUpload,
   normalizeImportName,
@@ -207,6 +213,7 @@ export function createImportsMultipartRoute(
 
     const body: MultipartImportBody = {};
     let fileTask: Promise<PreparedMultipartImportUpload> | null = null;
+    let fileValidationError: unknown = null;
     let settled = false;
     let quotaReleased = false;
     const activeFileStreams = createMultipartUploadStreamRegistry();
@@ -292,24 +299,25 @@ export function createImportsMultipartRoute(
     };
 
     if (quotaSubject && !quotaTracker.tryReserve(quotaSubject, reservedQuotaBytes)) {
-      res.status(413).json({
-        ok: false,
-        message:
-          "You already have an import upload in progress that uses your per-user upload quota. Please wait and try again.",
-      });
+      const message =
+        "You already have an import upload in progress that uses your per-user upload quota. Please wait and try again.";
+      res.status(413).json(buildApiErrorResponse(message, {
+        code: ERROR_CODES.IMPORT_UPLOAD_RATE_LIMITED,
+        statusCode: 413,
+      }));
       return;
     }
 
-    const fail = (status: number, message: string) => {
+    const fail = (status: number, message: string, code?: ErrorCode) => {
       if (settled) {
         return;
       }
       releaseQuota();
       settled = true;
-      res.status(status).json({
-        ok: false,
-        message,
-      });
+      res.status(status).json(buildApiErrorResponse(message, {
+        code,
+        statusCode: status,
+      }));
     };
 
     parser.on("field", (fieldName, value) => {
@@ -343,12 +351,18 @@ export function createImportsMultipartRoute(
         return;
       }
 
-      trackFileStream(file);
-
-      fileTask = (async () => {
-        const filename = String(info.filename || "").trim();
-        return prepareMultipartImportUpload({ file, filename });
-      })();
+      try {
+        const filename = normalizeAndValidateImportUploadFilename(info.filename);
+        validateImportUploadMimeType(filename, info.mimeType);
+        trackFileStream(file);
+        fileTask = prepareMultipartImportUpload({ file, filename });
+        void fileTask.catch(() => {
+          // The parser finish/error handlers own the response and cleanup.
+        });
+      } catch (error) {
+        fileValidationError = error;
+        file.resume();
+      }
     });
 
     parser.once("error", (error) => {
@@ -369,7 +383,7 @@ export function createImportsMultipartRoute(
       }
 
       const failure = resolveImportMultipartFailure(error, undefined, safeMaxFileSizeBytes);
-      fail(failure.statusCode, failure.message);
+      fail(failure.statusCode, failure.message, failure.code);
     });
 
     parser.once("finish", async () => {
@@ -377,8 +391,22 @@ export function createImportsMultipartRoute(
         return;
       }
 
+      if (fileValidationError) {
+        const failure = resolveImportMultipartFailure(
+          fileValidationError,
+          undefined,
+          safeMaxFileSizeBytes,
+        );
+        fail(failure.statusCode, failure.message, failure.code);
+        return;
+      }
+
       if (!fileTask) {
-        fail(400, "Please select a CSV, XLSX, or XLSB file to import.");
+        fail(
+          400,
+          "Please select a CSV, XLSX, or XLSB file to import.",
+          ERROR_CODES.IMPORT_UNSUPPORTED_FILE_TYPE,
+        );
         return;
       }
 
@@ -407,7 +435,7 @@ export function createImportsMultipartRoute(
           delete responseLocals.multipartImportUpload;
         }
         const failure = resolveImportMultipartFailure(error, undefined, safeMaxFileSizeBytes);
-        fail(failure.statusCode, failure.message);
+        fail(failure.statusCode, failure.message, failure.code);
       }
     });
 
