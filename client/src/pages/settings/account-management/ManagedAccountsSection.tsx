@@ -59,6 +59,7 @@ export function ManagedAccountsSection({
         filters={
           <ManagedAccountsFiltersPanel
             activeFilters={filterState.activeFilters}
+            attentionSummary={attentionSummary}
             hasActiveFilters={filterState.hasActiveFilters}
             roleFilter={filterState.roleFilter}
             searchQuery={filterState.searchQuery}

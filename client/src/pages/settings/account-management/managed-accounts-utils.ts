@@ -124,6 +124,13 @@ export function buildManagedAccountAttentionSummary(
   };
 }
 
+export function getManagedAccountAttentionCount(
+  summary: ManagedAccountAttentionSummary,
+  status: ManagedAccountAttentionStatus,
+): number {
+  return summary.items.find((item) => item.status === status)?.count ?? 0;
+}
+
 export function buildManagedAccountRiskSummary(user: ManagedUser): ManagedAccountRiskSummary {
   if (user.isBanned) {
     return {

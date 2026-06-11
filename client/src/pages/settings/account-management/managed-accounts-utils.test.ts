@@ -14,6 +14,7 @@ import {
   buildManagedAccountTimeline,
   getManagedAccountsEmptyMessage,
   getManagedAccountsEmptyState,
+  getManagedAccountAttentionCount,
   getManagedAccountAttentionStatus,
   normalizeManagedAccountsRoleFilter,
   normalizeManagedAccountsStatusFilter,
@@ -192,6 +193,17 @@ test("buildManagedAccountAttentionSummary counts visible attention statuses", ()
       { status: "disabled", count: 1 },
     ],
   );
+});
+
+test("getManagedAccountAttentionCount returns visible count for a status", () => {
+  const summary = buildManagedAccountAttentionSummary([
+    createManagedUser({ id: "locked-1", lockedAt: "2026-01-03T00:00:00.000Z" }),
+    createManagedUser({ id: "locked-2", lockedAt: "2026-01-04T00:00:00.000Z" }),
+    createManagedUser({ id: "banned-1", isBanned: true }),
+  ]);
+
+  assert.equal(getManagedAccountAttentionCount(summary, "locked"), 2);
+  assert.equal(getManagedAccountAttentionCount(summary, "disabled"), 0);
 });
 
 test("buildManagedAccountRiskSummary prioritizes banned and locked account states", () => {

@@ -7,12 +7,15 @@ import {
   MANAGED_ACCOUNT_ATTENTION_FILTERS,
   MANAGED_ACCOUNT_ROLE_OPTIONS,
   MANAGED_ACCOUNT_STATUS_OPTIONS,
+  type ManagedAccountAttentionSummary,
   type ManagedAccountsRoleFilter,
   type ManagedAccountsStatusFilter,
 } from "@/pages/settings/account-management/managed-accounts-shared";
+import { getManagedAccountAttentionCount } from "@/pages/settings/account-management/managed-accounts-utils";
 
 type ManagedAccountsFiltersPanelProps = {
   activeFilters: ActiveFilterChip[];
+  attentionSummary: ManagedAccountAttentionSummary;
   hasActiveFilters: boolean;
   roleFilter: ManagedAccountsRoleFilter;
   searchQuery: string;
@@ -25,6 +28,7 @@ type ManagedAccountsFiltersPanelProps = {
 
 export function ManagedAccountsFiltersPanel({
   activeFilters,
+  attentionSummary,
   hasActiveFilters,
   roleFilter,
   searchQuery,
@@ -54,6 +58,8 @@ export function ManagedAccountsFiltersPanel({
         <div className="mt-3 flex flex-wrap gap-2">
           {MANAGED_ACCOUNT_ATTENTION_FILTERS.map((option) => {
             const isActive = statusFilter === option.value;
+            const visibleCount = getManagedAccountAttentionCount(attentionSummary, option.value);
+            const visibleCountLabel = `${visibleCount.toLocaleString()} visible`;
 
             return (
               <Button
@@ -71,9 +77,21 @@ export function ManagedAccountsFiltersPanel({
                     ? "text-amber-800 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100"
                     : undefined,
                 )}
-                title={option.description}
+                title={`${option.description} ${visibleCountLabel} on this page.`}
+                aria-label={`${option.label}: ${visibleCountLabel}; ${option.description}`}
               >
-                {option.label}
+                <span>{option.label}</span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "ml-2 rounded-full border px-1.5 py-0.5 text-2xs font-semibold",
+                    isActive
+                      ? "border-primary-foreground/40 text-primary-foreground"
+                      : "border-border/70 text-muted-foreground",
+                  )}
+                >
+                  {visibleCount.toLocaleString()}
+                </span>
               </Button>
             );
           })}
