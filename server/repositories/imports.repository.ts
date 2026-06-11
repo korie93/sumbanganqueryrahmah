@@ -297,6 +297,29 @@ export class ImportsRepository {
     return result[0];
   }
 
+  async createDataRows(rows: InsertDataRow[]): Promise<DataRow[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const values = rows.map((row) => {
+      if (!row.jsonDataJsonb || typeof row.jsonDataJsonb !== "object") {
+        throw new Error("Invalid jsonDataJsonb");
+      }
+
+      return {
+        id: crypto.randomUUID(),
+        importId: row.importId,
+        jsonDataJsonb: row.jsonDataJsonb,
+      };
+    });
+
+    return db
+      .insert(dataRows)
+      .values(values)
+      .returning();
+  }
+
   async getDataRowsByImport(importId: string): Promise<DataRow[]> {
     const rows: DataRow[] = [];
     let offset = 0;

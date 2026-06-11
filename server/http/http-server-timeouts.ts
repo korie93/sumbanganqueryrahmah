@@ -1,0 +1,7 @@
+import { LONG_OPERATION_REQUEST_TIMEOUTS_MS } from "./global-request-timeout";
+
+const HTTP_SERVER_TIMEOUT_BUFFER_MS = 60_000;
+
+export const HTTP_SERVER_SOCKET_TIMEOUT_MS =
+  Math.max(...Object.values(LONG_OPERATION_REQUEST_TIMEOUTS_MS))
+  + HTTP_SERVER_TIMEOUT_BUFFER_MS;

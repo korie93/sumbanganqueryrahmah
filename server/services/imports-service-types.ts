@@ -13,7 +13,7 @@ type AnalyzeAllImportsResult = Awaited<ReturnType<ImportAnalysisService["analyze
 type ImportsStorage = Pick<
   PostgresStorage,
   | "createAuditLog"
-  | "createDataRow"
+  | "createDataRows"
   | "createImport"
   | "deleteDataRowsByImport"
   | "deleteImport"

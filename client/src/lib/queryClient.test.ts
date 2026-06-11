@@ -232,6 +232,31 @@ test("apiRequest does not retry authentication failures", async () => {
   }
 });
 
+test("apiRequest does not retry non-idempotent mutations after gateway failures", async () => {
+  const originalFetch = globalThis.fetch;
+  resetApiRetryStateForTests();
+  let callCount = 0;
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify({ message: "upstream unavailable" }), {
+      status: 502,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("POST", "/api/imports", new FormData()),
+      /upstream unavailable/,
+    );
+    assert.equal(callCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetApiRetryStateForTests();
+  }
+});
+
 test("apiRequest aborts the retry chain when the caller signal aborts during backoff", async () => {
   const originalFetch = globalThis.fetch;
   const controller = new AbortController();

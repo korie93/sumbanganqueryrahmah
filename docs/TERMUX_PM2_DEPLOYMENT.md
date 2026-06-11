@@ -211,3 +211,38 @@ Jika output masih menunjukkan `1m`, `1M`, atau nilai kecil pada blok domain
 SQR, edit fail yang dipaparkan oleh `sudo nginx -T`, bukan salinan config yang
 tidak diaktifkan. Selepas reload, uji import CSV, XLSX, dan XLSB menggunakan
 fail melebihi 1 MB tetapi di bawah 96 MB.
+
+## 7. Elak Nginx 502 Semasa Import Diproses
+
+Import spreadsheet boleh mengambil masa lebih lama daripada request biasa.
+Letakkan blok tepat ini sebelum `location /api/` dalam blok HTTPS domain SQR:
+
+```nginx
+location = /api/imports {
+    limit_req zone=sqr_api_per_ip burst=20 nodelay;
+    limit_conn sqr_conn_per_ip 20;
+
+    proxy_pass http://127.0.0.1:5000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+
+    proxy_request_buffering off;
+    proxy_read_timeout 360s;
+    proxy_send_timeout 360s;
+}
+```
+
+Uji konfigurasi dan pastikan proses aplikasi sihat sebelum mencuba semula:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+curl -fsS http://127.0.0.1:5000/api/health/ready
+pm2 logs sqr --lines 100 --nostream
+```
+
+Client tidak mengulang `POST /api/imports` secara automatik. Ini mengelakkan
+fail yang sama diproses beberapa kali apabila gateway sementara gagal.

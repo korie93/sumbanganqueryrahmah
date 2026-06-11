@@ -34,6 +34,7 @@ import { createRuntimeConfigManager } from "./runtime-config-manager";
 import { createRuntimeMonitorManager } from "./runtime-monitor-manager";
 import { wrapAsyncPrototypeMethods } from "./wrapAsyncPrototypeMethods";
 import { applyTrustedProxies } from "../http/trust-proxy";
+import { HTTP_SERVER_SOCKET_TIMEOUT_MS } from "../http/http-server-timeouts";
 
 type CreateLocalRuntimeEnvironmentOptions = {
   onGracefulShutdownMessage?: (reason: string) => void;
@@ -42,7 +43,6 @@ type CreateLocalRuntimeEnvironmentOptions = {
 
 const DB_METHOD_WRAP_EXCLUDE = new Set<string>(["constructor"]);
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
-const HTTP_SERVER_TIMEOUT_MS = 120_000;
 
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {
   const storage = new PostgresStorage();
@@ -51,7 +51,10 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
   const app = express();
   applyTrustedProxies(app, runtimeConfig.app.trustedProxies);
   const server = createServer(app);
-  server.setTimeout(HTTP_SERVER_TIMEOUT_MS);
+  // Keep the transport timeout above every application-owned request deadline.
+  // Otherwise Node closes the upstream socket first and Nginx converts the
+  // controlled application timeout into an opaque 502 response.
+  server.setTimeout(HTTP_SERVER_SOCKET_TIMEOUT_MS);
   // The server owns several one-shot shutdown cleanup hooks (WebSocket,
   // cache sweepers, rate limit sweeps, telemetry guards, queue listeners).
   // Raise the per-server listener cap so Node does not report those expected

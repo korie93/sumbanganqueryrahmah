@@ -10,6 +10,7 @@ import { runtimeConfig } from "../../config/runtime";
 function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsServiceStorage {
   const auditLogs: Array<Record<string, unknown>> = [];
   const imports = new Map<string, { id: string; name: string; filename: string; createdBy: string | null }>();
+  let createdRowCount = 0;
 
   const baseStorage: ImportsServiceStorage = {
     createAuditLog: async (entry) => {
@@ -25,10 +26,13 @@ function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsS
         timestamp: new Date("2026-04-12T00:00:00.000Z"),
       };
     },
-    createDataRow: async (data) => ({
-      id: `row-${Math.random().toString(16).slice(2)}`,
-      importId: data.importId,
-      jsonDataJsonb: data.jsonDataJsonb,
+    createDataRows: async (rows) => rows.map((data) => {
+      createdRowCount += 1;
+      return {
+        id: `row-${createdRowCount}`,
+        importId: data.importId,
+        jsonDataJsonb: data.jsonDataJsonb,
+      };
     }),
     createImport: async (data) => {
       const created = {
@@ -89,13 +93,13 @@ test("createImportFromCsvFile streams rows and records the inspected row count i
           timestamp: new Date("2026-04-12T00:00:00.000Z"),
         };
       },
-      createDataRow: async (data) => {
-        createdRows.push(data.jsonDataJsonb as Record<string, unknown>);
-        return {
-          id: `row-${createdRows.length}`,
+      createDataRows: async (rows) => {
+        createdRows.push(...rows.map((data) => data.jsonDataJsonb as Record<string, unknown>));
+        return rows.map((data, index) => ({
+          id: `row-${createdRows.length - rows.length + index + 1}`,
           importId: data.importId,
           jsonDataJsonb: data.jsonDataJsonb,
-        };
+        }));
       },
       deleteDataRowsByImport: async (importId) => {
         deletedRowImportIds.push(importId);
@@ -133,9 +137,8 @@ test("createImportFromCsvFile flushes streamed rows in configurable bounded batc
   runtimeConfig.runtime.importInsertBatchSize = 3;
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-mutation-"));
   const filePath = path.join(tempDir, "batched.csv");
-  let inFlightWrites = 0;
-  let maxInFlightWrites = 0;
   let createdRowCount = 0;
+  const batchSizes: number[] = [];
 
   try {
     await writeFile(
@@ -154,17 +157,17 @@ test("createImportFromCsvFile flushes streamed rows in configurable bounded batc
     );
 
     const operations = new ImportsServiceMutationOperations(createStorageStub({
-      createDataRow: async (data) => {
-        inFlightWrites += 1;
-        maxInFlightWrites = Math.max(maxInFlightWrites, inFlightWrites);
+      createDataRows: async (rows) => {
+        batchSizes.push(rows.length);
         await new Promise((resolve) => setImmediate(resolve));
-        inFlightWrites -= 1;
-        createdRowCount += 1;
-        return {
-          id: `row-${createdRowCount}`,
-          importId: data.importId,
-          jsonDataJsonb: data.jsonDataJsonb,
-        };
+        return rows.map((data) => {
+          createdRowCount += 1;
+          return {
+            id: `row-${createdRowCount}`,
+            importId: data.importId,
+            jsonDataJsonb: data.jsonDataJsonb,
+          };
+        });
       },
     }));
 
@@ -176,7 +179,7 @@ test("createImportFromCsvFile flushes streamed rows in configurable bounded batc
     });
 
     assert.equal(createdRowCount, 7);
-    assert.equal(maxInFlightWrites <= 3, true);
+    assert.deepEqual(batchSizes, [3, 3, 1]);
   } finally {
     runtimeConfig.runtime.importInsertBatchSize = originalBatchSize;
     await rm(tempDir, { recursive: true, force: true });
@@ -229,22 +232,24 @@ test("createImportFromCsvFile cleans up staged imports when row insertion fails 
   const filePath = path.join(tempDir, "broken.csv");
   const deletedImportIds: string[] = [];
   const deletedRowImportIds: string[] = [];
-  let createDataRowCalls = 0;
+  let createDataRowsCalls = 0;
+  const originalBatchSize = runtimeConfig.runtime.importInsertBatchSize;
+  runtimeConfig.runtime.importInsertBatchSize = 1;
 
   try {
     await writeFile(filePath, "name,amount\nAlice,10\nBob,20\n", "utf8");
     const operations = new ImportsServiceMutationOperations(createStorageStub({
-      createDataRow: async (data) => {
-        createDataRowCalls += 1;
-        if (createDataRowCalls === 2) {
+      createDataRows: async (rows) => {
+        createDataRowsCalls += 1;
+        if (createDataRowsCalls === 2) {
           throw new Error("insert failed");
         }
 
-        return {
-          id: `row-${createDataRowCalls}`,
+        return rows.map((data) => ({
+          id: `row-${createDataRowsCalls}`,
           importId: data.importId,
           jsonDataJsonb: data.jsonDataJsonb,
-        };
+        }));
       },
       deleteDataRowsByImport: async (importId) => {
         deletedRowImportIds.push(importId);
@@ -267,12 +272,54 @@ test("createImportFromCsvFile cleans up staged imports when row insertion fails 
       /insert failed/i,
     );
 
-    assert.equal(createDataRowCalls, 2);
+    assert.equal(createDataRowsCalls, 2);
     assert.equal(deletedRowImportIds.length, 1);
     assert.equal(deletedImportIds.length, 1);
     assert.equal(deletedRowImportIds[0], deletedImportIds[0]);
   } finally {
+    runtimeConfig.runtime.importInsertBatchSize = originalBatchSize;
     await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("createImport writes legacy JSON rows with bounded multi-row inserts", async () => {
+  const originalBatchSize = runtimeConfig.runtime.importInsertBatchSize;
+  runtimeConfig.runtime.importInsertBatchSize = 2;
+  const batchSizes: number[] = [];
+  const storedRows: Array<Record<string, unknown>> = [];
+
+  try {
+    const operations = new ImportsServiceMutationOperations(createStorageStub({
+      createDataRows: async (rows) => {
+        batchSizes.push(rows.length);
+        storedRows.push(...rows.map((row) => row.jsonDataJsonb as Record<string, unknown>));
+        return rows.map((row, index) => ({
+          id: `row-${storedRows.length - rows.length + index + 1}`,
+          importId: row.importId,
+          jsonDataJsonb: row.jsonDataJsonb,
+        }));
+      },
+    }));
+
+    await operations.createImport({
+      name: "Legacy JSON Import",
+      filename: "legacy.json",
+      dataRows: [
+        { name: "Alice" },
+        { name: "Bob" },
+        { name: "Carol" },
+      ],
+      createdBy: "superuser",
+    });
+
+    assert.deepEqual(batchSizes, [2, 1]);
+    assert.deepEqual(storedRows, [
+      { name: "Alice" },
+      { name: "Bob" },
+      { name: "Carol" },
+    ]);
+  } finally {
+    runtimeConfig.runtime.importInsertBatchSize = originalBatchSize;
   }
 });
 

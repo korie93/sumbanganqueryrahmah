@@ -7,6 +7,7 @@ import {
   createGlobalRequestTimeoutMiddleware,
   resolveGlobalRequestTimeoutMs,
 } from "../global-request-timeout";
+import { HTTP_SERVER_SOCKET_TIMEOUT_MS } from "../http-server-timeouts";
 import { runWithRequestDeadline } from "../request-deadline";
 import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
@@ -167,6 +168,12 @@ test("global request timeout resolves long-operation route budgets by longest pr
     ]),
     250,
   );
+});
+
+test("HTTP server socket timeout exceeds every application-owned request deadline", () => {
+  for (const timeoutMs of Object.values(LONG_OPERATION_REQUEST_TIMEOUTS_MS)) {
+    assert.ok(HTTP_SERVER_SOCKET_TIMEOUT_MS > timeoutMs);
+  }
 });
 
 test("global request timeout uses route-specific budget before aborting", async () => {

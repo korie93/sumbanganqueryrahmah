@@ -9,6 +9,7 @@ import {
   importsListResponseSchema,
 } from "../../../shared/api-contracts";
 import { ERROR_CODES } from "../../../shared/error-codes";
+import { runtimeConfig } from "../../config/runtime";
 import { createImportsController } from "../../controllers/imports.controller";
 import { errorHandler } from "../../middleware/error-handler";
 import type { ImportWithRowCount, ImportsRepository } from "../../repositories/imports.repository";
@@ -130,6 +131,7 @@ function createImportsRouteHarness(options?: {
   const searchCalls: Array<Record<string, unknown>> = [];
   const createImportCalls: Array<Record<string, unknown>> = [];
   const createDataRowCalls: Array<Record<string, unknown>> = [];
+  const createDataRowsBatchSizes: number[] = [];
   const renameCalls: Array<{ id: string; name: string }> = [];
   const deleteCalls: string[] = [];
   const analyzeImportCalls: string[] = [];
@@ -293,6 +295,26 @@ function createImportsRouteHarness(options?: {
       importRowCounts.set(data.importId, existing.length);
       return row;
     },
+    createDataRows: async (
+      rows: Array<{ importId: string; jsonDataJsonb: Record<string, unknown> }>,
+    ) => {
+      createDataRowsBatchSizes.push(rows.length);
+      const createdRows: DataRow[] = [];
+      for (const data of rows) {
+        createDataRowCalls.push(data);
+        const row: DataRow = {
+          id: `row-created-${createDataRowCalls.length}`,
+          importId: data.importId,
+          jsonDataJsonb: data.jsonDataJsonb,
+        };
+        const existing = dataRowsByImport.get(data.importId) ?? [];
+        existing.push(row);
+        dataRowsByImport.set(data.importId, existing);
+        importRowCounts.set(data.importId, existing.length);
+        createdRows.push(row);
+      }
+      return createdRows;
+    },
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
       return { id: `audit-${auditLogs.length}`, ...entry };
@@ -409,6 +431,7 @@ function createImportsRouteHarness(options?: {
     searchCalls,
     createImportCalls,
     createDataRowCalls,
+    createDataRowsBatchSizes,
     renameCalls,
     deleteCalls,
     analyzeImportCalls,
@@ -751,6 +774,56 @@ test("POST /api/imports accepts multipart Excel uploads without leaking temp fil
     assert.equal(auditLogs.length, 1);
     assert.match(String(auditLogs[0].details), /Imported 2 rows from multipart-import\.xlsx/);
   } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports processes a production-sized XLSB workbook with bounded database batches", async () => {
+  const {
+    app,
+    createDataRowCalls,
+    createDataRowsBatchSizes,
+    auditLogs,
+  } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  const originalBatchSize = runtimeConfig.runtime.importInsertBatchSize;
+  runtimeConfig.runtime.importInsertBatchSize = 1_000;
+  const headers = Array.from({ length: 41 }, (_, index) => `column_${index + 1}`);
+  const rows = Array.from({ length: 3_725 }, (_, rowIndex) =>
+    headers.map((_header, columnIndex) => `r${rowIndex + 1}c${columnIndex + 1}`),
+  );
+  const workbook = xlsx.utils.book_new();
+  const worksheet = xlsx.utils.aoa_to_sheet([headers, ...rows]);
+
+  try {
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Import");
+    const workbookBuffer = xlsx.write(workbook, {
+      type: "buffer",
+      bookType: "xlsb",
+    }) as Uint8Array;
+    const formData = new FormData();
+    formData.set("name", "Production XLSB Import");
+    formData.append(
+      "file",
+      new File(
+        [new Uint8Array(workbookBuffer)],
+        "production-sized.xlsb",
+        { type: "application/vnd.ms-excel.sheet.binary.macroenabled.12" },
+      ),
+    );
+
+    const response = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      body: formData,
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(createDataRowCalls.length, 3_725);
+    assert.deepEqual(createDataRowsBatchSizes, [1_000, 1_000, 1_000, 725]);
+    assert.equal(auditLogs.length, 1);
+    assert.match(String(auditLogs[0]?.details), /Imported 3725 rows from production-sized\.xlsb/);
+  } finally {
+    runtimeConfig.runtime.importInsertBatchSize = originalBatchSize;
     await stopTestServer(server);
   }
 });

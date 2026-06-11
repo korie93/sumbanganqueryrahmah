@@ -50,6 +50,10 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     return this.importsRepository.createDataRow(data);
   }
 
+  async createDataRows(rows: InsertDataRow[]): Promise<DataRow[]> {
+    return this.importsRepository.createDataRows(rows);
+  }
+
   async getDataRowsByImport(importId: string): Promise<DataRow[]> {
     if (STORAGE_DEBUG_LOGS) {
       logger.debug("Viewer import ID received", { importId });

@@ -254,13 +254,15 @@ export async function apiRequest(
     throw buildOfflineApiRequestError();
   }
 
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const isIdempotentMethod = ["GET", "HEAD", "OPTIONS"].includes(normalizedMethod);
   const isFormDataPayload =
     typeof FormData !== "undefined"
     && data instanceof FormData;
   const headers = createApiHeaders({
-    ...(String(method || "").toUpperCase() === "GET"
-      || String(method || "").toUpperCase() === "HEAD"
-      || String(method || "").toUpperCase() === "OPTIONS"
+    ...(normalizedMethod === "GET"
+      || normalizedMethod === "HEAD"
+      || normalizedMethod === "OPTIONS"
       ? {}
       : (getCsrfHeader() as Record<string, string>)),
     ...(options?.headers || {}),
@@ -268,7 +270,7 @@ export async function apiRequest(
   if (data && !isFormDataPayload) headers["Content-Type"] = "application/json";
 
   const requestInit: RequestInit = {
-    method,
+    method: normalizedMethod,
     headers,
     credentials: "include",
   };
@@ -282,7 +284,7 @@ export async function apiRequest(
 
   try {
     const res = await fetchApiWithRetry(url, requestInit, {
-      retry: options?.retry,
+      retry: options?.retry ?? (isIdempotentMethod ? undefined : false),
     });
 
     try {

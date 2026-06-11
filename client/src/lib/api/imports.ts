@@ -7,7 +7,7 @@ import {
   importsListResponseSchema,
 } from "@shared/api-contracts";
 
-const IMPORT_UPLOAD_TIMEOUT_MS = 2 * 60_000;
+const IMPORT_UPLOAD_TIMEOUT_MS = 5 * 60_000 + 30_000;
 
 type ImportRequestOptions = {
   cursor?: string | undefined;
@@ -72,6 +72,7 @@ export async function createImportFromFile(
     formData,
     {
       ...options,
+      retry: false,
       timeoutMs: IMPORT_UPLOAD_TIMEOUT_MS,
     },
   );

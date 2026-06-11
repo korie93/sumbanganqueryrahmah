@@ -35,6 +35,7 @@ export interface ImportAiStorageContract {
   deleteDataRowsByImport(importId: string): Promise<number>;
 
   createDataRow(data: InsertDataRow): Promise<DataRow>;
+  createDataRows(rows: InsertDataRow[]): Promise<DataRow[]>;
   getDataRowsByImport(importId: string): Promise<DataRow[]>;
   getDataRowCountByImport(importId: string): Promise<number>;
   advancedSearchDataRows(

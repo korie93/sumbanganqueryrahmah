@@ -53,6 +53,19 @@ function normalizeBoundedImportRow(row: unknown, maxBytes: number) {
   return normalized;
 }
 
+async function insertImportRows(
+  storage: ImportsServiceStorage,
+  importId: string,
+  rows: unknown[],
+  rowByteBudget: number,
+) {
+  const normalizedRows = rows.map((row) => ({
+    importId,
+    jsonDataJsonb: normalizeBoundedImportRow(row, rowByteBudget),
+  }));
+  await storage.createDataRows(normalizedRows);
+}
+
 export class ImportsServiceMutationOperations {
   constructor(private readonly storage: ImportsServiceStorage) {}
 
@@ -68,14 +81,7 @@ export class ImportsServiceMutationOperations {
     try {
       for (let index = 0; index < params.dataRows.length; index += insertChunkSize) {
         const chunk = params.dataRows.slice(index, index + insertChunkSize);
-        await Promise.all(
-          chunk.map((row) =>
-            this.storage.createDataRow({
-              importId: importRecord.id,
-              jsonDataJsonb: normalizeBoundedImportRow(row, rowByteBudget),
-            }),
-          ),
-        );
+        await insertImportRows(this.storage, importRecord.id, chunk, rowByteBudget);
       }
     } catch (error) {
       await this.storage.deleteDataRowsByImport(importRecord.id);
@@ -112,14 +118,7 @@ export class ImportsServiceMutationOperations {
 
       const chunk = pendingRows;
       pendingRows = [];
-      await Promise.all(
-        chunk.map((row) =>
-          this.storage.createDataRow({
-            importId: importRecord.id,
-            jsonDataJsonb: normalizeBoundedImportRow(row, rowByteBudget),
-          }),
-        ),
-      );
+      await insertImportRows(this.storage, importRecord.id, chunk, rowByteBudget);
     };
 
     let parsed: Awaited<ReturnType<typeof forEachCsvFileRow>>;

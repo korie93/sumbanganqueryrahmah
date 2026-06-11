@@ -111,6 +111,16 @@ test("production Nginx import body limit stays aligned with Express import limit
   assert.match(nginxText, /structured validation\s+# errors instead of a generic HTML Nginx 413 response/i);
 });
 
+test("production Nginx gives imports enough time to return an application-owned response", () => {
+  const nginxText = readText(nginxConfigPath);
+  const importBlock = extractLocationBlock(nginxText, "= /api/imports");
+
+  assert.match(importBlock, /proxy_request_buffering off;/);
+  assert.match(importBlock, /proxy_read_timeout 360s;/);
+  assert.match(importBlock, /proxy_send_timeout 360s;/);
+  assert.match(importBlock, /proxy_pass http:\/\/127\.0\.0\.1:5000;/);
+});
+
 test("production environment template keeps import limits aligned with the app contract", () => {
   const envText = readText(envExamplePath);
   const productionEnvText = readText(productionEnvTemplatePath);
@@ -262,6 +272,10 @@ test("Hetzner deployment guide mirrors the hardened Nginx contract", () => {
 
   assert.deepEqual(conflictingHeaders, []);
   assert.match(docText, /client_max_body_size 100M;/);
+  const importBlock = extractLocationBlock(docText, "= /api/imports");
+  assert.match(importBlock, /proxy_request_buffering off;/);
+  assert.match(importBlock, /proxy_read_timeout 360s;/);
+  assert.match(importBlock, /proxy_send_timeout 360s;/);
   assert.match(docText, /proxy_buffer_size 32k;/);
   assert.match(docText, /proxy_buffers 8 32k;/);
   assert.match(docText, /proxy_busy_buffers_size 64k;/);
