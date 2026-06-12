@@ -245,7 +245,7 @@ export class ImportsRepository {
         i.name,
         i.filename,
         i.content_hash_sha256 as "contentHashSha256",
-        i.source_size_bytes as "sourceSizeBytes",
+        i.source_size_bytes::double precision as "sourceSizeBytes",
         i.created_at as "createdAt",
         i.is_deleted as "isDeleted",
         i.created_by as "createdBy"

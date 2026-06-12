@@ -19,3 +19,13 @@ test("imports row-count query uses parameter-safe IN predicates instead of raw A
     "raw ANY(${importIds}::text[]) is invalid because Drizzle expands arrays into a record tuple",
   );
 });
+
+test("imports list query serializes bigint source sizes as JavaScript numbers", () => {
+  const source = readFileSync(IMPORTS_REPOSITORY_PATH, "utf8");
+
+  assert.match(
+    source,
+    /i\.source_size_bytes::double precision as "sourceSizeBytes"/,
+    "raw PostgreSQL bigint values must be cast because node-postgres returns int8 columns as strings",
+  );
+});
