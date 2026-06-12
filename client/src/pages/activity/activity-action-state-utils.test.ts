@@ -13,6 +13,7 @@ test("activity action state utils build bulk delete success and partial payloads
       deletedCount: 3,
       requestedCount: 3,
       notFoundIds: [],
+      protectedIds: [],
     }),
     {
       title: "Success",
@@ -26,11 +27,26 @@ test("activity action state utils build bulk delete success and partial payloads
       deletedCount: 2,
       requestedCount: 4,
       notFoundIds: ["a", "b"],
+      protectedIds: [],
     }),
     {
-      title: "Partial Success",
-      description: "2 deleted, 2 missing.",
-      variant: "destructive",
+      title: "Partial cleanup",
+      description: "2 deleted, 0 protected by active bans, 2 missing.",
+      variant: "warning",
+    },
+  );
+
+  assert.deepEqual(
+    buildBulkDeleteToastPayload({
+      deletedCount: 1,
+      requestedCount: 2,
+      notFoundIds: [],
+      protectedIds: ["banned-activity"],
+    }),
+    {
+      title: "Partial cleanup",
+      description: "1 deleted, 1 protected by active bans, 0 missing.",
+      variant: "warning",
     },
   );
 });

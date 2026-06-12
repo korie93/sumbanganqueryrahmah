@@ -91,6 +91,23 @@ export interface ActivityPageResponse {
   };
 }
 
+export interface ActivityRetentionStatus {
+  policy: {
+    autoCleanupEnabled: boolean;
+    batchSize: number;
+    securityRetentionDays: number;
+    standardRetentionDays: number;
+  };
+  preview: {
+    protectedActiveBanCount: number;
+    securityEligibleCount: number;
+    standardEligibleCount: number;
+    totalEligibleCount: number;
+  };
+  securityCutoff: string;
+  standardCutoff: string;
+}
+
 export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
   return apiRequest("POST", "/api/activity/heartbeat", {}, {
     signal: options?.signal,
@@ -133,6 +150,7 @@ export async function deleteActivityLogsBulk(activityIds: string[]) {
     deletedCount: number;
     requestedCount: number;
     notFoundIds: string[];
+    protectedIds: string[];
   }>;
 }
 
@@ -167,19 +185,45 @@ export async function getActivityPage(
 export async function cleanupEndedActivityLogs(options?: {
   limit?: number | undefined;
   olderThanDays?: number | undefined;
-}) {
+}, requestOptions?: ActivityRequestOptions) {
   const response = await apiRequest("DELETE", "/api/activity/logs/cleanup-ended", {
     limit: options?.limit,
     olderThanDays: options?.olderThanDays,
+  }, {
+    signal: requestOptions?.signal,
   });
   return response.json() as Promise<{
     cutoff: string;
     deletedCount: number;
     limit: number;
+    lockAcquired: boolean;
     ok: boolean;
     olderThanDays: number;
+    protectedActiveBanCount: number;
+    reason: "disabled" | "lock_unavailable" | null;
+    securityCutoff: string;
+    securityDeletedCount: number;
+    securityRetentionDays: number;
+    skipped: boolean;
+    standardDeletedCount: number;
+    standardRetentionDays: number;
     success: boolean;
   }>;
+}
+
+export async function getActivityRetentionStatus(
+  options?: ActivityRequestOptions,
+): Promise<ActivityRetentionStatus> {
+  const response = await apiRequest(
+    "GET",
+    "/api/activity/retention",
+    undefined,
+    options,
+  );
+  const payload = await response.json() as {
+    retention: ActivityRetentionStatus;
+  };
+  return payload.retention;
 }
 
 export async function kickUser(activityId: string) {

@@ -10,6 +10,10 @@ import {
   type ActivityPageResult,
   type ActivityPageSortBy,
   type ActivityPageSortOrder,
+  type ActivityRetentionCleanupParams,
+  type ActivityRetentionCleanupResult,
+  type ActivityRetentionPreview,
+  type ActivityRetentionPreviewParams,
   type ActivityStatusSummary,
   computeActivityStatus,
   type ActivityWithStatus,
@@ -369,8 +373,17 @@ export async function listActivityPage(params: ActivityPageParams): Promise<Acti
 }
 
 export async function deleteActivity(id: string): Promise<boolean> {
-  await db.delete(userActivity).where(eq(userActivity.id, id));
-  return true;
+  const result = await db.execute(sql`
+    DELETE FROM public.user_activity activity
+    WHERE activity.id = ${id}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.banned_sessions ban
+        WHERE ban.activity_id = activity.id
+      )
+    RETURNING activity.id
+  `);
+  return (result.rows?.length ?? 0) > 0;
 }
 
 export async function deleteEndedActivitiesBefore(params: {
@@ -382,6 +395,7 @@ export async function deleteEndedActivitiesBefore(params: {
       SELECT id
       FROM public.user_activity
       WHERE is_active IS FALSE
+        AND COALESCE(logout_reason, '') NOT IN ('BANNED', 'KICKED')
         AND COALESCE(logout_time, last_activity_time, login_time) < ${params.cutoff}
       ORDER BY COALESCE(logout_time, last_activity_time, login_time) ASC NULLS LAST, id ASC
       LIMIT ${params.limit}
@@ -395,6 +409,153 @@ export async function deleteEndedActivitiesBefore(params: {
   return ((result.rows ?? []) as Array<{ id?: unknown }>)
     .map((row) => String(row.id ?? "").trim())
     .filter(Boolean);
+}
+
+export async function getActivityRetentionPreview(
+  params: ActivityRetentionPreviewParams,
+): Promise<ActivityRetentionPreview> {
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*) FILTER (
+        WHERE activity.is_active IS FALSE
+          AND COALESCE(activity.logout_reason, '') NOT IN ('BANNED', 'KICKED')
+          AND COALESCE(activity.logout_time, activity.last_activity_time, activity.login_time)
+            < ${params.standardCutoff}
+      )::integer AS standard_eligible_count,
+      COUNT(*) FILTER (
+        WHERE activity.is_active IS FALSE
+          AND COALESCE(activity.logout_time, activity.last_activity_time, activity.login_time)
+            < ${params.securityCutoff}
+          AND (
+            activity.logout_reason = 'KICKED'
+            OR (
+              activity.logout_reason = 'BANNED'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM public.banned_sessions ban
+                WHERE ban.activity_id = activity.id
+              )
+            )
+          )
+      )::integer AS security_eligible_count,
+      COUNT(*) FILTER (
+        WHERE activity.is_active IS FALSE
+          AND activity.logout_reason = 'BANNED'
+          AND EXISTS (
+            SELECT 1
+            FROM public.banned_sessions ban
+            WHERE ban.activity_id = activity.id
+          )
+      )::integer AS protected_active_ban_count
+    FROM public.user_activity activity
+  `);
+
+  const row = (result.rows?.[0] ?? {}) as Record<string, unknown>;
+  const standardEligibleCount = Math.max(0, Number(row.standard_eligible_count) || 0);
+  const securityEligibleCount = Math.max(0, Number(row.security_eligible_count) || 0);
+
+  return {
+    protectedActiveBanCount: Math.max(0, Number(row.protected_active_ban_count) || 0),
+    securityEligibleCount,
+    standardEligibleCount,
+    totalEligibleCount: standardEligibleCount + securityEligibleCount,
+  };
+}
+
+export async function cleanupActivityRetention(
+  params: ActivityRetentionCleanupParams,
+): Promise<ActivityRetentionCleanupResult> {
+  return db.transaction(async (tx) => {
+    const lockResult = await tx.execute(sql`
+      SELECT pg_try_advisory_xact_lock(
+        hashtext('sqr_activity_retention_cleanup')
+      ) AS acquired
+    `);
+    const lockAcquired = lockResult.rows?.[0]?.acquired === true;
+    if (!lockAcquired) {
+      return {
+        deletedIds: [],
+        lockAcquired: false,
+        securityDeletedCount: 0,
+        standardDeletedCount: 0,
+      };
+    }
+
+    const result = await tx.execute(sql`
+      WITH cleanup_candidates AS (
+        SELECT
+          activity.id,
+          CASE
+            WHEN activity.logout_reason IN ('BANNED', 'KICKED') THEN 'security'
+            ELSE 'standard'
+          END AS retention_class
+        FROM public.user_activity activity
+        WHERE activity.is_active IS FALSE
+          AND (
+            (
+              COALESCE(activity.logout_reason, '') NOT IN ('BANNED', 'KICKED')
+              AND COALESCE(activity.logout_time, activity.last_activity_time, activity.login_time)
+                < ${params.standardCutoff}
+            )
+            OR (
+              COALESCE(activity.logout_time, activity.last_activity_time, activity.login_time)
+                < ${params.securityCutoff}
+              AND (
+                activity.logout_reason = 'KICKED'
+                OR (
+                  activity.logout_reason = 'BANNED'
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM public.banned_sessions ban
+                    WHERE ban.activity_id = activity.id
+                  )
+                )
+              )
+            )
+          )
+        ORDER BY
+          COALESCE(activity.logout_time, activity.last_activity_time, activity.login_time)
+            ASC NULLS LAST,
+          activity.id ASC
+        FOR UPDATE OF activity SKIP LOCKED
+        LIMIT ${params.limit}
+      ),
+      deleted AS (
+        DELETE FROM public.user_activity activity
+        USING cleanup_candidates candidate
+        WHERE activity.id = candidate.id
+        RETURNING activity.id, candidate.retention_class
+      )
+      SELECT id, retention_class
+      FROM deleted
+    `);
+
+    const rows = (result.rows ?? []) as Array<{
+      id?: unknown;
+      retention_class?: unknown;
+    }>;
+    const deletedIds: string[] = [];
+    let securityDeletedCount = 0;
+    let standardDeletedCount = 0;
+
+    for (const row of rows) {
+      const id = String(row.id ?? "").trim();
+      if (!id) continue;
+      deletedIds.push(id);
+      if (row.retention_class === "security") {
+        securityDeletedCount += 1;
+      } else {
+        standardDeletedCount += 1;
+      }
+    }
+
+    return {
+      deletedIds,
+      lockAcquired: true,
+      securityDeletedCount,
+      standardDeletedCount,
+    };
+  });
 }
 
 export async function getFilteredActivities(filters: {

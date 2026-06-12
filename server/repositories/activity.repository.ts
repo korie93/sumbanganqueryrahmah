@@ -9,6 +9,7 @@ import {
 import { getAuthenticatedSessionSnapshot } from "./activity-repository-auth-guard-operations";
 import {
   createActivity,
+  cleanupActivityRetention,
   deactivateUserActivities,
   deactivateUserSessionsByFingerprint,
   deleteActivity,
@@ -17,6 +18,7 @@ import {
   expireIdleActivitySessions,
   getActiveActivities,
   getActiveActivitiesByUsername,
+  getActivityRetentionPreview,
   getActivityById,
   getAllActivities,
   getFilteredActivities,
@@ -31,6 +33,11 @@ import type {
   ActivityPageResult,
   ActivityPageSortBy,
   ActivityPageSortOrder,
+  ActivityRetentionCleanupParams,
+  ActivityRetentionCleanupResult,
+  ActivityRetentionPolicy,
+  ActivityRetentionPreview,
+  ActivityRetentionPreviewParams,
   ActivityRepositoryOptions,
   ActivityStatusSummary,
   ActivityWithStatus,
@@ -42,9 +49,11 @@ export class ActivityRepository {
   constructor(private readonly options: ActivityRepositoryOptions) {}
 
   readonly createActivity = createActivity;
+  readonly cleanupActivityRetention = cleanupActivityRetention;
   readonly touchActivity = touchActivity;
   readonly touchAuthenticatedActivity = touchAuthenticatedActivity;
   readonly getActiveActivitiesByUsername = getActiveActivitiesByUsername;
+  readonly getActivityRetentionPreview = getActivityRetentionPreview;
   readonly updateActivity = updateActivity;
   readonly expireIdleActivitySession = expireIdleActivitySession;
   readonly expireIdleActivitySessions = expireIdleActivitySessions;
@@ -107,6 +116,11 @@ export type {
   ActivityPageResult,
   ActivityPageSortBy,
   ActivityPageSortOrder,
+  ActivityRetentionCleanupParams,
+  ActivityRetentionCleanupResult,
+  ActivityRetentionPolicy,
+  ActivityRetentionPreview,
+  ActivityRetentionPreviewParams,
   ActivityStatusSummary,
   ActivityWithStatus,
   AuthenticatedSessionSnapshot,

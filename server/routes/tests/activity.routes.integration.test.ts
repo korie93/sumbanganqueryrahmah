@@ -133,7 +133,11 @@ function createActivityRouteHarness(options?: {
   const auditLogs: AuditEntry[] = [];
   const clearNicknameSessionCalls: string[] = [];
   const deleteActivityCalls: string[] = [];
-  const deleteEndedActivitiesBeforeCalls: Array<{ cutoff: Date; limit: number }> = [];
+  const activityRetentionCleanupCalls: Array<{
+    limit: number;
+    securityCutoff: Date;
+    standardCutoff: Date;
+  }> = [];
   const banVisitorCalls: Array<Record<string, unknown>> = [];
   const deactivateUserActivitiesCalls: Array<{ username: string; reason?: string | undefined }> = [];
   const updateUserBanCalls: Array<{ username: string; isBanned: boolean }> = [];
@@ -238,29 +242,92 @@ function createActivityRouteHarness(options?: {
       auditLogs.push(entry);
       return { id: `audit-${auditLogs.length}`, ...entry };
     },
-    deleteActivity: async (activityId: string) => {
-      deleteActivityCalls.push(activityId);
-      return activities.delete(activityId);
+    getActivityRetentionPolicy: async () => ({
+      autoCleanupEnabled: false,
+      batchSize: 500,
+      securityRetentionDays: 365,
+      standardRetentionDays: 90,
+    }),
+    getActivityRetentionPreview: async (params: {
+      securityCutoff: Date;
+      standardCutoff: Date;
+    }) => {
+      let securityEligibleCount = 0;
+      let standardEligibleCount = 0;
+      for (const activity of activities.values()) {
+        if (activity.isActive) continue;
+        const activityTime =
+          activity.logoutTime?.getTime()
+          ?? activity.lastActivityTime?.getTime()
+          ?? activity.loginTime?.getTime()
+          ?? Number.POSITIVE_INFINITY;
+        if (
+          activity.logoutReason === "KICKED"
+          && activityTime < params.securityCutoff.getTime()
+        ) {
+          securityEligibleCount += 1;
+        } else if (
+          activity.logoutReason !== "BANNED"
+          && activityTime < params.standardCutoff.getTime()
+        ) {
+          standardEligibleCount += 1;
+        }
+      }
+      return {
+        protectedActiveBanCount: 0,
+        securityEligibleCount,
+        standardEligibleCount,
+        totalEligibleCount: securityEligibleCount + standardEligibleCount,
+      };
     },
-    deleteEndedActivitiesBefore: async (params: { cutoff: Date; limit: number }) => {
-      deleteEndedActivitiesBeforeCalls.push(params);
+    cleanupActivityRetention: async (params: {
+      limit: number;
+      securityCutoff: Date;
+      standardCutoff: Date;
+    }) => {
+      activityRetentionCleanupCalls.push(params);
       const deletedIds: string[] = [];
+      let securityDeletedCount = 0;
+      let standardDeletedCount = 0;
       for (const [activityId, activity] of activities.entries()) {
-        if (deletedIds.length >= params.limit) {
-          break;
+        if (deletedIds.length >= params.limit || activity.isActive) {
+          continue;
         }
         const activityTime =
           activity.logoutTime?.getTime()
           ?? activity.lastActivityTime?.getTime()
           ?? activity.loginTime?.getTime()
           ?? Number.POSITIVE_INFINITY;
-        if (activity.isActive === false && activityTime < params.cutoff.getTime()) {
-          activities.delete(activityId);
-          deletedIds.push(activityId);
+        const securityEligible =
+          activity.logoutReason === "KICKED"
+          && activityTime < params.securityCutoff.getTime();
+        const standardEligible =
+          activity.logoutReason !== "BANNED"
+          && activity.logoutReason !== "KICKED"
+          && activityTime < params.standardCutoff.getTime();
+        if (!securityEligible && !standardEligible) {
+          continue;
+        }
+        activities.delete(activityId);
+        deletedIds.push(activityId);
+        if (securityEligible) {
+          securityDeletedCount += 1;
+        } else {
+          standardDeletedCount += 1;
         }
       }
-      return deletedIds;
+      return {
+        deletedIds,
+        lockAcquired: true,
+        securityDeletedCount,
+        standardDeletedCount,
+      };
     },
+    deleteActivity: async (activityId: string) => {
+      deleteActivityCalls.push(activityId);
+      return activities.delete(activityId);
+    },
+    deleteEndedActivitiesBefore: async () => [],
     getActivityById: async (activityId: string) => activities.get(activityId),
     getAllActivities: async () => Array.from(activities.values()),
     getFilteredActivities: async (filters: Record<string, unknown>) => {
@@ -363,7 +430,7 @@ function createActivityRouteHarness(options?: {
     auditLogs,
     clearNicknameSessionCalls,
     deleteActivityCalls,
-    deleteEndedActivitiesBeforeCalls,
+    activityRetentionCleanupCalls,
     banVisitorCalls,
     deactivateUserActivitiesCalls,
     updateUserBanCalls,
@@ -676,6 +743,7 @@ test("DELETE /api/activity/logs/bulk-delete deduplicates ids and audits the batc
       requestedCount: 3,
       deletedCount: 2,
       notFoundIds: ["missing-activity"],
+      protectedIds: [],
     });
     assert.deepEqual(deleteActivityCalls, ["activity-2", "activity-3"]);
     assert.deepEqual(clearNicknameSessionCalls, ["activity-2", "activity-3"]);
@@ -690,6 +758,28 @@ test("DELETE /api/activity/logs/bulk-delete deduplicates ids and audits the batc
     assert.equal(auditDetails.deletedCount, 2);
     assert.equal(auditDetails.notFoundCount, 1);
     assert.equal(typeof auditDetails.durationMs, "number");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/activity/:id refuses to remove a log linked to an active ban", async () => {
+  const { app, clearNicknameSessionCalls } = createActivityRouteHarness({
+    storageOverrides: {
+      deleteActivity: async () => false,
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/activity-2`, {
+      method: "DELETE",
+    });
+
+    assert.equal(response.status, 409);
+    const payload = await response.json();
+    assert.equal(payload.message, "Activity logs linked to an active ban cannot be deleted.");
+    assert.deepEqual(clearNicknameSessionCalls, []);
   } finally {
     await stopTestServer(server);
   }
@@ -740,8 +830,8 @@ test("DELETE /api/activity/logs/cleanup-ended removes only old ended login logs"
     app,
     activities,
     auditLogs,
+    activityRetentionCleanupCalls,
     clearNicknameSessionCalls,
-    deleteEndedActivitiesBeforeCalls,
   } = createActivityRouteHarness({
     authenticateToken: createTestAuthenticateToken({
       userId: "admin-1",
@@ -783,6 +873,17 @@ test("DELETE /api/activity/logs/cleanup-ended removes only old ended login logs"
     logoutTime: null,
     logoutReason: null,
   });
+  activities.set("banned-old", {
+    id: "banned-old",
+    userId: "user-2",
+    username: "regular.user",
+    role: "user",
+    isActive: false,
+    loginTime: new Date("2025-01-01T00:00:00.000Z"),
+    lastActivityTime: new Date("2025-01-01T00:05:00.000Z"),
+    logoutTime: new Date("2025-01-01T00:10:00.000Z"),
+    logoutReason: "BANNED",
+  });
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -808,8 +909,9 @@ test("DELETE /api/activity/logs/cleanup-ended removes only old ended login logs"
     assert.equal(activities.has("ended-old"), false);
     assert.equal(activities.has("ended-new"), true);
     assert.equal(activities.has("active-old"), true);
-    assert.equal(deleteEndedActivitiesBeforeCalls.length, 1);
-    assert.equal(deleteEndedActivitiesBeforeCalls[0]?.limit, 10);
+    assert.equal(activities.has("banned-old"), true);
+    assert.equal(activityRetentionCleanupCalls.length, 1);
+    assert.equal(activityRetentionCleanupCalls[0]?.limit, 10);
     assert.deepEqual(clearNicknameSessionCalls, ["ended-old"]);
     const lastAuditLog = auditLogs[auditLogs.length - 1];
     assert.equal(lastAuditLog?.action, "DELETE_OLD_ACTIVITY_LOGS");
@@ -817,14 +919,16 @@ test("DELETE /api/activity/logs/cleanup-ended removes only old ended login logs"
     const auditDetails = JSON.parse(String(lastAuditLog?.details));
     assert.equal(auditDetails.deletedCount, 1);
     assert.equal(auditDetails.limit, 10);
-    assert.equal(auditDetails.olderThanDays, 30);
+    assert.equal(auditDetails.standardRetentionDays, 30);
+    assert.equal(auditDetails.securityRetentionDays, 365);
+    assert.equal(auditDetails.source, "manual");
   } finally {
     await stopTestServer(server);
   }
 });
 
 test("DELETE /api/activity/logs/cleanup-ended rejects invalid retention bounds", async () => {
-  const { app, deleteEndedActivitiesBeforeCalls } = createActivityRouteHarness({
+  const { app, activityRetentionCleanupCalls } = createActivityRouteHarness({
     authenticateToken: createTestAuthenticateToken({
       userId: "admin-1",
       username: "admin.user",
@@ -848,9 +952,51 @@ test("DELETE /api/activity/logs/cleanup-ended rejects invalid retention bounds",
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), {
       ok: false,
-      message: "olderThanDays must be an integer between 1 and 365",
+      message: "olderThanDays must be an integer between 1 and 3650",
     });
-    assert.deepEqual(deleteEndedActivitiesBeforeCalls, []);
+    assert.deepEqual(activityRetentionCleanupCalls, []);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/retention returns policy preview for moderators", async () => {
+  const { app } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+    storageOverrides: {
+      getActivityRetentionPolicy: async () => ({
+        autoCleanupEnabled: true,
+        batchSize: 250,
+        securityRetentionDays: 365,
+        standardRetentionDays: 90,
+      }),
+      getActivityRetentionPreview: async () => ({
+        protectedActiveBanCount: 2,
+        securityEligibleCount: 3,
+        standardEligibleCount: 4,
+        totalEligibleCount: 7,
+      }),
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/retention`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.success, true);
+    assert.equal(payload.retention.policy.autoCleanupEnabled, true);
+    assert.equal(payload.retention.policy.batchSize, 250);
+    assert.equal(payload.retention.preview.protectedActiveBanCount, 2);
+    assert.equal(payload.retention.preview.totalEligibleCount, 7);
+    assert.match(payload.retention.standardCutoff, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(payload.retention.securityCutoff, /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     await stopTestServer(server);
   }

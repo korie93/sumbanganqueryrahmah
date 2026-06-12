@@ -26,12 +26,15 @@ export type ActivityStorage = Pick<
   | "banVisitor"
   | "clearCollectionNicknameSessionByActivity"
   | "createAuditLog"
+  | "cleanupActivityRetention"
   | "deactivateUserActivities"
   | "deleteActivity"
   | "deleteEndedActivitiesBefore"
   | "getActiveActivities"
   | "getActiveActivitiesByUsername"
   | "getActivityById"
+  | "getActivityRetentionPolicy"
+  | "getActivityRetentionPreview"
   | "getAllActivities"
   | "listActivityPage"
   | "getBannedSessions"
@@ -41,6 +44,25 @@ export type ActivityStorage = Pick<
   | "updateActivity"
   | "updateUserBan"
 >;
+
+export type ActivityRetentionCleanupSource = "automatic" | "manual";
+
+export type ActivityRetentionStatus = {
+  policy: {
+    autoCleanupEnabled: boolean;
+    batchSize: number;
+    securityRetentionDays: number;
+    standardRetentionDays: number;
+  };
+  preview: {
+    protectedActiveBanCount: number;
+    securityEligibleCount: number;
+    standardEligibleCount: number;
+    totalEligibleCount: number;
+  };
+  securityCutoff: string;
+  standardCutoff: string;
+};
 
 export type ActivityClientRegistry = Map<string, WebSocket>;
 

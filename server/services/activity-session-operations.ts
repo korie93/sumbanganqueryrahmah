@@ -4,6 +4,8 @@ import { logger } from "../lib/logger";
 import type {
   ActivityFilters,
   ActivityPageOptions,
+  ActivityRetentionCleanupSource,
+  ActivityRetentionStatus,
   ActivityStorage,
 } from "./activity-service-types";
 
@@ -11,6 +13,8 @@ type CloseActivitySocket = (
   activityId: string,
   payload?: Record<string, unknown>,
 ) => Promise<void>;
+
+const DAY_MS = 24 * 60 * 60 * 1_000;
 
 type ActivityListItem = Awaited<ReturnType<ActivityStorage["getAllActivities"]>>[number] & {
   id?: string | null | undefined;
@@ -117,12 +121,14 @@ function buildActivityBatchAuditDetails(params: {
   requestedCount: number;
   deletedCount: number;
   notFoundCount: number;
+  protectedCount: number;
   durationMs: number;
 }) {
   return JSON.stringify({
     requestedCount: params.requestedCount,
     deletedCount: params.deletedCount,
     notFoundCount: params.notFoundCount,
+    protectedCount: params.protectedCount,
     durationMs: params.durationMs,
   });
 }
@@ -140,34 +146,56 @@ function buildActivityBatchFailureAuditDetails(params: {
 }
 
 function buildActivityRetentionCleanupAuditDetails(params: {
-  cutoffIso: string;
+  autoCleanupEnabled: boolean;
   deletedCount: number;
   durationMs: number;
   limit: number;
-  olderThanDays: number;
+  lockAcquired: boolean;
+  protectedActiveBanCount: number;
+  securityCutoffIso: string;
+  securityDeletedCount: number;
+  securityRetentionDays: number;
+  source: ActivityRetentionCleanupSource;
+  standardCutoffIso: string;
+  standardDeletedCount: number;
+  standardRetentionDays: number;
 }) {
   return JSON.stringify({
-    cutoffIso: params.cutoffIso,
+    autoCleanupEnabled: params.autoCleanupEnabled,
     deletedCount: params.deletedCount,
     durationMs: params.durationMs,
     limit: params.limit,
-    olderThanDays: params.olderThanDays,
+    lockAcquired: params.lockAcquired,
+    protectedActiveBanCount: params.protectedActiveBanCount,
+    securityCutoffIso: params.securityCutoffIso,
+    securityDeletedCount: params.securityDeletedCount,
+    securityRetentionDays: params.securityRetentionDays,
+    source: params.source,
+    standardCutoffIso: params.standardCutoffIso,
+    standardDeletedCount: params.standardDeletedCount,
+    standardRetentionDays: params.standardRetentionDays,
   });
 }
 
 function buildActivityRetentionCleanupFailureAuditDetails(params: {
-  cutoffIso: string;
   durationMs: number;
   errorType: string;
   limit: number;
-  olderThanDays: number;
+  securityCutoffIso: string;
+  securityRetentionDays: number;
+  source: ActivityRetentionCleanupSource;
+  standardCutoffIso: string;
+  standardRetentionDays: number;
 }) {
   return JSON.stringify({
-    cutoffIso: params.cutoffIso,
     durationMs: params.durationMs,
     errorType: params.errorType,
     limit: params.limit,
-    olderThanDays: params.olderThanDays,
+    securityCutoffIso: params.securityCutoffIso,
+    securityRetentionDays: params.securityRetentionDays,
+    source: params.source,
+    standardCutoffIso: params.standardCutoffIso,
+    standardRetentionDays: params.standardRetentionDays,
   });
 }
 
@@ -199,12 +227,15 @@ async function createBatchFailureAuditLog(params: {
 }
 
 async function createRetentionCleanupFailureAuditLog(params: {
-  cutoff: Date;
   error: unknown;
   limit: number;
-  olderThanDays: number;
   performedBy: string;
+  securityCutoff: Date;
+  securityRetentionDays: number;
+  source: ActivityRetentionCleanupSource;
   startedAt: number;
+  standardCutoff: Date;
+  standardRetentionDays: number;
   storage: ActivityStorage;
 }) {
   try {
@@ -213,11 +244,14 @@ async function createRetentionCleanupFailureAuditLog(params: {
       performedBy: params.performedBy,
       targetResource: "activity_logs",
       details: buildActivityRetentionCleanupFailureAuditDetails({
-        cutoffIso: params.cutoff.toISOString(),
         durationMs: Date.now() - params.startedAt,
         errorType: params.error instanceof Error ? params.error.name : "UnknownError",
         limit: params.limit,
-        olderThanDays: params.olderThanDays,
+        securityCutoffIso: params.securityCutoff.toISOString(),
+        securityRetentionDays: params.securityRetentionDays,
+        source: params.source,
+        standardCutoffIso: params.standardCutoff.toISOString(),
+        standardRetentionDays: params.standardRetentionDays,
       }),
     });
   } catch (auditError) {
@@ -377,14 +411,19 @@ export function createActivitySessionOperations(
     },
 
     async deleteActivityLog(activityId: string) {
-      await storage.deleteActivity(activityId);
+      const deleted = await storage.deleteActivity(activityId);
+      if (!deleted) {
+        return { status: "protected" as const };
+      }
       await closeSocket(activityId);
+      return { status: "deleted" as const };
     },
 
     async bulkDeleteActivityLogs(activityIds: string[], performedBy: string) {
       const startedAt = Date.now();
       let deletedCount = 0;
       const notFoundIds: string[] = [];
+      const protectedIds: string[] = [];
 
       try {
         for (const activityId of activityIds) {
@@ -394,7 +433,11 @@ export function createActivitySessionOperations(
             continue;
           }
 
-          await storage.deleteActivity(activityId);
+          const deleted = await storage.deleteActivity(activityId);
+          if (!deleted) {
+            protectedIds.push(activityId);
+            continue;
+          }
           await closeSocket(activityId);
           deletedCount += 1;
         }
@@ -419,6 +462,7 @@ export function createActivitySessionOperations(
           requestedCount: activityIds.length,
           deletedCount,
           notFoundCount: notFoundIds.length,
+          protectedCount: protectedIds.length,
           durationMs: Date.now() - startedAt,
         }),
       });
@@ -426,50 +470,123 @@ export function createActivitySessionOperations(
       return {
         deletedCount,
         notFoundIds,
+        protectedIds,
+      };
+    },
+
+    async getActivityRetentionStatus(now: Date = new Date()): Promise<ActivityRetentionStatus> {
+      const policy = await storage.getActivityRetentionPolicy();
+      const standardCutoff = new Date(now.getTime() - policy.standardRetentionDays * DAY_MS);
+      const securityCutoff = new Date(now.getTime() - policy.securityRetentionDays * DAY_MS);
+      const preview = await storage.getActivityRetentionPreview({
+        securityCutoff,
+        standardCutoff,
+      });
+
+      return {
+        policy,
+        preview,
+        securityCutoff: securityCutoff.toISOString(),
+        standardCutoff: standardCutoff.toISOString(),
       };
     },
 
     async cleanupEndedActivityLogs(params: {
-      cutoff: Date;
-      limit: number;
-      olderThanDays: number;
+      limit?: number | undefined;
+      now?: Date | undefined;
+      olderThanDays?: number | undefined;
       performedBy: string;
+      securityOlderThanDays?: number | undefined;
+      source: ActivityRetentionCleanupSource;
     }) {
       const startedAt = Date.now();
+      const policy = await storage.getActivityRetentionPolicy();
+      const now = params.now ?? new Date();
+      const standardRetentionDays = params.olderThanDays ?? policy.standardRetentionDays;
+      const securityRetentionDays = Math.max(
+        standardRetentionDays,
+        params.securityOlderThanDays ?? policy.securityRetentionDays,
+      );
+      const limit = params.limit ?? policy.batchSize;
+      const standardCutoff = new Date(now.getTime() - standardRetentionDays * DAY_MS);
+      const securityCutoff = new Date(now.getTime() - securityRetentionDays * DAY_MS);
+
+      if (params.source === "automatic" && !policy.autoCleanupEnabled) {
+        return {
+          cutoff: standardCutoff.toISOString(),
+          deletedCount: 0,
+          limit,
+          lockAcquired: false,
+          protectedActiveBanCount: 0,
+          reason: "disabled" as const,
+          securityCutoff: securityCutoff.toISOString(),
+          securityDeletedCount: 0,
+          securityRetentionDays,
+          skipped: true,
+          standardDeletedCount: 0,
+          standardRetentionDays,
+        };
+      }
 
       try {
-        const deletedIds = await storage.deleteEndedActivitiesBefore({
-          cutoff: params.cutoff,
-          limit: params.limit,
+        const preview = await storage.getActivityRetentionPreview({
+          securityCutoff,
+          standardCutoff,
+        });
+        const cleanup = await storage.cleanupActivityRetention({
+          limit,
+          securityCutoff,
+          standardCutoff,
         });
 
-        await Promise.all(deletedIds.map((activityId) => closeSocket(activityId)));
+        await Promise.all(cleanup.deletedIds.map((activityId) => closeSocket(activityId)));
 
         await storage.createAuditLog({
           action: "DELETE_OLD_ACTIVITY_LOGS",
           performedBy: params.performedBy,
           targetResource: "activity_logs",
           details: buildActivityRetentionCleanupAuditDetails({
-            cutoffIso: params.cutoff.toISOString(),
-            deletedCount: deletedIds.length,
+            autoCleanupEnabled: policy.autoCleanupEnabled,
+            deletedCount: cleanup.deletedIds.length,
             durationMs: Date.now() - startedAt,
-            limit: params.limit,
-            olderThanDays: params.olderThanDays,
+            limit,
+            lockAcquired: cleanup.lockAcquired,
+            protectedActiveBanCount: preview.protectedActiveBanCount,
+            securityCutoffIso: securityCutoff.toISOString(),
+            securityDeletedCount: cleanup.securityDeletedCount,
+            securityRetentionDays,
+            source: params.source,
+            standardCutoffIso: standardCutoff.toISOString(),
+            standardDeletedCount: cleanup.standardDeletedCount,
+            standardRetentionDays,
           }),
         });
 
         return {
-          deletedCount: deletedIds.length,
-          cutoff: params.cutoff.toISOString(),
+          cutoff: standardCutoff.toISOString(),
+          deletedCount: cleanup.deletedIds.length,
+          limit,
+          lockAcquired: cleanup.lockAcquired,
+          protectedActiveBanCount: preview.protectedActiveBanCount,
+          reason: cleanup.lockAcquired ? null : "lock_unavailable" as const,
+          securityCutoff: securityCutoff.toISOString(),
+          securityDeletedCount: cleanup.securityDeletedCount,
+          securityRetentionDays,
+          skipped: !cleanup.lockAcquired,
+          standardDeletedCount: cleanup.standardDeletedCount,
+          standardRetentionDays,
         };
       } catch (error) {
         await createRetentionCleanupFailureAuditLog({
-          cutoff: params.cutoff,
           error,
-          limit: params.limit,
-          olderThanDays: params.olderThanDays,
+          limit,
           performedBy: params.performedBy,
+          securityCutoff,
+          securityRetentionDays,
+          source: params.source,
           startedAt,
+          standardCutoff,
+          standardRetentionDays,
           storage,
         });
         throw error;

@@ -4,6 +4,7 @@ import { ActivityBannedUsersSection } from "@/pages/activity/ActivityBannedUsers
 import { ActivityFiltersSection } from "@/pages/activity/ActivityFiltersSection";
 import { ActivityLogsSection } from "@/pages/activity/ActivityLogsSection";
 import { ActivityQuickSnapshotSection } from "@/pages/activity/ActivityQuickSnapshotSection";
+import { ActivityRetentionPanel } from "@/pages/activity/ActivityRetentionPanel";
 import type { ActivityPageContentProps } from "@/pages/activity/activity-page-content-shared";
 
 export function ActivityPageContent({
@@ -46,6 +47,7 @@ export function ActivityPageContent({
   onLogsOpenChange,
   onPageChange,
   onPageSizeChange,
+  onRefreshActivity,
   onSortChange,
   onSelectActivity,
   onSelectBannedUser,
@@ -88,6 +90,10 @@ export function ActivityPageContent({
         bannedCount={bannedUsers.length}
         summaryCounts={summaryCounts}
       />
+
+      {canModerateActivity ? (
+        <ActivityRetentionPanel onCleanupComplete={onRefreshActivity} />
+      ) : null}
 
       <ActivityBannedUsersSection
         actionLoading={actionLoading}

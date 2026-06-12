@@ -10,13 +10,14 @@ export type UseActivityActionStateOptions = {
 export type ActivityBulkDeleteResult = {
   deletedCount: number;
   notFoundIds: string[];
+  protectedIds: string[];
   requestedCount: number;
 };
 
 export type ActivityActionToastPayload = {
   description: string;
   title: string;
-  variant?: "default" | "destructive";
+  variant?: "default" | "destructive" | "warning";
 };
 
 export type UseActivityModerationActionHandlersOptions = UseActivityActionStateOptions & {

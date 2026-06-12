@@ -5,6 +5,7 @@ import type {
   ActivityClientRegistry,
   ActivityFilters,
   ActivityPageOptions,
+  ActivityRetentionCleanupSource,
   ActivityStorage,
   BanAccountResult,
   BanActivityResult,
@@ -69,11 +70,17 @@ export class ActivityService {
     return this.sessionOperations.bulkDeleteActivityLogs(activityIds, performedBy);
   }
 
+  async getActivityRetentionStatus(now?: Date) {
+    return this.sessionOperations.getActivityRetentionStatus(now);
+  }
+
   async cleanupEndedActivityLogs(params: {
-    cutoff: Date;
-    limit: number;
-    olderThanDays: number;
+    limit?: number | undefined;
+    now?: Date | undefined;
+    olderThanDays?: number | undefined;
     performedBy: string;
+    securityOlderThanDays?: number | undefined;
+    source: ActivityRetentionCleanupSource;
   }) {
     return this.sessionOperations.cleanupEndedActivityLogs(params);
   }

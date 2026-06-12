@@ -9,23 +9,19 @@ import {
   type ActivityRouteContext,
 } from "./activity-route-context";
 
-const ACTIVITY_LOG_CLEANUP_DEFAULT_DAYS = 30;
-const ACTIVITY_LOG_CLEANUP_MAX_DAYS = 365;
-const ACTIVITY_LOG_CLEANUP_DEFAULT_LIMIT = 500;
+const ACTIVITY_LOG_CLEANUP_MAX_DAYS = 3_650;
 const ACTIVITY_LOG_CLEANUP_MAX_LIMIT = 5_000;
-const DAY_MS = 24 * 60 * 60 * 1_000;
 
-function readCleanupInteger(
+function readOptionalCleanupInteger(
   value: unknown,
   options: {
-    defaultValue: number;
     label: string;
     max: number;
     min: number;
   },
-): { ok: true; value: number } | { ok: false; message: string } {
+): { ok: true; value: number | undefined } | { ok: false; message: string } {
   if (value === undefined || value === null || value === "") {
-    return { ok: true, value: options.defaultValue };
+    return { ok: true, value: undefined };
   }
 
   const parsed = parseStrictInteger(value, {
@@ -62,7 +58,12 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const activityId = readRouteParam(req.params.id, "activity id");
-      await activityService.deleteActivityLog(activityId);
+      const result = await activityService.deleteActivityLog(activityId);
+      if (result.status === "protected") {
+        return res.status(409).json(buildActivityErrorPayload(
+          "Activity logs linked to an active ban cannot be deleted.",
+        ));
+      }
       return res.json(buildActivitySuccessPayload());
     }),
   );
@@ -88,13 +89,14 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
         return res.status(400).json(buildActivityErrorPayload("activityIds is required"));
       }
 
-      const { deletedCount, notFoundIds } =
+      const { deletedCount, notFoundIds, protectedIds } =
         await activityService.bulkDeleteActivityLogs(activityIds, req.user!.username);
 
       return res.json(buildActivitySuccessPayload({
         requestedCount: activityIds.length,
         deletedCount,
         notFoundIds,
+        protectedIds,
       }));
     }),
   );
@@ -107,8 +109,7 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const body = readActivityBodyObject(req.body);
-      const olderThanDays = readCleanupInteger(body.olderThanDays, {
-        defaultValue: ACTIVITY_LOG_CLEANUP_DEFAULT_DAYS,
+      const olderThanDays = readOptionalCleanupInteger(body.olderThanDays, {
         label: "olderThanDays",
         max: ACTIVITY_LOG_CLEANUP_MAX_DAYS,
         min: 1,
@@ -117,8 +118,7 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
         return res.status(400).json(buildActivityErrorPayload(olderThanDays.message));
       }
 
-      const limit = readCleanupInteger(body.limit, {
-        defaultValue: ACTIVITY_LOG_CLEANUP_DEFAULT_LIMIT,
+      const limit = readOptionalCleanupInteger(body.limit, {
         label: "limit",
         max: ACTIVITY_LOG_CLEANUP_MAX_LIMIT,
         min: 1,
@@ -127,19 +127,16 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
         return res.status(400).json(buildActivityErrorPayload(limit.message));
       }
 
-      const cutoff = new Date(Date.now() - olderThanDays.value * DAY_MS);
       const result = await activityService.cleanupEndedActivityLogs({
-        cutoff,
-        limit: limit.value,
-        olderThanDays: olderThanDays.value,
+        ...(limit.value === undefined ? {} : { limit: limit.value }),
+        ...(olderThanDays.value === undefined ? {} : { olderThanDays: olderThanDays.value }),
         performedBy: req.user!.username,
+        source: "manual",
       });
 
       return res.json(buildActivitySuccessPayload({
-        cutoff: result.cutoff,
-        deletedCount: result.deletedCount,
-        limit: limit.value,
-        olderThanDays: olderThanDays.value,
+        ...result,
+        olderThanDays: result.standardRetentionDays,
       }));
     }),
   );

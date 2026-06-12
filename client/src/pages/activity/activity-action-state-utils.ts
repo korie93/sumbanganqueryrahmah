@@ -22,13 +22,15 @@ export function buildBulkDeleteToastPayload(
   response: ActivityBulkDeleteResult,
 ): ActivityActionToastPayload {
   const allDeleted = response.deletedCount === response.requestedCount;
+  const protectedCount = response.protectedIds.length;
+  const missingCount = response.notFoundIds.length;
 
   return {
-    title: allDeleted ? "Success" : "Partial Success",
+    title: allDeleted ? "Success" : "Partial cleanup",
     description: allDeleted
       ? `${response.deletedCount} activity log(s) deleted.`
-      : `${response.deletedCount} deleted, ${response.notFoundIds.length} missing.`,
-    variant: allDeleted ? "default" : "destructive",
+      : `${response.deletedCount} deleted, ${protectedCount} protected by active bans, ${missingCount} missing.`,
+    variant: allDeleted ? "default" : "warning",
   };
 }
 

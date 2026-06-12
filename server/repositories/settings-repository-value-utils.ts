@@ -1,5 +1,6 @@
 import type { MaintenanceState, SettingInputType } from "../config/system-settings";
 import { resolveHeartbeatIntervalMinutes } from "../activity/activity-session-policy";
+import type { ActivityRetentionPolicy } from "./activity-repository-types";
 
 export const TRUTHY_SETTING_VALUES = new Set(["true", "1", "yes", "on"]);
 
@@ -94,6 +95,31 @@ export function applySettingConstraints(
     return { valid: true, value: clampInteger(10, 500) };
   }
 
+  if (
+    settingKey === "activity_retention_days"
+    || settingKey === "activity_security_retention_days"
+  ) {
+    if (numericValue < 7 || numericValue > 3650) {
+      return {
+        valid: false,
+        value: normalizedValue,
+        message: "Activity retention must be between 7 and 3650 days.",
+      };
+    }
+    return { valid: true, value: clampInteger(7, 3650) };
+  }
+
+  if (settingKey === "activity_retention_batch_size") {
+    if (numericValue < 1 || numericValue > 5000) {
+      return {
+        valid: false,
+        value: normalizedValue,
+        message: "Activity cleanup batch size must be between 1 and 5000.",
+      };
+    }
+    return { valid: true, value: clampInteger(1, 5000) };
+  }
+
   return { valid: true, value: normalizedValue };
 }
 
@@ -175,5 +201,28 @@ export function buildAppConfig(values: Map<string, string>) {
     aiTimeoutMs,
     searchResultLimit,
     viewerRowsPerPage,
+  };
+}
+
+export function buildActivityRetentionPolicy(
+  values: Map<string, string>,
+): ActivityRetentionPolicy {
+  const readInteger = (key: string, fallback: number, min: number, max: number) => {
+    const value = Number(values.get(key));
+    if (!Number.isFinite(value)) return fallback;
+    return Math.min(max, Math.max(min, Math.floor(value)));
+  };
+
+  const standardRetentionDays = readInteger("activity_retention_days", 90, 7, 3650);
+  const securityRetentionDays = Math.max(
+    standardRetentionDays,
+    readInteger("activity_security_retention_days", 365, 7, 3650),
+  );
+
+  return {
+    autoCleanupEnabled: asTruthySetting(values.get("activity_auto_cleanup_enabled"), false),
+    batchSize: readInteger("activity_retention_batch_size", 500, 1, 5000),
+    securityRetentionDays,
+    standardRetentionDays,
   };
 }

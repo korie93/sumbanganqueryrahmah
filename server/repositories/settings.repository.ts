@@ -24,6 +24,7 @@ import {
 } from "./settings-repository-view-utils";
 import {
   applySettingConstraints,
+  buildActivityRetentionPolicy,
   asTruthySetting,
   buildAppConfig,
   buildMaintenanceState,
@@ -318,6 +319,17 @@ export class SettingsRepository {
     ]);
 
     return buildMaintenanceState(values, now);
+  }
+
+  async getActivityRetentionPolicy() {
+    const values = await this.getSettingsValueMap([
+      "activity_auto_cleanup_enabled",
+      "activity_retention_days",
+      "activity_security_retention_days",
+      "activity_retention_batch_size",
+    ]);
+
+    return buildActivityRetentionPolicy(values);
   }
 
   async getAppConfig(): Promise<SettingsAppConfig> {

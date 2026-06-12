@@ -36,6 +36,10 @@ test("settings bootstrap seed includes generated role tab settings", () => {
     + ROLE_TAB_SETTINGS.user.length;
 
   assert.ok(keys.has("maintenance_type"));
+  assert.ok(keys.has("activity_auto_cleanup_enabled"));
+  assert.ok(keys.has("activity_retention_days"));
+  assert.ok(keys.has("activity_security_retention_days"));
+  assert.ok(keys.has("activity_retention_batch_size"));
   assert.ok(keys.has(roleTabSettingKey("admin", "monitor")));
   assert.ok(keys.has(roleTabSettingKey("manager", "dashboard")));
   assert.ok(keys.has(roleTabSettingKey("manager", "settings")));
@@ -48,4 +52,5 @@ test("settings bootstrap seed keeps admin editable allowlist intentional", () =>
   assert.equal(ADMIN_EDITABLE_SETTING_KEYS.has("maintenance_message"), true);
   assert.equal(ADMIN_EDITABLE_SETTING_KEYS.has("maintenance_mode"), false);
   assert.equal(ADMIN_EDITABLE_SETTING_KEYS.has("jwt_expiry_hours"), false);
+  assert.equal(ADMIN_EDITABLE_SETTING_KEYS.has("activity_auto_cleanup_enabled"), false);
 });

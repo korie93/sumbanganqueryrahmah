@@ -2,6 +2,11 @@ import type { User, UserActivity, InsertUserActivity } from "../shared/schema-po
 import type {
   ActivityPageParams,
   ActivityPageResult,
+  ActivityRetentionCleanupParams,
+  ActivityRetentionCleanupResult,
+  ActivityRetentionPolicy,
+  ActivityRetentionPreview,
+  ActivityRetentionPreviewParams,
 } from "./repositories/activity.repository";
 import type {
   MaintenanceState,
@@ -31,6 +36,12 @@ export interface ActivitySettingsStorageContract {
     cutoff: Date;
     limit: number;
   }): Promise<string[]>;
+  getActivityRetentionPreview(
+    params: ActivityRetentionPreviewParams,
+  ): Promise<ActivityRetentionPreview>;
+  cleanupActivityRetention(
+    params: ActivityRetentionCleanupParams,
+  ): Promise<ActivityRetentionCleanupResult>;
   getFilteredActivities(filters: {
     status?: string[] | undefined;
     username?: string | undefined;
@@ -106,6 +117,7 @@ export interface ActivitySettingsStorageContract {
     shouldBroadcast?: boolean;
   }>;
   getMaintenanceState(now?: Date): Promise<MaintenanceState>;
+  getActivityRetentionPolicy(): Promise<ActivityRetentionPolicy>;
   getAppConfig(): Promise<{
     systemName: string;
     sessionTimeoutMinutes: number;

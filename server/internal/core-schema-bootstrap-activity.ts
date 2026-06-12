@@ -72,6 +72,15 @@ export async function ensureCoreUserActivityTable(
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_last_activity_time ON public.user_activity(last_activity_time DESC)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_fingerprint ON public.user_activity(fingerprint)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_ip_address ON public.user_activity(ip_address)`);
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_user_activity_retention_ended
+    ON public.user_activity (
+      COALESCE(logout_time, last_activity_time, login_time),
+      logout_reason,
+      id
+    )
+    WHERE is_active IS FALSE
+  `);
 }
 
 export async function ensureCoreAuditLogsTable(

@@ -35,6 +35,8 @@ import { createRuntimeMonitorManager } from "./runtime-monitor-manager";
 import { wrapAsyncPrototypeMethods } from "./wrapAsyncPrototypeMethods";
 import { applyTrustedProxies } from "../http/trust-proxy";
 import { HTTP_SERVER_SOCKET_TIMEOUT_MS } from "../http/http-server-timeouts";
+import { ActivityService } from "../services/activity.service";
+import { startActivityRetentionJob } from "./activity-retention-job";
 
 type CreateLocalRuntimeEnvironmentOptions = {
   onGracefulShutdownMessage?: (reason: string) => void;
@@ -275,6 +277,18 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     getRuntimeSettingsCached,
     defaultSessionTimeoutMinutes: runtimeConfig.runtime.defaults.sessionTimeoutMinutes,
     aiPrecomputeOnStart: runtimeConfig.ai.precomputeOnStart,
+    startActivityRetentionJob: () => {
+      const activityService = new ActivityService(storage, connectedClients);
+      return startActivityRetentionJob({
+        runCleanup: async (now) => {
+          await activityService.cleanupEndedActivityLogs({
+            now,
+            performedBy: "system:activity-retention",
+            source: "automatic",
+          });
+        },
+      });
+    },
     port: runtimeConfig.app.port,
     host: runtimeConfig.app.host,
     markWebSocketConnectionsReady: () => {

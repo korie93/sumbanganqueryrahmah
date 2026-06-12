@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   applySettingConstraints,
   asTruthySetting,
+  buildActivityRetentionPolicy,
   buildAppConfig,
   buildMaintenanceState,
   normalizeSettingValue,
@@ -37,6 +38,18 @@ test("applySettingConstraints enforces numeric setting bounds", () => {
     valid: true,
     value: "42",
   });
+  assert.deepEqual(applySettingConstraints("activity_retention_days", "number", "90.9"), {
+    valid: true,
+    value: "90",
+  });
+  assert.equal(
+    applySettingConstraints("activity_security_retention_days", "number", "6").message,
+    "Activity retention must be between 7 and 3650 days.",
+  );
+  assert.equal(
+    applySettingConstraints("activity_retention_batch_size", "number", "5001").message,
+    "Activity cleanup batch size must be between 1 and 5000.",
+  );
 });
 
 test("buildMaintenanceState disables scheduled or expired windows", () => {
@@ -94,4 +107,20 @@ test("asTruthySetting respects fallback for blank values", () => {
   assert.equal(asTruthySetting("on"), true);
   assert.equal(asTruthySetting("", true), true);
   assert.equal(asTruthySetting("", false), false);
+});
+
+test("buildActivityRetentionPolicy clamps values and never shortens security retention", () => {
+  const policy = buildActivityRetentionPolicy(new Map<string, string>([
+    ["activity_auto_cleanup_enabled", "true"],
+    ["activity_retention_days", "180"],
+    ["activity_security_retention_days", "30"],
+    ["activity_retention_batch_size", "9000"],
+  ]));
+
+  assert.deepEqual(policy, {
+    autoCleanupEnabled: true,
+    batchSize: 5000,
+    securityRetentionDays: 180,
+    standardRetentionDays: 180,
+  });
 });

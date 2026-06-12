@@ -19,6 +19,7 @@ import { buildRateLimiterTopologyWarning } from "../middleware/rate-limit-runtim
 import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
 import { verifyCollectionReceiptExternalScanStartup } from "../lib/collection-receipt-external-scan-startup";
 import { verifyBcryptRuntimeStartup } from "../auth/passwords";
+import type { BackgroundSweepJob } from "./background-sweep-job";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -43,6 +44,7 @@ type StartLocalServerOptions = {
   categoryStatsService: Pick<CategoryStatsService, "warmCategoryStats">;
   notifyFatalStartup: (reason: string, details?: string) => void;
   markWebSocketConnectionsReady?: () => void;
+  startActivityRetentionJob?: () => BackgroundSweepJob;
   port?: number;
   host?: string;
 };
@@ -80,6 +82,7 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     categoryStatsService,
     notifyFatalStartup,
     markWebSocketConnectionsReady,
+    startActivityRetentionJob,
     port = runtimeConfig.app.port,
     host = runtimeConfig.app.host,
   } = options;
@@ -246,6 +249,12 @@ export async function startLocalServer(options: StartLocalServerOptions) {
   server.once("close", () => {
     clearInterval(idleSweeperHandle);
   });
+
+  const activityRetentionJob = startActivityRetentionJob?.();
+  if (activityRetentionJob) {
+    server.once("close", activityRetentionJob.stop);
+    void activityRetentionJob.trigger();
+  }
 
   markStartupReady();
   markWebSocketConnectionsReady?.();

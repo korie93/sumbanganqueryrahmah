@@ -55,6 +55,7 @@ export type ActivityPageContentProps = {
   onLogsOpenChange: (open: boolean) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onRefreshActivity: () => void;
   onSortChange: (sortBy: ActivitySortBy, sortOrder: ActivitySortOrder) => void;
   onSelectActivity: (activity: ActivityRecord | null) => void;
   onSelectBannedUser: (user: BannedUser | null) => void;

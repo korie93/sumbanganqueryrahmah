@@ -6,6 +6,10 @@ import type {
 import type {
   ActivityPageParams,
   ActivityPageResult,
+  ActivityRetentionCleanupParams,
+  ActivityRetentionCleanupResult,
+  ActivityRetentionPreview,
+  ActivityRetentionPreviewParams,
   AuthenticatedSessionSnapshot,
 } from "../../repositories/activity.repository";
 import { PostgresImportsSearchStorage } from "./postgres-imports-search-storage";
@@ -75,6 +79,18 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
     limit: number;
   }): Promise<string[]> {
     return this.activityRepository.deleteEndedActivitiesBefore(params);
+  }
+
+  async getActivityRetentionPreview(
+    params: ActivityRetentionPreviewParams,
+  ): Promise<ActivityRetentionPreview> {
+    return this.activityRepository.getActivityRetentionPreview(params);
+  }
+
+  async cleanupActivityRetention(
+    params: ActivityRetentionCleanupParams,
+  ): Promise<ActivityRetentionCleanupResult> {
+    return this.activityRepository.cleanupActivityRetention(params);
   }
 
   async getFilteredActivities(filters: {

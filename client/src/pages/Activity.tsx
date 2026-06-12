@@ -43,6 +43,7 @@ export default function Activity() {
     logsOpen,
     setLogsOpen,
     requestActivityPage,
+    refreshCurrentView,
     page,
     pageSize,
     totalItems,
@@ -122,6 +123,7 @@ export default function Activity() {
         onLogsOpenChange={setLogsOpen}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
+        onRefreshActivity={refreshCurrentView}
         onSortChange={handleSortChange}
         onSelectActivity={setSelectedActivity}
         onSelectBannedUser={setSelectedBannedUser}

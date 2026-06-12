@@ -22,12 +22,30 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
         requestId: null,
         targetResource: null,
       }) as AuditRecord,
+    cleanupActivityRetention: async () => ({
+      deletedIds: [],
+      lockAcquired: true,
+      securityDeletedCount: 0,
+      standardDeletedCount: 0,
+    }),
     deactivateUserActivities: async () => undefined,
     deleteActivity: async () => true,
     deleteEndedActivitiesBefore: async () => [],
     getActiveActivities: async () => [],
     getActiveActivitiesByUsername: async () => [],
     getActivityById: async () => undefined,
+    getActivityRetentionPolicy: async () => ({
+      autoCleanupEnabled: false,
+      batchSize: 500,
+      securityRetentionDays: 365,
+      standardRetentionDays: 90,
+    }),
+    getActivityRetentionPreview: async () => ({
+      protectedActiveBanCount: 0,
+      securityEligibleCount: 0,
+      standardEligibleCount: 0,
+      totalEligibleCount: 0,
+    }),
     getAllActivities: async () => [],
     listActivityPage: async (params) => ({
       activities: [],
@@ -204,6 +222,7 @@ test("bulkDeleteActivityLogs reports not found ids and closes deleted activities
   assert.deepEqual(result, {
     deletedCount: 2,
     notFoundIds: ["missing"],
+    protectedIds: [],
   });
   assert.deepEqual(deletedIds, ["a1", "a2"]);
   assert.deepEqual(closedIds, ["a1", "a2"]);
@@ -214,13 +233,76 @@ test("bulkDeleteActivityLogs reports not found ids and closes deleted activities
   assert.equal(details.requestedCount, 3);
   assert.equal(details.deletedCount, 2);
   assert.equal(details.notFoundCount, 1);
+  assert.equal(details.protectedCount, 0);
 });
 
-test("cleanupEndedActivityLogs deletes only storage-selected ended logs and audits retention details", async () => {
+test("bulkDeleteActivityLogs preserves records linked to active bans", async () => {
   const closedIds: string[] = [];
-  const cleanupCalls: Array<{ cutoff: Date; limit: number }> = [];
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityById: async (activityId) => createActiveActivityRecord(activityId),
+      deleteActivity: async (activityId) => activityId !== "protected-ban",
+    }),
+    async (activityId) => {
+      closedIds.push(activityId);
+    },
+  );
+
+  const result = await operations.bulkDeleteActivityLogs(
+    ["ordinary-log", "protected-ban"],
+    "admin.user",
+  );
+
+  assert.deepEqual(result, {
+    deletedCount: 1,
+    notFoundIds: [],
+    protectedIds: ["protected-ban"],
+  });
+  assert.deepEqual(closedIds, ["ordinary-log"]);
+});
+
+test("getActivityRetentionStatus returns bounded policy cutoffs and protected ban counts", async () => {
+  const previewCalls: Array<{ securityCutoff: Date; standardCutoff: Date }> = [];
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityRetentionPolicy: async () => ({
+        autoCleanupEnabled: true,
+        batchSize: 250,
+        securityRetentionDays: 365,
+        standardRetentionDays: 90,
+      }),
+      getActivityRetentionPreview: async (params) => {
+        previewCalls.push(params);
+        return {
+          protectedActiveBanCount: 2,
+          securityEligibleCount: 3,
+          standardEligibleCount: 4,
+          totalEligibleCount: 7,
+        };
+      },
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.getActivityRetentionStatus(
+    new Date("2026-06-12T00:00:00.000Z"),
+  );
+
+  assert.equal(result.standardCutoff, "2026-03-14T00:00:00.000Z");
+  assert.equal(result.securityCutoff, "2025-06-12T00:00:00.000Z");
+  assert.equal(result.preview.protectedActiveBanCount, 2);
+  assert.equal(result.preview.totalEligibleCount, 7);
+  assert.equal(previewCalls.length, 1);
+});
+
+test("cleanupEndedActivityLogs deletes eligible records and audits protected ban details", async () => {
+  const closedIds: string[] = [];
+  const cleanupCalls: Array<{
+    limit: number;
+    securityCutoff: Date;
+    standardCutoff: Date;
+  }> = [];
   const auditEntries: Array<Parameters<ActivityStorage["createAuditLog"]>[0]> = [];
-  const cutoff = new Date("2026-05-09T00:00:00.000Z");
 
   const operations = createActivitySessionOperations(
     createStorageMock({
@@ -232,9 +314,26 @@ test("cleanupEndedActivityLogs deletes only storage-selected ended logs and audi
           timestamp: new Date("2026-06-08T00:00:00.000Z"),
         } as AuditRecord;
       },
-      deleteEndedActivitiesBefore: async (params) => {
+      getActivityRetentionPolicy: async () => ({
+        autoCleanupEnabled: true,
+        batchSize: 500,
+        securityRetentionDays: 365,
+        standardRetentionDays: 90,
+      }),
+      getActivityRetentionPreview: async () => ({
+        protectedActiveBanCount: 3,
+        securityEligibleCount: 1,
+        standardEligibleCount: 2,
+        totalEligibleCount: 3,
+      }),
+      cleanupActivityRetention: async (params) => {
         cleanupCalls.push(params);
-        return ["ended-old-1", "ended-old-2"];
+        return {
+          deletedIds: ["ended-old-1", "kicked-old-1"],
+          lockAcquired: true,
+          securityDeletedCount: 1,
+          standardDeletedCount: 1,
+        };
       },
     }),
     async (activityId: string) => {
@@ -243,26 +342,59 @@ test("cleanupEndedActivityLogs deletes only storage-selected ended logs and audi
   );
 
   const result = await operations.cleanupEndedActivityLogs({
-    cutoff,
+    now: new Date("2026-06-12T00:00:00.000Z"),
     limit: 500,
     olderThanDays: 30,
     performedBy: "admin.user",
+    source: "manual",
   });
 
-  assert.deepEqual(result, {
-    cutoff: "2026-05-09T00:00:00.000Z",
-    deletedCount: 2,
-  });
-  assert.deepEqual(cleanupCalls, [{ cutoff, limit: 500 }]);
-  assert.deepEqual(closedIds, ["ended-old-1", "ended-old-2"]);
+  assert.equal(result.cutoff, "2026-05-13T00:00:00.000Z");
+  assert.equal(result.securityCutoff, "2025-06-12T00:00:00.000Z");
+  assert.equal(result.deletedCount, 2);
+  assert.equal(result.standardDeletedCount, 1);
+  assert.equal(result.securityDeletedCount, 1);
+  assert.equal(result.protectedActiveBanCount, 3);
+  assert.equal(result.skipped, false);
+  assert.equal(cleanupCalls.length, 1);
+  assert.equal(cleanupCalls[0]?.limit, 500);
+  assert.deepEqual(closedIds, ["ended-old-1", "kicked-old-1"]);
   assert.equal(auditEntries.length, 1);
   assert.equal(auditEntries[0]?.action, "DELETE_OLD_ACTIVITY_LOGS");
   assert.equal(auditEntries[0]?.performedBy, "admin.user");
   const details = JSON.parse(String(auditEntries[0]?.details));
-  assert.equal(details.cutoffIso, "2026-05-09T00:00:00.000Z");
+  assert.equal(details.standardCutoffIso, "2026-05-13T00:00:00.000Z");
+  assert.equal(details.securityCutoffIso, "2025-06-12T00:00:00.000Z");
   assert.equal(details.deletedCount, 2);
   assert.equal(details.limit, 500);
-  assert.equal(details.olderThanDays, 30);
+  assert.equal(details.standardRetentionDays, 30);
+  assert.equal(details.securityRetentionDays, 365);
+  assert.equal(details.protectedActiveBanCount, 3);
+  assert.equal(details.source, "manual");
+});
+
+test("cleanupEndedActivityLogs skips automatic cleanup when policy is disabled", async () => {
+  let cleanupCalled = false;
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      cleanupActivityRetention: async () => {
+        cleanupCalled = true;
+        throw new Error("cleanup must not run");
+      },
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.cleanupEndedActivityLogs({
+    now: new Date("2026-06-12T00:00:00.000Z"),
+    performedBy: "system:activity-retention",
+    source: "automatic",
+  });
+
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, "disabled");
+  assert.equal(result.deletedCount, 0);
+  assert.equal(cleanupCalled, false);
 });
 
 test("cleanupEndedActivityLogs writes a failure audit when retention cleanup fails", async () => {
@@ -277,7 +409,7 @@ test("cleanupEndedActivityLogs writes a failure audit when retention cleanup fai
           timestamp: new Date("2026-06-08T00:00:00.000Z"),
         } as AuditRecord;
       },
-      deleteEndedActivitiesBefore: async () => {
+      cleanupActivityRetention: async () => {
         throw new Error("cleanup failed");
       },
     }),
@@ -287,10 +419,11 @@ test("cleanupEndedActivityLogs writes a failure audit when retention cleanup fai
   await assert.rejects(
     () =>
       operations.cleanupEndedActivityLogs({
-        cutoff: new Date("2026-05-09T00:00:00.000Z"),
+        now: new Date("2026-06-12T00:00:00.000Z"),
         limit: 500,
         olderThanDays: 30,
         performedBy: "admin.user",
+        source: "manual",
       }),
     /cleanup failed/,
   );
@@ -301,7 +434,9 @@ test("cleanupEndedActivityLogs writes a failure audit when retention cleanup fai
   const details = JSON.parse(String(auditEntries[0]?.details));
   assert.equal(details.errorType, "Error");
   assert.equal(details.limit, 500);
-  assert.equal(details.olderThanDays, 30);
+  assert.equal(details.standardRetentionDays, 30);
+  assert.equal(details.securityRetentionDays, 365);
+  assert.equal(details.source, "manual");
 });
 
 test("heartbeat marks activity online and returns ISO timestamp", async () => {

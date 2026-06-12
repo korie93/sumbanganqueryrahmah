@@ -45,6 +45,36 @@ export type ActivityPageResult = {
   summary: ActivityStatusSummary;
 };
 
+export type ActivityRetentionPolicy = {
+  autoCleanupEnabled: boolean;
+  batchSize: number;
+  securityRetentionDays: number;
+  standardRetentionDays: number;
+};
+
+export type ActivityRetentionPreviewParams = {
+  securityCutoff: Date;
+  standardCutoff: Date;
+};
+
+export type ActivityRetentionPreview = {
+  protectedActiveBanCount: number;
+  securityEligibleCount: number;
+  standardEligibleCount: number;
+  totalEligibleCount: number;
+};
+
+export type ActivityRetentionCleanupParams = ActivityRetentionPreviewParams & {
+  limit: number;
+};
+
+export type ActivityRetentionCleanupResult = {
+  deletedIds: string[];
+  lockAcquired: boolean;
+  securityDeletedCount: number;
+  standardDeletedCount: number;
+};
+
 export type AuthenticatedSessionSnapshot = {
   activity: UserActivity;
   user?: User | undefined;

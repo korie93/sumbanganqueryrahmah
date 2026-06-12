@@ -3,6 +3,7 @@ import type {
   SystemSettingCategory,
   SystemSettingItem,
 } from "../../config/system-settings";
+import type { ActivityRetentionPolicy } from "../../repositories/activity.repository";
 import { PostgresAiStorage } from "./postgres-ai-storage";
 
 export class PostgresSettingsStorage extends PostgresAiStorage {
@@ -40,6 +41,11 @@ export class PostgresSettingsStorage extends PostgresAiStorage {
   async getMaintenanceState(now: Date = new Date()): Promise<MaintenanceState> {
     await this.ensureSettingsTables();
     return this.settingsRepository.getMaintenanceState(now);
+  }
+
+  async getActivityRetentionPolicy(): Promise<ActivityRetentionPolicy> {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.getActivityRetentionPolicy();
   }
 
   async getAppConfig(): Promise<{

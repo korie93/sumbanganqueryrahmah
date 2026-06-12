@@ -219,6 +219,18 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
   );
 
   app.get(
+    "/api/activity/retention",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (_req, res) => {
+      return res.json(buildActivitySuccessPayload({
+        retention: await activityService.getActivityRetentionStatus(),
+      }));
+    }),
+  );
+
+  app.get(
     "/api/activity/filter",
     authenticateToken,
     requireRole("user", "admin", "superuser"),

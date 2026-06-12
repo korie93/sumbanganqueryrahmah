@@ -55,6 +55,7 @@ export function useActivityPageState() {
     logsOpen: dataState.logsOpen,
     setLogsOpen: dataState.setLogsOpen,
     requestActivityPage: dataState.requestActivityPage,
+    refreshCurrentView: dataState.refreshCurrentView,
     page: dataState.page,
     pageSize: dataState.pageSize,
     totalItems: dataState.totalItems,
