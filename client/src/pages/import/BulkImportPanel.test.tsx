@@ -87,7 +87,50 @@ test("BulkImportPanel offers retry only when completed files include retryable f
     }),
   );
 
-  assert.match(markup, />Retry Failed</);
+  assert.match(markup, />Retry failed</);
   assert.match(markup, /2 rows imported/);
-  assert.doesNotMatch(markup, />Start Import</);
+  assert.doesNotMatch(markup, />Start import</);
+});
+
+test("BulkImportPanel presents a compact queue summary for selected files", () => {
+  const markup = renderToStaticMarkup(
+    createElement(BulkImportPanel, {
+      bulkFiles: [
+        new File(["ready"], "ready.csv"),
+        new File(["blocked"], "blocked.csv"),
+      ],
+      bulkInputRef: createRef<HTMLInputElement>(),
+      bulkProcessing: false,
+      bulkProgress: 0,
+      bulkResults: [
+        {
+          id: "ready",
+          filename: "ready.csv",
+          sizeBytes: 5,
+          status: "pending",
+        },
+        {
+          id: "blocked",
+          filename: "blocked.csv",
+          sizeBytes: 7,
+          status: "error",
+          blocked: true,
+          error: "File exceeds the upload limit.",
+        },
+      ],
+      maxUploadSizeLabel: "10 MB",
+      onBulkDrop: () => undefined,
+      onBulkDragOver: () => undefined,
+      onBulkFileSelect: () => undefined,
+      onClearBulk: () => undefined,
+      onStartBulkImport: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Bulk import queue/);
+  assert.match(markup, /aria-label="Bulk import summary"/);
+  assert.match(markup, /Queue summary/);
+  assert.match(markup, /1 ready/);
+  assert.match(markup, /1 too large/);
+  assert.match(markup, /Oversized files are skipped automatically/);
 });
