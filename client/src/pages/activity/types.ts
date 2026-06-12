@@ -1,22 +1,14 @@
-import type { ActivityFilters } from "@/lib/api";
+import type {
+  ActivityApiRecord,
+  ActivityFilters,
+  ActivitySortBy,
+  ActivitySortOrder,
+  ActivityStatus,
+} from "@/lib/api";
 
-export type ActivityStatus = "ONLINE" | "IDLE" | "LOGOUT" | "KICKED" | "BANNED";
+export type { ActivitySortBy, ActivitySortOrder, ActivityStatus };
 
-export interface ActivityRecord {
-  id: string;
-  username: string;
-  role: string;
-  status: ActivityStatus;
-  pcName?: string;
-  browser?: string;
-  fingerprint?: string;
-  ipAddress?: string;
-  loginTime: string;
-  logoutTime?: string;
-  lastActivityTime?: string;
-  isActive: boolean;
-  logoutReason?: string;
-}
+export type ActivityRecord = ActivityApiRecord;
 
 export interface BannedUser {
   visitorId: string;
@@ -41,10 +33,19 @@ export interface ActivityLogsTableProps {
   canModerateActivity: boolean;
   loading: boolean;
   logsOpen: boolean;
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  sortBy: ActivitySortBy;
+  sortOrder: ActivitySortOrder;
   onBanClick: (activity: ActivityRecord) => void;
   onDeleteClick: (activity: ActivityRecord) => void;
   onKickClick: (activity: ActivityRecord) => void;
   onLogsOpenChange: (open: boolean) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onSortChange: (sortBy: ActivitySortBy, sortOrder: ActivitySortOrder) => void;
   onToggleSelected: (activityId: string, checked: boolean) => void;
   onToggleSelectAllVisible: (checked: boolean) => void;
   selectedActivityIds: Set<string>;

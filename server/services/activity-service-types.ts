@@ -1,5 +1,9 @@
 import type { WebSocket } from "ws";
 import type { PostgresStorage } from "../storage-postgres";
+import type {
+  ActivityPageSortBy,
+  ActivityPageSortOrder,
+} from "../repositories/activity.repository";
 
 export type ActivityFilters = {
   status?: string[] | undefined;
@@ -8,6 +12,13 @@ export type ActivityFilters = {
   browser?: string | undefined;
   dateFrom?: Date | undefined;
   dateTo?: Date | undefined;
+};
+
+export type ActivityPageOptions = {
+  page: number;
+  pageSize: number;
+  sortBy: ActivityPageSortBy;
+  sortOrder: ActivityPageSortOrder;
 };
 
 export type ActivityStorage = Pick<
@@ -22,6 +33,7 @@ export type ActivityStorage = Pick<
   | "getActiveActivitiesByUsername"
   | "getActivityById"
   | "getAllActivities"
+  | "listActivityPage"
   | "getBannedSessions"
   | "getFilteredActivities"
   | "getUserByUsername"

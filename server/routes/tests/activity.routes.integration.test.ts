@@ -47,6 +47,7 @@ type StoredActivityRecord = NonNullable<Awaited<ReturnType<PostgresStorage["getA
 type StoredActivityFeedRecord = Awaited<ReturnType<PostgresStorage["getAllActivities"]>>[number] & {
   status?: string;
 };
+type ActivityPageParams = Parameters<PostgresStorage["listActivityPage"]>[0];
 
 type UserRecord = {
   id: string;
@@ -138,6 +139,7 @@ function createActivityRouteHarness(options?: {
   const updateUserBanCalls: Array<{ username: string; isBanned: boolean }> = [];
   const unbanVisitorCalls: string[] = [];
   const filteredActivityCalls: Array<Record<string, unknown>> = [];
+  const activityPageCalls: ActivityPageParams[] = [];
 
   const users = new Map<string, UserRecord>([
     ["user.one", { id: "user-1", username: "user.one", role: "user", isBanned: false }],
@@ -265,6 +267,22 @@ function createActivityRouteHarness(options?: {
       filteredActivityCalls.push(filters);
       return Array.from(activities.values());
     },
+    listActivityPage: async (params: ActivityPageParams) => {
+      activityPageCalls.push(params);
+      return {
+        activities: [],
+        page: params.page,
+        pageSize: params.pageSize,
+        total: 12,
+        totalPages: 2,
+        summary: {
+          idleCount: 3,
+          kickedCount: 1,
+          logoutCount: 2,
+          onlineCount: 6,
+        },
+      };
+    },
     getActiveActivities: async () => Array.from(activities.values()).filter((activity) => activity.isActive),
     getActiveActivitiesByUsername: async (username: string) =>
       Array.from(activities.values()).filter((activity) => activity.username === username && activity.isActive),
@@ -351,6 +369,7 @@ function createActivityRouteHarness(options?: {
     updateUserBanCalls,
     unbanVisitorCalls,
     filteredActivityCalls,
+    activityPageCalls,
     activities,
     connectedClients,
     socketStates,
@@ -1011,6 +1030,89 @@ test("GET /api/users/banned returns mapped banned session data", async () => {
         },
       ],
     });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/page validates and forwards pagination, sorting, and filters", async () => {
+  const { app, activityPageCalls } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "user.one",
+      role: "user",
+      activityId: "activity-1",
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/activity/page`
+      + "?page=2&pageSize=10&sortBy=username&sortOrder=asc"
+      + "&status=ONLINE%2CIDLE%2CONLINE&username=user.one"
+      + "&dateFrom=2026-06-01&dateTo=2026-06-12",
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      activities: [],
+      summary: {
+        idleCount: 3,
+        kickedCount: 1,
+        logoutCount: 2,
+        onlineCount: 6,
+      },
+      pagination: {
+        mode: "offset",
+        page: 2,
+        pageSize: 10,
+        limit: 10,
+        offset: 10,
+        total: 12,
+        totalPages: 2,
+        hasNextPage: false,
+        hasPreviousPage: true,
+      },
+    });
+    assert.equal(activityPageCalls.length, 1);
+    assert.deepEqual(activityPageCalls[0], {
+      page: 2,
+      pageSize: 10,
+      sortBy: "username",
+      sortOrder: "asc",
+      currentActivityId: "activity-1",
+      filters: {
+        status: ["ONLINE", "IDLE"],
+        username: "user.one",
+        ipAddress: "",
+        browser: "",
+        dateFrom: new Date("2026-06-01T00:00:00.000Z"),
+        dateTo: new Date("2026-06-12T00:00:00.000Z"),
+      },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/page rejects invalid pagination, sorting, and status values", async () => {
+  const { app, activityPageCalls } = createActivityRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const urls = [
+      `${baseUrl}/api/activity/page?pageSize=0`,
+      `${baseUrl}/api/activity/page?sortBy=details`,
+      `${baseUrl}/api/activity/page?sortOrder=sideways`,
+      `${baseUrl}/api/activity/page?status=ONLINE%2CUNKNOWN`,
+    ];
+
+    for (const url of urls) {
+      const response = await fetch(url);
+      assert.equal(response.status, 400);
+    }
+    assert.equal(activityPageCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }

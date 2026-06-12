@@ -5,12 +5,12 @@ import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import { getActivityLogsCountLabel } from "@/pages/activity/activity-logs-table-utils";
 
 type ActivityLogsTableHeaderProps = {
-  activityCount: number;
+  totalItems: number;
   logsOpen: boolean;
 };
 
 export function ActivityLogsTableHeader({
-  activityCount,
+  totalItems,
   logsOpen,
 }: ActivityLogsTableHeaderProps) {
   return (
@@ -25,7 +25,7 @@ export function ActivityLogsTableHeader({
         <div className="flex items-center gap-2">
           <ActivityIcon className="h-5 w-5 text-primary" />
           <span className="font-semibold text-foreground">Activity Logs</span>
-          <Badge variant="secondary">{getActivityLogsCountLabel(activityCount)}</Badge>
+          <Badge variant="secondary">{getActivityLogsCountLabel(totalItems)}</Badge>
         </div>
         <ChevronDown
           className={`h-5 w-5 text-muted-foreground transition-transform ${logsOpen ? "rotate-180" : ""}`}

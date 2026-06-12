@@ -4,6 +4,7 @@ import {
   activityHeartbeat,
   activityHeartbeatLight,
   getAllActivity,
+  getActivityPage,
   getBannedUsers,
   getFilteredActivity,
 } from "@/lib/api/activity";
@@ -762,6 +763,32 @@ test("activity API wrappers forward AbortSignal", async () => {
     if (url === "/api/activity/filter?status=ONLINE%2CIDLE&username=alice") {
       return jsonResponse({ activities: [] });
     }
+    if (
+      url
+      === "/api/activity/page?page=2&pageSize=20&sortBy=username&sortOrder=asc"
+      + "&status=ONLINE%2CIDLE&username=alice"
+    ) {
+      return jsonResponse({
+        activities: [],
+        summary: {
+          idleCount: 0,
+          kickedCount: 0,
+          logoutCount: 0,
+          onlineCount: 0,
+        },
+        pagination: {
+          mode: "offset",
+          page: 2,
+          pageSize: 20,
+          limit: 20,
+          offset: 20,
+          total: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      });
+    }
     if (url === "/api/users/banned") {
       return jsonResponse({ users: [] });
     }
@@ -778,18 +805,34 @@ test("activity API wrappers forward AbortSignal", async () => {
       },
       { signal: controller.signal },
     );
+    await getActivityPage(
+      {
+        page: 2,
+        pageSize: 20,
+        sortBy: "username",
+        sortOrder: "asc",
+        status: ["ONLINE", "IDLE"],
+        username: "alice",
+      },
+      { signal: controller.signal },
+    );
     await getBannedUsers({ signal: controller.signal });
   } finally {
     restoreFetch();
   }
 
-  assert.equal(requests.length, 3);
+  assert.equal(requests.length, 4);
   for (const request of requests) {
     assert.equal(request.signal, controller.signal);
   }
   assert.equal(requests[0]?.url, "/api/activity/all");
   assert.equal(requests[1]?.url, "/api/activity/filter?status=ONLINE%2CIDLE&username=alice");
-  assert.equal(requests[2]?.url, "/api/users/banned");
+  assert.equal(
+    requests[2]?.url,
+    "/api/activity/page?page=2&pageSize=20&sortBy=username&sortOrder=asc"
+    + "&status=ONLINE%2CIDLE&username=alice",
+  );
+  assert.equal(requests[3]?.url, "/api/users/banned");
 });
 
 test("auth manual fetch wrappers forward AbortSignal", async () => {

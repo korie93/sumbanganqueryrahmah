@@ -1,7 +1,9 @@
 import { Suspense, lazy } from "react";
 import { Activity as ActivityIcon } from "lucide-react";
+import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { ActivityLogsTableHeader } from "@/pages/activity/ActivityLogsTableHeader";
+import { ActivityLogsToolbar } from "@/pages/activity/ActivityLogsToolbar";
 import { ActivityMobileLogsList } from "@/pages/activity/ActivityMobileLogsList";
 import { getActivityLogsEmptyLabel } from "@/pages/activity/activity-logs-table-utils";
 import type { ActivityLogsTableProps } from "@/pages/activity/types";
@@ -27,10 +29,19 @@ export function ActivityLogsTable({
   canModerateActivity,
   loading,
   logsOpen,
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+  sortBy,
+  sortOrder,
   onBanClick,
   onDeleteClick,
   onKickClick,
   onLogsOpenChange,
+  onPageChange,
+  onPageSizeChange,
+  onSortChange,
   onToggleSelected,
   onToggleSelectAllVisible,
   selectedActivityIds,
@@ -43,10 +54,19 @@ export function ActivityLogsTable({
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
       <div className="glass-wrapper p-6" data-floating-ai-avoid="true">
         <ActivityLogsTableHeader
-          activityCount={activities.length}
+          totalItems={totalItems}
           logsOpen={logsOpen}
         />
         <CollapsibleContent>
+          <ActivityLogsToolbar
+            disabled={loading}
+            page={page}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            totalItems={totalItems}
+            totalPages={totalPages}
+            onSortChange={onSortChange}
+          />
           {loading ? (
             <div className="py-8 text-center">
               <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
@@ -88,6 +108,19 @@ export function ActivityLogsTable({
               />
             </Suspense>
           )}
+          <div className="mt-4">
+            <AppPaginationBar
+              disabled={loading}
+              loading={loading}
+              page={page}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              totalItems={totalItems}
+              itemLabel="activity logs"
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
+          </div>
         </CollapsibleContent>
       </div>
     </Collapsible>

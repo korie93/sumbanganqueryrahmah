@@ -1,7 +1,5 @@
-import { useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
-import { buildActivitySummaryCounts } from "@/pages/activity/activity-page-state-utils";
 import { useActivityActionState } from "@/pages/activity/useActivityActionState";
 import { useActivityDataState } from "@/pages/activity/useActivityDataState";
 import { useActivitySelectionState } from "@/pages/activity/useActivitySelectionState";
@@ -21,11 +19,6 @@ export function useActivityPageState() {
     selectedActivityIds: selectionState.selectedActivityIds,
     setSelectedActivityIds: selectionState.setSelectedActivityIds,
   });
-  const summaryCounts = useMemo(
-    () => buildActivitySummaryCounts(dataState.activities),
-    [dataState.activities],
-  );
-
   return {
     isMobile,
     shouldDeferSecondaryMobileSections,
@@ -61,7 +54,16 @@ export function useActivityPageState() {
     setDateToOpen: dataState.setDateToOpen,
     logsOpen: dataState.logsOpen,
     setLogsOpen: dataState.setLogsOpen,
-    fetchActivities: dataState.fetchActivities,
+    requestActivityPage: dataState.requestActivityPage,
+    page: dataState.page,
+    pageSize: dataState.pageSize,
+    totalItems: dataState.totalItems,
+    totalPages: dataState.totalPages,
+    sortBy: dataState.sortBy,
+    sortOrder: dataState.sortOrder,
+    handlePageChange: dataState.handlePageChange,
+    handlePageSizeChange: dataState.handlePageSizeChange,
+    handleSortChange: dataState.handleSortChange,
     handleApplyFilters: dataState.handleApplyFilters,
     handleClearFilters: dataState.handleClearFilters,
     toggleStatusFilter: dataState.toggleStatusFilter,
@@ -71,7 +73,7 @@ export function useActivityPageState() {
     handleBulkDeleteConfirm: actionState.handleBulkDeleteConfirm,
     handleUnbanConfirm: actionState.handleUnbanConfirm,
     selectedVisibleCount: selectionState.selectedVisibleCount,
-    summaryCounts,
+    summaryCounts: dataState.summaryCounts,
     allVisibleSelected: selectionState.allVisibleSelected,
     partiallySelected: selectionState.partiallySelected,
     hasOpenActionDialog: actionState.hasOpenActionDialog,

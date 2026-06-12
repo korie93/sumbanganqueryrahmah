@@ -5,7 +5,11 @@ import {
   updateActivitySelection,
   updateAllVisibleActivitySelection,
 } from "@/pages/activity/activity-page-content-utils";
-import type { ActivityRecord } from "@/pages/activity/types";
+import type {
+  ActivityRecord,
+  ActivitySortBy,
+  ActivitySortOrder,
+} from "@/pages/activity/types";
 
 const ActivityLogsTable = lazy(() =>
   import("@/pages/activity/ActivityLogsTable").then((module) => ({
@@ -20,10 +24,19 @@ type ActivityLogsSectionProps = {
   canModerateActivity: boolean;
   loading: boolean;
   logsOpen: boolean;
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  sortBy: ActivitySortBy;
+  sortOrder: ActivitySortOrder;
   onBanDialogOpenChange: (open: boolean) => void;
   onDeleteDialogOpenChange: (open: boolean) => void;
   onKickDialogOpenChange: (open: boolean) => void;
   onLogsOpenChange: (open: boolean) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onSortChange: (sortBy: ActivitySortBy, sortOrder: ActivitySortOrder) => void;
   onSelectActivity: (activity: ActivityRecord | null) => void;
   onSetSelectedActivityIds: Dispatch<SetStateAction<Set<string>>>;
   partiallySelected: boolean;
@@ -37,10 +50,19 @@ export function ActivityLogsSection({
   canModerateActivity,
   loading,
   logsOpen,
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+  sortBy,
+  sortOrder,
   onBanDialogOpenChange,
   onDeleteDialogOpenChange,
   onKickDialogOpenChange,
   onLogsOpenChange,
+  onPageChange,
+  onPageSizeChange,
+  onSortChange,
   onSelectActivity,
   onSetSelectedActivityIds,
   partiallySelected,
@@ -55,6 +77,12 @@ export function ActivityLogsSection({
         canModerateActivity={canModerateActivity}
         loading={loading}
         logsOpen={logsOpen}
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
         onBanClick={(activity) => {
           onSelectActivity(activity);
           onBanDialogOpenChange(true);
@@ -68,6 +96,9 @@ export function ActivityLogsSection({
           onKickDialogOpenChange(true);
         }}
         onLogsOpenChange={onLogsOpenChange}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+        onSortChange={onSortChange}
         onToggleSelected={(activityId, checked) => {
           onSetSelectedActivityIds((previous) => updateActivitySelection(previous, activityId, checked));
         }}

@@ -3,7 +3,11 @@ import type {
   User,
   UserActivity,
 } from "../../../shared/schema-postgres";
-import type { AuthenticatedSessionSnapshot } from "../../repositories/activity.repository";
+import type {
+  ActivityPageParams,
+  ActivityPageResult,
+  AuthenticatedSessionSnapshot,
+} from "../../repositories/activity.repository";
 import { PostgresImportsSearchStorage } from "./postgres-imports-search-storage";
 
 export class PostgresActivityStorage extends PostgresImportsSearchStorage {
@@ -56,6 +60,10 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
 
   async getAllActivities(): Promise<(UserActivity & { status: string })[]> {
     return this.activityRepository.getAllActivities();
+  }
+
+  async listActivityPage(params: ActivityPageParams): Promise<ActivityPageResult> {
+    return this.activityRepository.listActivityPage(params);
   }
 
   async deleteActivity(id: string): Promise<boolean> {

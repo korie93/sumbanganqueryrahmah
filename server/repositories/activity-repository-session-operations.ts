@@ -1,9 +1,16 @@
-import { and, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
 import { auditLogs, collectionNicknameSessions, userActivity } from "../../shared/schema-postgres";
+import { ACTIVITY_IDLE_STATUS_THRESHOLD_MINUTES } from "../activity/activity-session-policy";
 import { db } from "../db-postgres";
 import {
   ACTIVITY_QUERY_PAGE_LIMIT,
+  type ActivityPageFilters,
+  type ActivityPageParams,
+  type ActivityPageResult,
+  type ActivityPageSortBy,
+  type ActivityPageSortOrder,
+  type ActivityStatusSummary,
   computeActivityStatus,
   type ActivityWithStatus,
 } from "./activity-repository-shared";
@@ -203,6 +210,162 @@ export async function getAllActivities(): Promise<ActivityWithStatus[]> {
     ...activity,
     status: computeActivityStatus(activity),
   }));
+}
+
+function buildActivityStatusExpression(currentActivityId?: string): SQL<string> {
+  const currentSessionClause = currentActivityId
+    ? sql`WHEN ${userActivity.id} = ${currentActivityId} THEN 'ONLINE'`
+    : sql``;
+
+  return sql<string>`
+    CASE
+      WHEN ${userActivity.isActive} IS FALSE THEN
+        CASE
+          WHEN ${userActivity.logoutReason} = 'KICKED' THEN 'KICKED'
+          WHEN ${userActivity.logoutReason} = 'BANNED' THEN 'BANNED'
+          ELSE 'LOGOUT'
+        END
+      ${currentSessionClause}
+      WHEN ${userActivity.lastActivityTime} IS NOT NULL
+        AND ${userActivity.lastActivityTime}
+          <= NOW() - (${ACTIVITY_IDLE_STATUS_THRESHOLD_MINUTES} * INTERVAL '1 minute')
+        THEN 'IDLE'
+      ELSE 'ONLINE'
+    END
+  `;
+}
+
+function buildActivityPageWhere(
+  filters: ActivityPageFilters | undefined,
+  statusExpression: SQL<string>,
+): SQL | undefined {
+  if (!filters) {
+    return undefined;
+  }
+
+  const conditions: SQL[] = [];
+  if (filters.username) conditions.push(eq(userActivity.username, filters.username));
+  if (filters.ipAddress) conditions.push(eq(userActivity.ipAddress, filters.ipAddress));
+  if (filters.browser) conditions.push(eq(userActivity.browser, filters.browser));
+  if (filters.dateFrom) conditions.push(gte(userActivity.loginTime, filters.dateFrom));
+  if (filters.dateTo) {
+    const endOfDay = new Date(filters.dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+    conditions.push(lte(userActivity.loginTime, endOfDay));
+  }
+  if (filters.status?.length) {
+    conditions.push(inArray(statusExpression, filters.status));
+  }
+
+  return conditions.length ? and(...conditions) : undefined;
+}
+
+function buildActivityPageOrder(
+  sortBy: ActivityPageSortBy,
+  sortOrder: ActivityPageSortOrder,
+  statusExpression: SQL<string>,
+): SQL[] {
+  const direction = sortOrder === "asc" ? asc : desc;
+  const loginTimeFallback = desc(userActivity.loginTime);
+  const idFallback = asc(userActivity.id);
+
+  if (sortBy === "username") {
+    return [direction(userActivity.username), loginTimeFallback, idFallback];
+  }
+  if (sortBy === "status") {
+    return [direction(statusExpression), loginTimeFallback, idFallback];
+  }
+  if (sortBy === "duration") {
+    const durationExpression = sql<number>`
+      EXTRACT(EPOCH FROM (
+        COALESCE(${userActivity.logoutTime}, NOW()) - ${userActivity.loginTime}
+      ))
+    `;
+    return [
+      asc(sql`${durationExpression} IS NULL`),
+      direction(durationExpression),
+      loginTimeFallback,
+      idFallback,
+    ];
+  }
+
+  return [direction(userActivity.loginTime), idFallback];
+}
+
+function buildActivityStatusSummary(
+  rows: Array<{ status: string; total: number }>,
+): ActivityStatusSummary {
+  const summary: ActivityStatusSummary = {
+    idleCount: 0,
+    kickedCount: 0,
+    logoutCount: 0,
+    onlineCount: 0,
+  };
+
+  for (const row of rows) {
+    const total = Math.max(0, Number(row.total) || 0);
+    if (row.status === "ONLINE") summary.onlineCount = total;
+    if (row.status === "IDLE") summary.idleCount = total;
+    if (row.status === "LOGOUT") summary.logoutCount = total;
+    if (row.status === "KICKED") summary.kickedCount = total;
+  }
+
+  return summary;
+}
+
+export async function listActivityPage(params: ActivityPageParams): Promise<ActivityPageResult> {
+  const pageSize = Math.max(1, Math.min(100, Math.trunc(params.pageSize)));
+  const requestedPage = Math.max(1, Math.trunc(params.page));
+  const statusExpression = buildActivityStatusExpression(params.currentActivityId);
+  const whereCondition = buildActivityPageWhere(params.filters, statusExpression);
+  const statusSource = db
+    .select({
+      status: statusExpression.as("status"),
+    })
+    .from(userActivity)
+    .where(whereCondition)
+    .as("activity_status_source");
+
+  const statusRows = await db
+    .select({
+      status: statusSource.status,
+      total: sql<number>`count(*)::integer`,
+    })
+    .from(statusSource)
+    .groupBy(statusSource.status);
+
+  const normalizedStatusRows = statusRows.map((row) => ({
+    status: String(row.status),
+    total: Number(row.total),
+  }));
+  const total = normalizedStatusRows.reduce((sum, row) => sum + row.total, 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const offset = (page - 1) * pageSize;
+  const orderBy = buildActivityPageOrder(params.sortBy, params.sortOrder, statusExpression);
+
+  const rows = await db
+    .select({
+      activity: userActivity,
+      status: statusExpression,
+    })
+    .from(userActivity)
+    .where(whereCondition)
+    .orderBy(...orderBy)
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    activities: rows.map((row) => ({
+      ...row.activity,
+      status: String(row.status),
+    })),
+    page,
+    pageSize,
+    total,
+    totalPages,
+    summary: buildActivityStatusSummary(normalizedStatusRows),
+  };
 }
 
 export async function deleteActivity(id: string): Promise<boolean> {

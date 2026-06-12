@@ -1,6 +1,12 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { ActivityFilters } from "@/lib/api";
-import type { ActivityRecord, ActivityStatus, BannedUser } from "@/pages/activity/types";
+import type {
+  ActivityRecord,
+  ActivitySortBy,
+  ActivitySortOrder,
+  ActivityStatus,
+  BannedUser,
+} from "@/pages/activity/types";
 
 export type ActivitySummaryCounts = {
   idleCount: number;
@@ -33,6 +39,12 @@ export type ActivityPageContentProps = {
   kickDialogOpen: boolean;
   loading: boolean;
   logsOpen: boolean;
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  sortBy: ActivitySortBy;
+  sortOrder: ActivitySortOrder;
   onBanDialogOpenChange: (open: boolean) => void;
   onBulkDeleteDialogOpenChange: (open: boolean) => void;
   onDateFromOpenChange: (open: boolean) => void;
@@ -41,6 +53,9 @@ export type ActivityPageContentProps = {
   onFieldChange: (field: keyof ActivityFilters, value: string) => void;
   onKickDialogOpenChange: (open: boolean) => void;
   onLogsOpenChange: (open: boolean) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onSortChange: (sortBy: ActivitySortBy, sortOrder: ActivitySortOrder) => void;
   onSelectActivity: (activity: ActivityRecord | null) => void;
   onSelectBannedUser: (user: BannedUser | null) => void;
   onSetSelectedActivityIds: Dispatch<SetStateAction<Set<string>>>;

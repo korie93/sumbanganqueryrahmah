@@ -4,6 +4,7 @@ import { createActivitySessionOperations } from "./activity-session-operations";
 import type {
   ActivityClientRegistry,
   ActivityFilters,
+  ActivityPageOptions,
   ActivityStorage,
   BanAccountResult,
   BanActivityResult,
@@ -50,6 +51,14 @@ export class ActivityService {
 
   async getFilteredActivities(filters: ActivityFilters, currentActivityId?: string) {
     return this.sessionOperations.getFilteredActivities(filters, currentActivityId);
+  }
+
+  async listActivityPage(
+    options: ActivityPageOptions,
+    filters: ActivityFilters,
+    currentActivityId?: string,
+  ) {
+    return this.sessionOperations.listActivityPage(options, filters, currentActivityId);
   }
 
   async deleteActivityLog(activityId: string) {

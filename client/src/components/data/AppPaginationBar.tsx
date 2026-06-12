@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const STANDARD_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
 
@@ -84,22 +83,20 @@ export function AppPaginationBar({
       </p>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-        <Select
+        <select
+          aria-label={pageSizeLabel}
+          className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-[120px]"
+          name="pageSize"
           value={String(pageSize)}
-          onValueChange={(value) => onPageSizeChange(Number(value))}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
           disabled={controlsDisabled}
         >
-          <SelectTrigger aria-label={pageSizeLabel} className="h-9 w-full sm:w-[120px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {pageSizeOptions.map((option) => (
-              <SelectItem key={option} value={String(option)}>
-                {option} / page
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {pageSizeOptions.map((option) => (
+            <option key={option} value={String(option)}>
+              {option} / page
+            </option>
+          ))}
+        </select>
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-wrap sm:items-center">
           <Button

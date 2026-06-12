@@ -42,7 +42,16 @@ export default function Activity() {
     setDateToOpen,
     logsOpen,
     setLogsOpen,
-    fetchActivities,
+    requestActivityPage,
+    page,
+    pageSize,
+    totalItems,
+    totalPages,
+    sortBy,
+    sortOrder,
+    handlePageChange,
+    handlePageSizeChange,
+    handleSortChange,
     handleApplyFilters,
     handleClearFilters,
     toggleStatusFilter,
@@ -60,13 +69,13 @@ export default function Activity() {
   return (
     <OperationalPage width="content">
       <ActivityPageHeader
-        activityCount={activities.length}
+        activityCount={totalItems}
         canModerateActivity={canModerateActivity}
         filters={filters}
         isMobile={isMobile}
         loading={loading}
         onOpenBulkDeleteDialog={() => setBulkDeleteDialogOpen(true)}
-        onRefresh={() => void fetchActivities(hasActiveActivityFilters(filters))}
+        onRefresh={() => requestActivityPage(hasActiveActivityFilters(filters))}
         onToggleFilters={() => setShowFilters((previous) => !previous)}
         selectedCount={selectedActivityIds.size}
         showFilters={showFilters}
@@ -95,6 +104,12 @@ export default function Activity() {
         kickDialogOpen={kickDialogOpen}
         loading={loading}
         logsOpen={logsOpen}
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
         onBanDialogOpenChange={setBanDialogOpen}
         onBulkDeleteDialogOpenChange={setBulkDeleteDialogOpen}
         onDateFromOpenChange={setDateFromOpen}
@@ -105,6 +120,9 @@ export default function Activity() {
         }
         onKickDialogOpenChange={setKickDialogOpen}
         onLogsOpenChange={setLogsOpen}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+        onSortChange={handleSortChange}
         onSelectActivity={setSelectedActivity}
         onSelectBannedUser={setSelectedBannedUser}
         onSetSelectedActivityIds={setSelectedActivityIds}

@@ -42,7 +42,7 @@ export function ActivityPageHeader({
       badge={
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" className="rounded-full px-3 py-1">
-            {activityCount} visible logs
+            {activityCount} matching logs
           </Badge>
           <Badge variant="outline" className="rounded-full px-3 py-1">
             {getActivityAccessLabel(canModerateActivity)}

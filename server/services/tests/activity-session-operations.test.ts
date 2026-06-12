@@ -29,6 +29,19 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
     getActiveActivitiesByUsername: async () => [],
     getActivityById: async () => undefined,
     getAllActivities: async () => [],
+    listActivityPage: async (params) => ({
+      activities: [],
+      page: params.page,
+      pageSize: params.pageSize,
+      total: 0,
+      totalPages: 1,
+      summary: {
+        idleCount: 0,
+        kickedCount: 0,
+        logoutCount: 0,
+        onlineCount: 0,
+      },
+    }),
     getBannedSessions: async () => [],
     getFilteredActivities: async () => [],
     getUserByUsername: async () => undefined,
@@ -322,6 +335,75 @@ test("heartbeat marks activity online and returns ISO timestamp", async () => {
   const capturedPatch = capture.patch;
   assert.equal(capturedPatch.isActive, true);
   assert.ok(capturedPatch.lastActivityTime instanceof Date);
+});
+
+test("listActivityPage serializes dates and keeps the requesting active session online", async () => {
+  const staleCurrentActivity = {
+    ...createActiveActivityRecord("act-1"),
+    loginTime: new Date("2026-06-12T01:00:00.000Z"),
+    lastActivityTime: new Date(Date.now() - 10 * 60_000),
+  } as ActivityRecord;
+  const pageCalls: Array<Parameters<ActivityStorage["listActivityPage"]>[0]> = [];
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      listActivityPage: async (params) => {
+        pageCalls.push(params);
+        return {
+          activities: [{
+            ...staleCurrentActivity,
+            status: "IDLE",
+          }],
+          page: 2,
+          pageSize: 10,
+          total: 12,
+          totalPages: 2,
+          summary: {
+            idleCount: 3,
+            kickedCount: 1,
+            logoutCount: 2,
+            onlineCount: 6,
+          },
+        };
+      },
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.listActivityPage(
+    {
+      page: 2,
+      pageSize: 10,
+      sortBy: "username",
+      sortOrder: "asc",
+    },
+    {
+      status: ["ONLINE"],
+      username: "ali",
+    },
+    "act-1",
+  );
+
+  assert.deepEqual(pageCalls, [{
+    page: 2,
+    pageSize: 10,
+    sortBy: "username",
+    sortOrder: "asc",
+    currentActivityId: "act-1",
+    filters: {
+      status: ["ONLINE"],
+      username: "ali",
+    },
+  }]);
+  assert.equal(result.activities.length, 1);
+  assert.equal(result.activities[0]?.status, "ONLINE");
+  assert.equal(result.activities[0]?.loginTime, "2026-06-12T01:00:00.000Z");
+  assert.match(String(result.activities[0]?.lastActivityTime), /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(result.summary, {
+    idleCount: 3,
+    kickedCount: 1,
+    logoutCount: 2,
+    onlineCount: 6,
+  });
 });
 
 test("getAllActivities keeps the requesting active session online in the returned feed", async () => {

@@ -43,6 +43,54 @@ export async function activityHeartbeat(payload?: {
   });
 }
 
+export type ActivityStatus = "ONLINE" | "IDLE" | "LOGOUT" | "KICKED" | "BANNED";
+export type ActivitySortBy = "duration" | "loginTime" | "status" | "username";
+export type ActivitySortOrder = "asc" | "desc";
+
+export interface ActivityApiRecord {
+  id: string;
+  username: string;
+  role: string;
+  status: ActivityStatus;
+  pcName?: string | undefined;
+  browser?: string | undefined;
+  fingerprint?: string | undefined;
+  ipAddress?: string | undefined;
+  loginTime: string;
+  logoutTime?: string | undefined;
+  lastActivityTime?: string | undefined;
+  isActive: boolean;
+  logoutReason?: string | undefined;
+}
+
+export interface ActivityPageQuery extends ActivityFilters {
+  page: number;
+  pageSize: number;
+  sortBy: ActivitySortBy;
+  sortOrder: ActivitySortOrder;
+}
+
+export interface ActivityPageResponse {
+  activities: ActivityApiRecord[];
+  summary: {
+    idleCount: number;
+    kickedCount: number;
+    logoutCount: number;
+    onlineCount: number;
+  };
+  pagination: {
+    mode: "offset";
+    page: number;
+    pageSize: number;
+    limit: number;
+    offset: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
 export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
   return apiRequest("POST", "/api/activity/heartbeat", {}, {
     signal: options?.signal,
@@ -86,6 +134,34 @@ export async function deleteActivityLogsBulk(activityIds: string[]) {
     requestedCount: number;
     notFoundIds: string[];
   }>;
+}
+
+export async function getActivityPage(
+  query: ActivityPageQuery,
+  options?: ActivityRequestOptions,
+): Promise<ActivityPageResponse> {
+  const params = new URLSearchParams({
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+    sortBy: query.sortBy,
+    sortOrder: query.sortOrder,
+  });
+  if (query.status && query.status.length > 0) {
+    params.set("status", query.status.join(","));
+  }
+  if (query.username) params.set("username", query.username);
+  if (query.ipAddress) params.set("ipAddress", query.ipAddress);
+  if (query.browser) params.set("browser", query.browser);
+  if (query.dateFrom) params.set("dateFrom", query.dateFrom);
+  if (query.dateTo) params.set("dateTo", query.dateTo);
+
+  const response = await apiRequest(
+    "GET",
+    `/api/activity/page?${params.toString()}`,
+    undefined,
+    options,
+  );
+  return response.json() as Promise<ActivityPageResponse>;
 }
 
 export async function cleanupEndedActivityLogs(options?: {

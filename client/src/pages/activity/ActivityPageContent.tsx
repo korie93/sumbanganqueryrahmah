@@ -30,6 +30,12 @@ export function ActivityPageContent({
   kickDialogOpen,
   loading,
   logsOpen,
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+  sortBy,
+  sortOrder,
   onBanDialogOpenChange,
   onBulkDeleteDialogOpenChange,
   onDateFromOpenChange,
@@ -38,6 +44,9 @@ export function ActivityPageContent({
   onFieldChange,
   onKickDialogOpenChange,
   onLogsOpenChange,
+  onPageChange,
+  onPageSizeChange,
+  onSortChange,
   onSelectActivity,
   onSelectBannedUser,
   onSetSelectedActivityIds,
@@ -96,10 +105,19 @@ export function ActivityPageContent({
         canModerateActivity={canModerateActivity}
         loading={loading}
         logsOpen={logsOpen}
+        page={page}
+        pageSize={pageSize}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
         onBanDialogOpenChange={onBanDialogOpenChange}
         onDeleteDialogOpenChange={onDeleteDialogOpenChange}
         onKickDialogOpenChange={onKickDialogOpenChange}
         onLogsOpenChange={onLogsOpenChange}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+        onSortChange={onSortChange}
         onSelectActivity={onSelectActivity}
         onSetSelectedActivityIds={onSetSelectedActivityIds}
         partiallySelected={partiallySelected}

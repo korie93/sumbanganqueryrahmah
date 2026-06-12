@@ -1,5 +1,9 @@
 import type { User, UserActivity, InsertUserActivity } from "../shared/schema-postgres";
 import type {
+  ActivityPageParams,
+  ActivityPageResult,
+} from "./repositories/activity.repository";
+import type {
   MaintenanceState,
   SystemSettingCategory,
   SystemSettingItem,
@@ -21,6 +25,7 @@ export interface ActivitySettingsStorageContract {
   getActivityById(id: string): Promise<UserActivity | undefined>;
   getActiveActivities(): Promise<UserActivity[]>;
   getAllActivities(): Promise<UserActivity[]>;
+  listActivityPage(params: ActivityPageParams): Promise<ActivityPageResult>;
   deleteActivity(id: string): Promise<boolean>;
   deleteEndedActivitiesBefore(params: {
     cutoff: Date;

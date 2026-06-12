@@ -18,6 +18,7 @@ export function useActivityFilterState() {
   }, [filters]);
 
   const handleClearFilters = useCallback(() => {
+    filtersRef.current = DEFAULT_ACTIVITY_FILTERS;
     setFilters(DEFAULT_ACTIVITY_FILTERS);
   }, []);
 

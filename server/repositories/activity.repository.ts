@@ -20,12 +20,19 @@ import {
   getActivityById,
   getAllActivities,
   getFilteredActivities,
+  listActivityPage,
   touchActivity,
   touchAuthenticatedActivity,
   updateActivity,
 } from "./activity-repository-session-operations";
 import type {
+  ActivityPageFilters,
+  ActivityPageParams,
+  ActivityPageResult,
+  ActivityPageSortBy,
+  ActivityPageSortOrder,
   ActivityRepositoryOptions,
+  ActivityStatusSummary,
   ActivityWithStatus,
   AuthenticatedSessionSnapshot,
   BannedUserWithInfo,
@@ -47,6 +54,7 @@ export class ActivityRepository {
   readonly deleteActivity = deleteActivity;
   readonly deleteEndedActivitiesBefore = deleteEndedActivitiesBefore;
   readonly getFilteredActivities = getFilteredActivities;
+  readonly listActivityPage = listActivityPage;
   readonly deactivateUserActivities = deactivateUserActivities;
   readonly deactivateUserSessionsByFingerprint = deactivateUserSessionsByFingerprint;
   readonly getBannedUsers = getBannedUsers;
@@ -94,6 +102,12 @@ export class ActivityRepository {
 
 export type {
   ActivityRepositoryOptions,
+  ActivityPageFilters,
+  ActivityPageParams,
+  ActivityPageResult,
+  ActivityPageSortBy,
+  ActivityPageSortOrder,
+  ActivityStatusSummary,
   ActivityWithStatus,
   AuthenticatedSessionSnapshot,
   BannedUserWithInfo,

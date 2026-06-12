@@ -8,6 +8,43 @@ export type ActivityRepositoryOptions = {
 
 export type ActivityWithStatus = UserActivity & { status: string };
 
+export type ActivityPageSortBy = "duration" | "loginTime" | "status" | "username";
+export type ActivityPageSortOrder = "asc" | "desc";
+
+export type ActivityPageFilters = {
+  status?: string[] | undefined;
+  username?: string | undefined;
+  ipAddress?: string | undefined;
+  browser?: string | undefined;
+  dateFrom?: Date | undefined;
+  dateTo?: Date | undefined;
+};
+
+export type ActivityPageParams = {
+  page: number;
+  pageSize: number;
+  sortBy: ActivityPageSortBy;
+  sortOrder: ActivityPageSortOrder;
+  currentActivityId?: string | undefined;
+  filters?: ActivityPageFilters | undefined;
+};
+
+export type ActivityStatusSummary = {
+  idleCount: number;
+  kickedCount: number;
+  logoutCount: number;
+  onlineCount: number;
+};
+
+export type ActivityPageResult = {
+  activities: ActivityWithStatus[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  summary: ActivityStatusSummary;
+};
+
 export type AuthenticatedSessionSnapshot = {
   activity: UserActivity;
   user?: User | undefined;

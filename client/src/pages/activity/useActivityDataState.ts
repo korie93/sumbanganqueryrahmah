@@ -5,20 +5,30 @@ import { useActivityFilterState } from "@/pages/activity/useActivityFilterState"
 
 export function useActivityDataState({ canModerateActivity }: UseActivityDataStateOptions) {
   const filterState = useActivityFilterState();
-  const { filtersRef, ...publicFilterState } = filterState;
+  const {
+    filtersRef,
+    handleClearFilters: resetFilters,
+    ...publicFilterState
+  } = filterState;
   const feedState = useActivityFeedState({
     canModerateActivity,
     filtersRef,
   });
-  const { fetchActivities } = feedState;
+  const { requestActivityPage } = feedState;
 
   const handleApplyFilters = useCallback(() => {
-    void fetchActivities(true);
-  }, [fetchActivities]);
+    requestActivityPage(true, { page: 1 });
+  }, [requestActivityPage]);
+
+  const handleClearFilters = useCallback(() => {
+    resetFilters();
+    requestActivityPage(false, { page: 1 });
+  }, [requestActivityPage, resetFilters]);
 
   return {
     ...feedState,
     ...publicFilterState,
     handleApplyFilters,
+    handleClearFilters,
   };
 }

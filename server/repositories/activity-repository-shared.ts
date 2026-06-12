@@ -1,6 +1,12 @@
 export {
   ACTIVITY_QUERY_PAGE_LIMIT,
+  type ActivityPageFilters,
+  type ActivityPageParams,
+  type ActivityPageResult,
+  type ActivityPageSortBy,
+  type ActivityPageSortOrder,
   type ActivityRepositoryOptions,
+  type ActivityStatusSummary,
   type ActivityWithStatus,
   type AuthenticatedSessionSnapshot,
   type BannedUserWithInfo,

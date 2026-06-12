@@ -16,7 +16,17 @@ test("useActivityFeedState records activity fetch failures instead of dropping t
 });
 
 test("useActivityFeedState attaches catch handlers to background refresh promises", () => {
-  assert.match(source, /const runFetchActivities = useCallback\(\(useFilters = false\) => \{/);
-  assert.match(source, /void fetchActivities\(useFilters\)\.catch\(handleUnexpectedActivityFeedFailure\);/);
+  assert.match(source, /const runFetchActivities = useCallback\(\(/);
+  assert.match(
+    source,
+    /void fetchActivities\(useFilters, overrides\)\.catch\(handleUnexpectedActivityFeedFailure\);/,
+  );
   assert.doesNotMatch(source, /void fetchActivities\((?:false|true)\);/);
+});
+
+test("useActivityFeedState aborts stale page requests and cleans up lifecycle resources", () => {
+  assert.match(source, /fetchControllerRef\.current\?\.abort\(\);/);
+  assert.match(source, /window\.clearInterval\(interval\);/);
+  assert.match(source, /document\.removeEventListener\("visibilitychange", handleVisibilityChange\);/);
+  assert.match(source, /window\.removeEventListener\("activity-heartbeat-synced", handleHeartbeatSynced\);/);
 });

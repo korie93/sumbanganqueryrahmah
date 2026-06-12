@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { resolveTimestampMs, serializeTimestamp } from "../lib/timestamp";
 import { logger } from "../lib/logger";
-import type { ActivityFilters, ActivityStorage } from "./activity-service-types";
+import type {
+  ActivityFilters,
+  ActivityPageOptions,
+  ActivityStorage,
+} from "./activity-service-types";
 
 type CloseActivitySocket = (
   activityId: string,
@@ -337,6 +341,39 @@ export function createActivitySessionOperations(
           filters,
         ),
       );
+    },
+
+    async listActivityPage(
+      options: ActivityPageOptions,
+      filters: ActivityFilters,
+      currentActivityId?: string,
+    ) {
+      const result = await storage.listActivityPage({
+        ...options,
+        currentActivityId,
+        filters,
+      });
+      const now = new Date();
+      const activities = result.activities.map((activity) => {
+        if (
+          currentActivityId
+          && activity.id === currentActivityId
+          && activity.isActive !== false
+          && !activity.logoutTime
+        ) {
+          return {
+            ...activity,
+            lastActivityTime: now,
+            status: "ONLINE",
+          };
+        }
+        return activity;
+      });
+
+      return {
+        ...result,
+        activities: serializeActivitiesForResponse(activities as ActivityListItem[]),
+      };
     },
 
     async deleteActivityLog(activityId: string) {
