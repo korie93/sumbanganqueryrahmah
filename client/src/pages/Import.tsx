@@ -43,24 +43,22 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
   } = useImportPageState({ onNavigate, importUploadLimitBytes });
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:bg-background dark:bg-none sm:p-6">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-6 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm sm:mb-8 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-label-2xl text-primary">
-            Workspace Import
-          </p>
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="app-shell-min-height bg-background p-3 sm:p-5">
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-4 border-b border-border pb-4 sm:mb-6 sm:pb-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Import Data</h1>
+              <p className="text-xs font-semibold uppercase text-primary">Workspace Import</p>
+              <h1 className="mt-1 text-2xl font-bold text-foreground sm:text-3xl">Import Data</h1>
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:text-base">
-                Upload CSV or Excel files, preview the dataset, then save it into Viewer and Analysis.
+                Prepare, review, and save datasets through one guided workflow.
               </p>
             </div>
-            <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs font-medium">
+            <Badge variant="secondary" className="w-fit px-3 py-1 text-xs font-medium">
               Max file size {maxUploadSizeLabel}
             </Badge>
           </div>
-        </div>
+        </header>
 
         <Tabs
           value={activeTab}
@@ -71,7 +69,7 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
           }}
           className="w-full"
         >
-          <TabsList className="mb-4 grid w-full grid-cols-2 rounded-xl border border-border/70 bg-background/70 p-1 sm:mx-auto sm:mb-6 sm:max-w-md">
+          <TabsList className="mb-4 grid w-full grid-cols-2 border border-border bg-muted/40 p-1 sm:mb-6 sm:w-80">
             <TabsTrigger value="single" data-testid="tab-single-import">
               <File className="mr-2 h-4 w-4" />
               Single File
