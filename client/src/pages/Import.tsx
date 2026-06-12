@@ -16,6 +16,9 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
     setImportName,
     parsedData,
     headers,
+    columnMapping,
+    setColumnMapping,
+    backgroundJob,
     previewDeferred,
     loading,
     error,
@@ -24,6 +27,8 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
     handleDrop,
     handleDragOver,
     handleSave,
+    handleCancelBackgroundJob,
+    handleResumeBackgroundJob,
     resetSingleImport,
     bulkFiles,
     bulkResults,
@@ -83,6 +88,8 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
               file={file}
               fileInputRef={fileInputRef}
               headers={headers}
+              columnMapping={columnMapping}
+              backgroundJob={backgroundJob}
               importName={importName}
               loading={loading}
               maxUploadSizeLabel={maxUploadSizeLabel}
@@ -90,6 +97,9 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onFileChange={handleFileChange}
+              onColumnMappingChange={setColumnMapping}
+              onCancelBackgroundJob={handleCancelBackgroundJob}
+              onResumeBackgroundJob={handleResumeBackgroundJob}
               onImportNameChange={setImportName}
               onSave={handleSave}
               parsedData={parsedData}

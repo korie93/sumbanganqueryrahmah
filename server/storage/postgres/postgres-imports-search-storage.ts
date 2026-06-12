@@ -22,8 +22,21 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     return this.searchRepository.searchSimpleDataRows(search);
   }
 
-  async createImport(data: InsertImport & { createdBy?: string }): Promise<Import> {
+  async createImport(
+    data: InsertImport & {
+      createdBy?: string;
+      contentHashSha256?: string;
+      sourceSizeBytes?: number;
+    },
+  ): Promise<Import> {
     return this.importsRepository.createImport(data);
+  }
+
+  async findActiveImportByContentHash(
+    createdBy: string,
+    contentHashSha256: string,
+  ): Promise<Import | undefined> {
+    return this.importsRepository.findActiveImportByContentHash(createdBy, contentHashSha256);
   }
 
   async getImports(): Promise<Import[]> {

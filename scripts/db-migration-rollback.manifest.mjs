@@ -60,6 +60,7 @@ const MIGRATION_TAGS = Object.freeze([
   "0041_pii_xor_check_constraints",
   "0042_debug_audit_log",
   "0043_manager_role_permission_seed",
+  "0044_import_content_hash",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(

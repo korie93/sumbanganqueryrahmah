@@ -44,6 +44,7 @@ import { BackupOperationsService } from "../services/backup-operations.service";
 import { CollectionRollupOperationsService } from "../services/collection-rollup-operations.service";
 import { CollectionRollupRefreshQueueService } from "../services/collection-rollup-refresh-queue.service";
 import { ImportsService } from "../services/imports.service";
+import { ImportBackgroundJobService } from "../services/import-background-job.service";
 import { OperationsAnalyticsService } from "../services/operations-analytics.service";
 import { SearchService } from "../services/search.service";
 import { WebVitalsTelemetryService } from "../services/web-vitals-telemetry.service";
@@ -240,6 +241,11 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   registerImportRoutes(app, {
     importsController: createImportsController({
       importsService: new ImportsService(storage, importsRepository, importAnalysisService),
+      importBackgroundJobService: new ImportBackgroundJobService(
+        () => backgroundQueues.getQueue("import"),
+      ),
+      importBackgroundThresholdBytes:
+        environmentRuntimeConfig.runtime.importBackgroundThresholdBytes,
       getRuntimeSettingsCached,
       isDbProtected: getDbProtection,
       analysisRequestTimeoutMs: environmentRuntimeConfig.runtime.importAnalysisTimeoutMs,

@@ -33,6 +33,7 @@ test("cleanupOrphanedUploads removes only stale .upload files from managed uploa
   const oldDate = new Date(now - maxAgeMs - 10_000);
   const importTempRootDir = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-orphan-import-root-"));
   const receiptUploadDir = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-orphan-receipts-"));
+  const importJobDir = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-import-jobs-"));
   const oldImportDir = path.join(importTempRootDir, "sqr-import-upload-old");
   const activeImportDir = path.join(importTempRootDir, "sqr-import-upload-active");
   const unrelatedDir = path.join(importTempRootDir, "not-sqr-import-upload");
@@ -41,6 +42,9 @@ test("cleanupOrphanedUploads removes only stale .upload files from managed uploa
   const unrelatedUpload = path.join(unrelatedDir, "old.upload");
   const oldReceiptUpload = path.join(receiptUploadDir, "receipt-old.upload");
   const activeReceiptUpload = path.join(receiptUploadDir, "receipt-active.upload");
+  const oldImportJobUpload = path.join(importJobDir, "job-old.upload");
+  const oldImportJobCancelMarker = path.join(importJobDir, "job-old.upload.cancel");
+  const activeImportJobUpload = path.join(importJobDir, "job-active.upload");
 
   try {
     await fs.mkdir(oldImportDir);
@@ -51,20 +55,26 @@ test("cleanupOrphanedUploads removes only stale .upload files from managed uploa
     await fs.writeFile(unrelatedUpload, "unrelated", "utf8");
     await fs.writeFile(oldReceiptUpload, "old receipt", "utf8");
     await fs.writeFile(activeReceiptUpload, "active receipt", "utf8");
+    await fs.writeFile(oldImportJobUpload, "old job", "utf8");
+    await fs.writeFile(oldImportJobCancelMarker, "cancelled", "utf8");
+    await fs.writeFile(activeImportJobUpload, "active job", "utf8");
     await fs.utimes(oldImportUpload, oldDate, oldDate);
     await fs.utimes(oldImportDir, oldDate, oldDate);
     await fs.utimes(unrelatedUpload, oldDate, oldDate);
     await fs.utimes(unrelatedDir, oldDate, oldDate);
     await fs.utimes(oldReceiptUpload, oldDate, oldDate);
+    await fs.utimes(oldImportJobUpload, oldDate, oldDate);
+    await fs.utimes(oldImportJobCancelMarker, oldDate, oldDate);
 
     const result = await cleanupOrphanedUploads({
+      importJobDir,
       importTempRootDir,
       maxAgeMs,
       now,
       receiptUploadDir,
     });
 
-    assert.equal(result.removedFiles, 2);
+    assert.equal(result.removedFiles, 4);
     assert.equal(result.removedDirectories, 1);
     assert.equal(result.errors, 0);
     assert.equal(await pathExists(oldImportUpload), false);
@@ -72,10 +82,14 @@ test("cleanupOrphanedUploads removes only stale .upload files from managed uploa
     assert.equal(await pathExists(oldReceiptUpload), false);
     assert.equal(await pathExists(activeImportUpload), true);
     assert.equal(await pathExists(activeReceiptUpload), true);
+    assert.equal(await pathExists(oldImportJobUpload), false);
+    assert.equal(await pathExists(oldImportJobCancelMarker), false);
+    assert.equal(await pathExists(activeImportJobUpload), true);
     assert.equal(await pathExists(unrelatedUpload), true);
   } finally {
     await fs.rm(importTempRootDir, { recursive: true, force: true });
     await fs.rm(receiptUploadDir, { recursive: true, force: true });
+    await fs.rm(importJobDir, { recursive: true, force: true });
   }
 });
 

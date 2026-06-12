@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { Readable } from "node:stream";
@@ -75,6 +76,24 @@ test("parseMultipartImportUpload rejects unsupported upload extensions", async (
   );
 });
 
+test("prepareMultipartImportUpload computes SHA-256 and byte size while streaming", async () => {
+  const content = "name,amount\nAlice,12\n";
+  const upload = await prepareMultipartImportUpload({
+    file: Readable.from(content),
+    filename: "hash-check.csv",
+  });
+
+  try {
+    assert.equal(upload.sourceSizeBytes, Buffer.byteLength(content));
+    assert.equal(
+      upload.contentHashSha256,
+      createHash("sha256").update(content).digest("hex"),
+    );
+  } finally {
+    await cleanupPreparedMultipartImportUpload(upload);
+  }
+});
+
 test("parseMultipartImportUpload rejects files that exceed the configured size limit", async () => {
   class LimitReadable extends Readable {
     private hasSentData = false;
@@ -140,7 +159,7 @@ test("prepareMultipartImportUpload removes limit listeners after successful stag
 
   try {
     assert.equal(file.listenerCount("limit"), 0);
-    assert.equal(upload.kind, "csv-file");
+    assert.equal(upload.kind, "staged-file");
   } finally {
     await cleanupPreparedMultipartImportUpload(upload);
   }
@@ -160,7 +179,7 @@ test("prepareMultipartImportUpload uses UPLOAD_TMP_DIR when it is configured", a
 
     try {
       assert.equal(resolveImportUploadTempRootDir(), tempRoot);
-      assert.equal(upload.kind, "csv-file");
+      assert.equal(upload.kind, "staged-file");
       assert.equal(path.dirname(upload.tempDir), tempRoot);
       assert.equal(upload.filePath.startsWith(upload.tempDir), true);
     } finally {
@@ -226,10 +245,12 @@ test("cleanupPreparedMultipartImportUpload logs cleanup failures before removing
 
   try {
     await cleanupPreparedMultipartImportUpload({
-      kind: "csv-file",
+      kind: "staged-file",
       filename: "sample.csv",
       filePath: tempDir,
       tempDir,
+      contentHashSha256: "a".repeat(64),
+      sourceSizeBytes: 10,
     });
   } finally {
     logger.warn = originalWarn;

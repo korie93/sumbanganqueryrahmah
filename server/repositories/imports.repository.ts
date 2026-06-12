@@ -137,7 +137,13 @@ function buildImportListFilterSql(params: {
 }
 
 export class ImportsRepository {
-  async createImport(data: InsertImport & { createdBy?: string }): Promise<Import> {
+  async createImport(
+    data: InsertImport & {
+      createdBy?: string;
+      contentHashSha256?: string;
+      sourceSizeBytes?: number;
+    },
+  ): Promise<Import> {
     const result = await db
       .insert(imports)
       .values({
@@ -145,6 +151,10 @@ export class ImportsRepository {
         name: data.name,
         filename: data.filename,
         createdBy: data.createdBy || null,
+        contentHashSha256: data.contentHashSha256 || null,
+        sourceSizeBytes: Number.isFinite(data.sourceSizeBytes)
+          ? Math.max(0, Math.trunc(Number(data.sourceSizeBytes)))
+          : null,
         createdAt: new Date(),
         isDeleted: false,
       })
@@ -187,6 +197,29 @@ export class ImportsRepository {
     }));
   }
 
+  async findActiveImportByContentHash(
+    createdBy: string,
+    contentHashSha256: string,
+  ): Promise<Import | undefined> {
+    const normalizedCreatedBy = String(createdBy || "").trim();
+    const normalizedHash = String(contentHashSha256 || "").trim().toLowerCase();
+    if (!normalizedCreatedBy || !/^[a-f0-9]{64}$/.test(normalizedHash)) {
+      return undefined;
+    }
+
+    const result = await db
+      .select()
+      .from(imports)
+      .where(and(
+        eq(imports.createdBy, normalizedCreatedBy),
+        eq(imports.contentHashSha256, normalizedHash),
+        eq(imports.isDeleted, false),
+      ))
+      .limit(1);
+
+    return result[0];
+  }
+
   async listImportsWithRowCountsPage(params: ImportListPageParams = {}): Promise<ImportListPage> {
     const limit = clampImportListLimit(params.limit);
     const cursor = parseImportListCursor(params.cursor);
@@ -211,6 +244,8 @@ export class ImportsRepository {
         i.id,
         i.name,
         i.filename,
+        i.content_hash_sha256 as "contentHashSha256",
+        i.source_size_bytes as "sourceSizeBytes",
         i.created_at as "createdAt",
         i.is_deleted as "isDeleted",
         i.created_by as "createdBy"

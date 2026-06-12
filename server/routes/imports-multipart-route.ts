@@ -45,8 +45,8 @@ type MultipartResponseLifecycle = {
 };
 
 const IMPORT_MULTIPART_FILE_STREAM_TIMEOUT_MS = 30_000;
-const IMPORT_MULTIPART_FIELD_VALUE_MAX_BYTES = 1_024;
-const ALLOWED_IMPORT_MULTIPART_FIELD_NAMES = new Set(["name"]);
+const IMPORT_MULTIPART_FIELD_VALUE_MAX_BYTES = 64 * 1_024;
+const ALLOWED_IMPORT_MULTIPART_FIELD_NAMES = new Set(["name", "columnMapping"]);
 const ALLOWED_IMPORT_MULTIPART_FILE_FIELD_NAMES = new Set(["file"]);
 
 function createMultipartUploadStreamRegistry() {
@@ -112,7 +112,7 @@ function attachPreparedUploadResponseCleanup(params: {
   ) => void;
 }) {
   const { res, responseLocals, upload, onCleanupFailure } = params;
-  if (upload.kind !== "csv-file") {
+  if (upload.kind !== "staged-file") {
     return;
   }
 
@@ -332,6 +332,8 @@ export function createImportsMultipartRoute(
 
       if (normalizedFieldName === "name") {
         body.name = String(value || "").trim().slice(0, 160);
+      } else if (normalizedFieldName === "columnMapping") {
+        body.columnMapping = String(value || "").trim();
       }
     });
 
@@ -414,17 +416,13 @@ export function createImportsMultipartRoute(
         const upload = await fileTask;
         body.filename = upload.filename;
         body.name = normalizeImportName(body.name, upload.filename);
-        if (upload.kind === "parsed") {
-          body.data = upload.dataRows;
-        } else {
-          responseLocals.multipartImportUpload = upload;
-          attachPreparedUploadResponseCleanup({
-            res: res as unknown as MultipartResponseLifecycle,
-            responseLocals,
-            upload,
-            onCleanupFailure: logMultipartCleanupFailure,
-          });
-        }
+        responseLocals.multipartImportUpload = upload;
+        attachPreparedUploadResponseCleanup({
+          res: res as unknown as MultipartResponseLifecycle,
+          responseLocals,
+          upload,
+          onCleanupFailure: logMultipartCleanupFailure,
+        });
         releaseQuota();
         settled = true;
         req.body = body;

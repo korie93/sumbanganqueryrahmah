@@ -22,6 +22,7 @@ import type {
   WorkerControlState,
 } from "./runtime-monitor-manager";
 import type { BackgroundQueueHealthSnapshot } from "../queue/health";
+import type { Queue } from "bullmq";
 
 type AuthGuards = ReturnType<typeof createAuthGuards>;
 
@@ -97,6 +98,7 @@ export type RegisterLocalServerRoutesOptions = {
   app: Express;
   backgroundQueues: {
     getHealthSnapshot: () => Promise<BackgroundQueueHealthSnapshot>;
+    getQueue: (queueName: "import") => Queue | null;
   };
   server: Server;
   composition: LocalServerComposition;

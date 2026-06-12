@@ -10,12 +10,14 @@ export let emailQueue: Queue | null = backgroundQueueRuntime.getQueue("email");
 export let auditQueue: Queue | null = backgroundQueueRuntime.getQueue("audit");
 export let backupQueue: Queue | null = backgroundQueueRuntime.getQueue("backup");
 export let cleanupQueue: Queue | null = backgroundQueueRuntime.getQueue("cleanup");
+export let importQueue: Queue | null = backgroundQueueRuntime.getQueue("import");
 
 function refreshQueueExports(): void {
   emailQueue = backgroundQueueRuntime.getQueue("email");
   auditQueue = backgroundQueueRuntime.getQueue("audit");
   backupQueue = backgroundQueueRuntime.getQueue("backup");
   cleanupQueue = backgroundQueueRuntime.getQueue("cleanup");
+  importQueue = backgroundQueueRuntime.getQueue("import");
 }
 
 export function getBackgroundQueueRuntime(): BackgroundQueueRuntime {

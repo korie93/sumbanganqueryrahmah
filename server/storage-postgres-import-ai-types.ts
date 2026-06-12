@@ -27,7 +27,15 @@ type BranchSearchResult = {
 };
 
 export interface ImportAiStorageContract {
-  createImport(data: InsertImport & { createdBy?: string }): Promise<Import>;
+  createImport(data: InsertImport & {
+    createdBy?: string;
+    contentHashSha256?: string;
+    sourceSizeBytes?: number;
+  }): Promise<Import>;
+  findActiveImportByContentHash(
+    createdBy: string,
+    contentHashSha256: string,
+  ): Promise<Import | undefined>;
   getImports(): Promise<Import[]>;
   getImportById(id: string): Promise<Import | undefined>;
   updateImportName(id: string, name: string): Promise<Import | undefined>;

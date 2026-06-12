@@ -5,6 +5,7 @@ import {
   createImportMutationIdempotencyKey,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { waitForImportJobCompletion } from "@/pages/import/import-background-job";
 import {
   buildBulkImportSelectionResults,
   filterSupportedImportFiles,
@@ -136,7 +137,7 @@ export function useBulkImportState({
       }
 
       try {
-        const importRecord = await createImportFromFile(
+        const importResult = await createImportFromFile(
           importName,
           currentFile,
           {
@@ -148,8 +149,26 @@ export function useBulkImportState({
         if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
           break;
         }
+        const importRecord = "job" in importResult
+          ? await waitForImportJobCompletion(
+            importResult.job,
+            controller.signal,
+            () => undefined,
+          )
+          : importResult;
+        if ("status" in importRecord && importRecord.status !== "completed") {
+          if (importRecord.status === "duplicate") {
+            throw new Error(
+              `File already imported as "${importRecord.duplicateImportName ?? "an existing import"}".`,
+            );
+          }
+          if (importRecord.status === "cancelled") {
+            throw new Error("Background import was cancelled.");
+          }
+          throw new Error(importRecord.error || "Background import failed.");
+        }
         nextPending.status = "success";
-        nextPending.rowCount = importRecord.rowCount;
+        nextPending.rowCount = importRecord.rowCount ?? 0;
         delete nextPending.error;
       } catch (bulkError: unknown) {
         if (isImportAbortError(bulkError) || controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {

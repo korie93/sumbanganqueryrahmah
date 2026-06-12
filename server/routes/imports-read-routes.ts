@@ -27,6 +27,13 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
     asyncHandler(importsController.getImport),
   );
   app.get(
+    "/api/import-jobs/:jobId",
+    authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
+    asyncHandler(importsController.getImportJob),
+  );
+  app.get(
     "/api/imports/:id/data",
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),

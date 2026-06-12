@@ -143,6 +143,7 @@ export type RuntimeConfig = {
     importInsertBatchSize: number;
     importMaxRowBytes: number;
     importPerUserActiveUploadBytes: number;
+    importBackgroundThresholdBytes: number;
     importAnalysisTimeoutMs: number;
     collectionRollupListenReconnectMs: number;
     httpRequestTimeoutMs: number;

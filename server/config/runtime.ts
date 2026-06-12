@@ -561,6 +561,11 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       resolvedDefaultImportUploadLimitBytes,
       { min: ONE_MIB_BYTES, max: MAX_CONFIGURED_PAYLOAD_BYTES },
     ),
+    importBackgroundThresholdBytes: readInt(
+      "IMPORT_BACKGROUND_THRESHOLD_BYTES",
+      8 * ONE_MIB_BYTES,
+      { min: ONE_MIB_BYTES, max: MAX_CONFIGURED_PAYLOAD_BYTES },
+    ),
     importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
     httpRequestTimeoutMs: readInt("HTTP_REQUEST_TIMEOUT_MS", 115_000, { min: 1_000 }),

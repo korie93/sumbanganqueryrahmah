@@ -810,12 +810,22 @@ function createSystemPermissionHarness() {
           status: "disabled",
           waiting: 0,
         },
+        import: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "disabled",
+          waiting: 0,
+        },
       },
       workers: {
         audit: "disabled",
         backup: "disabled",
         cleanup: "disabled",
         email: "disabled",
+        import: "disabled",
       },
     }),
   });

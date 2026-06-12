@@ -16,6 +16,7 @@ export interface BulkFileResult {
 }
 
 export type ImportRow = Record<string, string>;
+export type { ImportBackgroundJobContract, ImportColumnMappingEntry };
 
 export interface ParsedPreviewResult {
   headers: string[];
@@ -27,3 +28,7 @@ export interface ParsedBulkResult {
   data: ImportRow[];
   error?: string | undefined;
 }
+import type {
+  ImportBackgroundJobContract,
+} from "@shared/api-contracts";
+import type { ImportColumnMappingEntry } from "@/lib/api/imports";

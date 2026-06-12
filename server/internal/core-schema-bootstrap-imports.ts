@@ -14,6 +14,8 @@ export async function ensureCoreImportsTable(
       id text PRIMARY KEY,
       name text NOT NULL,
       filename text NOT NULL,
+      content_hash_sha256 text,
+      source_size_bytes bigint,
       created_at timestamp with time zone DEFAULT now() NOT NULL,
       is_deleted boolean DEFAULT false,
       created_by text
@@ -21,6 +23,8 @@ export async function ensureCoreImportsTable(
   `);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS name text`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS filename text`);
+  await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS content_hash_sha256 text`);
+  await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS source_size_bytes bigint`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
@@ -107,6 +111,14 @@ export async function ensureCoreImportsTable(
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_content_hash_sha256 ON public.imports(content_hash_sha256)`);
+  await database.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_imports_active_creator_hash_unique
+    ON public.imports(created_by, content_hash_sha256)
+    WHERE is_deleted = false
+      AND created_by IS NOT NULL
+      AND content_hash_sha256 IS NOT NULL
+  `);
 }
 
 export async function ensureCoreDataRowsTable(

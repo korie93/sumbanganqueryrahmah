@@ -77,13 +77,37 @@ export const importRecordSchema = z.object({
   createdAt: nonEmptyStringSchema,
   isDeleted: z.boolean(),
   createdBy: nullishStringSchema,
+  contentHashSha256: nullishStringSchema,
+  sourceSizeBytes: z.number().int().nonnegative().nullish(),
 });
 
 export const importListItemSchema = importRecordSchema.extend({
   rowCount: nonNegativeIntSchema,
 });
 
-export const importMutationResultSchema = importListItemSchema;
+export const importBackgroundJobSchema = z.object({
+  id: nonEmptyStringSchema,
+  status: z.enum(["queued", "running", "completed", "failed", "cancelled", "duplicate"]),
+  name: nonEmptyStringSchema,
+  filename: nonEmptyStringSchema,
+  progress: z.number().int().min(0).max(100),
+  rowCount: nonNegativeIntSchema.nullable(),
+  importId: nullableStringSchema,
+  duplicateImportName: nullableStringSchema,
+  error: nullableStringSchema,
+  canCancel: z.boolean(),
+  canResume: z.boolean(),
+});
+
+export const queuedImportMutationResultSchema = z.object({
+  status: z.literal("queued"),
+  job: importBackgroundJobSchema,
+});
+
+export const importMutationResultSchema = z.union([
+  importListItemSchema,
+  queuedImportMutationResultSchema,
+]);
 
 export const importsListResponseSchema = z.object({
   imports: z.array(importListItemSchema),
@@ -287,6 +311,8 @@ export const collectionMonthlyTargetResponseSchema = z.object({
 });
 
 export type ImportsListResponse = z.infer<typeof importsListResponseSchema>;
+export type ImportBackgroundJobContract = z.infer<typeof importBackgroundJobSchema>;
+export type ImportMutationResultContract = z.infer<typeof importMutationResultSchema>;
 export type ImportDataPageResponse = z.infer<typeof importDataPageResponseSchema>;
 export type SearchGlobalResponse = z.infer<typeof searchGlobalResponseSchema>;
 export type AdvancedSearchResponse = z.infer<typeof advancedSearchResponseSchema>;

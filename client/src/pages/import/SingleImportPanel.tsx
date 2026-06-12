@@ -1,11 +1,26 @@
-import { AlertCircle, FileSpreadsheet, Save, ShieldCheck, Upload, X } from "lucide-react";
+import {
+  AlertCircle,
+  FileSpreadsheet,
+  PauseCircle,
+  Play,
+  Save,
+  ShieldCheck,
+  Upload,
+  X,
+} from "lucide-react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { getImportPreviewRowKey } from "@/pages/import/import-preview-row-key";
+import { ImportColumnMappingPanel } from "@/pages/import/ImportColumnMappingPanel";
 import { formatImportUploadSize } from "@/pages/import/upload-limits";
-import type { ImportRow } from "@/pages/import/types";
+import type {
+  ImportBackgroundJobContract,
+  ImportColumnMappingEntry,
+  ImportRow,
+} from "@/pages/import/types";
 
 interface SingleImportPanelProps {
   error: string;
@@ -23,6 +38,11 @@ interface SingleImportPanelProps {
   onSave: () => void;
   parsedData: ImportRow[];
   previewDeferred: boolean;
+  columnMapping: ImportColumnMappingEntry[];
+  backgroundJob: ImportBackgroundJobContract | null;
+  onColumnMappingChange: (mapping: ImportColumnMappingEntry[]) => void;
+  onCancelBackgroundJob: () => void;
+  onResumeBackgroundJob: () => void;
 }
 
 export function SingleImportPanel({
@@ -41,6 +61,11 @@ export function SingleImportPanel({
   onSave,
   parsedData,
   previewDeferred,
+  columnMapping,
+  backgroundJob,
+  onColumnMappingChange,
+  onCancelBackgroundJob,
+  onResumeBackgroundJob,
 }: SingleImportPanelProps) {
   const loadingBusyProps = loading ? { "aria-busy": "true" as const } : {};
   const loadingDropzoneDisabledProps = loading
@@ -170,9 +195,15 @@ export function SingleImportPanel({
             <span className="text-sm">{error}</span>
           </div>
         ) : null}
+
+        <ImportColumnMappingPanel
+          disabled={loading}
+          mapping={columnMapping}
+          onChange={onColumnMappingChange}
+        />
       </div>
 
-      {parsedData.length > 0 || previewDeferred ? (
+      {parsedData.length > 0 || previewDeferred || backgroundJob ? (
         <div className="glass-wrapper p-4 sm:p-6" {...loadingBusyProps}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -249,6 +280,41 @@ export function SingleImportPanel({
               ) : null}
             </HorizontalScrollHint>
           )}
+
+          {backgroundJob ? (
+            <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4" role="status" aria-live="polite">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Background import: {backgroundJob.status}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    You may leave this page. The server retains the staged file until the job completes or expires.
+                  </p>
+                </div>
+                {backgroundJob.canCancel ? (
+                  <Button type="button" variant="outline" size="sm" onClick={onCancelBackgroundJob}>
+                    <PauseCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Cancel
+                  </Button>
+                ) : null}
+                {backgroundJob.canResume ? (
+                  <Button type="button" variant="outline" size="sm" onClick={onResumeBackgroundJob}>
+                    <Play className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Resume
+                  </Button>
+                ) : null}
+              </div>
+              <Progress
+                value={backgroundJob.progress}
+                className="mt-3 h-2"
+                aria-label="Background import progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={backgroundJob.progress}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </>

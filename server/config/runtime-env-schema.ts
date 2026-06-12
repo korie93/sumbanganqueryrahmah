@@ -218,6 +218,10 @@ const runtimeEnvironmentShape = {
     min: 1_048_576,
     max: 536_870_912,
   }),
+  IMPORT_BACKGROUND_THRESHOLD_BYTES: optionalIntEnv("IMPORT_BACKGROUND_THRESHOLD_BYTES", {
+    min: 1_048_576,
+    max: 536_870_912,
+  }),
   COLLECTION_BODY_LIMIT: optionalEnvString("COLLECTION_BODY_LIMIT", 64),
   CORS_ALLOWED_ORIGINS: optionalEnvString("CORS_ALLOWED_ORIGINS"),
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),

@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { badRequest, notFound } from "../http/errors";
+import { badRequest, conflict, notFound } from "../http/errors";
 import { runWithRequestDeadline } from "../http/request-deadline";
 import { readInteger, readNonEmptyString, readPageLimit, readRouteParam } from "../http/validation";
 import {
@@ -14,6 +14,11 @@ import {
 } from "../routes/imports-idempotency";
 import { ImportUploadValidationError } from "../services/import-upload-file-utils";
 import type { ImportDataColumnFilter, ImportsService } from "../services/imports.service";
+import { parseImportColumnMapping } from "../services/import-column-mapping";
+import type { ImportBackgroundJobService } from "../services/import-background-job.service";
+import { DuplicateImportError } from "../services/import-operation-errors";
+import { parseImportUploadFile } from "../services/import-upload-parser";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 type RuntimeSettings = {
   viewerRowsPerPage: number;
@@ -24,6 +29,8 @@ type CreateImportsControllerDeps = {
   getRuntimeSettingsCached: () => Promise<RuntimeSettings>;
   isDbProtected: () => boolean;
   analysisRequestTimeoutMs?: number | undefined;
+  importBackgroundJobService?: ImportBackgroundJobService | undefined;
+  importBackgroundThresholdBytes?: number | undefined;
 };
 
 export type ImportsController = ReturnType<typeof createImportsController>;
@@ -71,6 +78,8 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     getRuntimeSettingsCached,
     isDbProtected,
     analysisRequestTimeoutMs,
+    importBackgroundJobService,
+    importBackgroundThresholdBytes = Number.POSITIVE_INFINITY,
   } = deps;
 
   const listDataRows = async (req: AuthenticatedRequest, res: Response) => {
@@ -133,25 +142,75 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     }).multipartImportUpload;
 
     try {
-      if (multipartImportUpload?.kind === "csv-file") {
+      if (multipartImportUpload?.kind === "staged-file") {
         const body = req.body && typeof req.body === "object"
           ? req.body as Record<string, unknown>
           : {};
         const name = String(body.name ?? "");
         const filename = String(body.filename ?? multipartImportUpload.filename ?? "");
+        const columnMapping = parseImportColumnMapping(body.columnMapping);
+        const requestedBy = String(req.user?.username || "").trim();
 
-        const importRecord = await importsService.createImportFromCsvFile({
+        if (
+          importBackgroundJobService?.configured
+          && multipartImportUpload.sourceSizeBytes >= importBackgroundThresholdBytes
+        ) {
+          const queuedJob = await importBackgroundJobService.enqueue({
+            upload: multipartImportUpload,
+            name,
+            requestedBy,
+            columnMapping,
+          });
+          delete (res.locals as {
+            multipartImportUpload?: PreparedMultipartImportUpload;
+          }).multipartImportUpload;
+          const payload = {
+            status: "queued" as const,
+            job: queuedJob,
+          };
+          await completeImportMutationIdempotency(res, payload, 202);
+          return res.status(202).json(payload);
+        }
+
+        const commonInput = {
           name,
           filename,
-          filePath: multipartImportUpload.filePath,
-          createdBy: req.user?.username,
-        });
+          createdBy: requestedBy,
+          contentHashSha256: multipartImportUpload.contentHashSha256,
+          sourceSizeBytes: multipartImportUpload.sourceSizeBytes,
+          columnMapping,
+        };
+        const importRecord = filename.toLowerCase().endsWith(".csv")
+          ? await importsService.createImportFromCsvFile({
+              ...commonInput,
+              filePath: multipartImportUpload.filePath,
+            })
+          : await (async () => {
+              const parsed = await parseImportUploadFile(
+                filename,
+                multipartImportUpload.filePath,
+              );
+              if (parsed.error) {
+                throw new ImportUploadValidationError(
+                  parsed.error,
+                  ERROR_CODES.IMPORT_PARSE_FAILED,
+                );
+              }
+              return importsService.createImport({
+                ...commonInput,
+                dataRows: parsed.rows,
+              });
+            })();
 
         await completeImportMutationIdempotency(res, importRecord);
         return res.json(importRecord);
       }
 
       const { name, filename, dataRows } = importsService.parseCreateImportBody(req.body);
+      const rawBody = req.body && typeof req.body === "object"
+        ? req.body as Record<string, unknown>
+        : {};
+      const columnMapping = parseImportColumnMapping(rawBody.columnMapping);
 
       if (!Array.isArray(dataRows) || dataRows.length === 0) {
         throw badRequest("No data rows provided");
@@ -162,6 +221,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         filename,
         dataRows,
         createdBy: req.user?.username,
+        columnMapping,
       });
 
       await completeImportMutationIdempotency(res, importRecord);
@@ -171,11 +231,53 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       if (error instanceof ImportUploadValidationError) {
         throw badRequest(error.message, error.code);
       }
+      if (error instanceof DuplicateImportError) {
+        throw conflict(
+          "This file has already been imported.",
+          ERROR_CODES.IMPORT_DUPLICATE_FILE,
+        );
+      }
       throw error;
     } finally {
       await cleanupPreparedMultipartImportUpload(multipartImportUpload);
       delete (res.locals as { multipartImportUpload?: PreparedMultipartImportUpload }).multipartImportUpload;
     }
+  };
+
+  const getImportJob = async (req: AuthenticatedRequest, res: Response) => {
+    const jobId = readRouteParam(req.params.jobId, "import job id");
+    const job = await importBackgroundJobService?.getJob(
+      jobId,
+      String(req.user?.username || ""),
+    );
+    if (!job) {
+      throw notFound("Import job not found");
+    }
+    return res.json(job);
+  };
+
+  const cancelImportJob = async (req: AuthenticatedRequest, res: Response) => {
+    const jobId = readRouteParam(req.params.jobId, "import job id");
+    const job = await importBackgroundJobService?.cancel(
+      jobId,
+      String(req.user?.username || ""),
+    );
+    if (!job) {
+      throw notFound("Import job not found");
+    }
+    return res.json(job);
+  };
+
+  const resumeImportJob = async (req: AuthenticatedRequest, res: Response) => {
+    const jobId = readRouteParam(req.params.jobId, "import job id");
+    const job = await importBackgroundJobService?.resume(
+      jobId,
+      String(req.user?.username || ""),
+    );
+    if (!job) {
+      throw notFound("Import job not found");
+    }
+    return res.status(202).json(job);
   };
 
   const getImport = async (req: AuthenticatedRequest, res: Response) => {
@@ -289,6 +391,9 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     listDataRows,
     listImports,
     createImport,
+    getImportJob,
+    cancelImportJob,
+    resumeImportJob,
     getImport,
     getImportDataPage,
     analyzeImport,

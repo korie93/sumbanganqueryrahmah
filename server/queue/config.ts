@@ -1,10 +1,11 @@
-export type BackgroundQueueName = "email" | "audit" | "backup" | "cleanup";
+export type BackgroundQueueName = "email" | "audit" | "backup" | "cleanup" | "import";
 
 export const BACKGROUND_QUEUE_NAMES: readonly BackgroundQueueName[] = [
   "email",
   "audit",
   "backup",
   "cleanup",
+  "import",
 ] as const;
 
 export type BackgroundQueueRedisSource =
@@ -91,4 +92,3 @@ export function resolveBackgroundQueueConfig(
     removeOnFail: DEFAULT_REMOVE_ON_FAIL,
   };
 }
-

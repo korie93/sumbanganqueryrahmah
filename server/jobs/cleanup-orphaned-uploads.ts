@@ -1,12 +1,16 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { runtimeConfig } from "../config/runtime";
 import { COLLECTION_RECEIPT_DIR } from "../lib/collection-receipt-files";
 import { logger } from "../lib/logger";
 
 const IMPORT_UPLOAD_TEMP_DIR_PREFIX = "sqr-import-upload-";
 const ORPHANED_UPLOAD_EXTENSION = ".upload";
+const IMPORT_JOB_CANCEL_EXTENSION = ".cancel";
+const IMPORT_JOB_DIRECTORY_NAME = "import-jobs";
 const DEFAULT_ORPHANED_UPLOAD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_IMPORT_JOB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_ORPHANED_UPLOAD_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_ORPHANED_UPLOAD_STARTUP_DELAY_MS = 30_000;
 
@@ -20,7 +24,9 @@ export type OrphanedUploadCleanupResult = {
 export type OrphanedUploadCleanupOptions = {
   readonly now?: number | undefined;
   readonly maxAgeMs?: number | undefined;
+  readonly importJobMaxAgeMs?: number | undefined;
   readonly importTempRootDir?: string | undefined;
+  readonly importJobDir?: string | undefined;
   readonly receiptUploadDir?: string | undefined;
 };
 
@@ -126,6 +132,41 @@ async function cleanupReceiptUploadDirectory(params: {
   return result;
 }
 
+async function cleanupImportJobDirectory(params: {
+  importJobDir: string;
+  now: number;
+  maxAgeMs: number;
+}) {
+  if (!await pathExists(params.importJobDir)) {
+    return emptyCleanupResult();
+  }
+
+  let result = emptyCleanupResult();
+  const entries = await fs.readdir(params.importJobDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (
+      !entry.isFile()
+      || (
+        !entry.name.endsWith(ORPHANED_UPLOAD_EXTENSION)
+        && !entry.name.endsWith(IMPORT_JOB_CANCEL_EXTENSION)
+      )
+    ) {
+      continue;
+    }
+
+    result = addCleanupResults(
+      result,
+      await cleanupUploadFile(
+        path.join(params.importJobDir, entry.name),
+        params.now,
+        params.maxAgeMs,
+      ),
+    );
+  }
+
+  return result;
+}
+
 async function cleanupImportUploadDirectory(params: {
   directoryPath: string;
   now: number;
@@ -222,8 +263,16 @@ export async function cleanupOrphanedUploads(
 ): Promise<OrphanedUploadCleanupResult> {
   const now = options.now ?? Date.now();
   const maxAgeMs = Math.max(1, Math.trunc(options.maxAgeMs ?? DEFAULT_ORPHANED_UPLOAD_MAX_AGE_MS));
+  const importJobMaxAgeMs = Math.max(
+    1,
+    Math.trunc(
+      options.importJobMaxAgeMs
+      ?? options.maxAgeMs
+      ?? DEFAULT_IMPORT_JOB_MAX_AGE_MS,
+    ),
+  );
   const importTempRootDir = options.importTempRootDir ?? process.env.UPLOAD_TMP_DIR ?? os.tmpdir();
-  const result = addCleanupResults(
+  let result = addCleanupResults(
     await cleanupImportUploadRoot({
       importTempRootDir,
       maxAgeMs,
@@ -232,6 +281,15 @@ export async function cleanupOrphanedUploads(
     await cleanupReceiptUploadDirectory({
       receiptUploadDir: options.receiptUploadDir ?? COLLECTION_RECEIPT_DIR,
       maxAgeMs,
+      now,
+    }),
+  );
+  result = addCleanupResults(
+    result,
+    await cleanupImportJobDirectory({
+      importJobDir: options.importJobDir
+        ?? path.resolve(runtimeConfig.app.uploadsRootDir, IMPORT_JOB_DIRECTORY_NAME),
+      maxAgeMs: importJobMaxAgeMs,
       now,
     }),
   );

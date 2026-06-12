@@ -4,6 +4,7 @@ import { parseApiJson } from "./contract";
 import {
   deleteImportResponseSchema,
   importDataPageResponseSchema,
+  importBackgroundJobSchema,
   importMutationResultSchema,
   importRecordSchema,
   importsListResponseSchema,
@@ -24,6 +25,12 @@ type ImportMutationRequestOptions = ImportRequestOptions & {
   headers?: Record<string, string>;
   idempotencyFingerprint?: string;
   idempotencyKey?: string;
+  columnMapping?: ImportColumnMappingEntry[];
+};
+
+export type ImportColumnMappingEntry = {
+  source: string;
+  target: string | null;
 };
 
 export type ImportDataColumnFilter = {
@@ -113,7 +120,12 @@ export async function createImport(
   const response = await apiRequest(
     "POST",
     "/api/imports",
-    { name, filename, data },
+    {
+      name,
+      filename,
+      data,
+      columnMapping: options?.columnMapping ?? [],
+    },
     {
       ...options,
       headers: buildImportMutationHeaders(options),
@@ -129,6 +141,9 @@ export async function createImportFromFile(
 ) {
   const formData = new FormData();
   formData.set("name", name);
+  if (options?.columnMapping?.length) {
+    formData.set("columnMapping", JSON.stringify(options.columnMapping));
+  }
   formData.append("file", file, file.name);
 
   const response = await apiRequest(
@@ -143,6 +158,36 @@ export async function createImportFromFile(
     },
   );
   return parseApiJson(response, importMutationResultSchema, "/api/imports");
+}
+
+export async function getImportJob(jobId: string, options?: ImportRequestOptions) {
+  const response = await apiRequest(
+    "GET",
+    `/api/import-jobs/${encodeURIComponent(jobId)}`,
+    undefined,
+    options,
+  );
+  return parseApiJson(response, importBackgroundJobSchema, `/api/import-jobs/${jobId}`);
+}
+
+export async function cancelImportJob(jobId: string, options?: ImportRequestOptions) {
+  const response = await apiRequest(
+    "POST",
+    `/api/import-jobs/${encodeURIComponent(jobId)}/cancel`,
+    undefined,
+    options,
+  );
+  return parseApiJson(response, importBackgroundJobSchema, `/api/import-jobs/${jobId}/cancel`);
+}
+
+export async function resumeImportJob(jobId: string, options?: ImportRequestOptions) {
+  const response = await apiRequest(
+    "POST",
+    `/api/import-jobs/${encodeURIComponent(jobId)}/resume`,
+    undefined,
+    options,
+  );
+  return parseApiJson(response, importBackgroundJobSchema, `/api/import-jobs/${jobId}/resume`);
 }
 
 export async function deleteImport(id: string, options?: ImportRequestOptions) {

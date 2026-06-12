@@ -5,6 +5,7 @@ import type {
 } from "../repositories/imports.repository";
 import type { ImportAnalysisService } from "./import-analysis.service";
 import type { PostgresStorage } from "../storage-postgres";
+import type { ImportColumnMappingEntry } from "./import-column-mapping";
 
 type SearchDataRowsResult = Awaited<ReturnType<PostgresStorage["searchDataRows"]>>;
 type AnalyzeImportResult = Awaited<ReturnType<ImportAnalysisService["analyzeImport"]>>;
@@ -19,6 +20,7 @@ type ImportsStorage = Pick<
   | "deleteImport"
   | "getDataRowsByImport"
   | "getImportById"
+  | "findActiveImportByContentHash"
   | "searchDataRows"
   | "updateImportName"
 >;
@@ -39,6 +41,9 @@ export type CreateImportInput = {
   filename: string;
   dataRows: unknown[];
   createdBy?: string | undefined;
+  contentHashSha256?: string | undefined;
+  sourceSizeBytes?: number | undefined;
+  columnMapping?: ImportColumnMappingEntry[] | undefined;
 };
 
 export type CreateImportFromCsvFileInput = {
@@ -46,6 +51,11 @@ export type CreateImportFromCsvFileInput = {
   filename: string;
   filePath: string;
   createdBy?: string | undefined;
+  contentHashSha256?: string | undefined;
+  sourceSizeBytes?: number | undefined;
+  columnMapping?: ImportColumnMappingEntry[] | undefined;
+  onProgress?: ((processedRows: number, totalRows: number) => Promise<void> | void) | undefined;
+  shouldCancel?: (() => Promise<boolean> | boolean) | undefined;
 };
 
 export type ImportDataPageInput = {

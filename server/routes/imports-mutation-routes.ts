@@ -23,6 +23,20 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     importsMultipartRoute,
     asyncHandler(importsController.createImport),
   );
+  app.post(
+    "/api/import-jobs/:jobId/cancel",
+    authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
+    asyncHandler(importsController.cancelImportJob),
+  );
+  app.post(
+    "/api/import-jobs/:jobId/resume",
+    authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
+    asyncHandler(importsController.resumeImportJob),
+  );
 
   app.patch(
     "/api/imports/:id",

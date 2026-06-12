@@ -192,6 +192,20 @@ async function parseExcelFile(file: File): Promise<ParsedPreviewResult> {
   return parseExcelBuffer(xlsx, arrayBuffer);
 }
 
+export async function readDeferredCsvHeaders(file: File): Promise<string[]> {
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    return [];
+  }
+
+  const prefix = await file.slice(0, Math.min(file.size, 64 * 1024)).text();
+  const lines = prefix.replace(/^\ufeff/, "").split(/\r?\n/);
+  const headerLineIndex = findHeaderLine(lines);
+  if (headerLineIndex >= lines.length) {
+    return [];
+  }
+  return parseCsvLine(lines[headerLineIndex]).filter((header) => header.length > 0);
+}
+
 export async function parseImportPreview(file: File): Promise<ParsedPreviewResult> {
   const fileName = file.name.toLowerCase();
   if (!isSupportedSpreadsheet(fileName)) {

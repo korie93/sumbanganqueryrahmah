@@ -5,11 +5,19 @@ import test from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { ImportsServiceMutationOperations } from "../imports-service-mutation-operations";
 import type { ImportsServiceStorage } from "../imports-service-types";
+import { DuplicateImportError, ImportJobCancelledError } from "../import-operation-errors";
 import { runtimeConfig } from "../../config/runtime";
 
 function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsServiceStorage {
   const auditLogs: Array<Record<string, unknown>> = [];
-  const imports = new Map<string, { id: string; name: string; filename: string; createdBy: string | null }>();
+  const imports = new Map<string, {
+    id: string;
+    name: string;
+    filename: string;
+    createdBy: string | null;
+    contentHashSha256: string | null;
+    sourceSizeBytes: number | null;
+  }>();
   let createdRowCount = 0;
 
   const baseStorage: ImportsServiceStorage = {
@@ -40,6 +48,8 @@ function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsS
         name: data.name,
         filename: data.filename,
         createdBy: data.createdBy ?? null,
+        contentHashSha256: data.contentHashSha256 ?? null,
+        sourceSizeBytes: data.sourceSizeBytes ?? null,
       };
       imports.set(created.id, created);
       return {
@@ -53,6 +63,20 @@ function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsS
     getDataRowsByImport: async () => [],
     getImportById: async (id) => {
       const found = imports.get(id);
+      return found
+        ? {
+            ...found,
+            createdAt: new Date("2026-04-12T00:00:00.000Z"),
+            isDeleted: false,
+          }
+        : undefined;
+    },
+    findActiveImportByContentHash: async (createdBy, contentHashSha256) => {
+      const found = [...imports.values()].find(
+        (entry) =>
+          entry.createdBy === createdBy
+          && entry.contentHashSha256 === contentHashSha256,
+      );
       return found
         ? {
             ...found,
@@ -325,7 +349,7 @@ test("createImport writes legacy JSON rows with bounded multi-row inserts", asyn
   }
 });
 
-test("createImportFromCsvFile cleans up empty staged CSV imports", async () => {
+test("createImportFromCsvFile rejects empty CSV files before creating an import", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-mutation-"));
   const filePath = path.join(tempDir, "empty.csv");
   const deletedImportIds: string[] = [];
@@ -355,9 +379,8 @@ test("createImportFromCsvFile cleans up empty staged CSV imports", async () => {
       /No data rows provided/i,
     );
 
-    assert.equal(deletedRowImportIds.length, 1);
-    assert.equal(deletedImportIds.length, 1);
-    assert.equal(deletedRowImportIds[0], deletedImportIds[0]);
+    assert.equal(deletedRowImportIds.length, 0);
+    assert.equal(deletedImportIds.length, 0);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -391,4 +414,158 @@ test("createImport rolls back legacy JSON imports when a row exceeds the byte bu
   assert.equal(deletedRowImportIds.length, 1);
   assert.equal(deletedImportIds.length, 1);
   assert.equal(deletedRowImportIds[0], deletedImportIds[0]);
+});
+
+test("createImport rejects a duplicate content hash before creating database rows", async () => {
+  let createImportCalls = 0;
+  const existingImport = {
+    id: "import-existing",
+    name: "Existing Import",
+    filename: "original.csv",
+    createdAt: new Date("2026-04-12T00:00:00.000Z"),
+    isDeleted: false,
+    createdBy: "superuser",
+    contentHashSha256: "a".repeat(64),
+    sourceSizeBytes: 24,
+  };
+  const operations = new ImportsServiceMutationOperations(createStorageStub({
+    createImport: async () => {
+      createImportCalls += 1;
+      return existingImport;
+    },
+    findActiveImportByContentHash: async () => existingImport,
+  }));
+
+  await assert.rejects(
+    () => operations.createImport({
+      name: "Renamed Duplicate",
+      filename: "renamed.csv",
+      dataRows: [{ name: "Alice" }],
+      createdBy: "superuser",
+      contentHashSha256: "a".repeat(64),
+      sourceSizeBytes: 24,
+    }),
+    DuplicateImportError,
+  );
+  assert.equal(createImportCalls, 0);
+});
+
+test("createImport translates a concurrent hash uniqueness race into a duplicate result", async () => {
+  let duplicateChecks = 0;
+  const existingImport = {
+    id: "import-race-winner",
+    name: "Concurrent Import",
+    filename: "winner.csv",
+    createdAt: new Date("2026-04-12T00:00:00.000Z"),
+    isDeleted: false,
+    createdBy: "superuser",
+    contentHashSha256: "b".repeat(64),
+    sourceSizeBytes: 24,
+  };
+  const operations = new ImportsServiceMutationOperations(createStorageStub({
+    createImport: async () => {
+      throw Object.assign(new Error("unique violation"), { code: "23505" });
+    },
+    findActiveImportByContentHash: async () => {
+      duplicateChecks += 1;
+      return duplicateChecks === 1 ? undefined : existingImport;
+    },
+  }));
+
+  await assert.rejects(
+    () => operations.createImport({
+      name: "Concurrent Loser",
+      filename: "loser.csv",
+      dataRows: [{ name: "Alice" }],
+      createdBy: "superuser",
+      contentHashSha256: "b".repeat(64),
+      sourceSizeBytes: 24,
+    }),
+    DuplicateImportError,
+  );
+  assert.equal(duplicateChecks, 2);
+});
+
+test("createImportFromCsvFile applies column mapping before rows are stored", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-mapping-"));
+  const filePath = path.join(tempDir, "mapped.csv");
+  const storedRows: Array<Record<string, unknown>> = [];
+
+  try {
+    await writeFile(filePath, "Customer Name,Private Note,Amount\nAlice,secret,42\n", "utf8");
+    const operations = new ImportsServiceMutationOperations(createStorageStub({
+      createDataRows: async (rows) => {
+        storedRows.push(...rows.map((row) => row.jsonDataJsonb as Record<string, unknown>));
+        return rows.map((row, index) => ({
+          id: `mapped-row-${index}`,
+          importId: row.importId,
+          jsonDataJsonb: row.jsonDataJsonb,
+        }));
+      },
+    }));
+
+    await operations.createImportFromCsvFile({
+      name: "Mapped Import",
+      filename: "mapped.csv",
+      filePath,
+      createdBy: "superuser",
+      columnMapping: [
+        { source: "Customer Name", target: "customer_name" },
+        { source: "Private Note", target: null },
+        { source: "Amount", target: "amount" },
+      ],
+    });
+
+    assert.deepEqual(storedRows.map((row) => ({ ...row })), [{
+      customer_name: "Alice",
+      amount: "42",
+    }]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("createImportFromCsvFile rolls back partial rows when cancellation is requested", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-cancel-"));
+  const filePath = path.join(tempDir, "cancel.csv");
+  const deletedImportIds: string[] = [];
+  const deletedRowImportIds: string[] = [];
+  let cancellationChecks = 0;
+  const originalBatchSize = runtimeConfig.runtime.importInsertBatchSize;
+  runtimeConfig.runtime.importInsertBatchSize = 1;
+
+  try {
+    await writeFile(filePath, "name\nAlice\nBob\nCarol\n", "utf8");
+    const operations = new ImportsServiceMutationOperations(createStorageStub({
+      deleteDataRowsByImport: async (importId) => {
+        deletedRowImportIds.push(importId);
+        return 1;
+      },
+      deleteImport: async (importId) => {
+        deletedImportIds.push(importId);
+        return true;
+      },
+    }));
+
+    await assert.rejects(
+      () => operations.createImportFromCsvFile({
+        name: "Cancelled Import",
+        filename: "cancel.csv",
+        filePath,
+        createdBy: "superuser",
+        shouldCancel: () => {
+          cancellationChecks += 1;
+          return cancellationChecks >= 2;
+        },
+      }),
+      ImportJobCancelledError,
+    );
+
+    assert.equal(deletedRowImportIds.length, 1);
+    assert.equal(deletedImportIds.length, 1);
+    assert.equal(deletedRowImportIds[0], deletedImportIds[0]);
+  } finally {
+    runtimeConfig.runtime.importInsertBatchSize = originalBatchSize;
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });

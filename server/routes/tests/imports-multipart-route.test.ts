@@ -237,10 +237,7 @@ test("createImportsMultipartRoute cleans staged CSV uploads if downstream leaves
     req.end(body);
   });
 
-  assert.equal(upload.kind, "csv-file");
-  if (upload.kind !== "csv-file") {
-    return;
-  }
+  assert.equal(upload.kind, "staged-file");
 
   assert.equal(await pathExists(upload.filePath), true);
   assert.equal(await pathExists(upload.tempDir), true);

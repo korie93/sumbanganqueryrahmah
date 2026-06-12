@@ -60,6 +60,8 @@ test("all-import analysis uses keyset pagination instead of offset pagination", 
     createdAt: new Date(),
     isDeleted: false,
     createdBy: "admin.user",
+    contentHashSha256: null,
+    sourceSizeBytes: null,
     rowCount: 2,
   }]);
 

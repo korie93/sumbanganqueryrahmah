@@ -157,6 +157,8 @@ function createImportsRouteHarness(options?: {
     createdAt: new Date("2026-03-10T00:00:00.000Z"),
     isDeleted: false,
     createdBy: "admin.user",
+    contentHashSha256: null,
+    sourceSizeBytes: null,
   };
   const secondImport: Import = {
     id: "import-2",
@@ -165,6 +167,8 @@ function createImportsRouteHarness(options?: {
     createdAt: new Date("2026-03-09T00:00:00.000Z"),
     isDeleted: false,
     createdBy: "admin.user",
+    contentHashSha256: null,
+    sourceSizeBytes: null,
   };
   const thirdImport: Import = {
     id: "import-3",
@@ -173,6 +177,8 @@ function createImportsRouteHarness(options?: {
     createdAt: new Date("2026-03-08T00:00:00.000Z"),
     isDeleted: false,
     createdBy: "admin.user",
+    contentHashSha256: null,
+    sourceSizeBytes: null,
   };
   importRecords.set(seedImport.id, seedImport);
   importRecords.set(secondImport.id, secondImport);
@@ -333,7 +339,13 @@ function createImportsRouteHarness(options?: {
         nextCursorRowId: hasMore ? String(items[items.length - 1]?.id || "") || null : null,
       };
     },
-    createImport: async (data: { name: string; filename: string; createdBy?: string }) => {
+    createImport: async (data: {
+      name: string;
+      filename: string;
+      createdBy?: string;
+      contentHashSha256?: string;
+      sourceSizeBytes?: number;
+    }) => {
       createImportCalls.push(data);
       const created: Import = {
         id: `import-${importRecords.size + 1}`,
@@ -342,12 +354,23 @@ function createImportsRouteHarness(options?: {
         createdAt: new Date("2026-03-19T00:00:00.000Z"),
         isDeleted: false,
         createdBy: data.createdBy ?? null,
+        contentHashSha256: data.contentHashSha256 ?? null,
+        sourceSizeBytes: data.sourceSizeBytes ?? null,
       };
       importRecords.set(created.id, created);
       importRowCounts.set(created.id, 0);
       dataRowsByImport.set(created.id, []);
       return created;
     },
+    findActiveImportByContentHash: async (
+      createdBy: string,
+      contentHashSha256: string,
+    ) => [...importRecords.values()].find(
+      (record) =>
+        !record.isDeleted
+        && record.createdBy === createdBy
+        && record.contentHashSha256 === contentHashSha256,
+    ),
     createDataRow: async (data: { importId: string; jsonDataJsonb: Record<string, unknown> }) => {
       createDataRowCalls.push(data);
       const row: DataRow = {
@@ -1055,9 +1078,9 @@ test("POST /api/imports returns a structured parse error for an excessively wide
     assert.equal(payload.code, ERROR_CODES.IMPORT_PARSE_FAILED);
     assert.equal(payload.error?.code, ERROR_CODES.IMPORT_PARSE_FAILED);
     assert.match(String(payload.message), /column limit of 300/i);
-    assert.equal(createImportCalls.length, 1);
+    assert.equal(createImportCalls.length, 0);
     assert.equal(createDataRowCalls.length, 0);
-    assert.equal(deleteCalls.length, 1);
+    assert.equal(deleteCalls.length, 0);
     assert.equal(auditLogs.length, 0);
   } finally {
     await stopTestServer(server);

@@ -108,6 +108,8 @@ export const imports = pgTable("imports", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   filename: text("filename").notNull(),
+  contentHashSha256: text("content_hash_sha256"),
+  sourceSizeBytes: bigint("source_size_bytes", { mode: "number" }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   isDeleted: boolean("is_deleted").default(false).notNull(),
   createdBy: text("created_by"),
@@ -115,6 +117,10 @@ export const imports = pgTable("imports", {
   createdAtIdx: index("idx_imports_created_at").on(table.createdAt),
   isDeletedIdx: index("idx_imports_is_deleted").on(table.isDeleted),
   createdByIdx: index("idx_imports_created_by").on(table.createdBy),
+  contentHashIdx: index("idx_imports_content_hash_sha256").on(table.contentHashSha256),
+  activeCreatorContentHashUnique: uniqueIndex("idx_imports_active_creator_hash_unique")
+    .on(table.createdBy, table.contentHashSha256)
+    .where(sql`${table.isDeleted} = false AND ${table.createdBy} IS NOT NULL AND ${table.contentHashSha256} IS NOT NULL`),
 }));
 
 export const dataRows = pgTable("data_rows", {

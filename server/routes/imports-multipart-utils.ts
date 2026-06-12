@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { logger } from "../lib/logger";
 import {
@@ -23,20 +24,17 @@ export type MultipartImportBody = {
   name?: string;
   filename?: string;
   data?: Record<string, string>[];
+  columnMapping?: string;
 };
 
-export type PreparedMultipartImportUpload =
-  | {
-    kind: "parsed";
-    filename: string;
-    dataRows: Record<string, string>[];
-  }
-  | {
-    kind: "csv-file";
-    filename: string;
-    filePath: string;
-    tempDir: string;
-  };
+export type PreparedMultipartImportUpload = {
+  kind: "staged-file";
+  filename: string;
+  filePath: string;
+  tempDir: string;
+  contentHashSha256: string;
+  sourceSizeBytes: number;
+};
 
 export const IMPORT_TOO_LARGE_MESSAGE = IMPORT_UPLOAD_TOO_LARGE_MESSAGE;
 const IMPORT_UPLOAD_TEMP_DIR_PREFIX = "sqr-import-upload-";
@@ -163,6 +161,15 @@ export async function prepareMultipartImportUpload(params: {
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;
   let keepStagedFile = false;
+  let sourceSizeBytes = 0;
+  const contentHasher = createHash("sha256");
+  const hashingStream = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      sourceSizeBytes += chunk.length;
+      contentHasher.update(chunk);
+      callback(null, chunk);
+    },
+  });
 
   const handleLimit = () => {
     exceededSizeLimit = true;
@@ -172,6 +179,7 @@ export async function prepareMultipartImportUpload(params: {
   try {
     await pipeline(
       file,
+      hashingStream,
       fs.createWriteStream(tempFilePath, { flags: "wx" }),
     );
 
@@ -180,28 +188,14 @@ export async function prepareMultipartImportUpload(params: {
     }
     await validateImportUploadFileSignature(filename, tempFilePath);
 
-    if (String(filename || "").trim().toLowerCase().endsWith(".csv")) {
-      keepStagedFile = true;
-      return {
-        kind: "csv-file",
-        filename,
-        filePath: tempFilePath,
-        tempDir,
-      };
-    }
-
-    const parsed = await parseImportUploadFile(filename, tempFilePath);
-    if (parsed.error) {
-      throw new ImportUploadValidationError(
-        parsed.error,
-        ERROR_CODES.IMPORT_PARSE_FAILED,
-      );
-    }
-
+    keepStagedFile = true;
     return {
-      kind: "parsed",
+      kind: "staged-file",
       filename,
-      dataRows: parsed.rows,
+      filePath: tempFilePath,
+      tempDir,
+      contentHashSha256: contentHasher.digest("hex"),
+      sourceSizeBytes,
     };
   } finally {
     removeLimitListener(file, handleLimit);
@@ -215,7 +209,7 @@ export async function prepareMultipartImportUpload(params: {
 export async function cleanupPreparedMultipartImportUpload(
   upload: PreparedMultipartImportUpload | null | undefined,
 ): Promise<void> {
-  if (!upload || upload.kind !== "csv-file") {
+  if (!upload || upload.kind !== "staged-file") {
     return;
   }
 

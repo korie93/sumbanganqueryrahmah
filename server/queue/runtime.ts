@@ -23,6 +23,7 @@ import {
   processBackupJob,
   processCleanupJob,
   processEmailJob,
+  processImportJob,
 } from "./workers";
 
 type QueueMap = Record<BackgroundQueueName, Queue | null>;
@@ -45,6 +46,7 @@ function createEmptyMap<T>(): Record<BackgroundQueueName, T | null> {
     backup: null,
     cleanup: null,
     email: null,
+    import: null,
   };
 }
 
@@ -141,6 +143,10 @@ export class BackgroundQueueRuntime {
         prefix: this.config.prefix,
       }) as unknown as RuntimeWorker;
       this.workers.cleanup = new Worker("cleanup", processCleanupJob, {
+        connection: this.connection,
+        prefix: this.config.prefix,
+      }) as unknown as RuntimeWorker;
+      this.workers.import = new Worker("import", processImportJob, {
         connection: this.connection,
         prefix: this.config.prefix,
       }) as unknown as RuntimeWorker;

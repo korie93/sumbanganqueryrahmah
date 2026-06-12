@@ -302,6 +302,13 @@
       "when": 1781082463287,
       "tag": "0043_manager_role_permission_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1781150400000,
+      "tag": "0044_import_content_hash",
+      "breakpoints": true
     }
   ]
 }

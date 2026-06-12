@@ -242,6 +242,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     app,
     backgroundQueues: {
       getHealthSnapshot: () => backgroundQueueRuntime.getHealthSnapshot(),
+      getQueue: (queueName) => backgroundQueueRuntime.getQueue(queueName),
     },
     server,
     composition,

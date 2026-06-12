@@ -197,6 +197,8 @@ test("analysis operations forward abort signals to the analysis service", async 
         createdAt: new Date(),
         isDeleted: false,
         createdBy: "admin.user",
+        contentHashSha256: null,
+        sourceSizeBytes: null,
       }),
     },
     repository: {
@@ -207,6 +209,8 @@ test("analysis operations forward abort signals to the analysis service", async 
         createdAt: new Date(),
         isDeleted: false,
         createdBy: "admin.user",
+        contentHashSha256: null,
+        sourceSizeBytes: null,
         rowCount: 1,
       }],
     },

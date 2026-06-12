@@ -1,22 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   buildImportMutationFingerprint,
+  cancelImportJob,
   createImport,
   createImportFromFile,
   createImportMutationIdempotencyKey,
+  getImportJob,
+  resumeImportJob,
 } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
-import {
-  parseImportPreview,
-  shouldDeferImportPreview,
-} from "@/pages/import/parsing";
+import { waitForImportJobCompletion } from "@/pages/import/import-background-job";
 import {
   isImportAbortError,
   resolveNextImportName,
   shouldSaveSingleImportFromOriginalFile,
 } from "@/pages/import/import-page-state-utils";
-import type { ImportRow } from "@/pages/import/types";
+import {
+  parseImportPreview,
+  readDeferredCsvHeaders,
+  shouldDeferImportPreview,
+} from "@/pages/import/parsing";
+import type {
+  ImportBackgroundJobContract,
+  ImportColumnMappingEntry,
+  ImportRow,
+} from "@/pages/import/types";
 import {
   buildImportFileTooLargeMessage,
   isImportFileTooLarge,
@@ -27,6 +36,68 @@ type UseSingleImportStateOptions = {
   onNavigate: (page: string) => void;
 };
 
+const ACTIVE_IMPORT_JOB_STORAGE_KEY = "sqr-active-import-job-id";
+
+function persistActiveImportJobId(jobId: string | null): void {
+  try {
+    if (jobId) {
+      window.sessionStorage.setItem(ACTIVE_IMPORT_JOB_STORAGE_KEY, jobId);
+    } else {
+      window.sessionStorage.removeItem(ACTIVE_IMPORT_JOB_STORAGE_KEY);
+    }
+  } catch {
+    // Storage can be unavailable in hardened/private browser contexts.
+  }
+}
+
+function readActiveImportJobId(): string | null {
+  try {
+    return window.sessionStorage.getItem(ACTIVE_IMPORT_JOB_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function buildIdentityColumnMapping(headers: string[]): ImportColumnMappingEntry[] {
+  return headers.map((header) => ({ source: header, target: header }));
+}
+
+function validateColumnMapping(mapping: ImportColumnMappingEntry[]): string | null {
+  if (mapping.length === 0) {
+    return null;
+  }
+
+  const includedTargets = mapping
+    .filter((entry) => entry.target !== null)
+    .map((entry) => entry.target?.trim() ?? "");
+
+  if (includedTargets.length === 0) {
+    return "Select at least one column to import.";
+  }
+  if (includedTargets.some((target) => target.length === 0)) {
+    return "Every included column must have a target field name.";
+  }
+
+  const normalizedTargets = includedTargets.map((target) => target.toLocaleLowerCase());
+  if (new Set(normalizedTargets).size !== normalizedTargets.length) {
+    return "Target field names must be unique.";
+  }
+  return null;
+}
+
+function getBackgroundJobError(job: ImportBackgroundJobContract): string | null {
+  if (job.status === "duplicate") {
+    return `This file has already been imported as "${job.duplicateImportName ?? "an existing import"}".`;
+  }
+  if (job.status === "cancelled") {
+    return "Background import was cancelled. You can resume it when ready.";
+  }
+  if (job.status === "failed") {
+    return job.error || "Background import failed. You can resume it after reviewing the file.";
+  }
+  return null;
+}
+
 export function useSingleImportState({
   importUploadLimitBytes,
   onNavigate,
@@ -35,6 +106,8 @@ export function useSingleImportState({
   const [importName, setImportName] = useState("");
   const [parsedData, setParsedData] = useState<ImportRow[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<ImportColumnMappingEntry[]>([]);
+  const [backgroundJob, setBackgroundJob] = useState<ImportBackgroundJobContract | null>(null);
   const [previewDeferred, setPreviewDeferred] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -50,12 +123,19 @@ export function useSingleImportState({
   const { toast } = useToast();
 
   const resetSingleImport = useCallback(() => {
+    singleSaveAbortControllerRef.current?.abort();
+    singleSaveAbortControllerRef.current = null;
+    singleSaveInFlightRef.current = false;
+    setLoading(false);
     setFile(null);
     setParsedData([]);
     setHeaders([]);
+    setColumnMapping([]);
+    setBackgroundJob(null);
     setPreviewDeferred(false);
     setImportName("");
     setError("");
+    persistActiveImportJobId(null);
     singleSaveMutationIntentRef.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -73,10 +153,14 @@ export function useSingleImportState({
     }
 
     const requestId = ++singleParseRequestIdRef.current;
+    singleSaveAbortControllerRef.current?.abort();
     setError("");
     setFile(selectedFile);
     setParsedData([]);
     setHeaders([]);
+    setColumnMapping([]);
+    setBackgroundJob(null);
+    persistActiveImportJobId(null);
     setPreviewDeferred(false);
 
     if (isImportFileTooLarge(selectedFile, importUploadLimitBytes)) {
@@ -87,6 +171,18 @@ export function useSingleImportState({
     setImportName((currentName) => resolveNextImportName(currentName, selectedFile.name));
     if (shouldDeferImportPreview(selectedFile)) {
       setPreviewDeferred(true);
+      try {
+        const deferredHeaders = await readDeferredCsvHeaders(selectedFile);
+        if (requestId !== singleParseRequestIdRef.current) {
+          return;
+        }
+        setHeaders(deferredHeaders);
+        setColumnMapping(buildIdentityColumnMapping(deferredHeaders));
+      } catch (headerError) {
+        if (requestId === singleParseRequestIdRef.current) {
+          logClientError("Failed to read deferred import headers:", headerError);
+        }
+      }
       return;
     }
 
@@ -103,6 +199,7 @@ export function useSingleImportState({
       }
 
       setHeaders(parsed.headers);
+      setColumnMapping(buildIdentityColumnMapping(parsed.headers));
       setParsedData(parsed.rows);
     } catch (parseError) {
       if (requestId !== singleParseRequestIdRef.current) {
@@ -135,6 +232,21 @@ export function useSingleImportState({
     event.preventDefault();
   }, []);
 
+  const finishSuccessfulImport = useCallback((
+    savedName: string,
+    rowCount: number,
+    wasDeferred: boolean,
+  ) => {
+    resetSingleImport();
+    toast({
+      title: "Success",
+      description: wasDeferred
+        ? `File "${savedName}" was validated and imported (${rowCount.toLocaleString()} rows).`
+        : `Data "${savedName}" has been saved (${rowCount.toLocaleString()} rows).`,
+    });
+    onNavigate("saved");
+  }, [onNavigate, resetSingleImport, toast]);
+
   const handleSave = useCallback(async () => {
     if (loading || singleSaveInFlightRef.current) {
       return;
@@ -150,20 +262,29 @@ export function useSingleImportState({
       return;
     }
 
+    const mappingError = validateColumnMapping(columnMapping);
+    if (mappingError) {
+      setError(mappingError);
+      return;
+    }
+
     setLoading(true);
     setError("");
+    setBackgroundJob(null);
     singleSaveInFlightRef.current = true;
     singleSaveAbortControllerRef.current?.abort();
     const controller = new AbortController();
     singleSaveAbortControllerRef.current = controller;
 
     try {
-      const rowCount = parsedData.length;
+      const previewRowCount = parsedData.length;
       const savedName = importName.trim();
       const selectedFile = file;
+      let importedRowCount = previewRowCount;
+
       if (
         selectedFile
-        && shouldSaveSingleImportFromOriginalFile(selectedFile, rowCount, previewDeferred)
+        && shouldSaveSingleImportFromOriginalFile(selectedFile, previewRowCount, previewDeferred)
       ) {
         const fingerprint = buildImportMutationFingerprint(savedName, selectedFile);
         if (singleSaveMutationIntentRef.current?.fingerprint !== fingerprint) {
@@ -172,31 +293,53 @@ export function useSingleImportState({
             key: createImportMutationIdempotencyKey(),
           };
         }
-        await createImportFromFile(savedName, selectedFile, {
+        const result = await createImportFromFile(savedName, selectedFile, {
+          columnMapping,
           idempotencyFingerprint: singleSaveMutationIntentRef.current.fingerprint,
           idempotencyKey: singleSaveMutationIntentRef.current.key,
           signal: controller.signal,
         });
+
+        if ("job" in result) {
+          persistActiveImportJobId(result.job.id);
+          const terminalJob = await waitForImportJobCompletion(
+            result.job,
+            controller.signal,
+            (job) => {
+              if (isMountedRef.current) {
+                setBackgroundJob(job);
+              }
+            },
+          );
+          if (terminalJob.status === "duplicate") {
+            persistActiveImportJobId(null);
+          }
+          const terminalError = getBackgroundJobError(terminalJob);
+          if (terminalError) {
+            setError(terminalError);
+            return;
+          }
+          importedRowCount = terminalJob.rowCount ?? 0;
+        } else {
+          importedRowCount = result.rowCount;
+        }
       } else {
-        await createImport(
+        const result = await createImport(
           savedName,
           selectedFile?.name || "unknown.csv",
           parsedData,
-          { signal: controller.signal },
+          { columnMapping, signal: controller.signal },
         );
+        if ("job" in result) {
+          throw new Error("Unexpected background response for an in-browser import.");
+        }
+        importedRowCount = result.rowCount;
       }
+
       if (controller.signal.aborted || !isMountedRef.current) {
         return;
       }
-
-      resetSingleImport();
-      toast({
-        title: "Success",
-        description: previewDeferred
-          ? `File "${savedName}" has been validated and saved by the server.`
-          : `Data "${savedName}" has been saved (${rowCount} rows).`,
-      });
-      onNavigate("saved");
+      finishSuccessfulImport(savedName, importedRowCount, previewDeferred);
     } catch (saveError: unknown) {
       if (isImportAbortError(saveError) || !isMountedRef.current) {
         return;
@@ -205,27 +348,97 @@ export function useSingleImportState({
     } finally {
       if (singleSaveAbortControllerRef.current === controller) {
         singleSaveAbortControllerRef.current = null;
-      }
-      singleSaveInFlightRef.current = false;
-      if (isMountedRef.current) {
-        setLoading(false);
+        singleSaveInFlightRef.current = false;
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     }
   }, [
+    columnMapping,
     file,
+    finishSuccessfulImport,
     importName,
     loading,
-    onNavigate,
     parsedData,
     previewDeferred,
-    resetSingleImport,
-    toast,
   ]);
 
+  const handleCancelBackgroundJob = useCallback(async () => {
+    if (!backgroundJob?.canCancel) {
+      return;
+    }
+    try {
+      const nextJob = await cancelImportJob(backgroundJob.id);
+      if (isMountedRef.current) {
+        setBackgroundJob(nextJob);
+      }
+    } catch (cancelError) {
+      if (isMountedRef.current) {
+        setError(cancelError instanceof Error ? cancelError.message : "Failed to cancel import.");
+      }
+    }
+  }, [backgroundJob]);
+
+  const handleResumeBackgroundJob = useCallback(async () => {
+    if (!backgroundJob?.canResume || loading || singleSaveInFlightRef.current) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    singleSaveInFlightRef.current = true;
+    const controller = new AbortController();
+    singleSaveAbortControllerRef.current?.abort();
+    singleSaveAbortControllerRef.current = controller;
+
+    try {
+      const resumedJob = await resumeImportJob(backgroundJob.id, { signal: controller.signal });
+      persistActiveImportJobId(resumedJob.id);
+      const terminalJob = await waitForImportJobCompletion(
+        resumedJob,
+        controller.signal,
+        (job) => {
+          if (isMountedRef.current) {
+            setBackgroundJob(job);
+          }
+        },
+      );
+      if (terminalJob.status === "duplicate") {
+        persistActiveImportJobId(null);
+      }
+      const terminalError = getBackgroundJobError(terminalJob);
+      if (terminalError) {
+        setError(terminalError);
+        return;
+      }
+      finishSuccessfulImport(
+        terminalJob.name,
+        terminalJob.rowCount ?? 0,
+        true,
+      );
+    } catch (resumeError) {
+      if (!isImportAbortError(resumeError) && isMountedRef.current) {
+        setError(resumeError instanceof Error ? resumeError.message : "Failed to resume import.");
+      }
+    } finally {
+      if (singleSaveAbortControllerRef.current === controller) {
+        singleSaveAbortControllerRef.current = null;
+        singleSaveInFlightRef.current = false;
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
+      }
+    }
+  }, [backgroundJob, finishSuccessfulImport, loading]);
+
   const resetSingleForInactiveTab = useCallback(() => {
+    if (backgroundJob) {
+      return;
+    }
     invalidateSinglePreview();
     resetSingleImport();
-  }, [invalidateSinglePreview, resetSingleImport]);
+  }, [backgroundJob, invalidateSinglePreview, resetSingleImport]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -236,12 +449,77 @@ export function useSingleImportState({
     };
   }, [invalidateSinglePreview]);
 
+  useEffect(() => {
+    const jobId = readActiveImportJobId();
+    if (!jobId || singleSaveInFlightRef.current) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    singleSaveAbortControllerRef.current = controller;
+    singleSaveInFlightRef.current = true;
+    setLoading(true);
+
+    void (async () => {
+      try {
+        const initialJob = await getImportJob(jobId, { signal: controller.signal });
+        const terminalJob = await waitForImportJobCompletion(
+          initialJob,
+          controller.signal,
+          (job) => {
+            if (isMountedRef.current) {
+              setBackgroundJob(job);
+            }
+          },
+        );
+        if (terminalJob.status === "duplicate") {
+          persistActiveImportJobId(null);
+        }
+        const terminalError = getBackgroundJobError(terminalJob);
+        if (terminalError) {
+          setError(terminalError);
+          return;
+        }
+        finishSuccessfulImport(terminalJob.name, terminalJob.rowCount ?? 0, true);
+      } catch (restoreError) {
+        if (isImportAbortError(restoreError) || !isMountedRef.current) {
+          return;
+        }
+        persistActiveImportJobId(null);
+        setError(
+          restoreError instanceof Error
+            ? restoreError.message
+            : "Failed to restore background import status.",
+        );
+      } finally {
+        if (singleSaveAbortControllerRef.current === controller) {
+          singleSaveAbortControllerRef.current = null;
+          singleSaveInFlightRef.current = false;
+          if (isMountedRef.current) {
+            setLoading(false);
+          }
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      if (singleSaveAbortControllerRef.current === controller) {
+        singleSaveAbortControllerRef.current = null;
+        singleSaveInFlightRef.current = false;
+      }
+    };
+  }, [finishSuccessfulImport]);
+
   return {
     file,
     importName,
     setImportName,
     parsedData,
     headers,
+    columnMapping,
+    setColumnMapping,
+    backgroundJob,
     previewDeferred,
     loading,
     error,
@@ -250,6 +528,8 @@ export function useSingleImportState({
     handleDrop,
     handleDragOver,
     handleSave,
+    handleCancelBackgroundJob,
+    handleResumeBackgroundJob,
     resetSingleImport,
     resetSingleForInactiveTab,
   };
