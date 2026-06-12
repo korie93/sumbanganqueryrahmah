@@ -15,6 +15,7 @@ export function ActivityDesktopLogsTable({
   onBanClick,
   onDeleteClick,
   onKickClick,
+  onInvestigateClick,
   onToggleSelected,
   onToggleSelectAllVisible,
   partiallySelected,
@@ -47,6 +48,7 @@ export function ActivityDesktopLogsTable({
               onBanClick={onBanClick}
               onDeleteClick={onDeleteClick}
               onKickClick={onKickClick}
+              onInvestigateClick={onInvestigateClick}
               onToggleSelected={onToggleSelected}
             />
           ))}

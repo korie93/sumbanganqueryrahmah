@@ -21,6 +21,7 @@ export function ActivityDesktopLogRow({
   onBanClick,
   onDeleteClick,
   onKickClick,
+  onInvestigateClick,
   onToggleSelected,
 }: ActivityDesktopLogRowProps) {
   const browserInfo = parseActivityUserAgent(activity.browser);
@@ -79,6 +80,7 @@ export function ActivityDesktopLogRow({
             onBanClick={onBanClick}
             onDeleteClick={onDeleteClick}
             onKickClick={onKickClick}
+            onInvestigateClick={onInvestigateClick}
           />
         </div>
       ) : null}

@@ -9,6 +9,7 @@ export type ActivityDesktopLogsTableProps = Pick<
   | "onBanClick"
   | "onDeleteClick"
   | "onKickClick"
+  | "onInvestigateClick"
   | "onToggleSelected"
   | "onToggleSelectAllVisible"
   | "partiallySelected"
@@ -29,12 +30,13 @@ export interface ActivityDesktopLogActionsProps {
   onBanClick: (activity: ActivityRecord) => void;
   onDeleteClick: (activity: ActivityRecord) => void;
   onKickClick: (activity: ActivityRecord) => void;
+  onInvestigateClick: (activity: ActivityRecord) => void;
 }
 
 export interface ActivityDesktopLogRowProps
   extends Pick<
     ActivityDesktopLogsTableProps,
-    "actionLoading" | "canModerateActivity" | "onBanClick" | "onDeleteClick" | "onKickClick"
+    "actionLoading" | "canModerateActivity" | "onBanClick" | "onDeleteClick" | "onKickClick" | "onInvestigateClick"
   > {
   activity: ActivityRecord;
   gridClassName: string;

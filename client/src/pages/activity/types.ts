@@ -42,6 +42,7 @@ export interface ActivityLogsTableProps {
   onBanClick: (activity: ActivityRecord) => void;
   onDeleteClick: (activity: ActivityRecord) => void;
   onKickClick: (activity: ActivityRecord) => void;
+  onInvestigateClick: (activity: ActivityRecord) => void;
   onLogsOpenChange: (open: boolean) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;

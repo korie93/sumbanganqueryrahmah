@@ -26,6 +26,7 @@ test("ActivityMobileLogsList keeps moderation actions on native buttons for keyb
       onBanClick: () => undefined,
       onDeleteClick: () => undefined,
       onKickClick: () => undefined,
+      onInvestigateClick: () => undefined,
       onToggleSelected: () => undefined,
       onToggleSelectAllVisible: () => undefined,
       partiallySelected: false,
@@ -34,6 +35,7 @@ test("ActivityMobileLogsList keeps moderation actions on native buttons for keyb
   );
 
   assert.match(markup, /button-kick-activity-1/);
+  assert.match(markup, /button-investigate-activity-1/);
   assert.match(markup, /button-ban-activity-1/);
   assert.match(markup, /button-delete-activity-1/);
   assert.match(markup, /Force logout operator\.one/);

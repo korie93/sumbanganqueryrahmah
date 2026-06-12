@@ -33,6 +33,7 @@ type ActivityLogsSectionProps = {
   onBanDialogOpenChange: (open: boolean) => void;
   onDeleteDialogOpenChange: (open: boolean) => void;
   onKickDialogOpenChange: (open: boolean) => void;
+  onInvestigateActivity: (activity: ActivityRecord) => void;
   onLogsOpenChange: (open: boolean) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
@@ -59,6 +60,7 @@ export function ActivityLogsSection({
   onBanDialogOpenChange,
   onDeleteDialogOpenChange,
   onKickDialogOpenChange,
+  onInvestigateActivity,
   onLogsOpenChange,
   onPageChange,
   onPageSizeChange,
@@ -95,6 +97,7 @@ export function ActivityLogsSection({
           onSelectActivity(activity);
           onKickDialogOpenChange(true);
         }}
+        onInvestigateClick={onInvestigateActivity}
         onLogsOpenChange={onLogsOpenChange}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}

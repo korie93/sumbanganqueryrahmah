@@ -3,6 +3,7 @@ import { ActivityActionDialogsSection } from "@/pages/activity/ActivityActionDia
 import { ActivityBannedUsersSection } from "@/pages/activity/ActivityBannedUsersSection";
 import { ActivityFiltersSection } from "@/pages/activity/ActivityFiltersSection";
 import { ActivityLogsSection } from "@/pages/activity/ActivityLogsSection";
+import { ActivityInvestigationDrawer } from "@/pages/activity/ActivityInvestigationDrawer";
 import { ActivityQuickSnapshotSection } from "@/pages/activity/ActivityQuickSnapshotSection";
 import { ActivityRetentionPanel } from "@/pages/activity/ActivityRetentionPanel";
 import type { ActivityPageContentProps } from "@/pages/activity/activity-page-content-shared";
@@ -15,6 +16,8 @@ export function ActivityPageContent({
   bannedUsers,
   bulkDeleteDialogOpen,
   canModerateActivity,
+  investigatedActivity,
+  investigationOpen,
   dateFromOpen,
   dateToOpen,
   deleteDialogOpen,
@@ -44,6 +47,8 @@ export function ActivityPageContent({
   onDeleteDialogOpenChange,
   onFieldChange,
   onKickDialogOpenChange,
+  onInvestigationOpenChange,
+  onInvestigateActivity,
   onLogsOpenChange,
   onPageChange,
   onPageSizeChange,
@@ -120,6 +125,7 @@ export function ActivityPageContent({
         onBanDialogOpenChange={onBanDialogOpenChange}
         onDeleteDialogOpenChange={onDeleteDialogOpenChange}
         onKickDialogOpenChange={onKickDialogOpenChange}
+        onInvestigateActivity={onInvestigateActivity}
         onLogsOpenChange={onLogsOpenChange}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
@@ -128,6 +134,28 @@ export function ActivityPageContent({
         onSetSelectedActivityIds={onSetSelectedActivityIds}
         partiallySelected={partiallySelected}
         selectedActivityIds={selectedActivityIds}
+      />
+
+      <ActivityInvestigationDrawer
+        actionLoading={actionLoading}
+        activity={investigatedActivity}
+        onBan={(activity) => {
+          onInvestigationOpenChange(false);
+          onSelectActivity(activity);
+          onBanDialogOpenChange(true);
+        }}
+        onDelete={(activity) => {
+          onInvestigationOpenChange(false);
+          onSelectActivity(activity);
+          onDeleteDialogOpenChange(true);
+        }}
+        onKick={(activity) => {
+          onInvestigationOpenChange(false);
+          onSelectActivity(activity);
+          onKickDialogOpenChange(true);
+        }}
+        onOpenChange={onInvestigationOpenChange}
+        open={investigationOpen}
       />
 
       <ActivityActionDialogsSection

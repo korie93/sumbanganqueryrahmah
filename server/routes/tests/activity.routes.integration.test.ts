@@ -24,6 +24,7 @@ type AuditEntry = {
   action: string;
   performedBy?: string;
   targetUser?: string;
+  targetResource?: string;
   details?: string;
 };
 
@@ -329,6 +330,31 @@ function createActivityRouteHarness(options?: {
     },
     deleteEndedActivitiesBefore: async () => [],
     getActivityById: async (activityId: string) => activities.get(activityId),
+    getActivityInvestigation: async (activityId: string) => {
+      const activity = activities.get(activityId);
+      if (!activity) {
+        return undefined;
+      }
+      return {
+        activity: {
+          ...toStoredActivity(activity, {
+            loginTime: new Date("2026-06-12T01:00:00.000Z"),
+            lastActivityTime: new Date("2026-06-12T01:05:00.000Z"),
+          }),
+          status: activity.isActive ? "ONLINE" : "LOGOUT",
+        },
+        activeBan: null,
+        auditEvents: [
+          {
+            id: "audit-session-1",
+            action: "LOGIN_SUCCESS",
+            performedBy: activity.username,
+            requestId: "request-session-1",
+            timestamp: new Date("2026-06-12T01:00:00.000Z"),
+          },
+        ],
+      };
+    },
     getAllActivities: async () => Array.from(activities.values()),
     getFilteredActivities: async (filters: Record<string, unknown>) => {
       filteredActivityCalls.push(filters);
@@ -1071,6 +1097,11 @@ test("POST /api/activity/kick closes the target socket and writes an audit log",
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "KICK_USER");
     assert.equal(auditLogs[0].targetUser, "regular.user");
+    assert.equal(auditLogs[0].targetResource, "activity:activity-2");
+    assert.deepEqual(JSON.parse(String(auditLogs[0].details)), {
+      activityId: "activity-2",
+      outcome: "kicked",
+    });
   } finally {
     await stopTestServer(server);
   }
@@ -1261,6 +1292,65 @@ test("GET /api/activity/page rejects invalid pagination, sorting, and status val
     assert.equal(activityPageCalls.length, 0);
   } finally {
     await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/:id/investigation returns sanitized session facts for administrators", async () => {
+  const { app } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/activity-2/investigation`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+
+    assert.equal(payload.ok, true);
+    assert.equal(payload.investigation.session.id, "activity-2");
+    assert.equal(payload.investigation.session.device.fingerprintHint, "••••fp-2");
+    assert.equal(payload.investigation.session.fingerprint, undefined);
+    assert.equal(payload.investigation.auditEvents[0].requestId, "request-session-1");
+    assert.equal(payload.investigation.auditEvents[0].details, undefined);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/:id/investigation rejects non-moderators and missing activities", async () => {
+  const userHarness = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "user.one",
+      role: "user",
+      activityId: "activity-1",
+    }),
+  });
+  const userServer = await startTestServer(userHarness.app);
+
+  try {
+    const response = await fetch(`${userServer.baseUrl}/api/activity/activity-2/investigation`);
+    assert.equal(response.status, 403);
+  } finally {
+    await stopTestServer(userServer.server);
+  }
+
+  const adminHarness = createActivityRouteHarness();
+  const adminServer = await startTestServer(adminHarness.app);
+  try {
+    const response = await fetch(`${adminServer.baseUrl}/api/activity/missing/investigation`);
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Activity not found",
+    });
+  } finally {
+    await stopTestServer(adminServer.server);
   }
 });
 

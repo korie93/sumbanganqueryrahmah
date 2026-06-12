@@ -75,6 +75,23 @@ export type ActivityRetentionCleanupResult = {
   standardDeletedCount: number;
 };
 
+export type ActivityInvestigationAuditEvent = {
+  id: string;
+  action: string;
+  performedBy: string;
+  requestId: string | null;
+  timestamp: Date;
+};
+
+export type ActivityInvestigationRecord = {
+  activity: ActivityWithStatus;
+  activeBan: {
+    banId: string;
+    bannedAt: Date;
+  } | null;
+  auditEvents: ActivityInvestigationAuditEvent[];
+};
+
 export type AuthenticatedSessionSnapshot = {
   activity: UserActivity;
   user?: User | undefined;

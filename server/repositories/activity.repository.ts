@@ -7,6 +7,7 @@ import {
   unbanVisitor,
 } from "./activity-repository-ban-operations";
 import { getAuthenticatedSessionSnapshot } from "./activity-repository-auth-guard-operations";
+import { getActivityInvestigation } from "./activity-repository-investigation-operations";
 import {
   createActivity,
   cleanupActivityRetention,
@@ -29,6 +30,8 @@ import {
 } from "./activity-repository-session-operations";
 import type {
   ActivityPageFilters,
+  ActivityInvestigationAuditEvent,
+  ActivityInvestigationRecord,
   ActivityPageParams,
   ActivityPageResult,
   ActivityPageSortBy,
@@ -72,6 +75,10 @@ export class ActivityRepository {
     return getAuthenticatedSessionSnapshot(this.options, activityId);
   }
 
+  async getActivityInvestigation(activityId: string): Promise<ActivityInvestigationRecord | undefined> {
+    return getActivityInvestigation(this.options, activityId);
+  }
+
   async isVisitorBanned(
     fingerprint?: string | null,
     ipAddress?: string | null,
@@ -111,6 +118,8 @@ export class ActivityRepository {
 
 export type {
   ActivityRepositoryOptions,
+  ActivityInvestigationAuditEvent,
+  ActivityInvestigationRecord,
   ActivityPageFilters,
   ActivityPageParams,
   ActivityPageResult,

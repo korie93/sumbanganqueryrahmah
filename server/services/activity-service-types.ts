@@ -33,6 +33,7 @@ export type ActivityStorage = Pick<
   | "getActiveActivities"
   | "getActiveActivitiesByUsername"
   | "getActivityById"
+  | "getActivityInvestigation"
   | "getActivityRetentionPolicy"
   | "getActivityRetentionPreview"
   | "getAllActivities"

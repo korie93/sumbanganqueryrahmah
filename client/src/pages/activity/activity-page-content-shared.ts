@@ -23,6 +23,8 @@ export type ActivityPageContentProps = {
   bannedUsers: BannedUser[];
   bulkDeleteDialogOpen: boolean;
   canModerateActivity: boolean;
+  investigatedActivity: ActivityRecord | null;
+  investigationOpen: boolean;
   dateFromOpen: boolean;
   dateToOpen: boolean;
   deleteDialogOpen: boolean;
@@ -52,6 +54,8 @@ export type ActivityPageContentProps = {
   onDeleteDialogOpenChange: (open: boolean) => void;
   onFieldChange: (field: keyof ActivityFilters, value: string) => void;
   onKickDialogOpenChange: (open: boolean) => void;
+  onInvestigationOpenChange: (open: boolean) => void;
+  onInvestigateActivity: (activity: ActivityRecord | null) => void;
   onLogsOpenChange: (open: boolean) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;

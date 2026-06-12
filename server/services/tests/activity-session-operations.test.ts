@@ -34,6 +34,7 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
     getActiveActivities: async () => [],
     getActiveActivitiesByUsername: async () => [],
     getActivityById: async () => undefined,
+    getActivityInvestigation: async () => undefined,
     getActivityRetentionPolicy: async () => ({
       autoCleanupEnabled: false,
       batchSize: 500,
@@ -172,6 +173,44 @@ test("logout continues and logs when the pre-logout activity flush fails", async
   } finally {
     logger.warn = originalWarn;
   }
+});
+
+test("getActivityInvestigation masks persistent identifiers and exposes only safe audit metadata", async () => {
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityInvestigation: async () => ({
+        activity: {
+          ...createActiveActivityRecord("act-investigate"),
+          fingerprint: "sha256-device-fingerprint",
+          browser: "Chrome 149",
+          ipAddress: "127.0.0.1",
+          pcName: "OPS-01",
+          loginTime: new Date("2026-06-12T01:00:00.000Z"),
+          lastActivityTime: new Date("2026-06-12T01:10:00.000Z"),
+          status: "ONLINE",
+        },
+        activeBan: null,
+        auditEvents: [
+          {
+            id: "audit-1",
+            action: "LOGIN_SUCCESS",
+            performedBy: "ali",
+            requestId: "request-1",
+            timestamp: new Date("2026-06-12T01:00:00.000Z"),
+          },
+        ],
+      }),
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.getActivityInvestigation("act-investigate");
+
+  assert.equal(result?.session.device.fingerprintHint, "••••rprint");
+  assert.equal(result?.security.riskLevel, "normal");
+  assert.equal(result?.auditEvents[0]?.requestId, "request-1");
+  assert.equal("details" in (result?.auditEvents[0] ?? {}), false);
+  assert.equal(result?.timeline[0]?.label, "Session started");
 });
 
 test("bulkDeleteActivityLogs reports not found ids and closes deleted activities", async () => {

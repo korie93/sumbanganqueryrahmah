@@ -50,6 +50,10 @@ export class ActivityService {
     return this.sessionOperations.getAllActivities(currentActivityId);
   }
 
+  async getActivityInvestigation(activityId: string) {
+    return this.sessionOperations.getActivityInvestigation(activityId);
+  }
+
   async getFilteredActivities(filters: ActivityFilters, currentActivityId?: string) {
     return this.sessionOperations.getFilteredActivities(filters, currentActivityId);
   }

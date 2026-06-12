@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { ListChildComponentProps } from "react-window";
 import { FixedSizeList } from "react-window";
-import { Shield, Trash2, UserX } from "lucide-react";
+import { Search, Shield, Trash2, UserX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,6 +37,7 @@ type ActivityMobileLogsListProps = Pick<
   | "onBanClick"
   | "onDeleteClick"
   | "onKickClick"
+  | "onInvestigateClick"
   | "onToggleSelected"
   | "onToggleSelectAllVisible"
   | "partiallySelected"
@@ -128,6 +129,7 @@ function ActivityMobileVirtualRow({
     onBanClick,
     onDeleteClick,
     onKickClick,
+    onInvestigateClick,
     onToggleSelected,
     selectedActivityIds,
   } = data;
@@ -211,7 +213,19 @@ function ActivityMobileVirtualRow({
         </div>
 
         {canModerateActivity ? (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onInvestigateClick(activity)}
+              aria-label={`Investigate session for ${activity.username}`}
+              className="w-full"
+              data-testid={`button-investigate-${activity.id}`}
+            >
+              <Search className="mr-2 h-4 w-4" />
+              Investigate
+            </Button>
             {activity.isActive ? (
               <>
                 <Button
@@ -272,6 +286,7 @@ export function ActivityMobileLogsList({
   onBanClick,
   onDeleteClick,
   onKickClick,
+  onInvestigateClick,
   onToggleSelected,
   onToggleSelectAllVisible,
   partiallySelected,
@@ -286,6 +301,7 @@ export function ActivityMobileLogsList({
       onBanClick,
       onDeleteClick,
       onKickClick,
+      onInvestigateClick,
       onToggleSelected,
       onToggleSelectAllVisible,
       partiallySelected,
@@ -299,6 +315,7 @@ export function ActivityMobileLogsList({
       onBanClick,
       onDeleteClick,
       onKickClick,
+      onInvestigateClick,
       onToggleSelected,
       onToggleSelectAllVisible,
       partiallySelected,

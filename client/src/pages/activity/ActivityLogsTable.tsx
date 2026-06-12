@@ -38,6 +38,7 @@ export function ActivityLogsTable({
   onBanClick,
   onDeleteClick,
   onKickClick,
+  onInvestigateClick,
   onLogsOpenChange,
   onPageChange,
   onPageSizeChange,
@@ -86,6 +87,7 @@ export function ActivityLogsTable({
               onBanClick={onBanClick}
               onDeleteClick={onDeleteClick}
               onKickClick={onKickClick}
+              onInvestigateClick={onInvestigateClick}
               onToggleSelected={onToggleSelected}
               onToggleSelectAllVisible={onToggleSelectAllVisible}
               partiallySelected={partiallySelected}
@@ -101,6 +103,7 @@ export function ActivityLogsTable({
                 onBanClick={onBanClick}
                 onDeleteClick={onDeleteClick}
                 onKickClick={onKickClick}
+                onInvestigateClick={onInvestigateClick}
                 onToggleSelected={onToggleSelected}
                 onToggleSelectAllVisible={onToggleSelectAllVisible}
                 partiallySelected={partiallySelected}

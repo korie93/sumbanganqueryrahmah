@@ -1,6 +1,8 @@
 export {
   ACTIVITY_QUERY_PAGE_LIMIT,
   type ActivityPageFilters,
+  type ActivityInvestigationAuditEvent,
+  type ActivityInvestigationRecord,
   type ActivityPageParams,
   type ActivityPageResult,
   type ActivityPageSortBy,

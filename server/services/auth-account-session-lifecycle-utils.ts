@@ -182,6 +182,7 @@ export async function createAuthenticatedSession(params: {
     action: "LOGIN_SUCCESS",
     performedBy: params.user.username,
     targetUser: params.user.id,
+    targetResource: `activity:${activity.id}`,
     details: buildSecurityAuditDetails({
       event: "AUTH_LOGIN_SUCCESS",
       outcome: "success",
@@ -189,6 +190,7 @@ export async function createAuthenticatedSession(params: {
       ipAddress: params.input.ipAddress,
       userAgent: params.input.browserName,
       metadata: {
+        activity_id: activity.id,
         closed_count: closedSessionIds.length,
         mfa_used: params.details.toLowerCase().includes("2fa"),
         role: params.user.role,

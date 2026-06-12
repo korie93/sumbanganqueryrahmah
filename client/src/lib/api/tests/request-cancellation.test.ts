@@ -4,6 +4,7 @@ import {
   activityHeartbeat,
   activityHeartbeatLight,
   getAllActivity,
+  getActivityInvestigation,
   getActivityPage,
   getBannedUsers,
   getFilteredActivity,
@@ -792,6 +793,16 @@ test("activity API wrappers forward AbortSignal", async () => {
     if (url === "/api/users/banned") {
       return jsonResponse({ users: [] });
     }
+    if (url === "/api/activity/activity%2F1/investigation") {
+      return jsonResponse({
+        investigation: {
+          session: { id: "activity/1" },
+          security: {},
+          timeline: [],
+          auditEvents: [],
+        },
+      });
+    }
 
     throw new Error(`Unexpected URL: ${url}`);
   }) as typeof fetch);
@@ -817,11 +828,12 @@ test("activity API wrappers forward AbortSignal", async () => {
       { signal: controller.signal },
     );
     await getBannedUsers({ signal: controller.signal });
+    await getActivityInvestigation("activity/1", { signal: controller.signal });
   } finally {
     restoreFetch();
   }
 
-  assert.equal(requests.length, 4);
+  assert.equal(requests.length, 5);
   for (const request of requests) {
     assert.equal(request.signal, controller.signal);
   }
@@ -833,6 +845,7 @@ test("activity API wrappers forward AbortSignal", async () => {
     + "&status=ONLINE%2CIDLE&username=alice",
   );
   assert.equal(requests[3]?.url, "/api/users/banned");
+  assert.equal(requests[4]?.url, "/api/activity/activity%2F1/investigation");
 });
 
 test("auth manual fetch wrappers forward AbortSignal", async () => {

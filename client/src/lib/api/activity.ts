@@ -91,6 +91,49 @@ export interface ActivityPageResponse {
   };
 }
 
+export interface ActivityInvestigation {
+  session: {
+    id: string;
+    username: string;
+    role: string;
+    status: ActivityStatus;
+    isActive: boolean;
+    loginTime: string | null;
+    logoutTime: string | null;
+    lastActivityTime: string | null;
+    logoutReason: string | null;
+    durationMs: number | null;
+    device: {
+      browser: string | null;
+      ipAddress: string | null;
+      pcName: string | null;
+      fingerprintHint: string | null;
+    };
+  };
+  security: {
+    activeBan: {
+      banId: string;
+      bannedAt: string;
+    } | null;
+    riskLevel: "attention" | "critical" | "normal";
+    reasons: string[];
+  };
+  timeline: Array<{
+    id: string;
+    kind: "activity" | "ban" | "login" | "logout" | "moderation";
+    label: string;
+    timestamp: string;
+    actor: string | null;
+  }>;
+  auditEvents: Array<{
+    id: string;
+    action: string;
+    performedBy: string;
+    requestId: string | null;
+    timestamp: string;
+  }>;
+}
+
 export interface ActivityRetentionStatus {
   policy: {
     autoCleanupEnabled: boolean;
@@ -180,6 +223,22 @@ export async function getActivityPage(
     options,
   );
   return response.json() as Promise<ActivityPageResponse>;
+}
+
+export async function getActivityInvestigation(
+  activityId: string,
+  options?: ActivityRequestOptions,
+): Promise<ActivityInvestigation> {
+  const response = await apiRequest(
+    "GET",
+    `/api/activity/${encodeURIComponent(activityId)}/investigation`,
+    undefined,
+    options,
+  );
+  const payload = await response.json() as {
+    investigation: ActivityInvestigation;
+  };
+  return payload.investigation;
 }
 
 export async function cleanupEndedActivityLogs(options?: {

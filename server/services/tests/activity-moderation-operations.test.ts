@@ -34,6 +34,7 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
     getActiveActivities: async () => [],
     getActiveActivitiesByUsername: async () => [],
     getActivityById: async () => undefined,
+    getActivityInvestigation: async () => undefined,
     getActivityRetentionPolicy: async () => ({
       autoCleanupEnabled: false,
       batchSize: 500,

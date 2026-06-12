@@ -2,6 +2,7 @@ import type { User, UserActivity, InsertUserActivity } from "../shared/schema-po
 import type {
   ActivityPageParams,
   ActivityPageResult,
+  ActivityInvestigationRecord,
   ActivityRetentionCleanupParams,
   ActivityRetentionCleanupResult,
   ActivityRetentionPolicy,
@@ -28,6 +29,7 @@ export interface ActivitySettingsStorageContract {
     idleMinutes: number;
   }): Promise<UserActivity | undefined>;
   getActivityById(id: string): Promise<UserActivity | undefined>;
+  getActivityInvestigation(id: string): Promise<ActivityInvestigationRecord | undefined>;
   getActiveActivities(): Promise<UserActivity[]>;
   getAllActivities(): Promise<UserActivity[]>;
   listActivityPage(params: ActivityPageParams): Promise<ActivityPageResult>;

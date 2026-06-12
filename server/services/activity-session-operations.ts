@@ -63,6 +63,135 @@ function serializeActivitiesForResponse<T extends ActivityListItem>(activities: 
   return activities.map((activity) => serializeActivityForResponse(activity));
 }
 
+function maskSessionFingerprint(fingerprint: string | null | undefined): string | null {
+  const normalized = String(fingerprint || "").trim();
+  if (!normalized) {
+    return null;
+  }
+  return `••••${normalized.slice(-6)}`;
+}
+
+function resolveInvestigationRisk(params: {
+  activeBan: boolean;
+  status: string;
+}): {
+  level: "attention" | "critical" | "normal";
+  reasons: string[];
+} {
+  if (params.activeBan || params.status === "BANNED") {
+    return {
+      level: "critical",
+      reasons: ["This session is linked to an active ban."],
+    };
+  }
+  if (params.status === "KICKED") {
+    return {
+      level: "attention",
+      reasons: ["An administrator forcibly ended this session."],
+    };
+  }
+  if (params.status === "IDLE") {
+    return {
+      level: "attention",
+      reasons: ["The session exceeded the configured idle threshold."],
+    };
+  }
+  return {
+    level: "normal",
+    reasons: ["No enforced security action is recorded for this session."],
+  };
+}
+
+function getAuditEventLabel(action: string): string {
+  switch (action) {
+    case "BAN_USER":
+      return "Session banned";
+    case "KICK_USER":
+      return "Forced logout";
+    case "LOGIN_SUCCESS":
+      return "Login accepted";
+    case "LOGOUT":
+      return "User logout";
+    default:
+      return action.replace(/_/g, " ").toLowerCase();
+  }
+}
+
+function buildInvestigationTimeline(
+  investigation: NonNullable<Awaited<ReturnType<ActivityStorage["getActivityInvestigation"]>>>,
+) {
+  const { activity, activeBan, auditEvents } = investigation;
+  const events: Array<{
+    id: string;
+    kind: "activity" | "ban" | "login" | "logout" | "moderation";
+    label: string;
+    timestamp: string;
+    actor: string | null;
+  }> = [];
+  const loginTime = serializeTimestamp(activity.loginTime);
+  if (loginTime) {
+    events.push({
+      id: `${activity.id}:login`,
+      kind: "login",
+      label: "Session started",
+      timestamp: loginTime,
+      actor: activity.username,
+    });
+  }
+
+  const lastActivityTime = serializeTimestamp(activity.lastActivityTime);
+  if (lastActivityTime && lastActivityTime !== loginTime) {
+    events.push({
+      id: `${activity.id}:last-activity`,
+      kind: "activity",
+      label: "Last recorded activity",
+      timestamp: lastActivityTime,
+      actor: activity.username,
+    });
+  }
+
+  const logoutTime = serializeTimestamp(activity.logoutTime);
+  if (logoutTime) {
+    events.push({
+      id: `${activity.id}:logout`,
+      kind: activity.logoutReason === "KICKED" || activity.logoutReason === "BANNED"
+        ? "moderation"
+        : "logout",
+      label: activity.logoutReason === "KICKED"
+        ? "Session forcibly ended"
+        : activity.logoutReason === "BANNED"
+          ? "Session ended by ban"
+          : activity.logoutReason === "IDLE_TIMEOUT"
+            ? "Session expired after inactivity"
+            : "Session ended",
+      timestamp: logoutTime,
+      actor: null,
+    });
+  }
+
+  if (activeBan) {
+    events.push({
+      id: `${activity.id}:ban`,
+      kind: "ban",
+      label: "Active session ban recorded",
+      timestamp: activeBan.bannedAt.toISOString(),
+      actor: null,
+    });
+  }
+
+  for (const auditEvent of auditEvents) {
+    events.push({
+      id: `audit:${auditEvent.id}`,
+      kind: "moderation",
+      label: getAuditEventLabel(auditEvent.action),
+      timestamp: auditEvent.timestamp.toISOString(),
+      actor: auditEvent.performedBy,
+    });
+  }
+
+  return events.sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+}
+
 function matchesActivityBaseFilters(
   activity: ActivityListItem,
   filters: ActivityFilters | undefined,
@@ -343,6 +472,8 @@ export function createActivitySessionOperations(
       await storage.createAuditLog({
         action: "LOGOUT",
         performedBy: username,
+        targetResource: `activity:${activityId}`,
+        details: JSON.stringify({ activityId, outcome: "logout" }),
       });
     },
 
@@ -375,6 +506,67 @@ export function createActivitySessionOperations(
           filters,
         ),
       );
+    },
+
+    async getActivityInvestigation(activityId: string) {
+      const investigation = await storage.getActivityInvestigation(activityId);
+      if (!investigation) {
+        return undefined;
+      }
+
+      const { activity, activeBan, auditEvents } = investigation;
+      const risk = resolveInvestigationRisk({
+        activeBan: Boolean(activeBan),
+        status: activity.status,
+      });
+      const loginTimeMs = resolveActivityTimestampMs(activity.loginTime);
+      const endTimeMs = resolveActivityTimestampMs(
+        activity.isActive !== false
+          ? new Date()
+          : activity.logoutTime ?? activity.lastActivityTime,
+      );
+
+      return {
+        session: {
+          id: activity.id,
+          username: activity.username,
+          role: activity.role,
+          status: activity.status,
+          isActive: activity.isActive !== false,
+          loginTime: serializeTimestamp(activity.loginTime),
+          logoutTime: serializeTimestamp(activity.logoutTime),
+          lastActivityTime: serializeTimestamp(activity.lastActivityTime),
+          logoutReason: activity.logoutReason ?? null,
+          durationMs:
+            Number.isFinite(loginTimeMs) && Number.isFinite(endTimeMs)
+              ? Math.max(0, endTimeMs - loginTimeMs)
+              : null,
+          device: {
+            browser: activity.browser ?? null,
+            ipAddress: activity.ipAddress ?? null,
+            pcName: activity.pcName ?? null,
+            fingerprintHint: maskSessionFingerprint(activity.fingerprint),
+          },
+        },
+        security: {
+          activeBan: activeBan
+            ? {
+                banId: activeBan.banId,
+                bannedAt: activeBan.bannedAt.toISOString(),
+              }
+            : null,
+          riskLevel: risk.level,
+          reasons: risk.reasons,
+        },
+        timeline: buildInvestigationTimeline(investigation),
+        auditEvents: auditEvents.map((event) => ({
+          id: event.id,
+          action: event.action,
+          performedBy: event.performedBy,
+          requestId: event.requestId,
+          timestamp: event.timestamp.toISOString(),
+        })),
+      };
     },
 
     async listActivityPage(

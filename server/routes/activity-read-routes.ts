@@ -12,6 +12,7 @@ import {
   parseStrictInteger,
   readNonEmptyString,
   readQueryObject,
+  readRouteParam,
 } from "../http/validation";
 import type {
   ActivityPageSortBy,
@@ -205,6 +206,21 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
           total: result.total,
         }),
       });
+    }),
+  );
+
+  app.get(
+    "/api/activity/:id/investigation",
+    authenticateToken,
+    requireRole("admin", "superuser"),
+    requireTabAccess("activity"),
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const activityId = readRouteParam(req.params.id, "activity id", 256);
+      const investigation = await activityService.getActivityInvestigation(activityId);
+      if (!investigation) {
+        return res.status(404).json(buildActivityErrorPayload("Activity not found"));
+      }
+      return res.json(buildActivitySuccessPayload({ investigation }));
     }),
   );
 

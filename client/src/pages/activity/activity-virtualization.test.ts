@@ -17,7 +17,7 @@ test("getVirtualizedListHeight clamps list height to the configured maximum", ()
 });
 
 test("mobile activity rows reserve enough height for details and moderation actions", () => {
-  assert.equal(ACTIVITY_MOBILE_ROW_HEIGHT_PX, 520);
+  assert.equal(ACTIVITY_MOBILE_ROW_HEIGHT_PX, 580);
 });
 
 test("getActivityDesktopGridClassName reserves selection and action columns only for moderation views", () => {

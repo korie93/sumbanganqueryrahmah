@@ -11,6 +11,9 @@ export default function Activity() {
     isMobile,
     shouldDeferSecondaryMobileSections,
     canModerateActivity,
+    investigatedActivity,
+    setInvestigatedActivity,
+    setInvestigationOpen,
     activities,
     bannedUsers,
     errorMessage,
@@ -89,6 +92,8 @@ export default function Activity() {
         bannedUsers={bannedUsers}
         bulkDeleteDialogOpen={bulkDeleteDialogOpen}
         canModerateActivity={canModerateActivity}
+        investigatedActivity={investigatedActivity}
+        investigationOpen={Boolean(investigatedActivity)}
         dateFromOpen={dateFromOpen}
         dateToOpen={dateToOpen}
         deleteDialogOpen={deleteDialogOpen}
@@ -120,6 +125,8 @@ export default function Activity() {
           setFilters((previous) => ({ ...previous, [field]: value }))
         }
         onKickDialogOpenChange={setKickDialogOpen}
+        onInvestigationOpenChange={setInvestigationOpen}
+        onInvestigateActivity={setInvestigatedActivity}
         onLogsOpenChange={setLogsOpen}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}

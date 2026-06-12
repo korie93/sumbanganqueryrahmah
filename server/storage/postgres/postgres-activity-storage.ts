@@ -6,6 +6,7 @@ import type {
 import type {
   ActivityPageParams,
   ActivityPageResult,
+  ActivityInvestigationRecord,
   ActivityRetentionCleanupParams,
   ActivityRetentionCleanupResult,
   ActivityRetentionPreview,
@@ -56,6 +57,10 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
 
   async getActivityById(id: string): Promise<UserActivity | undefined> {
     return this.activityRepository.getActivityById(id);
+  }
+
+  async getActivityInvestigation(id: string): Promise<ActivityInvestigationRecord | undefined> {
+    return this.activityRepository.getActivityInvestigation(id);
   }
 
   async getActiveActivities(): Promise<UserActivity[]> {

@@ -1,9 +1,11 @@
+import { useCallback, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
 import { useActivityActionState } from "@/pages/activity/useActivityActionState";
 import { useActivityDataState } from "@/pages/activity/useActivityDataState";
 import { useActivitySelectionState } from "@/pages/activity/useActivitySelectionState";
 import { getCurrentActivityRole } from "@/pages/activity/utils";
+import type { ActivityRecord } from "@/pages/activity/types";
 
 export function useActivityPageState() {
   const isMobile = useIsMobile();
@@ -11,6 +13,7 @@ export function useActivityPageState() {
     isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
   const currentRole = getCurrentActivityRole();
   const canModerateActivity = currentRole === "admin" || currentRole === "superuser";
+  const [investigatedActivity, setInvestigatedActivity] = useState<ActivityRecord | null>(null);
 
   const dataState = useActivityDataState({ canModerateActivity });
   const selectionState = useActivitySelectionState({ activities: dataState.activities });
@@ -19,10 +22,19 @@ export function useActivityPageState() {
     selectedActivityIds: selectionState.selectedActivityIds,
     setSelectedActivityIds: selectionState.setSelectedActivityIds,
   });
+  const setInvestigationOpen = useCallback((open: boolean) => {
+    if (!open) {
+      setInvestigatedActivity(null);
+    }
+  }, []);
+
   return {
     isMobile,
     shouldDeferSecondaryMobileSections,
     canModerateActivity,
+    investigatedActivity,
+    setInvestigatedActivity,
+    setInvestigationOpen,
     activities: dataState.activities,
     bannedUsers: dataState.bannedUsers,
     errorMessage: dataState.errorMessage,

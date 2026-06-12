@@ -10,6 +10,13 @@ type CloseActivitySocket = (
   payload?: Record<string, unknown>,
 ) => Promise<void>;
 
+function buildSessionModerationAuditDetails(activityId: string, outcome: "banned" | "kicked") {
+  return JSON.stringify({
+    activityId,
+    outcome,
+  });
+}
+
 export function createActivityModerationOperations(
   storage: ActivityStorage,
   closeSocket: CloseActivitySocket,
@@ -36,7 +43,8 @@ export function createActivityModerationOperations(
         action: "KICK_USER",
         performedBy,
         targetUser: activity.username,
-        details: `Kicked activityId=${activityId}`,
+        targetResource: `activity:${activityId}`,
+        details: buildSessionModerationAuditDetails(activityId, "kicked"),
       });
 
       return { status: "ok" };
@@ -78,7 +86,8 @@ export function createActivityModerationOperations(
         action: "BAN_USER",
         performedBy,
         targetUser: activity.username,
-        details: `Banned via activityId=${activityId}`,
+        targetResource: `activity:${activityId}`,
+        details: buildSessionModerationAuditDetails(activityId, "banned"),
       });
 
       return { status: "ok" };
