@@ -24,5 +24,5 @@ test("theme tokens keep a keyboard-safe dvh to svh to vh viewport fallback chain
   assert.match(css, /--viewport-min-height-value:\s*var\(--viewport-safe-height-value\);/);
   assert.match(css, /--app-shell-min-height-value:\s*calc\(var\(--viewport-min-height-value\) - 3\.5rem\);/);
   assert.match(css, /@supports not \(height: 100dvh\)\s*\{\s*:root \{\s*--viewport-safe-height-value:\s*min\(100svh,\s*max\(0px,\s*calc\(100vh - var\(--viewport-keyboard-inset-bottom\)\)\)\);/s);
-  assert.match(css, /@supports not \(height: 100dvh\) and not \(height: 100svh\)\s*\{\s*:root \{\s*--viewport-safe-height-value:\s*max\(0px,\s*calc\(100vh - var\(--viewport-keyboard-inset-bottom\)\)\);/s);
+  assert.match(css, /@supports not \(\(height: 100dvh\) or \(height: 100svh\)\)\s*\{\s*:root \{\s*--viewport-safe-height-value:\s*max\(0px,\s*calc\(100vh - var\(--viewport-keyboard-inset-bottom\)\)\);/s);
 });

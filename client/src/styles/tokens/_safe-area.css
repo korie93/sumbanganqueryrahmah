@@ -36,7 +36,7 @@
   }
 }
 
-@supports not (height: 100dvh) and not (height: 100svh) {
+@supports not ((height: 100dvh) or (height: 100svh)) {
   :root {
     --viewport-safe-height-value: max(0px, calc(100vh - var(--viewport-keyboard-inset-bottom)));
     --viewport-min-height-value: var(--viewport-safe-height-value);
