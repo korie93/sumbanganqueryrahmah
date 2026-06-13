@@ -15,4 +15,9 @@ test("activity investigation query uses bound identifiers and exact session audi
   assert.match(source, /position\(\$\{legacyActivityMarker\}/);
   assert.doesNotMatch(source, /WHERE.*\$\{activityId\}/);
   assert.match(source, /ACTIVITY_INVESTIGATION_AUDIT_LIMIT = 20/);
+  assert.match(source, /ACTIVITY_INVESTIGATION_RELATED_SESSION_LIMIT = 8/);
+  assert.match(source, /ne\(userActivity\.id, activityId\)/);
+  assert.match(source, /eq\(userActivity\.userId, activity\.userId\)/);
+  assert.match(source, /countDistinct\(userActivity\.userId\)/);
+  assert.match(source, /or\(\.\.\.relatedConditions\)/);
 });

@@ -199,6 +199,15 @@ test("getActivityInvestigation masks persistent identifiers and exposes only saf
             timestamp: new Date("2026-06-12T01:00:00.000Z"),
           },
         ],
+        history: {
+          activeConcurrentSessionCount: 0,
+          priorMatchingFingerprintCount: 0,
+          priorMatchingIpCount: 0,
+          priorSessionCount: 0,
+          sharedFingerprintAccountCount: 0,
+          sharedIpAccountCount: 0,
+        },
+        relatedSessions: [],
       }),
     }),
     async () => undefined,
@@ -211,6 +220,68 @@ test("getActivityInvestigation masks persistent identifiers and exposes only saf
   assert.equal(result?.auditEvents[0]?.requestId, "request-1");
   assert.equal("details" in (result?.auditEvents[0] ?? {}), false);
   assert.equal(result?.timeline[0]?.label, "Session started");
+});
+
+test("getActivityInvestigation explains correlation risk without exposing raw related fingerprints", async () => {
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityInvestigation: async () => ({
+        activity: {
+          ...createActiveActivityRecord("act-current"),
+          browser: "Chrome 149",
+          deviceType: "desktop",
+          fingerprint: "current-device-fingerprint",
+          ipAddress: "203.0.113.10",
+          loginTime: new Date("2026-06-12T02:00:00.000Z"),
+          platform: "Windows 11",
+          status: "ONLINE",
+        },
+        activeBan: null,
+        auditEvents: [],
+        history: {
+          activeConcurrentSessionCount: 1,
+          priorMatchingFingerprintCount: 0,
+          priorMatchingIpCount: 0,
+          priorSessionCount: 4,
+          sharedFingerprintAccountCount: 1,
+          sharedIpAccountCount: 2,
+        },
+        relatedSessions: [
+          {
+            ...createActiveActivityRecord("act-related"),
+            browser: "Chrome 149",
+            deviceType: "desktop",
+            fingerprint: "current-device-fingerprint",
+            ipAddress: "203.0.113.10",
+            loginTime: new Date("2026-06-12T01:30:00.000Z"),
+            platform: "Windows 11",
+            status: "ONLINE",
+            userId: "user-2",
+            username: "siti",
+          },
+        ],
+      }),
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.getActivityInvestigation("act-current");
+
+  assert.equal(result?.security.riskLevel, "attention");
+  assert.deepEqual(
+    result?.security.signals.map((signal) => signal.code),
+    ["new_ip", "new_device", "concurrent_session", "shared_device", "shared_ip"],
+  );
+  assert.deepEqual(result?.relatedSessions[0]?.matches, [
+    "ip_address",
+    "device_fingerprint",
+  ]);
+  assert.equal(
+    result?.relatedSessions[0]?.device.fingerprintHint?.endsWith("rprint"),
+    true,
+  );
+  assert.equal("fingerprint" in (result?.relatedSessions[0]?.device ?? {}), false);
+  assert.equal(JSON.stringify(result).includes("current-device-fingerprint"), false);
 });
 
 test("bulkDeleteActivityLogs reports not found ids and closes deleted activities", async () => {

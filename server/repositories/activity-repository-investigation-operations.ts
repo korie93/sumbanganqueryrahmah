@@ -1,4 +1,15 @@
-import { desc, eq, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  lt,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import {
   auditLogs,
   bannedSessions,
@@ -12,6 +23,23 @@ import {
 } from "./activity-repository-shared";
 
 const ACTIVITY_INVESTIGATION_AUDIT_LIMIT = 20;
+const ACTIVITY_INVESTIGATION_RELATED_SESSION_LIMIT = 8;
+
+async function countActivityRows(condition: SQL): Promise<number> {
+  const rows = await db
+    .select({ count: count() })
+    .from(userActivity)
+    .where(condition);
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function countDistinctActivityAccounts(condition: SQL): Promise<number> {
+  const rows = await db
+    .select({ count: countDistinct(userActivity.userId) })
+    .from(userActivity)
+    .where(condition);
+  return Number(rows[0]?.count ?? 0);
+}
 
 export async function getActivityInvestigation(
   options: ActivityRepositoryOptions,
@@ -29,15 +57,93 @@ export async function getActivityInvestigation(
     return undefined;
   }
 
-  const banRows = await db
-    .select({
-      banId: bannedSessions.id,
-      bannedAt: bannedSessions.bannedAt,
-    })
-    .from(bannedSessions)
-    .where(eq(bannedSessions.activityId, activityId))
-    .orderBy(desc(bannedSessions.bannedAt))
-    .limit(1);
+  const ipAddress = String(activity.ipAddress || "").trim();
+  const fingerprint = String(activity.fingerprint || "").trim();
+  const relatedConditions: SQL[] = [eq(userActivity.userId, activity.userId)];
+  if (ipAddress) {
+    relatedConditions.push(eq(userActivity.ipAddress, ipAddress));
+  }
+  if (fingerprint) {
+    relatedConditions.push(eq(userActivity.fingerprint, fingerprint));
+  }
+
+  const previousSessionCondition = activity.loginTime
+    ? and(
+        eq(userActivity.userId, activity.userId),
+        ne(userActivity.id, activityId),
+        lt(userActivity.loginTime, activity.loginTime),
+      )
+    : and(
+        eq(userActivity.userId, activity.userId),
+        ne(userActivity.id, activityId),
+      );
+  if (!previousSessionCondition) {
+    throw new Error("Activity investigation history condition could not be created");
+  }
+
+  const [
+    banRows,
+    relatedRows,
+    priorSessionCount,
+    priorMatchingIpCount,
+    priorMatchingFingerprintCount,
+    activeConcurrentSessionCount,
+    sharedIpAccountCount,
+    sharedFingerprintAccountCount,
+  ] = await Promise.all([
+    db
+      .select({
+        banId: bannedSessions.id,
+        bannedAt: bannedSessions.bannedAt,
+      })
+      .from(bannedSessions)
+      .where(eq(bannedSessions.activityId, activityId))
+      .orderBy(desc(bannedSessions.bannedAt))
+      .limit(1),
+    db
+      .select()
+      .from(userActivity)
+      .where(
+        and(
+          ne(userActivity.id, activityId),
+          or(...relatedConditions),
+        ),
+      )
+      .orderBy(desc(userActivity.loginTime))
+      .limit(ACTIVITY_INVESTIGATION_RELATED_SESSION_LIMIT),
+    countActivityRows(previousSessionCondition),
+    ipAddress
+      ? countActivityRows(and(previousSessionCondition, eq(userActivity.ipAddress, ipAddress))!)
+      : Promise.resolve(0),
+    fingerprint
+      ? countActivityRows(
+          and(previousSessionCondition, eq(userActivity.fingerprint, fingerprint))!,
+        )
+      : Promise.resolve(0),
+    countActivityRows(
+      and(
+        eq(userActivity.userId, activity.userId),
+        ne(userActivity.id, activityId),
+        eq(userActivity.isActive, true),
+      )!,
+    ),
+    ipAddress
+      ? countDistinctActivityAccounts(
+          and(
+            eq(userActivity.ipAddress, ipAddress),
+            ne(userActivity.userId, activity.userId),
+          )!,
+        )
+      : Promise.resolve(0),
+    fingerprint
+      ? countDistinctActivityAccounts(
+          and(
+            eq(userActivity.fingerprint, fingerprint),
+            ne(userActivity.userId, activity.userId),
+          )!,
+        )
+      : Promise.resolve(0),
+  ]);
 
   const targetResource = `activity:${activityId}`;
   let auditEventRows = await db
@@ -84,5 +190,17 @@ export async function getActivityInvestigation(
         }
       : null,
     auditEvents: auditEventRows,
+    history: {
+      activeConcurrentSessionCount,
+      priorMatchingFingerprintCount,
+      priorMatchingIpCount,
+      priorSessionCount,
+      sharedFingerprintAccountCount,
+      sharedIpAccountCount,
+    },
+    relatedSessions: relatedRows.map((relatedActivity) => ({
+      ...relatedActivity,
+      status: computeActivityStatus(relatedActivity),
+    })),
   };
 }

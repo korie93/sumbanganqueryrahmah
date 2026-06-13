@@ -121,7 +121,39 @@ export interface ActivityInvestigation {
     } | null;
     riskLevel: "attention" | "critical" | "normal";
     reasons: string[];
+    signals: Array<{
+      code:
+        | "active_ban"
+        | "concurrent_session"
+        | "forced_logout"
+        | "idle_timeout"
+        | "new_device"
+        | "new_ip"
+        | "no_elevated_risk"
+        | "shared_device"
+        | "shared_ip";
+      description: string;
+      label: string;
+      severity: "attention" | "critical" | "info";
+    }>;
   };
+  relatedSessions: Array<{
+    id: string;
+    username: string;
+    role: string;
+    status: ActivityStatus;
+    isActive: boolean;
+    loginTime: string | null;
+    logoutTime: string | null;
+    device: {
+      browser: string | null;
+      deviceType: "desktop" | "mobile" | "tablet" | "unknown" | null;
+      fingerprintHint: string | null;
+      ipAddress: string | null;
+      platform: string | null;
+    };
+    matches: Array<"device_fingerprint" | "ip_address" | "same_account">;
+  }>;
   timeline: Array<{
     id: string;
     kind: "activity" | "ban" | "login" | "logout" | "moderation";

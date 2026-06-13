@@ -30,6 +30,7 @@ import type { ActivityRecord } from "@/pages/activity/types";
 import { formatActivityTime, getStatusBadge } from "@/pages/activity/utils";
 import { useActivityInvestigation } from "@/pages/activity/useActivityInvestigation";
 import { getActivityDeviceTypeLabel } from "@/pages/activity/activity-device-utils";
+import { ActivityInvestigationRelatedSessions } from "@/pages/activity/ActivityInvestigationRelatedSessions";
 
 type ActivityInvestigationDrawerProps = {
   activity: ActivityRecord | null;
@@ -40,6 +41,16 @@ type ActivityInvestigationDrawerProps = {
   onOpenChange: (open: boolean) => void;
   open: boolean;
 };
+
+function findInvestigationTrigger(activityId: string | null | undefined): HTMLElement | null {
+  if (!activityId || typeof document === "undefined") {
+    return null;
+  }
+  const expectedTestId = `button-investigate-${activityId}`;
+  return Array.from(
+    document.querySelectorAll<HTMLElement>("[data-testid^='button-investigate-']"),
+  ).find((element) => element.dataset.testid === expectedTestId) ?? null;
+}
 
 function formatDuration(durationMs: number | null): string {
   if (durationMs === null) {
@@ -174,11 +185,30 @@ function InvestigationRisk({ data }: { data: ActivityInvestigation }) {
           {label}
         </Badge>
       </div>
-      <ul className="mt-3 space-y-2">
-        {data.security.reasons.map((reason) => (
-          <li key={reason} className="flex gap-2 text-sm text-foreground/90">
-            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
-            <span>{reason}</span>
+      <ul className="mt-3 divide-y divide-border/70 border-y border-border/70">
+        {data.security.signals.map((signal) => (
+          <li key={signal.code} className="flex items-start gap-3 py-3">
+            <span
+              className={
+                signal.severity === "critical"
+                  ? "mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-destructive"
+                  : signal.severity === "attention"
+                    ? "mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-600 dark:bg-amber-400"
+                    : "mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary"
+              }
+              aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-foreground">{signal.label}</span>
+                <Badge variant="outline" className="text-2xs capitalize">
+                  {signal.severity}
+                </Badge>
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                {signal.description}
+              </span>
+            </span>
           </li>
         ))}
       </ul>
@@ -270,14 +300,19 @@ export function ActivityInvestigationDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full border-border/70 bg-background p-0 sm:max-w-xl"
+        className="w-full overflow-hidden border-border/70 bg-background p-0 sm:max-w-xl"
         data-floating-ai-avoid="true"
         onOpenAutoFocus={() => {
+          const trigger = findInvestigationTrigger(activity?.id);
           const activeElement = document.activeElement;
-          returnFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+          returnFocusRef.current = trigger
+            ?? (activeElement instanceof HTMLElement && activeElement !== document.body
+              ? activeElement
+              : null);
         }}
         onCloseAutoFocus={(event) => {
-          const returnFocus = returnFocusRef.current;
+          const returnFocus = returnFocusRef.current
+            ?? findInvestigationTrigger(activity?.id);
           returnFocusRef.current = null;
           if (!returnFocus || !document.contains(returnFocus)) {
             return;
@@ -286,8 +321,8 @@ export function ActivityInvestigationDrawer({
           returnFocus.focus();
         }}
       >
-        <div className="flex min-h-full flex-col">
-          <SheetHeader className="border-b border-border/70 px-5 py-5 pr-12 text-left sm:px-6">
+        <div className="flex h-full min-h-0 flex-col">
+          <SheetHeader className="shrink-0 border-b border-border/70 px-5 py-5 pr-12 text-left sm:px-6">
             <div className="flex flex-wrap items-center gap-2">
               <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
               <span className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
@@ -303,7 +338,7 @@ export function ActivityInvestigationDrawer({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="flex-1 px-5 sm:px-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 sm:px-6">
             {loading ? <InvestigationLoadingState /> : null}
             {!loading && error ? (
               <Alert variant="destructive" className="my-5">
@@ -321,6 +356,7 @@ export function ActivityInvestigationDrawer({
               <>
                 <InvestigationSummary data={data} />
                 <InvestigationRisk data={data} />
+                <ActivityInvestigationRelatedSessions sessions={data.relatedSessions} />
                 <InvestigationTimeline data={data} />
                 <InvestigationAuditReferences data={data} />
               </>
@@ -328,7 +364,7 @@ export function ActivityInvestigationDrawer({
           </div>
 
           {activity && data ? (
-            <SheetFooter className="sticky bottom-0 gap-2 border-t border-border/70 bg-background/95 px-5 py-4 backdrop-blur sm:px-6">
+            <SheetFooter className="shrink-0 gap-2 border-t border-border/70 bg-background px-5 py-4 sm:px-6">
               <Button
                 type="button"
                 variant="outline"

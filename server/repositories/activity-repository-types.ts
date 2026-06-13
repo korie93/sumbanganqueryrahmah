@@ -90,6 +90,15 @@ export type ActivityInvestigationRecord = {
     bannedAt: Date;
   } | null;
   auditEvents: ActivityInvestigationAuditEvent[];
+  history: {
+    activeConcurrentSessionCount: number;
+    priorMatchingFingerprintCount: number;
+    priorMatchingIpCount: number;
+    priorSessionCount: number;
+    sharedFingerprintAccountCount: number;
+    sharedIpAccountCount: number;
+  };
+  relatedSessions: ActivityWithStatus[];
 };
 
 export type AuthenticatedSessionSnapshot = {

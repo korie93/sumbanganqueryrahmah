@@ -353,6 +353,15 @@ function createActivityRouteHarness(options?: {
             timestamp: new Date("2026-06-12T01:00:00.000Z"),
           },
         ],
+        history: {
+          activeConcurrentSessionCount: 0,
+          priorMatchingFingerprintCount: 0,
+          priorMatchingIpCount: 0,
+          priorSessionCount: 0,
+          sharedFingerprintAccountCount: 0,
+          sharedIpAccountCount: 0,
+        },
+        relatedSessions: [],
       };
     },
     getAllActivities: async () => Array.from(activities.values()),
@@ -1395,6 +1404,8 @@ test("GET /api/activity/:id/investigation returns sanitized session facts for ad
     assert.equal(payload.investigation.session.fingerprint, undefined);
     assert.equal(payload.investigation.auditEvents[0].requestId, "request-session-1");
     assert.equal(payload.investigation.auditEvents[0].details, undefined);
+    assert.deepEqual(payload.investigation.relatedSessions, []);
+    assert.equal(payload.investigation.security.signals[0].code, "no_elevated_risk");
   } finally {
     await stopTestServer(server);
   }

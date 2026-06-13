@@ -82,35 +82,156 @@ function maskSessionFingerprint(fingerprint: string | null | undefined): string 
   return `••••${normalized.slice(-6)}`;
 }
 
+type InvestigationRiskSignal = {
+  code:
+    | "active_ban"
+    | "concurrent_session"
+    | "forced_logout"
+    | "idle_timeout"
+    | "new_device"
+    | "new_ip"
+    | "no_elevated_risk"
+    | "shared_device"
+    | "shared_ip";
+  description: string;
+  label: string;
+  severity: "attention" | "critical" | "info";
+};
+
 function resolveInvestigationRisk(params: {
   activeBan: boolean;
+  activeConcurrentSessionCount: number;
+  hasFingerprint: boolean;
+  hasIpAddress: boolean;
+  isActive: boolean;
+  priorMatchingFingerprintCount: number;
+  priorMatchingIpCount: number;
+  priorSessionCount: number;
+  sharedFingerprintAccountCount: number;
+  sharedIpAccountCount: number;
   status: string;
 }): {
   level: "attention" | "critical" | "normal";
   reasons: string[];
+  signals: InvestigationRiskSignal[];
 } {
+  const signals: InvestigationRiskSignal[] = [];
+
   if (params.activeBan || params.status === "BANNED") {
-    return {
-      level: "critical",
-      reasons: ["This session is linked to an active ban."],
-    };
+    signals.push({
+      code: "active_ban",
+      description: "This session is linked to an active ban.",
+      label: "Active ban",
+      severity: "critical",
+    });
   }
   if (params.status === "KICKED") {
-    return {
-      level: "attention",
-      reasons: ["An administrator forcibly ended this session."],
-    };
+    signals.push({
+      code: "forced_logout",
+      description: "An administrator forcibly ended this session.",
+      label: "Forced logout",
+      severity: "attention",
+    });
   }
   if (params.status === "IDLE") {
-    return {
-      level: "attention",
-      reasons: ["The session exceeded the configured idle threshold."],
-    };
+    signals.push({
+      code: "idle_timeout",
+      description: "The session exceeded the configured idle threshold.",
+      label: "Idle timeout",
+      severity: "attention",
+    });
   }
+
+  if (
+    params.hasIpAddress
+    && params.priorSessionCount > 0
+    && params.priorMatchingIpCount === 0
+  ) {
+    signals.push({
+      code: "new_ip",
+      description: "This account has no earlier recorded session from the same IP address.",
+      label: "New IP address",
+      severity: "attention",
+    });
+  }
+
+  if (
+    params.hasFingerprint
+    && params.priorSessionCount > 0
+    && params.priorMatchingFingerprintCount === 0
+  ) {
+    signals.push({
+      code: "new_device",
+      description: "This account has no earlier recorded session with the same device fingerprint.",
+      label: "New device",
+      severity: "attention",
+    });
+  }
+
+  if (params.isActive && params.activeConcurrentSessionCount > 0) {
+    signals.push({
+      code: "concurrent_session",
+      description: `${params.activeConcurrentSessionCount} other active session${params.activeConcurrentSessionCount === 1 ? "" : "s"} exist for this account.`,
+      label: "Concurrent sessions",
+      severity: "attention",
+    });
+  }
+
+  if (params.sharedFingerprintAccountCount > 0) {
+    signals.push({
+      code: "shared_device",
+      description: `The same device fingerprint appears on ${params.sharedFingerprintAccountCount} other account${params.sharedFingerprintAccountCount === 1 ? "" : "s"}.`,
+      label: "Shared device",
+      severity: "attention",
+    });
+  }
+
+  if (params.sharedIpAccountCount > 0) {
+    signals.push({
+      code: "shared_ip",
+      description: `The same IP address appears on ${params.sharedIpAccountCount} other account${params.sharedIpAccountCount === 1 ? "" : "s"}; shared networks can be legitimate.`,
+      label: "Shared IP",
+      severity: "info",
+    });
+  }
+
+  if (signals.length === 0) {
+    signals.push({
+      code: "no_elevated_risk",
+      description: "No elevated correlation or enforced security signal is recorded for this session.",
+      label: "No elevated signal",
+      severity: "info",
+    });
+  }
+
+  const level = signals.some((signal) => signal.severity === "critical")
+    ? "critical"
+    : signals.some((signal) => signal.severity === "attention")
+      ? "attention"
+      : "normal";
+
   return {
-    level: "normal",
-    reasons: ["No enforced security action is recorded for this session."],
+    level,
+    reasons: signals.map((signal) => signal.description),
+    signals,
   };
+}
+
+function buildRelatedSessionMatches(
+  activity: ActivityListItem,
+  relatedActivity: ActivityListItem,
+) {
+  const matches: Array<"device_fingerprint" | "ip_address" | "same_account"> = [];
+  if (activity.userId && relatedActivity.userId === activity.userId) {
+    matches.push("same_account");
+  }
+  if (activity.ipAddress && relatedActivity.ipAddress === activity.ipAddress) {
+    matches.push("ip_address");
+  }
+  if (activity.fingerprint && relatedActivity.fingerprint === activity.fingerprint) {
+    matches.push("device_fingerprint");
+  }
+  return matches;
 }
 
 function getAuditEventLabel(action: string): string {
@@ -534,9 +655,24 @@ export function createActivitySessionOperations(
         return undefined;
       }
 
-      const { activity, activeBan, auditEvents } = investigation;
+      const {
+        activity,
+        activeBan,
+        auditEvents,
+        history,
+        relatedSessions,
+      } = investigation;
       const risk = resolveInvestigationRisk({
         activeBan: Boolean(activeBan),
+        activeConcurrentSessionCount: history.activeConcurrentSessionCount,
+        hasFingerprint: Boolean(String(activity.fingerprint || "").trim()),
+        hasIpAddress: Boolean(String(activity.ipAddress || "").trim()),
+        isActive: activity.isActive !== false,
+        priorMatchingFingerprintCount: history.priorMatchingFingerprintCount,
+        priorMatchingIpCount: history.priorMatchingIpCount,
+        priorSessionCount: history.priorSessionCount,
+        sharedFingerprintAccountCount: history.sharedFingerprintAccountCount,
+        sharedIpAccountCount: history.sharedIpAccountCount,
         status: activity.status,
       });
       const loginTimeMs = resolveActivityTimestampMs(activity.loginTime);
@@ -579,7 +715,25 @@ export function createActivitySessionOperations(
             : null,
           riskLevel: risk.level,
           reasons: risk.reasons,
+          signals: risk.signals,
         },
+        relatedSessions: relatedSessions.map((relatedActivity) => ({
+          id: relatedActivity.id,
+          username: relatedActivity.username,
+          role: relatedActivity.role,
+          status: relatedActivity.status,
+          isActive: relatedActivity.isActive !== false,
+          loginTime: serializeTimestamp(relatedActivity.loginTime),
+          logoutTime: serializeTimestamp(relatedActivity.logoutTime),
+          device: {
+            browser: relatedActivity.browser ?? null,
+            deviceType: relatedActivity.deviceType ?? null,
+            fingerprintHint: maskSessionFingerprint(relatedActivity.fingerprint),
+            ipAddress: relatedActivity.ipAddress ?? null,
+            platform: relatedActivity.platform ?? null,
+          },
+          matches: buildRelatedSessionMatches(activity, relatedActivity),
+        })),
         timeline: buildInvestigationTimeline(investigation),
         auditEvents: auditEvents.map((event) => ({
           id: event.id,
