@@ -34,3 +34,26 @@ test("backup smoke consumes only recovered GET list rate limits after the destru
     /const consumeExpectedRecoveredBackupListRateLimit = \(tracker\) => \{[\s\S]*entry\.includes\("POST"\)/,
   );
 });
+
+test("UI smoke has bounded execution, phase diagnostics, and bounded cleanup", () => {
+  assert.match(smokeSource, /const SMOKE_TOTAL_TIMEOUT_MS = Number\(process\.env\.SMOKE_TOTAL_TIMEOUT_MS/);
+  assert.match(smokeSource, /const SMOKE_CLEANUP_TIMEOUT_MS = Number\(process\.env\.SMOKE_CLEANUP_TIMEOUT_MS/);
+  assert.match(smokeSource, /class SmokeTimeoutError extends Error/);
+  assert.match(smokeSource, /const runSmokePhase = async \(label, operation\) =>/);
+  assert.match(smokeSource, /Last active phase: \$\{activeSmokePhase\}/);
+  assert.match(smokeSource, /activePhase: activeSmokePhase/);
+  assert.match(
+    smokeSource,
+    /await runSmokePhase\("browser startup", async \(\) => \{[\s\S]*chromium\.launch/,
+  );
+  assert.match(smokeSource, /if \(smokeTimedOut\) \{[\s\S]*close late smoke browser/);
+  assert.match(smokeSource, /smokeTimedOut = error instanceof SmokeTimeoutError/);
+  assert.match(smokeSource, /}, smokeTotalTimeoutMs, "UI smoke run"\);/);
+  assert.match(smokeSource, /"capture smoke failure artifacts"/);
+  assert.match(smokeSource, /"save smoke trace"/);
+  assert.match(smokeSource, /"close smoke browser"/);
+  assert.match(
+    smokeSource,
+    /process\.exitCode = error instanceof SmokeTimeoutError \? SMOKE_TIMEOUT_EXIT_CODE : 1/,
+  );
+});

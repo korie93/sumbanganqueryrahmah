@@ -41,3 +41,20 @@ test("smoke-ui workflow keeps auth smoke ahead of slower Lighthouse budgets", ()
     "UI smoke should still run after visual and accessibility contracts",
   );
 });
+
+test("smoke-ui workflow retries only timeouts and preserves per-attempt artifacts", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const smokeStep = extractSection(
+    workflow,
+    "      - name: Run UI smoke",
+    "\n      - name: Capture smoke monitoring snapshot",
+  );
+
+  assert.match(workflow, /SMOKE_TOTAL_TIMEOUT_MS:\s*480000/);
+  assert.match(workflow, /SMOKE_CLEANUP_TIMEOUT_MS:\s*15000/);
+  assert.match(smokeStep, /timeout --signal=TERM --kill-after=30s 9m/);
+  assert.match(smokeStep, /SMOKE_ARTIFACTS_DIR="artifacts\/smoke-ui\/attempt-\$\{attempt\}"/);
+  assert.match(smokeStep, /if \[ "\$smoke_status" -eq 124 \]; then/);
+  assert.match(smokeStep, /run_smoke_attempt 2/);
+  assert.doesNotMatch(smokeStep, /if \[ "\$smoke_status" -ne 0 \]; then/);
+});

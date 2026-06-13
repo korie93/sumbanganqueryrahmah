@@ -14,6 +14,57 @@ const BACKUP_JOB_TIMEOUT_MS = 180_000;
 const BACKUP_JOB_POLL_INTERVAL_MS = 1_500;
 const SMOKE_NAVIGATION_TIMEOUT_MS = 30_000;
 const SMOKE_LOAD_STATE_TIMEOUT_MS = 10_000;
+const SMOKE_TOTAL_TIMEOUT_MS = Number(process.env.SMOKE_TOTAL_TIMEOUT_MS || 8 * 60_000);
+const SMOKE_CLEANUP_TIMEOUT_MS = Number(process.env.SMOKE_CLEANUP_TIMEOUT_MS || 15_000);
+const SMOKE_TIMEOUT_EXIT_CODE = 124;
+let activeSmokePhase = "browser startup";
+
+class SmokeTimeoutError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SmokeTimeoutError";
+  }
+}
+
+const normalizePositiveTimeout = (value, fallback) =>
+  Number.isFinite(value) && value > 0 ? Math.trunc(value) : fallback;
+
+const smokeTotalTimeoutMs = normalizePositiveTimeout(SMOKE_TOTAL_TIMEOUT_MS, 8 * 60_000);
+const smokeCleanupTimeoutMs = normalizePositiveTimeout(SMOKE_CLEANUP_TIMEOUT_MS, 15_000);
+
+const withTimeout = async (operation, timeoutMs, label) => {
+  let timeoutHandle;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new SmokeTimeoutError(
+        `${label} exceeded ${timeoutMs}ms. Last active phase: ${activeSmokePhase}.`,
+      ));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      timeoutPromise,
+    ]);
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+};
+
+const runSmokePhase = async (label, operation) => {
+  activeSmokePhase = label;
+  const startedAt = Date.now();
+  console.log(`[smoke-ui] start: ${label}`);
+  try {
+    const result = await operation();
+    console.log(`[smoke-ui] complete: ${label} (${Date.now() - startedAt}ms)`);
+    return result;
+  } catch (error) {
+    console.error(`[smoke-ui] failed: ${label} (${Date.now() - startedAt}ms)`);
+    throw error;
+  }
+};
 
 const formatBestEffortError = (error) => {
   if (error instanceof Error) {
@@ -95,6 +146,7 @@ const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
     baseUrl,
     url: page.url(),
     message,
+    activePhase: activeSmokePhase,
     failedRequests: tracker.failedRequests,
     consoleMessages: tracker.consoleMessages,
     cookies,
@@ -105,6 +157,29 @@ const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
     JSON.stringify(failureState, null, 2),
     "utf8",
   ).catch((error) => recordBestEffortFailure("write failure state artifact", error));
+};
+
+const captureStartupFailureArtifact = async (error) => {
+  if (!artifactsDir) {
+    return;
+  }
+
+  await ensureArtifactsDir();
+  const failureStatePath = path.join(artifactsDir, "failure-state.json");
+  const message = error instanceof Error ? error.stack || error.message : String(error);
+  await writeFile(
+    failureStatePath,
+    JSON.stringify({
+      baseUrl,
+      url: "",
+      message,
+      activePhase: activeSmokePhase,
+      failedRequests: [],
+      consoleMessages: [],
+      cookies: [],
+    }, null, 2),
+    "utf8",
+  );
 };
 
 const getVisibleUserMenuTrigger = async (page) => {
@@ -2320,128 +2395,184 @@ const checkLogoutFlow = async (page, context, tracker) => {
 };
 
 const run = async () => {
-  const browser = await chromium.launch(resolvePlaywrightLaunchOptions());
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  let browser = null;
+  let context = null;
+  let page = null;
   const tracker = createTracker();
   let traceStarted = false;
   let shouldSaveTrace = false;
-  tracker.attach(page);
-
-  if (artifactsDir) {
-    await ensureArtifactsDir();
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
-    traceStarted = true;
-  }
+  let smokeTimedOut = false;
 
   try {
-    await navigateForSmoke(page, baseUrl);
-    await ensureLoginPageVisible(page);
+    await withTimeout(async () => {
+      await runSmokePhase("browser startup", async () => {
+        const launchedBrowser = await chromium.launch(resolvePlaywrightLaunchOptions());
+        if (smokeTimedOut) {
+          await launchedBrowser.close().catch((error) => (
+            recordBestEffortFailure("close late smoke browser", error)
+          ));
+          throw new SmokeTimeoutError("Browser startup completed after the smoke watchdog expired.");
+        }
+        browser = launchedBrowser;
+        context = await browser.newContext();
+        page = await context.newPage();
+        tracker.attach(page);
 
-    await context.clearCookies();
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          id: 999,
-          username: "stale-user",
-          role: "superuser",
-          fullName: "Stale User",
-          status: "active",
-          mustChangePassword: false,
-          passwordResetBySuperuser: false,
-          isBanned: false,
-        }),
-      );
-      localStorage.setItem("activeTab", "home");
-    });
-    await reloadForSmoke(page);
-    const staleUserValue = await page.evaluate(() => localStorage.getItem("user"));
-    assert(staleUserValue === null, "stale localStorage user should be cleared when no auth cookie exists");
-    await ensureLoginPageVisible(page);
-    tracker.assertClean("unauth bootstrap");
-    tracker.clear();
+        if (artifactsDir) {
+          await ensureArtifactsDir();
+          await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
+          traceStarted = true;
+        }
+      });
 
-    if (username && password) {
-      const loginResponsePromise = page.waitForResponse(
-        (response) =>
-          response.request().method() === "POST"
-          && response.url().includes("/api/auth/login"),
-      );
+      await runSmokePhase("public login bootstrap", async () => {
+        await navigateForSmoke(page, baseUrl);
+        await ensureLoginPageVisible(page);
+      });
 
-      await page.getByTestId("input-username").fill(username);
-      await page.getByTestId("input-password").fill(password);
-      await page.getByTestId("button-login").click();
-      await waitForSmokeDocumentReady(page);
-      await page.waitForTimeout(250);
-      const loginResponse = await loginResponsePromise;
-      let loginPayload = null;
-      try {
-        loginPayload = await loginResponse.json();
-      } catch {
-        loginPayload = null;
+      await runSmokePhase("stale browser session cleanup", async () => {
+        await context.clearCookies();
+        await page.evaluate(() => {
+          localStorage.clear();
+          sessionStorage.clear();
+          localStorage.setItem(
+            "user",
+            JSON.stringify({
+              id: 999,
+              username: "stale-user",
+              role: "superuser",
+              fullName: "Stale User",
+              status: "active",
+              mustChangePassword: false,
+              passwordResetBySuperuser: false,
+              isBanned: false,
+            }),
+          );
+          localStorage.setItem("activeTab", "home");
+        });
+        await reloadForSmoke(page);
+        const staleUserValue = await page.evaluate(() => localStorage.getItem("user"));
+        assert(staleUserValue === null, "stale localStorage user should be cleared when no auth cookie exists");
+        await ensureLoginPageVisible(page);
+        tracker.assertClean("unauth bootstrap");
+        tracker.clear();
+      });
+
+      if (username && password) {
+        await runSmokePhase("authenticated login", async () => {
+          const loginResponsePromise = page.waitForResponse(
+            (response) =>
+              response.request().method() === "POST"
+              && response.url().includes("/api/auth/login"),
+          );
+
+          await page.getByTestId("input-username").fill(username);
+          await page.getByTestId("input-password").fill(password);
+          await page.getByTestId("button-login").click();
+          await waitForSmokeDocumentReady(page);
+          await page.waitForTimeout(250);
+          const loginResponse = await loginResponsePromise;
+          let loginPayload = null;
+          try {
+            loginPayload = await loginResponse.json();
+          } catch {
+            loginPayload = null;
+          }
+
+          const cookieNames = await waitForAuthCookies(context);
+          const authProbe = await probeAuthSession(page);
+          assert(
+            authProbe.ok && authProbe.hasUser,
+            [
+              "Login should establish an authenticated session.",
+              `POST /api/auth/login status: ${loginResponse.status()}`,
+              `POST /api/auth/login message: ${String(loginPayload?.message || "(none)")}`,
+              `GET /api/me status: ${authProbe.status}`,
+              `GET /api/me message: ${String(authProbe.message || "(none)")}`,
+              `Cookies seen after login: ${Array.from(cookieNames).join(", ") || "(none)"}`,
+            ].join("\n"),
+          );
+
+          assert(
+            !(await page.getByTestId("input-username").isVisible().catch(() => false)),
+            "login page should be replaced after successful login",
+          );
+          tracker.assertClean("login");
+          tracker.clear();
+        });
+
+        await runSmokePhase("desktop navigation", () => checkDesktopNavbar(page, tracker));
+        await runSmokePhase("keyboard navigation", () => checkKeyboardMenuAccess(page, tracker));
+        await runSmokePhase("theme controls", () => checkUserMenuThemeMode(page, tracker));
+        await runSmokePhase("mobile navigation", () => checkMobileNavbar(page, tracker));
+        await runSmokePhase("home entry point", () => checkHomeEntryPoint(page, tracker));
+        await runSmokePhase("collection daily page", () => checkCollectionDailyPage(page, tracker));
+        await runSmokePhase(
+          "collection mutation consistency",
+          () => checkCollectionMutationConsistency(context),
+        );
+        await runSmokePhase(
+          "collection stale delete conflict",
+          () => checkCollectionRecordsStaleDeleteConflict(page, context, tracker),
+        );
+        await runSmokePhase(
+          "collection receipt flow",
+          () => checkCollectionReceiptUiFlow(page, context, tracker),
+        );
+        await runSmokePhase(
+          "backup restore flow",
+          () => checkBackupRestoreUiFlow(page, context, tracker),
+        );
+        await runSmokePhase("logout", () => checkLogoutFlow(page, context, tracker));
+      } else {
+        console.log(
+          "Skipping authenticated smoke navigation because SMOKE_TEST_USERNAME and SMOKE_TEST_PASSWORD are not set.",
+        );
       }
-
-      const cookieNames = await waitForAuthCookies(context);
-      const authProbe = await probeAuthSession(page);
-      assert(
-        authProbe.ok && authProbe.hasUser,
-        [
-          "Login should establish an authenticated session.",
-          `POST /api/auth/login status: ${loginResponse.status()}`,
-          `POST /api/auth/login message: ${String(loginPayload?.message || "(none)")}`,
-          `GET /api/me status: ${authProbe.status}`,
-          `GET /api/me message: ${String(authProbe.message || "(none)")}`,
-          `Cookies seen after login: ${Array.from(cookieNames).join(", ") || "(none)"}`,
-        ].join("\n"),
-      );
-
-      assert(
-        !(await page.getByTestId("input-username").isVisible().catch(() => false)),
-        "login page should be replaced after successful login",
-      );
-      tracker.assertClean("login");
-      tracker.clear();
-
-      await checkDesktopNavbar(page, tracker);
-      await checkKeyboardMenuAccess(page, tracker);
-      await checkUserMenuThemeMode(page, tracker);
-      await checkMobileNavbar(page, tracker);
-      await checkHomeEntryPoint(page, tracker);
-      await checkCollectionDailyPage(page, tracker);
-      await checkCollectionMutationConsistency(context);
-      await checkCollectionRecordsStaleDeleteConflict(page, context, tracker);
-      await checkCollectionReceiptUiFlow(page, context, tracker);
-      await checkBackupRestoreUiFlow(page, context, tracker);
-
-      await checkLogoutFlow(page, context, tracker);
-    } else {
-      console.log(
-        "Skipping authenticated smoke navigation because SMOKE_TEST_USERNAME and SMOKE_TEST_PASSWORD are not set.",
-      );
-    }
+    }, smokeTotalTimeoutMs, "UI smoke run");
   } catch (error) {
+    smokeTimedOut = error instanceof SmokeTimeoutError;
     shouldSaveTrace = Boolean(artifactsDir);
-    await captureFailureArtifacts({ context, page, tracker, error }).catch((artifactError) => (
+    await withTimeout(
+      () => (
+        context && page
+          ? captureFailureArtifacts({ context, page, tracker, error })
+          : captureStartupFailureArtifact(error)
+      ),
+      smokeCleanupTimeoutMs,
+      "capture smoke failure artifacts",
+    ).catch((artifactError) => (
       recordBestEffortFailure("capture smoke failure artifacts", artifactError)
     ));
     throw error;
   } finally {
-    if (traceStarted) {
+    if (traceStarted && context) {
       if (shouldSaveTrace && artifactsDir) {
         const tracePath = path.join(artifactsDir, "trace.zip");
-        await context.tracing.stop({ path: tracePath }).catch((error) => (
+        await withTimeout(
+          () => context.tracing.stop({ path: tracePath }),
+          smokeCleanupTimeoutMs,
+          "save smoke trace",
+        ).catch((error) => (
           recordBestEffortFailure("save smoke trace", error)
         ));
       } else {
-        await context.tracing.stop().catch((error) => (
+        await withTimeout(
+          () => context.tracing.stop(),
+          smokeCleanupTimeoutMs,
+          "stop smoke trace",
+        ).catch((error) => (
           recordBestEffortFailure("stop smoke trace", error)
         ));
       }
     }
-    await browser.close();
+    if (browser) {
+      await withTimeout(
+        () => browser.close(),
+        smokeCleanupTimeoutMs,
+        "close smoke browser",
+      ).catch((error) => recordBestEffortFailure("close smoke browser", error));
+    }
   }
 };
 
@@ -2452,5 +2583,5 @@ run().catch((error) => {
   }
   errors.push(message);
   console.error(message);
-  process.exitCode = 1;
+  process.exitCode = error instanceof SmokeTimeoutError ? SMOKE_TIMEOUT_EXIT_CODE : 1;
 });

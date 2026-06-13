@@ -161,6 +161,8 @@ jobs:
       SMOKE_TEST_USERNAME: superuser${{ github.run_id }}${{ github.run_attempt }}
       SMOKE_TEST_PASSWORD: sqr-ci-superuser-${{ github.run_id }}-${{ github.run_attempt }}-password-32chars
       SMOKE_BASE_URL: http://127.0.0.1:5000
+      SMOKE_TOTAL_TIMEOUT_MS: 480000
+      SMOKE_CLEANUP_TIMEOUT_MS: 15000
       # The smoke job does not upload receipts, but app readiness is fail-closed
       # when receipt scanning is unavailable. Use a deterministic clean scanner
       # shim in CI; production templates still require clamdscan fail-closed.
@@ -268,7 +270,24 @@ jobs:
           echo "Running smoke-ui on commit: $GITHUB_SHA"
           git rev-parse HEAD
           grep -n "Login should establish an authenticated session." scripts/ui-smoke.mjs
-          SMOKE_ARTIFACTS_DIR=artifacts/smoke-ui npm run smoke:ui
+          set +e
+          run_smoke_attempt() {
+            local attempt="$1"
+            echo "Starting smoke-ui attempt ${attempt}/2"
+            timeout --signal=TERM --kill-after=30s 9m \
+              env SMOKE_ARTIFACTS_DIR="artifacts/smoke-ui/attempt-${attempt}" \
+              npm run smoke:ui
+          }
+
+          run_smoke_attempt 1
+          smoke_status=$?
+          if [ "$smoke_status" -eq 124 ]; then
+            echo "Smoke attempt 1 timed out; retrying once after cooldown."
+            sleep 12
+            run_smoke_attempt 2
+            smoke_status=$?
+          fi
+          exit "$smoke_status"
 
       - name: Capture smoke monitoring snapshot
         if: always()
