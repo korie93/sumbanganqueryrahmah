@@ -81,7 +81,6 @@ export default defineConfig({
           }
 
           if (id.includes("@tanstack/react-query")) return "query";
-          if (id.includes("recharts")) return "charts";
           if (id.includes("xlsx")) return "excel";
           if (id.includes("jspdf")) return "pdf";
           if (id.includes("html2canvas")) return "capture";

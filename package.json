@@ -202,12 +202,12 @@
     "@types/react-window": "^1.8.8",
     "@types/recharts": "^1.8.29",
     "@types/ws": "^8.5.13",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
     "axe-core": "^4.11.4",
     "c8": "^11.0.0",
     "drizzle-kit": "^0.31.10",
-    "esbuild": "^0.25.4",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.4",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
@@ -218,16 +218,16 @@
     "playwright": "^1.59.1",
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.2",
-    "vite": "^6.4.1"
+    "vite": "^8.0.16"
   },
   "overrides": {
     "qs": "^6.15.2",
     "lodash": "^4.17.23",
     "rollup": "^4.59.0",
-    "esbuild": "^0.25.4",
+    "esbuild": "^0.28.1",
     "ip-address": "^10.2.0"
   }
 }

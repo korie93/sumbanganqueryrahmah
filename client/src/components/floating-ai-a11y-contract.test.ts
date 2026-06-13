@@ -152,5 +152,5 @@ test("viewport fallback only reaches 100vh when dvh and svh are unsupported", ()
   const tokens = readClientSource("theme-tokens.css");
 
   assert.match(tokens, /@supports not \(height: 100dvh\) \{/);
-  assert.match(tokens, /@supports not \(height: 100dvh\) and not \(height: 100svh\) \{/);
+  assert.match(tokens, /@supports not \(\(height: 100dvh\) or \(height: 100svh\)\) \{/);
 });

@@ -8,7 +8,7 @@ import {
 const sourcePath = path.resolve(process.cwd(), "server", "internal", "local-http-security.ts");
 const writeMode = process.argv.includes("--write");
 const arrayPattern =
-  /const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = \[\n(?<body>[\s\S]*?)\n\];/;
+  /const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = \[\r?\n(?<body>[\s\S]*?)\r?\n\];/;
 
 function extractExistingHashes(source) {
   const match = source.match(arrayPattern);

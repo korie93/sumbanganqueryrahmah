@@ -16,3 +16,15 @@ test("react-remove-scroll CSP hash generator matches the checked-in Helmet allow
     assert.match(source, new RegExp(hash.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 });
+
+test("react-remove-scroll CSP verifier accepts LF and CRLF source files", () => {
+  const verifierSource = readFileSync(
+    path.join(process.cwd(), "scripts", "verify-react-remove-scroll-csp-hashes.mjs"),
+    "utf8",
+  );
+
+  assert.equal(
+    verifierSource.includes(String.raw`\[\r?\n(?<body>[\s\S]*?)\r?\n\];`),
+    true,
+  );
+});
