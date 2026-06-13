@@ -2,6 +2,7 @@ import {
   Activity,
   Ban,
   Clock3,
+  Computer,
   Laptop,
   Network,
   RefreshCw,
@@ -28,6 +29,7 @@ import type { ActivityInvestigation } from "@/lib/api";
 import type { ActivityRecord } from "@/pages/activity/types";
 import { formatActivityTime, getStatusBadge } from "@/pages/activity/utils";
 import { useActivityInvestigation } from "@/pages/activity/useActivityInvestigation";
+import { getActivityDeviceTypeLabel } from "@/pages/activity/activity-device-utils";
 
 type ActivityInvestigationDrawerProps = {
   activity: ActivityRecord | null;
@@ -83,8 +85,13 @@ function InvestigationSummary({ data }: { data: ActivityInvestigation }) {
     },
     {
       icon: Laptop,
-      label: "Device",
-      value: data.session.device.pcName || "Not recorded",
+      label: "Device class",
+      value: getActivityDeviceTypeLabel(data.session.device.deviceType),
+    },
+    {
+      icon: Computer,
+      label: "Platform",
+      value: data.session.device.platform || "Not recorded",
     },
     {
       icon: Search,
@@ -132,6 +139,14 @@ function InvestigationSummary({ data }: { data: ActivityInvestigation }) {
             {data.session.device.browser || "Not recorded"}
           </dd>
         </div>
+        {data.session.device.pcName ? (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">Client-provided device label</dt>
+            <dd className="mt-1 break-words text-foreground">
+              {data.session.device.pcName}
+            </dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   );

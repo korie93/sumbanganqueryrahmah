@@ -309,6 +309,13 @@
       "when": 1781150400000,
       "tag": "0044_import_content_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1781280000000,
+      "tag": "0045_activity_device_audit",
+      "breakpoints": true
     }
   ]
 }

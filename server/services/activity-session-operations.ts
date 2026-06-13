@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import { resolveTimestampMs, serializeTimestamp } from "../lib/timestamp";
 import { logger } from "../lib/logger";
+import { maskClientIpAddress } from "../http/client-ip";
 import type {
   ActivityFilters,
   ActivityPageOptions,
+  ActivityResponseAccess,
   ActivityRetentionCleanupSource,
   ActivityRetentionStatus,
   ActivityStorage,
@@ -24,6 +26,8 @@ type ActivityListItem = Awaited<ReturnType<ActivityStorage["getAllActivities"]>>
   username?: string | null | undefined;
   ipAddress?: string | null | undefined;
   browser?: string | null | undefined;
+  deviceType?: string | null | undefined;
+  platform?: string | null | undefined;
   lastActivityTime?: Date | string | null | undefined;
   status?: string | undefined;
 };
@@ -50,17 +54,24 @@ type SerializedActivityListItem<T extends ActivityListItem> = Omit<
 
 function serializeActivityForResponse<T extends ActivityListItem>(
   activity: T,
+  access: ActivityResponseAccess = {},
 ): SerializedActivityListItem<T> {
   return {
     ...activity,
+    ipAddress: access.includeExactIpAddress
+      ? activity.ipAddress ?? null
+      : maskClientIpAddress(activity.ipAddress),
     lastActivityTime: serializeTimestamp(activity.lastActivityTime),
     loginTime: serializeTimestamp(activity.loginTime) ?? "",
     logoutTime: serializeTimestamp(activity.logoutTime),
   } as SerializedActivityListItem<T>;
 }
 
-function serializeActivitiesForResponse<T extends ActivityListItem>(activities: T[]) {
-  return activities.map((activity) => serializeActivityForResponse(activity));
+function serializeActivitiesForResponse<T extends ActivityListItem>(
+  activities: T[],
+  access: ActivityResponseAccess = {},
+) {
+  return activities.map((activity) => serializeActivityForResponse(activity, access));
 }
 
 function maskSessionFingerprint(fingerprint: string | null | undefined): string | null {
@@ -477,10 +488,13 @@ export function createActivitySessionOperations(
       });
     },
 
-    async getAllActivities(currentActivityId?: string) {
+    async getAllActivities(
+      currentActivityId?: string,
+      access: ActivityResponseAccess = {},
+    ) {
       const activities = await storage.getAllActivities();
       if (!currentActivityId) {
-        return serializeActivitiesForResponse(activities as ActivityListItem[]);
+        return serializeActivitiesForResponse(activities as ActivityListItem[], access);
       }
 
       const requestingActivity = await storage.getActivityById(currentActivityId) as ActivityListItem | undefined;
@@ -489,13 +503,18 @@ export function createActivitySessionOperations(
           activities as ActivityListItem[],
           requestingActivity,
         ),
+        access,
       );
     },
 
-    async getFilteredActivities(filters: ActivityFilters, currentActivityId?: string) {
+    async getFilteredActivities(
+      filters: ActivityFilters,
+      currentActivityId?: string,
+      access: ActivityResponseAccess = {},
+    ) {
       const activities = await storage.getFilteredActivities(filters);
       if (!currentActivityId) {
-        return serializeActivitiesForResponse(activities as ActivityListItem[]);
+        return serializeActivitiesForResponse(activities as ActivityListItem[], access);
       }
 
       const requestingActivity = await storage.getActivityById(currentActivityId) as ActivityListItem | undefined;
@@ -505,6 +524,7 @@ export function createActivitySessionOperations(
           requestingActivity,
           filters,
         ),
+        access,
       );
     },
 
@@ -543,8 +563,10 @@ export function createActivitySessionOperations(
               : null,
           device: {
             browser: activity.browser ?? null,
+            deviceType: activity.deviceType ?? null,
             ipAddress: activity.ipAddress ?? null,
             pcName: activity.pcName ?? null,
+            platform: activity.platform ?? null,
             fingerprintHint: maskSessionFingerprint(activity.fingerprint),
           },
         },
@@ -573,6 +595,7 @@ export function createActivitySessionOperations(
       options: ActivityPageOptions,
       filters: ActivityFilters,
       currentActivityId?: string,
+      access: ActivityResponseAccess = {},
     ) {
       const result = await storage.listActivityPage({
         ...options,
@@ -598,7 +621,10 @@ export function createActivitySessionOperations(
 
       return {
         ...result,
-        activities: serializeActivitiesForResponse(activities as ActivityListItem[]),
+        activities: serializeActivitiesForResponse(
+          activities as ActivityListItem[],
+          access,
+        ),
       };
     },
 

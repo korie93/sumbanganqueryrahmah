@@ -96,3 +96,63 @@ test("POST /api/auth/login returns a safe response when 2FA challenge signing fa
     await stopTestServer(server);
   }
 });
+
+test("POST /api/auth/login derives network and device audit data from trusted request metadata", async () => {
+  const app = createJsonTestApp();
+  app.set("trust proxy", ["loopback"]);
+  const context = createTwoFactorSigningFailureContext(app);
+  const capturedInputs: Record<string, unknown>[] = [];
+
+  context.authAccountService.login = (async (input: Record<string, unknown>) => {
+    capturedInputs.push(input);
+    return {
+      kind: "authenticated",
+      user: {
+        id: "user-device-audit",
+        username: "audit.user",
+        role: "admin",
+        mustChangePassword: false,
+        status: "active",
+      },
+      activity: {
+        id: "activity-device-audit",
+      },
+      closedSessionIds: [],
+    };
+  }) as unknown as typeof context.authAccountService.login;
+  context.signSessionToken = () => ({
+    expiresAt: "2026-06-14T00:00:00.000Z",
+    expiresAtMs: Date.parse("2026-06-14T00:00:00.000Z"),
+    token: "test-token",
+  });
+  registerAuthLoginRoutes(context);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent":
+          "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 "
+          + "Chrome/149.0.0.0 Mobile Safari/537.36",
+        "X-Forwarded-For": "203.0.113.44",
+      },
+      body: JSON.stringify({
+        browser: "Spoofed Browser 999",
+        password: "StrongPass123!",
+        username: "audit.user",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const capturedInput = capturedInputs[0];
+    assert.ok(capturedInput);
+    assert.equal(capturedInput.browserName, "Chrome 149");
+    assert.equal(capturedInput.deviceType, "mobile");
+    assert.equal(capturedInput.platform, "Android");
+    assert.equal(capturedInput.ipAddress, "203.0.113.44");
+  } finally {
+    await stopTestServer(server);
+  }
+});

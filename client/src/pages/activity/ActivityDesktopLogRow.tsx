@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { ActivityDesktopLogActions } from "@/pages/activity/ActivityDesktopLogActions";
 import { buildActivityRowAriaLabel } from "@/pages/activity/activity-row-aria";
 import { getActivityBrowserText } from "@/pages/activity/activity-desktop-logs-utils";
+import { getActivityDeviceLabel } from "@/pages/activity/activity-device-utils";
 import type { ActivityDesktopLogRowProps } from "@/pages/activity/activity-desktop-logs-shared";
 import {
   formatActivityTime,
@@ -26,6 +27,7 @@ export function ActivityDesktopLogRow({
 }: ActivityDesktopLogRowProps) {
   const browserInfo = parseActivityUserAgent(activity.browser);
   const browserLabel = getActivityBrowserText(browserInfo);
+  const deviceLabel = getActivityDeviceLabel(activity);
 
   return (
     <div
@@ -63,6 +65,9 @@ export function ActivityDesktopLogRow({
       <div>{getStatusBadge(activity.status)}</div>
       <div className="truncate text-xs text-muted-foreground" title={activity.ipAddress || "-"}>
         {activity.ipAddress || "-"}
+      </div>
+      <div className="truncate text-xs text-muted-foreground" title={deviceLabel}>
+        {deviceLabel}
       </div>
       <div className="truncate text-xs text-muted-foreground" title={browserLabel}>
         {browserLabel}

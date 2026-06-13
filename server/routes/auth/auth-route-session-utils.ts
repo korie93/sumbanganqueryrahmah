@@ -37,8 +37,10 @@ type TwoFactorChallengeTokenPayload = {
   role: string;
   fingerprint?: string | null | undefined;
   browserName: string;
+  deviceType?: string | undefined;
   pcName?: string | null | undefined;
   ipAddress?: string | null | undefined;
+  platform?: string | undefined;
 };
 
 type TwoFactorChallengeTokenClaims = {
@@ -48,8 +50,10 @@ type TwoFactorChallengeTokenClaims = {
   role?: string | undefined;
   fingerprint?: string | null | undefined;
   browserName?: string | undefined;
+  deviceType?: string | undefined;
   pcName?: string | null | undefined;
   ipAddress?: string | null | undefined;
+  platform?: string | undefined;
   iat?: number | undefined;
   exp?: number | undefined;
 };
@@ -164,8 +168,10 @@ export function verifyAuthTwoFactorChallengeToken(token: string) {
     role: decoded.role,
     fingerprint: decoded.fingerprint ?? null,
     browserName: decoded.browserName,
+    deviceType: decoded.deviceType || "unknown",
     pcName: decoded.pcName ?? null,
     ipAddress: decoded.ipAddress ?? null,
+    platform: decoded.platform || "Unknown",
     iat: decoded.iat,
     exp: decoded.exp,
   };

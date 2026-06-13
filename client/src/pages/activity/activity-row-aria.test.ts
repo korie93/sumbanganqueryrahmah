@@ -11,6 +11,8 @@ const activity: ActivityRecord = {
   status: "ONLINE",
   ipAddress: "127.0.0.1",
   browser: "Chrome 123",
+  deviceType: "desktop",
+  platform: "Windows 10/11",
   loginTime: "2026-04-13T02:00:00.000Z",
   isActive: true,
 }
@@ -22,5 +24,6 @@ test("buildActivityRowAriaLabel keeps activity summaries screen-reader friendly"
   assert.match(label, /role admin/)
   assert.match(label, /status online/)
   assert.match(label, /browser Chrome 123/)
+  assert.match(label, /device Desktop · Windows 10\/11/)
   assert.match(label, /IP 127\.0\.0\.1/)
 })

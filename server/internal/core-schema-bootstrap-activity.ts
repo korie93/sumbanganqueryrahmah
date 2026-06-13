@@ -12,6 +12,8 @@ export async function ensureCoreUserActivityTable(
       role text NOT NULL,
       pc_name text,
       browser text,
+      device_type text,
+      platform text,
       fingerprint text,
       ip_address text,
       login_time timestamp with time zone,
@@ -26,6 +28,8 @@ export async function ensureCoreUserActivityTable(
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS role text`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS pc_name text`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS browser text`);
+  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS device_type text`);
+  await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS platform text`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS fingerprint text`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS ip_address text`);
   await database.execute(sql`ALTER TABLE public.user_activity ADD COLUMN IF NOT EXISTS login_time timestamp with time zone`);
@@ -129,10 +133,14 @@ export async function ensureCoreBannedSessionsTable(
       ip_address text,
       browser text,
       pc_name text,
+      device_type text,
+      platform text,
       banned_at timestamp with time zone DEFAULT now() NOT NULL
     )
   `);
   await database.execute(sql`ALTER TABLE public.banned_sessions ADD COLUMN IF NOT EXISTS banned_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.banned_sessions ADD COLUMN IF NOT EXISTS device_type text`);
+  await database.execute(sql`ALTER TABLE public.banned_sessions ADD COLUMN IF NOT EXISTS platform text`);
   await database.execute(sql`
     UPDATE public.banned_sessions
     SET banned_at = COALESCE(banned_at, now())

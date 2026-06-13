@@ -12,6 +12,8 @@ const activity: ActivityRecord = {
   status: "ONLINE",
   ipAddress: "127.0.0.1",
   browser: "Chrome 123",
+  deviceType: "desktop",
+  platform: "Windows 10/11",
   loginTime: "2026-04-13T02:00:00.000Z",
   isActive: true,
 };
@@ -42,6 +44,7 @@ test("ActivityMobileLogsList keeps moderation actions on native buttons for keyb
   assert.match(markup, /Ban operator\.one/);
   assert.match(markup, /Delete activity log for operator\.one/);
   assert.match(markup, /aria-label="Activity for operator\.one, role admin, status online,/);
+  assert.match(markup, /Desktop · Windows 10\/11/);
   assert.match(markup, /type="button"/);
   assert.match(markup, /<div class="box-border pb-3">/);
   assert.doesNotMatch(markup, /<div style="[^"]*" class="box-border pb-3">/);

@@ -620,6 +620,32 @@ test("getAllActivities keeps the requesting active session online in the returne
   assert.ok(resolveDateValue((result[0] as { lastActivityTime?: unknown }).lastActivityTime) > staleCurrentActivity.lastActivityTime!.getTime());
 });
 
+test("activity feeds expose exact IPs only when privileged audit access is requested", async () => {
+  const activity = {
+    ...createActiveActivityRecord("act-network"),
+    ipAddress: "203.0.113.77",
+    deviceType: "desktop",
+    platform: "Windows 10/11",
+    status: "ONLINE",
+  };
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getAllActivities: async () => [activity],
+    }),
+    async () => undefined,
+  );
+
+  const masked = await operations.getAllActivities();
+  const exact = await operations.getAllActivities(undefined, {
+    includeExactIpAddress: true,
+  });
+
+  assert.equal(masked[0]?.ipAddress, "203.0.113.x");
+  assert.equal(exact[0]?.ipAddress, "203.0.113.77");
+  assert.equal(exact[0]?.deviceType, "desktop");
+  assert.equal(exact[0]?.platform, "Windows 10/11");
+});
+
 test("getFilteredActivities injects the requesting active session into ONLINE filters when storage returned stale data", async () => {
   const staleCurrentActivity = {
     id: "act-1",

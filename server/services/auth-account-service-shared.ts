@@ -5,8 +5,10 @@ export type LoginInput = {
   password: string;
   fingerprint?: string | null | undefined;
   browserName: string;
+  deviceType?: string | undefined;
   pcName?: string | null | undefined;
   ipAddress?: string | null | undefined;
+  platform?: string | undefined;
 };
 
 export type TwoFactorLoginInput = {
@@ -14,8 +16,10 @@ export type TwoFactorLoginInput = {
   code: string;
   fingerprint?: string | null | undefined;
   browserName: string;
+  deviceType?: string | undefined;
   pcName?: string | null | undefined;
   ipAddress?: string | null | undefined;
+  platform?: string | undefined;
 };
 
 export type ActivateAccountInput = {

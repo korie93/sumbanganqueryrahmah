@@ -35,7 +35,9 @@ export type AuthAccountUser = NonNullable<
 
 export type AuthenticatedSessionInput = {
   browserName: string;
+  deviceType?: string | undefined;
   fingerprint?: string | null | undefined;
   ipAddress?: string | null | undefined;
   pcName?: string | null | undefined;
+  platform?: string | undefined;
 };

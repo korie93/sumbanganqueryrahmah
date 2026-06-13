@@ -28,6 +28,7 @@ export function ActivityDesktopLogsHeader({
       <div>User</div>
       <div>Status</div>
       <div>IP</div>
+      <div>Device</div>
       <div>Browser</div>
       <div>Login</div>
       <div>Logout</div>

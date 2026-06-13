@@ -139,6 +139,8 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
     ipAddress?: string | null;
     browser?: string | null;
     pcName?: string | null;
+    deviceType?: string | null;
+    platform?: string | null;
   }): Promise<void> {
     return this.activityRepository.banVisitor(params);
   }

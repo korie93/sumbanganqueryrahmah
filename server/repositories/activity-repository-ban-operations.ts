@@ -66,16 +66,19 @@ export async function banVisitor(
     ipAddress?: string | null;
     browser?: string | null;
     pcName?: string | null;
+    deviceType?: string | null;
+    platform?: string | null;
   },
 ): Promise<void> {
   await options.ensureBannedSessionsTable();
   const banId = crypto.randomUUID();
   await db.execute(sql`
     INSERT INTO public.banned_sessions
-      (id, username, role, activity_id, fingerprint, ip_address, browser, pc_name, banned_at)
+      (id, username, role, activity_id, fingerprint, ip_address, browser, pc_name, device_type, platform, banned_at)
     VALUES
       (${banId}, ${params.username}, ${params.role}, ${params.activityId},
        ${params.fingerprint ?? null}, ${params.ipAddress ?? null}, ${params.browser ?? null}, ${params.pcName ?? null},
+       ${params.deviceType ?? null}, ${params.platform ?? null},
        ${new Date()})
     ON CONFLICT DO NOTHING
   `);

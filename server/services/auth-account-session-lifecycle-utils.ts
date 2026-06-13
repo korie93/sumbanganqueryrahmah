@@ -106,6 +106,8 @@ export async function createAuthenticatedSession(params: {
   user: AuthAccountUser;
 }) {
   let closedSessionIds: string[] = [];
+  const deviceType = params.input.deviceType || "unknown";
+  const platform = params.input.platform || "Unknown";
 
   if (params.user.role === "superuser") {
     const enforceSingleSession = await params.storage.getBooleanSystemSetting(
@@ -173,6 +175,8 @@ export async function createAuthenticatedSession(params: {
     role: params.user.role,
     pcName: params.input.pcName ?? null,
     browser: params.input.browserName,
+    deviceType,
+    platform,
     fingerprint: hashDeviceFingerprint(params.input.fingerprint),
     ipAddress: params.input.ipAddress ?? null,
   });
@@ -193,6 +197,8 @@ export async function createAuthenticatedSession(params: {
         activity_id: activity.id,
         closed_count: closedSessionIds.length,
         mfa_used: params.details.toLowerCase().includes("2fa"),
+        device_type: deviceType,
+        platform,
         role: params.user.role,
       },
       message: "Login completed.",

@@ -897,8 +897,8 @@ test("auth manual fetch wrappers forward AbortSignal", async () => {
     username: "alice",
     password: "secret",
     fingerprint: "fingerprint-1",
-    browser: navigator.userAgent,
   });
+  assert.equal("browser" in JSON.parse(requests[0]?.body || "{}"), false);
 });
 
 test("auth token and password wrappers forward AbortSignal", async () => {

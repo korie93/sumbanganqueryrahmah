@@ -143,6 +143,8 @@ export const userActivity = pgTable("user_activity", {
   role: text("role").notNull(),
   pcName: text("pc_name"),
   browser: text("browser"),
+  deviceType: text("device_type"),
+  platform: text("platform"),
   fingerprint: text("fingerprint"),
   ipAddress: text("ip_address"),
   loginTime: utcTimestamp("login_time"),
@@ -172,6 +174,8 @@ export const bannedSessions = pgTable("banned_sessions", {
   ipAddress: text("ip_address"),
   browser: text("browser"),
   pcName: text("pc_name"),
+  deviceType: text("device_type"),
+  platform: text("platform"),
   bannedAt: utcTimestamp("banned_at").defaultNow().notNull(),
 }, (table) => ({
   activityIdIdx: index("idx_banned_sessions_activity_id").on(table.activityId),

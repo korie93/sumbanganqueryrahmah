@@ -21,6 +21,10 @@ export type ActivityPageOptions = {
   sortOrder: ActivityPageSortOrder;
 };
 
+export type ActivityResponseAccess = {
+  includeExactIpAddress?: boolean | undefined;
+};
+
 export type ActivityStorage = Pick<
   PostgresStorage,
   | "banVisitor"

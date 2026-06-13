@@ -188,10 +188,10 @@ export class AuthAccountAuthenticationOperations {
     if (!validPassword) {
       await handleFailedPasswordAttempt({
         input: {
-        fingerprint: input.fingerprint,
-        browserName: input.browserName,
-        pcName: input.pcName,
-        ipAddress: input.ipAddress,
+          fingerprint: input.fingerprint,
+          browserName: input.browserName,
+          pcName: input.pcName,
+          ipAddress: input.ipAddress,
         },
         lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
         lockedReason: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_REASON,
@@ -383,8 +383,10 @@ export class AuthAccountAuthenticationOperations {
       input: {
         fingerprint: input.fingerprint,
         browserName: input.browserName,
+        deviceType: input.deviceType,
         pcName: input.pcName,
         ipAddress: input.ipAddress,
+        platform: input.platform,
       },
       storage: this.deps.storage,
       user: activeUser,

@@ -122,6 +122,8 @@ export const insertUserActivitySchema = createInsertSchema(userActivity).pick({
   role: true,
   pcName: true,
   browser: true,
+  deviceType: true,
+  platform: true,
   fingerprint: true,
   ipAddress: true,
 });
@@ -244,7 +246,11 @@ export type Import = typeof imports.$inferSelect;
 export type InsertDataRow = z.infer<typeof insertDataRowSchema>;
 export type DataRow = typeof dataRows.$inferSelect;
 export type InsertUserActivity = z.infer<typeof insertUserActivitySchema>;
-export type UserActivity = typeof userActivity.$inferSelect;
+type UserActivityRow = typeof userActivity.$inferSelect;
+export type UserActivity = Omit<UserActivityRow, "deviceType" | "platform"> & {
+  deviceType?: string | null;
+  platform?: string | null;
+};
 export type BannedSessionRow = typeof bannedSessions.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;

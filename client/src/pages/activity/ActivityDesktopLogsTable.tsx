@@ -28,7 +28,7 @@ export function ActivityDesktopLogsTable({
 
   return (
     <HorizontalScrollHint hint="Scroll table">
-      <div className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm">
+      <div className="min-w-[70rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm">
         <ActivityDesktopLogsHeader
           allVisibleSelected={allVisibleSelected}
           canModerateActivity={canModerateActivity}

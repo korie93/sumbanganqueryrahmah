@@ -83,6 +83,8 @@ export interface ActivitySettingsStorageContract {
     ipAddress?: string | null;
     browser?: string | null;
     pcName?: string | null;
+    deviceType?: string | null;
+    platform?: string | null;
   }): Promise<void>;
   unbanVisitor(banId: string): Promise<void>;
   getBannedSessions(): Promise<

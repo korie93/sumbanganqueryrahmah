@@ -19,8 +19,10 @@ test("auth route session utils round-trip two-factor challenge tokens and normal
     role: "admin",
     fingerprint: "fp-123",
     browserName: "Chrome 120",
+    deviceType: "desktop",
     pcName: "OPS-01",
     ipAddress: "127.0.0.1",
+    platform: "Windows 10/11",
   });
 
   const challenge = verifyAuthTwoFactorChallengeToken(token);
@@ -29,9 +31,11 @@ test("auth route session utils round-trip two-factor challenge tokens and normal
   assert.equal(challenge.username, "alpha.user");
   assert.equal(challenge.role, "admin");
   assert.equal(challenge.browserName, "Chrome 120");
+  assert.equal(challenge.deviceType, "desktop");
   assert.equal(challenge.fingerprint, "fp-123");
   assert.equal(challenge.pcName, "OPS-01");
   assert.equal(challenge.ipAddress, "127.0.0.1");
+  assert.equal(challenge.platform, "Windows 10/11");
   assert.equal(
     parseAuthBrowserName(
       undefined,

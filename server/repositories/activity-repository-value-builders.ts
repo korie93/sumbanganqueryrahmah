@@ -15,6 +15,8 @@ export function buildCreateActivityValues(data: InsertUserActivity, id: string =
     role: data.role,
     pcName: data.pcName ?? null,
     browser: data.browser ?? null,
+    deviceType: data.deviceType ?? null,
+    platform: data.platform ?? null,
     fingerprint: data.fingerprint ?? null,
     ipAddress: data.ipAddress ?? null,
     loginTime: currentTimestamp,

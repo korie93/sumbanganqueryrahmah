@@ -95,6 +95,8 @@ export class ActivityRepository {
     ipAddress?: string | null;
     browser?: string | null;
     pcName?: string | null;
+    deviceType?: string | null;
+    platform?: string | null;
   }): Promise<void> {
     await banVisitor(this.options, params);
   }

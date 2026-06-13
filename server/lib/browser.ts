@@ -1,7 +1,17 @@
-export function parseBrowser(userAgent: string | null | undefined): string {
-  if (!userAgent) return "Unknown";
+export type ClientDeviceType = "desktop" | "mobile" | "tablet" | "unknown";
 
-  const ua = userAgent;
+const MAX_USER_AGENT_LENGTH = 1024;
+
+function normalizeUserAgent(userAgent: string | string[] | null | undefined): string {
+  const value = Array.isArray(userAgent) ? userAgent[0] : userAgent;
+  return String(value || "").trim().slice(0, MAX_USER_AGENT_LENGTH);
+}
+
+export function parseBrowser(userAgent: string | null | undefined): string {
+  const normalized = normalizeUserAgent(userAgent);
+  if (!normalized) return "Unknown";
+
+  const ua = normalized;
   const uaLower = ua.toLowerCase();
 
   const extractVersion = (pattern: RegExp): string => {
@@ -61,7 +71,7 @@ export function parseBrowser(userAgent: string | null | undefined): string {
 }
 
 export function parsePlatform(userAgent: string | null | undefined): string {
-  const normalized = String(userAgent || "").trim();
+  const normalized = normalizeUserAgent(userAgent);
   if (!normalized) return "Unknown";
 
   if (/windows nt 10\.0/i.test(normalized)) return "Windows 10/11";
@@ -73,6 +83,46 @@ export function parsePlatform(userAgent: string | null | undefined): string {
   if (/linux/i.test(normalized)) return "Linux";
 
   return "Unknown";
+}
+
+export function parseDeviceType(
+  userAgent: string | string[] | null | undefined,
+): ClientDeviceType {
+  const normalized = normalizeUserAgent(userAgent);
+  if (!normalized) return "unknown";
+
+  if (
+    /ipad|tablet|kindle|silk/i.test(normalized)
+    || /android/i.test(normalized) && !/mobile/i.test(normalized)
+    || /macintosh/i.test(normalized) && /mobile/i.test(normalized)
+  ) {
+    return "tablet";
+  }
+
+  if (/iphone|ipod|android.*mobile|windows phone|mobile/i.test(normalized)) {
+    return "mobile";
+  }
+
+  if (/windows|macintosh|cros|x11|linux/i.test(normalized)) {
+    return "desktop";
+  }
+
+  return "unknown";
+}
+
+export function buildClientDeviceProfile(
+  userAgent: string | string[] | null | undefined,
+): {
+  browserName: string;
+  deviceType: ClientDeviceType;
+  platform: string;
+} {
+  const normalized = normalizeUserAgent(userAgent);
+  return {
+    browserName: parseBrowser(normalized),
+    deviceType: parseDeviceType(normalized),
+    platform: parsePlatform(normalized),
+  };
 }
 
 export function summarizeUserAgent(userAgent: string | null | undefined): string {

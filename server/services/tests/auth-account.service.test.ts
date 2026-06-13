@@ -200,6 +200,7 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
   const passwordHash = await hashPassword("Password123!");
   const user = buildSuperuser(passwordHash);
   const auditActions: string[] = [];
+  const createdActivityInputs: Parameters<AuthAccountStorage["createActivity"]>[0][] = [];
   let deactivated = false;
 
   const service = createAuthAccountService({
@@ -222,21 +223,24 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
     deactivateUserActivities: async () => {
       deactivated = true;
     },
-    createActivity: async () => ({
-      id: "activity-new-1",
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-      loginTime: new Date("2026-03-20T00:00:00.000Z"),
-      lastActivityTime: new Date("2026-03-20T00:00:00.000Z"),
-      logoutTime: null,
-      isActive: true,
-      logoutReason: null,
-      fingerprint: "fp-1",
-      browser: "chrome",
-      pcName: "pc",
-      ipAddress: "127.0.0.1",
-    }),
+    createActivity: async (input: Parameters<AuthAccountStorage["createActivity"]>[0]) => {
+      createdActivityInputs.push(input);
+      return {
+        id: "activity-new-1",
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        loginTime: new Date("2026-03-20T00:00:00.000Z"),
+        lastActivityTime: new Date("2026-03-20T00:00:00.000Z"),
+        logoutTime: null,
+        isActive: true,
+        logoutReason: null,
+        fingerprint: "fp-1",
+        browser: "chrome",
+        pcName: "pc",
+        ipAddress: "127.0.0.1",
+      };
+    },
     touchLastLogin: async () => undefined,
     // Optional runtime app config path used by stale-session detection.
     getAppConfig: async () => ({
@@ -256,14 +260,20 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
     username: "superuser",
     password: "Password123!",
     browserName: "chrome",
+    deviceType: "desktop",
     fingerprint: "fp-1",
     ipAddress: "127.0.0.1",
     pcName: "pc",
+    platform: "Windows 10/11",
   });
 
   assert.equal(result.kind, "authenticated");
   assert.equal(result.user.username, "superuser");
   assert.equal(result.activity.id, "activity-new-1");
+  const createdActivityInput = createdActivityInputs[0];
+  assert.ok(createdActivityInput);
+  assert.equal(createdActivityInput?.deviceType, "desktop");
+  assert.equal(createdActivityInput?.platform, "Windows 10/11");
   assert.equal(deactivated, true);
   assert.ok(auditActions.includes("LOGIN_STALE_SESSION_RECOVERED"));
   assert.ok(auditActions.includes("LOGIN_SUCCESS"));

@@ -6,6 +6,8 @@ import { ERROR_CODES } from "../../../shared/error-codes";
 import { rotateCsrfTokenAfterPrivilegeEscalation } from "../../http/csrf";
 import { HttpError } from "../../http/errors";
 import { logger } from "../../lib/logger";
+import { buildClientDeviceProfile } from "../../lib/browser";
+import { resolveRequestClientIp } from "../../http/client-ip";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 const LEGACY_LOGIN_ROUTE = "/api/login";
@@ -24,20 +26,21 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
     signSessionToken,
     signTwoFactorChallengeToken,
     verifyTwoFactorChallengeToken,
-    parseBrowserName,
   } = context;
 
   const handleLogin = jsonRoute(async (req, res) => {
     const body = readLoginBody(req.body);
-    const browserName = parseBrowserName(body.browser, req.headers["user-agent"]);
-    const ipAddress = req.ip || req.socket.remoteAddress || null;
+    const deviceProfile = buildClientDeviceProfile(req.headers["user-agent"]);
+    const ipAddress = resolveRequestClientIp(req);
     const loginResult = await authAccountService.login({
       username: body.username,
       password: body.password,
       fingerprint: body.fingerprint,
       pcName: body.pcName,
-      browserName,
+      browserName: deviceProfile.browserName,
+      deviceType: deviceProfile.deviceType,
       ipAddress,
+      platform: deviceProfile.platform,
     });
 
     if (loginResult.kind === "two_factor_required") {
@@ -48,9 +51,11 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
           username: loginResult.user.username,
           role: loginResult.user.role,
           fingerprint: body.fingerprint,
-          browserName,
+          browserName: deviceProfile.browserName,
+          deviceType: deviceProfile.deviceType,
           pcName: body.pcName,
           ipAddress,
+          platform: deviceProfile.platform,
         });
       } catch (error) {
         logger.error("Two-factor login challenge token signing failed", {
@@ -134,8 +139,10 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
         code: body.code,
         fingerprint: challenge.fingerprint,
         browserName: challenge.browserName,
+        deviceType: challenge.deviceType,
         pcName: challenge.pcName,
         ipAddress: challenge.ipAddress,
+        platform: challenge.platform,
       });
 
       const session = signSessionToken(

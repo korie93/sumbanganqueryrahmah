@@ -1273,6 +1273,84 @@ test("GET /api/activity/page validates and forwards pagination, sorting, and fil
   }
 });
 
+test("GET /api/activity/page limits exact network audit data to moderators", async () => {
+  const listActivityPage = async (params: ActivityPageParams) => ({
+    activities: [
+      {
+        id: "activity-network-audit",
+        userId: "user-2",
+        username: "regular.user",
+        role: "user",
+        fingerprint: "fp-network",
+        ipAddress: "203.0.113.88",
+        browser: "Chrome 149",
+        deviceType: "desktop",
+        platform: "Windows 10/11",
+        isActive: true,
+        pcName: null,
+        loginTime: new Date("2026-06-13T01:00:00.000Z"),
+        logoutTime: null,
+        lastActivityTime: new Date("2026-06-13T01:01:00.000Z"),
+        logoutReason: null,
+        status: "ONLINE",
+      },
+    ],
+    page: params.page,
+    pageSize: params.pageSize,
+    total: 1,
+    totalPages: 1,
+    summary: {
+      idleCount: 0,
+      kickedCount: 0,
+      logoutCount: 0,
+      onlineCount: 1,
+    },
+  });
+  const userHarness = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "user.one",
+      role: "user",
+      activityId: "activity-1",
+    }),
+    storageOverrides: {
+      listActivityPage,
+    },
+  });
+  const adminHarness = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+    storageOverrides: {
+      listActivityPage,
+    },
+  });
+  const userServer = await startTestServer(userHarness.app);
+  const adminServer = await startTestServer(adminHarness.app);
+
+  try {
+    const [userResponse, adminResponse] = await Promise.all([
+      fetch(`${userServer.baseUrl}/api/activity/page?page=1&pageSize=20`),
+      fetch(`${adminServer.baseUrl}/api/activity/page?page=1&pageSize=20`),
+    ]);
+    const userPayload = await userResponse.json();
+    const adminPayload = await adminResponse.json();
+
+    assert.equal(userPayload.activities[0]?.ipAddress, "203.0.113.x");
+    assert.equal(adminPayload.activities[0]?.ipAddress, "203.0.113.88");
+    assert.equal(adminPayload.activities[0]?.deviceType, "desktop");
+    assert.equal(adminPayload.activities[0]?.platform, "Windows 10/11");
+  } finally {
+    await Promise.all([
+      stopTestServer(userServer.server),
+      stopTestServer(adminServer.server),
+    ]);
+  }
+});
+
 test("GET /api/activity/page rejects invalid pagination, sorting, and status values", async () => {
   const { app, activityPageCalls } = createActivityRouteHarness();
   const { server, baseUrl } = await startTestServer(app);

@@ -126,7 +126,6 @@ export async function login(
       username: username.toLowerCase().trim(),
       password,
       fingerprint,
-      browser: navigator.userAgent,
       ...(captchaResponse ? { captchaResponse } : {}),
     }),
     credentials: "include",

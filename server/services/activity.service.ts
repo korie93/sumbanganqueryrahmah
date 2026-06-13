@@ -5,6 +5,7 @@ import type {
   ActivityClientRegistry,
   ActivityFilters,
   ActivityPageOptions,
+  ActivityResponseAccess,
   ActivityRetentionCleanupSource,
   ActivityStorage,
   BanAccountResult,
@@ -46,24 +47,32 @@ export class ActivityService {
     return this.sessionOperations.logout(activityId, username);
   }
 
-  async getAllActivities(currentActivityId?: string) {
-    return this.sessionOperations.getAllActivities(currentActivityId);
+  async getAllActivities(
+    currentActivityId?: string,
+    access?: ActivityResponseAccess,
+  ) {
+    return this.sessionOperations.getAllActivities(currentActivityId, access);
   }
 
   async getActivityInvestigation(activityId: string) {
     return this.sessionOperations.getActivityInvestigation(activityId);
   }
 
-  async getFilteredActivities(filters: ActivityFilters, currentActivityId?: string) {
-    return this.sessionOperations.getFilteredActivities(filters, currentActivityId);
+  async getFilteredActivities(
+    filters: ActivityFilters,
+    currentActivityId?: string,
+    access?: ActivityResponseAccess,
+  ) {
+    return this.sessionOperations.getFilteredActivities(filters, currentActivityId, access);
   }
 
   async listActivityPage(
     options: ActivityPageOptions,
     filters: ActivityFilters,
     currentActivityId?: string,
+    access?: ActivityResponseAccess,
   ) {
-    return this.sessionOperations.listActivityPage(options, filters, currentActivityId);
+    return this.sessionOperations.listActivityPage(options, filters, currentActivityId, access);
   }
 
   async deleteActivityLog(activityId: string) {

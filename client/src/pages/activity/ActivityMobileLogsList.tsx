@@ -27,6 +27,7 @@ import {
 } from "@/pages/activity/utils";
 import { getActivitySelectionCountLabel } from "@/pages/activity/activity-logs-table-utils";
 import { buildActivityRowAriaLabel } from "@/pages/activity/activity-row-aria";
+import { getActivityDeviceLabel } from "@/pages/activity/activity-device-utils";
 
 type ActivityMobileLogsListProps = Pick<
   ActivityLogsTableProps,
@@ -141,6 +142,7 @@ function ActivityMobileVirtualRow({
 
   const { browser, version } = parseActivityUserAgent(activity.browser);
   const browserLabel = `${browser}${version ? ` ${version}` : ""}`;
+  const deviceLabel = getActivityDeviceLabel(activity);
 
   return (
     <ActivityPositionedRowShell positionStyle={style} className="box-border pb-3">
@@ -188,6 +190,12 @@ function ActivityMobileVirtualRow({
             <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">IP Address</p>
             <p className="truncate text-foreground/90" title={activity.ipAddress || "-"}>
               {activity.ipAddress || "-"}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">Device</p>
+            <p className="truncate text-foreground/90" title={deviceLabel}>
+              {deviceLabel}
             </p>
           </div>
           <div className="space-y-1">

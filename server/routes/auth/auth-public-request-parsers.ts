@@ -1,15 +1,18 @@
 import { z } from "zod";
 import { parseRequestBody } from "../../http/validation";
 
-const nullableString = z.union([z.string(), z.null(), z.undefined()]);
+function nullableBoundedString(max: number) {
+  return z.union([z.string().max(max), z.null(), z.undefined()])
+    .transform((value) => (typeof value === "string" ? value.trim() || null : null));
+}
 const optionalString = z.union([z.string(), z.undefined()]);
 
 const loginBodySchema = z.object({
   username: z.string().default(""),
   password: z.string().default(""),
-  fingerprint: nullableString.transform((value) => (typeof value === "string" ? value : null)),
-  pcName: nullableString.transform((value) => (typeof value === "string" ? value : null)),
-  browser: nullableString.transform((value) => (typeof value === "string" ? value : null)),
+  fingerprint: nullableBoundedString(512),
+  pcName: nullableBoundedString(128),
+  browser: nullableBoundedString(1024),
 });
 
 const activationBodySchema = z.object({

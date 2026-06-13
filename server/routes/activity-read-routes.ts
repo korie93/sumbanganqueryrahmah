@@ -46,6 +46,10 @@ const ACTIVITY_PAGE_SORT_FIELDS = new Set<ActivityPageSortBy>([
 ]);
 const ACTIVITY_PAGE_SORT_ORDERS = new Set<ActivityPageSortOrder>(["asc", "desc"]);
 
+function canViewExactNetworkAudit(role: string | null | undefined): boolean {
+  return role === "admin" || role === "superuser";
+}
+
 function readActivityPageInteger(
   value: unknown,
   label: string,
@@ -195,6 +199,9 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
         },
         readActivityPageFilters(query),
         req.user?.activityId,
+        {
+          includeExactIpAddress: canViewExactNetworkAudit(req.user?.role),
+        },
       );
 
       return res.json({
@@ -230,7 +237,14 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
     requireRole("user", "admin", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res) => {
-      return res.json({ activities: await activityService.getAllActivities(req.user?.activityId) });
+      return res.json({
+        activities: await activityService.getAllActivities(
+          req.user?.activityId,
+          {
+            includeExactIpAddress: canViewExactNetworkAudit(req.user?.role),
+          },
+        ),
+      });
     }),
   );
 
@@ -256,6 +270,9 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
         activities: await activityService.getFilteredActivities(
           buildActivityFilters(readQueryObject(req.query)),
           req.user?.activityId,
+          {
+            includeExactIpAddress: canViewExactNetworkAudit(req.user?.role),
+          },
         ),
       });
     }),
@@ -291,7 +308,10 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
     requireRole("admin", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (_req, res) => {
-      return res.json(await activityService.getAllActivities());
+      return res.json(await activityService.getAllActivities(
+        undefined,
+        { includeExactIpAddress: true },
+      ));
     }),
   );
 
@@ -312,7 +332,11 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
     requireTabAccess("activity"),
     asyncHandler(async (req, res) => {
       const filters = buildActivityFilters(readActivityBodyObject(req.body));
-      return res.json(await activityService.getFilteredActivities(filters));
+      return res.json(await activityService.getFilteredActivities(
+        filters,
+        undefined,
+        { includeExactIpAddress: true },
+      ));
     }),
   );
 }

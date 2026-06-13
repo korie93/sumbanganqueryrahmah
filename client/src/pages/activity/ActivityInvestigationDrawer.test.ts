@@ -12,6 +12,8 @@ test("session investigation drawer cancels requests and does not render raw audi
   assert.match(hookSource, /return \(\) => \{\s*controller\.abort\(\)/);
   assert.match(hookSource, /controller\.signal\.aborted/);
   assert.match(drawerSource, /fingerprintHint/);
+  assert.match(drawerSource, /Device class/);
+  assert.match(drawerSource, /data\.session\.device\.platform/);
   assert.doesNotMatch(drawerSource, /auditEvent\.details|event\.details/);
   assert.match(drawerSource, /Signals describe recorded session state/);
   assert.match(drawerSource, /data-floating-ai-avoid="true"/);

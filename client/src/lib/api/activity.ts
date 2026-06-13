@@ -54,6 +54,8 @@ export interface ActivityApiRecord {
   status: ActivityStatus;
   pcName?: string | undefined;
   browser?: string | undefined;
+  deviceType?: "desktop" | "mobile" | "tablet" | "unknown" | undefined;
+  platform?: string | undefined;
   fingerprint?: string | undefined;
   ipAddress?: string | undefined;
   loginTime: string;
@@ -105,8 +107,10 @@ export interface ActivityInvestigation {
     durationMs: number | null;
     device: {
       browser: string | null;
+      deviceType: "desktop" | "mobile" | "tablet" | "unknown" | null;
       ipAddress: string | null;
       pcName: string | null;
+      platform: string | null;
       fingerprintHint: string | null;
     };
   };

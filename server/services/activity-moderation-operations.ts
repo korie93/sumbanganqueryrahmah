@@ -69,6 +69,8 @@ export function createActivityModerationOperations(
         ipAddress: activity.ipAddress ?? null,
         browser: activity.browser ?? null,
         pcName: activity.pcName ?? null,
+        deviceType: activity.deviceType ?? null,
+        platform: activity.platform ?? null,
       });
 
       await storage.updateActivity(activityId, {

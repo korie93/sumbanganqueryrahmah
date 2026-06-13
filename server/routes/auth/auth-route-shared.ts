@@ -81,8 +81,10 @@ export type AuthRouteContext = {
     role: string;
     fingerprint?: string | null | undefined;
     browserName: string;
+    deviceType?: string | undefined;
     pcName?: string | null | undefined;
     ipAddress?: string | null | undefined;
+    platform?: string | undefined;
   }) => string;
   verifyTwoFactorChallengeToken: (token: string) => {
     purpose: "two_factor_login";
@@ -91,8 +93,10 @@ export type AuthRouteContext = {
     role: string;
     fingerprint?: string | null | undefined;
     browserName: string;
+    deviceType: string;
     pcName?: string | null | undefined;
     ipAddress?: string | null | undefined;
+    platform: string;
     iat?: number | undefined;
     exp?: number | undefined;
   };
