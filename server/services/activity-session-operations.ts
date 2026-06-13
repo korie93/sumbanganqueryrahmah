@@ -4,6 +4,7 @@ import { logger } from "../lib/logger";
 import { maskClientIpAddress } from "../http/client-ip";
 import type {
   ActivityFilters,
+  ActivityInvestigationRelatedPageOptions,
   ActivityPageOptions,
   ActivityResponseAccess,
   ActivityRetentionCleanupSource,
@@ -649,8 +650,14 @@ export function createActivitySessionOperations(
       );
     },
 
-    async getActivityInvestigation(activityId: string) {
-      const investigation = await storage.getActivityInvestigation(activityId);
+    async getActivityInvestigation(
+      activityId: string,
+      relatedPage: ActivityInvestigationRelatedPageOptions = {
+        page: 1,
+        pageSize: 5,
+      },
+    ) {
+      const investigation = await storage.getActivityInvestigation(activityId, relatedPage);
       if (!investigation) {
         return undefined;
       }
@@ -734,6 +741,21 @@ export function createActivitySessionOperations(
           },
           matches: buildRelatedSessionMatches(activity, relatedActivity),
         })),
+        relatedSessionsPagination: {
+          mode: "offset" as const,
+          page: investigation.relatedSessionsPagination.page,
+          pageSize: investigation.relatedSessionsPagination.pageSize,
+          limit: investigation.relatedSessionsPagination.pageSize,
+          offset:
+            (investigation.relatedSessionsPagination.page - 1)
+            * investigation.relatedSessionsPagination.pageSize,
+          total: investigation.relatedSessionsPagination.total,
+          totalPages: investigation.relatedSessionsPagination.totalPages,
+          hasNextPage:
+            investigation.relatedSessionsPagination.page
+            < investigation.relatedSessionsPagination.totalPages,
+          hasPreviousPage: investigation.relatedSessionsPagination.page > 1,
+        },
         timeline: buildInvestigationTimeline(investigation),
         auditEvents: auditEvents.map((event) => ({
           id: event.id,
@@ -782,12 +804,20 @@ export function createActivitySessionOperations(
       };
     },
 
-    async deleteActivityLog(activityId: string) {
+    async deleteActivityLog(activityId: string, performedBy: string) {
+      const activity = await storage.getActivityById(activityId);
       const deleted = await storage.deleteActivity(activityId);
       if (!deleted) {
         return { status: "protected" as const };
       }
       await closeSocket(activityId);
+      await storage.createAuditLog({
+        action: "DELETE_ACTIVITY_LOG",
+        performedBy,
+        targetUser: activity?.username ?? null,
+        targetResource: `activity:${activityId}`,
+        details: "Activity log deleted by an administrator",
+      });
       return { status: "deleted" as const };
     },
 

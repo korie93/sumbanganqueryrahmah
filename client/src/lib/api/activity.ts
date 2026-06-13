@@ -4,6 +4,11 @@ type ActivityRequestOptions = {
   signal?: AbortSignal | undefined;
 };
 
+type ActivityInvestigationRequestOptions = ActivityRequestOptions & {
+  relatedPage?: number | undefined;
+  relatedPageSize?: number | undefined;
+};
+
 export type ActivityLoginPayload = {
   username: string;
   role: string;
@@ -154,6 +159,17 @@ export interface ActivityInvestigation {
     };
     matches: Array<"device_fingerprint" | "ip_address" | "same_account">;
   }>;
+  relatedSessionsPagination: {
+    mode: "offset";
+    page: number;
+    pageSize: number;
+    limit: number;
+    offset: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
   timeline: Array<{
     id: string;
     kind: "activity" | "ban" | "login" | "logout" | "moderation";
@@ -263,13 +279,17 @@ export async function getActivityPage(
 
 export async function getActivityInvestigation(
   activityId: string,
-  options?: ActivityRequestOptions,
+  options?: ActivityInvestigationRequestOptions,
 ): Promise<ActivityInvestigation> {
+  const params = new URLSearchParams({
+    relatedPage: String(options?.relatedPage ?? 1),
+    relatedPageSize: String(options?.relatedPageSize ?? 5),
+  });
   const response = await apiRequest(
     "GET",
-    `/api/activity/${encodeURIComponent(activityId)}/investigation`,
+    `/api/activity/${encodeURIComponent(activityId)}/investigation?${params.toString()}`,
     undefined,
-    options,
+    { signal: options?.signal },
   );
   const payload = await response.json() as {
     investigation: ActivityInvestigation;

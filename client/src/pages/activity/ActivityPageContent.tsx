@@ -155,6 +155,7 @@ export function ActivityPageContent({
           onKickDialogOpenChange(true);
         }}
         onOpenChange={onInvestigationOpenChange}
+        onRelatedSessionsChange={onRefreshActivity}
         open={investigationOpen}
       />
 

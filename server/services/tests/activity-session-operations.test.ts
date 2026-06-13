@@ -208,6 +208,12 @@ test("getActivityInvestigation masks persistent identifiers and exposes only saf
           sharedIpAccountCount: 0,
         },
         relatedSessions: [],
+        relatedSessionsPagination: {
+          page: 1,
+          pageSize: 5,
+          total: 0,
+          totalPages: 1,
+        },
       }),
     }),
     async () => undefined,
@@ -260,6 +266,12 @@ test("getActivityInvestigation explains correlation risk without exposing raw re
             username: "siti",
           },
         ],
+        relatedSessionsPagination: {
+          page: 1,
+          pageSize: 5,
+          total: 1,
+          totalPages: 1,
+        },
       }),
     }),
     async () => undefined,
@@ -282,6 +294,17 @@ test("getActivityInvestigation explains correlation risk without exposing raw re
   );
   assert.equal("fingerprint" in (result?.relatedSessions[0]?.device ?? {}), false);
   assert.equal(JSON.stringify(result).includes("current-device-fingerprint"), false);
+  assert.deepEqual(result?.relatedSessionsPagination, {
+    mode: "offset",
+    page: 1,
+    pageSize: 5,
+    limit: 5,
+    offset: 0,
+    total: 1,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  });
 });
 
 test("bulkDeleteActivityLogs reports not found ids and closes deleted activities", async () => {

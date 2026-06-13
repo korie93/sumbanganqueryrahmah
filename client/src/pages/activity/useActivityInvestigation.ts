@@ -15,10 +15,37 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [requestVersion, setRequestVersion] = useState(0);
+  const [relatedPagination, setRelatedPagination] = useState({
+    activityId,
+    page: 1,
+    pageSize: 5,
+  });
+  const relatedPage = relatedPagination.activityId === activityId
+    ? relatedPagination.page
+    : 1;
+  const relatedPageSize = relatedPagination.activityId === activityId
+    ? relatedPagination.pageSize
+    : 5;
 
   const retry = useCallback(() => {
     setRequestVersion((version) => version + 1);
   }, []);
+
+  const setRelatedPage = useCallback((page: number) => {
+    setRelatedPagination((current) => ({
+      activityId,
+      page: Math.max(1, Math.trunc(page)),
+      pageSize: current.activityId === activityId ? current.pageSize : 5,
+    }));
+  }, [activityId]);
+
+  const setRelatedPageSize = useCallback((pageSize: number) => {
+    setRelatedPagination({
+      activityId,
+      page: 1,
+      pageSize: Math.min(20, Math.max(1, Math.trunc(pageSize))),
+    });
+  }, [activityId]);
 
   useEffect(() => {
     controllerRef.current?.abort();
@@ -33,14 +60,27 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
 
     const controller = new AbortController();
     controllerRef.current = controller;
-    setData(null);
+    setData((current) => (
+      current?.session.id === activityId ? current : null
+    ));
     setError(null);
     setLoading(true);
 
-    void getActivityInvestigation(activityId, { signal: controller.signal })
+    void getActivityInvestigation(activityId, {
+      relatedPage,
+      relatedPageSize,
+      signal: controller.signal,
+    })
       .then((investigation) => {
         if (!controller.signal.aborted) {
           setData(investigation);
+          if (investigation.relatedSessionsPagination.page !== relatedPage) {
+            setRelatedPagination({
+              activityId,
+              page: investigation.relatedSessionsPagination.page,
+              pageSize: investigation.relatedSessionsPagination.pageSize,
+            });
+          }
         }
       })
       .catch((loadError: unknown) => {
@@ -63,12 +103,14 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
         controllerRef.current = null;
       }
     };
-  }, [activityId, open, requestVersion]);
+  }, [activityId, open, relatedPage, relatedPageSize, requestVersion]);
 
   return {
     data,
     error,
     loading,
     retry,
+    setRelatedPage,
+    setRelatedPageSize,
   };
 }

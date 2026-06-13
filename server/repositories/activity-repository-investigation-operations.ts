@@ -19,11 +19,11 @@ import { db } from "../db-postgres";
 import {
   computeActivityStatus,
   type ActivityInvestigationRecord,
+  type ActivityInvestigationRelatedSessionsPageParams,
   type ActivityRepositoryOptions,
 } from "./activity-repository-shared";
 
 const ACTIVITY_INVESTIGATION_AUDIT_LIMIT = 20;
-const ACTIVITY_INVESTIGATION_RELATED_SESSION_LIMIT = 8;
 
 async function countActivityRows(condition: SQL): Promise<number> {
   const rows = await db
@@ -44,6 +44,7 @@ async function countDistinctActivityAccounts(condition: SQL): Promise<number> {
 export async function getActivityInvestigation(
   options: ActivityRepositoryOptions,
   activityId: string,
+  relatedPage: ActivityInvestigationRelatedSessionsPageParams,
 ): Promise<ActivityInvestigationRecord | undefined> {
   await options.ensureBannedSessionsTable();
 
@@ -66,6 +67,20 @@ export async function getActivityInvestigation(
   if (fingerprint) {
     relatedConditions.push(eq(userActivity.fingerprint, fingerprint));
   }
+  const relatedSessionCondition = and(
+    ne(userActivity.id, activityId),
+    or(...relatedConditions),
+  );
+  if (!relatedSessionCondition) {
+    throw new Error("Activity investigation related session condition could not be created");
+  }
+  const relatedSessionsTotal = await countActivityRows(relatedSessionCondition);
+  const relatedSessionsTotalPages = Math.max(
+    1,
+    Math.ceil(relatedSessionsTotal / relatedPage.pageSize),
+  );
+  const relatedSessionsPage = Math.min(relatedPage.page, relatedSessionsTotalPages);
+  const relatedSessionsOffset = (relatedSessionsPage - 1) * relatedPage.pageSize;
 
   const previousSessionCondition = activity.loginTime
     ? and(
@@ -103,14 +118,10 @@ export async function getActivityInvestigation(
     db
       .select()
       .from(userActivity)
-      .where(
-        and(
-          ne(userActivity.id, activityId),
-          or(...relatedConditions),
-        ),
-      )
+      .where(relatedSessionCondition)
       .orderBy(desc(userActivity.loginTime))
-      .limit(ACTIVITY_INVESTIGATION_RELATED_SESSION_LIMIT),
+      .limit(relatedPage.pageSize)
+      .offset(relatedSessionsOffset),
     countActivityRows(previousSessionCondition),
     ipAddress
       ? countActivityRows(and(previousSessionCondition, eq(userActivity.ipAddress, ipAddress))!)
@@ -202,5 +213,11 @@ export async function getActivityInvestigation(
       ...relatedActivity,
       status: computeActivityStatus(relatedActivity),
     })),
+    relatedSessionsPagination: {
+      page: relatedSessionsPage,
+      pageSize: relatedPage.pageSize,
+      total: relatedSessionsTotal,
+      totalPages: relatedSessionsTotalPages,
+    },
   };
 }

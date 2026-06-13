@@ -8,7 +8,7 @@ import {
 const sourcePath = path.resolve(process.cwd(), "server", "internal", "local-http-security.ts");
 const writeMode = process.argv.includes("--write");
 const arrayPattern =
-  /const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = \[\n(?<body>[\s\S]*?)\n\];/;
+  /(?<exportPrefix>export\s+)?const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = \[\r?\n(?<body>[\s\S]*?)\r?\n\];/;
 
 function extractExistingHashes(source) {
   const match = source.match(arrayPattern);
@@ -18,6 +18,8 @@ function extractExistingHashes(source) {
 
   return {
     body: match.groups.body,
+    exportPrefix: match.groups.exportPrefix ?? "",
+    lineEnding: source.includes("\r\n") ? "\r\n" : "\n",
     hashes: Array.from(match.groups.body.matchAll(/"('sha256-[^"]+')"|('sha256-[^']+')/g))
       .map((hashMatch) => hashMatch[1] || hashMatch[2])
       .filter(Boolean),
@@ -38,7 +40,9 @@ if (JSON.stringify(existing.hashes) === JSON.stringify(generated.hashes)) {
 if (writeMode) {
   const nextSource = source.replace(
     arrayPattern,
-    `const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [\n${formatCspHashArray(generated.hashes)}\n];`,
+    `${existing.exportPrefix}const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [`
+      + `${existing.lineEnding}${formatCspHashArray(generated.hashes)}`
+      + `${existing.lineEnding}];`,
   );
   await writeFile(sourcePath, nextSource, "utf8");
   console.log(

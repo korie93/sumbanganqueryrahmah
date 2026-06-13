@@ -4,6 +4,7 @@ import { createActivitySessionOperations } from "./activity-session-operations";
 import type {
   ActivityClientRegistry,
   ActivityFilters,
+  ActivityInvestigationRelatedPageOptions,
   ActivityPageOptions,
   ActivityResponseAccess,
   ActivityRetentionCleanupSource,
@@ -54,8 +55,11 @@ export class ActivityService {
     return this.sessionOperations.getAllActivities(currentActivityId, access);
   }
 
-  async getActivityInvestigation(activityId: string) {
-    return this.sessionOperations.getActivityInvestigation(activityId);
+  async getActivityInvestigation(
+    activityId: string,
+    relatedPage: ActivityInvestigationRelatedPageOptions,
+  ) {
+    return this.sessionOperations.getActivityInvestigation(activityId, relatedPage);
   }
 
   async getFilteredActivities(
@@ -75,8 +79,8 @@ export class ActivityService {
     return this.sessionOperations.listActivityPage(options, filters, currentActivityId, access);
   }
 
-  async deleteActivityLog(activityId: string) {
-    return this.sessionOperations.deleteActivityLog(activityId);
+  async deleteActivityLog(activityId: string, performedBy: string) {
+    return this.sessionOperations.deleteActivityLog(activityId, performedBy);
   }
 
   async bulkDeleteActivityLogs(activityIds: string[], performedBy: string) {

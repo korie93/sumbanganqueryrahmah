@@ -83,6 +83,11 @@ export type ActivityInvestigationAuditEvent = {
   timestamp: Date;
 };
 
+export type ActivityInvestigationRelatedSessionsPageParams = {
+  page: number;
+  pageSize: number;
+};
+
 export type ActivityInvestigationRecord = {
   activity: ActivityWithStatus;
   activeBan: {
@@ -99,6 +104,12 @@ export type ActivityInvestigationRecord = {
     sharedIpAccountCount: number;
   };
   relatedSessions: ActivityWithStatus[];
+  relatedSessionsPagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
 };
 
 export type AuthenticatedSessionSnapshot = {

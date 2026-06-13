@@ -145,6 +145,7 @@ function createActivityRouteHarness(options?: {
   const unbanVisitorCalls: string[] = [];
   const filteredActivityCalls: Array<Record<string, unknown>> = [];
   const activityPageCalls: ActivityPageParams[] = [];
+  const activityInvestigationPageCalls: Array<{ page: number; pageSize: number }> = [];
 
   const users = new Map<string, UserRecord>([
     ["user.one", { id: "user-1", username: "user.one", role: "user", isBanned: false }],
@@ -330,7 +331,11 @@ function createActivityRouteHarness(options?: {
     },
     deleteEndedActivitiesBefore: async () => [],
     getActivityById: async (activityId: string) => activities.get(activityId),
-    getActivityInvestigation: async (activityId: string) => {
+    getActivityInvestigation: async (
+      activityId: string,
+      relatedPage: { page: number; pageSize: number },
+    ) => {
+      activityInvestigationPageCalls.push(relatedPage);
       const activity = activities.get(activityId);
       if (!activity) {
         return undefined;
@@ -362,6 +367,12 @@ function createActivityRouteHarness(options?: {
           sharedIpAccountCount: 0,
         },
         relatedSessions: [],
+        relatedSessionsPagination: {
+          page: relatedPage.page,
+          pageSize: relatedPage.pageSize,
+          total: 0,
+          totalPages: 1,
+        },
       };
     },
     getAllActivities: async () => Array.from(activities.values()),
@@ -472,6 +483,7 @@ function createActivityRouteHarness(options?: {
     unbanVisitorCalls,
     filteredActivityCalls,
     activityPageCalls,
+    activityInvestigationPageCalls,
     activities,
     connectedClients,
     socketStates,
@@ -1383,7 +1395,7 @@ test("GET /api/activity/page rejects invalid pagination, sorting, and status val
 });
 
 test("GET /api/activity/:id/investigation returns sanitized session facts for administrators", async () => {
-  const { app } = createActivityRouteHarness({
+  const { app, activityInvestigationPageCalls } = createActivityRouteHarness({
     authenticateToken: createTestAuthenticateToken({
       userId: "admin-1",
       username: "admin.user",
@@ -1394,7 +1406,9 @@ test("GET /api/activity/:id/investigation returns sanitized session facts for ad
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/activity/activity-2/investigation`);
+    const response = await fetch(
+      `${baseUrl}/api/activity/activity-2/investigation?relatedPage=1&relatedPageSize=10`,
+    );
     assert.equal(response.status, 200);
     const payload = await response.json();
 
@@ -1405,7 +1419,53 @@ test("GET /api/activity/:id/investigation returns sanitized session facts for ad
     assert.equal(payload.investigation.auditEvents[0].requestId, "request-session-1");
     assert.equal(payload.investigation.auditEvents[0].details, undefined);
     assert.deepEqual(payload.investigation.relatedSessions, []);
+    assert.equal(payload.investigation.relatedSessionsPagination.pageSize, 10);
+    assert.deepEqual(activityInvestigationPageCalls, [{ page: 1, pageSize: 10 }]);
     assert.equal(payload.investigation.security.signals[0].code, "no_elevated_risk");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/activity/:id closes an active session and audits the deletion", async () => {
+  const {
+    activities,
+    app,
+    auditLogs,
+    clearNicknameSessionCalls,
+    connectedClients,
+    socketStates,
+  } = createActivityRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/activity-2`, {
+      method: "DELETE",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(activities.has("activity-2"), false);
+    assert.equal(connectedClients.has("activity-2"), false);
+    assert.equal(socketStates.get("activity-2")?.closeCalls, 1);
+    assert.deepEqual(clearNicknameSessionCalls, ["activity-2"]);
+    const deletionAudit = auditLogs[auditLogs.length - 1];
+    assert.equal(deletionAudit?.action, "DELETE_ACTIVITY_LOG");
+    assert.equal(deletionAudit?.performedBy, "admin.user");
+    assert.equal(deletionAudit?.targetResource, "activity:activity-2");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/:id/investigation rejects invalid related-session pagination", async () => {
+  const { app, activityInvestigationPageCalls } = createActivityRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/activity/activity-2/investigation?relatedPageSize=21`,
+    );
+    assert.equal(response.status, 400);
+    assert.equal(activityInvestigationPageCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }

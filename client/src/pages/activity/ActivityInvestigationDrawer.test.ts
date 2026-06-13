@@ -22,6 +22,12 @@ test("session investigation drawer cancels requests and renders safe correlation
   assert.match(relatedSessionsSource, /Same account/);
   assert.match(relatedSessionsSource, /Same IP/);
   assert.match(relatedSessionsSource, /Same device/);
+  assert.match(relatedSessionsSource, /CollapsibleContent/);
+  assert.match(relatedSessionsSource, /AppPaginationBar/);
+  assert.match(relatedSessionsSource, /Delete related session log/);
+  assert.match(relatedSessionsSource, /pagination\.total/);
+  assert.match(drawerSource, /deleteActivityLog\(relatedDeleteTarget\.id\)/);
+  assert.match(drawerSource, /button-confirm-delete-related-session/);
   assert.doesNotMatch(relatedSessionsSource, /\.fingerprint(?!Hint)/);
   assert.match(drawerSource, /data-floating-ai-avoid="true"/);
   assert.match(drawerSource, /min-h-0 flex-1 overflow-y-auto/);

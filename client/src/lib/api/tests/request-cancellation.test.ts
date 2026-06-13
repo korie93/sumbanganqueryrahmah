@@ -793,11 +793,23 @@ test("activity API wrappers forward AbortSignal", async () => {
     if (url === "/api/users/banned") {
       return jsonResponse({ users: [] });
     }
-    if (url === "/api/activity/activity%2F1/investigation") {
+    if (url === "/api/activity/activity%2F1/investigation?relatedPage=2&relatedPageSize=10") {
       return jsonResponse({
         investigation: {
           session: { id: "activity/1" },
           security: {},
+          relatedSessions: [],
+          relatedSessionsPagination: {
+            mode: "offset",
+            page: 2,
+            pageSize: 10,
+            limit: 10,
+            offset: 10,
+            total: 12,
+            totalPages: 2,
+            hasNextPage: false,
+            hasPreviousPage: true,
+          },
           timeline: [],
           auditEvents: [],
         },
@@ -828,7 +840,11 @@ test("activity API wrappers forward AbortSignal", async () => {
       { signal: controller.signal },
     );
     await getBannedUsers({ signal: controller.signal });
-    await getActivityInvestigation("activity/1", { signal: controller.signal });
+    await getActivityInvestigation("activity/1", {
+      relatedPage: 2,
+      relatedPageSize: 10,
+      signal: controller.signal,
+    });
   } finally {
     restoreFetch();
   }
@@ -845,7 +861,10 @@ test("activity API wrappers forward AbortSignal", async () => {
     + "&status=ONLINE%2CIDLE&username=alice",
   );
   assert.equal(requests[3]?.url, "/api/users/banned");
-  assert.equal(requests[4]?.url, "/api/activity/activity%2F1/investigation");
+  assert.equal(
+    requests[4]?.url,
+    "/api/activity/activity%2F1/investigation?relatedPage=2&relatedPageSize=10",
+  );
 });
 
 test("auth manual fetch wrappers forward AbortSignal", async () => {

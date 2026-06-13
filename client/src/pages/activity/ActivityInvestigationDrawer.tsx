@@ -12,7 +12,7 @@ import {
   Trash2,
   UserX,
 } from "lucide-react";
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,20 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { ActivityInvestigation } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import {
+  deleteActivityLog,
+  type ActivityInvestigation,
+} from "@/lib/api";
 import type { ActivityRecord } from "@/pages/activity/types";
 import { formatActivityTime, getStatusBadge } from "@/pages/activity/utils";
 import { useActivityInvestigation } from "@/pages/activity/useActivityInvestigation";
 import { getActivityDeviceTypeLabel } from "@/pages/activity/activity-device-utils";
+import { getActivityActionErrorDescription } from "@/pages/activity/activity-action-state-utils";
+import { ActivityConfirmationDialog } from "@/pages/activity/ActivityConfirmationDialog";
 import { ActivityInvestigationRelatedSessions } from "@/pages/activity/ActivityInvestigationRelatedSessions";
+
+type RelatedSession = ActivityInvestigation["relatedSessions"][number];
 
 type ActivityInvestigationDrawerProps = {
   activity: ActivityRecord | null;
@@ -39,6 +47,7 @@ type ActivityInvestigationDrawerProps = {
   onDelete: (activity: ActivityRecord) => void;
   onKick: (activity: ActivityRecord) => void;
   onOpenChange: (open: boolean) => void;
+  onRelatedSessionsChange: () => void;
   open: boolean;
 };
 
@@ -290,117 +299,205 @@ export function ActivityInvestigationDrawer({
   onDelete,
   onKick,
   onOpenChange,
+  onRelatedSessionsChange,
   open,
 }: ActivityInvestigationDrawerProps) {
+  const { toast } = useToast();
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const { data, error, loading, retry } = useActivityInvestigation(activity?.id ?? null, open);
+  const [relatedDeleteTarget, setRelatedDeleteTarget] = useState<RelatedSession | null>(null);
+  const [relatedDeleteLoadingId, setRelatedDeleteLoadingId] = useState<string | null>(null);
+  const {
+    data,
+    error,
+    loading,
+    retry,
+    setRelatedPage,
+    setRelatedPageSize,
+  } = useActivityInvestigation(activity?.id ?? null, open);
   const actionDisabled = Boolean(activity && actionLoading === activity.id);
 
+  const handleRelatedDeleteConfirm = useCallback(async () => {
+    if (!relatedDeleteTarget || relatedDeleteLoadingId !== null) {
+      return;
+    }
+
+    setRelatedDeleteLoadingId(relatedDeleteTarget.id);
+    try {
+      await deleteActivityLog(relatedDeleteTarget.id);
+      toast({
+        title: "Related session deleted",
+        description: `Activity log for ${relatedDeleteTarget.username} has been deleted.`,
+        variant: "success",
+      });
+      setRelatedDeleteTarget(null);
+      retry();
+      onRelatedSessionsChange();
+    } catch (deleteError) {
+      toast({
+        title: "Delete failed",
+        description: getActivityActionErrorDescription(
+          deleteError,
+          "The related session log could not be deleted.",
+        ),
+        variant: "destructive",
+      });
+    } finally {
+      setRelatedDeleteLoadingId(null);
+    }
+  }, [
+    onRelatedSessionsChange,
+    relatedDeleteLoadingId,
+    relatedDeleteTarget,
+    retry,
+    toast,
+  ]);
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full overflow-hidden border-border/70 bg-background p-0 sm:max-w-xl"
-        data-floating-ai-avoid="true"
-        onOpenAutoFocus={() => {
-          const trigger = findInvestigationTrigger(activity?.id);
-          const activeElement = document.activeElement;
-          returnFocusRef.current = trigger
-            ?? (activeElement instanceof HTMLElement && activeElement !== document.body
-              ? activeElement
-              : null);
-        }}
-        onCloseAutoFocus={(event) => {
-          const returnFocus = returnFocusRef.current
-            ?? findInvestigationTrigger(activity?.id);
-          returnFocusRef.current = null;
-          if (!returnFocus || !document.contains(returnFocus)) {
-            return;
+    <>
+      <Sheet
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setRelatedDeleteTarget(null);
           }
-          event.preventDefault();
-          returnFocus.focus();
+          onOpenChange(nextOpen);
         }}
       >
-        <div className="flex h-full min-h-0 flex-col">
-          <SheetHeader className="shrink-0 border-b border-border/70 px-5 py-5 pr-12 text-left sm:px-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
-              <span className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
-                Session investigation
-              </span>
+        <SheetContent
+          side="right"
+          className="w-full overflow-hidden border-border/70 bg-background p-0 sm:max-w-xl"
+          data-floating-ai-avoid="true"
+          onOpenAutoFocus={() => {
+            const trigger = findInvestigationTrigger(activity?.id);
+            const activeElement = document.activeElement;
+            returnFocusRef.current = trigger
+              ?? (activeElement instanceof HTMLElement && activeElement !== document.body
+                ? activeElement
+                : null);
+          }}
+          onCloseAutoFocus={(event) => {
+            const returnFocus = returnFocusRef.current
+              ?? findInvestigationTrigger(activity?.id);
+            returnFocusRef.current = null;
+            if (!returnFocus || !document.contains(returnFocus)) {
+              return;
+            }
+            event.preventDefault();
+            returnFocus.focus();
+          }}
+        >
+          <div className="flex h-full min-h-0 flex-col">
+            <SheetHeader className="shrink-0 border-b border-border/70 px-5 py-5 pr-12 text-left sm:px-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
+                <span className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
+                  Session investigation
+                </span>
+              </div>
+              <SheetTitle className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 truncate">{activity?.username || "Activity session"}</span>
+                {data ? getStatusBadge(data.session.status) : null}
+              </SheetTitle>
+              <SheetDescription>
+                Review session facts, security signals, and exact audit references before taking action.
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 sm:px-6">
+              {loading && !data ? <InvestigationLoadingState /> : null}
+              {error ? (
+                <Alert variant="destructive" className="my-5">
+                  <AlertTitle>Investigation unavailable</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>{error}</p>
+                    <Button type="button" variant="outline" size="sm" onClick={retry}>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Try again
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              {data ? (
+                <>
+                  <InvestigationSummary data={data} />
+                  <InvestigationRisk data={data} />
+                  <ActivityInvestigationRelatedSessions
+                    deletingSessionId={relatedDeleteLoadingId}
+                    loading={loading}
+                    pagination={data.relatedSessionsPagination}
+                    sessions={data.relatedSessions}
+                    onDeleteRequest={setRelatedDeleteTarget}
+                    onPageChange={setRelatedPage}
+                    onPageSizeChange={setRelatedPageSize}
+                  />
+                  <InvestigationTimeline data={data} />
+                  <InvestigationAuditReferences data={data} />
+                </>
+              ) : null}
             </div>
-            <SheetTitle className="flex flex-wrap items-center gap-2">
-              <span className="min-w-0 truncate">{activity?.username || "Activity session"}</span>
-              {data ? getStatusBadge(data.session.status) : null}
-            </SheetTitle>
-            <SheetDescription>
-              Review session facts, security signals, and exact audit references before taking action.
-            </SheetDescription>
-          </SheetHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 sm:px-6">
-            {loading ? <InvestigationLoadingState /> : null}
-            {!loading && error ? (
-              <Alert variant="destructive" className="my-5">
-                <AlertTitle>Investigation unavailable</AlertTitle>
-                <AlertDescription className="space-y-3">
-                  <p>{error}</p>
-                  <Button type="button" variant="outline" size="sm" onClick={retry}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Try again
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {!loading && data ? (
-              <>
-                <InvestigationSummary data={data} />
-                <InvestigationRisk data={data} />
-                <ActivityInvestigationRelatedSessions sessions={data.relatedSessions} />
-                <InvestigationTimeline data={data} />
-                <InvestigationAuditReferences data={data} />
-              </>
-            ) : null}
-          </div>
-
-          {activity && data ? (
-            <SheetFooter className="shrink-0 gap-2 border-t border-border/70 bg-background px-5 py-4 sm:px-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onDelete(activity)}
-                disabled={actionDisabled}
-                className="text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete log
-              </Button>
-              {activity.isActive ? (
+            {activity && data ? (
+              <SheetFooter className="shrink-0 gap-2 border-t border-border/70 bg-background px-5 py-4 sm:px-6">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => onKick(activity)}
+                  onClick={() => onDelete(activity)}
                   disabled={actionDisabled}
+                  className="text-destructive"
                 >
-                  <UserX className="mr-2 h-4 w-4" />
-                  Force logout
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete log
                 </Button>
-              ) : null}
-              {activity.isActive && activity.role !== "superuser" ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => onBan(activity)}
-                  disabled={actionDisabled}
-                >
-                  <Ban className="mr-2 h-4 w-4" />
-                  Ban
-                </Button>
-              ) : null}
-            </SheetFooter>
-          ) : null}
-        </div>
-      </SheetContent>
-    </Sheet>
+                {activity.isActive ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onKick(activity)}
+                    disabled={actionDisabled}
+                  >
+                    <UserX className="mr-2 h-4 w-4" />
+                    Force logout
+                  </Button>
+                ) : null}
+                {activity.isActive && activity.role !== "superuser" ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => onBan(activity)}
+                    disabled={actionDisabled}
+                  >
+                    <Ban className="mr-2 h-4 w-4" />
+                    Ban
+                  </Button>
+                ) : null}
+              </SheetFooter>
+            ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <ActivityConfirmationDialog
+        confirmClassName="bg-destructive text-destructive-foreground"
+        confirmDisabled={relatedDeleteLoadingId !== null}
+        confirmLabel={relatedDeleteLoadingId ? "Deleting..." : "Delete log"}
+        description={
+          relatedDeleteTarget?.isActive
+            ? `This will permanently delete the activity log for ${relatedDeleteTarget.username} and disconnect the active session.`
+            : `This will permanently delete the related activity log for ${relatedDeleteTarget?.username || "this user"}.`
+        }
+        icon={<Trash2 className="h-5 w-5 text-destructive" />}
+        onConfirm={() => {
+          void handleRelatedDeleteConfirm();
+        }}
+        onOpenChange={(dialogOpen) => {
+          if (!dialogOpen && relatedDeleteLoadingId === null) {
+            setRelatedDeleteTarget(null);
+          }
+        }}
+        open={relatedDeleteTarget !== null}
+        testId="button-confirm-delete-related-session"
+        title="Delete Related Session Log?"
+      />
+    </>
   );
 }

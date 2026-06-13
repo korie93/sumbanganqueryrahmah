@@ -58,7 +58,10 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const activityId = readRouteParam(req.params.id, "activity id");
-      const result = await activityService.deleteActivityLog(activityId);
+      const result = await activityService.deleteActivityLog(
+        activityId,
+        req.user!.username,
+      );
       if (result.status === "protected") {
         return res.status(409).json(buildActivityErrorPayload(
           "Activity logs linked to an active ban cannot be deleted.",

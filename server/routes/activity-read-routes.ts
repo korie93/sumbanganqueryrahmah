@@ -223,7 +223,16 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res) => {
       const activityId = readRouteParam(req.params.id, "activity id", 256);
-      const investigation = await activityService.getActivityInvestigation(activityId);
+      const query = readQueryObject(req.query);
+      const investigation = await activityService.getActivityInvestigation(activityId, {
+        page: readActivityPageInteger(query.relatedPage, "relatedPage", 1, 10_000),
+        pageSize: readActivityPageInteger(
+          query.relatedPageSize,
+          "relatedPageSize",
+          5,
+          20,
+        ),
+      });
       if (!investigation) {
         return res.status(404).json(buildActivityErrorPayload("Activity not found"));
       }

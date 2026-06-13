@@ -12,6 +12,7 @@ import {
 
 type ActivityConfirmationDialogProps = {
   confirmClassName?: string;
+  confirmDisabled?: boolean;
   confirmLabel: string;
   description: string;
   icon: ReactNode;
@@ -24,6 +25,7 @@ type ActivityConfirmationDialogProps = {
 
 export function ActivityConfirmationDialog({
   confirmClassName,
+  confirmDisabled = false,
   confirmLabel,
   description,
   icon,
@@ -45,7 +47,12 @@ export function ActivityConfirmationDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} className={confirmClassName} data-testid={testId}>
+          <AlertDialogAction
+            className={confirmClassName}
+            data-testid={testId}
+            disabled={confirmDisabled}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

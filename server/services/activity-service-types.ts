@@ -25,6 +25,11 @@ export type ActivityResponseAccess = {
   includeExactIpAddress?: boolean | undefined;
 };
 
+export type ActivityInvestigationRelatedPageOptions = {
+  page: number;
+  pageSize: number;
+};
+
 export type ActivityStorage = Pick<
   PostgresStorage,
   | "banVisitor"

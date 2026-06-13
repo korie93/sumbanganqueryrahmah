@@ -3,6 +3,7 @@ export {
   type ActivityPageFilters,
   type ActivityInvestigationAuditEvent,
   type ActivityInvestigationRecord,
+  type ActivityInvestigationRelatedSessionsPageParams,
   type ActivityPageParams,
   type ActivityPageResult,
   type ActivityPageSortBy,

@@ -3,6 +3,7 @@ import type {
   ActivityPageParams,
   ActivityPageResult,
   ActivityInvestigationRecord,
+  ActivityInvestigationRelatedSessionsPageParams,
   ActivityRetentionCleanupParams,
   ActivityRetentionCleanupResult,
   ActivityRetentionPolicy,
@@ -29,7 +30,10 @@ export interface ActivitySettingsStorageContract {
     idleMinutes: number;
   }): Promise<UserActivity | undefined>;
   getActivityById(id: string): Promise<UserActivity | undefined>;
-  getActivityInvestigation(id: string): Promise<ActivityInvestigationRecord | undefined>;
+  getActivityInvestigation(
+    id: string,
+    relatedPage: ActivityInvestigationRelatedSessionsPageParams,
+  ): Promise<ActivityInvestigationRecord | undefined>;
   getActiveActivities(): Promise<UserActivity[]>;
   getAllActivities(): Promise<UserActivity[]>;
   listActivityPage(params: ActivityPageParams): Promise<ActivityPageResult>;

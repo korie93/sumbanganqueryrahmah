@@ -32,6 +32,7 @@ import type {
   ActivityPageFilters,
   ActivityInvestigationAuditEvent,
   ActivityInvestigationRecord,
+  ActivityInvestigationRelatedSessionsPageParams,
   ActivityPageParams,
   ActivityPageResult,
   ActivityPageSortBy,
@@ -75,8 +76,11 @@ export class ActivityRepository {
     return getAuthenticatedSessionSnapshot(this.options, activityId);
   }
 
-  async getActivityInvestigation(activityId: string): Promise<ActivityInvestigationRecord | undefined> {
-    return getActivityInvestigation(this.options, activityId);
+  async getActivityInvestigation(
+    activityId: string,
+    relatedPage: ActivityInvestigationRelatedSessionsPageParams,
+  ): Promise<ActivityInvestigationRecord | undefined> {
+    return getActivityInvestigation(this.options, activityId, relatedPage);
   }
 
   async isVisitorBanned(
@@ -122,6 +126,7 @@ export type {
   ActivityRepositoryOptions,
   ActivityInvestigationAuditEvent,
   ActivityInvestigationRecord,
+  ActivityInvestigationRelatedSessionsPageParams,
   ActivityPageFilters,
   ActivityPageParams,
   ActivityPageResult,
