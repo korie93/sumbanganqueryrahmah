@@ -261,7 +261,6 @@ function App() {
   return (
     <>
       <a
-        aria-label="Skip to main content"
         className="skip-to-main-link"
         href="#main-content"
         onClick={focusMainContent}

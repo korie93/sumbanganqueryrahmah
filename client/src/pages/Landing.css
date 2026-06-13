@@ -16,13 +16,13 @@
   --landing-primary-border: hsl(221 83% 42%);
   --landing-primary-soft: hsl(214 88% 97%);
   --landing-primary-text: hsl(217 72% 28%);
-  --landing-teal: hsl(174 72% 30%);
+  --landing-teal: hsl(174 72% 25%);
   --landing-teal-soft: hsl(174 54% 95%);
   --landing-teal-border: hsl(174 42% 76%);
-  --landing-trust: hsl(154 58% 32%);
+  --landing-trust: hsl(154 58% 27%);
   --landing-trust-soft: hsl(151 52% 95%);
   --landing-trust-border: hsl(151 42% 74%);
-  --landing-amber: hsl(36 84% 39%);
+  --landing-amber: hsl(36 84% 31%);
   --landing-amber-soft: hsl(43 92% 96%);
   --landing-amber-border: hsl(39 82% 76%);
   --landing-shadow: hsl(215 34% 22% / 0.18);

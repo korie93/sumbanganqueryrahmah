@@ -17,6 +17,15 @@ test("bundle budget script can emit a JSON report artifact", () => {
   assert.match(source, /results: results\.map\(buildReportResult\)/);
 });
 
+test("bundle budget script keeps chart runtime outside the public entry graph", () => {
+  const source = readRepoFile("scripts/verify-client-bundle-budgets.mjs");
+
+  assert.match(source, /extractStaticJavaScriptDependencies/);
+  assert.match(source, /inspectInitialModuleGraph/);
+  assert.match(source, /recharts-\(\?:wrapper\|surface\|layer\|sector\)/);
+  assert.match(source, /chart runtime must remain outside the public entry graph/);
+});
+
 test("CI uploads bundle budget reports after enforcing budgets", () => {
   const workflow = readRepoFile(".github/workflows/ci.yml");
 

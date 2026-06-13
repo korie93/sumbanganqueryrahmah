@@ -117,6 +117,60 @@ function extractAssetNameFromHtml(html, assetType) {
   return null;
 }
 
+function extractStaticJavaScriptDependencies(source) {
+  const dependencies = new Set();
+  const staticImportPattern =
+    /\b(?:import|export)(?!\s*\()\s*(?:[^"'()]*?\bfrom\s*)?["']\.\/([^"']+\.js)["']/g;
+
+  for (const match of source.matchAll(staticImportPattern)) {
+    if (match[1]) {
+      dependencies.add(match[1]);
+    }
+  }
+
+  return [...dependencies];
+}
+
+async function inspectInitialModuleGraph(entryScriptName) {
+  if (!entryScriptName) {
+    return {
+      chartAssets: [],
+      files: [],
+    };
+  }
+
+  const pending = [entryScriptName];
+  const visited = new Set();
+  const chartAssets = new Set();
+
+  while (pending.length > 0) {
+    const assetName = pending.pop();
+    if (!assetName || visited.has(assetName)) {
+      continue;
+    }
+
+    visited.add(assetName);
+    const source = await fs.readFile(path.join(assetsDir, assetName), "utf8");
+    if (
+      assetName.startsWith("charts-")
+      || /recharts-(?:wrapper|surface|layer|sector)/.test(source)
+    ) {
+      chartAssets.add(assetName);
+    }
+
+    for (const dependency of extractStaticJavaScriptDependencies(source)) {
+      if (!visited.has(dependency)) {
+        pending.push(dependency);
+      }
+    }
+  }
+
+  return {
+    chartAssets: [...chartAssets].sort(),
+    files: [...visited].sort(),
+  };
+}
+
 async function readEntryAssets() {
   const html = await fs.readFile(indexHtmlPath, "utf8");
   return {
@@ -212,6 +266,7 @@ async function run() {
   for (const rule of rules) {
     results.push(await resolveRuleResult(assetFiles, entryAssets, rule));
   }
+  const initialModuleGraph = await inspectInitialModuleGraph(entryAssets.script);
 
   console.log("Client bundle budget report");
   for (const result of results) {
@@ -223,14 +278,25 @@ async function run() {
       `${result.label.padEnd(20)} ${assetLabel.padEnd(40)} raw ${rawSizeLabel.padStart(10)} / ${String(result.maxKB).padStart(4)} KB  gzip ${gzipSizeLabel.padStart(10)} / ${gzipBudgetLabel.padStart(6)}  ${result.reason}`,
     );
   }
+  console.log(
+    `initial-js-graph     ${String(initialModuleGraph.files.length).padStart(3)} static assets; chart runtime ${
+      initialModuleGraph.chartAssets.length === 0
+        ? "excluded"
+        : `included by ${initialModuleGraph.chartAssets.join(", ")}`
+    }`,
+  );
 
   const failures = results.filter((result) => result.overBudget);
   await writeBudgetReportIfRequested(results);
-  if (failures.length > 0) {
-    const summary = failures
+  const failureMessages = failures
       .map((result) => `${result.label}: ${result.reason}`)
-      .join("; ");
-    throw new Error(`Client bundle budget check failed: ${summary}`);
+  if (initialModuleGraph.chartAssets.length > 0) {
+    failureMessages.push(
+      `initial-js-graph: chart runtime must remain outside the public entry graph (${initialModuleGraph.chartAssets.join(", ")})`,
+    );
+  }
+  if (failureMessages.length > 0) {
+    throw new Error(`Client bundle budget check failed: ${failureMessages.join("; ")}`);
   }
 }
 

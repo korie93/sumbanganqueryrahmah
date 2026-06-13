@@ -85,8 +85,9 @@ test("landing and public auth theme use solid neutral dark-mode auth surfaces", 
   assert.match(tokenSource, /--login-card-overlay-gradient:\s*none;/);
   assert.match(landingCss, /\.landing-hero-panel\s*{/);
   assert.match(landingCss, /--landing-primary:\s*hsl\(221 83% 53%\);/);
-  assert.match(landingCss, /--landing-trust:\s*hsl\(154 58% 32%\);/);
-  assert.match(landingCss, /--landing-amber:\s*hsl\(36 84% 39%\);/);
+  assert.match(landingCss, /--landing-teal:\s*hsl\(174 72% 25%\);/);
+  assert.match(landingCss, /--landing-trust:\s*hsl\(154 58% 27%\);/);
+  assert.match(landingCss, /--landing-amber:\s*hsl\(36 84% 31%\);/);
   assert.match(landingCss, /background:\s*linear-gradient\(180deg, var\(--landing-surface\), var\(--landing-surface-muted\)\);/);
   assert.match(landingCss, /\.landing-placeholder-footer-shell\s*{/);
 });
