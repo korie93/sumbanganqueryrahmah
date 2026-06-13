@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
 import { AnalysisChartsSection } from "@/pages/analysis/AnalysisChartsSection";
+import { AnalysisComparisonSection } from "@/pages/analysis/AnalysisComparisonSection";
 import { AnalysisDataQualitySection } from "@/pages/analysis/AnalysisDataQualitySection";
 import { AnalysisDetailsSection } from "@/pages/analysis/AnalysisDetailsSection";
 import { AnalysisHeader } from "@/pages/analysis/AnalysisHeader";
@@ -83,6 +84,9 @@ export default function Analysis(props: AnalysisProps) {
               onInspectColumn={(focusColumn) =>
                 dataState.handleInspectInViewer({ focusColumn })}
             />
+            {dataState.mode === "all" && dataState.allResult ? (
+              <AnalysisComparisonSection allResult={dataState.allResult} />
+            ) : null}
             <AnalysisChartsSection
               section={chartsSection}
               categoryBarData={displayState.categoryBarData}
