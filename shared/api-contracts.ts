@@ -132,6 +132,100 @@ export const importDataPageResponseSchema = z.object({
   pagination: hybridPaginationMetaSchema,
 });
 
+export const importAnalysisCategorySchema = z.object({
+  count: nonNegativeIntSchema,
+  samples: z.array(z.string()),
+});
+
+export const importAnalysisDuplicateItemSchema = z.object({
+  value: z.string(),
+  count: positiveIntSchema,
+});
+
+export const importAnalysisColumnTypeSchema = z.enum([
+  "boolean",
+  "date",
+  "empty",
+  "mixed",
+  "number",
+  "structured",
+  "text",
+]);
+
+const importAnalysisProfiledTypeSchema = z.enum([
+  "boolean",
+  "date",
+  "number",
+  "structured",
+  "text",
+]);
+
+export const importAnalysisColumnProfileSchema = z.object({
+  name: nonEmptyStringSchema.max(120),
+  inferredType: importAnalysisColumnTypeSchema,
+  applicableRows: nonNegativeIntSchema,
+  populatedCount: nonNegativeIntSchema,
+  emptyCount: nonNegativeIntSchema,
+  completenessPercent: z.number().min(0).max(100),
+  typeConsistencyPercent: z.number().min(0).max(100),
+  uniqueCount: nonNegativeIntSchema,
+  uniqueCountIsApproximate: z.boolean(),
+  duplicateCount: nonNegativeIntSchema,
+  typeDistribution: z.record(importAnalysisProfiledTypeSchema, nonNegativeIntSchema),
+});
+
+export const importAnalysisQualitySchema = z.object({
+  score: z.number().int().min(0).max(100),
+  grade: z.enum(["excellent", "good", "review", "poor", "no_data"]),
+  completenessPercent: z.number().min(0).max(100),
+  typeConsistencyPercent: z.number().min(0).max(100),
+  profiledColumns: nonNegativeIntSchema,
+  columnsNeedingReview: nonNegativeIntSchema,
+  columnsWithMissingValues: nonNegativeIntSchema,
+  mixedTypeColumns: nonNegativeIntSchema,
+  limitedCardinalityColumns: nonNegativeIntSchema,
+  totalApplicableCells: nonNegativeIntSchema,
+  populatedCells: nonNegativeIntSchema,
+  emptyCells: nonNegativeIntSchema,
+  columnLimitReached: z.boolean(),
+});
+
+export const importAnalysisDataSchema = z.object({
+  icLelaki: importAnalysisCategorySchema,
+  icPerempuan: importAnalysisCategorySchema,
+  noPolis: importAnalysisCategorySchema,
+  noTentera: importAnalysisCategorySchema,
+  passportMY: importAnalysisCategorySchema,
+  passportLuarNegara: importAnalysisCategorySchema,
+  duplicates: z.object({
+    count: nonNegativeIntSchema,
+    items: z.array(importAnalysisDuplicateItemSchema),
+  }),
+  quality: importAnalysisQualitySchema,
+  columns: z.array(importAnalysisColumnProfileSchema),
+});
+
+const importAnalysisSourceSchema = z.object({
+  id: nonEmptyStringSchema,
+  name: nonEmptyStringSchema,
+  filename: nonEmptyStringSchema,
+});
+
+export const singleImportAnalysisResponseSchema = z.object({
+  import: importAnalysisSourceSchema,
+  totalRows: nonNegativeIntSchema,
+  analysis: importAnalysisDataSchema,
+});
+
+export const allImportsAnalysisResponseSchema = z.object({
+  totalImports: nonNegativeIntSchema,
+  totalRows: nonNegativeIntSchema,
+  imports: z.array(importAnalysisSourceSchema.extend({
+    rowCount: nonNegativeIntSchema,
+  })),
+  analysis: importAnalysisDataSchema,
+});
+
 const searchResultRowSchema = jsonObjectSchema;
 
 export const searchGlobalResponseSchema = z.object({
@@ -314,6 +408,12 @@ export type ImportsListResponse = z.infer<typeof importsListResponseSchema>;
 export type ImportBackgroundJobContract = z.infer<typeof importBackgroundJobSchema>;
 export type ImportMutationResultContract = z.infer<typeof importMutationResultSchema>;
 export type ImportDataPageResponse = z.infer<typeof importDataPageResponseSchema>;
+export type ImportAnalysisColumnProfileContract = z.infer<typeof importAnalysisColumnProfileSchema>;
+export type ImportAnalysisDataContract = z.infer<typeof importAnalysisDataSchema>;
+export type ImportAnalysisDuplicateItemContract = z.infer<typeof importAnalysisDuplicateItemSchema>;
+export type ImportAnalysisQualityContract = z.infer<typeof importAnalysisQualitySchema>;
+export type SingleImportAnalysisResponse = z.infer<typeof singleImportAnalysisResponseSchema>;
+export type AllImportsAnalysisResponse = z.infer<typeof allImportsAnalysisResponseSchema>;
 export type SearchGlobalResponse = z.infer<typeof searchGlobalResponseSchema>;
 export type AdvancedSearchResponse = z.infer<typeof advancedSearchResponseSchema>;
 export type AuditLogsResponse = z.infer<typeof auditLogsResponseSchema>;

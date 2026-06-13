@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronDown, Copy } from "lucide-react";
+import { AlertTriangle, ChevronDown, Copy, ExternalLink } from "lucide-react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ interface AnalysisDuplicatesPanelProps {
     totalPages: number;
   };
   onCopyDuplicate: (value: string) => void;
+  onInspectDuplicate: ((value: string) => void) | null;
   onDuplicatesOpenChange: (open: boolean) => void;
   onPageChange: (key: string, page: number, totalItems: number) => void;
 }
@@ -30,6 +31,7 @@ export function AnalysisDuplicatesPanel({
   duplicatesOpen,
   duplicatesPaged,
   onCopyDuplicate,
+  onInspectDuplicate,
   onDuplicatesOpenChange,
   onPageChange,
 }: AnalysisDuplicatesPanelProps) {
@@ -95,6 +97,16 @@ export function AnalysisDuplicatesPanel({
                         <Copy className="mr-2 h-4 w-4" />
                         Copy Value
                       </Button>
+                      {onInspectDuplicate ? (
+                        <Button
+                          variant="outline"
+                          className="mt-2 w-full justify-center"
+                          onClick={() => onInspectDuplicate(duplicate.value)}
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Find in Viewer
+                        </Button>
+                      ) : null}
                     </article>
                   ))}
                 </div>
@@ -125,15 +137,27 @@ export function AnalysisDuplicatesPanel({
                             <Badge variant="destructive">{duplicate.count}x</Badge>
                           </td>
                           <td className="p-3">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onCopyDuplicate(duplicate.value)}
-                              aria-label="Copy duplicate value"
-                              data-testid={`button-copy-dup-${index}`}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Copy duplicate value"
+                                onClick={() => onCopyDuplicate(duplicate.value)}
+                                data-testid={`button-copy-dup-${index}`}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              {onInspectDuplicate ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Find duplicate in Viewer"
+                                  onClick={() => onInspectDuplicate(duplicate.value)}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       ))}

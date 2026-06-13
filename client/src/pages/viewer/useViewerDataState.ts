@@ -25,12 +25,14 @@ const VIEWER_SEARCH_DEBOUNCE_MS = 300;
 
 type UseViewerDataStateOptions = {
   importId?: string | undefined;
+  initialSearch?: string | undefined;
   rowsPerPage: number;
   onSelectionReset: () => void;
 };
 
 export function useViewerDataState({
   importId,
+  initialSearch = "",
   rowsPerPage,
   onSelectionReset,
 }: UseViewerDataStateOptions) {
@@ -42,8 +44,8 @@ export function useViewerDataState({
   const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
   const [error, setError] = useState("");
   const [importName, setImportName] = useState("Data Viewer");
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
   const [debouncedColumnFilters, setDebouncedColumnFilters] = useState<ColumnFilter[]>([]);
   const [emptyHint, setEmptyHint] = useState("");
   const [isCleared, setIsCleared] = useState(false);

@@ -15,6 +15,22 @@ const analysis: AnalysisData = {
   passportMY: { count: 1, samples: ["A1234567"] },
   passportLuarNegara: { count: 2, samples: ["X123", "X456"] },
   duplicates: { count: 3, items: [{ value: "900101-01-1111", count: 2 }] },
+  quality: {
+    score: 100,
+    grade: "excellent",
+    completenessPercent: 100,
+    typeConsistencyPercent: 100,
+    profiledColumns: 1,
+    columnsNeedingReview: 0,
+    columnsWithMissingValues: 0,
+    mixedTypeColumns: 0,
+    limitedCardinalityColumns: 0,
+    totalApplicableCells: 48,
+    populatedCells: 48,
+    emptyCells: 0,
+    columnLimitReached: false,
+  },
+  columns: [],
 };
 
 const singleResult: SingleAnalysisResult = {

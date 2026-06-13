@@ -48,6 +48,22 @@ function createEmptyAnalysisResult() {
     passportMY: { count: 0, samples: [] },
     passportLuarNegara: { count: 0, samples: [] },
     duplicates: { count: 0, items: [] },
+    quality: {
+      score: 0,
+      grade: "no_data" as const,
+      completenessPercent: 0,
+      typeConsistencyPercent: 0,
+      profiledColumns: 0,
+      columnsNeedingReview: 0,
+      columnsWithMissingValues: 0,
+      mixedTypeColumns: 0,
+      limitedCardinalityColumns: 0,
+      totalApplicableCells: 0,
+      populatedCells: 0,
+      emptyCells: 0,
+      columnLimitReached: false,
+    },
+    columns: [],
   };
 }
 

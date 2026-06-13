@@ -2,12 +2,14 @@ import { apiRequest } from "../api-client";
 import { createClientRandomId } from "../secure-id";
 import { parseApiJson } from "./contract";
 import {
+  allImportsAnalysisResponseSchema,
   deleteImportResponseSchema,
   importDataPageResponseSchema,
   importBackgroundJobSchema,
   importMutationResultSchema,
   importRecordSchema,
   importsListResponseSchema,
+  singleImportAnalysisResponseSchema,
 } from "@shared/api-contracts";
 
 const IMPORT_UPLOAD_TIMEOUT_MS = 5 * 60_000 + 30_000;
@@ -243,7 +245,11 @@ export async function analyzeImport(id: string, options?: ImportRequestOptions) 
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(
+    response,
+    singleImportAnalysisResponseSchema,
+    `/api/imports/${id}/analyze`,
+  );
 }
 
 export async function analyzeAll(options?: ImportRequestOptions) {
@@ -253,5 +259,5 @@ export async function analyzeAll(options?: ImportRequestOptions) {
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(response, allImportsAnalysisResponseSchema, "/api/analyze/all");
 }

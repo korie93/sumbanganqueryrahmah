@@ -2,7 +2,9 @@ import type { ImportsRepository, ImportWithRowCount } from "../repositories/impo
 import {
   consumeImportAnalysisRows,
   createImportAnalysisAccumulator,
+  createImportAnalysisDatasetScope,
   finalizeImportAnalysisAccumulator,
+  finalizeImportAnalysisDatasetScope,
   IMPORT_ANALYSIS_BATCH_SIZE,
 } from "./import-analysis-utils";
 
@@ -24,6 +26,7 @@ export class ImportAnalysisService {
     signal?: AbortSignal,
   ) {
     const accumulator = createImportAnalysisAccumulator();
+    const datasetScope = createImportAnalysisDatasetScope();
     const totalRows = await this.importsRepository.getDataRowCountByImport(importRecord.id);
     let afterRowId: string | null = null;
     let processedRows = 0;
@@ -39,10 +42,11 @@ export class ImportAnalysisService {
         break;
       }
 
-      consumeImportAnalysisRows(accumulator, rows);
+      consumeImportAnalysisRows(accumulator, rows, datasetScope);
       processedRows += rows.length;
       afterRowId = rows[rows.length - 1]?.id ?? afterRowId;
     }
+    finalizeImportAnalysisDatasetScope(accumulator, datasetScope, processedRows);
 
     return {
       import: {
@@ -70,6 +74,7 @@ export class ImportAnalysisService {
 
     for (const importRecord of importsWithCounts) {
       totalRows += Number(importRecord.rowCount || 0);
+      const datasetScope = createImportAnalysisDatasetScope();
       let afterRowId: string | null = null;
       let processedRows = 0;
 
@@ -84,10 +89,11 @@ export class ImportAnalysisService {
           break;
         }
 
-        consumeImportAnalysisRows(accumulator, rows);
+        consumeImportAnalysisRows(accumulator, rows, datasetScope);
         processedRows += rows.length;
         afterRowId = rows[rows.length - 1]?.id ?? afterRowId;
       }
+      finalizeImportAnalysisDatasetScope(accumulator, datasetScope, processedRows);
     }
 
     return {

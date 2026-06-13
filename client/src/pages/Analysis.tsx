@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
 import { AnalysisChartsSection } from "@/pages/analysis/AnalysisChartsSection";
+import { AnalysisDataQualitySection } from "@/pages/analysis/AnalysisDataQualitySection";
 import { AnalysisDetailsSection } from "@/pages/analysis/AnalysisDetailsSection";
 import { AnalysisHeader } from "@/pages/analysis/AnalysisHeader";
 import { AnalysisSummarySection } from "@/pages/analysis/AnalysisSummarySection";
@@ -76,6 +77,12 @@ export default function Analysis(props: AnalysisProps) {
         {!dataState.loading && !dataState.error && dataState.analysis ? (
           <>
             <AnalysisSummarySection snapshotItems={displayState.snapshotItems} />
+            <AnalysisDataQualitySection
+              analysis={dataState.analysis}
+              mode={dataState.mode}
+              onInspectColumn={(focusColumn) =>
+                dataState.handleInspectInViewer({ focusColumn })}
+            />
             <AnalysisChartsSection
               section={chartsSection}
               categoryBarData={displayState.categoryBarData}
@@ -86,6 +93,11 @@ export default function Analysis(props: AnalysisProps) {
               analysis={dataState.analysis}
               mode={dataState.mode}
               allResult={dataState.allResult}
+              onInspectDuplicate={
+                dataState.mode === "single"
+                  ? (search) => dataState.handleInspectInViewer({ search })
+                  : null
+              }
               displayState={{
                 copiedItems: displayState.copiedItems,
                 expandedSections: displayState.expandedSections,

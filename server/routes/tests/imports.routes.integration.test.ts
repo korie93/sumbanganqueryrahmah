@@ -3,11 +3,13 @@ import test from "node:test";
 import * as xlsx from "xlsx";
 import type { DataRow, Import } from "../../../shared/schema-postgres";
 import {
+  allImportsAnalysisResponseSchema,
   deleteImportResponseSchema,
   importDataPageResponseSchema,
   importMutationResultSchema,
   importRecordSchema,
   importsListResponseSchema,
+  singleImportAnalysisResponseSchema,
 } from "../../../shared/api-contracts";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import { runtimeConfig } from "../../config/runtime";
@@ -62,6 +64,22 @@ function createAnalysisPayload(importRecord: { id: string; name: string; filenam
       passportMY: { count: 0, samples: [] },
       passportLuarNegara: { count: 0, samples: [] },
       duplicates: { count: 0, items: [] },
+      quality: {
+        score: 0,
+        grade: "no_data",
+        completenessPercent: 0,
+        typeConsistencyPercent: 0,
+        profiledColumns: 0,
+        columnsNeedingReview: 0,
+        columnsWithMissingValues: 0,
+        mixedTypeColumns: 0,
+        limitedCardinalityColumns: 0,
+        totalApplicableCells: 0,
+        populatedCells: 0,
+        emptyCells: 0,
+        columnLimitReached: false,
+      },
+      columns: [],
     },
   };
 }
@@ -1199,6 +1217,20 @@ test("GET /api/imports/:id/analyze returns a 404 for missing imports", async () 
   }
 });
 
+test("GET /api/imports/:id/analyze returns the shared analysis contract", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-1/analyze`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.doesNotThrow(() => singleImportAnalysisResponseSchema.parse(payload));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/analyze/all analyzes all imports through the service layer", async () => {
   const { app, analyzeAllCalls } = createImportsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -1208,6 +1240,7 @@ test("GET /api/analyze/all analyzes all imports through the service layer", asyn
     assert.equal(response.status, 200);
 
     const payload = await response.json();
+    assert.doesNotThrow(() => allImportsAnalysisResponseSchema.parse(payload));
     assert.equal(payload.totalImports, 3);
     assert.equal(payload.totalRows, 3);
     assert.deepEqual(analyzeAllCalls, [["import-1", "import-2", "import-3"]]);

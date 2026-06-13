@@ -20,6 +20,22 @@ const analysis: AnalysisData = {
       { value: "920202026666", count: 3 },
     ],
   },
+  quality: {
+    score: 92,
+    grade: "good",
+    completenessPercent: 90,
+    typeConsistencyPercent: 96,
+    profiledColumns: 4,
+    columnsNeedingReview: 1,
+    columnsWithMissingValues: 1,
+    mixedTypeColumns: 0,
+    limitedCardinalityColumns: 0,
+    totalApplicableCells: 160,
+    populatedCells: 144,
+    emptyCells: 16,
+    columnLimitReached: false,
+  },
+  columns: [],
 };
 
 const singleResult: SingleAnalysisResult = {

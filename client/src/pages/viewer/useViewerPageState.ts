@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getBrowserSessionStorage } from "@/lib/browser-storage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
+import {
+  consumeViewerAnalysisHandoff,
+} from "@/pages/viewer/analysis-handoff";
 import { buildViewerActiveFilterChips } from "@/pages/viewer/page-utils";
 import { useViewerDataState } from "@/pages/viewer/useViewerDataState";
 import { useViewerExportState } from "@/pages/viewer/useViewerExportState";
@@ -45,6 +49,9 @@ export function useViewerPageState({
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   const [selectAllFiltered, setSelectAllFiltered] = useState(false);
+  const [analysisHandoff] = useState(() =>
+    consumeViewerAnalysisHandoff(getBrowserSessionStorage()),
+  );
 
   const clearSelectionState = useCallback(() => {
     setSelectedRowIds((previous) => (previous.size === 0 ? previous : new Set<number>()));
@@ -53,6 +60,7 @@ export function useViewerPageState({
 
   const data = useViewerDataState({
     importId,
+    initialSearch: analysisHandoff?.search,
     rowsPerPage,
     onSelectionReset: clearSelectionState,
   });
@@ -68,9 +76,16 @@ export function useViewerPageState({
         return previous;
       }
 
+      if (
+        analysisHandoff?.focusColumn &&
+        data.headers.includes(analysisHandoff.focusColumn)
+      ) {
+        return new Set([analysisHandoff.focusColumn]);
+      }
+
       return new Set(data.headers);
     });
-  }, [data.headers]);
+  }, [analysisHandoff?.focusColumn, data.headers]);
 
   usePageShortcuts([
     {

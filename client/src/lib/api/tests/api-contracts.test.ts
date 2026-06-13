@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
 import {
+  allImportsAnalysisResponseSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
   auditLogRecordSchema,
@@ -9,13 +10,16 @@ import {
   collectionMonthlyTargetResponseSchema,
   importListItemSchema,
   normalizeApiPaginationMeta,
+  singleImportAnalysisResponseSchema,
 } from "@shared/api-contracts";
 import { ERROR_CODES } from "@shared/error-codes";
 import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "@shared/pagination-contracts";
 import {
+  analyzeAll,
+  analyzeImport,
+  deleteImport,
   getImportData,
   getImports,
-  deleteImport,
   renameImport,
 } from "@/lib/api/imports";
 import { getAuditLogs } from "@/lib/api/audit";
@@ -26,6 +30,34 @@ import {
   updateSetting,
 } from "@/lib/api/settings";
 import { parseApiJson } from "@/lib/api/contract";
+
+function createEmptyAnalysisContract() {
+  return {
+    icLelaki: { count: 0, samples: [] },
+    icPerempuan: { count: 0, samples: [] },
+    noPolis: { count: 0, samples: [] },
+    noTentera: { count: 0, samples: [] },
+    passportMY: { count: 0, samples: [] },
+    passportLuarNegara: { count: 0, samples: [] },
+    duplicates: { count: 0, items: [] },
+    quality: {
+      score: 0,
+      grade: "no_data",
+      completenessPercent: 0,
+      typeConsistencyPercent: 0,
+      profiledColumns: 0,
+      columnsNeedingReview: 0,
+      columnsWithMissingValues: 0,
+      mixedTypeColumns: 0,
+      limitedCardinalityColumns: 0,
+      totalApplicableCells: 0,
+      populatedCells: 0,
+      emptyCells: 0,
+      columnLimitReached: false,
+    },
+    columns: [],
+  } as const;
+}
 
 function withMockFetch(mock: typeof fetch): () => void {
   const originalFetch = globalThis.fetch;
@@ -136,6 +168,61 @@ test("shared API error payload contract accepts only enumerated API error codes"
     code: "permission_denied",
   });
   assert.equal(malformedCodePayload.success, false);
+});
+
+test("analysis API contracts require quality and bounded column profile metadata", () => {
+  const single = singleImportAnalysisResponseSchema.safeParse({
+    import: {
+      id: "import-1",
+      name: "June",
+      filename: "june.csv",
+    },
+    totalRows: 0,
+    analysis: createEmptyAnalysisContract(),
+  });
+  const all = allImportsAnalysisResponseSchema.safeParse({
+    totalImports: 0,
+    totalRows: 0,
+    imports: [],
+    analysis: createEmptyAnalysisContract(),
+  });
+
+  assert.equal(single.success, true);
+  assert.equal(all.success, true);
+  assert.equal(singleImportAnalysisResponseSchema.safeParse({
+    import: { id: "import-1", name: "June", filename: "june.csv" },
+    totalRows: 0,
+    analysis: {},
+  }).success, false);
+});
+
+test("analysis API wrappers validate their response contracts", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/imports/import-1/analyze") {
+      return jsonResponse({
+        import: { id: "import-1", name: "June", filename: "june.csv" },
+        totalRows: 0,
+        analysis: createEmptyAnalysisContract(),
+      });
+    }
+    if (url === "/api/analyze/all") {
+      return jsonResponse({
+        totalImports: 0,
+        totalRows: 0,
+        imports: [],
+        analysis: createEmptyAnalysisContract(),
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    assert.equal((await analyzeImport("import-1")).analysis.quality.grade, "no_data");
+    assert.equal((await analyzeAll()).analysis.columns.length, 0);
+  } finally {
+    restoreFetch();
+  }
 });
 
 test("shared API error payload contract allows known control fields and rejects unexpected extras", () => {

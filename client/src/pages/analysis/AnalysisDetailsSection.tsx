@@ -59,6 +59,7 @@ type AnalysisDetailsSectionProps = {
   mode: AnalysisMode;
   allResult: AllAnalysisResult | null;
   displayState: AnalysisDetailsState;
+  onInspectDuplicate: ((value: string) => void) | null;
 };
 
 export function AnalysisDetailsSection({
@@ -67,6 +68,7 @@ export function AnalysisDetailsSection({
   mode,
   allResult,
   displayState,
+  onInspectDuplicate,
 }: AnalysisDetailsSectionProps) {
   const hasSpecialIdSamples =
     analysis.noPolis.samples?.length > 0 ||
@@ -223,6 +225,7 @@ export function AnalysisDetailsSection({
               duplicatesOpen={displayState.duplicatesOpen}
               duplicatesPaged={displayState.duplicatesPaged}
               onCopyDuplicate={displayState.copyToClipboard}
+              onInspectDuplicate={onInspectDuplicate}
               onDuplicatesOpenChange={displayState.setDuplicatesOpen}
               onPageChange={displayState.setPage}
             />

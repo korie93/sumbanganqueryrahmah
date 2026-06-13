@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { analyzeAll, analyzeImport } from "@/lib/api";
 import {
   getBrowserLocalStorage,
+  getBrowserSessionStorage,
   safeGetStorageItem,
   safeRemoveStorageItem,
 } from "@/lib/browser-storage";
+import { storeViewerAnalysisSelection } from "@/pages/viewer/analysis-handoff";
 import type {
   AllAnalysisResult,
   AnalysisMode,
@@ -130,6 +132,31 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
     onNavigate("saved");
   }, [onNavigate]);
 
+  const handleInspectInViewer = useCallback((handoff: {
+    focusColumn?: string;
+    search?: string;
+  }) => {
+    if (mode !== "single" || !singleResult) {
+      return;
+    }
+
+    const stored = storeViewerAnalysisSelection(
+      getBrowserLocalStorage(),
+      getBrowserSessionStorage(),
+      {
+        importId: singleResult.import.id,
+        importName: singleResult.import.name,
+        ...handoff,
+      },
+    );
+    if (!stored) {
+      setError("Unable to open this analysis in Viewer. Please return to Saved and try again.");
+      return;
+    }
+
+    onNavigate("viewer", singleResult.import.id);
+  }, [mode, onNavigate, singleResult]);
+
   return {
     loading,
     error,
@@ -142,5 +169,6 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
     handleReset,
     handleRefresh,
     handleBackToSaved,
+    handleInspectInViewer,
   };
 }

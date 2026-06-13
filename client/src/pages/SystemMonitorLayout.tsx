@@ -23,11 +23,11 @@ type SystemMonitorLayoutProps = {
   showAuditLogs: boolean;
   requestedSection: MonitorSection;
   onSectionChange?: ((section: MonitorSection) => void) | undefined;
-  onNavigate?: ((page: string) => void) | undefined;
+  onNavigate?: ((page: string, importId?: string) => void) | undefined;
 };
 
 type AnalysisSectionProps = {
-  onNavigate?: ((page: string) => void) | undefined;
+  onNavigate?: ((page: string, importId?: string) => void) | undefined;
 };
 
 export { preloadSystemMonitorSection };
