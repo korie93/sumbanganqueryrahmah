@@ -29,14 +29,14 @@ export function ActivityDesktopLogsTable({
   return (
     <HorizontalScrollHint hint="Scroll table">
       <div className="min-w-[70rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm">
-        <ActivityDesktopLogsHeader
-          allVisibleSelected={allVisibleSelected}
-          canModerateActivity={canModerateActivity}
-          gridClassName={gridClassName}
-          onToggleSelectAllVisible={onToggleSelectAllVisible}
-          partiallySelected={partiallySelected}
-        />
-        <div className="max-h-[360px] overflow-y-auto">
+        <div className="max-h-[408px] overflow-y-auto [scrollbar-gutter:stable]">
+          <ActivityDesktopLogsHeader
+            allVisibleSelected={allVisibleSelected}
+            canModerateActivity={canModerateActivity}
+            gridClassName={gridClassName}
+            onToggleSelectAllVisible={onToggleSelectAllVisible}
+            partiallySelected={partiallySelected}
+          />
           {activities.map((activity) => (
             <ActivityDesktopLogRow
               key={activity.id}
