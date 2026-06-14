@@ -7,7 +7,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { SavedImportCard } from "@/pages/saved/SavedImportCard";
+import { SavedListDensityControl } from "@/pages/saved/SavedListDensityControl";
 import type { ImportItem } from "@/pages/saved/types";
+import { useSavedListDensity } from "@/pages/saved/useSavedListDensity";
 
 interface SavedImportsListProps {
   activeImportId: string | null;
@@ -52,6 +54,8 @@ export function SavedImportsList({
   selectedImportIds,
   summaryLabel,
 }: SavedImportsListProps) {
+  const listDensity = useSavedListDensity();
+
   if (imports.length === 0) {
     return (
       <div className="ops-empty-state">
@@ -69,31 +73,37 @@ export function SavedImportsList({
   return (
     <Collapsible open={filesOpen} onOpenChange={onFilesOpenChange}>
       <div className="rounded-xl border border-border/70 bg-background/80 p-3 shadow-sm sm:p-4">
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="h-auto w-full items-start justify-between gap-3 p-0 text-left"
-            data-testid="button-toggle-files"
-          >
-            <div className="flex min-w-0 items-start gap-2">
-              <BookMarked className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-foreground">Saved Files</span>
-                  <span className="text-xs text-muted-foreground sm:text-sm">({summaryLabel})</span>
+        <div className="flex items-start justify-between gap-3">
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="h-auto min-w-0 flex-1 items-start justify-between gap-3 p-0 text-left"
+              data-testid="button-toggle-files"
+            >
+              <div className="flex min-w-0 items-start gap-2">
+                <BookMarked className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-foreground">Saved Files</span>
+                    <span className="text-xs text-muted-foreground sm:text-sm">({summaryLabel})</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground sm:hidden">
+                    Reopen files quickly or continue to Viewer and Analysis.
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground sm:hidden">
-                  Reopen files quickly or continue to Viewer and Analysis.
-                </p>
               </div>
-            </div>
-            <ChevronDown
-              className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-                filesOpen ? "rotate-180" : ""
-              }`}
-            />
-          </Button>
-        </CollapsibleTrigger>
+              <ChevronDown
+                className={`mt-0.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+                  filesOpen ? "rotate-180" : ""
+                }`}
+              />
+            </Button>
+          </CollapsibleTrigger>
+          <SavedListDensityControl
+            value={listDensity.preference}
+            onChange={listDensity.setPreference}
+          />
+        </div>
         <CollapsibleContent>
           <div
             className="
@@ -126,6 +136,7 @@ export function SavedImportsList({
                 isSelected={selectedImportIds.has(item.id)}
                 isSuperuser={isSuperuser}
                 item={item}
+                density={listDensity.density}
                 onAnalysis={onAnalysis}
                 onDelete={onDelete}
                 onInspect={onInspect}

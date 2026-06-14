@@ -5,16 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { buildSavedImportRowAriaLabel } from "@/pages/saved/saved-import-row-aria";
-import {
-  formatSavedFileSize,
-  getSavedImportSizeBytes,
-  getSavedImportStatus,
-} from "@/pages/saved/saved-workspace";
+import { formatSavedFileSize, getSavedImportSizeBytes, getSavedImportStatus } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
-
+import type { SavedListDensity } from "@/pages/saved/useSavedListDensity";
 type SavedImportCardProps = {
   actionsDisabled: boolean;
   duplicateHashCounts: ReadonlyMap<string, number>;
+  density: SavedListDensity;
   formatDate: (dateStr: string) => string;
   isActive: boolean;
   isSelected: boolean;
@@ -27,16 +24,15 @@ type SavedImportCardProps = {
   onToggleSelected: (id: string, checked: boolean) => void;
   onView: (item: ImportItem) => void;
 };
-
 const statusToneClassName = {
   default: "border-border bg-muted/45 text-foreground",
   success: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
   warning: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
   danger: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200",
 } as const;
-
 export function SavedImportCard({
   actionsDisabled,
+  density,
   duplicateHashCounts,
   formatDate,
   isActive,
@@ -50,15 +46,17 @@ export function SavedImportCard({
   onToggleSelected,
   onView,
 }: SavedImportCardProps) {
+  const compact = density === "compact";
   const status = getSavedImportStatus(item, duplicateHashCounts);
   const rowCount = typeof item.rowCount === "number" ? item.rowCount : null;
+  const actionClassName = cn("w-full sm:w-auto", compact && "h-8 px-2 text-xs");
+  const actionIconClassName = cn("h-4 w-4", compact ? "mr-1.5" : "mr-2");
   const handleSelectionChange = (checked: boolean) => {
     onToggleSelected(item.id, checked);
     if (checked) {
       onInspect(item);
     }
   };
-
   return (
     <div
       aria-label={buildSavedImportRowAriaLabel({
@@ -66,15 +64,18 @@ export function SavedImportCard({
         item,
       })}
       className={cn(
-        "rounded-xl border bg-background/70 p-3 shadow-sm transition-colors sm:p-4",
-        isSelected || isActive
-          ? "border-primary/45 bg-primary/5"
-          : "border-border/70",
+        "rounded-xl border bg-background/70 shadow-sm transition-colors",
+        compact ? "p-2.5 sm:p-3" : "p-3 sm:p-4",
+        isSelected || isActive ? "border-primary/45 bg-primary/5" : "border-border/70",
       )}
+      data-density={density}
       data-testid={`card-import-${item.id}`}
       role="group"
     >
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:gap-4">
+      <div className={cn(
+        "grid xl:grid-cols-[minmax(0,1fr)_auto]",
+        compact ? "gap-2 xl:gap-3" : "gap-3 xl:gap-4",
+      )}>
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             {isSuperuser ? (
@@ -96,7 +97,7 @@ export function SavedImportCard({
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <BookMarked className="h-5 w-5 text-primary" />
               </span>
-              <span className="min-w-0 space-y-2">
+              <span className={cn("min-w-0", compact ? "space-y-1.5" : "space-y-2")}>
                 <span className="block space-y-1">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="break-words text-sm font-medium text-foreground sm:text-base">
@@ -129,7 +130,6 @@ export function SavedImportCard({
               </span>
             </button>
           </div>
-
           {isSuperuser ? (
             <div className="flex shrink-0 items-start justify-end md:hidden">
               <MobileActionMenu
@@ -155,57 +155,59 @@ export function SavedImportCard({
             </div>
           ) : null}
         </div>
-
-        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center xl:max-w-[40rem] xl:justify-end xl:self-start">
+        <div className={cn(
+          "grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center xl:max-w-[40rem] xl:justify-end xl:self-start",
+          compact ? "gap-1.5" : "gap-2",
+        )}>
           <Button
             variant="outline"
-            className="w-full sm:w-auto"
+            className={actionClassName}
             onClick={() => onView(item)}
             data-testid={`button-view-${item.id}`}
           >
-            <Eye className="mr-2 h-4 w-4" />
+            <Eye className={actionIconClassName} />
             View
           </Button>
           <Button
             variant="outline"
-            className="w-full sm:w-auto"
+            className={actionClassName}
             onClick={() => onAnalysis(item)}
             data-testid={`button-analysis-${item.id}`}
           >
-            <BarChart3 className="mr-2 h-4 w-4" />
+            <BarChart3 className={actionIconClassName} />
             Analysis
           </Button>
           <Button
             variant="outline"
-            className="w-full sm:w-auto"
+            className={actionClassName}
             onClick={() => onInspect(item)}
             aria-pressed={isActive}
             data-testid={`button-inspect-${item.id}`}
           >
-            <Info className="mr-2 h-4 w-4" />
+            <Info className={actionIconClassName} />
             {isActive ? "Selected" : "Details"}
           </Button>
           {isSuperuser ? (
             <Button
               variant="outline"
-              className="hidden md:inline-flex"
+              className={cn(actionClassName, "hidden md:inline-flex")}
               onClick={() => onRename(item)}
               disabled={actionsDisabled}
               data-testid={`button-rename-${item.id}`}
             >
-              <Edit2 className="mr-2 h-4 w-4" />
+              <Edit2 className={actionIconClassName} />
               Rename
             </Button>
           ) : null}
           {isSuperuser ? (
             <Button
               variant="outline"
-              className="hidden text-destructive md:inline-flex"
+              className={cn(actionClassName, "hidden text-destructive md:inline-flex")}
               onClick={() => onDelete(item)}
               disabled={actionsDisabled}
               data-testid={`button-delete-${item.id}`}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className={actionIconClassName} />
               Delete
             </Button>
           ) : null}

@@ -8,6 +8,7 @@ const savedModuleFiles = [
   "SavedImportCard.tsx",
   "SavedImportDetailDrawer.tsx",
   "SavedImportsWorkspace.tsx",
+  "SavedListDensityControl.tsx",
   "SavedWorkspacePanel.tsx",
   "useSavedDataState.ts",
   "useSavedImportDetailState.ts",
@@ -74,6 +75,23 @@ test("saved files use the wide page and a viewport-sized desktop scroll region",
   assert.match(importsList, /md:overflow-y-auto/);
   assert.doesNotMatch(importsList, /max-h-\[440px\]/);
   assert.match(importCard, /xl:grid-cols-\[minmax\(0,1fr\)_auto\]/);
+});
+
+test("saved file density is user-persisted and comfortable on mobile", async () => {
+  const importsList = await readSavedSource("SavedImportsList.tsx");
+  const importCard = await readSavedSource("SavedImportCard.tsx");
+  const densityControl = await readSavedSource("SavedListDensityControl.tsx");
+  const densityState = await readSavedSource("useSavedListDensity.ts");
+
+  assert.match(importsList, /SavedListDensityControl/);
+  assert.match(importsList, /density=\{listDensity\.density\}/);
+  assert.match(importCard, /data-density=\{density\}/);
+  assert.match(densityControl, /aria-label="Saved file density"/);
+  assert.match(densityControl, /hidden .*md:flex/);
+  assert.match(densityState, /getStoredAuthenticatedUser/);
+  assert.match(densityState, /safeSetStorageItem/);
+  assert.match(densityState, /isMobile \? "comfortable" : preference/);
+  assert.doesNotMatch(densityState, /localStorage\.(getItem|setItem)/);
 });
 
 test("saved data state keeps one server page and aborts stale requests", async () => {
