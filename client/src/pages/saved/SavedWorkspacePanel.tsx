@@ -47,7 +47,11 @@ export function SavedWorkspacePanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-1" role="list">
+      <div
+        className="grid grid-cols-2 gap-2 xl:grid-cols-1"
+        role="group"
+        aria-label="Saved workspace views"
+      >
         {workspaceItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;

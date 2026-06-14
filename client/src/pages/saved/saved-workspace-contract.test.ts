@@ -42,6 +42,7 @@ test("saved workspace avoids unsafe DOM writes and timer lifecycle risk", async 
 test("saved page wires server pagination and a compact detail drawer", async () => {
   const savedPage = await readSavedSource("../Saved.tsx");
   const workspace = await readSavedSource("SavedImportsWorkspace.tsx");
+  const workspacePanel = await readSavedSource("SavedWorkspacePanel.tsx");
   const importCard = await readSavedSource("SavedImportCard.tsx");
   const workspaceState = await readSavedSource("saved-workspace.ts");
 
@@ -54,6 +55,9 @@ test("saved page wires server pagination and a compact detail drawer", async () 
   assert.match(importCard, /button-select-import-/);
   assert.match(importCard, /onClick=\{\(\) => onInspect\(item\)\}/);
   assert.match(importCard, /if \(checked\) \{\s*onInspect\(item\);/);
+  assert.match(workspacePanel, /role="group"/);
+  assert.match(workspacePanel, /aria-label="Saved workspace views"/);
+  assert.doesNotMatch(workspacePanel, /role="list"/);
   assert.doesNotMatch(workspaceState, /return imports\[0\]\?\.id/);
 });
 
