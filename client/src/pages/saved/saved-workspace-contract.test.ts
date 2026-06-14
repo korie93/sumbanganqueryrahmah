@@ -61,6 +61,21 @@ test("saved page wires server pagination and a compact detail drawer", async () 
   assert.doesNotMatch(workspaceState, /return imports\[0\]\?\.id/);
 });
 
+test("saved files use the wide page and a viewport-sized desktop scroll region", async () => {
+  const savedPage = await readSavedSource("../Saved.tsx");
+  const workspace = await readSavedSource("SavedImportsWorkspace.tsx");
+  const importsList = await readSavedSource("SavedImportsList.tsx");
+  const importCard = await readSavedSource("SavedImportCard.tsx");
+
+  assert.match(savedPage, /<OperationalPage width="wide">/);
+  assert.match(workspace, /xl:grid-cols-\[15rem_minmax\(0,1fr\)\]/);
+  assert.match(importsList, /saved-files-scroll-region/);
+  assert.match(importsList, /md:max-h-\[clamp\(32rem,calc\(100dvh-20rem\),52rem\)\]/);
+  assert.match(importsList, /md:overflow-y-auto/);
+  assert.doesNotMatch(importsList, /max-h-\[440px\]/);
+  assert.match(importCard, /xl:grid-cols-\[minmax\(0,1fr\)_auto\]/);
+});
+
 test("saved data state keeps one server page and aborts stale requests", async () => {
   const dataState = await readSavedSource("useSavedDataState.ts");
   const detailState = await readSavedSource("useSavedImportDetailState.ts");

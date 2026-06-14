@@ -18,7 +18,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
   const state = useSavedPageState({ onNavigate, userRole });
 
   return (
-    <OperationalPage width="content">
+    <OperationalPage width="wide">
       <OperationalPageHeader
         title="Saved Imports"
         eyebrow="Imported Data"
@@ -151,7 +151,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
           </Button>
         </OperationalSectionCard>
       ) : (
-        <OperationalSectionCard contentClassName="space-y-0">
+        <OperationalSectionCard contentClassName="space-y-0 p-3 sm:p-4 xl:p-5">
           <SavedImportsWorkspace
             activeImport={state.activeImport}
             activeImportId={state.activeImportId}

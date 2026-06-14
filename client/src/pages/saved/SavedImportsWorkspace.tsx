@@ -83,7 +83,7 @@ export function SavedImportsWorkspace({
   const hasNoWorkspaceResults = imports.length === 0 && totalImports > 0;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+    <div className="grid gap-4 xl:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)]">
       <div className="space-y-4">
         <SavedWorkspacePanel
           activeView={workspaceView}
