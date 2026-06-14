@@ -40,9 +40,13 @@ test("saved workspace avoids unsafe DOM writes and timer lifecycle risk", async 
 test("saved page wires compact workspace navigation and detail panel", async () => {
   const savedPage = await readSavedSource("../Saved.tsx");
   const workspace = await readSavedSource("SavedImportsWorkspace.tsx");
+  const importCard = await readSavedSource("SavedImportCard.tsx");
 
   assert.match(savedPage, /SavedImportsWorkspace/);
   assert.match(workspace, /SavedWorkspacePanel/);
   assert.match(workspace, /SavedImportDetailPanel/);
   assert.match(workspace, /onWorkspaceViewChange/);
+  assert.match(importCard, /button-select-import-/);
+  assert.match(importCard, /onClick=\{\(\) => onInspect\(item\)\}/);
+  assert.match(importCard, /if \(checked\) \{\s*onInspect\(item\);/);
 });

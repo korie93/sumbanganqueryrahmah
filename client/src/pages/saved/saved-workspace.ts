@@ -128,6 +128,16 @@ export function filterSavedImportsByWorkspaceView(
   return imports.filter(isSavedImportNeedsReview);
 }
 
+export function resolveSavedActiveImportId(
+  imports: ImportItem[],
+  activeImportId: string | null,
+) {
+  if (activeImportId && imports.some((item) => item.id === activeImportId)) {
+    return activeImportId;
+  }
+  return imports[0]?.id ?? null;
+}
+
 export function buildSavedWorkspaceSummary(
   imports: ImportItem[],
   totalFiles: number,

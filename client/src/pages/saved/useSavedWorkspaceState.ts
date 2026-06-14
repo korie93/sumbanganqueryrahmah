@@ -3,6 +3,7 @@ import {
   buildSavedDuplicateHashCounts,
   buildSavedWorkspaceSummary,
   filterSavedImportsByWorkspaceView,
+  resolveSavedActiveImportId,
   type SavedWorkspaceView,
 } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
@@ -35,12 +36,9 @@ export function useSavedWorkspaceState({
   );
 
   useEffect(() => {
-    if (visibleImports.length === 0) {
-      setActiveImportId(null);
-      return;
-    }
-    if (!activeImportId || !visibleImports.some((item) => item.id === activeImportId)) {
-      setActiveImportId(visibleImports[0]?.id ?? null);
+    const resolvedImportId = resolveSavedActiveImportId(visibleImports, activeImportId);
+    if (resolvedImportId !== activeImportId) {
+      setActiveImportId(resolvedImportId);
     }
   }, [activeImportId, visibleImports]);
 
