@@ -1,12 +1,15 @@
 import { FileStack } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
+import { AnalysisChartsSkeleton } from "@/pages/analysis/AnalysisChartsSkeleton";
 import { AnalysisChartsSection } from "@/pages/analysis/AnalysisChartsSection";
 import { AnalysisComparisonSection } from "@/pages/analysis/AnalysisComparisonSection";
 import { AnalysisDataQualitySection } from "@/pages/analysis/AnalysisDataQualitySection";
 import { AnalysisDetailsSection } from "@/pages/analysis/AnalysisDetailsSection";
+import { AnalysisSectionFallback } from "@/pages/analysis/AnalysisSectionFallback";
 import { AnalysisSummarySection } from "@/pages/analysis/AnalysisSummarySection";
 import type { useAnalysisDataState } from "@/pages/analysis/useAnalysisDataState";
+import { useDeferredAnalysisSectionMount } from "@/pages/analysis/useDeferredAnalysisSectionMount";
 import type { useAnalysisDisplayState } from "@/pages/analysis/useAnalysisDisplayState";
 import type { AnalysisWorkspaceSection } from "@/pages/analysis/analysis-workspace";
 
@@ -16,6 +19,7 @@ type AnalysisDisplayState = ReturnType<typeof useAnalysisDisplayState>;
 type AnalysisWorkspaceContentProps = {
   activeSection: AnalysisWorkspaceSection;
   dataState: AnalysisDataState;
+  deferSecondarySections: boolean;
   displayState: AnalysisDisplayState;
 };
 
@@ -54,8 +58,19 @@ function CompareUnavailable({
 export function AnalysisWorkspaceContent({
   activeSection,
   dataState,
+  deferSecondarySections,
   displayState,
 }: AnalysisWorkspaceContentProps) {
+  const trendsSection = useDeferredAnalysisSectionMount({
+    enabled: deferSecondarySections,
+    rootMargin: "220px 0px",
+    timeoutMs: 900,
+  });
+  const issuesSection = useDeferredAnalysisSectionMount({
+    enabled: deferSecondarySections,
+    rootMargin: "420px 0px",
+    timeoutMs: 1500,
+  });
   const analysis = dataState.analysis;
   if (!analysis) return null;
 
@@ -109,42 +124,50 @@ export function AnalysisWorkspaceContent({
 
   if (activeSection === "trends") {
     return (
-      <div data-testid="analysis-workspace-trends">
-        <AnalysisChartsSection
-          categoryBarData={displayState.categoryBarData}
-          genderPieData={displayState.genderPieData}
-        />
+      <div ref={trendsSection.triggerRef} data-testid="analysis-workspace-trends">
+        {trendsSection.shouldRender ? (
+          <AnalysisChartsSection
+            categoryBarData={displayState.categoryBarData}
+            genderPieData={displayState.genderPieData}
+          />
+        ) : (
+          <AnalysisChartsSkeleton />
+        )}
       </div>
     );
   }
 
   return (
-    <div data-testid="analysis-workspace-issues">
-      <AnalysisDetailsSection
-        analysis={analysis}
-        mode={dataState.mode}
-        allResult={dataState.allResult}
-        onInspectDuplicate={
-          dataState.mode === "single"
-            ? (search) => dataState.handleInspectInViewer({ search })
-            : null
-        }
-        displayState={{
-          copiedItems: displayState.copiedItems,
-          expandedSections: displayState.expandedSections,
-          specialIdPagedSections: displayState.specialIdPagedSections,
-          filesPaged: displayState.filesPaged,
-          duplicatesPaged: displayState.duplicatesPaged,
-          filesListOpen: displayState.filesListOpen,
-          duplicatesOpen: displayState.duplicatesOpen,
-          setFilesListOpen: displayState.setFilesListOpen,
-          setDuplicatesOpen: displayState.setDuplicatesOpen,
-          setPage: displayState.setPage,
-          toggleSection: displayState.toggleSection,
-          copyToClipboard: displayState.copyToClipboard,
-          copyAllToClipboard: displayState.copyAllToClipboard,
-        }}
-      />
+    <div ref={issuesSection.triggerRef} data-testid="analysis-workspace-issues">
+      {issuesSection.shouldRender ? (
+        <AnalysisDetailsSection
+          analysis={analysis}
+          mode={dataState.mode}
+          allResult={dataState.allResult}
+          onInspectDuplicate={
+            dataState.mode === "single"
+              ? (search) => dataState.handleInspectInViewer({ search })
+              : null
+          }
+          displayState={{
+            copiedItems: displayState.copiedItems,
+            expandedSections: displayState.expandedSections,
+            specialIdPagedSections: displayState.specialIdPagedSections,
+            filesPaged: displayState.filesPaged,
+            duplicatesPaged: displayState.duplicatesPaged,
+            filesListOpen: displayState.filesListOpen,
+            duplicatesOpen: displayState.duplicatesOpen,
+            setFilesListOpen: displayState.setFilesListOpen,
+            setDuplicatesOpen: displayState.setDuplicatesOpen,
+            setPage: displayState.setPage,
+            toggleSection: displayState.toggleSection,
+            copyToClipboard: displayState.copyToClipboard,
+            copyAllToClipboard: displayState.copyAllToClipboard,
+          }}
+        />
+      ) : (
+        <AnalysisSectionFallback label="Loading issue details..." />
+      )}
     </div>
   );
 }

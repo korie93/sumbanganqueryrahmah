@@ -21,12 +21,16 @@ const navigationHookSource = readFileSync(
 
 test("analysis workspace mounts content through one active section switch", () => {
   assert.match(analysisSource, /<AnalysisWorkspaceContent/);
+  assert.match(analysisSource, /isMobileViewportWidth\(window\.innerWidth\)/);
   assert.doesNotMatch(analysisSource, /<AnalysisChartsSection/);
   assert.doesNotMatch(analysisSource, /<AnalysisDetailsSection/);
   assert.match(contentSource, /activeSection === "overview"/);
   assert.match(contentSource, /activeSection === "quality"/);
   assert.match(contentSource, /activeSection === "compare"/);
   assert.match(contentSource, /activeSection === "trends"/);
+  assert.match(contentSource, /useDeferredAnalysisSectionMount/);
+  assert.match(contentSource, /trendsSection\.shouldRender/);
+  assert.match(contentSource, /issuesSection\.shouldRender/);
 });
 
 test("analysis workspace navigation remains accessible and bounded", () => {

@@ -4,6 +4,7 @@ import {
 import { OperationalPage, OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { isMobileViewportWidth } from "@/lib/responsive";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
 import { AnalysisHeader } from "@/pages/analysis/AnalysisHeader";
 import { AnalysisWorkspaceContent } from "@/pages/analysis/AnalysisWorkspaceContent";
@@ -16,6 +17,8 @@ import type { AnalysisProps } from "@/pages/analysis/types";
 export default function Analysis(props: AnalysisProps) {
   const { onNavigate } = props;
   const isMobile = useIsMobile();
+  const shouldDeferSecondaryMobileSections =
+    isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
 
   const dataState = useAnalysisDataState(props);
   const displayState = useAnalysisDisplayState({
@@ -76,6 +79,7 @@ export default function Analysis(props: AnalysisProps) {
               <AnalysisWorkspaceContent
                 activeSection={workspaceNavigation.activeSection}
                 dataState={dataState}
+                deferSecondarySections={shouldDeferSecondaryMobileSections}
                 displayState={displayState}
               />
             </section>
