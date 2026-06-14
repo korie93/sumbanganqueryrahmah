@@ -8,6 +8,7 @@ import {
   type CollectionRecordPiiSearchHashes,
   encryptCollectionPiiFieldValue,
   hasCollectionPiiEncryptionConfigured,
+  resolveCollectionPiiFieldValue,
   shouldRewriteCollectionPiiSearchHashValue,
   shouldRewriteCollectionPiiSearchHashesValue,
   shouldRewriteCollectionPiiShadowValue,
@@ -330,11 +331,18 @@ function rewriteCollectionPiiShadowValue(params: {
   plaintext: unknown;
   encrypted: string | null;
 }): string | null {
-  if (!shouldRewriteCollectionPiiShadowValue(params)) {
+  const resolvedValue = resolveCollectionPiiFieldValue({
+    plaintext: params.plaintext,
+    encrypted: params.encrypted,
+  });
+  if (!shouldRewriteCollectionPiiShadowValue({
+    plaintext: resolvedValue,
+    encrypted: params.encrypted,
+  })) {
     return params.encrypted;
   }
 
-  return encryptCollectionPiiFieldValue(params.plaintext);
+  return encryptCollectionPiiFieldValue(resolvedValue);
 }
 
 function buildCollectionPiiSearchHashesForPlan(
@@ -342,14 +350,34 @@ function buildCollectionPiiSearchHashesForPlan(
   plan: CollectionPiiRewritePlan,
 ): CollectionRecordPiiSearchHashes | null {
   return buildCollectionRecordPiiSearchHashes({
-    customerName: plan.customerName ? row.customer_name : null,
-    icNumber: plan.icNumber ? row.ic_number : null,
-    customerPhone: plan.customerPhone ? row.customer_phone : null,
-    accountNumber: plan.accountNumber ? row.account_number : null,
+    customerName: plan.customerName
+      ? resolveCollectionPiiFieldValue({
+          plaintext: row.customer_name,
+          encrypted: row.customer_name_encrypted,
+        })
+      : null,
+    icNumber: plan.icNumber
+      ? resolveCollectionPiiFieldValue({
+          plaintext: row.ic_number,
+          encrypted: row.ic_number_encrypted,
+        })
+      : null,
+    customerPhone: plan.customerPhone
+      ? resolveCollectionPiiFieldValue({
+          plaintext: row.customer_phone,
+          encrypted: row.customer_phone_encrypted,
+        })
+      : null,
+    accountNumber: plan.accountNumber
+      ? resolveCollectionPiiFieldValue({
+          plaintext: row.account_number,
+          encrypted: row.account_number_encrypted,
+        })
+      : null,
   });
 }
 
-function buildCollectionPiiReencryptionUpdate(
+export function buildCollectionPiiReencryptionUpdate(
   row: CollectionPiiRow,
   plan: CollectionPiiRewritePlan,
 ) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildCollectionPiiReencryptionUpdate,
   buildCollectionPiiRollbackSnapshotName,
   buildCollectionPiiRollbackSql,
   summarizeCollectionPiiDecryptability,
@@ -9,7 +10,10 @@ import {
   parseCliOptions,
   validateCollectionPiiActiveKey,
 } from "./reencrypt-collection-pii";
-import { encryptCollectionPiiFieldValue } from "../server/lib/collection-pii-encryption";
+import {
+  decryptCollectionPiiValueResult,
+  encryptCollectionPiiFieldValue,
+} from "../server/lib/collection-pii-encryption";
 
 test("parseCliOptions accepts field filters, json output, and row caps for re-encryption", () => {
   const options = parseCliOptions([
@@ -92,6 +96,70 @@ test("getCollectionPiiRewritePlan respects selected field filters", () => {
       delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
     } else {
       process.env.COLLECTION_PII_ENCRYPTION_KEY = previousKey;
+    }
+  }
+});
+
+test("re-encryption preserves retired PII by resolving the existing encrypted shadow", () => {
+  const previousKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  const previousKeys = process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+  const previousRetiredFields = process.env.COLLECTION_PII_RETIRED_FIELDS;
+
+  try {
+    process.env.COLLECTION_PII_ENCRYPTION_KEY = "reencrypt-collection-pii-old-key";
+    const oldEncryptedValue = encryptCollectionPiiFieldValue("900101015555");
+    assert.ok(oldEncryptedValue);
+
+    process.env.COLLECTION_PII_ENCRYPTION_KEY = "reencrypt-collection-pii-new-key";
+    process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = "reencrypt-collection-pii-old-key";
+    process.env.COLLECTION_PII_RETIRED_FIELDS = "icNumber";
+
+    const update = buildCollectionPiiReencryptionUpdate(
+      {
+        id: "record-1",
+        ic_number: null,
+        ic_number_encrypted: oldEncryptedValue,
+        ic_number_search_hash: null,
+      },
+      {
+        customerName: false,
+        icNumber: true,
+        customerPhone: false,
+        accountNumber: false,
+      },
+    );
+
+    assert.deepEqual(update.assignments, [
+      "ic_number_encrypted = $2",
+      "ic_number_search_hash = $3",
+    ]);
+    const rewrittenEncryptedValue = update.values[1];
+    assert.equal(typeof rewrittenEncryptedValue, "string");
+    assert.notEqual(rewrittenEncryptedValue, oldEncryptedValue);
+    assert.equal(typeof update.values[2], "string");
+
+    const decryptResult = decryptCollectionPiiValueResult(rewrittenEncryptedValue, {
+      logFailure: false,
+    });
+    assert.deepEqual(decryptResult, {
+      success: true,
+      data: "900101015555",
+    });
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = previousKey;
+    }
+    if (previousKeys === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = previousKeys;
+    }
+    if (previousRetiredFields === undefined) {
+      delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+    } else {
+      process.env.COLLECTION_PII_RETIRED_FIELDS = previousRetiredFields;
     }
   }
 });
