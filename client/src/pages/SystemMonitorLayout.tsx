@@ -120,7 +120,7 @@ export default function SystemMonitorLayout({
   const [activeSection, setActiveSection] = useState<MonitorSection>(() =>
     availableSections.includes(requestedSection) ? requestedSection : defaultSection,
   );
-  const lastEmittedSectionRef = useRef<MonitorSection | null>(null);
+  const lastEmittedSectionRef = useRef<MonitorSection | null>(requestedSection);
 
   useEffect(() => {
     if (availableSections.length === 0) return;

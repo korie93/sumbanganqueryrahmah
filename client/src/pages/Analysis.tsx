@@ -4,24 +4,18 @@ import {
 import { OperationalPage, OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { isMobileViewportWidth } from "@/lib/responsive";
 import { AnalysisLoadingSkeleton } from "@/pages/analysis/AnalysisLoadingSkeleton";
-import { AnalysisChartsSection } from "@/pages/analysis/AnalysisChartsSection";
-import { AnalysisComparisonSection } from "@/pages/analysis/AnalysisComparisonSection";
-import { AnalysisDataQualitySection } from "@/pages/analysis/AnalysisDataQualitySection";
-import { AnalysisDetailsSection } from "@/pages/analysis/AnalysisDetailsSection";
 import { AnalysisHeader } from "@/pages/analysis/AnalysisHeader";
-import { AnalysisSummarySection } from "@/pages/analysis/AnalysisSummarySection";
+import { AnalysisWorkspaceContent } from "@/pages/analysis/AnalysisWorkspaceContent";
+import { AnalysisWorkspaceNavigation } from "@/pages/analysis/AnalysisWorkspaceNavigation";
 import { useAnalysisDataState } from "@/pages/analysis/useAnalysisDataState";
 import { useAnalysisDisplayState } from "@/pages/analysis/useAnalysisDisplayState";
-import { useDeferredAnalysisSectionMount } from "@/pages/analysis/useDeferredAnalysisSectionMount";
+import { useAnalysisWorkspaceNavigation } from "@/pages/analysis/useAnalysisWorkspaceNavigation";
 import type { AnalysisProps } from "@/pages/analysis/types";
 
 export default function Analysis(props: AnalysisProps) {
   const { onNavigate } = props;
   const isMobile = useIsMobile();
-  const shouldDeferSecondaryMobileSections =
-    isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
 
   const dataState = useAnalysisDataState(props);
   const displayState = useAnalysisDisplayState({
@@ -32,16 +26,7 @@ export default function Analysis(props: AnalysisProps) {
     singleResult: dataState.singleResult,
     totalRows: dataState.totalRows,
   });
-  const chartsSection = useDeferredAnalysisSectionMount({
-    enabled: shouldDeferSecondaryMobileSections,
-    rootMargin: "220px 0px",
-    timeoutMs: 900,
-  });
-  const detailsSection = useDeferredAnalysisSectionMount({
-    enabled: shouldDeferSecondaryMobileSections,
-    rootMargin: "420px 0px",
-    timeoutMs: 1500,
-  });
+  const workspaceNavigation = useAnalysisWorkspaceNavigation();
 
   return (
     <OperationalPage width="content">
@@ -76,49 +61,25 @@ export default function Analysis(props: AnalysisProps) {
         {dataState.loading ? <AnalysisLoadingSkeleton /> : null}
 
         {!dataState.loading && !dataState.error && dataState.analysis ? (
-          <>
-            <AnalysisSummarySection snapshotItems={displayState.snapshotItems} />
-            <AnalysisDataQualitySection
-              analysis={dataState.analysis}
-              mode={dataState.mode}
-              onInspectColumn={(focusColumn) =>
-                dataState.handleInspectInViewer({ focusColumn })}
-            />
-            {dataState.mode === "all" && dataState.allResult ? (
-              <AnalysisComparisonSection allResult={dataState.allResult} />
-            ) : null}
-            <AnalysisChartsSection
-              section={chartsSection}
-              categoryBarData={displayState.categoryBarData}
-              genderPieData={displayState.genderPieData}
-            />
-            <AnalysisDetailsSection
-              section={detailsSection}
-              analysis={dataState.analysis}
-              mode={dataState.mode}
+          <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start">
+            <AnalysisWorkspaceNavigation
+              activeSection={workspaceNavigation.activeSection}
               allResult={dataState.allResult}
-              onInspectDuplicate={
-                dataState.mode === "single"
-                  ? (search) => dataState.handleInspectInViewer({ search })
-                  : null
-              }
-              displayState={{
-                copiedItems: displayState.copiedItems,
-                expandedSections: displayState.expandedSections,
-                specialIdPagedSections: displayState.specialIdPagedSections,
-                filesPaged: displayState.filesPaged,
-                duplicatesPaged: displayState.duplicatesPaged,
-                filesListOpen: displayState.filesListOpen,
-                duplicatesOpen: displayState.duplicatesOpen,
-                setFilesListOpen: displayState.setFilesListOpen,
-                setDuplicatesOpen: displayState.setDuplicatesOpen,
-                setPage: displayState.setPage,
-                toggleSection: displayState.toggleSection,
-                copyToClipboard: displayState.copyToClipboard,
-                copyAllToClipboard: displayState.copyAllToClipboard,
-              }}
+              analysis={dataState.analysis}
+              mode={dataState.mode}
+              onSelect={workspaceNavigation.selectSection}
             />
-          </>
+            <section
+              className="min-w-0 flex-1"
+              aria-label={`${workspaceNavigation.activeSection} analysis section`}
+            >
+              <AnalysisWorkspaceContent
+                activeSection={workspaceNavigation.activeSection}
+                dataState={dataState}
+                displayState={displayState}
+              />
+            </section>
+          </div>
         ) : null}
       </div>
     </OperationalPage>

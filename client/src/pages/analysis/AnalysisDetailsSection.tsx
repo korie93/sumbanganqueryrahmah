@@ -4,7 +4,6 @@ import { Plane, Shield, Users } from "lucide-react";
 import { AnalysisCategoryCard } from "@/pages/analysis/AnalysisCategoryCard";
 import { AnalysisSectionFallback } from "@/pages/analysis/AnalysisSectionFallback";
 import type { AnalysisData, AnalysisMode, AllAnalysisResult } from "@/pages/analysis/types";
-import type { useDeferredAnalysisSectionMount } from "@/pages/analysis/useDeferredAnalysisSectionMount";
 
 const AnalysisExpandableSection = lazy(() =>
   import("@/pages/analysis/AnalysisExpandableSection").then((module) => ({
@@ -21,8 +20,6 @@ const AnalysisDuplicatesPanel = lazy(() =>
     default: module.AnalysisDuplicatesPanel,
   })),
 );
-
-type DeferredSectionMount = ReturnType<typeof useDeferredAnalysisSectionMount>;
 
 type PaginatedItems<T> = {
   page: number;
@@ -54,7 +51,6 @@ type AnalysisDetailsState = {
 };
 
 type AnalysisDetailsSectionProps = {
-  section: DeferredSectionMount;
   analysis: AnalysisData;
   mode: AnalysisMode;
   allResult: AllAnalysisResult | null;
@@ -63,7 +59,6 @@ type AnalysisDetailsSectionProps = {
 };
 
 export function AnalysisDetailsSection({
-  section,
   analysis,
   mode,
   allResult,
@@ -77,9 +72,8 @@ export function AnalysisDetailsSection({
     analysis.passportLuarNegara.samples?.length > 0;
 
   return (
-    <div ref={section.triggerRef}>
-      {section.shouldRender ? (
-        <>
+    <div>
+      <>
           <h2 className="text-lg font-semibold text-foreground mb-4">ID Type Detection</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             <AnalysisCategoryCard
@@ -230,10 +224,7 @@ export function AnalysisDetailsSection({
               onPageChange={displayState.setPage}
             />
           </Suspense>
-        </>
-      ) : (
-        <AnalysisSectionFallback label="Detailed analysis sections will load as you scroll." />
-      )}
+      </>
     </div>
   );
 }
