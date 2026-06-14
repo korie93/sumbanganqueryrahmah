@@ -9,4 +9,7 @@ export interface ImportItem {
   filename: string;
   createdAt: string;
   rowCount?: number;
+  createdBy?: string | null | undefined;
+  contentHashSha256?: string | null | undefined;
+  sourceSizeBytes?: number | null | undefined;
 }

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SavedDialogs } from "@/pages/saved/SavedDialogs";
 import { SavedFiltersBar } from "@/pages/saved/SavedFiltersBar";
-import { SavedImportsList } from "@/pages/saved/SavedImportsList";
+import { SavedImportsWorkspace } from "@/pages/saved/SavedImportsWorkspace";
 import { SavedLoadingSkeleton } from "@/pages/saved/SavedLoadingSkeleton";
 import { useSavedPageState } from "@/pages/saved/useSavedPageState";
 import { formatSavedImportDate } from "@/pages/saved/utils";
@@ -126,7 +126,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             Import Data
           </Button>
         </OperationalSectionCard>
-      ) : state.visibleImports.length === 0 ? (
+      ) : state.loadedImportCount === 0 ? (
         <OperationalSectionCard contentClassName="ops-empty-state">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted sm:h-16 sm:w-16">
             <Search className="w-8 h-8 text-muted-foreground" />
@@ -146,40 +146,39 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         </OperationalSectionCard>
       ) : (
         <OperationalSectionCard contentClassName="space-y-0">
-          <SavedImportsList
-            imports={state.visibleImports}
-            summaryLabel={state.importSummaryLabel}
-            isSuperuser={state.isSuperuser}
-            filesOpen={state.filesOpen}
+          <SavedImportsWorkspace
+            activeImport={state.activeImport}
+            activeImportId={state.activeImportId}
             actionsDisabled={state.adminActionsDisabled}
-            onFilesOpenChange={state.setFilesOpen}
-            onView={state.handleView}
-            onRename={state.handleRenameClick}
+            allVisibleSelected={state.allVisibleSelected}
+            duplicateHashCounts={state.duplicateHashCounts}
+            filesOpen={state.filesOpen}
+            formatDate={formatSavedImportDate}
+            hasActiveFilters={state.hasActiveFilters}
+            hasMoreImports={state.hasMoreImports}
+            imports={state.visibleImports}
+            isSuperuser={state.isSuperuser}
+            loading={state.loading}
+            loadingMore={state.loadingMore}
+            partiallySelected={state.partiallySelected}
+            selectedImportIds={state.selectedImportIds}
+            summaryLabel={state.importSummaryLabel}
+            totalImports={state.totalImports}
+            workspaceResultLabel={state.workspaceResultLabel}
+            workspaceSummary={state.workspaceSummary}
+            workspaceView={state.workspaceView}
             onAnalysis={state.handleAnalysis}
+            onClearFilters={state.clearFilters}
             onDelete={state.handleDeleteClick}
+            onFilesOpenChange={state.setFilesOpen}
+            onInspect={state.handleInspectImport}
+            onLoadMore={state.handleLoadMore}
+            onRename={state.handleRenameClick}
             onToggleSelected={state.handleToggleSelected}
             onToggleSelectAllVisible={state.handleToggleSelectAllVisible}
-            selectedImportIds={state.selectedImportIds}
-            allVisibleSelected={state.allVisibleSelected}
-            partiallySelected={state.partiallySelected}
-            formatDate={formatSavedImportDate}
+            onView={state.handleView}
+            onWorkspaceViewChange={state.setWorkspaceView}
           />
-          {state.hasMoreImports ? (
-            <div className="mt-4 flex flex-col items-center gap-2 border-t border-border/60 pt-4">
-              <p className="text-sm text-muted-foreground">
-                Showing {state.visibleImports.length} of {state.totalImports} imports.
-              </p>
-              <Button
-                variant="outline"
-                onClick={state.handleLoadMore}
-                disabled={state.loading || state.loadingMore}
-                data-testid="button-load-more-imports"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${state.loadingMore ? "animate-spin" : ""}`} />
-                {state.loadingMore ? "Loading more..." : "Load more"}
-              </Button>
-            </div>
-          ) : null}
         </OperationalSectionCard>
       )}
 

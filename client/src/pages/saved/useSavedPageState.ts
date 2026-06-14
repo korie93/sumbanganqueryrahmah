@@ -12,6 +12,7 @@ import {
 } from "@/pages/saved/saved-state-utils";
 import { useSavedDataState } from "@/pages/saved/useSavedDataState";
 import { useSavedMutationState } from "@/pages/saved/useSavedMutationState";
+import { useSavedWorkspaceState } from "@/pages/saved/useSavedWorkspaceState";
 
 export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
   const isSuperuser = userRole === "superuser";
@@ -21,7 +22,13 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
   const { toast } = useToast();
 
   const data = useSavedDataState();
-  const visibleImports = data.imports;
+  const loadedImports = data.imports;
+  const workspace = useSavedWorkspaceState({
+    hasMoreImports: data.hasMoreImports,
+    imports: loadedImports,
+    totalImports: data.totalImports,
+  });
+  const visibleImports = workspace.visibleImports;
 
   useEffect(() => {
     setSelectedImportIds((previous) => pruneSavedSelectedImportIds(previous, visibleImports));
@@ -72,10 +79,17 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     () =>
       buildSavedImportSummaryLabel({
         totalImports: data.totalImports,
-        visibleImportCount: visibleImports.length,
+        visibleImportCount: loadedImports.length,
         hasMoreImports: data.hasMoreImports,
       }),
-    [data.hasMoreImports, data.totalImports, visibleImports.length],
+    [data.hasMoreImports, data.totalImports, loadedImports.length],
+  );
+  const workspaceResultLabel = useMemo(
+    () =>
+      workspace.workspaceView === "all"
+        ? importSummaryLabel
+        : `${visibleImports.length} shown of ${loadedImports.length} loaded`,
+    [importSummaryLabel, loadedImports.length, visibleImports.length, workspace.workspaceView],
   );
   const adminActionsDisabled =
     data.loading || data.loadingMore || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
@@ -123,6 +137,7 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
 
   return {
     isSuperuser,
+    loadedImportCount: loadedImports.length,
     visibleImports,
     totalImports: data.totalImports,
     hasMoreImports: data.hasMoreImports,
@@ -133,13 +148,20 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     dateFilter: data.dateFilter,
     hasActiveFilters: data.hasActiveFilters,
     selectedImportIds,
+    activeImport: workspace.activeImport,
+    activeImportId: workspace.activeImportId,
+    duplicateHashCounts: workspace.duplicateHashCounts,
     filesOpen,
+    workspaceView: workspace.workspaceView,
+    workspaceSummary: workspace.workspaceSummary,
+    workspaceResultLabel,
     searchInputRef,
     importSummaryLabel,
     allVisibleSelected,
     partiallySelected,
     adminActionsDisabled,
     setFilesOpen,
+    setWorkspaceView: workspace.setWorkspaceView,
     setBulkDeleteDialogOpen: mutation.setBulkDeleteDialogOpen,
     setDeleteDialogOpen: mutation.setDeleteDialogOpen,
     setRenameDialogOpen: mutation.setRenameDialogOpen,
@@ -152,6 +174,7 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     handleAnalysis,
     handleToggleSelected,
     handleToggleSelectAllVisible,
+    handleInspectImport: workspace.handleInspectImport,
     handleDeleteClick: mutation.handleDeleteClick,
     handleRenameClick: mutation.handleRenameClick,
     deleteDialogOpen: mutation.deleteDialogOpen,
