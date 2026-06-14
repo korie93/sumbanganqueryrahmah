@@ -132,10 +132,13 @@ export function resolveSavedActiveImportId(
   imports: ImportItem[],
   activeImportId: string | null,
 ) {
-  if (activeImportId && imports.some((item) => item.id === activeImportId)) {
-    return activeImportId;
+  if (!activeImportId) {
+    return null;
   }
-  return imports[0]?.id ?? null;
+
+  return imports.some((item) => item.id === activeImportId)
+    ? activeImportId
+    : null;
 }
 
 export function buildSavedWorkspaceSummary(

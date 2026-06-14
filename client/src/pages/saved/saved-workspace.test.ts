@@ -101,9 +101,9 @@ test("saved file size formatting handles unknown and large values", () => {
   assert.equal(formatSavedFileSize(12 * 1024 * 1024), "12 MB");
 });
 
-test("saved workspace preserves an older active file instead of resetting to the latest", () => {
+test("saved workspace only keeps an explicitly selected file that remains visible", () => {
   assert.equal(resolveSavedActiveImportId(imports, "duplicate-b"), "duplicate-b");
-  assert.equal(resolveSavedActiveImportId(imports, null), "recent");
-  assert.equal(resolveSavedActiveImportId(imports, "missing"), "recent");
+  assert.equal(resolveSavedActiveImportId(imports, null), null);
+  assert.equal(resolveSavedActiveImportId(imports, "missing"), null);
   assert.equal(resolveSavedActiveImportId([], "duplicate-b"), null);
 });

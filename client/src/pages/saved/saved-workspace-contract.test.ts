@@ -41,6 +41,7 @@ test("saved page wires compact workspace navigation and detail panel", async () 
   const savedPage = await readSavedSource("../Saved.tsx");
   const workspace = await readSavedSource("SavedImportsWorkspace.tsx");
   const importCard = await readSavedSource("SavedImportCard.tsx");
+  const workspaceState = await readSavedSource("saved-workspace.ts");
 
   assert.match(savedPage, /SavedImportsWorkspace/);
   assert.match(workspace, /SavedWorkspacePanel/);
@@ -49,4 +50,5 @@ test("saved page wires compact workspace navigation and detail panel", async () 
   assert.match(importCard, /button-select-import-/);
   assert.match(importCard, /onClick=\{\(\) => onInspect\(item\)\}/);
   assert.match(importCard, /if \(checked\) \{\s*onInspect\(item\);/);
+  assert.doesNotMatch(workspaceState, /return imports\[0\]\?\.id/);
 });
