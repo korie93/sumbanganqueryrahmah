@@ -1,3 +1,5 @@
+import { getRuntimeEnvironmentSource } from "./runtime-environment";
+
 type ProductionEnv = NodeJS.ProcessEnv | Readonly<Record<string, string | undefined>>;
 
 interface RequiredProductionEnvGroup {
@@ -32,7 +34,9 @@ function hasConfiguredValue(env: ProductionEnv, name: string): boolean {
   return Boolean(String(env[name] || "").trim());
 }
 
-export function getMissingProductionEnvironmentVariables(env: ProductionEnv = process.env): string[] {
+export function getMissingProductionEnvironmentVariables(
+  env: ProductionEnv = getRuntimeEnvironmentSource(),
+): string[] {
   if (env.NODE_ENV !== "production") {
     return [];
   }
@@ -42,7 +46,9 @@ export function getMissingProductionEnvironmentVariables(env: ProductionEnv = pr
     .map((group) => group.label);
 }
 
-export function validateProductionConfig(env: ProductionEnv = process.env): void {
+export function validateProductionConfig(
+  env: ProductionEnv = getRuntimeEnvironmentSource(),
+): void {
   const missing = getMissingProductionEnvironmentVariables(env);
   if (missing.length === 0) {
     return;

@@ -19,6 +19,7 @@ import {
   validateImportUploadFileSignature,
 } from "../services/import-upload-file-utils";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { readOptionalEnvString } from "../config/runtime-environment";
 
 export type MultipartImportBody = {
   name?: string;
@@ -55,7 +56,7 @@ function removeLimitListener(file: NodeJS.ReadableStream, listener: () => void) 
 }
 
 export function resolveImportUploadTempRootDir() {
-  return process.env.UPLOAD_TMP_DIR?.trim() || os.tmpdir();
+  return readOptionalEnvString("UPLOAD_TMP_DIR") ?? os.tmpdir();
 }
 
 async function createImportUploadTempDir() {

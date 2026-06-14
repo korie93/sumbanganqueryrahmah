@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runtimeConfig } from "../config/runtime";
+import { readOptionalEnvString } from "../config/runtime-environment";
 import { COLLECTION_RECEIPT_DIR } from "../lib/collection-receipt-files";
 import { logger } from "../lib/logger";
 
@@ -271,7 +272,9 @@ export async function cleanupOrphanedUploads(
       ?? DEFAULT_IMPORT_JOB_MAX_AGE_MS,
     ),
   );
-  const importTempRootDir = options.importTempRootDir ?? process.env.UPLOAD_TMP_DIR ?? os.tmpdir();
+  const importTempRootDir = options.importTempRootDir
+    ?? readOptionalEnvString("UPLOAD_TMP_DIR")
+    ?? os.tmpdir();
   let result = addCleanupResults(
     await cleanupImportUploadRoot({
       importTempRootDir,

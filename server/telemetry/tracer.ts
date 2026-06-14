@@ -2,20 +2,21 @@ import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { NodeSDK } from "@opentelemetry/sdk-node";
+import {
+  readBooleanEnvFlag,
+  readOptionalEnvString,
+} from "../config/runtime-environment";
 import { logger } from "../lib/logger";
 
 const DEFAULT_OTLP_TRACE_ENDPOINT = "http://localhost:4318/v1/traces";
 const SERVICE_NAME = "sumbanganqueryrahmah";
 const SERVICE_VERSION = "1.0.0";
-const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
-
 let telemetrySdk: NodeSDK | null = null;
 let telemetryStarted = false;
 
 function isTracingEnabled(): boolean {
-  const explicitEnabled = String(process.env.OTEL_TRACING_ENABLED || "").trim().toLowerCase();
-  return ENABLED_VALUES.has(explicitEnabled)
-    || Boolean(String(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "").trim());
+  return readBooleanEnvFlag("OTEL_TRACING_ENABLED", false)
+    || Boolean(readOptionalEnvString("OTEL_EXPORTER_OTLP_ENDPOINT"));
 }
 
 export function initializeTelemetry(): void {
@@ -24,7 +25,7 @@ export function initializeTelemetry(): void {
   }
 
   telemetryStarted = true;
-  const endpoint = String(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "").trim()
+  const endpoint = readOptionalEnvString("OTEL_EXPORTER_OTLP_ENDPOINT")
     || DEFAULT_OTLP_TRACE_ENDPOINT;
 
   try {

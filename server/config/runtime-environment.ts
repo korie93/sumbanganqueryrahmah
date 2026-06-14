@@ -5,9 +5,16 @@ export type RuntimeEnvironment = "development" | "test" | "production";
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const FALSE_VALUES = new Set(["0", "false", "no", "off"]);
 
-type RuntimeEnvironmentSource = Record<string, string | undefined>;
+export type RuntimeEnvironmentSource = Record<string, string | undefined>;
 
-function readOptionalString(name: string, env: RuntimeEnvironmentSource): string | null {
+export function getRuntimeEnvironmentSource(): NodeJS.ProcessEnv {
+  return process.env;
+}
+
+export function readOptionalEnvString(
+  name: string,
+  env: RuntimeEnvironmentSource = getRuntimeEnvironmentSource(),
+): string | null {
   const value = env[name];
   if (typeof value !== "string") {
     return null;
@@ -19,9 +26,9 @@ function readOptionalString(name: string, env: RuntimeEnvironmentSource): string
 export function readBooleanEnvFlag(
   name: string,
   fallback: boolean,
-  env: RuntimeEnvironmentSource = process.env,
+  env: RuntimeEnvironmentSource = getRuntimeEnvironmentSource(),
 ): boolean {
-  const raw = String(readOptionalString(name, env) ?? "").trim().toLowerCase();
+  const raw = String(readOptionalEnvString(name, env) ?? "").trim().toLowerCase();
   if (!raw) return fallback;
   if (TRUE_VALUES.has(raw)) return true;
   if (FALSE_VALUES.has(raw)) return false;
@@ -51,9 +58,9 @@ export function isLoopbackHostname(value: string): boolean {
 
 function resolvePublicAppHost(env: RuntimeEnvironmentSource): string | null {
   const publicBaseUrl =
-    readOptionalString("PUBLIC_APP_URL", env)
-    || readOptionalString("APP_BASE_URL", env)
-    || readOptionalString("CLIENT_APP_URL", env);
+    readOptionalEnvString("PUBLIC_APP_URL", env)
+    || readOptionalEnvString("APP_BASE_URL", env)
+    || readOptionalEnvString("CLIENT_APP_URL", env);
   if (!publicBaseUrl) {
     return null;
   }
@@ -66,13 +73,13 @@ function resolvePublicAppHost(env: RuntimeEnvironmentSource): string | null {
 }
 
 export function isStrictLocalDevelopmentEnvironment(
-  env: RuntimeEnvironmentSource = process.env,
+  env: RuntimeEnvironmentSource = getRuntimeEnvironmentSource(),
 ): boolean {
   if (normalizeRuntimeEnvironment(env.NODE_ENV) !== "development") {
     return false;
   }
 
-  const host = readOptionalString("HOST", env);
+  const host = readOptionalEnvString("HOST", env);
   if (host && !isLoopbackHostname(host)) {
     return false;
   }
@@ -85,7 +92,7 @@ export function isStrictLocalDevelopmentEnvironment(
 }
 
 export function isProductionLikeEnvironment(
-  env: RuntimeEnvironmentSource = process.env,
+  env: RuntimeEnvironmentSource = getRuntimeEnvironmentSource(),
 ): boolean {
   const nodeEnv = normalizeRuntimeEnvironment(env.NODE_ENV);
   if (nodeEnv === "test") {

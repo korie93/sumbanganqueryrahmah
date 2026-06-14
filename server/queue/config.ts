@@ -1,3 +1,5 @@
+import { getRuntimeEnvironmentSource } from "../config/runtime-environment";
+
 export type BackgroundQueueName = "email" | "audit" | "backup" | "cleanup" | "import";
 
 export const BACKGROUND_QUEUE_NAMES: readonly BackgroundQueueName[] = [
@@ -53,7 +55,7 @@ function resolveRedisUrl(params: ResolveBackgroundQueueConfigParams): {
   redisSource: BackgroundQueueRedisSource;
   redisUrl: string | null;
 } {
-  const env = params.env ?? process.env;
+  const env = params.env ?? getRuntimeEnvironmentSource();
   const candidates: ReadonlyArray<{
     source: BackgroundQueueRedisSource;
     value: string | null;

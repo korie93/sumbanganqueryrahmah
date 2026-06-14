@@ -3,6 +3,7 @@ import { count, sql } from "drizzle-orm";
 import { users } from "../../../shared/schema-postgres";
 import { normalizeUserRole } from "../../auth/account-lifecycle";
 import { runtimeConfig } from "../../config/runtime";
+import { readOptionalEnvString } from "../../config/runtime-environment";
 import { hashPassword } from "../../auth/passwords";
 import { shouldSeedDefaultUsers } from "../../config/security";
 import { db } from "../../db-postgres";
@@ -21,7 +22,7 @@ type SeedableUser = {
 };
 
 function readSeedPassword(envName: "SEED_SUPERUSER_PASSWORD" | "SEED_ADMIN_PASSWORD" | "SEED_USER_PASSWORD"): string {
-  return String(process.env[envName] || "").trim();
+  return readOptionalEnvString(envName) ?? "";
 }
 
 function resolveConfiguredSeedUsers(): SeedableUser[] {
