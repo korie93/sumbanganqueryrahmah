@@ -55,6 +55,7 @@ function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsS
       return {
         ...created,
         createdAt: new Date("2026-04-12T00:00:00.000Z"),
+        lastOpenedAt: null,
         isDeleted: false,
       };
     },
@@ -67,6 +68,7 @@ function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsS
         ? {
             ...found,
             createdAt: new Date("2026-04-12T00:00:00.000Z"),
+            lastOpenedAt: null,
             isDeleted: false,
           }
         : undefined;
@@ -81,6 +83,7 @@ function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsS
         ? {
             ...found,
             createdAt: new Date("2026-04-12T00:00:00.000Z"),
+            lastOpenedAt: null,
             isDeleted: false,
           }
         : undefined;
@@ -423,6 +426,7 @@ test("createImport rejects a duplicate content hash before creating database row
     name: "Existing Import",
     filename: "original.csv",
     createdAt: new Date("2026-04-12T00:00:00.000Z"),
+    lastOpenedAt: null,
     isDeleted: false,
     createdBy: "superuser",
     contentHashSha256: "a".repeat(64),
@@ -457,6 +461,7 @@ test("createImport translates a concurrent hash uniqueness race into a duplicate
     name: "Concurrent Import",
     filename: "winner.csv",
     createdAt: new Date("2026-04-12T00:00:00.000Z"),
+    lastOpenedAt: null,
     isDeleted: false,
     createdBy: "superuser",
     contentHashSha256: "b".repeat(64),

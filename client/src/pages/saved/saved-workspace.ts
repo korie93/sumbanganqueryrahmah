@@ -73,6 +73,9 @@ export function isSavedImportDuplicate(
   item: ImportItem,
   duplicateHashCounts: ReadonlyMap<string, number>,
 ) {
+  if (item.isDuplicate === true) {
+    return true;
+  }
   const hash = String(item.contentHashSha256 || "").trim().toLowerCase();
   return hash !== "" && (duplicateHashCounts.get(hash) ?? 0) > 1;
 }
@@ -162,6 +165,6 @@ export function buildSavedWorkspaceSummary(
     largeCount: imports.filter(isSavedImportLarge).length,
     duplicateCount: imports.filter((item) => isSavedImportDuplicate(item, duplicateHashCounts)).length,
     reviewCount: imports.filter(isSavedImportNeedsReview).length,
-    hasPartialLoad: hasMoreImports && imports.length < totalFiles,
+    hasPartialLoad: (hasMoreImports || imports.length < totalFiles) && imports.length < totalFiles,
   };
 }

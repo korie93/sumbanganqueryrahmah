@@ -1,95 +1,122 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { getImports } from "@/lib/api";
+import type { SavedWorkspaceView } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
-import { isSavedAbortError, mergeSavedImportPages, readSavedErrorMessage } from "@/pages/saved/saved-state-utils";
+import { isSavedAbortError, readSavedErrorMessage } from "@/pages/saved/saved-state-utils";
 
-type SavedFetchOptions = {
-  cursor?: string | null;
-  reset?: boolean;
-};
+const DEFAULT_PAGE_SIZE = 20;
+
+function parseOptionalRowCount(value: string) {
+  const normalized = value.trim();
+  if (!/^\d+$/.test(normalized)) {
+    return undefined;
+  }
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
 
 export function useSavedDataState() {
   const [imports, setImports] = useState<ImportItem[]>([]);
   const [totalImports, setTotalImports] = useState(0);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [page, setPageState] = useState(1);
+  const [pageSize, setPageSizeState] = useState(DEFAULT_PAGE_SIZE);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  const [searchTerm, setSearchTermState] = useState("");
+  const [uploaderFilter, setUploaderFilterState] = useState("");
+  const [dateFilter, setDateFilterState] = useState<Date | undefined>(undefined);
+  const [minRowsFilter, setMinRowsFilterState] = useState("");
+  const [maxRowsFilter, setMaxRowsFilterState] = useState("");
+  const [workspaceView, setWorkspaceViewState] = useState<SavedWorkspaceView>("all");
 
   const mountedRef = useRef(true);
   const fetchAbortControllerRef = useRef<AbortController | null>(null);
   const fetchRequestIdRef = useRef(0);
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const deferredUploaderFilter = useDeferredValue(uploaderFilter);
 
-  const hasActiveFilters = searchTerm.trim() !== "" || dateFilter !== undefined;
-  const activeCreatedOn = useMemo(
-    () => (dateFilter ? dateFilter.toISOString().slice(0, 10) : undefined),
-    [dateFilter],
-  );
-  const hasMoreImports = nextCursor !== null;
+  const activeCreatedOn = useMemo(() => {
+    if (!dateFilter) return undefined;
+    return [
+      dateFilter.getFullYear(),
+      String(dateFilter.getMonth() + 1).padStart(2, "0"),
+      String(dateFilter.getDate()).padStart(2, "0"),
+    ].join("-");
+  }, [dateFilter]);
+  const minRows = useMemo(() => parseOptionalRowCount(minRowsFilter), [minRowsFilter]);
+  const maxRows = useMemo(() => parseOptionalRowCount(maxRowsFilter), [maxRowsFilter]);
+  const hasActiveFilters =
+    searchTerm.trim() !== ""
+    || uploaderFilter.trim() !== ""
+    || dateFilter !== undefined
+    || minRowsFilter.trim() !== ""
+    || maxRowsFilter.trim() !== "";
 
-  const fetchImports = useCallback(
-    async (options?: SavedFetchOptions) => {
-      const reset = options?.reset !== false;
-      fetchAbortControllerRef.current?.abort();
-      const controller = new AbortController();
-      fetchAbortControllerRef.current = controller;
-      const requestId = ++fetchRequestIdRef.current;
-      setError("");
+  const fetchImports = useCallback(async () => {
+    fetchAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortControllerRef.current = controller;
+    const requestId = ++fetchRequestIdRef.current;
+    setError("");
+    setLoading(true);
 
-      if (reset) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
+    try {
+      const data = await getImports({
+        page,
+        pageSize,
+        search: deferredSearchTerm,
+        createdBy: deferredUploaderFilter,
+        createdOn: activeCreatedOn,
+        minRows,
+        maxRows,
+        view: workspaceView,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
+        return;
+      }
+      if (data.pagination.mode !== "offset") {
+        throw new Error("Saved imports returned an unsupported pagination mode.");
       }
 
-      try {
-        const data = await getImports({
-          cursor: options?.cursor || undefined,
-          limit: 100,
-          search: deferredSearchTerm,
-          createdOn: activeCreatedOn,
-          signal: controller.signal,
-        });
-
-        if (controller.signal.aborted || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
-          return;
-        }
-
-        const nextItems = Array.isArray(data?.imports) ? data.imports : [];
-        const nextTotal = typeof data?.pagination?.total === "number" ? data.pagination.total : nextItems.length;
-        const nextPageCursor = typeof data?.pagination?.nextCursor === "string" ? data.pagination.nextCursor : null;
-
-        setTotalImports(nextTotal);
-        setNextCursor(nextPageCursor);
-        setImports((previous) => (reset ? nextItems : mergeSavedImportPages(previous, nextItems)));
-      } catch (error: unknown) {
-        if (isSavedAbortError(error) || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
-          return;
-        }
-
-        setError(readSavedErrorMessage(error, "Failed to load data."));
-        if (reset) {
-          setImports([]);
-          setTotalImports(0);
-          setNextCursor(null);
-        }
-      } finally {
-        if (fetchAbortControllerRef.current === controller) {
-          fetchAbortControllerRef.current = null;
-        }
-        if (requestId === fetchRequestIdRef.current && mountedRef.current) {
-          setLoading(false);
-          setLoadingMore(false);
-        }
+      setImports(Array.isArray(data.imports) ? data.imports : []);
+      setTotalImports(data.pagination.total);
+      setTotalPages(data.pagination.totalPages);
+      setPageState(data.pagination.page);
+    } catch (fetchError: unknown) {
+      if (isSavedAbortError(fetchError) || requestId !== fetchRequestIdRef.current || !mountedRef.current) {
+        return;
       }
-    },
-    [activeCreatedOn, deferredSearchTerm],
-  );
+      setError(readSavedErrorMessage(fetchError, "Failed to load saved imports."));
+      setImports([]);
+      setTotalImports(0);
+      setTotalPages(1);
+    } finally {
+      if (fetchAbortControllerRef.current === controller) {
+        fetchAbortControllerRef.current = null;
+      }
+      if (requestId === fetchRequestIdRef.current && mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [
+    activeCreatedOn,
+    deferredSearchTerm,
+    deferredUploaderFilter,
+    maxRows,
+    minRows,
+    page,
+    pageSize,
+    workspaceView,
+  ]);
 
   useEffect(() => {
+    void fetchImports();
+  }, [fetchImports]);
+
+  useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       fetchAbortControllerRef.current?.abort();
@@ -97,28 +124,47 @@ export function useSavedDataState() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!mountedRef.current) {
-      return;
-    }
-    void fetchImports({ reset: true });
-  }, [fetchImports]);
-
-  const clearFilters = useCallback(() => {
-    setSearchTerm("");
-    setDateFilter(undefined);
+  const resetPage = useCallback(() => setPageState(1), []);
+  const setSearchTerm = useCallback((value: string) => {
+    resetPage();
+    setSearchTermState(value);
+  }, [resetPage]);
+  const setUploaderFilter = useCallback((value: string) => {
+    resetPage();
+    setUploaderFilterState(value);
+  }, [resetPage]);
+  const setDateFilter = useCallback((value?: Date) => {
+    resetPage();
+    setDateFilterState(value);
+  }, [resetPage]);
+  const setMinRowsFilter = useCallback((value: string) => {
+    resetPage();
+    setMinRowsFilterState(value);
+  }, [resetPage]);
+  const setMaxRowsFilter = useCallback((value: string) => {
+    resetPage();
+    setMaxRowsFilterState(value);
+  }, [resetPage]);
+  const setWorkspaceView = useCallback((value: SavedWorkspaceView) => {
+    resetPage();
+    setWorkspaceViewState(value);
+  }, [resetPage]);
+  const setPage = useCallback((value: number) => {
+    setPageState(Math.max(1, Math.trunc(value)));
+  }, []);
+  const setPageSize = useCallback((value: number) => {
+    setPageState(1);
+    setPageSizeState(Math.max(1, Math.trunc(value)));
   }, []);
 
-  const refresh = useCallback(async () => {
-    await fetchImports({ reset: true });
-  }, [fetchImports]);
-
-  const loadMore = useCallback(async () => {
-    if (!nextCursor) {
-      return;
-    }
-    await fetchImports({ cursor: nextCursor, reset: false });
-  }, [fetchImports, nextCursor]);
+  const clearFilters = useCallback(() => {
+    setPageState(1);
+    setSearchTermState("");
+    setUploaderFilterState("");
+    setDateFilterState(undefined);
+    setMinRowsFilterState("");
+    setMaxRowsFilterState("");
+  }, []);
 
   const replaceImportName = useCallback((importId: string, nextName: string) => {
     setImports((previous) =>
@@ -127,31 +173,39 @@ export function useSavedDataState() {
   }, []);
 
   const removeImports = useCallback((importIds: string[]) => {
-    if (importIds.length === 0) {
-      return;
-    }
-
+    if (importIds.length === 0) return;
     const removedIds = new Set(importIds);
     setImports((previous) => previous.filter((item) => !removedIds.has(item.id)));
     setTotalImports((previous) => Math.max(0, previous - importIds.length));
-  }, []);
+    void fetchImports();
+  }, [fetchImports]);
 
   return {
     imports,
     totalImports,
-    nextCursor,
-    hasMoreImports,
+    page,
+    pageSize,
+    totalPages,
+    hasMoreImports: page < totalPages,
     loading,
-    loadingMore,
     error,
     searchTerm,
+    uploaderFilter,
     dateFilter,
+    minRowsFilter,
+    maxRowsFilter,
+    workspaceView,
     hasActiveFilters,
     setSearchTerm,
+    setUploaderFilter,
     setDateFilter,
+    setMinRowsFilter,
+    setMaxRowsFilter,
+    setWorkspaceView,
+    setPage,
+    setPageSize,
     clearFilters,
-    refresh,
-    loadMore,
+    refresh: fetchImports,
     replaceImportName,
     removeImports,
   };

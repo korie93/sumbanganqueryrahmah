@@ -75,6 +75,7 @@ export const importRecordSchema = z.object({
   name: nonEmptyStringSchema,
   filename: nonEmptyStringSchema,
   createdAt: nonEmptyStringSchema,
+  lastOpenedAt: nullishStringSchema,
   isDeleted: z.boolean(),
   createdBy: nullishStringSchema,
   contentHashSha256: nullishStringSchema,
@@ -82,6 +83,7 @@ export const importRecordSchema = z.object({
 });
 
 export const importListItemSchema = importRecordSchema.extend({
+  isDuplicate: z.boolean().optional(),
   rowCount: nonNegativeIntSchema,
 });
 
@@ -111,7 +113,16 @@ export const importMutationResultSchema = z.union([
 
 export const importsListResponseSchema = z.object({
   imports: z.array(importListItemSchema),
-  pagination: cursorPaginationMetaSchema,
+  pagination: z.discriminatedUnion("mode", [
+    cursorPaginationMetaSchema,
+    offsetPaginationMetaSchema,
+  ]),
+});
+
+export const importSummaryResponseSchema = z.object({
+  import: importListItemSchema,
+  columns: z.array(nonEmptyStringSchema),
+  columnCount: nonNegativeIntSchema,
 });
 
 export const importDataRowSchema = z.object({

@@ -17,6 +17,7 @@ export async function ensureCoreImportsTable(
       content_hash_sha256 text,
       source_size_bytes bigint,
       created_at timestamp with time zone DEFAULT now() NOT NULL,
+      last_opened_at timestamp with time zone,
       is_deleted boolean DEFAULT false,
       created_by text
     )
@@ -26,6 +27,7 @@ export async function ensureCoreImportsTable(
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS content_hash_sha256 text`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS source_size_bytes bigint`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
+  await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS last_opened_at timestamp with time zone`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
   if (isLegacyImportsBackfillEnabled()) {
@@ -109,6 +111,7 @@ export async function ensureCoreImportsTable(
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN created_at SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN is_deleted SET NOT NULL`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_last_opened_at ON public.imports(last_opened_at DESC)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_content_hash_sha256 ON public.imports(content_hash_sha256)`);

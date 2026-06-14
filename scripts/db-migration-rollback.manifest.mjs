@@ -62,6 +62,7 @@ const MIGRATION_TAGS = Object.freeze([
   "0043_manager_role_permission_seed",
   "0044_import_content_hash",
   "0045_activity_device_audit",
+  "0046_import_last_opened",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(

@@ -6,9 +6,11 @@ const savedModuleFiles = [
   "../Saved.tsx",
   "SavedImportsList.tsx",
   "SavedImportCard.tsx",
-  "SavedImportDetailPanel.tsx",
+  "SavedImportDetailDrawer.tsx",
   "SavedImportsWorkspace.tsx",
   "SavedWorkspacePanel.tsx",
+  "useSavedDataState.ts",
+  "useSavedImportDetailState.ts",
   "saved-workspace.ts",
 ] as const;
 
@@ -37,7 +39,7 @@ test("saved workspace avoids unsafe DOM writes and timer lifecycle risk", async 
   assert.doesNotMatch(combined, /setInterval|setTimeout|addEventListener/);
 });
 
-test("saved page wires compact workspace navigation and detail panel", async () => {
+test("saved page wires server pagination and a compact detail drawer", async () => {
   const savedPage = await readSavedSource("../Saved.tsx");
   const workspace = await readSavedSource("SavedImportsWorkspace.tsx");
   const importCard = await readSavedSource("SavedImportCard.tsx");
@@ -45,10 +47,24 @@ test("saved page wires compact workspace navigation and detail panel", async () 
 
   assert.match(savedPage, /SavedImportsWorkspace/);
   assert.match(workspace, /SavedWorkspacePanel/);
-  assert.match(workspace, /SavedImportDetailPanel/);
+  assert.match(workspace, /SavedImportDetailDrawer/);
+  assert.match(workspace, /AppPaginationBar/);
   assert.match(workspace, /onWorkspaceViewChange/);
+  assert.doesNotMatch(workspace, /Load more|onLoadMore/);
   assert.match(importCard, /button-select-import-/);
   assert.match(importCard, /onClick=\{\(\) => onInspect\(item\)\}/);
   assert.match(importCard, /if \(checked\) \{\s*onInspect\(item\);/);
   assert.doesNotMatch(workspaceState, /return imports\[0\]\?\.id/);
+});
+
+test("saved data state keeps one server page and aborts stale requests", async () => {
+  const dataState = await readSavedSource("useSavedDataState.ts");
+  const detailState = await readSavedSource("useSavedImportDetailState.ts");
+
+  assert.match(dataState, /page,\s*pageSize/);
+  assert.match(dataState, /pagination\.mode !== "offset"/);
+  assert.doesNotMatch(dataState, /mergeSavedImportPages/);
+  assert.match(dataState, /mountedRef\.current = true/);
+  assert.match(dataState, /fetchAbortControllerRef\.current\?\.abort\(\)/);
+  assert.match(detailState, /controller\.abort\(\)/);
 });

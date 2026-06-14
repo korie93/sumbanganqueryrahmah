@@ -1108,6 +1108,7 @@ test("restoreFromBackup blocks oversized structured payloads before opening a da
               name: "Large Backup",
               filename: "payload.csv",
               createdAt: new Date("2026-04-13T00:00:00.000Z"),
+              lastOpenedAt: null,
               isDeleted: false,
               createdBy: "super.user",
               contentHashSha256: null,

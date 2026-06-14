@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   buildSavedDuplicateHashCounts,
   buildSavedWorkspaceSummary,
-  filterSavedImportsByWorkspaceView,
   resolveSavedActiveImportId,
   type SavedWorkspaceView,
 } from "@/pages/saved/saved-workspace";
@@ -12,14 +11,17 @@ type SavedWorkspaceStateOptions = {
   hasMoreImports: boolean;
   imports: ImportItem[];
   totalImports: number;
+  workspaceView: SavedWorkspaceView;
+  onWorkspaceViewChange: (view: SavedWorkspaceView) => void;
 };
 
 export function useSavedWorkspaceState({
   hasMoreImports,
   imports,
   totalImports,
+  workspaceView,
+  onWorkspaceViewChange,
 }: SavedWorkspaceStateOptions) {
-  const [workspaceView, setWorkspaceView] = useState<SavedWorkspaceView>("all");
   const [activeImportId, setActiveImportId] = useState<string | null>(null);
 
   const workspaceSummary = useMemo(
@@ -30,10 +32,7 @@ export function useSavedWorkspaceState({
     () => buildSavedDuplicateHashCounts(imports),
     [imports],
   );
-  const visibleImports = useMemo(
-    () => filterSavedImportsByWorkspaceView(imports, workspaceView),
-    [imports, workspaceView],
-  );
+  const visibleImports = imports;
 
   useEffect(() => {
     const resolvedImportId = resolveSavedActiveImportId(visibleImports, activeImportId);
@@ -50,13 +49,17 @@ export function useSavedWorkspaceState({
   const handleInspectImport = useCallback((importItem: { id: string }) => {
     setActiveImportId(importItem.id);
   }, []);
+  const handleCloseImportDetails = useCallback(() => {
+    setActiveImportId(null);
+  }, []);
 
   return {
     activeImport,
     activeImportId,
     duplicateHashCounts,
+    handleCloseImportDetails,
     handleInspectImport,
-    setWorkspaceView,
+    setWorkspaceView: onWorkspaceViewChange,
     visibleImports,
     workspaceSummary,
     workspaceView,

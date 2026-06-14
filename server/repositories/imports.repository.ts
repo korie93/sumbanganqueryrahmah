@@ -14,14 +14,27 @@ import { assertSqlIdentifier } from "./sql-identifier-utils";
 const QUERY_PAGE_LIMIT = 1000;
 const IMPORT_LIST_PAGE_DEFAULT_LIMIT = 100;
 const IMPORT_LIST_PAGE_MAX_LIMIT = 200;
+const IMPORT_LIST_OFFSET_DEFAULT_PAGE_SIZE = 20;
+const IMPORT_LIST_OFFSET_MAX_PAGE_SIZE = 100;
 const IMPORT_COLUMN_KEYS_MAX_LIMIT = 500;
+const LARGE_IMPORT_SIZE_BYTES = 10 * 1024 * 1024;
+const LARGE_IMPORT_ROW_COUNT = 10_000;
 
-export type ImportWithRowCount = Import & { rowCount: number };
+export type ImportWithRowCount = Import & { isDuplicate?: boolean; rowCount: number };
+export type ImportListView = "all" | "recent" | "large" | "duplicates" | "review";
 export type ImportListPage = {
   items: ImportWithRowCount[];
   nextCursor: string | null;
   total: number;
   limit: number;
+};
+export type ImportListOffsetPage = {
+  items: ImportWithRowCount[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  offset: number;
 };
 
 type ImportListPageParams = {
@@ -29,6 +42,17 @@ type ImportListPageParams = {
   limit?: number | undefined;
   search?: string | null | undefined;
   createdOn?: string | null | undefined;
+};
+
+export type ImportListOffsetPageParams = {
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  search?: string | null | undefined;
+  createdBy?: string | null | undefined;
+  createdOn?: string | null | undefined;
+  minRows?: number | null | undefined;
+  maxRows?: number | null | undefined;
+  view?: ImportListView | undefined;
 };
 
 type ImportListCursor = {
@@ -52,6 +76,13 @@ function readImportRows<TRow>(rows: unknown[] | undefined): TRow[] {
 function clampImportListLimit(limit: number | undefined): number {
   const safeLimit = Number.isFinite(limit) ? Math.trunc(Number(limit)) : IMPORT_LIST_PAGE_DEFAULT_LIMIT;
   return Math.max(1, Math.min(IMPORT_LIST_PAGE_MAX_LIMIT, safeLimit));
+}
+
+function clampImportListPageSize(pageSize: number | undefined): number {
+  const safePageSize = Number.isFinite(pageSize)
+    ? Math.trunc(Number(pageSize))
+    : IMPORT_LIST_OFFSET_DEFAULT_PAGE_SIZE;
+  return Math.max(1, Math.min(IMPORT_LIST_OFFSET_MAX_PAGE_SIZE, safePageSize));
 }
 
 function encodeImportListCursor(cursor: ImportListCursor): string {
@@ -99,7 +130,11 @@ function parseImportListCursor(rawCursor: string | null | undefined): ImportList
 function buildImportListFilterSql(params: {
   alias: string;
   search?: string | null | undefined;
+  createdBy?: string | null | undefined;
   createdOn?: string | null | undefined;
+  minRows?: number | null | undefined;
+  maxRows?: number | null | undefined;
+  view?: ImportListView | undefined;
   cursor?: ImportListCursor | null | undefined;
   includeCursor: boolean;
 }) {
@@ -109,7 +144,18 @@ function buildImportListFilterSql(params: {
   if (search) {
     const likeValue = buildLikePattern(search, "contains");
     conditions.push(
-      sql`(${alias}.name ILIKE ${likeValue} ESCAPE '\' OR ${alias}.filename ILIKE ${likeValue} ESCAPE '\')`,
+      sql`(
+        ${alias}.name ILIKE ${likeValue} ESCAPE '\'
+        OR ${alias}.filename ILIKE ${likeValue} ESCAPE '\'
+        OR COALESCE(${alias}.created_by, '') ILIKE ${likeValue} ESCAPE '\'
+      )`,
+    );
+  }
+
+  const createdBy = String(params.createdBy || "").trim();
+  if (createdBy) {
+    conditions.push(
+      sql`COALESCE(${alias}.created_by, '') ILIKE ${buildLikePattern(createdBy, "contains")} ESCAPE '\'`,
     );
   }
 
@@ -123,6 +169,40 @@ function buildImportListFilterSql(params: {
     }
   }
 
+  const rowCountSql = sql`(
+    SELECT COUNT(*)::int
+    FROM public.data_rows import_rows
+    WHERE import_rows.import_id = ${alias}.id
+  )`;
+  if (typeof params.minRows === "number") {
+    conditions.push(sql`${rowCountSql} >= ${params.minRows}`);
+  }
+  if (typeof params.maxRows === "number") {
+    conditions.push(sql`${rowCountSql} <= ${params.maxRows}`);
+  }
+
+  if (params.view === "recent") {
+    conditions.push(sql`${alias}.created_at >= NOW() - INTERVAL '7 days'`);
+  } else if (params.view === "large") {
+    conditions.push(
+      sql`(COALESCE(${alias}.source_size_bytes, 0) >= ${LARGE_IMPORT_SIZE_BYTES} OR ${rowCountSql} >= ${LARGE_IMPORT_ROW_COUNT})`,
+    );
+  } else if (params.view === "duplicates") {
+    conditions.push(sql`
+      ${alias}.content_hash_sha256 IS NOT NULL
+      AND ${alias}.content_hash_sha256 IN (
+        SELECT duplicate_import.content_hash_sha256
+        FROM public.imports duplicate_import
+        WHERE duplicate_import.is_deleted = false
+          AND duplicate_import.content_hash_sha256 IS NOT NULL
+        GROUP BY duplicate_import.content_hash_sha256
+        HAVING COUNT(*) > 1
+      )
+    `);
+  } else if (params.view === "review") {
+    conditions.push(sql`${rowCountSql} = 0`);
+  }
+
   if (params.includeCursor && params.cursor) {
     const cursorCreatedAt = new Date(params.cursor.createdAt);
     conditions.push(
@@ -134,6 +214,18 @@ function buildImportListFilterSql(params: {
   }
 
   return sql.join(conditions, sql` AND `);
+}
+
+function buildImportDuplicateSql(aliasName: string) {
+  const alias = sql.raw(assertSqlIdentifier(aliasName));
+  return sql`EXISTS (
+    SELECT 1
+    FROM public.imports duplicate_import
+    WHERE duplicate_import.is_deleted = false
+      AND duplicate_import.content_hash_sha256 IS NOT NULL
+      AND duplicate_import.content_hash_sha256 = ${alias}.content_hash_sha256
+      AND duplicate_import.id <> ${alias}.id
+  )`;
 }
 
 export class ImportsRepository {
@@ -234,6 +326,7 @@ export class ImportsRepository {
         alias: "i",
         search: params.search,
         createdOn: params.createdOn,
+        view: "all",
         includeCursor: false,
       })}
     `);
@@ -247,6 +340,8 @@ export class ImportsRepository {
         i.content_hash_sha256 as "contentHashSha256",
         i.source_size_bytes::double precision as "sourceSizeBytes",
         i.created_at as "createdAt",
+        i.last_opened_at as "lastOpenedAt",
+        ${buildImportDuplicateSql("i")} as "isDuplicate",
         i.is_deleted as "isDeleted",
         i.created_by as "createdBy"
       FROM public.imports i
@@ -254,6 +349,7 @@ export class ImportsRepository {
         alias: "i",
         search: params.search,
         createdOn: params.createdOn,
+        view: "all",
         cursor,
         includeCursor: true,
       })}
@@ -261,7 +357,7 @@ export class ImportsRepository {
       LIMIT ${limit + 1}
     `);
 
-    const rows = ((pageResult.rows || []) as Import[]);
+    const rows = ((pageResult.rows || []) as Array<Import & { isDuplicate?: boolean }>);
     const hasMore = rows.length > limit;
     const pageItems = hasMore ? rows.slice(0, limit) : rows;
     const rowCountsByImportId = await this.getDataRowCountsByImportIds(
@@ -286,6 +382,66 @@ export class ImportsRepository {
     };
   }
 
+  async listImportsWithRowCountsOffsetPage(
+    params: ImportListOffsetPageParams = {},
+  ): Promise<ImportListOffsetPage> {
+    const pageSize = clampImportListPageSize(params.pageSize);
+    const requestedPage = Number.isFinite(params.page) ? Math.max(1, Math.trunc(Number(params.page))) : 1;
+    const filterSql = buildImportListFilterSql({
+      alias: "i",
+      search: params.search,
+      createdBy: params.createdBy,
+      createdOn: params.createdOn,
+      minRows: params.minRows,
+      maxRows: params.maxRows,
+      view: params.view ?? "all",
+      includeCursor: false,
+    });
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*)::int AS "total"
+      FROM public.imports i
+      WHERE ${filterSql}
+    `);
+    const total = Number(totalResult.rows?.[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const offset = (page - 1) * pageSize;
+    const pageResult = await db.execute(sql`
+      SELECT
+        i.id,
+        i.name,
+        i.filename,
+        i.content_hash_sha256 as "contentHashSha256",
+        i.source_size_bytes::double precision as "sourceSizeBytes",
+        i.created_at as "createdAt",
+        i.last_opened_at as "lastOpenedAt",
+        ${buildImportDuplicateSql("i")} as "isDuplicate",
+        i.is_deleted as "isDeleted",
+        i.created_by as "createdBy"
+      FROM public.imports i
+      WHERE ${filterSql}
+      ORDER BY i.created_at DESC, i.id DESC
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `);
+    const pageItems = (pageResult.rows || []) as Array<Import & { isDuplicate?: boolean }>;
+    const rowCountsByImportId = await this.getDataRowCountsByImportIds(
+      pageItems.map((importRecord) => importRecord.id),
+    );
+
+    return {
+      items: pageItems.map((importRecord) => ({
+        ...importRecord,
+        rowCount: rowCountsByImportId.get(importRecord.id) ?? 0,
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages,
+      offset,
+    };
+  }
+
   async getImportById(id: string): Promise<Import | undefined> {
     const result = await db
       .select()
@@ -299,6 +455,13 @@ export class ImportsRepository {
   async updateImportName(id: string, name: string): Promise<Import | undefined> {
     await db.update(imports).set({ name }).where(eq(imports.id, id));
     return this.getImportById(id);
+  }
+
+  async markImportOpened(id: string): Promise<void> {
+    await db
+      .update(imports)
+      .set({ lastOpenedAt: new Date() })
+      .where(and(eq(imports.id, id), eq(imports.isDeleted, false)));
   }
 
   async deleteImport(id: string): Promise<boolean> {

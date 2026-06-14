@@ -111,10 +111,12 @@ export const imports = pgTable("imports", {
   contentHashSha256: text("content_hash_sha256"),
   sourceSizeBytes: bigint("source_size_bytes", { mode: "number" }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  lastOpenedAt: utcTimestamp("last_opened_at"),
   isDeleted: boolean("is_deleted").default(false).notNull(),
   createdBy: text("created_by"),
 }, (table) => ({
   createdAtIdx: index("idx_imports_created_at").on(table.createdAt),
+  lastOpenedAtIdx: index("idx_imports_last_opened_at").on(table.lastOpenedAt),
   isDeletedIdx: index("idx_imports_is_deleted").on(table.isDeleted),
   createdByIdx: index("idx_imports_created_by").on(table.createdBy),
   contentHashIdx: index("idx_imports_content_hash_sha256").on(table.contentHashSha256),

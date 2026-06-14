@@ -20,14 +20,24 @@ function createReadOperations(params: {
     ...(params.storage ?? {}),
   } as unknown as ImportsServiceStorage;
   const repository = {
+    getDataRowCountByImport: async () => 0,
     getImportColumnNames: async () => [],
     getImportsWithRowCounts: async () => [],
+    listImportsWithRowCountsOffsetPage: async () => ({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+      offset: 0,
+    }),
     listImportsWithRowCountsPage: async () => ({
-      imports: [],
+      items: [],
       total: 0,
       limit: 100,
       nextCursor: null,
     }),
+    markImportOpened: async () => undefined,
     ...(params.repository ?? {}),
   } as unknown as ImportsServiceRepository;
   const analysis = {
@@ -201,9 +211,8 @@ test("getImportDataPage rejects malformed cursors before querying storage", asyn
   assert.equal(searchCalls, 0);
 });
 
-test("analysis operations forward abort signals to the analysis service", async () => {
-  const controller = new AbortController();
-  const capturedSignals: Array<AbortSignal | undefined> = [];
+test("getImportSummary returns row and column metadata without loading data rows", async () => {
+  let fullRowLoads = 0;
   const operations = createReadOperations({
     storage: {
       getImportById: async () => ({
@@ -211,6 +220,43 @@ test("analysis operations forward abort signals to the analysis service", async 
         name: "Dataset",
         filename: "dataset.csv",
         createdAt: new Date(),
+        lastOpenedAt: null,
+        isDeleted: false,
+        createdBy: "admin.user",
+        contentHashSha256: null,
+        sourceSizeBytes: 1024,
+      }),
+      getDataRowsByImport: async () => {
+        fullRowLoads += 1;
+        return [];
+      },
+    },
+    repository: {
+      getDataRowCountByImport: async () => 25,
+      getImportColumnNames: async () => ["amount", "name"],
+    },
+  });
+
+  const result = await operations.getImportSummary("import-1");
+
+  assert.equal(result?.import.rowCount, 25);
+  assert.deepEqual(result?.columns, ["amount", "name"]);
+  assert.equal(result?.columnCount, 2);
+  assert.equal(fullRowLoads, 0);
+});
+
+test("analysis operations forward abort signals to the analysis service", async () => {
+  const controller = new AbortController();
+  const capturedSignals: Array<AbortSignal | undefined> = [];
+  const openedImportIds: string[] = [];
+  const operations = createReadOperations({
+    storage: {
+      getImportById: async () => ({
+        id: "import-1",
+        name: "Dataset",
+        filename: "dataset.csv",
+        createdAt: new Date(),
+        lastOpenedAt: null,
         isDeleted: false,
         createdBy: "admin.user",
         contentHashSha256: null,
@@ -218,11 +264,15 @@ test("analysis operations forward abort signals to the analysis service", async 
       }),
     },
     repository: {
+      markImportOpened: async (importId) => {
+        openedImportIds.push(importId);
+      },
       getImportsWithRowCounts: async () => [{
         id: "import-1",
         name: "Dataset",
         filename: "dataset.csv",
         createdAt: new Date(),
+        lastOpenedAt: null,
         isDeleted: false,
         createdBy: "admin.user",
         contentHashSha256: null,
@@ -255,4 +305,5 @@ test("analysis operations forward abort signals to the analysis service", async 
   await operations.analyzeAll(controller.signal);
 
   assert.deepEqual(capturedSignals, [controller.signal, controller.signal]);
+  assert.deepEqual(openedImportIds, ["import-1"]);
 });

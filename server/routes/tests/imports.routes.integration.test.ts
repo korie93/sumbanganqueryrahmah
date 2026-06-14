@@ -173,6 +173,7 @@ function createImportsRouteHarness(options?: {
     name: "Customer Import",
     filename: "customers.xlsx",
     createdAt: new Date("2026-03-10T00:00:00.000Z"),
+    lastOpenedAt: null,
     isDeleted: false,
     createdBy: "admin.user",
     contentHashSha256: null,
@@ -183,6 +184,7 @@ function createImportsRouteHarness(options?: {
     name: "March Batch",
     filename: "march.xlsx",
     createdAt: new Date("2026-03-09T00:00:00.000Z"),
+    lastOpenedAt: null,
     isDeleted: false,
     createdBy: "admin.user",
     contentHashSha256: null,
@@ -193,6 +195,7 @@ function createImportsRouteHarness(options?: {
     name: "Archive Batch",
     filename: "archive.csv",
     createdAt: new Date("2026-03-08T00:00:00.000Z"),
+    lastOpenedAt: null,
     isDeleted: false,
     createdBy: "admin.user",
     contentHashSha256: null,
@@ -269,6 +272,59 @@ function createImportsRouteHarness(options?: {
       nextCursor: nextItem ? nextItem.id : null,
       total: filtered.length,
       limit,
+    };
+  };
+
+  const listImportsWithOffset = (params: {
+    page?: number;
+    pageSize?: number;
+    search?: string | null;
+    createdBy?: string | null;
+    createdOn?: string | null;
+    minRows?: number | null;
+    maxRows?: number | null;
+    view?: "all" | "recent" | "large" | "duplicates" | "review";
+  }) => {
+    listImportsPageCalls.push(params);
+    const search = String(params.search || "").trim().toLowerCase();
+    const createdBy = String(params.createdBy || "").trim().toLowerCase();
+    const createdOn = String(params.createdOn || "").trim();
+    const pageSize = Math.max(1, Math.min(100, Number(params.pageSize ?? 20)));
+    const duplicateCounts = new Map<string, number>();
+    for (const item of listImportsWithCounts()) {
+      const hash = String(item.contentHashSha256 || "");
+      if (hash) duplicateCounts.set(hash, (duplicateCounts.get(hash) ?? 0) + 1);
+    }
+    const filtered = listImportsWithCounts().filter((item) => {
+      const uploader = String(item.createdBy || "").toLowerCase();
+      const rows = Number(item.rowCount || 0);
+      const matchesSearch = !search
+        || item.name.toLowerCase().includes(search)
+        || item.filename.toLowerCase().includes(search)
+        || uploader.includes(search);
+      const matchesUploader = !createdBy || uploader.includes(createdBy);
+      const matchesDate = !createdOn || formatImportCreatedOn(item.createdAt) === createdOn;
+      const matchesMinRows = params.minRows == null || rows >= params.minRows;
+      const matchesMaxRows = params.maxRows == null || rows <= params.maxRows;
+      const matchesView =
+        !params.view
+        || params.view === "all"
+        || (params.view === "large" && (rows >= 10_000 || Number(item.sourceSizeBytes || 0) >= 10 * 1024 * 1024))
+        || (params.view === "duplicates" && (duplicateCounts.get(String(item.contentHashSha256 || "")) ?? 0) > 1)
+        || (params.view === "review" && rows === 0)
+        || (params.view === "recent" && new Date(item.createdAt).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return matchesSearch && matchesUploader && matchesDate && matchesMinRows && matchesMaxRows && matchesView;
+    });
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const page = Math.min(Math.max(1, Number(params.page ?? 1)), totalPages);
+    const offset = (page - 1) * pageSize;
+    return {
+      items: filtered.slice(offset, offset + pageSize),
+      total: filtered.length,
+      page,
+      pageSize,
+      totalPages,
+      offset,
     };
   };
 
@@ -370,6 +426,7 @@ function createImportsRouteHarness(options?: {
         name: data.name,
         filename: data.filename,
         createdAt: new Date("2026-03-19T00:00:00.000Z"),
+        lastOpenedAt: null,
         isDeleted: false,
         createdBy: data.createdBy ?? null,
         contentHashSha256: data.contentHashSha256 ?? null,
@@ -465,7 +522,10 @@ function createImportsRouteHarness(options?: {
   } as unknown as PostgresStorage;
 
   const importsRepository = {
+    getDataRowCountByImport: async (importId: string) => importRowCounts.get(importId) ?? 0,
     getImportsWithRowCounts: async () => listImportsWithCounts(),
+    listImportsWithRowCountsOffsetPage: async (params: Parameters<typeof listImportsWithOffset>[0]) =>
+      listImportsWithOffset(params),
     listImportsWithRowCountsPage: async (params: {
       cursor?: string | null;
       limit?: number;
@@ -474,6 +534,12 @@ function createImportsRouteHarness(options?: {
     }) => listImportsWithCursor(params),
     getImportColumnNames: async (importId: string) =>
       getImportHeaders(dataRowsByImport.get(importId) ?? []),
+    markImportOpened: async (importId: string) => {
+      const record = importRecords.get(importId);
+      if (record) {
+        importRecords.set(importId, { ...record, lastOpenedAt: new Date() });
+      }
+    },
   } as unknown as ImportsRepository;
 
   const importAnalysisService = {
@@ -623,6 +689,60 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
       search: "batch",
       createdOn: "2026-03-09",
     }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports supports offset pagination and server-side saved filters", async () => {
+  const { app, listImportsPageCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/imports?page=1&pageSize=1&search=admin&createdBy=admin&minRows=1&maxRows=2&view=all`,
+    );
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.doesNotThrow(() => importsListResponseSchema.parse(payload));
+    assert.equal(payload.imports.length, 1);
+    assert.equal(payload.imports[0].id, "import-1");
+    assert.deepEqual(payload.pagination, {
+      mode: "offset",
+      page: 1,
+      pageSize: 1,
+      limit: 1,
+      offset: 0,
+      total: 2,
+      totalPages: 2,
+      hasNextPage: true,
+      hasPreviousPage: false,
+    });
+    assert.deepEqual(listImportsPageCalls, [{
+      page: 1,
+      pageSize: 1,
+      search: "admin",
+      createdBy: "admin",
+      createdOn: null,
+      minRows: 1,
+      maxRows: 2,
+      view: "all",
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports rejects inverted row-count filters", async () => {
+  const { app, listImportsPageCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports?page=1&minRows=20&maxRows=10`);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).message, "Minimum rows cannot exceed maximum rows.");
+    assert.equal(listImportsPageCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }
@@ -1118,6 +1238,25 @@ test("GET /api/imports/:id returns the import details with rows", async () => {
     assert.equal(payload.import.id, "import-1");
     assert.equal(payload.rows.length, 2);
     assert.equal(payload.rows[0].jsonDataJsonb.name, "Alice");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/summary returns lightweight drawer metadata", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-1/summary`);
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.import.id, "import-1");
+    assert.equal(payload.import.rowCount, 2);
+    assert.equal(payload.columnCount, 2);
+    assert.deepEqual(payload.columns, ["age", "name"]);
+    assert.equal("rows" in payload, false);
   } finally {
     await stopTestServer(server);
   }

@@ -53,6 +53,10 @@ export class ImportsService {
     return this.readOperations.getImportDetails(importId);
   }
 
+  async getImportSummary(importId: string) {
+    return this.readOperations.getImportSummary(importId);
+  }
+
   async getImportDataPage(params: ImportDataPageInput) {
     return this.readOperations.getImportDataPage(params);
   }

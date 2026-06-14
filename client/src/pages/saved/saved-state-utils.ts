@@ -25,14 +25,6 @@ export function readSavedErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-export function mergeSavedImportPages(previous: ImportItem[], nextItems: ImportItem[]) {
-  const deduped = new Map(previous.map((item) => [item.id, item]));
-  for (const item of nextItems) {
-    deduped.set(item.id, item);
-  }
-  return Array.from(deduped.values());
-}
-
 export function pruneSavedSelectedImportIds(previous: Set<string>, imports: ImportItem[]) {
   if (previous.size === 0) {
     return previous;

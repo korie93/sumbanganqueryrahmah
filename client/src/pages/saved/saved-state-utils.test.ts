@@ -4,30 +4,11 @@ import test from "node:test";
 import {
   buildSavedImportSummaryLabel,
   countSavedSelectedVisibleImports,
-  mergeSavedImportPages,
   pruneSavedSelectedImportIds,
   readSavedErrorMessage,
   toggleSavedImportSelection,
   toggleSavedVisibleImportSelection,
 } from "@/pages/saved/saved-state-utils";
-
-test("mergeSavedImportPages deduplicates loaded items while preserving order", () => {
-  const previous = [
-    { id: "imp-1", name: "Batch A", filename: "a.csv", createdAt: "2026-04-01T00:00:00.000Z" },
-    { id: "imp-2", name: "Batch B", filename: "b.csv", createdAt: "2026-04-02T00:00:00.000Z" },
-  ];
-
-  const merged = mergeSavedImportPages(previous, [
-    { id: "imp-2", name: "Batch B Renamed", filename: "b.csv", createdAt: "2026-04-02T00:00:00.000Z" },
-    { id: "imp-3", name: "Batch C", filename: "c.csv", createdAt: "2026-04-03T00:00:00.000Z" },
-  ]);
-
-  assert.deepEqual(
-    merged.map((item) => item.id),
-    ["imp-1", "imp-2", "imp-3"],
-  );
-  assert.equal(merged[1]?.name, "Batch B Renamed");
-});
 
 test("saved selection helpers keep immutable selection semantics", () => {
   const imports = [

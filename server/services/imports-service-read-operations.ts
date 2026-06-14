@@ -4,6 +4,7 @@ import type {
   ImportDataPageInput,
   ImportDataPageResult,
   ImportDetailsResult,
+  ImportSummaryResult,
   ImportsServiceAnalysis,
   ImportsServiceRepository,
   ImportsServiceStorage,
@@ -32,6 +33,18 @@ export class ImportsServiceReadOperations {
   }
 
   async listImports(params: ListImportsInput = {}) {
+    if (typeof params.page === "number") {
+      return this.importsRepository.listImportsWithRowCountsOffsetPage({
+        page: params.page,
+        pageSize: params.pageSize,
+        search: params.search,
+        createdBy: params.createdBy,
+        createdOn: params.createdOn,
+        minRows: params.minRows,
+        maxRows: params.maxRows,
+        view: params.view,
+      });
+    }
     return this.importsRepository.listImportsWithRowCountsPage(params);
   }
 
@@ -45,6 +58,26 @@ export class ImportsServiceReadOperations {
     return {
       import: importRecord,
       rows,
+    };
+  }
+
+  async getImportSummary(importId: string): Promise<ImportSummaryResult | null> {
+    const importRecord = await this.storage.getImportById(importId);
+    if (!importRecord) {
+      return null;
+    }
+
+    const [rowCount, columns] = await Promise.all([
+      this.importsRepository.getDataRowCountByImport(importId),
+      this.importsRepository.getImportColumnNames(importId),
+    ]);
+    return {
+      import: {
+        ...importRecord,
+        rowCount,
+      },
+      columns,
+      columnCount: columns.length,
     };
   }
 
@@ -69,6 +102,7 @@ export class ImportsServiceReadOperations {
         cursor: parsedCursor?.lastRowId ?? null,
       }),
       this.importsRepository.getImportColumnNames(params.importId),
+      this.importsRepository.markImportOpened(params.importId),
     ]);
 
     const nextCursor = result.nextCursorRowId
@@ -131,6 +165,7 @@ export class ImportsServiceReadOperations {
       return null;
     }
 
+    await this.importsRepository.markImportOpened(importId);
     return this.importAnalysisService.analyzeImport(importRecord, signal);
   }
 

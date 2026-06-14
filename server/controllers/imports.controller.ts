@@ -42,6 +42,15 @@ const viewerColumnFilterSchema = z.object({
 });
 
 const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
+const savedWorkspaceViewSchema = z.enum(["all", "recent", "large", "duplicates", "review"]);
+const savedPageSchema = z.coerce.number().int().min(1).max(1_000_000);
+const savedRowCountSchema = z.coerce.number().int().min(0).max(2_147_483_647);
+const savedCreatedOnSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  });
 
 function buildImportMutationSuccessPayload<T extends Record<string, unknown>>(payload?: T) {
   return {
@@ -70,6 +79,17 @@ function parseViewerColumnFiltersQuery(value: unknown): ImportDataColumnFilter[]
   }
 
   return result.data;
+}
+
+function parseSavedOptionalRowCount(value: unknown, label: string): number | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const parsed = savedRowCountSchema.safeParse(value);
+  if (!parsed.success) {
+    throw badRequest(`${label} must be a non-negative integer.`);
+  }
+  return parsed.data;
 }
 
 export function createImportsController(deps: CreateImportsControllerDeps) {
@@ -104,11 +124,67 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     return res.json(result);
   };
 
-  const listImports = async (_req: AuthenticatedRequest, res: Response) => {
-    const cursor = readNonEmptyString(_req.query.cursor);
-    const pageSize = readPageLimit(_req.query.pageSize ?? _req.query.limit, 100, 200);
-    const search = readNonEmptyString(_req.query.search);
-    const createdOn = readNonEmptyString(_req.query.createdOn);
+  const listImports = async (req: AuthenticatedRequest, res: Response) => {
+    const cursor = readNonEmptyString(req.query.cursor);
+    const search = readNonEmptyString(req.query.search);
+    const createdOn = readNonEmptyString(req.query.createdOn);
+    const requestedPage = req.query.page;
+
+    if (requestedPage !== undefined) {
+      const pageResult = savedPageSchema.safeParse(requestedPage);
+      if (!pageResult.success) {
+        throw badRequest("Page must be a positive integer.");
+      }
+      const pageSize = readPageLimit(req.query.pageSize ?? req.query.limit, 20, 100);
+      const createdBy = readNonEmptyString(req.query.createdBy);
+      const minRows = parseSavedOptionalRowCount(req.query.minRows, "Minimum rows");
+      const maxRows = parseSavedOptionalRowCount(req.query.maxRows, "Maximum rows");
+      if (minRows !== null && maxRows !== null && minRows > maxRows) {
+        throw badRequest("Minimum rows cannot exceed maximum rows.");
+      }
+      if (createdBy && createdBy.length > 255) {
+        throw badRequest("Uploader filter is too long.");
+      }
+      if (createdOn && !savedCreatedOnSchema.safeParse(createdOn).success) {
+        throw badRequest("Import date must use YYYY-MM-DD.");
+      }
+      const viewResult = savedWorkspaceViewSchema.safeParse(
+        readNonEmptyString(req.query.view) || "all",
+      );
+      if (!viewResult.success) {
+        throw badRequest("Invalid saved workspace view.");
+      }
+
+      const result = await importsService.listImports({
+        page: pageResult.data,
+        pageSize,
+        search: search || null,
+        createdBy: createdBy || null,
+        createdOn: createdOn || null,
+        minRows,
+        maxRows,
+        view: viewResult.data,
+      });
+      if (!("page" in result)) {
+        throw new Error("Offset import pagination returned an invalid result.");
+      }
+      return res.json({
+        imports: result.items,
+        pagination: {
+          mode: "offset" as const,
+          page: result.page,
+          pageSize: result.pageSize,
+          limit: result.pageSize,
+          offset: result.offset,
+          total: result.total,
+          totalPages: result.totalPages,
+          hasNextPage: result.page < result.totalPages,
+          hasPreviousPage: result.page > 1,
+        },
+      });
+    }
+
+    const pageSize = readPageLimit(req.query.pageSize ?? req.query.limit, 100, 200);
 
     try {
       const result = await importsService.listImports({
@@ -117,6 +193,9 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         search: search || null,
         createdOn: createdOn || null,
       });
+      if (!("nextCursor" in result)) {
+        throw new Error("Cursor import pagination returned an invalid result.");
+      }
       return res.json({
         imports: result.items,
         pagination: {
@@ -290,6 +369,15 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     return res.json(details);
   };
 
+  const getImportSummary = async (req: AuthenticatedRequest, res: Response) => {
+    const importId = readRouteParam(req.params.id, "import id");
+    const summary = await importsService.getImportSummary(importId);
+    if (!summary) {
+      throw notFound("Import not found");
+    }
+    return res.json(summary);
+  };
+
   const getImportDataPage = async (req: AuthenticatedRequest, res: Response) => {
     const runtimeSettings = await getRuntimeSettingsCached();
     const importId = readRouteParam(req.params.id, "import id");
@@ -395,6 +483,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     cancelImportJob,
     resumeImportJob,
     getImport,
+    getImportSummary,
     getImportDataPage,
     analyzeImport,
     analyzeAll,

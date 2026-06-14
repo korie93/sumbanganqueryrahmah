@@ -29,3 +29,12 @@ test("imports list query serializes bigint source sizes as JavaScript numbers", 
     "raw PostgreSQL bigint values must be cast because node-postgres returns int8 columns as strings",
   );
 });
+
+test("imports list exposes paginated saved-file detail metadata", () => {
+  const source = readFileSync(IMPORTS_REPOSITORY_PATH, "utf8");
+
+  assert.match(source, /i\.last_opened_at as "lastOpenedAt"/);
+  assert.match(source, /buildImportDuplicateSql\("i"\)\} as "isDuplicate"/);
+  assert.match(source, /listImportsWithRowCountsOffsetPage/);
+  assert.match(source, /buildLikePattern\(createdBy, "contains"\)/);
+});

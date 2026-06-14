@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
+import {
+  getBrowserLocalStorage,
+  getBrowserSessionStorage,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedProps } from "@/pages/saved/types";
@@ -27,6 +32,8 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     hasMoreImports: data.hasMoreImports,
     imports: loadedImports,
     totalImports: data.totalImports,
+    workspaceView: data.workspaceView,
+    onWorkspaceViewChange: data.setWorkspaceView,
   });
   const visibleImports = workspace.visibleImports;
 
@@ -85,14 +92,11 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     [data.hasMoreImports, data.totalImports, loadedImports.length],
   );
   const workspaceResultLabel = useMemo(
-    () =>
-      workspace.workspaceView === "all"
-        ? importSummaryLabel
-        : `${visibleImports.length} shown of ${loadedImports.length} loaded`,
-    [importSummaryLabel, loadedImports.length, visibleImports.length, workspace.workspaceView],
+    () => `${visibleImports.length} on this page · ${data.totalImports} matching`,
+    [data.totalImports, visibleImports.length],
   );
   const adminActionsDisabled =
-    data.loading || data.loadingMore || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
+    data.loading || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
 
   const handleView = useCallback(
     (importItem: { id: string; name: string }) => {
@@ -109,6 +113,19 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
       const storage = getBrowserLocalStorage();
       safeSetStorageItem(storage, "analysisImportId", importItem.id);
       safeSetStorageItem(storage, "analysisImportName", importItem.name);
+      onNavigate("analysis");
+    },
+    [onNavigate],
+  );
+
+  const handleCompare = useCallback(
+    (importItem: { id: string }) => {
+      const localStorage = getBrowserLocalStorage();
+      const sessionStorage = getBrowserSessionStorage();
+      safeRemoveStorageItem(localStorage, "analysisImportId");
+      safeRemoveStorageItem(localStorage, "analysisImportName");
+      safeSetStorageItem(sessionStorage, "analysisWorkspaceSection", "compare");
+      safeSetStorageItem(sessionStorage, "analysisComparisonCurrentId", importItem.id);
       onNavigate("analysis");
     },
     [onNavigate],
@@ -131,10 +148,6 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     void data.refresh();
   }, [data]);
 
-  const handleLoadMore = useCallback(() => {
-    void data.loadMore();
-  }, [data]);
-
   return {
     isSuperuser,
     loadedImportCount: loadedImports.length,
@@ -142,10 +155,15 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     totalImports: data.totalImports,
     hasMoreImports: data.hasMoreImports,
     loading: data.loading,
-    loadingMore: data.loadingMore,
     error: data.error,
+    page: data.page,
+    pageSize: data.pageSize,
+    totalPages: data.totalPages,
     searchTerm: data.searchTerm,
+    uploaderFilter: data.uploaderFilter,
     dateFilter: data.dateFilter,
+    minRowsFilter: data.minRowsFilter,
+    maxRowsFilter: data.maxRowsFilter,
     hasActiveFilters: data.hasActiveFilters,
     selectedImportIds,
     activeImport: workspace.activeImport,
@@ -166,15 +184,21 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     setDeleteDialogOpen: mutation.setDeleteDialogOpen,
     setRenameDialogOpen: mutation.setRenameDialogOpen,
     setSearchTerm: data.setSearchTerm,
+    setUploaderFilter: data.setUploaderFilter,
     setDateFilter: data.setDateFilter,
+    setMinRowsFilter: data.setMinRowsFilter,
+    setMaxRowsFilter: data.setMaxRowsFilter,
+    setPage: data.setPage,
+    setPageSize: data.setPageSize,
     clearFilters: data.clearFilters,
     handleRefresh,
-    handleLoadMore,
     handleView,
     handleAnalysis,
+    handleCompare,
     handleToggleSelected,
     handleToggleSelectAllVisible,
     handleInspectImport: workspace.handleInspectImport,
+    handleCloseImportDetails: workspace.handleCloseImportDetails,
     handleDeleteClick: mutation.handleDeleteClick,
     handleRenameClick: mutation.handleRenameClick,
     deleteDialogOpen: mutation.deleteDialogOpen,

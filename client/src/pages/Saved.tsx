@@ -91,11 +91,17 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         >
           <SavedFiltersBar
             searchTerm={state.searchTerm}
+            uploaderFilter={state.uploaderFilter}
             dateFilter={state.dateFilter}
+            minRowsFilter={state.minRowsFilter}
+            maxRowsFilter={state.maxRowsFilter}
             hasActiveFilters={state.hasActiveFilters}
             searchInputRef={state.searchInputRef}
             onSearchTermChange={state.setSearchTerm}
+            onUploaderFilterChange={state.setUploaderFilter}
             onDateFilterChange={state.setDateFilter}
+            onMinRowsFilterChange={state.setMinRowsFilter}
+            onMaxRowsFilterChange={state.setMaxRowsFilter}
             onClearFilters={state.clearFilters}
           />
         </OperationalSectionCard>
@@ -155,24 +161,27 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             filesOpen={state.filesOpen}
             formatDate={formatSavedImportDate}
             hasActiveFilters={state.hasActiveFilters}
-            hasMoreImports={state.hasMoreImports}
             imports={state.visibleImports}
             isSuperuser={state.isSuperuser}
             loading={state.loading}
-            loadingMore={state.loadingMore}
+            page={state.page}
+            pageSize={state.pageSize}
             partiallySelected={state.partiallySelected}
             selectedImportIds={state.selectedImportIds}
-            summaryLabel={state.importSummaryLabel}
             totalImports={state.totalImports}
+            totalPages={state.totalPages}
             workspaceResultLabel={state.workspaceResultLabel}
             workspaceSummary={state.workspaceSummary}
             workspaceView={state.workspaceView}
             onAnalysis={state.handleAnalysis}
+            onCloseDetails={state.handleCloseImportDetails}
+            onCompare={state.handleCompare}
             onClearFilters={state.clearFilters}
             onDelete={state.handleDeleteClick}
             onFilesOpenChange={state.setFilesOpen}
             onInspect={state.handleInspectImport}
-            onLoadMore={state.handleLoadMore}
+            onPageChange={state.setPage}
+            onPageSizeChange={state.setPageSize}
             onRename={state.handleRenameClick}
             onToggleSelected={state.handleToggleSelected}
             onToggleSelectAllVisible={state.handleToggleSelectAllVisible}

@@ -20,6 +20,13 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
     asyncHandler(importsController.listImports),
   );
   app.get(
+    "/api/imports/:id/summary",
+    authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
+    asyncHandler(importsController.getImportSummary),
+  );
+  app.get(
     "/api/imports/:id",
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),

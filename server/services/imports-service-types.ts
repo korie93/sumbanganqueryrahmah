@@ -1,5 +1,7 @@
 import type { DataRow, Import, InsertDataRow } from "../../shared/schema-postgres";
 import type {
+  ImportListOffsetPage,
+  ImportListView,
   ImportListPage,
   ImportsRepository,
 } from "../repositories/imports.repository";
@@ -83,11 +85,23 @@ export type ImportDetailsResult = {
   rows: DataRow[];
 };
 
+export type ImportSummaryResult = {
+  import: Import & { rowCount: number };
+  columns: string[];
+  columnCount: number;
+};
+
 export type ListImportsInput = {
   cursor?: string | null;
   limit?: number;
+  page?: number;
+  pageSize?: number;
   search?: string | null;
+  createdBy?: string | null;
   createdOn?: string | null;
+  minRows?: number | null;
+  maxRows?: number | null;
+  view?: ImportListView;
 };
 
 export type ImportDataPageResult = {
@@ -130,7 +144,12 @@ export type RenameImportBody = {
 export type ImportsServiceStorage = ImportsStorage;
 export type ImportsServiceRepository = Pick<
   ImportsRepository,
-  "getImportColumnNames" | "getImportsWithRowCounts" | "listImportsWithRowCountsPage"
+  | "getDataRowCountByImport"
+  | "getImportColumnNames"
+  | "getImportsWithRowCounts"
+  | "listImportsWithRowCountsOffsetPage"
+  | "listImportsWithRowCountsPage"
+  | "markImportOpened"
 >;
 export type ImportsServiceAnalysis = Pick<
   ImportAnalysisService,
@@ -138,4 +157,10 @@ export type ImportsServiceAnalysis = Pick<
 >;
 
 export type NormalizeImportRowResult = InsertDataRow["jsonDataJsonb"];
-export type { AnalyzeAllImportsResult, AnalyzeImportResult, SearchDataRowsResult, ImportListPage };
+export type {
+  AnalyzeAllImportsResult,
+  AnalyzeImportResult,
+  SearchDataRowsResult,
+  ImportListOffsetPage,
+  ImportListPage,
+};

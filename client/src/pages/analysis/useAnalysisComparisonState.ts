@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { analyzeImport } from "@/lib/api";
 import {
+  getBrowserSessionStorage,
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+} from "@/lib/browser-storage";
+import {
   buildAnalysisComparison,
   type AnalysisComparison,
 } from "@/pages/analysis/analysis-comparison-utils";
@@ -22,15 +27,29 @@ export function useAnalysisComparisonState({
   const [error, setError] = useState("");
   const abortControllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
+  const requestedCurrentIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     const importIds = new Set(imports.map((item) => item.id));
-    setBaselineIdState((previous) =>
-      importIds.has(previous) ? previous : imports[1]?.id ?? "",
-    );
+    if (requestedCurrentIdRef.current === undefined) {
+      const storage = getBrowserSessionStorage();
+      requestedCurrentIdRef.current = safeGetStorageItem(storage, "analysisComparisonCurrentId");
+      safeRemoveStorageItem(storage, "analysisComparisonCurrentId");
+    }
+    const requestedCurrentId = requestedCurrentIdRef.current;
+    const initialCurrentId =
+      requestedCurrentId && importIds.has(requestedCurrentId)
+        ? requestedCurrentId
+        : imports[0]?.id ?? "";
     setCurrentIdState((previous) =>
-      importIds.has(previous) ? previous : imports[0]?.id ?? "",
+      importIds.has(previous) ? previous : initialCurrentId,
     );
+    setBaselineIdState((previous) => {
+      if (importIds.has(previous) && previous !== initialCurrentId) {
+        return previous;
+      }
+      return imports.find((item) => item.id !== initialCurrentId)?.id ?? "";
+    });
   }, [imports]);
 
   useEffect(() => {

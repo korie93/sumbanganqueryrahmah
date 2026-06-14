@@ -8,6 +8,7 @@ import {
   importBackgroundJobSchema,
   importMutationResultSchema,
   importRecordSchema,
+  importSummaryResponseSchema,
   importsListResponseSchema,
   singleImportAnalysisResponseSchema,
 } from "@shared/api-contracts";
@@ -17,9 +18,14 @@ const IMPORT_UPLOAD_TIMEOUT_MS = 5 * 60_000 + 30_000;
 type ImportRequestOptions = {
   cursor?: string | undefined;
   limit?: number | undefined;
+  page?: number | undefined;
   pageSize?: number | undefined;
   search?: string | undefined;
+  createdBy?: string | undefined;
   createdOn?: string | undefined;
+  minRows?: number | undefined;
+  maxRows?: number | undefined;
+  view?: "all" | "recent" | "large" | "duplicates" | "review" | undefined;
   signal?: AbortSignal | undefined;
 };
 
@@ -102,15 +108,40 @@ export function buildImportMutationFingerprint(
 export async function getImports(options?: ImportRequestOptions) {
   const params = new URLSearchParams();
   if (options?.cursor) params.set("cursor", options.cursor);
+  if (typeof options?.page === "number" && Number.isFinite(options.page)) {
+    params.set("page", String(options.page));
+  }
   const pageSize = options?.pageSize ?? options?.limit;
   if (typeof pageSize === "number" && Number.isFinite(pageSize)) {
     params.set("pageSize", String(pageSize));
   }
   if (options?.search?.trim()) params.set("search", options.search.trim());
+  if (options?.createdBy?.trim()) params.set("createdBy", options.createdBy.trim());
   if (options?.createdOn?.trim()) params.set("createdOn", options.createdOn.trim());
+  if (typeof options?.minRows === "number" && Number.isFinite(options.minRows)) {
+    params.set("minRows", String(options.minRows));
+  }
+  if (typeof options?.maxRows === "number" && Number.isFinite(options.maxRows)) {
+    params.set("maxRows", String(options.maxRows));
+  }
+  if (options?.view) params.set("view", options.view);
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   const response = await apiRequest("GET", `/api/imports${suffix}`, undefined, options);
   return parseApiJson(response, importsListResponseSchema, "/api/imports");
+}
+
+export async function getImportSummary(id: string, options?: ImportRequestOptions) {
+  const response = await apiRequest(
+    "GET",
+    `/api/imports/${encodeURIComponent(id)}/summary`,
+    undefined,
+    options,
+  );
+  return parseApiJson(
+    response,
+    importSummaryResponseSchema,
+    `/api/imports/${id}/summary`,
+  );
 }
 
 export async function createImport(

@@ -316,6 +316,13 @@
       "when": 1781280000000,
       "tag": "0045_activity_device_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1781438400000,
+      "tag": "0046_import_last_opened",
+      "breakpoints": true
     }
   ]
 }

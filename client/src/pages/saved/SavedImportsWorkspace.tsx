@@ -1,6 +1,7 @@
-import { RefreshCw, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
-import { SavedImportDetailPanel } from "@/pages/saved/SavedImportDetailPanel";
+import { SavedImportDetailDrawer } from "@/pages/saved/SavedImportDetailDrawer";
 import { SavedImportsList } from "@/pages/saved/SavedImportsList";
 import { SavedWorkspacePanel } from "@/pages/saved/SavedWorkspacePanel";
 import type { SavedWorkspaceSummary, SavedWorkspaceView } from "@/pages/saved/saved-workspace";
@@ -15,24 +16,27 @@ type SavedImportsWorkspaceProps = {
   filesOpen: boolean;
   formatDate: (dateStr: string) => string;
   hasActiveFilters: boolean;
-  hasMoreImports: boolean;
   imports: ImportItem[];
   isSuperuser: boolean;
   loading: boolean;
-  loadingMore: boolean;
+  page: number;
+  pageSize: number;
   partiallySelected: boolean;
   selectedImportIds: Set<string>;
-  summaryLabel: string;
   totalImports: number;
+  totalPages: number;
   workspaceResultLabel: string;
   workspaceSummary: SavedWorkspaceSummary;
   workspaceView: SavedWorkspaceView;
   onAnalysis: (item: ImportItem) => void;
+  onCloseDetails: () => void;
+  onCompare: (item: ImportItem) => void;
   onClearFilters: () => void;
   onDelete: (item: ImportItem) => void;
   onFilesOpenChange: (open: boolean) => void;
   onInspect: (item: ImportItem) => void;
-  onLoadMore: () => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
   onRename: (item: ImportItem) => void;
   onToggleSelected: (id: string, checked: boolean) => void;
   onToggleSelectAllVisible: (checked: boolean) => void;
@@ -49,26 +53,29 @@ export function SavedImportsWorkspace({
   filesOpen,
   formatDate,
   hasActiveFilters,
-  hasMoreImports,
   imports,
   isSuperuser,
   loading,
-  loadingMore,
   onAnalysis,
+  onCloseDetails,
+  onCompare,
   onClearFilters,
   onDelete,
   onFilesOpenChange,
   onInspect,
-  onLoadMore,
+  onPageChange,
+  onPageSizeChange,
   onRename,
   onToggleSelected,
   onToggleSelectAllVisible,
   onView,
   onWorkspaceViewChange,
   partiallySelected,
+  page,
+  pageSize,
   selectedImportIds,
-  summaryLabel,
   totalImports,
+  totalPages,
   workspaceResultLabel,
   workspaceSummary,
   workspaceView,
@@ -82,17 +89,6 @@ export function SavedImportsWorkspace({
           activeView={workspaceView}
           summary={workspaceSummary}
           onViewChange={onWorkspaceViewChange}
-        />
-        <SavedImportDetailPanel
-          activeImport={activeImport}
-          actionsDisabled={actionsDisabled}
-          duplicateHashCounts={duplicateHashCounts}
-          formatDate={formatDate}
-          isSuperuser={isSuperuser}
-          onAnalysis={onAnalysis}
-          onDelete={onDelete}
-          onRename={onRename}
-          onView={onView}
         />
       </div>
 
@@ -145,23 +141,31 @@ export function SavedImportsWorkspace({
           />
         )}
 
-        {hasMoreImports ? (
-          <div className="flex flex-col items-center gap-2 border-t border-border/60 pt-4">
-            <p className="text-sm text-muted-foreground">
-              Showing {summaryLabel} from the saved import history.
-            </p>
-            <Button
-              variant="outline"
-              onClick={onLoadMore}
-              disabled={loading || loadingMore}
-              data-testid="button-load-more-imports"
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${loadingMore ? "animate-spin" : ""}`} />
-              {loadingMore ? "Loading more..." : "Load more"}
-            </Button>
-          </div>
-        ) : null}
+        <AppPaginationBar
+          disabled={actionsDisabled}
+          loading={loading}
+          page={page}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={totalImports}
+          itemLabel="saved files"
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
       </div>
+
+      <SavedImportDetailDrawer
+        activeImport={activeImport}
+        actionsDisabled={actionsDisabled}
+        duplicateHashCounts={duplicateHashCounts}
+        formatDate={formatDate}
+        isSuperuser={isSuperuser}
+        onAnalysis={onAnalysis}
+        onClose={onCloseDetails}
+        onCompare={onCompare}
+        onDelete={onDelete}
+        onView={onView}
+      />
     </div>
   );
 }
