@@ -3,6 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CollectionNicknameSummaryChartContent } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartContent";
+import { CollectionNicknameSummaryRankingTable } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartDetails";
 
 test("CollectionNicknameSummaryChartContent renders accessible chart context from table totals", () => {
   const markup = renderToStaticMarkup(
@@ -48,8 +49,18 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Purata setiap rekod/);
   assert.match(markup, /Perbandingan kutipan/);
   assert.match(markup, /Ranking terperinci/);
+  assert.match(markup, /Penapis paparan/);
+  assert.match(markup, /Cari nickname/);
+  assert.match(markup, /Susun mengikut/);
+  assert.match(markup, /Bilangan paparan/);
+  assert.match(markup, /Prestasi relatif/);
+  assert.match(markup, /Tinggi/);
+  assert.match(markup, /Sederhana/);
+  assert.match(markup, /Rendah/);
+  assert.match(markup, /Eksport/);
   assert.match(markup, /Nickname summary detailed ranking/);
   assert.match(markup, /Nickname summary compact ranking/);
+  assert.match(markup, /Disusun daripada jumlah kutipan tertinggi kepada terendah/);
   assert.ok(markup.indexOf("Collector Alpha") < markup.lastIndexOf("Collector Beta"));
   assert.match(markup, /RM(?:&nbsp;|\u00a0| )250\.00/);
   assert.match(markup, /75\.0%/);
@@ -80,4 +91,28 @@ test("CollectionNicknameSummaryChartContent renders explicit empty and zero stat
   assert.match(zeroMarkup, /No collection amount to chart/);
   assert.match(zeroMarkup, /2 record\(s\)/);
   assert.doesNotMatch(zeroMarkup, /role="img"/);
+});
+
+test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CollectionNicknameSummaryRankingTable, {
+      peakAmount: 100,
+      rankedData: [
+        {
+          key: "collector-alpha",
+          nickname: "Collector Alpha",
+          axisLabel: "Collector Alpha",
+          totalAmount: 100,
+          totalRecords: 4,
+          averagePerRecord: 25,
+          percentage: 100,
+          hasAmount: true,
+          color: "hsl(var(--chart-1))",
+        },
+      ],
+      sortBy: "records",
+    }),
+  );
+
+  assert.match(markup, /Disusun daripada jumlah rekod tertinggi kepada terendah/);
 });

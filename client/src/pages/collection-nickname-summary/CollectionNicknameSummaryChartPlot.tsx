@@ -9,6 +9,8 @@ import {
   YAxis,
 } from "recharts";
 import {
+  getCollectionNicknamePerformanceLabel,
+  getCollectionNicknamePerformanceLevel,
   getCollectionNicknameSummaryChartPeak,
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
@@ -31,6 +33,7 @@ type TooltipEntry = {
 type CollectionNicknameSummaryChartPlotProps = {
   chartData: CollectionNicknameSummaryChartDatum[];
   detailed: boolean;
+  performancePeakAmount?: number;
   totalAmount: number;
   totalRecords: number;
 };
@@ -45,15 +48,18 @@ function formatPercentage(value: number): string {
 
 function CollectionNicknameSummaryChartTooltip({
   active,
+  peakAmount,
   payload,
 }: {
   active?: boolean | undefined;
+  peakAmount: number;
   payload?: TooltipEntry[] | undefined;
 }) {
   const point = payload?.[0]?.payload;
   if (!active || !point) {
     return null;
   }
+  const performanceLevel = getCollectionNicknamePerformanceLevel(point, peakAmount);
 
   return (
     <div className="min-w-[220px] rounded-lg border border-border/70 bg-background px-3 py-2 text-xs shadow-lg">
@@ -74,6 +80,12 @@ function CollectionNicknameSummaryChartTooltip({
         <div className="flex justify-between gap-4">
           <dt>Bahagian</dt>
           <dd>{formatPercentage(point.percentage)}</dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt>Prestasi</dt>
+          <dd className="font-medium text-foreground">
+            {getCollectionNicknamePerformanceLabel(performanceLevel)}
+          </dd>
         </div>
       </dl>
     </div>
@@ -100,6 +112,7 @@ function buildAccessibleChartLabel({
 export function CollectionNicknameSummaryChartPlot({
   chartData,
   detailed,
+  performancePeakAmount,
   totalAmount,
   totalRecords,
 }: CollectionNicknameSummaryChartPlotProps) {
@@ -115,6 +128,9 @@ export function CollectionNicknameSummaryChartPlot({
     totalAmount,
     totalRecords,
   });
+  const peakAmount = performancePeakAmount
+    ?? getCollectionNicknameSummaryChartPeak(chartData)?.totalAmount
+    ?? 0;
 
   return (
     <div
@@ -157,7 +173,9 @@ export function CollectionNicknameSummaryChartPlot({
               className="text-2xs text-muted-foreground"
             />
             <Tooltip
-              content={(props) => <CollectionNicknameSummaryChartTooltip {...props} />}
+              content={(props) => (
+                <CollectionNicknameSummaryChartTooltip {...props} peakAmount={peakAmount} />
+              )}
               cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
               wrapperStyle={{ outline: "none" }}
             />

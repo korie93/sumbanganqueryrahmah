@@ -1,4 +1,10 @@
-import type { CollectionNicknameSummaryChartDatum } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
+import {
+  getCollectionNicknamePerformanceLabel,
+  getCollectionNicknamePerformanceLevel,
+  type CollectionNicknameSummaryChartDatum,
+  type CollectionNicknameSummaryChartSort,
+  type CollectionNicknamePerformanceLevel,
+} from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionNicknameSummaryMetricsProps = {
@@ -9,11 +15,63 @@ type CollectionNicknameSummaryMetricsProps = {
 };
 
 type CollectionNicknameSummaryRankingTableProps = {
+  peakAmount: number;
   rankedData: CollectionNicknameSummaryChartDatum[];
+  sortBy: CollectionNicknameSummaryChartSort;
 };
 
 function formatPercentage(value: number): string {
   return `${Math.max(0, value).toFixed(1)}%`;
+}
+
+const RANKING_SORT_DESCRIPTION: Record<CollectionNicknameSummaryChartSort, string> = {
+  amount: "Disusun daripada jumlah kutipan tertinggi kepada terendah.",
+  records: "Disusun daripada jumlah rekod tertinggi kepada terendah.",
+  average: "Disusun daripada purata setiap rekod tertinggi kepada terendah.",
+};
+
+const PERFORMANCE_SYMBOL: Record<CollectionNicknamePerformanceLevel, string> = {
+  high: "↑",
+  medium: "•",
+  low: "↓",
+};
+
+export function CollectionNicknamePerformanceBadge({
+  level,
+}: {
+  level: CollectionNicknamePerformanceLevel;
+}) {
+  return (
+    <span
+      className="inline-flex whitespace-nowrap rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground"
+    >
+      <span aria-hidden="true">{PERFORMANCE_SYMBOL[level]}&nbsp;</span>
+      {getCollectionNicknamePerformanceLabel(level)}
+    </span>
+  );
+}
+
+export function CollectionNicknamePerformanceLegend() {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground"
+      aria-label="Panduan penanda prestasi"
+    >
+      <span className="font-medium text-foreground">Prestasi relatif:</span>
+      <span className="inline-flex items-center gap-1.5">
+        <CollectionNicknamePerformanceBadge level="high" />
+        <span>sekurang-kurangnya 67% daripada kutipan tertinggi</span>
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <CollectionNicknamePerformanceBadge level="medium" />
+        <span>34% hingga 66%</span>
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <CollectionNicknamePerformanceBadge level="low" />
+        <span>di bawah 34%</span>
+      </span>
+    </div>
+  );
 }
 
 export function CollectionNicknameSummaryMetrics({
@@ -61,7 +119,9 @@ export function CollectionNicknameSummaryMetrics({
 }
 
 export function CollectionNicknameSummaryRankingTable({
+  peakAmount,
   rankedData,
+  sortBy,
 }: CollectionNicknameSummaryRankingTableProps) {
   return (
     <section className="min-w-0" aria-labelledby="nickname-summary-ranking-title">
@@ -70,7 +130,7 @@ export function CollectionNicknameSummaryRankingTable({
           Ranking terperinci
         </h3>
         <p className="text-xs leading-5 text-muted-foreground">
-          Disusun daripada jumlah kutipan tertinggi kepada terendah.
+          {RANKING_SORT_DESCRIPTION[sortBy]}
         </p>
       </div>
       <div
@@ -87,6 +147,7 @@ export function CollectionNicknameSummaryRankingTable({
               <th scope="col" className="w-14 px-3 py-2.5 font-medium text-muted-foreground">#</th>
               <th scope="col" className="px-3 py-2.5 font-medium text-muted-foreground">Nickname</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium text-muted-foreground">Kutipan</th>
+              <th scope="col" className="px-3 py-2.5 text-center font-medium text-muted-foreground">Prestasi</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium text-muted-foreground">Rekod</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium text-muted-foreground">Purata</th>
               <th scope="col" className="px-3 py-2.5 text-right font-medium text-muted-foreground">Bahagian</th>
@@ -108,6 +169,11 @@ export function CollectionNicknameSummaryRankingTable({
                 </th>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium text-foreground">
                   {formatAmountRM(row.totalAmount)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-center">
+                  <CollectionNicknamePerformanceBadge
+                    level={getCollectionNicknamePerformanceLevel(row, peakAmount)}
+                  />
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground">
                   {row.totalRecords.toLocaleString()}
@@ -146,6 +212,11 @@ export function CollectionNicknameSummaryRankingTable({
               <span className="shrink-0 text-sm font-semibold text-foreground">
                 {formatAmountRM(row.totalAmount)}
               </span>
+            </div>
+            <div className="pl-7">
+              <CollectionNicknamePerformanceBadge
+                level={getCollectionNicknamePerformanceLevel(row, peakAmount)}
+              />
             </div>
             <dl className="grid grid-cols-3 gap-2 pl-7 text-xs">
               <div>

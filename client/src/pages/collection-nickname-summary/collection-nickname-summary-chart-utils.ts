@@ -22,6 +22,22 @@ export type CollectionNicknameSummaryChartDatum = {
   color: string;
 };
 
+export type CollectionNicknameSummaryChartLimit = "5" | "10" | "all";
+export type CollectionNicknameSummaryChartSort = "amount" | "records" | "average";
+export type CollectionNicknamePerformanceLevel = "high" | "medium" | "low";
+
+export type CollectionNicknameSummaryChartFilter = {
+  limit: CollectionNicknameSummaryChartLimit;
+  query: string;
+  sortBy: CollectionNicknameSummaryChartSort;
+};
+
+const COLLECTION_NICKNAME_PERFORMANCE_LABELS: Record<CollectionNicknamePerformanceLevel, string> = {
+  high: "Tinggi",
+  medium: "Sederhana",
+  low: "Rendah",
+};
+
 function toSafeNonNegativeNumber(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
@@ -124,4 +140,74 @@ export function rankCollectionNicknameSummaryChartData(
 
     return left.nickname.localeCompare(right.nickname, "en-MY");
   });
+}
+
+export function getCollectionNicknamePerformanceLevel(
+  row: Pick<CollectionNicknameSummaryChartDatum, "totalAmount">,
+  peakAmount: number,
+): CollectionNicknamePerformanceLevel {
+  const safePeakAmount = toSafeNonNegativeNumber(peakAmount);
+  const safeAmount = toSafeNonNegativeNumber(row.totalAmount);
+  if (safePeakAmount <= 0 || safeAmount <= 0) {
+    return "low";
+  }
+
+  const ratio = safeAmount / safePeakAmount;
+  if (ratio >= 2 / 3) {
+    return "high";
+  }
+  if (ratio >= 1 / 3) {
+    return "medium";
+  }
+  return "low";
+}
+
+export function getCollectionNicknamePerformanceLabel(
+  level: CollectionNicknamePerformanceLevel,
+): string {
+  return COLLECTION_NICKNAME_PERFORMANCE_LABELS[level];
+}
+
+function compareChartRows(
+  left: CollectionNicknameSummaryChartDatum,
+  right: CollectionNicknameSummaryChartDatum,
+  sortBy: CollectionNicknameSummaryChartSort,
+): number {
+  const primaryDifference = sortBy === "records"
+    ? right.totalRecords - left.totalRecords
+    : sortBy === "average"
+      ? right.averagePerRecord - left.averagePerRecord
+      : right.totalAmount - left.totalAmount;
+  if (primaryDifference !== 0) {
+    return primaryDifference;
+  }
+
+  const amountDifference = right.totalAmount - left.totalAmount;
+  if (amountDifference !== 0) {
+    return amountDifference;
+  }
+
+  const recordDifference = right.totalRecords - left.totalRecords;
+  if (recordDifference !== 0) {
+    return recordDifference;
+  }
+
+  return left.nickname.localeCompare(right.nickname, "en-MY");
+}
+
+export function filterCollectionNicknameSummaryChartData(
+  data: readonly CollectionNicknameSummaryChartDatum[],
+  filter: CollectionNicknameSummaryChartFilter,
+): CollectionNicknameSummaryChartDatum[] {
+  const normalizedQuery = filter.query.replace(/\s+/g, " ").trim().toLocaleLowerCase("en-MY");
+  const matchingRows = normalizedQuery
+    ? data.filter((row) => row.nickname.toLocaleLowerCase("en-MY").includes(normalizedQuery))
+    : [...data];
+  const sortedRows = matchingRows.sort((left, right) => compareChartRows(left, right, filter.sortBy));
+
+  if (filter.limit === "all") {
+    return sortedRows;
+  }
+
+  return sortedRows.slice(0, Number(filter.limit));
 }

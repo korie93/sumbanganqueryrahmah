@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCollectionNicknameSummaryChartData,
+  filterCollectionNicknameSummaryChartData,
+  getCollectionNicknamePerformanceLabel,
+  getCollectionNicknamePerformanceLevel,
   getCollectionNicknameSummaryChartPeak,
   hasCollectionNicknameSummaryChartData,
   rankCollectionNicknameSummaryChartData,
@@ -113,4 +116,40 @@ test("rankCollectionNicknameSummaryChartData ranks amount, records, then nicknam
     rankCollectionNicknameSummaryChartData(chartData).map((row) => row.nickname),
     ["Collector Alpha", "Collector Beta", "Collector Delta", "Collector Charlie"],
   );
+});
+
+test("filterCollectionNicknameSummaryChartData searches, sorts, limits, and preserves input", () => {
+  const chartData = buildCollectionNicknameSummaryChartData([
+    { nickname: "Collector Alpha", totalAmount: 300, totalRecords: 3 },
+    { nickname: "Collector Beta", totalAmount: 500, totalRecords: 1 },
+    { nickname: "Alpha Support", totalAmount: 200, totalRecords: 4 },
+    { nickname: "Collector Delta", totalAmount: 100, totalRecords: 2 },
+  ], 1_100);
+  const before = structuredClone(chartData);
+
+  const byRecords = filterCollectionNicknameSummaryChartData(chartData, {
+    limit: "all",
+    query: " alpha ",
+    sortBy: "records",
+  });
+  const topTwoByAverage = filterCollectionNicknameSummaryChartData(chartData, {
+    limit: "5",
+    query: "",
+    sortBy: "average",
+  }).slice(0, 2);
+
+  assert.deepEqual(byRecords.map((row) => row.nickname), ["Alpha Support", "Collector Alpha"]);
+  assert.deepEqual(topTwoByAverage.map((row) => row.nickname), ["Collector Beta", "Collector Alpha"]);
+  assert.deepEqual(chartData, before);
+});
+
+test("performance levels use explicit relative thresholds and labels", () => {
+  assert.equal(getCollectionNicknamePerformanceLevel({ totalAmount: 1_000 }, 1_000), "high");
+  assert.equal(getCollectionNicknamePerformanceLevel({ totalAmount: 670 }, 1_000), "high");
+  assert.equal(getCollectionNicknamePerformanceLevel({ totalAmount: 500 }, 1_000), "medium");
+  assert.equal(getCollectionNicknamePerformanceLevel({ totalAmount: 200 }, 1_000), "low");
+  assert.equal(getCollectionNicknamePerformanceLevel({ totalAmount: 0 }, 0), "low");
+  assert.equal(getCollectionNicknamePerformanceLabel("high"), "Tinggi");
+  assert.equal(getCollectionNicknamePerformanceLabel("medium"), "Sederhana");
+  assert.equal(getCollectionNicknamePerformanceLabel("low"), "Rendah");
 });

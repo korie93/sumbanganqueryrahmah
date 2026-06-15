@@ -92,7 +92,12 @@ export function CollectionNicknameSummaryChart({
         contentClassName="min-w-0"
       >
         <Suspense fallback={<CollectionNicknameSummaryChartFallback />}>
-          <CollectionNicknameSummaryChartContent {...contentProps} displayMode="compact" />
+          <CollectionNicknameSummaryChartContent
+            {...contentProps}
+            displayMode="compact"
+            fromDate={fromDate}
+            toDate={toDate}
+          />
         </Suspense>
       </OperationalSectionCard>
 
@@ -114,7 +119,12 @@ export function CollectionNicknameSummaryChart({
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto pr-1">
             <Suspense fallback={<CollectionNicknameSummaryChartFallback />}>
-              <CollectionNicknameSummaryChartContent {...contentProps} displayMode="detail" />
+              <CollectionNicknameSummaryChartContent
+                {...contentProps}
+                displayMode="detail"
+                fromDate={fromDate}
+                toDate={toDate}
+              />
             </Suspense>
           </div>
         </DialogContent>
