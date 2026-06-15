@@ -23,13 +23,37 @@ test("CollectionNicknameSummaryChartContent renders accessible chart context fro
   assert.match(markup, /role="region"/);
   assert.match(markup, /role="img"/);
   assert.match(markup, /Nickname summary bar chart for 2 nicknames/);
-  assert.match(markup, /Chart total/);
-  assert.match(markup, /Highest/);
+  assert.match(markup, /Jumlah kutipan/);
+  assert.match(markup, /Kutipan tertinggi/);
   assert.match(markup, /Nickname summary chart data/);
   assert.match(markup, /Collector Alpha With A Long Nickname/);
   assert.match(markup, /75\.0% of total/);
   assert.match(markup, /tabindex="0"/);
   assert.match(markup, /min-width:260px/);
+});
+
+test("CollectionNicknameSummaryChartContent renders detailed ranking and averages", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CollectionNicknameSummaryChartContent, {
+      nicknameTotals: [
+        { nickname: "Collector Beta", totalAmount: 250, totalRecords: 1 },
+        { nickname: "Collector Alpha", totalAmount: 750, totalRecords: 3 },
+      ],
+      totalAmount: 1_000,
+      totalRecords: 4,
+      displayMode: "detail",
+    }),
+  );
+
+  assert.match(markup, /Purata setiap rekod/);
+  assert.match(markup, /Perbandingan kutipan/);
+  assert.match(markup, /Ranking terperinci/);
+  assert.match(markup, /Nickname summary detailed ranking/);
+  assert.match(markup, /Nickname summary compact ranking/);
+  assert.ok(markup.indexOf("Collector Alpha") < markup.lastIndexOf("Collector Beta"));
+  assert.match(markup, /RM(?:&nbsp;|\u00a0| )250\.00/);
+  assert.match(markup, /75\.0%/);
+  assert.match(markup, /h-\[clamp\(360px,54vh,620px\)\]/);
 });
 
 test("CollectionNicknameSummaryChartContent renders explicit empty and zero states", () => {

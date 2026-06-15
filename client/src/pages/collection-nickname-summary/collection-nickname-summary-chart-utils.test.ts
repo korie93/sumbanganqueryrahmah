@@ -4,6 +4,7 @@ import {
   buildCollectionNicknameSummaryChartData,
   getCollectionNicknameSummaryChartPeak,
   hasCollectionNicknameSummaryChartData,
+  rankCollectionNicknameSummaryChartData,
   truncateNicknameChartLabel,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
@@ -21,6 +22,7 @@ test("buildCollectionNicknameSummaryChartData preserves table order and calculat
   assert.deepEqual(chartData.map((row) => row.nickname), ["Collector Alpha", "Collector Beta"]);
   assert.deepEqual(chartData.map((row) => row.totalAmount), [750, 250]);
   assert.deepEqual(chartData.map((row) => row.totalRecords), [3, 1]);
+  assert.deepEqual(chartData.map((row) => row.averagePerRecord), [250, 250]);
   assert.deepEqual(chartData.map((row) => row.percentage), [75, 25]);
   assert.deepEqual(chartData.map((row) => row.color), [
     "hsl(var(--chart-1))",
@@ -97,4 +99,18 @@ test("buildCollectionNicknameSummaryChartData rotates the fixed theme-aware pale
 
   assert.equal(new Set(chartData.slice(0, 5).map((row) => row.color)).size, 5);
   assert.equal(chartData[5]?.color, chartData[0]?.color);
+});
+
+test("rankCollectionNicknameSummaryChartData ranks amount, records, then nickname", () => {
+  const chartData = buildCollectionNicknameSummaryChartData([
+    { nickname: "Collector Charlie", totalAmount: 300, totalRecords: 1 },
+    { nickname: "Collector Beta", totalAmount: 500, totalRecords: 2 },
+    { nickname: "Collector Alpha", totalAmount: 500, totalRecords: 2 },
+    { nickname: "Collector Delta", totalAmount: 500, totalRecords: 1 },
+  ], 1_800);
+
+  assert.deepEqual(
+    rankCollectionNicknameSummaryChartData(chartData).map((row) => row.nickname),
+    ["Collector Alpha", "Collector Beta", "Collector Delta", "Collector Charlie"],
+  );
 });

@@ -16,6 +16,7 @@ export type CollectionNicknameSummaryChartDatum = {
   axisLabel: string;
   totalAmount: number;
   totalRecords: number;
+  averagePerRecord: number;
   percentage: number;
   hasAmount: boolean;
   color: string;
@@ -69,6 +70,7 @@ export function buildCollectionNicknameSummaryChartData(
       axisLabel: buildNicknameChartAxisLabel(nickname),
       totalAmount,
       totalRecords,
+      averagePerRecord: totalRecords > 0 ? totalAmount / totalRecords : 0,
       percentage: 0,
       hasAmount: totalAmount > 0,
       color: COLLECTION_NICKNAME_CHART_COLORS[index % COLLECTION_NICKNAME_CHART_COLORS.length],
@@ -104,4 +106,22 @@ export function getCollectionNicknameSummaryChartPeak(
     }
   }
   return peak;
+}
+
+export function rankCollectionNicknameSummaryChartData(
+  data: readonly CollectionNicknameSummaryChartDatum[],
+): CollectionNicknameSummaryChartDatum[] {
+  return [...data].sort((left, right) => {
+    const amountDifference = right.totalAmount - left.totalAmount;
+    if (amountDifference !== 0) {
+      return amountDifference;
+    }
+
+    const recordDifference = right.totalRecords - left.totalRecords;
+    if (recordDifference !== 0) {
+      return recordDifference;
+    }
+
+    return left.nickname.localeCompare(right.nickname, "en-MY");
+  });
 }
