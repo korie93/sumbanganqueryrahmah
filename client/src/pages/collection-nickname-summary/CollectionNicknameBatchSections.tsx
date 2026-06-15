@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { CollectionNicknameSummaryChart } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChart";
 
 type CollectionNicknameBatchSectionsProps = {
   loading: boolean;
@@ -82,6 +83,14 @@ export function CollectionNicknameBatchSections({
           ))}
         </div>
       </OperationalSectionCard>
+
+      <CollectionNicknameSummaryChart
+        fromDate={fromDate}
+        toDate={toDate}
+        nicknameTotals={nicknameTotals}
+        totalAmount={totalAmount}
+        totalRecords={totalRecords}
+      />
 
       {isMobile ? (
         <div className="space-y-3" data-floating-ai-avoid="true">

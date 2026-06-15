@@ -6,6 +6,7 @@ import { useCollectionNicknameSummaryData } from "@/pages/collection-nickname-su
 import { CollectionNicknameSummaryDesktopFilters } from "@/pages/collection/CollectionNicknameSummaryDesktopFilters";
 import { CollectionNicknameSummaryMobileFilters } from "@/pages/collection/CollectionNicknameSummaryMobileFilters";
 import {
+  CollectionNicknameSummaryErrorState,
   CollectionNicknameSummaryIdleState,
   CollectionNicknameSummaryLoadingState,
 } from "@/pages/collection/CollectionNicknameSummaryStates";
@@ -76,7 +77,9 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
         <CollectionNicknameSummaryDesktopFilters summaryData={summaryData} />
       )}
 
-      {summaryData.hasApplied || summaryData.loadingSummary ? (
+      {summaryData.summaryError ? (
+        <CollectionNicknameSummaryErrorState message={summaryData.summaryError} />
+      ) : summaryData.hasApplied || summaryData.loadingSummary ? (
         <Suspense fallback={<CollectionNicknameSummaryLoadingState />}>
           <CollectionNicknameBatchSections
             loading={summaryData.loadingSummary}

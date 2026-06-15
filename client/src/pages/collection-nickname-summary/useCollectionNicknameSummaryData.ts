@@ -48,6 +48,7 @@ type UseCollectionNicknameSummaryDataValue = {
   totalAmount: number;
   totalRecords: number;
   hasApplied: boolean;
+  summaryError: string | null;
   freshness: CollectionReportFreshness | null;
   allSelected: boolean;
   partiallySelected: boolean;
@@ -84,6 +85,7 @@ export function useCollectionNicknameSummaryData({
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalRecords, setTotalRecords] = useState(0);
   const [hasApplied, setHasApplied] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [freshness, setFreshness] = useState<CollectionReportFreshness | null>(null);
 
   const abortNicknamesRequest = useCallback(() => {
@@ -229,6 +231,7 @@ export function useCollectionNicknameSummaryData({
         setTotalRecords(cachedEntry.totalRecords);
         setFreshness(cachedEntry.freshness);
         setHasApplied(true);
+        setSummaryError(null);
         setLoadingSummary(false);
         return;
       }
@@ -237,6 +240,7 @@ export function useCollectionNicknameSummaryData({
       const controller = new AbortController();
       summaryAbortControllerRef.current = controller;
       setLoadingSummary(true);
+      setSummaryError(null);
       try {
         const response = await getCollectionNicknameSummary({
           from,
@@ -261,17 +265,20 @@ export function useCollectionNicknameSummaryData({
         setTotalRecords(normalizedTotalRecords);
         setFreshness(response?.freshness || null);
         setHasApplied(true);
+        setSummaryError(null);
       } catch (error: unknown) {
         if (controller.signal.aborted || isAbortError(error)) return;
         if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
+        const errorMessage = parseApiError(error);
         setNicknameTotals([]);
         setTotalAmount(0);
         setTotalRecords(0);
         setFreshness(null);
         setHasApplied(false);
+        setSummaryError(errorMessage);
         toast({
           title: "Failed to Load Nickname Summary",
-          description: parseApiError(error),
+          description: errorMessage,
           variant: "destructive",
         });
       } finally {
@@ -343,6 +350,7 @@ export function useCollectionNicknameSummaryData({
     setTotalRecords(0);
     setFreshness(null);
     setHasApplied(false);
+    setSummaryError(null);
   }, [abortSummaryRequest]);
 
   return {
@@ -358,6 +366,7 @@ export function useCollectionNicknameSummaryData({
     totalAmount,
     totalRecords,
     hasApplied,
+    summaryError,
     freshness,
     allSelected,
     partiallySelected,
