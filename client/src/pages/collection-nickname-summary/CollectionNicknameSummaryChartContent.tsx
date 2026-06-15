@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,7 +18,7 @@ import {
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-const CHART_MIN_WIDTH = 480;
+const CHART_MIN_WIDTH = 260;
 const CHART_MAX_WIDTH = 6_000;
 const CHART_SLOT_WIDTH = 120;
 const CHART_MARGIN = { top: 12, right: 18, left: 2, bottom: 8 };
@@ -180,7 +181,7 @@ export function CollectionNicknameSummaryChartContent({
           role="img"
           aria-label={chartLabel}
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" debounce={80}>
             <BarChart data={chartData} margin={CHART_MARGIN} accessibilityLayer>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
               <XAxis
@@ -208,11 +209,14 @@ export function CollectionNicknameSummaryChartContent({
               <Bar
                 dataKey="totalAmount"
                 name="Total collection"
-                fill="hsl(var(--primary))"
                 radius={[6, 6, 0, 0]}
                 maxBarSize={46}
                 isAnimationActive={false}
-              />
+              >
+                {chartData.map((entry) => (
+                  <Cell key={entry.key} fill={entry.color} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

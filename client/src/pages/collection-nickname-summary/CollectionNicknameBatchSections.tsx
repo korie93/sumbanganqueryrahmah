@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
-import { CollectionNicknameSummaryChart } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChart";
+import { CollectionNicknameSummaryChartToggle } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartToggle";
 
 type CollectionNicknameBatchSectionsProps = {
   loading: boolean;
@@ -18,6 +18,7 @@ type CollectionNicknameBatchSectionsProps = {
   selectedNicknames: string[];
   fromDate: string;
   toDate: string;
+  chartResetKey: string;
   totalAmount: number;
   totalRecords: number;
   nicknameTotals: NicknameTotalSummary[];
@@ -29,6 +30,7 @@ export function CollectionNicknameBatchSections({
   selectedNicknames,
   fromDate,
   toDate,
+  chartResetKey,
   totalAmount,
   totalRecords,
   nicknameTotals,
@@ -83,14 +85,6 @@ export function CollectionNicknameBatchSections({
           ))}
         </div>
       </OperationalSectionCard>
-
-      <CollectionNicknameSummaryChart
-        fromDate={fromDate}
-        toDate={toDate}
-        nicknameTotals={nicknameTotals}
-        totalAmount={totalAmount}
-        totalRecords={totalRecords}
-      />
 
       {isMobile ? (
         <div className="space-y-3" data-floating-ai-avoid="true">
@@ -190,6 +184,15 @@ export function CollectionNicknameBatchSections({
           </div>
         </div>
       )}
+
+      <CollectionNicknameSummaryChartToggle
+        key={chartResetKey}
+        fromDate={fromDate}
+        toDate={toDate}
+        nicknameTotals={nicknameTotals}
+        totalAmount={totalAmount}
+        totalRecords={totalRecords}
+      />
     </div>
   );
 }

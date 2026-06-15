@@ -29,6 +29,7 @@ test("CollectionNicknameSummaryChartContent renders accessible chart context fro
   assert.match(markup, /Collector Alpha With A Long Nickname/);
   assert.match(markup, /75\.0% of total/);
   assert.match(markup, /tabindex="0"/);
+  assert.match(markup, /min-width:260px/);
 });
 
 test("CollectionNicknameSummaryChartContent renders explicit empty and zero states", () => {

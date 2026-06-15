@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildCollectionNicknameSummaryChartResetKey,
   countCollectionNicknameSummaryControls,
   formatCollectionNicknameSummaryMobileDateRange,
   getCollectionNicknameSummaryPreview,
@@ -37,4 +38,27 @@ test("getCollectionNicknameSummaryPreview limits preview chips", () => {
     selectedNicknamePreview: ["a", "b"],
     remainingNicknameCount: 1,
   });
+});
+
+test("buildCollectionNicknameSummaryChartResetKey is stable for the same filter scope", () => {
+  const first = buildCollectionNicknameSummaryChartResetKey({
+    selectedNicknames: [" Collector Beta ", "collector alpha", "Collector Beta"],
+    fromDate: "2026-06-01",
+    toDate: "2026-06-15",
+  });
+  const second = buildCollectionNicknameSummaryChartResetKey({
+    selectedNicknames: ["COLLECTOR ALPHA", "collector beta"],
+    fromDate: "2026-06-01",
+    toDate: "2026-06-15",
+  });
+
+  assert.equal(first, second);
+  assert.notEqual(
+    first,
+    buildCollectionNicknameSummaryChartResetKey({
+      selectedNicknames: ["collector alpha", "collector beta"],
+      fromDate: "2026-06-02",
+      toDate: "2026-06-15",
+    }),
+  );
 });

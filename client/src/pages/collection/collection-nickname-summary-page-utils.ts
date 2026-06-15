@@ -35,3 +35,23 @@ export function getCollectionNicknameSummaryPreview(selectedNicknames: string[])
     remainingNicknameCount: selectedNicknames.length - selectedNicknamePreview.length,
   };
 }
+
+export function buildCollectionNicknameSummaryChartResetKey(params: {
+  selectedNicknames: string[];
+  fromDate: string;
+  toDate: string;
+}): string {
+  const nicknames = Array.from(
+    new Set(
+      params.selectedNicknames
+        .map((nickname) => String(nickname || "").trim().toLocaleLowerCase("en-MY"))
+        .filter(Boolean),
+    ),
+  ).sort((left, right) => left.localeCompare(right, "en-MY"));
+
+  return JSON.stringify({
+    fromDate: String(params.fromDate || "").trim(),
+    toDate: String(params.toDate || "").trim(),
+    nicknames,
+  });
+}

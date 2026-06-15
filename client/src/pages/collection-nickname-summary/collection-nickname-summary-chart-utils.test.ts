@@ -22,6 +22,10 @@ test("buildCollectionNicknameSummaryChartData preserves table order and calculat
   assert.deepEqual(chartData.map((row) => row.totalAmount), [750, 250]);
   assert.deepEqual(chartData.map((row) => row.totalRecords), [3, 1]);
   assert.deepEqual(chartData.map((row) => row.percentage), [75, 25]);
+  assert.deepEqual(chartData.map((row) => row.color), [
+    "hsl(var(--chart-1))",
+    "hsl(var(--chart-2))",
+  ]);
   assert.equal(hasCollectionNicknameSummaryChartData(chartData), true);
   assert.equal(getCollectionNicknameSummaryChartPeak(chartData)?.nickname, "Collector Alpha");
 });
@@ -52,6 +56,22 @@ test("buildCollectionNicknameSummaryChartData falls back to row totals for perce
   assert.deepEqual(chartData.map((row) => row.percentage), [60, 40]);
 });
 
+test("buildCollectionNicknameSummaryChartData keeps mobile axis labels compact", () => {
+  const chartData = buildCollectionNicknameSummaryChartData([
+    { nickname: "SW.AFIQAH_1242", totalAmount: 100, totalRecords: 1 },
+    { nickname: "SW.BUKHARI_924", totalAmount: 200, totalRecords: 1 },
+  ], 300);
+
+  assert.deepEqual(chartData.map((row) => row.axisLabel), [
+    "AFIQAH_1242",
+    "BUKHARI_924",
+  ]);
+  assert.deepEqual(chartData.map((row) => row.nickname), [
+    "SW.AFIQAH_1242",
+    "SW.BUKHARI_924",
+  ]);
+});
+
 test("truncateNicknameChartLabel preserves short labels and truncates long labels", () => {
   assert.equal(truncateNicknameChartLabel("Collector A"), "Collector A");
   assert.equal(
@@ -63,4 +83,18 @@ test("truncateNicknameChartLabel preserves short labels and truncates long label
 test("buildCollectionNicknameSummaryChartData handles nullish input", () => {
   assert.deepEqual(buildCollectionNicknameSummaryChartData(null, 0), []);
   assert.deepEqual(buildCollectionNicknameSummaryChartData(undefined, 0), []);
+});
+
+test("buildCollectionNicknameSummaryChartData rotates the fixed theme-aware palette", () => {
+  const chartData = buildCollectionNicknameSummaryChartData(
+    Array.from({ length: 6 }, (_, index) => ({
+      nickname: `Collector ${index + 1}`,
+      totalAmount: 100 + index,
+      totalRecords: 1,
+    })),
+    615,
+  );
+
+  assert.equal(new Set(chartData.slice(0, 5).map((row) => row.color)).size, 5);
+  assert.equal(chartData[5]?.color, chartData[0]?.color);
 });

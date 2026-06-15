@@ -11,6 +11,7 @@ import {
   CollectionNicknameSummaryLoadingState,
 } from "@/pages/collection/CollectionNicknameSummaryStates";
 import {
+  buildCollectionNicknameSummaryChartResetKey,
   countCollectionNicknameSummaryControls,
   formatCollectionNicknameSummaryMobileDateRange,
   getCollectionNicknameSummaryPreview,
@@ -45,6 +46,14 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
   const mobileDateRangeLabel = useMemo(
     () => formatCollectionNicknameSummaryMobileDateRange(summaryData.fromDate, summaryData.toDate),
     [summaryData.fromDate, summaryData.toDate],
+  );
+  const chartResetKey = useMemo(
+    () => buildCollectionNicknameSummaryChartResetKey({
+      selectedNicknames: summaryData.selectedNicknames,
+      fromDate: summaryData.fromDate,
+      toDate: summaryData.toDate,
+    }),
+    [summaryData.fromDate, summaryData.selectedNicknames, summaryData.toDate],
   );
 
   if (!canAccess) {
@@ -84,9 +93,10 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
           <CollectionNicknameBatchSections
             loading={summaryData.loadingSummary}
             hasApplied={summaryData.hasApplied}
-            selectedNicknames={summaryData.selectedNicknames}
-            fromDate={summaryData.fromDate}
-            toDate={summaryData.toDate}
+            selectedNicknames={summaryData.appliedNicknames}
+            fromDate={summaryData.appliedFromDate}
+            toDate={summaryData.appliedToDate}
+            chartResetKey={chartResetKey}
             totalAmount={summaryData.totalAmount}
             totalRecords={summaryData.totalRecords}
             nicknameTotals={summaryData.nicknameTotals}

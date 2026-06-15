@@ -1,6 +1,14 @@
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 
-const AXIS_LABEL_MAX_LENGTH = 18;
+const AXIS_LABEL_MAX_LENGTH = 14;
+const DEFAULT_LABEL_MAX_LENGTH = 18;
+const COLLECTION_NICKNAME_CHART_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+] as const;
 
 export type CollectionNicknameSummaryChartDatum = {
   key: string;
@@ -10,6 +18,7 @@ export type CollectionNicknameSummaryChartDatum = {
   totalRecords: number;
   percentage: number;
   hasAmount: boolean;
+  color: string;
 };
 
 function toSafeNonNegativeNumber(value: unknown): number {
@@ -25,9 +34,14 @@ function normalizeNickname(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim() || "Unknown / No Nickname";
 }
 
+function buildNicknameChartAxisLabel(nickname: string): string {
+  const withoutOperationalPrefix = nickname.replace(/^SW[._-]/i, "");
+  return truncateNicknameChartLabel(withoutOperationalPrefix, AXIS_LABEL_MAX_LENGTH);
+}
+
 export function truncateNicknameChartLabel(
   nickname: string,
-  maxLength = AXIS_LABEL_MAX_LENGTH,
+  maxLength = DEFAULT_LABEL_MAX_LENGTH,
 ): string {
   const normalized = normalizeNickname(nickname);
   const safeMaxLength = Math.max(4, Math.trunc(maxLength));
@@ -52,11 +66,12 @@ export function buildCollectionNicknameSummaryChartData(
     return {
       key: `${nickname.toLocaleLowerCase("en-MY")}-${index}`,
       nickname,
-      axisLabel: truncateNicknameChartLabel(nickname),
+      axisLabel: buildNicknameChartAxisLabel(nickname),
       totalAmount,
       totalRecords,
       percentage: 0,
       hasAmount: totalAmount > 0,
+      color: COLLECTION_NICKNAME_CHART_COLORS[index % COLLECTION_NICKNAME_CHART_COLORS.length],
     } satisfies CollectionNicknameSummaryChartDatum;
   });
 

@@ -48,6 +48,9 @@ type UseCollectionNicknameSummaryDataValue = {
   totalAmount: number;
   totalRecords: number;
   hasApplied: boolean;
+  appliedNicknames: string[];
+  appliedFromDate: string;
+  appliedToDate: string;
   summaryError: string | null;
   freshness: CollectionReportFreshness | null;
   allSelected: boolean;
@@ -85,6 +88,9 @@ export function useCollectionNicknameSummaryData({
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalRecords, setTotalRecords] = useState(0);
   const [hasApplied, setHasApplied] = useState(false);
+  const [appliedNicknames, setAppliedNicknames] = useState<string[]>([]);
+  const [appliedFromDate, setAppliedFromDate] = useState("");
+  const [appliedToDate, setAppliedToDate] = useState("");
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [freshness, setFreshness] = useState<CollectionReportFreshness | null>(null);
 
@@ -230,6 +236,9 @@ export function useCollectionNicknameSummaryData({
         setTotalAmount(cachedEntry.totalAmount);
         setTotalRecords(cachedEntry.totalRecords);
         setFreshness(cachedEntry.freshness);
+        setAppliedNicknames([...nicknames]);
+        setAppliedFromDate(from);
+        setAppliedToDate(to);
         setHasApplied(true);
         setSummaryError(null);
         setLoadingSummary(false);
@@ -264,6 +273,9 @@ export function useCollectionNicknameSummaryData({
         setTotalAmount(normalizedTotalAmount);
         setTotalRecords(normalizedTotalRecords);
         setFreshness(response?.freshness || null);
+        setAppliedNicknames([...nicknames]);
+        setAppliedFromDate(from);
+        setAppliedToDate(to);
         setHasApplied(true);
         setSummaryError(null);
       } catch (error: unknown) {
@@ -274,6 +286,9 @@ export function useCollectionNicknameSummaryData({
         setTotalAmount(0);
         setTotalRecords(0);
         setFreshness(null);
+        setAppliedNicknames([]);
+        setAppliedFromDate("");
+        setAppliedToDate("");
         setHasApplied(false);
         setSummaryError(errorMessage);
         toast({
@@ -349,6 +364,9 @@ export function useCollectionNicknameSummaryData({
     setTotalAmount(0);
     setTotalRecords(0);
     setFreshness(null);
+    setAppliedNicknames([]);
+    setAppliedFromDate("");
+    setAppliedToDate("");
     setHasApplied(false);
     setSummaryError(null);
   }, [abortSummaryRequest]);
@@ -366,6 +384,9 @@ export function useCollectionNicknameSummaryData({
     totalAmount,
     totalRecords,
     hasApplied,
+    appliedNicknames,
+    appliedFromDate,
+    appliedToDate,
     summaryError,
     freshness,
     allSelected,
