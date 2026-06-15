@@ -258,7 +258,10 @@ test("POST /api/telemetry/web-vitals accepts a valid web vitals payload", async 
 
 test("POST /telemetry/web-vitals remains a guarded compatibility alias", async () => {
   const metrics = createInternalMetrics();
-  const { app, recordedPayloads } = createTelemetryRouteHarness({ metrics });
+  const { app, recordedPayloads } = createTelemetryRouteHarness({
+    metrics,
+    now: () => new Date("2026-05-01T00:00:00.000Z"),
+  });
   const { server, baseUrl } = await startTestServer(app);
 
   try {
