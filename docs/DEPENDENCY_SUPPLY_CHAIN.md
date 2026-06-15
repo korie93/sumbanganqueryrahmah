@@ -134,6 +134,7 @@ Current overrides:
 | `rollup` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. |
 | `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. |
 | `ip-address` | Pins patched IP address parsing helpers for `express-rate-limit` until the upstream dependency advances. |
+| `js-yaml` | Pins patched YAML parsing for ESLint transitive config loading until `@eslint/eslintrc` resolves the patched range by default. |
 
 When removing an override, remove its entry from this table and from the audit
 helper in the same dependency-only PR.

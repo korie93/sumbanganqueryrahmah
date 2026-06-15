@@ -63,6 +63,7 @@ Operational notes:
 | `rollup` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. | Build-tool supply-chain hardening for Rollup advisories. | Vite and related build packages resolve the patched Rollup release by default. |
 | `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. | Dev-server exposure and vulnerable nested esbuild advisory class. | `drizzle-kit` and Vite dependencies no longer pull an affected esbuild range. |
 | `ip-address` | Pins patched IP address parsing helpers for `express-rate-limit` until the upstream dependency advances. | Rate-limit client identity parsing hardening. | `express-rate-limit` resolves a patched `ip-address` transitively without an override. |
+| `js-yaml` | Pins patched YAML parsing for ESLint transitive config loading until `@eslint/eslintrc` resolves the patched range by default. | Quadratic-complexity YAML merge-key DoS advisory class in older transitive parser versions. | ESLint resolves patched `js-yaml` transitively and `npm run audit:dependencies` stays clean without the override. |
 
 Quarterly review checklist:
 

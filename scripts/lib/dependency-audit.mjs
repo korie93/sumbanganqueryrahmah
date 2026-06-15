@@ -62,6 +62,10 @@ const documentedOverrideReasons = new Map([
     "ip-address",
     "Pins patched IP address parsing helpers for express-rate-limit until the upstream dependency advances.",
   ],
+  [
+    "js-yaml",
+    "Pins patched YAML parsing for ESLint transitive config loading until @eslint/eslintrc resolves the patched range by default.",
+  ],
 ]);
 
 const securityCriticalDirectDependencies = Object.freeze([
