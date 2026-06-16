@@ -4,11 +4,16 @@ import {
   CartesianGrid,
   Cell,
   ResponsiveContainer,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import {
+  getCollectionNicknameBenchmarkGap,
+  getCollectionNicknameBenchmarkProgress,
+  getCollectionNicknameBenchmarkStatus,
+  getCollectionNicknameBenchmarkStatusLabel,
   getCollectionNicknamePerformanceLabel,
   getCollectionNicknamePerformanceLevel,
   getCollectionNicknameSummaryChartPeak,
@@ -31,8 +36,10 @@ type TooltipEntry = {
 };
 
 type CollectionNicknameSummaryChartPlotProps = {
+  benchmarkAmount?: number;
   chartData: CollectionNicknameSummaryChartDatum[];
   detailed: boolean;
+  onSelectNickname?: (row: CollectionNicknameSummaryChartDatum) => void;
   performancePeakAmount?: number;
   totalAmount: number;
   totalRecords: number;
@@ -48,10 +55,12 @@ function formatPercentage(value: number): string {
 
 function CollectionNicknameSummaryChartTooltip({
   active,
+  benchmarkAmount,
   peakAmount,
   payload,
 }: {
   active?: boolean | undefined;
+  benchmarkAmount: number;
   peakAmount: number;
   payload?: TooltipEntry[] | undefined;
 }) {
@@ -60,6 +69,10 @@ function CollectionNicknameSummaryChartTooltip({
     return null;
   }
   const performanceLevel = getCollectionNicknamePerformanceLevel(point, peakAmount);
+  const benchmarkActive = benchmarkAmount > 0;
+  const benchmarkStatus = getCollectionNicknameBenchmarkStatus(point, benchmarkAmount);
+  const benchmarkProgress = getCollectionNicknameBenchmarkProgress(point, benchmarkAmount);
+  const benchmarkGap = getCollectionNicknameBenchmarkGap(point, benchmarkAmount);
 
   return (
     <div className="min-w-[220px] rounded-lg border border-border/70 bg-background px-3 py-2 text-xs shadow-lg">
@@ -87,16 +100,39 @@ function CollectionNicknameSummaryChartTooltip({
             {getCollectionNicknamePerformanceLabel(performanceLevel)}
           </dd>
         </div>
+        {benchmarkActive ? (
+          <>
+            <div className="flex justify-between gap-4">
+              <dt>Target</dt>
+              <dd>{formatAmountRM(benchmarkAmount)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Status target</dt>
+              <dd className="font-medium text-foreground">
+                {getCollectionNicknameBenchmarkStatusLabel(benchmarkStatus)}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Progress</dt>
+              <dd>
+                {formatPercentage(Math.min(benchmarkProgress, 999.9))}
+                {benchmarkGap > 0 ? `, kurang ${formatAmountRM(benchmarkGap)}` : ""}
+              </dd>
+            </div>
+          </>
+        ) : null}
       </dl>
     </div>
   );
 }
 
 function buildAccessibleChartLabel({
+  benchmarkAmount,
   chartData,
   totalAmount,
   totalRecords,
 }: {
+  benchmarkAmount: number;
   chartData: CollectionNicknameSummaryChartDatum[];
   totalAmount: number;
   totalRecords: number;
@@ -106,12 +142,18 @@ function buildAccessibleChartLabel({
     return "Nickname summary bar chart. No collection amount is available for the selected filters.";
   }
 
-  return `Nickname summary bar chart for ${chartData.length} nickname${chartData.length === 1 ? "" : "s"}. Total ${formatAmountRM(totalAmount)} across ${totalRecords} records. Highest collection is ${peak.nickname} with ${formatAmountRM(peak.totalAmount)}.`;
+  const benchmarkText = benchmarkAmount > 0
+    ? ` Target per nickname is ${formatAmountRM(benchmarkAmount)}.`
+    : "";
+
+  return `Nickname summary bar chart for ${chartData.length} nickname${chartData.length === 1 ? "" : "s"}. Total ${formatAmountRM(totalAmount)} across ${totalRecords} records. Highest collection is ${peak.nickname} with ${formatAmountRM(peak.totalAmount)}.${benchmarkText}`;
 }
 
 export function CollectionNicknameSummaryChartPlot({
+  benchmarkAmount = 0,
   chartData,
   detailed,
+  onSelectNickname,
   performancePeakAmount,
   totalAmount,
   totalRecords,
@@ -124,6 +166,7 @@ export function CollectionNicknameSummaryChartPlot({
     ),
   );
   const chartLabel = buildAccessibleChartLabel({
+    benchmarkAmount,
     chartData,
     totalAmount,
     totalRecords,
@@ -174,11 +217,29 @@ export function CollectionNicknameSummaryChartPlot({
             />
             <Tooltip
               content={(props) => (
-                <CollectionNicknameSummaryChartTooltip {...props} peakAmount={peakAmount} />
+                <CollectionNicknameSummaryChartTooltip
+                  {...props}
+                  benchmarkAmount={benchmarkAmount}
+                  peakAmount={peakAmount}
+                />
               )}
               cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
               wrapperStyle={{ outline: "none" }}
             />
+            {benchmarkAmount > 0 ? (
+              <ReferenceLine
+                y={benchmarkAmount}
+                stroke="hsl(var(--foreground))"
+                strokeDasharray="6 4"
+                strokeOpacity={0.75}
+                label={{
+                  value: "Target",
+                  position: "insideTopRight",
+                  fill: "hsl(var(--muted-foreground))",
+                  fontSize: 11,
+                }}
+              />
+            ) : null}
             <Bar
               dataKey="totalAmount"
               name="Jumlah kutipan"
@@ -187,7 +248,12 @@ export function CollectionNicknameSummaryChartPlot({
               isAnimationActive={false}
             >
               {chartData.map((entry) => (
-                <Cell key={entry.key} fill={entry.color} />
+                <Cell
+                  key={entry.key}
+                  fill={entry.color}
+                  cursor={onSelectNickname ? "pointer" : "default"}
+                  onClick={() => onSelectNickname?.(entry)}
+                />
               ))}
             </Bar>
           </BarChart>

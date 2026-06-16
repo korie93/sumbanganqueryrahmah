@@ -51,6 +51,7 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Ranking terperinci/);
   assert.match(markup, /Penapis paparan/);
   assert.match(markup, /Cari nickname/);
+  assert.match(markup, /Target per nickname \(RM\)/);
   assert.match(markup, /Susun mengikut/);
   assert.match(markup, /Bilangan paparan/);
   assert.match(markup, /Prestasi relatif/);
@@ -60,6 +61,7 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Eksport/);
   assert.match(markup, /Nickname summary detailed ranking/);
   assert.match(markup, /Nickname summary compact ranking/);
+  assert.match(markup, /Lihat rekod/);
   assert.match(markup, /Disusun daripada jumlah kutipan tertinggi kepada terendah/);
   assert.ok(markup.indexOf("Collector Alpha") < markup.lastIndexOf("Collector Beta"));
   assert.match(markup, /RM(?:&nbsp;|\u00a0| )250\.00/);
@@ -96,6 +98,8 @@ test("CollectionNicknameSummaryChartContent renders explicit empty and zero stat
 test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
   const markup = renderToStaticMarkup(
     createElement(CollectionNicknameSummaryRankingTable, {
+      benchmarkAmount: 100,
+      onSelectNickname: () => undefined,
       peakAmount: 100,
       rankedData: [
         {
@@ -115,4 +119,6 @@ test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
   );
 
   assert.match(markup, /Disusun daripada jumlah rekod tertinggi kepada terendah/);
+  assert.match(markup, /Capai target/);
+  assert.match(markup, /Lihat rekod/);
 });

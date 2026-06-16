@@ -25,6 +25,7 @@ export type CollectionNicknameSummaryChartDatum = {
 export type CollectionNicknameSummaryChartLimit = "5" | "10" | "all";
 export type CollectionNicknameSummaryChartSort = "amount" | "records" | "average";
 export type CollectionNicknamePerformanceLevel = "high" | "medium" | "low";
+export type CollectionNicknameBenchmarkStatus = "not-set" | "achieved" | "near" | "behind";
 
 export type CollectionNicknameSummaryChartFilter = {
   limit: CollectionNicknameSummaryChartLimit;
@@ -36,6 +37,13 @@ const COLLECTION_NICKNAME_PERFORMANCE_LABELS: Record<CollectionNicknamePerforman
   high: "Tinggi",
   medium: "Sederhana",
   low: "Rendah",
+};
+
+const COLLECTION_NICKNAME_BENCHMARK_LABELS: Record<CollectionNicknameBenchmarkStatus, string> = {
+  "not-set": "Tiada target",
+  achieved: "Capai target",
+  near: "Hampir capai",
+  behind: "Jauh daripada target",
 };
 
 function toSafeNonNegativeNumber(value: unknown): number {
@@ -166,6 +174,64 @@ export function getCollectionNicknamePerformanceLabel(
   level: CollectionNicknamePerformanceLevel,
 ): string {
   return COLLECTION_NICKNAME_PERFORMANCE_LABELS[level];
+}
+
+export function parseCollectionNicknameBenchmarkAmount(input: string): number {
+  const normalized = String(input || "").replace(/,/g, "").trim();
+  if (!normalized) {
+    return 0;
+  }
+  return toSafeNonNegativeNumber(normalized);
+}
+
+export function getCollectionNicknameBenchmarkProgress(
+  row: Pick<CollectionNicknameSummaryChartDatum, "totalAmount">,
+  benchmarkAmount: number,
+): number {
+  const safeBenchmarkAmount = toSafeNonNegativeNumber(benchmarkAmount);
+  if (safeBenchmarkAmount <= 0) {
+    return 0;
+  }
+
+  const safeAmount = toSafeNonNegativeNumber(row.totalAmount);
+  return Math.max(0, (safeAmount / safeBenchmarkAmount) * 100);
+}
+
+export function getCollectionNicknameBenchmarkGap(
+  row: Pick<CollectionNicknameSummaryChartDatum, "totalAmount">,
+  benchmarkAmount: number,
+): number {
+  const safeBenchmarkAmount = toSafeNonNegativeNumber(benchmarkAmount);
+  if (safeBenchmarkAmount <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, safeBenchmarkAmount - toSafeNonNegativeNumber(row.totalAmount));
+}
+
+export function getCollectionNicknameBenchmarkStatus(
+  row: Pick<CollectionNicknameSummaryChartDatum, "totalAmount">,
+  benchmarkAmount: number,
+): CollectionNicknameBenchmarkStatus {
+  const safeBenchmarkAmount = toSafeNonNegativeNumber(benchmarkAmount);
+  if (safeBenchmarkAmount <= 0) {
+    return "not-set";
+  }
+
+  const progress = getCollectionNicknameBenchmarkProgress(row, safeBenchmarkAmount);
+  if (progress >= 100) {
+    return "achieved";
+  }
+  if (progress >= 80) {
+    return "near";
+  }
+  return "behind";
+}
+
+export function getCollectionNicknameBenchmarkStatusLabel(
+  status: CollectionNicknameBenchmarkStatus,
+): string {
+  return COLLECTION_NICKNAME_BENCHMARK_LABELS[status];
 }
 
 function compareChartRows(

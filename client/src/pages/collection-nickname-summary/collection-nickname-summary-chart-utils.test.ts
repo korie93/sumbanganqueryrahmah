@@ -3,10 +3,15 @@ import test from "node:test";
 import {
   buildCollectionNicknameSummaryChartData,
   filterCollectionNicknameSummaryChartData,
+  getCollectionNicknameBenchmarkGap,
+  getCollectionNicknameBenchmarkProgress,
+  getCollectionNicknameBenchmarkStatus,
+  getCollectionNicknameBenchmarkStatusLabel,
   getCollectionNicknamePerformanceLabel,
   getCollectionNicknamePerformanceLevel,
   getCollectionNicknameSummaryChartPeak,
   hasCollectionNicknameSummaryChartData,
+  parseCollectionNicknameBenchmarkAmount,
   rankCollectionNicknameSummaryChartData,
   truncateNicknameChartLabel,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
@@ -152,4 +157,19 @@ test("performance levels use explicit relative thresholds and labels", () => {
   assert.equal(getCollectionNicknamePerformanceLabel("high"), "Tinggi");
   assert.equal(getCollectionNicknamePerformanceLabel("medium"), "Sederhana");
   assert.equal(getCollectionNicknamePerformanceLabel("low"), "Rendah");
+});
+
+test("benchmark helpers classify target progress and gaps", () => {
+  assert.equal(parseCollectionNicknameBenchmarkAmount("50,000"), 50_000);
+  assert.equal(parseCollectionNicknameBenchmarkAmount("-1"), 0);
+  assert.equal(getCollectionNicknameBenchmarkStatus({ totalAmount: 0 }, 0), "not-set");
+  assert.equal(getCollectionNicknameBenchmarkStatus({ totalAmount: 100 }, 100), "achieved");
+  assert.equal(getCollectionNicknameBenchmarkStatus({ totalAmount: 80 }, 100), "near");
+  assert.equal(getCollectionNicknameBenchmarkStatus({ totalAmount: 79.99 }, 100), "behind");
+  assert.equal(getCollectionNicknameBenchmarkProgress({ totalAmount: 125 }, 100), 125);
+  assert.equal(getCollectionNicknameBenchmarkGap({ totalAmount: 75 }, 100), 25);
+  assert.equal(getCollectionNicknameBenchmarkGap({ totalAmount: 125 }, 100), 0);
+  assert.equal(getCollectionNicknameBenchmarkStatusLabel("achieved"), "Capai target");
+  assert.equal(getCollectionNicknameBenchmarkStatusLabel("near"), "Hampir capai");
+  assert.equal(getCollectionNicknameBenchmarkStatusLabel("behind"), "Jauh daripada target");
 });
