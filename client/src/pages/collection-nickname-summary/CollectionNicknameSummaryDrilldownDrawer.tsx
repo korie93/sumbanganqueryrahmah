@@ -23,6 +23,7 @@ import {
   getCollectionNicknameBenchmarkStatus,
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
+import type { CollectionNicknameTargetBenchmark } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import {
   formatAmountRM,
   parseApiError,
@@ -36,7 +37,7 @@ type DrilldownPagination = {
 };
 
 type CollectionNicknameSummaryDrilldownDrawerProps = {
-  benchmarkAmount: number;
+  benchmark: CollectionNicknameTargetBenchmark | null;
   fromDate?: string | undefined;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -75,7 +76,7 @@ function formatRecordPaymentDate(value: string): string {
 }
 
 export function CollectionNicknameSummaryDrilldownDrawer({
-  benchmarkAmount,
+  benchmark,
   fromDate,
   onOpenChange,
   open,
@@ -91,6 +92,7 @@ export function CollectionNicknameSummaryDrilldownDrawer({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const selectedKey = row?.key || "";
+  const benchmarkAmount = benchmark?.amount ?? 0;
 
   useEffect(() => {
     setPage(1);
@@ -218,7 +220,7 @@ export function CollectionNicknameSummaryDrilldownDrawer({
                       <p className="text-xs text-muted-foreground">
                         {targetGap > 0
                           ? `Kurang ${formatAmountRM(targetGap)} untuk capai target.`
-                          : "Target telah dicapai atau melebihi sasaran."}
+                          : "Target Collection Daily telah dicapai atau melebihi sasaran."}
                       </p>
                     </div>
                     <CollectionNicknameBenchmarkBadge status={targetStatus} />

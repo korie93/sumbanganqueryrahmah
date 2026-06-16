@@ -6,7 +6,6 @@ import {
   filterCollectionNicknameSummaryChartData,
   getCollectionNicknameSummaryChartPeak,
   hasCollectionNicknameSummaryChartData,
-  parseCollectionNicknameBenchmarkAmount,
   rankCollectionNicknameSummaryChartData,
   type CollectionNicknameSummaryChartDatum,
   type CollectionNicknameSummaryChartLimit,
@@ -25,6 +24,10 @@ import {
   type CollectionNicknameSummaryExportKind,
 } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartExportMenu";
 import { CollectionNicknameSummaryChartPlot } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartPlot";
+import {
+  getCollectionNicknameTargetBenchmark,
+  useCollectionNicknameTargetBenchmarks,
+} from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import {
   exportCollectionNicknameSummaryCsv,
   exportCollectionNicknameSummaryPdf,
@@ -54,7 +57,6 @@ export function CollectionNicknameSummaryChartContent({
   const [limit, setLimit] = useState<CollectionNicknameSummaryChartLimit>("10");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<CollectionNicknameSummaryChartSort>("amount");
-  const [benchmarkAmountInput, setBenchmarkAmountInput] = useState("");
   const [selectedDrilldownRow, setSelectedDrilldownRow] =
     useState<CollectionNicknameSummaryChartDatum | null>(null);
   const [busyExportKind, setBusyExportKind] = useState<CollectionNicknameSummaryExportKind | null>(null);
@@ -90,15 +92,19 @@ export function CollectionNicknameSummaryChartContent({
     () => displayedData.reduce((sum, row) => sum + row.totalRecords, 0),
     [displayedData],
   );
-  const benchmarkAmount = useMemo(
-    () => parseCollectionNicknameBenchmarkAmount(benchmarkAmountInput),
-    [benchmarkAmountInput],
-  );
+  const targetBenchmarks = useCollectionNicknameTargetBenchmarks({
+    enabled: isDetailed && displayedData.length > 0,
+    fromDate,
+    rows: displayedData,
+    toDate,
+  });
+  const selectedTargetBenchmark = selectedDrilldownRow
+    ? getCollectionNicknameTargetBenchmark(targetBenchmarks.benchmarks, selectedDrilldownRow.nickname)
+    : null;
   const resetFilters = useCallback(() => {
     setLimit("10");
     setQuery("");
     setSortBy("amount");
-    setBenchmarkAmountInput("");
   }, []);
   const handleSelectNickname = useCallback((row: CollectionNicknameSummaryChartDatum) => {
     setSelectedDrilldownRow(row);
@@ -204,13 +210,11 @@ export function CollectionNicknameSummaryChartContent({
 
       {isDetailed ? (
         <CollectionNicknameSummaryChartControls
-          benchmarkAmountInput={benchmarkAmountInput}
           limit={limit}
           query={query}
           sortBy={sortBy}
           totalCount={chartData.length}
           visibleCount={displayedData.length}
-          onBenchmarkAmountChange={setBenchmarkAmountInput}
           onLimitChange={setLimit}
           onQueryChange={setQuery}
           onReset={resetFilters}
@@ -245,15 +249,21 @@ export function CollectionNicknameSummaryChartContent({
             <>
               {isDetailed ? <CollectionNicknamePerformanceLegend /> : null}
               {isDetailed ? (
-                <CollectionNicknameBenchmarkLegend benchmarkAmount={benchmarkAmount} />
+                <CollectionNicknameBenchmarkLegend
+                  configuredCount={targetBenchmarks.configuredCount}
+                  errorMessage={targetBenchmarks.errorMessage}
+                  loading={targetBenchmarks.loading}
+                  requestedMonths={targetBenchmarks.requestedMonths}
+                  visibleCount={displayedData.length}
+                />
               ) : null}
               <div className={isDetailed ? "mt-3" : undefined}>
                 <CollectionNicknameSummaryChartPlot
-                  benchmarkAmount={isDetailed ? benchmarkAmount : 0}
                   chartData={displayedData}
                   detailed={isDetailed}
                   onSelectNickname={handleSelectNickname}
                   performancePeakAmount={peak?.totalAmount ?? 0}
+                  targetBenchmarks={isDetailed ? targetBenchmarks.benchmarks : undefined}
                   totalAmount={isDetailed ? displayedTotalAmount : totalAmount}
                   totalRecords={isDetailed ? displayedTotalRecords : totalRecords}
                 />
@@ -275,11 +285,11 @@ export function CollectionNicknameSummaryChartContent({
 
         {isDetailed && displayedRankedData.length > 0 ? (
           <CollectionNicknameSummaryRankingTable
-            benchmarkAmount={benchmarkAmount}
             onSelectNickname={handleSelectNickname}
             peakAmount={peak?.totalAmount ?? 0}
             rankedData={displayedRankedData}
             sortBy={sortBy}
+            targetBenchmarks={targetBenchmarks.benchmarks}
           />
         ) : null}
       </div>
@@ -296,7 +306,7 @@ export function CollectionNicknameSummaryChartContent({
         </ul>
       </div>
       <CollectionNicknameSummaryDrilldownDrawer
-        benchmarkAmount={isDetailed ? benchmarkAmount : 0}
+        benchmark={isDetailed ? selectedTargetBenchmark : null}
         fromDate={fromDate}
         open={Boolean(selectedDrilldownRow)}
         row={selectedDrilldownRow}

@@ -12,6 +12,10 @@ import {
   type CollectionNicknameSummaryChartSort,
   type CollectionNicknamePerformanceLevel,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
+import {
+  getCollectionNicknameTargetBenchmark,
+  type CollectionNicknameTargetBenchmark,
+} from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionNicknameSummaryMetricsProps = {
@@ -22,7 +26,7 @@ type CollectionNicknameSummaryMetricsProps = {
 };
 
 type CollectionNicknameSummaryRankingTableProps = {
-  benchmarkAmount?: number;
+  targetBenchmarks?: ReadonlyMap<string, CollectionNicknameTargetBenchmark>;
   onSelectNickname?: (row: CollectionNicknameSummaryChartDatum) => void;
   peakAmount: number;
   rankedData: CollectionNicknameSummaryChartDatum[];
@@ -83,21 +87,41 @@ export function CollectionNicknameBenchmarkBadge({
 }
 
 export function CollectionNicknameBenchmarkLegend({
-  benchmarkAmount,
+  configuredCount,
+  errorMessage,
+  loading,
+  requestedMonths,
+  visibleCount,
 }: {
-  benchmarkAmount: number;
+  configuredCount: number;
+  errorMessage: string | null;
+  loading: boolean;
+  requestedMonths: number;
+  visibleCount: number;
 }) {
-  if (benchmarkAmount <= 0) {
-    return null;
-  }
-
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground"
-      aria-label="Panduan target nickname"
+      aria-label="Panduan target Collection Daily"
     >
-      <span className="font-medium text-foreground">Target per nickname:</span>
-      <span className="font-semibold text-foreground">{formatAmountRM(benchmarkAmount)}</span>
+      <span className="font-medium text-foreground">Target Collection Daily:</span>
+      <span className="font-semibold text-foreground">
+        {loading
+          ? "Memuat target..."
+          : configuredCount > 0
+            ? `${configuredCount}/${visibleCount} nickname ada target`
+            : "Tiada target aktif"}
+      </span>
+      <span>
+        {requestedMonths > 1
+          ? `Dikira ikut target bulanan dan julat ${requestedMonths} bulan.`
+          : "Dikira daripada target bulanan Collection Daily."}
+      </span>
+      {errorMessage ? (
+        <span className="font-medium text-destructive">
+          Target tidak dapat dimuat: {errorMessage}
+        </span>
+      ) : null}
       <span className="inline-flex items-center gap-1.5">
         <CollectionNicknameBenchmarkBadge status="achieved" />
         <span>100% atau lebih</span>
@@ -182,13 +206,15 @@ export function CollectionNicknameSummaryMetrics({
 }
 
 export function CollectionNicknameSummaryRankingTable({
-  benchmarkAmount = 0,
   onSelectNickname,
   peakAmount,
   rankedData,
   sortBy,
+  targetBenchmarks,
 }: CollectionNicknameSummaryRankingTableProps) {
-  const benchmarkActive = benchmarkAmount > 0;
+  const benchmarkActive = rankedData.some((row) =>
+    getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).amount > 0
+  );
 
   return (
     <section className="min-w-0" aria-labelledby="nickname-summary-ranking-title">
@@ -226,6 +252,8 @@ export function CollectionNicknameSummaryRankingTable({
           </thead>
           <tbody>
             {rankedData.map((row, index) => {
+              const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
+              const benchmarkAmount = benchmark.amount;
               const targetStatus = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
               const progress = getCollectionNicknameBenchmarkProgress(row, benchmarkAmount);
               const gap = getCollectionNicknameBenchmarkGap(row, benchmarkAmount);
@@ -247,13 +275,17 @@ export function CollectionNicknameSummaryRankingTable({
                   </td>
                   {benchmarkActive ? (
                     <td className="whitespace-nowrap px-3 py-2.5 text-center">
-                      <div className="inline-flex flex-col items-center gap-1">
-                        <CollectionNicknameBenchmarkBadge status={targetStatus} />
-                        <span className="text-2xs text-muted-foreground">
-                          {formatPercentage(Math.min(progress, 999.9))}
-                          {gap > 0 ? `, kurang ${formatAmountRM(gap)}` : ""}
-                        </span>
-                      </div>
+                      {benchmarkAmount > 0 ? (
+                        <div className="inline-flex flex-col items-center gap-1">
+                          <CollectionNicknameBenchmarkBadge status={targetStatus} />
+                          <span className="text-2xs text-muted-foreground">
+                            {formatPercentage(Math.min(progress, 999.9))}
+                            {gap > 0 ? `, kurang ${formatAmountRM(gap)}` : ""}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Tiada target</span>
+                      )}
                     </td>
                   ) : null}
                   <td className="whitespace-nowrap px-3 py-2.5 text-center">
@@ -295,6 +327,8 @@ export function CollectionNicknameSummaryRankingTable({
         aria-label="Nickname summary compact ranking"
       >
         {rankedData.map((row, index) => {
+          const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
+          const benchmarkAmount = benchmark.amount;
           const targetStatus = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
           const progress = getCollectionNicknameBenchmarkProgress(row, benchmarkAmount);
           return (
@@ -322,12 +356,16 @@ export function CollectionNicknameSummaryRankingTable({
                   level={getCollectionNicknamePerformanceLevel(row, peakAmount)}
                 />
                 {benchmarkActive ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CollectionNicknameBenchmarkBadge status={targetStatus} />
-                    <span className="text-xs text-muted-foreground">
-                      {formatPercentage(Math.min(progress, 999.9))} target
-                    </span>
-                  </div>
+                  benchmarkAmount > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CollectionNicknameBenchmarkBadge status={targetStatus} />
+                      <span className="text-xs text-muted-foreground">
+                        {formatPercentage(Math.min(progress, 999.9))} target
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Tiada target Collection Daily</span>
+                  )
                 ) : null}
               </div>
               <dl className="grid grid-cols-3 gap-2 pl-7 text-xs">

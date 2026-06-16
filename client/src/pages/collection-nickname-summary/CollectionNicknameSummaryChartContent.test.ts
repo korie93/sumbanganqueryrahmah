@@ -4,6 +4,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CollectionNicknameSummaryChartContent } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartContent";
 import { CollectionNicknameSummaryRankingTable } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartDetails";
+import {
+  normalizeCollectionNicknameTargetKey,
+  type CollectionNicknameTargetBenchmark,
+} from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 
 test("CollectionNicknameSummaryChartContent renders accessible chart context from table totals", () => {
   const markup = renderToStaticMarkup(
@@ -51,7 +55,7 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Ranking terperinci/);
   assert.match(markup, /Penapis paparan/);
   assert.match(markup, /Cari nickname/);
-  assert.match(markup, /Target per nickname \(RM\)/);
+  assert.match(markup, /Target Collection Daily/);
   assert.match(markup, /Susun mengikut/);
   assert.match(markup, /Bilangan paparan/);
   assert.match(markup, /Prestasi relatif/);
@@ -66,6 +70,7 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.ok(markup.indexOf("Collector Alpha") < markup.lastIndexOf("Collector Beta"));
   assert.match(markup, /RM(?:&nbsp;|\u00a0| )250\.00/);
   assert.match(markup, /75\.0%/);
+  assert.match(markup, /h-\[clamp\(420px,58vh,720px\)\]/);
   assert.match(markup, /h-\[clamp\(360px,54vh,620px\)\]/);
 });
 
@@ -96,9 +101,19 @@ test("CollectionNicknameSummaryChartContent renders explicit empty and zero stat
 });
 
 test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
+  const targetBenchmarks = new Map<string, CollectionNicknameTargetBenchmark>([
+    [
+      normalizeCollectionNicknameTargetKey("Collector Alpha"),
+      {
+        amount: 100,
+        configuredMonths: 1,
+        missingMonths: 0,
+        requestedMonths: 1,
+      },
+    ],
+  ]);
   const markup = renderToStaticMarkup(
     createElement(CollectionNicknameSummaryRankingTable, {
-      benchmarkAmount: 100,
       onSelectNickname: () => undefined,
       peakAmount: 100,
       rankedData: [
@@ -115,6 +130,7 @@ test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
         },
       ],
       sortBy: "records",
+      targetBenchmarks,
     }),
   );
 

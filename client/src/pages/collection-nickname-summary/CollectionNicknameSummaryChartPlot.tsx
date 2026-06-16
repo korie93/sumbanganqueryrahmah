@@ -19,6 +19,10 @@ import {
   getCollectionNicknameSummaryChartPeak,
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
+import {
+  getCollectionNicknameTargetBenchmark,
+  type CollectionNicknameTargetBenchmark,
+} from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 const CHART_MIN_WIDTH = 260;
@@ -36,11 +40,11 @@ type TooltipEntry = {
 };
 
 type CollectionNicknameSummaryChartPlotProps = {
-  benchmarkAmount?: number;
   chartData: CollectionNicknameSummaryChartDatum[];
   detailed: boolean;
   onSelectNickname?: (row: CollectionNicknameSummaryChartDatum) => void;
   performancePeakAmount?: number;
+  targetBenchmarks?: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined;
   totalAmount: number;
   totalRecords: number;
 };
@@ -55,20 +59,21 @@ function formatPercentage(value: number): string {
 
 function CollectionNicknameSummaryChartTooltip({
   active,
-  benchmarkAmount,
   peakAmount,
   payload,
+  targetBenchmarks,
 }: {
   active?: boolean | undefined;
-  benchmarkAmount: number;
   peakAmount: number;
   payload?: TooltipEntry[] | undefined;
+  targetBenchmarks?: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined;
 }) {
   const point = payload?.[0]?.payload;
   if (!active || !point) {
     return null;
   }
   const performanceLevel = getCollectionNicknamePerformanceLevel(point, peakAmount);
+  const benchmarkAmount = getCollectionNicknameTargetBenchmark(targetBenchmarks, point.nickname).amount;
   const benchmarkActive = benchmarkAmount > 0;
   const benchmarkStatus = getCollectionNicknameBenchmarkStatus(point, benchmarkAmount);
   const benchmarkProgress = getCollectionNicknameBenchmarkProgress(point, benchmarkAmount);
@@ -127,13 +132,13 @@ function CollectionNicknameSummaryChartTooltip({
 }
 
 function buildAccessibleChartLabel({
-  benchmarkAmount,
   chartData,
+  configuredTargetCount,
   totalAmount,
   totalRecords,
 }: {
-  benchmarkAmount: number;
   chartData: CollectionNicknameSummaryChartDatum[];
+  configuredTargetCount: number;
   totalAmount: number;
   totalRecords: number;
 }): string {
@@ -142,22 +147,30 @@ function buildAccessibleChartLabel({
     return "Nickname summary bar chart. No collection amount is available for the selected filters.";
   }
 
-  const benchmarkText = benchmarkAmount > 0
-    ? ` Target per nickname is ${formatAmountRM(benchmarkAmount)}.`
+  const benchmarkText = configuredTargetCount > 0
+    ? ` ${configuredTargetCount} nickname${configuredTargetCount === 1 ? " has" : "s have"} Collection Daily targets.`
     : "";
 
   return `Nickname summary bar chart for ${chartData.length} nickname${chartData.length === 1 ? "" : "s"}. Total ${formatAmountRM(totalAmount)} across ${totalRecords} records. Highest collection is ${peak.nickname} with ${formatAmountRM(peak.totalAmount)}.${benchmarkText}`;
 }
 
 export function CollectionNicknameSummaryChartPlot({
-  benchmarkAmount = 0,
   chartData,
   detailed,
   onSelectNickname,
   performancePeakAmount,
+  targetBenchmarks,
   totalAmount,
   totalRecords,
 }: CollectionNicknameSummaryChartPlotProps) {
+  const configuredTargetAmounts = chartData
+    .map((row) => getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).amount)
+    .filter((amount) => amount > 0);
+  const configuredTargetCount = configuredTargetAmounts.length;
+  const uniqueTargetAmounts = Array.from(new Set(configuredTargetAmounts.map((amount) => amount.toFixed(2))));
+  const singleReferenceTargetAmount = uniqueTargetAmounts.length === 1
+    ? Number(uniqueTargetAmounts[0])
+    : 0;
   const chartWidth = Math.min(
     CHART_MAX_WIDTH,
     Math.max(
@@ -166,8 +179,8 @@ export function CollectionNicknameSummaryChartPlot({
     ),
   );
   const chartLabel = buildAccessibleChartLabel({
-    benchmarkAmount,
     chartData,
+    configuredTargetCount,
     totalAmount,
     totalRecords,
   });
@@ -188,7 +201,7 @@ export function CollectionNicknameSummaryChartPlot({
       <div
         className={
           detailed
-            ? "h-[clamp(300px,42vh,500px)] w-full min-w-full p-3"
+            ? "h-[clamp(420px,58vh,720px)] w-full min-w-full p-3"
             : "h-[320px] w-full min-w-full p-3 sm:h-[360px]"
         }
         style={{ minWidth: `${chartWidth}px` }}
@@ -219,16 +232,16 @@ export function CollectionNicknameSummaryChartPlot({
               content={(props) => (
                 <CollectionNicknameSummaryChartTooltip
                   {...props}
-                  benchmarkAmount={benchmarkAmount}
                   peakAmount={peakAmount}
+                  targetBenchmarks={targetBenchmarks}
                 />
               )}
               cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
               wrapperStyle={{ outline: "none" }}
             />
-            {benchmarkAmount > 0 ? (
+            {singleReferenceTargetAmount > 0 ? (
               <ReferenceLine
-                y={benchmarkAmount}
+                y={singleReferenceTargetAmount}
                 stroke="hsl(var(--foreground))"
                 strokeDasharray="6 4"
                 strokeOpacity={0.75}

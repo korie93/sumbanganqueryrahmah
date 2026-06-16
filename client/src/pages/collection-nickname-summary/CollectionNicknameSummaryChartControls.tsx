@@ -1,4 +1,4 @@
-import { RotateCcw, Search, Target } from "lucide-react";
+import { RotateCcw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -8,13 +8,11 @@ import type {
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 
 type CollectionNicknameSummaryChartControlsProps = {
-  benchmarkAmountInput: string;
   limit: CollectionNicknameSummaryChartLimit;
   query: string;
   sortBy: CollectionNicknameSummaryChartSort;
   totalCount: number;
   visibleCount: number;
-  onBenchmarkAmountChange: (value: string) => void;
   onLimitChange: (limit: CollectionNicknameSummaryChartLimit) => void;
   onQueryChange: (query: string) => void;
   onReset: () => void;
@@ -24,13 +22,11 @@ type CollectionNicknameSummaryChartControlsProps = {
 const LIMIT_OPTIONS: CollectionNicknameSummaryChartLimit[] = ["5", "10", "all"];
 
 export function CollectionNicknameSummaryChartControls({
-  benchmarkAmountInput,
   limit,
   query,
   sortBy,
   totalCount,
   visibleCount,
-  onBenchmarkAmountChange,
   onLimitChange,
   onQueryChange,
   onReset,
@@ -39,8 +35,7 @@ export function CollectionNicknameSummaryChartControls({
   const filtersActive =
     limit !== "10"
     || query.trim().length > 0
-    || sortBy !== "amount"
-    || benchmarkAmountInput.trim().length > 0;
+    || sortBy !== "amount";
 
   return (
     <section
@@ -69,7 +64,7 @@ export function CollectionNicknameSummaryChartControls({
         </Button>
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-4 lg:items-end">
+      <div className="mt-3 grid gap-3 lg:grid-cols-3 lg:items-end">
         <label className="grid gap-1.5 text-xs font-medium text-foreground">
           Cari nickname
           <span className="relative">
@@ -85,27 +80,6 @@ export function CollectionNicknameSummaryChartControls({
               maxLength={100}
               autoComplete="off"
               onChange={(event) => onQueryChange(event.target.value)}
-            />
-          </span>
-        </label>
-
-        <label className="grid gap-1.5 text-xs font-medium text-foreground">
-          Target per nickname (RM)
-          <span className="relative">
-            <Target
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="100"
-              value={benchmarkAmountInput}
-              className="pl-9"
-              placeholder="Contoh: 50000"
-              autoComplete="off"
-              onChange={(event) => onBenchmarkAmountChange(event.target.value)}
             />
           </span>
         </label>
