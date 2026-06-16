@@ -27,6 +27,37 @@ test("column mapping renames included columns and removes excluded columns", () 
   });
 });
 
+test("column mapping accepts JSON string payloads", () => {
+  const mapping = parseImportColumnMapping(JSON.stringify([
+    { source: "Customer Name", target: "customer_name" },
+  ]));
+
+  assert.deepEqual(mapping, [
+    { source: "Customer Name", target: "customer_name" },
+  ]);
+});
+
+test("column mapping rejects malformed JSON string payloads", () => {
+  assert.throws(
+    () => parseImportColumnMapping("[{\"source\":\"Name\","),
+    /valid JSON/i,
+  );
+});
+
+test("column mapping rejects oversized JSON string payloads before validation", () => {
+  assert.throws(
+    () => parseImportColumnMapping(`"${"x".repeat(65 * 1024)}"`),
+    /valid JSON/i,
+  );
+});
+
+test("column mapping rejects deeply nested JSON string payloads", () => {
+  assert.throws(
+    () => parseImportColumnMapping("[[[[{\"source\":\"Name\",\"target\":\"name\"}]]]]"),
+    /valid JSON/i,
+  );
+});
+
 test("column mapping rejects duplicate targets case-insensitively", () => {
   assert.throws(
     () => parseImportColumnMapping([

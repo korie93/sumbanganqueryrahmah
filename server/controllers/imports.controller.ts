@@ -19,6 +19,7 @@ import type { ImportBackgroundJobService } from "../services/import-background-j
 import { DuplicateImportError } from "../services/import-operation-errors";
 import { parseImportUploadFile } from "../services/import-upload-parser";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { safeJsonParse } from "../lib/safe-json";
 
 type RuntimeSettings = {
   viewerRowsPerPage: number;
@@ -45,6 +46,7 @@ const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
 const savedWorkspaceViewSchema = z.enum(["all", "recent", "large", "duplicates", "review"]);
 const savedPageSchema = z.coerce.number().int().min(1).max(1_000_000);
 const savedRowCountSchema = z.coerce.number().int().min(0).max(2_147_483_647);
+const VIEWER_COLUMN_FILTERS_JSON_MAX_BYTES = 16 * 1024;
 const savedCreatedOnSchema = z.string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine((value) => {
@@ -66,14 +68,19 @@ function parseViewerColumnFiltersQuery(value: unknown): ImportDataColumnFilter[]
     return [];
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(normalized);
-  } catch {
+  const parseResult = safeJsonParse<unknown>(normalized, "viewer_column_filters", {
+    maxArrayLength: 10,
+    maxDepth: 3,
+    maxObjectKeys: 4,
+    maxRawBytes: VIEWER_COLUMN_FILTERS_JSON_MAX_BYTES,
+    maxStringLength: 500,
+    maxTotalBytes: VIEWER_COLUMN_FILTERS_JSON_MAX_BYTES,
+  });
+  if (!parseResult.success) {
     throw badRequest("Invalid viewer column filters.");
   }
 
-  const result = viewerColumnFiltersSchema.safeParse(parsed);
+  const result = viewerColumnFiltersSchema.safeParse(parseResult.data);
   if (!result.success) {
     throw badRequest("Invalid viewer column filters.");
   }

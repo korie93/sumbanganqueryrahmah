@@ -2,10 +2,12 @@ import { z } from "zod";
 import { ImportUploadValidationError } from "./import-upload-file-utils";
 import { ERROR_CODES } from "../../shared/error-codes";
 import type { ImportRow } from "./import-upload-types";
+import { safeJsonParse } from "../lib/safe-json";
 
 const FORBIDDEN_COLUMN_NAMES = new Set(["__proto__", "constructor", "prototype"]);
 const MAX_COLUMN_NAME_LENGTH = 120;
 const MAX_COLUMN_MAPPINGS = 300;
+const MAX_COLUMN_MAPPING_JSON_BYTES = 64 * 1024;
 
 export const importColumnMappingEntrySchema = z.object({
   source: z.string().trim().min(1).max(MAX_COLUMN_NAME_LENGTH),
@@ -32,13 +34,20 @@ export function parseImportColumnMapping(value: unknown): ImportColumnMappingEnt
     return [];
   }
 
-  let parsedValue = value;
+  let parsedValue: unknown = value;
   if (typeof value === "string") {
-    try {
-      parsedValue = JSON.parse(value);
-    } catch {
+    const parseResult = safeJsonParse<unknown>(value, "import_column_mapping", {
+      maxArrayLength: MAX_COLUMN_MAPPINGS,
+      maxDepth: 3,
+      maxObjectKeys: 4,
+      maxRawBytes: MAX_COLUMN_MAPPING_JSON_BYTES,
+      maxStringLength: MAX_COLUMN_NAME_LENGTH,
+      maxTotalBytes: MAX_COLUMN_MAPPING_JSON_BYTES,
+    });
+    if (!parseResult.success) {
       throwInvalidMapping("Column mapping must be valid JSON.");
     }
+    parsedValue = parseResult.data;
   }
 
   const result = importColumnMappingSchema.safeParse(parsedValue);

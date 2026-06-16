@@ -3,6 +3,7 @@ import { ERROR_CODES } from "../../shared/error-codes";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest } from "../http/errors";
 import { logger } from "../lib/logger";
+import { safeJsonParse } from "../lib/safe-json";
 import type { PostgresStorage } from "../storage-postgres";
 
 type ImportMutationIdempotencyStorage = Pick<
@@ -43,9 +44,10 @@ function normalizeIdempotencyFingerprint(value: unknown): string | null {
     return null;
   }
 
-  try {
-    JSON.parse(normalized);
-  } catch {
+  const parseResult = safeJsonParse<unknown>(normalized, "import_idempotency_fingerprint", {
+    maxRawBytes: IDEMPOTENCY_HEADER_MAX_LENGTH,
+  });
+  if (!parseResult.success) {
     throw badRequest("Idempotency fingerprint must be valid JSON.");
   }
 

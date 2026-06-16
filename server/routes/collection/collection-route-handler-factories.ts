@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from "../../auth/guards";
 import { runtimeConfig } from "../../config/runtime";
 import { badRequest, HttpError } from "../../http/errors";
 import { logger } from "../../lib/logger";
+import { safeJsonParse } from "../../lib/safe-json";
 import type {
   PostgresStorage,
 } from "../../storage-postgres";
@@ -148,9 +149,10 @@ export function normalizeIdempotencyFingerprintHeaderValue(value: unknown): stri
   const cached = idempotencyFingerprintValidationCacheController.get(normalized);
 
   if (!cached) {
-    try {
-      JSON.parse(normalized);
-    } catch {
+    const parseResult = safeJsonParse<unknown>(normalized, "collection_idempotency_fingerprint", {
+      maxRawBytes: 512,
+    });
+    if (!parseResult.success) {
       throw badRequest("Idempotency fingerprint must be valid JSON.");
     }
 
