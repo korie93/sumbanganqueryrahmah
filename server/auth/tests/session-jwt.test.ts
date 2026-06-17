@@ -296,6 +296,15 @@ test("verifyJwtWithAnySecret rejects alg none tokens before signature verificati
   );
 });
 
+test("verifyJwtWithAnySecret rejects oversized JWT headers before signature verification", () => {
+  const token = createUnsignedJwt({ username: "alice" }, "HS256".repeat(400));
+
+  assert.throws(
+    () => verifyJwtWithAnySecret(token, ["current-secret"]),
+    /unsupported session signing algorithm/i,
+  );
+});
+
 test("verifyJwtWithAnySecret rejects tampered tokens after algorithm validation", () => {
   const token = jwt.sign(
     { username: "alice" },

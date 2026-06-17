@@ -1,6 +1,7 @@
 import { badRequest } from "../../http/errors";
 import { buildHybridPaginationMeta } from "../../http/pagination";
 import type { AuthenticatedUser } from "../../auth/guards";
+import { safeJsonParse } from "../../lib/safe-json";
 import { resolveCurrentCollectionNicknameFromSession } from "../../routes/collection-access";
 import {
   isValidCollectionDate,
@@ -9,6 +10,8 @@ import {
 import type { CollectionStoragePort } from "./collection-service-support";
 
 export const COLLECTION_NICKNAME_SUMMARY_RECORD_LIMIT = 250;
+const COLLECTION_LIST_CURSOR_MAX_BYTES = 256;
+const COLLECTION_LIST_CURSOR_MAX_LENGTH = 512;
 
 export type CollectionListCursor = {
   offset: number;
@@ -36,9 +39,26 @@ export function parseCollectionListCursor(rawCursor: unknown): CollectionListCur
   if (!normalized) {
     return null;
   }
+  if (normalized.length > COLLECTION_LIST_CURSOR_MAX_LENGTH) {
+    return null;
+  }
 
   try {
-    const parsed = JSON.parse(Buffer.from(normalized, "base64url").toString("utf8")) as Partial<CollectionListCursor>;
+    const parseResult = safeJsonParse<Partial<CollectionListCursor>>(
+      Buffer.from(normalized, "base64url").toString("utf8"),
+      "collection_list_cursor",
+      {
+        maxDepth: 2,
+        maxObjectKeys: 2,
+        maxRawBytes: COLLECTION_LIST_CURSOR_MAX_BYTES,
+        maxStringLength: 64,
+        maxTotalBytes: COLLECTION_LIST_CURSOR_MAX_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    const parsed = parseResult.data;
     const offset = Number(parsed.offset);
     if (!Number.isInteger(offset) || offset < 0) {
       return null;

@@ -1,8 +1,10 @@
 import { logger } from "../lib/logger";
+import { safeJsonParse } from "../lib/safe-json";
 
 export type BackupMetadataRecord = Record<string, unknown>;
 
 const MAX_BACKUP_METADATA_PARSE_WARNINGS = 3;
+const MAX_BACKUP_METADATA_BYTES = 200_000;
 let backupMetadataParseWarningCount = 0;
 
 function summarizeBackupMetadataParseError(error: unknown): Record<string, unknown> | undefined {
@@ -33,10 +35,24 @@ export function parseBackupMetadataSafe(raw: unknown): BackupMetadataRecord | nu
   if (!trimmed) return null;
 
   // Guard against pathological legacy rows that can break JSON parsing/allocation.
-  if (trimmed.length > 200_000) return null;
+  if (Buffer.byteLength(trimmed, "utf8") > MAX_BACKUP_METADATA_BYTES) return null;
 
   try {
-    const parsed = JSON.parse(trimmed);
+    const parseResult = safeJsonParse<unknown>(
+      trimmed,
+      "backup_metadata",
+      {
+        maxDepth: 8,
+        maxObjectKeys: 200,
+        maxRawBytes: MAX_BACKUP_METADATA_BYTES,
+        maxStringLength: 20_000,
+        maxTotalBytes: MAX_BACKUP_METADATA_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    const parsed = parseResult.data;
     return isBackupMetadataRecord(parsed) ? parsed : null;
   } catch (error) {
     if (backupMetadataParseWarningCount < MAX_BACKUP_METADATA_PARSE_WARNINGS) {

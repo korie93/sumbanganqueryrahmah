@@ -1,4 +1,5 @@
 import { ensureObject } from "../http/validation";
+import { safeJsonParse } from "../lib/safe-json";
 import { jsonObjectSchema } from "../../shared/json-schema";
 import type {
   CreateImportBody,
@@ -6,6 +7,9 @@ import type {
   NormalizeImportRowResult,
   RenameImportBody,
 } from "./imports-service-types";
+
+const IMPORT_DATA_PAGE_CURSOR_MAX_BYTES = 512;
+const IMPORT_DATA_PAGE_CURSOR_MAX_LENGTH = 1_024;
 
 export function encodeImportDataPageCursor(cursor: ImportDataPageCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
@@ -18,11 +22,26 @@ export function parseImportDataPageCursor(
   if (!normalized) {
     return null;
   }
+  if (normalized.length > IMPORT_DATA_PAGE_CURSOR_MAX_LENGTH) {
+    return null;
+  }
 
   try {
-    const parsed = JSON.parse(
+    const parseResult = safeJsonParse<Partial<ImportDataPageCursor>>(
       Buffer.from(normalized, "base64url").toString("utf8"),
-    ) as Partial<ImportDataPageCursor>;
+      "import_data_page_cursor",
+      {
+        maxDepth: 2,
+        maxObjectKeys: 4,
+        maxRawBytes: IMPORT_DATA_PAGE_CURSOR_MAX_BYTES,
+        maxStringLength: 128,
+        maxTotalBytes: IMPORT_DATA_PAGE_CURSOR_MAX_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    const parsed = parseResult.data;
     const lastRowId = String(parsed.lastRowId || "").trim();
     const page = Number.isFinite(Number(parsed.page)) ? Math.trunc(Number(parsed.page)) : 0;
     if (!lastRowId || page < 2) {

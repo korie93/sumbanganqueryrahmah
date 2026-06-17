@@ -3,6 +3,9 @@ import type {
   BranchRowDb,
   BranchSearchResult,
 } from "./ai-repository-types";
+import { safeJsonParse } from "../lib/safe-json";
+
+const AI_REPOSITORY_JSON_MAX_BYTES = 256 * 1024;
 
 export function readRows<T>(result: { rows?: unknown[] | null }): T[] {
   return Array.isArray(result.rows) ? (result.rows as T[]) : [];
@@ -13,7 +16,21 @@ export function normalizeJsonPayload(value: unknown): unknown {
 
   if (typeof next === "string") {
     try {
-      next = JSON.parse(next);
+      const parseResult = safeJsonParse<unknown>(
+        next,
+        "ai_repository_json_payload",
+        {
+          maxDepth: 12,
+          maxObjectKeys: 1_000,
+          maxRawBytes: AI_REPOSITORY_JSON_MAX_BYTES,
+          maxStringLength: 100_000,
+          maxTotalBytes: AI_REPOSITORY_JSON_MAX_BYTES,
+        },
+      );
+      if (!parseResult.success) {
+        return next;
+      }
+      next = parseResult.data;
     } catch {
       return next;
     }

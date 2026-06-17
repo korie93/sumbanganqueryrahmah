@@ -20,6 +20,8 @@ test("readRows and normalizeJsonPayload handle empty and JSON payloads safely", 
 
   assert.deepEqual(normalizeJsonPayload('{"name":"Ali"}'), { name: "Ali" });
   assert.equal(normalizeJsonPayload("not-json"), "not-json");
+  const oversizedPayload = JSON.stringify({ payload: "x".repeat(300 * 1024) });
+  assert.equal(normalizeJsonPayload(oversizedPayload), oversizedPayload);
 });
 
 test("mapSearchRow and mapBranchRow normalize row payloads for AI search consumers", () => {

@@ -3,6 +3,7 @@ import {
   normalizeCollectionText,
   type CollectionReceiptMetadataPayload,
 } from "../../routes/collection.validation";
+import { safeJsonParse } from "../../lib/safe-json";
 import type {
   CollectionRecordReceipt,
   CreateCollectionRecordReceiptInput,
@@ -20,6 +21,8 @@ import {
 export type MultipartCollectionPayload = Record<string, unknown> & {
   uploadedReceipts?: unknown[] | null;
 };
+
+const COLLECTION_RECEIPT_METADATA_MAX_BYTES = 64 * 1024;
 
 export function normalizeExtractionConfidence(value: unknown): number | null {
   if (value === null || value === undefined || value === "") {
@@ -101,7 +104,22 @@ export function readCollectionReceiptMetadataList(
       return [];
     }
     try {
-      const parsed = JSON.parse(normalized);
+      const parseResult = safeJsonParse<unknown>(
+        normalized,
+        "collection_receipt_metadata_list",
+        {
+          maxArrayLength: 50,
+          maxDepth: 6,
+          maxObjectKeys: 40,
+          maxRawBytes: COLLECTION_RECEIPT_METADATA_MAX_BYTES,
+          maxStringLength: 4_096,
+          maxTotalBytes: COLLECTION_RECEIPT_METADATA_MAX_BYTES,
+        },
+      );
+      if (!parseResult.success) {
+        throw new Error("COLLECTION_RECEIPT_METADATA_INVALID");
+      }
+      const parsed = parseResult.data;
       return Array.isArray(parsed)
         ? parsed
             .map((item) => ensureLooseObject(item))

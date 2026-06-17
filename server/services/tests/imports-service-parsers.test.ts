@@ -49,6 +49,21 @@ test("parseImportDataPageCursor rejects invalid cursors", () => {
     ),
     null,
   );
+  assert.equal(
+    parseImportDataPageCursor(
+      Buffer.from(
+        JSON.stringify({ lastRowId: "row-1", page: 2, nested: { a: { b: { c: true } } } }),
+        "utf8",
+      ).toString("base64url"),
+    ),
+    null,
+  );
+  assert.equal(
+    parseImportDataPageCursor(
+      Buffer.from(JSON.stringify({ lastRowId: "x".repeat(700), page: 2 }), "utf8").toString("base64url"),
+    ),
+    null,
+  );
 });
 
 test("normalizeImportRow rejects non-object rows", () => {

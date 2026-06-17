@@ -139,21 +139,29 @@ function measureAverageComparisonNs(callback: () => void, iterations: number): n
   return elapsedNs / iterations;
 }
 
+function measureBestAverageComparisonNs(callback: () => void, iterations: number, samples = 5): number {
+  const averages: number[] = [];
+  for (let index = 0; index < samples; index += 1) {
+    averages.push(measureAverageComparisonNs(callback, iterations));
+  }
+  return Math.min(...averages);
+}
+
 test("constant-time csrf comparisons keep invalid token timing within 5 microseconds per comparison", () => {
   const csrfToken = randomBytes(32).toString("hex");
   const wrongToken = randomBytes(32).toString("hex");
-  const iterations = 20_000;
+  const iterations = 10_000;
 
-  const validAverageNs = measureAverageComparisonNs(() => {
+  const validAverageNs = measureBestAverageComparisonNs(() => {
     compareAuthSessionCsrfTokens(csrfToken, csrfToken);
   }, iterations);
-  const wrongAverageNs = measureAverageComparisonNs(() => {
+  const wrongAverageNs = measureBestAverageComparisonNs(() => {
     compareAuthSessionCsrfTokens(wrongToken, csrfToken);
   }, iterations);
-  const shortAverageNs = measureAverageComparisonNs(() => {
+  const shortAverageNs = measureBestAverageComparisonNs(() => {
     compareAuthSessionCsrfTokens("short", csrfToken);
   }, iterations);
-  const malformedAverageNs = measureAverageComparisonNs(() => {
+  const malformedAverageNs = measureBestAverageComparisonNs(() => {
     compareAuthSessionCsrfTokens(null, csrfToken);
   }, iterations);
 

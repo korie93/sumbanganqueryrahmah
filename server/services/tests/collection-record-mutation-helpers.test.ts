@@ -194,6 +194,10 @@ test("collection receipt helpers normalize metadata and uploaded receipt rows", 
     () => readCollectionReceiptMetadataList("{not json"),
     /COLLECTION_RECEIPT_METADATA_INVALID/,
   );
+  assert.throws(
+    () => readCollectionReceiptMetadataList(JSON.stringify([{ receiptId: "x".repeat(70 * 1024) }])),
+    /COLLECTION_RECEIPT_METADATA_INVALID/,
+  );
 
   const uploadedRows = readUploadedReceiptRows({
     uploadedReceipts: [

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { dbRead } from "../../db-postgres";
+import { normalizeSearchJsonPayload } from "../search-repository-shared";
 import {
   MAX_SEARCH_OFFSET,
   SearchRepository,
@@ -22,6 +23,11 @@ function withMockedDbExecute(
     }).execute = originalExecute;
   };
 }
+
+test("normalizeSearchJsonPayload keeps oversized serialized payloads as strings", () => {
+  const oversizedPayload = JSON.stringify({ payload: "x".repeat(300 * 1024) });
+  assert.equal(normalizeSearchJsonPayload(oversizedPayload), oversizedPayload);
+});
 
 test("SearchRepository.searchGlobalDataRows skips deep offset scans and still reports totals", async () => {
   const repository = new SearchRepository();

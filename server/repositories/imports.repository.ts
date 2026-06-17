@@ -8,6 +8,7 @@ import type {
 } from "../../shared/schema-postgres";
 import { dataRows, imports } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
+import { safeJsonParse } from "../lib/safe-json";
 import { buildLikePattern } from "./sql-like-utils";
 import { assertSqlIdentifier } from "./sql-identifier-utils";
 
@@ -19,6 +20,8 @@ const IMPORT_LIST_OFFSET_MAX_PAGE_SIZE = 100;
 const IMPORT_COLUMN_KEYS_MAX_LIMIT = 500;
 const LARGE_IMPORT_SIZE_BYTES = 10 * 1024 * 1024;
 const LARGE_IMPORT_ROW_COUNT = 10_000;
+const IMPORT_LIST_CURSOR_MAX_BYTES = 512;
+const IMPORT_LIST_CURSOR_MAX_LENGTH = 1_024;
 
 export type ImportWithRowCount = Import & { isDuplicate?: boolean; rowCount: number };
 export type ImportListView = "all" | "recent" | "large" | "duplicates" | "review";
@@ -109,9 +112,26 @@ function parseImportListCursor(rawCursor: string | null | undefined): ImportList
   if (!normalized) {
     return null;
   }
+  if (normalized.length > IMPORT_LIST_CURSOR_MAX_LENGTH) {
+    return null;
+  }
 
   try {
-    const parsed = JSON.parse(Buffer.from(normalized, "base64url").toString("utf8")) as Partial<ImportListCursor>;
+    const parseResult = safeJsonParse<Partial<ImportListCursor>>(
+      Buffer.from(normalized, "base64url").toString("utf8"),
+      "import_list_cursor",
+      {
+        maxDepth: 2,
+        maxObjectKeys: 4,
+        maxRawBytes: IMPORT_LIST_CURSOR_MAX_BYTES,
+        maxStringLength: 128,
+        maxTotalBytes: IMPORT_LIST_CURSOR_MAX_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    const parsed = parseResult.data;
     const createdAt = String(parsed.createdAt || "").trim();
     const id = String(parsed.id || "").trim();
     if (!createdAt || !id || Number.isNaN(new Date(createdAt).getTime())) {

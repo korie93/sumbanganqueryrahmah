@@ -15,6 +15,7 @@ export const JSON_PARSE_LIMITS = {
 } as const;
 
 type SafeJsonParseOptions = {
+  logFailures?: boolean | undefined;
   metrics?: InternalMetricsRecorder;
   maxArrayLength?: number | undefined;
   maxDepth?: number | undefined;
@@ -137,9 +138,12 @@ export function safeJsonParse<T>(
 ): JsonParseResult<T> {
   const metrics = options.metrics ?? internalMetrics;
   const limits = resolveJsonParseLimits(options);
+  const shouldLogFailures = options.logFailures !== false;
 
   if (typeof raw !== "string") {
-    recordJsonParseFailure(context, "InvalidInput", metrics);
+    if (shouldLogFailures) {
+      recordJsonParseFailure(context, "InvalidInput", metrics);
+    }
     return {
       success: false,
       error: "Expected JSON string",
@@ -147,7 +151,9 @@ export function safeJsonParse<T>(
   }
 
   if (Buffer.byteLength(raw, "utf8") > limits.maxRawBytes) {
-    recordJsonParseFailure(context, "JsonRawSizeLimitExceeded", metrics);
+    if (shouldLogFailures) {
+      recordJsonParseFailure(context, "JsonRawSizeLimitExceeded", metrics);
+    }
     return {
       success: false,
       error: `JSON string size exceeds limit ${limits.maxRawBytes}`,
@@ -158,13 +164,15 @@ export function safeJsonParse<T>(
     const data = JSON.parse(raw) as T;
     const limitError = validateJsonValueLimits(data, limits);
     if (limitError) {
-      recordJsonParseFailure(
-        context,
-        limitError.includes("cumulative byte size")
-          ? "JsonMemoryLimitExceeded"
-          : "JsonLimitExceeded",
-        metrics,
-      );
+      if (shouldLogFailures) {
+        recordJsonParseFailure(
+          context,
+          limitError.includes("cumulative byte size")
+            ? "JsonMemoryLimitExceeded"
+            : "JsonLimitExceeded",
+          metrics,
+        );
+      }
       return {
         success: false,
         error: limitError,
@@ -176,11 +184,13 @@ export function safeJsonParse<T>(
       data,
     };
   } catch (error) {
-    recordJsonParseFailure(
-      context,
-      error instanceof Error ? error.name : "UnknownError",
-      metrics,
-    );
+    if (shouldLogFailures) {
+      recordJsonParseFailure(
+        context,
+        error instanceof Error ? error.name : "UnknownError",
+        metrics,
+      );
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : "Parse failed",

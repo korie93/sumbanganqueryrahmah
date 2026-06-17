@@ -17,6 +17,7 @@ test("AI category helpers parse JSON objects safely", () => {
 
   assert.deepEqual(parseJsonData('{"Nama":"Ali"}'), { Nama: "Ali" });
   assert.deepEqual(parseJsonData("bad-json"), {});
+  assert.deepEqual(parseJsonData(JSON.stringify({ payload: "x".repeat(300 * 1024) })), {});
 });
 
 test("AI category rule array helper supports array, text, and postgres-array shaped values", () => {

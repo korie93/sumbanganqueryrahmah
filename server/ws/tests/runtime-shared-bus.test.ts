@@ -26,6 +26,16 @@ test("runtime WebSocket shared bus rejects malformed or oversized events", () =>
   assert.equal(parseRuntimeWsSharedBusEvent("{"), null);
   assert.equal(parseRuntimeWsSharedBusEvent(JSON.stringify({ type: "broadcast" })), null);
   assert.equal(parseRuntimeWsSharedBusEvent("x".repeat(100 * 1024)), null);
+  let nestedPayload = "1";
+  for (let index = 0; index < 12; index += 1) {
+    nestedPayload = `{"a":${nestedPayload}}`;
+  }
+  assert.equal(
+    parseRuntimeWsSharedBusEvent(
+      `{"id":"event-1","originId":"instance-a","type":"broadcast","payload":${nestedPayload}}`,
+    ),
+    null,
+  );
 });
 
 test("resolveRuntimeWsSharedBusConfig accepts redis with explicit or shared URL", () => {

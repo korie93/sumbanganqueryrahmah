@@ -1,5 +1,8 @@
 import type { AiIntent } from "./ai-search-types";
 import type { AiSearchJsonRecord } from "./ai-search-query-shared";
+import { safeJsonParse } from "../lib/safe-json";
+
+const AI_INTENT_JSON_MAX_BYTES = 32 * 1024;
 
 export function parseIntentFallback(query: string): AiIntent {
   const digits = query.match(/\d{6,}/g) || [];
@@ -31,7 +34,21 @@ export function extractJsonObject(text: string): Record<string, unknown> | null 
   }
 
   try {
-    const parsed = JSON.parse(text.slice(first, last + 1));
+    const parseResult = safeJsonParse<Record<string, unknown>>(
+      text.slice(first, last + 1),
+      "ai_intent_json_object",
+      {
+        maxDepth: 8,
+        maxObjectKeys: 80,
+        maxRawBytes: AI_INTENT_JSON_MAX_BYTES,
+        maxStringLength: 4_096,
+        maxTotalBytes: AI_INTENT_JSON_MAX_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    const parsed = parseResult.data;
     return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;

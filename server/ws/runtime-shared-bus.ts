@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { logger as defaultLogger } from "../lib/logger";
+import { safeJsonParse } from "../lib/safe-json";
 
 export const RUNTIME_WS_SHARED_BUS_CHANNEL = "sqr:runtime-ws:v1";
 export const MAX_RUNTIME_WS_SHARED_BUS_EVENT_BYTES = 96 * 1024;
@@ -98,7 +99,21 @@ export function parseRuntimeWsSharedBusEvent(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(rawMessage);
+    const parseResult = safeJsonParse<unknown>(
+      rawMessage,
+      "runtime_ws_shared_bus_event",
+      {
+        maxDepth: 8,
+        maxObjectKeys: 128,
+        maxRawBytes: MAX_RUNTIME_WS_SHARED_BUS_EVENT_BYTES,
+        maxStringLength: 32 * 1024,
+        maxTotalBytes: MAX_RUNTIME_WS_SHARED_BUS_EVENT_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    parsed = parseResult.data;
   } catch {
     return null;
   }

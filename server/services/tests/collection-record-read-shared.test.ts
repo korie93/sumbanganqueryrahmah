@@ -14,6 +14,10 @@ test("collection record read shared cursor helpers round-trip valid offsets and 
   assert.equal(parseCollectionListCursor("not-base64"), null);
   const invalidOffset = Buffer.from(JSON.stringify({ offset: -5 }), "utf8").toString("base64url");
   assert.equal(parseCollectionListCursor(invalidOffset), null);
+  const oversizedCursor = Buffer
+    .from(JSON.stringify({ offset: 1, padding: "x".repeat(300) }), "utf8")
+    .toString("base64url");
+  assert.equal(parseCollectionListCursor(oversizedCursor), null);
 });
 
 test("collection record read shared helpers normalize booleans, validation filters, and pagination", () => {

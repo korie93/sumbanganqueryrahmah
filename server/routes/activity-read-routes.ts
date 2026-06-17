@@ -14,6 +14,7 @@ import {
   readQueryObject,
   readRouteParam,
 } from "../http/validation";
+import { safeJsonParse } from "../lib/safe-json";
 import type {
   ActivityPageSortBy,
   ActivityPageSortOrder,
@@ -45,6 +46,8 @@ const ACTIVITY_PAGE_SORT_FIELDS = new Set<ActivityPageSortBy>([
   "username",
 ]);
 const ACTIVITY_PAGE_SORT_ORDERS = new Set<ActivityPageSortOrder>(["asc", "desc"]);
+const LOGOUT_JWT_PAYLOAD_SEGMENT_MAX_LENGTH = 4_096;
+const LOGOUT_JWT_PAYLOAD_MAX_BYTES = 2_048;
 
 function canViewExactNetworkAudit(role: string | null | undefined): boolean {
   return role === "admin" || role === "superuser";
@@ -100,12 +103,29 @@ function readLogoutJwtClaimsFromToken(token: string): LogoutJwtRevocationClaims 
   if (!payloadSegment) {
     return null;
   }
+  if (payloadSegment.length > LOGOUT_JWT_PAYLOAD_SEGMENT_MAX_LENGTH) {
+    return null;
+  }
 
   try {
-    const payload = JSON.parse(Buffer.from(payloadSegment, "base64url").toString("utf8")) as {
+    const parseResult = safeJsonParse<{
       exp?: unknown;
       jti?: unknown;
-    };
+    }>(
+      Buffer.from(payloadSegment, "base64url").toString("utf8"),
+      "logout_jwt_payload",
+      {
+        maxDepth: 2,
+        maxObjectKeys: 16,
+        maxRawBytes: LOGOUT_JWT_PAYLOAD_MAX_BYTES,
+        maxStringLength: 256,
+        maxTotalBytes: LOGOUT_JWT_PAYLOAD_MAX_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    const payload = parseResult.data;
     const jwtId = String(payload.jti || "").trim();
     if (!jwtId) {
       return null;

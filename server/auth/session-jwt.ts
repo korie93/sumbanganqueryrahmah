@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import jwt, { type Algorithm, type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
+import { safeJsonParse } from "../lib/safe-json";
 import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
 
 export const SESSION_JWT_ALGORITHM = "RS256" as const;
@@ -20,6 +21,9 @@ export const SESSION_JWT_HS256_FALLBACK_WARNING =
 export const SESSION_JWT_RS256_PRODUCTION_REQUIRED_ERROR =
   "FATAL: SESSION_JWT_PRIVATE_KEY and SESSION_JWT_PUBLIC_KEY are required in production; HS256 fallback is not allowed.";
 export { SESSION_JWT_DEFAULT_EXPIRY } from "./session-lifetime";
+
+const SESSION_JWT_HEADER_SEGMENT_MAX_LENGTH = 1_024;
+const SESSION_JWT_HEADER_MAX_BYTES = 512;
 
 type RefreshableSessionClaims = {
   exp?: number | undefined;
@@ -151,11 +155,29 @@ function readJwtHeaderAlgorithm(token: string): string | null {
   if (!headerSegment) {
     return null;
   }
+  if (headerSegment.length > SESSION_JWT_HEADER_SEGMENT_MAX_LENGTH) {
+    return null;
+  }
 
   try {
-    const header = JSON.parse(Buffer.from(headerSegment, "base64url").toString("utf8")) as {
+    const parseResult = safeJsonParse<{
       alg?: unknown;
-    };
+    }>(
+      Buffer.from(headerSegment, "base64url").toString("utf8"),
+      "session_jwt_header",
+      {
+        logFailures: false,
+        maxDepth: 2,
+        maxObjectKeys: 8,
+        maxRawBytes: SESSION_JWT_HEADER_MAX_BYTES,
+        maxStringLength: 64,
+        maxTotalBytes: SESSION_JWT_HEADER_MAX_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return null;
+    }
+    const header = parseResult.data;
     const algorithm = String(header.alg || "").trim();
     return algorithm || null;
   } catch {

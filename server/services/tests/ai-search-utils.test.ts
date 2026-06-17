@@ -38,6 +38,11 @@ test("extractJsonObject parses embedded JSON and ignores invalid wrappers", () =
     entities: {},
   });
   assert.equal(extractJsonObject("not-json"), null);
+  let nested = "1";
+  for (let index = 0; index < 12; index += 1) {
+    nested = `{"a":${nested}}`;
+  }
+  assert.equal(extractJsonObject(nested), null);
 });
 
 test("customer postcode and location helpers prefer home fields and ignore relation/office noise", () => {

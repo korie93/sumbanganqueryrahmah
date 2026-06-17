@@ -53,6 +53,13 @@ test("security audit verification detects tampering", () => {
   );
 });
 
+test("security audit verification rejects oversized JSON details safely", () => {
+  assert.deepEqual(
+    verifySecurityAuditDetails(JSON.stringify({ payload: "x".repeat(20 * 1024) })),
+    { ok: false, reason: "invalid_json" },
+  );
+});
+
 test("security audit metadata drops sensitive keys", () => {
   assert.deepEqual(sanitizeSecurityAuditMetadata({
     password: "secret",

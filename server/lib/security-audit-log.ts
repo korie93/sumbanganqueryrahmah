@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getAuditHmacKey } from "../config/security";
 import { getRequestContext } from "./request-context";
+import { safeJsonParse } from "./safe-json";
 
 export type SecurityAuditEventType =
   | "AUTH_LOGIN_SUCCESS"
@@ -68,6 +69,7 @@ export type SecurityAuditVerificationResult =
 const SECURITY_AUDIT_SCHEMA_VERSION = 1;
 const MAX_SECURITY_AUDIT_STRING_LENGTH = 160;
 const MAX_SECURITY_AUDIT_METADATA_KEYS = 30;
+const MAX_SECURITY_AUDIT_DETAILS_BYTES = 16 * 1024;
 const SECURITY_AUDIT_HASH_PREFIX = "hmac-sha256:";
 const SECURITY_AUDIT_FORBIDDEN_METADATA_KEY_PATTERN =
   /(password|passcode|token|secret|session|jwt|cookie|authorization|fingerprint|email|ic|phone|account|name|address)/i;
@@ -243,7 +245,21 @@ export function verifySecurityAuditDetails(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(details);
+    const parseResult = safeJsonParse<unknown>(
+      details,
+      "security_audit_details",
+      {
+        maxDepth: 6,
+        maxObjectKeys: 64,
+        maxRawBytes: MAX_SECURITY_AUDIT_DETAILS_BYTES,
+        maxStringLength: 512,
+        maxTotalBytes: MAX_SECURITY_AUDIT_DETAILS_BYTES,
+      },
+    );
+    if (!parseResult.success) {
+      return { ok: false, reason: "invalid_json" };
+    }
+    parsed = parseResult.data;
   } catch {
     return { ok: false, reason: "invalid_json" };
   }
