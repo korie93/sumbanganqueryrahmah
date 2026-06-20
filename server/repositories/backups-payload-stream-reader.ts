@@ -1,5 +1,6 @@
 import type { BackupPayloadChunkReader } from "./backups-restore-shared-utils";
 import type { BackupDatasetKey } from "./backups-payload-reader-shared";
+import { parseBackupJsonValue } from "./backups-payload-json";
 
 export function createSequentialAsyncBackupPayloadChunkReader(
   source: AsyncIterable<string>,
@@ -191,7 +192,7 @@ export function createSequentialAsyncBackupPayloadChunkReader(
       }
 
       const keyTokenRaw = await readJsonStringTokenAsync();
-      const key = JSON.parse(keyTokenRaw) as string;
+      const key = parseBackupJsonValue<string>(keyTokenRaw, "backup_payload_stream_key");
       await skipWhitespaceAsync();
       await expectChar(":");
       await skipWhitespaceAsync();
@@ -229,7 +230,10 @@ export function createSequentialAsyncBackupPayloadChunkReader(
             break;
           }
 
-          chunk.push(JSON.parse(await readJsonValueRawAsync()) as T);
+          chunk.push(parseBackupJsonValue<T>(
+            await readJsonValueRawAsync(),
+            `backup_payload_stream_item:${key}`,
+          ));
           if (chunk.length >= safeChunkSize) {
             yield chunk;
             chunk = [];

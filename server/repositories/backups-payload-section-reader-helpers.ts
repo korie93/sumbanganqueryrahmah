@@ -2,6 +2,7 @@ import type {
   BackupDatasetKey,
 } from "./backups-payload-reader-shared";
 import type { BackupDataPayload } from "./backups-repository-types";
+import { parseBackupJsonValue } from "./backups-payload-json";
 
 function skipWhitespace(source: string, start: number): number {
   let index = start;
@@ -119,7 +120,7 @@ export function parseTopLevelBackupMemberRanges(source: string): Map<string, { s
   index = skipWhitespace(source, index + 1);
   while (index < source.length && source[index] !== "}") {
     const keyToken = readJsonStringToken(source, index);
-    const key = JSON.parse(keyToken.raw) as string;
+    const key = parseBackupJsonValue<string>(keyToken.raw, "backup_payload_key");
     index = skipWhitespace(source, keyToken.nextIndex);
 
     if (source[index] !== ":") {
@@ -187,7 +188,7 @@ export function* iterateArrayChunksFromStringSource<T>(
   while (index < range.end && source[index] !== "]") {
     const valueStart = index;
     const valueEnd = skipJsonValue(source, valueStart);
-    chunk.push(JSON.parse(source.slice(valueStart, valueEnd)) as T);
+    chunk.push(parseBackupJsonValue<T>(source.slice(valueStart, valueEnd), "backup_payload_item"));
 
     if (chunk.length >= safeChunkSize) {
       yield chunk;

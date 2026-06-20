@@ -1,4 +1,5 @@
 import { createClientRandomUnitInterval } from "@/lib/secure-id";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 
 export const WS_RECONNECT_BASE_DELAY_MS = 1_000;
 export const WS_RECONNECT_MAX_DELAY_MS = 30_000;
@@ -37,12 +38,14 @@ export function parseAutoLogoutWebSocketMessage(rawData: unknown): AutoLogoutWeb
     return null;
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawData);
-  } catch {
+  const parsedJson = safeJsonParseResult<unknown>(rawData, {
+    maxDepth: 6,
+    maxRawLength: 16_384,
+  });
+  if (!parsedJson.ok) {
     return null;
   }
+  const parsed = parsedJson.data;
 
   if (!isObjectRecord(parsed) || typeof parsed.type !== "string") {
     return null;

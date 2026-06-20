@@ -1,4 +1,5 @@
 import { createClientRandomId } from "@/lib/secure-id";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 
 const FORCE_LOGOUT_EVENT_NAME = "force-logout";
 const FORCE_LOGOUT_BROADCAST_CHANNEL_NAME = "sqr-auth-force-logout";
@@ -24,14 +25,17 @@ export function parseForcedLogoutStorageValue(raw: string | null | undefined): F
     return {};
   }
 
-  try {
-    const parsed = JSON.parse(normalized) as ForcedLogoutPayload;
-    return {
-      message: normalizeAuthNoticeMessage(parsed?.message),
-    };
-  } catch {
+  const parsed = safeJsonParseResult<ForcedLogoutPayload>(normalized, {
+    maxDepth: 4,
+    maxRawLength: 2_048,
+  });
+  if (!parsed.ok) {
     return {};
   }
+
+  return {
+    message: normalizeAuthNoticeMessage(parsed.data?.message),
+  };
 }
 
 function normalizeForcedLogoutPayload(raw: unknown): ForcedLogoutPayload | null {

@@ -1,4 +1,5 @@
 import { createApiHeaders } from "../api-client";
+import { safeJsonParseResult } from "../utils/safe-json";
 import { getAuthHeader, getCsrfHeader } from "./shared";
 import type { MonitorApiResult, MonitorRequestOptions } from "./monitor-types";
 
@@ -6,12 +7,14 @@ export async function parseMonitorErrorMessage(response: Response): Promise<stri
   try {
     const text = await response.text();
     if (!text) return response.statusText || "Request failed";
-    try {
-      const parsed = JSON.parse(text);
-      return String(parsed?.message || parsed?.error || text);
-    } catch {
+    const parsed = safeJsonParseResult<Record<string, unknown>>(text, {
+      maxDepth: 8,
+      maxRawLength: 16_384,
+    });
+    if (!parsed.ok) {
       return text;
     }
+    return String(parsed.data.message || parsed.data.error || text);
   } catch {
     return response.statusText || "Request failed";
   }

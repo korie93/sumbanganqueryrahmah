@@ -106,7 +106,7 @@
     "monitor:stale-conflicts": "node scripts/monitor-stale-conflicts.mjs",
     "dev": "npm run dev:server",
     "dev:server": "tsx server/index-local.ts",
-    "build": "npm run verify:csp-hashes && node scripts/run-client-build.mjs && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm && npx esbuild server/cluster-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/cluster-local.js --format=esm && npm run verify:production-sourcemaps",
+    "build": "npm run verify:csp-hashes && node scripts/run-client-build.mjs && node scripts/build-server.mjs && npm run verify:production-sourcemaps",
     "start": "npm run start:built",
     "prestart": "node scripts/ensure-build.mjs",
     "prepare": "husky",

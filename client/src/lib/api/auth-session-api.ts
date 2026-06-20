@@ -1,6 +1,7 @@
 import { ERROR_CODES } from "@shared/error-codes";
 
 import { apiRequest, createApiHeaders } from "../api-client";
+import { safeJsonParseResult } from "../utils/safe-json";
 import { notifyMaintenanceMode } from "./maintenance-navigation";
 import type {
   CurrentUser,
@@ -95,18 +96,23 @@ function resolveNonJsonLoginErrorMessage(res: Response, text: string) {
 
 async function readLoginResponsePayload(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
-  try {
-    const data = JSON.parse(text || "{}") as unknown;
-    return data && typeof data === "object" && !Array.isArray(data)
-      ? data as Record<string, unknown>
-      : {};
-  } catch {
+  const parsed = safeJsonParseResult<unknown>(text || "{}", {
+    maxDepth: 12,
+    maxRawLength: 64_000,
+  });
+  if (parsed.ok && parsed.data && typeof parsed.data === "object" && !Array.isArray(parsed.data)) {
+    return parsed.data as Record<string, unknown>;
+  }
+
+  if (!parsed.ok) {
     if (!res.ok) {
       throw buildLoginError(resolveNonJsonLoginErrorMessage(res, text), res);
     }
 
     throw buildLoginError("Server mengembalikan respons log masuk yang tidak sah.", res);
   }
+
+  return {};
 }
 
 export async function login(

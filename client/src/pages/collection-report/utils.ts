@@ -8,6 +8,7 @@ import {
   safeRemoveStorageItem,
   safeSetStorageItem,
 } from "@/lib/browser-storage";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import type { CollectionSubPage } from "@/pages/collection-report/types";
 
 export function hasLetterAndNumber(value: string) {
@@ -35,19 +36,22 @@ export function getPathForSubPage(subPage: CollectionSubPage) {
 }
 
 export function isValidNicknameAuthSession(raw: string, username: string, role: string, nickname: string) {
-  try {
-    const parsed = JSON.parse(raw || "{}");
-    const savedNickname = String(parsed?.nickname || "").trim().toLowerCase();
-    const savedUsername = String(parsed?.username || "").trim().toLowerCase();
-    const savedRole = String(parsed?.role || "").trim().toLowerCase();
-
-    if (!savedNickname || !savedUsername || !savedRole) return false;
-    if (!username || !nickname) return false;
-
-    return savedNickname === nickname.toLowerCase() && savedUsername === username && savedRole === role;
-  } catch {
+  const parsed = safeJsonParseResult<Record<string, unknown>>(raw || "{}", {
+    maxDepth: 4,
+    maxRawLength: 2_048,
+  });
+  if (!parsed.ok) {
     return false;
   }
+
+  const savedNickname = String(parsed.data.nickname || "").trim().toLowerCase();
+  const savedUsername = String(parsed.data.username || "").trim().toLowerCase();
+  const savedRole = String(parsed.data.role || "").trim().toLowerCase();
+
+  if (!savedNickname || !savedUsername || !savedRole) return false;
+  if (!username || !nickname) return false;
+
+  return savedNickname === nickname.toLowerCase() && savedUsername === username && savedRole === role;
 }
 
 export function getStoredCollectionNickname() {

@@ -4,6 +4,7 @@ import {
   safeRemoveStorageItem,
   safeSetStorageItem,
 } from "@/lib/browser-storage";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 
 export const VIEWER_ANALYSIS_HANDOFF_STORAGE_KEY = "viewerAnalysisHandoff";
 
@@ -99,10 +100,14 @@ export function consumeViewerAnalysisHandoff(
     return null;
   }
 
-  try {
-    const parsed = viewerAnalysisHandoffSchema.safeParse(JSON.parse(rawValue));
-    return parsed.success ? parsed.data : null;
-  } catch {
+  const parsedJson = safeJsonParseResult<unknown>(rawValue, {
+    maxDepth: 4,
+    maxRawLength: 2_048,
+  });
+  if (!parsedJson.ok) {
     return null;
   }
+
+  const parsed = viewerAnalysisHandoffSchema.safeParse(parsedJson.data);
+  return parsed.success ? parsed.data : null;
 }

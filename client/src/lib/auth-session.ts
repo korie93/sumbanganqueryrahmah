@@ -11,6 +11,7 @@ import {
   safeRemoveStorageItem,
   safeSetStorageItem,
 } from "@/lib/browser-storage";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import {
   calculateSessionExpiry,
   isSessionExpired,
@@ -223,12 +224,15 @@ function parseAuthNoticePayload(raw: string | null | undefined): string {
     return "";
   }
 
-  try {
-    const parsed = JSON.parse(normalized) as { message?: unknown };
-    return normalizeAuthNoticeMessage(typeof parsed?.message === "string" ? parsed.message : "");
-  } catch {
-    return normalized;
+  const parsed = safeJsonParseResult<{ message?: unknown }>(normalized, {
+    maxDepth: 4,
+    maxRawLength: 2_048,
+  });
+  if (parsed.ok) {
+    return normalizeAuthNoticeMessage(typeof parsed.data?.message === "string" ? parsed.data.message : "");
   }
+
+  return normalized.length <= 500 ? normalized : "";
 }
 
 export function persistAuthNotice(message: string | null | undefined) {
@@ -280,19 +284,19 @@ export function getStoredAuthenticatedUser(): User | null {
     return null;
   }
 
-  try {
-    const parsed = authSessionUserSchema.safeParse(JSON.parse(raw) as unknown);
-    if (!parsed.success) {
-      throw new Error("Invalid cached user");
-    }
-    if (readAuthSessionTimestamp(AUTH_SESSION_STORED_AT_KEY) === null) {
-      writeAuthSessionMetadata();
-    }
-    return parsed.data;
-  } catch {
+  const parsedJson = safeJsonParseResult<unknown>(raw, {
+    maxDepth: 8,
+    maxRawLength: 16_384,
+  });
+  const parsed = parsedJson.ok ? authSessionUserSchema.safeParse(parsedJson.data) : null;
+  if (!parsed?.success) {
     clearStoredAuthSessionValues();
     return null;
   }
+  if (readAuthSessionTimestamp(AUTH_SESSION_STORED_AT_KEY) === null) {
+    writeAuthSessionMetadata();
+  }
+  return parsed.data;
 }
 
 export function getStoredUsername(): string {

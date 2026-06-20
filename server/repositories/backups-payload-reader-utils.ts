@@ -12,6 +12,7 @@ import {
   parseTopLevelBackupMemberRanges,
 } from "./backups-payload-section-reader-helpers";
 import { createSequentialAsyncBackupPayloadChunkReader } from "./backups-payload-stream-reader";
+import { parseBackupJsonValue } from "./backups-payload-json";
 
 export function createBackupPayloadSectionReader(source: BackupPayloadSource) {
   if (typeof source !== "string") {
@@ -37,7 +38,7 @@ export function createBackupPayloadSectionReader(source: BackupPayloadSource) {
         return [];
       }
       const rawValue = source.slice(range.start, range.end);
-      const parsed = JSON.parse(rawValue) as unknown;
+      const parsed = parseBackupJsonValue<unknown>(rawValue, `backup_payload_dataset:${key}`);
       if (!Array.isArray(parsed)) {
         throw new Error(`Invalid backup payload dataset: ${key}`);
       }

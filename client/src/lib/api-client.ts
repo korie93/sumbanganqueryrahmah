@@ -11,6 +11,7 @@ import {
   setBannedSessionFlag,
   setStoredForcePasswordChange,
 } from "./auth-session";
+import { safeJsonParseResult } from "./utils/safe-json";
 import {
   attachApiRetryCount,
   fetchApiWithRetry,
@@ -84,19 +85,18 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseJsonObject(text: string): ApiErrorPayload | null {
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    if (!isObjectRecord(parsed)) {
-      return null;
-    }
-
-    const normalized = apiErrorPayloadSchema.safeParse(parsed);
-    return normalized.success && isObjectRecord(normalized.data)
-      ? normalized.data
-      : { message: UNKNOWN_API_ERROR_MESSAGE };
-  } catch {
+  const parsed = safeJsonParseResult<unknown>(text, {
+    maxDepth: 12,
+    maxRawLength: 64_000,
+  });
+  if (!parsed.ok || !isObjectRecord(parsed.data)) {
     return null;
   }
+
+  const normalized = apiErrorPayloadSchema.safeParse(parsed.data);
+  return normalized.success && isObjectRecord(normalized.data)
+    ? normalized.data
+    : { message: UNKNOWN_API_ERROR_MESSAGE };
 }
 
 function readApiMessage(payload: ApiErrorPayload | null): string {

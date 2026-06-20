@@ -35,6 +35,14 @@ function createBackupCollectionRecord(
   };
 }
 
+function createDeepObject(depth: number): Record<string, unknown> {
+  let current: Record<string, unknown> = { value: "leaf" };
+  for (let index = 0; index < depth; index += 1) {
+    current = { nested: current };
+  }
+  return current;
+}
+
 test("createBackupPayloadSectionReader reads top-level backup arrays from a raw JSON string", () => {
   const payloadJson = JSON.stringify({
     imports: [
@@ -137,6 +145,29 @@ test("createBackupPayloadSectionReader iterates JSON array datasets in bounded c
   assert.deepEqual(
     await collectChunkIds(reader.iterateArrayChunks<{ id: string }>("collectionRecords", 2)),
     [["record-1", "record-2"], ["record-3"]],
+  );
+});
+
+test("createBackupPayloadSectionReader rejects excessively nested JSON values", async () => {
+  const reader = createBackupPayloadSectionReader(JSON.stringify({
+    imports: [],
+    dataRows: [
+      {
+        id: "row-1",
+        jsonDataJsonb: createDeepObject(45),
+      },
+    ],
+    users: [],
+    auditLogs: [],
+  }));
+
+  await assert.rejects(
+    async () => {
+      for await (const _chunk of reader.iterateArrayChunks("dataRows", 1)) {
+        // Iteration performs bounded parsing lazily.
+      }
+    },
+    /Invalid backup payload format/,
   );
 });
 

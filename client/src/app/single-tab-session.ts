@@ -5,6 +5,7 @@ import {
   safeSetStorageItem,
   type BrowserStorageLike,
 } from "@/lib/browser-storage";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 
 const SINGLE_TAB_LOCK_STORAGE_PREFIX = "sqr_single_tab_lock:";
 const SINGLE_TAB_SEED_STORAGE_KEY = "sqr_single_tab_seed";
@@ -45,26 +46,30 @@ export function parseSingleTabLock(raw: string | null | undefined): SingleTabLoc
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(normalized) as Partial<SingleTabLock>;
-    const username = normalizeSingleTabUsername(parsed.username);
-    const tabSeed = normalizeStorageValue(parsed.tabSeed);
-    const instanceId = normalizeStorageValue(parsed.instanceId);
-    const updatedAt = Number(parsed.updatedAt);
-
-    if (!username || !tabSeed || !instanceId || !Number.isFinite(updatedAt) || updatedAt <= 0) {
-      return null;
-    }
-
-    return {
-      username,
-      tabSeed,
-      instanceId,
-      updatedAt,
-    };
-  } catch {
+  const parsedJson = safeJsonParseResult<Partial<SingleTabLock>>(normalized, {
+    maxDepth: 4,
+    maxRawLength: 2_048,
+  });
+  if (!parsedJson.ok || typeof parsedJson.data !== "object" || parsedJson.data === null) {
     return null;
   }
+
+  const parsed = parsedJson.data;
+  const username = normalizeSingleTabUsername(parsed.username);
+  const tabSeed = normalizeStorageValue(parsed.tabSeed);
+  const instanceId = normalizeStorageValue(parsed.instanceId);
+  const updatedAt = Number(parsed.updatedAt);
+
+  if (!username || !tabSeed || !instanceId || !Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return null;
+  }
+
+  return {
+    username,
+    tabSeed,
+    instanceId,
+    updatedAt,
+  };
 }
 
 export function createSingleTabNavigationReclaim(
@@ -91,22 +96,26 @@ export function parseSingleTabNavigationReclaim(
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(normalized) as Partial<SingleTabNavigationReclaim>;
-    const tabSeed = normalizeStorageValue(parsed.tabSeed);
-    const markedAt = Number(parsed.markedAt);
-
-    if (!tabSeed || !Number.isFinite(markedAt) || markedAt <= 0) {
-      return null;
-    }
-
-    return {
-      tabSeed,
-      markedAt,
-    };
-  } catch {
+  const parsedJson = safeJsonParseResult<Partial<SingleTabNavigationReclaim>>(normalized, {
+    maxDepth: 4,
+    maxRawLength: 2_048,
+  });
+  if (!parsedJson.ok || typeof parsedJson.data !== "object" || parsedJson.data === null) {
     return null;
   }
+
+  const parsed = parsedJson.data;
+  const tabSeed = normalizeStorageValue(parsed.tabSeed);
+  const markedAt = Number(parsed.markedAt);
+
+  if (!tabSeed || !Number.isFinite(markedAt) || markedAt <= 0) {
+    return null;
+  }
+
+  return {
+    tabSeed,
+    markedAt,
+  };
 }
 
 export function isSingleTabNavigationReclaimActive(

@@ -5,6 +5,7 @@ import {
   safeRemoveStorageItem,
   safeSetStorageItem,
 } from "@/lib/browser-storage";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import { COLLECTION_BATCH_OPTIONS } from "@/pages/collection/utils";
 
 export type SaveCollectionDraft = {
@@ -49,27 +50,31 @@ export function parseSaveCollectionDraft(raw: string | null | undefined): SaveCo
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(raw) as Partial<SaveCollectionDraft>;
-    const batchCandidate = normalizeDraftString(parsed.batch);
-    const batch = COLLECTION_BATCH_OPTIONS.includes(batchCandidate as CollectionBatch)
-      ? batchCandidate as CollectionBatch
-      : "P10";
-
-    return {
-      customerName: normalizeDraftString(parsed.customerName),
-      icNumber: normalizeDraftString(parsed.icNumber),
-      customerPhone: normalizeDraftString(parsed.customerPhone),
-      accountNumber: normalizeDraftString(parsed.accountNumber),
-      batch,
-      paymentDate: normalizeDraftString(parsed.paymentDate),
-      amount: normalizeDraftString(parsed.amount),
-      hadPendingReceipts: Boolean(parsed.hadPendingReceipts),
-      savedAt: normalizeDraftString(parsed.savedAt),
-    };
-  } catch {
+  const parsedJson = safeJsonParseResult<Partial<SaveCollectionDraft>>(raw, {
+    maxDepth: 4,
+    maxRawLength: 16_384,
+  });
+  if (!parsedJson.ok || typeof parsedJson.data !== "object" || parsedJson.data === null) {
     return null;
   }
+
+  const parsed = parsedJson.data;
+  const batchCandidate = normalizeDraftString(parsed.batch);
+  const batch = COLLECTION_BATCH_OPTIONS.includes(batchCandidate as CollectionBatch)
+    ? batchCandidate as CollectionBatch
+    : "P10";
+
+  return {
+    customerName: normalizeDraftString(parsed.customerName),
+    icNumber: normalizeDraftString(parsed.icNumber),
+    customerPhone: normalizeDraftString(parsed.customerPhone),
+    accountNumber: normalizeDraftString(parsed.accountNumber),
+    batch,
+    paymentDate: normalizeDraftString(parsed.paymentDate),
+    amount: normalizeDraftString(parsed.amount),
+    hadPendingReceipts: Boolean(parsed.hadPendingReceipts),
+    savedAt: normalizeDraftString(parsed.savedAt),
+  };
 }
 
 export function readSaveCollectionDraft(staffNickname: string): SaveCollectionDraft | null {

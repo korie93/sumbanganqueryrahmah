@@ -1,4 +1,5 @@
 import { formatOperationalDateTime } from "@/lib/date-format";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import type { BackupFilters, BackupOption, BackupRecord } from "@/pages/backup-restore/types";
 
 type BackupRecordLike = Record<string, unknown>;
@@ -26,15 +27,19 @@ function isRecord(value: unknown): value is BackupRecordLike {
 
 export function normalizeBackup(raw: unknown): BackupRecord {
   const record = isRecord(raw) ? raw : {};
-  let metadata = record.metadata ?? null;
+  let metadata: unknown = record.metadata ?? null;
 
   if (typeof metadata === "string") {
     if (metadata.length > 200_000) {
       metadata = null;
     } else {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch {
+      const parsedMetadata = safeJsonParseResult<unknown>(metadata, {
+        maxDepth: 12,
+        maxRawLength: 200_000,
+      });
+      if (parsedMetadata.ok) {
+        metadata = parsedMetadata.data;
+      } else {
         metadata = null;
       }
     }
