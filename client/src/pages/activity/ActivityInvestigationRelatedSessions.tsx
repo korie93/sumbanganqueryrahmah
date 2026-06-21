@@ -17,6 +17,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { ActivityInvestigation } from "@/lib/api";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { getActivityDeviceTypeLabel } from "@/pages/activity/activity-device-utils";
 import { formatActivityTime, getStatusBadge } from "@/pages/activity/utils";
 
@@ -95,7 +96,7 @@ export function ActivityInvestigationRelatedSessions({
               size="sm"
               variant="outline"
               aria-controls="related-sessions-content"
-              aria-expanded={open}
+              {...getAriaExpandedProps(open)}
               className="shrink-0"
             >
               {open ? (

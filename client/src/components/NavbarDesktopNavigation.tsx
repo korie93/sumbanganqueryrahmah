@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { formatSavedCountBadge } from "@/components/navbar-utils"
 import type { DesktopNavOverflowState } from "@/components/useDesktopNavOverflowState"
+import { getAriaCurrentPageProps } from "@/lib/aria-state-props"
 
 type NavbarDesktopNavigationProps = {
   directItems: NavigationEntry[]
@@ -143,7 +144,7 @@ function NavbarDesktopNavigationImpl({
               type="button"
               title={item.label}
               aria-label={item.label}
-              aria-current={isActive ? "page" : undefined}
+              {...getAriaCurrentPageProps(isActive)}
               onClick={() => onNavigate(item.id)}
               onMouseEnter={() => onPrefetch(item.id)}
               onFocus={() => onPrefetch(item.id)}
@@ -184,7 +185,7 @@ function NavbarDesktopNavigationImpl({
                   type="button"
                   title={group.label}
                   aria-label={`Menu ${group.label}`}
-                  aria-current={active ? "page" : undefined}
+                  {...getAriaCurrentPageProps(active)}
                   onMouseEnter={() => group.items.forEach((item) => onPrefetch(item.id))}
                   onFocus={() => group.items.forEach((item) => onPrefetch(item.id))}
                   className={`nav-pill${active ? " nav-pill-active" : ""}`}
@@ -223,7 +224,7 @@ function NavbarDesktopNavigationImpl({
                     return (
                       <DropdownMenuItem
                         key={item.id}
-                        aria-current={activeItem ? "page" : undefined}
+                        {...getAriaCurrentPageProps(activeItem)}
                         onSelect={() => onNavigate(item.id)}
                         onFocus={() => onPrefetch(item.id)}
                         className={`items-start gap-3 rounded-xl px-3 py-3 ${activeItem ? "bg-primary/10 text-primary focus:bg-primary/10 focus:text-primary" : ""}`}

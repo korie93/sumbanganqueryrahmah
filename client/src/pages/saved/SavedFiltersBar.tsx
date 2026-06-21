@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatSavedFilterDate } from "@/pages/saved/utils";
 import { DatePickerField } from "@/components/ui/date-picker-field";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 
 interface SavedFiltersBarProps {
   searchTerm: string;
@@ -129,8 +130,8 @@ export function SavedFiltersBar({
             type="button"
             variant="outline"
             className="h-10"
-            aria-expanded={advancedOpen}
             aria-controls="saved-advanced-filters"
+            {...getAriaExpandedProps(advancedOpen)}
             onClick={() => setAdvancedOpen((open) => !open)}
             data-testid="button-toggle-saved-advanced-filters"
           >

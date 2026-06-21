@@ -39,7 +39,8 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(notificationCenterSource, /role="tablist"/);
   assert.match(notificationCenterSource, /aria-label="Tapis notifikasi"/);
   assert.match(notificationCenterSource, /role="tabpanel"/);
-  assert.match(notificationCenterSource, /aria-selected=\{selected\}/);
+  assert.match(notificationCenterSource, /getAriaSelectedProps\(selected\)/);
+  assert.doesNotMatch(notificationCenterSource, /aria-selected=\{[^}]+\}/);
   assert.match(notificationCenterSource, /aria-label="Ringkasan notifikasi"/);
   assert.match(notificationCenterSource, /groupNotificationEntriesByModule/);
   assert.match(notificationCenterSource, /Notifikasi \$\{group\.module\}/);
@@ -67,9 +68,10 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(homeButtonSource, />Utama<\/span>/);
   assert.match(homeButtonSource, /nav-home-pill !hidden lg:!inline-flex/);
   assert.match(desktopNavigationSource, /aria-label="Navigasi utama"/);
-  assert.match(desktopNavigationSource, /aria-current=\{isActive \? "page" : undefined\}/);
-  assert.match(desktopNavigationSource, /aria-current=\{active \? "page" : undefined\}/);
-  assert.match(desktopNavigationSource, /aria-current=\{activeItem \? "page" : undefined\}/);
+  assert.match(desktopNavigationSource, /getAriaCurrentPageProps\(isActive\)/);
+  assert.match(desktopNavigationSource, /getAriaCurrentPageProps\(active\)/);
+  assert.match(desktopNavigationSource, /getAriaCurrentPageProps\(activeItem\)/);
+  assert.doesNotMatch(desktopNavigationSource, /aria-current=\{[^}]+\}/);
   assert.match(desktopNavigationSource, /onEscapeKeyDown=\{\(\) => \{/);
   assert.match(desktopNavigationSource, /onCloseAutoFocus=\{\(event\) => \{/);
   assert.match(desktopNavigationSource, /groupTriggerRefs\.current\.get\(groupId\)\?\.focus\(\{ preventScroll: true \}\)/);
@@ -91,7 +93,8 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(mobileNavigationSource, /<SheetTitle>Navigasi<\/SheetTitle>/);
   assert.match(mobileNavigationSource, /Bahagian semasa:/);
   assert.match(mobileNavigationSource, /aria-label="Navigasi mudah alih"/);
-  assert.match(mobileNavigationSource, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(mobileNavigationSource, /getAriaCurrentPageProps\(active\)/);
+  assert.doesNotMatch(mobileNavigationSource, /aria-current=\{[^}]+\}/);
   assert.match(mobileNavigationSource, /border-primary bg-primary text-primary-foreground shadow-sm/);
   assert.match(mobileNavigationSource, /active \? "bg-primary-foreground text-primary" : "bg-primary\/10 text-primary"/);
   assert.match(mobileNavigationSource, /rounded-full bg-primary-foreground px-2 py-0\.5 text-xxs font-semibold uppercase tracking-label-xs text-primary/);

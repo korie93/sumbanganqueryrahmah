@@ -6,6 +6,7 @@ import {
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getAriaCurrentPageProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import type {
   AnalysisData,
@@ -63,7 +64,7 @@ export function AnalysisWorkspaceNavigation({
                 size="sm"
                 className="h-10 shrink-0 gap-2"
                 onClick={() => onSelect(item.key)}
-                aria-current={active ? "page" : undefined}
+                {...getAriaCurrentPageProps(active)}
                 data-testid={`analysis-section-${item.key}`}
               >
                 <Icon className="h-4 w-4" />
@@ -122,8 +123,8 @@ export function AnalysisWorkspaceNavigation({
                     ? "bg-primary/10 text-primary"
                     : "text-foreground/78 hover:bg-accent hover:text-foreground",
                 )}
-                aria-current={active ? "page" : undefined}
                 aria-label={collapsed ? item.label : undefined}
+                {...getAriaCurrentPageProps(active)}
                 title={collapsed ? item.label : item.description}
                 data-testid={`analysis-sidebar-${item.key}`}
               >

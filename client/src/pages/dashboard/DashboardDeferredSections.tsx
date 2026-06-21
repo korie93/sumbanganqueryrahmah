@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import type {
@@ -125,7 +126,7 @@ function DashboardCollapsiblePanel({
             variant="outline"
             size="sm"
             aria-controls={contentId}
-            aria-expanded={open}
+            {...getAriaExpandedProps(open)}
             className="h-10 rounded-xl sm:h-9"
             data-testid={`button-toggle-${id}`}
           >

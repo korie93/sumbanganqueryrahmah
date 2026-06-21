@@ -34,8 +34,8 @@ test("form controls omit aria-invalid when the field is valid", () => {
   assert.doesNotMatch(loginSource, /"aria-invalid": "false"/);
 });
 
-test("pressed and decorative aria states avoid direct JSX expressions for Edge inspection", () => {
-  const directAriaExpression = /aria-(?:pressed|hidden)=\{[^}]+\}/;
+test("aria state tokens avoid direct JSX expressions for Edge inspection", () => {
+  const directAriaExpression = /aria-(?:pressed|hidden|expanded|selected|current|required)=\{[^}]+\}/;
   const offenders = [
     ...readTsxFiles(path.join(clientSrcDir, "components")),
     ...readTsxFiles(path.join(clientSrcDir, "pages")),
@@ -94,7 +94,8 @@ test("Floating AI trigger exposes dialog relationship and expanded state", () =>
   assert.match(triggerSource, /aria-controls=\{panelId\}/);
   assert.match(triggerSource, /aria-haspopup="dialog"/);
   assert.match(triggerSource, /aria-label=\{isOpen \? `Kecilkan panel/);
-  assert.match(triggerSource, /aria-expanded=\{isOpen\}/);
+  assert.match(triggerSource, /getAriaExpandedProps\(isOpen\)/);
+  assert.doesNotMatch(triggerSource, /aria-expanded=\{[^}]+\}/);
 });
 
 test("sidebar rail is an explicit non-submit control", () => {

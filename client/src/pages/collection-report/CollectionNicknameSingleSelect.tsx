@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 
 type CollectionNicknameSingleSelectProps = {
@@ -70,8 +71,8 @@ export function CollectionNicknameSingleSelect({
             variant="outline"
             className={cn("w-full justify-between", triggerClassName)}
             disabled={loading}
-            aria-expanded={open}
             aria-haspopup="dialog"
+            {...getAriaExpandedProps(open)}
           >
             <span className="truncate text-left">{selectedLabel}</span>
             <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />

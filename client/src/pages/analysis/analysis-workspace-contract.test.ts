@@ -35,7 +35,8 @@ test("analysis workspace mounts content through one active section switch", () =
 
 test("analysis workspace navigation remains accessible and bounded", () => {
   assert.match(navigationSource, /aria-label="Analysis sections"/);
-  assert.match(navigationSource, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(navigationSource, /getAriaCurrentPageProps\(active\)/);
+  assert.doesNotMatch(navigationSource, /aria-current=\{[^}]+\}/);
   assert.match(navigationSource, /Collapse analysis sidebar/);
   assert.doesNotMatch(navigationSource, /dangerouslySetInnerHTML/);
   assert.doesNotMatch(navigationSource, /setInterval|setTimeout|addEventListener/);

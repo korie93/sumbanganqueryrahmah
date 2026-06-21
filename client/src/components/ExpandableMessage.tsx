@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import { buildExpandableMessageParts } from "@/components/expandable-message-utils";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 
 type ExpandableMessageProps = {
@@ -43,8 +44,8 @@ export function ExpandableMessage({
           buttonClassName,
         )}
         aria-controls={messageId}
-        aria-expanded={expanded}
         aria-label={expanded ? "Ringkaskan mesej penuh" : "Papar mesej penuh"}
+        {...getAriaExpandedProps(expanded)}
         onClick={() => setExpanded((current) => !current)}
       >
         {expanded ? "Ringkaskan mesej" : "Papar mesej penuh"}

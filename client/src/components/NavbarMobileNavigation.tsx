@@ -8,6 +8,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { getAriaCurrentPageProps } from "@/lib/aria-state-props"
 
 type NavbarMobileNavigationProps = {
   open: boolean
@@ -55,7 +56,7 @@ function NavbarMobileNavigationImpl({
               <button
                 key={item.id}
                 type="button"
-                aria-current={active ? "page" : undefined}
+                {...getAriaCurrentPageProps(active)}
                 onClick={() => {
                   onNavigate(item.id)
                   onOpenChange(false)

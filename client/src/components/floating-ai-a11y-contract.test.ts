@@ -71,7 +71,8 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   const focusSource = readComponentSource("useFloatingAIFocusManagement.ts");
   const combinedSource = `${source}\n${panelSource}\n${triggerSource}`;
 
-  assert.match(triggerSource, /aria-expanded=\{isOpen\}/);
+  assert.match(triggerSource, /getAriaExpandedProps\(isOpen\)/);
+  assert.doesNotMatch(triggerSource, /aria-expanded=\{[^}]+\}/);
   assert.doesNotMatch(source, /"aria-expanded": isOpen \? "true" : "false"/);
   assert.match(panelSource, /role="dialog"/);
   assert.match(panelSource, /aria-labelledby=\{panelTitleId\}/);

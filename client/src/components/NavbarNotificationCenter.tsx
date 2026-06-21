@@ -27,6 +27,7 @@ import type {
   NotificationHistoryState,
   NotificationHistoryVariant,
 } from "@/hooks/use-notification-history";
+import { getAriaSelectedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 
 type NavbarNotificationCenterProps = NotificationHistoryState & {
@@ -320,7 +321,7 @@ export function NavbarNotificationCenter({
                   id={`notification-center-${variant}-filter-${filter.id}`}
                   role="tab"
                   aria-controls={filterPanelId}
-                  aria-selected={selected}
+                  {...getAriaSelectedProps(selected)}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     selected

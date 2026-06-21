@@ -3,6 +3,7 @@ import {
   COLLECTION_DAILY_LEAVE_TYPES,
   type CollectionDailyLeaveType,
 } from "@shared/collection-daily-status";
+import { getAriaRequiredProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 
 type LeaveTypeSelectProps = {
@@ -37,7 +38,7 @@ export function LeaveTypeSelect({
         "h-9 w-full rounded-lg border border-input bg-background px-2 text-xs text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
         className,
       )}
-      aria-required={required}
+      {...getAriaRequiredProps(required)}
     >
       <option value="">Pilih leave type</option>
       {COLLECTION_DAILY_LEAVE_TYPES.map((leaveType) => (

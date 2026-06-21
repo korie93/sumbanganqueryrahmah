@@ -3,6 +3,7 @@ import { Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingTriggerShell } from "@/components/FloatingAIShell";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
 
@@ -62,7 +63,7 @@ export function FloatingAITrigger({
         aria-controls={panelId}
         aria-haspopup="dialog"
         aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}
-        aria-expanded={isOpen}
+        {...getAriaExpandedProps(isOpen)}
         className={cn(
           "pointer-events-auto relative flex items-center justify-center rounded-full border transition-transform hover:scale-[1.03]",
           styles.floatingTriggerButton,

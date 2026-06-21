@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { getAriaCurrentStepProps } from "@/lib/aria-state-props";
 import { getImportPreviewRowKey } from "@/pages/import/import-preview-row-key";
 import { ImportColumnMappingPanel } from "@/pages/import/ImportColumnMappingPanel";
 import { formatImportUploadSize } from "@/pages/import/upload-limits";
@@ -209,7 +210,7 @@ export function SingleImportPanel({
                     }
                   }}
                   disabled={!available || loading}
-                  aria-current={active ? "step" : undefined}
+                  {...getAriaCurrentStepProps(active)}
                   className={`flex min-h-16 w-full min-w-0 items-center justify-center gap-2 px-2 py-3 text-left transition-colors sm:justify-start sm:px-4 ${
                     active
                       ? "bg-primary text-primary-foreground"

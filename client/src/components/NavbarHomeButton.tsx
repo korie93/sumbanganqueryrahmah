@@ -2,6 +2,7 @@ import { memo } from "react"
 import { Home } from "lucide-react"
 
 import { HOME_NAV_ITEM } from "@/app/navigation"
+import { getAriaCurrentPageProps } from "@/lib/aria-state-props"
 
 type NavbarHomeButtonProps = {
   active: boolean
@@ -23,7 +24,7 @@ function NavbarHomeButtonImpl({
       className={`nav-pill nav-home-pill !hidden lg:!inline-flex${active ? " nav-pill-active" : ""}`}
       data-testid="nav-home"
       aria-label="Utama"
-      aria-current={active ? "page" : undefined}
+      {...getAriaCurrentPageProps(active)}
     >
       <span className="nav-pill-icon">
         <Home className="h-4 w-4" aria-hidden="true" />

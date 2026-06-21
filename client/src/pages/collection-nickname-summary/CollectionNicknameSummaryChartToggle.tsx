@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { BarChart3, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { CollectionNicknameSummaryChart } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChart";
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 
@@ -39,8 +40,8 @@ export function CollectionNicknameSummaryChartToggle({
           type="button"
           variant={isChartVisible ? "outline" : "default"}
           className="shrink-0"
-          aria-expanded={isChartVisible}
           aria-controls={chartRegionId}
+          {...getAriaExpandedProps(isChartVisible)}
           onClick={() => setIsChartVisible((current) => !current)}
         >
           {isChartVisible ? (
