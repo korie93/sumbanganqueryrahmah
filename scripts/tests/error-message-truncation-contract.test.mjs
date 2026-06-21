@@ -24,7 +24,8 @@ test("long toast and login messages use the shared expandable disclosure", () =>
 
   assert.match(toasterSource, /<ExpandableMessage>\{description\}<\/ExpandableMessage>/);
   assert.match(loginSource, /<ExpandableMessage>\{error\}<\/ExpandableMessage>/);
-  assert.match(expandableSource, /aria-expanded=\{expanded\}/);
+  assert.match(expandableSource, /getAriaExpandedProps\(expanded\)/);
+  assert.doesNotMatch(expandableSource, /aria-expanded=\{[^}]+\}/);
   assert.match(expandableSource, /aria-controls=\{messageId\}/);
   assert.match(expandableSource, /Papar mesej penuh/);
 });
