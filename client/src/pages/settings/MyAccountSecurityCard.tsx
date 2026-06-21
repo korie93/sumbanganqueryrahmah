@@ -47,6 +47,15 @@ interface MyAccountSecurityCardProps {
   usernameSaving: boolean;
 }
 
+function getInvalidFieldProps(errorMessage: string | null, errorId: string) {
+  return errorMessage
+    ? {
+      "aria-describedby": errorId,
+      "aria-invalid": "true" as const,
+    }
+    : {};
+}
+
 export function MyAccountSecurityCard({
   confirmPasswordInput,
   confirmPasswordError,
@@ -107,6 +116,24 @@ export function MyAccountSecurityCard({
   const confirmPasswordErrorId = "my-account-confirm-password-error";
   const twoFactorPasswordErrorId = "my-account-two-factor-password-error";
   const twoFactorCodeErrorId = "my-account-two-factor-code-error";
+  const usernameValidationProps = getInvalidFieldProps(usernameError, usernameErrorId);
+  const currentPasswordValidationProps = getInvalidFieldProps(
+    currentPasswordError,
+    currentPasswordErrorId,
+  );
+  const newPasswordValidationProps = getInvalidFieldProps(newPasswordError, newPasswordErrorId);
+  const confirmPasswordValidationProps = getInvalidFieldProps(
+    confirmPasswordError,
+    confirmPasswordErrorId,
+  );
+  const twoFactorPasswordValidationProps = getInvalidFieldProps(
+    twoFactorPasswordError,
+    twoFactorPasswordErrorId,
+  );
+  const twoFactorCodeValidationProps = getInvalidFieldProps(
+    twoFactorCodeError,
+    twoFactorCodeErrorId,
+  );
 
   return (
     <Card className="border-border/60 bg-background/70">
@@ -165,8 +192,7 @@ export function MyAccountSecurityCard({
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
-                    aria-invalid={usernameError ? true : undefined}
-                    aria-describedby={usernameError ? usernameErrorId : undefined}
+                    {...usernameValidationProps}
                   />
                   {usernameError ? (
                     <p id={usernameErrorId} className="text-xs text-destructive" role="alert">
@@ -212,8 +238,7 @@ export function MyAccountSecurityCard({
                     onBlur={onCurrentPasswordBlur}
                     disabled={securityBusy}
                     autoComplete="current-password"
-                    aria-invalid={currentPasswordError ? true : undefined}
-                    aria-describedby={currentPasswordError ? currentPasswordErrorId : undefined}
+                    {...currentPasswordValidationProps}
                   />
                   {currentPasswordError ? (
                     <p id={currentPasswordErrorId} className="text-xs text-destructive" role="alert">
@@ -234,8 +259,7 @@ export function MyAccountSecurityCard({
                     onBlur={onNewPasswordBlur}
                     disabled={securityBusy}
                     autoComplete="new-password"
-                    aria-invalid={newPasswordError ? true : undefined}
-                    aria-describedby={newPasswordError ? newPasswordErrorId : undefined}
+                    {...newPasswordValidationProps}
                   />
                   {newPasswordError ? (
                     <p id={newPasswordErrorId} className="text-xs text-destructive" role="alert">
@@ -256,8 +280,7 @@ export function MyAccountSecurityCard({
                     onBlur={onConfirmPasswordBlur}
                     disabled={securityBusy}
                     autoComplete="new-password"
-                    aria-invalid={confirmPasswordError ? true : undefined}
-                    aria-describedby={confirmPasswordError ? confirmPasswordErrorId : undefined}
+                    {...confirmPasswordValidationProps}
                   />
                   {confirmPasswordError ? (
                     <p id={confirmPasswordErrorId} className="text-xs text-destructive" role="alert">
@@ -309,8 +332,7 @@ export function MyAccountSecurityCard({
                       onBlur={onTwoFactorPasswordBlur}
                       disabled={securityBusy}
                       autoComplete="current-password"
-                      aria-invalid={twoFactorPasswordError ? true : undefined}
-                      aria-describedby={twoFactorPasswordError ? twoFactorPasswordErrorId : undefined}
+                      {...twoFactorPasswordValidationProps}
                     />
                     {twoFactorPasswordError ? (
                       <p id={twoFactorPasswordErrorId} className="text-xs text-destructive" role="alert">
@@ -333,8 +355,7 @@ export function MyAccountSecurityCard({
                       disabled={securityBusy && !twoFactorPendingSetup}
                       pattern="[0-9]*"
                       autoComplete="one-time-code"
-                      aria-invalid={twoFactorCodeError ? true : undefined}
-                      aria-describedby={twoFactorCodeError ? twoFactorCodeErrorId : undefined}
+                      {...twoFactorCodeValidationProps}
                     />
                     {twoFactorCodeError ? (
                       <p id={twoFactorCodeErrorId} className="text-xs text-destructive" role="alert">

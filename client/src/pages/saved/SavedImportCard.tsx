@@ -51,6 +51,7 @@ export function SavedImportCard({
   const rowCount = typeof item.rowCount === "number" ? item.rowCount : null;
   const actionClassName = cn("w-full sm:w-auto", compact && "h-8 px-2 text-xs");
   const actionIconClassName = cn("h-4 w-4", compact ? "mr-1.5" : "mr-2");
+  const activePressedProps = isActive ? { "aria-pressed": "true" as const } : { "aria-pressed": "false" as const };
   const handleSelectionChange = (checked: boolean) => {
     onToggleSelected(item.id, checked);
     if (checked) {
@@ -91,7 +92,7 @@ export function SavedImportCard({
               type="button"
               className="flex min-w-0 flex-1 items-start gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => onInspect(item)}
-              aria-pressed={isActive}
+              {...activePressedProps}
               data-testid={`button-select-import-${item.id}`}
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
@@ -181,7 +182,7 @@ export function SavedImportCard({
             variant="outline"
             className={actionClassName}
             onClick={() => onInspect(item)}
-            aria-pressed={isActive}
+            {...activePressedProps}
             data-testid={`button-inspect-${item.id}`}
           >
             <Info className={actionIconClassName} />

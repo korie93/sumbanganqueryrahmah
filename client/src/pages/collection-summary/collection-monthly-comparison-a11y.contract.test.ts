@@ -31,7 +31,11 @@ test("login password visibility control has stable accessible names and pressed 
 test("monthly comparison quick range controls expose group and pressed semantics", () => {
   assert.match(setupCardSource, /role="group"\s*aria-label="Quick monthly comparison ranges"/s);
   assert.match(setupCardSource, /aria-label=\{`Apply quick range \$\{preset\.label\}`\}/);
-  assert.match(setupCardSource, /aria-pressed=\{active\}/);
+  assert.match(setupCardSource, /const pressedProps = active/);
+  assert.match(setupCardSource, /"aria-pressed": "true" as const/);
+  assert.match(setupCardSource, /"aria-pressed": "false" as const/);
+  assert.match(setupCardSource, /\{\.\.\.pressedProps\}/);
+  assert.doesNotMatch(setupCardSource, /aria-pressed=\{active\}/);
 });
 
 test("collection month field keeps its label and format hint associated with input", () => {

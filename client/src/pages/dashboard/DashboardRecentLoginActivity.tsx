@@ -420,6 +420,9 @@ function DashboardRecentLoginActivityImpl({
               >
                 {RECENT_LOGIN_FILTER_OPTIONS.map((option) => {
                   const active = selectedFilter === option.id;
+                  const pressedProps = active
+                    ? { "aria-pressed": "true" as const }
+                    : { "aria-pressed": "false" as const };
                   return (
                     <Button
                       key={option.id}
@@ -428,7 +431,7 @@ function DashboardRecentLoginActivityImpl({
                       size="sm"
                       className="h-8 justify-center rounded-lg px-2 text-xs"
                       onClick={() => onFilterChange(option.id)}
-                      aria-pressed={active ? "true" : "false"}
+                      {...pressedProps}
                       aria-label={`Show ${option.label.toLowerCase()} login activity, ${filterCounts[option.id]} records`}
                       data-testid={`button-login-activity-filter-${option.id}`}
                     >

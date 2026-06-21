@@ -26,6 +26,15 @@ interface CreateClosedAccountSectionProps {
   onCreateUsernameInputChange: (value: string) => void;
 }
 
+function getInvalidFieldProps(errorMessage: string | undefined, errorId: string) {
+  return errorMessage
+    ? {
+      "aria-describedby": errorId,
+      "aria-invalid": "true" as const,
+    }
+    : {};
+}
+
 export function CreateClosedAccountSection({
   createEmailInput,
   createFieldErrors,
@@ -59,6 +68,14 @@ export function CreateClosedAccountSection({
   const emailDescription = createFieldErrors.createEmailInput
     ? `${emailHelpId} ${emailErrorId}`
     : emailHelpId;
+  const usernameValidationProps = getInvalidFieldProps(
+    createFieldErrors.createUsernameInput,
+    usernameDescription,
+  );
+  const emailValidationProps = getInvalidFieldProps(
+    createFieldErrors.createEmailInput,
+    emailDescription,
+  );
   const RoleGuidanceIcon = roleGuidance.tone === "warning" ? AlertTriangle : Info;
 
   return (
@@ -105,8 +122,8 @@ export function CreateClosedAccountSection({
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              aria-invalid={createFieldErrors.createUsernameInput ? true : undefined}
               aria-describedby={usernameDescription}
+              {...usernameValidationProps}
             />
             <p id={usernameHelpId} className="text-xs text-muted-foreground">
               3-32 characters: letters, numbers, dot, underscore, or hyphen.
@@ -135,8 +152,8 @@ export function CreateClosedAccountSection({
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              aria-invalid={createFieldErrors.createEmailInput ? true : undefined}
               aria-describedby={emailDescription}
+              {...emailValidationProps}
             />
             <p id={emailHelpId} className="text-xs text-muted-foreground">
               Activation email is required before first login.

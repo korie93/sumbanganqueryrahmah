@@ -1,13 +1,28 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientSrcDir = path.resolve(__dirname, "../..");
 
 function readSource(relativePath: string) {
   return readFileSync(path.resolve(__dirname, relativePath), "utf8");
+}
+
+function readTsxFiles(rootDir: string): Array<{ filePath: string; source: string }> {
+  return readdirSync(rootDir).flatMap((entry) => {
+    const entryPath = path.join(rootDir, entry);
+    const stats = statSync(entryPath);
+    if (stats.isDirectory()) {
+      return readTsxFiles(entryPath);
+    }
+    if (!entryPath.endsWith(".tsx")) {
+      return [];
+    }
+    return [{ filePath: entryPath, source: readFileSync(entryPath, "utf8") }];
+  });
 }
 
 test("form controls omit aria-invalid when the field is valid", () => {
@@ -17,6 +32,19 @@ test("form controls omit aria-invalid when the field is valid", () => {
   assert.doesNotMatch(formSource, /aria-invalid="false"/);
   assert.match(formSource, /aria-invalid=\{error \? true : undefined\}/);
   assert.doesNotMatch(loginSource, /"aria-invalid": "false"/);
+});
+
+test("pressed and decorative aria states avoid direct JSX expressions for Edge inspection", () => {
+  const directAriaExpression = /aria-(?:pressed|hidden)=\{[^}]+\}/;
+  const offenders = [
+    ...readTsxFiles(path.join(clientSrcDir, "components")),
+    ...readTsxFiles(path.join(clientSrcDir, "pages")),
+  ].flatMap(({ filePath, source }) => {
+    const match = source.match(directAriaExpression);
+    return match ? [`${path.relative(clientSrcDir, filePath)}: ${match[0]}`] : [];
+  });
+
+  assert.deepEqual(offenders, []);
 });
 
 test("table headers default to column scope while allowing overrides", () => {

@@ -196,12 +196,15 @@ export function CollectionMonthlyComparisonSetupCard({
         <span className="text-xs font-medium text-muted-foreground">Quick range</span>
         {rangePresets.map((preset) => {
           const active = preset.startMonth === startMonth && preset.endMonth === endMonth;
+          const pressedProps = active
+            ? { "aria-pressed": "true" as const }
+            : { "aria-pressed": "false" as const };
           return (
             <button
               key={preset.id}
               type="button"
               aria-label={`Apply quick range ${preset.label}`}
-              aria-pressed={active}
+              {...pressedProps}
               className={
                 active
                   ? "inline-flex h-8 items-center justify-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-medium text-primary"

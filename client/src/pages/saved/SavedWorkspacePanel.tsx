@@ -55,12 +55,15 @@ export function SavedWorkspacePanel({
         {workspaceItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
+          const pressedProps = isActive
+            ? { "aria-pressed": "true" as const }
+            : { "aria-pressed": "false" as const };
           return (
             <Button
               key={item.id}
               type="button"
               variant="ghost"
-              aria-pressed={isActive}
+              {...pressedProps}
               className={cn(
                 "h-auto justify-start gap-2 rounded-lg border px-3 py-2 text-left",
                 isActive

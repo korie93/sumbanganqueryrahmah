@@ -264,21 +264,27 @@ export function DashboardTrendPeriodSelector({
       role="group"
       aria-label="Select trend period"
     >
-      {TREND_DAY_OPTIONS.map((days) => (
-        <Button
-          key={days}
-          type="button"
-          variant={trendDays === days ? "default" : "ghost"}
-          size="sm"
-          className="h-8 rounded-lg px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
-          onClick={() => onTrendDaysChange(days)}
-          aria-pressed={trendDays === days ? "true" : "false"}
-          aria-label={`Show ${days} day trends`}
-          data-testid={`button-trend-${days}d`}
-        >
-          {days}d
-        </Button>
-      ))}
+      {TREND_DAY_OPTIONS.map((days) => {
+        const pressedProps = trendDays === days
+          ? { "aria-pressed": "true" as const }
+          : { "aria-pressed": "false" as const };
+
+        return (
+          <Button
+            key={days}
+            type="button"
+            variant={trendDays === days ? "default" : "ghost"}
+            size="sm"
+            className="h-8 rounded-lg px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
+            onClick={() => onTrendDaysChange(days)}
+            {...pressedProps}
+            aria-label={`Show ${days} day trends`}
+            data-testid={`button-trend-${days}d`}
+          >
+            {days}d
+          </Button>
+        );
+      })}
     </div>
   );
 }
