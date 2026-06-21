@@ -1,3 +1,5 @@
+@import "../styles/tokens/colors/_state-pages.css";
+
 .maintenance-page {
   background: var(--maintenance-layout-bg);
   color: var(--maintenance-title-text);

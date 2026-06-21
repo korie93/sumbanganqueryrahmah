@@ -1,3 +1,5 @@
+@import "../styles/tokens/colors/_state-pages.css";
+
 .banned-page {
   background: var(--banned-layout-bg);
 }
