@@ -8,6 +8,12 @@ import {
   getImportJob,
   resumeImportJob,
 } from "@/lib/api";
+import {
+  getBrowserSessionStorage,
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
 import { waitForImportJobCompletion } from "@/pages/import/import-background-job";
@@ -39,23 +45,16 @@ type UseSingleImportStateOptions = {
 const ACTIVE_IMPORT_JOB_STORAGE_KEY = "sqr-active-import-job-id";
 
 function persistActiveImportJobId(jobId: string | null): void {
-  try {
-    if (jobId) {
-      window.sessionStorage.setItem(ACTIVE_IMPORT_JOB_STORAGE_KEY, jobId);
-    } else {
-      window.sessionStorage.removeItem(ACTIVE_IMPORT_JOB_STORAGE_KEY);
-    }
-  } catch {
-    // Storage can be unavailable in hardened/private browser contexts.
+  const storage = getBrowserSessionStorage();
+  if (jobId) {
+    safeSetStorageItem(storage, ACTIVE_IMPORT_JOB_STORAGE_KEY, jobId);
+    return;
   }
+  safeRemoveStorageItem(storage, ACTIVE_IMPORT_JOB_STORAGE_KEY);
 }
 
 function readActiveImportJobId(): string | null {
-  try {
-    return window.sessionStorage.getItem(ACTIVE_IMPORT_JOB_STORAGE_KEY);
-  } catch {
-    return null;
-  }
+  return safeGetStorageItem(getBrowserSessionStorage(), ACTIVE_IMPORT_JOB_STORAGE_KEY);
 }
 
 function buildIdentityColumnMapping(headers: string[]): ImportColumnMappingEntry[] {
