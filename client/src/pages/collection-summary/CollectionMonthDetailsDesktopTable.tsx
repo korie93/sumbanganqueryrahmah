@@ -15,7 +15,7 @@ type CollectionMonthDetailsDesktopTableProps = Pick<
   "loading" | "records" | "page" | "pageSize" | "toDisplayDate"
 >;
 
-const stickyHeaderClassName = "sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur";
+const stickyHeaderClassName = "sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur";
 
 export function CollectionMonthDetailsDesktopTable({
   loading,

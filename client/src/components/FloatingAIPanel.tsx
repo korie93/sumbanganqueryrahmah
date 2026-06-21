@@ -82,7 +82,7 @@ export function FloatingAIPanel({
         ref={panelSurfaceRef}
         id={panelId}
         className={cn(
-          "flex h-full w-full flex-col overflow-hidden border supports-[backdrop-filter]:backdrop-blur-sm",
+          "flex h-full w-full flex-col overflow-hidden border sqr-backdrop-blur-sm",
           styles.floatingPanelSurface,
           shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
           layoutState.panel.mode === "fullscreen"
@@ -117,7 +117,7 @@ export function FloatingAIPanel({
             "flex shrink-0 items-center justify-between border-b",
             styles.floatingPanelHeader,
             isMobile
-              ? cn(styles.floatingPanelHeaderMobile, "supports-[backdrop-filter]:backdrop-blur-xl")
+              ? cn(styles.floatingPanelHeaderMobile, "sqr-backdrop-blur-xl")
               : styles.floatingPanelHeaderDesktop,
             isMobile && layoutState.panel.mode === "fullscreen"
               ? "min-h-16 px-4"

@@ -64,7 +64,7 @@ function SideTabNavigationFallback({
       {mobileOpen ? (
         <>
           <div
-            className="fixed inset-0 z-[var(--z-mobile-nav-overlay)] bg-black/45 backdrop-blur-[1px] lg:hidden"
+            className="fixed inset-0 z-[var(--z-mobile-nav-overlay)] bg-black/45 sqr-backdrop-blur-hairline lg:hidden"
             aria-hidden="true"
           />
           <aside

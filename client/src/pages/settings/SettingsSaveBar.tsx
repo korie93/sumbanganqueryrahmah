@@ -25,8 +25,8 @@ export function SettingsSaveBar({
   return (
     <Card
       className={cn(
-        "border-primary/40 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:shadow-sm sm:backdrop-blur-0",
-        keyboardOpen ? "static shadow-sm backdrop-blur-0" : "sticky bottom-0 z-[var(--z-sticky-content)]",
+        "border-primary/40 bg-background/95 shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:shadow-sm sqr-sm-backdrop-blur-none",
+        keyboardOpen ? "static shadow-sm sqr-backdrop-blur-none" : "sticky bottom-0 z-[var(--z-sticky-content)]",
       )}
       data-floating-ai-avoid="true"
     >

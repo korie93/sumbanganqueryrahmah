@@ -74,7 +74,7 @@ export function AIConversationCard({
   );
 
   return (
-    <div className="rounded-2xl border border-border bg-background/70 p-4 backdrop-blur">
+    <div className="rounded-2xl border border-border bg-background/70 p-4 sqr-backdrop-blur">
       <div className="space-y-4">
         {!aiEnabled ? (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">

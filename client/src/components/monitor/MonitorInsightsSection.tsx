@@ -65,7 +65,7 @@ function MonitorInsightsSubsectionToggle({
   );
 
   return (
-    <Card className="border-border/60 bg-background/35 supports-[backdrop-filter]:backdrop-blur-sm">
+    <Card className="border-border/60 bg-background/35 sqr-backdrop-blur-sm">
       <CardContent className="p-4">
         {open ? (
           <button
@@ -148,7 +148,7 @@ function MonitorInsightsSectionImpl({
       className={
         embedded
           ? "space-y-4"
-          : "space-y-4 rounded-2xl border border-border/60 bg-background/30 p-4 supports-[backdrop-filter]:backdrop-blur-sm"
+          : "space-y-4 rounded-2xl border border-border/60 bg-background/30 p-4 sqr-backdrop-blur-sm"
       }
     >
       {embedded ? null : (

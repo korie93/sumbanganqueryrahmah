@@ -41,7 +41,7 @@ export function HomeMobileLayout({
                 Move between the modules you use most without digging through the full desktop navigation.
               </p>
             </div>
-            <span className="rounded-full border border-white/18 bg-white/12 p-3 text-white shadow-sm backdrop-blur">
+            <span className="rounded-full border border-white/18 bg-white/12 p-3 text-white shadow-sm sqr-backdrop-blur">
               <Sparkles className="h-5 w-5" aria-hidden="true" />
             </span>
           </div>

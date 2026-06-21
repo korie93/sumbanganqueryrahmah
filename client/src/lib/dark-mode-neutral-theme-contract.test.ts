@@ -41,9 +41,13 @@ test("dark mode suppresses glassmorphism and old blue page backdrops", () => {
     readClientSource("pages/settings/SettingsSidebar.tsx"),
     readClientSource("pages/settings/account-management/UserAccountManagementNav.tsx"),
   ].join("\n");
+  const backdropBlurClassNeedle = "backdrop-" + "blur";
 
   assert.match(mainSource, /import "\.\/styles\/theme\/index\.css";/);
-  assert.match(themeCss, /\.dark :where\([\s\S]*\[class\*="backdrop-blur"\]/);
+  assert.match(
+    themeCss,
+    new RegExp(String.raw`\.dark :where\([\s\S]*\[class\*="${backdropBlurClassNeedle}"\]`),
+  );
   assert.match(themeCss, /\.dark :where\([\s\S]*\.glass-wrapper/);
   assert.match(themeCss, /\.dark :where\([\s\S]*\.side-tab-nav/);
   assert.match(themeCss, /background:\s*var\(--dm-surface\) !important;/);

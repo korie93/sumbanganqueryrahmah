@@ -3,3 +3,55 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.sqr-backdrop-blur-none {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .sqr-backdrop-blur-hairline {
+    --sqr-backdrop-blur-size: 1px;
+  }
+
+  .sqr-backdrop-blur-sm {
+    --sqr-backdrop-blur-size: 4px;
+  }
+
+  .sqr-backdrop-blur {
+    --sqr-backdrop-blur-size: 8px;
+  }
+
+  .sqr-backdrop-blur-md {
+    --sqr-backdrop-blur-size: 12px;
+  }
+
+  .sqr-backdrop-blur-xl {
+    --sqr-backdrop-blur-size: 24px;
+  }
+
+  :where(
+    .sqr-backdrop-blur-hairline,
+    .sqr-backdrop-blur-sm,
+    .sqr-backdrop-blur,
+    .sqr-backdrop-blur-md,
+    .sqr-backdrop-blur-xl
+  ) {
+    -webkit-backdrop-filter: blur(var(--sqr-backdrop-blur-size));
+    backdrop-filter: blur(var(--sqr-backdrop-blur-size));
+  }
+}
+
+@media (min-width: 640px) {
+  .sqr-sm-backdrop-blur-none {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .sqr-md-backdrop-blur-none {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

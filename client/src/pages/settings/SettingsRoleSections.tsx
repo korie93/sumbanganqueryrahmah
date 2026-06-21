@@ -290,7 +290,7 @@ export function SettingsRoleSections({
 
   return (
     <section className="space-y-4" aria-label="Role and permission manager">
-      <Card className="sticky top-3 z-20 border-border/70 bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <Card className="sticky top-3 z-20 border-border/70 bg-background/95 shadow-sm sqr-backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <CardContent className="p-3 sm:p-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0 space-y-1">

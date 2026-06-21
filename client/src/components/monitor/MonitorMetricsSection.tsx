@@ -129,7 +129,7 @@ function MonitorMetricsSectionImpl({ metricGroups, embedded = false }: MonitorMe
         {pagedMetricGroups.items.map((group) => (
           <Card
             key={group.title}
-            className="border-border/60 bg-background/35 supports-[backdrop-filter]:backdrop-blur-sm"
+            className="border-border/60 bg-background/35 sqr-backdrop-blur-sm"
           >
             <CardContent className="space-y-3 p-4">
               <MonitorMetricGroupToggle

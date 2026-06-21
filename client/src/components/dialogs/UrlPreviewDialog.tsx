@@ -83,7 +83,7 @@ export function UrlPreviewDialog({
 
         <DialogFooter
           className={isMobile
-            ? "url-preview-dialog-footer-mobile border-t border-border/60 bg-background/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+            ? "url-preview-dialog-footer-mobile border-t border-border/60 bg-background/95 px-4 py-3 shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85"
             : "flex flex-row items-center justify-end gap-2"
           }
         >
