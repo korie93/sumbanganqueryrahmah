@@ -12,6 +12,7 @@ import {
   type FieldValues,
 } from "react-hook-form"
 
+import { getAriaInvalidProps } from "@/lib/aria-state-props"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 
@@ -125,7 +126,7 @@ const FormControl = React.forwardRef<
     <Slot
       ref={ref}
       id={formItemId}
-      aria-invalid={error ? true : undefined}
+      {...getAriaInvalidProps(Boolean(error))}
       {...{ "aria-describedby": error ? `${formDescriptionId} ${formMessageId}` : formDescriptionId }}
       {...props}
     />

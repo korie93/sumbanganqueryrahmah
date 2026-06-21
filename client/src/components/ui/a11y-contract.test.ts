@@ -30,12 +30,13 @@ test("form controls omit aria-invalid when the field is valid", () => {
   const loginSource = readSource("../../pages/Login.tsx");
 
   assert.doesNotMatch(formSource, /aria-invalid="false"/);
-  assert.match(formSource, /aria-invalid=\{error \? true : undefined\}/);
+  assert.match(formSource, /getAriaInvalidProps\(Boolean\(error\)\)/);
+  assert.doesNotMatch(formSource, /aria-invalid=\{[^}]+\}/);
   assert.doesNotMatch(loginSource, /"aria-invalid": "false"/);
 });
 
 test("aria state tokens avoid direct JSX expressions for Edge inspection", () => {
-  const directAriaExpression = /aria-(?:pressed|hidden|expanded|selected|current|required)=\{[^}]+\}/;
+  const directAriaExpression = /aria-(?:pressed|hidden|expanded|selected|current|required|invalid)=\{[^}]+\}/;
   const offenders = [
     ...readTsxFiles(path.join(clientSrcDir, "components")),
     ...readTsxFiles(path.join(clientSrcDir, "pages")),

@@ -3,6 +3,7 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar, type CalendarProps } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ export function DatePickerField({
   const selectedDate = getSelectedDate(value);
   const triggerLabel = ariaLabel ?? placeholder;
   const triggerAriaLabelProps = triggerLabel ? { "aria-label": triggerLabel } : {};
+  const triggerInvalidProps = getAriaInvalidProps(ariaInvalid);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -78,8 +80,8 @@ export function DatePickerField({
           disabled={disabled}
           onBlur={onBlur}
           aria-describedby={ariaDescribedBy}
-          aria-invalid={ariaInvalid}
           {...triggerAriaLabelProps}
+          {...triggerInvalidProps}
           title={triggerLabel}
           className={cn(
             "h-10 w-full justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",
