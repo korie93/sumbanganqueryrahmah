@@ -62,6 +62,7 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Tinggi/);
   assert.match(markup, /Sederhana/);
   assert.match(markup, /Rendah/);
+  assert.doesNotMatch(markup, /(?:\u00e2|\ufffd)/);
   assert.match(markup, /Eksport/);
   assert.match(markup, /Nickname summary detailed ranking/);
   assert.match(markup, /Nickname summary compact ranking/);
