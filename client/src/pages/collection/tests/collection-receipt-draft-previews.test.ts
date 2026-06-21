@@ -47,3 +47,13 @@ test("collection receipt draft preview images reserve decoded thumbnail dimensio
   assert.match(cardSource, /aspectRatio: previewAspectRatio/);
   assert.match(cardSource, /decoding="async"/);
 });
+
+test("collection receipt draft preview creation falls back when thumbnail decoding fails", () => {
+  const previewSource = readFileSync(
+    path.join(collectionSourceDir, "useCollectionReceiptDraftPreviews.ts"),
+    "utf8",
+  );
+
+  assert.match(previewSource, /try\s*\{\s*thumbnail = await createBitmapThumbnail\(file\);/s);
+  assert.match(previewSource, /catch\s*\{\s*thumbnail = createEmptyCollectionReceiptDraftThumbnail\(\);/s);
+});

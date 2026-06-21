@@ -190,7 +190,11 @@ async function createCollectionReceiptDraftPreview(
 
   let thumbnail = createEmptyCollectionReceiptDraftThumbnail();
   if (kind === "image" && typeof document !== "undefined") {
-    thumbnail = await createBitmapThumbnail(file);
+    try {
+      thumbnail = await createBitmapThumbnail(file);
+    } catch {
+      thumbnail = createEmptyCollectionReceiptDraftThumbnail();
+    }
   }
 
   return {
