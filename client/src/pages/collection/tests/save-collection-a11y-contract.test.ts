@@ -8,10 +8,14 @@ const saveCollectionPageSource = readFileSync(
   "utf8",
 );
 
-test("save collection batch select uses explicit invalid props for Edge a11y inspection", () => {
-  assert.match(saveCollectionPageSource, /const batchValidationProps = state\.fieldErrors\.batch/);
+test("save collection fields use explicit invalid props for Edge a11y inspection", () => {
+  assert.match(saveCollectionPageSource, /function getInvalidFieldProps/);
+  assert.match(saveCollectionPageSource, /const batchValidationProps = getInvalidFieldProps/);
+  assert.match(saveCollectionPageSource, /const paymentDateValidationProps = getInvalidFieldProps/);
   assert.match(saveCollectionPageSource, /"aria-invalid": "true" as const/);
   assert.match(saveCollectionPageSource, /<select[\s\S]*\{\.\.\.batchValidationProps\}/);
+  assert.match(saveCollectionPageSource, /<DatePickerField[\s\S]*\{\.\.\.paymentDateValidationProps\}/);
+  assert.doesNotMatch(saveCollectionPageSource, /aria-invalid=\{/);
 
   const batchSelectMatch = saveCollectionPageSource.match(/<select[\s\S]*?<\/select>/);
   assert.ok(batchSelectMatch);

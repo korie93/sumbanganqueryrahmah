@@ -24,6 +24,15 @@ type SaveCollectionPageProps = {
   onSaved?: () => void;
 };
 
+function getInvalidFieldProps(errorMessage: string | undefined, errorId: string) {
+  return errorMessage
+    ? {
+      "aria-describedby": errorId,
+      "aria-invalid": "true" as const,
+    }
+    : {};
+}
+
 function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
   const mutationFeedback = useMutationFeedback();
   const isMobile = useIsMobile();
@@ -49,12 +58,28 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const amountErrorId = `${amountInputId}-error`;
   const paymentDateError = state.fieldErrors.paymentDate
     || (state.isPaymentDateInFuture ? "Payment Date cannot be in the future." : "");
-  const batchValidationProps = state.fieldErrors.batch
-    ? {
-      "aria-describedby": batchErrorId,
-      "aria-invalid": "true" as const,
-    }
-    : {};
+  const customerNameValidationProps = getInvalidFieldProps(
+    state.fieldErrors.customerName,
+    customerNameErrorId,
+  );
+  const icNumberValidationProps = getInvalidFieldProps(
+    state.fieldErrors.icNumber,
+    icNumberErrorId,
+  );
+  const customerPhoneValidationProps = getInvalidFieldProps(
+    state.fieldErrors.customerPhone,
+    customerPhoneErrorId,
+  );
+  const accountNumberValidationProps = getInvalidFieldProps(
+    state.fieldErrors.accountNumber,
+    accountNumberErrorId,
+  );
+  const batchValidationProps = getInvalidFieldProps(state.fieldErrors.batch, batchErrorId);
+  const paymentDateValidationProps = getInvalidFieldProps(
+    paymentDateError,
+    paymentDateErrorId,
+  );
+  const amountValidationProps = getInvalidFieldProps(state.fieldErrors.amount, amountErrorId);
 
   usePageShortcuts([
     {
@@ -80,8 +105,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("customerName")}
           disabled={state.submitting}
           autoComplete="name"
-          aria-invalid={state.fieldErrors.customerName ? true : undefined}
-          aria-describedby={state.fieldErrors.customerName ? customerNameErrorId : undefined}
+          {...customerNameValidationProps}
         />
         {state.fieldErrors.customerName ? (
           <p id={customerNameErrorId} className="text-xs text-destructive" role="alert">
@@ -100,8 +124,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           inputMode="numeric"
           autoComplete="off"
-          aria-invalid={state.fieldErrors.icNumber ? true : undefined}
-          aria-describedby={state.fieldErrors.icNumber ? icNumberErrorId : undefined}
+          {...icNumberValidationProps}
         />
         {state.fieldErrors.icNumber ? (
           <p id={icNumberErrorId} className="text-xs text-destructive" role="alert">
@@ -122,8 +145,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           placeholder="+60 12-345 6789"
           inputMode="tel"
           autoComplete="tel"
-          aria-invalid={state.fieldErrors.customerPhone ? true : undefined}
-          aria-describedby={state.fieldErrors.customerPhone ? customerPhoneErrorId : undefined}
+          {...customerPhoneValidationProps}
         />
         {state.fieldErrors.customerPhone ? (
           <p id={customerPhoneErrorId} className="text-xs text-destructive" role="alert">
@@ -146,8 +168,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("accountNumber")}
           disabled={state.submitting}
           autoComplete="off"
-          aria-invalid={state.fieldErrors.accountNumber ? true : undefined}
-          aria-describedby={state.fieldErrors.accountNumber ? accountNumberErrorId : undefined}
+          {...accountNumberValidationProps}
         />
         {state.fieldErrors.accountNumber ? (
           <p id={accountNumberErrorId} className="text-xs text-destructive" role="alert">
@@ -193,8 +214,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           placeholder="Select payment date..."
           ariaLabel="Payment Date"
-          aria-invalid={paymentDateError ? true : undefined}
-          aria-describedby={paymentDateError ? paymentDateErrorId : undefined}
+          {...paymentDateValidationProps}
           buttonTestId="save-collection-payment-date"
           disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}
         />
@@ -217,8 +237,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("amount")}
           disabled={state.submitting}
           inputMode="decimal"
-          aria-invalid={state.fieldErrors.amount ? true : undefined}
-          aria-describedby={state.fieldErrors.amount ? amountErrorId : undefined}
+          {...amountValidationProps}
         />
         {state.fieldErrors.amount ? (
           <p id={amountErrorId} className="text-xs text-destructive" role="alert">
