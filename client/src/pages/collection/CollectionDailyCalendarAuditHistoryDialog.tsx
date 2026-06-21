@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { formatOperationalDateTime } from "@/lib/date-format";
 import { buildCollectionDailyCalendarAuditHistoryItems } from "@/pages/collection/collection-daily-calendar-audit-history-utils";
+import "./CollectionDailyCalendarAuditHistoryDialog.css";
 
 type CollectionDailyCalendarAuditHistoryDialogProps = {
   day: CollectionDailyOverviewDay;

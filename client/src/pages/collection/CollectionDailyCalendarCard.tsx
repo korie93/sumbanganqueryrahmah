@@ -1,10 +1,10 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
 import { CollectionDailyCalendarAttentionSummary } from "@/pages/collection/CollectionDailyCalendarAttentionSummary";
 import { CollectionDailyCalendarBulkToolbar } from "@/pages/collection/CollectionDailyCalendarBulkToolbar";
-import { CollectionDailyCalendarEditDialog } from "@/pages/collection/CollectionDailyCalendarEditDialog";
 import { CollectionDailyCalendarChangeReview } from "@/pages/collection/CollectionDailyCalendarChangeReview";
 import { CollectionDailyCalendarConflictReport } from "@/pages/collection/CollectionDailyCalendarConflictReport";
 import { CollectionDailyCalendarLegend } from "@/pages/collection/CollectionDailyCalendarLegend";
@@ -41,6 +41,11 @@ export type CollectionDailyCalendarCardProps = {
 const CollectionDailyDesktopCalendarGrid = lazy(() =>
   import("@/pages/collection/CollectionDailyDesktopCalendarGrid").then((module) => ({
     default: module.CollectionDailyDesktopCalendarGrid,
+  })),
+);
+const CollectionDailyCalendarEditDialog = lazy(() =>
+  import("@/pages/collection/CollectionDailyCalendarEditDialog").then((module) => ({
+    default: module.CollectionDailyCalendarEditDialog,
   })),
 );
 
@@ -286,25 +291,27 @@ export function CollectionDailyCalendarCard({
               </div>
             )}
 
-            {canManage ? (
-              <CollectionDailyCalendarEditDialog
-                open={editDialogOpen}
-                day={editingDay}
-                editableDay={editingEditableDay}
-                isDirty={
-                  editingEditableDay ? dirtyCalendarDayNumbers.has(editingEditableDay.day) : false
-                }
-                savingCalendar={savingCalendar}
-                username={overview.username}
-                year={overview.month.year}
-                month={overview.month.month}
-                onOpenChange={handleEditDialogOpenChange}
-                onSaveCalendar={onSaveCalendar}
-                onChange={(patch) => {
-                  if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);
-                }}
-                onViewDetails={onSelectDate}
-              />
+            {editDialogOpen ? (
+              <Suspense fallback={<LazyDialogFallback label="Loading daily status editor dialog..." />}>
+                <CollectionDailyCalendarEditDialog
+                  open={editDialogOpen}
+                  day={editingDay}
+                  editableDay={editingEditableDay}
+                  isDirty={
+                    editingEditableDay ? dirtyCalendarDayNumbers.has(editingEditableDay.day) : false
+                  }
+                  savingCalendar={savingCalendar}
+                  username={overview.username}
+                  year={overview.month.year}
+                  month={overview.month.month}
+                  onOpenChange={handleEditDialogOpenChange}
+                  onSaveCalendar={onSaveCalendar}
+                  onChange={(patch) => {
+                    if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);
+                  }}
+                  onViewDetails={onSelectDate}
+                />
+              </Suspense>
             ) : null}
           </div>
         )}
