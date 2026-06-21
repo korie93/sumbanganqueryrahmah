@@ -49,6 +49,12 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const amountErrorId = `${amountInputId}-error`;
   const paymentDateError = state.fieldErrors.paymentDate
     || (state.isPaymentDateInFuture ? "Payment Date cannot be in the future." : "");
+  const batchValidationProps = state.fieldErrors.batch
+    ? {
+      "aria-describedby": batchErrorId,
+      "aria-invalid": "true" as const,
+    }
+    : {};
 
   usePageShortcuts([
     {
@@ -159,8 +165,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("batch")}
           disabled={state.submitting}
           aria-label="Batch"
-          aria-invalid={state.fieldErrors.batch ? true : undefined}
-          aria-describedby={state.fieldErrors.batch ? batchErrorId : undefined}
+          {...batchValidationProps}
           className={cn(
             "w-full border border-input bg-background px-3 text-sm",
             isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md",
