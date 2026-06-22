@@ -42,6 +42,7 @@ test("collection month field keeps its label and format hint associated with inp
   assert.match(monthFieldSource, /<label htmlFor=\{id\}/);
   assert.match(monthFieldSource, /const helpId = `\$\{id\}-format`;/);
   assert.match(monthFieldSource, /aria-describedby=\{helpId\}/);
-  assert.match(monthFieldSource, /"aria-invalid": true/);
+  assert.match(monthFieldSource, /getAriaInvalidProps\(showInvalidState\)/);
+  assert.doesNotMatch(monthFieldSource, /"aria-invalid": true/);
   assert.match(monthFieldSource, /id=\{helpId\}/);
 });

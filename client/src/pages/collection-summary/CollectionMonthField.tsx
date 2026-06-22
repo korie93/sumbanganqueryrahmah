@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 
 import { normalizeCollectionMonthInputValue } from "./collection-monthly-comparison-utils";
@@ -21,7 +22,7 @@ export function CollectionMonthField({
   const helpId = `${id}-format`;
   const normalizedDraftValue = normalizeCollectionMonthInputValue(draftValue);
   const showInvalidState = draftValue.trim().length > 0 && !normalizedDraftValue;
-  const invalidAriaAttributes = showInvalidState ? { "aria-invalid": true } : {};
+  const invalidAriaAttributes = getAriaInvalidProps(showInvalidState);
 
   useEffect(() => {
     setDraftValue(value);
