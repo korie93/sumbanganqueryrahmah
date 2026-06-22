@@ -114,7 +114,7 @@ const BreadcrumbEllipsis = ({
     className={cn("flex h-11 w-11 items-center justify-center sm:h-9 sm:w-9", className)}
     {...props}
   >
-    <MoreHorizontal className="h-4 w-4" />
+    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
     <span className="sr-only">More</span>
   </span>
 )

@@ -101,6 +101,40 @@ test("checkbox checkmark icon is decorative only", () => {
   assert.match(menubarSource, /<Check className="h-4 w-4" aria-hidden="true" \/>/);
 });
 
+test("shared primitive visual indicators are decorative only", () => {
+  const accordionSource = readSource("accordion.tsx");
+  const breadcrumbSource = readSource("breadcrumb.tsx");
+  const calendarSource = readSource("calendar.tsx");
+  const commandSource = readSource("command.tsx");
+  const dialogSource = readSource("dialog.tsx");
+  const sheetSource = readSource("sheet.tsx");
+  const radioGroupSource = readSource("radio-group.tsx");
+  const resizableSource = readSource("resizable.tsx");
+
+  assert.match(accordionSource, /<ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" aria-hidden="true" \/>/);
+  assert.match(breadcrumbSource, /<MoreHorizontal className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(calendarSource, /<ChevronLeft className=\{cn\("h-4 w-4", className\)\} \{\.\.\.props\} aria-hidden="true" \/>/);
+  assert.match(calendarSource, /<ChevronRight className=\{cn\("h-4 w-4", className\)\} \{\.\.\.props\} aria-hidden="true" \/>/);
+  assert.match(commandSource, /<Search className="mr-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" \/>/);
+  assert.match(dialogSource, /<X className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(sheetSource, /<X className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(radioGroupSource, /<Circle className="h-2\.5 w-2\.5 fill-current text-current" aria-hidden="true" \/>/);
+  assert.match(resizableSource, /<GripVertical className="h-2\.5 w-2\.5" aria-hidden="true" \/>/);
+});
+
+test("menu submenu arrows and radio dots are decorative only", () => {
+  const contextMenuSource = readSource("context-menu.tsx");
+  const dropdownMenuSource = readSource("dropdown-menu.tsx");
+  const menubarSource = readSource("menubar.tsx");
+
+  assert.match(contextMenuSource, /<ChevronRight className="ml-auto h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(contextMenuSource, /<Circle className="h-2 w-2 fill-current" aria-hidden="true" \/>/);
+  assert.match(dropdownMenuSource, /<ChevronRight className="ml-auto" aria-hidden="true" \/>/);
+  assert.match(dropdownMenuSource, /<Circle className="h-2 w-2 fill-current" aria-hidden="true" \/>/);
+  assert.match(menubarSource, /<ChevronRight className="ml-auto h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(menubarSource, /<Circle className="h-2 w-2 fill-current" aria-hidden="true" \/>/);
+});
+
 test("Floating AI trigger exposes dialog relationship and expanded state", () => {
   const triggerSource = readSource("../FloatingAITrigger.tsx");
 
