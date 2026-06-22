@@ -198,7 +198,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
                 className="h-11 w-full justify-center rounded-2xl"
                 onClick={() => setMobileFiltersOpen(true)}
               >
-                <Filter className="mr-2 h-4 w-4" />
+                <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
                 Search & Filters
                 {hasActiveFilters ? (
                   <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
@@ -213,7 +213,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
                 onClick={handleMobileReset}
                 disabled={!hasActiveFilters || viewModel.filters.loadingRecords}
               >
-                <RotateCcw className="mr-2 h-4 w-4" />
+                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
                 Reset
               </Button>
             </div>

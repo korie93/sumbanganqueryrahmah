@@ -104,7 +104,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
                   className="h-11 w-full justify-center rounded-2xl"
                   onClick={() => setMobileFiltersOpen(true)}
                 >
-                  <Filter className="mr-2 h-4 w-4" />
+                  <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
                   Summary Filters
                   {activeFilterCount > 0 ? (
                     <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
@@ -119,7 +119,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
                   onClick={handleResetMobileScope}
                   disabled={summaryData.loading || activeFilterCount === 0}
                 >
-                  <RotateCcw className="mr-2 h-4 w-4" />
+                  <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
                   Reset
                   </Button>
               </div>
@@ -158,7 +158,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
                 <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
                   <div className="space-y-1">
                     <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                      <CalendarRange className="h-4 w-4" />
+                      <CalendarRange className="h-4 w-4" aria-hidden="true" />
                       Summary Scope
                     </h3>
                     <p className="text-sm leading-relaxed text-muted-foreground">

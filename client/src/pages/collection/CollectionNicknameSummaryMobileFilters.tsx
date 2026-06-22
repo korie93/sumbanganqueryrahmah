@@ -63,7 +63,7 @@ export function CollectionNicknameSummaryMobileFilters({
               className="h-11 w-full justify-center rounded-2xl"
               onClick={() => setMobileFiltersOpen(true)}
             >
-              <Filter className="mr-2 h-4 w-4" />
+              <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
               Summary Filters
               {activeControlCount > 0 ? (
                 <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
@@ -78,7 +78,7 @@ export function CollectionNicknameSummaryMobileFilters({
               onClick={summaryData.reset}
               disabled={!canReset || summaryData.loadingSummary}
             >
-              <RotateCcw className="mr-2 h-4 w-4" />
+              <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
               Reset
             </Button>
           </div>

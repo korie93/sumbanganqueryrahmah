@@ -197,9 +197,9 @@ function CollectionStoredReceipts({
               >
                 <span className="collection-day-receipt-icon" aria-hidden="true">
                   {isLoadingReceipt ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Eye className="h-3.5 w-3.5" />
+                    <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                   )}
                 </span>
                 <span className="min-w-0 flex-1">

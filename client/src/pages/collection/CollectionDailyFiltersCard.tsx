@@ -17,7 +17,7 @@ export function CollectionDailyFiltersCard({
     <OperationalSectionCard
       title={
         <span className="collection-daily-title flex items-center gap-2" data-testid="collection-daily-title">
-          <CalendarDays className="collection-daily-title-icon h-5 w-5" />
+          <CalendarDays className="collection-daily-title-icon h-5 w-5" aria-hidden="true" />
           Collection Daily
         </span>
       }
@@ -33,7 +33,7 @@ export function CollectionDailyFiltersCard({
           disabled={loadingOverview}
           data-testid="collection-daily-refresh"
         >
-          {loadingOverview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {loadingOverview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
           Refresh
         </Button>
       }
