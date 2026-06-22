@@ -89,6 +89,18 @@ test("icon buttons derive an accessible name from an explicit title fallback", (
   assert.match(buttonSource, /\{\.\.\.ariaLabelProps\}/);
 });
 
+test("checkbox checkmark icon is decorative only", () => {
+  const checkboxSource = readSource("checkbox.tsx");
+  const contextMenuSource = readSource("context-menu.tsx");
+  const dropdownMenuSource = readSource("dropdown-menu.tsx");
+  const menubarSource = readSource("menubar.tsx");
+
+  assert.match(checkboxSource, /<Check className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(contextMenuSource, /<Check className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(dropdownMenuSource, /<Check className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(menubarSource, /<Check className="h-4 w-4" aria-hidden="true" \/>/);
+});
+
 test("Floating AI trigger exposes dialog relationship and expanded state", () => {
   const triggerSource = readSource("../FloatingAITrigger.tsx");
 
