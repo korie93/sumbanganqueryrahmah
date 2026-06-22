@@ -107,7 +107,7 @@ export function CollectionReceiptPanel({
             onClick={onClearPending}
             disabled={disabled || pendingFiles.length === 0}
           >
-            <RotateCcw className="mr-2 h-4 w-4" />
+            <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
             Clear Pending
           </Button>
         ) : null}
@@ -148,6 +148,7 @@ export function CollectionReceiptPanel({
             {existingReceipts.map((receipt) => {
               const markedForRemoval = removedSet.has(receipt.id);
               const existingDraft = existingDraftMap.get(receipt.id);
+              const existingReceiptLabel = receipt.originalFileName || "receipt";
               return (
                 <div
                   key={receipt.id}
@@ -176,6 +177,7 @@ export function CollectionReceiptPanel({
                         <Input
                           id={`existing-receipt-amount-${receipt.id}`}
                           name={`existingReceiptAmount${receipt.id}`}
+                          aria-label={`Existing receipt amount for ${existingReceiptLabel}`}
                           value={existingDraft.receiptAmount || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptAmount: event.target.value })}
@@ -188,6 +190,7 @@ export function CollectionReceiptPanel({
                           id={`existing-receipt-date-${receipt.id}`}
                           name={`existingReceiptDate${receipt.id}`}
                           type="date"
+                          aria-label={`Existing receipt date for ${existingReceiptLabel}`}
                           value={existingDraft.receiptDate || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptDate: event.target.value })}
@@ -197,6 +200,7 @@ export function CollectionReceiptPanel({
                         <Input
                           id={`existing-receipt-reference-${receipt.id}`}
                           name={`existingReceiptReference${receipt.id}`}
+                          aria-label={`Existing receipt reference for ${existingReceiptLabel}`}
                           value={existingDraft.receiptReference || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptReference: event.target.value })}

@@ -67,18 +67,18 @@ export function CollectionReceiptDraftCard({
               />
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <FileImage className="h-9 w-9" />
+                <FileImage className="h-9 w-9" aria-hidden="true" />
                 <Badge variant="secondary">Image</Badge>
               </div>
             )
           ) : preview.kind === "pdf" ? (
             <div className="flex flex-col items-center gap-2 text-muted-foreground">
-              <FileText className="h-9 w-9" />
+              <FileText className="h-9 w-9" aria-hidden="true" />
               <Badge variant="secondary">PDF</Badge>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2 text-muted-foreground">
-              <FileImage className="h-9 w-9" />
+              <FileImage className="h-9 w-9" aria-hidden="true" />
               <Badge variant="outline">Preview unavailable</Badge>
             </div>
           )}
@@ -169,7 +169,7 @@ export function CollectionReceiptDraftCard({
               onClick={() => onRemove(index)}
               disabled={disabled}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
               Remove
             </Button>
           </div>
