@@ -143,6 +143,11 @@ export function useSaveCollectionSubmitState({
         },
       );
 
+      if (!mountedRef.current) {
+        resetSubmitMutationIntent();
+        return;
+      }
+
       mutationFeedback.notifyMutationSuccess({
         title: "Collection Saved",
         description: buildSaveCollectionSuccessDescription({
@@ -152,29 +157,28 @@ export function useSaveCollectionSubmitState({
       });
       emitCollectionDataChanged();
       resetSubmitMutationIntent();
-      if (mountedRef.current) {
-        setLastSavedSummary(
-          buildSaveCollectionLastSavedSummary({
-            values,
-            receiptCount: receiptFiles.length,
-          }),
-        );
-        setSubmitFailure(null);
-        setSubmitPhase("saved");
-      }
+      setLastSavedSummary(
+        buildSaveCollectionLastSavedSummary({
+          values,
+          receiptCount: receiptFiles.length,
+        }),
+      );
+      setSubmitFailure(null);
+      setSubmitPhase("saved");
       clearPageState();
       onSaved?.();
     } catch (error: unknown) {
-      if (mountedRef.current) {
-        setSubmitPhase("failed");
-        setSubmitFailure(
-          buildSaveCollectionRequestFailure({
-            error,
-            receiptCount: receiptFiles.length,
-            fallbackMessage: "Failed to save collection.",
-          }),
-        );
+      if (!mountedRef.current) {
+        return;
       }
+      setSubmitPhase("failed");
+      setSubmitFailure(
+        buildSaveCollectionRequestFailure({
+          error,
+          receiptCount: receiptFiles.length,
+          fallbackMessage: "Failed to save collection.",
+        }),
+      );
       mutationFeedback.notifyMutationError({
         title: "Failed to Save Collection",
         error,
