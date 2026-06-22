@@ -10,9 +10,10 @@ const saveCollectionPageSource = readFileSync(
 
 test("save collection fields use explicit invalid props for Edge a11y inspection", () => {
   assert.match(saveCollectionPageSource, /function getInvalidFieldProps/);
+  assert.match(saveCollectionPageSource, /getAriaInvalidProps\(Boolean\(errorMessage\)\)/);
   assert.match(saveCollectionPageSource, /const batchValidationProps = getInvalidFieldProps/);
   assert.match(saveCollectionPageSource, /const paymentDateValidationProps = getInvalidFieldProps/);
-  assert.match(saveCollectionPageSource, /"aria-invalid": "true" as const/);
+  assert.doesNotMatch(saveCollectionPageSource, /"aria-invalid": "true" as const/);
   assert.match(saveCollectionPageSource, /<select[\s\S]*\{\.\.\.batchValidationProps\}/);
   assert.match(saveCollectionPageSource, /<DatePickerField[\s\S]*\{\.\.\.paymentDateValidationProps\}/);
   assert.doesNotMatch(saveCollectionPageSource, /aria-invalid=\{/);

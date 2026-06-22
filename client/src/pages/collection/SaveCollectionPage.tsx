@@ -8,6 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import { SaveCollectionFormSection } from "@/pages/collection/SaveCollectionFormSection";
@@ -25,10 +26,12 @@ type SaveCollectionPageProps = {
 };
 
 function getInvalidFieldProps(errorMessage: string | undefined, errorId: string) {
+  const invalidProps = getAriaInvalidProps(Boolean(errorMessage));
+
   return errorMessage
     ? {
       "aria-describedby": errorId,
-      "aria-invalid": "true" as const,
+      ...invalidProps,
     }
     : {};
 }
