@@ -64,7 +64,7 @@ export function CollectionDailyRoleGuide({
   return (
     <section className="collection-daily-role-guide" aria-label="Collection Daily role guidance">
       <div className="collection-daily-role-guide-icon" aria-hidden="true">
-        <Icon className="h-5 w-5" />
+        <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
 
       <div className="min-w-0 flex-1 space-y-2">

@@ -126,7 +126,7 @@ function ManageCollectionNicknamesPage({
             <p className="text-xs text-muted-foreground">{viewModels.summaryText}</p>
             {isMobile ? (
               <Badge variant="secondary" className="rounded-full">
-                <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                <ShieldCheck className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
                 Superuser Only
               </Badge>
             ) : null}

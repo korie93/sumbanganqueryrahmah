@@ -14,6 +14,11 @@ const dailyFiltersCardSource = readCollectionSource("CollectionDailyFiltersCard.
 const dailyDayDetailsDialogSource = readCollectionSource("CollectionDailyDayDetailsDialog.tsx");
 const dailyDayDetailsDialogPartsSource = readCollectionSource("CollectionDailyDayDetailsDialogParts.tsx");
 const dailyConflictReportSource = readCollectionSource("CollectionDailyCalendarConflictReport.tsx");
+const dailyAttentionSummarySource = readCollectionSource("CollectionDailyCalendarAttentionSummary.tsx");
+const dailyDayDetailsEmptyStateSource = readCollectionSource("CollectionDailyDayDetailsEmptyState.tsx");
+const dailyRoleGuideSource = readCollectionSource("CollectionDailyRoleGuide.tsx");
+const dailyDayStatusNoticeSource = readCollectionSource("CollectionDailyDayStatusNotice.tsx");
+const manageNicknamesSource = readCollectionSource("ManageCollectionNicknamesPage.tsx");
 
 test("collection mobile filter action icons are decorative only", () => {
   assert.match(nicknameSummaryMobileFiltersSource, /<Filter className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
@@ -32,4 +37,10 @@ test("collection daily heading and loading icons are hidden from assistive techn
   assert.match(dailyDayDetailsDialogPartsSource, /<Eye className="h-3\.5 w-3\.5" aria-hidden="true" \/>/);
   assert.match(dailyConflictReportSource, /<AlertTriangle className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(summaryPageSource, /<CalendarRange className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(dailyAttentionSummarySource, /<Icon className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(dailyDayDetailsEmptyStateSource, /<CalendarOff className="h-5 w-5" aria-hidden="true" \/>/);
+  assert.match(dailyRoleGuideSource, /<Icon className="h-5 w-5" aria-hidden="true" \/>/);
+  assert.match(dailyDayStatusNoticeSource, /<CalendarOff className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(dailyDayStatusNoticeSource, /<BriefcaseBusiness className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(manageNicknamesSource, /<ShieldCheck className="mr-1 h-3\.5 w-3\.5" aria-hidden="true" \/>/);
 });

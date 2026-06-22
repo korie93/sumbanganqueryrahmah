@@ -36,9 +36,9 @@ export function CollectionDailyDayStatusNotice({
       <div className="collection-day-status-notice-header">
         <span className="collection-day-status-notice-icon" aria-hidden="true">
           {isHoliday ? (
-            <CalendarOff className="h-4 w-4" />
+            <CalendarOff className="h-4 w-4" aria-hidden="true" />
           ) : (
-            <BriefcaseBusiness className="h-4 w-4" />
+            <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
           )}
         </span>
         <div className="min-w-0">

@@ -18,7 +18,7 @@ export function CollectionDailyDayDetailsEmptyState({
   return (
     <section className="collection-day-empty-state" aria-label="Tiada rekod kutipan untuk tarikh ini">
       <div className="collection-day-empty-state-icon" aria-hidden="true">
-        <CalendarOff className="h-5 w-5" />
+        <CalendarOff className="h-5 w-5" aria-hidden="true" />
       </div>
       <div className="min-w-0 space-y-2">
         <div>

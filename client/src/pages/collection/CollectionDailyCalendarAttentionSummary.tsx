@@ -28,7 +28,7 @@ export function CollectionDailyCalendarAttentionSummary({
       aria-label="Daily calendar attention summary"
     >
       <span className="collection-daily-attention-summary-icon" aria-hidden="true">
-        <Icon className="h-4 w-4" />
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
       <div className="collection-daily-attention-summary-copy">
         <p>{summary.title}</p>
