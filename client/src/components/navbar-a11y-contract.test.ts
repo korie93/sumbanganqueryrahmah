@@ -26,6 +26,8 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /\{translate\("common\.navbar\.mobileMenuText"\)\}/);
   assert.match(navbarSource, /<button[\s\S]*data-testid="button-open-mobile-nav"/);
   assert.doesNotMatch(navbarSource, /<div[^>]*data-testid="button-open-mobile-nav"/);
+  assert.match(navbarSource, /getAriaExpandedProps\(mobileNavOpen\)/);
+  assert.doesNotMatch(navbarSource, /"aria-expanded": mobileNavOpen/);
   assert.match(navbarSource, /useNotificationHistoryState\(\)/);
   assert.match(navbarSource, /variant="mobile"/);
   assert.match(navbarSource, /variant="desktop"/);

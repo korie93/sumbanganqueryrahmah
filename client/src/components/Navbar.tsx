@@ -28,6 +28,7 @@ import {
   removeNotificationHistoryEntry,
   useNotificationHistoryState,
 } from "@/hooks/use-notification-history"
+import { getAriaExpandedProps } from "@/lib/aria-state-props"
 import { translate } from "@/lib/i18n"
 import "./Navbar.css"
 
@@ -113,9 +114,7 @@ function NavbarImpl({
     () => resolveNavbarActiveMobileItemId(mobileItems, activeNavigationItemId),
     [activeNavigationItemId, mobileItems]
   )
-  const mobileNavTriggerExpandedProps = {
-    "aria-expanded": mobileNavOpen,
-  } as const
+  const mobileNavTriggerExpandedProps = getAriaExpandedProps(mobileNavOpen)
 
   const clearPendingUserMenuFocusFrames = useCallback(() => {
     if (typeof window !== "undefined") {
