@@ -28,7 +28,7 @@ export function CollectionDailyCalendarConflictReport({
     <details className="collection-daily-conflict-report">
       <summary className="collection-daily-conflict-report-summary">
         <span className="collection-daily-conflict-report-icon" aria-hidden="true">
-          <AlertTriangle className="h-4 w-4" />
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
         </span>
         <span>
           <strong>{items.length} conflict status</strong>

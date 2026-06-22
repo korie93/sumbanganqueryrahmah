@@ -13,6 +13,7 @@ const recordsPageSource = readCollectionSource("CollectionRecordsPage.tsx");
 const dailyFiltersCardSource = readCollectionSource("CollectionDailyFiltersCard.tsx");
 const dailyDayDetailsDialogSource = readCollectionSource("CollectionDailyDayDetailsDialog.tsx");
 const dailyDayDetailsDialogPartsSource = readCollectionSource("CollectionDailyDayDetailsDialogParts.tsx");
+const dailyConflictReportSource = readCollectionSource("CollectionDailyCalendarConflictReport.tsx");
 
 test("collection mobile filter action icons are decorative only", () => {
   assert.match(nicknameSummaryMobileFiltersSource, /<Filter className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
@@ -29,5 +30,6 @@ test("collection daily heading and loading icons are hidden from assistive techn
   assert.match(dailyDayDetailsDialogSource, /<Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" \/>/);
   assert.match(dailyDayDetailsDialogPartsSource, /<Loader2 className="h-3\.5 w-3\.5 animate-spin" aria-hidden="true" \/>/);
   assert.match(dailyDayDetailsDialogPartsSource, /<Eye className="h-3\.5 w-3\.5" aria-hidden="true" \/>/);
+  assert.match(dailyConflictReportSource, /<AlertTriangle className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(summaryPageSource, /<CalendarRange className="h-4 w-4" aria-hidden="true" \/>/);
 });
