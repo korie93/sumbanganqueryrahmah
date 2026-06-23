@@ -71,6 +71,11 @@ function formatTooltipValue(value: ValueType | undefined) {
   return String(value ?? "");
 }
 
+function formatTooltipName(name: NameType | undefined) {
+  const normalized = String(name ?? "").trim();
+  return normalized || "Metric";
+}
+
 export function formatDashboardHourCompact(hour: number) {
   return formatDashboardHour(hour).replace(" AM", "a").replace(" PM", "p").replace(" ", "");
 }
@@ -230,24 +235,33 @@ export const CompactChartTooltip = memo(function CompactChartTooltip({
         {formatLabel(label)}
       </p>
       <div className="mt-2 space-y-1.5">
-        {payload.map((item) => (
-          <div key={String(item.name)} className="flex items-center justify-between gap-3 text-xs">
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${TOOLTIP_DOT_CLASS_BY_NAME[String(item.name || "")] || "bg-[hsl(var(--chart-3))]"}`}
-                aria-hidden="true"
-              />
-              <span
-                className="truncate text-muted-foreground"
-                title={String(item.name ?? "")}
-                aria-label={String(item.name ?? "")}
-              >
-                {String(item.name ?? "")}
-              </span>
+        {payload.map((item) => {
+          const metricName = formatTooltipName(item.name);
+          const tooltipValue = formatTooltipValue(item.value);
+          const metricKey = String(item.dataKey ?? item.name ?? metricName);
+
+          return (
+            <div
+              key={metricKey}
+              className="flex items-center justify-between gap-3 text-xs"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${TOOLTIP_DOT_CLASS_BY_NAME[metricName] || "bg-[hsl(var(--chart-3))]"}`}
+                  aria-hidden="true"
+                />
+                <span
+                  className="truncate text-muted-foreground"
+                  title={metricName}
+                  aria-label={metricName}
+                >
+                  {metricName}
+                </span>
+              </div>
+              <span className="shrink-0 font-semibold text-foreground">{tooltipValue}</span>
             </div>
-            <span className="shrink-0 font-semibold text-foreground">{formatTooltipValue(item.value)}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

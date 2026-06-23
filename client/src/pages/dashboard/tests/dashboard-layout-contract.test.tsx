@@ -993,6 +993,19 @@ test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
   assert.match(source, /export const DashboardChartsGrid = memo\(DashboardChartsGridImpl\)/);
 });
 
+test("Dashboard compact chart tooltip does not expose empty metric labels", () => {
+  const partsSource = readFileSync(path.resolve(__dirname, "../DashboardChartsGridParts.tsx"), "utf8");
+
+  assert.match(partsSource, /function formatTooltipName\(name: NameType \| undefined\)/);
+  assert.match(partsSource, /return normalized \|\| "Metric";/);
+  assert.match(partsSource, /const metricName = formatTooltipName\(item\.name\);/);
+  assert.match(partsSource, /const metricKey = String\(item\.dataKey \?\? item\.name \?\? metricName\);/);
+  assert.match(partsSource, /key=\{metricKey\}/);
+  assert.match(partsSource, /aria-label=\{metricName\}/);
+  assert.doesNotMatch(partsSource, /aria-label=\{String\(item\.name \?\? ""\)\}/);
+  assert.doesNotMatch(partsSource, /key=\{`\$\{metricName\}-\$\{tooltipValue\}-\$\{index\}`\}/);
+});
+
 test("DashboardChartsGrid exposes larger detailed chart dialogs without unmanaged lifecycle work", () => {
   const source = readFileSync(path.resolve(__dirname, "../DashboardChartsGrid.tsx"), "utf8");
   const markup = renderToStaticMarkup(
