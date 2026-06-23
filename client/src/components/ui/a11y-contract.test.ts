@@ -120,10 +120,11 @@ test("shared primitive visual indicators are decorative only", () => {
   assert.match(datePickerSource, /<CalendarIcon[\s\S]*aria-hidden="true"/);
   assert.match(datePickerSource, /getAriaInvalidProps\(ariaInvalid\)/);
   assert.match(datePickerSource, /const displayValue = value \? formatIsoDateToDDMMYYYY\(value\) : placeholder/);
-  assert.match(datePickerSource, /const triggerAccessibleLabel = ariaLabel \? `\$\{ariaLabel\}: \$\{displayValue\}` : displayValue/);
-  assert.match(datePickerSource, /const triggerRequiredProps = ariaRequired \? \{ "aria-required": ariaRequired \} : \{\}/);
-  assert.match(datePickerSource, /\{\.\.\.triggerRequiredProps\}/);
+  assert.match(datePickerSource, /const requiredLabel = required \? " required" : ""/);
+  assert.match(datePickerSource, /\? `\$\{ariaLabel\}\$\{requiredLabel\}: \$\{displayValue\}`/);
+  assert.match(datePickerSource, /: `\$\{displayValue\}\$\{requiredLabel\}`/);
   assert.doesNotMatch(datePickerSource, /aria-required=\{/);
+  assert.doesNotMatch(datePickerSource, /"aria-required"/);
   assert.match(dialogSource, /<X className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(sheetSource, /<X className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(radioGroupSource, /<Circle className="h-2\.5 w-2\.5 fill-current text-current" aria-hidden="true" \/>/);

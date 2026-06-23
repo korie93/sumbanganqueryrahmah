@@ -18,12 +18,12 @@ interface DatePickerFieldProps {
   contentClassName?: string;
   disabled?: boolean;
   disabledDates?: CalendarProps["disabled"];
+  required?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onBlur?: FocusEventHandler<HTMLButtonElement> | undefined;
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | "true" | "false" | "grammar" | "spelling" | undefined;
-  "aria-required"?: "true" | "false" | undefined;
 }
 
 function getSelectedDate(value: string) {
@@ -57,12 +57,12 @@ export function DatePickerField({
   contentClassName,
   disabled = false,
   disabledDates,
+  required = false,
   open: controlledOpen,
   onOpenChange,
   onBlur,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
-  "aria-required": ariaRequired,
 }: DatePickerFieldProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -70,10 +70,12 @@ export function DatePickerField({
   const selectedDate = getSelectedDate(value);
   const displayValue = value ? formatIsoDateToDDMMYYYY(value) : placeholder;
   const triggerLabel = ariaLabel ?? placeholder;
-  const triggerAccessibleLabel = ariaLabel ? `${ariaLabel}: ${displayValue}` : displayValue;
+  const requiredLabel = required ? " required" : "";
+  const triggerAccessibleLabel = ariaLabel
+    ? `${ariaLabel}${requiredLabel}: ${displayValue}`
+    : `${displayValue}${requiredLabel}`;
   const triggerAriaLabelProps = triggerAccessibleLabel ? { "aria-label": triggerAccessibleLabel } : {};
   const triggerInvalidProps = getAriaInvalidProps(ariaInvalid);
-  const triggerRequiredProps = ariaRequired ? { "aria-required": ariaRequired } : {};
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -87,7 +89,6 @@ export function DatePickerField({
           aria-describedby={ariaDescribedBy}
           {...triggerAriaLabelProps}
           {...triggerInvalidProps}
-          {...triggerRequiredProps}
           title={triggerLabel}
           className={cn(
             "h-10 w-full justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",

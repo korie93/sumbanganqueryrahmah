@@ -222,7 +222,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           placeholder="Select payment date..."
           ariaLabel="Payment Date"
-          {...requiredFieldProps}
+          required
           {...paymentDateValidationProps}
           buttonTestId="save-collection-payment-date"
           disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}

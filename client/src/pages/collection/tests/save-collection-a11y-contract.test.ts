@@ -24,7 +24,6 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.match(saveCollectionPageSource, /<select[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.batchValidationProps\}/);
   assert.doesNotMatch(saveCollectionPageSource, /"aria-invalid": "true" as const/);
   assert.match(saveCollectionPageSource, /<select[\s\S]*\{\.\.\.batchValidationProps\}/);
-  assert.match(saveCollectionPageSource, /<DatePickerField[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.paymentDateValidationProps\}/);
   assert.match(saveCollectionPageSource, /<DatePickerField[\s\S]*\{\.\.\.paymentDateValidationProps\}/);
   assert.match(saveCollectionPageSource, /name="collectionAmount"[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.amountValidationProps\}/);
   assert.doesNotMatch(saveCollectionPageSource, /aria-invalid=\{/);
@@ -34,6 +33,15 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.ok(batchSelectMatch);
   assert.doesNotMatch(batchSelectMatch[0], /aria-invalid=\{/);
   assert.doesNotMatch(batchSelectMatch[0], /aria-required=\{/);
+
+  const datePickerStart = saveCollectionPageSource.indexOf("<DatePickerField");
+  assert.notEqual(datePickerStart, -1);
+  const datePickerEnd = saveCollectionPageSource.indexOf("/>", datePickerStart);
+  assert.notEqual(datePickerEnd, -1);
+  const datePickerSource = saveCollectionPageSource.slice(datePickerStart, datePickerEnd + 2);
+  assert.match(datePickerSource, /required/);
+  assert.match(datePickerSource, /\{\.\.\.paymentDateValidationProps\}/);
+  assert.doesNotMatch(datePickerSource, /\{\.\.\.requiredFieldProps\}/);
 
   const phoneNameIndex = saveCollectionPageSource.indexOf('name="customerPhoneNumber"');
   assert.notEqual(phoneNameIndex, -1);
