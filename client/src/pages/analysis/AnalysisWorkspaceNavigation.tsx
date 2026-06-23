@@ -111,6 +111,7 @@ export function AnalysisWorkspaceNavigation({
           {items.map((item) => {
             const Icon = item.icon;
             const active = item.key === activeSection;
+            const collapsedItemLabelProps = collapsed ? { "aria-label": item.label } : {};
             return (
               <button
                 key={item.key}
@@ -123,7 +124,7 @@ export function AnalysisWorkspaceNavigation({
                     ? "bg-primary/10 text-primary"
                     : "text-foreground/78 hover:bg-accent hover:text-foreground",
                 )}
-                aria-label={collapsed ? item.label : undefined}
+                {...collapsedItemLabelProps}
                 {...getAriaCurrentPageProps(active)}
                 title={collapsed ? item.label : item.description}
                 data-testid={`analysis-sidebar-${item.key}`}
