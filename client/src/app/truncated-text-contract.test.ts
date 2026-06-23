@@ -33,3 +33,15 @@ test("data-heavy truncated rows expose title and aria-label text", () => {
     assert.match(source, /className="[^"]*truncate[^"]*"[\s\S]{0,260}aria-label=/);
   }
 });
+
+test("collection day metric truncation labels use a non-empty value fallback", () => {
+  const source = readClientSource("../pages/collection/CollectionDailyDayDetailsDialogParts.tsx");
+
+  assert.match(source, /function formatMetricValueLabel\(value: string \| number\)/);
+  assert.match(source, /return normalized \|\| "No value";/);
+  assert.match(source, /const valueLabel = formatMetricValueLabel\(value\);/);
+  assert.match(source, /title=\{valueLabel\}/);
+  assert.match(source, /aria-label=\{valueLabel\}/);
+  assert.doesNotMatch(source, /title=\{String\(value\)\}/);
+  assert.doesNotMatch(source, /aria-label=\{String\(value\)\}/);
+});

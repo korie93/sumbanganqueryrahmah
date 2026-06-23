@@ -51,6 +51,11 @@ function getMetricToneClass(tone: CollectionDayMetricTone) {
   return "border-border/60 bg-muted/10";
 }
 
+function formatMetricValueLabel(value: string | number) {
+  const normalized = String(value).trim();
+  return normalized || "No value";
+}
+
 export function CollectionDayMetric({
   icon: Icon,
   label,
@@ -62,6 +67,8 @@ export function CollectionDayMetric({
   tone?: CollectionDayMetricTone;
   value: string | number;
 }) {
+  const valueLabel = formatMetricValueLabel(value);
+
   return (
     <div className={cn("min-w-0 rounded-xl border px-3 py-2.5", getMetricToneClass(tone))}>
       <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">
@@ -70,8 +77,12 @@ export function CollectionDayMetric({
           {label}
         </span>
       </div>
-      <div className="mt-1 truncate text-sm font-semibold text-foreground" title={String(value)} aria-label={String(value)}>
-        {value}
+      <div
+        className="mt-1 truncate text-sm font-semibold text-foreground"
+        title={valueLabel}
+        aria-label={valueLabel}
+      >
+        {valueLabel}
       </div>
     </div>
   );
