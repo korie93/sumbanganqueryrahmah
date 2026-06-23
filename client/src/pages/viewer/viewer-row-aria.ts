@@ -6,11 +6,13 @@ type ViewerRowAriaOptions = {
   visibleHeaders: string[];
 };
 
+export function formatViewerCellValue(value: unknown) {
+  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+  return normalized || "-";
+}
+
 function normalizeViewerCellValue(value: unknown) {
-  const normalized = String(value ?? "-").replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "-";
-  }
+  const normalized = formatViewerCellValue(value);
   if (normalized.length <= 48) {
     return normalized;
   }

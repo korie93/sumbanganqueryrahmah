@@ -45,3 +45,12 @@ test("collection day metric truncation labels use a non-empty value fallback", (
   assert.doesNotMatch(source, /title=\{String\(value\)\}/);
   assert.doesNotMatch(source, /aria-label=\{String\(value\)\}/);
 });
+
+test("viewer truncated cells use the shared non-empty value formatter", () => {
+  const source = readClientSource("../pages/viewer/ViewerVirtualizedRow.tsx");
+
+  assert.match(source, /const cellText = formatViewerCellValue\(row\[header\]\);/);
+  assert.match(source, /title=\{cellText\}/);
+  assert.match(source, /aria-label=\{cellText\}/);
+  assert.doesNotMatch(source, /String\(row\[header\] \?\? "-"\)/);
+});

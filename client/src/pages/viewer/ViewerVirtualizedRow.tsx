@@ -2,7 +2,10 @@ import { memo } from "react";
 import type { ListChildComponentProps } from "react-window";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PositionedRowShell, ViewerGridShell } from "@/pages/viewer/viewer-grid-shell";
-import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
+import {
+  buildViewerRowAriaLabel,
+  formatViewerCellValue,
+} from "@/pages/viewer/viewer-row-aria";
 import type { ViewerVirtualRowData } from "@/pages/viewer/types";
 
 function ViewerVirtualizedRowImpl({
@@ -31,7 +34,7 @@ function ViewerVirtualizedRowImpl({
         </div>
         <div className="px-3 text-muted-foreground">{row.__rowId + 1}</div>
         {data.visibleHeaders.map((header) => {
-          const cellText = String(row[header] ?? "-");
+          const cellText = formatViewerCellValue(row[header]);
 
           return (
             <div

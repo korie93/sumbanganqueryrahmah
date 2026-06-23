@@ -1,6 +1,9 @@
 import { memo, useCallback, useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
+import {
+  buildViewerRowAriaLabel,
+  formatViewerCellValue,
+} from "@/pages/viewer/viewer-row-aria";
 import type { DataRowWithId } from "@/pages/viewer/types";
 
 interface ViewerStandardTableProps {
@@ -46,7 +49,7 @@ const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
       </td>
       <td className="p-3 text-muted-foreground">{row.__rowId + 1}</td>
       {visibleHeaders.map((header) => {
-        const cellText = String(row[header] ?? "-");
+        const cellText = formatViewerCellValue(row[header]);
 
         return (
           <td

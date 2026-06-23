@@ -1,3 +1,5 @@
+import { formatViewerCellValue } from "@/pages/viewer/viewer-row-aria";
+
 interface ViewerDataFieldCardProps {
   header: string;
   value: unknown;
@@ -10,6 +12,7 @@ export function ViewerDataFieldCard({
   compact = false,
 }: ViewerDataFieldCardProps) {
   const groupAriaLabelProps = header ? { "aria-label": header } : {};
+  const displayValue = formatViewerCellValue(value);
 
   return (
     <div
@@ -24,7 +27,7 @@ export function ViewerDataFieldCard({
       <p className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
         {header}
       </p>
-      <p className="mt-1 break-words text-sm text-foreground">{String(value ?? "-")}</p>
+      <p className="mt-1 break-words text-sm text-foreground">{displayValue}</p>
     </div>
   );
 }
