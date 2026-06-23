@@ -3,6 +3,8 @@ import test from "node:test";
 import { z } from "zod";
 import {
   allImportsAnalysisResponseSchema,
+  analyticsRecentLoginActivityListSchema,
+  analyticsRecentLoginActivityPageSchema,
   analyticsRoleDistributionSchema,
   analyticsTopUsersSchema,
   apiErrorPayloadSchema,
@@ -25,6 +27,8 @@ import {
   renameImport,
 } from "@/lib/api/imports";
 import {
+  getRecentLoginActivity,
+  getRecentLoginActivityPage,
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api/analytics";
@@ -211,6 +215,141 @@ test("top users API wrapper rejects malformed contract payloads", async () => {
     await assert.rejects(
       () => getTopActiveUsers(),
       /API contract mismatch for \/api\/analytics\/top-users/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("recent login activity contracts accept bounded sanitized activity data", () => {
+  const activity = {
+    browser: "Chrome 149",
+    eventType: "success",
+    failureReason: null,
+    id: "activity-1",
+    ipAddress: "192.168.x.x",
+    lastActivityTime: "2026-06-24T02:15:00.000Z",
+    loginTime: "2026-06-24T02:00:00.000Z",
+    logoutReason: null,
+    logoutTime: null,
+    platform: "Windows",
+    role: " admin ",
+    status: "active",
+    userAgentSummary: "Chrome 149 on Windows",
+    username: " operator.one ",
+  } as const;
+
+  const list = analyticsRecentLoginActivityListSchema.parse([activity]);
+  assert.equal(list[0]?.role, "admin");
+  assert.equal(list[0]?.username, "operator.one");
+
+  const page = analyticsRecentLoginActivityPageSchema.parse({
+    activities: [activity],
+    filterCounts: {
+      active: 1,
+      all: 1,
+      attention: 0,
+      ended: 0,
+      failed: 0,
+    },
+    pagination: {
+      page: 1,
+      pageSize: 20,
+      totalItems: 1,
+      totalPages: 1,
+    },
+  });
+  assert.equal(page.activities.length, 1);
+  assert.equal(page.pagination.totalItems, 1);
+});
+
+test("recent login activity contracts reject invalid status, timestamps, and counts", () => {
+  assert.equal(
+    analyticsRecentLoginActivityListSchema.safeParse([{
+      browser: null,
+      id: "",
+      ipAddress: null,
+      lastActivityTime: "not-a-date",
+      loginTime: null,
+      logoutReason: null,
+      logoutTime: null,
+      role: "admin",
+      status: "unknown",
+      username: "operator.one",
+    }]).success,
+    false,
+  );
+  assert.equal(
+    analyticsRecentLoginActivityPageSchema.safeParse({
+      activities: [],
+      filterCounts: {
+        active: 0,
+        all: -1,
+        attention: 0,
+        ended: 0,
+        failed: 0,
+      },
+      pagination: {
+        page: 0,
+        pageSize: 20,
+        totalItems: -1,
+        totalPages: 0,
+      },
+    }).success,
+    false,
+  );
+});
+
+test("recent login activity API wrappers reject malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/analytics/recent-login-activity?pageSize=8") {
+      return jsonResponse([{
+        browser: null,
+        id: "activity-1",
+        ipAddress: null,
+        lastActivityTime: null,
+        loginTime: null,
+        logoutReason: null,
+        logoutTime: null,
+        role: "admin",
+        status: "unknown",
+        username: "operator.one",
+      }]);
+    }
+    if (url.startsWith("/api/analytics/recent-login-activity-page?")) {
+      return jsonResponse({
+        activities: [],
+        filterCounts: {
+          active: 0,
+          all: 0,
+          attention: 0,
+          ended: 0,
+          failed: 0,
+        },
+        pagination: {
+          page: 1,
+          pageSize: 20,
+          totalItems: 0,
+          totalPages: 0,
+        },
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getRecentLoginActivity(),
+      /API contract mismatch for \/api\/analytics\/recent-login-activity/,
+    );
+    await assert.rejects(
+      () => getRecentLoginActivityPage({
+        page: 1,
+        pageSize: 20,
+        status: "all",
+      }),
+      /API contract mismatch for \/api\/analytics\/recent-login-activity-page/,
     );
   } finally {
     restoreFetch();

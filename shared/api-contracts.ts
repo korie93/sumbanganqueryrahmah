@@ -86,6 +86,46 @@ export const analyticsTopUsersSchema = z.array(
   }),
 );
 
+const analyticsTimestampSchema = z.string().datetime({ offset: true }).nullable();
+
+export const analyticsRecentLoginActivitySchema = z.object({
+  browser: nullableStringSchema,
+  eventType: z.enum(["failure", "success"]),
+  failureReason: nullableStringSchema,
+  id: nonEmptyStringSchema,
+  ipAddress: nullableStringSchema,
+  lastActivityTime: analyticsTimestampSchema,
+  loginTime: analyticsTimestampSchema,
+  logoutReason: nullableStringSchema,
+  logoutTime: analyticsTimestampSchema,
+  platform: nullableStringSchema,
+  role: nonEmptyStringSchema,
+  status: z.enum(["active", "ended", "failed"]),
+  userAgentSummary: nullableStringSchema,
+  username: nonEmptyStringSchema,
+});
+
+export const analyticsRecentLoginActivityListSchema = z.array(
+  analyticsRecentLoginActivitySchema,
+);
+
+export const analyticsRecentLoginActivityPageSchema = z.object({
+  activities: analyticsRecentLoginActivityListSchema,
+  filterCounts: z.object({
+    all: nonNegativeIntSchema,
+    active: nonNegativeIntSchema,
+    ended: nonNegativeIntSchema,
+    failed: nonNegativeIntSchema,
+    attention: nonNegativeIntSchema,
+  }),
+  pagination: z.object({
+    page: positiveIntSchema,
+    pageSize: paginationLimitSchema,
+    totalItems: nonNegativeIntSchema,
+    totalPages: positiveIntSchema,
+  }),
+});
+
 export const importRecordSchema = z.object({
   id: nonEmptyStringSchema,
   name: nonEmptyStringSchema,

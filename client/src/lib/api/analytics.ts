@@ -2,6 +2,8 @@ import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import type { RecentLoginActivityPageQuery } from "@/pages/dashboard/types";
 import {
+  analyticsRecentLoginActivityListSchema,
+  analyticsRecentLoginActivityPageSchema,
   analyticsRoleDistributionSchema,
   analyticsTopUsersSchema,
 } from "@shared/api-contracts";
@@ -46,7 +48,11 @@ export async function getRecentLoginActivity(pageSize: number = 8, options?: Ana
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(
+    response,
+    analyticsRecentLoginActivityListSchema,
+    "/api/analytics/recent-login-activity",
+  );
 }
 
 export async function getRecentLoginActivityPage(
@@ -70,7 +76,11 @@ export async function getRecentLoginActivityPage(
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(
+    response,
+    analyticsRecentLoginActivityPageSchema,
+    "/api/analytics/recent-login-activity-page",
+  );
 }
 
 export async function getPeakHours(options?: AnalyticsRequestOptions) {
