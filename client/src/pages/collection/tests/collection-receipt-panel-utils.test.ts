@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCollectionReceiptPanelSummary } from "../collection-receipt-panel-utils";
+import {
+  buildCollectionReceiptPanelSummary,
+  formatCollectionReceiptFileName,
+} from "../collection-receipt-panel-utils";
+
+test("formatCollectionReceiptFileName normalizes display labels safely", () => {
+  assert.equal(formatCollectionReceiptFileName(null), "Receipt");
+  assert.equal(formatCollectionReceiptFileName(" \n "), "Receipt");
+  assert.equal(
+    formatCollectionReceiptFileName("  customer   proof.pdf  "),
+    "customer proof.pdf",
+  );
+});
 
 test("buildCollectionReceiptPanelSummary reports empty receipt state clearly", () => {
   const summary = buildCollectionReceiptPanelSummary({});

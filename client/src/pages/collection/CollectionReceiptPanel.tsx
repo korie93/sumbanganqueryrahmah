@@ -10,7 +10,10 @@ import {
   resolveCollectionReceiptPendingStatusCopy,
   type CollectionReceiptPendingStatus,
 } from "@/pages/collection/collection-receipt-pending-status";
-import { buildCollectionReceiptPanelSummary } from "@/pages/collection/collection-receipt-panel-utils";
+import {
+  buildCollectionReceiptPanelSummary,
+  formatCollectionReceiptFileName,
+} from "@/pages/collection/collection-receipt-panel-utils";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import {
   formatCollectionReceiptFileSize,
@@ -148,7 +151,9 @@ export function CollectionReceiptPanel({
             {existingReceipts.map((receipt) => {
               const markedForRemoval = removedSet.has(receipt.id);
               const existingDraft = existingDraftMap.get(receipt.id);
-              const existingReceiptLabel = receipt.originalFileName || "receipt";
+              const existingReceiptLabel = formatCollectionReceiptFileName(
+                receipt.originalFileName,
+              );
               return (
                 <div
                   key={receipt.id}
@@ -160,10 +165,10 @@ export function CollectionReceiptPanel({
                     <div className="flex flex-wrap items-center gap-2">
                       <p
                         className="truncate text-sm font-medium"
-                        title={receipt.originalFileName}
-                        aria-label={receipt.originalFileName}
+                        title={existingReceiptLabel}
+                        aria-label={existingReceiptLabel}
                       >
-                        {receipt.originalFileName}
+                        {existingReceiptLabel}
                       </p>
                       <Badge variant={markedForRemoval ? "destructive" : "secondary"}>
                         {markedForRemoval ? "Will Remove" : "Existing"}

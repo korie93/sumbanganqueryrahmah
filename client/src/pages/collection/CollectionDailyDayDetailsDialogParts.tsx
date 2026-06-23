@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { CollectionDailyDayDetailsResponse } from "@/lib/api";
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
+import { formatCollectionReceiptFileName } from "@/pages/collection/collection-receipt-panel-utils";
 import { buildCollectionDailyReceiptKey } from "@/pages/collection/useCollectionDailyReceiptViewer";
 import { formatCollectionReceiptFileSize } from "@/pages/collection/useCollectionReceiptDraftPreviews";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -194,6 +195,9 @@ function CollectionStoredReceipts({
             const key = buildCollectionDailyReceiptKey(record.id, receipt.id);
             const isLoadingReceipt = loadingReceiptKey === key;
             const receiptTypeLabel = getReceiptTypeLabel(receipt);
+            const receiptFileName = formatCollectionReceiptFileName(
+              receipt.originalFileName,
+            );
 
             return (
               <Button
@@ -202,7 +206,7 @@ function CollectionStoredReceipts({
                 size="sm"
                 variant="outline"
                 className="collection-day-receipt-button"
-                aria-label={`View stored receipt ${receipt.originalFileName} for ${record.customerName}`}
+                aria-label={`View stored receipt ${receiptFileName} for ${record.customerName}`}
                 disabled={isLoadingReceipt}
                 onClick={() => onViewReceipt(record, receipt.id)}
               >
@@ -216,10 +220,10 @@ function CollectionStoredReceipts({
                 <span className="min-w-0 flex-1">
                   <span
                     className="block truncate font-medium"
-                    title={receipt.originalFileName}
-                    aria-label={receipt.originalFileName}
+                    title={receiptFileName}
+                    aria-label={receiptFileName}
                   >
-                    {receipt.originalFileName}
+                    {receiptFileName}
                   </span>
                   <span className="block truncate text-2xs font-normal text-muted-foreground">
                     {receiptTypeLabel} · {formatCollectionReceiptFileSize(receipt.fileSize)}

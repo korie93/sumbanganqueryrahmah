@@ -7,6 +7,11 @@ export type CollectionReceiptPanelSummary = {
   message: string;
 };
 
+export function formatCollectionReceiptFileName(value: unknown) {
+  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+  return normalized || "Receipt";
+}
+
 function formatReceiptCountLabel(count: number) {
   const safeCount = Math.max(0, Number(count) || 0);
   return `${safeCount} ${safeCount === 1 ? "receipt" : "receipts"}`;

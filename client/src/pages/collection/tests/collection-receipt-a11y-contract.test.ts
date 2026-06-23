@@ -11,7 +11,9 @@ const receiptPanelSource = readCollectionSource("CollectionReceiptPanel.tsx");
 const receiptDraftCardSource = readCollectionSource("CollectionReceiptDraftCard.tsx");
 
 test("collection receipt existing metadata inputs have explicit accessible names", () => {
-  assert.match(receiptPanelSource, /const existingReceiptLabel = receipt\.originalFileName \|\| "receipt"/);
+  assert.match(receiptPanelSource, /const existingReceiptLabel = formatCollectionReceiptFileName\(/);
+  assert.match(receiptPanelSource, /title=\{existingReceiptLabel\}/);
+  assert.match(receiptPanelSource, /aria-label=\{existingReceiptLabel\}/);
   assert.match(receiptPanelSource, /aria-label=\{`Existing receipt amount for \$\{existingReceiptLabel\}`\}/);
   assert.match(receiptPanelSource, /aria-label=\{`Existing receipt date for \$\{existingReceiptLabel\}`\}/);
   assert.match(receiptPanelSource, /aria-label=\{`Existing receipt reference for \$\{existingReceiptLabel\}`\}/);
