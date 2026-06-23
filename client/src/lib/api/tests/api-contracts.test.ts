@@ -3,6 +3,7 @@ import test from "node:test";
 import { z } from "zod";
 import {
   allImportsAnalysisResponseSchema,
+  analyticsRoleDistributionSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
   auditLogRecordSchema,
@@ -22,6 +23,7 @@ import {
   getImports,
   renameImport,
 } from "@/lib/api/imports";
+import { getRoleDistribution } from "@/lib/api/analytics";
 import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
@@ -107,6 +109,39 @@ test("parseApiJson includes concise Zod issue details without echoing raw payloa
       return true;
     },
   );
+});
+
+test("analytics role distribution contract trims valid roles and rejects blank labels", () => {
+  const valid = analyticsRoleDistributionSchema.parse([
+    { role: " admin ", count: 3 },
+  ]);
+
+  assert.deepEqual(valid, [{ role: "admin", count: 3 }]);
+  assert.equal(
+    analyticsRoleDistributionSchema.safeParse([
+      { role: " \n ", count: 1 },
+    ]).success,
+    false,
+  );
+});
+
+test("role distribution API wrapper rejects malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/analytics/role-distribution") {
+      return jsonResponse([{ role: "", count: 1 }]);
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getRoleDistribution(),
+      /API contract mismatch for \/api\/analytics\/role-distribution/,
+    );
+  } finally {
+    restoreFetch();
+  }
 });
 
 test("shared API contracts accept nullish actor fields without widening required fields", () => {

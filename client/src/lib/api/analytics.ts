@@ -1,5 +1,7 @@
 import { apiRequest } from "../api-client";
+import { parseApiJson } from "./contract";
 import type { RecentLoginActivityPageQuery } from "@/pages/dashboard/types";
+import { analyticsRoleDistributionSchema } from "@shared/api-contracts";
 
 type AnalyticsRequestOptions = {
   signal?: AbortSignal | undefined;
@@ -71,5 +73,9 @@ export async function getPeakHours(options?: AnalyticsRequestOptions) {
 
 export async function getRoleDistribution(options?: AnalyticsRequestOptions) {
   const response = await apiRequest("GET", "/api/analytics/role-distribution", undefined, options);
-  return response.json();
+  return parseApiJson(
+    response,
+    analyticsRoleDistributionSchema,
+    "/api/analytics/role-distribution",
+  );
 }

@@ -70,6 +70,13 @@ export const apiPaginationMetaSchema = z.discriminatedUnion("mode", [
   hybridPaginationMetaSchema,
 ]);
 
+export const analyticsRoleDistributionSchema = z.array(
+  z.object({
+    role: nonEmptyStringSchema,
+    count: nonNegativeIntSchema,
+  }),
+);
+
 export const importRecordSchema = z.object({
   id: nonEmptyStringSchema,
   name: nonEmptyStringSchema,
