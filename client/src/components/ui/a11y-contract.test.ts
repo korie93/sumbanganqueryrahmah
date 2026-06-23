@@ -106,6 +106,7 @@ test("shared primitive visual indicators are decorative only", () => {
   const breadcrumbSource = readSource("breadcrumb.tsx");
   const calendarSource = readSource("calendar.tsx");
   const commandSource = readSource("command.tsx");
+  const datePickerSource = readSource("date-picker-field.tsx");
   const dialogSource = readSource("dialog.tsx");
   const sheetSource = readSource("sheet.tsx");
   const radioGroupSource = readSource("radio-group.tsx");
@@ -116,6 +117,8 @@ test("shared primitive visual indicators are decorative only", () => {
   assert.match(calendarSource, /<ChevronLeft className=\{cn\("h-4 w-4", className\)\} \{\.\.\.props\} aria-hidden="true" \/>/);
   assert.match(calendarSource, /<ChevronRight className=\{cn\("h-4 w-4", className\)\} \{\.\.\.props\} aria-hidden="true" \/>/);
   assert.match(commandSource, /<Search className="mr-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" \/>/);
+  assert.match(datePickerSource, /<CalendarIcon[\s\S]*aria-hidden="true"/);
+  assert.match(datePickerSource, /getAriaInvalidProps\(ariaInvalid\)/);
   assert.match(dialogSource, /<X className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(sheetSource, /<X className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(radioGroupSource, /<Circle className="h-2\.5 w-2\.5 fill-current text-current" aria-hidden="true" \/>/);

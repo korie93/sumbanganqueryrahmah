@@ -94,6 +94,7 @@ export function DatePickerField({
         >
           <CalendarIcon
             className={cn("mr-2 h-4 w-4 shrink-0", value ? "text-primary" : "text-muted-foreground")}
+            aria-hidden="true"
           />
           <span className="truncate">
             {value ? formatIsoDateToDDMMYYYY(value) : placeholder}
