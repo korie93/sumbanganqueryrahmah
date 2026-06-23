@@ -75,6 +75,7 @@ export function DatePickerField({
     ? `${ariaLabel}${requiredLabel}: ${displayValue}`
     : `${displayValue}${requiredLabel}`;
   const triggerAriaLabelProps = triggerAccessibleLabel ? { "aria-label": triggerAccessibleLabel } : {};
+  const triggerDescribedByProps = ariaDescribedBy ? { "aria-describedby": ariaDescribedBy } : {};
   const triggerInvalidProps = getAriaInvalidProps(ariaInvalid);
 
   return (
@@ -86,8 +87,8 @@ export function DatePickerField({
           variant="outline"
           disabled={disabled}
           onBlur={onBlur}
-          aria-describedby={ariaDescribedBy}
           {...triggerAriaLabelProps}
+          {...triggerDescribedByProps}
           {...triggerInvalidProps}
           title={triggerLabel}
           className={cn(

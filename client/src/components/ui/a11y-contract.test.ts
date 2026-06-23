@@ -123,6 +123,9 @@ test("shared primitive visual indicators are decorative only", () => {
   assert.match(datePickerSource, /const requiredLabel = required \? " required" : ""/);
   assert.match(datePickerSource, /\? `\$\{ariaLabel\}\$\{requiredLabel\}: \$\{displayValue\}`/);
   assert.match(datePickerSource, /: `\$\{displayValue\}\$\{requiredLabel\}`/);
+  assert.match(datePickerSource, /const triggerDescribedByProps = ariaDescribedBy \? \{ "aria-describedby": ariaDescribedBy \} : \{\}/);
+  assert.match(datePickerSource, /\{\.\.\.triggerDescribedByProps\}/);
+  assert.doesNotMatch(datePickerSource, /aria-describedby=\{/);
   assert.doesNotMatch(datePickerSource, /aria-required=\{/);
   assert.doesNotMatch(datePickerSource, /"aria-required"/);
   assert.match(dialogSource, /<X className="h-4 w-4" aria-hidden="true" \/>/);
