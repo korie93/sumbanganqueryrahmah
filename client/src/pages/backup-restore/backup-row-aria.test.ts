@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildBackupRowAriaLabel } from "@/pages/backup-restore/backup-row-aria";
+import { normalizeBackup } from "@/pages/backup-restore/utils";
 
 test("buildBackupRowAriaLabel summarizes backup metadata", () => {
   assert.equal(
@@ -23,5 +24,24 @@ test("buildBackupRowAriaLabel summarizes backup metadata", () => {
       formattedCreatedAt: "14/04/2026, 08:00 PM",
     }),
     "Backup Nightly Backup, created by superuser, created 14/04/2026, 08:00 PM, 12 imports, 1200 data rows, 8 users, 75 audit logs, 18 collection records",
+  );
+});
+
+test("normalizeBackup supplies safe labels for blank legacy metadata", () => {
+  const backup = normalizeBackup({
+    id: "backup-legacy",
+    name: "  ",
+    createdAt: "2026-04-14T00:00:00.000Z",
+    createdBy: "\n",
+  });
+
+  assert.equal(backup.name, "Unnamed backup");
+  assert.equal(backup.createdBy, "system");
+  assert.equal(
+    buildBackupRowAriaLabel({
+      backup,
+      formattedCreatedAt: "14/04/2026, 08:00 PM",
+    }),
+    "Backup Unnamed backup, created by system, created 14/04/2026, 08:00 PM",
   );
 });

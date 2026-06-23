@@ -25,6 +25,11 @@ function isRecord(value: unknown): value is BackupRecordLike {
   return typeof value === "object" && value !== null;
 }
 
+function normalizeBackupText(value: unknown, fallback: string) {
+  const normalized = String(value ?? "").trim();
+  return normalized || fallback;
+}
+
 export function normalizeBackup(raw: unknown): BackupRecord {
   const record = isRecord(raw) ? raw : {};
   let metadata: unknown = record.metadata ?? null;
@@ -47,10 +52,10 @@ export function normalizeBackup(raw: unknown): BackupRecord {
 
   return {
     id: String(record.id ?? ""),
-    name: String(record.name ?? ""),
+    name: normalizeBackupText(record.name, "Unnamed backup"),
     createdAt: String(record.createdAt ?? record.created_at ?? new Date().toISOString()),
-    createdBy: String(record.createdBy ?? record.created_by ?? "system"),
-        metadata: isRecord(metadata)
+    createdBy: normalizeBackupText(record.createdBy ?? record.created_by, "system"),
+    metadata: isRecord(metadata)
       ? {
           importsCount: Number(metadata.importsCount ?? metadata.imports_count ?? 0),
           dataRowsCount: Number(metadata.dataRowsCount ?? metadata.data_rows_count ?? 0),
