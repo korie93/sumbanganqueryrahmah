@@ -8,7 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
-import { getAriaInvalidProps } from "@/lib/aria-state-props";
+import { getAriaInvalidProps, getAriaRequiredProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import { SaveCollectionFormSection } from "@/pages/collection/SaveCollectionFormSection";
@@ -83,6 +83,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     paymentDateErrorId,
   );
   const amountValidationProps = getInvalidFieldProps(state.fieldErrors.amount, amountErrorId);
+  const requiredFieldProps = getAriaRequiredProps(true);
 
   usePageShortcuts([
     {
@@ -108,6 +109,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("customerName")}
           disabled={state.submitting}
           autoComplete="name"
+          {...requiredFieldProps}
           {...customerNameValidationProps}
         />
         {state.fieldErrors.customerName ? (
@@ -127,6 +129,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           inputMode="numeric"
           autoComplete="off"
+          {...requiredFieldProps}
           {...icNumberValidationProps}
         />
         {state.fieldErrors.icNumber ? (
@@ -171,6 +174,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("accountNumber")}
           disabled={state.submitting}
           autoComplete="off"
+          {...requiredFieldProps}
           {...accountNumberValidationProps}
         />
         {state.fieldErrors.accountNumber ? (
@@ -189,6 +193,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("batch")}
           disabled={state.submitting}
           aria-label="Batch"
+          {...requiredFieldProps}
           {...batchValidationProps}
           className={cn(
             "w-full border border-input bg-background px-3 text-sm",
@@ -217,6 +222,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           placeholder="Select payment date..."
           ariaLabel="Payment Date"
+          {...requiredFieldProps}
           {...paymentDateValidationProps}
           buttonTestId="save-collection-payment-date"
           disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}
@@ -240,6 +246,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("amount")}
           disabled={state.submitting}
           inputMode="decimal"
+          {...requiredFieldProps}
           {...amountValidationProps}
         />
         {state.fieldErrors.amount ? (

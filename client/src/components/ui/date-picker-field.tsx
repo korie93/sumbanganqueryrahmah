@@ -23,6 +23,7 @@ interface DatePickerFieldProps {
   onBlur?: FocusEventHandler<HTMLButtonElement> | undefined;
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | "true" | "false" | "grammar" | "spelling" | undefined;
+  "aria-required"?: "true" | "false" | undefined;
 }
 
 function getSelectedDate(value: string) {
@@ -61,6 +62,7 @@ export function DatePickerField({
   onBlur,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
+  "aria-required": ariaRequired,
 }: DatePickerFieldProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -69,6 +71,7 @@ export function DatePickerField({
   const triggerLabel = ariaLabel ?? placeholder;
   const triggerAriaLabelProps = triggerLabel ? { "aria-label": triggerLabel } : {};
   const triggerInvalidProps = getAriaInvalidProps(ariaInvalid);
+  const triggerRequiredProps = ariaRequired ? { "aria-required": ariaRequired } : {};
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -82,6 +85,7 @@ export function DatePickerField({
           aria-describedby={ariaDescribedBy}
           {...triggerAriaLabelProps}
           {...triggerInvalidProps}
+          {...triggerRequiredProps}
           title={triggerLabel}
           className={cn(
             "h-10 w-full justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",
