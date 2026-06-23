@@ -1,7 +1,10 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import type { RecentLoginActivityPageQuery } from "@/pages/dashboard/types";
-import { analyticsRoleDistributionSchema } from "@shared/api-contracts";
+import {
+  analyticsRoleDistributionSchema,
+  analyticsTopUsersSchema,
+} from "@shared/api-contracts";
 
 type AnalyticsRequestOptions = {
   signal?: AbortSignal | undefined;
@@ -29,7 +32,11 @@ export async function getTopActiveUsers(pageSize: number = 10, options?: Analyti
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(
+    response,
+    analyticsTopUsersSchema,
+    "/api/analytics/top-users",
+  );
 }
 
 export async function getRecentLoginActivity(pageSize: number = 8, options?: AnalyticsRequestOptions) {

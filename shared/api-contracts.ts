@@ -77,6 +77,15 @@ export const analyticsRoleDistributionSchema = z.array(
   }),
 );
 
+export const analyticsTopUsersSchema = z.array(
+  z.object({
+    username: nonEmptyStringSchema,
+    role: nonEmptyStringSchema,
+    loginCount: nonNegativeIntSchema,
+    lastLogin: z.string().datetime({ offset: true }).nullable(),
+  }),
+);
+
 export const importRecordSchema = z.object({
   id: nonEmptyStringSchema,
   name: nonEmptyStringSchema,

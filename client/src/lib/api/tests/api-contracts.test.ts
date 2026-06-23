@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   allImportsAnalysisResponseSchema,
   analyticsRoleDistributionSchema,
+  analyticsTopUsersSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
   auditLogRecordSchema,
@@ -23,7 +24,10 @@ import {
   getImports,
   renameImport,
 } from "@/lib/api/imports";
-import { getRoleDistribution } from "@/lib/api/analytics";
+import {
+  getRoleDistribution,
+  getTopActiveUsers,
+} from "@/lib/api/analytics";
 import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
@@ -138,6 +142,75 @@ test("role distribution API wrapper rejects malformed contract payloads", async 
     await assert.rejects(
       () => getRoleDistribution(),
       /API contract mismatch for \/api\/analytics\/role-distribution/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("analytics top users contract normalizes identities and validates activity fields", () => {
+  const valid = analyticsTopUsersSchema.parse([
+    {
+      username: " operator.one ",
+      role: " admin ",
+      loginCount: 4,
+      lastLogin: "2026-06-24T01:30:00.000Z",
+    },
+    {
+      username: "new.user",
+      role: "user",
+      loginCount: 0,
+      lastLogin: null,
+    },
+  ]);
+
+  assert.deepEqual(valid, [
+    {
+      username: "operator.one",
+      role: "admin",
+      loginCount: 4,
+      lastLogin: "2026-06-24T01:30:00.000Z",
+    },
+    {
+      username: "new.user",
+      role: "user",
+      loginCount: 0,
+      lastLogin: null,
+    },
+  ]);
+  assert.equal(
+    analyticsTopUsersSchema.safeParse([
+      {
+        username: "",
+        role: "admin",
+        loginCount: -1,
+        lastLogin: "not-a-date",
+      },
+    ]).success,
+    false,
+  );
+});
+
+test("top users API wrapper rejects malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/analytics/top-users?pageSize=10") {
+      return jsonResponse([
+        {
+          username: "",
+          role: "admin",
+          loginCount: 1,
+          lastLogin: null,
+        },
+      ]);
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getTopActiveUsers(),
+      /API contract mismatch for \/api\/analytics\/top-users/,
     );
   } finally {
     restoreFetch();
