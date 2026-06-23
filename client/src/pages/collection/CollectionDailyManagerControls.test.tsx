@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CollectionDailyTargetControls, CollectionDailyUserFilterControl } from "@/pages/collection/CollectionDailyManagerControls";
+
+const userFilterSource = readFileSync(
+  path.resolve(process.cwd(), "client/src/pages/collection/CollectionDailyUserFilterControl.tsx"),
+  "utf8",
+);
 
 test("CollectionDailyUserFilterControl renders a searchable solid picker", () => {
   const markup = renderToStaticMarkup(
@@ -33,6 +40,13 @@ test("CollectionDailyUserFilterControl renders a searchable solid picker", () =>
   assert.match(markup, /id="collection-daily-user-trigger-value"/);
   assert.match(markup, /ALPHA \+1/);
   assert.match(markup, /bg-background text-left shadow-sm h-11 rounded-xl px-4/);
+});
+
+test("CollectionDailyUserFilterControl spreads labelledby only when available", () => {
+  assert.match(userFilterSource, /const triggerLabelledBy = triggerLabelId \? `\$\{triggerLabelId\} \$\{triggerValueId\}` : undefined;/);
+  assert.match(userFilterSource, /const triggerLabelledByProps = triggerLabelledBy \? \{ "aria-labelledby": triggerLabelledBy \} : \{\};/);
+  assert.match(userFilterSource, /\{\.\.\.triggerLabelledByProps\}/);
+  assert.doesNotMatch(userFilterSource, /aria-labelledby=\{/);
 });
 
 test("CollectionDailyTargetControls keeps target actions compact and explicit", () => {

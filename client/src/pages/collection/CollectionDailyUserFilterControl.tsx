@@ -44,6 +44,8 @@ export function CollectionDailyUserFilterControl({
   const isMobile = useIsMobile();
   const [searchValue, setSearchValue] = useState("");
   const triggerValueId = `${triggerId}-value`;
+  const triggerLabelledBy = triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined;
+  const triggerLabelledByProps = triggerLabelledBy ? { "aria-labelledby": triggerLabelledBy } : {};
 
   useEffect(() => {
     if (!userPopoverOpen) {
@@ -86,7 +88,7 @@ export function CollectionDailyUserFilterControl({
             disabled={loadingUsers}
             aria-expanded="true"
             aria-haspopup="dialog"
-            aria-labelledby={triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined}
+            {...triggerLabelledByProps}
             data-testid="collection-daily-user-trigger"
           >
             {triggerContent}
@@ -103,7 +105,7 @@ export function CollectionDailyUserFilterControl({
             disabled={loadingUsers}
             aria-expanded="false"
             aria-haspopup="dialog"
-            aria-labelledby={triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined}
+            {...triggerLabelledByProps}
             data-testid="collection-daily-user-trigger"
           >
             {triggerContent}
