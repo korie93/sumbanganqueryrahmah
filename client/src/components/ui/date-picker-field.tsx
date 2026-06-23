@@ -68,8 +68,10 @@ export function DatePickerField({
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const selectedDate = getSelectedDate(value);
+  const displayValue = value ? formatIsoDateToDDMMYYYY(value) : placeholder;
   const triggerLabel = ariaLabel ?? placeholder;
-  const triggerAriaLabelProps = triggerLabel ? { "aria-label": triggerLabel } : {};
+  const triggerAccessibleLabel = ariaLabel ? `${ariaLabel}: ${displayValue}` : displayValue;
+  const triggerAriaLabelProps = triggerAccessibleLabel ? { "aria-label": triggerAccessibleLabel } : {};
   const triggerInvalidProps = getAriaInvalidProps(ariaInvalid);
   const triggerRequiredProps = ariaRequired ? { "aria-required": ariaRequired } : {};
 
@@ -101,7 +103,7 @@ export function DatePickerField({
             aria-hidden="true"
           />
           <span className="truncate">
-            {value ? formatIsoDateToDDMMYYYY(value) : placeholder}
+            {displayValue}
           </span>
         </Button>
       </PopoverTrigger>

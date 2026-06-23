@@ -119,6 +119,8 @@ test("shared primitive visual indicators are decorative only", () => {
   assert.match(commandSource, /<Search className="mr-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" \/>/);
   assert.match(datePickerSource, /<CalendarIcon[\s\S]*aria-hidden="true"/);
   assert.match(datePickerSource, /getAriaInvalidProps\(ariaInvalid\)/);
+  assert.match(datePickerSource, /const displayValue = value \? formatIsoDateToDDMMYYYY\(value\) : placeholder/);
+  assert.match(datePickerSource, /const triggerAccessibleLabel = ariaLabel \? `\$\{ariaLabel\}: \$\{displayValue\}` : displayValue/);
   assert.match(datePickerSource, /const triggerRequiredProps = ariaRequired \? \{ "aria-required": ariaRequired \} : \{\}/);
   assert.match(datePickerSource, /\{\.\.\.triggerRequiredProps\}/);
   assert.doesNotMatch(datePickerSource, /aria-required=\{/);
