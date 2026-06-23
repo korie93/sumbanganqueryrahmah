@@ -28,12 +28,15 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
 });
 
 test("save collection progress exposes non-visual step state text", () => {
+  assert.match(saveCollectionProgressSource, /import \{ getAriaCurrentStepProps \} from "@\/lib\/aria-state-props"/);
   assert.match(saveCollectionProgressSource, /function getStepStateLabel/);
   assert.match(saveCollectionProgressSource, /if \(state === "complete"\) return "Complete"/);
   assert.match(saveCollectionProgressSource, /if \(state === "failed"\) return "Failed"/);
   assert.match(saveCollectionProgressSource, /if \(state === "active"\) return "In progress"/);
   assert.match(saveCollectionProgressSource, /return "Pending"/);
   assert.match(saveCollectionProgressSource, /<span className="sr-only">\{getStepStateLabel\(step\.state\)\}<\/span>/);
+  assert.match(saveCollectionProgressSource, /\{\.\.\.getAriaCurrentStepProps\(step\.state === "active"\)\}/);
+  assert.doesNotMatch(saveCollectionProgressSource, /aria-current=\{/);
   assert.match(saveCollectionProgressSource, /aria-live="polite"/);
   assert.match(saveCollectionProgressSource, /aria-atomic="true"/);
 });

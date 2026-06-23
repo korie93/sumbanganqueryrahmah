@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCircle2, CircleDashed, Loader2 } from "lucide-react";
+import { getAriaCurrentStepProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import {
   buildSaveCollectionProgressSteps,
@@ -69,6 +70,7 @@ export function SaveCollectionProgress({
         {steps.map((step) => (
           <li
             key={step.id}
+            {...getAriaCurrentStepProps(step.state === "active")}
             className={cn(
               "rounded-lg border bg-background/70 p-2.5",
               step.state === "active" ? "border-primary/40" : "border-border/60",
