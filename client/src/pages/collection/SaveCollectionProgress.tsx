@@ -26,6 +26,13 @@ function StepIcon({ state }: { state: ReturnType<typeof buildSaveCollectionProgr
   return <CircleDashed className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
 }
 
+function getStepStateLabel(state: ReturnType<typeof buildSaveCollectionProgressSteps>[number]["state"]): string {
+  if (state === "complete") return "Complete";
+  if (state === "failed") return "Failed";
+  if (state === "active") return "In progress";
+  return "Pending";
+}
+
 export function SaveCollectionProgress({
   phase,
   receiptCount,
@@ -70,6 +77,7 @@ export function SaveCollectionProgress({
           >
             <div className="flex items-center gap-2">
               <StepIcon state={step.state} />
+              <span className="sr-only">{getStepStateLabel(step.state)}</span>
               <span className="text-xs font-semibold text-foreground">{step.label}</span>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.description}</p>
