@@ -74,6 +74,9 @@ export function CollectionNicknameSummaryChartContent({
   );
   const hasData = hasCollectionNicknameSummaryChartData(chartData);
   const isDetailed = displayMode === "detail";
+  const detailedChartLabelProps = isDetailed
+    ? { "aria-labelledby": "nickname-summary-detailed-chart-title" }
+    : {};
   const displayedData = useMemo(
     () => isDetailed
       ? filterCollectionNicknameSummaryChartData(chartData, { limit, query, sortBy })
@@ -225,7 +228,7 @@ export function CollectionNicknameSummaryChartContent({
       <div className={isDetailed ? "min-w-0 space-y-4" : ""}>
         <section
           className="min-w-0"
-          aria-labelledby={isDetailed ? "nickname-summary-detailed-chart-title" : undefined}
+          {...detailedChartLabelProps}
         >
           {isDetailed ? (
             <div className="mb-2 flex flex-wrap items-start justify-between gap-2">

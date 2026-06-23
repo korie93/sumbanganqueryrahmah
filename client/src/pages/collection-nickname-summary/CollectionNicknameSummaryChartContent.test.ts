@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -8,6 +10,11 @@ import {
   normalizeCollectionNicknameTargetKey,
   type CollectionNicknameTargetBenchmark,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
+
+const chartContentSource = readFileSync(
+  path.resolve(process.cwd(), "client/src/pages/collection-nickname-summary/CollectionNicknameSummaryChartContent.tsx"),
+  "utf8",
+);
 
 test("CollectionNicknameSummaryChartContent renders accessible chart context from table totals", () => {
   const markup = renderToStaticMarkup(
@@ -73,6 +80,13 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /75\.0%/);
   assert.match(markup, /h-\[clamp\(420px,58vh,720px\)\]/);
   assert.match(markup, /h-\[clamp\(360px,54vh,620px\)\]/);
+});
+
+test("CollectionNicknameSummaryChartContent spreads detailed chart label only when available", () => {
+  assert.match(chartContentSource, /const detailedChartLabelProps = isDetailed/);
+  assert.match(chartContentSource, /\? \{ "aria-labelledby": "nickname-summary-detailed-chart-title" \}/);
+  assert.match(chartContentSource, /\{\.\.\.detailedChartLabelProps\}/);
+  assert.doesNotMatch(chartContentSource, /aria-labelledby=\{isDetailed/);
 });
 
 test("CollectionNicknameSummaryChartContent renders explicit empty and zero states", () => {
