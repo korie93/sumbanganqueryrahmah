@@ -951,6 +951,7 @@ test("auth manual fetch wrappers forward AbortSignal", async () => {
         mustChangePassword: false,
         status: "active",
         user: null,
+        sessionExpiresAt: "2099-01-01T00:00:00.000Z",
       });
     }
     if (url.endsWith("/api/health")) {

@@ -35,12 +35,11 @@ function buildApiContractMismatchMessage(endpoint: string, error: z.ZodError) {
   return `API contract mismatch for ${endpoint} (${messageParts.join("; ")})`;
 }
 
-export async function parseApiJson<TSchema extends z.ZodTypeAny>(
-  response: Response,
+export function parseApiPayload<TSchema extends z.ZodTypeAny>(
+  payload: unknown,
   schema: TSchema,
   endpoint: string,
-): Promise<z.infer<TSchema>> {
-  const payload = await response.json();
+): z.infer<TSchema> {
   const parsed = schema.safeParse(payload);
 
   if (parsed.success) {
@@ -48,4 +47,12 @@ export async function parseApiJson<TSchema extends z.ZodTypeAny>(
   }
 
   throw new Error(buildApiContractMismatchMessage(endpoint, parsed.error));
+}
+
+export async function parseApiJson<TSchema extends z.ZodTypeAny>(
+  response: Response,
+  schema: TSchema,
+  endpoint: string,
+): Promise<z.infer<TSchema>> {
+  return parseApiPayload(await response.json(), schema, endpoint);
 }

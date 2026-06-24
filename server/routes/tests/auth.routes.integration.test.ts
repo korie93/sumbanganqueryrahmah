@@ -35,6 +35,11 @@ import {
 import type { AuditEntry } from "./auth-route-auth-flow-shared";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import {
+  authLoginResponseSchema,
+  authLoginSuccessResponseSchema,
+  authUserResponseSchema,
+} from "../../../shared/api-contracts";
+import {
   createAccountsStorageDouble,
   createDevMailAdminStorageDouble,
   createManagedUsersPageStorageDouble,
@@ -543,6 +548,7 @@ test("GET /api/me accepts the auth session cookie without a bearer token", async
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authUserResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.user.username, user.username);
     assert.equal(payload.user.role, user.role);
@@ -1083,6 +1089,7 @@ test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authLoginSuccessResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.username, user.username);
     assert.equal(payload.activityId, activity.id);
@@ -1409,6 +1416,7 @@ test("POST /api/auth/login returns a 2FA challenge for enabled admin accounts an
 
     assert.equal(loginResponse.status, 200);
     const loginPayload = await loginResponse.json();
+    assert.doesNotThrow(() => authLoginResponseSchema.parse(loginPayload));
     assert.equal(loginPayload.ok, true);
     assert.equal(loginPayload.twoFactorRequired, true);
     assert.equal(typeof loginPayload.challengeToken, "string");
@@ -1430,6 +1438,7 @@ test("POST /api/auth/login returns a 2FA challenge for enabled admin accounts an
 
     assert.equal(verifyResponse.status, 200);
     const verifyPayload = await verifyResponse.json();
+    assert.doesNotThrow(() => authLoginSuccessResponseSchema.parse(verifyPayload));
     assert.equal(verifyPayload.ok, true);
     assert.equal(verifyPayload.activityId, activity.id);
     assert.equal(typeof verifyPayload.sessionExpiresAt, "string");

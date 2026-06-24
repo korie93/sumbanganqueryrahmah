@@ -1,7 +1,13 @@
 import { ERROR_CODES } from "@shared/error-codes";
+import {
+  authLoginResponseSchema,
+  authLoginSuccessResponseSchema,
+  authUserResponseSchema,
+} from "@shared/api-contracts";
 
 import { apiRequest, createApiHeaders } from "../api-client";
 import { safeJsonParseResult } from "../utils/safe-json";
+import { parseApiJson, parseApiPayload } from "./contract";
 import { notifyMaintenanceMode } from "./maintenance-navigation";
 import type {
   CurrentUser,
@@ -10,8 +16,6 @@ import type {
   RequestOptions,
 } from "./auth-types";
 import { API_BASE, getCsrfHeader } from "./shared";
-
-import type { AuthUserResponse } from "./auth-types";
 
 function readRetryAfterMs(res: Response, data: unknown): number | undefined {
   const payloadRetryAfterMs = Number((data as { retryAfterMs?: unknown } | null)?.retryAfterMs);
@@ -160,17 +164,21 @@ export async function login(
     );
   }
 
-  return data as LoginResponse;
+  return parseApiPayload(data, authLoginResponseSchema, "/api/auth/login");
 }
 
 export async function verifyTwoFactorLogin(
   payload: { challengeToken: string; code: string },
   options?: RequestOptions,
-) {
+): Promise<LoginSuccessResponse> {
   const response = await apiRequest("POST", "/api/auth/verify-two-factor-login", payload, {
     signal: options?.signal,
   });
-  return response.json() as Promise<LoginSuccessResponse>;
+  return parseApiJson(
+    response,
+    authLoginSuccessResponseSchema,
+    "/api/auth/verify-two-factor-login",
+  );
 }
 
 export async function checkHealth(options?: RequestOptions) {
@@ -185,7 +193,7 @@ export async function getMe(options?: RequestOptions): Promise<CurrentUser> {
   const response = await apiRequest("GET", "/api/me", undefined, {
     signal: options?.signal,
   });
-  const payload = (await response.json()) as AuthUserResponse;
+  const payload = await parseApiJson(response, authUserResponseSchema, "/api/me");
   if (!payload.user) {
     throw new Error("Authenticated user payload is missing.");
   }

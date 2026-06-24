@@ -11,6 +11,9 @@ export type CurrentUser = {
   twoFactorEnabled?: boolean;
   twoFactorPendingSetup?: boolean;
   twoFactorConfiguredAt?: string | null;
+  activatedAt?: string | null;
+  passwordChangedAt?: string | null;
+  lastLoginAt?: string | null;
   sessionExpiresAt?: string | null;
 };
 

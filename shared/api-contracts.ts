@@ -474,6 +474,60 @@ export const maintenanceStatusResponseSchema = z.object({
   endTime: z.string().datetime({ offset: true }).nullable(),
 });
 
+const authNullableTimestampSchema = z.string().datetime({ offset: true }).nullable();
+const authOptionalNullableTimestampSchema = authNullableTimestampSchema.optional().default(null);
+
+export const authCurrentUserSchema = z.object({
+  id: nonEmptyStringSchema,
+  username: nonEmptyStringSchema,
+  fullName: nullableStringSchema,
+  email: nullableStringSchema,
+  role: nonEmptyStringSchema,
+  status: z.enum(["pending_activation", "active", "suspended", "disabled"]),
+  mustChangePassword: z.boolean(),
+  passwordResetBySuperuser: z.boolean(),
+  isBanned: z.boolean().nullable(),
+  twoFactorEnabled: z.boolean().optional().default(false),
+  twoFactorPendingSetup: z.boolean(),
+  twoFactorConfiguredAt: authOptionalNullableTimestampSchema,
+  activatedAt: authNullableTimestampSchema,
+  passwordChangedAt: authNullableTimestampSchema,
+  lastLoginAt: authNullableTimestampSchema,
+}).strict();
+
+export const authLoginSuccessResponseSchema = z.object({
+  ok: z.literal(true),
+  username: nonEmptyStringSchema,
+  role: nonEmptyStringSchema,
+  activityId: nonEmptyStringSchema,
+  mustChangePassword: z.boolean(),
+  status: z.enum(["pending_activation", "active", "suspended", "disabled"]),
+  user: authCurrentUserSchema.nullable(),
+  sessionExpiresAt: z.string().datetime({ offset: true }),
+}).strict();
+
+export const authLoginTwoFactorChallengeResponseSchema = z.object({
+  ok: z.literal(true),
+  twoFactorRequired: z.literal(true),
+  challengeToken: nonEmptyStringSchema,
+  username: nonEmptyStringSchema,
+  role: nonEmptyStringSchema,
+  mustChangePassword: z.boolean(),
+  status: z.enum(["pending_activation", "active", "suspended", "disabled"]),
+  user: authCurrentUserSchema.nullable(),
+}).strict();
+
+export const authLoginResponseSchema = z.union([
+  authLoginSuccessResponseSchema,
+  authLoginTwoFactorChallengeResponseSchema,
+]);
+
+export const authUserResponseSchema = z.object({
+  ok: z.literal(true),
+  sessionExpiresAt: z.string().datetime({ offset: true }).nullable(),
+  user: authCurrentUserSchema.nullable(),
+}).strict();
+
 export const activityStatusSchema = z.enum([
   "ONLINE",
   "IDLE",
@@ -594,6 +648,10 @@ export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
 export type AppConfigResponse = z.infer<typeof appConfigResponseSchema>;
 export type MaintenanceStatusResponse = z.infer<typeof maintenanceStatusResponseSchema>;
+export type AuthCurrentUserContract = z.infer<typeof authCurrentUserSchema>;
+export type AuthLoginSuccessResponseContract = z.infer<typeof authLoginSuccessResponseSchema>;
+export type AuthLoginResponseContract = z.infer<typeof authLoginResponseSchema>;
+export type AuthUserResponseContract = z.infer<typeof authUserResponseSchema>;
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;

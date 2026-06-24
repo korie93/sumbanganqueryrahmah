@@ -15,6 +15,9 @@ import {
   activityPageResponseSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
+  authCurrentUserSchema,
+  authLoginResponseSchema,
+  authUserResponseSchema,
   auditLogRecordSchema,
   collectionMonthlyComparisonResponseSchema,
   collectionMonthlyTargetResponseSchema,
@@ -47,6 +50,11 @@ import {
   getAllActivity,
   getFilteredActivity,
 } from "@/lib/api/activity";
+import {
+  getMe,
+  login,
+  verifyTwoFactorLogin,
+} from "@/lib/api/auth";
 import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
@@ -541,6 +549,132 @@ test("runtime configuration API wrappers reject malformed contract payloads", as
     await assert.rejects(
       () => getMaintenanceStatus(),
       /API contract mismatch for \/api\/maintenance-status/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+function createAuthUserContract() {
+  return {
+    id: "user-1",
+    username: "operator.one",
+    fullName: "Operator One",
+    email: "operator@example.com",
+    role: "admin",
+    status: "active",
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    isBanned: false,
+    twoFactorEnabled: true,
+    twoFactorPendingSetup: false,
+    twoFactorConfiguredAt: "2026-06-24T08:00:00.000Z",
+    activatedAt: "2026-06-01T08:00:00.000Z",
+    passwordChangedAt: null,
+    lastLoginAt: "2026-06-24T08:00:00.000Z",
+  } as const;
+}
+
+test("authentication contracts accept complete session payloads and reject sensitive drift", () => {
+  const user = authCurrentUserSchema.parse(createAuthUserContract());
+  assert.equal(user.username, "operator.one");
+
+  const loginResponse = authLoginResponseSchema.parse({
+    ok: true,
+    username: user.username,
+    role: user.role,
+    activityId: "activity-1",
+    mustChangePassword: false,
+    status: "active",
+    user,
+    sessionExpiresAt: "2026-06-25T08:00:00.000Z",
+  });
+  assert.equal("activityId" in loginResponse && loginResponse.activityId, "activity-1");
+
+  assert.equal(
+    authCurrentUserSchema.safeParse({
+      ...createAuthUserContract(),
+      passwordHash: "must-not-cross-the-wire",
+    }).success,
+    false,
+  );
+  assert.equal(
+    authLoginResponseSchema.safeParse({
+      ok: true,
+      username: "operator.one",
+      role: "admin",
+      activityId: "activity-1",
+      mustChangePassword: false,
+      status: "active",
+      user: createAuthUserContract(),
+      sessionExpiresAt: "not-a-timestamp",
+    }).success,
+    false,
+  );
+  assert.equal(
+    authUserResponseSchema.safeParse({
+      ok: true,
+      user: {
+        ...createAuthUserContract(),
+        status: "unknown",
+      },
+      sessionExpiresAt: null,
+    }).success,
+    false,
+  );
+});
+
+test("authentication API wrappers reject malformed success payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/auth/login") {
+      return jsonResponse({
+        ok: true,
+        username: "operator.one",
+        role: "admin",
+        activityId: "activity-1",
+        mustChangePassword: false,
+        status: "active",
+        user: createAuthUserContract(),
+        sessionExpiresAt: "invalid",
+      });
+    }
+    if (url === "/api/auth/verify-two-factor-login") {
+      return jsonResponse({
+        ok: true,
+        username: "operator.one",
+        role: "admin",
+        mustChangePassword: false,
+        status: "active",
+        user: createAuthUserContract(),
+        sessionExpiresAt: "2026-06-25T08:00:00.000Z",
+      });
+    }
+    if (url === "/api/me") {
+      return jsonResponse({
+        ok: true,
+        user: {
+          ...createAuthUserContract(),
+          passwordHash: "must-not-cross-the-wire",
+        },
+        sessionExpiresAt: "2026-06-25T08:00:00.000Z",
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => login("operator.one", "secret"),
+      /API contract mismatch for \/api\/auth\/login/,
+    );
+    await assert.rejects(
+      () => verifyTwoFactorLogin({ challengeToken: "challenge", code: "123456" }),
+      /API contract mismatch for \/api\/auth\/verify-two-factor-login/,
+    );
+    await assert.rejects(
+      () => getMe(),
+      /API contract mismatch for \/api\/me/,
     );
   } finally {
     restoreFetch();
