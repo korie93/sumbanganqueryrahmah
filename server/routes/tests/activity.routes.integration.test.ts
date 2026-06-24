@@ -3,6 +3,10 @@ import test from "node:test";
 import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import type { RequestHandler } from "express";
+import {
+  activityListResponseSchema,
+  activityPageResponseSchema,
+} from "../../../shared/api-contracts";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import {
   configureSessionRevocationStoreForRuntime,
@@ -1253,7 +1257,9 @@ test("GET /api/activity/page validates and forwards pagination, sorting, and fil
     );
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), {
+    const payload = await response.json();
+    assert.doesNotThrow(() => activityPageResponseSchema.parse(payload));
+    assert.deepEqual(payload, {
       activities: [],
       summary: {
         idleCount: 3,
@@ -1364,6 +1370,8 @@ test("GET /api/activity/page limits exact network audit data to moderators", asy
     assert.equal(adminPayload.activities[0]?.ipAddress, "203.0.113.88");
     assert.equal(adminPayload.activities[0]?.deviceType, "desktop");
     assert.equal(adminPayload.activities[0]?.platform, "Windows 10/11");
+    assert.equal(adminPayload.activities[0]?.fingerprint, undefined);
+    assert.equal(adminPayload.activities[0]?.userId, undefined);
   } finally {
     await Promise.all([
       stopTestServer(userServer.server),
@@ -1543,11 +1551,14 @@ test("GET /api/activity/all keeps the requesting active session online when the 
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => activityListResponseSchema.parse(payload));
     assert.equal(payload.activities.length, 1);
     assert.equal(payload.activities[0]?.id, "activity-1");
     assert.equal(payload.activities[0]?.status, "ONLINE");
     assert.equal(payload.activities[0]?.loginTime, "2026-04-10T06:05:00.000Z");
     assert.match(String(payload.activities[0]?.lastActivityTime || ""), /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(payload.activities[0]?.fingerprint, undefined);
+    assert.equal(payload.activities[0]?.userId, undefined);
   } finally {
     await stopTestServer(server);
   }
@@ -1593,6 +1604,7 @@ test("GET /api/activity/filter removes the requesting session from IDLE results 
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => activityListResponseSchema.parse(payload));
     assert.deepEqual(payload, {
       activities: [],
     });

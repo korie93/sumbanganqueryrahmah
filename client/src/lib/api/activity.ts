@@ -1,4 +1,9 @@
 import { apiRequest } from "../api-client";
+import { parseApiJson } from "./contract";
+import {
+  activityListResponseSchema,
+  activityPageResponseSchema,
+} from "@shared/api-contracts";
 
 type ActivityRequestOptions = {
   signal?: AbortSignal | undefined;
@@ -211,7 +216,7 @@ export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
 
 export async function getAllActivity(options?: ActivityRequestOptions) {
   const response = await apiRequest("GET", "/api/activity/all", undefined, options);
-  return response.json();
+  return parseApiJson(response, activityListResponseSchema, "/api/activity/all");
 }
 
 export async function getFilteredActivity(filters: ActivityFilters, options?: ActivityRequestOptions) {
@@ -228,7 +233,7 @@ export async function getFilteredActivity(filters: ActivityFilters, options?: Ac
   const queryString = params.toString();
   const url = queryString ? `/api/activity/filter?${queryString}` : "/api/activity/filter";
   const response = await apiRequest("GET", url, undefined, options);
-  return response.json();
+  return parseApiJson(response, activityListResponseSchema, "/api/activity/filter");
 }
 
 export async function deleteActivityLog(activityId: string) {
@@ -274,7 +279,7 @@ export async function getActivityPage(
     undefined,
     options,
   );
-  return response.json() as Promise<ActivityPageResponse>;
+  return parseApiJson(response, activityPageResponseSchema, "/api/activity/page");
 }
 
 export async function getActivityInvestigation(

@@ -46,7 +46,7 @@ function hashActivityIdForLogoutFlush(activityId: string): string {
 
 type SerializedActivityListItem<T extends ActivityListItem> = Omit<
   T,
-  "lastActivityTime" | "loginTime" | "logoutTime"
+  "fingerprint" | "lastActivityTime" | "loginTime" | "logoutTime" | "userId"
 > & {
   lastActivityTime: string | null;
   loginTime: string;
@@ -57,8 +57,16 @@ function serializeActivityForResponse<T extends ActivityListItem>(
   activity: T,
   access: ActivityResponseAccess = {},
 ): SerializedActivityListItem<T> {
+  const {
+    fingerprint: omittedFingerprint,
+    userId: omittedUserId,
+    ...publicActivity
+  } = activity;
+  void omittedFingerprint;
+  void omittedUserId;
+
   return {
-    ...activity,
+    ...publicActivity,
     ipAddress: access.includeExactIpAddress
       ? activity.ipAddress ?? null
       : maskClientIpAddress(activity.ipAddress),

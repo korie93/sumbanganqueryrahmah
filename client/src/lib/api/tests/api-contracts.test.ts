@@ -11,6 +11,8 @@ import {
   analyticsSummarySchema,
   analyticsTopUsersSchema,
   appConfigResponseSchema,
+  activityListResponseSchema,
+  activityPageResponseSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
   auditLogRecordSchema,
@@ -40,6 +42,11 @@ import {
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api/analytics";
+import {
+  getActivityPage,
+  getAllActivity,
+  getFilteredActivity,
+} from "@/lib/api/activity";
 import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
@@ -534,6 +541,161 @@ test("runtime configuration API wrappers reject malformed contract payloads", as
     await assert.rejects(
       () => getMaintenanceStatus(),
       /API contract mismatch for \/api\/maintenance-status/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("activity feed contracts normalize nullable device fields and preserve audit facts", () => {
+  const activity = {
+    id: "activity-1",
+    username: " operator.one ",
+    role: " admin ",
+    status: "ONLINE",
+    pcName: null,
+    browser: "Chrome 149",
+    deviceType: "desktop",
+    platform: "Windows 10/11",
+    fingerprint: null,
+    ipAddress: "203.0.113.88",
+    loginTime: "2026-06-24T08:00:00.000Z",
+    logoutTime: null,
+    lastActivityTime: "2026-06-24T08:05:00.000Z",
+    isActive: true,
+    logoutReason: null,
+  } as const;
+
+  const list = activityListResponseSchema.parse({ activities: [activity] });
+  assert.equal(list.activities[0]?.username, "operator.one");
+  assert.equal(list.activities[0]?.role, "admin");
+  assert.equal(list.activities[0]?.pcName, undefined);
+
+  const page = activityPageResponseSchema.parse({
+    activities: [activity],
+    summary: {
+      idleCount: 0,
+      kickedCount: 0,
+      logoutCount: 0,
+      onlineCount: 1,
+    },
+    pagination: {
+      mode: "offset",
+      page: 1,
+      pageSize: 20,
+      limit: 20,
+      offset: 0,
+      total: 1,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    },
+  });
+  assert.equal(page.pagination.total, 1);
+});
+
+test("activity feed contracts reject unknown states, malformed timestamps, and invalid counts", () => {
+  assert.equal(
+    activityListResponseSchema.safeParse({
+      activities: [{
+        id: "",
+        username: "operator.one",
+        role: "admin",
+        status: "UNKNOWN",
+        loginTime: "not-a-date",
+        isActive: true,
+      }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    activityPageResponseSchema.safeParse({
+      activities: [],
+      summary: {
+        idleCount: -1,
+        kickedCount: 0,
+        logoutCount: 0,
+        onlineCount: 0,
+      },
+      pagination: {
+        mode: "offset",
+        page: 0,
+        pageSize: 20,
+        limit: 20,
+        offset: 0,
+        total: -1,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    }).success,
+    false,
+  );
+});
+
+test("activity feed API wrappers reject malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/activity/all") {
+      return jsonResponse({
+        activities: [{
+          id: "activity-1",
+          username: "operator.one",
+          role: "admin",
+          status: "UNKNOWN",
+          loginTime: "2026-06-24T08:00:00.000Z",
+          isActive: true,
+        }],
+      });
+    }
+    if (url === "/api/activity/filter") {
+      return jsonResponse({ activities: "not-an-array" });
+    }
+    if (
+      url
+      === "/api/activity/page?page=1&pageSize=20&sortBy=loginTime&sortOrder=desc"
+    ) {
+      return jsonResponse({
+        activities: [],
+        summary: {
+          idleCount: 0,
+          kickedCount: 0,
+          logoutCount: 0,
+          onlineCount: 0,
+        },
+        pagination: {
+          mode: "offset",
+          page: 1,
+          pageSize: 20,
+          limit: 20,
+          offset: 0,
+          total: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getAllActivity(),
+      /API contract mismatch for \/api\/activity\/all/,
+    );
+    await assert.rejects(
+      () => getFilteredActivity({}),
+      /API contract mismatch for \/api\/activity\/filter/,
+    );
+    await assert.rejects(
+      () => getActivityPage({
+        page: 1,
+        pageSize: 20,
+        sortBy: "loginTime",
+        sortOrder: "desc",
+      }),
+      /API contract mismatch for \/api\/activity\/page/,
     );
   } finally {
     restoreFetch();

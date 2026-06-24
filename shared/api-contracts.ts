@@ -474,6 +474,54 @@ export const maintenanceStatusResponseSchema = z.object({
   endTime: z.string().datetime({ offset: true }).nullable(),
 });
 
+export const activityStatusSchema = z.enum([
+  "ONLINE",
+  "IDLE",
+  "LOGOUT",
+  "KICKED",
+  "BANNED",
+]);
+
+const optionalActivityStringSchema = z.string().nullish().transform((value) => value ?? undefined);
+const optionalActivityTimestampSchema = z.string()
+  .datetime({ offset: true })
+  .nullish()
+  .transform((value) => value ?? undefined);
+
+export const activityRecordSchema = z.object({
+  id: nonEmptyStringSchema,
+  username: nonEmptyStringSchema,
+  role: nonEmptyStringSchema,
+  status: activityStatusSchema,
+  pcName: optionalActivityStringSchema,
+  browser: optionalActivityStringSchema,
+  deviceType: z.enum(["desktop", "mobile", "tablet", "unknown"])
+    .nullish()
+    .transform((value) => value ?? undefined),
+  platform: optionalActivityStringSchema,
+  ipAddress: optionalActivityStringSchema,
+  loginTime: z.string().datetime({ offset: true }),
+  logoutTime: optionalActivityTimestampSchema,
+  lastActivityTime: optionalActivityTimestampSchema,
+  isActive: z.boolean(),
+  logoutReason: optionalActivityStringSchema,
+});
+
+export const activityListResponseSchema = z.object({
+  activities: z.array(activityRecordSchema),
+});
+
+export const activityPageResponseSchema = z.object({
+  activities: z.array(activityRecordSchema),
+  summary: z.object({
+    idleCount: nonNegativeIntSchema,
+    kickedCount: nonNegativeIntSchema,
+    logoutCount: nonNegativeIntSchema,
+    onlineCount: nonNegativeIntSchema,
+  }),
+  pagination: offsetPaginationMetaSchema,
+});
+
 export const collectionReportFreshnessSchema = z.object({
   status: z.enum(["fresh", "warming", "stale"]),
   pendingCount: nonNegativeIntSchema,
@@ -546,6 +594,9 @@ export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
 export type AppConfigResponse = z.infer<typeof appConfigResponseSchema>;
 export type MaintenanceStatusResponse = z.infer<typeof maintenanceStatusResponseSchema>;
+export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
+export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
+export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;
 export type CollectionMonthlyTargetResponse = z.infer<typeof collectionMonthlyTargetResponseSchema>;
