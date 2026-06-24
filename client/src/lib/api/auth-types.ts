@@ -126,6 +126,10 @@ export type AuthUserResponse = AuthOkResponse<{
   user: CurrentUser | null;
 }>;
 
+export type AuthUserMutationResponse = AuthOkResponse<{
+  user: CurrentUser | null;
+}>;
+
 export type AuthUserForceLogoutResponse = AuthOkResponse<{
   forceLogout: boolean;
   user: CurrentUser | null;

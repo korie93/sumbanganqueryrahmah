@@ -528,6 +528,32 @@ export const authUserResponseSchema = z.object({
   user: authCurrentUserSchema.nullable(),
 }).strict();
 
+export const authUserMutationResponseSchema = z.object({
+  ok: z.literal(true),
+  user: authCurrentUserSchema.nullable(),
+}).strict();
+
+export const authUserForceLogoutResponseSchema = authUserMutationResponseSchema.extend({
+  forceLogout: z.boolean(),
+}).strict();
+
+export const authTwoFactorStatusResponseSchema = authUserMutationResponseSchema.extend({
+  twoFactor: z.object({
+    enabled: z.boolean(),
+    pendingSetup: z.boolean(),
+    configuredAt: authNullableTimestampSchema,
+  }).strict(),
+}).strict();
+
+export const authTwoFactorSetupResponseSchema = authUserMutationResponseSchema.extend({
+  setup: z.object({
+    accountName: nonEmptyStringSchema,
+    issuer: nonEmptyStringSchema,
+    otpauthUrl: z.string().trim().startsWith("otpauth://totp/"),
+    secret: nonEmptyStringSchema,
+  }).strict(),
+}).strict();
+
 export const activityStatusSchema = z.enum([
   "ONLINE",
   "IDLE",
@@ -652,6 +678,10 @@ export type AuthCurrentUserContract = z.infer<typeof authCurrentUserSchema>;
 export type AuthLoginSuccessResponseContract = z.infer<typeof authLoginSuccessResponseSchema>;
 export type AuthLoginResponseContract = z.infer<typeof authLoginResponseSchema>;
 export type AuthUserResponseContract = z.infer<typeof authUserResponseSchema>;
+export type AuthUserMutationResponseContract = z.infer<typeof authUserMutationResponseSchema>;
+export type AuthUserForceLogoutResponseContract = z.infer<typeof authUserForceLogoutResponseSchema>;
+export type AuthTwoFactorStatusResponseContract = z.infer<typeof authTwoFactorStatusResponseSchema>;
+export type AuthTwoFactorSetupResponseContract = z.infer<typeof authTwoFactorSetupResponseSchema>;
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;

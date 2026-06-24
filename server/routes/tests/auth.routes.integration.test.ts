@@ -37,6 +37,10 @@ import { ERROR_CODES } from "../../../shared/error-codes";
 import {
   authLoginResponseSchema,
   authLoginSuccessResponseSchema,
+  authTwoFactorSetupResponseSchema,
+  authTwoFactorStatusResponseSchema,
+  authUserForceLogoutResponseSchema,
+  authUserMutationResponseSchema,
   authUserResponseSchema,
 } from "../../../shared/api-contracts";
 import {
@@ -585,6 +589,7 @@ test("PATCH /api/me/credentials returns the current user when no credential fiel
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authUserForceLogoutResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.forceLogout, false);
     assert.equal(payload.user.username, user.username);
@@ -708,6 +713,7 @@ test("POST /api/auth/change-password clears auth and CSRF cookies when forcing l
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authUserForceLogoutResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.forceLogout, true);
     assert.equal(accountUpdates.length, 1);
@@ -1613,10 +1619,18 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
 
     assert.equal(setupResponse.status, 200);
     const setupPayload = await setupResponse.json();
+    assert.doesNotThrow(() => authTwoFactorSetupResponseSchema.parse(setupPayload));
     assert.equal(typeof setupPayload.setup.secret, "string");
     assert.equal(user.twoFactorEnabled, false);
     assert.equal(typeof user.twoFactorSecretEncrypted, "string");
     assert.match(String(setupResponse.headers.get("set-cookie") || ""), /sqr_csrf=/);
+
+    const statusResponse = await fetch(`${baseUrl}/api/auth/two-factor`);
+    assert.equal(statusResponse.status, 200);
+    const statusPayload = await statusResponse.json();
+    assert.doesNotThrow(() => authTwoFactorStatusResponseSchema.parse(statusPayload));
+    assert.equal(statusPayload.twoFactor.enabled, false);
+    assert.equal(statusPayload.twoFactor.pendingSetup, true);
 
     const code = generateCurrentTwoFactorCode(setupPayload.setup.secret);
     const enableResponse = await fetch(`${baseUrl}/api/auth/two-factor/enable`, {
@@ -1630,6 +1644,8 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
     });
 
     assert.equal(enableResponse.status, 200);
+    const enablePayload = await enableResponse.json();
+    assert.doesNotThrow(() => authUserMutationResponseSchema.parse(enablePayload));
     assert.equal(user.twoFactorEnabled, true);
     assert.ok(user.twoFactorConfiguredAt instanceof Date);
     assert.match(String(enableResponse.headers.get("set-cookie") || ""), /sqr_csrf=/);
@@ -1646,6 +1662,8 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
     });
 
     assert.equal(disableResponse.status, 200);
+    const disablePayload = await disableResponse.json();
+    assert.doesNotThrow(() => authUserMutationResponseSchema.parse(disablePayload));
     assert.equal(user.twoFactorEnabled, false);
     assert.equal(user.twoFactorSecretEncrypted, null);
     assert.equal(user.twoFactorConfiguredAt, null);

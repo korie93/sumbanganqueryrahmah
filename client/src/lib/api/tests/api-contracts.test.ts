@@ -17,6 +17,10 @@ import {
   apiPaginationMetaSchema,
   authCurrentUserSchema,
   authLoginResponseSchema,
+  authTwoFactorSetupResponseSchema,
+  authTwoFactorStatusResponseSchema,
+  authUserForceLogoutResponseSchema,
+  authUserMutationResponseSchema,
   authUserResponseSchema,
   auditLogRecordSchema,
   collectionMonthlyComparisonResponseSchema,
@@ -54,6 +58,12 @@ import {
   getMe,
   login,
   verifyTwoFactorLogin,
+  changeMyPassword,
+  disableTwoFactor,
+  enableTwoFactor,
+  getTwoFactorStatus,
+  startTwoFactorSetup,
+  updateMyCredentials,
 } from "@/lib/api/auth";
 import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
@@ -675,6 +685,138 @@ test("authentication API wrappers reject malformed success payloads", async () =
     await assert.rejects(
       () => getMe(),
       /API contract mismatch for \/api\/me/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("authentication self-service contracts isolate setup secrets and require mutation state", () => {
+  const user = createAuthUserContract();
+
+  const status = authTwoFactorStatusResponseSchema.parse({
+    ok: true,
+    twoFactor: {
+      enabled: true,
+      pendingSetup: false,
+      configuredAt: "2026-06-24T08:00:00.000Z",
+    },
+    user,
+  });
+  assert.equal(status.twoFactor.enabled, true);
+
+  const setup = authTwoFactorSetupResponseSchema.parse({
+    ok: true,
+    setup: {
+      accountName: "operator.one",
+      issuer: "SQR",
+      otpauthUrl: "otpauth://totp/SQR:operator.one?secret=ABCDEF",
+      secret: "ABCDEF",
+    },
+    user,
+  });
+  assert.equal(setup.setup.issuer, "SQR");
+
+  assert.equal(
+    authUserMutationResponseSchema.safeParse({
+      ok: true,
+      user,
+      setup: { secret: "must-not-leak" },
+    }).success,
+    false,
+  );
+  assert.equal(
+    authUserForceLogoutResponseSchema.safeParse({
+      ok: true,
+      forceLogout: "yes",
+      user,
+    }).success,
+    false,
+  );
+  assert.equal(
+    authTwoFactorSetupResponseSchema.safeParse({
+      ok: true,
+      setup: {
+        accountName: "operator.one",
+        issuer: "SQR",
+        otpauthUrl: "https://example.com/not-an-otp-uri",
+        secret: "ABCDEF",
+      },
+      user,
+    }).success,
+    false,
+  );
+});
+
+test("authentication self-service API wrappers reject malformed success payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/auth/change-password") {
+      return jsonResponse({ ok: true, forceLogout: "yes", user: createAuthUserContract() });
+    }
+    if (url === "/api/auth/two-factor") {
+      return jsonResponse({
+        ok: true,
+        twoFactor: {
+          enabled: false,
+          pendingSetup: false,
+          configuredAt: "invalid",
+        },
+        user: createAuthUserContract(),
+      });
+    }
+    if (url === "/api/auth/two-factor/setup") {
+      return jsonResponse({
+        ok: true,
+        setup: {
+          accountName: "operator.one",
+          issuer: "SQR",
+          otpauthUrl: "invalid",
+          secret: "ABCDEF",
+        },
+        user: createAuthUserContract(),
+      });
+    }
+    if (url === "/api/auth/two-factor/enable") {
+      return jsonResponse({
+        ok: true,
+        user: createAuthUserContract(),
+        secret: "must-not-leak",
+      });
+    }
+    if (url === "/api/auth/two-factor/disable") {
+      return jsonResponse({ ok: true, user: null, forceLogout: false });
+    }
+    if (url === "/api/me/credentials") {
+      return jsonResponse({ ok: true, user: createAuthUserContract() });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => changeMyPassword({ currentPassword: "old", newPassword: "new" }),
+      /API contract mismatch for \/api\/auth\/change-password/,
+    );
+    await assert.rejects(
+      () => getTwoFactorStatus(),
+      /API contract mismatch for \/api\/auth\/two-factor/,
+    );
+    await assert.rejects(
+      () => startTwoFactorSetup({ currentPassword: "old" }),
+      /API contract mismatch for \/api\/auth\/two-factor\/setup/,
+    );
+    await assert.rejects(
+      () => enableTwoFactor({ code: "123456" }),
+      /API contract mismatch for \/api\/auth\/two-factor\/enable/,
+    );
+    await assert.rejects(
+      () => disableTwoFactor({ currentPassword: "old", code: "123456" }),
+      /API contract mismatch for \/api\/auth\/two-factor\/disable/,
+    );
+    await assert.rejects(
+      () => updateMyCredentials({ newUsername: "operator.two" }),
+      /API contract mismatch for \/api\/me\/credentials/,
     );
   } finally {
     restoreFetch();
