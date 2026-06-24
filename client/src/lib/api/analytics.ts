@@ -2,9 +2,12 @@ import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import type { RecentLoginActivityPageQuery } from "@/pages/dashboard/types";
 import {
+  analyticsLoginTrendsSchema,
+  analyticsPeakHoursSchema,
   analyticsRecentLoginActivityListSchema,
   analyticsRecentLoginActivityPageSchema,
   analyticsRoleDistributionSchema,
+  analyticsSummarySchema,
   analyticsTopUsersSchema,
 } from "@shared/api-contracts";
 
@@ -14,7 +17,7 @@ type AnalyticsRequestOptions = {
 
 export async function getAnalyticsSummary(options?: AnalyticsRequestOptions) {
   const response = await apiRequest("GET", "/api/analytics/summary", undefined, options);
-  return response.json();
+  return parseApiJson(response, analyticsSummarySchema, "/api/analytics/summary");
 }
 
 export async function getLoginTrends(days: number = 7, options?: AnalyticsRequestOptions) {
@@ -24,7 +27,11 @@ export async function getLoginTrends(days: number = 7, options?: AnalyticsReques
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(
+    response,
+    analyticsLoginTrendsSchema,
+    "/api/analytics/login-trends",
+  );
 }
 
 export async function getTopActiveUsers(pageSize: number = 10, options?: AnalyticsRequestOptions) {
@@ -85,7 +92,7 @@ export async function getRecentLoginActivityPage(
 
 export async function getPeakHours(options?: AnalyticsRequestOptions) {
   const response = await apiRequest("GET", "/api/analytics/peak-hours", undefined, options);
-  return response.json();
+  return parseApiJson(response, analyticsPeakHoursSchema, "/api/analytics/peak-hours");
 }
 
 export async function getRoleDistribution(options?: AnalyticsRequestOptions) {

@@ -687,7 +687,17 @@ test("analytics API wrappers forward AbortSignal", async () => {
 
     const url = String(input);
     if (url === "/api/analytics/summary") {
-      return jsonResponse({ totalUsers: 0 });
+      return jsonResponse({
+        totalUsers: 0,
+        activeSessions: 0,
+        loginsToday: 0,
+        totalDataRows: 0,
+        totalImports: 0,
+        bannedUsers: 0,
+        collectionRecordVersionConflicts24h: 0,
+        loginFailures24h: 0,
+        backupActions24h: 0,
+      });
     }
     if (url === "/api/analytics/login-trends?days=14") {
       return jsonResponse([]);
@@ -709,7 +719,9 @@ test("analytics API wrappers forward AbortSignal", async () => {
       });
     }
     if (url === "/api/analytics/peak-hours") {
-      return jsonResponse([]);
+      return jsonResponse(
+        Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })),
+      );
     }
     if (url === "/api/analytics/role-distribution") {
       return jsonResponse([]);

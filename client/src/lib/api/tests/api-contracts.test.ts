@@ -3,9 +3,12 @@ import test from "node:test";
 import { z } from "zod";
 import {
   allImportsAnalysisResponseSchema,
+  analyticsLoginTrendsSchema,
+  analyticsPeakHoursSchema,
   analyticsRecentLoginActivityListSchema,
   analyticsRecentLoginActivityPageSchema,
   analyticsRoleDistributionSchema,
+  analyticsSummarySchema,
   analyticsTopUsersSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
@@ -27,6 +30,9 @@ import {
   renameImport,
 } from "@/lib/api/imports";
 import {
+  getAnalyticsSummary,
+  getLoginTrends,
+  getPeakHours,
   getRecentLoginActivity,
   getRecentLoginActivityPage,
   getRoleDistribution,
@@ -350,6 +356,98 @@ test("recent login activity API wrappers reject malformed contract payloads", as
         status: "all",
       }),
       /API contract mismatch for \/api\/analytics\/recent-login-activity-page/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("dashboard metric contracts accept complete bounded analytics data", () => {
+  const summary = analyticsSummarySchema.parse({
+    totalUsers: 12,
+    activeSessions: 3,
+    loginsToday: 5,
+    totalDataRows: 240,
+    totalImports: 8,
+    bannedUsers: 1,
+    collectionRecordVersionConflicts24h: 0,
+    loginFailures24h: 2,
+    backupActions24h: 4,
+  });
+  assert.equal(summary.totalDataRows, 240);
+
+  const trends = analyticsLoginTrendsSchema.parse([
+    { date: "2026-06-23", logins: 5, logouts: 2 },
+    { date: "2026-06-24", logins: 3, logouts: 1 },
+  ]);
+  assert.equal(trends.length, 2);
+
+  const peakHours = analyticsPeakHoursSchema.parse(
+    Array.from({ length: 24 }, (_, hour) => ({ hour, count: hour % 4 })),
+  );
+  assert.equal(peakHours[23]?.hour, 23);
+});
+
+test("dashboard metric contracts reject incomplete, negative, and duplicate chart data", () => {
+  assert.equal(
+    analyticsSummarySchema.safeParse({
+      totalUsers: -1,
+    }).success,
+    false,
+  );
+  assert.equal(
+    analyticsLoginTrendsSchema.safeParse([
+      { date: "24/06/2026", logins: 1, logouts: -1 },
+    ]).success,
+    false,
+  );
+
+  const duplicatePeakHours = Array.from(
+    { length: 24 },
+    (_, hour) => ({ hour: hour === 23 ? 22 : hour, count: 0 }),
+  );
+  assert.equal(analyticsPeakHoursSchema.safeParse(duplicatePeakHours).success, false);
+  assert.equal(
+    analyticsPeakHoursSchema.safeParse([
+      { hour: 24, count: 1 },
+    ]).success,
+    false,
+  );
+});
+
+test("dashboard metric API wrappers reject malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/analytics/summary") {
+      return jsonResponse({
+        totalUsers: -1,
+      });
+    }
+    if (url === "/api/analytics/login-trends?days=7") {
+      return jsonResponse([
+        { date: "not-a-date", logins: 1, logouts: 0 },
+      ]);
+    }
+    if (url === "/api/analytics/peak-hours") {
+      return jsonResponse([
+        { hour: 9, count: 3 },
+      ]);
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getAnalyticsSummary(),
+      /API contract mismatch for \/api\/analytics\/summary/,
+    );
+    await assert.rejects(
+      () => getLoginTrends(),
+      /API contract mismatch for \/api\/analytics\/login-trends/,
+    );
+    await assert.rejects(
+      () => getPeakHours(),
+      /API contract mismatch for \/api\/analytics\/peak-hours/,
     );
   } finally {
     restoreFetch();

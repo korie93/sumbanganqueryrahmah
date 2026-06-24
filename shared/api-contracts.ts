@@ -126,6 +126,41 @@ export const analyticsRecentLoginActivityPageSchema = z.object({
   }),
 });
 
+export const analyticsSummarySchema = z.object({
+  totalUsers: nonNegativeIntSchema,
+  activeSessions: nonNegativeIntSchema,
+  loginsToday: nonNegativeIntSchema,
+  totalDataRows: nonNegativeIntSchema,
+  totalImports: nonNegativeIntSchema,
+  bannedUsers: nonNegativeIntSchema,
+  collectionRecordVersionConflicts24h: nonNegativeIntSchema,
+  loginFailures24h: nonNegativeIntSchema,
+  backupActions24h: nonNegativeIntSchema,
+});
+
+export const analyticsLoginTrendsSchema = z.array(
+  z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    logins: nonNegativeIntSchema,
+    logouts: nonNegativeIntSchema,
+  }),
+);
+
+export const analyticsPeakHoursSchema = z.array(
+  z.object({
+    hour: z.number().int().min(0).max(23),
+    count: nonNegativeIntSchema,
+  }),
+).length(24).superRefine((hours, context) => {
+  const uniqueHours = new Set(hours.map(({ hour }) => hour));
+  if (uniqueHours.size !== 24) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Peak hours must contain every hour exactly once",
+    });
+  }
+});
+
 export const importRecordSchema = z.object({
   id: nonEmptyStringSchema,
   name: nonEmptyStringSchema,
