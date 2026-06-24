@@ -453,6 +453,27 @@ export const tabVisibilityResponseSchema = z.object({
   tabs: z.record(z.boolean()),
 });
 
+export const appConfigResponseSchema = z.object({
+  systemName: nonEmptyStringSchema,
+  sessionTimeoutMinutes: z.number().int().min(1).max(1440),
+  heartbeatIntervalMinutes: z.number().int().min(1).max(1440),
+  wsIdleMinutes: z.number().int().min(1).max(1440),
+  aiEnabled: z.boolean(),
+  semanticSearchEnabled: z.boolean(),
+  aiTimeoutMs: z.number().int().min(1000).max(120_000),
+  searchResultLimit: z.number().int().min(10).max(5000),
+  viewerRowsPerPage: z.number().int().min(10).max(500),
+  importUploadLimitBytes: z.number().int().min(1024 * 1024).max(512 * 1024 * 1024),
+});
+
+export const maintenanceStatusResponseSchema = z.object({
+  maintenance: z.boolean(),
+  message: nonEmptyStringSchema,
+  type: z.enum(["soft", "hard"]),
+  startTime: z.string().datetime({ offset: true }).nullable(),
+  endTime: z.string().datetime({ offset: true }).nullable(),
+});
+
 export const collectionReportFreshnessSchema = z.object({
   status: z.enum(["fresh", "warming", "stale"]),
   pendingCount: nonNegativeIntSchema,
@@ -523,6 +544,8 @@ export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema>;
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
+export type AppConfigResponse = z.infer<typeof appConfigResponseSchema>;
+export type MaintenanceStatusResponse = z.infer<typeof maintenanceStatusResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;
 export type CollectionMonthlyTargetResponse = z.infer<typeof collectionMonthlyTargetResponseSchema>;

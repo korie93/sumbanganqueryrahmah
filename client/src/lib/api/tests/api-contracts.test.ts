@@ -10,12 +10,14 @@ import {
   analyticsRoleDistributionSchema,
   analyticsSummarySchema,
   analyticsTopUsersSchema,
+  appConfigResponseSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
   auditLogRecordSchema,
   collectionMonthlyComparisonResponseSchema,
   collectionMonthlyTargetResponseSchema,
   importListItemSchema,
+  maintenanceStatusResponseSchema,
   normalizeApiPaginationMeta,
   singleImportAnalysisResponseSchema,
 } from "@shared/api-contracts";
@@ -42,6 +44,8 @@ import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
   getSettings,
+  getAppConfig,
+  getMaintenanceStatus,
   getTabVisibility,
   updateSetting,
 } from "@/lib/api/settings";
@@ -448,6 +452,88 @@ test("dashboard metric API wrappers reject malformed contract payloads", async (
     await assert.rejects(
       () => getPeakHours(),
       /API contract mismatch for \/api\/analytics\/peak-hours/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("runtime configuration contracts enforce operational bounds", () => {
+  const config = appConfigResponseSchema.parse({
+    systemName: " SQR System ",
+    sessionTimeoutMinutes: 30,
+    heartbeatIntervalMinutes: 5,
+    wsIdleMinutes: 3,
+    aiEnabled: true,
+    semanticSearchEnabled: true,
+    aiTimeoutMs: 10_000,
+    searchResultLimit: 200,
+    viewerRowsPerPage: 100,
+    importUploadLimitBytes: 96 * 1024 * 1024,
+  });
+  assert.equal(config.systemName, "SQR System");
+
+  assert.equal(
+    appConfigResponseSchema.safeParse({
+      ...config,
+      heartbeatIntervalMinutes: 0,
+      importUploadLimitBytes: 513 * 1024 * 1024,
+    }).success,
+    false,
+  );
+});
+
+test("maintenance status contract accepts complete state and rejects unsafe timestamps", () => {
+  const maintenance = maintenanceStatusResponseSchema.parse({
+    maintenance: true,
+    message: "Scheduled maintenance",
+    type: "hard",
+    startTime: "2026-06-24T10:00:00.000Z",
+    endTime: null,
+  });
+  assert.equal(maintenance.type, "hard");
+
+  assert.equal(
+    maintenanceStatusResponseSchema.safeParse({
+      maintenance: true,
+      message: "",
+      type: "warning",
+      startTime: "tomorrow",
+      endTime: null,
+    }).success,
+    false,
+  );
+});
+
+test("runtime configuration API wrappers reject malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/app-config") {
+      return jsonResponse({
+        systemName: "",
+        sessionTimeoutMinutes: 0,
+      });
+    }
+    if (url === "/api/maintenance-status") {
+      return jsonResponse({
+        maintenance: true,
+        message: "Maintenance",
+        type: "hard",
+        startTime: "invalid",
+        endTime: null,
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getAppConfig(),
+      /API contract mismatch for \/api\/app-config/,
+    );
+    await assert.rejects(
+      () => getMaintenanceStatus(),
+      /API contract mismatch for \/api\/maintenance-status/,
     );
   } finally {
     restoreFetch();

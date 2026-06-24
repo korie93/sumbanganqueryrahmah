@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import {
+  appConfigResponseSchema,
   settingsResponseSchema,
   settingsUpdateResponseSchema,
   tabVisibilityResponseSchema,
@@ -182,6 +183,7 @@ test("GET /api/app-config returns config with no-store cache headers", async () 
     assert.equal(response.headers.get("expires"), "0");
 
       const payload = await response.json();
+      assert.doesNotThrow(() => appConfigResponseSchema.parse(payload));
       assert.equal(payload.systemName, "SQR");
       assert.equal(payload.viewerRowsPerPage, 100);
       assert.equal(payload.importUploadLimitBytes, DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES);

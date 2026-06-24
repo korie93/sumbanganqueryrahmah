@@ -1256,8 +1256,10 @@ test("getMaintenanceStatus forwards AbortSignal", async () => {
 
     return jsonResponse({
       maintenance: false,
-      message: "",
+      message: "System available",
       type: "soft",
+      startTime: null,
+      endTime: null,
     });
   }) as typeof fetch);
 
