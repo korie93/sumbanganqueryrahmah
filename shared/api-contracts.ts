@@ -554,6 +554,29 @@ export const authTwoFactorSetupResponseSchema = authUserMutationResponseSchema.e
   }).strict(),
 }).strict();
 
+export const authRecoveryTokenMetadataSchema = z.object({
+  email: nullableStringSchema,
+  expiresAt: z.string().datetime({ offset: true }),
+  fullName: nullableStringSchema,
+  role: nonEmptyStringSchema,
+  username: nonEmptyStringSchema,
+}).strict();
+
+export const authActivationTokenResponseSchema = z.object({
+  ok: z.literal(true),
+  activation: authRecoveryTokenMetadataSchema,
+}).strict();
+
+export const authPasswordResetTokenResponseSchema = z.object({
+  ok: z.literal(true),
+  reset: authRecoveryTokenMetadataSchema,
+}).strict();
+
+export const authMessageResponseSchema = z.object({
+  ok: z.literal(true),
+  message: nonEmptyStringSchema,
+}).strict();
+
 export const activityStatusSchema = z.enum([
   "ONLINE",
   "IDLE",
@@ -682,6 +705,10 @@ export type AuthUserMutationResponseContract = z.infer<typeof authUserMutationRe
 export type AuthUserForceLogoutResponseContract = z.infer<typeof authUserForceLogoutResponseSchema>;
 export type AuthTwoFactorStatusResponseContract = z.infer<typeof authTwoFactorStatusResponseSchema>;
 export type AuthTwoFactorSetupResponseContract = z.infer<typeof authTwoFactorSetupResponseSchema>;
+export type AuthRecoveryTokenMetadataContract = z.infer<typeof authRecoveryTokenMetadataSchema>;
+export type AuthActivationTokenResponseContract = z.infer<typeof authActivationTokenResponseSchema>;
+export type AuthPasswordResetTokenResponseContract = z.infer<typeof authPasswordResetTokenResponseSchema>;
+export type AuthMessageResponseContract = z.infer<typeof authMessageResponseSchema>;
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;

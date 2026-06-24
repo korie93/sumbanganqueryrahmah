@@ -35,8 +35,11 @@ import {
 import type { AuditEntry } from "./auth-route-auth-flow-shared";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import {
+  authActivationTokenResponseSchema,
   authLoginResponseSchema,
   authLoginSuccessResponseSchema,
+  authMessageResponseSchema,
+  authPasswordResetTokenResponseSchema,
   authTwoFactorSetupResponseSchema,
   authTwoFactorStatusResponseSchema,
   authUserForceLogoutResponseSchema,
@@ -1782,6 +1785,8 @@ test("POST /api/auth/request-password-reset creates a request and audit log for 
     });
 
     assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.doesNotThrow(() => authMessageResponseSchema.parse(payload));
     assert.equal(resetRequests.length, 1);
     assert.deepEqual(resetRequests[0], {
       userId: "user-1",
@@ -1883,6 +1888,7 @@ test("POST /api/auth/validate-activation-token returns activation metadata for a
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authActivationTokenResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.activation.username, "pending.user");
     assert.equal(payload.activation.email, "pending.user@example.com");
@@ -1920,6 +1926,7 @@ test("POST /api/auth/activate-account activates a pending account, hashes the pa
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authUserMutationResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.user.status, "active");
     assert.equal(updateCalls.length, 1);
@@ -1995,6 +2002,7 @@ test("POST /api/auth/validate-password-reset-token returns reset metadata for a 
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authPasswordResetTokenResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.reset.username, "reset.user");
     assert.equal(payload.reset.email, "reset.user@example.com");
@@ -2033,6 +2041,7 @@ test("POST /api/auth/validate-password-reset-token accepts database-style UTC ti
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authPasswordResetTokenResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.reset.username, "reset.user");
   } finally {
@@ -2075,6 +2084,7 @@ test("POST /api/auth/reset-password-with-token updates credentials, invalidates 
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authUserMutationResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(updateCalls.length, 1);
     assert.equal(typeof user.passwordHash, "string");

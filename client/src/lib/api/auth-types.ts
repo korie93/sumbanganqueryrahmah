@@ -139,6 +139,14 @@ export type AuthMessageResponse = AuthOkResponse<{
   message: string;
 }>;
 
+export type ActivationTokenValidationResponse = AuthOkResponse<{
+  activation: ActivationTokenValidationPayload;
+}>;
+
+export type PasswordResetTokenValidationResponse = AuthOkResponse<{
+  reset: PasswordResetTokenValidationPayload;
+}>;
+
 export type TwoFactorStatusResponse = AuthOkResponse<{
   twoFactor: {
     enabled: boolean;

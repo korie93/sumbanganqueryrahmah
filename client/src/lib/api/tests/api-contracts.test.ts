@@ -15,8 +15,12 @@ import {
   activityPageResponseSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
+  authActivationTokenResponseSchema,
   authCurrentUserSchema,
   authLoginResponseSchema,
+  authMessageResponseSchema,
+  authPasswordResetTokenResponseSchema,
+  authRecoveryTokenMetadataSchema,
   authTwoFactorSetupResponseSchema,
   authTwoFactorStatusResponseSchema,
   authUserForceLogoutResponseSchema,
@@ -58,12 +62,17 @@ import {
   getMe,
   login,
   verifyTwoFactorLogin,
+  activateAccount,
   changeMyPassword,
   disableTwoFactor,
   enableTwoFactor,
   getTwoFactorStatus,
+  requestPasswordReset,
+  resetPasswordWithToken,
   startTwoFactorSetup,
   updateMyCredentials,
+  validateActivationToken,
+  validatePasswordResetToken,
 } from "@/lib/api/auth";
 import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
@@ -817,6 +826,122 @@ test("authentication self-service API wrappers reject malformed success payloads
     await assert.rejects(
       () => updateMyCredentials({ newUsername: "operator.two" }),
       /API contract mismatch for \/api\/me\/credentials/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("authentication recovery contracts expose only bounded public token metadata", () => {
+  const metadata = authRecoveryTokenMetadataSchema.parse({
+    email: "operator@example.com",
+    expiresAt: "2026-06-25T08:00:00.000Z",
+    fullName: "Operator One",
+    role: "user",
+    username: "operator.one",
+  });
+  assert.equal(metadata.username, "operator.one");
+
+  assert.equal(
+    authActivationTokenResponseSchema.safeParse({
+      ok: true,
+      activation: {
+        ...metadata,
+        tokenHash: "must-not-cross-the-wire",
+      },
+    }).success,
+    false,
+  );
+  assert.equal(
+    authPasswordResetTokenResponseSchema.safeParse({
+      ok: true,
+      reset: {
+        ...metadata,
+        expiresAt: "not-a-timestamp",
+      },
+    }).success,
+    false,
+  );
+  assert.equal(
+    authMessageResponseSchema.safeParse({
+      ok: true,
+      message: "   ",
+    }).success,
+    false,
+  );
+});
+
+test("authentication recovery API wrappers reject malformed success payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/auth/validate-activation-token") {
+      return jsonResponse({
+        ok: true,
+        activation: {
+          email: "operator@example.com",
+          expiresAt: "invalid",
+          fullName: "Operator One",
+          role: "user",
+          username: "operator.one",
+        },
+      });
+    }
+    if (url === "/api/auth/activate-account") {
+      return jsonResponse({
+        ok: true,
+        user: createAuthUserContract(),
+        tokenHash: "must-not-cross-the-wire",
+      });
+    }
+    if (url === "/api/auth/request-password-reset") {
+      return jsonResponse({ ok: true, message: "" });
+    }
+    if (url === "/api/auth/validate-password-reset-token") {
+      return jsonResponse({
+        ok: true,
+        reset: {
+          email: null,
+          expiresAt: "2026-06-25T08:00:00.000Z",
+          fullName: null,
+          role: "",
+          username: "operator.one",
+        },
+      });
+    }
+    if (url === "/api/auth/reset-password-with-token") {
+      return jsonResponse({ ok: true });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => validateActivationToken({ token: "token" }),
+      /API contract mismatch for \/api\/auth\/validate-activation-token/,
+    );
+    await assert.rejects(
+      () => activateAccount({
+        token: "token",
+        newPassword: "StrongPassword123!",
+        confirmPassword: "StrongPassword123!",
+      }),
+      /API contract mismatch for \/api\/auth\/activate-account/,
+    );
+    await assert.rejects(
+      () => requestPasswordReset({ identifier: "operator.one" }),
+      /API contract mismatch for \/api\/auth\/request-password-reset/,
+    );
+    await assert.rejects(
+      () => validatePasswordResetToken({ token: "token" }),
+      /API contract mismatch for \/api\/auth\/validate-password-reset-token/,
+    );
+    await assert.rejects(
+      () => resetPasswordWithToken({
+        token: "token",
+        newPassword: "StrongPassword123!",
+        confirmPassword: "StrongPassword123!",
+      }),
+      /API contract mismatch for \/api\/auth\/reset-password-with-token/,
     );
   } finally {
     restoreFetch();

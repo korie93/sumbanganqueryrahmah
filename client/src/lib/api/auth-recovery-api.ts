@@ -1,23 +1,31 @@
 import { apiRequest } from "../api-client";
+import {
+  authActivationTokenResponseSchema,
+  authMessageResponseSchema,
+  authPasswordResetTokenResponseSchema,
+  authUserMutationResponseSchema,
+} from "@shared/api-contracts";
+import { parseApiJson } from "./contract";
 import type {
-  ActivationTokenValidationPayload,
+  ActivationTokenValidationResponse,
   AuthMessageResponse,
-  AuthUserResponse,
-  PasswordResetTokenValidationPayload,
+  AuthUserMutationResponse,
+  PasswordResetTokenValidationResponse,
   RequestOptions,
 } from "./auth-types";
 
 export async function validateActivationToken(
   payload: { token: string },
   options?: RequestOptions,
-) {
+): Promise<ActivationTokenValidationResponse> {
   const response = await apiRequest("POST", "/api/auth/validate-activation-token", payload, {
     signal: options?.signal,
   });
-  return response.json() as Promise<{
-    ok: boolean;
-    activation: ActivationTokenValidationPayload;
-  }>;
+  return parseApiJson(
+    response,
+    authActivationTokenResponseSchema,
+    "/api/auth/validate-activation-token",
+  );
 }
 
 export async function activateAccount(
@@ -28,34 +36,43 @@ export async function activateAccount(
     confirmPassword: string;
   },
   options?: RequestOptions,
-) {
+): Promise<AuthUserMutationResponse> {
   const response = await apiRequest("POST", "/api/auth/activate-account", payload, {
     signal: options?.signal,
   });
-  return response.json() as Promise<AuthUserResponse>;
+  return parseApiJson(
+    response,
+    authUserMutationResponseSchema,
+    "/api/auth/activate-account",
+  );
 }
 
 export async function requestPasswordReset(
   payload: { identifier: string },
   options?: RequestOptions,
-) {
+): Promise<AuthMessageResponse> {
   const response = await apiRequest("POST", "/api/auth/request-password-reset", payload, {
     signal: options?.signal,
   });
-  return response.json() as Promise<AuthMessageResponse>;
+  return parseApiJson(
+    response,
+    authMessageResponseSchema,
+    "/api/auth/request-password-reset",
+  );
 }
 
 export async function validatePasswordResetToken(
   payload: { token: string },
   options?: RequestOptions,
-) {
+): Promise<PasswordResetTokenValidationResponse> {
   const response = await apiRequest("POST", "/api/auth/validate-password-reset-token", payload, {
     signal: options?.signal,
   });
-  return response.json() as Promise<{
-    ok: boolean;
-    reset: PasswordResetTokenValidationPayload;
-  }>;
+  return parseApiJson(
+    response,
+    authPasswordResetTokenResponseSchema,
+    "/api/auth/validate-password-reset-token",
+  );
 }
 
 export async function resetPasswordWithToken(
@@ -65,9 +82,13 @@ export async function resetPasswordWithToken(
     confirmPassword: string;
   },
   options?: RequestOptions,
-) {
+): Promise<AuthUserMutationResponse> {
   const response = await apiRequest("POST", "/api/auth/reset-password-with-token", payload, {
     signal: options?.signal,
   });
-  return response.json() as Promise<AuthUserResponse>;
+  return parseApiJson(
+    response,
+    authUserMutationResponseSchema,
+    "/api/auth/reset-password-with-token",
+  );
 }
