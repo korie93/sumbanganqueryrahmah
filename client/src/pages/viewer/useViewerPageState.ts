@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBrowserSessionStorage } from "@/lib/browser-storage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import {
@@ -8,6 +8,12 @@ import { buildViewerActiveFilterChips } from "@/pages/viewer/page-utils";
 import { useViewerDataState } from "@/pages/viewer/useViewerDataState";
 import { useViewerExportState } from "@/pages/viewer/useViewerExportState";
 import { filterViewerRows } from "@/pages/viewer/utils";
+import {
+  buildViewerHeadersSignature,
+  moveViewerColumn,
+  readViewerColumnPreference,
+  writeViewerColumnPreference,
+} from "@/pages/viewer/viewer-column-preferences";
 import {
   deselectViewerColumns,
   getViewerGridTemplateColumns,
@@ -45,6 +51,10 @@ export function useViewerPageState({
   const isSuperuser = userRole === "superuser";
 
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [columnPreferencesReady, setColumnPreferencesReady] = useState(false);
+  const [columnPreferencesDirty, setColumnPreferencesDirty] = useState(false);
+  const initializedColumnPreferenceKeyRef = useRef("");
   const [showFilters, setShowFilters] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
@@ -65,27 +75,59 @@ export function useViewerPageState({
     onSelectionReset: clearSelectionState,
   });
 
+  const columnPreferenceKey = useMemo(
+    () => `${importId || "default"}::${buildViewerHeadersSignature(data.headers)}`,
+    [data.headers, importId],
+  );
+
   useEffect(() => {
     if (data.headers.length === 0) {
       setSelectedColumns((previous) => (previous.size === 0 ? previous : new Set<string>()));
+      setColumnOrder((previous) => (previous.length === 0 ? previous : []));
+      setColumnPreferencesReady(false);
+      setColumnPreferencesDirty(false);
+      initializedColumnPreferenceKeyRef.current = "";
       return;
     }
 
-    setSelectedColumns((previous) => {
-      if (previous.size > 0) {
-        return previous;
-      }
+    if (initializedColumnPreferenceKeyRef.current === columnPreferenceKey) {
+      return;
+    }
 
-      if (
-        analysisHandoff?.focusColumn &&
-        data.headers.includes(analysisHandoff.focusColumn)
-      ) {
-        return new Set([analysisHandoff.focusColumn]);
-      }
+    const preference = readViewerColumnPreference(importId, data.headers);
+    initializedColumnPreferenceKeyRef.current = columnPreferenceKey;
+    setColumnOrder(preference.order);
+    setSelectedColumns(
+      analysisHandoff?.focusColumn && data.headers.includes(analysisHandoff.focusColumn)
+        ? new Set([analysisHandoff.focusColumn])
+        : new Set(preference.visible),
+    );
+    setColumnPreferencesReady(true);
+    setColumnPreferencesDirty(false);
+  }, [analysisHandoff?.focusColumn, columnPreferenceKey, data.headers, importId]);
 
-      return new Set(data.headers);
+  useEffect(() => {
+    if (
+      !columnPreferencesReady
+      || !columnPreferencesDirty
+      || columnOrder.length === 0
+      || selectedColumns.size === 0
+    ) {
+      return;
+    }
+
+    writeViewerColumnPreference(importId, {
+      order: columnOrder,
+      visible: columnOrder.filter((column) => selectedColumns.has(column)),
     });
-  }, [analysisHandoff?.focusColumn, data.headers]);
+    setColumnPreferencesDirty(false);
+  }, [
+    columnOrder,
+    columnPreferencesDirty,
+    columnPreferencesReady,
+    importId,
+    selectedColumns,
+  ]);
 
   usePageShortcuts([
     {
@@ -107,9 +149,13 @@ export function useViewerPageState({
     },
   ]);
 
+  const orderedHeaders = useMemo(
+    () => (columnOrder.length > 0 ? columnOrder : data.headers),
+    [columnOrder, data.headers],
+  );
   const visibleHeaders = useMemo(
-    () => getViewerVisibleHeaders(data.headers, selectedColumns),
-    [data.headers, selectedColumns],
+    () => getViewerVisibleHeaders(orderedHeaders, selectedColumns),
+    [orderedHeaders, selectedColumns],
   );
   const isSearchBelowMinLength =
     data.debouncedSearch.length > 0 && data.debouncedSearch.length < data.minSearchLength;
@@ -158,14 +204,28 @@ export function useViewerPageState({
 
   const toggleColumn = useCallback((column: string) => {
     setSelectedColumns((previous) => toggleViewerColumnSelection(previous, column));
+    setColumnPreferencesDirty(true);
   }, []);
 
   const selectAllColumns = useCallback(() => {
     setSelectedColumns(new Set(data.headers));
+    setColumnPreferencesDirty(true);
   }, [data.headers]);
 
   const deselectAllColumns = useCallback(() => {
-    setSelectedColumns(deselectViewerColumns(data.headers));
+    setSelectedColumns(deselectViewerColumns(orderedHeaders));
+    setColumnPreferencesDirty(true);
+  }, [orderedHeaders]);
+
+  const moveColumn = useCallback((column: string, direction: -1 | 1) => {
+    setColumnOrder((previous) => moveViewerColumn(previous, column, direction));
+    setColumnPreferencesDirty(true);
+  }, []);
+
+  const resetColumns = useCallback(() => {
+    setColumnOrder([...data.headers]);
+    setSelectedColumns(new Set(data.headers));
+    setColumnPreferencesDirty(true);
   }, [data.headers]);
 
   const toggleRowSelection = useCallback((rowId: number) => {
@@ -222,7 +282,7 @@ export function useViewerPageState({
     isSuperuser,
     importName: data.importName,
     rows: data.rows,
-    headers: data.headers,
+    headers: orderedHeaders,
     totalRows: data.totalRows,
     currentPage: data.currentPage,
     totalPages,
@@ -276,6 +336,8 @@ export function useViewerPageState({
     handleNextPage: data.handleNextPage,
     handleShowFiltersChange,
     toggleColumn,
+    moveColumn,
+    resetColumns,
     selectAllColumns,
     deselectAllColumns,
     isServerSearchActive,

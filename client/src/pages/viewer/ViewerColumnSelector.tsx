@@ -38,6 +38,8 @@ interface ViewerColumnSelectorProps {
   selectedColumns: Set<string>;
   onOpenChange: (open: boolean) => void;
   onToggleColumn: (column: string) => void;
+  onMoveColumn: (column: string, direction: -1 | 1) => void;
+  onResetColumns: () => void;
   onSelectAllColumns: () => void;
   onDeselectAllColumns: () => void;
 }
@@ -48,6 +50,8 @@ function ViewerColumnSelectorImpl({
   selectedColumns,
   onOpenChange,
   onToggleColumn,
+  onMoveColumn,
+  onResetColumns,
   onSelectAllColumns,
   onDeselectAllColumns,
 }: ViewerColumnSelectorProps) {
@@ -99,6 +103,14 @@ function ViewerColumnSelectorImpl({
             >
               Min
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onResetColumns}
+              data-testid="button-reset-columns"
+            >
+              Reset
+            </Button>
           </div>
         </div>
         {open ? (
@@ -107,6 +119,7 @@ function ViewerColumnSelectorImpl({
               headers={headers}
               selectedColumns={selectedColumns}
               onToggleColumn={onToggleColumn}
+              onMoveColumn={onMoveColumn}
             />
           </Suspense>
         ) : null}
@@ -117,6 +130,8 @@ function ViewerColumnSelectorImpl({
       onDeselectAllColumns,
       onSelectAllColumns,
       onToggleColumn,
+      onMoveColumn,
+      onResetColumns,
       open,
       selectedColumns,
       selectorListFallback,
@@ -147,7 +162,7 @@ function ViewerColumnSelectorImpl({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent className="w-64" align="end">
+      <PopoverContent className="w-72" align="end">
         {selectorContent}
       </PopoverContent>
     </Popover>

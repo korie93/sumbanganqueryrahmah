@@ -74,6 +74,8 @@ test("viewer controls use stable item callbacks", () => {
   assert.match(filterRowSource, /export const ViewerFilterRow = memo\(ViewerFilterRowImpl\)/);
   assert.match(columnListSource, /const ViewerColumnSelectorItem = memo\(function ViewerColumnSelectorItem/);
   assert.match(columnListSource, /const handleToggleColumn = useCallback\(/);
+  assert.match(columnListSource, /const handleMoveUp = useCallback\(/);
+  assert.match(columnListSource, /const handleMoveDown = useCallback\(/);
   assert.match(searchSource, /const handleSearchInputChange = useCallback\(/);
 });
 
@@ -97,4 +99,6 @@ test("viewer page state avoids object-wide dependencies for active filter chips"
   assert.match(source, /\[data\.activeColumnFilters, data\.removeFilter, data\.search, handleClearSearchFilter\]/);
   assert.doesNotMatch(source, /\[data, exportState\]/);
   assert.doesNotMatch(source, /buildViewerActiveFilterChips\(\{[\s\S]*?\}\),\s*\[data\]/);
+  assert.match(source, /readViewerColumnPreference/);
+  assert.match(source, /writeViewerColumnPreference/);
 });

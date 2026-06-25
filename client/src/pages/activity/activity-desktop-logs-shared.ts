@@ -1,4 +1,8 @@
 import type { ActivityLogsTableProps, ActivityRecord } from "@/pages/activity/types";
+import type {
+  ActivityColumnId,
+  ActivityColumnPreferences,
+} from "@/pages/activity/activity-column-preferences";
 
 export type ActivityDesktopLogsTableProps = Pick<
   ActivityLogsTableProps,
@@ -14,12 +18,15 @@ export type ActivityDesktopLogsTableProps = Pick<
   | "onToggleSelectAllVisible"
   | "partiallySelected"
   | "selectedActivityIds"
->;
+> & {
+  columnPreferences: ActivityColumnPreferences;
+};
 
 export interface ActivityDesktopLogsHeaderProps {
   allVisibleSelected: boolean;
   canModerateActivity: boolean;
-  gridClassName: string;
+  columns: ActivityColumnId[];
+  gridTemplateColumns: string;
   onToggleSelectAllVisible: (checked: boolean) => void;
   partiallySelected: boolean;
 }
@@ -39,7 +46,8 @@ export interface ActivityDesktopLogRowProps
     "actionLoading" | "canModerateActivity" | "onBanClick" | "onDeleteClick" | "onKickClick" | "onInvestigateClick"
   > {
   activity: ActivityRecord;
-  gridClassName: string;
+  columns: ActivityColumnId[];
+  gridTemplateColumns: string;
   isSelected: boolean;
   onToggleSelected: (activityId: string, checked: boolean) => void;
 }

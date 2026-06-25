@@ -25,7 +25,9 @@ test("desktop activity columns use a visible, keyboard-accessible horizontal scr
   assert.match(source, /ariaLabel="Activity log columns"/);
   assert.match(source, /showScrollbar/);
   assert.match(source, /viewportClassName="overscroll-x-contain pb-2"/);
-  assert.match(source, /getActivityDesktopTableWidthClassName/);
+  assert.match(source, /getActivityGridTemplateColumns/);
+  assert.match(source, /getActivityTableMinWidth/);
+  assert.match(source, /role="table"/);
   assert.doesNotMatch(source, /min-w-\[70rem\] overflow-hidden/);
 });
 

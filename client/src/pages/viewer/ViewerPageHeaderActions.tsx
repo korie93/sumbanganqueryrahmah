@@ -29,6 +29,8 @@ interface ViewerPageHeaderActionsProps {
   onSelectAllColumns: () => void;
   onShowColumnSelectorChange: (open: boolean) => void;
   onToggleColumn: (column: string) => void;
+  onMoveColumn: (column: string, direction: -1 | 1) => void;
+  onResetColumns: () => void;
   onToggleFilters: () => void;
   rowsCount: number;
   selectedColumns: Set<string>;
@@ -64,6 +66,8 @@ function ViewerPageHeaderActionsImpl({
   onSelectAllColumns,
   onShowColumnSelectorChange,
   onToggleColumn,
+  onMoveColumn,
+  onResetColumns,
   onToggleFilters,
   rowsCount,
   selectedColumns,
@@ -83,6 +87,8 @@ function ViewerPageHeaderActionsImpl({
               selectedColumns={selectedColumns}
               onOpenChange={onShowColumnSelectorChange}
               onToggleColumn={onToggleColumn}
+              onMoveColumn={onMoveColumn}
+              onResetColumns={onResetColumns}
               onSelectAllColumns={onSelectAllColumns}
               onDeselectAllColumns={onDeselectAllColumns}
             />

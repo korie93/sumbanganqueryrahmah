@@ -7,6 +7,7 @@ import { ActivityLogsToolbar } from "@/pages/activity/ActivityLogsToolbar";
 import { ActivityMobileLogsList } from "@/pages/activity/ActivityMobileLogsList";
 import { getActivityLogsEmptyLabel } from "@/pages/activity/activity-logs-table-utils";
 import type { ActivityLogsTableProps } from "@/pages/activity/types";
+import { useActivityColumnPreferences } from "@/pages/activity/useActivityColumnPreferences";
 import { useActivityLogsLayoutPreference } from "@/pages/activity/useActivityLogsLayoutPreference";
 
 const ActivityDesktopLogsTable = lazy(() =>
@@ -50,6 +51,7 @@ export function ActivityLogsTable({
   partiallySelected,
 }: ActivityLogsTableProps) {
   const preferMobileLayout = useActivityLogsLayoutPreference();
+  const columnPreferences = useActivityColumnPreferences();
 
   return (
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
@@ -66,7 +68,12 @@ export function ActivityLogsTable({
             sortOrder={sortOrder}
             totalItems={totalItems}
             totalPages={totalPages}
+            columnPreferences={columnPreferences.preferences}
+            showColumnControls={!preferMobileLayout}
+            onMoveColumn={columnPreferences.moveColumn}
+            onResetColumns={columnPreferences.resetColumns}
             onSortChange={onSortChange}
+            onToggleColumn={columnPreferences.toggleColumn}
           />
           {loading ? (
             <div className="py-8 text-center">
@@ -100,6 +107,7 @@ export function ActivityLogsTable({
                 activities={activities}
                 allVisibleSelected={allVisibleSelected}
                 canModerateActivity={canModerateActivity}
+                columnPreferences={columnPreferences.preferences}
                 onBanClick={onBanClick}
                 onDeleteClick={onDeleteClick}
                 onKickClick={onKickClick}

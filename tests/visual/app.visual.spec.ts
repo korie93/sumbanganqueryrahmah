@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page, type Route } from "@playwright/test";
@@ -11,6 +13,8 @@ interface VisualRouteSpec {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const visualStabilizerPath = path.join(__dirname, "visual-regression.css");
 const visualThemes: readonly VisualTheme[] = ["light", "dark"];
 const visualSessionExpiresAt = "2036-01-01T00:00:00.000Z";
@@ -435,6 +439,24 @@ async function installMockAuthenticatedSession(page: Page, theme: VisualTheme) {
     sessionStorage.setItem("collection_staff_nickname_auth", "1");
     localStorage.setItem("theme", nextTheme);
     document.cookie = "sqr_auth_hint=1; path=/; SameSite=Lax";
+    document.addEventListener("DOMContentLoaded", () => {
+      const hideFloatingAi = () => {
+        document
+          .querySelectorAll<HTMLElement>('[data-testid="floating-ai-toggle"]')
+          .forEach((element) => {
+            element.parentElement?.remove();
+          });
+      };
+      const observer = new MutationObserver(hideFloatingAi);
+      observer.observe(document.documentElement, {
+        attributeFilter: ["hidden"],
+        attributes: true,
+        childList: true,
+        subtree: true,
+      });
+      window.addEventListener("pagehide", () => observer.disconnect(), { once: true });
+      hideFloatingAi();
+    }, { once: true });
   }, { nextTheme: theme, user: visualUser });
 }
 
@@ -460,6 +482,13 @@ async function expectVisualBaseline(page: Page, name: string, theme: VisualTheme
       ? { maxDiffPixelRatio: 0.1 }
       : {};
 
+  await page
+    .locator('[data-testid="floating-ai-toggle"]')
+    .evaluateAll((elements) => {
+      elements.forEach((element) => {
+        element.parentElement?.remove();
+      });
+    });
   await expect(page).toHaveScreenshot(`${name}-${theme}.png`, {
     animations: "disabled",
     caret: "hide",
@@ -484,6 +513,39 @@ async function logoutVisualSession(page: Page) {
     sessionStorage.clear();
   }).catch(() => undefined);
   await page.context().clearCookies();
+}
+
+async function expectNoSeriousAccessibilityViolations(page: Page, label: string) {
+  await page.evaluate(axeSource);
+  const violations = await page.evaluate(async () => {
+    const axe = (window as typeof window & {
+      axe?: {
+        run: (
+          root: Document,
+          options: { resultTypes: string[] },
+        ) => Promise<{
+          violations: Array<{
+            id: string;
+            impact: string | null;
+            nodes: Array<{ target: string[] }>;
+          }>;
+        }>;
+      };
+    }).axe;
+    if (!axe) {
+      throw new Error("axe-core did not initialize");
+    }
+    const result = await axe.run(document, { resultTypes: ["violations"] });
+    return result.violations
+      .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
+      .map((violation) => ({
+        id: violation.id,
+        impact: violation.impact,
+        targets: violation.nodes.flatMap((node) => node.target),
+      }));
+  });
+
+  expect(violations, `${label} serious/critical accessibility violations`).toEqual([]);
 }
 
 for (const theme of visualThemes) {
@@ -557,6 +619,18 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await page.setViewportSize({ width: 1100, height: 900 });
     await page.goto("/monitor?section=activity", { waitUntil: "domcontentloaded" });
 
+    await page.getByTestId("button-activity-columns").click();
+    await page.getByRole("checkbox", { name: "Show Browser column" }).click();
+    await page.getByRole("button", { name: "Move Duration up" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("columnheader", { name: "Browser" })).toHaveCount(0);
+    const activityHeaderOrder = await page
+      .getByRole("columnheader")
+      .allTextContents();
+    expect(activityHeaderOrder.indexOf("Duration")).toBeLessThan(
+      activityHeaderOrder.indexOf("Logout"),
+    );
+
     const activityScrollport = page.getByRole("region", { name: "Activity log columns" });
     await expect(activityScrollport).toBeVisible();
     const activityMetrics = await activityScrollport.evaluate((element) => ({
@@ -579,12 +653,34 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     expect(actionsHeaderRect!.x + actionsHeaderRect!.width).toBeLessThanOrEqual(
       activityViewportRect!.x + activityViewportRect!.width + 1,
     );
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("region", { name: "Activity log columns" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Duration" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Browser" })).toHaveCount(0);
+    const persistedActivityHeaderOrder = await page
+      .getByRole("columnheader")
+      .allTextContents();
+    expect(persistedActivityHeaderOrder.indexOf("Duration")).toBeLessThan(
+      persistedActivityHeaderOrder.indexOf("Logout"),
+    );
+    await expectNoSeriousAccessibilityViolations(page, "Activity column preferences");
 
     await page.goto("/saved", { waitUntil: "domcontentloaded" });
     await page.getByTestId("button-view-visual-import-1").click();
 
     const viewerScrollport = page.getByRole("region", { name: "Viewer data columns" });
     await expect(viewerScrollport).toBeVisible();
+    await page.getByTestId("button-column-selector").click();
+    await page.getByTestId("checkbox-column-Processing Notes").click();
+    await page.getByRole("button", { name: "Move Last Updated At up" }).click();
+    await page.keyboard.press("Escape");
+    await expect(
+      viewerScrollport.getByRole("columnheader", { name: "Processing Notes" }),
+    ).toHaveCount(0);
+    const viewerHeaderOrder = await viewerScrollport.getByRole("columnheader").allTextContents();
+    expect(viewerHeaderOrder.indexOf("Last Updated At")).toBeLessThan(
+      viewerHeaderOrder.indexOf("Created At"),
+    );
     const viewerMetrics = await viewerScrollport.evaluate((element) => ({
       clientWidth: element.clientWidth,
       overflowX: getComputedStyle(element).overflowX,
@@ -601,6 +697,23 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await expect(
       viewerScrollport.getByRole("columnheader", { name: "Last Updated At" }),
     ).toBeInViewport();
+    await page.goto("/saved", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("button-view-visual-import-1").click();
+    const persistedViewerScrollport = page.getByRole("region", { name: "Viewer data columns" });
+    await expect(persistedViewerScrollport).toBeVisible();
+    await expect(
+      persistedViewerScrollport.getByRole("columnheader", { name: "Last Updated At" }),
+    ).toBeVisible();
+    await expect(
+      persistedViewerScrollport.getByRole("columnheader", { name: "Processing Notes" }),
+    ).toHaveCount(0);
+    const persistedViewerHeaderOrder = await persistedViewerScrollport
+      .getByRole("columnheader")
+      .allTextContents();
+    expect(persistedViewerHeaderOrder.indexOf("Last Updated At")).toBeLessThan(
+      persistedViewerHeaderOrder.indexOf("Created At"),
+    );
+    await expectNoSeriousAccessibilityViolations(page, "Viewer column preferences");
   } finally {
     await logoutVisualSession(page);
   }

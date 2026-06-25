@@ -71,6 +71,8 @@ export default function Viewer({
           onBack={viewer.handleBackToSaved}
           onShowColumnSelectorChange={viewer.setShowColumnSelector}
           onToggleColumn={viewer.toggleColumn}
+          onMoveColumn={viewer.moveColumn}
+          onResetColumns={viewer.resetColumns}
           onSelectAllColumns={viewer.selectAllColumns}
           onDeselectAllColumns={viewer.deselectAllColumns}
           onToggleFilters={viewer.handleToggleFilters}

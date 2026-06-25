@@ -3,9 +3,10 @@ import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { ActivityDesktopLogsHeader } from "@/pages/activity/ActivityDesktopLogsHeader";
 import { ActivityDesktopLogRow } from "@/pages/activity/ActivityDesktopLogRow";
 import {
-  getActivityDesktopGridClassName,
-  getActivityDesktopTableWidthClassName,
-} from "@/pages/activity/activity-virtualization";
+  getActivityGridTemplateColumns,
+  getActivityTableMinWidth,
+  getVisibleActivityColumns,
+} from "@/pages/activity/activity-column-preferences";
 import type { ActivityDesktopLogsTableProps } from "@/pages/activity/activity-desktop-logs-shared";
 
 export function ActivityDesktopLogsTable({
@@ -13,6 +14,7 @@ export function ActivityDesktopLogsTable({
   activities,
   allVisibleSelected,
   canModerateActivity,
+  columnPreferences,
   onBanClick,
   onDeleteClick,
   onKickClick,
@@ -22,13 +24,17 @@ export function ActivityDesktopLogsTable({
   partiallySelected,
   selectedActivityIds,
 }: ActivityDesktopLogsTableProps) {
-  const gridClassName = useMemo(
-    () => getActivityDesktopGridClassName(canModerateActivity),
-    [canModerateActivity],
+  const columns = useMemo(
+    () => getVisibleActivityColumns(columnPreferences),
+    [columnPreferences],
   );
-  const tableWidthClassName = useMemo(
-    () => getActivityDesktopTableWidthClassName(canModerateActivity),
-    [canModerateActivity],
+  const gridTemplateColumns = useMemo(
+    () => getActivityGridTemplateColumns(columns, canModerateActivity),
+    [canModerateActivity, columns],
+  );
+  const tableMinWidth = useMemo(
+    () => getActivityTableMinWidth(columns, canModerateActivity),
+    [canModerateActivity, columns],
   );
 
   return (
@@ -39,13 +45,18 @@ export function ActivityDesktopLogsTable({
       viewportClassName="overscroll-x-contain pb-2"
     >
       <div
-        className={`w-full rounded-lg border border-border bg-card/60 text-sm ${tableWidthClassName}`}
+        role="table"
+        aria-colcount={columns.length + (canModerateActivity ? 2 : 0)}
+        aria-rowcount={activities.length + 1}
+        className="w-full rounded-lg border border-border bg-card/60 text-sm"
+        style={{ minWidth: `${tableMinWidth}px` }}
       >
         <div className="max-h-[408px] overflow-y-auto [scrollbar-gutter:stable]">
           <ActivityDesktopLogsHeader
             allVisibleSelected={allVisibleSelected}
             canModerateActivity={canModerateActivity}
-            gridClassName={gridClassName}
+            columns={columns}
+            gridTemplateColumns={gridTemplateColumns}
             onToggleSelectAllVisible={onToggleSelectAllVisible}
             partiallySelected={partiallySelected}
           />
@@ -55,7 +66,8 @@ export function ActivityDesktopLogsTable({
               actionLoading={actionLoading}
               activity={activity}
               canModerateActivity={canModerateActivity}
-              gridClassName={gridClassName}
+              columns={columns}
+              gridTemplateColumns={gridTemplateColumns}
               isSelected={selectedActivityIds.has(activity.id)}
               onBanClick={onBanClick}
               onDeleteClick={onDeleteClick}

@@ -3,8 +3,6 @@ import test from "node:test";
 import {
   ACTIVITY_DESKTOP_ROW_HEIGHT_PX,
   ACTIVITY_MOBILE_ROW_HEIGHT_PX,
-  getActivityDesktopGridClassName,
-  getActivityDesktopTableWidthClassName,
   getVirtualizedListHeight,
 } from "@/pages/activity/activity-virtualization";
 
@@ -19,14 +17,4 @@ test("getVirtualizedListHeight clamps list height to the configured maximum", ()
 
 test("mobile activity rows reserve enough height for details and moderation actions", () => {
   assert.equal(ACTIVITY_MOBILE_ROW_HEIGHT_PX, 580);
-});
-
-test("getActivityDesktopGridClassName reserves selection and action columns only for moderation views", () => {
-  assert.match(getActivityDesktopGridClassName(true), /^grid-cols-\[3rem_/);
-  assert.doesNotMatch(getActivityDesktopGridClassName(false), /^grid-cols-\[3rem_/);
-});
-
-test("desktop activity table reserves enough intrinsic width for every readable column", () => {
-  assert.equal(getActivityDesktopTableWidthClassName(true), "min-w-[96rem]");
-  assert.equal(getActivityDesktopTableWidthClassName(false), "min-w-[82rem]");
 });
