@@ -14,6 +14,7 @@
 [data-testid*="count"],
 [data-testid*="date"],
 [data-testid*="timestamp"],
+[data-testid="badge-dashboard-freshness"],
 [data-testid="floating-ai-toggle"],
 [data-testid="floating-ai-unread-badge"],
 [aria-live="polite"] {

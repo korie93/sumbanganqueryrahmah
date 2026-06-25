@@ -13,18 +13,39 @@ interface VisualRouteSpec {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const visualStabilizerPath = path.join(__dirname, "visual-regression.css");
 const visualThemes: readonly VisualTheme[] = ["light", "dark"];
+const visualSessionExpiresAt = "2036-01-01T00:00:00.000Z";
 const visualUser = {
+  activatedAt: "2026-01-01T00:00:00.000Z",
   email: "visual.admin@example.test",
   fullName: "Visual Admin",
   id: "visual-admin",
   isBanned: false,
+  lastLoginAt: "2026-01-15T08:00:00.000Z",
   mustChangePassword: false,
+  passwordChangedAt: "2026-01-01T00:00:00.000Z",
   passwordResetBySuperuser: false,
   role: "superuser",
-  sessionExpiresAt: "2036-01-01T00:00:00.000Z",
   status: "active",
+  twoFactorConfiguredAt: null,
   twoFactorEnabled: false,
+  twoFactorPendingSetup: false,
   username: "visual-admin",
+} as const;
+const visualRecentLoginActivity = {
+  browser: "Chrome 149",
+  eventType: "success",
+  failureReason: null,
+  id: "visual-activity-1",
+  ipAddress: "203.0.113.24",
+  lastActivityTime: "2026-01-15T08:15:00.000Z",
+  loginTime: "2026-01-15T08:00:00.000Z",
+  logoutReason: null,
+  logoutTime: null,
+  platform: "Windows 11",
+  role: "superuser",
+  status: "active",
+  userAgentSummary: "Chrome on Windows",
+  username: visualUser.username,
 } as const;
 
 const publicRoutes: readonly VisualRouteSpec[] = [
@@ -61,6 +82,7 @@ function buildVisualMasks(page: Page, theme: VisualTheme) {
       page.locator('[data-testid*="count"]'),
       page.locator('[data-testid*="date"]'),
       page.locator('[data-testid*="timestamp"]'),
+      page.locator('[data-testid="badge-dashboard-freshness"]'),
       page.locator('[aria-live="polite"]'),
     ],
     maskColor: theme === "dark" ? "#111827" : "#f8fafc",
@@ -99,7 +121,8 @@ async function installMockAuthenticatedApi(page: Page) {
 
     if (pathname === "/api/me") {
       return jsonResponse(route, {
-        sessionExpiresAt: visualUser.sessionExpiresAt,
+        ok: true,
+        sessionExpiresAt: visualSessionExpiresAt,
         user: visualUser,
       });
     }
@@ -111,9 +134,11 @@ async function installMockAuthenticatedApi(page: Page) {
         heartbeatIntervalMinutes: 1,
         importUploadLimitBytes: 10 * 1024 * 1024,
         searchResultLimit: 250,
+        semanticSearchEnabled: true,
         sessionTimeoutMinutes: 30,
         systemName: "SQR Visual Baseline",
         viewerRowsPerPage: 100,
+        wsIdleMinutes: 10,
       });
     }
 
@@ -150,8 +175,13 @@ async function installMockAuthenticatedApi(page: Page) {
 
     if (pathname === "/api/analytics/summary") {
       return jsonResponse(route, {
-        activeUsers: 18,
-        todayLogins: 42,
+        activeSessions: 18,
+        backupActions24h: 2,
+        bannedUsers: 3,
+        collectionRecordVersionConflicts24h: 1,
+        loginFailures24h: 4,
+        loginsToday: 42,
+        totalDataRows: 24_680,
         totalImports: 9,
         totalUsers: 128,
       });
@@ -159,13 +189,13 @@ async function installMockAuthenticatedApi(page: Page) {
 
     if (pathname === "/api/analytics/login-trends") {
       return jsonResponse(route, [
-        { date: "2026-01-09", count: 8 },
-        { date: "2026-01-10", count: 12 },
-        { date: "2026-01-11", count: 9 },
-        { date: "2026-01-12", count: 15 },
-        { date: "2026-01-13", count: 18 },
-        { date: "2026-01-14", count: 14 },
-        { date: "2026-01-15", count: 21 },
+        { date: "2026-01-09", logins: 8, logouts: 5 },
+        { date: "2026-01-10", logins: 12, logouts: 9 },
+        { date: "2026-01-11", logins: 9, logouts: 8 },
+        { date: "2026-01-12", logins: 15, logouts: 11 },
+        { date: "2026-01-13", logins: 18, logouts: 13 },
+        { date: "2026-01-14", logins: 14, logouts: 12 },
+        { date: "2026-01-15", logins: 21, logouts: 15 },
       ]);
     }
 
@@ -187,11 +217,36 @@ async function installMockAuthenticatedApi(page: Page) {
     }
 
     if (pathname === "/api/analytics/peak-hours") {
-      return jsonResponse(route, [
-        { hour: 9, count: 14 },
-        { hour: 10, count: 18 },
-        { hour: 15, count: 11 },
-      ]);
+      return jsonResponse(
+        route,
+        Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          count: hour === 10 ? 18 : hour === 9 ? 14 : hour === 15 ? 11 : 2,
+        })),
+      );
+    }
+
+    if (pathname === "/api/analytics/recent-login-activity") {
+      return jsonResponse(route, [visualRecentLoginActivity]);
+    }
+
+    if (pathname === "/api/analytics/recent-login-activity-page") {
+      return jsonResponse(route, {
+        activities: [visualRecentLoginActivity],
+        filterCounts: {
+          active: 1,
+          all: 1,
+          attention: 0,
+          ended: 0,
+          failed: 0,
+        },
+        pagination: {
+          page: 1,
+          pageSize: 4,
+          totalItems: 1,
+          totalPages: 1,
+        },
+      });
     }
 
     if (pathname === "/api/analytics/role-distribution") {
