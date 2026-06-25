@@ -29,3 +29,15 @@ test("horizontal scroll hint can expose a visible keyboard-accessible data viewp
     /\.horizontal-scroll-hint\.horizontal-scroll-hint--visible::-webkit-scrollbar\s*\{[\s\S]*display:\s*block;/,
   );
 });
+
+test("horizontal scroll hint can expose accessible viewport-sized navigation controls", () => {
+  assert.match(source, /showNavigationControls\?: boolean/);
+  assert.match(source, /navigationLabel\?: string/);
+  assert.match(source, /role="group"/);
+  assert.match(source, /aria-label=\{navigationLabel\}/);
+  assert.match(source, /aria-label="Scroll columns left"/);
+  assert.match(source, /aria-label="Scroll columns right"/);
+  assert.match(source, /Math\.round\(viewportNode\.clientWidth \* 0\.75\)/);
+  assert.match(source, /disabled=\{!overflowState\.canScrollLeft\}/);
+  assert.match(source, /disabled=\{!overflowState\.canScrollRight\}/);
+});

@@ -42,6 +42,8 @@ export function ActivityDesktopLogsTable({
     <HorizontalScrollHint
       ariaLabel="Activity log columns"
       hint="Scroll table"
+      navigationLabel="Activity table column navigation"
+      showNavigationControls
       showScrollbar
       viewportClassName="overscroll-x-contain pb-2"
     >

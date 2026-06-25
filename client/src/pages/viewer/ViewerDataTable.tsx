@@ -111,6 +111,8 @@ function ViewerDataTableImpl({
       <HorizontalScrollHint
         ariaLabel="Viewer data columns"
         hint="Scroll columns"
+        navigationLabel="Viewer table column navigation"
+        showNavigationControls
         showScrollbar
         viewportClassName="overscroll-x-contain pb-2"
       >

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type UIEventHandler } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -8,7 +10,9 @@ type HorizontalScrollHintProps = {
   className?: string;
   viewportClassName?: string;
   hint?: string;
+  navigationLabel?: string;
   onScroll?: UIEventHandler<HTMLDivElement>;
+  showNavigationControls?: boolean;
   showScrollbar?: boolean;
 };
 
@@ -27,7 +31,9 @@ export function HorizontalScrollHint({
   className,
   viewportClassName,
   hint = translate("common.horizontalScroll.hint"),
+  navigationLabel = "Horizontal column navigation",
   onScroll,
+  showNavigationControls = false,
   showScrollbar = false,
 }: HorizontalScrollHintProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -94,8 +100,58 @@ export function HorizontalScrollHint({
     };
   }, [children]);
 
+  const scrollByViewport = (direction: -1 | 1) => {
+    const viewportNode = viewportRef.current;
+    if (!viewportNode) {
+      return;
+    }
+
+    const maxScrollLeft = Math.max(0, viewportNode.scrollWidth - viewportNode.clientWidth);
+    const distance = Math.max(240, Math.round(viewportNode.clientWidth * 0.75));
+    const nextScrollLeft = Math.min(
+      maxScrollLeft,
+      Math.max(0, viewportNode.scrollLeft + (distance * direction)),
+    );
+
+    viewportNode.scrollTo({
+      left: nextScrollLeft,
+      behavior: "auto",
+    });
+  };
+
   return (
     <div className={cn("relative", className)}>
+      {showNavigationControls && overflowState.canScroll ? (
+        <div
+          className="mb-2 flex items-center justify-end gap-1"
+          role="group"
+          aria-label={navigationLabel}
+          data-testid="horizontal-scroll-navigation"
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 min-w-8"
+            aria-label="Scroll columns left"
+            disabled={!overflowState.canScrollLeft}
+            onClick={() => scrollByViewport(-1)}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 min-w-8"
+            aria-label="Scroll columns right"
+            disabled={!overflowState.canScrollRight}
+            onClick={() => scrollByViewport(1)}
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
       <div
         ref={viewportRef}
         aria-label={ariaLabel}

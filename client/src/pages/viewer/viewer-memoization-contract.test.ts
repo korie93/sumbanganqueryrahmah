@@ -19,6 +19,8 @@ test("viewer table shell memoizes stable render data and fallbacks", () => {
   assert.match(source, /const desktopTableFallback = useMemo\(/);
   assert.match(source, /const mobileTableFallback = useMemo\(/);
   assert.match(source, /ariaLabel="Viewer data columns"/);
+  assert.match(source, /navigationLabel="Viewer table column navigation"/);
+  assert.match(source, /showNavigationControls/);
   assert.match(source, /showScrollbar/);
   assert.match(source, /className=\{styles\.desktopTableWidth\}/);
   assert.match(styleSource, /min-width:\s*max\(100%, var\(--viewer-table-min-width, 0px\)\)/);

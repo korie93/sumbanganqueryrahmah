@@ -641,6 +641,17 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
 
     const activityScrollport = page.getByRole("region", { name: "Activity log columns" });
     await expect(activityScrollport).toBeVisible();
+    const activityScrollNavigation = page.getByRole("group", {
+      name: "Activity table column navigation",
+    });
+    await expect(activityScrollNavigation).toBeVisible();
+    await expect(
+      activityScrollNavigation.getByRole("button", { name: "Scroll columns left" }),
+    ).toBeDisabled();
+    await activityScrollNavigation.getByRole("button", { name: "Scroll columns right" }).click();
+    await expect.poll(() => activityScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    await activityScrollNavigation.getByRole("button", { name: "Scroll columns left" }).click();
+    await expect.poll(() => activityScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
     const activityMetrics = await activityScrollport.evaluate((element) => ({
       clientWidth: element.clientWidth,
       overflowX: getComputedStyle(element).overflowX,
@@ -682,6 +693,17 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
 
     const viewerScrollport = page.getByRole("region", { name: "Viewer data columns" });
     await expect(viewerScrollport).toBeVisible();
+    const viewerScrollNavigation = page.getByRole("group", {
+      name: "Viewer table column navigation",
+    });
+    await expect(viewerScrollNavigation).toBeVisible();
+    await expect(
+      viewerScrollNavigation.getByRole("button", { name: "Scroll columns left" }),
+    ).toBeDisabled();
+    await viewerScrollNavigation.getByRole("button", { name: "Scroll columns right" }).click();
+    await expect.poll(() => viewerScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    await viewerScrollNavigation.getByRole("button", { name: "Scroll columns left" }).click();
+    await expect.poll(() => viewerScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
     const viewerRow = viewerScrollport.locator("tbody tr").first();
     await expect(viewerRow).toBeVisible();
     const comfortableViewerHeight = (await viewerRow.boundingBox())?.height ?? 0;

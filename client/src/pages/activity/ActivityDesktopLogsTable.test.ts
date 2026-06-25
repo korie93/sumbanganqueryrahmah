@@ -23,6 +23,8 @@ test("desktop activity header and rows share the same vertical scrollport", () =
 
 test("desktop activity columns use a visible, keyboard-accessible horizontal scrollport", () => {
   assert.match(source, /ariaLabel="Activity log columns"/);
+  assert.match(source, /navigationLabel="Activity table column navigation"/);
+  assert.match(source, /showNavigationControls/);
   assert.match(source, /showScrollbar/);
   assert.match(source, /viewportClassName="overscroll-x-contain pb-2"/);
   assert.match(source, /getActivityGridTemplateColumns/);
