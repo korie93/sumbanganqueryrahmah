@@ -15,6 +15,7 @@ export function ActivityDesktopLogsTable({
   allVisibleSelected,
   canModerateActivity,
   columnPreferences,
+  density,
   onBanClick,
   onDeleteClick,
   onKickClick,
@@ -49,6 +50,7 @@ export function ActivityDesktopLogsTable({
         aria-colcount={columns.length + (canModerateActivity ? 2 : 0)}
         aria-rowcount={activities.length + 1}
         className="w-full rounded-lg border border-border bg-card/60 text-sm"
+        data-density={density}
         style={{ minWidth: `${tableMinWidth}px` }}
       >
         <div className="max-h-[408px] overflow-y-auto [scrollbar-gutter:stable]">
@@ -56,6 +58,7 @@ export function ActivityDesktopLogsTable({
             allVisibleSelected={allVisibleSelected}
             canModerateActivity={canModerateActivity}
             columns={columns}
+            density={density}
             gridTemplateColumns={gridTemplateColumns}
             onToggleSelectAllVisible={onToggleSelectAllVisible}
             partiallySelected={partiallySelected}
@@ -67,6 +70,7 @@ export function ActivityDesktopLogsTable({
               activity={activity}
               canModerateActivity={canModerateActivity}
               columns={columns}
+              density={density}
               gridTemplateColumns={gridTemplateColumns}
               isSelected={selectedActivityIds.has(activity.id)}
               onBanClick={onBanClick}

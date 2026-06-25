@@ -1,6 +1,7 @@
 import { Suspense, lazy, memo, useLayoutEffect, useMemo, useRef } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { useIsMobile } from "@/hooks/use-mobile";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerDataTableFeedback } from "@/pages/viewer/ViewerDataTableFeedback";
 import styles from "./ViewerDataTable.module.css";
@@ -32,6 +33,7 @@ interface ViewerDataTableProps {
   enableVirtualRows: boolean;
   filteredRows: DataRowWithId[];
   gridTemplateColumns: string;
+  tableDensity: TableDensity;
   minSearchLength: number;
   onToggleRowSelection: (rowId: number) => void;
   onToggleSelectAllFiltered: () => void;
@@ -48,6 +50,7 @@ function ViewerDataTableImpl({
   enableVirtualRows,
   filteredRows,
   gridTemplateColumns,
+  tableDensity,
   minSearchLength,
   onToggleRowSelection,
   onToggleSelectAllFiltered,
@@ -70,13 +73,14 @@ function ViewerDataTableImpl({
 
   const virtualRowData = useMemo<ViewerVirtualRowData>(
     () => ({
+      density: tableDensity,
       rows: filteredRows,
       visibleHeaders,
       selectedRowIds,
       onToggleRowSelection,
       gridTemplateColumns,
     }),
-    [filteredRows, gridTemplateColumns, onToggleRowSelection, selectedRowIds, visibleHeaders],
+    [filteredRows, gridTemplateColumns, onToggleRowSelection, selectedRowIds, tableDensity, visibleHeaders],
   );
 
   const desktopTableFallback = useMemo(
@@ -128,6 +132,7 @@ function ViewerDataTableImpl({
                 <ViewerVirtualizedTable
                   filteredRows={filteredRows}
                   gridTemplateColumns={gridTemplateColumns}
+                  density={tableDensity}
                   onToggleRowSelection={onToggleRowSelection}
                   onToggleSelectAllFiltered={onToggleSelectAllFiltered}
                   rowHeightPx={rowHeightPx}
@@ -142,6 +147,7 @@ function ViewerDataTableImpl({
               <Suspense fallback={desktopTableFallback}>
                 <ViewerStandardTable
                   filteredRows={filteredRows}
+                  density={tableDensity}
                   onToggleRowSelection={onToggleRowSelection}
                   onToggleSelectAllFiltered={onToggleSelectAllFiltered}
                   selectedRowIds={selectedRowIds}

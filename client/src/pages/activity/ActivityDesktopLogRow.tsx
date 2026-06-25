@@ -18,6 +18,7 @@ export function ActivityDesktopLogRow({
   activity,
   canModerateActivity,
   columns,
+  density,
   gridTemplateColumns,
   isSelected,
   onBanClick,
@@ -89,8 +90,11 @@ export function ActivityDesktopLogRow({
     <div
       role="row"
       aria-label={buildActivityRowAriaLabel(activity, browserLabel)}
-      className="grid h-full items-center gap-3 border-b border-border/70 px-3 py-3 hover:bg-muted/50"
+      className={`grid h-full items-center gap-3 border-b border-border/70 px-3 hover:bg-muted/50 ${
+        density === "compact" ? "py-2" : "py-3"
+      }`}
       style={{ gridTemplateColumns }}
+      data-density={density}
       data-testid={`activity-row-${activity.id}`}
     >
       {canModerateActivity ? (

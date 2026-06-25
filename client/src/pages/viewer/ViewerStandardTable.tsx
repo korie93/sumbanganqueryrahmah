@@ -5,9 +5,11 @@ import {
   formatViewerCellValue,
 } from "@/pages/viewer/viewer-row-aria";
 import type { DataRowWithId } from "@/pages/viewer/types";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 
 interface ViewerStandardTableProps {
   filteredRows: DataRowWithId[];
+  density: TableDensity;
   onToggleRowSelection: (rowId: number) => void;
   onToggleSelectAllFiltered: () => void;
   selectedRowIds: Set<number>;
@@ -17,6 +19,7 @@ interface ViewerStandardTableProps {
 
 interface ViewerStandardTableRowProps {
   row: DataRowWithId;
+  density: TableDensity;
   selected: boolean;
   visibleHeaders: string[];
   onToggleRowSelection: (rowId: number) => void;
@@ -24,6 +27,7 @@ interface ViewerStandardTableRowProps {
 
 const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
   row,
+  density,
   selected,
   visibleHeaders,
   onToggleRowSelection,
@@ -39,23 +43,30 @@ const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
   return (
     <tr
       aria-label={rowAriaLabel}
-      className={`h-[48px] border-t border-border hover:bg-muted/50 ${selected ? "bg-primary/10" : ""}`}
+      className={`${density === "compact" ? "h-10" : "h-12"} border-t border-border hover:bg-muted/50 ${
+        selected ? "bg-primary/10" : ""
+      }`}
+      data-density={density}
     >
-      <td className="p-3">
+      <td className={density === "compact" ? "p-2" : "p-3"}>
         <Checkbox
           checked={selected}
           onCheckedChange={handleToggleRow}
           aria-label={`Select row ${row.__rowId + 1}`}
         />
       </td>
-      <td className="p-3 text-muted-foreground">{row.__rowId + 1}</td>
+      <td className={`${density === "compact" ? "p-2" : "p-3"} text-muted-foreground`}>
+        {row.__rowId + 1}
+      </td>
       {visibleHeaders.map((header) => {
         const cellText = formatViewerCellValue(row[header]);
 
         return (
           <td
             key={header}
-            className="max-w-[300px] truncate whitespace-nowrap p-3 text-foreground"
+            className={`max-w-[300px] truncate whitespace-nowrap text-foreground ${
+              density === "compact" ? "p-2" : "p-3"
+            }`}
             title={cellText}
           >
             {cellText}
@@ -68,6 +79,7 @@ const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
 
 function ViewerStandardTableImpl({
   filteredRows,
+  density,
   onToggleRowSelection,
   onToggleSelectAllFiltered,
   selectedRowIds,
@@ -79,7 +91,12 @@ function ViewerStandardTableImpl({
       <table className="ops-data-table w-full table-fixed text-sm">
         <thead className="sticky top-0 z-[var(--z-sticky-header)] bg-muted">
           <tr>
-            <th scope="col" className="w-10 p-3 text-left font-medium text-muted-foreground">
+            <th
+              scope="col"
+              className={`w-10 text-left font-medium text-muted-foreground ${
+                density === "compact" ? "p-2" : "p-3"
+              }`}
+            >
               <Checkbox
                 checked={selectAllFiltered && filteredRows.length > 0}
                 onCheckedChange={onToggleSelectAllFiltered}
@@ -87,12 +104,21 @@ function ViewerStandardTableImpl({
                 data-testid="checkbox-select-all-rows"
               />
             </th>
-            <th scope="col" className="w-12 p-3 text-left font-medium text-muted-foreground">#</th>
+            <th
+              scope="col"
+              className={`w-12 text-left font-medium text-muted-foreground ${
+                density === "compact" ? "p-2" : "p-3"
+              }`}
+            >
+              #
+            </th>
             {visibleHeaders.map((header) => (
               <th
                 key={header}
                 scope="col"
-                className="truncate whitespace-nowrap p-3 text-left font-medium text-muted-foreground"
+                className={`truncate whitespace-nowrap text-left font-medium text-muted-foreground ${
+                  density === "compact" ? "p-2" : "p-3"
+                }`}
                 title={header}
               >
                 {header}
@@ -105,6 +131,7 @@ function ViewerStandardTableImpl({
             <ViewerStandardTableRow
               key={row.__rowId}
               row={row}
+              density={density}
               selected={selectedRowIds.has(row.__rowId)}
               visibleHeaders={visibleHeaders}
               onToggleRowSelection={onToggleRowSelection}

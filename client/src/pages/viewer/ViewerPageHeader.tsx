@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
 import { buildViewerPageHeaderDescription } from "@/pages/viewer/page-header-utils";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 
 const ViewerPageHeaderActions = lazy(() =>
   import("@/pages/viewer/ViewerPageHeaderActions").then((module) => ({
@@ -23,6 +24,7 @@ interface ViewerPageHeaderProps {
   currentPage: number;
   totalPages: number;
   headers: string[];
+  densityPreference: TableDensity;
   selectedColumns: Set<string>;
   showColumnSelector: boolean;
   showFilters: boolean;
@@ -39,6 +41,7 @@ interface ViewerPageHeaderProps {
   onResetColumns: () => void;
   onSelectAllColumns: () => void;
   onDeselectAllColumns: () => void;
+  onDensityChange: (density: TableDensity) => void;
   onToggleFilters: () => void;
   onClearAllData: () => void;
   onExportCsv: (exportFiltered?: boolean, exportSelected?: boolean) => void;
@@ -66,6 +69,7 @@ function ViewerPageHeaderImpl({
   currentPage,
   totalPages,
   headers,
+  densityPreference,
   selectedColumns,
   showColumnSelector,
   showFilters,
@@ -82,6 +86,7 @@ function ViewerPageHeaderImpl({
   onResetColumns,
   onSelectAllColumns,
   onDeselectAllColumns,
+  onDensityChange,
   onToggleFilters,
   onClearAllData,
   onExportCsv,
@@ -120,9 +125,11 @@ function ViewerPageHeaderImpl({
             filterCount={filterCount}
             hasFilteredSubset={hasFilteredSubset}
             headers={headers}
+            densityPreference={densityPreference}
             isSuperuser={isSuperuser}
             onClearAllData={onClearAllData}
             onDeselectAllColumns={onDeselectAllColumns}
+            onDensityChange={onDensityChange}
             onExportCsv={onExportCsv}
             onExportExcel={onExportExcel}
             onExportPdf={onExportPdf}

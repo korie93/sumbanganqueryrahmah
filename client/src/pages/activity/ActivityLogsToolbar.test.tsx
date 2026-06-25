@@ -15,7 +15,9 @@ test("ActivityLogsToolbar renders result context and an accessible sort control"
       totalItems: 37,
       totalPages: 2,
       columnPreferences: getDefaultActivityColumnPreferences(),
+      densityPreference: "comfortable",
       showColumnControls: true,
+      onDensityChange: () => undefined,
       onMoveColumn: () => undefined,
       onResetColumns: () => undefined,
       onSortChange: () => undefined,
@@ -28,4 +30,5 @@ test("ActivityLogsToolbar renders result context and an accessible sort control"
   assert.match(markup, /aria-label="Sort activity logs"/);
   assert.match(markup, /data-testid="select-activity-sort"/);
   assert.match(markup, /data-testid="button-activity-columns"/);
+  assert.match(markup, /data-testid="activity-density-control"/);
 });

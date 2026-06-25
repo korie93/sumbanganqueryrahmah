@@ -8,6 +8,7 @@ import { ViewerContentEmptyState } from "@/pages/viewer/ViewerContentEmptyState"
 import { ViewerContentErrorBanner } from "@/pages/viewer/ViewerContentErrorBanner";
 import { ViewerContentFiltersSection } from "@/pages/viewer/ViewerContentFiltersSection";
 import { ViewerContentSummaryStrip } from "@/pages/viewer/ViewerContentSummaryStrip";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 
 type ViewerContentProps = {
   rows: DataRowWithId[];
@@ -34,6 +35,7 @@ type ViewerContentProps = {
   debouncedSearch: string;
   enableVirtualRows: boolean;
   gridTemplateColumns: string;
+  tableDensity: TableDensity;
   rowHeightPx: number;
   selectAllFiltered: boolean;
   virtualTableMinWidth: number;
@@ -81,6 +83,7 @@ function ViewerContentImpl({
   debouncedSearch,
   enableVirtualRows,
   gridTemplateColumns,
+  tableDensity,
   rowHeightPx,
   selectAllFiltered,
   virtualTableMinWidth,
@@ -155,6 +158,7 @@ function ViewerContentImpl({
           debouncedSearch={debouncedSearch}
           enableVirtualRows={enableVirtualRows}
           gridTemplateColumns={gridTemplateColumns}
+          tableDensity={tableDensity}
           rowHeightPx={rowHeightPx}
           selectedRowIds={selectedRowIds}
           selectAllFiltered={selectAllFiltered}

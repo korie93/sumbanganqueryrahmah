@@ -1,6 +1,8 @@
 import { Suspense, lazy, memo } from "react";
 import { Filter, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TableDensityControl } from "@/components/data/TableDensityControl";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import { buildViewerFiltersButtonLabel } from "@/pages/viewer/page-header-utils";
 
 const ViewerColumnSelector = lazy(() =>
@@ -20,9 +22,11 @@ interface ViewerPageHeaderActionsProps {
   filterCount: number;
   hasFilteredSubset: boolean;
   headers: string[];
+  densityPreference: TableDensity;
   isSuperuser: boolean;
   onClearAllData: () => void;
   onDeselectAllColumns: () => void;
+  onDensityChange: (density: TableDensity) => void;
   onExportCsv: (exportFiltered?: boolean, exportSelected?: boolean) => void;
   onExportExcel: (exportFiltered?: boolean, exportSelected?: boolean) => void;
   onExportPdf: (exportFiltered?: boolean, exportSelected?: boolean) => void;
@@ -57,9 +61,11 @@ function ViewerPageHeaderActionsImpl({
   filterCount,
   hasFilteredSubset,
   headers,
+  densityPreference,
   isSuperuser,
   onClearAllData,
   onDeselectAllColumns,
+  onDensityChange,
   onExportCsv,
   onExportExcel,
   onExportPdf,
@@ -80,6 +86,12 @@ function ViewerPageHeaderActionsImpl({
     <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
       {rowsCount > 0 ? (
         <>
+          <TableDensityControl
+            ariaLabel="Viewer row density"
+            testIdPrefix="viewer"
+            value={densityPreference}
+            onChange={onDensityChange}
+          />
           <Suspense fallback={<ViewerHeaderButtonFallback label="Columns" />}>
             <ViewerColumnSelector
               open={showColumnSelector}

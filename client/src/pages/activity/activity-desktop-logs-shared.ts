@@ -3,6 +3,7 @@ import type {
   ActivityColumnId,
   ActivityColumnPreferences,
 } from "@/pages/activity/activity-column-preferences";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 
 export type ActivityDesktopLogsTableProps = Pick<
   ActivityLogsTableProps,
@@ -20,12 +21,14 @@ export type ActivityDesktopLogsTableProps = Pick<
   | "selectedActivityIds"
 > & {
   columnPreferences: ActivityColumnPreferences;
+  density: TableDensity;
 };
 
 export interface ActivityDesktopLogsHeaderProps {
   allVisibleSelected: boolean;
   canModerateActivity: boolean;
   columns: ActivityColumnId[];
+  density: TableDensity;
   gridTemplateColumns: string;
   onToggleSelectAllVisible: (checked: boolean) => void;
   partiallySelected: boolean;
@@ -47,6 +50,7 @@ export interface ActivityDesktopLogRowProps
   > {
   activity: ActivityRecord;
   columns: ActivityColumnId[];
+  density: TableDensity;
   gridTemplateColumns: string;
   isSelected: boolean;
   onToggleSelected: (activityId: string, checked: boolean) => void;

@@ -34,7 +34,7 @@ test("viewer standard table isolates row selection rerenders", () => {
   assert.match(source, /ops-data-table w-full table-fixed text-sm/);
   assert.match(source, /aria-label=\{`Select row \$\{row\.__rowId \+ 1\}`\}/);
   assert.match(source, /aria-label="Select all filtered rows"/);
-  assert.match(source, /className="truncate whitespace-nowrap p-3/);
+  assert.match(source, /density === "compact" \? "p-2" : "p-3"/);
   assert.match(source, /title=\{header\}/);
   assert.match(source, /selected=\{selectedRowIds\.has\(row\.__rowId\)\}/);
   assert.match(source, /export const ViewerStandardTable = memo\(ViewerStandardTableImpl\)/);
@@ -101,4 +101,6 @@ test("viewer page state avoids object-wide dependencies for active filter chips"
   assert.doesNotMatch(source, /buildViewerActiveFilterChips\(\{[\s\S]*?\}\),\s*\[data\]/);
   assert.match(source, /readViewerColumnPreference/);
   assert.match(source, /writeViewerColumnPreference/);
+  assert.match(source, /usePersistentTableDensity\("viewer"\)/);
+  assert.match(source, /tableDensity\.density === "compact" \? 40 : 48/);
 });

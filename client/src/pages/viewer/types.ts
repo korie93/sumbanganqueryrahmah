@@ -13,6 +13,7 @@ export interface DataRowWithId {
 }
 
 export interface ViewerVirtualRowData {
+  density: import("@/hooks/usePersistentTableDensity").TableDensity;
   rows: DataRowWithId[];
   visibleHeaders: string[];
   selectedRowIds: Set<number>;

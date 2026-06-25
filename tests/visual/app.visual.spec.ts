@@ -619,6 +619,14 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await page.setViewportSize({ width: 1100, height: 900 });
     await page.goto("/monitor?section=activity", { waitUntil: "domcontentloaded" });
 
+    const activityRow = page.locator('[data-testid^="activity-row-"]').first();
+    await expect(activityRow).toBeVisible();
+    const comfortableActivityHeight = (await activityRow.boundingBox())?.height ?? 0;
+    await page.getByTestId("activity-density-compact").click();
+    await expect(activityRow).toHaveAttribute("data-density", "compact");
+    const compactActivityHeight = (await activityRow.boundingBox())?.height ?? 0;
+    expect(compactActivityHeight).toBeLessThan(comfortableActivityHeight);
+
     await page.getByTestId("button-activity-columns").click();
     await page.getByRole("checkbox", { name: "Show Browser column" }).click();
     await page.getByRole("button", { name: "Move Duration up" }).click();
@@ -655,6 +663,10 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     );
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByRole("region", { name: "Activity log columns" })).toBeVisible();
+    await expect(page.locator('[data-testid^="activity-row-"]').first()).toHaveAttribute(
+      "data-density",
+      "compact",
+    );
     await expect(page.getByRole("columnheader", { name: "Duration" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Browser" })).toHaveCount(0);
     const persistedActivityHeaderOrder = await page
@@ -670,6 +682,14 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
 
     const viewerScrollport = page.getByRole("region", { name: "Viewer data columns" });
     await expect(viewerScrollport).toBeVisible();
+    const viewerRow = viewerScrollport.locator("tbody tr").first();
+    await expect(viewerRow).toBeVisible();
+    const comfortableViewerHeight = (await viewerRow.boundingBox())?.height ?? 0;
+    await page.getByTestId("viewer-density-compact").click();
+    await expect(viewerRow).toHaveAttribute("data-density", "compact");
+    const compactViewerHeight = (await viewerRow.boundingBox())?.height ?? 0;
+    expect(compactViewerHeight).toBeLessThan(comfortableViewerHeight);
+
     await page.getByTestId("button-column-selector").click();
     await page.getByTestId("checkbox-column-Processing Notes").click();
     await page.getByRole("button", { name: "Move Last Updated At up" }).click();
@@ -701,6 +721,10 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await page.getByTestId("button-view-visual-import-1").click();
     const persistedViewerScrollport = page.getByRole("region", { name: "Viewer data columns" });
     await expect(persistedViewerScrollport).toBeVisible();
+    await expect(persistedViewerScrollport.locator("tbody tr").first()).toHaveAttribute(
+      "data-density",
+      "compact",
+    );
     await expect(
       persistedViewerScrollport.getByRole("columnheader", { name: "Last Updated At" }),
     ).toBeVisible();

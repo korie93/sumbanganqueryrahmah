@@ -24,15 +24,20 @@ function ViewerVirtualizedRowImpl({
           visibleHeaders: data.visibleHeaders,
         })}
         gridTemplateColumns={data.gridTemplateColumns}
-        className={`h-[48px] items-center border-t border-border px-0 hover:bg-muted/50 ${selected ? "bg-primary/10" : ""}`}
+        className={`h-full items-center border-t border-border px-0 hover:bg-muted/50 ${
+          selected ? "bg-primary/10" : ""
+        }`}
       >
-        <div className="px-3">
+        <div className={data.density === "compact" ? "px-2" : "px-3"}>
           <Checkbox
             checked={selected}
             onCheckedChange={() => data.onToggleRowSelection(row.__rowId)}
+            aria-label={`Select row ${row.__rowId + 1}`}
           />
         </div>
-        <div className="px-3 text-muted-foreground">{row.__rowId + 1}</div>
+        <div className={`${data.density === "compact" ? "px-2" : "px-3"} text-muted-foreground`}>
+          {row.__rowId + 1}
+        </div>
         {data.visibleHeaders.map((header) => {
           const cellText = formatViewerCellValue(row[header]);
 

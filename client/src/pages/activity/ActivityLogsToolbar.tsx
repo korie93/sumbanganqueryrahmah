@@ -1,4 +1,6 @@
 import { ArrowUpDown } from "lucide-react";
+import { TableDensityControl } from "@/components/data/TableDensityControl";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import { ActivityColumnSelector } from "@/pages/activity/ActivityColumnSelector";
 import type {
   ActivityColumnId,
@@ -55,9 +57,11 @@ type ActivityLogsToolbarProps = {
   totalItems: number;
   totalPages: number;
   columnPreferences: ActivityColumnPreferences;
+  densityPreference: TableDensity;
   showColumnControls: boolean;
   onMoveColumn: (column: ActivityColumnId, direction: -1 | 1) => void;
   onResetColumns: () => void;
+  onDensityChange: (density: TableDensity) => void;
   onSortChange: (sortBy: ActivitySortBy, sortOrder: ActivitySortOrder) => void;
   onToggleColumn: (column: ActivityColumnId) => void;
 };
@@ -70,9 +74,11 @@ export function ActivityLogsToolbar({
   totalItems,
   totalPages,
   columnPreferences,
+  densityPreference,
   showColumnControls,
   onMoveColumn,
   onResetColumns,
+  onDensityChange,
   onSortChange,
   onToggleColumn,
 }: ActivityLogsToolbarProps) {
@@ -90,12 +96,20 @@ export function ActivityLogsToolbar({
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         {showColumnControls ? (
-          <ActivityColumnSelector
-            preferences={columnPreferences}
-            onMoveColumn={onMoveColumn}
-            onReset={onResetColumns}
-            onToggleColumn={onToggleColumn}
-          />
+          <>
+            <TableDensityControl
+              ariaLabel="Activity row density"
+              testIdPrefix="activity"
+              value={densityPreference}
+              onChange={onDensityChange}
+            />
+            <ActivityColumnSelector
+              preferences={columnPreferences}
+              onMoveColumn={onMoveColumn}
+              onReset={onResetColumns}
+              onToggleColumn={onToggleColumn}
+            />
+          </>
         ) : null}
         <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <ArrowUpDown className="h-4 w-4" aria-hidden="true" />

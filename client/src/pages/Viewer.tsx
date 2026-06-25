@@ -59,6 +59,7 @@ export default function Viewer({
           currentPage={viewer.currentPage}
           totalPages={viewer.totalPages}
           headers={viewer.headers}
+          densityPreference={viewer.tableDensityPreference}
           selectedColumns={viewer.selectedColumns}
           showColumnSelector={viewer.showColumnSelector}
           showFilters={viewer.showFilters}
@@ -75,6 +76,7 @@ export default function Viewer({
           onResetColumns={viewer.resetColumns}
           onSelectAllColumns={viewer.selectAllColumns}
           onDeselectAllColumns={viewer.deselectAllColumns}
+          onDensityChange={viewer.setTableDensityPreference}
           onToggleFilters={viewer.handleToggleFilters}
           onClearAllData={viewer.clearAllData}
           onExportCsv={viewer.handleExportCsv}
@@ -109,6 +111,7 @@ export default function Viewer({
           debouncedSearch={viewer.debouncedSearch}
           enableVirtualRows={viewer.enableVirtualRows}
           gridTemplateColumns={viewer.gridTemplateColumns}
+          tableDensity={viewer.tableDensity}
           rowHeightPx={viewer.rowHeightPx}
           selectAllFiltered={viewer.selectAllFiltered}
           virtualTableMinWidth={viewer.virtualTableMinWidth}

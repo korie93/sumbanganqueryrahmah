@@ -6,6 +6,7 @@ import { ActivityLogsTableHeader } from "@/pages/activity/ActivityLogsTableHeade
 import { ActivityLogsToolbar } from "@/pages/activity/ActivityLogsToolbar";
 import { ActivityMobileLogsList } from "@/pages/activity/ActivityMobileLogsList";
 import { getActivityLogsEmptyLabel } from "@/pages/activity/activity-logs-table-utils";
+import { usePersistentTableDensity } from "@/hooks/usePersistentTableDensity";
 import type { ActivityLogsTableProps } from "@/pages/activity/types";
 import { useActivityColumnPreferences } from "@/pages/activity/useActivityColumnPreferences";
 import { useActivityLogsLayoutPreference } from "@/pages/activity/useActivityLogsLayoutPreference";
@@ -52,6 +53,7 @@ export function ActivityLogsTable({
 }: ActivityLogsTableProps) {
   const preferMobileLayout = useActivityLogsLayoutPreference();
   const columnPreferences = useActivityColumnPreferences();
+  const tableDensity = usePersistentTableDensity("activity");
 
   return (
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
@@ -69,9 +71,11 @@ export function ActivityLogsTable({
             totalItems={totalItems}
             totalPages={totalPages}
             columnPreferences={columnPreferences.preferences}
+            densityPreference={tableDensity.preference}
             showColumnControls={!preferMobileLayout}
             onMoveColumn={columnPreferences.moveColumn}
             onResetColumns={columnPreferences.resetColumns}
+            onDensityChange={tableDensity.setPreference}
             onSortChange={onSortChange}
             onToggleColumn={columnPreferences.toggleColumn}
           />
@@ -108,6 +112,7 @@ export function ActivityLogsTable({
                 allVisibleSelected={allVisibleSelected}
                 canModerateActivity={canModerateActivity}
                 columnPreferences={columnPreferences.preferences}
+                density={tableDensity.density}
                 onBanClick={onBanClick}
                 onDeleteClick={onDeleteClick}
                 onKickClick={onKickClick}

@@ -2,6 +2,7 @@ import { Suspense, lazy, memo, type RefObject } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import type { DataRowWithId } from "@/pages/viewer/types";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import {
   ViewerDataTableFallback,
   ViewerFooterFallback,
@@ -36,6 +37,7 @@ type ViewerContentDatasetSectionProps = {
   debouncedSearch: string;
   enableVirtualRows: boolean;
   gridTemplateColumns: string;
+  tableDensity: TableDensity;
   rowHeightPx: number;
   selectedRowIds: Set<number>;
   selectAllFiltered: boolean;
@@ -71,6 +73,7 @@ function ViewerContentDatasetSectionImpl({
   debouncedSearch,
   enableVirtualRows,
   gridTemplateColumns,
+  tableDensity,
   rowHeightPx,
   selectedRowIds,
   selectAllFiltered,
@@ -120,6 +123,7 @@ function ViewerContentDatasetSectionImpl({
           enableVirtualRows={enableVirtualRows}
           filteredRows={filteredRows}
           gridTemplateColumns={gridTemplateColumns}
+          tableDensity={tableDensity}
           minSearchLength={minSearchLength}
           onToggleRowSelection={onToggleRowSelection}
           onToggleSelectAllFiltered={onToggleSelectAllFiltered}

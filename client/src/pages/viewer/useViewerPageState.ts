@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBrowserSessionStorage } from "@/lib/browser-storage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
+import { usePersistentTableDensity } from "@/hooks/usePersistentTableDensity";
 import {
   consumeViewerAnalysisHandoff,
 } from "@/pages/viewer/analysis-handoff";
@@ -49,6 +50,7 @@ export function useViewerPageState({
     return Math.min(500, Math.max(10, Math.floor(parsed)));
   }, [isLowSpecMode, viewerRowsPerPage]);
   const isSuperuser = userRole === "superuser";
+  const tableDensity = usePersistentTableDensity("viewer");
 
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
@@ -170,7 +172,7 @@ export function useViewerPageState({
     || filteredRows.length !== data.rows.length;
   const hasPageFilterSubset = filteredRows.length !== data.rows.length;
   const enableVirtualRows = filteredRows.length > (isLowSpecMode ? 60 : 120);
-  const rowHeightPx = 48;
+  const rowHeightPx = tableDensity.density === "compact" ? 40 : 48;
   const viewportHeightPx = 520;
   const virtualTableMinWidth = useMemo(
     () => getViewerVirtualTableMinWidth(visibleHeaders.length),
@@ -317,6 +319,9 @@ export function useViewerPageState({
     enableVirtualRows,
     gridTemplateColumns,
     rowHeightPx,
+    tableDensity: tableDensity.density,
+    tableDensityPreference: tableDensity.preference,
+    setTableDensityPreference: tableDensity.setPreference,
     selectAllFiltered,
     virtualTableMinWidth,
     viewportHeightPx,

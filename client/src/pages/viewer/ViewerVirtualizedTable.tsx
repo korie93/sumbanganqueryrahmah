@@ -4,9 +4,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerVirtualizedRow } from "@/pages/viewer/ViewerVirtualizedRow";
 import { ViewerGridShell } from "@/pages/viewer/viewer-grid-shell";
+import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 
 interface ViewerVirtualizedTableProps {
   filteredRows: DataRowWithId[];
+  density: TableDensity;
   gridTemplateColumns: string;
   onToggleRowSelection: (rowId: number) => void;
   onToggleSelectAllFiltered: () => void;
@@ -20,6 +22,7 @@ interface ViewerVirtualizedTableProps {
 
 function ViewerVirtualizedTableImpl({
   filteredRows,
+  density,
   gridTemplateColumns,
   onToggleSelectAllFiltered,
   rowHeightPx,
@@ -31,15 +34,21 @@ function ViewerVirtualizedTableImpl({
   return (
     <div>
       <div className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border bg-muted">
-        <ViewerGridShell gridTemplateColumns={gridTemplateColumns} className="h-12 items-center">
-          <div className="px-3">
+        <ViewerGridShell
+          gridTemplateColumns={gridTemplateColumns}
+          className={`${density === "compact" ? "h-10" : "h-12"} items-center`}
+        >
+          <div className={density === "compact" ? "px-2" : "px-3"}>
             <Checkbox
               checked={selectAllFiltered && filteredRows.length > 0}
               onCheckedChange={onToggleSelectAllFiltered}
+              aria-label="Select all filtered rows"
               data-testid="checkbox-select-all-rows"
             />
           </div>
-          <div className="px-3 font-medium text-muted-foreground">#</div>
+          <div className={`${density === "compact" ? "px-2" : "px-3"} font-medium text-muted-foreground`}>
+            #
+          </div>
           {visibleHeaders.map((header) => (
             <div
               key={header}
