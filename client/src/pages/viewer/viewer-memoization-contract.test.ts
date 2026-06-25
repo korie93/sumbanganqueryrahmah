@@ -12,11 +12,16 @@ function readViewerSource(fileName: string): string {
 
 test("viewer table shell memoizes stable render data and fallbacks", () => {
   const source = readViewerSource("ViewerDataTable.tsx");
+  const styleSource = readViewerSource("ViewerDataTable.module.css");
 
   assert.match(source, /import\s+\{[^}]*memo[^}]*useMemo[^}]*\}\s+from "react"/);
   assert.match(source, /const virtualRowData = useMemo<ViewerVirtualRowData>/);
   assert.match(source, /const desktopTableFallback = useMemo\(/);
   assert.match(source, /const mobileTableFallback = useMemo\(/);
+  assert.match(source, /ariaLabel="Viewer data columns"/);
+  assert.match(source, /showScrollbar/);
+  assert.match(source, /className=\{styles\.desktopTableWidth\}/);
+  assert.match(styleSource, /min-width:\s*max\(100%, var\(--viewer-table-min-width, 0px\)\)/);
   assert.match(source, /export const ViewerDataTable = memo\(ViewerDataTableImpl\)/);
 });
 
@@ -26,6 +31,11 @@ test("viewer standard table isolates row selection rerenders", () => {
   assert.match(source, /const ViewerStandardTableRow = memo\(function ViewerStandardTableRow/);
   assert.match(source, /const rowAriaLabel = useMemo\(/);
   assert.match(source, /const handleToggleRow = useCallback\(/);
+  assert.match(source, /ops-data-table w-full table-fixed text-sm/);
+  assert.match(source, /aria-label=\{`Select row \$\{row\.__rowId \+ 1\}`\}/);
+  assert.match(source, /aria-label="Select all filtered rows"/);
+  assert.match(source, /className="truncate whitespace-nowrap p-3/);
+  assert.match(source, /title=\{header\}/);
   assert.match(source, /selected=\{selectedRowIds\.has\(row\.__rowId\)\}/);
   assert.match(source, /export const ViewerStandardTable = memo\(ViewerStandardTableImpl\)/);
 });

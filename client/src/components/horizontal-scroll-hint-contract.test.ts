@@ -14,3 +14,18 @@ test("horizontal scroll hint hides touch scrollbars without disabling horizontal
   assert.match(globalStyles, /\.horizontal-scroll-hint\s*\{[\s\S]*scrollbar-width:\s*none;/);
   assert.match(globalStyles, /\.horizontal-scroll-hint::-webkit-scrollbar\s*\{[\s\S]*display:\s*none;/);
 });
+
+test("horizontal scroll hint can expose a visible keyboard-accessible data viewport", () => {
+  assert.match(source, /showScrollbar\?: boolean/);
+  assert.match(source, /horizontal-scroll-hint--visible scrollbar-visible/);
+  assert.match(source, /role=\{ariaLabel \? "region" : undefined\}/);
+  assert.match(source, /tabIndex=\{ariaLabel \? 0 : undefined\}/);
+  assert.match(
+    globalStyles,
+    /\.horizontal-scroll-hint\.horizontal-scroll-hint--visible\s*\{[\s\S]*scrollbar-width:\s*thin;/,
+  );
+  assert.match(
+    globalStyles,
+    /\.horizontal-scroll-hint\.horizontal-scroll-hint--visible::-webkit-scrollbar\s*\{[\s\S]*display:\s*block;/,
+  );
+});

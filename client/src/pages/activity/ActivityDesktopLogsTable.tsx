@@ -4,6 +4,7 @@ import { ActivityDesktopLogsHeader } from "@/pages/activity/ActivityDesktopLogsH
 import { ActivityDesktopLogRow } from "@/pages/activity/ActivityDesktopLogRow";
 import {
   getActivityDesktopGridClassName,
+  getActivityDesktopTableWidthClassName,
 } from "@/pages/activity/activity-virtualization";
 import type { ActivityDesktopLogsTableProps } from "@/pages/activity/activity-desktop-logs-shared";
 
@@ -25,10 +26,21 @@ export function ActivityDesktopLogsTable({
     () => getActivityDesktopGridClassName(canModerateActivity),
     [canModerateActivity],
   );
+  const tableWidthClassName = useMemo(
+    () => getActivityDesktopTableWidthClassName(canModerateActivity),
+    [canModerateActivity],
+  );
 
   return (
-    <HorizontalScrollHint hint="Scroll table">
-      <div className="min-w-[70rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm">
+    <HorizontalScrollHint
+      ariaLabel="Activity log columns"
+      hint="Scroll table"
+      showScrollbar
+      viewportClassName="overscroll-x-contain pb-2"
+    >
+      <div
+        className={`w-full rounded-lg border border-border bg-card/60 text-sm ${tableWidthClassName}`}
+      >
         <div className="max-h-[408px] overflow-y-auto [scrollbar-gutter:stable]">
           <ActivityDesktopLogsHeader
             allVisibleSelected={allVisibleSelected}

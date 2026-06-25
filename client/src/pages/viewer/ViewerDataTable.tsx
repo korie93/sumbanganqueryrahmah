@@ -3,6 +3,7 @@ import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerDataTableFeedback } from "@/pages/viewer/ViewerDataTableFeedback";
+import styles from "./ViewerDataTable.module.css";
 
 const ViewerMobileCardsTable = lazy(() =>
   import("@/pages/viewer/ViewerMobileCardsTable").then((module) => ({
@@ -58,10 +59,10 @@ function ViewerDataTableImpl({
   visibleHeaders,
 }: ViewerDataTableProps) {
   const isMobile = useIsMobile();
-  const virtualTableWidthRef = useRef<HTMLDivElement | null>(null);
+  const desktopTableWidthRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
-    virtualTableWidthRef.current?.style.setProperty(
+    desktopTableWidthRef.current?.style.setProperty(
       "--viewer-table-min-width",
       `${virtualTableMinWidth}px`,
     );
@@ -102,8 +103,13 @@ function ViewerDataTableImpl({
   );
 
   return (
-    <div className="ops-table-shell">
-      <HorizontalScrollHint hint="Scroll columns">
+    <div className="ops-table-shell min-w-0">
+      <HorizontalScrollHint
+        ariaLabel="Viewer data columns"
+        hint="Scroll columns"
+        showScrollbar
+        viewportClassName="overscroll-x-contain pb-2"
+      >
         {isMobile ? (
           <Suspense fallback={mobileTableFallback}>
             <ViewerMobileCardsTable
@@ -115,33 +121,36 @@ function ViewerDataTableImpl({
               visibleHeaders={visibleHeaders}
             />
           </Suspense>
-        ) : enableVirtualRows ? (
-          <Suspense fallback={desktopTableFallback}>
-            <ViewerVirtualizedTable
-              filteredRows={filteredRows}
-              gridTemplateColumns={gridTemplateColumns}
-              onToggleRowSelection={onToggleRowSelection}
-              onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-              rowHeightPx={rowHeightPx}
-              selectedRowIds={selectedRowIds}
-              selectAllFiltered={selectAllFiltered}
-              virtualRowData={virtualRowData}
-              viewportHeightPx={viewportHeightPx}
-              virtualTableWidthRef={virtualTableWidthRef}
-              visibleHeaders={visibleHeaders}
-            />
-          </Suspense>
         ) : (
-          <Suspense fallback={desktopTableFallback}>
-            <ViewerStandardTable
-              filteredRows={filteredRows}
-              onToggleRowSelection={onToggleRowSelection}
-              onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-              selectedRowIds={selectedRowIds}
-              selectAllFiltered={selectAllFiltered}
-              visibleHeaders={visibleHeaders}
-            />
-          </Suspense>
+          <div ref={desktopTableWidthRef} className={styles.desktopTableWidth}>
+            {enableVirtualRows ? (
+              <Suspense fallback={desktopTableFallback}>
+                <ViewerVirtualizedTable
+                  filteredRows={filteredRows}
+                  gridTemplateColumns={gridTemplateColumns}
+                  onToggleRowSelection={onToggleRowSelection}
+                  onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+                  rowHeightPx={rowHeightPx}
+                  selectedRowIds={selectedRowIds}
+                  selectAllFiltered={selectAllFiltered}
+                  virtualRowData={virtualRowData}
+                  viewportHeightPx={viewportHeightPx}
+                  visibleHeaders={visibleHeaders}
+                />
+              </Suspense>
+            ) : (
+              <Suspense fallback={desktopTableFallback}>
+                <ViewerStandardTable
+                  filteredRows={filteredRows}
+                  onToggleRowSelection={onToggleRowSelection}
+                  onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+                  selectedRowIds={selectedRowIds}
+                  selectAllFiltered={selectAllFiltered}
+                  visibleHeaders={visibleHeaders}
+                />
+              </Suspense>
+            )}
+          </div>
         )}
       </HorizontalScrollHint>
 

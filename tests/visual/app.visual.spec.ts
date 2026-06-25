@@ -47,6 +47,34 @@ const visualRecentLoginActivity = {
   userAgentSummary: "Chrome on Windows",
   username: visualUser.username,
 } as const;
+const visualActivityRows = Array.from({ length: 8 }, (_, index) => ({
+  browser: `Google Chrome 149.0.${index} on a managed enterprise workstation`,
+  deviceType: "desktop",
+  id: `visual-activity-${index + 1}`,
+  ipAddress: `203.0.113.${24 + index}`,
+  isActive: index < 3,
+  lastActivityTime: "2026-01-15T08:15:00.000Z",
+  loginTime: "2026-01-15T08:00:00.000Z",
+  logoutReason: index < 3 ? null : "USER_LOGOUT",
+  logoutTime: index < 3 ? null : "2026-01-15T09:00:00.000Z",
+  pcName: `OPERATIONS-WORKSTATION-${String(index + 1).padStart(2, "0")}`,
+  platform: "Windows 11 Enterprise",
+  role: index === 0 ? "superuser" : "admin",
+  status: index < 3 ? "ONLINE" : "LOGOUT",
+  username: `visual.operator.${String(index + 1).padStart(2, "0")}`,
+}));
+const visualViewerHeaders = [
+  "Customer Name",
+  "Identification Number",
+  "Account Number",
+  "Branch",
+  "Collection Status",
+  "Payment Reference",
+  "Processing Notes",
+  "Created By",
+  "Created At",
+  "Last Updated At",
+] as const;
 
 const publicRoutes: readonly VisualRouteSpec[] = [
   {
@@ -163,14 +191,78 @@ async function installMockAuthenticatedApi(page: Page) {
           },
         ],
         pagination: {
-          hasMore: false,
-          limit: 1,
-          nextCursor: null,
-          pageSize: 1,
-          mode: "cursor",
+          hasNextPage: false,
+          hasPreviousPage: false,
+          limit: 20,
+          mode: "offset",
+          offset: 0,
+          page: 1,
+          pageSize: 20,
           total: 1,
+          totalPages: 1,
         },
       });
+    }
+
+    if (pathname === "/api/imports/visual-import-1/data") {
+      return jsonResponse(route, {
+        headers: visualViewerHeaders,
+        limit: 100,
+        nextCursor: null,
+        offset: 0,
+        page: 1,
+        pageSize: 100,
+        pagination: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          limit: 100,
+          mode: "hybrid",
+          nextCursor: null,
+          offset: 0,
+          page: 1,
+          pageSize: 100,
+          total: 3,
+          totalPages: 1,
+        },
+        rows: Array.from({ length: 3 }, (_, index) => ({
+          id: `visual-row-${index + 1}`,
+          importId: "visual-import-1",
+          jsonDataJsonb: Object.fromEntries(
+            visualViewerHeaders.map((header) => [
+              header,
+              `${header} sample value ${index + 1}`,
+            ]),
+          ),
+        })),
+        total: 3,
+      });
+    }
+
+    if (pathname === "/api/activity/page") {
+      return jsonResponse(route, {
+        activities: visualActivityRows,
+        pagination: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          limit: 20,
+          mode: "offset",
+          offset: 0,
+          page: 1,
+          pageSize: 20,
+          total: visualActivityRows.length,
+          totalPages: 1,
+        },
+        summary: {
+          idleCount: 0,
+          kickedCount: 0,
+          logoutCount: 5,
+          onlineCount: 3,
+        },
+      });
+    }
+
+    if (pathname === "/api/users/banned") {
+      return jsonResponse(route, { users: [] });
     }
 
     if (pathname === "/api/analytics/summary") {
@@ -418,5 +510,98 @@ test.describe("authenticated key page baselines", () => {
         await logoutVisualSession(page);
       }
     });
+  }
+});
+
+test("dashboard scaling and data tables preserve reachable content", async ({ page }) => {
+  test.setTimeout(90_000);
+  await installMockAuthenticatedSession(page, "light");
+
+  try {
+    await navigateForSnapshot(page, authenticatedRoutes[0]);
+
+    for (const viewport of [
+      { fontSize: 16, width: 1280 },
+      { fontSize: 20, width: 1024 },
+      { fontSize: 24, width: 800 },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: 900 });
+      await page.evaluate((fontSize) => {
+        document.documentElement.style.fontSize = `${fontSize}px`;
+      }, viewport.fontSize);
+      await page.waitForTimeout(150);
+
+      const dashboardLayout = await page.evaluate(() => {
+        const dashboard = document.querySelector("[data-dashboard-export-root]");
+        const documentElement = document.documentElement;
+        const dashboardRect = dashboard?.getBoundingClientRect();
+
+        return {
+          dashboardRight: dashboardRect?.right ?? Number.POSITIVE_INFINITY,
+          documentClientWidth: documentElement.clientWidth,
+          documentScrollWidth: documentElement.scrollWidth,
+        };
+      });
+
+      expect(dashboardLayout.documentScrollWidth).toBeLessThanOrEqual(
+        dashboardLayout.documentClientWidth + 1,
+      );
+      expect(dashboardLayout.dashboardRight).toBeLessThanOrEqual(
+        dashboardLayout.documentClientWidth + 1,
+      );
+    }
+
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "";
+    });
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await page.goto("/monitor?section=activity", { waitUntil: "domcontentloaded" });
+
+    const activityScrollport = page.getByRole("region", { name: "Activity log columns" });
+    await expect(activityScrollport).toBeVisible();
+    const activityMetrics = await activityScrollport.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      overflowX: getComputedStyle(element).overflowX,
+      scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(activityMetrics.scrollWidth).toBeGreaterThan(activityMetrics.clientWidth);
+    expect(activityMetrics.overflowX).toBe("auto");
+    expect(activityMetrics.scrollbarWidth).not.toBe("none");
+    await activityScrollport.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await expect.poll(() => activityScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    const activityViewportRect = await activityScrollport.boundingBox();
+    const actionsHeaderRect = await activityScrollport.getByText("Actions", { exact: true }).boundingBox();
+    expect(activityViewportRect).not.toBeNull();
+    expect(actionsHeaderRect).not.toBeNull();
+    expect(actionsHeaderRect!.x + actionsHeaderRect!.width).toBeLessThanOrEqual(
+      activityViewportRect!.x + activityViewportRect!.width + 1,
+    );
+
+    await page.goto("/saved", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("button-view-visual-import-1").click();
+
+    const viewerScrollport = page.getByRole("region", { name: "Viewer data columns" });
+    await expect(viewerScrollport).toBeVisible();
+    const viewerMetrics = await viewerScrollport.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      overflowX: getComputedStyle(element).overflowX,
+      scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(viewerMetrics.scrollWidth).toBeGreaterThan(viewerMetrics.clientWidth);
+    expect(viewerMetrics.overflowX).toBe("auto");
+    expect(viewerMetrics.scrollbarWidth).not.toBe("none");
+    await viewerScrollport.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await expect.poll(() => viewerScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    await expect(
+      viewerScrollport.getByRole("columnheader", { name: "Last Updated At" }),
+    ).toBeInViewport();
+  } finally {
+    await logoutVisualSession(page);
   }
 });

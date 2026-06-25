@@ -639,7 +639,7 @@ function DashboardContent() {
   }, [handleExportPdf, handleRefreshAll]);
 
   return (
-    <OperationalPage width="content">
+    <OperationalPage className="min-w-0" width="content">
       <DashboardPageHeader
         isMobile={isMobile}
         kpiCount={summaryCards.length}
@@ -657,7 +657,11 @@ function DashboardContent() {
         }}
       />
 
-      <div ref={dashboardRef} className="space-y-4 sm:space-y-6" data-dashboard-export-root="true">
+      <div
+        ref={dashboardRef}
+        className="min-w-0 space-y-4 sm:space-y-6"
+        data-dashboard-export-root="true"
+      >
         {dashboardErrorMessages.length > 0 ? (
           <section
             className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"

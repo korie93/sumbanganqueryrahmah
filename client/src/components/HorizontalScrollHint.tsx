@@ -3,11 +3,13 @@ import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type HorizontalScrollHintProps = {
+  ariaLabel?: string;
   children: ReactNode;
   className?: string;
   viewportClassName?: string;
   hint?: string;
   onScroll?: UIEventHandler<HTMLDivElement>;
+  showScrollbar?: boolean;
 };
 
 type HorizontalOverflowState = {
@@ -20,11 +22,13 @@ type HorizontalOverflowState = {
  * Renders the shared horizontal scroll hint component used across SQR screens.
  */
 export function HorizontalScrollHint({
+  ariaLabel,
   children,
   className,
   viewportClassName,
   hint = translate("common.horizontalScroll.hint"),
   onScroll,
+  showScrollbar = false,
 }: HorizontalScrollHintProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [overflowState, setOverflowState] = useState<HorizontalOverflowState>({
@@ -94,8 +98,15 @@ export function HorizontalScrollHint({
     <div className={cn("relative", className)}>
       <div
         ref={viewportRef}
-        className={cn("horizontal-scroll-hint overflow-x-auto", viewportClassName)}
+        aria-label={ariaLabel}
+        className={cn(
+          "horizontal-scroll-hint overflow-x-auto",
+          showScrollbar ? "horizontal-scroll-hint--visible scrollbar-visible" : "",
+          viewportClassName,
+        )}
         onScroll={onScroll}
+        role={ariaLabel ? "region" : undefined}
+        tabIndex={ariaLabel ? 0 : undefined}
       >
         {children}
       </div>

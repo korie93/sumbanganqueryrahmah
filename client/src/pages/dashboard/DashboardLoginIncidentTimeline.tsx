@@ -204,7 +204,7 @@ function DashboardLoginIncidentTimelineSkeleton() {
       aria-label="Loading dashboard login incident timeline"
       data-floating-ai-avoid="true"
     >
-      <div className="grid gap-3 lg:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
           <div key={index} className="rounded-xl border border-border/60 bg-muted/10 p-3" aria-hidden="true">
             <div className="h-3 w-16 animate-pulse rounded bg-slate-200/80 dark:bg-muted" />
@@ -253,7 +253,7 @@ function DashboardLoginIncidentTimelineImpl({
         </p>
       </div>
 
-      <ol className="mt-4 grid gap-3 lg:grid-cols-4" aria-label="Login incident sequence">
+      <ol className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="Login incident sequence">
         {timelineItems.map((item, index) => {
           const Icon = item.icon;
 

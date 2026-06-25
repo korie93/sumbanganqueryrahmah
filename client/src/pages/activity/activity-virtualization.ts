@@ -6,6 +6,8 @@ export const ACTIVITY_DESKTOP_GRID_CLASSNAME_WITH_ACTIONS =
   "grid-cols-[3rem_minmax(10rem,_1.25fr)_6.5rem_10rem_minmax(11rem,_1fr)_minmax(12rem,_1.2fr)_8.5rem_8.5rem_7rem_minmax(10rem,_auto)]";
 export const ACTIVITY_DESKTOP_GRID_CLASSNAME_WITHOUT_ACTIONS =
   "grid-cols-[minmax(10rem,_1.25fr)_6.5rem_10rem_minmax(11rem,_1fr)_minmax(12rem,_1.2fr)_8.5rem_8.5rem_7rem]";
+export const ACTIVITY_DESKTOP_TABLE_WIDTH_CLASSNAME_WITH_ACTIONS = "min-w-[96rem]";
+export const ACTIVITY_DESKTOP_TABLE_WIDTH_CLASSNAME_WITHOUT_ACTIONS = "min-w-[82rem]";
 
 export function getVirtualizedListHeight(
   itemCount: number,
@@ -25,4 +27,10 @@ export function getActivityDesktopGridClassName(canModerateActivity: boolean): s
   }
 
   return ACTIVITY_DESKTOP_GRID_CLASSNAME_WITHOUT_ACTIONS;
+}
+
+export function getActivityDesktopTableWidthClassName(canModerateActivity: boolean): string {
+  return canModerateActivity
+    ? ACTIVITY_DESKTOP_TABLE_WIDTH_CLASSNAME_WITH_ACTIONS
+    : ACTIVITY_DESKTOP_TABLE_WIDTH_CLASSNAME_WITHOUT_ACTIONS;
 }

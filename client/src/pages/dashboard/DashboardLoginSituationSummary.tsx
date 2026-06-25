@@ -154,7 +154,7 @@ function DashboardLoginSituationSummarySkeleton() {
         </div>
         <div className="rounded-xl border border-border/60 bg-muted/10 p-3" aria-hidden="true">
           <div className="h-3 w-20 animate-pulse rounded bg-slate-200/80 dark:bg-muted" />
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {Array.from({ length: 4 }, (_, index) => (
               <div key={index} className="h-12 animate-pulse rounded-lg bg-slate-200/60 dark:bg-muted" />
             ))}
@@ -241,17 +241,17 @@ function DashboardLoginSituationSummaryImpl({
 
         <aside className="rounded-xl border border-border/60 bg-muted/10 p-3" aria-label="Situation summary facts">
           <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">Bukti ringkas</p>
-          <dl className="mt-3 grid grid-cols-2 gap-2">
+          <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {situation.facts.map((fact) => {
               const Icon = fact.icon;
 
               return (
                 <div key={fact.label} className={`rounded-lg border p-2 ${SITUATION_TONE_CLASS_BY_TONE[fact.tone]}`}>
-                  <dt className="flex items-center gap-1.5 text-xxs font-semibold uppercase tracking-label-sm opacity-85">
+                  <dt className="flex min-w-0 items-start gap-1.5 text-xxs font-semibold uppercase tracking-label-sm opacity-85">
                     <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{fact.label}</span>
+                    <span className="min-w-0 break-words">{fact.label}</span>
                   </dt>
-                  <dd className="mt-1 truncate text-sm font-bold text-current">{fact.value}</dd>
+                  <dd className="mt-1 break-words text-sm font-bold text-current">{fact.value}</dd>
                 </div>
               );
             })}

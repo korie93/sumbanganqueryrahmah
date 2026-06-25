@@ -45,6 +45,7 @@ const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
         <Checkbox
           checked={selected}
           onCheckedChange={handleToggleRow}
+          aria-label={`Select row ${row.__rowId + 1}`}
         />
       </td>
       <td className="p-3 text-muted-foreground">{row.__rowId + 1}</td>
@@ -75,19 +76,25 @@ function ViewerStandardTableImpl({
 }: ViewerStandardTableProps) {
   return (
     <div className="max-h-[560px] overflow-y-auto">
-      <table className="ops-data-table w-full text-sm">
+      <table className="ops-data-table w-full table-fixed text-sm">
         <thead className="sticky top-0 z-[var(--z-sticky-header)] bg-muted">
           <tr>
             <th scope="col" className="w-10 p-3 text-left font-medium text-muted-foreground">
               <Checkbox
                 checked={selectAllFiltered && filteredRows.length > 0}
                 onCheckedChange={onToggleSelectAllFiltered}
+                aria-label="Select all filtered rows"
                 data-testid="checkbox-select-all-rows"
               />
             </th>
             <th scope="col" className="w-12 p-3 text-left font-medium text-muted-foreground">#</th>
             {visibleHeaders.map((header) => (
-              <th key={header} scope="col" className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
+              <th
+                key={header}
+                scope="col"
+                className="truncate whitespace-nowrap p-3 text-left font-medium text-muted-foreground"
+                title={header}
+              >
                 {header}
               </th>
             ))}

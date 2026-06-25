@@ -21,3 +21,11 @@ test("desktop activity header and rows share the same vertical scrollport", () =
   assert.ok(scrollportEnd > rowIndex);
 });
 
+test("desktop activity columns use a visible, keyboard-accessible horizontal scrollport", () => {
+  assert.match(source, /ariaLabel="Activity log columns"/);
+  assert.match(source, /showScrollbar/);
+  assert.match(source, /viewportClassName="overscroll-x-contain pb-2"/);
+  assert.match(source, /getActivityDesktopTableWidthClassName/);
+  assert.doesNotMatch(source, /min-w-\[70rem\] overflow-hidden/);
+});
+

@@ -1,10 +1,9 @@
-import { memo, type MutableRefObject } from "react";
+import { memo } from "react";
 import { FixedSizeList } from "react-window";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerVirtualizedRow } from "@/pages/viewer/ViewerVirtualizedRow";
 import { ViewerGridShell } from "@/pages/viewer/viewer-grid-shell";
-import styles from "./ViewerDataTable.module.css";
 
 interface ViewerVirtualizedTableProps {
   filteredRows: DataRowWithId[];
@@ -16,7 +15,6 @@ interface ViewerVirtualizedTableProps {
   selectAllFiltered: boolean;
   virtualRowData: ViewerVirtualRowData;
   viewportHeightPx: number;
-  virtualTableWidthRef: MutableRefObject<HTMLDivElement | null>;
   visibleHeaders: string[];
 }
 
@@ -28,11 +26,10 @@ function ViewerVirtualizedTableImpl({
   selectAllFiltered,
   virtualRowData,
   viewportHeightPx,
-  virtualTableWidthRef,
   visibleHeaders,
 }: ViewerVirtualizedTableProps) {
   return (
-    <div ref={virtualTableWidthRef} className={styles.virtualTableWidth}>
+    <div>
       <div className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border bg-muted">
         <ViewerGridShell gridTemplateColumns={gridTemplateColumns} className="h-12 items-center">
           <div className="px-3">

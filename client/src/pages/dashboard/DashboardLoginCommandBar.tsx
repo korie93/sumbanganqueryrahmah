@@ -36,7 +36,7 @@ function DashboardLoginCommandBarSkeleton() {
       aria-label="Loading dashboard login command bar"
       data-floating-ai-avoid="true"
     >
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {Array.from({ length: 5 }, (_, index) => (
           <div key={index} className="rounded-xl border border-border/60 bg-muted/10 p-3" aria-hidden="true">
             <div className="h-3 w-20 animate-pulse rounded bg-slate-200/80 dark:bg-muted" />
@@ -61,12 +61,12 @@ function DashboardCommandMetric({
   tone?: DashboardAccessSignalTone;
 }) {
   return (
-    <article className={`rounded-xl border p-3 ${COMMAND_BAR_TONE_CLASS_BY_TONE[tone]}`}>
+    <article className={`min-w-0 rounded-xl border p-3 ${COMMAND_BAR_TONE_CLASS_BY_TONE[tone]}`}>
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <p className="truncate text-xs font-semibold uppercase tracking-label-sm opacity-85">{label}</p>
+        <p className="min-w-0 break-words text-xs font-semibold uppercase tracking-label-sm opacity-85">{label}</p>
       </div>
-      <p className="mt-2 truncate text-lg font-bold leading-none">{value}</p>
+      <p className="mt-2 break-words text-lg font-bold leading-none">{value}</p>
     </article>
   );
 }
@@ -133,7 +133,7 @@ function DashboardLoginCommandBarImpl({
           </div>
         )}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <DashboardCommandMetric
           icon={ShieldCheck}
           label="Health"

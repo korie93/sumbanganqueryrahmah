@@ -3,6 +3,6 @@
   grid-template-columns: var(--viewer-grid-template-columns, minmax(0, 1fr));
 }
 
-.virtualTableWidth {
-  min-width: var(--viewer-table-min-width, 0px);
+.desktopTableWidth {
+  min-width: max(100%, var(--viewer-table-min-width, 0px));
 }

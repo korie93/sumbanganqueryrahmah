@@ -169,6 +169,8 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   );
 
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
+  assert.match(dashboardSource, /<OperationalPage className="min-w-0" width="content">/);
+  assert.match(dashboardSource, /className="min-w-0 space-y-4 sm:space-y-6"/);
   assert.match(dashboardSource, /<DashboardLoginCommandBar/);
   assert.match(dashboardSource, /<DashboardLoginFocusStrip/);
   assert.match(dashboardSource, /<DashboardLoginSituationSummary/);
@@ -991,6 +993,22 @@ test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
   assert.match(source, /const renderLoginTrendTooltip = useCallback\(/);
   assert.match(source, /const renderPeakHoursTooltip = useCallback\(/);
   assert.match(source, /export const DashboardChartsGrid = memo\(DashboardChartsGridImpl\)/);
+});
+
+test("Dashboard compact decision surfaces reflow and preserve text at zoomed widths", () => {
+  const commandSource = readFileSync(path.resolve(__dirname, "../DashboardLoginCommandBar.tsx"), "utf8");
+  const situationSource = readFileSync(path.resolve(__dirname, "../DashboardLoginSituationSummary.tsx"), "utf8");
+  const timelineSource = readFileSync(path.resolve(__dirname, "../DashboardLoginIncidentTimeline.tsx"), "utf8");
+  const sidebarSource = readFileSync(path.resolve(__dirname, "../DashboardLoginReviewSidebar.tsx"), "utf8");
+
+  assert.match(commandSource, /grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5/);
+  assert.match(commandSource, /mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4/);
+  assert.match(commandSource, /min-w-0 break-words/);
+  assert.doesNotMatch(commandSource, /mt-2 truncate text-lg/);
+  assert.match(situationSource, /mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2/);
+  assert.match(situationSource, /mt-1 break-words text-sm font-bold/);
+  assert.match(timelineSource, /md:grid-cols-2 xl:grid-cols-4/);
+  assert.match(sidebarSource, /flex flex-wrap items-start justify-between gap-3/);
 });
 
 test("Dashboard compact chart tooltip does not expose empty metric labels", () => {
