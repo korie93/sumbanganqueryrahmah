@@ -648,10 +648,17 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await expect(
       activityScrollNavigation.getByRole("button", { name: "Scroll columns left" }),
     ).toBeDisabled();
+    await expect(activityScrollNavigation.getByRole("progressbar")).toHaveText("0%");
     await activityScrollNavigation.getByRole("button", { name: "Scroll columns right" }).click();
     await expect.poll(() => activityScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-    await activityScrollNavigation.getByRole("button", { name: "Scroll columns left" }).click();
+    await activityScrollNavigation.getByRole("button", { name: "Jump to last column" }).click();
+    await expect(activityScrollNavigation.getByRole("progressbar")).toHaveText("100%");
+    await expect(
+      activityScrollNavigation.getByRole("button", { name: "Jump to last column" }),
+    ).toBeDisabled();
+    await activityScrollNavigation.getByRole("button", { name: "Jump to first column" }).click();
     await expect.poll(() => activityScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
+    await expect(activityScrollNavigation.getByRole("progressbar")).toHaveText("0%");
     const activityMetrics = await activityScrollport.evaluate((element) => ({
       clientWidth: element.clientWidth,
       overflowX: getComputedStyle(element).overflowX,
@@ -700,10 +707,17 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await expect(
       viewerScrollNavigation.getByRole("button", { name: "Scroll columns left" }),
     ).toBeDisabled();
+    await expect(viewerScrollNavigation.getByRole("progressbar")).toHaveText("0%");
     await viewerScrollNavigation.getByRole("button", { name: "Scroll columns right" }).click();
     await expect.poll(() => viewerScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-    await viewerScrollNavigation.getByRole("button", { name: "Scroll columns left" }).click();
+    await viewerScrollNavigation.getByRole("button", { name: "Jump to last column" }).click();
+    await expect(viewerScrollNavigation.getByRole("progressbar")).toHaveText("100%");
+    await expect(
+      viewerScrollNavigation.getByRole("button", { name: "Jump to last column" }),
+    ).toBeDisabled();
+    await viewerScrollNavigation.getByRole("button", { name: "Jump to first column" }).click();
     await expect.poll(() => viewerScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
+    await expect(viewerScrollNavigation.getByRole("progressbar")).toHaveText("0%");
     const viewerRow = viewerScrollport.locator("tbody tr").first();
     await expect(viewerRow).toBeVisible();
     const comfortableViewerHeight = (await viewerRow.boundingBox())?.height ?? 0;

@@ -37,6 +37,11 @@ test("horizontal scroll hint can expose accessible viewport-sized navigation con
   assert.match(source, /aria-label=\{navigationLabel\}/);
   assert.match(source, /aria-label="Scroll columns left"/);
   assert.match(source, /aria-label="Scroll columns right"/);
+  assert.match(source, /aria-label="Jump to first column"/);
+  assert.match(source, /aria-label="Jump to last column"/);
+  assert.match(source, /role="progressbar"/);
+  assert.match(source, /aria-valuenow=\{overflowState\.scrollPercent\}/);
+  assert.match(source, /Math\.round\(\(viewportNode\.scrollLeft \/ maxScrollLeft\) \* 100\)/);
   assert.match(source, /Math\.round\(viewportNode\.clientWidth \* 0\.75\)/);
   assert.match(source, /disabled=\{!overflowState\.canScrollLeft\}/);
   assert.match(source, /disabled=\{!overflowState\.canScrollRight\}/);

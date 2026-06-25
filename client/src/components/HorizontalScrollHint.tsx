@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode, type UIEventHandler } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -20,6 +25,7 @@ type HorizontalOverflowState = {
   canScroll: boolean;
   canScrollLeft: boolean;
   canScrollRight: boolean;
+  scrollPercent: number;
 };
 
 /**
@@ -41,6 +47,7 @@ export function HorizontalScrollHint({
     canScroll: false,
     canScrollLeft: false,
     canScrollRight: false,
+    scrollPercent: 0,
   });
 
   useEffect(() => {
@@ -57,16 +64,21 @@ export function HorizontalScrollHint({
       frame = 0;
 
       const maxScrollLeft = Math.max(0, viewportNode.scrollWidth - viewportNode.clientWidth);
+      const scrollPercent = maxScrollLeft > 0
+        ? Math.round((viewportNode.scrollLeft / maxScrollLeft) * 100)
+        : 0;
       const nextState = {
         canScroll: maxScrollLeft > 12,
         canScrollLeft: viewportNode.scrollLeft > 8,
         canScrollRight: maxScrollLeft - viewportNode.scrollLeft > 8,
+        scrollPercent: Math.min(100, Math.max(0, scrollPercent)),
       };
 
       setOverflowState((previous) => (
         previous.canScroll === nextState.canScroll
         && previous.canScrollLeft === nextState.canScrollLeft
         && previous.canScrollRight === nextState.canScrollRight
+        && previous.scrollPercent === nextState.scrollPercent
       ) ? previous : nextState);
     };
 
@@ -119,6 +131,20 @@ export function HorizontalScrollHint({
     });
   };
 
+  const scrollToBoundary = (boundary: "start" | "end") => {
+    const viewportNode = viewportRef.current;
+    if (!viewportNode) {
+      return;
+    }
+
+    viewportNode.scrollTo({
+      left: boundary === "start"
+        ? 0
+        : Math.max(0, viewportNode.scrollWidth - viewportNode.clientWidth),
+      behavior: "auto",
+    });
+  };
+
   return (
     <div className={cn("relative", className)}>
       {showNavigationControls && overflowState.canScroll ? (
@@ -133,12 +159,34 @@ export function HorizontalScrollHint({
             variant="outline"
             size="icon"
             className="h-8 w-8 min-w-8"
+            aria-label="Jump to first column"
+            disabled={!overflowState.canScrollLeft}
+            onClick={() => scrollToBoundary("start")}
+          >
+            <ChevronsLeft aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 min-w-8"
             aria-label="Scroll columns left"
             disabled={!overflowState.canScrollLeft}
             onClick={() => scrollByViewport(-1)}
           >
             <ChevronLeft aria-hidden="true" />
           </Button>
+          <span
+            className="min-w-11 text-center text-2xs font-semibold tabular-nums text-muted-foreground"
+            role="progressbar"
+            aria-label="Horizontal table position"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={overflowState.scrollPercent}
+            data-testid="horizontal-scroll-position"
+          >
+            {overflowState.scrollPercent}%
+          </span>
           <Button
             type="button"
             variant="outline"
@@ -149,6 +197,17 @@ export function HorizontalScrollHint({
             onClick={() => scrollByViewport(1)}
           >
             <ChevronRight aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 min-w-8"
+            aria-label="Jump to last column"
+            disabled={!overflowState.canScrollRight}
+            onClick={() => scrollToBoundary("end")}
+          >
+            <ChevronsRight aria-hidden="true" />
           </Button>
         </div>
       ) : null}
