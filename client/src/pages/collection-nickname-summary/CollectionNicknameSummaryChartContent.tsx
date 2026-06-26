@@ -124,6 +124,12 @@ export function CollectionNicknameSummaryChartContent({
 
     const exportContext = {
       fromDate,
+      targetBenchmarks: targetBenchmarks.benchmarks,
+      targetStatusNote: targetBenchmarks.errorMessage
+        ? `Target Collection Daily tidak dapat dimuat: ${targetBenchmarks.errorMessage}`
+        : targetBenchmarks.configuredCount > 0
+          ? `${targetBenchmarks.configuredCount}/${displayedData.length} nickname mempunyai target Collection Daily.`
+          : "Tiada target Collection Daily aktif untuk paparan ini.",
       toDate,
       totalAmount,
       totalRecords,
@@ -165,7 +171,11 @@ export function CollectionNicknameSummaryChartContent({
   }, [
     busyExportKind,
     displayedRankedData,
+    displayedData.length,
     fromDate,
+    targetBenchmarks.benchmarks,
+    targetBenchmarks.configuredCount,
+    targetBenchmarks.errorMessage,
     toDate,
     toast,
     totalAmount,
@@ -237,12 +247,14 @@ export function CollectionNicknameSummaryChartContent({
                   Perbandingan kutipan
                 </h3>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Arahkan tetikus atau fokus pada graf untuk melihat jumlah, rekod, purata dan prestasi.
+                  Arahkan tetikus atau fokus pada graf untuk melihat jumlah, rekod, purata, target dan prestasi.
+                  Bar berbingkai menunjukkan target Collection Daily apabila tersedia.
                 </p>
               </div>
               <CollectionNicknameSummaryChartExportMenu
                 busyKind={busyExportKind}
                 disabled={displayedData.length === 0}
+                targetLoading={targetBenchmarks.loading}
                 visibleCount={displayedData.length}
                 onExport={handleExport}
               />
@@ -250,7 +262,9 @@ export function CollectionNicknameSummaryChartContent({
           ) : null}
           {displayedData.length > 0 ? (
             <>
-              {isDetailed ? <CollectionNicknamePerformanceLegend /> : null}
+              {isDetailed ? (
+                <CollectionNicknamePerformanceLegend targetAware={targetBenchmarks.configuredCount > 0} />
+              ) : null}
               {isDetailed ? (
                 <CollectionNicknameBenchmarkLegend
                   configuredCount={targetBenchmarks.configuredCount}

@@ -1,10 +1,19 @@
 import { buildCsvContent, downloadCsv } from "@/lib/csv";
 import { downloadBlob } from "@/lib/download";
 import {
+  getCollectionNicknameBenchmarkGap,
+  getCollectionNicknameBenchmarkProgress,
+  getCollectionNicknameBenchmarkStatus,
+  getCollectionNicknameBenchmarkStatusLabel,
   getCollectionNicknamePerformanceLabel,
-  getCollectionNicknamePerformanceLevel,
+  type CollectionNicknamePerformanceLevel,
+  getCollectionNicknameTargetAwarePerformanceLevel,
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
+import {
+  getCollectionNicknameTargetBenchmark,
+  type CollectionNicknameTargetBenchmark,
+} from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 
 const PNG_WIDTH = 1_600;
 const PNG_MAX_RANKING_ROWS = 30;
@@ -17,9 +26,18 @@ let nicknameChartJsPdfModulePromise: Promise<typeof import("jspdf")> | null = nu
 
 export type CollectionNicknameSummaryExportContext = {
   fromDate?: string | undefined;
+  targetBenchmarks?: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined;
+  targetStatusNote?: string | undefined;
   toDate?: string | undefined;
   totalAmount: number;
   totalRecords: number;
+};
+
+type CollectionNicknameSummaryExportTarget = {
+  amount: number;
+  gap: number;
+  progress: number;
+  statusLabel: string;
 };
 
 function loadJsPdfModule() {
@@ -62,19 +80,79 @@ function getPeakAmount(rows: readonly CollectionNicknameSummaryChartDatum[]): nu
   return rows.reduce((peak, row) => Math.max(peak, row.totalAmount), 0);
 }
 
+function getPeakScaleAmount(
+  rows: readonly CollectionNicknameSummaryChartDatum[],
+  context: CollectionNicknameSummaryExportContext,
+): number {
+  return rows.reduce((peak, row) => {
+    const targetAmount = getExportTarget(row, context).amount;
+    return Math.max(peak, row.totalAmount, targetAmount);
+  }, 0);
+}
+
+function getExportTarget(
+  row: CollectionNicknameSummaryChartDatum,
+  context: CollectionNicknameSummaryExportContext,
+): CollectionNicknameSummaryExportTarget {
+  const benchmarkAmount = getCollectionNicknameTargetBenchmark(
+    context.targetBenchmarks,
+    row.nickname,
+  ).amount;
+  const progress = getCollectionNicknameBenchmarkProgress(row, benchmarkAmount);
+  const gap = getCollectionNicknameBenchmarkGap(row, benchmarkAmount);
+  const status = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
+  return {
+    amount: benchmarkAmount,
+    gap,
+    progress,
+    statusLabel: getCollectionNicknameBenchmarkStatusLabel(status),
+  };
+}
+
+function getExportPerformanceLabel(
+  row: CollectionNicknameSummaryChartDatum,
+  context: CollectionNicknameSummaryExportContext,
+  peakAmount: number,
+): string {
+  const targetAmount = getExportTarget(row, context).amount;
+  return getCollectionNicknamePerformanceLabel(
+    getCollectionNicknameTargetAwarePerformanceLevel(row, peakAmount, targetAmount),
+  );
+}
+
 export function buildCollectionNicknameSummaryCsvContent(
   rows: readonly CollectionNicknameSummaryChartDatum[],
+  context: CollectionNicknameSummaryExportContext = {
+    totalAmount: 0,
+    totalRecords: 0,
+  },
 ): string {
   const peakAmount = getPeakAmount(rows);
   return buildCsvContent(
-    ["Rank", "Nickname", "Prestasi", "Jumlah Kutipan (MYR)", "Rekod", "Purata (MYR)", "Bahagian"],
+    [
+      "Rank",
+      "Nickname",
+      "Prestasi",
+      "Jumlah Kutipan (MYR)",
+      "Target (MYR)",
+      "Status Target",
+      "Progress Target",
+      "Jurang Target (MYR)",
+      "Rekod",
+      "Purata (MYR)",
+      "Bahagian",
+    ],
     rows.map((row, index) => {
-      const level = getCollectionNicknamePerformanceLevel(row, peakAmount);
+      const target = getExportTarget(row, context);
       return [
         index + 1,
         normalizeExportText(row.nickname),
-        getCollectionNicknamePerformanceLabel(level),
+        getExportPerformanceLabel(row, context, peakAmount),
         row.totalAmount.toFixed(2),
+        target.amount > 0 ? target.amount.toFixed(2) : "",
+        target.amount > 0 ? target.statusLabel : "Tiada target",
+        target.amount > 0 ? formatPercentage(Math.min(target.progress, 999.9)) : "",
+        target.amount > 0 ? target.gap.toFixed(2) : "",
         row.totalRecords,
         row.averagePerRecord.toFixed(2),
         formatPercentage(row.percentage),
@@ -88,7 +166,7 @@ export function exportCollectionNicknameSummaryCsv(
   context: CollectionNicknameSummaryExportContext,
 ): void {
   downloadCsv(
-    buildCollectionNicknameSummaryCsvContent(rows),
+    buildCollectionNicknameSummaryCsvContent(rows, context),
     `${buildExportBaseFilename(context)}.csv`,
   );
 }
@@ -137,7 +215,7 @@ function drawCanvasText(
   context.fillText(text, x, y);
 }
 
-function getPerformanceCanvasColor(level: ReturnType<typeof getCollectionNicknamePerformanceLevel>): string {
+function getPerformanceCanvasColor(level: CollectionNicknamePerformanceLevel): string {
   if (level === "high") return "#047857";
   if (level === "medium") return "#a16207";
   return "#475569";
@@ -195,21 +273,38 @@ export async function exportCollectionNicknameSummaryPng(
     drawCanvasText(drawing, `Dipaparkan: ${rows.length} nickname`, 950, 190, {
       font: "bold 25px Arial, sans-serif",
     });
+    if (context.targetStatusNote) {
+      drawCanvasText(drawing, context.targetStatusNote, 80, 225, {
+        color: "#475569",
+        font: "19px Arial, sans-serif",
+        maxWidth: 1_360,
+      });
+    }
 
-    drawCanvasText(drawing, "Perbandingan kutipan", 80, 255, {
+    drawCanvasText(drawing, "Perbandingan kutipan vs target", 80, 255, {
       font: "bold 28px Arial, sans-serif",
     });
     const peakAmount = getPeakAmount(rows);
+    const scalePeakAmount = getPeakScaleAmount(rows, context);
     chartRows.forEach((row, index) => {
       const y = 300 + index * 32;
-      const level = getCollectionNicknamePerformanceLevel(row, peakAmount);
-      const barWidth = peakAmount > 0 ? Math.max(4, (row.totalAmount / peakAmount) * 720) : 4;
+      const target = getExportTarget(row, context);
+      const level = getCollectionNicknameTargetAwarePerformanceLevel(row, peakAmount, target.amount);
+      const barWidth = scalePeakAmount > 0 ? Math.max(4, (row.totalAmount / scalePeakAmount) * 720) : 4;
       drawCanvasText(drawing, row.nickname, 80, y + 20, {
         font: "19px Arial, sans-serif",
         maxWidth: 300,
       });
       drawing.fillStyle = "#e2e8f0";
       drawing.fillRect(400, y, 720, 24);
+      if (target.amount > 0) {
+        const targetWidth = Math.max(4, (target.amount / scalePeakAmount) * 720);
+        drawing.strokeStyle = "#0f172a";
+        drawing.lineWidth = 2;
+        drawing.setLineDash([7, 5]);
+        drawing.strokeRect(400, y, targetWidth, 24);
+        drawing.setLineDash([]);
+      }
       drawing.fillStyle = getPerformanceCanvasColor(level);
       drawing.fillRect(400, y, barWidth, 24);
       drawCanvasText(drawing, formatMoney(row.totalAmount), 1_160, y + 20, {
@@ -231,10 +326,12 @@ export async function exportCollectionNicknameSummaryPng(
     const headers = [
       ["#", 100],
       ["Nickname", 160],
-      ["Prestasi", 620],
-      ["Kutipan", 820],
-      ["Rekod", 1_090],
-      ["Purata", 1_230],
+      ["Prestasi", 520],
+      ["Target", 710],
+      ["Status", 890],
+      ["Kutipan", 1_050],
+      ["Rekod", 1_225],
+      ["Purata", 1_355],
       ["Bahagian", 1_500],
     ] as const;
     headers.forEach(([label, x]) => {
@@ -251,26 +348,36 @@ export async function exportCollectionNicknameSummaryPng(
         drawing.fillStyle = "#f8fafc";
         drawing.fillRect(80, rowY, 1_440, PNG_ROW_HEIGHT);
       }
-      const level = getCollectionNicknamePerformanceLevel(row, peakAmount);
+      const target = getExportTarget(row, context);
+      const level = getCollectionNicknameTargetAwarePerformanceLevel(row, peakAmount, target.amount);
       drawCanvasText(drawing, String(index + 1), 100, rowY + 30, { font: "17px Arial, sans-serif" });
       drawCanvasText(drawing, row.nickname, 160, rowY + 30, {
         font: "17px Arial, sans-serif",
-        maxWidth: 390,
+        maxWidth: 300,
       });
-      drawCanvasText(drawing, getCollectionNicknamePerformanceLabel(level), 620, rowY + 30, {
+      drawCanvasText(drawing, getCollectionNicknamePerformanceLabel(level), 520, rowY + 30, {
         color: getPerformanceCanvasColor(level),
         font: "bold 17px Arial, sans-serif",
         align: "right",
       });
-      drawCanvasText(drawing, formatMoney(row.totalAmount), 820, rowY + 30, {
+      drawCanvasText(drawing, target.amount > 0 ? formatMoney(target.amount) : "-", 710, rowY + 30, {
         font: "17px Arial, sans-serif",
         align: "right",
       });
-      drawCanvasText(drawing, row.totalRecords.toLocaleString(), 1_090, rowY + 30, {
+      drawCanvasText(drawing, target.amount > 0 ? target.statusLabel : "Tiada target", 890, rowY + 30, {
+        font: "17px Arial, sans-serif",
+        align: "right",
+        maxWidth: 145,
+      });
+      drawCanvasText(drawing, formatMoney(row.totalAmount), 1_050, rowY + 30, {
         font: "17px Arial, sans-serif",
         align: "right",
       });
-      drawCanvasText(drawing, formatMoney(row.averagePerRecord), 1_230, rowY + 30, {
+      drawCanvasText(drawing, row.totalRecords.toLocaleString(), 1_225, rowY + 30, {
+        font: "17px Arial, sans-serif",
+        align: "right",
+      });
+      drawCanvasText(drawing, formatMoney(row.averagePerRecord), 1_355, rowY + 30, {
         font: "17px Arial, sans-serif",
         align: "right",
       });
@@ -344,13 +451,23 @@ export async function exportCollectionNicknameSummaryPdf(
   pdf.text(`Jumlah: ${formatMoney(context.totalAmount)}`, margin, 32);
   pdf.text(`Rekod: ${context.totalRecords.toLocaleString()}`, 80, 32);
   pdf.text(`Dipaparkan: ${rows.length} nickname`, 125, 32);
+  if (context.targetStatusNote) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(71, 85, 105);
+    pdf.text(truncatePdfText(context.targetStatusNote, 150), margin, 38);
+  }
 
   pdf.setFontSize(11);
-  pdf.text("Perbandingan kutipan", margin, 43);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(15, 23, 42);
+  pdf.text("Perbandingan kutipan vs target", margin, 45);
+  const scalePeakAmount = getPeakScaleAmount(rows, context);
   rows.slice(0, PDF_CHART_ROWS).forEach((row, index) => {
-    const y = 50 + index * 9;
-    const level = getCollectionNicknamePerformanceLevel(row, peakAmount);
-    const ratio = peakAmount > 0 ? row.totalAmount / peakAmount : 0;
+    const y = 52 + index * 9;
+    const target = getExportTarget(row, context);
+    const level = getCollectionNicknameTargetAwarePerformanceLevel(row, peakAmount, target.amount);
+    const ratio = scalePeakAmount > 0 ? row.totalAmount / scalePeakAmount : 0;
     const color = level === "high" ? [4, 120, 87] : level === "medium" ? [161, 98, 7] : [71, 85, 105];
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7.5);
@@ -358,6 +475,12 @@ export async function exportCollectionNicknameSummaryPdf(
     pdf.text(truncatePdfText(row.nickname, 28), margin, y + 4);
     pdf.setFillColor(226, 232, 240);
     pdf.rect(63, y, 116, 5, "F");
+    if (target.amount > 0) {
+      const targetRatio = scalePeakAmount > 0 ? target.amount / scalePeakAmount : 0;
+      pdf.setDrawColor(15, 23, 42);
+      pdf.setLineWidth(0.35);
+      pdf.rect(63, y, Math.max(1, 116 * targetRatio), 5, "S");
+    }
     pdf.setFillColor(color[0], color[1], color[2]);
     pdf.rect(63, y, Math.max(1, 116 * ratio), 5, "F");
     pdf.setFont("helvetica", "bold");
@@ -366,8 +489,8 @@ export async function exportCollectionNicknameSummaryPdf(
     pdf.text(getCollectionNicknamePerformanceLabel(level), 232, y + 4);
   });
 
-  const headers = ["#", "Nickname", "Prestasi", "Kutipan", "Rekod", "Purata", "Bahagian"];
-  const columnX = [margin, 24, 95, 129, 178, 204, 248];
+  const headers = ["#", "Nickname", "Prestasi", "Target", "Status", "Kutipan", "Rekod", "Purata", "Bahagian"];
+  const columnX = [margin, 24, 82, 109, 136, 166, 205, 225, 252];
   let pageNumber = 1;
   let y = 148;
 
@@ -396,11 +519,16 @@ export async function exportCollectionNicknameSummaryPdf(
       pdf.setFillColor(248, 250, 252);
       pdf.rect(margin, y, pageWidth - margin * 2, PDF_TABLE_ROW_HEIGHT, "F");
     }
-    const level = getCollectionNicknamePerformanceLevel(row, peakAmount);
+    const target = getExportTarget(row, context);
+    const level = getCollectionNicknameTargetAwarePerformanceLevel(row, peakAmount, target.amount);
     const values = [
       String(index + 1),
-      truncatePdfText(row.nickname, 34),
+      truncatePdfText(row.nickname, 27),
       getCollectionNicknamePerformanceLabel(level),
+      target.amount > 0 ? formatMoney(target.amount) : "-",
+      target.amount > 0
+        ? `${target.statusLabel} (${formatPercentage(Math.min(target.progress, 999.9))})`
+        : "Tiada target",
       formatMoney(row.totalAmount),
       row.totalRecords.toLocaleString(),
       formatMoney(row.averagePerRecord),

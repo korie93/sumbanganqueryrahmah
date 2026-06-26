@@ -6,7 +6,7 @@ import {
   getCollectionNicknameBenchmarkStatus,
   getCollectionNicknameBenchmarkStatusLabel,
   getCollectionNicknamePerformanceLabel,
-  getCollectionNicknamePerformanceLevel,
+  getCollectionNicknameTargetAwarePerformanceLevel,
   type CollectionNicknameBenchmarkStatus,
   type CollectionNicknameSummaryChartDatum,
   type CollectionNicknameSummaryChartSort,
@@ -138,24 +138,30 @@ export function CollectionNicknameBenchmarkLegend({
   );
 }
 
-export function CollectionNicknamePerformanceLegend() {
+export function CollectionNicknamePerformanceLegend({
+  targetAware = false,
+}: {
+  targetAware?: boolean;
+}) {
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground"
       aria-label="Panduan penanda prestasi"
     >
-      <span className="font-medium text-foreground">Prestasi relatif:</span>
+      <span className="font-medium text-foreground">
+        {targetAware ? "Prestasi target:" : "Prestasi relatif:"}
+      </span>
       <span className="inline-flex items-center gap-1.5">
         <CollectionNicknamePerformanceBadge level="high" />
-        <span>sekurang-kurangnya 67% daripada kutipan tertinggi</span>
+        <span>{targetAware ? "capai target" : "sekurang-kurangnya 67% daripada kutipan tertinggi"}</span>
       </span>
       <span className="inline-flex items-center gap-1.5">
         <CollectionNicknamePerformanceBadge level="medium" />
-        <span>34% hingga 66%</span>
+        <span>{targetAware ? "80% hingga 99% target" : "34% hingga 66%"}</span>
       </span>
       <span className="inline-flex items-center gap-1.5">
         <CollectionNicknamePerformanceBadge level="low" />
-        <span>di bawah 34%</span>
+        <span>{targetAware ? "belum hampir target" : "di bawah 34%"}</span>
       </span>
     </div>
   );
@@ -255,6 +261,11 @@ export function CollectionNicknameSummaryRankingTable({
               const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
               const benchmarkAmount = benchmark.amount;
               const targetStatus = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
+              const performanceLevel = getCollectionNicknameTargetAwarePerformanceLevel(
+                row,
+                peakAmount,
+                benchmarkAmount,
+              );
               const progress = getCollectionNicknameBenchmarkProgress(row, benchmarkAmount);
               const gap = getCollectionNicknameBenchmarkGap(row, benchmarkAmount);
               return (
@@ -289,9 +300,7 @@ export function CollectionNicknameSummaryRankingTable({
                     </td>
                   ) : null}
                   <td className="whitespace-nowrap px-3 py-2.5 text-center">
-                    <CollectionNicknamePerformanceBadge
-                      level={getCollectionNicknamePerformanceLevel(row, peakAmount)}
-                    />
+                    <CollectionNicknamePerformanceBadge level={performanceLevel} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground">
                     {row.totalRecords.toLocaleString()}
@@ -330,6 +339,11 @@ export function CollectionNicknameSummaryRankingTable({
           const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
           const benchmarkAmount = benchmark.amount;
           const targetStatus = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
+          const performanceLevel = getCollectionNicknameTargetAwarePerformanceLevel(
+            row,
+            peakAmount,
+            benchmarkAmount,
+          );
           const progress = getCollectionNicknameBenchmarkProgress(row, benchmarkAmount);
           return (
             <li key={row.key} className="space-y-2.5 bg-background px-3 py-3">
@@ -352,9 +366,7 @@ export function CollectionNicknameSummaryRankingTable({
                 </span>
               </div>
               <div className="space-y-2 pl-7">
-                <CollectionNicknamePerformanceBadge
-                  level={getCollectionNicknamePerformanceLevel(row, peakAmount)}
-                />
+                <CollectionNicknamePerformanceBadge level={performanceLevel} />
                 {benchmarkActive ? (
                   benchmarkAmount > 0 ? (
                     <div className="flex flex-wrap items-center gap-2">

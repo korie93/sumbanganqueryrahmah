@@ -15,8 +15,8 @@ import {
   getCollectionNicknameBenchmarkStatus,
   getCollectionNicknameBenchmarkStatusLabel,
   getCollectionNicknamePerformanceLabel,
-  getCollectionNicknamePerformanceLevel,
   getCollectionNicknameSummaryChartPeak,
+  getCollectionNicknameTargetAwarePerformanceLevel,
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import {
@@ -36,7 +36,11 @@ const COMPACT_AMOUNT_FORMATTER = new Intl.NumberFormat("en-MY", {
 });
 
 type TooltipEntry = {
-  payload?: CollectionNicknameSummaryChartDatum;
+  payload?: CollectionNicknameSummaryChartPlotDatum;
+};
+
+type CollectionNicknameSummaryChartPlotDatum = CollectionNicknameSummaryChartDatum & {
+  targetAmount: number | null;
 };
 
 type CollectionNicknameSummaryChartPlotProps = {
@@ -72,9 +76,13 @@ function CollectionNicknameSummaryChartTooltip({
   if (!active || !point) {
     return null;
   }
-  const performanceLevel = getCollectionNicknamePerformanceLevel(point, peakAmount);
   const benchmarkAmount = getCollectionNicknameTargetBenchmark(targetBenchmarks, point.nickname).amount;
   const benchmarkActive = benchmarkAmount > 0;
+  const performanceLevel = getCollectionNicknameTargetAwarePerformanceLevel(
+    point,
+    peakAmount,
+    benchmarkAmount,
+  );
   const benchmarkStatus = getCollectionNicknameBenchmarkStatus(point, benchmarkAmount);
   const benchmarkProgress = getCollectionNicknameBenchmarkProgress(point, benchmarkAmount);
   const benchmarkGap = getCollectionNicknameBenchmarkGap(point, benchmarkAmount);
@@ -100,7 +108,7 @@ function CollectionNicknameSummaryChartTooltip({
           <dd>{formatPercentage(point.percentage)}</dd>
         </div>
         <div className="flex justify-between gap-4">
-          <dt>Prestasi</dt>
+          <dt>{benchmarkActive ? "Prestasi target" : "Prestasi relatif"}</dt>
           <dd className="font-medium text-foreground">
             {getCollectionNicknamePerformanceLabel(performanceLevel)}
           </dd>
@@ -134,11 +142,13 @@ function CollectionNicknameSummaryChartTooltip({
 function buildAccessibleChartLabel({
   chartData,
   configuredTargetCount,
+  maxTargetAmount,
   totalAmount,
   totalRecords,
 }: {
   chartData: CollectionNicknameSummaryChartDatum[];
   configuredTargetCount: number;
+  maxTargetAmount: number;
   totalAmount: number;
   totalRecords: number;
 }): string {
@@ -148,7 +158,7 @@ function buildAccessibleChartLabel({
   }
 
   const benchmarkText = configuredTargetCount > 0
-    ? ` ${configuredTargetCount} nickname${configuredTargetCount === 1 ? " has" : "s have"} Collection Daily targets.`
+    ? ` ${configuredTargetCount} nickname${configuredTargetCount === 1 ? " has" : "s have"} Collection Daily targets, with the highest target at ${formatAmountRM(maxTargetAmount)}. Target-aware performance is used when a target is configured.`
     : "";
 
   return `Nickname summary bar chart for ${chartData.length} nickname${chartData.length === 1 ? "" : "s"}. Total ${formatAmountRM(totalAmount)} across ${totalRecords} records. Highest collection is ${peak.nickname} with ${formatAmountRM(peak.totalAmount)}.${benchmarkText}`;
@@ -163,10 +173,18 @@ export function CollectionNicknameSummaryChartPlot({
   totalAmount,
   totalRecords,
 }: CollectionNicknameSummaryChartPlotProps) {
+  const chartRows: CollectionNicknameSummaryChartPlotDatum[] = chartData.map((row) => {
+    const targetAmount = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).amount;
+    return {
+      ...row,
+      targetAmount: targetAmount > 0 ? targetAmount : null,
+    };
+  });
   const configuredTargetAmounts = chartData
     .map((row) => getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).amount)
     .filter((amount) => amount > 0);
   const configuredTargetCount = configuredTargetAmounts.length;
+  const maxTargetAmount = configuredTargetAmounts.reduce((peak, amount) => Math.max(peak, amount), 0);
   const uniqueTargetAmounts = Array.from(new Set(configuredTargetAmounts.map((amount) => amount.toFixed(2))));
   const singleReferenceTargetAmount = uniqueTargetAmounts.length === 1
     ? Number(uniqueTargetAmounts[0])
@@ -181,6 +199,7 @@ export function CollectionNicknameSummaryChartPlot({
   const chartLabel = buildAccessibleChartLabel({
     chartData,
     configuredTargetCount,
+    maxTargetAmount,
     totalAmount,
     totalRecords,
   });
@@ -209,7 +228,7 @@ export function CollectionNicknameSummaryChartPlot({
         aria-label={chartLabel}
       >
         <ResponsiveContainer width="100%" height="100%" debounce={80}>
-          <BarChart data={chartData} margin={CHART_MARGIN} accessibilityLayer>
+          <BarChart data={chartRows} margin={CHART_MARGIN} accessibilityLayer barGap={6}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
             <XAxis
               dataKey="axisLabel"
@@ -253,6 +272,19 @@ export function CollectionNicknameSummaryChartPlot({
                 }}
               />
             ) : null}
+            {configuredTargetCount > 0 ? (
+              <Bar
+                dataKey="targetAmount"
+                name="Target Collection Daily"
+                fill="transparent"
+                stroke="hsl(var(--foreground))"
+                strokeDasharray="4 3"
+                strokeOpacity={0.75}
+                radius={[6, 6, 0, 0]}
+                maxBarSize={detailed ? 44 : 34}
+                isAnimationActive={false}
+              />
+            ) : null}
             <Bar
               dataKey="totalAmount"
               name="Jumlah kutipan"
@@ -260,7 +292,7 @@ export function CollectionNicknameSummaryChartPlot({
               maxBarSize={detailed ? 58 : 46}
               isAnimationActive={false}
             >
-              {chartData.map((entry) => (
+              {chartRows.map((entry) => (
                 <Cell
                   key={entry.key}
                   fill={entry.color}

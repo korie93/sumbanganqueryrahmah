@@ -15,6 +15,10 @@ const chartContentSource = readFileSync(
   path.resolve(process.cwd(), "client/src/pages/collection-nickname-summary/CollectionNicknameSummaryChartContent.tsx"),
   "utf8",
 );
+const chartPlotSource = readFileSync(
+  path.resolve(process.cwd(), "client/src/pages/collection-nickname-summary/CollectionNicknameSummaryChartPlot.tsx"),
+  "utf8",
+);
 
 test("CollectionNicknameSummaryChartContent renders accessible chart context from table totals", () => {
   const markup = renderToStaticMarkup(
@@ -89,6 +93,12 @@ test("CollectionNicknameSummaryChartContent spreads detailed chart label only wh
   assert.doesNotMatch(chartContentSource, /aria-labelledby=\{isDetailed/);
 });
 
+test("CollectionNicknameSummaryChartPlot renders target benchmark bars when configured", () => {
+  assert.match(chartPlotSource, /dataKey="targetAmount"/);
+  assert.match(chartPlotSource, /name="Target Collection Daily"/);
+  assert.match(chartPlotSource, /strokeDasharray="4 3"/);
+});
+
 test("CollectionNicknameSummaryChartContent renders explicit empty and zero states", () => {
   const emptyMarkup = renderToStaticMarkup(
     createElement(CollectionNicknameSummaryChartContent, {
@@ -152,4 +162,42 @@ test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
   assert.match(markup, /Disusun daripada jumlah rekod tertinggi kepada terendah/);
   assert.match(markup, /Capai target/);
   assert.match(markup, /Lihat rekod/);
+});
+
+test("CollectionNicknameSummaryRankingTable uses target-aware performance labels", () => {
+  const targetBenchmarks = new Map<string, CollectionNicknameTargetBenchmark>([
+    [
+      normalizeCollectionNicknameTargetKey("Collector Alpha"),
+      {
+        amount: 200,
+        configuredMonths: 1,
+        missingMonths: 0,
+        requestedMonths: 1,
+      },
+    ],
+  ]);
+  const markup = renderToStaticMarkup(
+    createElement(CollectionNicknameSummaryRankingTable, {
+      peakAmount: 100,
+      rankedData: [
+        {
+          key: "collector-alpha",
+          nickname: "Collector Alpha",
+          axisLabel: "Collector Alpha",
+          totalAmount: 100,
+          totalRecords: 4,
+          averagePerRecord: 25,
+          percentage: 100,
+          hasAmount: true,
+          color: "hsl(var(--chart-1))",
+        },
+      ],
+      sortBy: "amount",
+      targetBenchmarks,
+    }),
+  );
+
+  assert.match(markup, /Jauh daripada target/);
+  assert.match(markup, /Rendah/);
+  assert.doesNotMatch(markup, /Tinggi/);
 });

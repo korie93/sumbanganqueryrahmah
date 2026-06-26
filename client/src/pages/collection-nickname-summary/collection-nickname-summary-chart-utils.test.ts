@@ -10,6 +10,7 @@ import {
   getCollectionNicknamePerformanceLabel,
   getCollectionNicknamePerformanceLevel,
   getCollectionNicknameSummaryChartPeak,
+  getCollectionNicknameTargetAwarePerformanceLevel,
   hasCollectionNicknameSummaryChartData,
   parseCollectionNicknameBenchmarkAmount,
   rankCollectionNicknameSummaryChartData,
@@ -172,4 +173,23 @@ test("benchmark helpers classify target progress and gaps", () => {
   assert.equal(getCollectionNicknameBenchmarkStatusLabel("achieved"), "Capai target");
   assert.equal(getCollectionNicknameBenchmarkStatusLabel("near"), "Hampir capai");
   assert.equal(getCollectionNicknameBenchmarkStatusLabel("behind"), "Jauh daripada target");
+});
+
+test("target-aware performance refuses high labels when collection misses target", () => {
+  assert.equal(
+    getCollectionNicknameTargetAwarePerformanceLevel({ totalAmount: 700 }, 700, 1_000),
+    "low",
+  );
+  assert.equal(
+    getCollectionNicknameTargetAwarePerformanceLevel({ totalAmount: 850 }, 1_000, 1_000),
+    "medium",
+  );
+  assert.equal(
+    getCollectionNicknameTargetAwarePerformanceLevel({ totalAmount: 1_000 }, 1_000, 1_000),
+    "high",
+  );
+  assert.equal(
+    getCollectionNicknameTargetAwarePerformanceLevel({ totalAmount: 700 }, 700, 0),
+    "high",
+  );
 });

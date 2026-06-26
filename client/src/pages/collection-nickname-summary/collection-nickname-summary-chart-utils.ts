@@ -170,6 +170,26 @@ export function getCollectionNicknamePerformanceLevel(
   return "low";
 }
 
+export function getCollectionNicknameTargetAwarePerformanceLevel(
+  row: Pick<CollectionNicknameSummaryChartDatum, "totalAmount">,
+  peakAmount: number,
+  benchmarkAmount: number,
+): CollectionNicknamePerformanceLevel {
+  const safeBenchmarkAmount = toSafeNonNegativeNumber(benchmarkAmount);
+  if (safeBenchmarkAmount <= 0) {
+    return getCollectionNicknamePerformanceLevel(row, peakAmount);
+  }
+
+  const benchmarkStatus = getCollectionNicknameBenchmarkStatus(row, safeBenchmarkAmount);
+  if (benchmarkStatus === "achieved") {
+    return "high";
+  }
+  if (benchmarkStatus === "near") {
+    return "medium";
+  }
+  return "low";
+}
+
 export function getCollectionNicknamePerformanceLabel(
   level: CollectionNicknamePerformanceLevel,
 ): string {
