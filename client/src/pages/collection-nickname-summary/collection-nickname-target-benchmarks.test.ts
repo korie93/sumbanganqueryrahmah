@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildCollectionNicknameTargetBenchmarksFromRows,
   buildCollectionNicknameTargetMonthWeights,
   calculateCollectionNicknameWeightedTarget,
   getCollectionNicknameTargetBenchmark,
@@ -56,4 +57,43 @@ test("target benchmark helpers normalize nickname keys and return safe fallback"
   assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "collector alpha").amount, 50_000);
   assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "Unknown").amount, 0);
   assert.deepEqual(buildCollectionNicknameTargetMonthWeights("bad", "2026-06-01"), []);
+});
+
+test("buildCollectionNicknameTargetBenchmarksFromRows reuses backend summary targets", () => {
+  const benchmarks = buildCollectionNicknameTargetBenchmarksFromRows([
+    {
+      nickname: "Collector Alpha",
+      totalAmount: 70_000,
+      totalRecords: 10,
+      targetBenchmark: {
+        amount: 80_000.125,
+        configuredMonths: 1,
+        missingMonths: 0,
+        requestedMonths: 1,
+      },
+    },
+    {
+      nickname: "Collector Beta",
+      totalAmount: 5_000,
+      totalRecords: 2,
+      targetBenchmark: {
+        amount: -1,
+        configuredMonths: "bad" as unknown as number,
+        missingMonths: 1,
+        requestedMonths: 1,
+      },
+    },
+    {
+      nickname: "Collector Gamma",
+      totalAmount: 0,
+      totalRecords: 0,
+      targetBenchmark: null,
+    },
+  ]);
+
+  assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "collector alpha").amount, 80_000.13);
+  assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "collector alpha").configuredMonths, 1);
+  assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "collector beta").amount, 0);
+  assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "collector beta").missingMonths, 1);
+  assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "collector gamma").requestedMonths, 0);
 });

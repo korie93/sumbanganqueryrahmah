@@ -173,6 +173,12 @@ export type CollectionNicknameSummaryResponse = {
     nickname: string;
     totalRecords: number;
     totalAmount: CollectionAmountMyrNumber;
+    targetBenchmark?: {
+      amount: CollectionAmountMyrNumber;
+      configuredMonths: number;
+      missingMonths: number;
+      requestedMonths: number;
+    } | null;
   }>;
   records: CollectionRecord[];
   freshness?: CollectionReportFreshness;

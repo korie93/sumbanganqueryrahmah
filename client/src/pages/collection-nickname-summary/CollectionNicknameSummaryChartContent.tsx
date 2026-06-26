@@ -25,6 +25,7 @@ import {
 } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartExportMenu";
 import { CollectionNicknameSummaryChartPlot } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartPlot";
 import {
+  buildCollectionNicknameTargetBenchmarksFromRows,
   getCollectionNicknameTargetBenchmark,
   useCollectionNicknameTargetBenchmarks,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
@@ -95,9 +96,14 @@ export function CollectionNicknameSummaryChartContent({
     () => displayedData.reduce((sum, row) => sum + row.totalRecords, 0),
     [displayedData],
   );
+  const prefetchedTargetBenchmarks = useMemo(
+    () => buildCollectionNicknameTargetBenchmarksFromRows(nicknameTotals),
+    [nicknameTotals],
+  );
   const targetBenchmarks = useCollectionNicknameTargetBenchmarks({
     enabled: isDetailed && displayedData.length > 0,
     fromDate,
+    prefetchedBenchmarks: prefetchedTargetBenchmarks,
     rows: displayedData,
     toDate,
   });

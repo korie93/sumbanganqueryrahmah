@@ -2468,8 +2468,23 @@ test("GET /api/collection/monthly-target returns configured target with lightwei
   }
 });
 
-test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading record rows", async () => {
-  const { storage, nicknameActiveChecks, nicknameSummaryCalls, nicknameListCalls } = createCollectionSummaryStorageDouble();
+test("GET /api/collection/nickname-summary honors summaryOnly and includes daily target benchmarks", async () => {
+  const {
+    storage,
+    dailyTargetCalls,
+    nicknameActiveChecks,
+    nicknameSummaryCalls,
+    nicknameListCalls,
+  } = createCollectionSummaryStorageDouble({
+    monthlyTargetRows: [
+      {
+        username: "Collector Alpha",
+        year: 2026,
+        month: 3,
+        monthlyTarget: 62000,
+      },
+    ],
+  });
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -2495,6 +2510,19 @@ test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading
     assert.deepEqual(payload.nicknames, ["Collector Alpha"]);
     assert.equal(payload.totalRecords, 3);
     assert.equal(payload.totalAmount, 450.5);
+    assert.deepEqual(payload.nicknameTotals, [
+      {
+        nickname: "Collector Alpha",
+        totalRecords: 3,
+        totalAmount: 450.5,
+        targetBenchmark: {
+          amount: 62000,
+          configuredMonths: 1,
+          missingMonths: 0,
+          requestedMonths: 1,
+        },
+      },
+    ]);
     assert.deepEqual(payload.records, []);
     assert.deepEqual(payload.pagination, {
       mode: "hybrid",
@@ -2513,6 +2541,13 @@ test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading
     assert.equal(nicknameSummaryCalls[0].from, "2026-03-01");
     assert.equal(nicknameSummaryCalls[0].to, "2026-03-31");
     assert.deepEqual(nicknameSummaryCalls[0].nicknames, ["Collector Alpha"]);
+    assert.deepEqual(dailyTargetCalls, [
+      {
+        username: "Collector Alpha",
+        year: 2026,
+        month: 3,
+      },
+    ]);
     assert.equal(nicknameListCalls.length, 0);
   } finally {
     await stopTestServer(server);
@@ -2561,11 +2596,23 @@ test("manager can list all active nicknames and view all-staff nickname summarie
         nickname: "Collector Alpha",
         totalRecords: 3,
         totalAmount: 450.5,
+        targetBenchmark: {
+          amount: 0,
+          configuredMonths: 0,
+          missingMonths: 1,
+          requestedMonths: 1,
+        },
       },
       {
         nickname: "Collector Beta",
         totalRecords: 0,
         totalAmount: 0,
+        targetBenchmark: {
+          amount: 0,
+          configuredMonths: 0,
+          missingMonths: 1,
+          requestedMonths: 1,
+        },
       },
     ]);
     assert.deepEqual(nicknameActiveChecks, ["Collector Alpha", "Collector Beta"]);

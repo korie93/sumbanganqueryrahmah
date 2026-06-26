@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getCollectionMonthlyTarget } from "@/lib/api";
 import { parseApiError } from "@/pages/collection/utils";
 import type { CollectionNicknameSummaryChartDatum } from "./collection-nickname-summary-chart-utils";
+import type { NicknameTotalSummary } from "./utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TARGET_FETCH_CONCURRENCY = 6;
@@ -46,6 +47,15 @@ function roundMoney(value: number): number {
   return Number.isFinite(safeValue) ? Math.round(safeValue * 100) / 100 : 0;
 }
 
+function toSafeNonNegativeNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function toSafeNonNegativeInteger(value: unknown): number {
+  return Math.trunc(toSafeNonNegativeNumber(value));
+}
+
 function parseIsoDateToUtc(value: string | undefined): number | null {
   const normalized = String(value || "").trim();
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
@@ -81,6 +91,33 @@ export function getCollectionNicknameTargetBenchmark(
   nickname: string,
 ): CollectionNicknameTargetBenchmark {
   return benchmarks?.get(normalizeCollectionNicknameTargetKey(nickname)) ?? EMPTY_BENCHMARK;
+}
+
+export function buildCollectionNicknameTargetBenchmarksFromRows(
+  rows: readonly NicknameTotalSummary[] | null | undefined,
+): Map<string, CollectionNicknameTargetBenchmark> {
+  const benchmarks = new Map<string, CollectionNicknameTargetBenchmark>();
+  if (!Array.isArray(rows)) {
+    return benchmarks;
+  }
+
+  for (const row of rows) {
+    const nickname = String(row?.nickname || "").trim();
+    const benchmark = row?.targetBenchmark;
+    const requestedMonths = toSafeNonNegativeInteger(benchmark?.requestedMonths);
+    if (!nickname || requestedMonths <= 0) {
+      continue;
+    }
+
+    benchmarks.set(normalizeCollectionNicknameTargetKey(nickname), {
+      amount: roundMoney(toSafeNonNegativeNumber(benchmark?.amount)),
+      configuredMonths: toSafeNonNegativeInteger(benchmark?.configuredMonths),
+      missingMonths: toSafeNonNegativeInteger(benchmark?.missingMonths),
+      requestedMonths,
+    });
+  }
+
+  return benchmarks;
 }
 
 export function buildCollectionNicknameTargetMonthWeights(
@@ -194,11 +231,13 @@ async function loadNicknameTargetBenchmark(
 export function useCollectionNicknameTargetBenchmarks({
   enabled,
   fromDate,
+  prefetchedBenchmarks,
   rows,
   toDate,
 }: {
   enabled: boolean;
   fromDate?: string | undefined;
+  prefetchedBenchmarks?: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined;
   rows: readonly CollectionNicknameSummaryChartDatum[];
   toDate?: string | undefined;
 }): CollectionNicknameTargetBenchmarkState {
@@ -227,6 +266,26 @@ export function useCollectionNicknameTargetBenchmarks({
       setState({
         benchmarks: new Map(),
         configuredCount: 0,
+        errorMessage: null,
+        loading: false,
+        requestedMonths: months.length,
+      });
+      return undefined;
+    }
+
+    const prefetchedEntries = nicknames
+      .map((nickname) => {
+        const key = normalizeCollectionNicknameTargetKey(nickname);
+        const benchmark = prefetchedBenchmarks?.get(key);
+        return benchmark ? [key, benchmark] as const : null;
+      })
+      .filter((entry): entry is readonly [string, CollectionNicknameTargetBenchmark] => entry !== null);
+
+    if (prefetchedEntries.length === nicknames.length) {
+      const benchmarks = new Map(prefetchedEntries);
+      setState({
+        benchmarks,
+        configuredCount: prefetchedEntries.filter(([, benchmark]) => benchmark.amount > 0).length,
         errorMessage: null,
         loading: false,
         requestedMonths: months.length,
@@ -279,7 +338,7 @@ export function useCollectionNicknameTargetBenchmarks({
       active = false;
       controller.abort();
     };
-  }, [enabled, months, nicknames]);
+  }, [enabled, months, nicknames, prefetchedBenchmarks]);
 
   return state;
 }

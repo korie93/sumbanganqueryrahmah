@@ -22,6 +22,10 @@ import {
   COLLECTION_NICKNAME_SUMMARY_RECORD_LIMIT,
 } from "./collection-record-read-shared";
 import {
+  buildCollectionNicknameTargetBenchmarkMap,
+  normalizeCollectionNicknameTargetBenchmarkKey,
+} from "./collection-nickname-target-benchmarks";
+import {
   canViewAllStaffCollectionReports,
   canViewCollectionNicknameSummary,
 } from "../../../shared/user-roles";
@@ -106,14 +110,23 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
       ...(toFilter !== undefined ? { to: toFilter } : {}),
       nicknames: nicknameFilters,
     });
+    const targetBenchmarkMap = await buildCollectionNicknameTargetBenchmarkMap(this.storage, {
+      from: fromFilter,
+      nicknames: nicknameFilters,
+      to: toFilter,
+    });
     const nicknameTotals = nicknameFilters.map((nickname) => {
       const matched = nicknameTotalsRaw.find(
         (item) => item.nickname.toLowerCase() === nickname.toLowerCase(),
       );
+      const targetBenchmark = targetBenchmarkMap.get(
+        normalizeCollectionNicknameTargetBenchmarkKey(nickname),
+      ) ?? null;
       return {
         nickname,
         totalRecords: Number(matched?.totalRecords ?? 0),
         totalAmount: parseCollectionAmountMyrNumber(matched?.totalAmount ?? 0),
+        targetBenchmark,
       };
     });
     const totals = nicknameTotals.reduce(
