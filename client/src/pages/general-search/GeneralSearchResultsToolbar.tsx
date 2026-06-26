@@ -100,7 +100,11 @@ export function GeneralSearchResultsToolbar({
                 value={String(resultsPerPage)}
                 onValueChange={(value) => onRowsPerPageChange(Number(value))}
               >
-                <SelectTrigger className="h-10 w-full" data-testid="select-rows-per-page">
+                <SelectTrigger
+                  aria-label="Rows per page"
+                  className="h-10 w-full"
+                  data-testid="select-rows-per-page"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -156,7 +160,11 @@ export function GeneralSearchResultsToolbar({
             value={String(resultsPerPage)}
             onValueChange={(value) => onRowsPerPageChange(Number(value))}
           >
-            <SelectTrigger className="w-[110px]" data-testid="select-rows-per-page">
+            <SelectTrigger
+              aria-label="Rows per page"
+              className="w-[110px]"
+              data-testid="select-rows-per-page"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

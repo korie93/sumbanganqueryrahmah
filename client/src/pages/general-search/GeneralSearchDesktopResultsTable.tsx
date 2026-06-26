@@ -45,9 +45,13 @@ export function GeneralSearchDesktopResultsTable({
 
   return (
     <HorizontalScrollHint
+      ariaLabel="General search result columns"
       className="rounded-lg border border-border"
-      viewportClassName="max-h-[600px] overflow-y-auto scrollbar-visible scroll-fade-y"
       hint="Scroll columns"
+      navigationLabel="General search table column navigation"
+      showNavigationControls
+      showScrollbar
+      viewportClassName="max-h-[600px] overflow-y-auto scroll-fade-y"
       {...(onScroll ? { onScroll } : {})}
     >
       <table className="w-full text-sm">

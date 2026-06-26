@@ -79,6 +79,14 @@ const visualViewerHeaders = [
   "Created At",
   "Last Updated At",
 ] as const;
+const visualSearchRows = Array.from({ length: 3 }, (_, index) =>
+  Object.fromEntries(
+    visualViewerHeaders.map((header) => [
+      header,
+      `${header} search result ${index + 1}`,
+    ]),
+  ),
+);
 
 const publicRoutes: readonly VisualRouteSpec[] = [
   {
@@ -178,6 +186,31 @@ async function installMockAuthenticatedApi(page: Page) {
       return jsonResponse(route, {
         role: visualUser.role,
         tabs: {},
+      });
+    }
+
+    if (pathname === "/api/search/global") {
+      return jsonResponse(route, {
+        columns: visualViewerHeaders,
+        rows: visualSearchRows,
+        results: visualSearchRows,
+        total: visualSearchRows.length,
+        totalIsApproximate: false,
+        page: 1,
+        limit: 50,
+        pageSize: 50,
+        offset: 0,
+        pagination: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          limit: 50,
+          mode: "offset",
+          offset: 0,
+          page: 1,
+          pageSize: 50,
+          total: visualSearchRows.length,
+          totalPages: 1,
+        },
       });
     }
 
@@ -774,6 +807,35 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
       persistedViewerHeaderOrder.indexOf("Created At"),
     );
     await expectNoSeriousAccessibilityViolations(page, "Viewer column preferences");
+
+    await page.goto("/general-search", { waitUntil: "domcontentloaded" });
+    await page.getByTestId("input-search").fill("visual");
+    await page.getByTestId("button-search").click();
+
+    const searchScrollport = page.getByRole("region", {
+      name: "General search result columns",
+    });
+    await expect(searchScrollport).toBeVisible();
+    const searchScrollNavigation = page.getByRole("group", {
+      name: "General search table column navigation",
+    });
+    await expect(searchScrollNavigation).toBeVisible();
+    await expect(searchScrollNavigation.getByRole("progressbar")).toHaveText("0%");
+    await searchScrollNavigation.getByRole("button", { name: "Jump to last column" }).click();
+    await expect(searchScrollNavigation.getByRole("progressbar")).toHaveText("100%");
+    await expect.poll(() => searchScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    const searchMetrics = await searchScrollport.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      overflowX: getComputedStyle(element).overflowX,
+      scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(searchMetrics.scrollWidth).toBeGreaterThan(searchMetrics.clientWidth);
+    expect(searchMetrics.overflowX).toBe("auto");
+    expect(searchMetrics.scrollbarWidth).not.toBe("none");
+    await searchScrollNavigation.getByRole("button", { name: "Jump to first column" }).click();
+    await expect.poll(() => searchScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
+    await expectNoSeriousAccessibilityViolations(page, "General search table navigation");
   } finally {
     await logoutVisualSession(page);
   }
