@@ -371,13 +371,24 @@ export function SingleImportPanel({
                   </div>
                 </div>
               ) : (
-                <HorizontalScrollHint className="border border-border" hint="Scroll preview">
-                  <table className="w-full text-sm">
+                <HorizontalScrollHint
+                  ariaLabel="Import preview columns"
+                  className="border border-border"
+                  hint="Scroll preview"
+                  navigationLabel="Import preview column navigation"
+                  showNavigationControls
+                  showScrollbar
+                >
+                  <table className="w-full min-w-max text-sm">
                     <thead className="sticky top-0 bg-muted">
                       <tr>
                         <th scope="col" className="w-12 p-3 text-left font-medium text-muted-foreground">#</th>
                         {headers.map((header) => (
-                          <th key={header} scope="col" className="p-3 text-left font-medium text-muted-foreground">
+                          <th
+                            key={header}
+                            scope="col"
+                            className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground"
+                          >
                             {header}
                           </th>
                         ))}
@@ -388,7 +399,11 @@ export function SingleImportPanel({
                         <tr key={getImportPreviewRowKey(row)} className="border-t border-border hover:bg-muted/50">
                           <td className="p-3 text-muted-foreground">{rowIndex + 1}</td>
                           {headers.map((header) => (
-                            <td key={header} className="max-w-72 truncate p-3 text-foreground" title={row[header] || "-"}>
+                            <td
+                              key={header}
+                              className="max-w-72 truncate whitespace-nowrap p-3 text-foreground"
+                              title={row[header] || "-"}
+                            >
                               {row[header] || "-"}
                             </td>
                           ))}

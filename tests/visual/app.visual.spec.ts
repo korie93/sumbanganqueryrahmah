@@ -808,6 +808,43 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     );
     await expectNoSeriousAccessibilityViolations(page, "Viewer column preferences");
 
+    await page.goto("/import", { waitUntil: "domcontentloaded" });
+    const importPreviewCsv = [
+      visualViewerHeaders.join(","),
+      visualViewerHeaders.map((header) => `${header} import preview`).join(","),
+      visualViewerHeaders.map((header) => `${header} second row`).join(","),
+    ].join("\n");
+    await page.getByTestId("input-file").setInputFiles({
+      buffer: Buffer.from(importPreviewCsv),
+      mimeType: "text/csv",
+      name: "visual-import-preview.csv",
+    });
+    await expect(page.getByRole("heading", { name: "Confirm column mapping" })).toBeVisible();
+    await page.getByTestId("button-import-next").click();
+
+    const importScrollport = page.getByRole("region", { name: "Import preview columns" });
+    await expect(importScrollport).toBeVisible();
+    const importScrollNavigation = page.getByRole("group", {
+      name: "Import preview column navigation",
+    });
+    await expect(importScrollNavigation).toBeVisible();
+    await expect(importScrollNavigation.getByRole("progressbar")).toHaveText("0%");
+    await importScrollNavigation.getByRole("button", { name: "Jump to last column" }).click();
+    await expect(importScrollNavigation.getByRole("progressbar")).toHaveText("100%");
+    await expect.poll(() => importScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    const importMetrics = await importScrollport.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      overflowX: getComputedStyle(element).overflowX,
+      scrollbarWidth: getComputedStyle(element).scrollbarWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(importMetrics.scrollWidth).toBeGreaterThan(importMetrics.clientWidth);
+    expect(importMetrics.overflowX).toBe("auto");
+    expect(importMetrics.scrollbarWidth).not.toBe("none");
+    await importScrollNavigation.getByRole("button", { name: "Jump to first column" }).click();
+    await expect.poll(() => importScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
+    await expectNoSeriousAccessibilityViolations(page, "Import preview table navigation");
+
     await page.goto("/general-search", { waitUntil: "domcontentloaded" });
     await page.getByTestId("input-search").fill("visual");
     await page.getByTestId("button-search").click();
