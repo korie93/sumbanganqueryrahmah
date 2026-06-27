@@ -10,6 +10,7 @@ import type {
 import {
   collectionMonthlyComparisonResponseSchema,
   collectionMonthlyTargetResponseSchema,
+  collectionNicknameSummaryResponseSchema,
 } from "@shared/api-contracts";
 
 export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string | undefined; nicknames?: string[] | undefined }) {
@@ -128,5 +129,9 @@ export async function getCollectionNicknameSummary(filters: {
     undefined,
     options,
   );
-  return response.json() as Promise<CollectionNicknameSummaryResponse>;
+  return parseApiJson(
+    response,
+    collectionNicknameSummaryResponseSchema,
+    "/api/collection/nickname-summary",
+  ) as Promise<CollectionNicknameSummaryResponse>;
 }

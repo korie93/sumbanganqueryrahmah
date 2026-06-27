@@ -634,6 +634,75 @@ export const collectionReportFreshnessSchema = z.object({
   message: z.string(),
 });
 
+const collectionRecordReceiptSchema = z.object({
+  id: nonEmptyStringSchema,
+  collectionRecordId: nonEmptyStringSchema,
+  storagePath: nonEmptyStringSchema,
+  originalFileName: nonEmptyStringSchema,
+  originalMimeType: nonEmptyStringSchema,
+  originalExtension: z.string(),
+  fileSize: nonNegativeIntSchema,
+  receiptAmount: z.string().nullable(),
+  extractedAmount: z.string().nullable(),
+  extractionStatus: z.enum(["unprocessed", "suggested", "ambiguous", "unavailable", "error"]),
+  extractionConfidence: z.number().finite().nullable(),
+  receiptDate: nullableStringSchema,
+  receiptReference: nullableStringSchema,
+  fileHash: nullableStringSchema,
+  createdAt: z.string().datetime({ offset: true }),
+  deletedAt: z.string().datetime({ offset: true }).nullable().optional(),
+});
+
+const collectionRecordResponseSchema = z.object({
+  id: nonEmptyStringSchema,
+  customerName: z.string(),
+  icNumber: z.string(),
+  customerPhone: z.string(),
+  accountNumber: z.string(),
+  batch: z.enum(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]),
+  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  amount: z.string(),
+  receiptFile: nullableStringSchema,
+  receipts: z.array(collectionRecordReceiptSchema),
+  archivedReceipts: z.array(collectionRecordReceiptSchema).optional(),
+  receiptTotalAmount: z.string(),
+  receiptValidationStatus: z.enum(["matched", "underpaid", "overpaid", "unverified", "needs_review"]),
+  receiptValidationMessage: nullableStringSchema,
+  receiptCount: nonNegativeIntSchema,
+  duplicateReceiptFlag: z.boolean(),
+  createdByLogin: z.string(),
+  collectionStaffNickname: z.string(),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }).optional(),
+});
+
+const collectionNicknameTargetBenchmarkSchema = z.object({
+  amount: z.number().finite().nonnegative(),
+  configuredMonths: nonNegativeIntSchema,
+  missingMonths: nonNegativeIntSchema,
+  requestedMonths: positiveIntSchema,
+});
+
+export const collectionNicknameSummaryResponseSchema = z.object({
+  ok: z.literal(true),
+  nicknames: z.array(nonEmptyStringSchema).max(1000),
+  totalRecords: nonNegativeIntSchema,
+  totalAmount: z.number().finite().nonnegative(),
+  page: positiveIntSchema,
+  pageSize: paginationLimitSchema,
+  limit: paginationLimitSchema,
+  offset: nonNegativeIntSchema,
+  nicknameTotals: z.array(z.object({
+    nickname: nonEmptyStringSchema,
+    totalRecords: nonNegativeIntSchema,
+    totalAmount: z.number().finite().nonnegative(),
+    targetBenchmark: collectionNicknameTargetBenchmarkSchema.nullable().optional(),
+  })).max(1000),
+  records: z.array(collectionRecordResponseSchema).max(250),
+  freshness: collectionReportFreshnessSchema.optional(),
+  pagination: hybridPaginationMetaSchema,
+});
+
 const collectionMonthKeySchema = z.string().regex(/^\d{4}-\d{2}$/);
 
 export const collectionMonthlyComparisonMonthSchema = z.object({
@@ -713,6 +782,7 @@ export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
+export type CollectionNicknameSummaryResponseContract = z.infer<typeof collectionNicknameSummaryResponseSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;
 export type CollectionMonthlyTargetResponse = z.infer<typeof collectionMonthlyTargetResponseSchema>;
 export type ApiPaginationMeta = z.infer<typeof apiPaginationMetaSchema>;

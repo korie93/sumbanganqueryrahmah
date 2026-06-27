@@ -29,6 +29,7 @@ import {
   auditLogRecordSchema,
   collectionMonthlyComparisonResponseSchema,
   collectionMonthlyTargetResponseSchema,
+  collectionNicknameSummaryResponseSchema,
   importListItemSchema,
   maintenanceStatusResponseSchema,
   normalizeApiPaginationMeta,
@@ -1437,6 +1438,137 @@ test("collection monthly target contract accepts configured and missing targets"
     source: "missing",
   });
   assert.equal(missing.success, true);
+});
+
+test("collection nickname summary contract accepts target-aware bounded summaries", () => {
+  const parsed = collectionNicknameSummaryResponseSchema.safeParse({
+    ok: true,
+    nicknames: ["Collector Alpha"],
+    totalRecords: 3,
+    totalAmount: 450.5,
+    page: 1,
+    pageSize: 250,
+    limit: 250,
+    offset: 0,
+    nicknameTotals: [{
+      nickname: "Collector Alpha",
+      totalRecords: 3,
+      totalAmount: 450.5,
+      targetBenchmark: {
+        amount: 62000,
+        configuredMonths: 1,
+        missingMonths: 0,
+        requestedMonths: 1,
+      },
+    }],
+    records: [{
+      id: "collection-1",
+      customerName: "Alice Tan",
+      icNumber: "900101015555",
+      customerPhone: "0123456789",
+      accountNumber: "ACC-1001",
+      batch: "P10",
+      paymentDate: "2026-03-01",
+      amount: "120.50",
+      receiptFile: null,
+      receipts: [{
+        id: "receipt-1",
+        collectionRecordId: "collection-1",
+        storagePath: "collection-receipts/receipt-1.pdf",
+        originalFileName: "receipt.pdf",
+        originalMimeType: "application/pdf",
+        originalExtension: ".pdf",
+        fileSize: 2048,
+        receiptAmount: "120.50",
+        extractedAmount: "120.50",
+        extractionStatus: "suggested",
+        extractionConfidence: 0.98,
+        receiptDate: "2026-03-01",
+        receiptReference: "PAY-1001",
+        fileHash: "sha256-example",
+        createdAt: "2026-03-01T09:00:00.000Z",
+        deletedAt: null,
+      }],
+      archivedReceipts: [],
+      receiptTotalAmount: "120.50",
+      receiptValidationStatus: "matched",
+      receiptValidationMessage: null,
+      receiptCount: 1,
+      duplicateReceiptFlag: false,
+      createdByLogin: "staff.user",
+      collectionStaffNickname: "Collector Alpha",
+      createdAt: "2026-03-01T09:00:00.000Z",
+      updatedAt: "2026-03-01T09:10:00.000Z",
+    }],
+    pagination: {
+      mode: "hybrid",
+      page: 1,
+      pageSize: 250,
+      total: 3,
+      totalPages: 1,
+      limit: 250,
+      offset: 0,
+      nextCursor: null,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    },
+  });
+
+  assert.equal(parsed.success, true);
+  if (parsed.success) {
+    assert.equal(parsed.data.records[0]?.receipts[0]?.originalFileName, "receipt.pdf");
+  }
+});
+
+test("collection nickname summary contract rejects oversized record pages", () => {
+  const validRecord = {
+    id: "collection-1",
+    customerName: "Alice Tan",
+    icNumber: "900101015555",
+    customerPhone: "0123456789",
+    accountNumber: "ACC-1001",
+    batch: "P10",
+    paymentDate: "2026-03-01",
+    amount: "1.00",
+    receiptFile: null,
+    receipts: [],
+    archivedReceipts: [],
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: "unverified",
+    receiptValidationMessage: null,
+    receiptCount: 0,
+    duplicateReceiptFlag: false,
+    createdByLogin: "staff.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: "2026-03-01T09:00:00.000Z",
+    updatedAt: "2026-03-01T09:10:00.000Z",
+  };
+  const parsed = collectionNicknameSummaryResponseSchema.safeParse({
+    ok: true,
+    nicknames: ["Collector Alpha"],
+    totalRecords: 251,
+    totalAmount: 251,
+    page: 1,
+    pageSize: 250,
+    limit: 250,
+    offset: 0,
+    nicknameTotals: [],
+    records: Array.from({ length: 251 }, () => validRecord),
+    pagination: {
+      mode: "hybrid",
+      page: 1,
+      pageSize: 250,
+      total: 251,
+      totalPages: 2,
+      limit: 250,
+      offset: 0,
+      nextCursor: null,
+      hasNextPage: true,
+      hasPreviousPage: false,
+    },
+  });
+
+  assert.equal(parsed.success, false);
 });
 
 test("imports API wrappers accept payloads that match the shared contract", async () => {

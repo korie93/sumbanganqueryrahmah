@@ -28,6 +28,7 @@ test("getCollectionNicknameSummary forwards query params and AbortSignal", async
         limit: 25,
         offset: 25,
         pagination: {
+          mode: "hybrid",
           page: 2,
           pageSize: 25,
           total: 1,
@@ -115,6 +116,60 @@ test("getCollectionNicknames forwards includeInactive and AbortSignal", async ()
     /\/api\/collection\/nicknames\?includeInactive=1$/,
   );
   assert.equal(requests[0]?.signal, controller.signal);
+});
+
+test("getCollectionNicknameSummary rejects malformed target benchmark payloads", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => new Response(
+    JSON.stringify({
+      ok: true,
+      nicknames: ["Collector Alpha"],
+      totalRecords: 1,
+      totalAmount: 55,
+      page: 1,
+      pageSize: 25,
+      limit: 25,
+      offset: 0,
+      pagination: {
+        mode: "hybrid",
+        page: 1,
+        pageSize: 25,
+        total: 1,
+        totalPages: 1,
+        limit: 25,
+        offset: 0,
+        nextCursor: null,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      nicknameTotals: [{
+        nickname: "Collector Alpha",
+        totalRecords: 1,
+        totalAmount: 55,
+        targetBenchmark: {
+          amount: "62000",
+          configuredMonths: 1,
+          missingMonths: 0,
+          requestedMonths: 1,
+        },
+      }],
+      records: [],
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      getCollectionNicknameSummary({ nicknames: ["Collector Alpha"] }),
+      /API contract mismatch for \/api\/collection\/nickname-summary/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("getCollectionMonthlyComparison forwards nickname, month range, and AbortSignal", async () => {
