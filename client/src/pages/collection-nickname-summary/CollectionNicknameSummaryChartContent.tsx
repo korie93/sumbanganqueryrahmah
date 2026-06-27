@@ -258,7 +258,7 @@ export function CollectionNicknameSummaryChartContent({
                 </h3>
                 <p className="text-xs leading-5 text-muted-foreground">
                   Arahkan tetikus atau fokus pada graf untuk melihat jumlah, rekod, purata, target dan prestasi.
-                  Bar berbingkai menunjukkan target Collection Daily apabila tersedia.
+                  Bar berbingkai merah menunjukkan target Collection Daily apabila tersedia.
                 </p>
               </div>
               <CollectionNicknameSummaryChartExportMenu

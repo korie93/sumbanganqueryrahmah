@@ -281,13 +281,14 @@ export function CollectionNicknameSummaryChartPlot({
             {singleReferenceTargetAmount > 0 ? (
               <ReferenceLine
                 y={singleReferenceTargetAmount}
-                stroke="hsl(var(--foreground))"
+                stroke="hsl(var(--destructive))"
                 strokeDasharray="6 4"
-                strokeOpacity={0.75}
+                strokeOpacity={0.9}
+                strokeWidth={2}
                 label={{
                   value: "Target",
                   position: "insideTopRight",
-                  fill: "hsl(var(--muted-foreground))",
+                  fill: "hsl(var(--destructive))",
                   fontSize: 11,
                 }}
               />
@@ -297,9 +298,10 @@ export function CollectionNicknameSummaryChartPlot({
                 dataKey="targetAmount"
                 name="Target Collection Daily"
                 fill="transparent"
-                stroke="hsl(var(--foreground))"
+                stroke="hsl(var(--destructive))"
                 strokeDasharray="4 3"
-                strokeOpacity={0.75}
+                strokeOpacity={0.9}
+                strokeWidth={2}
                 radius={[6, 6, 0, 0]}
                 maxBarSize={detailed ? 44 : 34}
                 isAnimationActive={false}

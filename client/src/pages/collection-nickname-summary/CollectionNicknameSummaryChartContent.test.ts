@@ -67,6 +67,7 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Penapis paparan/);
   assert.match(markup, /Cari nickname/);
   assert.match(markup, /Target Collection Daily/);
+  assert.match(markup, /Garisan merah menunjukkan target/);
   assert.match(markup, /Susun mengikut/);
   assert.match(markup, /Bilangan paparan/);
   assert.match(markup, /Prestasi relatif/);
@@ -97,6 +98,11 @@ test("CollectionNicknameSummaryChartPlot renders target benchmark bars when conf
   assert.match(chartPlotSource, /dataKey="targetAmount"/);
   assert.match(chartPlotSource, /name="Target Collection Daily"/);
   assert.match(chartPlotSource, /strokeDasharray="4 3"/);
+  assert.equal(
+    (chartPlotSource.match(/stroke="hsl\(var\(--destructive\)\)"/g) || []).length,
+    2,
+  );
+  assert.equal((chartPlotSource.match(/strokeWidth=\{2\}/g) || []).length, 2);
 });
 
 test("CollectionNicknameSummaryChartContent renders explicit empty and zero states", () => {

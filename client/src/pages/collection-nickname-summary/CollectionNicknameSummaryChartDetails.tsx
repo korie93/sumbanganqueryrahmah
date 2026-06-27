@@ -121,6 +121,13 @@ export function CollectionNicknameBenchmarkLegend({
           ? `Jumlah target bulanan penuh bagi ${requestedMonths} bulan dalam julat dipilih.`
           : "Menggunakan target bulanan penuh yang ditetapkan di Collection Daily."}
       </span>
+      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+        <span
+          className="w-6 border-t-2 border-dashed border-destructive"
+          aria-hidden="true"
+        />
+        Garisan merah menunjukkan target.
+      </span>
       {errorMessage ? (
         <span className="font-medium text-destructive">
           Target tidak dapat dimuat: {errorMessage}

@@ -28,6 +28,7 @@ const PNG_CHART_ROWS = 12;
 const PNG_ROW_HEIGHT = 46;
 const PDF_CHART_ROWS = 10;
 const PDF_TABLE_ROW_HEIGHT = 7;
+const TARGET_EXPORT_STROKE = "#b91c1c";
 
 let nicknameChartJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
@@ -326,7 +327,7 @@ export async function exportCollectionNicknameSummaryPng(
       drawing.fillRect(400, y, 720, 24);
       if (target.amount > 0) {
         const targetWidth = Math.max(4, (target.amount / scalePeakAmount) * 720);
-        drawing.strokeStyle = "#0f172a";
+        drawing.strokeStyle = TARGET_EXPORT_STROKE;
         drawing.lineWidth = 2;
         drawing.setLineDash([7, 5]);
         drawing.strokeRect(400, y, targetWidth, 24);
@@ -508,7 +509,7 @@ export async function exportCollectionNicknameSummaryPdf(
     pdf.rect(63, y, 116, 5, "F");
     if (target.amount > 0) {
       const targetRatio = scalePeakAmount > 0 ? target.amount / scalePeakAmount : 0;
-      pdf.setDrawColor(15, 23, 42);
+      pdf.setDrawColor(185, 28, 28);
       pdf.setLineWidth(0.35);
       pdf.rect(63, y, Math.max(1, 116 * targetRatio), 5, "S");
     }
