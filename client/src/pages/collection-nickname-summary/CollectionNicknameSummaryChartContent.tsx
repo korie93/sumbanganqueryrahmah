@@ -134,7 +134,7 @@ export function CollectionNicknameSummaryChartContent({
       targetStatusNote: targetBenchmarks.errorMessage
         ? `Target Collection Daily tidak dapat dimuat: ${targetBenchmarks.errorMessage}`
         : targetBenchmarks.configuredCount > 0
-          ? `${targetBenchmarks.configuredCount}/${displayedData.length} nickname mempunyai target Collection Daily.`
+          ? `${targetBenchmarks.configuredCount}/${displayedData.length} nickname mempunyai target Collection Daily. Target menggunakan jumlah bulanan penuh bagi ${targetBenchmarks.requestedMonths} bulan dipilih.`
           : "Tiada target Collection Daily aktif untuk paparan ini.",
       toDate,
       totalAmount,
@@ -182,6 +182,7 @@ export function CollectionNicknameSummaryChartContent({
     targetBenchmarks.benchmarks,
     targetBenchmarks.configuredCount,
     targetBenchmarks.errorMessage,
+    targetBenchmarks.requestedMonths,
     toDate,
     toast,
     totalAmount,

@@ -2,8 +2,6 @@ import { parseCollectionAmountMyrNumber } from "../../../shared/collection-amoun
 import { roundMoney } from "./collection-daily-helpers";
 import type { CollectionStoragePort } from "./collection-service-support";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export type CollectionNicknameTargetBenchmark = {
   amount: number;
   configuredMonths: number;
@@ -11,9 +9,8 @@ export type CollectionNicknameTargetBenchmark = {
   requestedMonths: number;
 };
 
-type CollectionNicknameTargetMonthWeight = {
+type CollectionNicknameTargetMonth = {
   month: number;
-  weight: number;
   year: number;
 };
 
@@ -39,42 +36,31 @@ function parseIsoDateToUtc(value: string | undefined): number | null {
   return timestamp;
 }
 
-function buildCollectionNicknameTargetMonthWeights(
+function buildCollectionNicknameTargetMonths(
   fromDate: string | undefined,
   toDate: string | undefined,
-): CollectionNicknameTargetMonthWeight[] {
+): CollectionNicknameTargetMonth[] {
   const fromTimestamp = parseIsoDateToUtc(fromDate);
   const toTimestamp = parseIsoDateToUtc(toDate);
   if (fromTimestamp === null || toTimestamp === null || fromTimestamp > toTimestamp) {
     return [];
   }
 
-  const weights: CollectionNicknameTargetMonthWeight[] = [];
+  const months: CollectionNicknameTargetMonth[] = [];
   const cursor = new Date(fromTimestamp);
   cursor.setUTCDate(1);
+  const finalMonth = new Date(toTimestamp);
+  finalMonth.setUTCDate(1);
 
-  while (cursor.getTime() <= toTimestamp) {
-    const year = cursor.getUTCFullYear();
-    const monthIndex = cursor.getUTCMonth();
-    const monthStart = Date.UTC(year, monthIndex, 1);
-    const monthEnd = Date.UTC(year, monthIndex + 1, 0);
-    const overlapStart = Math.max(fromTimestamp, monthStart);
-    const overlapEnd = Math.min(toTimestamp, monthEnd);
-    const daysInMonth = new Date(monthEnd).getUTCDate();
-    const overlapDays = Math.max(0, Math.floor((overlapEnd - overlapStart) / DAY_MS) + 1);
-
-    if (overlapDays > 0) {
-      weights.push({
-        month: monthIndex + 1,
-        weight: overlapDays / daysInMonth,
-        year,
-      });
-    }
-
-    cursor.setUTCMonth(monthIndex + 1);
+  while (cursor.getTime() <= finalMonth.getTime()) {
+    months.push({
+      month: cursor.getUTCMonth() + 1,
+      year: cursor.getUTCFullYear(),
+    });
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
   }
 
-  return weights;
+  return months;
 }
 
 export function normalizeCollectionNicknameTargetBenchmarkKey(nickname: string): string {
@@ -93,7 +79,7 @@ export async function buildCollectionNicknameTargetBenchmarkMap(
     return new Map();
   }
 
-  const months = buildCollectionNicknameTargetMonthWeights(params.from, params.to);
+  const months = buildCollectionNicknameTargetMonths(params.from, params.to);
   const benchmarks = new Map<string, CollectionNicknameTargetBenchmark>();
   if (months.length === 0) {
     return benchmarks;
@@ -110,9 +96,12 @@ export async function buildCollectionNicknameTargetBenchmarkMap(
         year: month.year,
         month: month.month,
       });
-      const monthlyTarget = parseCollectionAmountMyrNumber(target?.monthlyTarget ?? 0);
-      if (target && monthlyTarget > 0) {
-        amount += roundMoney(monthlyTarget * month.weight);
+      if (target) {
+        const monthlyTarget = Math.max(
+          0,
+          parseCollectionAmountMyrNumber(target.monthlyTarget),
+        );
+        amount += monthlyTarget;
         configuredMonths += 1;
       } else {
         missingMonths += 1;

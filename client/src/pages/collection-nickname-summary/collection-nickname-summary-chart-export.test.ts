@@ -38,6 +38,34 @@ test("nickname summary CSV export includes target-aware ranking, performance lab
   assert.match(csv, /"3","Gamma","Rendah"/);
 });
 
+test("nickname summary CSV export preserves the full configured monthly target", () => {
+  const rows = buildCollectionNicknameSummaryChartData([
+    { nickname: "Collector Alpha", totalAmount: 30_000, totalRecords: 10 },
+  ], 30_000);
+  const targetBenchmarks = new Map<string, CollectionNicknameTargetBenchmark>([
+    [
+      normalizeCollectionNicknameTargetKey("Collector Alpha"),
+      {
+        amount: 60_000,
+        configuredMonths: 1,
+        missingMonths: 0,
+        requestedMonths: 1,
+      },
+    ],
+  ]);
+
+  const csv = buildCollectionNicknameSummaryCsvContent(rows, {
+    targetBenchmarks,
+    totalAmount: 30_000,
+    totalRecords: 10,
+  });
+
+  assert.match(
+    csv,
+    /"1","Collector Alpha","Rendah","30000\.00","60000\.00","Jauh daripada target","50\.0%","30000\.00"/,
+  );
+});
+
 test("nickname summary image and PDF exports avoid HTML capture and release canvas memory", () => {
   const source = readFileSync(
     new URL("./collection-nickname-summary-chart-export.ts", import.meta.url),

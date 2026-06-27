@@ -2468,7 +2468,7 @@ test("GET /api/collection/monthly-target returns configured target with lightwei
   }
 });
 
-test("GET /api/collection/nickname-summary honors summaryOnly and includes daily target benchmarks", async () => {
+test("GET /api/collection/nickname-summary keeps the configured monthly target for partial-month reports", async () => {
   const {
     storage,
     dailyTargetCalls,
@@ -2501,7 +2501,7 @@ test("GET /api/collection/nickname-summary honors summaryOnly and includes daily
   const { server, baseUrl } = await startTestServer(app);
   try {
     const response = await fetch(
-      `${baseUrl}/api/collection/nickname-summary?from=2026-03-01&to=2026-03-31&nicknames=Collector%20Alpha&summaryOnly=1`,
+      `${baseUrl}/api/collection/nickname-summary?from=2026-03-10&to=2026-03-20&nicknames=Collector%20Alpha&summaryOnly=1`,
     );
 
     assert.equal(response.status, 200);
@@ -2538,8 +2538,8 @@ test("GET /api/collection/nickname-summary honors summaryOnly and includes daily
     });
     assert.deepEqual(nicknameActiveChecks, ["Collector Alpha"]);
     assert.equal(nicknameSummaryCalls.length, 1);
-    assert.equal(nicknameSummaryCalls[0].from, "2026-03-01");
-    assert.equal(nicknameSummaryCalls[0].to, "2026-03-31");
+    assert.equal(nicknameSummaryCalls[0].from, "2026-03-10");
+    assert.equal(nicknameSummaryCalls[0].to, "2026-03-20");
     assert.deepEqual(nicknameSummaryCalls[0].nicknames, ["Collector Alpha"]);
     assert.deepEqual(dailyTargetCalls, [
       {

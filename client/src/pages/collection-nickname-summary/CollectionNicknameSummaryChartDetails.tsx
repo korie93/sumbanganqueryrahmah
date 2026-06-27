@@ -114,8 +114,8 @@ export function CollectionNicknameBenchmarkLegend({
       </span>
       <span>
         {requestedMonths > 1
-          ? `Dikira ikut target bulanan dan julat ${requestedMonths} bulan.`
-          : "Dikira daripada target bulanan Collection Daily."}
+          ? `Jumlah target bulanan penuh bagi ${requestedMonths} bulan dalam julat dipilih.`
+          : "Menggunakan target bulanan penuh yang ditetapkan di Collection Daily."}
       </span>
       {errorMessage ? (
         <span className="font-medium text-destructive">

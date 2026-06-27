@@ -4,7 +4,6 @@ import { parseApiError } from "@/pages/collection/utils";
 import type { CollectionNicknameSummaryChartDatum } from "./collection-nickname-summary-chart-utils";
 import type { NicknameTotalSummary } from "./utils";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const TARGET_FETCH_CONCURRENCY = 6;
 
 export type CollectionNicknameTargetBenchmark = {
@@ -22,11 +21,8 @@ export type CollectionNicknameTargetBenchmarkState = {
   requestedMonths: number;
 };
 
-export type CollectionNicknameTargetMonthWeight = {
-  daysInMonth: number;
+export type CollectionNicknameTargetMonth = {
   month: string;
-  overlapDays: number;
-  weight: number;
 };
 
 const EMPTY_BENCHMARK: CollectionNicknameTargetBenchmark = {
@@ -120,55 +116,42 @@ export function buildCollectionNicknameTargetBenchmarksFromRows(
   return benchmarks;
 }
 
-export function buildCollectionNicknameTargetMonthWeights(
+export function buildCollectionNicknameTargetMonths(
   fromDate: string | undefined,
   toDate: string | undefined,
-): CollectionNicknameTargetMonthWeight[] {
+): CollectionNicknameTargetMonth[] {
   const fromTimestamp = parseIsoDateToUtc(fromDate);
   const toTimestamp = parseIsoDateToUtc(toDate);
   if (fromTimestamp === null || toTimestamp === null || fromTimestamp > toTimestamp) {
     return [];
   }
 
-  const weights: CollectionNicknameTargetMonthWeight[] = [];
+  const months: CollectionNicknameTargetMonth[] = [];
   const cursor = new Date(fromTimestamp);
   cursor.setUTCDate(1);
+  const finalMonth = new Date(toTimestamp);
+  finalMonth.setUTCDate(1);
 
-  while (cursor.getTime() <= toTimestamp) {
-    const year = cursor.getUTCFullYear();
-    const monthIndex = cursor.getUTCMonth();
-    const monthStart = Date.UTC(year, monthIndex, 1);
-    const monthEnd = Date.UTC(year, monthIndex + 1, 0);
-    const overlapStart = Math.max(fromTimestamp, monthStart);
-    const overlapEnd = Math.min(toTimestamp, monthEnd);
-    const daysInMonth = new Date(monthEnd).getUTCDate();
-    const overlapDays = Math.max(0, Math.floor((overlapEnd - overlapStart) / DAY_MS) + 1);
-
-    if (overlapDays > 0) {
-      weights.push({
-        daysInMonth,
-        month: formatMonthKey(year, monthIndex),
-        overlapDays,
-        weight: overlapDays / daysInMonth,
-      });
-    }
-
-    cursor.setUTCMonth(monthIndex + 1);
+  while (cursor.getTime() <= finalMonth.getTime()) {
+    months.push({
+      month: formatMonthKey(cursor.getUTCFullYear(), cursor.getUTCMonth()),
+    });
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
   }
 
-  return weights;
+  return months;
 }
 
-export function calculateCollectionNicknameWeightedTarget(
+export function addCollectionNicknameConfiguredMonthlyTarget(
+  currentTotal: number,
   monthlyTarget: number,
-  weight: number,
 ): number {
+  const safeCurrentTotal = Number(currentTotal);
   const safeMonthlyTarget = Number(monthlyTarget);
-  const safeWeight = Number(weight);
-  if (!Number.isFinite(safeMonthlyTarget) || !Number.isFinite(safeWeight)) {
-    return 0;
-  }
-  return roundMoney(Math.max(0, safeMonthlyTarget) * Math.max(0, safeWeight));
+  return roundMoney(
+    (Number.isFinite(safeCurrentTotal) ? Math.max(0, safeCurrentTotal) : 0)
+    + (Number.isFinite(safeMonthlyTarget) ? Math.max(0, safeMonthlyTarget) : 0),
+  );
 }
 
 async function runLimited<T>(
@@ -193,7 +176,7 @@ async function runLimited<T>(
 
 async function loadNicknameTargetBenchmark(
   nickname: string,
-  months: readonly CollectionNicknameTargetMonthWeight[],
+  months: readonly CollectionNicknameTargetMonth[],
   signal: AbortSignal,
 ): Promise<[string, CollectionNicknameTargetBenchmark]> {
   let amount = 0;
@@ -208,9 +191,9 @@ async function loadNicknameTargetBenchmark(
       },
       { signal },
     );
-    const monthlyTarget = Number(response.monthlyTarget || 0);
-    if (response.configured && Number.isFinite(monthlyTarget) && monthlyTarget > 0) {
-      amount += calculateCollectionNicknameWeightedTarget(monthlyTarget, month.weight);
+    const monthlyTarget = Number(response.monthlyTarget);
+    if (response.configured && Number.isFinite(monthlyTarget) && monthlyTarget >= 0) {
+      amount = addCollectionNicknameConfiguredMonthlyTarget(amount, monthlyTarget);
       configuredMonths += 1;
     } else {
       missingMonths += 1;
@@ -242,7 +225,7 @@ export function useCollectionNicknameTargetBenchmarks({
   toDate?: string | undefined;
 }): CollectionNicknameTargetBenchmarkState {
   const months = useMemo(
-    () => buildCollectionNicknameTargetMonthWeights(fromDate, toDate),
+    () => buildCollectionNicknameTargetMonths(fromDate, toDate),
     [fromDate, toDate],
   );
   const nicknames = useMemo(
