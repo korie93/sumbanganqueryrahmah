@@ -653,7 +653,7 @@ const collectionRecordReceiptSchema = z.object({
   deletedAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
-const collectionRecordResponseSchema = z.object({
+export const collectionRecordResponseSchema = z.object({
   id: nonEmptyStringSchema,
   customerName: z.string(),
   icNumber: z.string(),
@@ -674,6 +674,24 @@ const collectionRecordResponseSchema = z.object({
   collectionStaffNickname: z.string(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }).optional(),
+});
+
+const collectionRecordListPageLimitSchema = z.number().int().min(1).max(5000);
+
+export const collectionRecordListResponseSchema = z.object({
+  ok: z.literal(true),
+  records: z.array(collectionRecordResponseSchema).max(5000),
+  total: nonNegativeIntSchema,
+  totalAmount: z.number().finite().nonnegative(),
+  page: positiveIntSchema,
+  pageSize: collectionRecordListPageLimitSchema,
+  limit: collectionRecordListPageLimitSchema,
+  offset: nonNegativeIntSchema,
+  nextCursor: nullableStringSchema,
+  pagination: hybridPaginationMetaSchema.extend({
+    pageSize: collectionRecordListPageLimitSchema,
+    limit: collectionRecordListPageLimitSchema,
+  }),
 });
 
 const collectionNicknameTargetBenchmarkSchema = z.object({
@@ -782,6 +800,7 @@ export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
+export type CollectionRecordListResponseContract = z.infer<typeof collectionRecordListResponseSchema>;
 export type CollectionNicknameSummaryResponseContract = z.infer<typeof collectionNicknameSummaryResponseSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;
 export type CollectionMonthlyTargetResponse = z.infer<typeof collectionMonthlyTargetResponseSchema>;

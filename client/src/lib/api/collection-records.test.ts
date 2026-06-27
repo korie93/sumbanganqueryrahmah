@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCollectionMutationFingerprint,
   buildCollectionRecordFormData,
+  getCollectionRecords,
 } from "./collection-records";
 
 test("buildCollectionRecordFormData appends scalar fields and repeated receipt ids", () => {
@@ -159,4 +160,81 @@ test("buildCollectionMutationFingerprint keeps multipart receipt headers below t
 
   assert.doesNotThrow(() => JSON.parse(fingerprint));
   assert.ok(fingerprint.length <= 512);
+});
+
+function buildCollectionListPayload(overrides?: Record<string, unknown>) {
+  return {
+    ok: true,
+    records: [],
+    total: 0,
+    totalAmount: 0,
+    page: 1,
+    pageSize: 5000,
+    limit: 5000,
+    offset: 0,
+    nextCursor: null,
+    pagination: {
+      mode: "hybrid",
+      page: 1,
+      pageSize: 5000,
+      total: 0,
+      totalPages: 1,
+      limit: 5000,
+      offset: 0,
+      nextCursor: null,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    },
+    ...overrides,
+  };
+}
+
+test("getCollectionRecords accepts the backend maximum page size", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(
+    JSON.stringify(buildCollectionListPayload()),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  )) as typeof fetch;
+
+  try {
+    const payload = await getCollectionRecords({ pageSize: 5000 });
+    assert.equal(payload.pageSize, 5000);
+    assert.equal(payload.pagination.limit, 5000);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("getCollectionRecords rejects malformed collection record payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(
+    JSON.stringify(buildCollectionListPayload({
+      records: [{
+        id: "collection-1",
+        customerName: "Alice Tan",
+        icNumber: "900101015555",
+        customerPhone: "0123456789",
+        accountNumber: "ACC-1001",
+        batch: "UNSUPPORTED",
+      }],
+      total: 1,
+      totalAmount: 120.5,
+    })),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      getCollectionRecords(),
+      /API contract mismatch for \/api\/collection\/list/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

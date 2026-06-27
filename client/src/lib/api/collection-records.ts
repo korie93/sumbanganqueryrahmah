@@ -1,5 +1,7 @@
 import { apiRequest } from "../api-client";
 import { createClientRandomId } from "../secure-id";
+import { collectionRecordListResponseSchema } from "@shared/api-contracts";
+import { parseApiJson } from "./contract";
 import type {
   CollectionPurgeResponse,
   CollectionPurgeSummaryResponse,
@@ -209,7 +211,11 @@ export async function getCollectionRecords(filters?: {
     undefined,
     { signal: options?.signal },
   );
-  return response.json() as Promise<CollectionRecordListResponse>;
+  return parseApiJson(
+    response,
+    collectionRecordListResponseSchema,
+    "/api/collection/list",
+  ) as Promise<CollectionRecordListResponse>;
 }
 
 export async function getCollectionPurgeSummary() {
