@@ -11,9 +11,16 @@ import {
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import {
+  getCollectionNicknameTargetEvaluationAmount,
   getCollectionNicknameTargetBenchmark,
+  isCollectionNicknameTargetBenchmarkComplete,
   type CollectionNicknameTargetBenchmark,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
+import {
+  buildCollectionNicknameTargetMissingMonthText,
+  buildCollectionNicknameTargetMonthExportText,
+} from "@/pages/collection-nickname-summary/collection-nickname-target-audit";
+import { appendCollectionNicknameTargetAuditPages } from "@/pages/collection-nickname-summary/collection-nickname-target-pdf-audit";
 
 const PNG_WIDTH = 1_600;
 const PNG_MAX_RANKING_ROWS = 30;
@@ -35,6 +42,9 @@ export type CollectionNicknameSummaryExportContext = {
 
 type CollectionNicknameSummaryExportTarget = {
   amount: number;
+  benchmark: CollectionNicknameTargetBenchmark;
+  complete: boolean;
+  configuredAmount: number;
   gap: number;
   progress: number;
   statusLabel: string;
@@ -94,15 +104,20 @@ function getExportTarget(
   row: CollectionNicknameSummaryChartDatum,
   context: CollectionNicknameSummaryExportContext,
 ): CollectionNicknameSummaryExportTarget {
-  const benchmarkAmount = getCollectionNicknameTargetBenchmark(
+  const benchmark = getCollectionNicknameTargetBenchmark(
     context.targetBenchmarks,
     row.nickname,
-  ).amount;
+  );
+  const complete = isCollectionNicknameTargetBenchmarkComplete(benchmark);
+  const benchmarkAmount = getCollectionNicknameTargetEvaluationAmount(benchmark);
   const progress = getCollectionNicknameBenchmarkProgress(row, benchmarkAmount);
   const gap = getCollectionNicknameBenchmarkGap(row, benchmarkAmount);
   const status = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
   return {
     amount: benchmarkAmount,
+    benchmark,
+    complete,
+    configuredAmount: benchmark.amount,
     gap,
     progress,
     statusLabel: getCollectionNicknameBenchmarkStatusLabel(status),
@@ -138,6 +153,10 @@ export function buildCollectionNicknameSummaryCsvContent(
       "Status Target",
       "Progress Target",
       "Jurang Target (MYR)",
+      "Pecahan Bulan Target",
+      "Bulan Tanpa Target",
+      "Target Dikemas Kini Oleh",
+      "Target Dikemas Kini Pada",
       "Rekod",
       "Purata (MYR)",
       "Bahagian",
@@ -149,10 +168,18 @@ export function buildCollectionNicknameSummaryCsvContent(
         normalizeExportText(row.nickname),
         getExportPerformanceLabel(row, context, peakAmount),
         row.totalAmount.toFixed(2),
-        target.amount > 0 ? target.amount.toFixed(2) : "",
-        target.amount > 0 ? target.statusLabel : "Tiada target",
+        target.benchmark.configuredMonths > 0 ? target.configuredAmount.toFixed(2) : "",
+        target.complete && target.amount > 0
+          ? target.statusLabel
+          : target.benchmark.requestedMonths > 0 && !target.complete
+            ? "Target tidak lengkap"
+            : "Tiada target",
         target.amount > 0 ? formatPercentage(Math.min(target.progress, 999.9)) : "",
         target.amount > 0 ? target.gap.toFixed(2) : "",
+        buildCollectionNicknameTargetMonthExportText(target.benchmark),
+        buildCollectionNicknameTargetMissingMonthText(target.benchmark),
+        target.benchmark.latestUpdatedBy || "",
+        target.benchmark.latestUpdatedAt || "",
         row.totalRecords,
         row.averagePerRecord.toFixed(2),
         formatPercentage(row.percentage),
@@ -360,11 +387,15 @@ export async function exportCollectionNicknameSummaryPng(
         font: "bold 17px Arial, sans-serif",
         align: "right",
       });
-      drawCanvasText(drawing, target.amount > 0 ? formatMoney(target.amount) : "-", 710, rowY + 30, {
+      drawCanvasText(drawing, target.benchmark.configuredMonths > 0 ? formatMoney(target.configuredAmount) : "-", 710, rowY + 30, {
         font: "17px Arial, sans-serif",
         align: "right",
       });
-      drawCanvasText(drawing, target.amount > 0 ? target.statusLabel : "Tiada target", 890, rowY + 30, {
+      drawCanvasText(drawing, target.complete && target.amount > 0
+        ? target.statusLabel
+        : target.benchmark.requestedMonths > 0 && !target.complete
+          ? "Tidak lengkap"
+          : "Tiada target", 890, rowY + 30, {
         font: "17px Arial, sans-serif",
         align: "right",
         maxWidth: 145,
@@ -525,10 +556,12 @@ export async function exportCollectionNicknameSummaryPdf(
       String(index + 1),
       truncatePdfText(row.nickname, 27),
       getCollectionNicknamePerformanceLabel(level),
-      target.amount > 0 ? formatMoney(target.amount) : "-",
-      target.amount > 0
+      target.benchmark.configuredMonths > 0 ? formatMoney(target.configuredAmount) : "-",
+      target.complete && target.amount > 0
         ? `${target.statusLabel} (${formatPercentage(Math.min(target.progress, 999.9))})`
-        : "Tiada target",
+        : target.benchmark.requestedMonths > 0 && !target.complete
+          ? "Target tidak lengkap"
+          : "Tiada target",
       formatMoney(row.totalAmount),
       row.totalRecords.toLocaleString(),
       formatMoney(row.averagePerRecord),
@@ -541,6 +574,17 @@ export async function exportCollectionNicknameSummaryPdf(
       pdf.text(value, columnX[valueIndex], y + 4.8);
     });
     y += PDF_TABLE_ROW_HEIGHT;
+  });
+
+  appendCollectionNicknameTargetAuditPages({
+    drawPageBase,
+    margin,
+    pageHeight,
+    pageNumber,
+    pdf,
+    rows,
+    targetBenchmarks: context.targetBenchmarks,
+    truncateText: truncatePdfText,
   });
 
   downloadBlob(pdf.output("blob"), `${buildExportBaseFilename(context)}.pdf`);

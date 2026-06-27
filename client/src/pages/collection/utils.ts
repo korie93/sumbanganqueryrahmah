@@ -18,6 +18,7 @@ export const COLLECTION_MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 export const COLLECTION_STAFF_NICKNAME_KEY = "collection_staff_nickname";
 export const COLLECTION_STAFF_NICKNAME_AUTH_KEY = "collection_staff_nickname_auth";
 export const COLLECTION_DATA_CHANGED_EVENT = "collection:data-changed";
+export const COLLECTION_TARGET_CHANGED_EVENT = "collection:target-changed";
 export const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
   "image/jpg": "image/jpeg",
@@ -140,6 +141,11 @@ export function getCurrentCollectionStaffNickname(): string {
 export function emitCollectionDataChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(COLLECTION_DATA_CHANGED_EVENT));
+}
+
+export function emitCollectionTargetChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(COLLECTION_TARGET_CHANGED_EVENT));
 }
 
 function normalizeCollectionReceiptMimeType(value: string): string {

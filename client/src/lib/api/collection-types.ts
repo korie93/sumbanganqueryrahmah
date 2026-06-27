@@ -176,7 +176,16 @@ export type CollectionNicknameSummaryResponse = {
     targetBenchmark?: {
       amount: CollectionAmountMyrNumber;
       configuredMonths: number;
+      latestUpdatedAt?: string | null;
+      latestUpdatedBy?: string | null;
       missingMonths: number;
+      months?: Array<{
+        amount: CollectionAmountMyrNumber;
+        configured: boolean;
+        month: string;
+        updatedAt: string | null;
+        updatedBy: string | null;
+      }>;
       requestedMonths: number;
     } | null;
   }>;

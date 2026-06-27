@@ -2,21 +2,34 @@ import { useEffect, useMemo, useState } from "react";
 import { getCollectionMonthlyTarget } from "@/lib/api";
 import { parseApiError } from "@/pages/collection/utils";
 import type { CollectionNicknameSummaryChartDatum } from "./collection-nickname-summary-chart-utils";
-import type { NicknameTotalSummary } from "./utils";
+import type { NicknameTargetMonthSummary, NicknameTotalSummary } from "./utils";
 
 const TARGET_FETCH_CONCURRENCY = 6;
 
 export type CollectionNicknameTargetBenchmark = {
   amount: number;
   configuredMonths: number;
+  latestUpdatedAt: string | null;
+  latestUpdatedBy: string | null;
   missingMonths: number;
+  months: CollectionNicknameTargetMonthBenchmark[];
   requestedMonths: number;
+};
+
+export type CollectionNicknameTargetMonthBenchmark = {
+  amount: number;
+  configured: boolean;
+  month: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
 };
 
 export type CollectionNicknameTargetBenchmarkState = {
   benchmarks: ReadonlyMap<string, CollectionNicknameTargetBenchmark>;
+  completeCount: number;
   configuredCount: number;
   errorMessage: string | null;
+  incompleteCount: number;
   loading: boolean;
   requestedMonths: number;
 };
@@ -28,7 +41,10 @@ export type CollectionNicknameTargetMonth = {
 const EMPTY_BENCHMARK: CollectionNicknameTargetBenchmark = {
   amount: 0,
   configuredMonths: 0,
+  latestUpdatedAt: null,
+  latestUpdatedBy: null,
   missingMonths: 0,
+  months: [],
   requestedMonths: 0,
 };
 
@@ -89,6 +105,20 @@ export function getCollectionNicknameTargetBenchmark(
   return benchmarks?.get(normalizeCollectionNicknameTargetKey(nickname)) ?? EMPTY_BENCHMARK;
 }
 
+export function isCollectionNicknameTargetBenchmarkComplete(
+  benchmark: CollectionNicknameTargetBenchmark,
+): boolean {
+  return benchmark.requestedMonths > 0
+    && benchmark.configuredMonths === benchmark.requestedMonths
+    && benchmark.missingMonths === 0;
+}
+
+export function getCollectionNicknameTargetEvaluationAmount(
+  benchmark: CollectionNicknameTargetBenchmark,
+): number {
+  return isCollectionNicknameTargetBenchmarkComplete(benchmark) ? benchmark.amount : 0;
+}
+
 export function buildCollectionNicknameTargetBenchmarksFromRows(
   rows: readonly NicknameTotalSummary[] | null | undefined,
 ): Map<string, CollectionNicknameTargetBenchmark> {
@@ -108,7 +138,16 @@ export function buildCollectionNicknameTargetBenchmarksFromRows(
     benchmarks.set(normalizeCollectionNicknameTargetKey(nickname), {
       amount: roundMoney(toSafeNonNegativeNumber(benchmark?.amount)),
       configuredMonths: toSafeNonNegativeInteger(benchmark?.configuredMonths),
+      latestUpdatedAt: benchmark?.latestUpdatedAt ?? null,
+      latestUpdatedBy: benchmark?.latestUpdatedBy ?? null,
       missingMonths: toSafeNonNegativeInteger(benchmark?.missingMonths),
+      months: (benchmark?.months ?? []).map((month: NicknameTargetMonthSummary) => ({
+            amount: roundMoney(toSafeNonNegativeNumber(month.amount)),
+            configured: month.configured,
+            month: month.month,
+            updatedAt: month.updatedAt,
+            updatedBy: month.updatedBy,
+          })),
       requestedMonths,
     });
   }
@@ -182,6 +221,7 @@ async function loadNicknameTargetBenchmark(
   let amount = 0;
   let configuredMonths = 0;
   let missingMonths = 0;
+  const monthBenchmarks: CollectionNicknameTargetMonthBenchmark[] = [];
 
   for (const month of months) {
     const response = await getCollectionMonthlyTarget(
@@ -195,8 +235,22 @@ async function loadNicknameTargetBenchmark(
     if (response.configured && Number.isFinite(monthlyTarget) && monthlyTarget >= 0) {
       amount = addCollectionNicknameConfiguredMonthlyTarget(amount, monthlyTarget);
       configuredMonths += 1;
+      monthBenchmarks.push({
+        amount: roundMoney(monthlyTarget),
+        configured: true,
+        month: month.month,
+        updatedAt: null,
+        updatedBy: null,
+      });
     } else {
       missingMonths += 1;
+      monthBenchmarks.push({
+        amount: 0,
+        configured: false,
+        month: month.month,
+        updatedAt: null,
+        updatedBy: null,
+      });
     }
   }
 
@@ -205,7 +259,10 @@ async function loadNicknameTargetBenchmark(
     {
       amount: roundMoney(amount),
       configuredMonths,
+      latestUpdatedAt: null,
+      latestUpdatedBy: null,
       missingMonths,
+      months: monthBenchmarks,
       requestedMonths: months.length,
     },
   ];
@@ -238,8 +295,10 @@ export function useCollectionNicknameTargetBenchmarks({
   );
   const [state, setState] = useState<CollectionNicknameTargetBenchmarkState>({
     benchmarks: new Map(),
+    completeCount: 0,
     configuredCount: 0,
     errorMessage: null,
+    incompleteCount: 0,
     loading: false,
     requestedMonths: 0,
   });
@@ -248,8 +307,10 @@ export function useCollectionNicknameTargetBenchmarks({
     if (!enabled || nicknames.length === 0 || months.length === 0) {
       setState({
         benchmarks: new Map(),
+        completeCount: 0,
         configuredCount: 0,
         errorMessage: null,
+        incompleteCount: 0,
         loading: false,
         requestedMonths: months.length,
       });
@@ -268,8 +329,14 @@ export function useCollectionNicknameTargetBenchmarks({
       const benchmarks = new Map(prefetchedEntries);
       setState({
         benchmarks,
-        configuredCount: prefetchedEntries.filter(([, benchmark]) => benchmark.amount > 0).length,
+        completeCount: prefetchedEntries.filter(([, benchmark]) => (
+          isCollectionNicknameTargetBenchmarkComplete(benchmark) && benchmark.amount > 0
+        )).length,
+        configuredCount: prefetchedEntries.filter(([, benchmark]) => benchmark.configuredMonths > 0).length,
         errorMessage: null,
+        incompleteCount: prefetchedEntries.filter(([, benchmark]) => (
+          benchmark.requestedMonths > 0 && !isCollectionNicknameTargetBenchmarkComplete(benchmark)
+        )).length,
         loading: false,
         requestedMonths: months.length,
       });
@@ -295,11 +362,17 @@ export function useCollectionNicknameTargetBenchmarks({
           return;
         }
         const benchmarks = new Map(entries);
-        const configuredCount = entries.filter(([, benchmark]) => benchmark.amount > 0).length;
+        const configuredCount = entries.filter(([, benchmark]) => benchmark.configuredMonths > 0).length;
         setState({
           benchmarks,
+          completeCount: entries.filter(([, benchmark]) => (
+            isCollectionNicknameTargetBenchmarkComplete(benchmark) && benchmark.amount > 0
+          )).length,
           configuredCount,
           errorMessage: null,
+          incompleteCount: entries.filter(([, benchmark]) => (
+            benchmark.requestedMonths > 0 && !isCollectionNicknameTargetBenchmarkComplete(benchmark)
+          )).length,
           loading: false,
           requestedMonths: months.length,
         });
@@ -310,8 +383,10 @@ export function useCollectionNicknameTargetBenchmarks({
         }
         setState({
           benchmarks: new Map(),
+          completeCount: 0,
           configuredCount: 0,
           errorMessage: parseApiError(error),
+          incompleteCount: 0,
           loading: false,
           requestedMonths: months.length,
         });

@@ -1509,7 +1509,16 @@ test("collection nickname summary contract accepts target-aware bounded summarie
       targetBenchmark: {
         amount: 62000,
         configuredMonths: 1,
+        latestUpdatedAt: "2026-03-15T06:30:00.000Z",
+        latestUpdatedBy: "superuser",
         missingMonths: 0,
+        months: [{
+          amount: 62000,
+          configured: true,
+          month: "2026-03",
+          updatedAt: "2026-03-15T06:30:00.000Z",
+          updatedBy: "superuser",
+        }],
         requestedMonths: 1,
       },
     }],
@@ -1569,6 +1578,14 @@ test("collection nickname summary contract accepts target-aware bounded summarie
   assert.equal(parsed.success, true);
   if (parsed.success) {
     assert.equal(parsed.data.records[0]?.receipts[0]?.originalFileName, "receipt.pdf");
+    assert.equal(
+      parsed.data.nicknameTotals[0]?.targetBenchmark?.latestUpdatedBy,
+      "superuser",
+    );
+    assert.equal(
+      parsed.data.nicknameTotals[0]?.targetBenchmark?.months?.[0]?.month,
+      "2026-03",
+    );
   }
 });
 

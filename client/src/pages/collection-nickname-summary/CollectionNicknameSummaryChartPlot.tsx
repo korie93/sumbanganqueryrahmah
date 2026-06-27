@@ -20,7 +20,9 @@ import {
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import {
+  getCollectionNicknameTargetEvaluationAmount,
   getCollectionNicknameTargetBenchmark,
+  isCollectionNicknameTargetBenchmarkComplete,
   type CollectionNicknameTargetBenchmark,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -76,7 +78,9 @@ function CollectionNicknameSummaryChartTooltip({
   if (!active || !point) {
     return null;
   }
-  const benchmarkAmount = getCollectionNicknameTargetBenchmark(targetBenchmarks, point.nickname).amount;
+  const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, point.nickname);
+  const benchmarkComplete = isCollectionNicknameTargetBenchmarkComplete(benchmark);
+  const benchmarkAmount = getCollectionNicknameTargetEvaluationAmount(benchmark);
   const benchmarkActive = benchmarkAmount > 0;
   const performanceLevel = getCollectionNicknameTargetAwarePerformanceLevel(
     point,
@@ -134,6 +138,18 @@ function CollectionNicknameSummaryChartTooltip({
             </div>
           </>
         ) : null}
+        {!benchmarkComplete && benchmark.requestedMonths > 0 ? (
+          <>
+            <div className="flex justify-between gap-4">
+              <dt>Status target</dt>
+              <dd className="font-medium text-foreground">Tidak lengkap</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Bulan ditetapkan</dt>
+              <dd>{benchmark.configuredMonths}/{benchmark.requestedMonths}</dd>
+            </div>
+          </>
+        ) : null}
       </dl>
     </div>
   );
@@ -174,14 +190,18 @@ export function CollectionNicknameSummaryChartPlot({
   totalRecords,
 }: CollectionNicknameSummaryChartPlotProps) {
   const chartRows: CollectionNicknameSummaryChartPlotDatum[] = chartData.map((row) => {
-    const targetAmount = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).amount;
+    const targetAmount = getCollectionNicknameTargetEvaluationAmount(
+      getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname),
+    );
     return {
       ...row,
       targetAmount: targetAmount > 0 ? targetAmount : null,
     };
   });
   const configuredTargetAmounts = chartData
-    .map((row) => getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).amount)
+    .map((row) => getCollectionNicknameTargetEvaluationAmount(
+      getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname),
+    ))
     .filter((amount) => amount > 0);
   const configuredTargetCount = configuredTargetAmounts.length;
   const maxTargetAmount = configuredTargetAmounts.reduce((peak, amount) => Math.max(peak, amount), 0);

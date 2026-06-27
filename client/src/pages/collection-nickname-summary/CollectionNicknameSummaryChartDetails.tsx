@@ -13,7 +13,9 @@ import {
   type CollectionNicknamePerformanceLevel,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import {
+  getCollectionNicknameTargetEvaluationAmount,
   getCollectionNicknameTargetBenchmark,
+  isCollectionNicknameTargetBenchmarkComplete,
   type CollectionNicknameTargetBenchmark,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -89,12 +91,14 @@ export function CollectionNicknameBenchmarkBadge({
 export function CollectionNicknameBenchmarkLegend({
   configuredCount,
   errorMessage,
+  incompleteCount,
   loading,
   requestedMonths,
   visibleCount,
 }: {
   configuredCount: number;
   errorMessage: string | null;
+  incompleteCount: number;
   loading: boolean;
   requestedMonths: number;
   visibleCount: number;
@@ -120,6 +124,11 @@ export function CollectionNicknameBenchmarkLegend({
       {errorMessage ? (
         <span className="font-medium text-destructive">
           Target tidak dapat dimuat: {errorMessage}
+        </span>
+      ) : null}
+      {!loading && !errorMessage && incompleteCount > 0 ? (
+        <span className="font-medium text-foreground">
+          {incompleteCount} nickname mempunyai bulan tanpa target; prestasi target tidak dinilai sehingga lengkap.
         </span>
       ) : null}
       <span className="inline-flex items-center gap-1.5">
@@ -219,7 +228,7 @@ export function CollectionNicknameSummaryRankingTable({
   targetBenchmarks,
 }: CollectionNicknameSummaryRankingTableProps) {
   const benchmarkActive = rankedData.some((row) =>
-    getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).amount > 0
+    getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname).configuredMonths > 0
   );
 
   return (
@@ -259,7 +268,8 @@ export function CollectionNicknameSummaryRankingTable({
           <tbody>
             {rankedData.map((row, index) => {
               const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
-              const benchmarkAmount = benchmark.amount;
+              const benchmarkComplete = isCollectionNicknameTargetBenchmarkComplete(benchmark);
+              const benchmarkAmount = getCollectionNicknameTargetEvaluationAmount(benchmark);
               const targetStatus = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
               const performanceLevel = getCollectionNicknameTargetAwarePerformanceLevel(
                 row,
@@ -286,7 +296,14 @@ export function CollectionNicknameSummaryRankingTable({
                   </td>
                   {benchmarkActive ? (
                     <td className="whitespace-nowrap px-3 py-2.5 text-center">
-                      {benchmarkAmount > 0 ? (
+                      {!benchmarkComplete ? (
+                        <div className="inline-flex flex-col items-center gap-1">
+                          <span className="text-xs font-semibold text-foreground">Target tidak lengkap</span>
+                          <span className="text-2xs text-muted-foreground">
+                            {benchmark.configuredMonths}/{benchmark.requestedMonths} bulan ditetapkan
+                          </span>
+                        </div>
+                      ) : benchmarkAmount > 0 ? (
                         <div className="inline-flex flex-col items-center gap-1">
                           <CollectionNicknameBenchmarkBadge status={targetStatus} />
                           <span className="text-2xs text-muted-foreground">
@@ -337,7 +354,8 @@ export function CollectionNicknameSummaryRankingTable({
       >
         {rankedData.map((row, index) => {
           const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
-          const benchmarkAmount = benchmark.amount;
+          const benchmarkComplete = isCollectionNicknameTargetBenchmarkComplete(benchmark);
+          const benchmarkAmount = getCollectionNicknameTargetEvaluationAmount(benchmark);
           const targetStatus = getCollectionNicknameBenchmarkStatus(row, benchmarkAmount);
           const performanceLevel = getCollectionNicknameTargetAwarePerformanceLevel(
             row,
@@ -368,7 +386,11 @@ export function CollectionNicknameSummaryRankingTable({
               <div className="space-y-2 pl-7">
                 <CollectionNicknamePerformanceBadge level={performanceLevel} />
                 {benchmarkActive ? (
-                  benchmarkAmount > 0 ? (
+                  !benchmarkComplete ? (
+                    <span className="text-xs font-medium text-foreground">
+                      Target tidak lengkap ({benchmark.configuredMonths}/{benchmark.requestedMonths} bulan)
+                    </span>
+                  ) : benchmarkAmount > 0 ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <CollectionNicknameBenchmarkBadge status={targetStatus} />
                       <span className="text-xs text-muted-foreground">

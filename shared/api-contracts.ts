@@ -726,7 +726,16 @@ export const collectionRecordListResponseSchema = z.object({
 const collectionNicknameTargetBenchmarkSchema = z.object({
   amount: z.number().finite().nonnegative(),
   configuredMonths: nonNegativeIntSchema,
+  latestUpdatedAt: z.string().datetime().nullable().optional(),
+  latestUpdatedBy: nullableStringSchema.optional(),
   missingMonths: nonNegativeIntSchema,
+  months: z.array(z.object({
+    amount: z.number().finite().nonnegative(),
+    configured: z.boolean(),
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    updatedAt: z.string().datetime().nullable(),
+    updatedBy: nullableStringSchema,
+  })).optional(),
   requestedMonths: positiveIntSchema,
 });
 

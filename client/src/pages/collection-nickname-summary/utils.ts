@@ -1,8 +1,19 @@
 export type NicknameTargetBenchmarkSummary = {
   amount: number;
   configuredMonths: number;
+  latestUpdatedAt: string | null;
+  latestUpdatedBy: string | null;
   missingMonths: number;
+  months: NicknameTargetMonthSummary[];
   requestedMonths: number;
+};
+
+export type NicknameTargetMonthSummary = {
+  amount: number;
+  configured: boolean;
+  month: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
 };
 
 export type NicknameTotalSummary = {
@@ -45,6 +56,47 @@ function toNonNegativeInteger(value: unknown): number {
   return Math.trunc(toNonNegativeNumber(value));
 }
 
+function toNullableText(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized ? normalized.slice(0, 120) : null;
+}
+
+function toNullableIsoTimestamp(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+}
+
+function normalizeTargetMonths(value: unknown): NicknameTargetMonthSummary[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!isObjectRecord(item)) {
+      return [];
+    }
+    const month = typeof item.month === "string" && /^\d{4}-\d{2}$/.test(item.month)
+      ? item.month
+      : "";
+    if (!month) {
+      return [];
+    }
+    return [{
+      amount: toNonNegativeNumber(item.amount),
+      configured: item.configured === true,
+      month,
+      updatedAt: toNullableIsoTimestamp(item.updatedAt),
+      updatedBy: toNullableText(item.updatedBy),
+    }];
+  });
+}
+
 function normalizeTargetBenchmark(value: unknown): NicknameTargetBenchmarkSummary | null {
   if (!isObjectRecord(value)) {
     return null;
@@ -58,7 +110,10 @@ function normalizeTargetBenchmark(value: unknown): NicknameTargetBenchmarkSummar
   return {
     amount: toNonNegativeNumber(value.amount),
     configuredMonths: toNonNegativeInteger(value.configuredMonths),
+    latestUpdatedAt: toNullableIsoTimestamp(value.latestUpdatedAt),
+    latestUpdatedBy: toNullableText(value.latestUpdatedBy),
     missingMonths: toNonNegativeInteger(value.missingMonths),
+    months: normalizeTargetMonths(value.months),
     requestedMonths,
   };
 }

@@ -16,6 +16,7 @@ import {
 } from "@/pages/collection-nickname-summary/nickname-summary-cache";
 import {
   COLLECTION_DATA_CHANGED_EVENT,
+  COLLECTION_TARGET_CHANGED_EVENT,
   parseApiError,
 } from "@/pages/collection/utils";
 
@@ -348,9 +349,15 @@ export function useCollectionNicknameSummaryData({
       void loadSummary(fromDate, toDate, selectedNicknames);
     };
 
-    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    const eventListenerController = new AbortController();
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged, {
+      signal: eventListenerController.signal,
+    });
+    window.addEventListener(COLLECTION_TARGET_CHANGED_EVENT, handleCollectionDataChanged, {
+      signal: eventListenerController.signal,
+    });
     return () => {
-      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+      eventListenerController.abort();
     };
   }, [fromDate, hasApplied, loadSummary, selectedNicknames, toDate]);
 

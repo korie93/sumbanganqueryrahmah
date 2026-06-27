@@ -5,14 +5,39 @@ import type { CollectionStoragePort } from "./collection-service-support";
 export type CollectionNicknameTargetBenchmark = {
   amount: number;
   configuredMonths: number;
+  latestUpdatedAt: string | null;
+  latestUpdatedBy: string | null;
   missingMonths: number;
+  months: CollectionNicknameTargetMonthBenchmark[];
   requestedMonths: number;
+};
+
+export type CollectionNicknameTargetMonthBenchmark = {
+  amount: number;
+  configured: boolean;
+  month: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
 };
 
 type CollectionNicknameTargetMonth = {
   month: number;
   year: number;
 };
+
+function formatMonthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function normalizeAuditActor(value: unknown): string | null {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  return normalized ? normalized.slice(0, 120) : null;
+}
+
+function normalizeAuditTimestamp(value: unknown): string | null {
+  const parsed = value instanceof Date ? value : new Date(String(value || ""));
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+}
 
 function parseIsoDateToUtc(value: string | undefined): number | null {
   const normalized = String(value || "").trim();
@@ -89,6 +114,9 @@ export async function buildCollectionNicknameTargetBenchmarkMap(
     let amount = 0;
     let configuredMonths = 0;
     let missingMonths = 0;
+    let latestUpdatedAt: string | null = null;
+    let latestUpdatedBy: string | null = null;
+    const monthBenchmarks: CollectionNicknameTargetMonthBenchmark[] = [];
 
     for (const month of months) {
       const target = await storage.getCollectionDailyTarget({
@@ -101,17 +129,40 @@ export async function buildCollectionNicknameTargetBenchmarkMap(
           0,
           parseCollectionAmountMyrNumber(target.monthlyTarget),
         );
+        const updatedAt = normalizeAuditTimestamp(target.updatedAt);
+        const updatedBy = normalizeAuditActor(target.updatedBy);
         amount += monthlyTarget;
         configuredMonths += 1;
+        monthBenchmarks.push({
+          amount: roundMoney(monthlyTarget),
+          configured: true,
+          month: formatMonthKey(month.year, month.month),
+          updatedAt,
+          updatedBy,
+        });
+        if (updatedAt && (!latestUpdatedAt || updatedAt > latestUpdatedAt)) {
+          latestUpdatedAt = updatedAt;
+          latestUpdatedBy = updatedBy;
+        }
       } else {
         missingMonths += 1;
+        monthBenchmarks.push({
+          amount: 0,
+          configured: false,
+          month: formatMonthKey(month.year, month.month),
+          updatedAt: null,
+          updatedBy: null,
+        });
       }
     }
 
     benchmarks.set(normalizeCollectionNicknameTargetBenchmarkKey(nickname), {
       amount: roundMoney(amount),
       configuredMonths,
+      latestUpdatedAt,
+      latestUpdatedBy,
       missingMonths,
+      months: monthBenchmarks,
       requestedMonths: months.length,
     });
   }

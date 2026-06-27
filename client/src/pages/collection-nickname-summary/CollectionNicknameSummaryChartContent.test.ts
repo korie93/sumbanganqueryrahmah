@@ -132,7 +132,10 @@ test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
       {
         amount: 100,
         configuredMonths: 1,
+        latestUpdatedAt: null,
+        latestUpdatedBy: null,
         missingMonths: 0,
+        months: [],
         requestedMonths: 1,
       },
     ],
@@ -171,7 +174,10 @@ test("CollectionNicknameSummaryRankingTable uses target-aware performance labels
       {
         amount: 200,
         configuredMonths: 1,
+        latestUpdatedAt: null,
+        latestUpdatedBy: null,
         missingMonths: 0,
+        months: [],
         requestedMonths: 1,
       },
     ],

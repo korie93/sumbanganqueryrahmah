@@ -23,7 +23,11 @@ import {
   getCollectionNicknameBenchmarkStatus,
   type CollectionNicknameSummaryChartDatum,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
-import type { CollectionNicknameTargetBenchmark } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
+import {
+  getCollectionNicknameTargetEvaluationAmount,
+  type CollectionNicknameTargetBenchmark,
+} from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
+import { CollectionNicknameTargetAuditPanel } from "@/pages/collection-nickname-summary/CollectionNicknameTargetAuditPanel";
 import {
   formatAmountRM,
   parseApiError,
@@ -92,7 +96,9 @@ export function CollectionNicknameSummaryDrilldownDrawer({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const selectedKey = row?.key || "";
-  const benchmarkAmount = benchmark?.amount ?? 0;
+  const benchmarkAmount = benchmark
+    ? getCollectionNicknameTargetEvaluationAmount(benchmark)
+    : 0;
 
   useEffect(() => {
     setPage(1);
@@ -231,6 +237,10 @@ export function CollectionNicknameSummaryDrilldownDrawer({
                     aria-label={`Progress target ${Math.min(targetProgress, 999.9).toFixed(1)}%`}
                   />
                 </section>
+              ) : null}
+
+              {benchmark && benchmark.requestedMonths > 0 ? (
+                <CollectionNicknameTargetAuditPanel benchmark={benchmark} />
               ) : null}
 
               <section aria-labelledby="nickname-drilldown-records-title">

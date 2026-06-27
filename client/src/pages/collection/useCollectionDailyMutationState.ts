@@ -4,7 +4,10 @@ import { parseCollectionAmountMyrInput } from "@shared/collection-amount-types";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 import { buildCollectionDailyCalendarSavedDescription } from "@/pages/collection/collection-daily-calendar-save-feedback";
 import { buildCollectionDailyCalendarPayloadDays } from "@/pages/collection/collection-daily-state-utils";
-import { parseApiError } from "@/pages/collection/utils";
+import {
+  emitCollectionTargetChanged,
+  parseApiError,
+} from "@/pages/collection/utils";
 
 type ToastFn = (options: {
   title: string;
@@ -71,6 +74,7 @@ export function useCollectionDailyMutationState({
         month,
         monthlyTarget,
       });
+      emitCollectionTargetChanged();
       toast({
         title: "Target Saved",
         description: "Monthly target has been updated.",

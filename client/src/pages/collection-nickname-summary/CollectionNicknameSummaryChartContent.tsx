@@ -134,8 +134,10 @@ export function CollectionNicknameSummaryChartContent({
       targetStatusNote: targetBenchmarks.errorMessage
         ? `Target Collection Daily tidak dapat dimuat: ${targetBenchmarks.errorMessage}`
         : targetBenchmarks.configuredCount > 0
-          ? `${targetBenchmarks.configuredCount}/${displayedData.length} nickname mempunyai target Collection Daily. Target menggunakan jumlah bulanan penuh bagi ${targetBenchmarks.requestedMonths} bulan dipilih.`
-          : "Tiada target Collection Daily aktif untuk paparan ini.",
+          ? `${targetBenchmarks.configuredCount}/${displayedData.length} nickname mempunyai target Collection Daily. Target menggunakan jumlah bulanan penuh bagi ${targetBenchmarks.requestedMonths} bulan dipilih.${targetBenchmarks.incompleteCount > 0 ? ` ${targetBenchmarks.incompleteCount} nickname mempunyai bulan tanpa target dan tidak dinilai sebagai prestasi target.` : ""}`
+          : targetBenchmarks.incompleteCount > 0
+            ? `Tiada target lengkap untuk paparan ini. ${targetBenchmarks.incompleteCount} nickname mempunyai bulan tanpa target dan tidak dinilai sebagai prestasi target.`
+            : "Tiada target Collection Daily aktif untuk paparan ini.",
       toDate,
       totalAmount,
       totalRecords,
@@ -182,6 +184,7 @@ export function CollectionNicknameSummaryChartContent({
     targetBenchmarks.benchmarks,
     targetBenchmarks.configuredCount,
     targetBenchmarks.errorMessage,
+    targetBenchmarks.incompleteCount,
     targetBenchmarks.requestedMonths,
     toDate,
     toast,
@@ -270,12 +273,13 @@ export function CollectionNicknameSummaryChartContent({
           {displayedData.length > 0 ? (
             <>
               {isDetailed ? (
-                <CollectionNicknamePerformanceLegend targetAware={targetBenchmarks.configuredCount > 0} />
+                <CollectionNicknamePerformanceLegend targetAware={targetBenchmarks.completeCount > 0} />
               ) : null}
               {isDetailed ? (
                 <CollectionNicknameBenchmarkLegend
                   configuredCount={targetBenchmarks.configuredCount}
                   errorMessage={targetBenchmarks.errorMessage}
+                  incompleteCount={targetBenchmarks.incompleteCount}
                   loading={targetBenchmarks.loading}
                   requestedMonths={targetBenchmarks.requestedMonths}
                   visibleCount={displayedData.length}

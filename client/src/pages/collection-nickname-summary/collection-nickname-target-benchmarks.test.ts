@@ -4,7 +4,9 @@ import {
   addCollectionNicknameConfiguredMonthlyTarget,
   buildCollectionNicknameTargetBenchmarksFromRows,
   buildCollectionNicknameTargetMonths,
+  getCollectionNicknameTargetEvaluationAmount,
   getCollectionNicknameTargetBenchmark,
+  isCollectionNicknameTargetBenchmarkComplete,
   normalizeCollectionNicknameTargetKey,
   type CollectionNicknameTargetBenchmark,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
@@ -36,7 +38,10 @@ test("target benchmark helpers normalize nickname keys and return safe fallback"
       {
         amount: 50_000,
         configuredMonths: 1,
+        latestUpdatedAt: null,
+        latestUpdatedBy: null,
         missingMonths: 0,
+        months: [],
         requestedMonths: 1,
       },
     ],
@@ -45,6 +50,36 @@ test("target benchmark helpers normalize nickname keys and return safe fallback"
   assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "collector alpha").amount, 50_000);
   assert.equal(getCollectionNicknameTargetBenchmark(benchmarks, "Unknown").amount, 0);
   assert.deepEqual(buildCollectionNicknameTargetMonths("bad", "2026-06-01"), []);
+});
+
+test("incomplete target benchmarks cannot be used for performance evaluation", () => {
+  const benchmark: CollectionNicknameTargetBenchmark = {
+    amount: 60_000,
+    configuredMonths: 1,
+    latestUpdatedAt: "2026-06-20T01:02:03.000Z",
+    latestUpdatedBy: "superuser",
+    missingMonths: 1,
+    months: [
+      {
+        amount: 60_000,
+        configured: true,
+        month: "2026-06",
+        updatedAt: "2026-06-20T01:02:03.000Z",
+        updatedBy: "superuser",
+      },
+      {
+        amount: 0,
+        configured: false,
+        month: "2026-07",
+        updatedAt: null,
+        updatedBy: null,
+      },
+    ],
+    requestedMonths: 2,
+  };
+
+  assert.equal(isCollectionNicknameTargetBenchmarkComplete(benchmark), false);
+  assert.equal(getCollectionNicknameTargetEvaluationAmount(benchmark), 0);
 });
 
 test("buildCollectionNicknameTargetBenchmarksFromRows reuses backend summary targets", () => {
@@ -56,7 +91,10 @@ test("buildCollectionNicknameTargetBenchmarksFromRows reuses backend summary tar
       targetBenchmark: {
         amount: 80_000.125,
         configuredMonths: 1,
+        latestUpdatedAt: null,
+        latestUpdatedBy: null,
         missingMonths: 0,
+        months: [],
         requestedMonths: 1,
       },
     },
@@ -67,7 +105,10 @@ test("buildCollectionNicknameTargetBenchmarksFromRows reuses backend summary tar
       targetBenchmark: {
         amount: -1,
         configuredMonths: "bad" as unknown as number,
+        latestUpdatedAt: null,
+        latestUpdatedBy: null,
         missingMonths: 1,
+        months: [],
         requestedMonths: 1,
       },
     },
