@@ -39,6 +39,14 @@ function isExternalPackageSource(resolved) {
 
 const documentedOverrideReasons = new Map([
   [
+    "@babel/core",
+    "Pins the patched Babel 7 line for ESLint tooling until react-hooks resolves the fixed release transitively.",
+  ],
+  [
+    "gaxios",
+    "Pins the compatible patch that removes deprecated runtime cleanup dependencies from GCP metadata detection.",
+  ],
+  [
     "qs",
     "Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge.",
   ],

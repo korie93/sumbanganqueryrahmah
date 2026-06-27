@@ -129,6 +129,8 @@ Current overrides:
 
 | Package | Reason |
 | --- | --- |
+| `@babel/core` | Pins the patched Babel 7 line for ESLint tooling until `eslint-plugin-react-hooks` resolves the fixed release transitively. |
+| `gaxios` | Pins the compatible patch that removes deprecated runtime cleanup dependencies from GCP metadata detection. |
 | `qs` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. |
 | `lodash` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. |
 | `rollup` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. |
@@ -138,3 +140,7 @@ Current overrides:
 
 When removing an override, remove its entry from this table and from the audit
 helper in the same dependency-only PR.
+
+## Install Script Allowlist
+
+The version-pinned `allowScripts` entries in `package.json` authorize only the reviewed lifecycle scripts required by `bcrypt`, `core-js`, `esbuild`, `msgpackr-extract`, and `protobufjs`. npm will warn again when one of those package versions changes, forcing a fresh review before the allowlist is updated.

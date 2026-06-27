@@ -233,11 +233,20 @@
     "vite": "^8.0.16"
   },
   "overrides": {
+    "@babel/core": "^7.29.7",
+    "gaxios": "7.1.5",
     "qs": "^6.15.2",
     "lodash": "^4.17.23",
     "rollup": "^4.59.0",
     "esbuild": "^0.28.1",
     "ip-address": "^10.2.0",
     "js-yaml": "^4.2.0"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "core-js@3.47.0": true,
+    "esbuild@0.28.1": true,
+    "msgpackr-extract@3.0.4": true,
+    "protobufjs@7.6.4": true
   }
 }

@@ -58,6 +58,8 @@ Operational notes:
 
 | Package | Override reason | CVE/Issue context | Safe to remove when |
 | --- | --- | --- | --- |
+| `@babel/core` | Pins the patched Babel 7 line for ESLint tooling until `eslint-plugin-react-hooks` resolves the fixed release transitively. | Local arbitrary-file-read advisory in vulnerable Babel source-map processing. | The lint toolchain resolves Babel 7.29.7 or newer without override support. |
+| `gaxios` | Pins the compatible patch that removes deprecated runtime cleanup dependencies from GCP metadata detection. | Removes the unsupported `rimraf@5` to `glob@10` chain while retaining the Gaxios 7 API used by OpenTelemetry. | `gcp-metadata` depends on `gaxios` 7.1.5 or newer directly. |
 | `qs` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. | Query parser hardening and historical prototype-pollution class risk. | Direct and transitive Express middleware no longer resolve a vulnerable `qs` version and `npm run audit:dependencies` stays clean without the override. |
 | `lodash` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. | Template injection and prototype-pollution advisory class across older lodash releases. | `npm ls lodash` shows only patched versions without override support. |
 | `rollup` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. | Build-tool supply-chain hardening for Rollup advisories. | Vite and related build packages resolve the patched Rollup release by default. |
@@ -70,7 +72,11 @@ Quarterly review checklist:
 ```bash
 npm run audit:dependencies
 npm outdated
-npm ls qs lodash rollup esbuild ip-address
+npm ls @babel/core gaxios qs lodash rollup esbuild ip-address
 ```
+
+## Install Script Allowlist
+
+`allowScripts` in `package.json` pins the exact reviewed versions that may run lifecycle scripts during `npm ci`. Native binary setup is allowed for `bcrypt`, `esbuild`, and the optional `msgpackr-extract` accelerator. The pinned `core-js` and `protobufjs` postinstall scripts are also explicitly reviewed. A version change intentionally returns the npm warning until that new script is reviewed and approved.
 
 When removing an override, update `package.json`, `package-lock.json`, this table, and `scripts/lib/dependency-audit.mjs` in the same dependency-only change.
