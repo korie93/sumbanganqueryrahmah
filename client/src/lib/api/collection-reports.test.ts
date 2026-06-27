@@ -2,10 +2,87 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getCollectionMonthlyComparison,
+  getCollectionMonthlySummary,
   getCollectionMonthlyTarget,
   getCollectionNicknameSummary,
 } from "./collection-reports";
 import { getCollectionNicknames } from "./collection-nicknames";
+
+test("getCollectionMonthlySummary validates rows and forwards nickname filters", async () => {
+  const requests: string[] = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    requests.push(String(input));
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        year: 2026,
+        summary: [
+          { month: 1, monthName: "January", totalRecords: 2, totalAmount: 300 },
+          { month: 2, monthName: "February", totalRecords: 1, totalAmount: 150.5 },
+        ],
+        freshness: {
+          status: "fresh",
+          pendingCount: 0,
+          runningCount: 0,
+          retryCount: 0,
+          oldestPendingAgeMs: 0,
+          message: "Collection report is current.",
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    const payload = await getCollectionMonthlySummary({
+      year: 2026,
+      nicknames: ["Collector Alpha", "Collector Beta"],
+    });
+    assert.equal(payload.summary[1]?.totalAmount, 150.5);
+    assert.equal(payload.freshness?.status, "fresh");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.match(
+    requests[0] || "",
+    /\/api\/collection\/summary\?year=2026&nicknames=Collector\+Alpha%2CCollector\+Beta$/,
+  );
+});
+
+test("getCollectionMonthlySummary rejects malformed amount payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(
+    JSON.stringify({
+      ok: true,
+      year: 2026,
+      summary: [{
+        month: 1,
+        monthName: "January",
+        totalRecords: 2,
+        totalAmount: "300.00",
+      }],
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      getCollectionMonthlySummary({ year: 2026 }),
+      /API contract mismatch for \/api\/collection\/summary/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("getCollectionNicknameSummary forwards query params and AbortSignal", async () => {
   const requests: Array<{ input: string; signal: AbortSignal | null }> = [];

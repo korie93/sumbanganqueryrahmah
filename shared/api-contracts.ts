@@ -634,6 +634,20 @@ export const collectionReportFreshnessSchema = z.object({
   message: z.string(),
 });
 
+export const collectionMonthlySummaryRowSchema = z.object({
+  month: z.number().int().min(1).max(12),
+  monthName: nonEmptyStringSchema,
+  totalRecords: nonNegativeIntSchema,
+  totalAmount: z.number().finite().nonnegative(),
+});
+
+export const collectionMonthlySummaryResponseSchema = z.object({
+  ok: z.literal(true),
+  year: z.number().int().min(2000).max(2100),
+  summary: z.array(collectionMonthlySummaryRowSchema).max(12),
+  freshness: collectionReportFreshnessSchema.optional(),
+});
+
 const collectionRecordReceiptSchema = z.object({
   id: nonEmptyStringSchema,
   collectionRecordId: nonEmptyStringSchema,
@@ -800,6 +814,7 @@ export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
+export type CollectionMonthlySummaryResponseContract = z.infer<typeof collectionMonthlySummaryResponseSchema>;
 export type CollectionRecordListResponseContract = z.infer<typeof collectionRecordListResponseSchema>;
 export type CollectionNicknameSummaryResponseContract = z.infer<typeof collectionNicknameSummaryResponseSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;

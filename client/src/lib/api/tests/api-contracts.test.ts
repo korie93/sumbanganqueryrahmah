@@ -28,6 +28,7 @@ import {
   authUserResponseSchema,
   auditLogRecordSchema,
   collectionMonthlyComparisonResponseSchema,
+  collectionMonthlySummaryResponseSchema,
   collectionMonthlyTargetResponseSchema,
   collectionNicknameSummaryResponseSchema,
   importListItemSchema,
@@ -1408,6 +1409,32 @@ test("collection monthly comparison contract accepts bounded monthly analytics p
   });
 
   assert.equal(parsed.success, true);
+});
+
+test("collection monthly summary contract bounds reports to calendar months", () => {
+  const summary = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    monthName: `Month ${index + 1}`,
+    totalRecords: index,
+    totalAmount: index * 100,
+  }));
+
+  assert.equal(collectionMonthlySummaryResponseSchema.safeParse({
+    ok: true,
+    year: 2026,
+    summary,
+  }).success, true);
+
+  assert.equal(collectionMonthlySummaryResponseSchema.safeParse({
+    ok: true,
+    year: 2026,
+    summary: [...summary, {
+      month: 13,
+      monthName: "Month 13",
+      totalRecords: 0,
+      totalAmount: 0,
+    }],
+  }).success, false);
 });
 
 test("collection monthly target contract accepts configured and missing targets", () => {

@@ -9,6 +9,7 @@ import type {
 } from "./collection-types";
 import {
   collectionMonthlyComparisonResponseSchema,
+  collectionMonthlySummaryResponseSchema,
   collectionMonthlyTargetResponseSchema,
   collectionNicknameSummaryResponseSchema,
 } from "@shared/api-contracts";
@@ -26,7 +27,11 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
     params.set("nickname", filters.nickname.trim());
   }
   const response = await apiRequest("GET", `/api/collection/summary?${params.toString()}`);
-  return response.json() as Promise<{
+  return parseApiJson(
+    response,
+    collectionMonthlySummaryResponseSchema,
+    "/api/collection/summary",
+  ) as Promise<{
     ok: boolean;
     year: number;
     summary: CollectionMonthlySummary[];
