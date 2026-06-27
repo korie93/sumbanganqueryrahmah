@@ -648,6 +648,21 @@ export const collectionMonthlySummaryResponseSchema = z.object({
   freshness: collectionReportFreshnessSchema.optional(),
 });
 
+const collectionPurgeResponseBaseSchema = z.object({
+  ok: z.literal(true),
+  retentionMonths: z.number().int().min(1).max(120),
+  cutoffDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  totalAmount: z.number().finite().nonnegative(),
+});
+
+export const collectionPurgeSummaryResponseSchema = collectionPurgeResponseBaseSchema.extend({
+  eligibleRecords: nonNegativeIntSchema,
+});
+
+export const collectionPurgeResponseSchema = collectionPurgeResponseBaseSchema.extend({
+  deletedRecords: nonNegativeIntSchema,
+});
+
 const collectionRecordReceiptSchema = z.object({
   id: nonEmptyStringSchema,
   collectionRecordId: nonEmptyStringSchema,
@@ -815,6 +830,8 @@ export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
 export type CollectionMonthlySummaryResponseContract = z.infer<typeof collectionMonthlySummaryResponseSchema>;
+export type CollectionPurgeSummaryResponseContract = z.infer<typeof collectionPurgeSummaryResponseSchema>;
+export type CollectionPurgeResponseContract = z.infer<typeof collectionPurgeResponseSchema>;
 export type CollectionRecordListResponseContract = z.infer<typeof collectionRecordListResponseSchema>;
 export type CollectionNicknameSummaryResponseContract = z.infer<typeof collectionNicknameSummaryResponseSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;

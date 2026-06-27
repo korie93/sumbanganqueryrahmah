@@ -1,6 +1,10 @@
 import { apiRequest } from "../api-client";
 import { createClientRandomId } from "../secure-id";
-import { collectionRecordListResponseSchema } from "@shared/api-contracts";
+import {
+  collectionPurgeResponseSchema,
+  collectionPurgeSummaryResponseSchema,
+  collectionRecordListResponseSchema,
+} from "@shared/api-contracts";
 import { parseApiJson } from "./contract";
 import type {
   CollectionPurgeResponse,
@@ -220,14 +224,22 @@ export async function getCollectionRecords(filters?: {
 
 export async function getCollectionPurgeSummary() {
   const response = await apiRequest("GET", "/api/collection/purge-summary");
-  return response.json() as Promise<CollectionPurgeSummaryResponse>;
+  return parseApiJson(
+    response,
+    collectionPurgeSummaryResponseSchema,
+    "/api/collection/purge-summary",
+  ) as Promise<CollectionPurgeSummaryResponse>;
 }
 
 export async function purgeOldCollectionRecords(currentPassword: string) {
   const response = await apiRequest("DELETE", "/api/collection/purge-old", {
     currentPassword,
   });
-  return response.json() as Promise<CollectionPurgeResponse>;
+  return parseApiJson(
+    response,
+    collectionPurgeResponseSchema,
+    "/api/collection/purge-old",
+  ) as Promise<CollectionPurgeResponse>;
 }
 
 function parseFilenameFromContentDisposition(contentDisposition: string | null): string | null {

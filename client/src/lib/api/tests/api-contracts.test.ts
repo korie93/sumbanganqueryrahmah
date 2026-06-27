@@ -31,6 +31,8 @@ import {
   collectionMonthlySummaryResponseSchema,
   collectionMonthlyTargetResponseSchema,
   collectionNicknameSummaryResponseSchema,
+  collectionPurgeResponseSchema,
+  collectionPurgeSummaryResponseSchema,
   importListItemSchema,
   maintenanceStatusResponseSchema,
   normalizeApiPaginationMeta,
@@ -1465,6 +1467,29 @@ test("collection monthly target contract accepts configured and missing targets"
     source: "missing",
   });
   assert.equal(missing.success, true);
+});
+
+test("collection purge contracts reject negative counts and malformed dates", () => {
+  const sharedPayload = {
+    ok: true,
+    retentionMonths: 6,
+    cutoffDate: "2025-12-27",
+    totalAmount: 450.75,
+  };
+
+  assert.equal(collectionPurgeSummaryResponseSchema.safeParse({
+    ...sharedPayload,
+    eligibleRecords: 2,
+  }).success, true);
+  assert.equal(collectionPurgeResponseSchema.safeParse({
+    ...sharedPayload,
+    deletedRecords: 2,
+  }).success, true);
+  assert.equal(collectionPurgeResponseSchema.safeParse({
+    ...sharedPayload,
+    cutoffDate: "27-12-2025",
+    deletedRecords: -1,
+  }).success, false);
 });
 
 test("collection nickname summary contract accepts target-aware bounded summaries", () => {

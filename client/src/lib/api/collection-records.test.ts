@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   buildCollectionMutationFingerprint,
   buildCollectionRecordFormData,
+  getCollectionPurgeSummary,
   getCollectionRecords,
+  purgeOldCollectionRecords,
 } from "./collection-records";
 
 test("buildCollectionRecordFormData appends scalar fields and repeated receipt ids", () => {
@@ -233,6 +235,75 @@ test("getCollectionRecords rejects malformed collection record payloads", async 
     await assert.rejects(
       getCollectionRecords(),
       /API contract mismatch for \/api\/collection\/list/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("collection purge API wrappers validate summary and mutation responses", async () => {
+  const requests: Array<{ method: string; body: string }> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    requests.push({
+      method: String(init?.method || "GET"),
+      body: typeof init?.body === "string" ? init.body : "",
+    });
+    const payload = url.endsWith("/purge-summary")
+      ? {
+          ok: true,
+          retentionMonths: 6,
+          cutoffDate: "2025-12-27",
+          eligibleRecords: 2,
+          totalAmount: 450.75,
+        }
+      : {
+          ok: true,
+          retentionMonths: 6,
+          cutoffDate: "2025-12-27",
+          deletedRecords: 2,
+          totalAmount: 450.75,
+        };
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const summary = await getCollectionPurgeSummary();
+    const purged = await purgeOldCollectionRecords("SuperSecret123");
+    assert.equal(summary.eligibleRecords, 2);
+    assert.equal(purged.deletedRecords, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests[0]?.method, "GET");
+  assert.equal(requests[1]?.method, "DELETE");
+  assert.deepEqual(JSON.parse(requests[1]?.body || "{}"), {
+    currentPassword: "SuperSecret123",
+  });
+});
+
+test("getCollectionPurgeSummary rejects malformed cutoff dates", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    ok: true,
+    retentionMonths: 6,
+    cutoffDate: "27-12-2025",
+    eligibleRecords: 2,
+    totalAmount: 450.75,
+  }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  })) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      getCollectionPurgeSummary(),
+      /API contract mismatch for \/api\/collection\/purge-summary/,
     );
   } finally {
     globalThis.fetch = originalFetch;
