@@ -57,9 +57,15 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /\{ id: "zoom-out", width: 1920, height: 900 \}/);
   assert.match(visualContractSource, /ready\.scrollWidth/);
   assert.match(visualContractSource, /protected surface has internal horizontal overflow/);
+  assert.match(visualContractSource, /async function verifyDashboardRecentActivityDetailLayout/);
+  assert.match(visualContractSource, /recent-login-activity-detail-sheet/);
+  assert.match(visualContractSource, /await page\.waitForFunction/);
+  assert.match(visualContractSource, /document\.activeElement\.dataset\.testid === testId/);
+  assert.match(visualContractSource, /recent activity detail has internal horizontal overflow/);
+  assert.match(visualContractSource, /recent activity detail did not return focus to its trigger/);
   assert.match(
     visualContractSource,
-    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\)/,
+    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\)/,
   );
 });
 

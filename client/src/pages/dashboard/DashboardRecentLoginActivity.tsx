@@ -1,4 +1,4 @@
-import { memo, useCallback, useState, type ReactNode } from "react";
+import { memo, useCallback, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, Clock, Eye, Globe2, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import {
@@ -111,9 +111,11 @@ function DetailBlock({
 
 function DashboardRecentLoginActivityDetailSheet({
   activity,
+  onCloseAutoFocus,
   onOpenChange,
 }: {
   activity: RecentLoginActivity | null;
+  onCloseAutoFocus: (event: Event) => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const open = activity !== null;
@@ -129,6 +131,7 @@ function DashboardRecentLoginActivityDetailSheet({
         side="right"
         className="w-[min(94vw,34rem)] overflow-y-auto sm:max-w-xl"
         data-testid="recent-login-activity-detail-sheet"
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         {activity && statusMeta && riskNote ? (
           <div className="space-y-5 pr-1">
@@ -248,6 +251,7 @@ function DashboardRecentLoginActivityImpl({
   const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<RecentLoginActivity | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<RecentLoginActivity | null>(null);
+  const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
   const safeActivities = activities ?? EMPTY_RECENT_LOGIN_ACTIVITIES;
   const pageStartIndex = (Math.max(1, page) - 1) * Math.max(1, pageSize);
   const hasActiveFilters = Boolean(
@@ -264,6 +268,21 @@ function DashboardRecentLoginActivityImpl({
     if (!open) {
       setSelectedActivity(null);
     }
+  }, []);
+  const handleDetailCloseAutoFocus = useCallback((event: Event) => {
+    event.preventDefault();
+    const trigger = detailTriggerRef.current;
+    detailTriggerRef.current = null;
+    if (trigger?.isConnected) {
+      trigger.focus();
+    }
+  }, []);
+  const handleOpenActivityDetail = useCallback((
+    activity: RecentLoginActivity,
+    trigger: HTMLButtonElement,
+  ) => {
+    detailTriggerRef.current = trigger;
+    setSelectedActivity(activity);
   }, []);
   const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
     if (!open) {
@@ -581,7 +600,7 @@ function DashboardRecentLoginActivityImpl({
                               variant="outline"
                               size="sm"
                               className="w-full justify-center rounded-lg"
-                              onClick={() => setSelectedActivity(activity)}
+                              onClick={(event) => handleOpenActivityDetail(activity, event.currentTarget)}
                               aria-label={`Open login activity details for ${activity.username}`}
                               data-testid={`button-recent-login-details-${absoluteIndex}`}
                             >
@@ -628,6 +647,7 @@ function DashboardRecentLoginActivityImpl({
       </Card>
       <DashboardRecentLoginActivityDetailSheet
         activity={selectedActivity}
+        onCloseAutoFocus={handleDetailCloseAutoFocus}
         onOpenChange={handleDetailSheetOpenChange}
       />
       <AlertDialog open={deleteCandidate !== null} onOpenChange={handleDeleteDialogOpenChange}>

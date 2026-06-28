@@ -255,6 +255,55 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
   }
 }
 
+async function verifyDashboardRecentActivityDetailLayout(page, viewportSpec) {
+  const trigger = page.locator('[data-testid^="button-recent-login-details-"]').first();
+  await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  const triggerTestId = await trigger.getAttribute("data-testid");
+  assert(triggerTestId, `dashboard/${viewportSpec.id}: recent activity detail trigger is missing its test id`);
+  await trigger.click();
+
+  const detailSheet = page.getByTestId("recent-login-activity-detail-sheet");
+  await detailSheet.waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForFunction(() => {
+    const element = document.querySelector('[data-testid="recent-login-activity-detail-sheet"]');
+    if (!(element instanceof HTMLElement)) {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    return rect.left >= -1 && rect.right <= window.innerWidth + 1;
+  }, undefined, { timeout: 2_000 }).catch(() => undefined);
+  const detailLayout = await detailSheet.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      clientWidth: element.clientWidth,
+      left: rect.left,
+      right: rect.right,
+      scrollWidth: element.scrollWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  assert(
+    detailLayout.left >= -1 && detailLayout.right <= detailLayout.viewportWidth + 1,
+    `dashboard/${viewportSpec.id}: recent activity detail escaped the viewport width`,
+  );
+  assert(
+    detailLayout.scrollWidth <= detailLayout.clientWidth + 1,
+    `dashboard/${viewportSpec.id}: recent activity detail has internal horizontal overflow`,
+  );
+
+  await page.keyboard.press("Escape");
+  await detailSheet.waitFor({ state: "hidden", timeout: 10_000 });
+  await page.waitForFunction((testId) => (
+    document.activeElement instanceof HTMLElement
+    && document.activeElement.dataset.testid === testId
+  ), triggerTestId, { timeout: 2_000 }).catch(() => undefined);
+  assert(
+    await trigger.evaluate((element) => document.activeElement === element),
+    `dashboard/${viewportSpec.id}: recent activity detail did not return focus to its trigger`,
+  );
+}
+
 async function loginForAuthenticatedContracts(page) {
   await navigateForVisualContract(page, "/login");
   await ensureLoginPageVisible(page, "Visual contract");
@@ -364,6 +413,7 @@ const run = async () => {
     if (dashboardRouteSpec) {
       for (const viewportSpec of dashboardZoomViewportSpecs) {
         await verifyRouteLayout(page, dashboardRouteSpec, viewportSpec);
+        await verifyDashboardRecentActivityDetailLayout(page, viewportSpec);
       }
     }
   } catch (error) {

@@ -913,6 +913,10 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(source, /SheetContent/);
   assert.match(source, /resolveDashboardRecentLoginRiskNote/);
   assert.match(source, /setSelectedActivity\(null\)/);
+  assert.match(source, /onCloseAutoFocus=\{handleDetailCloseAutoFocus\}/);
+  assert.match(source, /detailTriggerRef\.current = null/);
+  assert.match(source, /trigger\?\.isConnected/);
+  assert.match(source, /trigger\.focus\(\)/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
 
