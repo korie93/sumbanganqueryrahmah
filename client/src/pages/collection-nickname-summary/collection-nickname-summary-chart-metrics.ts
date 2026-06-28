@@ -1,6 +1,7 @@
 import {
   getCollectionNicknameBenchmarkGap,
   getCollectionNicknameBenchmarkProgress,
+  getCollectionNicknameBenchmarkStatus,
   type CollectionNicknameSummaryChartDatum,
   type CollectionNicknameSummaryChartMetric,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
@@ -20,6 +21,48 @@ export type CollectionNicknameSummaryMetricDatum = CollectionNicknameSummaryChar
   chartValue: number;
   targetAmount: number | null;
 };
+
+export type CollectionNicknameTargetOutcomeSummary = {
+  achievedCount: number;
+  behindCount: number;
+  completeCount: number;
+  configuredCount: number;
+  incompleteCount: number;
+  nearCount: number;
+  notEvaluatedCount: number;
+};
+
+export function summarizeCollectionNicknameTargetOutcomes(
+  rows: readonly CollectionNicknameSummaryChartDatum[],
+  targetBenchmarks: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined,
+): CollectionNicknameTargetOutcomeSummary {
+  return rows.reduce<CollectionNicknameTargetOutcomeSummary>((summary, row) => {
+    const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
+    const targetAmount = getCollectionNicknameTargetEvaluationAmount(benchmark);
+    const status = getCollectionNicknameBenchmarkStatus(row, targetAmount);
+    const complete = targetAmount > 0;
+
+    return {
+      achievedCount: summary.achievedCount + (status === "achieved" ? 1 : 0),
+      behindCount: summary.behindCount + (status === "behind" ? 1 : 0),
+      completeCount: summary.completeCount + (complete ? 1 : 0),
+      configuredCount: summary.configuredCount + (benchmark.configuredMonths > 0 ? 1 : 0),
+      incompleteCount: summary.incompleteCount + (
+        benchmark.requestedMonths > 0 && !complete ? 1 : 0
+      ),
+      nearCount: summary.nearCount + (status === "near" ? 1 : 0),
+      notEvaluatedCount: summary.notEvaluatedCount + (!complete ? 1 : 0),
+    };
+  }, {
+    achievedCount: 0,
+    behindCount: 0,
+    completeCount: 0,
+    configuredCount: 0,
+    incompleteCount: 0,
+    nearCount: 0,
+    notEvaluatedCount: 0,
+  });
+}
 
 export function formatCollectionNicknameChartMoneyCompact(value: number): string {
   return `RM ${COMPACT_METRIC_FORMATTER.format(Math.max(0, value))}`;

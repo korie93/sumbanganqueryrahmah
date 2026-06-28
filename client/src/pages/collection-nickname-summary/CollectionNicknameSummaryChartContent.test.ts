@@ -69,6 +69,11 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Kutipan/);
   assert.match(markup, /Progress %/);
   assert.match(markup, /Jurang Target/);
+  assert.match(markup, /Ringkasan keputusan target nickname yang dipaparkan/);
+  assert.match(markup, /Capai target/);
+  assert.match(markup, /Hampir capai/);
+  assert.match(markup, /Belum capai/);
+  assert.match(markup, /Tanpa target lengkap/);
   assert.match(markup, /Cari nickname/);
   assert.match(markup, /Target Collection Daily/);
   assert.match(markup, /Garisan merah menunjukkan target/);

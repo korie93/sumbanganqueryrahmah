@@ -19,6 +19,9 @@ import {
   type CollectionNicknameTargetBenchmark,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import { formatAmountRM } from "@/pages/collection/utils";
+import type {
+  CollectionNicknameTargetOutcomeSummary,
+} from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-metrics";
 
 type CollectionNicknameSummaryMetricsProps = {
   detailed: boolean;
@@ -181,6 +184,37 @@ export function CollectionNicknamePerformanceLegend({
         <span>{targetAware ? "belum hampir target" : "di bawah 34%"}</span>
       </span>
     </div>
+  );
+}
+
+export function CollectionNicknameTargetOutcomeStrip({
+  summary,
+}: {
+  summary: CollectionNicknameTargetOutcomeSummary;
+}) {
+  const outcomes = [
+    { label: "Capai target", value: summary.achievedCount },
+    { label: "Hampir capai", value: summary.nearCount },
+    { label: "Belum capai", value: summary.behindCount },
+    { label: "Tanpa target lengkap", value: summary.notEvaluatedCount },
+  ] as const;
+
+  return (
+    <dl
+      className="mb-3 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-4"
+      aria-label="Ringkasan keputusan target nickname yang dipaparkan"
+    >
+      {outcomes.map((outcome) => (
+        <div key={outcome.label} className="min-w-0 bg-background px-3 py-2.5 text-center">
+          <dt className="text-2xs font-medium leading-4 text-muted-foreground">
+            {outcome.label}
+          </dt>
+          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+            {outcome.value.toLocaleString()}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

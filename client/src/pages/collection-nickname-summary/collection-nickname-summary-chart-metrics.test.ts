@@ -4,6 +4,7 @@ import {
   buildCollectionNicknameSummaryMetricData,
   formatCollectionNicknameChartMetricAxis,
   getCollectionNicknameChartMetricName,
+  summarizeCollectionNicknameTargetOutcomes,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-metrics";
 import {
   buildCollectionNicknameSummaryChartData,
@@ -71,4 +72,30 @@ test("nickname chart metric labels and axes describe the active mode", () => {
   assert.equal(getCollectionNicknameChartMetricName("gap"), "Jurang target");
   assert.equal(formatCollectionNicknameChartMetricAxis(87.6, "progress"), "88%");
   assert.equal(formatCollectionNicknameChartMetricAxis(1_250, "gap"), "RM 1.3K");
+});
+
+test("nickname target outcome summary counts only complete targets as evaluated", () => {
+  const rows = buildCollectionNicknameSummaryChartData([
+    { nickname: "Achieved", totalAmount: 100, totalRecords: 1 },
+    { nickname: "Near", totalAmount: 85, totalRecords: 1 },
+    { nickname: "Behind", totalAmount: 50, totalRecords: 1 },
+    { nickname: "Incomplete", totalAmount: 500, totalRecords: 1 },
+    { nickname: "Not Set", totalAmount: 500, totalRecords: 1 },
+  ], 1_235);
+  const benchmarks = new Map<string, CollectionNicknameTargetBenchmark>([
+    [normalizeCollectionNicknameTargetKey("Achieved"), createBenchmark(100)],
+    [normalizeCollectionNicknameTargetKey("Near"), createBenchmark(100)],
+    [normalizeCollectionNicknameTargetKey("Behind"), createBenchmark(100)],
+    [normalizeCollectionNicknameTargetKey("Incomplete"), createBenchmark(100, 1, 2)],
+  ]);
+
+  assert.deepEqual(summarizeCollectionNicknameTargetOutcomes(rows, benchmarks), {
+    achievedCount: 1,
+    behindCount: 1,
+    completeCount: 3,
+    configuredCount: 4,
+    incompleteCount: 1,
+    nearCount: 1,
+    notEvaluatedCount: 2,
+  });
 });

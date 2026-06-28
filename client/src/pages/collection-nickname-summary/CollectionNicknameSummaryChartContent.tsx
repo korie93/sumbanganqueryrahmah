@@ -17,6 +17,7 @@ import {
   CollectionNicknameBenchmarkLegend,
   CollectionNicknameSummaryMetrics,
   CollectionNicknamePerformanceLegend,
+  CollectionNicknameTargetOutcomeStrip,
   CollectionNicknameSummaryRankingTable,
 } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartDetails";
 import { CollectionNicknameSummaryChartControls } from "@/pages/collection-nickname-summary/CollectionNicknameSummaryChartControls";
@@ -30,9 +31,11 @@ import {
   buildCollectionNicknameTargetBenchmarksFromRows,
   getCollectionNicknameTargetBenchmark,
   getCollectionNicknameTargetEvaluationAmount,
-  isCollectionNicknameTargetBenchmarkComplete,
   useCollectionNicknameTargetBenchmarks,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
+import {
+  summarizeCollectionNicknameTargetOutcomes,
+} from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-metrics";
 import {
   exportCollectionNicknameSummaryCsv,
   exportCollectionNicknameSummaryPdf,
@@ -123,21 +126,10 @@ export function CollectionNicknameSummaryChartContent({
     [displayedData],
   );
   const displayedTargetSummary = useMemo(
-    () => displayedData.reduce((summary, row) => {
-      const benchmark = getCollectionNicknameTargetBenchmark(
-        targetBenchmarks.benchmarks,
-        row.nickname,
-      );
-      const complete = isCollectionNicknameTargetBenchmarkComplete(benchmark)
-        && benchmark.amount > 0;
-      return {
-        completeCount: summary.completeCount + (complete ? 1 : 0),
-        configuredCount: summary.configuredCount + (benchmark.configuredMonths > 0 ? 1 : 0),
-        incompleteCount: summary.incompleteCount + (
-          benchmark.requestedMonths > 0 && !complete ? 1 : 0
-        ),
-      };
-    }, { completeCount: 0, configuredCount: 0, incompleteCount: 0 }),
+    () => summarizeCollectionNicknameTargetOutcomes(
+      displayedData,
+      targetBenchmarks.benchmarks,
+    ),
     [displayedData, targetBenchmarks.benchmarks],
   );
   const targetModesDisabled = targetBenchmarks.loading || displayedTargetSummary.completeCount === 0;
@@ -324,13 +316,16 @@ export function CollectionNicknameSummaryChartContent({
           {displayedData.length > 0 ? (
             <>
               {isDetailed ? (
-                <CollectionNicknamePerformanceLegend targetAware={targetBenchmarks.completeCount > 0} />
+                <CollectionNicknameTargetOutcomeStrip summary={displayedTargetSummary} />
+              ) : null}
+              {isDetailed ? (
+                <CollectionNicknamePerformanceLegend targetAware={displayedTargetSummary.completeCount > 0} />
               ) : null}
               {isDetailed ? (
                 <CollectionNicknameBenchmarkLegend
-                  configuredCount={targetBenchmarks.configuredCount}
+                  configuredCount={displayedTargetSummary.configuredCount}
                   errorMessage={targetBenchmarks.errorMessage}
-                  incompleteCount={targetBenchmarks.incompleteCount}
+                  incompleteCount={displayedTargetSummary.incompleteCount}
                   loading={targetBenchmarks.loading}
                   requestedMonths={targetBenchmarks.requestedMonths}
                   visibleCount={displayedData.length}
