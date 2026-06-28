@@ -496,6 +496,9 @@ function DashboardContent() {
         refetchPeakHours(),
         refetchRoles(),
       ]);
+      if (!isDashboardLifecycleActive()) {
+        return;
+      }
       const failures = getRejectedDashboardRefreshResults(results);
       if (failures.length > 0) {
         for (const failure of failures) {
