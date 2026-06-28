@@ -65,6 +65,10 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Perbandingan kutipan/);
   assert.match(markup, /Ranking terperinci/);
   assert.match(markup, /Penapis paparan/);
+  assert.match(markup, /Mod carta/);
+  assert.match(markup, /Kutipan/);
+  assert.match(markup, /Progress %/);
+  assert.match(markup, /Jurang Target/);
   assert.match(markup, /Cari nickname/);
   assert.match(markup, /Target Collection Daily/);
   assert.match(markup, /Garisan merah menunjukkan target/);
@@ -103,6 +107,9 @@ test("CollectionNicknameSummaryChartPlot renders target benchmark bars when conf
     2,
   );
   assert.equal((chartPlotSource.match(/strokeWidth=\{2\}/g) || []).length, 2);
+  assert.match(chartPlotSource, /value: metric === "progress" \? "Target 100%" : "Target"/);
+  assert.match(chartPlotSource, /dataKey="chartLabel"/);
+  assert.match(chartPlotSource, /metric === "amount" && configuredTargetCount > 0/);
 });
 
 test("CollectionNicknameSummaryChartContent renders explicit empty and zero states", () => {
@@ -171,6 +178,19 @@ test("CollectionNicknameSummaryRankingTable describes the active sort", () => {
   assert.match(markup, /Disusun daripada jumlah rekod tertinggi kepada terendah/);
   assert.match(markup, /Capai target/);
   assert.match(markup, /Lihat rekod/);
+});
+
+test("CollectionNicknameSummaryRankingTable describes target-gap sorting", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CollectionNicknameSummaryRankingTable, {
+      peakAmount: 100,
+      rankedData: [],
+      sortBy: "gap",
+      targetBenchmarks: new Map(),
+    }),
+  );
+
+  assert.match(markup, /Disusun daripada jurang target terbesar kepada terkecil/);
 });
 
 test("CollectionNicknameSummaryRankingTable uses target-aware performance labels", () => {

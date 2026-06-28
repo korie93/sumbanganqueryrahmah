@@ -1,14 +1,16 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
 import {
   buildCollectionNicknameSummaryChartData,
   filterCollectionNicknameSummaryChartData,
+  getCollectionNicknameBenchmarkGap,
   getCollectionNicknameSummaryChartPeak,
   hasCollectionNicknameSummaryChartData,
   rankCollectionNicknameSummaryChartData,
   type CollectionNicknameSummaryChartDatum,
   type CollectionNicknameSummaryChartLimit,
+  type CollectionNicknameSummaryChartMetric,
   type CollectionNicknameSummaryChartSort,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import {
@@ -27,6 +29,8 @@ import { CollectionNicknameSummaryChartPlot } from "@/pages/collection-nickname-
 import {
   buildCollectionNicknameTargetBenchmarksFromRows,
   getCollectionNicknameTargetBenchmark,
+  getCollectionNicknameTargetEvaluationAmount,
+  isCollectionNicknameTargetBenchmarkComplete,
   useCollectionNicknameTargetBenchmarks,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import {
@@ -58,6 +62,7 @@ export function CollectionNicknameSummaryChartContent({
   const [limit, setLimit] = useState<CollectionNicknameSummaryChartLimit>("10");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<CollectionNicknameSummaryChartSort>("amount");
+  const [metric, setMetric] = useState<CollectionNicknameSummaryChartMetric>("amount");
   const [selectedDrilldownRow, setSelectedDrilldownRow] =
     useState<CollectionNicknameSummaryChartDatum | null>(null);
   const [busyExportKind, setBusyExportKind] = useState<CollectionNicknameSummaryExportKind | null>(null);
@@ -78,11 +83,32 @@ export function CollectionNicknameSummaryChartContent({
   const detailedChartLabelProps = isDetailed
     ? { "aria-labelledby": "nickname-summary-detailed-chart-title" }
     : {};
+  const prefetchedTargetBenchmarks = useMemo(
+    () => buildCollectionNicknameTargetBenchmarksFromRows(nicknameTotals),
+    [nicknameTotals],
+  );
+  const targetBenchmarks = useCollectionNicknameTargetBenchmarks({
+    enabled: isDetailed && chartData.length > 0,
+    fromDate,
+    prefetchedBenchmarks: prefetchedTargetBenchmarks,
+    rows: chartData,
+    toDate,
+  });
   const displayedData = useMemo(
     () => isDetailed
-      ? filterCollectionNicknameSummaryChartData(chartData, { limit, query, sortBy })
+      ? filterCollectionNicknameSummaryChartData(chartData, {
+          getTargetGap: (row) => getCollectionNicknameBenchmarkGap(
+            row,
+            getCollectionNicknameTargetEvaluationAmount(
+              getCollectionNicknameTargetBenchmark(targetBenchmarks.benchmarks, row.nickname),
+            ),
+          ),
+          limit,
+          query,
+          sortBy,
+        })
       : chartData,
-    [chartData, isDetailed, limit, query, sortBy],
+    [chartData, isDetailed, limit, query, sortBy, targetBenchmarks.benchmarks],
   );
   const displayedRankedData = useMemo(
     () => isDetailed ? displayedData : rankedData,
@@ -96,22 +122,37 @@ export function CollectionNicknameSummaryChartContent({
     () => displayedData.reduce((sum, row) => sum + row.totalRecords, 0),
     [displayedData],
   );
-  const prefetchedTargetBenchmarks = useMemo(
-    () => buildCollectionNicknameTargetBenchmarksFromRows(nicknameTotals),
-    [nicknameTotals],
+  const displayedTargetSummary = useMemo(
+    () => displayedData.reduce((summary, row) => {
+      const benchmark = getCollectionNicknameTargetBenchmark(
+        targetBenchmarks.benchmarks,
+        row.nickname,
+      );
+      const complete = isCollectionNicknameTargetBenchmarkComplete(benchmark)
+        && benchmark.amount > 0;
+      return {
+        completeCount: summary.completeCount + (complete ? 1 : 0),
+        configuredCount: summary.configuredCount + (benchmark.configuredMonths > 0 ? 1 : 0),
+        incompleteCount: summary.incompleteCount + (
+          benchmark.requestedMonths > 0 && !complete ? 1 : 0
+        ),
+      };
+    }, { completeCount: 0, configuredCount: 0, incompleteCount: 0 }),
+    [displayedData, targetBenchmarks.benchmarks],
   );
-  const targetBenchmarks = useCollectionNicknameTargetBenchmarks({
-    enabled: isDetailed && displayedData.length > 0,
-    fromDate,
-    prefetchedBenchmarks: prefetchedTargetBenchmarks,
-    rows: displayedData,
-    toDate,
-  });
+  const targetModesDisabled = targetBenchmarks.loading || displayedTargetSummary.completeCount === 0;
+  useEffect(() => {
+    if (!targetBenchmarks.loading && displayedTargetSummary.completeCount === 0) {
+      setMetric("amount");
+      setSortBy((current) => current === "gap" ? "amount" : current);
+    }
+  }, [displayedTargetSummary.completeCount, targetBenchmarks.loading]);
   const selectedTargetBenchmark = selectedDrilldownRow
     ? getCollectionNicknameTargetBenchmark(targetBenchmarks.benchmarks, selectedDrilldownRow.nickname)
     : null;
   const resetFilters = useCallback(() => {
     setLimit("10");
+    setMetric("amount");
     setQuery("");
     setSortBy("amount");
   }, []);
@@ -133,10 +174,10 @@ export function CollectionNicknameSummaryChartContent({
       targetBenchmarks: targetBenchmarks.benchmarks,
       targetStatusNote: targetBenchmarks.errorMessage
         ? `Target Collection Daily tidak dapat dimuat: ${targetBenchmarks.errorMessage}`
-        : targetBenchmarks.configuredCount > 0
-          ? `${targetBenchmarks.configuredCount}/${displayedData.length} nickname mempunyai target Collection Daily. Target menggunakan jumlah bulanan penuh bagi ${targetBenchmarks.requestedMonths} bulan dipilih.${targetBenchmarks.incompleteCount > 0 ? ` ${targetBenchmarks.incompleteCount} nickname mempunyai bulan tanpa target dan tidak dinilai sebagai prestasi target.` : ""}`
-          : targetBenchmarks.incompleteCount > 0
-            ? `Tiada target lengkap untuk paparan ini. ${targetBenchmarks.incompleteCount} nickname mempunyai bulan tanpa target dan tidak dinilai sebagai prestasi target.`
+        : displayedTargetSummary.configuredCount > 0
+          ? `${displayedTargetSummary.configuredCount}/${displayedData.length} nickname mempunyai target Collection Daily. Target menggunakan jumlah bulanan penuh bagi ${targetBenchmarks.requestedMonths} bulan dipilih.${displayedTargetSummary.incompleteCount > 0 ? ` ${displayedTargetSummary.incompleteCount} nickname mempunyai bulan tanpa target dan tidak dinilai sebagai prestasi target.` : ""}`
+          : displayedTargetSummary.incompleteCount > 0
+            ? `Tiada target lengkap untuk paparan ini. ${displayedTargetSummary.incompleteCount} nickname mempunyai bulan tanpa target dan tidak dinilai sebagai prestasi target.`
             : "Tiada target Collection Daily aktif untuk paparan ini.",
       toDate,
       totalAmount,
@@ -180,11 +221,11 @@ export function CollectionNicknameSummaryChartContent({
     busyExportKind,
     displayedRankedData,
     displayedData.length,
+    displayedTargetSummary.configuredCount,
+    displayedTargetSummary.incompleteCount,
     fromDate,
     targetBenchmarks.benchmarks,
-    targetBenchmarks.configuredCount,
     targetBenchmarks.errorMessage,
-    targetBenchmarks.incompleteCount,
     targetBenchmarks.requestedMonths,
     toDate,
     toast,
@@ -234,14 +275,17 @@ export function CollectionNicknameSummaryChartContent({
       {isDetailed ? (
         <CollectionNicknameSummaryChartControls
           limit={limit}
+          metric={metric}
           query={query}
           sortBy={sortBy}
           totalCount={chartData.length}
           visibleCount={displayedData.length}
           onLimitChange={setLimit}
+          onMetricChange={setMetric}
           onQueryChange={setQuery}
           onReset={resetFilters}
           onSortChange={setSortBy}
+          targetModesDisabled={targetModesDisabled}
         />
       ) : null}
 
@@ -254,11 +298,16 @@ export function CollectionNicknameSummaryChartContent({
             <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h3 id="nickname-summary-detailed-chart-title" className="text-sm font-semibold text-foreground">
-                  Perbandingan kutipan
+                  {metric === "progress"
+                    ? "Progress terhadap target"
+                    : metric === "gap"
+                      ? "Jurang untuk capai target"
+                      : "Perbandingan kutipan"}
                 </h3>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Arahkan tetikus atau fokus pada graf untuk melihat jumlah, rekod, purata, target dan prestasi.
-                  Bar berbingkai merah menunjukkan target Collection Daily apabila tersedia.
+                  {metric === "amount"
+                    ? "Arahkan tetikus atau fokus pada graf untuk melihat jumlah, rekod, purata, target dan prestasi. Bar berbingkai merah menunjukkan target Collection Daily apabila tersedia."
+                    : "Nilai dipaparkan terus pada bar. Target tidak lengkap tidak dimasukkan dalam pengiraan prestasi."}
                 </p>
               </div>
               <CollectionNicknameSummaryChartExportMenu
@@ -289,6 +338,7 @@ export function CollectionNicknameSummaryChartContent({
                 <CollectionNicknameSummaryChartPlot
                   chartData={displayedData}
                   detailed={isDetailed}
+                  metric={metric}
                   onSelectNickname={handleSelectNickname}
                   performancePeakAmount={peak?.totalAmount ?? 0}
                   targetBenchmarks={isDetailed ? targetBenchmarks.benchmarks : undefined}

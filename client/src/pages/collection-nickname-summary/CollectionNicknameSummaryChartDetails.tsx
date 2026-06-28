@@ -43,6 +43,7 @@ const RANKING_SORT_DESCRIPTION: Record<CollectionNicknameSummaryChartSort, strin
   amount: "Disusun daripada jumlah kutipan tertinggi kepada terendah.",
   records: "Disusun daripada jumlah rekod tertinggi kepada terendah.",
   average: "Disusun daripada purata setiap rekod tertinggi kepada terendah.",
+  gap: "Disusun daripada jurang target terbesar kepada terkecil.",
 };
 
 const PERFORMANCE_SYMBOL: Record<CollectionNicknamePerformanceLevel, string> = {

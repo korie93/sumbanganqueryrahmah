@@ -3,6 +3,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   ReferenceLine,
   Tooltip,
@@ -18,6 +19,7 @@ import {
   getCollectionNicknameSummaryChartPeak,
   getCollectionNicknameTargetAwarePerformanceLevel,
   type CollectionNicknameSummaryChartDatum,
+  type CollectionNicknameSummaryChartMetric,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
 import {
   getCollectionNicknameTargetEvaluationAmount,
@@ -26,38 +28,32 @@ import {
   type CollectionNicknameTargetBenchmark,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import { formatAmountRM } from "@/pages/collection/utils";
+import {
+  buildCollectionNicknameSummaryMetricData,
+  formatCollectionNicknameChartMetricAxis,
+  getCollectionNicknameChartMetricName,
+  type CollectionNicknameSummaryMetricDatum,
+} from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-metrics";
 
 const CHART_MIN_WIDTH = 260;
 const CHART_MAX_WIDTH = 6_000;
 const CHART_SLOT_WIDTH = 120;
 const DETAILED_CHART_SLOT_WIDTH = 150;
 const CHART_MARGIN = { top: 12, right: 18, left: 2, bottom: 8 };
-const COMPACT_AMOUNT_FORMATTER = new Intl.NumberFormat("en-MY", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
 type TooltipEntry = {
-  payload?: CollectionNicknameSummaryChartPlotDatum;
-};
-
-type CollectionNicknameSummaryChartPlotDatum = CollectionNicknameSummaryChartDatum & {
-  targetAmount: number | null;
+  payload?: CollectionNicknameSummaryMetricDatum;
 };
 
 type CollectionNicknameSummaryChartPlotProps = {
   chartData: CollectionNicknameSummaryChartDatum[];
   detailed: boolean;
+  metric: CollectionNicknameSummaryChartMetric;
   onSelectNickname?: (row: CollectionNicknameSummaryChartDatum) => void;
   performancePeakAmount?: number;
   targetBenchmarks?: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined;
   totalAmount: number;
   totalRecords: number;
 };
-
-function formatCompactAmount(value: number): string {
-  return `RM ${COMPACT_AMOUNT_FORMATTER.format(Math.max(0, value))}`;
-}
 
 function formatPercentage(value: number): string {
   return `${Math.max(0, value).toFixed(1)}%`;
@@ -159,12 +155,14 @@ function buildAccessibleChartLabel({
   chartData,
   configuredTargetCount,
   maxTargetAmount,
+  metric,
   totalAmount,
   totalRecords,
 }: {
   chartData: CollectionNicknameSummaryChartDatum[];
   configuredTargetCount: number;
   maxTargetAmount: number;
+  metric: CollectionNicknameSummaryChartMetric;
   totalAmount: number;
   totalRecords: number;
 }): string {
@@ -177,31 +175,26 @@ function buildAccessibleChartLabel({
     ? ` ${configuredTargetCount} nickname${configuredTargetCount === 1 ? " has" : "s have"} Collection Daily targets, with the highest target at ${formatAmountRM(maxTargetAmount)}. Target-aware performance is used when a target is configured.`
     : "";
 
-  return `Nickname summary bar chart for ${chartData.length} nickname${chartData.length === 1 ? "" : "s"}. Total ${formatAmountRM(totalAmount)} across ${totalRecords} records. Highest collection is ${peak.nickname} with ${formatAmountRM(peak.totalAmount)}.${benchmarkText}`;
+  return `Nickname summary bar chart for ${chartData.length} nickname${chartData.length === 1 ? "" : "s"}. Displaying ${getCollectionNicknameChartMetricName(metric).toLowerCase()}. Total ${formatAmountRM(totalAmount)} across ${totalRecords} records. Highest collection is ${peak.nickname} with ${formatAmountRM(peak.totalAmount)}.${benchmarkText}`;
 }
 
 export function CollectionNicknameSummaryChartPlot({
   chartData,
   detailed,
+  metric,
   onSelectNickname,
   performancePeakAmount,
   targetBenchmarks,
   totalAmount,
   totalRecords,
 }: CollectionNicknameSummaryChartPlotProps) {
-  const chartRows: CollectionNicknameSummaryChartPlotDatum[] = chartData.map((row) => {
-    const targetAmount = getCollectionNicknameTargetEvaluationAmount(
-      getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname),
-    );
-    return {
-      ...row,
-      targetAmount: targetAmount > 0 ? targetAmount : null,
-    };
-  });
-  const configuredTargetAmounts = chartData
-    .map((row) => getCollectionNicknameTargetEvaluationAmount(
-      getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname),
-    ))
+  const chartRows = buildCollectionNicknameSummaryMetricData(
+    chartData,
+    targetBenchmarks,
+    metric,
+  );
+  const configuredTargetAmounts = chartRows
+    .map((row) => row.targetAmount ?? 0)
     .filter((amount) => amount > 0);
   const configuredTargetCount = configuredTargetAmounts.length;
   const maxTargetAmount = configuredTargetAmounts.reduce((peak, amount) => Math.max(peak, amount), 0);
@@ -220,12 +213,20 @@ export function CollectionNicknameSummaryChartPlot({
     chartData,
     configuredTargetCount,
     maxTargetAmount,
+    metric,
     totalAmount,
     totalRecords,
   });
   const peakAmount = performancePeakAmount
     ?? getCollectionNicknameSummaryChartPeak(chartData)?.totalAmount
     ?? 0;
+  const targetReferenceValue = metric === "progress"
+    ? configuredTargetCount > 0 ? 100 : 0
+    : metric === "amount"
+      ? singleReferenceTargetAmount
+      : 0;
+  const primaryDataKey = metric === "amount" ? "totalAmount" : "chartValue";
+  const chartMargin = detailed ? { ...CHART_MARGIN, top: 32 } : CHART_MARGIN;
 
   return (
     <div
@@ -248,7 +249,7 @@ export function CollectionNicknameSummaryChartPlot({
         aria-label={chartLabel}
       >
         <ResponsiveContainer width="100%" height="100%" debounce={80}>
-          <BarChart data={chartRows} margin={CHART_MARGIN} accessibilityLayer barGap={6}>
+          <BarChart data={chartRows} margin={chartMargin} accessibilityLayer barGap={6}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
             <XAxis
               dataKey="axisLabel"
@@ -263,7 +264,10 @@ export function CollectionNicknameSummaryChartPlot({
               axisLine={false}
               tickLine={false}
               tickMargin={8}
-              tickFormatter={(value) => formatCompactAmount(Number(value || 0))}
+              tickFormatter={(value) => formatCollectionNicknameChartMetricAxis(
+                Number(value || 0),
+                metric,
+              )}
               width={68}
               className="text-2xs text-muted-foreground"
             />
@@ -278,22 +282,22 @@ export function CollectionNicknameSummaryChartPlot({
               cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
               wrapperStyle={{ outline: "none" }}
             />
-            {singleReferenceTargetAmount > 0 ? (
+            {targetReferenceValue > 0 ? (
               <ReferenceLine
-                y={singleReferenceTargetAmount}
+                y={targetReferenceValue}
                 stroke="hsl(var(--destructive))"
                 strokeDasharray="6 4"
                 strokeOpacity={0.9}
                 strokeWidth={2}
                 label={{
-                  value: "Target",
+                  value: metric === "progress" ? "Target 100%" : "Target",
                   position: "insideTopRight",
                   fill: "hsl(var(--destructive))",
                   fontSize: 11,
                 }}
               />
             ) : null}
-            {configuredTargetCount > 0 ? (
+            {metric === "amount" && configuredTargetCount > 0 ? (
               <Bar
                 dataKey="targetAmount"
                 name="Target Collection Daily"
@@ -308,8 +312,8 @@ export function CollectionNicknameSummaryChartPlot({
               />
             ) : null}
             <Bar
-              dataKey="totalAmount"
-              name="Jumlah kutipan"
+              dataKey={primaryDataKey}
+              name={getCollectionNicknameChartMetricName(metric)}
               radius={[6, 6, 0, 0]}
               maxBarSize={detailed ? 58 : 46}
               isAnimationActive={false}
@@ -322,6 +326,14 @@ export function CollectionNicknameSummaryChartPlot({
                   onClick={() => onSelectNickname?.(entry)}
                 />
               ))}
+              {detailed ? (
+                <LabelList
+                  dataKey="chartLabel"
+                  position="top"
+                  fill="hsl(var(--foreground))"
+                  fontSize={11}
+                />
+              ) : null}
             </Bar>
           </BarChart>
         </ResponsiveContainer>

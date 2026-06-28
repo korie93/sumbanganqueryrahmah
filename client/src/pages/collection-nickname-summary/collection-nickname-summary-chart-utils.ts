@@ -23,11 +23,13 @@ export type CollectionNicknameSummaryChartDatum = {
 };
 
 export type CollectionNicknameSummaryChartLimit = "5" | "10" | "all";
-export type CollectionNicknameSummaryChartSort = "amount" | "records" | "average";
+export type CollectionNicknameSummaryChartMetric = "amount" | "progress" | "gap";
+export type CollectionNicknameSummaryChartSort = "amount" | "records" | "average" | "gap";
 export type CollectionNicknamePerformanceLevel = "high" | "medium" | "low";
 export type CollectionNicknameBenchmarkStatus = "not-set" | "achieved" | "near" | "behind";
 
 export type CollectionNicknameSummaryChartFilter = {
+  getTargetGap?: ((row: CollectionNicknameSummaryChartDatum) => number) | undefined;
   limit: CollectionNicknameSummaryChartLimit;
   query: string;
   sortBy: CollectionNicknameSummaryChartSort;
@@ -258,12 +260,15 @@ function compareChartRows(
   left: CollectionNicknameSummaryChartDatum,
   right: CollectionNicknameSummaryChartDatum,
   sortBy: CollectionNicknameSummaryChartSort,
+  getTargetGap?: ((row: CollectionNicknameSummaryChartDatum) => number) | undefined,
 ): number {
   const primaryDifference = sortBy === "records"
     ? right.totalRecords - left.totalRecords
     : sortBy === "average"
       ? right.averagePerRecord - left.averagePerRecord
-      : right.totalAmount - left.totalAmount;
+      : sortBy === "gap"
+        ? (getTargetGap?.(right) ?? 0) - (getTargetGap?.(left) ?? 0)
+        : right.totalAmount - left.totalAmount;
   if (primaryDifference !== 0) {
     return primaryDifference;
   }
@@ -289,7 +294,9 @@ export function filterCollectionNicknameSummaryChartData(
   const matchingRows = normalizedQuery
     ? data.filter((row) => row.nickname.toLocaleLowerCase("en-MY").includes(normalizedQuery))
     : [...data];
-  const sortedRows = matchingRows.sort((left, right) => compareChartRows(left, right, filter.sortBy));
+  const sortedRows = matchingRows.sort((left, right) => (
+    compareChartRows(left, right, filter.sortBy, filter.getTargetGap)
+  ));
 
   if (filter.limit === "all") {
     return sortedRows;

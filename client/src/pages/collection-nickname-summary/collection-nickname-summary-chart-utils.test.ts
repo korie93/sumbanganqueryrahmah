@@ -149,6 +149,31 @@ test("filterCollectionNicknameSummaryChartData searches, sorts, limits, and pres
   assert.deepEqual(chartData, before);
 });
 
+test("filterCollectionNicknameSummaryChartData sorts the largest target gap first", () => {
+  const chartData = buildCollectionNicknameSummaryChartData([
+    { nickname: "Collector Alpha", totalAmount: 300, totalRecords: 3 },
+    { nickname: "Collector Beta", totalAmount: 500, totalRecords: 1 },
+    { nickname: "Collector Charlie", totalAmount: 200, totalRecords: 4 },
+  ], 1_000);
+  const gaps = new Map([
+    ["Collector Alpha", 700],
+    ["Collector Beta", 100],
+    ["Collector Charlie", 900],
+  ]);
+
+  const sorted = filterCollectionNicknameSummaryChartData(chartData, {
+    getTargetGap: (row) => gaps.get(row.nickname) ?? 0,
+    limit: "all",
+    query: "",
+    sortBy: "gap",
+  });
+
+  assert.deepEqual(
+    sorted.map((row) => row.nickname),
+    ["Collector Charlie", "Collector Alpha", "Collector Beta"],
+  );
+});
+
 test("performance levels use explicit relative thresholds and labels", () => {
   assert.equal(getCollectionNicknamePerformanceLevel({ totalAmount: 1_000 }, 1_000), "high");
   assert.equal(getCollectionNicknamePerformanceLevel({ totalAmount: 670 }, 1_000), "high");
