@@ -124,6 +124,7 @@ const viewportSpecs = [
 
 const dashboardZoomViewportSpecs = [
   { id: "zoom-in", width: 800, height: 900 },
+  { id: "short-desktop", width: 1280, height: 600 },
   { id: "zoom-out-boundary", width: 1536, height: 900 },
   { id: "zoom-out", width: 1920, height: 900 },
 ];
@@ -317,6 +318,12 @@ async function verifyDashboardCleanupDialogLayout(page, viewportSpec) {
 
   const dialog = page.getByRole("alertdialog", { name: "Clean up old ended login logs?" });
   await dialog.waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForFunction(() => {
+    const element = document.querySelector('[role="alertdialog"]');
+    return element instanceof HTMLElement
+      && element.dataset.state === "open"
+      && element.contains(document.activeElement);
+  }, undefined, { timeout: 2_000 });
   const dialogLayout = await dialog.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return {
@@ -342,6 +349,37 @@ async function verifyDashboardCleanupDialogLayout(page, viewportSpec) {
   assert(
     await trigger.evaluate((element) => document.activeElement === element),
     `dashboard/${viewportSpec.id}: cleanup dialog did not return focus to its trigger`,
+  );
+}
+
+async function verifyDashboardReviewSidebarLayout(page, viewportSpec) {
+  if (viewportSpec.width < 1280) {
+    return;
+  }
+
+  const sidebar = page.getByTestId("dashboard-login-review-sidebar-container");
+  await sidebar.waitFor({ state: "visible", timeout: 10_000 });
+  await sidebar.scrollIntoViewIfNeeded();
+  const sidebarLayout = await sidebar.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      bottom: rect.bottom,
+      clientHeight: element.clientHeight,
+      overflowY: getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight,
+      top: rect.top,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  assert(
+    sidebarLayout.top >= -1 && sidebarLayout.bottom <= sidebarLayout.viewportHeight + 1,
+    `dashboard/${viewportSpec.id}: review sidebar escaped the viewport height`,
+  );
+  assert(
+    sidebarLayout.scrollHeight <= sidebarLayout.clientHeight + 1
+      || sidebarLayout.overflowY === "auto"
+      || sidebarLayout.overflowY === "scroll",
+    `dashboard/${viewportSpec.id}: tall review sidebar is not internally scrollable`,
   );
 }
 
@@ -454,6 +492,7 @@ const run = async () => {
     if (dashboardRouteSpec) {
       for (const viewportSpec of dashboardZoomViewportSpecs) {
         await verifyRouteLayout(page, dashboardRouteSpec, viewportSpec);
+        await verifyDashboardReviewSidebarLayout(page, viewportSpec);
         await verifyDashboardRecentActivityDetailLayout(page, viewportSpec);
         await verifyDashboardCleanupDialogLayout(page, viewportSpec);
       }

@@ -53,6 +53,7 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /scrollIntoViewIfNeeded\(\)/);
   assert.match(visualContractSource, /const dashboardZoomViewportSpecs = \[/);
   assert.match(visualContractSource, /\{ id: "zoom-in", width: 800, height: 900 \}/);
+  assert.match(visualContractSource, /\{ id: "short-desktop", width: 1280, height: 600 \}/);
   assert.match(visualContractSource, /\{ id: "zoom-out-boundary", width: 1536, height: 900 \}/);
   assert.match(visualContractSource, /\{ id: "zoom-out", width: 1920, height: 900 \}/);
   assert.match(visualContractSource, /ready\.scrollWidth/);
@@ -64,11 +65,16 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /recent activity detail has internal horizontal overflow/);
   assert.match(visualContractSource, /recent activity detail did not return focus to its trigger/);
   assert.match(visualContractSource, /async function verifyDashboardCleanupDialogLayout/);
+  assert.match(visualContractSource, /element\.contains\(document\.activeElement\)/);
   assert.match(visualContractSource, /cleanup dialog has internal horizontal overflow/);
   assert.match(visualContractSource, /cleanup dialog did not return focus to its trigger/);
+  assert.match(visualContractSource, /async function verifyDashboardReviewSidebarLayout/);
+  assert.match(visualContractSource, /await sidebar\.scrollIntoViewIfNeeded\(\)/);
+  assert.match(visualContractSource, /review sidebar escaped the viewport height/);
+  assert.match(visualContractSource, /tall review sidebar is not internally scrollable/);
   assert.match(
     visualContractSource,
-    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\);\s+await verifyDashboardCleanupDialogLayout\(page, viewportSpec\)/,
+    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardReviewSidebarLayout\(page, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\);\s+await verifyDashboardCleanupDialogLayout\(page, viewportSpec\)/,
   );
 });
 

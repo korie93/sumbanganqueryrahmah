@@ -394,7 +394,11 @@ export function DashboardDeferredSections({
       className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,320px)_minmax(0,1fr)] xl:items-start"
       aria-label="Dashboard login review workspace"
     >
-      <aside className="min-w-0 xl:sticky xl:top-4" aria-label="Dashboard login review sidebar">
+      <aside
+        className="min-w-0 xl:sticky xl:top-4 xl:max-h-[calc(var(--viewport-min-height-value)-2rem)] xl:overflow-y-auto xl:pr-1 scroll-fade-y"
+        aria-label="Dashboard login review sidebar"
+        data-testid="dashboard-login-review-sidebar-container"
+      >
         <DashboardLoginReviewSidebar
           loading={summaryLoading || trendsLoading || recentLoginActivitySnapshotLoading}
           peakHours={peakHours}

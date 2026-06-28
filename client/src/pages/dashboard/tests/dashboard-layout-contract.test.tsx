@@ -182,6 +182,9 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(deferredSource, /function DashboardCollapsiblePanel/);
   assert.match(deferredSource, /Dashboard login review sidebar/);
   assert.match(deferredSource, /xl:grid-cols-\[minmax\(250px,320px\)_minmax\(0,1fr\)\]/);
+  assert.match(deferredSource, /xl:max-h-\[calc\(var\(--viewport-min-height-value\)-2rem\)\]/);
+  assert.match(deferredSource, /xl:overflow-y-auto/);
+  assert.match(deferredSource, /dashboard-login-review-sidebar-container/);
   assert.match(deferredSource, /<div className="min-w-0 space-y-4">/);
   assert.doesNotMatch(deferredSource, /2xl:grid-cols-\[minmax\(0,0\.95fr\)_minmax\(0,1\.05fr\)\]/);
   assert.match(deferredSource, /id="dashboard-login-risk-insights"/);
