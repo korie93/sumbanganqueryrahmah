@@ -405,8 +405,8 @@ export function DashboardDeferredSections({
         />
       </aside>
       <div className="min-w-0 space-y-4">
-        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] 2xl:items-start">
-          <div id="dashboard-login-risk-insights" ref={loginRiskSection.triggerRef} className="scroll-mt-24">
+        <div className="min-w-0 space-y-4">
+          <div id="dashboard-login-risk-insights" ref={loginRiskSection.triggerRef} className="min-w-0 scroll-mt-24">
             <DashboardCollapsiblePanel
               id="dashboard-login-risk-insights-panel"
               title="Risk insights"
@@ -443,7 +443,7 @@ export function DashboardDeferredSections({
               )}
             </DashboardCollapsiblePanel>
           </div>
-          <div id="dashboard-recent-login-activity" ref={recentLoginActivitySection.triggerRef} className="scroll-mt-24">
+          <div id="dashboard-recent-login-activity" ref={recentLoginActivitySection.triggerRef} className="min-w-0 scroll-mt-24">
             <DashboardCollapsiblePanel
               id="dashboard-recent-login-activity-panel"
               title="Recent activity"

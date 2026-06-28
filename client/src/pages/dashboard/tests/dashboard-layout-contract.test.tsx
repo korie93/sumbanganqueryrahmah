@@ -182,7 +182,8 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(deferredSource, /function DashboardCollapsiblePanel/);
   assert.match(deferredSource, /Dashboard login review sidebar/);
   assert.match(deferredSource, /xl:grid-cols-\[minmax\(250px,320px\)_minmax\(0,1fr\)\]/);
-  assert.match(deferredSource, /2xl:grid-cols-\[minmax\(0,0\.95fr\)_minmax\(0,1\.05fr\)\]/);
+  assert.match(deferredSource, /<div className="min-w-0 space-y-4">/);
+  assert.doesNotMatch(deferredSource, /2xl:grid-cols-\[minmax\(0,0\.95fr\)_minmax\(0,1\.05fr\)\]/);
   assert.match(deferredSource, /id="dashboard-login-risk-insights"/);
   assert.match(deferredSource, /id="dashboard-recent-login-activity"/);
   assert.match(deferredSource, /id="dashboard-login-charts"/);
@@ -904,6 +905,9 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(source, /RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500/);
   assert.match(source, /status === "ended"/);
   assert.match(source, /max-h-\[360px\]/);
+  assert.match(source, /md:grid-cols-2 xl:grid-cols-\[minmax\(180px,1fr\)_minmax\(0,150px\)_minmax\(0,150px\)_auto\]/);
+  assert.match(source, /min-w-0 max-w-full rounded-2xl/);
+  assert.match(source, /min-w-0 break-all font-medium text-foreground/);
   assert.match(source, /xl:grid-cols-1 2xl:grid-cols-2/);
   assert.match(source, /DashboardRecentLoginActivityDetailSheet/);
   assert.match(source, /SheetContent/);

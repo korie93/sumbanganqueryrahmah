@@ -286,22 +286,22 @@ function DashboardRecentLoginActivityImpl({
   return (
     <>
       <Card
-        className="rounded-2xl border border-border/60 bg-background shadow-sm"
+        className="min-w-0 max-w-full rounded-2xl border border-border/60 bg-background shadow-sm"
         data-floating-ai-avoid="true"
         data-testid="card-recent-login-activity"
       >
-        <CardHeader className="space-y-1 pb-2">
+        <CardHeader className="min-w-0 space-y-1 pb-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-1">
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <ShieldCheck className="h-5 w-5" />
+              <CardTitle className="flex min-w-0 items-center gap-2 break-words text-base sm:text-lg">
+                <ShieldCheck className="h-5 w-5 shrink-0" aria-hidden="true" />
                 Recent Login Activity
               </CardTitle>
               <p className="text-xs leading-5 text-muted-foreground sm:text-sm">
                 Latest access events with masked network details for fast operator review.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center gap-2">
               <Badge variant="outline" className="w-fit rounded-full">
                 {totalItems} matched
               </Badge>
@@ -343,7 +343,7 @@ function DashboardRecentLoginActivityImpl({
             </div>
           ) : null}
         </CardHeader>
-        <CardContent aria-live="polite">
+        <CardContent className="min-w-0" aria-live="polite">
           {errorMessage ? (
             <DashboardSectionError
               title="Aktiviti login gagal dimuat"
@@ -356,8 +356,8 @@ function DashboardRecentLoginActivityImpl({
             <DashboardRecentLoginActivitySkeleton />
           ) : safeActivities.length > 0 || hasActiveFilters ? (
             <div className="space-y-3">
-              <div className="grid gap-2 rounded-xl border border-border/60 bg-muted/10 p-2.5 lg:grid-cols-[minmax(180px,1fr)_auto_auto_auto] lg:items-end">
-                <div className="relative min-w-0">
+              <div className="grid min-w-0 gap-2 rounded-xl border border-border/60 bg-muted/10 p-2.5 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_minmax(0,150px)_minmax(0,150px)_auto] xl:items-end">
+                <div className="relative min-w-0 md:col-span-2 xl:col-span-1">
                   <Search
                     className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                     aria-hidden="true"
@@ -372,7 +372,7 @@ function DashboardRecentLoginActivityImpl({
                     data-testid="input-recent-login-search"
                   />
                 </div>
-                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+                <label className="grid min-w-0 gap-1 text-2xs font-medium text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
                     From
@@ -382,11 +382,11 @@ function DashboardRecentLoginActivityImpl({
                     value={dateFrom}
                     onChange={(event) => onDateFromChange(event.target.value)}
                     aria-label="Recent login activity start date"
-                    className="h-9 w-full lg:w-[150px]"
+                    className="h-9 min-w-0 w-full"
                     data-testid="input-recent-login-date-from"
                   />
                 </label>
-                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+                <label className="grid min-w-0 gap-1 text-2xs font-medium text-muted-foreground">
                   <span>To</span>
                   <Input
                     type="date"
@@ -394,7 +394,7 @@ function DashboardRecentLoginActivityImpl({
                     min={dateFrom || undefined}
                     onChange={(event) => onDateToChange(event.target.value)}
                     aria-label="Recent login activity end date"
-                    className="h-9 w-full lg:w-[150px]"
+                    className="h-9 min-w-0 w-full"
                     data-testid="input-recent-login-date-to"
                   />
                 </label>
@@ -402,7 +402,7 @@ function DashboardRecentLoginActivityImpl({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-9 justify-center rounded-lg px-3 text-xs"
+                  className="h-9 w-full min-w-0 justify-center rounded-lg px-3 text-xs md:col-span-2 xl:col-span-1 xl:w-auto"
                   onClick={onClearFilters}
                   disabled={!hasActiveFilters}
                   aria-label="Clear recent login activity filters"
@@ -414,7 +414,7 @@ function DashboardRecentLoginActivityImpl({
               </div>
 
               <div
-                className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1 sm:grid-cols-5"
+                className="grid min-w-0 grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1 sm:grid-cols-5"
                 role="group"
                 aria-label="Filter recent login activity"
               >
@@ -429,13 +429,13 @@ function DashboardRecentLoginActivityImpl({
                       type="button"
                       variant={active ? "default" : "ghost"}
                       size="sm"
-                      className="h-8 justify-center rounded-lg px-2 text-xs"
+                      className="h-8 min-w-0 justify-center rounded-lg px-2 text-xs"
                       onClick={() => onFilterChange(option.id)}
                       {...pressedProps}
                       aria-label={`Show ${option.label.toLowerCase()} login activity, ${filterCounts[option.id]} records`}
                       data-testid={`button-login-activity-filter-${option.id}`}
                     >
-                      <span>{option.label}</span>
+                      <span className="truncate">{option.label}</span>
                       <span className="ml-1.5 rounded-full bg-background/80 px-1.5 py-0.5 text-2xs text-foreground">
                         {filterCounts[option.id]}
                       </span>
@@ -444,12 +444,12 @@ function DashboardRecentLoginActivityImpl({
                 })}
               </div>
 
-              <div className="grid gap-2 rounded-xl border border-border/60 bg-background/60 p-2.5 sm:grid-cols-2">
-                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+              <div className="grid min-w-0 gap-2 rounded-xl border border-border/60 bg-background/60 p-2.5 sm:grid-cols-2">
+                <label className="grid min-w-0 gap-1 text-2xs font-medium text-muted-foreground">
                   Role
                   <Select value={role} onValueChange={onRoleChange}>
                     <SelectTrigger
-                      className="h-9"
+                      className="h-9 min-w-0 w-full"
                       aria-label="Filter recent login activity by role"
                     >
                       <SelectValue />
@@ -464,11 +464,11 @@ function DashboardRecentLoginActivityImpl({
                     </SelectContent>
                   </Select>
                 </label>
-                <label className="grid gap-1 text-2xs font-medium text-muted-foreground">
+                <label className="grid min-w-0 gap-1 text-2xs font-medium text-muted-foreground">
                   Sort
                   <Select value={sort} onValueChange={onSortChange}>
                     <SelectTrigger
-                      className="h-9"
+                      className="h-9 min-w-0 w-full"
                       aria-label="Sort recent login activity"
                     >
                       <SelectValue />
@@ -498,7 +498,7 @@ function DashboardRecentLoginActivityImpl({
                     onPageSizeChange={onPageSizeChange}
                   />
                   <div
-                    className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
+                    className="grid min-w-0 max-w-full max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
                     role="region"
                     tabIndex={0}
                     aria-label={`${selectedFilterLabel} recent login activity list`}
@@ -524,7 +524,7 @@ function DashboardRecentLoginActivityImpl({
                             index: absoluteIndex + 1,
                             statusLabel: statusMeta.label,
                           })}
-                          className="rounded-xl border border-border/60 bg-muted/10 p-3 shadow-sm"
+                          className="min-w-0 rounded-xl border border-border/60 bg-muted/10 p-3 shadow-sm"
                           data-testid={`row-recent-login-activity-${absoluteIndex}`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -551,11 +551,11 @@ function DashboardRecentLoginActivityImpl({
                               <p className="font-medium text-foreground">
                                 {activity.status === "failed" ? "Attempt" : "Login"}
                               </p>
-                              <p className="mt-1 leading-5">{formattedLoginTime}</p>
+                              <p className="mt-1 break-words leading-5">{formattedLoginTime}</p>
                             </div>
                             <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
                               <p className="font-medium text-foreground">Last activity</p>
-                              <p className="mt-1 leading-5">{formattedLastActivityTime}</p>
+                              <p className="mt-1 break-words leading-5">{formattedLastActivityTime}</p>
                             </div>
                           </div>
 
@@ -566,7 +566,7 @@ function DashboardRecentLoginActivityImpl({
                                 {activity.platform ? `${browser} · ${activity.platform}` : browser}
                               </span>
                             </span>
-                            <span className="shrink-0 font-medium text-foreground">{ipAddress}</span>
+                            <span className="min-w-0 break-all font-medium text-foreground sm:max-w-[45%] sm:text-right">{ipAddress}</span>
                           </div>
 
                           {activity.logoutReason ? (

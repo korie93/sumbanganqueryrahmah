@@ -91,6 +91,8 @@ const authenticatedRouteSpecs = [
     id: "dashboard",
     path: "/dashboard",
     contentSelector: "main#main-content",
+    scrollSelector: "#dashboard-recent-login-activity",
+    readySelector: "[data-testid='card-recent-login-activity']",
   },
   {
     id: "collection-records",
@@ -118,6 +120,11 @@ const authenticatedRouteSpecs = [
 const viewportSpecs = [
   { id: "desktop", width: 1280, height: 900 },
   { id: "mobile", width: 390, height: 844 },
+];
+
+const dashboardZoomViewportSpecs = [
+  { id: "zoom-in", width: 800, height: 900 },
+  { id: "zoom-out", width: 1920, height: 900 },
 ];
 
 const readLayoutSummary = async (page, { contentSelector, primarySelector }) =>
@@ -178,6 +185,12 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
   }
 
   await page.locator(routeSpec.contentSelector).first().waitFor();
+  if (routeSpec.scrollSelector) {
+    await page.locator(routeSpec.scrollSelector).first().scrollIntoViewIfNeeded();
+  }
+  if (routeSpec.readySelector) {
+    await page.locator(routeSpec.readySelector).first().waitFor({ timeout: 15_000 });
+  }
 
   const layoutSummary = await readLayoutSummary(page, routeSpec);
   await captureRouteArtifacts(page, routeSpec.id, viewportSpec.id, layoutSummary);
@@ -314,6 +327,12 @@ const run = async () => {
     for (const viewportSpec of viewportSpecs) {
       for (const routeSpec of authenticatedRouteSpecs) {
         await verifyRouteLayout(page, routeSpec, viewportSpec);
+      }
+    }
+    const dashboardRouteSpec = authenticatedRouteSpecs.find((routeSpec) => routeSpec.id === "dashboard");
+    if (dashboardRouteSpec) {
+      for (const viewportSpec of dashboardZoomViewportSpecs) {
+        await verifyRouteLayout(page, dashboardRouteSpec, viewportSpec);
       }
     }
   } catch (error) {

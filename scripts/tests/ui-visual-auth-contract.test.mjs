@@ -45,6 +45,21 @@ test("visual contract keeps the login page reachability helper aligned with the 
   assert.match(loginPageSource, /data-testid="button-login"/);
 });
 
+test("visual contract guards dashboard recent activity across browser zoom widths", () => {
+  assert.match(
+    visualContractSource,
+    /id: "dashboard"[\s\S]*scrollSelector: "#dashboard-recent-login-activity"[\s\S]*readySelector: "\[data-testid='card-recent-login-activity'\]"/,
+  );
+  assert.match(visualContractSource, /scrollIntoViewIfNeeded\(\)/);
+  assert.match(visualContractSource, /const dashboardZoomViewportSpecs = \[/);
+  assert.match(visualContractSource, /\{ id: "zoom-in", width: 800, height: 900 \}/);
+  assert.match(visualContractSource, /\{ id: "zoom-out", width: 1920, height: 900 \}/);
+  assert.match(
+    visualContractSource,
+    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\)/,
+  );
+});
+
 test("visual and accessibility contracts verify the session through /api/me before authenticated route checks", () => {
   assert.match(visualContractSource, /probeAuthSession/);
   assert.match(visualContractSource, /waitForAuthenticatedShell/);
