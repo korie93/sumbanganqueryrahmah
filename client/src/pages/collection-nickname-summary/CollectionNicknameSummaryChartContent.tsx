@@ -171,6 +171,7 @@ export function CollectionNicknameSummaryChartContent({
 
     const exportContext = {
       fromDate,
+      metric,
       targetBenchmarks: targetBenchmarks.benchmarks,
       targetStatusNote: targetBenchmarks.errorMessage
         ? `Target Collection Daily tidak dapat dimuat: ${targetBenchmarks.errorMessage}`
@@ -224,6 +225,7 @@ export function CollectionNicknameSummaryChartContent({
     displayedTargetSummary.configuredCount,
     displayedTargetSummary.incompleteCount,
     fromDate,
+    metric,
     targetBenchmarks.benchmarks,
     targetBenchmarks.errorMessage,
     targetBenchmarks.requestedMonths,

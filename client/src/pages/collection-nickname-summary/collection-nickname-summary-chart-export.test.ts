@@ -135,6 +135,13 @@ test("nickname summary image and PDF exports avoid HTML capture and release canv
   assert.match(source, /TARGET_EXPORT_STROKE = "#b91c1c"/);
   assert.match(source, /drawing\.strokeStyle = TARGET_EXPORT_STROKE/);
   assert.match(source, /pdf\.setDrawColor\(185, 28, 28\)/);
+  assert.match(source, /metric\?: CollectionNicknameSummaryChartMetric/);
+  assert.match(source, /buildCollectionNicknameSummaryMetricData/);
+  assert.match(source, /Progress terhadap target \(100%\)/);
+  assert.match(source, /Jurang untuk capai target/);
+  assert.match(source, /metric === "progress" && row\.targetAmount/);
+  assert.match(source, /drawing\.lineTo\(targetX, y \+ 26\)/);
+  assert.match(source, /pdf\.line\(targetX, y - 0\.5, targetX, y \+ 5\.5\)/);
   assert.doesNotMatch(source, /html2canvas/);
   assert.doesNotMatch(source, /document\.write/);
   assert.doesNotMatch(source, /innerHTML/);

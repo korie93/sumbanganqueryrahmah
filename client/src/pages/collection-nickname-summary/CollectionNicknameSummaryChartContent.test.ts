@@ -98,6 +98,11 @@ test("CollectionNicknameSummaryChartContent spreads detailed chart label only wh
   assert.doesNotMatch(chartContentSource, /aria-labelledby=\{isDetailed/);
 });
 
+test("CollectionNicknameSummaryChartContent exports the active chart metric", () => {
+  assert.match(chartContentSource, /const exportContext = \{[\s\S]*?metric,/);
+  assert.match(chartContentSource, /fromDate,[\s\S]*?metric,[\s\S]*?targetBenchmarks\.benchmarks/);
+});
+
 test("CollectionNicknameSummaryChartPlot renders target benchmark bars when configured", () => {
   assert.match(chartPlotSource, /dataKey="targetAmount"/);
   assert.match(chartPlotSource, /name="Target Collection Daily"/);

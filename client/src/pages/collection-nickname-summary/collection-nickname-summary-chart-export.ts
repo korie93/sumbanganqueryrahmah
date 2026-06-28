@@ -9,7 +9,12 @@ import {
   type CollectionNicknamePerformanceLevel,
   getCollectionNicknameTargetAwarePerformanceLevel,
   type CollectionNicknameSummaryChartDatum,
+  type CollectionNicknameSummaryChartMetric,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-utils";
+import {
+  buildCollectionNicknameSummaryMetricData,
+  type CollectionNicknameSummaryMetricDatum,
+} from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-metrics";
 import {
   getCollectionNicknameTargetEvaluationAmount,
   getCollectionNicknameTargetBenchmark,
@@ -34,6 +39,7 @@ let nicknameChartJsPdfModulePromise: Promise<typeof import("jspdf")> | null = nu
 
 export type CollectionNicknameSummaryExportContext = {
   fromDate?: string | undefined;
+  metric?: CollectionNicknameSummaryChartMetric | undefined;
   targetBenchmarks?: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined;
   targetStatusNote?: string | undefined;
   toDate?: string | undefined;
@@ -91,14 +97,41 @@ function getPeakAmount(rows: readonly CollectionNicknameSummaryChartDatum[]): nu
   return rows.reduce((peak, row) => Math.max(peak, row.totalAmount), 0);
 }
 
-function getPeakScaleAmount(
-  rows: readonly CollectionNicknameSummaryChartDatum[],
+function getExportMetric(
   context: CollectionNicknameSummaryExportContext,
+): CollectionNicknameSummaryChartMetric {
+  return context.metric ?? "amount";
+}
+
+function getExportChartTitle(metric: CollectionNicknameSummaryChartMetric): string {
+  if (metric === "progress") return "Progress terhadap target (100%)";
+  if (metric === "gap") return "Jurang untuk capai target";
+  return "Perbandingan kutipan vs target";
+}
+
+function getExportChartScale(
+  rows: readonly CollectionNicknameSummaryMetricDatum[],
+  metric: CollectionNicknameSummaryChartMetric,
 ): number {
   return rows.reduce((peak, row) => {
-    const targetAmount = getExportTarget(row, context).amount;
-    return Math.max(peak, row.totalAmount, targetAmount);
+    const targetValue = metric === "amount" ? row.targetAmount ?? 0 : 0;
+    const progressTarget = metric === "progress" ? 100 : 0;
+    return Math.max(peak, row.chartValue, targetValue, progressTarget);
   }, 0);
+}
+
+function formatExportChartValue(
+  row: CollectionNicknameSummaryMetricDatum,
+  metric: CollectionNicknameSummaryChartMetric,
+): string {
+  if (metric === "progress") {
+    return row.targetAmount ? `${Math.min(row.chartValue, 999.9).toFixed(1)}%` : "Tiada target";
+  }
+  if (metric === "gap") {
+    if (!row.targetAmount) return "Tiada target";
+    return row.chartValue > 0 ? formatMoney(row.chartValue) : "Capai";
+  }
+  return formatMoney(row.totalAmount);
 }
 
 function getExportTarget(
@@ -266,7 +299,12 @@ export async function exportCollectionNicknameSummaryPng(
   context: CollectionNicknameSummaryExportContext,
 ): Promise<void> {
   const rankingRows = rows.slice(0, PNG_MAX_RANKING_ROWS);
-  const chartRows = rows.slice(0, PNG_CHART_ROWS);
+  const metric = getExportMetric(context);
+  const chartRows = buildCollectionNicknameSummaryMetricData(
+    rows.slice(0, PNG_CHART_ROWS),
+    context.targetBenchmarks,
+    metric,
+  );
   const rankingHeight = rankingRows.length * PNG_ROW_HEIGHT;
   const canvas = document.createElement("canvas");
   canvas.width = PNG_WIDTH;
@@ -309,33 +347,48 @@ export async function exportCollectionNicknameSummaryPng(
       });
     }
 
-    drawCanvasText(drawing, "Perbandingan kutipan vs target", 80, 255, {
+    drawCanvasText(drawing, getExportChartTitle(metric), 80, 255, {
       font: "bold 28px Arial, sans-serif",
     });
     const peakAmount = getPeakAmount(rows);
-    const scalePeakAmount = getPeakScaleAmount(rows, context);
+    const chartScale = getExportChartScale(chartRows, metric);
     chartRows.forEach((row, index) => {
       const y = 300 + index * 32;
       const target = getExportTarget(row, context);
       const level = getCollectionNicknameTargetAwarePerformanceLevel(row, peakAmount, target.amount);
-      const barWidth = scalePeakAmount > 0 ? Math.max(4, (row.totalAmount / scalePeakAmount) * 720) : 4;
+      const barWidth = chartScale > 0 && row.chartValue > 0
+        ? Math.max(4, (row.chartValue / chartScale) * 720)
+        : 0;
       drawCanvasText(drawing, row.nickname, 80, y + 20, {
         font: "19px Arial, sans-serif",
         maxWidth: 300,
       });
       drawing.fillStyle = "#e2e8f0";
       drawing.fillRect(400, y, 720, 24);
-      if (target.amount > 0) {
-        const targetWidth = Math.max(4, (target.amount / scalePeakAmount) * 720);
+      if (metric === "amount" && target.amount > 0) {
+        const targetWidth = Math.max(4, (target.amount / chartScale) * 720);
         drawing.strokeStyle = TARGET_EXPORT_STROKE;
         drawing.lineWidth = 2;
         drawing.setLineDash([7, 5]);
         drawing.strokeRect(400, y, targetWidth, 24);
         drawing.setLineDash([]);
       }
+      if (metric === "progress" && row.targetAmount && chartScale > 0) {
+        const targetX = 400 + (100 / chartScale) * 720;
+        drawing.strokeStyle = TARGET_EXPORT_STROKE;
+        drawing.lineWidth = 2;
+        drawing.setLineDash([7, 5]);
+        drawing.beginPath();
+        drawing.moveTo(targetX, y - 2);
+        drawing.lineTo(targetX, y + 26);
+        drawing.stroke();
+        drawing.setLineDash([]);
+      }
       drawing.fillStyle = getPerformanceCanvasColor(level);
-      drawing.fillRect(400, y, barWidth, 24);
-      drawCanvasText(drawing, formatMoney(row.totalAmount), 1_160, y + 20, {
+      if (barWidth > 0) {
+        drawing.fillRect(400, y, barWidth, 24);
+      }
+      drawCanvasText(drawing, formatExportChartValue(row, metric), 1_160, y + 20, {
         font: "bold 18px Arial, sans-serif",
       });
       drawCanvasText(drawing, getCollectionNicknamePerformanceLabel(level), 1_480, y + 20, {
@@ -454,6 +507,12 @@ export async function exportCollectionNicknameSummaryPdf(
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 14;
   const peakAmount = getPeakAmount(rows);
+  const metric = getExportMetric(context);
+  const chartRows = buildCollectionNicknameSummaryMetricData(
+    rows.slice(0, PDF_CHART_ROWS),
+    context.targetBenchmarks,
+    metric,
+  );
 
   const drawPageBase = (pageNumber: number) => {
     pdf.setFillColor(255, 255, 255);
@@ -493,13 +552,13 @@ export async function exportCollectionNicknameSummaryPdf(
   pdf.setFontSize(11);
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor(15, 23, 42);
-  pdf.text("Perbandingan kutipan vs target", margin, 45);
-  const scalePeakAmount = getPeakScaleAmount(rows, context);
-  rows.slice(0, PDF_CHART_ROWS).forEach((row, index) => {
+  pdf.text(getExportChartTitle(metric), margin, 45);
+  const chartScale = getExportChartScale(chartRows, metric);
+  chartRows.forEach((row, index) => {
     const y = 52 + index * 9;
     const target = getExportTarget(row, context);
     const level = getCollectionNicknameTargetAwarePerformanceLevel(row, peakAmount, target.amount);
-    const ratio = scalePeakAmount > 0 ? row.totalAmount / scalePeakAmount : 0;
+    const ratio = chartScale > 0 ? row.chartValue / chartScale : 0;
     const color = level === "high" ? [4, 120, 87] : level === "medium" ? [161, 98, 7] : [71, 85, 105];
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7.5);
@@ -507,16 +566,24 @@ export async function exportCollectionNicknameSummaryPdf(
     pdf.text(truncatePdfText(row.nickname, 28), margin, y + 4);
     pdf.setFillColor(226, 232, 240);
     pdf.rect(63, y, 116, 5, "F");
-    if (target.amount > 0) {
-      const targetRatio = scalePeakAmount > 0 ? target.amount / scalePeakAmount : 0;
+    if (metric === "amount" && target.amount > 0) {
+      const targetRatio = chartScale > 0 ? target.amount / chartScale : 0;
       pdf.setDrawColor(185, 28, 28);
       pdf.setLineWidth(0.35);
       pdf.rect(63, y, Math.max(1, 116 * targetRatio), 5, "S");
     }
+    if (metric === "progress" && row.targetAmount && chartScale > 0) {
+      const targetX = 63 + (100 / chartScale) * 116;
+      pdf.setDrawColor(185, 28, 28);
+      pdf.setLineWidth(0.35);
+      pdf.line(targetX, y - 0.5, targetX, y + 5.5);
+    }
     pdf.setFillColor(color[0], color[1], color[2]);
-    pdf.rect(63, y, Math.max(1, 116 * ratio), 5, "F");
+    if (ratio > 0) {
+      pdf.rect(63, y, Math.max(1, 116 * ratio), 5, "F");
+    }
     pdf.setFont("helvetica", "bold");
-    pdf.text(formatMoney(row.totalAmount), 184, y + 4);
+    pdf.text(formatExportChartValue(row, metric), 184, y + 4);
     pdf.setTextColor(color[0], color[1], color[2]);
     pdf.text(getCollectionNicknamePerformanceLabel(level), 232, y + 4);
   });
