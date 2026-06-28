@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCollectionNicknameSummaryMetricData,
+  filterCollectionNicknameTargetOutcomes,
   formatCollectionNicknameChartMetricAxis,
   getCollectionNicknameChartMetricName,
   summarizeCollectionNicknameTargetOutcomes,
@@ -98,4 +99,22 @@ test("nickname target outcome summary counts only complete targets as evaluated"
     nearCount: 1,
     notEvaluatedCount: 2,
   });
+
+  assert.deepEqual(
+    filterCollectionNicknameTargetOutcomes(rows, benchmarks, "achieved").map((row) => row.nickname),
+    ["Achieved"],
+  );
+  assert.deepEqual(
+    filterCollectionNicknameTargetOutcomes(rows, benchmarks, "near").map((row) => row.nickname),
+    ["Near"],
+  );
+  assert.deepEqual(
+    filterCollectionNicknameTargetOutcomes(rows, benchmarks, "behind").map((row) => row.nickname),
+    ["Behind"],
+  );
+  assert.deepEqual(
+    filterCollectionNicknameTargetOutcomes(rows, benchmarks, "not-evaluated").map((row) => row.nickname),
+    ["Incomplete", "Not Set"],
+  );
+  assert.notEqual(filterCollectionNicknameTargetOutcomes(rows, benchmarks, "all"), rows);
 });

@@ -32,6 +32,32 @@ export type CollectionNicknameTargetOutcomeSummary = {
   notEvaluatedCount: number;
 };
 
+export type CollectionNicknameTargetOutcomeFilter =
+  | "all"
+  | "achieved"
+  | "near"
+  | "behind"
+  | "not-evaluated";
+
+export function filterCollectionNicknameTargetOutcomes(
+  rows: readonly CollectionNicknameSummaryChartDatum[],
+  targetBenchmarks: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined,
+  filter: CollectionNicknameTargetOutcomeFilter,
+): CollectionNicknameSummaryChartDatum[] {
+  if (filter === "all") {
+    return [...rows];
+  }
+
+  return rows.filter((row) => {
+    const benchmark = getCollectionNicknameTargetBenchmark(targetBenchmarks, row.nickname);
+    const targetAmount = getCollectionNicknameTargetEvaluationAmount(benchmark);
+    if (filter === "not-evaluated") {
+      return targetAmount <= 0;
+    }
+    return getCollectionNicknameBenchmarkStatus(row, targetAmount) === filter;
+  });
+}
+
 export function summarizeCollectionNicknameTargetOutcomes(
   rows: readonly CollectionNicknameSummaryChartDatum[],
   targetBenchmarks: ReadonlyMap<string, CollectionNicknameTargetBenchmark> | undefined,

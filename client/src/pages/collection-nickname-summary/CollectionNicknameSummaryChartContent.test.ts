@@ -69,7 +69,9 @@ test("CollectionNicknameSummaryChartContent renders detailed ranking and average
   assert.match(markup, /Kutipan/);
   assert.match(markup, /Progress %/);
   assert.match(markup, /Jurang Target/);
-  assert.match(markup, /Ringkasan keputusan target nickname yang dipaparkan/);
+  assert.match(markup, /Tapis nickname mengikut keputusan target/);
+  assert.match(markup, /aria-pressed="true"/);
+  assert.match(markup, /Semua: 2 nickname/);
   assert.match(markup, /Capai target/);
   assert.match(markup, /Hampir capai/);
   assert.match(markup, /Belum capai/);

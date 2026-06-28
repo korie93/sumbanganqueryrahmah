@@ -34,7 +34,9 @@ import {
   useCollectionNicknameTargetBenchmarks,
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import {
+  filterCollectionNicknameTargetOutcomes,
   summarizeCollectionNicknameTargetOutcomes,
+  type CollectionNicknameTargetOutcomeFilter,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-metrics";
 import {
   exportCollectionNicknameSummaryCsv,
@@ -66,6 +68,8 @@ export function CollectionNicknameSummaryChartContent({
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<CollectionNicknameSummaryChartSort>("amount");
   const [metric, setMetric] = useState<CollectionNicknameSummaryChartMetric>("amount");
+  const [targetOutcomeFilter, setTargetOutcomeFilter] =
+    useState<CollectionNicknameTargetOutcomeFilter>("all");
   const [selectedDrilldownRow, setSelectedDrilldownRow] =
     useState<CollectionNicknameSummaryChartDatum | null>(null);
   const [busyExportKind, setBusyExportKind] = useState<CollectionNicknameSummaryExportKind | null>(null);
@@ -97,7 +101,7 @@ export function CollectionNicknameSummaryChartContent({
     rows: chartData,
     toDate,
   });
-  const displayedData = useMemo(
+  const baseDisplayedData = useMemo(
     () => isDetailed
       ? filterCollectionNicknameSummaryChartData(chartData, {
           getTargetGap: (row) => getCollectionNicknameBenchmarkGap(
@@ -112,6 +116,23 @@ export function CollectionNicknameSummaryChartContent({
         })
       : chartData,
     [chartData, isDetailed, limit, query, sortBy, targetBenchmarks.benchmarks],
+  );
+  const baseTargetSummary = useMemo(
+    () => summarizeCollectionNicknameTargetOutcomes(
+      baseDisplayedData,
+      targetBenchmarks.benchmarks,
+    ),
+    [baseDisplayedData, targetBenchmarks.benchmarks],
+  );
+  const displayedData = useMemo(
+    () => isDetailed
+      ? filterCollectionNicknameTargetOutcomes(
+          baseDisplayedData,
+          targetBenchmarks.benchmarks,
+          targetOutcomeFilter,
+        )
+      : baseDisplayedData,
+    [baseDisplayedData, isDetailed, targetBenchmarks.benchmarks, targetOutcomeFilter],
   );
   const displayedRankedData = useMemo(
     () => isDetailed ? displayedData : rankedData,
@@ -147,6 +168,7 @@ export function CollectionNicknameSummaryChartContent({
     setMetric("amount");
     setQuery("");
     setSortBy("amount");
+    setTargetOutcomeFilter("all");
   }, []);
   const handleSelectNickname = useCallback((row: CollectionNicknameSummaryChartDatum) => {
     setSelectedDrilldownRow(row);
@@ -280,6 +302,7 @@ export function CollectionNicknameSummaryChartContent({
           onReset={resetFilters}
           onSortChange={setSortBy}
           targetModesDisabled={targetModesDisabled}
+          targetOutcomeFilterActive={targetOutcomeFilter !== "all"}
         />
       ) : null}
 
@@ -316,7 +339,12 @@ export function CollectionNicknameSummaryChartContent({
           {displayedData.length > 0 ? (
             <>
               {isDetailed ? (
-                <CollectionNicknameTargetOutcomeStrip summary={displayedTargetSummary} />
+                <CollectionNicknameTargetOutcomeStrip
+                  activeFilter={targetOutcomeFilter}
+                  disabled={targetBenchmarks.loading || targetBenchmarks.requestedMonths === 0}
+                  onFilterChange={setTargetOutcomeFilter}
+                  summary={baseTargetSummary}
+                />
               ) : null}
               {isDetailed ? (
                 <CollectionNicknamePerformanceLegend targetAware={displayedTargetSummary.completeCount > 0} />

@@ -21,6 +21,7 @@ type CollectionNicknameSummaryChartControlsProps = {
   onReset: () => void;
   onSortChange: (sortBy: CollectionNicknameSummaryChartSort) => void;
   targetModesDisabled: boolean;
+  targetOutcomeFilterActive: boolean;
 };
 
 const LIMIT_OPTIONS: CollectionNicknameSummaryChartLimit[] = ["5", "10", "all"];
@@ -38,12 +39,14 @@ export function CollectionNicknameSummaryChartControls({
   onReset,
   onSortChange,
   targetModesDisabled,
+  targetOutcomeFilterActive,
 }: CollectionNicknameSummaryChartControlsProps) {
   const filtersActive =
     limit !== "10"
     || metric !== "amount"
     || query.trim().length > 0
-    || sortBy !== "amount";
+    || sortBy !== "amount"
+    || targetOutcomeFilterActive;
 
   return (
     <section

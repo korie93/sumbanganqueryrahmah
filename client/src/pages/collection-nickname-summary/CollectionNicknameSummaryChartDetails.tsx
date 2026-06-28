@@ -20,6 +20,7 @@ import {
 } from "@/pages/collection-nickname-summary/collection-nickname-target-benchmarks";
 import { formatAmountRM } from "@/pages/collection/utils";
 import type {
+  CollectionNicknameTargetOutcomeFilter,
   CollectionNicknameTargetOutcomeSummary,
 } from "@/pages/collection-nickname-summary/collection-nickname-summary-chart-metrics";
 
@@ -188,33 +189,62 @@ export function CollectionNicknamePerformanceLegend({
 }
 
 export function CollectionNicknameTargetOutcomeStrip({
+  activeFilter,
+  disabled,
+  onFilterChange,
   summary,
 }: {
+  activeFilter: CollectionNicknameTargetOutcomeFilter;
+  disabled: boolean;
+  onFilterChange: (filter: CollectionNicknameTargetOutcomeFilter) => void;
   summary: CollectionNicknameTargetOutcomeSummary;
 }) {
+  const totalCount = summary.achievedCount
+    + summary.nearCount
+    + summary.behindCount
+    + summary.notEvaluatedCount;
   const outcomes = [
-    { label: "Capai target", value: summary.achievedCount },
-    { label: "Hampir capai", value: summary.nearCount },
-    { label: "Belum capai", value: summary.behindCount },
-    { label: "Tanpa target lengkap", value: summary.notEvaluatedCount },
+    { filter: "all", label: "Semua", value: totalCount },
+    { filter: "achieved", label: "Capai target", value: summary.achievedCount },
+    { filter: "near", label: "Hampir capai", value: summary.nearCount },
+    { filter: "behind", label: "Belum capai", value: summary.behindCount },
+    { filter: "not-evaluated", label: "Tanpa target lengkap", value: summary.notEvaluatedCount },
   ] as const;
 
   return (
-    <dl
-      className="mb-3 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-4"
-      aria-label="Ringkasan keputusan target nickname yang dipaparkan"
+    <div
+      className="mb-3 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-5"
+      role="group"
+      aria-label="Tapis nickname mengikut keputusan target"
     >
-      {outcomes.map((outcome) => (
-        <div key={outcome.label} className="min-w-0 bg-background px-3 py-2.5 text-center">
-          <dt className="text-2xs font-medium leading-4 text-muted-foreground">
-            {outcome.label}
-          </dt>
-          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
-            {outcome.value.toLocaleString()}
-          </dd>
-        </div>
-      ))}
-    </dl>
+      {outcomes.map((outcome) => {
+        const pressedProps = activeFilter === outcome.filter
+          ? { "aria-pressed": "true" as const }
+          : { "aria-pressed": "false" as const };
+        return (
+          <button
+            key={outcome.filter}
+            type="button"
+            className={`min-w-0 px-3 py-2.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+              activeFilter === outcome.filter
+                ? "bg-muted text-foreground"
+                : "bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            } ${outcome.filter === "not-evaluated" ? "col-span-2 sm:col-span-1" : ""}`}
+            aria-label={`${outcome.label}: ${outcome.value.toLocaleString()} nickname`}
+            disabled={disabled || outcome.value === 0}
+            onClick={() => onFilterChange(outcome.filter)}
+            {...pressedProps}
+          >
+            <span className="block text-2xs font-medium leading-4">
+              {outcome.label}
+            </span>
+            <span className="mt-0.5 block text-lg font-semibold tabular-nums">
+              {outcome.value.toLocaleString()}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
