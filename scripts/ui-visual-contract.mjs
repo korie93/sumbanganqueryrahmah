@@ -129,6 +129,11 @@ const dashboardZoomViewportSpecs = [
   { id: "zoom-out", width: 1920, height: 900 },
 ];
 
+const dashboardChartDetailSpecs = [
+  { label: "login trends", triggerTestId: "button-expand-login-trends" },
+  { label: "peak activity hours", triggerTestId: "button-expand-peak-hours" },
+];
+
 const readLayoutSummary = async (page, { contentSelector, primarySelector, readySelector }) =>
   page.evaluate(({ contentSelector: nextContentSelector, primarySelector: nextPrimarySelector, readySelector: nextReadySelector }) => {
     const root = document.querySelector(nextContentSelector);
@@ -383,25 +388,19 @@ async function verifyDashboardReviewSidebarLayout(page, viewportSpec) {
   );
 }
 
-async function verifyDashboardChartDetailLayout(page, viewportSpec) {
-  if (viewportSpec.id !== "short-desktop") {
-    return;
-  }
-
-  const chartsSection = page.locator("#dashboard-login-charts");
-  await chartsSection.scrollIntoViewIfNeeded();
-  const panelToggle = page.getByTestId("button-toggle-dashboard-login-charts-panel");
-  await panelToggle.waitFor({ state: "visible", timeout: 10_000 });
-  if (await panelToggle.getAttribute("aria-expanded") !== "true") {
-    await panelToggle.click();
-  }
-
-  const trigger = page.getByTestId("button-expand-login-trends");
+async function verifyDashboardChartDialogLayout(page, viewportSpec, chartSpec) {
+  const trigger = page.getByTestId(chartSpec.triggerTestId);
   await trigger.waitFor({ state: "visible", timeout: 15_000 });
   await trigger.waitFor({ state: "attached" });
-  assert(await trigger.isEnabled(), "dashboard/short-desktop: login trends full view is disabled");
+  assert(
+    await trigger.isEnabled(),
+    `dashboard/short-desktop: ${chartSpec.label} full view is disabled`,
+  );
   const triggerTestId = await trigger.getAttribute("data-testid");
-  assert(triggerTestId, "dashboard/short-desktop: chart detail trigger is missing its test id");
+  assert(
+    triggerTestId,
+    `dashboard/short-desktop: ${chartSpec.label} detail trigger is missing its test id`,
+  );
   await trigger.click();
 
   const dialog = page.getByTestId("dialog-dashboard-chart-detail");
@@ -437,11 +436,11 @@ async function verifyDashboardChartDetailLayout(page, viewportSpec) {
       && dialogLayout.right <= dialogLayout.viewportWidth + 1
       && dialogLayout.top >= -1
       && dialogLayout.bottom <= dialogLayout.viewportHeight + 1,
-    "dashboard/short-desktop: chart detail escaped the viewport",
+    `dashboard/short-desktop: ${chartSpec.label} detail escaped the viewport`,
   );
   assert(
     dialogLayout.scrollWidth <= dialogLayout.clientWidth + 1,
-    "dashboard/short-desktop: chart detail has internal horizontal overflow",
+    `dashboard/short-desktop: ${chartSpec.label} detail has internal horizontal overflow`,
   );
 
   await dialog.getByRole("button", { name: "Close" }).click();
@@ -449,8 +448,26 @@ async function verifyDashboardChartDetailLayout(page, viewportSpec) {
   await waitForTestIdFocus(page, triggerTestId);
   assert(
     await trigger.evaluate((element) => document.activeElement === element),
-    "dashboard/short-desktop: chart detail did not return focus to its trigger",
+    `dashboard/short-desktop: ${chartSpec.label} detail did not return focus to its trigger`,
   );
+}
+
+async function verifyDashboardChartDetailLayout(page, viewportSpec) {
+  if (viewportSpec.id !== "short-desktop") {
+    return;
+  }
+
+  const chartsSection = page.locator("#dashboard-login-charts");
+  await chartsSection.scrollIntoViewIfNeeded();
+  const panelToggle = page.getByTestId("button-toggle-dashboard-login-charts-panel");
+  await panelToggle.waitFor({ state: "visible", timeout: 10_000 });
+  if (await panelToggle.getAttribute("aria-expanded") !== "true") {
+    await panelToggle.click();
+  }
+
+  for (const chartSpec of dashboardChartDetailSpecs) {
+    await verifyDashboardChartDialogLayout(page, viewportSpec, chartSpec);
+  }
 }
 
 async function loginForAuthenticatedContracts(page) {

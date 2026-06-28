@@ -74,9 +74,12 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /review sidebar escaped the viewport height/);
   assert.match(visualContractSource, /tall review sidebar is not internally scrollable/);
   assert.match(visualContractSource, /async function verifyDashboardChartDetailLayout/);
+  assert.match(visualContractSource, /button-expand-login-trends/);
+  assert.match(visualContractSource, /button-expand-peak-hours/);
+  assert.match(visualContractSource, /for \(const chartSpec of dashboardChartDetailSpecs\)/);
   assert.match(visualContractSource, /getByRole\("button", \{ name: "Close" \}\)\.click\(\)/);
-  assert.match(visualContractSource, /chart detail has internal horizontal overflow/);
-  assert.match(visualContractSource, /chart detail did not return focus to its trigger/);
+  assert.match(visualContractSource, /detail has internal horizontal overflow/);
+  assert.match(visualContractSource, /detail did not return focus to its trigger/);
   assert.match(
     visualContractSource,
     /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardReviewSidebarLayout\(page, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\);\s+await verifyDashboardCleanupDialogLayout\(page, viewportSpec\);\s+await verifyDashboardChartDetailLayout\(page, viewportSpec\)/,
