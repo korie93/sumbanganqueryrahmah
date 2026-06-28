@@ -18,7 +18,7 @@ import {
 import { logClientError } from "@/lib/client-logger";
 import { resolveMutationErrorDetails } from "@/lib/mutation-feedback";
 import { queryClient } from "@/lib/queryClient";
-import { toast } from "@/hooks/use-toast";
+import { toast, type ToastHandle } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
 import { getCurrentRole } from "@/pages/collection/utils";
@@ -54,7 +54,11 @@ import type {
   SummaryData,
   TopUser,
 } from "@/pages/dashboard/types";
-import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
+import {
+  buildSummaryCards,
+  exportDashboardToPdf,
+  isDashboardPdfExportAbortError,
+} from "@/pages/dashboard/utils";
 
 type DashboardRefetch = () => Promise<unknown>;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
@@ -100,6 +104,7 @@ function DashboardContent() {
   const exportRetryRef = useRef<() => void>(() => undefined);
   const refreshRetryRef = useRef<() => void>(() => undefined);
   const lifecycleAbortControllerRef = useRef<AbortController | null>(null);
+  const exportToastRef = useRef<ToastHandle | null>(null);
 
   const {
     data: summary,
@@ -469,6 +474,8 @@ function DashboardContent() {
     lifecycleAbortControllerRef.current = controller;
     return () => {
       controller.abort();
+      exportToastRef.current?.dismiss();
+      exportToastRef.current = null;
       if (lifecycleAbortControllerRef.current === controller) {
         lifecycleAbortControllerRef.current = null;
       }
@@ -564,6 +571,9 @@ function DashboardContent() {
   const handleExportPdf = useCallback(async () => {
     if (!dashboardRef.current || exportBlockReason || exportInFlightRef.current) return;
 
+    const exportSignal = lifecycleAbortControllerRef.current?.signal;
+    if (!exportSignal || exportSignal.aborted) return;
+
     exportInFlightRef.current = true;
     setExportingPdf(true);
     const exportToast = toast({
@@ -574,6 +584,7 @@ function DashboardContent() {
       loading: true,
       duration: 60_000,
     });
+    exportToastRef.current = exportToast;
     try {
       await exportDashboardToPdf(dashboardRef.current, {
         peakHours: peakHours ?? [],
@@ -581,7 +592,11 @@ function DashboardContent() {
         summary,
         topUsers: topUsers ?? [],
         trends: trends ?? [],
-      });
+      }, exportSignal);
+      if (!isDashboardLifecycleActive()) {
+        exportToast.dismiss();
+        return;
+      }
       exportToast.update({
         title: "PDF dashboard berjaya dijana",
         description: "Fail telah dihantar ke folder muat turun pelayar anda.",
@@ -596,6 +611,11 @@ function DashboardContent() {
         duration: 5000,
       });
     } catch (error: unknown) {
+      if (isDashboardPdfExportAbortError(error) || !isDashboardLifecycleActive()) {
+        exportToast.dismiss();
+        return;
+      }
+
       const description = error instanceof Error ? error.message : "Unknown error. Try on desktop browser.";
       logClientError("Failed to export dashboard PDF:", error);
       exportToast.update({
@@ -621,6 +641,9 @@ function DashboardContent() {
       });
     } finally {
       exportInFlightRef.current = false;
+      if (exportToastRef.current === exportToast) {
+        exportToastRef.current = null;
+      }
       if (isDashboardLifecycleActive()) {
         setExportingPdf(false);
       }

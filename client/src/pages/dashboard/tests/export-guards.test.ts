@@ -10,6 +10,8 @@ import {
   collectDashboardFallbackPdfLines,
   DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE,
   assertDashboardExportableElement,
+  exportDashboardToPdf,
+  isDashboardPdfExportAbortError,
   resolveDashboardCanvasPdfSlices,
   resolveDashboardExportPaintColor,
   resolveDashboardExportScale,
@@ -143,6 +145,20 @@ test("assertDashboardExportableElement requires the whitelisted dashboard export
       } as unknown as HTMLElement);
     },
     /hidden or marked sensitive/i,
+  );
+});
+
+test("exportDashboardToPdf rejects an already-aborted export before accessing the DOM", async () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () => exportDashboardToPdf({} as HTMLDivElement, undefined, controller.signal),
+    (error: unknown) => {
+      assert.equal(isDashboardPdfExportAbortError(error), true);
+      assert.equal(error instanceof Error ? error.name : null, "AbortError");
+      return true;
+    },
   );
 });
 

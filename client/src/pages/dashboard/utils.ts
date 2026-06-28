@@ -49,6 +49,7 @@ const DASHBOARD_PDF_FOOTER_HEIGHT_MM = 12;
 const DASHBOARD_PDF_ROW_GAP_MM = 3;
 const DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM = 10;
 export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
+const DASHBOARD_PDF_EXPORT_ABORT_MESSAGE = "Dashboard PDF export was cancelled.";
 export type DashboardRecentLoginActivityFilter =
   | "all"
   | "active"
@@ -1908,16 +1909,35 @@ function saveDashboardPdf(pdf: DashboardJsPdfDocument) {
   pdf.save(`SQR-Dashboard-Report-${new Date().toISOString().split("T")[0]}.pdf`);
 }
 
+function createDashboardPdfExportAbortError() {
+  const error = new Error(DASHBOARD_PDF_EXPORT_ABORT_MESSAGE);
+  error.name = "AbortError";
+  return error;
+}
+
+export function isDashboardPdfExportAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function assertDashboardPdfExportActive(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw createDashboardPdfExportAbortError();
+  }
+}
+
 export async function exportDashboardToPdf(
   element: HTMLDivElement,
   summaryInput?: DashboardPdfSummaryInput,
+  signal?: AbortSignal,
 ) {
+  assertDashboardPdfExportActive(signal);
   assertDashboardExportableElement(element);
 
   const [html2canvas, jsPDF] = await Promise.all([
     loadHtml2Canvas(),
     loadJsPdf(),
   ]);
+  assertDashboardPdfExportActive(signal);
 
   const isDark = document.documentElement.classList.contains("dark");
   const backgroundColor = isDark ? "#1e293b" : "#ffffff";
@@ -1953,6 +1973,7 @@ export async function exportDashboardToPdf(
         sanitizeDashboardExportClone(clonedDoc, isDark);
       },
     });
+    assertDashboardPdfExportActive(signal);
 
     if (canvas.width <= 0 || canvas.height <= 0) {
       throw new Error(DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE);
@@ -1960,14 +1981,20 @@ export async function exportDashboardToPdf(
 
     const pdf = createDashboardPdf(jsPDF);
     saveDashboardCanvasPdf(pdf, canvas, theme);
+    assertDashboardPdfExportActive(signal);
     saveDashboardPdf(pdf);
   } catch (error) {
+    if (signal?.aborted || isDashboardPdfExportAbortError(error)) {
+      throw createDashboardPdfExportAbortError();
+    }
+
     const fallbackPdf = createDashboardPdf(jsPDF);
     const fallbackContent = summaryInput
       ? buildDashboardPdfSummaryReport(summaryInput)
       : collectDashboardFallbackPdfLines(element);
     try {
       writeDashboardFallbackPdf(fallbackPdf, fallbackContent, theme);
+      assertDashboardPdfExportActive(signal);
       saveDashboardPdf(fallbackPdf);
     } catch (fallbackError) {
       const exportError = new Error(DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE) as Error & {

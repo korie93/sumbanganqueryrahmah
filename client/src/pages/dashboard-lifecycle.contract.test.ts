@@ -11,7 +11,11 @@ test("dashboard lifecycle uses AbortController and TanStack Query signals instea
 
   assert.doesNotMatch(source, /mountedRef/);
   assert.match(source, /lifecycleAbortControllerRef = useRef<AbortController \| null>\(null\)/);
+  assert.match(source, /exportToastRef = useRef<ToastHandle \| null>\(null\)/);
   assert.match(source, /controller\.abort\(\)/);
+  assert.match(source, /exportToastRef\.current\?\.dismiss\(\)/);
+  assert.match(source, /exportDashboardToPdf\([\s\S]*?exportSignal\)/);
+  assert.match(source, /isDashboardPdfExportAbortError\(error\)/);
   assert.match(source, /queryFn: \(\{ signal \}\) => getAnalyticsSummary\(\{ signal \}\)/);
   assert.match(source, /queryFn: \(\{ signal \}\) => getLoginTrends\(trendDays, \{ signal \}\)/);
   assert.match(source, /queryFn: \(\{ signal \}\) => getRecentLoginActivity\(8, \{ signal \}\)/);
