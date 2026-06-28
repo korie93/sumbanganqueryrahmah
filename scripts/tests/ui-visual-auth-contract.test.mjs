@@ -66,15 +66,20 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /recent activity detail did not return focus to its trigger/);
   assert.match(visualContractSource, /async function verifyDashboardCleanupDialogLayout/);
   assert.match(visualContractSource, /element\.contains\(document\.activeElement\)/);
+  assert.match(visualContractSource, /getByRole\("button", \{ name: "Cancel" \}\)\.click\(\)/);
   assert.match(visualContractSource, /cleanup dialog has internal horizontal overflow/);
   assert.match(visualContractSource, /cleanup dialog did not return focus to its trigger/);
   assert.match(visualContractSource, /async function verifyDashboardReviewSidebarLayout/);
   assert.match(visualContractSource, /await sidebar\.scrollIntoViewIfNeeded\(\)/);
   assert.match(visualContractSource, /review sidebar escaped the viewport height/);
   assert.match(visualContractSource, /tall review sidebar is not internally scrollable/);
+  assert.match(visualContractSource, /async function verifyDashboardChartDetailLayout/);
+  assert.match(visualContractSource, /getByRole\("button", \{ name: "Close" \}\)\.click\(\)/);
+  assert.match(visualContractSource, /chart detail has internal horizontal overflow/);
+  assert.match(visualContractSource, /chart detail did not return focus to its trigger/);
   assert.match(
     visualContractSource,
-    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardReviewSidebarLayout\(page, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\);\s+await verifyDashboardCleanupDialogLayout\(page, viewportSpec\)/,
+    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardReviewSidebarLayout\(page, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\);\s+await verifyDashboardCleanupDialogLayout\(page, viewportSpec\);\s+await verifyDashboardChartDetailLayout\(page, viewportSpec\)/,
   );
 });
 

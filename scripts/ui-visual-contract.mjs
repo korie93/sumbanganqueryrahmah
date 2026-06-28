@@ -343,7 +343,7 @@ async function verifyDashboardCleanupDialogLayout(page, viewportSpec) {
     `dashboard/${viewportSpec.id}: cleanup dialog has internal horizontal overflow`,
   );
 
-  await page.keyboard.press("Escape");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
   await dialog.waitFor({ state: "hidden", timeout: 10_000 });
   await waitForTestIdFocus(page, triggerTestId);
   assert(
@@ -380,6 +380,76 @@ async function verifyDashboardReviewSidebarLayout(page, viewportSpec) {
       || sidebarLayout.overflowY === "auto"
       || sidebarLayout.overflowY === "scroll",
     `dashboard/${viewportSpec.id}: tall review sidebar is not internally scrollable`,
+  );
+}
+
+async function verifyDashboardChartDetailLayout(page, viewportSpec) {
+  if (viewportSpec.id !== "short-desktop") {
+    return;
+  }
+
+  const chartsSection = page.locator("#dashboard-login-charts");
+  await chartsSection.scrollIntoViewIfNeeded();
+  const panelToggle = page.getByTestId("button-toggle-dashboard-login-charts-panel");
+  await panelToggle.waitFor({ state: "visible", timeout: 10_000 });
+  if (await panelToggle.getAttribute("aria-expanded") !== "true") {
+    await panelToggle.click();
+  }
+
+  const trigger = page.getByTestId("button-expand-login-trends");
+  await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  await trigger.waitFor({ state: "attached" });
+  assert(await trigger.isEnabled(), "dashboard/short-desktop: login trends full view is disabled");
+  const triggerTestId = await trigger.getAttribute("data-testid");
+  assert(triggerTestId, "dashboard/short-desktop: chart detail trigger is missing its test id");
+  await trigger.click();
+
+  const dialog = page.getByTestId("dialog-dashboard-chart-detail");
+  await dialog.waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForFunction(() => {
+    const element = document.querySelector('[data-testid="dialog-dashboard-chart-detail"]');
+    if (!(element instanceof HTMLElement)) {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    return element.dataset.state === "open"
+      && element.contains(document.activeElement)
+      && rect.left >= -1
+      && rect.right <= window.innerWidth + 1
+      && rect.top >= -1
+      && rect.bottom <= window.innerHeight + 1;
+  }, undefined, { timeout: 2_000 });
+  const dialogLayout = await dialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      bottom: rect.bottom,
+      clientWidth: element.clientWidth,
+      left: rect.left,
+      right: rect.right,
+      scrollWidth: element.scrollWidth,
+      top: rect.top,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  assert(
+    dialogLayout.left >= -1
+      && dialogLayout.right <= dialogLayout.viewportWidth + 1
+      && dialogLayout.top >= -1
+      && dialogLayout.bottom <= dialogLayout.viewportHeight + 1,
+    "dashboard/short-desktop: chart detail escaped the viewport",
+  );
+  assert(
+    dialogLayout.scrollWidth <= dialogLayout.clientWidth + 1,
+    "dashboard/short-desktop: chart detail has internal horizontal overflow",
+  );
+
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+  await waitForTestIdFocus(page, triggerTestId);
+  assert(
+    await trigger.evaluate((element) => document.activeElement === element),
+    "dashboard/short-desktop: chart detail did not return focus to its trigger",
   );
 }
 
@@ -495,6 +565,7 @@ const run = async () => {
         await verifyDashboardReviewSidebarLayout(page, viewportSpec);
         await verifyDashboardRecentActivityDetailLayout(page, viewportSpec);
         await verifyDashboardCleanupDialogLayout(page, viewportSpec);
+        await verifyDashboardChartDetailLayout(page, viewportSpec);
       }
     }
   } catch (error) {
