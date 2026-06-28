@@ -128,15 +128,24 @@ const dashboardZoomViewportSpecs = [
   { id: "zoom-out", width: 1920, height: 900 },
 ];
 
-const readLayoutSummary = async (page, { contentSelector, primarySelector }) =>
-  page.evaluate(({ contentSelector: nextContentSelector, primarySelector: nextPrimarySelector }) => {
+const readLayoutSummary = async (page, { contentSelector, primarySelector, readySelector }) =>
+  page.evaluate(({ contentSelector: nextContentSelector, primarySelector: nextPrimarySelector, readySelector: nextReadySelector }) => {
     const root = document.querySelector(nextContentSelector);
     const main = document.querySelector("main");
     const primary = nextPrimarySelector ? document.querySelector(nextPrimarySelector) : null;
+    const ready = nextReadySelector ? document.querySelector(nextReadySelector) : null;
 
-    if (!(root instanceof HTMLElement) || !(main instanceof HTMLElement)) {
+    if (
+      !(root instanceof HTMLElement)
+      || !(main instanceof HTMLElement)
+      || (nextReadySelector && !(ready instanceof HTMLElement))
+    ) {
       return {
-        missingSelector: !(root instanceof HTMLElement) ? nextContentSelector : "main",
+        missingSelector: !(root instanceof HTMLElement)
+          ? nextContentSelector
+          : !(main instanceof HTMLElement)
+            ? "main"
+            : nextReadySelector,
       };
     }
 
@@ -145,6 +154,7 @@ const readLayoutSummary = async (page, { contentSelector, primarySelector }) =>
     const rootRect = root.getBoundingClientRect();
     const mainRect = main.getBoundingClientRect();
     const primaryRect = primary instanceof HTMLElement ? primary.getBoundingClientRect() : null;
+    const readyRect = ready instanceof HTMLElement ? ready.getBoundingClientRect() : null;
 
     return {
       documentClientWidth: document.documentElement.clientWidth,
@@ -169,10 +179,18 @@ const readLayoutSummary = async (page, { contentSelector, primarySelector }) =>
             bottom: primaryRect.bottom,
           }
         : null,
+      ready: readyRect && ready instanceof HTMLElement
+        ? {
+            clientWidth: ready.clientWidth,
+            left: readyRect.left,
+            right: readyRect.right,
+            scrollWidth: ready.scrollWidth,
+          }
+        : null,
       viewportHeight,
       viewportWidth,
     };
-  }, { contentSelector, primarySelector });
+  }, { contentSelector, primarySelector, readySelector });
 
 async function verifyRouteLayout(page, routeSpec, viewportSpec) {
   await page.setViewportSize({
@@ -215,6 +233,18 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
       && layoutSummary.main.right <= layoutSummary.viewportWidth + 1,
     `${routeSpec.id}/${viewportSpec.id}: main content escaped the viewport width`,
   );
+
+  if (layoutSummary.ready) {
+    assert(
+      layoutSummary.ready.left >= -1
+        && layoutSummary.ready.right <= layoutSummary.viewportWidth + 1,
+      `${routeSpec.id}/${viewportSpec.id}: protected surface escaped the viewport width`,
+    );
+    assert(
+      layoutSummary.ready.scrollWidth <= layoutSummary.ready.clientWidth + 1,
+      `${routeSpec.id}/${viewportSpec.id}: protected surface has internal horizontal overflow`,
+    );
+  }
 
   if (layoutSummary.primary) {
     assert(

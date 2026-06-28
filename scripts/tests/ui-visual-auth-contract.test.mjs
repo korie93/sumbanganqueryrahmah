@@ -55,6 +55,8 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /\{ id: "zoom-in", width: 800, height: 900 \}/);
   assert.match(visualContractSource, /\{ id: "zoom-out-boundary", width: 1536, height: 900 \}/);
   assert.match(visualContractSource, /\{ id: "zoom-out", width: 1920, height: 900 \}/);
+  assert.match(visualContractSource, /ready\.scrollWidth/);
+  assert.match(visualContractSource, /protected surface has internal horizontal overflow/);
   assert.match(
     visualContractSource,
     /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\)/,
