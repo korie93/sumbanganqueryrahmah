@@ -53,6 +53,7 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /scrollIntoViewIfNeeded\(\)/);
   assert.match(visualContractSource, /const dashboardZoomViewportSpecs = \[/);
   assert.match(visualContractSource, /\{ id: "zoom-in", width: 800, height: 900 \}/);
+  assert.match(visualContractSource, /\{ id: "zoom-out-boundary", width: 1536, height: 900 \}/);
   assert.match(visualContractSource, /\{ id: "zoom-out", width: 1920, height: 900 \}/);
   assert.match(
     visualContractSource,

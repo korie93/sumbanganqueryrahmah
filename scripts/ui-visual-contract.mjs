@@ -124,6 +124,7 @@ const viewportSpecs = [
 
 const dashboardZoomViewportSpecs = [
   { id: "zoom-in", width: 800, height: 900 },
+  { id: "zoom-out-boundary", width: 1536, height: 900 },
   { id: "zoom-out", width: 1920, height: 900 },
 ];
 
