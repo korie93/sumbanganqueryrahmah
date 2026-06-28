@@ -255,6 +255,13 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
   }
 }
 
+async function waitForTestIdFocus(page, testId) {
+  await page.waitForFunction((nextTestId) => (
+    document.activeElement instanceof HTMLElement
+    && document.activeElement.dataset.testid === nextTestId
+  ), testId, { timeout: 2_000 }).catch(() => undefined);
+}
+
 async function verifyDashboardRecentActivityDetailLayout(page, viewportSpec) {
   const trigger = page.locator('[data-testid^="button-recent-login-details-"]').first();
   await trigger.waitFor({ state: "visible", timeout: 15_000 });
@@ -294,13 +301,47 @@ async function verifyDashboardRecentActivityDetailLayout(page, viewportSpec) {
 
   await page.keyboard.press("Escape");
   await detailSheet.waitFor({ state: "hidden", timeout: 10_000 });
-  await page.waitForFunction((testId) => (
-    document.activeElement instanceof HTMLElement
-    && document.activeElement.dataset.testid === testId
-  ), triggerTestId, { timeout: 2_000 }).catch(() => undefined);
+  await waitForTestIdFocus(page, triggerTestId);
   assert(
     await trigger.evaluate((element) => document.activeElement === element),
     `dashboard/${viewportSpec.id}: recent activity detail did not return focus to its trigger`,
+  );
+}
+
+async function verifyDashboardCleanupDialogLayout(page, viewportSpec) {
+  const trigger = page.getByTestId("button-recent-login-cleanup-ended");
+  await trigger.waitFor({ state: "visible", timeout: 10_000 });
+  const triggerTestId = await trigger.getAttribute("data-testid");
+  assert(triggerTestId, `dashboard/${viewportSpec.id}: cleanup dialog trigger is missing its test id`);
+  await trigger.click();
+
+  const dialog = page.getByRole("alertdialog", { name: "Clean up old ended login logs?" });
+  await dialog.waitFor({ state: "visible", timeout: 10_000 });
+  const dialogLayout = await dialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      clientWidth: element.clientWidth,
+      left: rect.left,
+      right: rect.right,
+      scrollWidth: element.scrollWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  assert(
+    dialogLayout.left >= -1 && dialogLayout.right <= dialogLayout.viewportWidth + 1,
+    `dashboard/${viewportSpec.id}: cleanup dialog escaped the viewport width`,
+  );
+  assert(
+    dialogLayout.scrollWidth <= dialogLayout.clientWidth + 1,
+    `dashboard/${viewportSpec.id}: cleanup dialog has internal horizontal overflow`,
+  );
+
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+  await waitForTestIdFocus(page, triggerTestId);
+  assert(
+    await trigger.evaluate((element) => document.activeElement === element),
+    `dashboard/${viewportSpec.id}: cleanup dialog did not return focus to its trigger`,
   );
 }
 
@@ -414,6 +455,7 @@ const run = async () => {
       for (const viewportSpec of dashboardZoomViewportSpecs) {
         await verifyRouteLayout(page, dashboardRouteSpec, viewportSpec);
         await verifyDashboardRecentActivityDetailLayout(page, viewportSpec);
+        await verifyDashboardCleanupDialogLayout(page, viewportSpec);
       }
     }
   } catch (error) {

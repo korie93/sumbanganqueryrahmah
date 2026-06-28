@@ -251,6 +251,9 @@ function DashboardRecentLoginActivityImpl({
   const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<RecentLoginActivity | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<RecentLoginActivity | null>(null);
+  const activityCardRef = useRef<HTMLDivElement | null>(null);
+  const cleanupTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
   const safeActivities = activities ?? EMPTY_RECENT_LOGIN_ACTIVITIES;
   const pageStartIndex = (Math.max(1, page) - 1) * Math.max(1, pageSize);
@@ -289,6 +292,36 @@ function DashboardRecentLoginActivityImpl({
       setDeleteCandidate(null);
     }
   }, []);
+  const restoreDialogFocus = useCallback((
+    event: Event,
+    triggerRef: { current: HTMLButtonElement | null },
+  ) => {
+    event.preventDefault();
+    const trigger = triggerRef.current;
+    triggerRef.current = null;
+    if (trigger?.isConnected && !trigger.disabled) {
+      trigger.focus();
+      return;
+    }
+    activityCardRef.current?.focus();
+  }, []);
+  const handleCleanupCloseAutoFocus = useCallback((event: Event) => {
+    restoreDialogFocus(event, cleanupTriggerRef);
+  }, [restoreDialogFocus]);
+  const handleDeleteCloseAutoFocus = useCallback((event: Event) => {
+    restoreDialogFocus(event, deleteTriggerRef);
+  }, [restoreDialogFocus]);
+  const handleOpenCleanupDialog = useCallback((trigger: HTMLButtonElement) => {
+    cleanupTriggerRef.current = trigger;
+    setCleanupDialogOpen(true);
+  }, []);
+  const handleOpenDeleteDialog = useCallback((
+    activity: RecentLoginActivity,
+    trigger: HTMLButtonElement,
+  ) => {
+    deleteTriggerRef.current = trigger;
+    setDeleteCandidate(activity);
+  }, []);
   const handleConfirmCleanup = useCallback(() => {
     if (onCleanupEndedActivities) {
       onCleanupEndedActivities();
@@ -305,6 +338,8 @@ function DashboardRecentLoginActivityImpl({
   return (
     <>
       <Card
+        ref={activityCardRef}
+        tabIndex={-1}
         className="min-w-0 max-w-full rounded-2xl border border-border/60 bg-background shadow-sm"
         data-floating-ai-avoid="true"
         data-testid="card-recent-login-activity"
@@ -330,7 +365,7 @@ function DashboardRecentLoginActivityImpl({
                   variant="outline"
                   size="sm"
                   className="h-8 rounded-full border-destructive/40 px-3 text-xs text-destructive hover:bg-destructive/10"
-                  onClick={() => setCleanupDialogOpen(true)}
+                  onClick={(event) => handleOpenCleanupDialog(event.currentTarget)}
                   disabled={cleaningEndedActivityLogs}
                   aria-label={`Clean up ended login activity logs older than ${RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS} days`}
                   data-testid="button-recent-login-cleanup-ended"
@@ -613,7 +648,7 @@ function DashboardRecentLoginActivityImpl({
                                 variant="outline"
                                 size="sm"
                                 className="w-full justify-center rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10"
-                                onClick={() => setDeleteCandidate(activity)}
+                                onClick={(event) => handleOpenDeleteDialog(activity, event.currentTarget)}
                                 disabled={isDeletingActivity}
                                 aria-label={`Delete ended login activity log for ${activity.username}`}
                                 data-testid={`button-recent-login-delete-${absoluteIndex}`}
@@ -651,7 +686,7 @@ function DashboardRecentLoginActivityImpl({
         onOpenChange={handleDetailSheetOpenChange}
       />
       <AlertDialog open={deleteCandidate !== null} onOpenChange={handleDeleteDialogOpenChange}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={handleDeleteCloseAutoFocus}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete ended login log?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -671,7 +706,7 @@ function DashboardRecentLoginActivityImpl({
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={handleCleanupCloseAutoFocus}>
           <AlertDialogHeader>
             <AlertDialogTitle>Clean up old ended login logs?</AlertDialogTitle>
             <AlertDialogDescription>

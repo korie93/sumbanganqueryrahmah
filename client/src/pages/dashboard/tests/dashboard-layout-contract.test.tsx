@@ -917,6 +917,10 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(source, /detailTriggerRef\.current = null/);
   assert.match(source, /trigger\?\.isConnected/);
   assert.match(source, /trigger\.focus\(\)/);
+  assert.match(source, /onCloseAutoFocus=\{handleDeleteCloseAutoFocus\}/);
+  assert.match(source, /onCloseAutoFocus=\{handleCleanupCloseAutoFocus\}/);
+  assert.match(source, /!trigger\.disabled/);
+  assert.match(source, /activityCardRef\.current\?\.focus\(\)/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
 
