@@ -54,7 +54,7 @@ export async function listManagedUsersPageOrAll(
     ...(search !== undefined ? { search } : {}),
     role: (() => {
       const value = String(readOptionalString(query.role) || "all").toLowerCase();
-      return value === "admin" || value === "user" ? value : "all";
+      return value === "admin" || value === "manager" || value === "user" ? value : "all";
     })(),
     status: parseManageableStatusFilter(query.status),
   });

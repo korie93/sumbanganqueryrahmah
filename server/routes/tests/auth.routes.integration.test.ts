@@ -154,7 +154,7 @@ test("GET /api/admin/users returns paginated managed users and forwards filters"
   const { server, baseUrl } = await startTestServer(app);
   try {
     const response = await fetch(
-      `${baseUrl}/api/admin/users?page=2&pageSize=15&search=alpha&role=admin&status=active`,
+      `${baseUrl}/api/admin/users?page=2&pageSize=15&search=alpha&role=manager&status=active`,
     );
 
     assert.equal(response.status, 200);
@@ -171,7 +171,7 @@ test("GET /api/admin/users returns paginated managed users and forwards filters"
     assert.equal(listPageCalls[0].page, 2);
     assert.equal(listPageCalls[0].pageSize, 15);
     assert.equal(listPageCalls[0].search, "alpha");
-    assert.equal(listPageCalls[0].role, "admin");
+    assert.equal(listPageCalls[0].role, "manager");
     assert.equal(listPageCalls[0].status, "active");
   } finally {
     await stopTestServer(server);
