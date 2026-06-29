@@ -630,6 +630,12 @@ export const activityMutationSuccessResponseSchema = z.object({
   success: z.literal(true),
 }).strict();
 
+export const activityHeartbeatResponseSchema = z.object({
+  ok: z.literal(true),
+  status: z.literal("ONLINE"),
+  lastActivityTime: z.string().datetime({ offset: true }),
+}).strict();
+
 export const activityBulkDeleteResponseSchema = z.object({
   ok: z.literal(true),
   success: z.literal(true),
@@ -1050,6 +1056,7 @@ export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type ActivityMutationSuccessResponseContract = z.infer<typeof activityMutationSuccessResponseSchema>;
+export type ActivityHeartbeatResponseContract = z.infer<typeof activityHeartbeatResponseSchema>;
 export type ActivityBulkDeleteResponseContract = z.infer<typeof activityBulkDeleteResponseSchema>;
 export type ActivityCleanupResponseContract = z.infer<typeof activityCleanupResponseSchema>;
 export type ActivityRetentionStatusContract = z.infer<typeof activityRetentionStatusSchema>;

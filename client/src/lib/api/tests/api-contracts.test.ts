@@ -14,6 +14,7 @@ import {
   activityBannedUsersResponseSchema,
   activityBulkDeleteResponseSchema,
   activityCleanupResponseSchema,
+  activityHeartbeatResponseSchema,
   activityInvestigationResponseSchema,
   activityListResponseSchema,
   activityMutationSuccessResponseSchema,
@@ -64,6 +65,9 @@ import {
   getTopActiveUsers,
 } from "@/lib/api/analytics";
 import {
+  activityHeartbeat,
+  activityHeartbeatLight,
+  activityLogout,
   banUser,
   cleanupEndedActivityLogs,
   deleteActivityLog,
@@ -1092,6 +1096,75 @@ test("activity mutation contracts accept valid responses and reject malformed cl
     }).success,
     false,
   );
+});
+
+test("activity session contracts require a verified online heartbeat", () => {
+  assert.deepEqual(
+    activityHeartbeatResponseSchema.parse({
+      ok: true,
+      status: "ONLINE",
+      lastActivityTime: "2026-06-29T05:30:00.000Z",
+    }),
+    {
+      ok: true,
+      status: "ONLINE",
+      lastActivityTime: "2026-06-29T05:30:00.000Z",
+    },
+  );
+  assert.equal(
+    activityHeartbeatResponseSchema.safeParse({
+      ok: true,
+      status: "IDLE",
+      lastActivityTime: "2026-06-29T05:30:00.000Z",
+    }).success,
+    false,
+  );
+  assert.equal(
+    activityHeartbeatResponseSchema.safeParse({
+      ok: true,
+      status: "ONLINE",
+      lastActivityTime: "not-a-date",
+    }).success,
+    false,
+  );
+});
+
+test("activity session wrappers reject false logout and malformed heartbeat success", async () => {
+  let heartbeatCalls = 0;
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/activity/logout") {
+      return jsonResponse({ ok: true, success: "true" });
+    }
+    if (url === "/api/activity/heartbeat") {
+      heartbeatCalls += 1;
+      return jsonResponse({
+        ok: true,
+        status: heartbeatCalls === 1 ? "IDLE" : "ONLINE",
+        lastActivityTime: heartbeatCalls === 1
+          ? "2026-06-29T05:30:00.000Z"
+          : "not-a-date",
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => activityLogout("activity-1"),
+      /API contract mismatch for \/api\/activity\/logout/,
+    );
+    await assert.rejects(
+      () => activityHeartbeat({ activityId: "activity-1" }),
+      /API contract mismatch for \/api\/activity\/heartbeat/,
+    );
+    await assert.rejects(
+      () => activityHeartbeatLight(),
+      /API contract mismatch for \/api\/activity\/heartbeat/,
+    );
+  } finally {
+    restoreFetch();
+  }
 });
 
 test("activity retention contract enforces policy and preview invariants", () => {

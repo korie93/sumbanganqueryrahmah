@@ -4,6 +4,7 @@ import {
   activityBannedUsersResponseSchema,
   activityBulkDeleteResponseSchema,
   activityCleanupResponseSchema,
+  activityHeartbeatResponseSchema,
   activityInvestigationResponseSchema,
   activityListResponseSchema,
   activityMutationSuccessResponseSchema,
@@ -47,7 +48,7 @@ export async function activityLogin(data: ActivityLoginPayload) {
 export async function activityLogout(activityId?: string) {
   const payload = activityId ? { activityId } : {};
   const response = await apiRequest("POST", "/api/activity/logout", payload);
-  return response.json();
+  return parseApiJson(response, activityMutationSuccessResponseSchema, "/api/activity/logout");
 }
 
 export async function activityHeartbeat(payload?: {
@@ -56,9 +57,10 @@ export async function activityHeartbeat(payload?: {
   browser?: string | undefined;
   fingerprint?: string | undefined;
 }, options?: ActivityRequestOptions) {
-  return apiRequest("POST", "/api/activity/heartbeat", payload || {}, {
+  const response = await apiRequest("POST", "/api/activity/heartbeat", payload || {}, {
     signal: options?.signal,
   });
+  return parseApiJson(response, activityHeartbeatResponseSchema, "/api/activity/heartbeat");
 }
 
 export type ActivityStatus = "ONLINE" | "IDLE" | "LOGOUT" | "KICKED" | "BANNED";
@@ -116,9 +118,10 @@ export type ActivityInvestigation = ActivityInvestigationContract;
 export type ActivityRetentionStatus = ActivityRetentionStatusContract;
 
 export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
-  return apiRequest("POST", "/api/activity/heartbeat", {}, {
+  const response = await apiRequest("POST", "/api/activity/heartbeat", {}, {
     signal: options?.signal,
   });
+  return parseApiJson(response, activityHeartbeatResponseSchema, "/api/activity/heartbeat");
 }
 
 export async function getAllActivity(options?: ActivityRequestOptions) {

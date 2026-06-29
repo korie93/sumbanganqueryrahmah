@@ -1152,7 +1152,11 @@ test("activity heartbeat wrappers forward AbortSignal", async () => {
       signal: (init?.signal as AbortSignal | undefined) || null,
     });
 
-    return new Response(null, { status: 204 });
+    return jsonResponse({
+      ok: true,
+      status: "ONLINE",
+      lastActivityTime: "2026-06-29T05:30:00.000Z",
+    });
   }) as typeof fetch);
 
   try {
