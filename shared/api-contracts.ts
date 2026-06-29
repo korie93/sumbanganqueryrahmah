@@ -640,7 +640,7 @@ export const authManagedUserDeleteResponseSchema = authUserMutationResponseSchem
   deleted: z.literal(true),
 }).strict();
 
-const authDeliveryPreviewUrlSchema = z.string().trim().refine((value) => {
+const authSafePreviewUrlSchema = z.string().trim().refine((value) => {
   if (/^\/(?!\/)/.test(value)) {
     const hasUnsafePathCharacter = Array.from(value).some((character) => {
       const codePoint = character.codePointAt(0) ?? 0;
@@ -664,7 +664,9 @@ const authDeliveryPreviewUrlSchema = z.string().trim().refine((value) => {
   } catch {
     return false;
   }
-}, "Delivery preview URL must use HTTP(S) or a root-relative path").nullable();
+}, "Delivery preview URL must use HTTP(S) or a root-relative path");
+
+const authDeliveryPreviewUrlSchema = authSafePreviewUrlSchema.nullable();
 
 export const authManagedDeliverySchema = z.object({
   deliveryMode: z.enum(["dev_outbox", "none", "smtp"]),
@@ -711,6 +713,97 @@ export const authManagedAccountActivationResponseSchema = authUserMutationRespon
 
 export const authManagedAccountPasswordResetResponseSchema = authUserForceLogoutResponseSchema.extend({
   reset: authManagedDeliverySchema,
+}).strict();
+
+export const authPendingPasswordResetRequestSchema = z.object({
+  id: nonEmptyStringSchema.max(128),
+  userId: nonEmptyStringSchema.max(128),
+  username: nonEmptyStringSchema.max(128),
+  fullName: z.string().trim().max(200).nullable(),
+  email: z.string().trim().email().max(320).nullable(),
+  role: z.enum(["admin", "manager", "user"]),
+  status: z.enum(["pending_activation", "active", "suspended", "disabled"]),
+  isBanned: z.boolean().nullable(),
+  requestedByUser: z.string().trim().max(128).nullable(),
+  approvedBy: z.string().trim().max(128).nullable(),
+  resetType: nonEmptyStringSchema.max(64),
+  createdAt: z.string().datetime({ offset: true }),
+  expiresAt: authNullableTimestampSchema,
+  usedAt: authNullableTimestampSchema,
+}).strict();
+
+export const authPendingPasswordResetRequestsResponseSchema = z.object({
+  ok: z.literal(true),
+  requests: z.array(authPendingPasswordResetRequestSchema),
+  pagination: authAdminPaginationSchema,
+}).strict().superRefine((value, context) => {
+  if (new Set(value.requests.map((request) => request.id)).size !== value.requests.length) {
+    context.addIssue({
+      code: "custom",
+      message: "Password reset request ids must be unique",
+      path: ["requests"],
+    });
+  }
+  if (
+    value.requests.length > value.pagination.pageSize
+    || value.requests.length > value.pagination.total
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Password reset request page size is inconsistent",
+      path: ["requests"],
+    });
+  }
+});
+
+export const authDevMailOutboxPreviewSchema = z.object({
+  createdAt: z.string().datetime({ offset: true }),
+  id: nonEmptyStringSchema.max(128),
+  previewUrl: authSafePreviewUrlSchema,
+  subject: nonEmptyStringSchema.max(500),
+  to: z.string().trim().email().max(320),
+}).strict();
+
+export const authDevMailOutboxPreviewsResponseSchema = z.object({
+  ok: z.literal(true),
+  enabled: z.boolean(),
+  previews: z.array(authDevMailOutboxPreviewSchema),
+  pagination: authAdminPaginationSchema,
+}).strict().superRefine((value, context) => {
+  if (new Set(value.previews.map((preview) => preview.id)).size !== value.previews.length) {
+    context.addIssue({
+      code: "custom",
+      message: "Development mail preview ids must be unique",
+      path: ["previews"],
+    });
+  }
+  if (
+    value.previews.length > value.pagination.pageSize
+    || value.previews.length > value.pagination.total
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Development mail preview page size is inconsistent",
+      path: ["previews"],
+    });
+  }
+  if (!value.enabled && (value.previews.length > 0 || value.pagination.total > 0)) {
+    context.addIssue({
+      code: "custom",
+      message: "Disabled development mail outbox cannot contain previews",
+      path: ["enabled"],
+    });
+  }
+});
+
+export const authDevMailOutboxDeleteResponseSchema = z.object({
+  ok: z.literal(true),
+  deleted: z.literal(true),
+}).strict();
+
+export const authDevMailOutboxClearResponseSchema = z.object({
+  ok: z.literal(true),
+  deletedCount: nonNegativeIntSchema,
 }).strict();
 
 export const activityStatusSchema = z.enum([
@@ -1194,6 +1287,12 @@ export type AuthManagedUserDeleteResponseContract = z.infer<typeof authManagedUs
 export type AuthManagedDeliveryContract = z.infer<typeof authManagedDeliverySchema>;
 export type AuthManagedAccountActivationResponseContract = z.infer<typeof authManagedAccountActivationResponseSchema>;
 export type AuthManagedAccountPasswordResetResponseContract = z.infer<typeof authManagedAccountPasswordResetResponseSchema>;
+export type AuthPendingPasswordResetRequestContract = z.infer<typeof authPendingPasswordResetRequestSchema>;
+export type AuthPendingPasswordResetRequestsResponseContract = z.infer<typeof authPendingPasswordResetRequestsResponseSchema>;
+export type AuthDevMailOutboxPreviewContract = z.infer<typeof authDevMailOutboxPreviewSchema>;
+export type AuthDevMailOutboxPreviewsResponseContract = z.infer<typeof authDevMailOutboxPreviewsResponseSchema>;
+export type AuthDevMailOutboxDeleteResponseContract = z.infer<typeof authDevMailOutboxDeleteResponseSchema>;
+export type AuthDevMailOutboxClearResponseContract = z.infer<typeof authDevMailOutboxClearResponseSchema>;
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;

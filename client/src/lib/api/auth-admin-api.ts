@@ -1,23 +1,23 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import {
+  authDevMailOutboxClearResponseSchema,
+  authDevMailOutboxDeleteResponseSchema,
+  authDevMailOutboxPreviewsResponseSchema,
   authManagedAccountActivationResponseSchema,
   authManagedAccountPasswordResetResponseSchema,
   authManagedUserDeleteResponseSchema,
   authManagedUsersResponseSchema,
+  authPendingPasswordResetRequestsResponseSchema,
   authUserForceLogoutResponseSchema,
   authUserMutationResponseSchema,
 } from "@shared/api-contracts";
 import type { ManageableUserRole } from "@shared/user-roles";
 import type {
-  DevMailOutboxClearResponse,
-  DevMailOutboxDeleteResponse,
   DevMailOutboxPreviewsQuery,
-  DevMailOutboxPreviewsResponse,
   ManagedUsersQuery,
   ManagedUsersResponse,
   PendingPasswordResetRequestsQuery,
-  PendingPasswordResetRequestsResponse,
   RequestOptions,
 } from "./auth-types";
 
@@ -136,7 +136,7 @@ export async function resendManagedUserActivation(userId: string) {
 export async function getPendingPasswordResetRequests(
   query?: PendingPasswordResetRequestsQuery,
   options?: RequestOptions,
-): Promise<PendingPasswordResetRequestsResponse> {
+) {
   const params = new URLSearchParams();
   if (query?.page) params.set("page", String(query.page));
   if (query?.pageSize) params.set("pageSize", String(query.pageSize));
@@ -149,13 +149,17 @@ export async function getPendingPasswordResetRequests(
     undefined,
     { signal: options?.signal },
   );
-  return response.json() as Promise<PendingPasswordResetRequestsResponse>;
+  return parseApiJson(
+    response,
+    authPendingPasswordResetRequestsResponseSchema,
+    "/api/admin/password-reset-requests",
+  );
 }
 
 export async function getDevMailOutboxPreviews(
   query?: DevMailOutboxPreviewsQuery,
   options?: RequestOptions,
-): Promise<DevMailOutboxPreviewsResponse> {
+) {
   const params = new URLSearchParams();
   if (query?.page) params.set("page", String(query.page));
   if (query?.pageSize) params.set("pageSize", String(query.pageSize));
@@ -166,7 +170,11 @@ export async function getDevMailOutboxPreviews(
   const response = await apiRequest("GET", `/api/admin/dev-mail-outbox${suffix}`, undefined, {
     signal: options?.signal,
   });
-  return response.json() as Promise<DevMailOutboxPreviewsResponse>;
+  return parseApiJson(
+    response,
+    authDevMailOutboxPreviewsResponseSchema,
+    "/api/admin/dev-mail-outbox",
+  );
 }
 
 export async function deleteDevMailOutboxPreview(previewId: string) {
@@ -174,10 +182,18 @@ export async function deleteDevMailOutboxPreview(previewId: string) {
     "DELETE",
     `/api/admin/dev-mail-outbox/${encodeURIComponent(previewId)}`,
   );
-  return response.json() as Promise<DevMailOutboxDeleteResponse>;
+  return parseApiJson(
+    response,
+    authDevMailOutboxDeleteResponseSchema,
+    "/api/admin/dev-mail-outbox/:previewId",
+  );
 }
 
 export async function clearDevMailOutboxPreviews() {
   const response = await apiRequest("DELETE", "/api/admin/dev-mail-outbox");
-  return response.json() as Promise<DevMailOutboxClearResponse>;
+  return parseApiJson(
+    response,
+    authDevMailOutboxClearResponseSchema,
+    "/api/admin/dev-mail-outbox",
+  );
 }

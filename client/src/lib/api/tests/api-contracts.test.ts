@@ -24,6 +24,9 @@ import {
   apiPaginationMetaSchema,
   authActivationTokenResponseSchema,
   authCurrentUserSchema,
+  authDevMailOutboxClearResponseSchema,
+  authDevMailOutboxDeleteResponseSchema,
+  authDevMailOutboxPreviewsResponseSchema,
   authLoginResponseSchema,
   authManagedAccountActivationResponseSchema,
   authManagedAccountPasswordResetResponseSchema,
@@ -32,6 +35,7 @@ import {
   authManagedUsersResponseSchema,
   authMessageResponseSchema,
   authPasswordResetTokenResponseSchema,
+  authPendingPasswordResetRequestsResponseSchema,
   authRecoveryTokenMetadataSchema,
   authTwoFactorSetupResponseSchema,
   authTwoFactorStatusResponseSchema,
@@ -87,8 +91,12 @@ import {
   unbanUser,
 } from "@/lib/api/activity";
 import {
+  clearDevMailOutboxPreviews,
   createManagedUserAccount,
+  deleteDevMailOutboxPreview,
   deleteManagedUserAccount,
+  getDevMailOutboxPreviews,
+  getPendingPasswordResetRequests,
   getSuperuserManagedUsers,
   getMe,
   login,
@@ -1125,6 +1133,156 @@ test("managed recovery wrappers reject unsafe delivery metadata", async () => {
     await assert.rejects(
       () => resendManagedUserActivation("user/1"),
       /API contract mismatch for \/api\/admin\/users\/:id\/resend-activation/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("privileged recovery list contracts reject sensitive drift and unsafe preview links", () => {
+  const resetRequest = {
+    id: "reset-1",
+    userId: "user-1",
+    username: "user.one",
+    fullName: "User One",
+    email: "user.one@example.com",
+    role: "user",
+    status: "active",
+    isBanned: false,
+    requestedByUser: "user.one",
+    approvedBy: null,
+    resetType: "email_link",
+    createdAt: "2026-06-29T10:00:00.000Z",
+    expiresAt: "2026-06-29T14:00:00.000Z",
+    usedAt: null,
+  } as const;
+  const preview = {
+    createdAt: "2026-06-29T10:00:00.000Z",
+    id: "1782730000000-0123456789abcdef",
+    previewUrl: "/dev/mail-preview/1782730000000-0123456789abcdef",
+    subject: "Account activation",
+    to: "user.one@example.com",
+  } as const;
+
+  assert.equal(
+    authPendingPasswordResetRequestsResponseSchema.safeParse({
+      ok: true,
+      requests: [resetRequest],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    }).success,
+    true,
+  );
+  assert.equal(
+    authPendingPasswordResetRequestsResponseSchema.safeParse({
+      ok: true,
+      requests: [{ ...resetRequest, tokenHash: "must-not-reach-client" }],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    }).success,
+    false,
+  );
+  assert.equal(
+    authDevMailOutboxPreviewsResponseSchema.safeParse({
+      ok: true,
+      enabled: true,
+      previews: [preview],
+      pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+    }).success,
+    true,
+  );
+  assert.equal(
+    authDevMailOutboxPreviewsResponseSchema.safeParse({
+      ok: true,
+      enabled: true,
+      previews: [{ ...preview, previewUrl: "javascript:alert(1)" }],
+      pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+    }).success,
+    false,
+  );
+  assert.equal(
+    authDevMailOutboxPreviewsResponseSchema.safeParse({
+      ok: true,
+      enabled: false,
+      previews: [preview],
+      pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+    }).success,
+    false,
+  );
+  assert.equal(
+    authDevMailOutboxDeleteResponseSchema.safeParse({ ok: true, deleted: false }).success,
+    false,
+  );
+  assert.equal(
+    authDevMailOutboxClearResponseSchema.safeParse({ ok: true, deletedCount: -1 }).success,
+    false,
+  );
+});
+
+test("privileged recovery list wrappers reject malformed response payloads", async () => {
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+    if (url === "/api/admin/password-reset-requests" && method === "GET") {
+      return jsonResponse({
+        ok: true,
+        requests: [{
+          id: "reset-1",
+          userId: "user-1",
+          username: "user.one",
+          fullName: null,
+          email: "user.one@example.com",
+          role: "user",
+          status: "active",
+          isBanned: false,
+          requestedByUser: "user.one",
+          approvedBy: null,
+          resetType: "email_link",
+          createdAt: "2026-06-29T10:00:00.000Z",
+          expiresAt: null,
+          usedAt: null,
+          tokenHash: "must-not-reach-client",
+        }],
+        pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+      });
+    }
+    if (url === "/api/admin/dev-mail-outbox" && method === "GET") {
+      return jsonResponse({
+        ok: true,
+        enabled: true,
+        previews: [{
+          createdAt: "2026-06-29T10:00:00.000Z",
+          id: "mail-1",
+          previewUrl: "javascript:alert(1)",
+          subject: "Reset password",
+          to: "user.one@example.com",
+        }],
+        pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+      });
+    }
+    if (url === "/api/admin/dev-mail-outbox/mail%2F1" && method === "DELETE") {
+      return jsonResponse({ ok: true, deleted: false });
+    }
+    if (url === "/api/admin/dev-mail-outbox" && method === "DELETE") {
+      return jsonResponse({ ok: true, deletedCount: -1 });
+    }
+    throw new Error(`Unexpected request: ${method} ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getPendingPasswordResetRequests(),
+      /API contract mismatch for \/api\/admin\/password-reset-requests/,
+    );
+    await assert.rejects(
+      () => getDevMailOutboxPreviews(),
+      /API contract mismatch for \/api\/admin\/dev-mail-outbox/,
+    );
+    await assert.rejects(
+      () => deleteDevMailOutboxPreview("mail/1"),
+      /API contract mismatch for \/api\/admin\/dev-mail-outbox\/:previewId/,
+    );
+    await assert.rejects(
+      () => clearDevMailOutboxPreviews(),
+      /API contract mismatch for \/api\/admin\/dev-mail-outbox/,
     );
   } finally {
     restoreFetch();
