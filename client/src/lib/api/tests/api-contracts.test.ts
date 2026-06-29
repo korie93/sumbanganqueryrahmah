@@ -92,6 +92,12 @@ import {
   unbanUser,
 } from "@/lib/api/activity";
 import {
+  createBackupAsync,
+  deleteBackup as deleteBackupApi,
+  getBackupJob,
+  getBackups,
+} from "@/lib/api/backups";
+import {
   clearDevMailOutboxPreviews,
   createManagedUserAccount,
   deleteDevMailOutboxPreview,
@@ -1603,6 +1609,87 @@ test("activity session wrappers reject false logout and malformed heartbeat succ
     await assert.rejects(
       () => activityHeartbeatLight(),
       /API contract mismatch for \/api\/activity\/heartbeat/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("backup API wrappers reject malformed management payloads", async () => {
+  const validBackupJob = {
+    id: "job-1",
+    type: "create",
+    status: "queued",
+    requestedBy: "superuser",
+    requestedAt: "2026-06-29T05:30:00.000Z",
+    startedAt: null,
+    finishedAt: null,
+    backupId: null,
+    backupName: "Nightly",
+    queuePosition: 1,
+    result: null,
+    error: null,
+  };
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url.startsWith("/api/backups?") && method === "GET") {
+      return jsonResponse({
+        backups: [
+          {
+            id: "backup-1",
+            name: "Nightly",
+            createdAt: "2026-06-29T05:30:00.000Z",
+            createdBy: "superuser",
+            metadata: null,
+          },
+        ],
+        pagination: {
+          page: "1",
+          pageSize: 20,
+          total: 1,
+          totalPages: 1,
+        },
+      });
+    }
+    if (url === "/api/backups?async=1" && method === "POST") {
+      return jsonResponse({
+        message: "Backup creation queued.",
+        job: {
+          ...validBackupJob,
+          queuePosition: "1",
+        },
+      });
+    }
+    if (url === "/api/backups/jobs/job-1" && method === "GET") {
+      return jsonResponse({
+        ...validBackupJob,
+        status: "waiting",
+      });
+    }
+    if (url === "/api/backups/backup-1" && method === "DELETE") {
+      return jsonResponse({ success: "true" });
+    }
+    throw new Error(`Unexpected ${method} ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getBackups({ page: 1, pageSize: 20 }),
+      /API contract mismatch for \/api\/backups/,
+    );
+    await assert.rejects(
+      () => createBackupAsync("Nightly"),
+      /API contract mismatch for \/api\/backups\?async=1/,
+    );
+    await assert.rejects(
+      () => getBackupJob("job-1"),
+      /API contract mismatch for \/api\/backups\/jobs\/job-1/,
+    );
+    await assert.rejects(
+      () => deleteBackupApi("backup-1"),
+      /API contract mismatch for \/api\/backups\/backup-1/,
     );
   } finally {
     restoreFetch();
