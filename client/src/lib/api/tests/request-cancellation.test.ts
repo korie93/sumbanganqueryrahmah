@@ -855,9 +855,40 @@ test("activity API wrappers forward AbortSignal", async () => {
     }
     if (url === "/api/activity/activity%2F1/investigation?relatedPage=2&relatedPageSize=10") {
       return jsonResponse({
+        ok: true,
+        success: true,
         investigation: {
-          session: { id: "activity/1" },
-          security: {},
+          session: {
+            id: "activity/1",
+            username: "operator.one",
+            role: "admin",
+            status: "ONLINE",
+            isActive: true,
+            loginTime: "2026-06-24T08:00:00.000Z",
+            logoutTime: null,
+            lastActivityTime: "2026-06-24T08:05:00.000Z",
+            logoutReason: null,
+            durationMs: 300_000,
+            device: {
+              browser: "Chrome 149",
+              deviceType: "desktop",
+              fingerprintHint: "masked-fp",
+              ipAddress: "203.0.113.88",
+              pcName: "ops-terminal",
+              platform: "Windows 10/11",
+            },
+          },
+          security: {
+            activeBan: null,
+            riskLevel: "normal",
+            reasons: [],
+            signals: [{
+              code: "no_elevated_risk",
+              description: "No elevated risk detected.",
+              label: "Normal session",
+              severity: "info",
+            }],
+          },
           relatedSessions: [],
           relatedSessionsPagination: {
             mode: "offset",

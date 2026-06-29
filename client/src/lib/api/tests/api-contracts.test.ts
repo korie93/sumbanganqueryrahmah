@@ -12,6 +12,7 @@ import {
   analyticsTopUsersSchema,
   appConfigResponseSchema,
   activityCleanupResponseSchema,
+  activityInvestigationResponseSchema,
   activityListResponseSchema,
   activityMutationSuccessResponseSchema,
   activityPageResponseSchema,
@@ -62,6 +63,7 @@ import {
 import {
   cleanupEndedActivityLogs,
   deleteActivityLog,
+  getActivityInvestigation,
   getActivityPage,
   getAllActivity,
   getFilteredActivity,
@@ -1126,6 +1128,122 @@ test("activity mutation API wrappers encode ids and reject malformed response pa
       "/api/activity/session%2Fwith%3Fquery",
       "/api/activity/logs/cleanup-ended",
     ]);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("activity investigation contract rejects raw fingerprints and malformed audit timestamps", () => {
+  const investigationResponse = {
+    ok: true,
+    success: true,
+    investigation: {
+      session: {
+        id: "activity-1",
+        username: "operator.one",
+        role: "admin",
+        status: "ONLINE",
+        isActive: true,
+        loginTime: "2026-06-24T08:00:00.000Z",
+        logoutTime: null,
+        lastActivityTime: "2026-06-24T08:05:00.000Z",
+        logoutReason: null,
+        durationMs: 300_000,
+        device: {
+          browser: "Chrome 149",
+          deviceType: "desktop",
+          fingerprintHint: "masked-fp",
+          ipAddress: "203.0.113.88",
+          pcName: "ops-terminal",
+          platform: "Windows 10/11",
+        },
+      },
+      security: {
+        activeBan: null,
+        riskLevel: "normal",
+        reasons: [],
+        signals: [{
+          code: "no_elevated_risk",
+          description: "No elevated risk detected.",
+          label: "Normal session",
+          severity: "info",
+        }],
+      },
+      relatedSessions: [],
+      relatedSessionsPagination: {
+        mode: "offset",
+        page: 1,
+        pageSize: 5,
+        limit: 5,
+        offset: 0,
+        total: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      timeline: [],
+      auditEvents: [{
+        id: "audit-1",
+        action: "LOGIN_SUCCESS",
+        performedBy: "operator.one",
+        requestId: "request-1",
+        timestamp: "2026-06-24T08:00:00.000Z",
+      }],
+    },
+  } as const;
+
+  assert.equal(activityInvestigationResponseSchema.safeParse(investigationResponse).success, true);
+  assert.equal(
+    activityInvestigationResponseSchema.safeParse({
+      ...investigationResponse,
+      investigation: {
+        ...investigationResponse.investigation,
+        session: {
+          ...investigationResponse.investigation.session,
+          fingerprint: "raw-fingerprint",
+        },
+      },
+    }).success,
+    false,
+  );
+  assert.equal(
+    activityInvestigationResponseSchema.safeParse({
+      ...investigationResponse,
+      investigation: {
+        ...investigationResponse.investigation,
+        auditEvents: [{
+          ...investigationResponse.investigation.auditEvents[0],
+          timestamp: "not-a-date",
+        }],
+      },
+    }).success,
+    false,
+  );
+});
+
+test("activity investigation API wrapper rejects incomplete sensitive payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    assert.equal(
+      String(input),
+      "/api/activity/activity%2F1/investigation?relatedPage=1&relatedPageSize=5",
+    );
+    return jsonResponse({
+      ok: true,
+      success: true,
+      investigation: {
+        session: {
+          id: "activity/1",
+          fingerprint: "raw-fingerprint",
+        },
+      },
+    });
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getActivityInvestigation("activity/1"),
+      /API contract mismatch for \/api\/activity\/:id\/investigation/,
+    );
   } finally {
     restoreFetch();
   }

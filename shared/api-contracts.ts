@@ -648,6 +648,95 @@ export const activityCleanupResponseSchema = z.object({
   standardRetentionDays: z.number().int().positive(),
 }).strict();
 
+const activityInvestigationTimestampSchema = z.string().datetime({ offset: true }).nullable();
+const activityInvestigationDeviceTypeSchema = z.enum([
+  "desktop",
+  "mobile",
+  "tablet",
+  "unknown",
+]).nullable();
+const activityInvestigationDeviceSchema = z.object({
+  browser: nullableStringSchema,
+  deviceType: activityInvestigationDeviceTypeSchema,
+  fingerprintHint: nullableStringSchema,
+  ipAddress: nullableStringSchema,
+  platform: nullableStringSchema,
+}).strict();
+
+export const activityInvestigationSchema = z.object({
+  session: z.object({
+    id: nonEmptyStringSchema,
+    username: nonEmptyStringSchema,
+    role: nonEmptyStringSchema,
+    status: activityStatusSchema,
+    isActive: z.boolean(),
+    loginTime: activityInvestigationTimestampSchema,
+    logoutTime: activityInvestigationTimestampSchema,
+    lastActivityTime: activityInvestigationTimestampSchema,
+    logoutReason: nullableStringSchema,
+    durationMs: z.number().finite().nonnegative().nullable(),
+    device: activityInvestigationDeviceSchema.extend({
+      pcName: nullableStringSchema,
+    }).strict(),
+  }).strict(),
+  security: z.object({
+    activeBan: z.object({
+      banId: nonEmptyStringSchema,
+      bannedAt: z.string().datetime({ offset: true }),
+    }).strict().nullable(),
+    riskLevel: z.enum(["attention", "critical", "normal"]),
+    reasons: z.array(nonEmptyStringSchema),
+    signals: z.array(z.object({
+      code: z.enum([
+        "active_ban",
+        "concurrent_session",
+        "forced_logout",
+        "idle_timeout",
+        "new_device",
+        "new_ip",
+        "no_elevated_risk",
+        "shared_device",
+        "shared_ip",
+      ]),
+      description: nonEmptyStringSchema,
+      label: nonEmptyStringSchema,
+      severity: z.enum(["attention", "critical", "info"]),
+    }).strict()),
+  }).strict(),
+  relatedSessions: z.array(z.object({
+    id: nonEmptyStringSchema,
+    username: nonEmptyStringSchema,
+    role: nonEmptyStringSchema,
+    status: activityStatusSchema,
+    isActive: z.boolean(),
+    loginTime: activityInvestigationTimestampSchema,
+    logoutTime: activityInvestigationTimestampSchema,
+    device: activityInvestigationDeviceSchema,
+    matches: z.array(z.enum(["device_fingerprint", "ip_address", "same_account"])),
+  }).strict()),
+  relatedSessionsPagination: offsetPaginationMetaSchema.strict(),
+  timeline: z.array(z.object({
+    id: nonEmptyStringSchema,
+    kind: z.enum(["activity", "ban", "login", "logout", "moderation"]),
+    label: nonEmptyStringSchema,
+    timestamp: z.string().datetime({ offset: true }),
+    actor: nullableStringSchema,
+  }).strict()),
+  auditEvents: z.array(z.object({
+    id: nonEmptyStringSchema,
+    action: nonEmptyStringSchema,
+    performedBy: nonEmptyStringSchema,
+    requestId: nullableStringSchema,
+    timestamp: z.string().datetime({ offset: true }),
+  }).strict()),
+}).strict();
+
+export const activityInvestigationResponseSchema = z.object({
+  ok: z.literal(true),
+  success: z.literal(true),
+  investigation: activityInvestigationSchema,
+}).strict();
+
 export const collectionReportFreshnessSchema = z.object({
   status: z.enum(["fresh", "warming", "stale"]),
   pendingCount: nonNegativeIntSchema,
@@ -862,6 +951,8 @@ export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type ActivityMutationSuccessResponseContract = z.infer<typeof activityMutationSuccessResponseSchema>;
 export type ActivityCleanupResponseContract = z.infer<typeof activityCleanupResponseSchema>;
+export type ActivityInvestigationContract = z.infer<typeof activityInvestigationSchema>;
+export type ActivityInvestigationResponseContract = z.infer<typeof activityInvestigationResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
 export type CollectionMonthlySummaryResponseContract = z.infer<typeof collectionMonthlySummaryResponseSchema>;
 export type CollectionPurgeSummaryResponseContract = z.infer<typeof collectionPurgeSummaryResponseSchema>;

@@ -2,9 +2,11 @@ import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import {
   activityCleanupResponseSchema,
+  activityInvestigationResponseSchema,
   activityListResponseSchema,
   activityMutationSuccessResponseSchema,
   activityPageResponseSchema,
+  type ActivityInvestigationContract,
 } from "@shared/api-contracts";
 
 type ActivityRequestOptions = {
@@ -105,93 +107,7 @@ export interface ActivityPageResponse {
   };
 }
 
-export interface ActivityInvestigation {
-  session: {
-    id: string;
-    username: string;
-    role: string;
-    status: ActivityStatus;
-    isActive: boolean;
-    loginTime: string | null;
-    logoutTime: string | null;
-    lastActivityTime: string | null;
-    logoutReason: string | null;
-    durationMs: number | null;
-    device: {
-      browser: string | null;
-      deviceType: "desktop" | "mobile" | "tablet" | "unknown" | null;
-      ipAddress: string | null;
-      pcName: string | null;
-      platform: string | null;
-      fingerprintHint: string | null;
-    };
-  };
-  security: {
-    activeBan: {
-      banId: string;
-      bannedAt: string;
-    } | null;
-    riskLevel: "attention" | "critical" | "normal";
-    reasons: string[];
-    signals: Array<{
-      code:
-        | "active_ban"
-        | "concurrent_session"
-        | "forced_logout"
-        | "idle_timeout"
-        | "new_device"
-        | "new_ip"
-        | "no_elevated_risk"
-        | "shared_device"
-        | "shared_ip";
-      description: string;
-      label: string;
-      severity: "attention" | "critical" | "info";
-    }>;
-  };
-  relatedSessions: Array<{
-    id: string;
-    username: string;
-    role: string;
-    status: ActivityStatus;
-    isActive: boolean;
-    loginTime: string | null;
-    logoutTime: string | null;
-    device: {
-      browser: string | null;
-      deviceType: "desktop" | "mobile" | "tablet" | "unknown" | null;
-      fingerprintHint: string | null;
-      ipAddress: string | null;
-      platform: string | null;
-    };
-    matches: Array<"device_fingerprint" | "ip_address" | "same_account">;
-  }>;
-  relatedSessionsPagination: {
-    mode: "offset";
-    page: number;
-    pageSize: number;
-    limit: number;
-    offset: number;
-    total: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-  };
-  timeline: Array<{
-    id: string;
-    kind: "activity" | "ban" | "login" | "logout" | "moderation";
-    label: string;
-    timestamp: string;
-    actor: string | null;
-  }>;
-  auditEvents: Array<{
-    id: string;
-    action: string;
-    performedBy: string;
-    requestId: string | null;
-    timestamp: string;
-  }>;
-}
+export type ActivityInvestigation = ActivityInvestigationContract;
 
 export interface ActivityRetentionStatus {
   policy: {
@@ -298,9 +214,11 @@ export async function getActivityInvestigation(
     undefined,
     { signal: options?.signal },
   );
-  const payload = await response.json() as {
-    investigation: ActivityInvestigation;
-  };
+  const payload = await parseApiJson(
+    response,
+    activityInvestigationResponseSchema,
+    "/api/activity/:id/investigation",
+  );
   return payload.investigation;
 }
 
