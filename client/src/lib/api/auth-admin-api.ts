@@ -1,16 +1,18 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
-import { authManagedUsersResponseSchema } from "@shared/api-contracts";
+import {
+  authManagedUserDeleteResponseSchema,
+  authManagedUsersResponseSchema,
+  authUserForceLogoutResponseSchema,
+  authUserMutationResponseSchema,
+} from "@shared/api-contracts";
 import type { ManageableUserRole } from "@shared/user-roles";
 import type {
-  AuthUserForceLogoutResponse,
-  AuthUserResponse,
   DevMailOutboxClearResponse,
   DevMailOutboxDeleteResponse,
   DevMailOutboxPreviewsQuery,
   DevMailOutboxPreviewsResponse,
   ManagedAccountActivationResponse,
-  ManagedAccountDeleteResponse,
   ManagedAccountPasswordResetResponse,
   ManagedUsersQuery,
   ManagedUsersResponse,
@@ -59,12 +61,16 @@ export async function updateManagedUserAccount(
     `/api/admin/users/${encodeURIComponent(userId)}`,
     payload,
   );
-  return response.json() as Promise<AuthUserResponse>;
+  return parseApiJson(response, authUserMutationResponseSchema, "/api/admin/users/:id");
 }
 
 export async function deleteManagedUserAccount(userId: string) {
   const response = await apiRequest("DELETE", `/api/admin/users/${encodeURIComponent(userId)}`);
-  return response.json() as Promise<ManagedAccountDeleteResponse>;
+  return parseApiJson(
+    response,
+    authManagedUserDeleteResponseSchema,
+    "/api/admin/users/:id",
+  );
 }
 
 export async function updateManagedUserRole(userId: string, role: ManageableUserRole) {
@@ -73,7 +79,11 @@ export async function updateManagedUserRole(userId: string, role: ManageableUser
     `/api/admin/users/${encodeURIComponent(userId)}/role`,
     { role },
   );
-  return response.json() as Promise<AuthUserForceLogoutResponse>;
+  return parseApiJson(
+    response,
+    authUserForceLogoutResponseSchema,
+    "/api/admin/users/:id/role",
+  );
 }
 
 export async function updateManagedUserStatus(
@@ -88,7 +98,11 @@ export async function updateManagedUserStatus(
     `/api/admin/users/${encodeURIComponent(userId)}/status`,
     payload,
   );
-  return response.json() as Promise<AuthUserForceLogoutResponse>;
+  return parseApiJson(
+    response,
+    authUserForceLogoutResponseSchema,
+    "/api/admin/users/:id/status",
+  );
 }
 
 export async function resetManagedUserPassword(userId: string) {

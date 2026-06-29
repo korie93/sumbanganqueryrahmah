@@ -25,6 +25,7 @@ import {
   authActivationTokenResponseSchema,
   authCurrentUserSchema,
   authLoginResponseSchema,
+  authManagedUserDeleteResponseSchema,
   authManagedUsersResponseSchema,
   authMessageResponseSchema,
   authPasswordResetTokenResponseSchema,
@@ -83,6 +84,7 @@ import {
   unbanUser,
 } from "@/lib/api/activity";
 import {
+  deleteManagedUserAccount,
   getSuperuserManagedUsers,
   getMe,
   login,
@@ -94,6 +96,9 @@ import {
   getTwoFactorStatus,
   requestPasswordReset,
   resetPasswordWithToken,
+  updateManagedUserAccount,
+  updateManagedUserRole,
+  updateManagedUserStatus,
   startTwoFactorSetup,
   updateMyCredentials,
   validateActivationToken,
@@ -931,6 +936,74 @@ test("managed users API wrapper rejects malformed privileged account payloads", 
       () => getSuperuserManagedUsers({ page: 1, pageSize: 20, role: "manager" }),
       /API contract mismatch for \/api\/admin\/users/,
     );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("managed account delete contract requires a completed deletion", () => {
+  assert.equal(
+    authManagedUserDeleteResponseSchema.safeParse({
+      ok: true,
+      deleted: true,
+      user: createAuthUserContract(),
+    }).success,
+    true,
+  );
+  assert.equal(
+    authManagedUserDeleteResponseSchema.safeParse({
+      ok: true,
+      deleted: false,
+      user: createAuthUserContract(),
+    }).success,
+    false,
+  );
+});
+
+test("managed account mutation wrappers reject contradictory success payloads", async () => {
+  const requestedUrls: string[] = [];
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    requestedUrls.push(url);
+    if (url === "/api/admin/users/user%2F1") {
+      return jsonResponse({
+        ok: true,
+        user: createAuthUserContract(),
+        sessionExpiresAt: null,
+      });
+    }
+    if (url === "/api/admin/users/user%2F1/role") {
+      return jsonResponse({ ok: true, forceLogout: "yes", user: createAuthUserContract() });
+    }
+    if (url === "/api/admin/users/user%2F1/status") {
+      return jsonResponse({ ok: true, forceLogout: false, user: null, passwordHash: "leak" });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => updateManagedUserAccount("user/1", { fullName: "Updated User" }),
+      /API contract mismatch for \/api\/admin\/users\/:id/,
+    );
+    await assert.rejects(
+      () => deleteManagedUserAccount("user/1"),
+      /API contract mismatch for \/api\/admin\/users\/:id/,
+    );
+    await assert.rejects(
+      () => updateManagedUserRole("user/1", "manager"),
+      /API contract mismatch for \/api\/admin\/users\/:id\/role/,
+    );
+    await assert.rejects(
+      () => updateManagedUserStatus("user/1", { isBanned: true }),
+      /API contract mismatch for \/api\/admin\/users\/:id\/status/,
+    );
+    assert.deepEqual(requestedUrls, [
+      "/api/admin/users/user%2F1",
+      "/api/admin/users/user%2F1",
+      "/api/admin/users/user%2F1/role",
+      "/api/admin/users/user%2F1/status",
+    ]);
   } finally {
     restoreFetch();
   }

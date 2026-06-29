@@ -636,6 +636,10 @@ export const authManagedUsersResponseSchema = z.object({
   }
 });
 
+export const authManagedUserDeleteResponseSchema = authUserMutationResponseSchema.extend({
+  deleted: z.literal(true),
+}).strict();
+
 export const activityStatusSchema = z.enum([
   "ONLINE",
   "IDLE",
@@ -1113,6 +1117,7 @@ export type AuthPasswordResetTokenResponseContract = z.infer<typeof authPassword
 export type AuthMessageResponseContract = z.infer<typeof authMessageResponseSchema>;
 export type AuthManagedUserContract = z.infer<typeof authManagedUserSchema>;
 export type AuthManagedUsersResponseContract = z.infer<typeof authManagedUsersResponseSchema>;
+export type AuthManagedUserDeleteResponseContract = z.infer<typeof authManagedUserDeleteResponseSchema>;
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
