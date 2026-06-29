@@ -25,6 +25,7 @@ import {
   authActivationTokenResponseSchema,
   authCurrentUserSchema,
   authLoginResponseSchema,
+  authManagedUsersResponseSchema,
   authMessageResponseSchema,
   authPasswordResetTokenResponseSchema,
   authRecoveryTokenMetadataSchema,
@@ -82,6 +83,7 @@ import {
   unbanUser,
 } from "@/lib/api/activity";
 import {
+  getSuperuserManagedUsers,
   getMe,
   login,
   verifyTwoFactorLogin,
@@ -849,6 +851,85 @@ test("authentication self-service API wrappers reject malformed success payloads
     await assert.rejects(
       () => updateMyCredentials({ newUsername: "operator.two" }),
       /API contract mismatch for \/api\/me\/credentials/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("managed users contract rejects sensitive drift and inconsistent pages", () => {
+  const managedUser = {
+    id: "user-1",
+    username: "manager.one",
+    fullName: "Manager One",
+    email: "manager.one@example.com",
+    role: "manager",
+    status: "active",
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    createdBy: "superuser",
+    createdAt: "2026-06-01T00:00:00.000Z",
+    updatedAt: "2026-06-02T00:00:00.000Z",
+    activatedAt: "2026-06-01T00:00:00.000Z",
+    lastLoginAt: null,
+    passwordChangedAt: null,
+    isBanned: false,
+    failedLoginAttempts: 0,
+    lockedAt: null,
+    lockedReason: null,
+    lockedBySystem: false,
+  } as const;
+  const validResponse = {
+    ok: true,
+    users: [managedUser],
+    pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+  } as const;
+
+  assert.equal(authManagedUsersResponseSchema.safeParse(validResponse).success, true);
+  assert.equal(
+    authManagedUsersResponseSchema.safeParse({
+      ...validResponse,
+      users: [{ ...managedUser, passwordHash: "must-not-reach-client" }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    authManagedUsersResponseSchema.safeParse({
+      ...validResponse,
+      users: [managedUser, managedUser],
+      pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 },
+    }).success,
+    false,
+  );
+  assert.equal(
+    authManagedUsersResponseSchema.safeParse({
+      ...validResponse,
+      pagination: { page: 1, pageSize: 20, total: 21, totalPages: 1 },
+    }).success,
+    false,
+  );
+});
+
+test("managed users API wrapper rejects malformed privileged account payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    assert.equal(String(input), "/api/admin/users?page=1&pageSize=20&role=manager");
+    return jsonResponse({
+      ok: true,
+      users: [{
+        id: "user-1",
+        username: "manager.one",
+        role: "manager",
+        status: "active",
+        passwordHash: "must-not-reach-client",
+      }],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    });
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getSuperuserManagedUsers({ page: 1, pageSize: 20, role: "manager" }),
+      /API contract mismatch for \/api\/admin\/users/,
     );
   } finally {
     restoreFetch();

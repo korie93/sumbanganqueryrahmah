@@ -1,4 +1,6 @@
 import { apiRequest } from "../api-client";
+import { parseApiJson } from "./contract";
+import { authManagedUsersResponseSchema } from "@shared/api-contracts";
 import type { ManageableUserRole } from "@shared/user-roles";
 import type {
   AuthUserForceLogoutResponse,
@@ -31,7 +33,7 @@ export async function getSuperuserManagedUsers(
   const response = await apiRequest("GET", `/api/admin/users${suffix}`, undefined, {
     signal: options?.signal,
   });
-  return response.json() as Promise<ManagedUsersResponse>;
+  return parseApiJson(response, authManagedUsersResponseSchema, "/api/admin/users");
 }
 
 export async function createManagedUserAccount(payload: {

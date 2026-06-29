@@ -577,6 +577,65 @@ export const authMessageResponseSchema = z.object({
   message: nonEmptyStringSchema,
 }).strict();
 
+const authAdminPaginationSchema = z.object({
+  page: positiveIntSchema,
+  pageSize: positiveIntSchema,
+  total: nonNegativeIntSchema,
+  totalPages: positiveIntSchema,
+}).strict().superRefine((value, context) => {
+  const expectedTotalPages = Math.max(1, Math.ceil(value.total / value.pageSize));
+  if (value.totalPages !== expectedTotalPages) {
+    context.addIssue({
+      code: "custom",
+      message: "Admin pagination totalPages is inconsistent",
+      path: ["totalPages"],
+    });
+  }
+});
+
+export const authManagedUserSchema = z.object({
+  id: nonEmptyStringSchema,
+  username: nonEmptyStringSchema,
+  fullName: nullableStringSchema,
+  email: nullableStringSchema,
+  role: z.enum(["admin", "manager", "user"]),
+  status: z.enum(["pending_activation", "active", "suspended", "disabled"]),
+  mustChangePassword: z.boolean(),
+  passwordResetBySuperuser: z.boolean(),
+  createdBy: nullableStringSchema,
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+  activatedAt: authNullableTimestampSchema,
+  lastLoginAt: authNullableTimestampSchema,
+  passwordChangedAt: authNullableTimestampSchema,
+  isBanned: z.boolean().nullable(),
+  failedLoginAttempts: nonNegativeIntSchema,
+  lockedAt: authNullableTimestampSchema,
+  lockedReason: nullableStringSchema,
+  lockedBySystem: z.boolean(),
+}).strict();
+
+export const authManagedUsersResponseSchema = z.object({
+  ok: z.literal(true),
+  users: z.array(authManagedUserSchema),
+  pagination: authAdminPaginationSchema,
+}).strict().superRefine((value, context) => {
+  if (new Set(value.users.map((user) => user.id)).size !== value.users.length) {
+    context.addIssue({
+      code: "custom",
+      message: "Managed user ids must be unique",
+      path: ["users"],
+    });
+  }
+  if (value.users.length > value.pagination.pageSize || value.users.length > value.pagination.total) {
+    context.addIssue({
+      code: "custom",
+      message: "Managed user page size is inconsistent",
+      path: ["users"],
+    });
+  }
+});
+
 export const activityStatusSchema = z.enum([
   "ONLINE",
   "IDLE",
@@ -1052,6 +1111,8 @@ export type AuthRecoveryTokenMetadataContract = z.infer<typeof authRecoveryToken
 export type AuthActivationTokenResponseContract = z.infer<typeof authActivationTokenResponseSchema>;
 export type AuthPasswordResetTokenResponseContract = z.infer<typeof authPasswordResetTokenResponseSchema>;
 export type AuthMessageResponseContract = z.infer<typeof authMessageResponseSchema>;
+export type AuthManagedUserContract = z.infer<typeof authManagedUserSchema>;
+export type AuthManagedUsersResponseContract = z.infer<typeof authManagedUsersResponseSchema>;
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
