@@ -42,7 +42,7 @@ export interface ActivityFilters {
 
 export async function activityLogin(data: ActivityLoginPayload) {
   const response = await apiRequest("POST", "/api/activity/login", data);
-  return response.json();
+  return parseApiJson(response, activityMutationSuccessResponseSchema, "/api/activity/login");
 }
 
 export async function activityLogout(activityId?: string) {

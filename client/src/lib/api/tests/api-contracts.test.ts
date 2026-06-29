@@ -74,6 +74,7 @@ import {
   getTopActiveUsers,
 } from "@/lib/api/analytics";
 import {
+  activityLogin,
   activityHeartbeat,
   activityHeartbeatLight,
   activityLogout,
@@ -1567,6 +1568,9 @@ test("activity session wrappers reject false logout and malformed heartbeat succ
   let heartbeatCalls = 0;
   const restoreFetch = withMockFetch((async (input) => {
     const url = String(input);
+    if (url === "/api/activity/login") {
+      return jsonResponse({ ok: true, success: "true" });
+    }
     if (url === "/api/activity/logout") {
       return jsonResponse({ ok: true, success: "true" });
     }
@@ -1584,6 +1588,10 @@ test("activity session wrappers reject false logout and malformed heartbeat succ
   }) as typeof fetch);
 
   try {
+    await assert.rejects(
+      () => activityLogin({ username: "operator.one", role: "admin" }),
+      /API contract mismatch for \/api\/activity\/login/,
+    );
     await assert.rejects(
       () => activityLogout("activity-1"),
       /API contract mismatch for \/api\/activity\/logout/,
