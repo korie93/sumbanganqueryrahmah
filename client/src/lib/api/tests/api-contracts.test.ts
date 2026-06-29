@@ -11,6 +11,7 @@ import {
   analyticsSummarySchema,
   analyticsTopUsersSchema,
   appConfigResponseSchema,
+  activityBulkDeleteResponseSchema,
   activityCleanupResponseSchema,
   activityInvestigationResponseSchema,
   activityListResponseSchema,
@@ -63,6 +64,7 @@ import {
 import {
   cleanupEndedActivityLogs,
   deleteActivityLog,
+  deleteActivityLogsBulk,
   getActivityInvestigation,
   getActivityPage,
   getAllActivity,
@@ -1083,6 +1085,57 @@ test("activity mutation contracts accept valid responses and reject malformed cl
     }).success,
     false,
   );
+});
+
+test("activity bulk delete contract enforces complete unique outcomes", () => {
+  const validResponse = {
+    ok: true,
+    success: true,
+    requestedCount: 4,
+    deletedCount: 2,
+    notFoundIds: ["missing-1"],
+    protectedIds: ["protected-1"],
+  } as const;
+
+  assert.equal(activityBulkDeleteResponseSchema.safeParse(validResponse).success, true);
+  assert.equal(
+    activityBulkDeleteResponseSchema.safeParse({
+      ...validResponse,
+      requestedCount: 5,
+    }).success,
+    false,
+  );
+  assert.equal(
+    activityBulkDeleteResponseSchema.safeParse({
+      ...validResponse,
+      notFoundIds: ["duplicate-id"],
+      protectedIds: ["duplicate-id"],
+    }).success,
+    false,
+  );
+});
+
+test("activity bulk delete API wrapper rejects contradictory response counts", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    assert.equal(String(input), "/api/activity/logs/bulk-delete");
+    return jsonResponse({
+      ok: true,
+      success: true,
+      requestedCount: 3,
+      deletedCount: 3,
+      notFoundIds: ["missing-1"],
+      protectedIds: [],
+    });
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => deleteActivityLogsBulk(["activity-1", "activity-2", "missing-1"]),
+      /API contract mismatch for \/api\/activity\/logs\/bulk-delete/,
+    );
+  } finally {
+    restoreFetch();
+  }
 });
 
 test("activity mutation API wrappers encode ids and reject malformed response payloads", async () => {

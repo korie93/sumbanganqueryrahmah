@@ -630,6 +630,32 @@ export const activityMutationSuccessResponseSchema = z.object({
   success: z.literal(true),
 }).strict();
 
+export const activityBulkDeleteResponseSchema = z.object({
+  ok: z.literal(true),
+  success: z.literal(true),
+  requestedCount: z.number().int().min(1).max(500),
+  deletedCount: z.number().int().min(0).max(500),
+  notFoundIds: z.array(nonEmptyStringSchema).max(500),
+  protectedIds: z.array(nonEmptyStringSchema).max(500),
+}).strict().superRefine((value, context) => {
+  const outcomeIds = [...value.notFoundIds, ...value.protectedIds];
+  if (new Set(outcomeIds).size !== outcomeIds.length) {
+    context.addIssue({
+      code: "custom",
+      message: "Activity outcome ids must be unique",
+      path: ["notFoundIds"],
+    });
+  }
+
+  if (value.deletedCount + outcomeIds.length !== value.requestedCount) {
+    context.addIssue({
+      code: "custom",
+      message: "Activity outcome counts must match requestedCount",
+      path: ["requestedCount"],
+    });
+  }
+});
+
 export const activityCleanupResponseSchema = z.object({
   ok: z.literal(true),
   success: z.literal(true),
@@ -950,6 +976,7 @@ export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
 export type ActivityMutationSuccessResponseContract = z.infer<typeof activityMutationSuccessResponseSchema>;
+export type ActivityBulkDeleteResponseContract = z.infer<typeof activityBulkDeleteResponseSchema>;
 export type ActivityCleanupResponseContract = z.infer<typeof activityCleanupResponseSchema>;
 export type ActivityInvestigationContract = z.infer<typeof activityInvestigationSchema>;
 export type ActivityInvestigationResponseContract = z.infer<typeof activityInvestigationResponseSchema>;

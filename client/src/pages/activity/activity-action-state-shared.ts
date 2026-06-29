@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import type { ActivityBulkDeleteResponseContract } from "@shared/api-contracts";
 import type { ActivityRecord, BannedUser } from "@/pages/activity/types";
 
 export type UseActivityActionStateOptions = {
@@ -7,12 +8,10 @@ export type UseActivityActionStateOptions = {
   setSelectedActivityIds: Dispatch<SetStateAction<Set<string>>>;
 };
 
-export type ActivityBulkDeleteResult = {
-  deletedCount: number;
-  notFoundIds: string[];
-  protectedIds: string[];
-  requestedCount: number;
-};
+export type ActivityBulkDeleteResult = Pick<
+  ActivityBulkDeleteResponseContract,
+  "deletedCount" | "notFoundIds" | "protectedIds" | "requestedCount"
+>;
 
 export type ActivityActionToastPayload = {
   description: string;

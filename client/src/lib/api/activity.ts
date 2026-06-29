@@ -1,6 +1,7 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import {
+  activityBulkDeleteResponseSchema,
   activityCleanupResponseSchema,
   activityInvestigationResponseSchema,
   activityListResponseSchema,
@@ -163,13 +164,11 @@ export async function deleteActivityLogsBulk(activityIds: string[]) {
   const response = await apiRequest("DELETE", "/api/activity/logs/bulk-delete", {
     activityIds,
   });
-  return response.json() as Promise<{
-    success: boolean;
-    deletedCount: number;
-    requestedCount: number;
-    notFoundIds: string[];
-    protectedIds: string[];
-  }>;
+  return parseApiJson(
+    response,
+    activityBulkDeleteResponseSchema,
+    "/api/activity/logs/bulk-delete",
+  );
 }
 
 export async function getActivityPage(
