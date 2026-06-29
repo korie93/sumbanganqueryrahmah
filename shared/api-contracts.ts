@@ -640,6 +640,79 @@ export const authManagedUserDeleteResponseSchema = authUserMutationResponseSchem
   deleted: z.literal(true),
 }).strict();
 
+const authDeliveryPreviewUrlSchema = z.string().trim().refine((value) => {
+  if (/^\/(?!\/)/.test(value)) {
+    const hasUnsafePathCharacter = Array.from(value).some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return character === "\\" || codePoint <= 31 || codePoint === 127;
+    });
+    if (hasUnsafePathCharacter) {
+      return false;
+    }
+    try {
+      const parsed = new URL(value, "https://sqr.invalid");
+      return parsed.origin === "https://sqr.invalid";
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && !parsed.username
+      && !parsed.password;
+  } catch {
+    return false;
+  }
+}, "Delivery preview URL must use HTTP(S) or a root-relative path").nullable();
+
+export const authManagedDeliverySchema = z.object({
+  deliveryMode: z.enum(["dev_outbox", "none", "smtp"]),
+  errorCode: nullableStringSchema,
+  errorMessage: nullableStringSchema,
+  expiresAt: z.string().datetime({ offset: true }),
+  previewUrl: authDeliveryPreviewUrlSchema,
+  recipientEmail: z.string().trim().email().max(320),
+  sent: z.boolean(),
+}).strict().superRefine((value, context) => {
+  if (value.sent && (value.errorCode !== null || value.errorMessage !== null)) {
+    context.addIssue({
+      code: "custom",
+      message: "Successful delivery cannot include an error",
+      path: ["sent"],
+    });
+  }
+  if (!value.sent && (!value.errorCode || !value.errorMessage || value.previewUrl !== null)) {
+    context.addIssue({
+      code: "custom",
+      message: "Failed delivery must include an error and no preview URL",
+      path: ["sent"],
+    });
+  }
+  if (value.deliveryMode === "dev_outbox" && (!value.sent || value.previewUrl === null)) {
+    context.addIssue({
+      code: "custom",
+      message: "Development outbox delivery requires a preview URL",
+      path: ["deliveryMode"],
+    });
+  }
+  if (value.deliveryMode === "none" && (value.sent || value.previewUrl !== null)) {
+    context.addIssue({
+      code: "custom",
+      message: "Disabled delivery cannot report a sent message or preview URL",
+      path: ["deliveryMode"],
+    });
+  }
+});
+
+export const authManagedAccountActivationResponseSchema = authUserMutationResponseSchema.extend({
+  activation: authManagedDeliverySchema,
+}).strict();
+
+export const authManagedAccountPasswordResetResponseSchema = authUserForceLogoutResponseSchema.extend({
+  reset: authManagedDeliverySchema,
+}).strict();
+
 export const activityStatusSchema = z.enum([
   "ONLINE",
   "IDLE",
@@ -1118,6 +1191,9 @@ export type AuthMessageResponseContract = z.infer<typeof authMessageResponseSche
 export type AuthManagedUserContract = z.infer<typeof authManagedUserSchema>;
 export type AuthManagedUsersResponseContract = z.infer<typeof authManagedUsersResponseSchema>;
 export type AuthManagedUserDeleteResponseContract = z.infer<typeof authManagedUserDeleteResponseSchema>;
+export type AuthManagedDeliveryContract = z.infer<typeof authManagedDeliverySchema>;
+export type AuthManagedAccountActivationResponseContract = z.infer<typeof authManagedAccountActivationResponseSchema>;
+export type AuthManagedAccountPasswordResetResponseContract = z.infer<typeof authManagedAccountPasswordResetResponseSchema>;
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;

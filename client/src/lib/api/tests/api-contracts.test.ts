@@ -25,6 +25,9 @@ import {
   authActivationTokenResponseSchema,
   authCurrentUserSchema,
   authLoginResponseSchema,
+  authManagedAccountActivationResponseSchema,
+  authManagedAccountPasswordResetResponseSchema,
+  authManagedDeliverySchema,
   authManagedUserDeleteResponseSchema,
   authManagedUsersResponseSchema,
   authMessageResponseSchema,
@@ -84,6 +87,7 @@ import {
   unbanUser,
 } from "@/lib/api/activity";
 import {
+  createManagedUserAccount,
   deleteManagedUserAccount,
   getSuperuserManagedUsers,
   getMe,
@@ -95,6 +99,8 @@ import {
   enableTwoFactor,
   getTwoFactorStatus,
   requestPasswordReset,
+  resendManagedUserActivation,
+  resetManagedUserPassword,
   resetPasswordWithToken,
   updateManagedUserAccount,
   updateManagedUserRole,
@@ -1004,6 +1010,122 @@ test("managed account mutation wrappers reject contradictory success payloads", 
       "/api/admin/users/user%2F1/role",
       "/api/admin/users/user%2F1/status",
     ]);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("managed account delivery contracts allow safe previews and consistent failure states", () => {
+  const devDelivery = {
+    deliveryMode: "dev_outbox",
+    errorCode: null,
+    errorMessage: null,
+    expiresAt: "2026-06-30T10:00:00.000Z",
+    previewUrl: "/dev/mail-preview/message-1",
+    recipientEmail: "user@example.com",
+    sent: true,
+  } as const;
+  const failedDelivery = {
+    deliveryMode: "smtp",
+    errorCode: "MAIL_SEND_FAILED",
+    errorMessage: "Mail transport unavailable",
+    expiresAt: "2026-06-30T10:00:00.000Z",
+    previewUrl: null,
+    recipientEmail: "user@example.com",
+    sent: false,
+  } as const;
+
+  assert.equal(authManagedDeliverySchema.safeParse(devDelivery).success, true);
+  assert.equal(authManagedDeliverySchema.safeParse(failedDelivery).success, true);
+  assert.equal(
+    authManagedDeliverySchema.safeParse({
+      ...devDelivery,
+      previewUrl: "javascript:alert(1)",
+    }).success,
+    false,
+  );
+  assert.equal(
+    authManagedDeliverySchema.safeParse({
+      ...devDelivery,
+      previewUrl: "/\\attacker.example/preview",
+    }).success,
+    false,
+  );
+  assert.equal(
+    authManagedDeliverySchema.safeParse({
+      ...devDelivery,
+      previewUrl: "//attacker.example/preview",
+    }).success,
+    false,
+  );
+  assert.equal(
+    authManagedDeliverySchema.safeParse({
+      ...failedDelivery,
+      errorCode: null,
+    }).success,
+    false,
+  );
+  assert.equal(
+    authManagedAccountActivationResponseSchema.safeParse({
+      ok: true,
+      user: createAuthUserContract(),
+      activation: devDelivery,
+    }).success,
+    true,
+  );
+  assert.equal(
+    authManagedAccountPasswordResetResponseSchema.safeParse({
+      ok: true,
+      forceLogout: true,
+      user: createAuthUserContract(),
+      reset: failedDelivery,
+    }).success,
+    true,
+  );
+});
+
+test("managed recovery wrappers reject unsafe delivery metadata", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    const unsafeDelivery = {
+      deliveryMode: "dev_outbox",
+      errorCode: null,
+      errorMessage: null,
+      expiresAt: "2026-06-30T10:00:00.000Z",
+      previewUrl: "javascript:alert(1)",
+      recipientEmail: "user@example.com",
+      sent: true,
+    };
+    if (url === "/api/admin/users") {
+      return jsonResponse({ ok: true, user: createAuthUserContract(), activation: unsafeDelivery });
+    }
+    if (url === "/api/admin/users/user%2F1/reset-password") {
+      return jsonResponse({
+        ok: true,
+        forceLogout: true,
+        user: createAuthUserContract(),
+        reset: unsafeDelivery,
+      });
+    }
+    if (url === "/api/admin/users/user%2F1/resend-activation") {
+      return jsonResponse({ ok: true, user: createAuthUserContract(), activation: unsafeDelivery });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => createManagedUserAccount({ username: "user.one", role: "user" }),
+      /API contract mismatch for \/api\/admin\/users/,
+    );
+    await assert.rejects(
+      () => resetManagedUserPassword("user/1"),
+      /API contract mismatch for \/api\/admin\/users\/:id\/reset-password/,
+    );
+    await assert.rejects(
+      () => resendManagedUserActivation("user/1"),
+      /API contract mismatch for \/api\/admin\/users\/:id\/resend-activation/,
+    );
   } finally {
     restoreFetch();
   }

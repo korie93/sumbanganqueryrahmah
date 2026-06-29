@@ -1,6 +1,8 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import {
+  authManagedAccountActivationResponseSchema,
+  authManagedAccountPasswordResetResponseSchema,
   authManagedUserDeleteResponseSchema,
   authManagedUsersResponseSchema,
   authUserForceLogoutResponseSchema,
@@ -12,8 +14,6 @@ import type {
   DevMailOutboxDeleteResponse,
   DevMailOutboxPreviewsQuery,
   DevMailOutboxPreviewsResponse,
-  ManagedAccountActivationResponse,
-  ManagedAccountPasswordResetResponse,
   ManagedUsersQuery,
   ManagedUsersResponse,
   PendingPasswordResetRequestsQuery,
@@ -45,7 +45,11 @@ export async function createManagedUserAccount(payload: {
   role: ManageableUserRole;
 }) {
   const response = await apiRequest("POST", "/api/admin/users", payload);
-  return response.json() as Promise<ManagedAccountActivationResponse>;
+  return parseApiJson(
+    response,
+    authManagedAccountActivationResponseSchema,
+    "/api/admin/users",
+  );
 }
 
 export async function updateManagedUserAccount(
@@ -110,7 +114,11 @@ export async function resetManagedUserPassword(userId: string) {
     "POST",
     `/api/admin/users/${encodeURIComponent(userId)}/reset-password`,
   );
-  return response.json() as Promise<ManagedAccountPasswordResetResponse>;
+  return parseApiJson(
+    response,
+    authManagedAccountPasswordResetResponseSchema,
+    "/api/admin/users/:id/reset-password",
+  );
 }
 
 export async function resendManagedUserActivation(userId: string) {
@@ -118,7 +126,11 @@ export async function resendManagedUserActivation(userId: string) {
     "POST",
     `/api/admin/users/${encodeURIComponent(userId)}/resend-activation`,
   );
-  return response.json() as Promise<ManagedAccountActivationResponse>;
+  return parseApiJson(
+    response,
+    authManagedAccountActivationResponseSchema,
+    "/api/admin/users/:id/resend-activation",
+  );
 }
 
 export async function getPendingPasswordResetRequests(
