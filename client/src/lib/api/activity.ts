@@ -1,7 +1,9 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import {
+  activityCleanupResponseSchema,
   activityListResponseSchema,
+  activityMutationSuccessResponseSchema,
   activityPageResponseSchema,
 } from "@shared/api-contracts";
 
@@ -237,8 +239,8 @@ export async function getFilteredActivity(filters: ActivityFilters, options?: Ac
 }
 
 export async function deleteActivityLog(activityId: string) {
-  const response = await apiRequest("DELETE", `/api/activity/${activityId}`);
-  return response.json();
+  const response = await apiRequest("DELETE", `/api/activity/${encodeURIComponent(activityId)}`);
+  return parseApiJson(response, activityMutationSuccessResponseSchema, "/api/activity/:id");
 }
 
 export async function deleteActivityLogsBulk(activityIds: string[]) {
@@ -312,23 +314,11 @@ export async function cleanupEndedActivityLogs(options?: {
   }, {
     signal: requestOptions?.signal,
   });
-  return response.json() as Promise<{
-    cutoff: string;
-    deletedCount: number;
-    limit: number;
-    lockAcquired: boolean;
-    ok: boolean;
-    olderThanDays: number;
-    protectedActiveBanCount: number;
-    reason: "disabled" | "lock_unavailable" | null;
-    securityCutoff: string;
-    securityDeletedCount: number;
-    securityRetentionDays: number;
-    skipped: boolean;
-    standardDeletedCount: number;
-    standardRetentionDays: number;
-    success: boolean;
-  }>;
+  return parseApiJson(
+    response,
+    activityCleanupResponseSchema,
+    "/api/activity/logs/cleanup-ended",
+  );
 }
 
 export async function getActivityRetentionStatus(

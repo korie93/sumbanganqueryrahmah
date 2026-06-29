@@ -11,7 +11,9 @@ import {
   analyticsSummarySchema,
   analyticsTopUsersSchema,
   appConfigResponseSchema,
+  activityCleanupResponseSchema,
   activityListResponseSchema,
+  activityMutationSuccessResponseSchema,
   activityPageResponseSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
@@ -58,6 +60,8 @@ import {
   getTopActiveUsers,
 } from "@/lib/api/analytics";
 import {
+  cleanupEndedActivityLogs,
+  deleteActivityLog,
   getActivityPage,
   getAllActivity,
   getFilteredActivity,
@@ -1036,6 +1040,95 @@ test("activity feed contracts reject unknown states, malformed timestamps, and i
     }).success,
     false,
   );
+});
+
+test("activity mutation contracts accept valid responses and reject malformed cleanup facts", () => {
+  assert.deepEqual(
+    activityMutationSuccessResponseSchema.parse({ ok: true, success: true }),
+    { ok: true, success: true },
+  );
+
+  const validCleanup = {
+    ok: true,
+    success: true,
+    cutoff: "2026-05-25T08:00:00.000Z",
+    deletedCount: 2,
+    limit: 500,
+    lockAcquired: true,
+    olderThanDays: 30,
+    protectedActiveBanCount: 1,
+    reason: null,
+    securityCutoff: "2025-06-24T08:00:00.000Z",
+    securityDeletedCount: 0,
+    securityRetentionDays: 365,
+    skipped: false,
+    standardDeletedCount: 2,
+    standardRetentionDays: 30,
+  } as const;
+
+  assert.equal(activityCleanupResponseSchema.safeParse(validCleanup).success, true);
+  assert.equal(
+    activityCleanupResponseSchema.safeParse({
+      ...validCleanup,
+      deletedCount: "2",
+    }).success,
+    false,
+  );
+  assert.equal(
+    activityCleanupResponseSchema.safeParse({
+      ...validCleanup,
+      securityCutoff: "not-a-date",
+    }).success,
+    false,
+  );
+});
+
+test("activity mutation API wrappers encode ids and reject malformed response payloads", async () => {
+  const requestedUrls: string[] = [];
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    requestedUrls.push(url);
+    if (url === "/api/activity/session%2Fwith%3Fquery") {
+      return jsonResponse({ ok: true, success: "true" });
+    }
+    if (url === "/api/activity/logs/cleanup-ended") {
+      return jsonResponse({
+        ok: true,
+        success: true,
+        cutoff: "2026-05-25T08:00:00.000Z",
+        deletedCount: "2",
+        limit: 500,
+        lockAcquired: true,
+        olderThanDays: 30,
+        protectedActiveBanCount: 0,
+        reason: null,
+        securityCutoff: "2025-06-24T08:00:00.000Z",
+        securityDeletedCount: 0,
+        securityRetentionDays: 365,
+        skipped: false,
+        standardDeletedCount: 2,
+        standardRetentionDays: 30,
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => deleteActivityLog("session/with?query"),
+      /API contract mismatch for \/api\/activity\/:id/,
+    );
+    await assert.rejects(
+      () => cleanupEndedActivityLogs(),
+      /API contract mismatch for \/api\/activity\/logs\/cleanup-ended/,
+    );
+    assert.deepEqual(requestedUrls, [
+      "/api/activity/session%2Fwith%3Fquery",
+      "/api/activity/logs/cleanup-ended",
+    ]);
+  } finally {
+    restoreFetch();
+  }
 });
 
 test("activity feed API wrappers reject malformed contract payloads", async () => {

@@ -625,6 +625,29 @@ export const activityPageResponseSchema = z.object({
   pagination: offsetPaginationMetaSchema,
 });
 
+export const activityMutationSuccessResponseSchema = z.object({
+  ok: z.literal(true),
+  success: z.literal(true),
+}).strict();
+
+export const activityCleanupResponseSchema = z.object({
+  ok: z.literal(true),
+  success: z.literal(true),
+  cutoff: z.string().datetime({ offset: true }),
+  deletedCount: nonNegativeIntSchema,
+  limit: z.number().int().positive(),
+  lockAcquired: z.boolean(),
+  olderThanDays: z.number().int().positive(),
+  protectedActiveBanCount: nonNegativeIntSchema,
+  reason: z.enum(["disabled", "lock_unavailable"]).nullable(),
+  securityCutoff: z.string().datetime({ offset: true }),
+  securityDeletedCount: nonNegativeIntSchema,
+  securityRetentionDays: z.number().int().positive(),
+  skipped: z.boolean(),
+  standardDeletedCount: nonNegativeIntSchema,
+  standardRetentionDays: z.number().int().positive(),
+}).strict();
+
 export const collectionReportFreshnessSchema = z.object({
   status: z.enum(["fresh", "warming", "stale"]),
   pendingCount: nonNegativeIntSchema,
@@ -837,6 +860,8 @@ export type AuthMessageResponseContract = z.infer<typeof authMessageResponseSche
 export type ActivityRecordResponse = z.infer<typeof activityRecordSchema>;
 export type ActivityListResponse = z.infer<typeof activityListResponseSchema>;
 export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSchema>;
+export type ActivityMutationSuccessResponseContract = z.infer<typeof activityMutationSuccessResponseSchema>;
+export type ActivityCleanupResponseContract = z.infer<typeof activityCleanupResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
 export type CollectionMonthlySummaryResponseContract = z.infer<typeof collectionMonthlySummaryResponseSchema>;
 export type CollectionPurgeSummaryResponseContract = z.infer<typeof collectionPurgeSummaryResponseSchema>;
