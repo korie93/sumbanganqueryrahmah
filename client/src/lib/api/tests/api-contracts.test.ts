@@ -98,6 +98,15 @@ import {
   getBackups,
 } from "@/lib/api/backups";
 import {
+  createCollectionAdminGroup,
+  deleteCollectionAdminGroup,
+  getCollectionAdminGroups,
+  getCollectionAdmins,
+  getCollectionNicknameAssignments,
+  saveCollectionNicknameAssignments,
+  updateCollectionAdminGroup,
+} from "@/lib/api/collection-admin";
+import {
   checkCollectionNicknameAuth,
   deleteCollectionNickname,
   getCollectionNicknames,
@@ -1790,6 +1799,130 @@ test("collection nickname API wrappers reject malformed management payloads", as
     await assert.rejects(
       () => deleteCollectionNickname("nickname-1"),
       /API contract mismatch for \/api\/collection\/nicknames\/:id/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("collection admin API wrappers reject malformed assignment and group payloads", async () => {
+  const validAdmin = {
+    id: "admin-1",
+    username: "admin.one",
+    role: "admin",
+    isBanned: null,
+    createdAt: "2026-06-29T05:30:00.000Z",
+    updatedAt: "2026-06-29T05:30:00.000Z",
+  };
+  const validGroup = {
+    id: "group-1",
+    leaderNickname: "Collector Lead",
+    leaderNicknameId: "nickname-lead",
+    leaderIsActive: true,
+    leaderRoleScope: "admin",
+    memberNicknames: ["Collector Alpha"],
+    memberNicknameIds: ["nickname-1"],
+    createdBy: "superuser",
+    createdAt: "2026-06-29T05:30:00.000Z",
+    updatedAt: "2026-06-29T05:30:00.000Z",
+  };
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url === "/api/collection/admins" && method === "GET") {
+      return jsonResponse({
+        ok: true,
+        admins: [
+          {
+            ...validAdmin,
+            role: "manager",
+          },
+        ],
+      });
+    }
+    if (url === "/api/collection/nickname-assignments/admin-1" && method === "GET") {
+      return jsonResponse({
+        ok: true,
+        admin: {
+          ...validAdmin,
+          updatedAt: "",
+        },
+        nicknameIds: ["nickname-1"],
+      });
+    }
+    if (url === "/api/collection/nickname-assignments/admin-1" && method === "PUT") {
+      return jsonResponse({
+        ok: true,
+        adminId: "admin-1",
+        nicknameIds: ["nickname-1", ""],
+      });
+    }
+    if (url === "/api/collection/admin-groups" && method === "GET") {
+      return jsonResponse({
+        ok: true,
+        groups: [
+          {
+            ...validGroup,
+            memberNicknames: ["Collector Alpha", 7],
+          },
+        ],
+      });
+    }
+    if (url === "/api/collection/admin-groups" && method === "POST") {
+      return jsonResponse({
+        ok: true,
+        group: {
+          ...validGroup,
+          leaderRoleScope: "manager",
+        },
+      });
+    }
+    if (url === "/api/collection/admin-groups/group-1" && method === "PUT") {
+      return jsonResponse({
+        ok: true,
+        group: {
+          ...validGroup,
+          leaderIsActive: "true",
+        },
+      });
+    }
+    if (url === "/api/collection/admin-groups/group-1" && method === "DELETE") {
+      return jsonResponse({
+        ok: "true",
+      });
+    }
+    throw new Error(`Unexpected ${method} ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getCollectionAdmins(),
+      /API contract mismatch for \/api\/collection\/admins/,
+    );
+    await assert.rejects(
+      () => getCollectionNicknameAssignments("admin-1"),
+      /API contract mismatch for \/api\/collection\/nickname-assignments\/:adminId/,
+    );
+    await assert.rejects(
+      () => saveCollectionNicknameAssignments("admin-1", ["nickname-1"]),
+      /API contract mismatch for \/api\/collection\/nickname-assignments\/:adminId/,
+    );
+    await assert.rejects(
+      () => getCollectionAdminGroups(),
+      /API contract mismatch for \/api\/collection\/admin-groups/,
+    );
+    await assert.rejects(
+      () => createCollectionAdminGroup({ leaderNicknameId: "nickname-lead" }),
+      /API contract mismatch for \/api\/collection\/admin-groups/,
+    );
+    await assert.rejects(
+      () => updateCollectionAdminGroup("group-1", { memberNicknameIds: ["nickname-1"] }),
+      /API contract mismatch for \/api\/collection\/admin-groups\/:groupId/,
+    );
+    await assert.rejects(
+      () => deleteCollectionAdminGroup("group-1"),
+      /API contract mismatch for \/api\/collection\/admin-groups\/:groupId/,
     );
   } finally {
     restoreFetch();
