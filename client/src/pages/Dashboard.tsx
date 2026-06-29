@@ -75,6 +75,14 @@ function useDashboardRetryHandler(refetch: DashboardRefetch) {
   }, [refetch]);
 }
 
+function invalidateDashboardActivityQueries() {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity"] }),
+    queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity-page"] }),
+    queryClient.invalidateQueries({ queryKey: ["/api/activity"] }),
+  ]);
+}
+
 function DashboardContent() {
   const isMobile = useIsMobile();
   const role = useMemo(() => getCurrentRole(), []);
@@ -105,6 +113,25 @@ function DashboardContent() {
   const refreshRetryRef = useRef<() => void>(() => undefined);
   const lifecycleAbortControllerRef = useRef<AbortController | null>(null);
   const exportToastRef = useRef<ToastHandle | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    lifecycleAbortControllerRef.current = controller;
+    return () => {
+      controller.abort();
+      exportToastRef.current?.dismiss();
+      exportToastRef.current = null;
+      if (lifecycleAbortControllerRef.current === controller) {
+        lifecycleAbortControllerRef.current = null;
+      }
+      exportInFlightRef.current = false;
+      refreshInFlightRef.current = false;
+    };
+  }, []);
+
+  const isDashboardLifecycleActive = useCallback(() => {
+    return lifecycleAbortControllerRef.current?.signal.aborted === false;
+  }, []);
 
   const {
     data: summary,
@@ -337,26 +364,26 @@ function DashboardContent() {
       return deleteActivityLog(activity.id);
     },
     onSuccess: async (_result, activity) => {
-      toast({
-        title: "Login log deleted",
-        description: `Ended login activity for ${activity.username} has been removed.`,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity"] });
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/analytics/recent-login-activity-page"],
-      });
-      await queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+      if (isDashboardLifecycleActive()) {
+        toast({
+          title: "Login log deleted",
+          description: `Ended login activity for ${activity.username} has been removed.`,
+        });
+      }
+      await invalidateDashboardActivityQueries();
     },
     onError: (error, activity) => {
       logClientError("Failed to delete recent login activity:", error, {
         activityStatus: activity.status,
         hasActivityId: Boolean(activity.id),
       });
-      toast({
-        title: "Delete login log failed",
-        description: error.message || "Unable to delete the ended login activity log.",
-        variant: "destructive",
-      });
+      if (isDashboardLifecycleActive()) {
+        toast({
+          title: "Delete login log failed",
+          description: error.message || "Unable to delete the ended login activity log.",
+          variant: "destructive",
+        });
+      }
     },
   });
   const cleanupEndedLoginActivityMutation = useMutation<
@@ -370,29 +397,29 @@ function DashboardContent() {
         olderThanDays: RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS,
       }),
     onSuccess: async (result) => {
-      toast({
-        title: "Old login logs cleaned",
-        description:
-          result.deletedCount > 0
-            ? `${result.deletedCount} ended login logs older than ${result.olderThanDays} days were removed.`
-            : `No ended login logs older than ${result.olderThanDays} days were found.`,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity"] });
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/analytics/recent-login-activity-page"],
-      });
-      await queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+      if (isDashboardLifecycleActive()) {
+        toast({
+          title: "Old login logs cleaned",
+          description:
+            result.deletedCount > 0
+              ? `${result.deletedCount} ended login logs older than ${result.olderThanDays} days were removed.`
+              : `No ended login logs older than ${result.olderThanDays} days were found.`,
+        });
+      }
+      await invalidateDashboardActivityQueries();
     },
     onError: (error) => {
       logClientError("Failed to clean up ended login activity logs:", error, {
         limit: RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT,
         olderThanDays: RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS,
       });
-      toast({
-        title: "Cleanup login logs failed",
-        description: error.message || "Unable to clean up old ended login activity logs.",
-        variant: "destructive",
-      });
+      if (isDashboardLifecycleActive()) {
+        toast({
+          title: "Cleanup login logs failed",
+          description: error.message || "Unable to clean up old ended login activity logs.",
+          variant: "destructive",
+        });
+      }
     },
   });
   const handleDeleteEndedLoginActivity = useCallback(
@@ -468,25 +495,6 @@ function DashboardContent() {
     recentLoginActivityPageIsPlaceholderData,
     recentLoginActivityPageNumber,
   ]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    lifecycleAbortControllerRef.current = controller;
-    return () => {
-      controller.abort();
-      exportToastRef.current?.dismiss();
-      exportToastRef.current = null;
-      if (lifecycleAbortControllerRef.current === controller) {
-        lifecycleAbortControllerRef.current = null;
-      }
-      exportInFlightRef.current = false;
-      refreshInFlightRef.current = false;
-    };
-  }, []);
-
-  const isDashboardLifecycleActive = useCallback(() => {
-    return lifecycleAbortControllerRef.current?.signal.aborted === false;
-  }, []);
 
   const handleRefreshAll = useCallback(async () => {
     if (refreshInFlightRef.current) return;
