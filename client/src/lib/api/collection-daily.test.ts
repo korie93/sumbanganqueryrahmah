@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  deleteCollectionDailyCalendarStatus,
   getCollectionDailyCalendarAudit,
   getCollectionDailyDayDetails,
   getCollectionDailyOverview,
   getCollectionDailyUsers,
+  setCollectionDailyCalendar,
+  setCollectionDailyTarget,
 } from "./collection-daily";
 
 test("getCollectionDailyUsers forwards AbortSignal", async () => {
@@ -63,6 +66,155 @@ test("getCollectionDailyUsers filters malformed user rows safely", async () => {
         role: "admin",
       },
     ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("collection daily mutation wrappers validate target, calendar, and delete responses", async () => {
+  const requests: Array<{ method: string; input: string }> = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = String(init?.method || "GET");
+    requests.push({ method, input: url });
+
+    const payload = url.includes("/daily/target")
+      ? {
+          ok: true,
+          target: {
+            id: "target-1",
+            username: "collector alpha",
+            year: 2026,
+            month: 3,
+            monthlyTarget: 1500,
+          },
+        }
+      : method === "DELETE"
+        ? { ok: true, deleted: true }
+        : {
+            ok: true,
+            calendar: [{
+              day: 15,
+              status: "HOLIDAY",
+              leaveType: "OFF",
+              note: "Company closed",
+              isWorkingDay: false,
+              isHoliday: true,
+              holidayName: "OFF",
+            }],
+          };
+
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const target = await setCollectionDailyTarget({
+      username: "Collector Alpha",
+      year: 2026,
+      month: 3,
+      monthlyTarget: 1500,
+    });
+    const calendar = await setCollectionDailyCalendar({
+      username: "Collector Alpha",
+      year: 2026,
+      month: 3,
+      days: [{
+        day: 15,
+        status: "HOLIDAY",
+        leaveType: "OFF",
+        isWorkingDay: false,
+        isHoliday: true,
+      }],
+    });
+    const deleted = await deleteCollectionDailyCalendarStatus({
+      username: "Collector Alpha",
+      year: 2026,
+      month: 3,
+      day: 15,
+    });
+
+    assert.equal(target.target.monthlyTarget, 1500);
+    assert.equal(calendar.calendar[0]?.leaveType, "OFF");
+    assert.equal(deleted.deleted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(requests.map((request) => request.method), ["PUT", "PUT", "DELETE"]);
+  assert.match(requests[0]?.input || "", /\/api\/collection\/daily\/target$/);
+  assert.match(requests[1]?.input || "", /\/api\/collection\/daily\/calendar$/);
+  assert.match(requests[2]?.input || "", /\/api\/collection\/daily\/calendar\?/);
+});
+
+test("collection daily mutation wrappers reject malformed server responses", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = String(init?.method || "GET");
+    const payload = url.includes("/daily/target")
+      ? {
+          ok: true,
+          target: {
+            id: "target-1",
+            username: "collector alpha",
+            year: 2026,
+            month: 3,
+            monthlyTarget: "1500",
+          },
+        }
+      : method === "DELETE"
+        ? { ok: true, deleted: "yes" }
+        : {
+            ok: true,
+            calendar: [{ day: "15", status: "HOLIDAY" }],
+          };
+
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      setCollectionDailyTarget({
+        username: "Collector Alpha",
+        year: 2026,
+        month: 3,
+        monthlyTarget: 1500,
+      }),
+      /API contract mismatch for \/api\/collection\/daily\/target/,
+    );
+    await assert.rejects(
+      setCollectionDailyCalendar({
+        username: "Collector Alpha",
+        year: 2026,
+        month: 3,
+        days: [{
+          day: 15,
+          status: "HOLIDAY",
+          leaveType: "OFF",
+          isWorkingDay: false,
+          isHoliday: true,
+        }],
+      }),
+      /API contract mismatch for \/api\/collection\/daily\/calendar/,
+    );
+    await assert.rejects(
+      deleteCollectionDailyCalendarStatus({
+        username: "Collector Alpha",
+        year: 2026,
+        month: 3,
+        day: 15,
+      }),
+      /API contract mismatch for \/api\/collection\/daily\/calendar/,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

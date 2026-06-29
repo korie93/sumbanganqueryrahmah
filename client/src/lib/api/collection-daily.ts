@@ -1,4 +1,6 @@
 import { apiRequest } from "../api-client";
+import { parseApiJson } from "./contract";
+import { z } from "zod";
 import {
   parseCollectionAmountMyrNumber,
   type CollectionAmountMyrNumber,
@@ -23,6 +25,41 @@ type CollectionDailyRequestOptions = {
 };
 
 type UnknownRecord = Record<string, unknown>;
+
+const nonNegativeAmountSchema = z.number().finite().nonnegative();
+const collectionDailyCalendarStatusSchema = z.enum(["WORKING", "HOLIDAY"]);
+const collectionDailyLeaveTypeSchema = z.enum(["AL", "MC", "EL", "UL", "RL", "OFF"]);
+
+const collectionDailyTargetResponseSchema = z.object({
+  ok: z.literal(true),
+  target: z.object({
+    id: z.string().min(1),
+    username: z.string().min(1),
+    year: z.number().int().min(2000).max(2100),
+    month: z.number().int().min(1).max(12),
+    monthlyTarget: nonNegativeAmountSchema,
+  }).passthrough(),
+});
+
+const collectionDailyCalendarRowSchema = z.object({
+  day: z.number().int().min(1).max(31),
+  status: collectionDailyCalendarStatusSchema.optional(),
+  leaveType: collectionDailyLeaveTypeSchema.nullable().optional(),
+  note: z.string().nullable().optional(),
+  isWorkingDay: z.boolean().optional(),
+  isHoliday: z.boolean().optional(),
+  holidayName: z.string().nullable().optional(),
+}).passthrough();
+
+const collectionDailyCalendarMutationResponseSchema = z.object({
+  ok: z.literal(true),
+  calendar: z.array(collectionDailyCalendarRowSchema).max(31),
+});
+
+const collectionDailyCalendarDeleteResponseSchema = z.object({
+  ok: z.literal(true),
+  deleted: z.boolean(),
+});
 
 function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -396,16 +433,11 @@ export async function setCollectionDailyTarget(payload: {
   monthlyTarget: CollectionAmountMyrNumber;
 }) {
   const response = await apiRequest("PUT", "/api/collection/daily/target", payload);
-  return response.json() as Promise<{
-    ok: boolean;
-    target: {
-      id: string;
-      username: string;
-      year: number;
-      month: number;
-      monthlyTarget: CollectionAmountMyrNumber;
-    };
-  }>;
+  return parseApiJson(
+    response,
+    collectionDailyTargetResponseSchema,
+    "/api/collection/daily/target",
+  );
 }
 
 export async function setCollectionDailyCalendar(payload: {
@@ -423,7 +455,11 @@ export async function setCollectionDailyCalendar(payload: {
   }>;
 }) {
   const response = await apiRequest("PUT", "/api/collection/daily/calendar", payload);
-  return response.json() as Promise<{ ok: boolean; calendar: Array<Record<string, unknown>> }>;
+  return parseApiJson(
+    response,
+    collectionDailyCalendarMutationResponseSchema,
+    "/api/collection/daily/calendar",
+  );
 }
 
 export async function deleteCollectionDailyCalendarStatus(payload: {
@@ -441,7 +477,11 @@ export async function deleteCollectionDailyCalendarStatus(payload: {
     "DELETE",
     `/api/collection/daily/calendar?${params.toString()}`,
   );
-  return response.json() as Promise<{ ok: boolean; deleted: boolean }>;
+  return parseApiJson(
+    response,
+    collectionDailyCalendarDeleteResponseSchema,
+    "/api/collection/daily/calendar",
+  );
 }
 
 export async function getCollectionDailyCalendarAudit(filters: {
