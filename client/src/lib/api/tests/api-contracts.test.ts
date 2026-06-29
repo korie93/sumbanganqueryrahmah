@@ -98,6 +98,13 @@ import {
   getBackups,
 } from "@/lib/api/backups";
 import {
+  checkCollectionNicknameAuth,
+  deleteCollectionNickname,
+  getCollectionNicknames,
+  loginCollectionNickname,
+  resetCollectionNicknamePassword,
+} from "@/lib/api/collection-nicknames";
+import {
   clearDevMailOutboxPreviews,
   createManagedUserAccount,
   deleteDevMailOutboxPreview,
@@ -1690,6 +1697,99 @@ test("backup API wrappers reject malformed management payloads", async () => {
     await assert.rejects(
       () => deleteBackupApi("backup-1"),
       /API contract mismatch for \/api\/backups\/backup-1/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("collection nickname API wrappers reject malformed management payloads", async () => {
+  const validNickname = {
+    id: "nickname-1",
+    nickname: "Collector Alpha",
+    isActive: true,
+    roleScope: "user",
+    createdBy: "superuser",
+    createdAt: "2026-06-29T05:30:00.000Z",
+  };
+  const validPasswordProfile = {
+    id: "nickname-1",
+    nickname: "Collector Alpha",
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+  };
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url === "/api/collection/nicknames?includeInactive=1" && method === "GET") {
+      return jsonResponse({
+        ok: true,
+        nicknames: [
+          {
+            ...validNickname,
+            roleScope: "manager",
+          },
+        ],
+      });
+    }
+    if (url === "/api/collection/nickname-auth/check" && method === "POST") {
+      return jsonResponse({
+        ok: true,
+        nickname: {
+          ...validPasswordProfile,
+          requiresPasswordSetup: false,
+          requiresPasswordLogin: "true",
+          requiresForcedPasswordChange: false,
+        },
+      });
+    }
+    if (url === "/api/collection/nickname-auth/login" && method === "POST") {
+      return jsonResponse({
+        ok: true,
+        nickname: {
+          ...validPasswordProfile,
+          requiresForcedPasswordChange: "false",
+        },
+      });
+    }
+    if (url === "/api/collection/nicknames/nickname-1/reset-password" && method === "POST") {
+      return jsonResponse({
+        ok: true,
+        temporaryPassword: "",
+        nickname: validPasswordProfile,
+      });
+    }
+    if (url === "/api/collection/nicknames/nickname-1" && method === "DELETE") {
+      return jsonResponse({
+        ok: true,
+        deleted: "true",
+        deactivated: false,
+      });
+    }
+    throw new Error(`Unexpected ${method} ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getCollectionNicknames({ includeInactive: true }),
+      /API contract mismatch for \/api\/collection\/nicknames/,
+    );
+    await assert.rejects(
+      () => checkCollectionNicknameAuth("Collector Alpha"),
+      /API contract mismatch for \/api\/collection\/nickname-auth\/check/,
+    );
+    await assert.rejects(
+      () => loginCollectionNickname({ nickname: "Collector Alpha", password: "password" }),
+      /API contract mismatch for \/api\/collection\/nickname-auth\/login/,
+    );
+    await assert.rejects(
+      () => resetCollectionNicknamePassword("nickname-1"),
+      /API contract mismatch for \/api\/collection\/nicknames\/:id\/reset-password/,
+    );
+    await assert.rejects(
+      () => deleteCollectionNickname("nickname-1"),
+      /API contract mismatch for \/api\/collection\/nicknames\/:id/,
     );
   } finally {
     restoreFetch();
