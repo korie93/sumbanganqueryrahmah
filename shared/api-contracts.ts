@@ -674,6 +674,80 @@ export const activityCleanupResponseSchema = z.object({
   standardRetentionDays: z.number().int().positive(),
 }).strict();
 
+export const activityRetentionStatusSchema = z.object({
+  policy: z.object({
+    autoCleanupEnabled: z.boolean(),
+    batchSize: z.number().int().min(1).max(5_000),
+    securityRetentionDays: z.number().int().min(7).max(3_650),
+    standardRetentionDays: z.number().int().min(7).max(3_650),
+  }).strict(),
+  preview: z.object({
+    protectedActiveBanCount: nonNegativeIntSchema,
+    securityEligibleCount: nonNegativeIntSchema,
+    standardEligibleCount: nonNegativeIntSchema,
+    totalEligibleCount: nonNegativeIntSchema,
+  }).strict(),
+  securityCutoff: z.string().datetime({ offset: true }),
+  standardCutoff: z.string().datetime({ offset: true }),
+}).strict().superRefine((value, context) => {
+  if (value.policy.securityRetentionDays < value.policy.standardRetentionDays) {
+    context.addIssue({
+      code: "custom",
+      message: "Security retention cannot be shorter than standard retention",
+      path: ["policy", "securityRetentionDays"],
+    });
+  }
+
+  if (
+    value.preview.totalEligibleCount
+    !== value.preview.securityEligibleCount + value.preview.standardEligibleCount
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Activity retention preview totals are inconsistent",
+      path: ["preview", "totalEligibleCount"],
+    });
+  }
+
+  if (Date.parse(value.securityCutoff) > Date.parse(value.standardCutoff)) {
+    context.addIssue({
+      code: "custom",
+      message: "Security cutoff cannot be newer than standard cutoff",
+      path: ["securityCutoff"],
+    });
+  }
+});
+
+export const activityRetentionResponseSchema = z.object({
+  ok: z.literal(true),
+  success: z.literal(true),
+  retention: activityRetentionStatusSchema,
+}).strict();
+
+export const activityBannedUserSchema = z.object({
+  visitorId: nonEmptyStringSchema,
+  banId: nonEmptyStringSchema,
+  username: nonEmptyStringSchema,
+  role: nonEmptyStringSchema,
+  banInfo: z.object({
+    ipAddress: nullableStringSchema,
+    browser: nullableStringSchema,
+    bannedAt: z.string().datetime({ offset: true }).nullable(),
+  }).strict(),
+}).strict().superRefine((value, context) => {
+  if (value.visitorId !== value.banId) {
+    context.addIssue({
+      code: "custom",
+      message: "Banned user identifiers must match",
+      path: ["banId"],
+    });
+  }
+});
+
+export const activityBannedUsersResponseSchema = z.object({
+  users: z.array(activityBannedUserSchema),
+}).strict();
+
 const activityInvestigationTimestampSchema = z.string().datetime({ offset: true }).nullable();
 const activityInvestigationDeviceTypeSchema = z.enum([
   "desktop",
@@ -978,6 +1052,10 @@ export type ActivityPageResponseContract = z.infer<typeof activityPageResponseSc
 export type ActivityMutationSuccessResponseContract = z.infer<typeof activityMutationSuccessResponseSchema>;
 export type ActivityBulkDeleteResponseContract = z.infer<typeof activityBulkDeleteResponseSchema>;
 export type ActivityCleanupResponseContract = z.infer<typeof activityCleanupResponseSchema>;
+export type ActivityRetentionStatusContract = z.infer<typeof activityRetentionStatusSchema>;
+export type ActivityRetentionResponseContract = z.infer<typeof activityRetentionResponseSchema>;
+export type ActivityBannedUserContract = z.infer<typeof activityBannedUserSchema>;
+export type ActivityBannedUsersResponseContract = z.infer<typeof activityBannedUsersResponseSchema>;
 export type ActivityInvestigationContract = z.infer<typeof activityInvestigationSchema>;
 export type ActivityInvestigationResponseContract = z.infer<typeof activityInvestigationResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;

@@ -1,13 +1,16 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import {
+  activityBannedUsersResponseSchema,
   activityBulkDeleteResponseSchema,
   activityCleanupResponseSchema,
   activityInvestigationResponseSchema,
   activityListResponseSchema,
   activityMutationSuccessResponseSchema,
   activityPageResponseSchema,
+  activityRetentionResponseSchema,
   type ActivityInvestigationContract,
+  type ActivityRetentionStatusContract,
 } from "@shared/api-contracts";
 
 type ActivityRequestOptions = {
@@ -110,22 +113,7 @@ export interface ActivityPageResponse {
 
 export type ActivityInvestigation = ActivityInvestigationContract;
 
-export interface ActivityRetentionStatus {
-  policy: {
-    autoCleanupEnabled: boolean;
-    batchSize: number;
-    securityRetentionDays: number;
-    standardRetentionDays: number;
-  };
-  preview: {
-    protectedActiveBanCount: number;
-    securityEligibleCount: number;
-    standardEligibleCount: number;
-    totalEligibleCount: number;
-  };
-  securityCutoff: string;
-  standardCutoff: string;
-}
+export type ActivityRetentionStatus = ActivityRetentionStatusContract;
 
 export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
   return apiRequest("POST", "/api/activity/heartbeat", {}, {
@@ -247,30 +235,32 @@ export async function getActivityRetentionStatus(
     undefined,
     options,
   );
-  const payload = await response.json() as {
-    retention: ActivityRetentionStatus;
-  };
+  const payload = await parseApiJson(
+    response,
+    activityRetentionResponseSchema,
+    "/api/activity/retention",
+  );
   return payload.retention;
 }
 
 export async function kickUser(activityId: string) {
   const response = await apiRequest("POST", "/api/activity/kick", { activityId });
-  return response.json();
+  return parseApiJson(response, activityMutationSuccessResponseSchema, "/api/activity/kick");
 }
 
 export async function banUser(activityId: string) {
   const response = await apiRequest("POST", "/api/activity/ban", { activityId });
-  return response.json();
+  return parseApiJson(response, activityMutationSuccessResponseSchema, "/api/activity/ban");
 }
 
 export async function unbanUser(banId: string) {
   const response = await apiRequest("POST", "/api/admin/unban", {
     banId,
   });
-  return response.json();
+  return parseApiJson(response, activityMutationSuccessResponseSchema, "/api/admin/unban");
 }
 
 export async function getBannedUsers(options?: ActivityRequestOptions) {
   const response = await apiRequest("GET", "/api/users/banned", undefined, options);
-  return response.json();
+  return parseApiJson(response, activityBannedUsersResponseSchema, "/api/users/banned");
 }

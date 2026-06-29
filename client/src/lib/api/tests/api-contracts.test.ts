@@ -11,12 +11,14 @@ import {
   analyticsSummarySchema,
   analyticsTopUsersSchema,
   appConfigResponseSchema,
+  activityBannedUsersResponseSchema,
   activityBulkDeleteResponseSchema,
   activityCleanupResponseSchema,
   activityInvestigationResponseSchema,
   activityListResponseSchema,
   activityMutationSuccessResponseSchema,
   activityPageResponseSchema,
+  activityRetentionResponseSchema,
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
   authActivationTokenResponseSchema,
@@ -62,13 +64,18 @@ import {
   getTopActiveUsers,
 } from "@/lib/api/analytics";
 import {
+  banUser,
   cleanupEndedActivityLogs,
   deleteActivityLog,
   deleteActivityLogsBulk,
   getActivityInvestigation,
   getActivityPage,
   getAllActivity,
+  getActivityRetentionStatus,
+  getBannedUsers,
   getFilteredActivity,
+  kickUser,
+  unbanUser,
 } from "@/lib/api/activity";
 import {
   getMe,
@@ -1085,6 +1092,147 @@ test("activity mutation contracts accept valid responses and reject malformed cl
     }).success,
     false,
   );
+});
+
+test("activity retention contract enforces policy and preview invariants", () => {
+  const validResponse = {
+    ok: true,
+    success: true,
+    retention: {
+      policy: {
+        autoCleanupEnabled: true,
+        batchSize: 500,
+        securityRetentionDays: 365,
+        standardRetentionDays: 90,
+      },
+      preview: {
+        protectedActiveBanCount: 2,
+        securityEligibleCount: 3,
+        standardEligibleCount: 4,
+        totalEligibleCount: 7,
+      },
+      securityCutoff: "2025-06-24T08:00:00.000Z",
+      standardCutoff: "2026-03-26T08:00:00.000Z",
+    },
+  } as const;
+
+  assert.equal(activityRetentionResponseSchema.safeParse(validResponse).success, true);
+  assert.equal(
+    activityRetentionResponseSchema.safeParse({
+      ...validResponse,
+      retention: {
+        ...validResponse.retention,
+        policy: {
+          ...validResponse.retention.policy,
+          securityRetentionDays: 30,
+        },
+      },
+    }).success,
+    false,
+  );
+  assert.equal(
+    activityRetentionResponseSchema.safeParse({
+      ...validResponse,
+      retention: {
+        ...validResponse.retention,
+        preview: {
+          ...validResponse.retention.preview,
+          totalEligibleCount: 8,
+        },
+      },
+    }).success,
+    false,
+  );
+});
+
+test("activity banned user contract blocks identity mismatches and unexpected fields", () => {
+  const bannedUser = {
+    visitorId: "ban-1",
+    banId: "ban-1",
+    username: "operator.one",
+    role: "user",
+    banInfo: {
+      ipAddress: "203.0.113.9",
+      browser: "Chrome 149",
+      bannedAt: "2026-06-24T08:00:00.000Z",
+    },
+  } as const;
+
+  assert.equal(
+    activityBannedUsersResponseSchema.safeParse({ users: [bannedUser] }).success,
+    true,
+  );
+  assert.equal(
+    activityBannedUsersResponseSchema.safeParse({
+      users: [{ ...bannedUser, banId: "ban-2" }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    activityBannedUsersResponseSchema.safeParse({
+      users: [{ ...bannedUser, passwordHash: "must-not-reach-client" }],
+    }).success,
+    false,
+  );
+});
+
+test("activity moderation and policy wrappers reject malformed response payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+    if (url === "/api/activity/retention") {
+      return jsonResponse({
+        ok: true,
+        success: true,
+        retention: {
+          policy: {
+            autoCleanupEnabled: true,
+            batchSize: 500,
+            securityRetentionDays: 30,
+            standardRetentionDays: 90,
+          },
+          preview: {
+            protectedActiveBanCount: 0,
+            securityEligibleCount: 0,
+            standardEligibleCount: 0,
+            totalEligibleCount: 0,
+          },
+          securityCutoff: "2026-05-25T08:00:00.000Z",
+          standardCutoff: "2026-03-26T08:00:00.000Z",
+        },
+      });
+    }
+    if (url === "/api/users/banned") {
+      return jsonResponse({
+        users: [{
+          visitorId: "ban-1",
+          banId: "ban-2",
+          username: "operator.one",
+          role: "user",
+          banInfo: { ipAddress: null, browser: null, bannedAt: null },
+        }],
+      });
+    }
+    if (["/api/activity/kick", "/api/activity/ban", "/api/admin/unban"].includes(url)) {
+      return jsonResponse({ ok: true, success: "true" });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getActivityRetentionStatus(),
+      /API contract mismatch for \/api\/activity\/retention/,
+    );
+    await assert.rejects(
+      () => getBannedUsers(),
+      /API contract mismatch for \/api\/users\/banned/,
+    );
+    await assert.rejects(() => kickUser("activity-1"), /API contract mismatch/);
+    await assert.rejects(() => banUser("activity-1"), /API contract mismatch/);
+    await assert.rejects(() => unbanUser("ban-1"), /API contract mismatch/);
+  } finally {
+    restoreFetch();
+  }
 });
 
 test("activity bulk delete contract enforces complete unique outcomes", () => {
