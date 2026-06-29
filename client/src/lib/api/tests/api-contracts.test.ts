@@ -141,7 +141,7 @@ import {
   validateActivationToken,
   validatePasswordResetToken,
 } from "@/lib/api/auth";
-import { getAuditLogs } from "@/lib/api/audit";
+import { cleanupAuditLogs, getAuditLogStats, getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
   getSettings,
@@ -3126,6 +3126,92 @@ test("search and audit API wrappers reject malformed contract payloads", async (
     );
     await assert.rejects(() => getSearchColumns(), /API contract mismatch for \/api\/search\/columns/);
     await assert.rejects(() => getAuditLogs({ page: 1, pageSize: 25 }), /API contract mismatch for \/api\/audit-logs/);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("audit stats and cleanup wrappers reject malformed operational payloads", async () => {
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url === "/api/audit-logs/stats" && method === "GET") {
+      return jsonResponse({
+        totalLogs: 12,
+        todayLogs: "3",
+        actionBreakdown: {
+          LOGIN: 9,
+          CLEANUP_AUDIT_LOGS: -1,
+        },
+      });
+    }
+
+    if (url === "/api/audit-logs/cleanup" && method === "DELETE") {
+      return jsonResponse({
+        success: "true",
+        deletedCount: 7,
+        message: "",
+      });
+    }
+
+    throw new Error(`Unexpected ${method} ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getAuditLogStats(),
+      /API contract mismatch for \/api\/audit-logs\/stats/,
+    );
+    await assert.rejects(
+      () => cleanupAuditLogs(30),
+      /API contract mismatch for \/api\/audit-logs\/cleanup/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("audit stats wrapper normalizes current backend counters for cleanup UI", async () => {
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url === "/api/audit-logs/stats" && method === "GET") {
+      return jsonResponse({
+        totalLogs: 12,
+        todayLogs: 3,
+        actionBreakdown: {
+          LOGIN: 9,
+          CLEANUP_AUDIT_LOGS: 1,
+        },
+      });
+    }
+
+    if (url === "/api/audit-logs/cleanup" && method === "DELETE") {
+      return jsonResponse({
+        success: true,
+        deletedCount: 7,
+        message: "Cleanup completed",
+      });
+    }
+
+    throw new Error(`Unexpected ${method} ${url}`);
+  }) as typeof fetch);
+
+  try {
+    assert.deepEqual(await getAuditLogStats(), {
+      total: 12,
+      olderThan30Days: 0,
+      olderThan60Days: 0,
+      olderThan90Days: 0,
+      oldestLogDate: null,
+    });
+    assert.deepEqual(await cleanupAuditLogs(30), {
+      success: true,
+      deletedCount: 7,
+      message: "Cleanup completed",
+    });
   } finally {
     restoreFetch();
   }

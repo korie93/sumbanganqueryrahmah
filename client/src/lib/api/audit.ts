@@ -1,6 +1,54 @@
 import { apiRequest } from "../api-client";
 import { auditLogsResponseSchema } from "@shared/api-contracts";
+import { z } from "zod";
 import { parseApiJson } from "./contract";
+
+type AuditLogStatsResponse = {
+  total: number;
+  olderThan30Days: number;
+  olderThan60Days: number;
+  olderThan90Days: number;
+  oldestLogDate: string | null;
+};
+
+type AuditLogCleanupResponse = {
+  success: boolean;
+  deletedCount: number;
+  message: string;
+};
+
+const nonNegativeIntegerSchema = z.number().int().nonnegative();
+
+const auditLogStatsLegacyResponseSchema: z.ZodType<AuditLogStatsResponse> = z.object({
+  total: nonNegativeIntegerSchema,
+  olderThan30Days: nonNegativeIntegerSchema,
+  olderThan60Days: nonNegativeIntegerSchema,
+  olderThan90Days: nonNegativeIntegerSchema,
+  oldestLogDate: z.string().min(1).nullable(),
+});
+
+const auditLogStatsWireResponseSchema = z.object({
+  totalLogs: nonNegativeIntegerSchema,
+  todayLogs: nonNegativeIntegerSchema,
+  actionBreakdown: z.record(nonNegativeIntegerSchema),
+}).transform((stats): AuditLogStatsResponse => ({
+  total: stats.totalLogs,
+  olderThan30Days: 0,
+  olderThan60Days: 0,
+  olderThan90Days: 0,
+  oldestLogDate: null,
+}));
+
+const auditLogStatsResponseSchema = z.union([
+  auditLogStatsLegacyResponseSchema,
+  auditLogStatsWireResponseSchema,
+]);
+
+const auditLogCleanupResponseSchema: z.ZodType<AuditLogCleanupResponse> = z.object({
+  success: z.boolean(),
+  deletedCount: nonNegativeIntegerSchema,
+  message: z.string().min(1),
+});
 
 export async function getAuditLogs(params?: {
   page?: number | undefined;
@@ -34,10 +82,10 @@ export async function getAuditLogs(params?: {
 
 export async function getAuditLogStats() {
   const response = await apiRequest("GET", "/api/audit-logs/stats");
-  return response.json();
+  return parseApiJson(response, auditLogStatsResponseSchema, "/api/audit-logs/stats");
 }
 
 export async function cleanupAuditLogs(olderThanDays: number) {
   const response = await apiRequest("DELETE", "/api/audit-logs/cleanup", { olderThanDays });
-  return response.json();
+  return parseApiJson(response, auditLogCleanupResponseSchema, "/api/audit-logs/cleanup");
 }
