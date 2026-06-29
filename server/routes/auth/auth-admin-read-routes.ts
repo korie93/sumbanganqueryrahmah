@@ -10,6 +10,7 @@ export function registerAuthAdminReadRoutes(context: AuthRouteContext) {
     rateLimiters,
     jsonRoute,
     buildManagedUserPayload,
+    buildPendingPasswordResetRequestPayload,
     buildOkPayload,
   } = context;
 
@@ -43,7 +44,7 @@ export function registerAuthAdminReadRoutes(context: AuthRouteContext) {
       );
       return {
         ok: true,
-        requests: result.requests,
+        requests: result.requests.map((request) => buildPendingPasswordResetRequestPayload(request)),
         pagination: result.pagination,
       };
     }),

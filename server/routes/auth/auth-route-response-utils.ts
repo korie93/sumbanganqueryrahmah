@@ -10,10 +10,51 @@ import {
 } from "../../services/auth-account.service";
 import type { PostgresStorage } from "../../storage-postgres";
 
+const UTC_NAIVE_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$/;
+
 export type AuthRouteJsonHandler = (
   req: AuthenticatedRequest,
   res: Response,
 ) => Promise<unknown>;
+
+type AuthRouteTimestampInput = Date | string | null | undefined;
+
+function normalizeTimestampInput(value: AuthRouteTimestampInput): Date | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const timestamp = UTC_NAIVE_TIMESTAMP_PATTERN.test(trimmed)
+    ? trimmed.replace(" ", "T").replace(/$/, "Z")
+    : trimmed;
+  const parsed = new Date(timestamp);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function buildRequiredIsoTimestamp(
+  value: AuthRouteTimestampInput,
+  fieldName: string,
+): string {
+  const parsed = normalizeTimestampInput(value);
+  if (!parsed) {
+    throw new Error(`Invalid auth response timestamp: ${fieldName}`);
+  }
+  return parsed.toISOString();
+}
+
+export function buildNullableIsoTimestamp(value: AuthRouteTimestampInput): string | null {
+  return normalizeTimestampInput(value)?.toISOString() ?? null;
+}
 
 export function buildManagedUserPayload(
   user: Awaited<ReturnType<PostgresStorage["getManagedUsers"]>>[number],
@@ -28,14 +69,14 @@ export function buildManagedUserPayload(
     mustChangePassword: user.mustChangePassword,
     passwordResetBySuperuser: user.passwordResetBySuperuser,
     createdBy: user.createdBy,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-    activatedAt: user.activatedAt,
-    lastLoginAt: user.lastLoginAt,
-    passwordChangedAt: user.passwordChangedAt,
+    createdAt: buildRequiredIsoTimestamp(user.createdAt, "createdAt"),
+    updatedAt: buildRequiredIsoTimestamp(user.updatedAt, "updatedAt"),
+    activatedAt: buildNullableIsoTimestamp(user.activatedAt),
+    lastLoginAt: buildNullableIsoTimestamp(user.lastLoginAt),
+    passwordChangedAt: buildNullableIsoTimestamp(user.passwordChangedAt),
     isBanned: user.isBanned,
     failedLoginAttempts: user.failedLoginAttempts,
-    lockedAt: user.lockedAt,
+    lockedAt: buildNullableIsoTimestamp(user.lockedAt),
     lockedReason: user.lockedReason,
     lockedBySystem: user.lockedBySystem,
   };
@@ -55,10 +96,31 @@ export function buildUserPayload(user: Awaited<ReturnType<PostgresStorage["getUs
     isBanned: user.isBanned,
     twoFactorEnabled: user.twoFactorEnabled,
     twoFactorPendingSetup: Boolean(user.twoFactorSecretEncrypted) && user.twoFactorEnabled !== true,
-    twoFactorConfiguredAt: user.twoFactorConfiguredAt,
-    activatedAt: user.activatedAt,
-    passwordChangedAt: user.passwordChangedAt,
-    lastLoginAt: user.lastLoginAt,
+    twoFactorConfiguredAt: buildNullableIsoTimestamp(user.twoFactorConfiguredAt),
+    activatedAt: buildNullableIsoTimestamp(user.activatedAt),
+    passwordChangedAt: buildNullableIsoTimestamp(user.passwordChangedAt),
+    lastLoginAt: buildNullableIsoTimestamp(user.lastLoginAt),
+  };
+}
+
+export function buildPendingPasswordResetRequestPayload(
+  request: Awaited<ReturnType<PostgresStorage["listPendingPasswordResetRequests"]>>[number],
+) {
+  return {
+    id: request.id,
+    userId: request.userId,
+    username: request.username,
+    fullName: request.fullName,
+    email: request.email,
+    role: request.role,
+    status: request.status,
+    isBanned: request.isBanned,
+    requestedByUser: request.requestedByUser,
+    approvedBy: request.approvedBy,
+    resetType: request.resetType,
+    createdAt: buildRequiredIsoTimestamp(request.createdAt, "createdAt"),
+    expiresAt: buildNullableIsoTimestamp(request.expiresAt),
+    usedAt: buildNullableIsoTimestamp(request.usedAt),
   };
 }
 
@@ -69,7 +131,7 @@ export function buildDeliveryPayload(
     deliveryMode: activation.deliveryMode,
     errorCode: activation.errorCode,
     errorMessage: activation.errorMessage,
-    expiresAt: activation.expiresAt,
+    expiresAt: buildRequiredIsoTimestamp(activation.expiresAt, "expiresAt"),
     previewUrl: activation.previewUrl,
     recipientEmail: activation.recipientEmail,
     sent: activation.sent,

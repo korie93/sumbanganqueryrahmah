@@ -36,10 +36,12 @@ import type { AuditEntry } from "./auth-route-auth-flow-shared";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import {
   authActivationTokenResponseSchema,
+  authManagedUsersResponseSchema,
   authLoginResponseSchema,
   authLoginSuccessResponseSchema,
   authMessageResponseSchema,
   authPasswordResetTokenResponseSchema,
+  authPendingPasswordResetRequestsResponseSchema,
   authTwoFactorSetupResponseSchema,
   authTwoFactorStatusResponseSchema,
   authUserForceLogoutResponseSchema,
@@ -159,8 +161,12 @@ test("GET /api/admin/users returns paginated managed users and forwards filters"
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authManagedUsersResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.users.length, 1);
+    assert.equal(payload.users[0].createdAt, "2026-03-01T00:00:00.000Z");
+    assert.equal(payload.users[0].updatedAt, "2026-03-02T00:00:00.123Z");
+    assert.equal(payload.users[0].activatedAt, "2026-03-01T00:00:00.000Z");
     assert.deepEqual(payload.pagination, {
       page: 2,
       pageSize: 15,
@@ -197,12 +203,15 @@ test("GET /api/admin/password-reset-requests returns paginated rows and forwards
 
     assert.equal(response.status, 200);
     const payload = await response.json();
+    assert.doesNotThrow(() => authPendingPasswordResetRequestsResponseSchema.parse(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.requests.length, 1);
+    assert.equal(payload.requests[0].createdAt, "2026-03-20T00:00:00.000Z");
+    assert.equal(payload.requests[0].expiresAt, "2026-03-21T00:00:00.000Z");
     assert.deepEqual(payload.pagination, {
       page: 1,
       pageSize: 20,
-      total: 7,
+      total: 21,
       totalPages: 2,
     });
     assert.equal(listPageCalls.length, 1);

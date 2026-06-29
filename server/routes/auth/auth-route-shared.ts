@@ -15,6 +15,7 @@ import {
   buildDeliveryPayload,
   buildManagedUserPayload,
   buildOkPayload,
+  buildPendingPasswordResetRequestPayload,
   buildUserPayload,
   createAuthJsonRoute,
   type AuthRouteJsonHandler,
@@ -64,12 +65,15 @@ export type AuthRouteContext = {
     isBanned: boolean | null;
     twoFactorEnabled: boolean | null;
     twoFactorPendingSetup: boolean | null;
-    twoFactorConfiguredAt: Date | null;
-    activatedAt: Date | null;
-    passwordChangedAt: Date | null;
-    lastLoginAt: Date | null;
+    twoFactorConfiguredAt: string | null;
+    activatedAt: string | null;
+    passwordChangedAt: string | null;
+    lastLoginAt: string | null;
   } | null;
   buildManagedUserPayload: (user: Awaited<ReturnType<PostgresStorage["getManagedUsers"]>>[number]) => Record<string, unknown>;
+  buildPendingPasswordResetRequestPayload: (
+    request: Awaited<ReturnType<PostgresStorage["listPendingPasswordResetRequests"]>>[number],
+  ) => Record<string, unknown>;
   buildDeliveryPayload: (
     activation: ManagedAccountActivationDelivery | ManagedAccountPasswordResetDelivery,
   ) => Record<string, unknown>;
@@ -136,6 +140,7 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
     },
     buildUserPayload,
     buildManagedUserPayload,
+    buildPendingPasswordResetRequestPayload,
     buildDeliveryPayload,
     buildOkPayload,
     signSessionToken(payload, res) {
