@@ -3,9 +3,12 @@ import test from "node:test";
 import {
   buildCollectionMutationFingerprint,
   buildCollectionRecordFormData,
+  createCollectionRecord,
+  deleteCollectionRecord,
   getCollectionPurgeSummary,
   getCollectionRecords,
   purgeOldCollectionRecords,
+  updateCollectionRecord,
 } from "./collection-records";
 
 test("buildCollectionRecordFormData appends scalar fields and repeated receipt ids", () => {
@@ -191,6 +194,31 @@ function buildCollectionListPayload(overrides?: Record<string, unknown>) {
   };
 }
 
+function buildCollectionRecordPayload(overrides?: Record<string, unknown>) {
+  return {
+    id: "collection-1",
+    customerName: "Alice Tan",
+    icNumber: "900101015555",
+    customerPhone: "0123456789",
+    accountNumber: "ACC-1001",
+    batch: "P25",
+    paymentDate: "2026-03-24",
+    amount: "120.50",
+    receiptFile: null,
+    receipts: [],
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: "needs_review",
+    receiptValidationMessage: "Tiada resit dilampirkan untuk semakan jumlah.",
+    receiptCount: 0,
+    duplicateReceiptFlag: false,
+    createdByLogin: "staff.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: "2026-03-24T09:00:00.000Z",
+    updatedAt: "2026-03-24T09:00:00.000Z",
+    ...overrides,
+  };
+}
+
 test("getCollectionRecords accepts the backend maximum page size", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(
@@ -235,6 +263,99 @@ test("getCollectionRecords rejects malformed collection record payloads", async 
     await assert.rejects(
       getCollectionRecords(),
       /API contract mismatch for \/api\/collection\/list/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("collection mutation API wrappers validate create, update, and delete payloads", async () => {
+  const requests: Array<{ method: string; url: string }> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = String(init?.method || "GET");
+    const url = String(input);
+    requests.push({ method, url });
+
+    const payload = method === "DELETE"
+      ? { ok: true }
+      : { ok: true, record: buildCollectionRecordPayload() };
+
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const created = await createCollectionRecord({
+      customerName: "Alice Tan",
+      icNumber: "900101015555",
+      customerPhone: "0123456789",
+      accountNumber: "ACC-1001",
+      batch: "P25",
+      paymentDate: "2026-03-24",
+      amount: 120.5,
+      collectionStaffNickname: "Collector Alpha",
+    });
+    const updated = await updateCollectionRecord("collection-1", {
+      amount: 99.25,
+    });
+    const deleted = await deleteCollectionRecord("collection-1");
+
+    assert.equal(created.record.id, "collection-1");
+    assert.equal(updated.record.collectionStaffNickname, "Collector Alpha");
+    assert.equal(deleted.ok, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(requests.map((request) => request.method), ["POST", "PATCH", "DELETE"]);
+  assert.match(requests[0]?.url || "", /\/api\/collection$/);
+  assert.match(requests[1]?.url || "", /\/api\/collection\/collection-1$/);
+  assert.match(requests[2]?.url || "", /\/api\/collection\/collection-1$/);
+});
+
+test("collection mutation API wrappers reject malformed record responses", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const method = String(init?.method || "GET");
+    const payload = method === "DELETE"
+      ? { ok: false }
+      : {
+          ok: true,
+          record: buildCollectionRecordPayload({
+            createdAt: "not-a-datetime",
+          }),
+        };
+
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      createCollectionRecord({
+        customerName: "Alice Tan",
+        icNumber: "900101015555",
+        customerPhone: "0123456789",
+        accountNumber: "ACC-1001",
+        batch: "P25",
+        paymentDate: "2026-03-24",
+        amount: 120.5,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+      /API contract mismatch for \/api\/collection/,
+    );
+    await assert.rejects(
+      updateCollectionRecord("collection-1", { amount: 99.25 }),
+      /API contract mismatch for \/api\/collection\/:id/,
+    );
+    await assert.rejects(
+      deleteCollectionRecord("collection-1"),
+      /API contract mismatch for \/api\/collection\/:id/,
     );
   } finally {
     globalThis.fetch = originalFetch;

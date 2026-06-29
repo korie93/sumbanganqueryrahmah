@@ -4,6 +4,7 @@ import {
   collectionPurgeResponseSchema,
   collectionPurgeSummaryResponseSchema,
   collectionRecordListResponseSchema,
+  collectionRecordResponseSchema,
 } from "@shared/api-contracts";
 import { parseApiJson } from "./contract";
 import type {
@@ -13,6 +14,7 @@ import type {
   CreateCollectionPayload,
   UpdateCollectionPayload,
 } from "./collection-types";
+import { z } from "zod";
 
 type CollectionMultipartPayload = Omit<UpdateCollectionPayload, "receipt" | "receipts">;
 type CollectionMutationRequestOptions = {
@@ -22,6 +24,13 @@ type CollectionMutationRequestOptions = {
 
 const COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS = 2 * 60_000;
 const COLLECTION_RECEIPT_DOWNLOAD_TIMEOUT_MS = 2 * 60_000;
+const collectionRecordMutationResponseSchema = z.object({
+  ok: z.literal(true),
+  record: collectionRecordResponseSchema,
+});
+const collectionRecordDeleteResponseSchema = z.object({
+  ok: z.literal(true),
+});
 
 function appendCollectionFormValue(formData: FormData, key: string, value: unknown) {
   if (value === undefined || value === null) {
@@ -161,7 +170,11 @@ export async function createCollectionRecord(
     headers: buildCollectionMutationHeaders(options),
     timeoutMs: payload instanceof FormData ? COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS : undefined,
   });
-  return response.json();
+  return parseApiJson(
+    response,
+    collectionRecordMutationResponseSchema,
+    "/api/collection",
+  );
 }
 
 export async function getCollectionRecords(filters?: {
@@ -294,7 +307,11 @@ export async function updateCollectionRecord(
     headers: buildCollectionMutationHeaders(options),
     timeoutMs: payload instanceof FormData ? COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS : undefined,
   });
-  return response.json();
+  return parseApiJson(
+    response,
+    collectionRecordMutationResponseSchema,
+    "/api/collection/:id",
+  );
 }
 
 export async function deleteCollectionRecord(
@@ -307,5 +324,9 @@ export async function deleteCollectionRecord(
   const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`, payload, {
     headers: buildCollectionMutationHeaders(options),
   });
-  return response.json();
+  return parseApiJson(
+    response,
+    collectionRecordDeleteResponseSchema,
+    "/api/collection/:id",
+  );
 }
