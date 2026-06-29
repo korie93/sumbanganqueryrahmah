@@ -20,6 +20,7 @@ const artifactsDir = path.resolve(
   process.env.RELEASE_ARTIFACTS_DIR || "artifacts/release-readiness-local",
 );
 const serverLogPath = path.join(artifactsDir, "server.log");
+const ADAPTIVE_RATE_WINDOW_COOLDOWN_MS = 11_000;
 
 const runCommand = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
@@ -76,6 +77,8 @@ const runCommandCapture = (command, args, options = {}) =>
       );
     });
   });
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const runNpm = (args, options = {}) =>
   runCommand(
@@ -231,6 +234,8 @@ const run = async () => {
         A11Y_BASE_URL: baseUrl,
       },
     });
+    console.log("Release readiness: waiting for local adaptive-rate window to reset before UI smoke...");
+    await wait(ADAPTIVE_RATE_WINDOW_COOLDOWN_MS);
     await runNpm(["run", "smoke:ui"], { env });
 
     console.log("Release readiness: capturing collection performance baseline...");

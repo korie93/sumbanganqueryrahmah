@@ -48,6 +48,19 @@ test("accessibility contrast wrapper delegates to the axe-backed contract", () =
   assert.match(script, /npm run test:e2e:a11y/);
 });
 
+test("release readiness isolates UI smoke from previous local rate-limit windows", () => {
+  const script = readFileSync(path.join(repoRoot, "scripts", "release-readiness-local.mjs"), "utf8");
+  const a11yIndex = script.indexOf('["run", "test:e2e:a11y"]');
+  const cooldownIndex = script.indexOf("await wait(ADAPTIVE_RATE_WINDOW_COOLDOWN_MS)");
+  const smokeIndex = script.indexOf('["run", "smoke:ui"]');
+
+  assert.notEqual(a11yIndex, -1);
+  assert.notEqual(cooldownIndex, -1);
+  assert.notEqual(smokeIndex, -1);
+  assert.ok(a11yIndex < cooldownIndex);
+  assert.ok(cooldownIndex < smokeIndex);
+});
+
 test("performance notes document useLatestRef audit findings", () => {
   const notes = readFileSync(path.join(repoRoot, "docs", "PERFORMANCE-NOTES.md"), "utf8");
 
