@@ -17,12 +17,23 @@ const PROD_LIKE_SESSION_SECRET = "prod-like-session-secret-minimum-32-characters
 const PROD_PREVIOUS_SESSION_SECRET = "prod-previous-session-secret-minimum-32-characters-001";
 const PROD_OLDER_SESSION_SECRET = "prod-older-session-secret-minimum-32-characters-001";
 
+const runtimeConfigTestEnvIsolationDefaults: Record<string, string | null> = {
+  COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: null,
+  COLLECTION_PII_RETIRED_FIELDS: null,
+  VERIFY_COLLECTION_PII_FULL_RETIREMENT: null,
+  VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT: null,
+};
+
 async function withEnv<T>(
   overrides: Record<string, string | null>,
   fn: () => Promise<T>,
 ): Promise<T> {
+  const effectiveOverrides = {
+    ...runtimeConfigTestEnvIsolationDefaults,
+    ...overrides,
+  };
   const previousValues = new Map<string, string | undefined>();
-  for (const [key, value] of Object.entries(overrides)) {
+  for (const [key, value] of Object.entries(effectiveOverrides)) {
     previousValues.set(key, process.env[key]);
     if (value === null) {
       delete process.env[key];

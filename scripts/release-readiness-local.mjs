@@ -95,6 +95,18 @@ const runNpmCapture = (args, options = {}) =>
     options,
   );
 
+const buildRegressionTestEnv = (sourceEnv) => {
+  const {
+    COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: _collectionPiiEncryptionKeyPrevious,
+    COLLECTION_PII_RETIRED_FIELDS: _collectionPiiRetiredFields,
+    VERIFY_COLLECTION_PII_FULL_RETIREMENT: _verifyCollectionPiiFullRetirement,
+    VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT: _verifyCollectionPiiSensitiveRetirement,
+    ...regressionTestEnv
+  } = sourceEnv;
+
+  return regressionTestEnv;
+};
+
 const run = async () => {
   await mkdir(artifactsDir, { recursive: true });
 
@@ -139,6 +151,7 @@ const run = async () => {
     // Bundle budgets should reflect the release artifact, not development-only branches.
     NODE_ENV: "production",
   };
+  const regressionTestEnv = buildRegressionTestEnv(env);
   const collectionPiiReadiness = resolveCollectionPiiReadinessConfig(env, artifactsDir);
 
   console.log("Release readiness: running runtime and repository security gates...");
@@ -173,11 +186,16 @@ const run = async () => {
   await runNpm(["run", "verify:design-token-spacing"], { env });
   await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "verify:db-migration-rollback"], { env });
-  await runNpm(["run", "test:client"], { env });
-  await runNpm(["run", "test:scripts"], { env });
-  await runNpm(["run", "test:db-integration"], { env });
-  await runNpm(["run", "test:routes"], { env });
-  await runNpm(["run", "test:services"], { env });
+  await runNpm(["run", "test:client"], { env: regressionTestEnv });
+  await runNpm(["run", "test:scripts"], { env: regressionTestEnv });
+  await runNpm(["run", "test:db-integration"], { env: regressionTestEnv });
+  await runNpm(["run", "test:auth"], { env: regressionTestEnv });
+  await runNpm(["run", "test:http"], { env: regressionTestEnv });
+  await runNpm(["run", "test:services"], { env: regressionTestEnv });
+  await runNpm(["run", "test:repositories"], { env: regressionTestEnv });
+  await runNpm(["run", "test:routes"], { env: regressionTestEnv });
+  await runNpm(["run", "test:ws"], { env: regressionTestEnv });
+  await runNpm(["run", "test:intelligence"], { env: regressionTestEnv });
 
   if (collectionPiiReadiness.encryptionConfigured) {
     console.log("Release readiness: capturing collection PII status...");

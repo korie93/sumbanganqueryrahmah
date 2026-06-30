@@ -66,3 +66,54 @@ test("release readiness verifies database rollback governance before test suites
   assert.ok(schemaGovernanceIndex < rollbackGovernanceIndex);
   assert.ok(rollbackGovernanceIndex < clientTestIndex);
 });
+
+test("release readiness runs every backend regression suite before building", () => {
+  const script = readReleaseReadinessScript();
+  const suiteNames = [
+    "test:auth",
+    "test:http",
+    "test:services",
+    "test:repositories",
+    "test:routes",
+    "test:ws",
+    "test:intelligence",
+  ];
+  const buildIndex = script.indexOf('["run", "build"]');
+
+  assert.notEqual(buildIndex, -1);
+  for (const suiteName of suiteNames) {
+    const suiteIndex = script.indexOf(`["run", "${suiteName}"]`);
+
+    assert.notEqual(suiteIndex, -1, `${suiteName} must run during release readiness`);
+    assert.ok(suiteIndex < buildIndex, `${suiteName} must run before the release build`);
+  }
+});
+
+test("release readiness runs regression suites with isolated PII rollout env", () => {
+  const script = readReleaseReadinessScript();
+  const suiteNames = [
+    "test:client",
+    "test:scripts",
+    "test:db-integration",
+    "test:auth",
+    "test:http",
+    "test:services",
+    "test:repositories",
+    "test:routes",
+    "test:ws",
+    "test:intelligence",
+  ];
+
+  assert.match(script, /const regressionTestEnv = buildRegressionTestEnv\(env\)/);
+  assert.match(script, /COLLECTION_PII_RETIRED_FIELDS: _collectionPiiRetiredFields/);
+  assert.match(script, /COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: _collectionPiiEncryptionKeyPrevious/);
+  assert.match(script, /VERIFY_COLLECTION_PII_FULL_RETIREMENT: _verifyCollectionPiiFullRetirement/);
+  assert.match(script, /VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT: _verifyCollectionPiiSensitiveRetirement/);
+  for (const suiteName of suiteNames) {
+    assert.match(
+      script,
+      new RegExp(`await runNpm\\(\\["run", "${suiteName}"\\], \\{ env: regressionTestEnv \\}\\);`),
+      `${suiteName} must use the isolated regression test env`,
+    );
+  }
+});

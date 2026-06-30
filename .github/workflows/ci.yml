@@ -68,6 +68,9 @@ jobs:
       - name: Run script tests
         run: npm run test:scripts
 
+      - name: Run auth tests
+        run: npm run test:auth
+
       - name: Run http tests
         run: npm run test:http
 

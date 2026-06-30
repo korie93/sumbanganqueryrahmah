@@ -35,6 +35,35 @@ test("PostgreSQL bootstrap runs before CI steps that need a live database", () =
   );
 });
 
+test("CI build job runs every backend regression suite", () => {
+  const ciWorkflow = readText(CI_WORKFLOW_PATH);
+  const suiteSteps = [
+    "Run auth tests",
+    "Run http tests",
+    "Run services tests",
+    "Run repositories tests",
+    "Run routes tests",
+    "Run WebSocket tests",
+    "Run intelligence tests",
+  ];
+  const buildIndex = ciWorkflow.indexOf("name: Build");
+
+  assert.notEqual(buildIndex, -1);
+  for (const stepName of suiteSteps) {
+    const stepIndex = ciWorkflow.indexOf(`name: ${stepName}`);
+
+    assert.notEqual(stepIndex, -1, `${stepName} must be present in CI`);
+    assert.ok(stepIndex < buildIndex, `${stepName} must run before the build`);
+  }
+});
+
+test("CI auth suite runs before HTTP and route coverage", () => {
+  const ciWorkflow = readText(CI_WORKFLOW_PATH);
+
+  assert.ok(ciWorkflow.indexOf("Run auth tests") < ciWorkflow.indexOf("Run http tests"));
+  assert.ok(ciWorkflow.indexOf("Run auth tests") < ciWorkflow.indexOf("Run routes tests"));
+});
+
 test("PostgreSQL bootstrap script validates env and waits for authenticated readiness", () => {
   const script = readText(POSTGRES_BOOTSTRAP_SCRIPT_PATH);
 
