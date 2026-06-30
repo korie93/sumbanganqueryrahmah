@@ -72,6 +72,10 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
   let retryHandle: NodeJS.Timeout | null = null;
 
   const logFailure = (operation: string, error: unknown) => {
+    if (closed) {
+      return;
+    }
+
     logger.warn("Redis WebSocket shared bus unavailable", {
       error: sanitizeRuntimeWebSocketError(error),
       operation,
@@ -138,6 +142,14 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
 
     publisherPromise ??= createClient()
       .then((client) => {
+        if (closed) {
+          void client.quit?.().catch((error) => {
+            logger.debug("Redis WebSocket shared bus publisher quit failed after close", {
+              error: sanitizeRuntimeWebSocketError(error),
+            });
+          });
+          return null;
+        }
         publisher = client;
         return client;
       })
@@ -159,10 +171,19 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
 
     subscriberPromise ??= createClient()
       .then(async (client) => {
+        if (closed || handlers.size === 0) {
+          await client.quit?.();
+          return null;
+        }
         if (!client.subscribe) {
           throw new Error("Redis client does not expose subscribe().");
         }
         await client.subscribe(channel, handleRawMessage);
+        if (closed || handlers.size === 0) {
+          await client.unsubscribe?.(channel);
+          await client.quit?.();
+          return null;
+        }
         subscriber = client;
         return client;
       })
@@ -212,7 +233,12 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
       }
 
       void ensurePublisher()
-        .then((client) => client?.publish?.(channel, message))
+        .then((client) => {
+          if (closed) {
+            return undefined;
+          }
+          return client?.publish?.(channel, message);
+        })
         .catch((error) => {
           publisher = null;
           publisherPromise = null;

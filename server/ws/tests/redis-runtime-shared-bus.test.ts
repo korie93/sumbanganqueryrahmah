@@ -11,8 +11,16 @@ class FakeRedisPubSubClient {
   published: Array<{ channel: string; message: string }> = [];
   subscriptions = new Map<string, (message: string) => void>();
   quitCalls = 0;
+  private readonly errorListeners: Array<(error: unknown) => void> = [];
+
+  constructor(
+    private readonly options: {
+      connectGate?: Promise<void>;
+    } = {},
+  ) {}
 
   async connect() {
+    await this.options.connectGate;
     this.connected = true;
   }
 
@@ -20,8 +28,17 @@ class FakeRedisPubSubClient {
     return this;
   }
 
-  on() {
+  on(event: string, handler: (...args: unknown[]) => void) {
+    if (event === "error") {
+      this.errorListeners.push(handler);
+    }
     return undefined;
+  }
+
+  emitError(error: unknown) {
+    for (const listener of this.errorListeners) {
+      listener(error);
+    }
   }
 
   async publish(channel: string, message: string) {
@@ -46,6 +63,17 @@ class FakeRedisPubSubClient {
 async function flushAsyncWork() {
   await Promise.resolve();
   await new Promise((resolve) => setImmediate(resolve));
+}
+
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  return { promise, reject, resolve };
 }
 
 test("Redis runtime WebSocket shared bus publishes serialized events", async () => {
@@ -108,6 +136,54 @@ test("Redis runtime WebSocket shared bus receives remote events and ignores same
     type: "closeActivity",
   }]);
   await bus.close();
+});
+
+test("Redis runtime WebSocket shared bus ignores late client errors after close", async () => {
+  const warnings: unknown[] = [];
+  const client = new FakeRedisPubSubClient();
+  const bus = createRedisRuntimeWsSharedBus({
+    createRedisClient: () => client,
+    instanceId: "instance-a",
+    logger: {
+      debug: () => undefined,
+      warn: (...args: unknown[]) => {
+        warnings.push(args);
+      },
+    },
+    redisUrl: "redis://redis.internal:6379/0",
+  });
+
+  bus.publish({
+    payload: { type: "ping" },
+    type: "broadcast",
+  });
+  await flushAsyncWork();
+  await bus.close();
+  client.emitError(new Error("late redis error after close"));
+
+  assert.equal(warnings.length, 0);
+});
+
+test("Redis runtime WebSocket shared bus skips pending publishes after close", async () => {
+  const connectGate = createDeferred();
+  const client = new FakeRedisPubSubClient({ connectGate: connectGate.promise });
+  const bus = createRedisRuntimeWsSharedBus({
+    createRedisClient: () => client,
+    instanceId: "instance-a",
+    redisUrl: "redis://redis.internal:6379/0",
+  });
+
+  bus.publish({
+    payload: { type: "ping" },
+    type: "broadcast",
+  });
+  const closePromise = bus.close();
+  connectGate.resolve();
+  await closePromise;
+  await flushAsyncWork();
+
+  assert.equal(client.published.length, 0);
+  assert.equal(client.quitCalls, 1);
 });
 
 test("Redis runtime WebSocket shared bus reconnect strategy uses bounded exponential backoff", () => {
