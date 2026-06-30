@@ -85,6 +85,16 @@ test("PM2 memory sizing guide documents limits, monitoring, and worker guardrail
   assert.match(guide, /SQR_MAX_WORKERS=1/);
   assert.match(guide, /SQR_RATE_LIMIT_STORE=redis/);
   assert.match(guide, /SQR_WS_SHARED_BUS=redis/);
+  assert.match(guide, /Server Checkout Gate/);
+  assert.match(guide, /bash scripts\/verify-server-checkout\.sh "\$BRANCH"/);
+  assert.match(guide, /Jangan teruskan sizing rollout jika gate gagal/);
+
+  const checkoutGateIndex = guide.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const buildIndex = guide.indexOf("npm run build", checkoutGateIndex);
+  const restartIndex = guide.indexOf("pm2 restart ecosystem.config.cjs --update-env", checkoutGateIndex);
+  assert.ok(checkoutGateIndex > -1, "sizing guide should invoke the checkout guard");
+  assert.ok(buildIndex > checkoutGateIndex, "sizing build steps should follow checkout verification");
+  assert.ok(restartIndex > checkoutGateIndex, "sizing PM2 restart steps should follow checkout verification");
 
   assert.match(ecosystem, /DEPLOYMENT-SIZING-GUIDE\.md/);
   assert.match(termuxDocs, /DEPLOYMENT-SIZING-GUIDE\.md/);

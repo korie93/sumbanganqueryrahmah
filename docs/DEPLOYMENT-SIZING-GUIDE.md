@@ -44,6 +44,19 @@ Sebelum menetapkan `SQR_MAX_WORKERS` lebih daripada `1`, pastikan:
 
 Jika Redis shared protection tidak tersedia, kekalkan satu worker. Ini mengelakkan bypass rate limit dan kehilangan broadcast WebSocket merentas worker.
 
+## Server Checkout Gate
+
+Sebelum ubah `max_memory_restart`, `node_args`, atau `SQR_MAX_WORKERS` di server, pastikan checkout production memang berada pada branch deploy yang betul dan sama dengan `origin`. Jalankan gate ini sebelum `npm ci`, `npm run build`, migration, atau PM2 restart:
+
+```bash
+BRANCH="${SQR_DEPLOY_BRANCH:-main}"
+git fetch origin --prune
+bash scripts/verify-server-checkout.sh "$BRANCH"
+git log -1 --oneline
+```
+
+Jangan teruskan sizing rollout jika gate gagal kerana wrong branch, working tree kotor, fetch `origin` gagal, atau commit tempatan belum sama dengan `origin/$BRANCH`.
+
 ## Monitoring Commands
 
 Semak penggunaan memori selepas deploy, selepas seeding, dan semasa peak traffic:
@@ -97,9 +110,10 @@ node_args: "--max-old-space-size=800",
 
 Jika perubahan sizing menyebabkan restart loop:
 
-1. Turunkan kembali `max_memory_restart` dan `node_args` kepada nilai terakhir yang stabil.
-2. Jalankan `npm run build`.
-3. Restart PM2 dengan `pm2 restart ecosystem.config.cjs --update-env`.
-4. Pantau `pm2 list` dan `pm2 logs sqr --lines 100`.
+1. Jalankan server checkout gate di atas dan pastikan ia lulus.
+2. Turunkan kembali `max_memory_restart` dan `node_args` kepada nilai terakhir yang stabil.
+3. Jalankan `npm run build`.
+4. Restart PM2 dengan `pm2 restart ecosystem.config.cjs --update-env`.
+5. Pantau `pm2 list` dan `pm2 logs sqr --lines 100`.
 
 Jika rollback masih tidak stabil, kembali kepada single worker (`SQR_MAX_WORKERS=1`) dan anggap isu ini sebagai incident capacity, bukan sekadar tuning PM2.
