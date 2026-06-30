@@ -90,6 +90,17 @@ test("secret rotation runbook documents collection PII key rotation cadence and 
   }
 });
 
+test("secret rotation runbook gates deployment-server rebuild validation", async () => {
+  const content = await readDoc("docs/SECRET_ROTATION.md");
+
+  const gateIndex = content.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const buildIndex = content.indexOf("npm run build", gateIndex);
+
+  assert.ok(gateIndex > -1, "secret rotation runbook should verify checkout before deploy validation");
+  assert.ok(buildIndex > gateIndex, "secret rotation validation build should follow checkout verification");
+  assert.match(content, /Do not rebuild, restart workers, or continue a production rotation/);
+});
+
 test("key rotation runbook covers operational key families without fictional scripts", async () => {
   const runbook = await readDoc("docs/KEY-ROTATION-RUNBOOK.md");
   const normalizedRunbook = runbook.replace(/\s+/g, " ");

@@ -305,6 +305,17 @@ For AI/provider credentials:
 
 ## Validation Commands
 
+If validation runs on a deployment server before rebuild or worker restart,
+verify that checkout first:
+
+```bash
+BRANCH="${SQR_DEPLOY_BRANCH:-main}"
+bash scripts/verify-server-checkout.sh "$BRANCH"
+```
+
+Do not rebuild, restart workers, or continue a production rotation if this gate
+fails because the active checkout is not the intended `origin/$BRANCH` state.
+
 Run these before and after the change when possible:
 
 ```bash
