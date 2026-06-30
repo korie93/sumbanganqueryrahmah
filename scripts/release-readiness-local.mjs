@@ -19,6 +19,7 @@ const artifactsDir = path.resolve(
   process.cwd(),
   process.env.RELEASE_ARTIFACTS_DIR || "artifacts/release-readiness-local",
 );
+const sbomArtifactsDir = path.join(artifactsDir, "sbom");
 const serverLogPath = path.join(artifactsDir, "server.log");
 const ADAPTIVE_RATE_WINDOW_COOLDOWN_MS = 11_000;
 
@@ -146,6 +147,12 @@ const run = async () => {
   await runNpm(["run", "verify:secrets"], { env });
   await runNpm(["run", "audit:dependencies"], { env });
   await runNpm(["run", "verify:xlsx-vendor-integrity"], { env });
+  await runNpm(["run", "supply-chain:sbom"], {
+    env: {
+      ...env,
+      SBOM_ARTIFACTS_DIR: process.env.SBOM_ARTIFACTS_DIR || sbomArtifactsDir,
+    },
+  });
   await runNpm(["run", "typecheck"], { env });
   await runNpm(["run", "lint"], { env });
 
