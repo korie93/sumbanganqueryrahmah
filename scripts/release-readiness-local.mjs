@@ -140,6 +140,11 @@ const run = async () => {
   };
   const collectionPiiReadiness = resolveCollectionPiiReadinessConfig(env, artifactsDir);
 
+  console.log("Release readiness: running repository security gates...");
+  await runNpm(["run", "verify:repo-hygiene"], { env });
+  await runNpm(["run", "verify:secrets"], { env });
+  await runNpm(["run", "audit:dependencies"], { env });
+
   console.log("Release readiness: checking PostgreSQL connectivity...");
   await assertPostgresConnection(env, { context: "Release readiness" });
 
