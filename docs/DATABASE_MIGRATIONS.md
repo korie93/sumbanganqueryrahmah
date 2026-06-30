@@ -46,6 +46,17 @@ Each discovered table must be classified as one of:
 
 ## Recommended Workflow
 
+Before running production-like migrations on a deployment server, verify that
+the checkout is clean, on the intended branch, and equal to `origin/$BRANCH`:
+
+```bash
+BRANCH="${SQR_DEPLOY_BRANCH:-main}"
+bash scripts/verify-server-checkout.sh "$BRANCH"
+```
+
+Do not run `npm run db:migrate` if this gate fails. Fix the branch, local
+changes, fetch failure, or commit drift first, then rerun the gate.
+
 For Drizzle-managed tables:
 
 1. Update the relevant Drizzle schema module under [shared/](../shared/), usually via [shared/schema-postgres.ts](../shared/schema-postgres.ts) plus the matching domain file.

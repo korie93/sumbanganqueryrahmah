@@ -56,3 +56,33 @@ test("drizzle journal includes every SQL migration file", () => {
 
   assert.deepEqual(journalTags, migrationTags);
 });
+
+test("production migration docs require checkout verification before migrate", () => {
+  const migrationGuide = readFileSync(new URL("../../docs/DATABASE_MIGRATIONS.md", import.meta.url), "utf8");
+  const rollbackRunbook = readFileSync(
+    new URL("../../docs/DATABASE_MIGRATION_ROLLBACK.md", import.meta.url),
+    "utf8",
+  );
+  const productionRunbook = readFileSync(
+    new URL("../../docs/runbooks/production.md", import.meta.url),
+    "utf8",
+  );
+
+  for (const content of [migrationGuide, rollbackRunbook, productionRunbook]) {
+    assert.match(content, /bash scripts\/verify-server-checkout\.sh "\$BRANCH"/);
+    assert.match(content, /npm run db:migrate/);
+  }
+
+  const guideGateIndex = migrationGuide.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const guideMigrateIndex = migrationGuide.indexOf("npm run db:migrate", guideGateIndex);
+  const rollbackGateIndex = rollbackRunbook.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const rollbackMigrateIndex = rollbackRunbook.indexOf("npm run db:migrate", rollbackGateIndex);
+  const productionGateIndex = productionRunbook.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const productionMigrateIndex = productionRunbook.indexOf("npm run db:migrate", productionGateIndex);
+
+  assert.ok(guideMigrateIndex > guideGateIndex, "database migration guide should gate before migrate");
+  assert.ok(rollbackMigrateIndex > rollbackGateIndex, "rollback runbook should gate before migrate");
+  assert.ok(productionMigrateIndex > productionGateIndex, "production runbook should gate before migrate");
+  assert.match(migrationGuide, /Do not run `npm run db:migrate` if this gate fails/);
+  assert.match(rollbackRunbook, /stop before taking the backup or\s+running migrations/s);
+});

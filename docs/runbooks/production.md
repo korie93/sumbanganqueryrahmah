@@ -5,6 +5,8 @@ runtime safety checks.
 
 ## Deployment Baseline
 
+- Verify the deployment checkout before install, migration, build, or restart:
+  `bash scripts/verify-server-checkout.sh "$BRANCH"`.
 - Run `npm run db:migrate` before app startup.
 - Keep `SQR_DB_BOOTSTRAP_MODE` empty or set to `migration` on production-like
   hosts.

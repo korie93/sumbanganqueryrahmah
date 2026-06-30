@@ -8,12 +8,18 @@ application artifact rollback.
 
 ## Before Running Migrations
 
-1. Take a PostgreSQL backup immediately before `npm run db:migrate`.
-2. Record the backup identifier, release artifact, previous artifact, and
+1. Verify the deployment checkout before migration:
+   `bash scripts/verify-server-checkout.sh "$BRANCH"`.
+2. Take a PostgreSQL backup immediately before `npm run db:migrate`.
+3. Record the backup identifier, release artifact, previous artifact, and
    current `public.__drizzle_migrations` rows.
-3. Run `npm run verify:db-migration-rollback`; it must report full manifest
+4. Run `npm run verify:db-migration-rollback`; it must report full manifest
    coverage before deployment continues.
-4. Acquire the normal migration advisory lock by using `npm run db:migrate`.
+5. Acquire the normal migration advisory lock by using `npm run db:migrate`.
+
+If checkout verification fails because of a wrong branch, local changes, fetch
+failure, or drift from `origin/$BRANCH`, stop before taking the backup or
+running migrations.
 
 ## Rollback Trigger
 
