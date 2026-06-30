@@ -3,6 +3,8 @@ import {
   authLoginResponseSchema,
   authLoginSuccessResponseSchema,
   authUserResponseSchema,
+  publicHealthResponseSchema,
+  type PublicHealthResponse,
 } from "@shared/api-contracts";
 
 import { apiRequest, createApiHeaders } from "../api-client";
@@ -181,12 +183,12 @@ export async function verifyTwoFactorLogin(
   );
 }
 
-export async function checkHealth(options?: RequestOptions) {
+export async function checkHealth(options?: RequestOptions): Promise<PublicHealthResponse> {
   const response = await fetch(`${API_BASE}/api/health`, {
     headers: createApiHeaders(),
     signal: options?.signal ?? null,
   });
-  return response.json();
+  return parseApiJson(response, publicHealthResponseSchema, "/api/health");
 }
 
 export async function getMe(options?: RequestOptions): Promise<CurrentUser> {

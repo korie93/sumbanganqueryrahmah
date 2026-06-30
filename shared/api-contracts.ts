@@ -474,6 +474,11 @@ export const maintenanceStatusResponseSchema = z.object({
   endTime: z.string().datetime({ offset: true }).nullable(),
 });
 
+export const publicHealthResponseSchema = z.object({
+  status: z.enum(["ok", "starting", "degraded", "failed"]),
+  ready: z.boolean(),
+}).strict();
+
 const authNullableTimestampSchema = z.string().datetime({ offset: true }).nullable();
 const authOptionalNullableTimestampSchema = authNullableTimestampSchema.optional().default(null);
 
@@ -1269,6 +1274,7 @@ export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
 export type AppConfigResponse = z.infer<typeof appConfigResponseSchema>;
 export type MaintenanceStatusResponse = z.infer<typeof maintenanceStatusResponseSchema>;
+export type PublicHealthResponse = z.infer<typeof publicHealthResponseSchema>;
 export type AuthCurrentUserContract = z.infer<typeof authCurrentUserSchema>;
 export type AuthLoginSuccessResponseContract = z.infer<typeof authLoginSuccessResponseSchema>;
 export type AuthLoginResponseContract = z.infer<typeof authLoginResponseSchema>;

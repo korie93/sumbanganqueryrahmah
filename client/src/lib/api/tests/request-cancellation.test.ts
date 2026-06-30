@@ -986,7 +986,7 @@ test("auth manual fetch wrappers forward AbortSignal", async () => {
       });
     }
     if (url.endsWith("/api/health")) {
-      return jsonResponse({ ok: true, live: true, ready: true });
+      return jsonResponse({ status: "ok", ready: true });
     }
 
     throw new Error(`Unexpected URL: ${url}`);

@@ -52,6 +52,7 @@ import {
   importListItemSchema,
   maintenanceStatusResponseSchema,
   normalizeApiPaginationMeta,
+  publicHealthResponseSchema,
   singleImportAnalysisResponseSchema,
 } from "@shared/api-contracts";
 import { ERROR_CODES } from "@shared/error-codes";
@@ -121,6 +122,7 @@ import {
   getDevMailOutboxPreviews,
   getPendingPasswordResetRequests,
   getSuperuserManagedUsers,
+  checkHealth,
   getMe,
   login,
   verifyTwoFactorLogin,
@@ -710,6 +712,31 @@ test("authentication contracts accept complete session payloads and reject sensi
   );
 });
 
+test("public health contract accepts only public-safe readiness fields", () => {
+  assert.deepEqual(publicHealthResponseSchema.parse({
+    status: "ok",
+    ready: true,
+  }), {
+    status: "ok",
+    ready: true,
+  });
+  assert.equal(
+    publicHealthResponseSchema.safeParse({
+      status: "ok",
+      ready: true,
+      live: true,
+    }).success,
+    false,
+  );
+  assert.equal(
+    publicHealthResponseSchema.safeParse({
+      status: "unknown",
+      ready: true,
+    }).success,
+    false,
+  );
+});
+
 test("authentication API wrappers reject malformed success payloads", async () => {
   const restoreFetch = withMockFetch((async (input) => {
     const url = String(input);
@@ -746,6 +773,9 @@ test("authentication API wrappers reject malformed success payloads", async () =
         sessionExpiresAt: "2026-06-25T08:00:00.000Z",
       });
     }
+    if (url.endsWith("/api/health")) {
+      return jsonResponse({ status: "ok", ready: "yes" });
+    }
     throw new Error(`Unexpected URL: ${url}`);
   }) as typeof fetch);
 
@@ -761,6 +791,10 @@ test("authentication API wrappers reject malformed success payloads", async () =
     await assert.rejects(
       () => getMe(),
       /API contract mismatch for \/api\/me/,
+    );
+    await assert.rejects(
+      () => checkHealth(),
+      /API contract mismatch for \/api\/health/,
     );
   } finally {
     restoreFetch();
