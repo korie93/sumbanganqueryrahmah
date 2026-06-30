@@ -161,8 +161,12 @@ Setiap kali pull kod baru dari branch yang sedang dideploy:
 ```bash
 BRANCH=main
 git fetch origin --prune
+if [ -n "$(git status --short)" ]; then
+  echo "Working tree has local changes; stop before deploy."
+  exit 1
+fi
 git switch "$BRANCH" 2>/dev/null || git switch --track "origin/$BRANCH"
-git pull --ff-only origin "$BRANCH"
+git merge --ff-only "origin/$BRANCH"
 bash scripts/verify-server-checkout.sh "$BRANCH"
 git log -1 --oneline
 npm ci

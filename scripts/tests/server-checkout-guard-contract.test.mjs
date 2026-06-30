@@ -40,15 +40,23 @@ test("PM2 deployment guide uses the server checkout guard before install and res
   const guide = readText(deploymentGuidePath);
 
   const guardIndex = guide.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const cleanTreeIndex = guide.indexOf('git status --short');
+  const switchIndex = guide.indexOf('git switch "$BRANCH"', cleanTreeIndex);
+  const mergeIndex = guide.indexOf('git merge --ff-only "origin/$BRANCH"', switchIndex);
   const npmCiIndex = guide.indexOf("npm ci", guardIndex);
   const buildIndex = guide.indexOf("npm run build", guardIndex);
   const restartIndex = guide.indexOf("pm2 restart sqr --update-env", guardIndex);
 
+  assert.ok(cleanTreeIndex > -1, "deployment guide should check for a clean tree before switching branches");
+  assert.ok(switchIndex > cleanTreeIndex, "branch switch should run after clean-tree verification");
+  assert.ok(mergeIndex > switchIndex, "fast-forward merge should run after switching to the deploy branch");
   assert.ok(guardIndex > -1, "deployment guide should invoke the checkout guard");
+  assert.ok(guardIndex > mergeIndex, "checkout guard should run after the fast-forward update");
   assert.ok(npmCiIndex > guardIndex, "npm ci should run after checkout verification");
   assert.ok(buildIndex > guardIndex, "build should run after checkout verification");
   assert.ok(restartIndex > guardIndex, "PM2 restart should run after checkout verification");
   assert.match(guide, /Jangan teruskan `npm ci`, `npm run build`, atau PM2/);
+  assert.doesNotMatch(guide, /git pull/);
 });
 
 test("README troubleshooting deploy flow uses the checkout guard before install and restart", () => {
