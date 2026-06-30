@@ -21,6 +21,7 @@ class FakeRedisHealthClient {
   connectCalls = 0;
   pingCalls = 0;
   quitCalls = 0;
+  private readonly errorListeners: Array<(error: unknown) => void> = [];
 
   constructor(
     private readonly options: {
@@ -36,8 +37,17 @@ class FakeRedisHealthClient {
     }
   }
 
-  on() {
+  on(event: string, listener: (error: unknown) => void) {
+    if (event === "error") {
+      this.errorListeners.push(listener);
+    }
     return undefined;
+  }
+
+  emitError(error: unknown) {
+    for (const listener of this.errorListeners) {
+      listener(error);
+    }
   }
 
   async ping() {
@@ -170,6 +180,29 @@ test("Redis health monitor logs recovery after a failed heartbeat", async () => 
     false,
   );
   await monitor.stop();
+});
+
+test("Redis health monitor ignores late client errors after stop", async () => {
+  const { logger, warnings } = createTestLogger();
+  const client = new FakeRedisHealthClient();
+  const monitor = new RedisHealthMonitor({
+    createRedisClient: () => client,
+    intervalMs: 5_000,
+    logger,
+    targets: [{ label: "rate-limit", redisUrl: "redis://:secret@redis.internal:6379/0" }],
+  });
+
+  await monitor.checkOnce();
+  await monitor.stop();
+  client.emitError(new Error("late redis error after shutdown"));
+
+  assert.equal(warnings.length, 0);
+  assert.equal(
+    getStartupHealthSnapshot().degradedServices.some(
+      (service) => service.service === REDIS_RATE_LIMIT_HEALTH_SERVICE,
+    ),
+    false,
+  );
 });
 
 test("Redis health reconnect strategy uses bounded exponential backoff", () => {

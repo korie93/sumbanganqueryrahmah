@@ -228,6 +228,9 @@ export class RedisHealthMonitor {
 
     try {
       await client.ping();
+      if (this.stopped) {
+        return;
+      }
       if (target.unavailable) {
         this.logger.info("Redis health monitor target recovered", {
           endpoint: target.endpoint,
@@ -295,6 +298,10 @@ export class RedisHealthMonitor {
   }
 
   private logFailure(target: MonitoredRedisEndpoint, error: unknown) {
+    if (this.stopped) {
+      return;
+    }
+
     const now = this.now();
     if (target.unavailable && now - target.lastWarningAt < this.warningRepeatMs) {
       return;
