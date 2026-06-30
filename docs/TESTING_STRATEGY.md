@@ -7,6 +7,7 @@ Dokumen ini menerangkan bentuk ujian automatik yang benar-benar wujud dalam repo
 Repo ini sudah mempunyai coverage untuk:
 
 - `client` unit tests
+- shared frontend/backend API contract tests
 - `server` HTTP, services, repositories, routes, WebSocket, dan intelligence tests
 - reviewed migration/bootstrap integration tests
 - curated coverage gate untuk surface berisiko tinggi di `client` dan `server`
@@ -40,10 +41,18 @@ Untuk semakan lebih cepat:
 
 ```bash
 npm run test:client
+npm run test:contracts
+npm run test:backend
 npm run test:http
 npm run test:services
 npm run test:repositories
 npm run test:routes
+```
+
+`npm test` sengaja tidak menjalankan browser smoke, visual/a11y, build, atau release-only drills. Untuk PostgreSQL bootstrap/migration compatibility yang memerlukan database hidup, jalankan:
+
+```bash
+npm run test:db-integration
 ```
 
 ## 2. Browser Smoke / E2E Semasa

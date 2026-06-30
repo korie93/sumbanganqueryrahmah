@@ -84,8 +84,10 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run typecheck` | Run TypeScript type checking |
 | `npm run test:e2e:smoke` | Run Playwright-backed browser smoke coverage against a running server |
 | `npm run test:e2e:ci-local` | Build, boot a local server, then run the CI-style Playwright smoke sequence |
-| `npm test` | Run all test suites |
+| `npm test` | Run the local regression suite: client, script, API contract, and backend tests |
+| `npm run test:backend` | Run backend regression suites for auth, HTTP, services, repositories, routes, WebSocket, and intelligence |
 | `npm run test:contracts` | Run shared frontend/backend API contract checks for critical endpoints |
+| `npm run test:db-integration` | Run reviewed PostgreSQL bootstrap/migration integration checks |
 | `npm run test:coverage` | Generate c8 coverage reports for the full main automated test suite |
 | `npm run test:coverage:gate` | Enforce CI coverage thresholds (lines >= 70, branches >= 60) for the hardened API contract boundary suite |
 | `npm run smoke:preflight` | Validate smoke prerequisites and bootstrap assumptions |
