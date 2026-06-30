@@ -61,6 +61,22 @@ test("release readiness isolates UI smoke from previous local rate-limit windows
   assert.ok(cooldownIndex < smokeIndex);
 });
 
+test("release readiness fails fast on typecheck and lint before database work", () => {
+  const script = readFileSync(path.join(repoRoot, "scripts", "release-readiness-local.mjs"), "utf8");
+  const dependencyAuditIndex = script.indexOf('["run", "audit:dependencies"]');
+  const typecheckIndex = script.indexOf('["run", "typecheck"]');
+  const lintIndex = script.indexOf('["run", "lint"]');
+  const postgresIndex = script.indexOf("checking PostgreSQL connectivity");
+
+  assert.notEqual(dependencyAuditIndex, -1);
+  assert.notEqual(typecheckIndex, -1);
+  assert.notEqual(lintIndex, -1);
+  assert.notEqual(postgresIndex, -1);
+  assert.ok(dependencyAuditIndex < typecheckIndex);
+  assert.ok(typecheckIndex < lintIndex);
+  assert.ok(lintIndex < postgresIndex);
+});
+
 test("performance notes document useLatestRef audit findings", () => {
   const notes = readFileSync(path.join(repoRoot, "docs", "PERFORMANCE-NOTES.md"), "utf8");
 

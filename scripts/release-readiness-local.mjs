@@ -144,6 +144,8 @@ const run = async () => {
   await runNpm(["run", "verify:repo-hygiene"], { env });
   await runNpm(["run", "verify:secrets"], { env });
   await runNpm(["run", "audit:dependencies"], { env });
+  await runNpm(["run", "typecheck"], { env });
+  await runNpm(["run", "lint"], { env });
 
   console.log("Release readiness: checking PostgreSQL connectivity...");
   await assertPostgresConnection(env, { context: "Release readiness" });
