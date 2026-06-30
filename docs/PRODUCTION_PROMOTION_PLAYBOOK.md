@@ -33,7 +33,22 @@ Artifacts are written to:
 
 - `artifacts/release-readiness-local`
 
-## 3. Staging Soak (30-60 minutes)
+## 3. Server Checkout Gate
+
+Before running `npm ci`, `npm run build`, or restarting PM2 on the deployment
+server, verify that the checkout is clean and exactly matches the branch being
+promoted:
+
+```bash
+BRANCH=main
+bash scripts/verify-server-checkout.sh "$BRANCH"
+```
+
+The guard fails closed when the server is on the wrong branch, has local changes,
+cannot fetch `origin`, or is behind `origin/$BRANCH`. Do not continue the deploy
+until this gate passes.
+
+## 4. Staging Soak (30-60 minutes)
 
 Staging client builds must run with `DEPLOY_ENV=staging` or `APP_ENV=staging`.
 Those markers intentionally disable Vite source maps, matching production
@@ -57,7 +72,7 @@ Verify after each mutation:
 - no duplicate counting
 - no hard refresh required for correctness
 
-## 4. Runtime Monitoring During Soak and Canary
+## 5. Runtime Monitoring During Soak and Canary
 
 Single snapshot:
 
@@ -85,7 +100,7 @@ Suggested escalation thresholds:
 - error rate >= 5%
 - any active critical alert
 
-## 5. Post-Deployment Health Gate
+## 6. Post-Deployment Health Gate
 
 After each staging, canary, or production deploy, run the public health and
 security-header gate from an operator machine or CI/CD deploy job that can reach
@@ -107,7 +122,7 @@ SQR_POST_DEPLOY_RATE_LIMIT_PROBE=1 \
 
 Do not mark a deploy complete while this script exits non-zero.
 
-## 6. Canary and Rollback
+## 7. Canary and Rollback
 
 Canary rollout steps:
 
@@ -129,12 +144,13 @@ Rollback action:
 2. verify login + collection + summary + receipt flows
 3. keep canary disabled until root cause is confirmed
 
-## 7. Go / No-Go
+## 8. Go / No-Go
 
 Go only if all are true:
 
 - CI gates are green
 - local release verification is green
+- server checkout gate passes for the promoted branch
 - staging soak passes without data drift
 - post-deployment health gate passes for the promoted URL
 - canary monitoring signals are stable

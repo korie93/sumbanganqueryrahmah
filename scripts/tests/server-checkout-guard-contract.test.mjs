@@ -4,6 +4,7 @@ import test from "node:test";
 
 const scriptPath = "scripts/verify-server-checkout.sh";
 const deploymentGuidePath = "docs/TERMUX_PM2_DEPLOYMENT.md";
+const promotionPlaybookPath = "docs/PRODUCTION_PROMOTION_PLAYBOOK.md";
 
 function readText(path) {
   return readFileSync(path, "utf8");
@@ -43,4 +44,21 @@ test("PM2 deployment guide uses the server checkout guard before install and res
   assert.ok(buildIndex > guardIndex, "build should run after checkout verification");
   assert.ok(restartIndex > guardIndex, "PM2 restart should run after checkout verification");
   assert.match(guide, /Jangan teruskan `npm ci`, `npm run build`, atau PM2/);
+});
+
+test("production promotion playbook requires the server checkout gate before deploy", () => {
+  const playbook = readText(promotionPlaybookPath);
+
+  for (const marker of [
+    "Server Checkout Gate",
+    'BRANCH=main',
+    'bash scripts/verify-server-checkout.sh "$BRANCH"',
+    "wrong branch",
+    "local changes",
+    "cannot fetch `origin`",
+    "behind `origin/$BRANCH`",
+    "server checkout gate passes for the promoted branch",
+  ]) {
+    assert.match(playbook, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
 });
