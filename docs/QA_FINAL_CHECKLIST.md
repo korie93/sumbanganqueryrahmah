@@ -6,6 +6,7 @@ Gunakan checklist ini selepas refactor besar, sebelum release, atau selepas depe
 
 - Jalankan `npm run typecheck`
 - Jalankan `npm test`
+- Jalankan `npm run test:db-integration` jika perubahan menyentuh migration, bootstrap PostgreSQL, schema governance, atau runtime database compatibility
 - Jalankan `npm run build`
 - Pastikan server tempatan hidup pada `http://127.0.0.1:5000`
 
@@ -88,8 +89,10 @@ Anggap build layak hanya jika:
 
 - typecheck lulus
 - tests lulus
+- DB integration lulus jika database/migration/bootstrap disentuh
 - build lulus
 - `npm run smoke:ui` lulus
+- `npm run release:verify:local` lulus untuk production promotion
 - tiada console error/warning pada flow utama
 - monitor utama stabil semasa canary:
   - `collectionRecordVersionConflicts24h`

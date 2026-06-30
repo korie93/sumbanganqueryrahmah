@@ -26,12 +26,20 @@ The built clustered runtime starts from:
 
 ## Required Verification
 
-For runtime, route, or config changes, run:
+For runtime, route, or config changes, run the local regression path:
 
 1. `npm run typecheck`
 2. `npm test`
 3. `npm run build`
 4. `npm run smoke:ui`
+
+If the change touches PostgreSQL migrations, bootstrap behavior, schema governance, or runtime database compatibility, also run:
+
+- `npm run test:db-integration`
+
+For dependency, security, deployment, or release promotion changes, prefer the full local release gate:
+
+- `npm run release:verify:local`
 
 If the change touches authenticated navigation, run smoke with:
 
