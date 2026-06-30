@@ -99,7 +99,7 @@ Use this as the shortest practical release path for the current build.
 ### Local pre-push gate
 
 ```bash
-npm install
+npm ci
 npm run typecheck
 npm run test:client
 npm run build
@@ -110,7 +110,9 @@ npm run release:verify:local
 ### Staging deploy host
 
 ```bash
-npm install
+BRANCH=main
+bash scripts/verify-server-checkout.sh "$BRANCH"
+npm ci
 npm run db:migrate
 npm run build
 npm start

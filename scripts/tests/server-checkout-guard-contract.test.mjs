@@ -8,6 +8,7 @@ const hetznerDeploymentGuidePath = "docs/HETZNER_PRODUCTION_DEPLOYMENT.md";
 const promotionPlaybookPath = "docs/PRODUCTION_PROMOTION_PLAYBOOK.md";
 const goLiveChecklistPath = "docs/GO_LIVE_LAUNCH_CHECKLIST.md";
 const goNoGoTemplatePath = "docs/GO_NO_GO_RELEASE_TEMPLATE.md";
+const releaseHardeningSummaryPath = "docs/RELEASE_HARDENING_SUMMARY.md";
 
 function readText(path) {
   return readFileSync(path, "utf8");
@@ -96,4 +97,21 @@ test("go-live docs include the server checkout gate in final release checks", ()
 
   assert.match(checklist, /before `npm ci`, build, or PM2 restart/);
   assert.match(template, /Pre-Deploy Gate/);
+});
+
+test("release hardening summary keeps staging deploy deterministic and guarded", () => {
+  const summary = readText(releaseHardeningSummaryPath);
+
+  const stagingIndex = summary.indexOf("### Staging deploy host");
+  const guardIndex = summary.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"', stagingIndex);
+  const npmCiIndex = summary.indexOf("npm ci", guardIndex);
+  const migrateIndex = summary.indexOf("npm run db:migrate", guardIndex);
+  const buildIndex = summary.indexOf("npm run build", guardIndex);
+
+  assert.ok(stagingIndex > -1, "release summary should include staging deploy host commands");
+  assert.ok(guardIndex > stagingIndex, "checkout guard should be in the staging deploy sequence");
+  assert.ok(npmCiIndex > guardIndex, "npm ci should run after checkout verification");
+  assert.ok(migrateIndex > npmCiIndex, "migration should run after deterministic install");
+  assert.ok(buildIndex > migrateIndex, "build should run after migration");
+  assert.doesNotMatch(summary, /npm install/);
 });
