@@ -31,6 +31,20 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 Store the generated value in the production secret manager or private server
 environment file only.
 
+## Deployment Checkout Preflight
+
+If the rotation will deploy or restart application processes on a deployment
+server, verify the checked-out branch before changing workers:
+
+```bash
+BRANCH="${SQR_DEPLOY_BRANCH:-main}"
+bash scripts/verify-server-checkout.sh "$BRANCH"
+```
+
+Do not deploy, rebuild, restart workers, or continue a production rotation if
+this gate fails because the active checkout is on the wrong branch, has local
+changes, cannot fetch origin, or differs from `origin/$BRANCH`.
+
 ## `SESSION_SECRET`
 
 `SESSION_SECRET` signs legacy HS256 session JWTs and remains the compatibility
