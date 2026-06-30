@@ -4,6 +4,7 @@ import test from "node:test";
 
 const scriptPath = "scripts/verify-server-checkout.sh";
 const deploymentGuidePath = "docs/TERMUX_PM2_DEPLOYMENT.md";
+const hetznerDeploymentGuidePath = "docs/HETZNER_PRODUCTION_DEPLOYMENT.md";
 const promotionPlaybookPath = "docs/PRODUCTION_PROMOTION_PLAYBOOK.md";
 const goLiveChecklistPath = "docs/GO_LIVE_LAUNCH_CHECKLIST.md";
 const goNoGoTemplatePath = "docs/GO_NO_GO_RELEASE_TEMPLATE.md";
@@ -46,6 +47,25 @@ test("PM2 deployment guide uses the server checkout guard before install and res
   assert.ok(buildIndex > guardIndex, "build should run after checkout verification");
   assert.ok(restartIndex > guardIndex, "PM2 restart should run after checkout verification");
   assert.match(guide, /Jangan teruskan `npm ci`, `npm run build`, atau PM2/);
+});
+
+test("Hetzner deployment guide verifies checkout before dependency install", () => {
+  const guide = readText(hetznerDeploymentGuidePath);
+
+  const guardIndex = guide.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const npmCiIndex = guide.indexOf("npm ci", guardIndex);
+
+  assert.ok(guardIndex > -1, "Hetzner guide should invoke the checkout guard");
+  assert.ok(npmCiIndex > guardIndex, "npm ci should run after checkout verification");
+
+  for (const marker of [
+    "BRANCH=main",
+    "working tree yang tidak bersih",
+    "masalah fetch `origin`",
+    "belum sama dengan `origin/$BRANCH`",
+  ]) {
+    assert.match(guide, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
 });
 
 test("production promotion playbook requires the server checkout gate before deploy", () => {

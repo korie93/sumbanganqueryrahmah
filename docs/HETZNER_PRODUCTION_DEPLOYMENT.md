@@ -166,6 +166,17 @@ git clone https://github.com/<org-atau-username>/sumbanganqueryrahmah.git
 cd sumbanganqueryrahmah
 ```
 
+Semak checkout server sebelum install atau build:
+
+```bash
+BRANCH=main
+bash scripts/verify-server-checkout.sh "$BRANCH"
+```
+
+Jika semakan ini gagal, jangan teruskan deploy. Selesaikan dahulu branch salah,
+working tree yang tidak bersih, masalah fetch `origin`, atau commit server yang
+belum sama dengan `origin/$BRANCH`.
+
 Pasang dependencies:
 
 ```bash
