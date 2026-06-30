@@ -81,15 +81,25 @@ test("Hetzner deployment guide verifies checkout before dependency install", () 
 
   const guardIndex = guide.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
   const npmCiIndex = guide.indexOf("npm ci", guardIndex);
+  const buildMigrateSectionIndex = guide.indexOf("## 9. Build dan Migrate");
+  const migrateIndex = guide.indexOf("npm run db:migrate", buildMigrateSectionIndex);
+  const buildIndex = guide.indexOf("npm run build", migrateIndex);
+  const pm2SectionIndex = guide.indexOf("## 10. Jalankan App Dengan PM2");
+  const pm2StartIndex = guide.indexOf("pm2 start ecosystem.config.cjs", pm2SectionIndex);
 
   assert.ok(guardIndex > -1, "Hetzner guide should invoke the checkout guard");
   assert.ok(npmCiIndex > guardIndex, "npm ci should run after checkout verification");
+  assert.ok(buildMigrateSectionIndex > guardIndex, "build/migrate section should follow checkout verification");
+  assert.ok(migrateIndex > guardIndex, "migration should run after checkout verification");
+  assert.ok(buildIndex > migrateIndex, "build should run after migration");
+  assert.ok(pm2StartIndex > guardIndex, "PM2 start should run after checkout verification");
 
   for (const marker of [
     "BRANCH=main",
     "working tree yang tidak bersih",
     "masalah fetch `origin`",
     "belum sama dengan `origin/$BRANCH`",
+    "Jangan migrate atau build jika guard itu gagal",
   ]) {
     assert.match(guide, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }

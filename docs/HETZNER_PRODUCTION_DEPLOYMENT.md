@@ -166,7 +166,7 @@ git clone https://github.com/<org-atau-username>/sumbanganqueryrahmah.git
 cd sumbanganqueryrahmah
 ```
 
-Semak checkout server sebelum install atau build:
+Semak checkout server sebelum install, migration, build, atau PM2 start/restart:
 
 ```bash
 BRANCH=main
@@ -286,6 +286,10 @@ Production-like startup kini mewajibkan `SQR_RATE_LIMIT_STORE=redis` dengan `SQR
 Biarkan `TWO_FACTOR_TOTP_ALGORITHM=SHA256` untuk enrollment 2FA baharu. Akaun 2FA lama yang disimpan sebagai SHA1 masih boleh login kerana algorithm disimpan dalam payload encrypted masing-masing; pantau `twoFactorTotpSha1VerificationSuccessTotal` semasa migration window sebelum merancang retirement SHA1.
 
 ## 9. Build dan Migrate
+
+Jika ini deploy update, atau anda lompat terus ke seksyen ini dari server yang
+sudah lama hidup, ulangi semakan checkout di seksyen 7 dalam sesi terminal yang
+sama sebelum migration/build. Jangan migrate atau build jika guard itu gagal.
 
 Jalankan:
 
