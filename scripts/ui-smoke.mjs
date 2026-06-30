@@ -2493,8 +2493,10 @@ const run = async () => {
             ].join("\n"),
           );
 
+          const loginUsernameInput = page.getByTestId("input-username");
+          await loginUsernameInput.waitFor({ state: "hidden", timeout: 10_000 }).catch(() => undefined);
           assert(
-            !(await page.getByTestId("input-username").isVisible().catch(() => false)),
+            !(await loginUsernameInput.isVisible().catch(() => false)),
             "login page should be replaced after successful login",
           );
           tracker.assertClean("login");

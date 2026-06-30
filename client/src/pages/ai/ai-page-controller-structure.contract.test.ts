@@ -38,3 +38,11 @@ test("AI page local state is centralized in a reducer", () => {
   assert.match(stateSource, /export function aiPageStateReducer/);
   assert.doesNotMatch(stateSource, /useState\(/);
 });
+
+test("AI page actions route response parsing through bounded readers", () => {
+  const actionsSource = readAiSource("useAIPageActions.ts");
+
+  assert.match(actionsSource, /readAIChatErrorResponse/);
+  assert.match(actionsSource, /readAIChatSuccessPayload/);
+  assert.doesNotMatch(actionsSource, /\.json\(/);
+});

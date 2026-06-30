@@ -1,6 +1,13 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 
-import { AI_CHAT_CHARACTER_LIMIT_NOTICE, isAIChatQueryOverLimit } from "@/components/ai-chat-utils";
+import {
+  AIChatRequestError,
+  AI_CHAT_CHARACTER_LIMIT_NOTICE,
+  DEFAULT_AI_CHAT_ERROR_MESSAGE,
+  isAIChatQueryOverLimit,
+  readAIChatErrorResponse,
+  readAIChatSuccessPayload,
+} from "@/components/ai-chat-utils";
 import type { AIChatMessage, AIChatMessageInput } from "@/context/AIContext";
 import { searchAI } from "@/lib/api";
 import type { AIChatStatus } from "@/lib/ai-chat";
@@ -10,7 +17,6 @@ import {
   AI_PAGE_MAX_RETRIES,
   AI_PAGE_RETRY_MS,
   appendAIPageMessage,
-  formatAIQueueBusyNotice,
   formatAIQueuedNotice,
 } from "./ai-page-controller-utils";
 import type { AIPageRuntimeRefs } from "./useAIPageRuntimeRefs";
@@ -203,34 +209,17 @@ export function useAIPageActions({
 
         const gateWaitMs = Number(response.headers.get("x-ai-gate-wait-ms") || "0");
         if (!response.ok) {
-          let responseMessage = response.statusText || "AI request failed.";
-          const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-
-          if (contentType.includes("application/json")) {
-            const payload = await response.json();
-            const gate = payload?.gate;
-            if (typeof payload?.message === "string" && payload.message.trim()) {
-              responseMessage = payload.message.trim();
-            }
-            if (
-              gate
-              && Number.isFinite(Number(gate.queueSize))
-              && Number.isFinite(Number(gate.queueLimit))
-            ) {
-              const queueSize = Number(gate.queueSize);
-              const queueLimit = Number(gate.queueLimit);
-              const waitMs = Number(gate.queueWaitMs || 0);
-              setGateNotice(formatAIQueueBusyNotice(queueSize, queueLimit, waitMs));
-            }
-          } else {
-            const responseText = (await response.text()).trim();
-            if (responseText) responseMessage = responseText;
+          const error = await readAIChatErrorResponse(
+            response,
+            response.statusText || DEFAULT_AI_CHAT_ERROR_MESSAGE,
+          );
+          if (error.gateNotice) {
+            setGateNotice(error.gateNotice);
           }
-
-          throw new Error(responseMessage);
+          throw error;
         }
 
-        const data = await response.json();
+        const data = await readAIChatSuccessPayload(response, DEFAULT_AI_CHAT_ERROR_MESSAGE);
         if (sessionRef.current !== sessionId) return;
 
         if (!isRetry && gateWaitMs > 0) {
@@ -274,6 +263,9 @@ export function useAIPageActions({
           return;
         }
 
+        if (error instanceof AIChatRequestError && error.gateNotice) {
+          setGateNotice(error.gateNotice);
+        }
         appendMessage({
           role: "assistant",
           content: resolveAiErrorMessage(error),

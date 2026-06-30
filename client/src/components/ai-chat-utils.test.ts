@@ -103,15 +103,15 @@ test("readAIChatErrorResponse keeps queue notice from valid JSON payloads", asyn
         return name.toLowerCase() === "content-type" ? "application/json; charset=utf-8" : null;
       },
     },
-    async json() {
-      return {
+    async text() {
+      return JSON.stringify({
         gate: {
           queueLimit: 4,
           queueSize: 3,
           queueWaitMs: 1500,
         },
         message: "queue penuh",
-      };
+      });
     },
   };
 
@@ -129,8 +129,8 @@ test("readAIChatErrorResponse falls back cleanly when JSON payload is malformed"
         return name.toLowerCase() === "content-type" ? "application/json" : null;
       },
     },
-    async json() {
-      throw new SyntaxError("Unexpected end of JSON input");
+    async text() {
+      return "{bad-json";
     },
   };
 
@@ -141,10 +141,36 @@ test("readAIChatErrorResponse falls back cleanly when JSON payload is malformed"
   assert.equal(error.gateNotice, null);
 });
 
+test("readAIChatErrorResponse keeps short plain text and hides HTML error pages", async () => {
+  const plainTextResponse = {
+    headers: {
+      get() {
+        return "text/plain";
+      },
+    },
+    async text() {
+      return "  upstream unavailable  ";
+    },
+  };
+  const htmlResponse = {
+    headers: {
+      get() {
+        return "text/html";
+      },
+    },
+    async text() {
+      return "<html><body>nginx error</body></html>";
+    },
+  };
+
+  assert.equal((await readAIChatErrorResponse(plainTextResponse, "fallback")).message, "upstream unavailable");
+  assert.equal((await readAIChatErrorResponse(htmlResponse, "fallback")).message, "fallback");
+});
+
 test("readAIChatSuccessPayload falls back to a controlled error on malformed JSON", async () => {
   const response = {
-    async json() {
-      throw new SyntaxError("Unexpected end of JSON input");
+    async text() {
+      return "{bad-json";
     },
   };
 
@@ -154,5 +180,46 @@ test("readAIChatSuccessPayload falls back to a controlled error on malformed JSO
       error instanceof AIChatRequestError
       && error.message === "fallback"
       && error.gateNotice === null,
+  );
+});
+
+test("readAIChatSuccessPayload normalizes success fields defensively", async () => {
+  const response = {
+    async text() {
+      return JSON.stringify({
+        ai_explanation: "Cadangan ringkas",
+        processing: false,
+        ignored: "metadata",
+      });
+    },
+  };
+  const malformedResponse = {
+    async text() {
+      return JSON.stringify({
+        ai_explanation: { nested: "bad" },
+        processing: "true",
+      });
+    },
+  };
+
+  assert.deepEqual(await readAIChatSuccessPayload(response, "fallback"), {
+    ai_explanation: "Cadangan ringkas",
+    processing: false,
+  });
+  assert.deepEqual(await readAIChatSuccessPayload(malformedResponse, "fallback"), {});
+});
+
+test("readAIChatSuccessPayload rejects oversized JSON before processing", async () => {
+  const response = {
+    async text() {
+      return JSON.stringify({ ai_explanation: "x".repeat(70_000), processing: false });
+    },
+  };
+
+  await assert.rejects(
+    () => readAIChatSuccessPayload(response, "fallback"),
+    (error: unknown) =>
+      error instanceof AIChatRequestError
+      && error.message === "fallback",
   );
 });

@@ -8,6 +8,7 @@ import {
 import type { AIChatMessage, AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { createClientRandomId } from "@/lib/secure-id";
+import { safeJsonParseResult, type SafeJsonParseOptions } from "@/lib/utils/safe-json";
 
 export const MAX_AI_CHAT_MESSAGES = 30;
 export const AI_CHAT_MAX_RETRIES = 6;
@@ -20,7 +21,12 @@ type AIChatResponseLike = {
   headers: {
     get(name: string): string | null;
   };
-  json(): Promise<unknown>;
+  text(): Promise<string>;
+};
+
+type AIChatSuccessPayload = {
+  ai_explanation?: string | undefined;
+  processing?: boolean | undefined;
 };
 
 export type AIChatStatusMeta = {
@@ -36,6 +42,48 @@ export class AIChatRequestError extends Error {
     this.name = "AIChatRequestError";
     this.gateNotice = options?.gateNotice ?? null;
   }
+}
+
+const AI_CHAT_RESPONSE_JSON_LIMITS: SafeJsonParseOptions = {
+  maxDepth: 12,
+  maxNodes: 1_000,
+  maxRawLength: 64_000,
+  maxStringLength: 20_000,
+};
+
+function looksLikeHtmlDocument(value: string) {
+  return /<!doctype html|<html[\s>]|<body[\s>]|<head[\s>]/i.test(value);
+}
+
+function normalizePlainTextErrorMessage(raw: string, fallbackMessage: string) {
+  const normalized = raw.replace(/\s+/g, " ").trim();
+  if (!normalized || looksLikeHtmlDocument(normalized)) {
+    return fallbackMessage;
+  }
+  return normalized.length > 500 ? `${normalized.slice(0, 497)}...` : normalized;
+}
+
+async function readAIChatJsonPayload(response: Pick<AIChatResponseLike, "text">) {
+  const raw = await response.text();
+  const parsed = safeJsonParseResult<unknown>(raw || "{}", AI_CHAT_RESPONSE_JSON_LIMITS);
+  if (!parsed.ok) {
+    throw new AIChatRequestError(DEFAULT_AI_CHAT_ERROR_MESSAGE);
+  }
+  return parsed.data;
+}
+
+function normalizeAIChatSuccessPayload(payload: unknown): AIChatSuccessPayload {
+  const record = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : {};
+  const next: AIChatSuccessPayload = {};
+  if (typeof record.ai_explanation === "string") {
+    next.ai_explanation = record.ai_explanation;
+  }
+  if (typeof record.processing === "boolean") {
+    next.processing = record.processing;
+  }
+  return next;
 }
 
 export function getAIChatTypingDelayMs(isLowSpecMode: boolean) {
@@ -149,11 +197,13 @@ export async function readAIChatErrorResponse(
 ) {
   const contentType = String(response.headers.get("content-type") || "").toLowerCase();
   if (!contentType.includes("application/json")) {
-    return new AIChatRequestError(fallbackMessage);
+    return new AIChatRequestError(
+      normalizePlainTextErrorMessage(await response.text(), fallbackMessage),
+    );
   }
 
   try {
-    const payload = await response.json();
+    const payload = await readAIChatJsonPayload(response);
     const details = getAIChatErrorDetailsFromPayload(payload, fallbackMessage);
     return new AIChatRequestError(details.message, { gateNotice: details.gateNotice });
   } catch {
@@ -162,14 +212,11 @@ export async function readAIChatErrorResponse(
 }
 
 export async function readAIChatSuccessPayload(
-  response: Pick<AIChatResponseLike, "json">,
+  response: Pick<AIChatResponseLike, "text">,
   fallbackMessage = DEFAULT_AI_CHAT_ERROR_MESSAGE,
 ) {
   try {
-    const payload = await response.json();
-    return payload && typeof payload === "object"
-      ? payload as Record<string, unknown>
-      : {};
+    return normalizeAIChatSuccessPayload(await readAIChatJsonPayload(response));
   } catch {
     throw new AIChatRequestError(fallbackMessage);
   }
