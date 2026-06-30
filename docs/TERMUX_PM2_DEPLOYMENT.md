@@ -163,12 +163,28 @@ BRANCH=main
 git fetch origin --prune
 git switch "$BRANCH" 2>/dev/null || git switch --track "origin/$BRANCH"
 git pull --ff-only origin "$BRANCH"
+git status --short
+test -z "$(git status --short)"
+CURRENT_BRANCH="$(git branch --show-current)"
+test "$CURRENT_BRANCH" = "$BRANCH"
+LOCAL_COMMIT="$(git rev-parse HEAD)"
+REMOTE_COMMIT="$(git rev-parse "origin/$BRANCH")"
+test "$LOCAL_COMMIT" = "$REMOTE_COMMIT"
+git log -1 --oneline
 npm ci
 npm run build
 pm2 restart sqr --update-env
+sleep 5
+pm2 status
+curl -fsS http://127.0.0.1:5000/api/health/ready
 ```
 
 Jika anda ubah `.env`, gunakan `--update-env` supaya process ambil nilai terbaru.
+Jika `git status --short` mengeluarkan fail berubah, berhenti dahulu dan semak
+perubahan itu. Jangan deploy sehingga working tree bersih atau perubahan memang
+sengaja disimpan. Semakan `LOCAL_COMMIT` dan `REMOTE_COMMIT` memastikan server
+benar-benar berada pada commit terbaru branch yang dipilih sebelum build dan
+restart dibuat.
 
 Untuk branch pembaikan, tukar baris pertama sahaja, contohnya:
 

@@ -48,6 +48,31 @@ test("PM2 deployment docs mention build-before-restart readiness contract", asyn
   }
 });
 
+test("PM2 deployment docs require branch and commit verification before restart", async () => {
+  const termuxDocs = await readFile("docs/TERMUX_PM2_DEPLOYMENT.md", "utf8");
+
+  for (const marker of [
+    "git fetch origin --prune",
+    "git status --short",
+    'test -z "$(git status --short)"',
+    'CURRENT_BRANCH="$(git branch --show-current)"',
+    'test "$CURRENT_BRANCH" = "$BRANCH"',
+    'LOCAL_COMMIT="$(git rev-parse HEAD)"',
+    'REMOTE_COMMIT="$(git rev-parse "origin/$BRANCH")"',
+    'test "$LOCAL_COMMIT" = "$REMOTE_COMMIT"',
+    "git branch --show-current",
+    "git rev-parse HEAD",
+    'git rev-parse "origin/$BRANCH"',
+    "git log -1 --oneline",
+    "npm ci",
+    "npm run build",
+    "pm2 restart sqr --update-env",
+    "curl -fsS http://127.0.0.1:5000/api/health/ready",
+  ]) {
+    assert.match(termuxDocs, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
 test("PM2 memory sizing guide documents limits, monitoring, and worker guardrails", async () => {
   const guide = await readFile("docs/DEPLOYMENT-SIZING-GUIDE.md", "utf8");
   const ecosystem = await readFile("deploy/pm2/ecosystem.config.cjs.example", "utf8");
