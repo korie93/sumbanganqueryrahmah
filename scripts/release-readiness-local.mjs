@@ -172,6 +172,7 @@ const run = async () => {
   await runNpm(["run", "verify:design-token-color-compatibility"], { env });
   await runNpm(["run", "verify:design-token-spacing"], { env });
   await runNpm(["run", "verify:db-schema-governance"], { env });
+  await runNpm(["run", "verify:db-migration-rollback"], { env });
   await runNpm(["run", "test:client"], { env });
   await runNpm(["run", "test:scripts"], { env });
   await runNpm(["run", "test:db-integration"], { env });

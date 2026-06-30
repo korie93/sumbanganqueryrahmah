@@ -53,3 +53,16 @@ test("release readiness writes SBOM artifacts under the local release artifact d
   assert.match(script, /const sbomArtifactsDir = path\.join\(artifactsDir, "sbom"\)/);
   assert.match(script, /SBOM_ARTIFACTS_DIR: process\.env\.SBOM_ARTIFACTS_DIR \|\| sbomArtifactsDir/);
 });
+
+test("release readiness verifies database rollback governance before test suites", () => {
+  const script = readReleaseReadinessScript();
+  const schemaGovernanceIndex = script.indexOf('["run", "verify:db-schema-governance"]');
+  const rollbackGovernanceIndex = script.indexOf('["run", "verify:db-migration-rollback"]');
+  const clientTestIndex = script.indexOf('["run", "test:client"]');
+
+  assert.notEqual(schemaGovernanceIndex, -1);
+  assert.notEqual(rollbackGovernanceIndex, -1);
+  assert.notEqual(clientTestIndex, -1);
+  assert.ok(schemaGovernanceIndex < rollbackGovernanceIndex);
+  assert.ok(rollbackGovernanceIndex < clientTestIndex);
+});
