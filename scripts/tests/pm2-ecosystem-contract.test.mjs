@@ -46,6 +46,9 @@ test("PM2 deployment docs mention build-before-restart readiness contract", asyn
     assert.match(content, /npm run build/);
     assert.match(content, /dist-local\/server\/cluster-local\.js/);
   }
+
+  assert.match(hetznerDocs, /pm2 start ecosystem\.config\.cjs/);
+  assert.doesNotMatch(hetznerDocs, /pm2 start npm --name sqr -- start/);
 });
 
 test("PM2 deployment docs require branch and commit verification before restart", async () => {

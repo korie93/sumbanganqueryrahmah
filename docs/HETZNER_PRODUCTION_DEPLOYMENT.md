@@ -308,10 +308,14 @@ Nota:
 
 ## 10. Jalankan App Dengan PM2
 
-Contoh:
+Gunakan ecosystem PM2 supaya `wait_ready`, graceful shutdown, restart backoff,
+dan memory guard kekal konsisten:
 
 ```bash
-pm2 start npm --name sqr -- start
+cp deploy/pm2/ecosystem.config.cjs.example ecosystem.config.cjs
+sed -i 's#/absolute/path/to/sumbanganqueryrahmah#/var/www/sumbanganqueryrahmah#' ecosystem.config.cjs
+npm run build
+pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup
 ```
@@ -323,7 +327,7 @@ pm2 logs sqr
 pm2 status
 ```
 
-Jika mahu ecosystem file, contoh minimal:
+Contoh ringkas struktur ecosystem file:
 
 ```js
 module.exports = {
