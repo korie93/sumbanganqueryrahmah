@@ -50,6 +50,8 @@ test("secret leak playbook links rotation runbook and covers containment plus es
     "SESSION_SECRET",
     "PG_PASSWORD",
     "Git History Containment",
+    'bash scripts/verify-server-checkout.sh "$BRANCH"',
+    "Stop the incident rollout if this gate fails",
     "Escalation Matrix",
     "Post-Incident Review",
   ]) {

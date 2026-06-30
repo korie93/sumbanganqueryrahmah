@@ -69,6 +69,18 @@ can still expose the value.
 
 ## Validation Commands
 
+If validation or recovery runs on a deployment server before rebuilding,
+migrating, or restarting workers, verify the checkout first:
+
+```bash
+BRANCH="${SQR_DEPLOY_BRANCH:-main}"
+bash scripts/verify-server-checkout.sh "$BRANCH"
+```
+
+Stop the incident rollout if this gate fails because a wrong branch, local
+changes, fetch failure, or drift from `origin/$BRANCH` can turn a secret
+rotation into an unintended code or migration deploy.
+
 Run the relevant subset after containment:
 
 ```bash
