@@ -45,6 +45,9 @@ test("PM2 deployment docs mention build-before-restart readiness contract", asyn
     assert.match(content, /shutdown_with_message/);
     assert.match(content, /npm run build/);
     assert.match(content, /dist-local\/server\/cluster-local\.js/);
+    assert.match(content, /GRACEFUL_SHUTDOWN_TIMEOUT_MS:\s*"10000"/);
+    assert.match(content, /kill_timeout:\s*15000/);
+    assert.doesNotMatch(content, /kill_timeout:\s*10000/);
   }
 
   assert.match(hetznerDocs, /pm2 start ecosystem\.config\.cjs/);

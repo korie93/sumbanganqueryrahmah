@@ -345,7 +345,7 @@ module.exports = {
       },
       max_memory_restart: "768M",
       node_args: "--max-old-space-size=600",
-      kill_timeout: 10000,
+      kill_timeout: 15000,
       listen_timeout: 5000
     }
   ]

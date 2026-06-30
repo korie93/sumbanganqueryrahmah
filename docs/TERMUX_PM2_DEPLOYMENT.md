@@ -80,7 +80,7 @@ module.exports = {
       max_memory_restart: "768M",
       node_args: "--max-old-space-size=600",
       restart_delay: 5000,
-      kill_timeout: 10000,
+      kill_timeout: 15000,
       listen_timeout: 5000,
       time: true,
     },
