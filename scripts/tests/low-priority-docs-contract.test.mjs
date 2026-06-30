@@ -117,6 +117,7 @@ test("key rotation runbook covers operational key families without fictional scr
     "BACKUP_ENCRYPTION_KEYS",
     "Emergency Rotation Checklist",
     "operations rotation register",
+    'bash scripts/verify-server-checkout.sh "$BRANCH"',
     "npm run collection:reencrypt-pii",
     "does not currently include a dedicated bulk 2FA re-encryption script",
   ]) {
@@ -126,6 +127,20 @@ test("key rotation runbook covers operational key families without fictional scr
   assert.doesNotMatch(runbook, /migrate-2fa-encryption|rotate-pii-encryption|verify-pii-encryption/);
   assert.match(envExample, /docs\/KEY-ROTATION-RUNBOOK\.md/);
   assert.match(security, /docs\/KEY-ROTATION-RUNBOOK\.md/);
+});
+
+test("key rotation runbook gates deployment-server worker restarts", async () => {
+  const runbook = await readDoc("docs/KEY-ROTATION-RUNBOOK.md");
+
+  const gateIndex = runbook.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const firstDeployRestartIndex = runbook.indexOf("Deploy or restart every application worker", gateIndex);
+
+  assert.ok(gateIndex > -1, "key rotation runbook should verify checkout before worker deployment");
+  assert.ok(
+    firstDeployRestartIndex > gateIndex,
+    "key rotation worker restart steps should follow checkout verification",
+  );
+  assert.match(runbook, /Do not continue if the checkout is on the wrong branch/);
 });
 
 test("database SSL guide documents runtime precedence and production TLS defaults", async () => {

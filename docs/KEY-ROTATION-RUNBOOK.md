@@ -21,9 +21,19 @@ Before every planned rotation:
 3. Generate replacement key material on a trusted operator machine or in the
    secret manager.
 4. Stage the new value in the deployment secret store.
-5. Keep old values only in the supported previous-key fields or secure cold
+5. If the rotation will deploy or restart application workers on a deployment
+   server, verify the checkout first:
+
+   ```bash
+   BRANCH="${SQR_DEPLOY_BRANCH:-main}"
+   bash scripts/verify-server-checkout.sh "$BRANCH"
+   ```
+
+   Do not continue if the checkout is on the wrong branch, has local changes,
+   cannot fetch origin, or differs from `origin/$BRANCH`.
+6. Keep old values only in the supported previous-key fields or secure cold
    storage, and only for the documented compatibility window.
-6. Record the rotation date, next due date, operator, reviewer, and verification
+7. Record the rotation date, next due date, operator, reviewer, and verification
    output in the operations rotation register. Do not record key values.
 
 ## Key Inventory
