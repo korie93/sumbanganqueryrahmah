@@ -41,6 +41,10 @@ For dependency, security, deployment, or release promotion changes, prefer the f
 
 - `npm run release:verify:local`
 
+For deployment or production promotion work, also verify the target server checkout before install, migration, build, or restart:
+
+- `bash scripts/verify-server-checkout.sh "$BRANCH"`
+
 If the change touches authenticated navigation, run smoke with:
 
 - `SMOKE_TEST_USERNAME`

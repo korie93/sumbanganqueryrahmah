@@ -16,6 +16,7 @@ test("Codex verification guide distinguishes local regression, database integrat
     "npm run smoke:ui",
     "npm run test:db-integration",
     "npm run release:verify:local",
+    'bash scripts/verify-server-checkout.sh "$BRANCH"',
     "PostgreSQL migrations",
     "dependency, security, deployment, or release promotion",
   ]) {
@@ -33,7 +34,9 @@ test("QA final checklist keeps database and release verification explicit", () =
     "npm run build",
     "npm run smoke:ui",
     "npm run release:verify:local",
+    'bash scripts/verify-server-checkout.sh "$BRANCH"',
     "production promotion",
+    "deployment server",
   ]) {
     assert.match(checklist, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }

@@ -93,6 +93,7 @@ Anggap build layak hanya jika:
 - build lulus
 - `npm run smoke:ui` lulus
 - `npm run release:verify:local` lulus untuk production promotion
+- `bash scripts/verify-server-checkout.sh "$BRANCH"` lulus pada deployment server sebelum install, migration, build, atau restart production
 - tiada console error/warning pada flow utama
 - monitor utama stabil semasa canary:
   - `collectionRecordVersionConflicts24h`
