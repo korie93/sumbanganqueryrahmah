@@ -9,6 +9,7 @@ const promotionPlaybookPath = "docs/PRODUCTION_PROMOTION_PLAYBOOK.md";
 const goLiveChecklistPath = "docs/GO_LIVE_LAUNCH_CHECKLIST.md";
 const goNoGoTemplatePath = "docs/GO_NO_GO_RELEASE_TEMPLATE.md";
 const releaseHardeningSummaryPath = "docs/RELEASE_HARDENING_SUMMARY.md";
+const readmePath = "README.md";
 
 function readText(path) {
   return readFileSync(path, "utf8");
@@ -48,6 +49,23 @@ test("PM2 deployment guide uses the server checkout guard before install and res
   assert.ok(buildIndex > guardIndex, "build should run after checkout verification");
   assert.ok(restartIndex > guardIndex, "PM2 restart should run after checkout verification");
   assert.match(guide, /Jangan teruskan `npm ci`, `npm run build`, atau PM2/);
+});
+
+test("README troubleshooting deploy flow uses the checkout guard before install and restart", () => {
+  const readme = readText(readmePath);
+
+  const guardIndex = readme.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
+  const npmCiIndex = readme.indexOf("npm ci", guardIndex);
+  const migrateIndex = readme.indexOf("npm run db:migrate", guardIndex);
+  const buildIndex = readme.indexOf("npm run build", guardIndex);
+  const restartIndex = readme.indexOf("pm2 restart sqr --update-env", guardIndex);
+
+  assert.ok(guardIndex > -1, "README should invoke the checkout guard in troubleshooting deploy flow");
+  assert.ok(npmCiIndex > guardIndex, "README npm ci should run after checkout verification");
+  assert.ok(migrateIndex > npmCiIndex, "README migration should run after deterministic install");
+  assert.ok(buildIndex > migrateIndex, "README build should run after migration");
+  assert.ok(restartIndex > buildIndex, "README PM2 restart should run after build");
+  assert.match(readme, /Jangan teruskan `npm ci`, migration, build, atau PM2 restart/);
 });
 
 test("Hetzner deployment guide verifies checkout before dependency install", () => {
