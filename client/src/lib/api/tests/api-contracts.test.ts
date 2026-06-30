@@ -152,7 +152,7 @@ import {
   getTabVisibility,
   updateSetting,
 } from "@/lib/api/settings";
-import { parseApiJson } from "@/lib/api/contract";
+import { parseApiJson, readApiJsonPayload } from "@/lib/api/contract";
 
 function createEmptyAnalysisContract() {
   return {
@@ -229,6 +229,29 @@ test("parseApiJson includes concise Zod issue details without echoing raw payloa
       assert.doesNotMatch(error.message, /super-secret-token/);
       return true;
     },
+  );
+});
+
+test("parseApiJson rejects malformed API JSON before schema validation", async () => {
+  const response = new Response("{bad-json", {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  await assert.rejects(
+    () => parseApiJson(response, z.object({ ok: z.literal(true) }), "/api/example"),
+    /API response JSON parse failed for \/api\/example/,
+  );
+});
+
+test("readApiJsonPayload enforces bounded client JSON response limits", async () => {
+  const response = jsonResponse({ message: "x".repeat(32) });
+
+  await assert.rejects(
+    () => readApiJsonPayload(response, "/api/example", { maxStringLength: 8 }),
+    /API response JSON parse failed for \/api\/example: JSON string length exceeds limit 8/,
   );
 });
 

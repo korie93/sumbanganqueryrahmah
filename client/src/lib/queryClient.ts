@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { createApiHeaders, fetchApiWithRetry, throwIfResNotOk } from "./api-client";
+import { readApiJsonPayload } from "./api/contract";
 import { detectLowSpecMode } from "./low-spec-mode";
 
 const isLowSpecClient = (() => {
@@ -61,11 +62,11 @@ export function resolveDefaultQueryStaleTime(queryKey: readonly unknown[]): numb
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey, signal }) => {
+export function getQueryFn<T>(options: { on401: "returnNull" }): QueryFunction<T | null>;
+export function getQueryFn<T>(options: { on401: "throw" }): QueryFunction<T>;
+export function getQueryFn<T>(options: { on401: UnauthorizedBehavior }): QueryFunction<T | null> {
+  const { on401: unauthorizedBehavior } = options;
+  return async ({ queryKey, signal }) => {
     const res = await fetchApiWithRetry(queryKey.join("/") as string, {
       credentials: "include",
       headers: createApiHeaders(),
@@ -77,8 +78,9 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    return await readApiJsonPayload<T>(res, queryKey.join("/") as string);
   };
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {

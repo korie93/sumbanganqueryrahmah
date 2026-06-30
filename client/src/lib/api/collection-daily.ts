@@ -1,5 +1,5 @@
 import { apiRequest } from "../api-client";
-import { parseApiJson } from "./contract";
+import { parseApiJson, readApiJsonPayload } from "./contract";
 import { z } from "zod";
 import {
   parseCollectionAmountMyrNumber,
@@ -414,7 +414,7 @@ export async function getCollectionDailyUsers(options?: CollectionDailyRequestOp
     undefined,
     options,
   );
-  const payload = await response.json();
+  const payload = await readApiJsonPayload(response, "/api/collection/daily/users");
   const record = asRecord(payload);
   return {
     ok: readBoolean(record?.ok, true),
@@ -505,7 +505,10 @@ export async function getCollectionDailyCalendarAudit(filters: {
     undefined,
     options,
   );
-  return normalizeCollectionDailyCalendarAuditResponse(await response.json(), filters);
+  return normalizeCollectionDailyCalendarAuditResponse(
+    await readApiJsonPayload(response, "/api/collection/daily/calendar/audit"),
+    filters,
+  );
 }
 
 export async function getCollectionDailyOverview(filters: {
@@ -532,7 +535,10 @@ export async function getCollectionDailyOverview(filters: {
     undefined,
     options,
   );
-  return normalizeCollectionDailyOverviewResponse(await response.json(), filters);
+  return normalizeCollectionDailyOverviewResponse(
+    await readApiJsonPayload(response, "/api/collection/daily/overview"),
+    filters,
+  );
 }
 
 export async function getCollectionDailyDayDetails(filters: {
@@ -565,5 +571,8 @@ export async function getCollectionDailyDayDetails(filters: {
     undefined,
     options,
   );
-  return normalizeCollectionDailyDayDetailsResponse(await response.json(), filters);
+  return normalizeCollectionDailyDayDetailsResponse(
+    await readApiJsonPayload(response, "/api/collection/daily/day-details"),
+    filters,
+  );
 }

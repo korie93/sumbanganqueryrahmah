@@ -1,5 +1,6 @@
 import { createApiHeaders } from "../api-client";
 import { safeJsonParseResult } from "../utils/safe-json";
+import { readApiJsonPayload } from "./contract";
 import { getAuthHeader, getCsrfHeader } from "./shared";
 import type { MonitorApiResult, MonitorRequestOptions } from "./monitor-types";
 
@@ -61,7 +62,7 @@ export async function fetchMonitorEndpoint<T>(
       };
     }
 
-    const data = (await response.json()) as T;
+    const data = await readApiJsonPayload<T>(response, endpoint);
     return {
       state: "ok",
       status: 200,
@@ -123,7 +124,7 @@ export async function postMonitorEndpoint<T>(
       };
     }
 
-    const data = (await response.json()) as T;
+    const data = await readApiJsonPayload<T>(response, endpoint);
     return {
       state: "ok",
       status: 200,
@@ -185,7 +186,7 @@ export async function deleteMonitorEndpoint<T>(
       };
     }
 
-    const data = (await response.json()) as T;
+    const data = await readApiJsonPayload<T>(response, endpoint);
     return {
       state: "ok",
       status: 200,

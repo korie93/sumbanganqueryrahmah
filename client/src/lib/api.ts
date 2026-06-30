@@ -1,4 +1,5 @@
 import { apiRequest } from "./api-client";
+import { readApiJsonPayload } from "./api/contract";
 
 export * from "./api/activity";
 export * from "./api/ai";
@@ -17,12 +18,12 @@ export async function aiChat(message: string, conversationId?: string | null) {
     message,
     conversationId: conversationId || null,
   });
-  return response.json();
+  return readApiJsonPayload(response, "/api/ai/chat");
 }
 
 export async function getAiConfig() {
   const response = await apiRequest("GET", "/api/ai/config");
-  return response.json();
+  return readApiJsonPayload(response, "/api/ai/config");
 }
 
 export async function aiIndexImport(importId: string, batchSize: number, maxRows?: number) {
@@ -30,5 +31,5 @@ export async function aiIndexImport(importId: string, batchSize: number, maxRows
     batchSize,
     maxRows,
   });
-  return response.json();
+  return readApiJsonPayload(response, "/api/ai/index/import/:importId");
 }

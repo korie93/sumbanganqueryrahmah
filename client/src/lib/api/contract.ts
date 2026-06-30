@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { safeJsonParseResult, type SafeJsonParseOptions } from "@/lib/utils/safe-json";
+
+const API_RESPONSE_JSON_LIMITS: SafeJsonParseOptions = {
+  maxDepth: 50,
+  maxNodes: 200_000,
+  maxRawLength: 8 * 1024 * 1024,
+  maxStringLength: 1_000_000,
+};
 
 function isDevApiContractDiagnosticsEnabled() {
   return Boolean(import.meta.env?.DEV);
@@ -54,5 +62,23 @@ export async function parseApiJson<TSchema extends z.ZodTypeAny>(
   schema: TSchema,
   endpoint: string,
 ): Promise<z.infer<TSchema>> {
-  return parseApiPayload(await response.json(), schema, endpoint);
+  return parseApiPayload(await readApiJsonPayload(response, endpoint), schema, endpoint);
+}
+
+export async function readApiJsonPayload<T = unknown>(
+  response: Response,
+  endpoint: string,
+  options?: SafeJsonParseOptions,
+): Promise<T> {
+  const raw = await response.text();
+  const parsed = safeJsonParseResult<T>(raw, {
+    ...API_RESPONSE_JSON_LIMITS,
+    ...options,
+  });
+
+  if (!parsed.ok) {
+    throw new Error(`API response JSON parse failed for ${endpoint}: ${parsed.error}`);
+  }
+
+  return parsed.data;
 }

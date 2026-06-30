@@ -640,6 +640,36 @@ test("getQueryFn injects x-request-id headers for query fetches", async () => {
   }
 });
 
+test("getQueryFn rejects malformed JSON through the bounded API reader", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => new Response("{bad-json", {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  })) as typeof fetch;
+
+  try {
+    const queryFn = getQueryFn<{ ok: boolean }>({ on401: "throw" });
+    const controller = new AbortController();
+
+    await assert.rejects(
+      async () => queryFn({
+        queryKey: ["/api/health"],
+        client: undefined as never,
+        meta: undefined,
+        signal: controller.signal,
+        pageParam: undefined,
+        direction: undefined,
+      }),
+      /API response JSON parse failed for \/api\/health/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("resolveDefaultQueryStaleTime tunes query freshness by endpoint profile", () => {
   assert.equal(resolveDefaultQueryStaleTime(["/api/health/live"]), 15_000);
   assert.equal(resolveDefaultQueryStaleTime(["/api/analytics/summary"]), 30_000);
