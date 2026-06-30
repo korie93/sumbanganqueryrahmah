@@ -140,10 +140,12 @@ const run = async () => {
   };
   const collectionPiiReadiness = resolveCollectionPiiReadinessConfig(env, artifactsDir);
 
-  console.log("Release readiness: running repository security gates...");
+  console.log("Release readiness: running runtime and repository security gates...");
+  await runNpm(["run", "verify:node-version"], { env });
   await runNpm(["run", "verify:repo-hygiene"], { env });
   await runNpm(["run", "verify:secrets"], { env });
   await runNpm(["run", "audit:dependencies"], { env });
+  await runNpm(["run", "verify:xlsx-vendor-integrity"], { env });
   await runNpm(["run", "typecheck"], { env });
   await runNpm(["run", "lint"], { env });
 
