@@ -53,16 +53,7 @@ test("PM2 deployment docs require branch and commit verification before restart"
 
   for (const marker of [
     "git fetch origin --prune",
-    "git status --short",
-    'test -z "$(git status --short)"',
-    'CURRENT_BRANCH="$(git branch --show-current)"',
-    'test "$CURRENT_BRANCH" = "$BRANCH"',
-    'LOCAL_COMMIT="$(git rev-parse HEAD)"',
-    'REMOTE_COMMIT="$(git rev-parse "origin/$BRANCH")"',
-    'test "$LOCAL_COMMIT" = "$REMOTE_COMMIT"',
-    "git branch --show-current",
-    "git rev-parse HEAD",
-    'git rev-parse "origin/$BRANCH"',
+    'bash scripts/verify-server-checkout.sh "$BRANCH"',
     "git log -1 --oneline",
     "npm ci",
     "npm run build",
