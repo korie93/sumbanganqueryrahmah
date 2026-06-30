@@ -19,8 +19,14 @@ temporarily rely on idempotent runtime compatibility bootstrap.
 5. Confirm startup logs include the security warning and no migration errors.
 6. Run smoke checks for login, collection reads, imports, and health.
 7. Remove the override immediately after recovery.
-8. Run `npm run db:migrate` as soon as the migration path is healthy again.
-9. Restart with migration-first mode.
+8. Verify the deployment checkout before returning to migration-first mode:
+   `bash scripts/verify-server-checkout.sh "$BRANCH"`.
+9. Run `npm run db:migrate` as soon as the migration path is healthy again.
+10. Restart with migration-first mode.
+
+If checkout verification fails, stop the recovery handoff. Fix the branch,
+local changes, fetch failure, or drift from `origin/$BRANCH` before running
+migrations.
 
 ## Rollback
 

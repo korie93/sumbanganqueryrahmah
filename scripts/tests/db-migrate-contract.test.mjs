@@ -67,8 +67,12 @@ test("production migration docs require checkout verification before migrate", (
     new URL("../../docs/runbooks/production.md", import.meta.url),
     "utf8",
   );
+  const emergencyBootstrapRunbook = readFileSync(
+    new URL("../../docs/runbooks/emergency-db-bootstrap.md", import.meta.url),
+    "utf8",
+  );
 
-  for (const content of [migrationGuide, rollbackRunbook, productionRunbook]) {
+  for (const content of [migrationGuide, rollbackRunbook, productionRunbook, emergencyBootstrapRunbook]) {
     assert.match(content, /bash scripts\/verify-server-checkout\.sh "\$BRANCH"/);
     assert.match(content, /npm run db:migrate/);
   }
@@ -79,10 +83,16 @@ test("production migration docs require checkout verification before migrate", (
   const rollbackMigrateIndex = rollbackRunbook.indexOf("npm run db:migrate", rollbackGateIndex);
   const productionGateIndex = productionRunbook.indexOf('bash scripts/verify-server-checkout.sh "$BRANCH"');
   const productionMigrateIndex = productionRunbook.indexOf("npm run db:migrate", productionGateIndex);
+  const emergencyGateIndex = emergencyBootstrapRunbook.indexOf(
+    'bash scripts/verify-server-checkout.sh "$BRANCH"',
+  );
+  const emergencyMigrateIndex = emergencyBootstrapRunbook.indexOf("npm run db:migrate", emergencyGateIndex);
 
   assert.ok(guideMigrateIndex > guideGateIndex, "database migration guide should gate before migrate");
   assert.ok(rollbackMigrateIndex > rollbackGateIndex, "rollback runbook should gate before migrate");
   assert.ok(productionMigrateIndex > productionGateIndex, "production runbook should gate before migrate");
+  assert.ok(emergencyMigrateIndex > emergencyGateIndex, "emergency bootstrap runbook should gate before migrate");
   assert.match(migrationGuide, /Do not run `npm run db:migrate` if this gate fails/);
   assert.match(rollbackRunbook, /stop before taking the backup or\s+running migrations/s);
+  assert.match(emergencyBootstrapRunbook, /stop the recovery handoff/);
 });
