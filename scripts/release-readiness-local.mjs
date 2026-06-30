@@ -186,6 +186,7 @@ const run = async () => {
   await runNpm(["run", "verify:design-token-spacing"], { env });
   await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "verify:db-migration-rollback"], { env });
+  await runNpm(["run", "test:contracts"], { env: regressionTestEnv });
   await runNpm(["run", "test:client"], { env: regressionTestEnv });
   await runNpm(["run", "test:scripts"], { env: regressionTestEnv });
   await runNpm(["run", "test:db-integration"], { env: regressionTestEnv });

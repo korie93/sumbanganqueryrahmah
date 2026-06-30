@@ -58,13 +58,26 @@ test("release readiness verifies database rollback governance before test suites
   const script = readReleaseReadinessScript();
   const schemaGovernanceIndex = script.indexOf('["run", "verify:db-schema-governance"]');
   const rollbackGovernanceIndex = script.indexOf('["run", "verify:db-migration-rollback"]');
+  const apiContractTestIndex = script.indexOf('["run", "test:contracts"]');
   const clientTestIndex = script.indexOf('["run", "test:client"]');
 
   assert.notEqual(schemaGovernanceIndex, -1);
   assert.notEqual(rollbackGovernanceIndex, -1);
+  assert.notEqual(apiContractTestIndex, -1);
   assert.notEqual(clientTestIndex, -1);
   assert.ok(schemaGovernanceIndex < rollbackGovernanceIndex);
-  assert.ok(rollbackGovernanceIndex < clientTestIndex);
+  assert.ok(rollbackGovernanceIndex < apiContractTestIndex);
+  assert.ok(apiContractTestIndex < clientTestIndex);
+});
+
+test("release readiness runs API contract tests before the release build", () => {
+  const script = readReleaseReadinessScript();
+  const apiContractTestIndex = script.indexOf('["run", "test:contracts"]');
+  const buildIndex = script.indexOf('["run", "build"]');
+
+  assert.notEqual(apiContractTestIndex, -1);
+  assert.notEqual(buildIndex, -1);
+  assert.ok(apiContractTestIndex < buildIndex);
 });
 
 test("release readiness runs every backend regression suite before building", () => {
@@ -92,6 +105,7 @@ test("release readiness runs every backend regression suite before building", ()
 test("release readiness runs regression suites with isolated PII rollout env", () => {
   const script = readReleaseReadinessScript();
   const suiteNames = [
+    "test:contracts",
     "test:client",
     "test:scripts",
     "test:db-integration",
