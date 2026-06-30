@@ -25,6 +25,7 @@ Companion docs:
 - [ ] `npm run build`
 - [ ] `npm run db:migrate`
 - [ ] `npm run release:verify:local`
+- [ ] `bash scripts/verify-server-checkout.sh "$BRANCH"` passed on the deployment server
 
 Notes:
 

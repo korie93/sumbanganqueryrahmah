@@ -5,6 +5,8 @@ import test from "node:test";
 const scriptPath = "scripts/verify-server-checkout.sh";
 const deploymentGuidePath = "docs/TERMUX_PM2_DEPLOYMENT.md";
 const promotionPlaybookPath = "docs/PRODUCTION_PROMOTION_PLAYBOOK.md";
+const goLiveChecklistPath = "docs/GO_LIVE_LAUNCH_CHECKLIST.md";
+const goNoGoTemplatePath = "docs/GO_NO_GO_RELEASE_TEMPLATE.md";
 
 function readText(path) {
   return readFileSync(path, "utf8");
@@ -61,4 +63,17 @@ test("production promotion playbook requires the server checkout gate before dep
   ]) {
     assert.match(playbook, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+});
+
+test("go-live docs include the server checkout gate in final release checks", () => {
+  const checklist = readText(goLiveChecklistPath);
+  const template = readText(goNoGoTemplatePath);
+
+  for (const content of [checklist, template]) {
+    assert.match(content, /bash scripts\/verify-server-checkout\.sh "\$BRANCH"/);
+    assert.match(content, /deployment server/i);
+  }
+
+  assert.match(checklist, /before `npm ci`, build, or PM2 restart/);
+  assert.match(template, /Pre-Deploy Gate/);
 });

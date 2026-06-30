@@ -16,6 +16,7 @@ This checklist is the final gate before controlled production launch.
 - [ ] Audit-log routes are superuser-protected.
 - [ ] Receipt preview/download access is ownership-safe.
 - [ ] Reviewed `systemd`, `nginx`, and `PM2` hardening defaults are preserved in deployment config.
+- [ ] `bash scripts/verify-server-checkout.sh "$BRANCH"` passes on the deployment server before `npm ci`, build, or PM2 restart.
 - [ ] `GET /api/health/ready` stays green after deploy before users are pointed to the instance.
 
 ## Phase 2: Critical Business Flow Gate
@@ -43,6 +44,13 @@ Run locally before promotion:
 
 ```bash
 npm run release:verify:local
+```
+
+Run on the deployment server before install/build/restart:
+
+```bash
+BRANCH=main
+bash scripts/verify-server-checkout.sh "$BRANCH"
 ```
 
 Run optional continuous monitor during canary:
