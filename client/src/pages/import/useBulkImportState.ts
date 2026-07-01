@@ -65,6 +65,12 @@ export function useBulkImportState({
   }, []);
 
   const handleClearBulk = useCallback(() => {
+    bulkImportRequestIdRef.current += 1;
+    bulkImportAbortControllerRef.current?.abort();
+    bulkImportAbortControllerRef.current = null;
+    bulkImportInFlightRef.current = false;
+    bulkProcessingRef.current = false;
+    setBulkProcessing(false);
     setBulkFiles([]);
     setBulkResults([]);
     setBulkProgress(0);
