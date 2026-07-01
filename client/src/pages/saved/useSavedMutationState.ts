@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { deleteImport, renameImport } from "@/lib/api";
 import type { ImportItem } from "@/pages/saved/types";
 import { isSavedAbortError, readSavedErrorMessage } from "@/pages/saved/saved-state-utils";
@@ -41,6 +41,17 @@ export function useSavedMutationState({
   const bulkDeleteAbortControllerRef = useRef<AbortController | null>(null);
   const mutationRequestIdRef = useRef(0);
 
+  const isActiveMutationRequest = useCallback((
+    controller: AbortController,
+    requestId: number,
+    controllerRef: MutableRefObject<AbortController | null>,
+  ) => (
+    mountedRef.current
+    && !controller.signal.aborted
+    && controllerRef.current === controller
+    && requestId === mutationRequestIdRef.current
+  ), []);
+
   useEffect(() => {
     return () => {
       mountedRef.current = false;
@@ -76,7 +87,7 @@ export function useSavedMutationState({
     try {
       const trimmedName = newName.trim();
       await renameImport(selectedImport.id, trimmedName, { signal: controller.signal });
-      if (controller.signal.aborted || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+      if (!isActiveMutationRequest(controller, requestId, renameAbortControllerRef)) {
         return;
       }
 
@@ -86,7 +97,7 @@ export function useSavedMutationState({
       });
       onImportRenamed(selectedImport.id, trimmedName);
     } catch (error: unknown) {
-      if (isSavedAbortError(error) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+      if (isSavedAbortError(error) || !isActiveMutationRequest(controller, requestId, renameAbortControllerRef)) {
         return;
       }
 
@@ -96,17 +107,31 @@ export function useSavedMutationState({
         variant: "destructive",
       });
     } finally {
+      const shouldFinalizeRename = isActiveMutationRequest(
+        controller,
+        requestId,
+        renameAbortControllerRef,
+      );
       if (renameAbortControllerRef.current === controller) {
         renameAbortControllerRef.current = null;
       }
-      if (mountedRef.current) {
+      if (shouldFinalizeRename) {
         setRenaming(false);
         setRenameDialogOpen(false);
         setSelectedImport(null);
         setNewName("");
       }
     }
-  }, [bulkDeleting, deleting, newName, onImportRenamed, renaming, selectedImport, toast]);
+  }, [
+    bulkDeleting,
+    deleting,
+    isActiveMutationRequest,
+    newName,
+    onImportRenamed,
+    renaming,
+    selectedImport,
+    toast,
+  ]);
 
   const handleRenameConfirm = useCallback(() => {
     void runRenameConfirm();
@@ -126,7 +151,7 @@ export function useSavedMutationState({
     try {
       const targetImport = selectedImport;
       await deleteImport(targetImport.id, { signal: controller.signal });
-      if (controller.signal.aborted || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+      if (!isActiveMutationRequest(controller, requestId, deleteAbortControllerRef)) {
         return;
       }
 
@@ -137,7 +162,7 @@ export function useSavedMutationState({
       onImportsRemoved([targetImport.id]);
       onSingleImportSelectionRemoved(targetImport.id);
     } catch (error: unknown) {
-      if (isSavedAbortError(error) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+      if (isSavedAbortError(error) || !isActiveMutationRequest(controller, requestId, deleteAbortControllerRef)) {
         return;
       }
 
@@ -147,10 +172,15 @@ export function useSavedMutationState({
         variant: "destructive",
       });
     } finally {
+      const shouldFinalizeDelete = isActiveMutationRequest(
+        controller,
+        requestId,
+        deleteAbortControllerRef,
+      );
       if (deleteAbortControllerRef.current === controller) {
         deleteAbortControllerRef.current = null;
       }
-      if (mountedRef.current) {
+      if (shouldFinalizeDelete) {
         setDeleting(false);
         setDeleteDialogOpen(false);
         setSelectedImport(null);
@@ -159,6 +189,7 @@ export function useSavedMutationState({
   }, [
     bulkDeleting,
     deleting,
+    isActiveMutationRequest,
     onImportsRemoved,
     onSingleImportSelectionRemoved,
     renaming,
@@ -184,7 +215,7 @@ export function useSavedMutationState({
 
     try {
       const results = await Promise.allSettled(ids.map((id) => deleteImport(id, { signal: controller.signal })));
-      if (controller.signal.aborted || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+      if (!isActiveMutationRequest(controller, requestId, bulkDeleteAbortControllerRef)) {
         return;
       }
 
@@ -223,7 +254,7 @@ export function useSavedMutationState({
         });
       }
     } catch (error: unknown) {
-      if (isSavedAbortError(error) || requestId !== mutationRequestIdRef.current || !mountedRef.current) {
+      if (isSavedAbortError(error) || !isActiveMutationRequest(controller, requestId, bulkDeleteAbortControllerRef)) {
         return;
       }
 
@@ -233,10 +264,15 @@ export function useSavedMutationState({
         variant: "destructive",
       });
     } finally {
+      const shouldFinalizeBulkDelete = isActiveMutationRequest(
+        controller,
+        requestId,
+        bulkDeleteAbortControllerRef,
+      );
       if (bulkDeleteAbortControllerRef.current === controller) {
         bulkDeleteAbortControllerRef.current = null;
       }
-      if (mountedRef.current) {
+      if (shouldFinalizeBulkDelete) {
         setBulkDeleting(false);
         setBulkDeleteDialogOpen(false);
       }
@@ -244,6 +280,7 @@ export function useSavedMutationState({
   }, [
     bulkDeleting,
     deleting,
+    isActiveMutationRequest,
     onBulkDeleteSelectionCleared,
     onImportsRemoved,
     renaming,
