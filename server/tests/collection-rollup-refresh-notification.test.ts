@@ -35,15 +35,35 @@ function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {
   });
 }
 
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  return { promise, reject, resolve };
+}
+
 class FakeNotificationClient extends EventEmitter {
+  connectCalls = 0;
   listenQueries: string[] = [];
   endCalls = 0;
 
-  constructor(private readonly options: { connectError?: Error; endError?: Error } = {}) {
+  constructor(
+    private readonly options: {
+      connectError?: Error;
+      connectGate?: Promise<void>;
+      endError?: Error;
+    } = {},
+  ) {
     super();
   }
 
   async connect(): Promise<void> {
+    this.connectCalls += 1;
+    await this.options.connectGate;
     if (this.options.connectError) {
       throw this.options.connectError;
     }
@@ -253,6 +273,42 @@ test("CollectionRollupRefreshNotificationSubscriber removes PostgreSQL listeners
     channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
   });
   assert.equal(wakeCount, 0);
+});
+
+test("CollectionRollupRefreshNotificationSubscriber stop waits for in-flight connects", async () => {
+  const connectGate = createDeferred();
+  const client = new FakeNotificationClient({ connectGate: connectGate.promise });
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => client,
+    reconnectDelayMs: 20,
+  });
+
+  const startPromise = subscriber.start(() => undefined);
+  await waitFor(() => client.connectCalls === 1);
+
+  let stopResolved = false;
+  const stopPromise = subscriber.stop().then(() => {
+    stopResolved = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(stopResolved, false);
+  assert.equal(client.endCalls, 0);
+
+  connectGate.resolve();
+  await Promise.all([startPromise, stopPromise]);
+
+  assert.equal(stopResolved, true);
+  assert.equal(client.endCalls, 1);
+  assert.equal(client.listenerCount("notification"), 0);
+  assert.equal(client.listenerCount("error"), 0);
+  assert.equal(client.listenerCount("end"), 0);
+  assert.deepEqual(subscriber.getDiagnostics(), {
+    activeClient: false,
+    pendingListenerCleanups: 0,
+    reconnectPending: false,
+  });
 });
 
 test("removePostgresNotificationClientListener uses removeListener when available", () => {

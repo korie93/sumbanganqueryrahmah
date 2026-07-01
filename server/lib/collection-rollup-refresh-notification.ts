@@ -491,6 +491,7 @@ export class CollectionRollupRefreshNotificationSubscriber
     this.notifyCallback = null;
     this.cancelPendingReconnect();
     this.reconnectAttempt = 0;
+    const pendingConnect = this.connectPromise;
 
     const activeClient = this.currentClient;
     this.currentClient = null;
@@ -499,6 +500,15 @@ export class CollectionRollupRefreshNotificationSubscriber
       await this.safeCloseClient(activeClient, "stop");
     }
     this.listenerRegistry.teardown();
+    if (pendingConnect) {
+      await pendingConnect.catch((error) => {
+        this.recordAsyncFailure({
+          critical: true,
+          error,
+          operation: "disconnect_cleanup",
+        });
+      });
+    }
   }
 
   getDiagnostics(): { activeClient: boolean; pendingListenerCleanups: number; reconnectPending: boolean } {
