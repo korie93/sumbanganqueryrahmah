@@ -122,6 +122,7 @@ export function useSingleImportState({
   const { toast } = useToast();
 
   const resetSingleImport = useCallback(() => {
+    singleParseRequestIdRef.current += 1;
     singleSaveAbortControllerRef.current?.abort();
     singleSaveAbortControllerRef.current = null;
     singleSaveInFlightRef.current = false;
