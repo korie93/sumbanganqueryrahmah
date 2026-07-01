@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   MAX_COLLECTION_DAILY_YEAR,
   MIN_COLLECTION_DAILY_YEAR,
@@ -303,6 +305,27 @@ test("buildCollectionDailyReceiptKey normalizes primary and specific receipt key
   assert.equal(buildCollectionDailyReceiptKey("record-1"), "record-1:primary");
   assert.equal(buildCollectionDailyReceiptKey("record-1", ""), "record-1:primary");
   assert.equal(buildCollectionDailyReceiptKey("record-1", "receipt-2"), "record-1:receipt-2");
+});
+
+test("collection daily receipt download ignores stale async completions", () => {
+  const source = readFileSync(
+    path.resolve(process.cwd(), "client/src/pages/collection/useCollectionDailyReceiptViewer.ts"),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /controller\.signal\.aborted \|\|\s*!isMountedRef\.current \|\|\s*downloadAbortControllerRef\.current !== controller/s,
+  );
+  assert.match(
+    source,
+    /isAbortError\(error\) \|\|\s*!isMountedRef\.current \|\|\s*downloadAbortControllerRef\.current !== controller/s,
+  );
+  assert.match(
+    source,
+    /const isCurrentDownload = downloadAbortControllerRef\.current === controller;\s*if \(isCurrentDownload\) \{\s*downloadAbortControllerRef\.current = null;\s*\}\s*if \(isMountedRef\.current && isCurrentDownload\) \{\s*setReceiptPreviewDownloading\(false\);/s,
+  );
+  assert.doesNotMatch(source, /if \(isMountedRef\.current\) \{\s*setReceiptPreviewDownloading\(false\);/s);
 });
 
 test("collection daily receipt viewer utils map daily receipts into collection records", () => {

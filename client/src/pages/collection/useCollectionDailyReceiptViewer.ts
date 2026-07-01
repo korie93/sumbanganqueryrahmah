@@ -241,7 +241,11 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
         selectedPreviewReceipt?.id,
         { signal: controller.signal },
       );
-      if (controller.signal.aborted) {
+      if (
+        controller.signal.aborted ||
+        !isMountedRef.current ||
+        downloadAbortControllerRef.current !== controller
+      ) {
         return;
       }
       downloadBlob(
@@ -251,7 +255,11 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
           "receipt",
       );
     } catch (error: unknown) {
-      if (isAbortError(error)) {
+      if (
+        isAbortError(error) ||
+        !isMountedRef.current ||
+        downloadAbortControllerRef.current !== controller
+      ) {
         return;
       }
       toast({
@@ -260,10 +268,11 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
         variant: "destructive",
       });
     } finally {
-      if (downloadAbortControllerRef.current === controller) {
+      const isCurrentDownload = downloadAbortControllerRef.current === controller;
+      if (isCurrentDownload) {
         downloadAbortControllerRef.current = null;
       }
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentDownload) {
         setReceiptPreviewDownloading(false);
       }
     }
