@@ -139,6 +139,7 @@ export function useCollectionReceiptPreview() {
     const loadPreview = async () => {
       setReceiptPreviewLoading(true);
       setReceiptPreviewError("");
+      setReceiptPreviewSource("");
       clearReceiptPreviewObjectUrl();
 
       try {
