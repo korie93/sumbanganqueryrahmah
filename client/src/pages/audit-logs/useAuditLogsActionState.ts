@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cleanupAuditLogs } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
@@ -38,8 +38,17 @@ export function useAuditLogsActionState({
   const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const isMountedRef = useRef(true);
   const exportInFlightRef = useRef(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      exportInFlightRef.current = false;
+    };
+  }, []);
 
   const logsToDeleteCount = useMemo(
     () => getLogsToDeleteCount(stats, cleanupDays),
@@ -60,6 +69,9 @@ export function useAuditLogsActionState({
     setCleanupLoading(true);
     try {
       const response = await cleanupAuditLogs(days);
+      if (!isMountedRef.current) {
+        return;
+      }
       toast({
         title: "Cleanup Complete",
         description: `Deleted ${response.deletedCount} audit log entries older than ${days} days.`,
@@ -69,13 +81,17 @@ export function useAuditLogsActionState({
       onRefresh();
       await onFetchStats();
     } catch (error: unknown) {
-      toast({
-        title: "Cleanup Failed",
-        description: error instanceof Error ? error.message : "Failed to cleanup audit logs.",
-        variant: "destructive",
-      });
+      if (isMountedRef.current) {
+        toast({
+          title: "Cleanup Failed",
+          description: error instanceof Error ? error.message : "Failed to cleanup audit logs.",
+          variant: "destructive",
+        });
+      }
     } finally {
-      setCleanupLoading(false);
+      if (isMountedRef.current) {
+        setCleanupLoading(false);
+      }
     }
   }, [cleanupDays, onFetchStats, onRefresh, onResetPage, toast]);
 
@@ -98,14 +114,18 @@ export function useAuditLogsActionState({
       await exportAuditLogsToPdf(logs);
     } catch (error: unknown) {
       logClientError("Failed to export audit logs PDF:", error);
-      toast({
-        title: "Export Failed",
-        description: error instanceof Error ? error.message : "Failed to export PDF",
-        variant: "destructive",
-      });
+      if (isMountedRef.current) {
+        toast({
+          title: "Export Failed",
+          description: error instanceof Error ? error.message : "Failed to export PDF",
+          variant: "destructive",
+        });
+      }
     } finally {
       exportInFlightRef.current = false;
-      setExportingPdf(false);
+      if (isMountedRef.current) {
+        setExportingPdf(false);
+      }
     }
   }, [exportingPdf, logs, toast]);
 
@@ -119,11 +139,13 @@ export function useAuditLogsActionState({
       exportAuditLogsToCsv(logs);
     } catch (error: unknown) {
       logClientError("Failed to export audit logs CSV:", error);
-      toast({
-        title: "Export Failed",
-        description: error instanceof Error ? error.message : "Failed to export CSV",
-        variant: "destructive",
-      });
+      if (isMountedRef.current) {
+        toast({
+          title: "Export Failed",
+          description: error instanceof Error ? error.message : "Failed to export CSV",
+          variant: "destructive",
+        });
+      }
     }
   }, [logs, toast]);
 
