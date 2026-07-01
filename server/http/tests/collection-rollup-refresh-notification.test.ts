@@ -47,13 +47,13 @@ test("collection rollup notification subscriber removes listeners when startup i
   assert.equal(emitter.listenerCount("end"), 1);
   assert.equal(subscriber.getDiagnostics().pendingListenerCleanups, 1);
 
-  await subscriber.stop();
+  const stopPromise = subscriber.stop();
   connectDeferred.resolve();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(queryStarted, true);
 
   queryDeferred.resolve(null);
-  await startPromise;
+  await Promise.all([startPromise, stopPromise]);
 
   assert.equal(endCalls, 1);
   assert.equal(emitter.listenerCount("notification"), 0);

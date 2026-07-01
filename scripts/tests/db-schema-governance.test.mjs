@@ -85,6 +85,14 @@ test("validateSchemaGovernance rejects weak manifest metadata", () => {
       },
     ],
     [
+      "hybrid_table",
+      {
+        table: "hybrid_table",
+        sourceTypes: ["drizzle-migration"],
+        sourceFiles: ["drizzle/0002_hybrid.sql"],
+      },
+    ],
+    [
       "reviewed_table",
       {
         table: "reviewed_table",
@@ -102,6 +110,12 @@ test("validateSchemaGovernance rejects weak manifest metadata", () => {
         allowedSources: ["runtime-ddl", "drizzle-schema"],
         notes: "",
       },
+      hybrid_table: {
+        authority: "drizzle-schema",
+        mode: "hybrid-managed",
+        allowedSources: ["drizzle-migration"],
+        notes: "Hybrid table has a note but no roadmap for this governance regression.",
+      },
       reviewed_table: {
         authority: "runtime-ddl",
         mode: "drizzle-reviewed",
@@ -117,6 +131,7 @@ test("validateSchemaGovernance rejects weak manifest metadata", () => {
   assert.match(failures, /runtime_table.+specific governance note/i);
   assert.match(failures, /runtime_table.+runtime-managed.+runtime-ddl as authority/i);
   assert.match(failures, /runtime_table.+runtime-managed.+non-runtime sources/i);
+  assert.match(failures, /hybrid_table.+hybrid-managed.+migrationRoadmap/i);
   assert.match(failures, /reviewed_table.+drizzle-reviewed.+drizzle-schema as authority/i);
   assert.match(failures, /reviewed_table.+drizzle-reviewed.+does not allow drizzle-migration/i);
 });
@@ -131,6 +146,14 @@ test("formatSchemaGovernanceReport summarizes successful checks", () => {
         sourceFiles: ["server/intelligence/learning/StabilityDnaEngine.ts"],
       },
     ],
+    [
+      "audit_migration_log",
+      {
+        table: "audit_migration_log",
+        sourceTypes: ["drizzle-migration"],
+        sourceFiles: ["drizzle/0000_audit_migration_log.sql"],
+      },
+    ],
   ]);
 
   const manifest = {
@@ -141,6 +164,13 @@ test("formatSchemaGovernanceReport summarizes successful checks", () => {
         allowedSources: ["runtime-ddl"],
         notes: "Adaptive learning storage remains runtime-managed until it is modeled in shared Drizzle schema.",
       },
+      audit_migration_log: {
+        authority: "drizzle-schema",
+        mode: "hybrid-managed",
+        allowedSources: ["drizzle-migration"],
+        migrationRoadmap: "Move to drizzle-reviewed after a non-destructive Drizzle schema model is approved.",
+        notes: "Forward-only migration audit ledger records reviewed remediation decisions.",
+      },
     },
   };
 
@@ -149,6 +179,8 @@ test("formatSchemaGovernanceReport summarizes successful checks", () => {
 
   assert.equal(validation.failures.length, 0);
   assert.match(report, /runtime-managed: 1/);
+  assert.match(report, /Hybrid-managed migration roadmap:/);
+  assert.match(report, /audit_migration_log: Move to drizzle-reviewed/);
   assert.match(report, /All discovered tables are classified/);
 });
 
