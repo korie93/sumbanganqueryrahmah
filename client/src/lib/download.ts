@@ -46,14 +46,36 @@ export function downloadBlob(blob: Blob, filename: string) {
   link.download = sanitizeDownloadFilename(filename);
   link.style.display = "none";
 
-  document.body?.appendChild(link);
-  link.click();
-  link.remove();
+  let clickError: unknown;
+  try {
+    document.body?.appendChild(link);
+    link.click();
+  } catch (error) {
+    clickError = error;
+  }
+
+  try {
+    link.remove();
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+
+  if (clickError) {
+    URL.revokeObjectURL(objectUrl);
+    throw clickError;
+  }
 
   activeObjectUrls.set(objectUrl, OBJECT_URL_PENDING_REVOKE_TIMEOUT_ID);
-  const timeoutId = window.setTimeout(() => {
+  let timeoutId: number;
+  try {
+    timeoutId = window.setTimeout(() => {
+      revokeTrackedObjectUrl(objectUrl);
+    }, OBJECT_URL_REVOKE_DELAY_MS);
+  } catch (error) {
     revokeTrackedObjectUrl(objectUrl);
-  }, OBJECT_URL_REVOKE_DELAY_MS);
+    throw error;
+  }
   if (activeObjectUrls.has(objectUrl)) {
     activeObjectUrls.set(objectUrl, timeoutId);
   }

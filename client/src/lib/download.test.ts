@@ -18,6 +18,11 @@ function withDownloadDom(
     timeoutCallbacks: Map<number, TimerHandler>;
     timeoutDelays: number[];
   }) => void,
+  options: {
+    clickThrows?: boolean;
+    removeThrows?: boolean;
+    setTimeoutThrows?: boolean;
+  } = {},
 ) {
   const globalObject = globalThis as typeof globalThis & {
     document?: Document;
@@ -47,10 +52,17 @@ function withDownloadDom(
   const anchor = {
     download: "",
     href: "",
-    remove: () => undefined,
+    remove: () => {
+      if (options.removeThrows) {
+        throw new Error("synthetic remove failure");
+      }
+    },
     style: { display: "" },
     click: () => {
       clicked.value = true;
+      if (options.clickThrows) {
+        throw new Error("synthetic click failure");
+      }
     },
   } as HTMLAnchorElement;
 
@@ -71,6 +83,9 @@ function withDownloadDom(
       timeoutCallbacks.delete(timerId);
     }) as typeof window.clearTimeout,
     setTimeout: ((handler: TimerHandler, delay?: number) => {
+      if (options.setTimeoutThrows) {
+        throw new Error("synthetic timer failure");
+      }
       const timeoutId = nextTimeoutId;
       nextTimeoutId += 1;
       timeoutCallbacks.set(timeoutId, handler);
@@ -137,6 +152,48 @@ test("downloadBlob scheduled cleanup revokes an object URL once", () => {
     assert.deepEqual(state.revokedUrls, ["blob:test-0-4"]);
     assert.equal(getActiveDownloadObjectUrlCount(), 0);
   });
+});
+
+test("downloadBlob revokes object URL immediately when the download click fails", () => {
+  withDownloadDom((state) => {
+    assert.throws(
+      () => downloadBlob(new Blob(["click"]), "safe.csv"),
+      /synthetic click failure/,
+    );
+
+    assert.equal(state.clicked.value, true);
+    assert.deepEqual(state.revokedUrls, ["blob:test-0-5"]);
+    assert.equal(getActiveDownloadObjectUrlCount(), 0);
+    assert.equal(state.timeoutCallbacks.size, 0);
+  }, { clickThrows: true });
+});
+
+test("downloadBlob revokes object URL immediately when link removal fails", () => {
+  withDownloadDom((state) => {
+    assert.throws(
+      () => downloadBlob(new Blob(["remove"]), "safe.csv"),
+      /synthetic remove failure/,
+    );
+
+    assert.equal(state.clicked.value, true);
+    assert.deepEqual(state.revokedUrls, ["blob:test-0-6"]);
+    assert.equal(getActiveDownloadObjectUrlCount(), 0);
+    assert.equal(state.timeoutCallbacks.size, 0);
+  }, { removeThrows: true });
+});
+
+test("downloadBlob revokes object URL immediately when cleanup scheduling fails", () => {
+  withDownloadDom((state) => {
+    assert.throws(
+      () => downloadBlob(new Blob(["timer"]), "safe.csv"),
+      /synthetic timer failure/,
+    );
+
+    assert.equal(state.clicked.value, true);
+    assert.deepEqual(state.revokedUrls, ["blob:test-0-5"]);
+    assert.equal(getActiveDownloadObjectUrlCount(), 0);
+    assert.equal(state.timeoutCallbacks.size, 0);
+  }, { setTimeoutThrows: true });
 });
 
 test("revokeAllObjectUrls clears all pending download URLs", () => {
