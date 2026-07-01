@@ -34,6 +34,11 @@ test("test:security script keeps import upload safety controls in the security g
   assert.match(securityScript, /cleanup-orphaned-uploads\.test\.ts/);
 });
 
+test("test:security script keeps JSON parsing safety contracts in the security gate", () => {
+  assert.match(securityScript, /client-json-parsing-contract\.test\.mjs/);
+  assert.match(securityScript, /server-json-parsing-contract\.test\.mjs/);
+});
+
 test("test:security script does not depend on production secrets or production database access", () => {
   assert.doesNotMatch(securityScript, /DATABASE_URL=/);
   assert.doesNotMatch(securityScript, /PG_PASSWORD=/);
