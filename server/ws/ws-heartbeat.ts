@@ -1,6 +1,9 @@
 import { WebSocket } from "ws";
 import { logger } from "../lib/logger";
-import type { RuntimeWsCleanupClient } from "./ws-lifecycle";
+import {
+  sanitizeRuntimeWebSocketError,
+  type RuntimeWsCleanupClient,
+} from "./ws-lifecycle";
 
 export const DEFAULT_RUNTIME_WS_HEARTBEAT_INTERVAL_MS = 30_000;
 
@@ -36,6 +39,7 @@ export function startRuntimeWsHeartbeat({
     let mismatchedEntries = 0;
     let desyncedEntries = 0;
     let heartbeatTimeouts = 0;
+    let failedPings = 0;
 
     for (const [activityId, ws] of Array.from(connectedClients.entries())) {
       const currentEntry = socketEntriesByActivity.get(activityId);
@@ -98,14 +102,29 @@ export function startRuntimeWsHeartbeat({
       }
 
       currentEntry.alive = false;
-      ws.ping();
+      try {
+        ws.ping();
+      } catch (error) {
+        failedPings += 1;
+        cleanupClient(activityId, {
+          expectedWs: ws,
+          closeWith: "terminate",
+          clearSession: true,
+          reason: "heartbeat-ping-failed",
+        });
+        logger.warn("WebSocket heartbeat ping failed; client removed", {
+          activityId,
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
     }
 
     const staleTotal = staleClientMapEntries
       + closedTrackedSockets
       + mismatchedEntries
       + desyncedEntries
-      + heartbeatTimeouts;
+      + heartbeatTimeouts
+      + failedPings;
     if (staleTotal > 0) {
       logger.warn("WebSocket heartbeat stale sweep removed clients", {
         staleTotal,
@@ -114,6 +133,7 @@ export function startRuntimeWsHeartbeat({
         mismatchedEntries,
         desyncedEntries,
         heartbeatTimeouts,
+        failedPings,
       });
     }
   }, heartbeatIntervalMs);

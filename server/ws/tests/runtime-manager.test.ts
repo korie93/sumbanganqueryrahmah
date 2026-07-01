@@ -2369,3 +2369,85 @@ test("runtime manager heartbeat terminates stale sockets and clears tracked stat
     wss.emit("close");
   }
 });
+
+test("runtime manager heartbeat removes sockets when ping fails", async (t) => {
+  const heartbeat = interceptHeartbeatRegistration();
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-heartbeat-ping-failed";
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  let clearSessionCalls = 0;
+
+  socket.ping = () => {
+    socket.pingCalls += 1;
+    throw Object.assign(new Error("raw socket payload must not leak"), {
+      code: "EPIPE",
+    });
+  };
+  t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    heartbeat.getHeartbeatCallback()();
+    await flushAsyncWork();
+
+    assert.equal(socket.pingCalls, 1);
+    assert.equal(socket.terminateCalls, 1);
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+    assert.equal(socket.listenerCount("pong"), 0);
+    assert.deepEqual(manager.getLifecycleSnapshot(), {
+      cleanupCallbacks: 0,
+      connectedClients: 0,
+      socketEntriesByActivity: 0,
+      socketEntriesByInstance: 0,
+      trackedSockets: 0,
+    });
+
+    const pingWarning = warnings.find(
+      (warning) => warning.message === "WebSocket heartbeat ping failed; client removed",
+    );
+    assert.deepEqual(pingWarning?.payload, {
+      activityId,
+      error: {
+        code: "EPIPE",
+        name: "Error",
+      },
+    });
+    assert.doesNotMatch(JSON.stringify(warnings), /raw socket payload/);
+    assert.deepEqual(
+      warnings.find((warning) => warning.message === "WebSocket heartbeat stale sweep removed clients")?.payload,
+      {
+        closedTrackedSockets: 0,
+        desyncedEntries: 0,
+        failedPings: 1,
+        heartbeatTimeouts: 0,
+        mismatchedEntries: 0,
+        staleClientMapEntries: 0,
+        staleTotal: 1,
+      },
+    );
+  } finally {
+    heartbeat.restore();
+    wss.emit("close");
+  }
+});
