@@ -127,6 +127,12 @@ export function useSingleImportState({
     setBackgroundJob(nextJob);
   }, []);
 
+  const isActiveSingleSaveController = useCallback((controller: AbortController) => (
+    isMountedRef.current
+    && !controller.signal.aborted
+    && singleSaveAbortControllerRef.current === controller
+  ), []);
+
   const resetSingleImport = useCallback(() => {
     singleParseRequestIdRef.current += 1;
     singleSaveAbortControllerRef.current?.abort();
@@ -306,6 +312,10 @@ export function useSingleImportState({
           signal: controller.signal,
         });
 
+        if (!isActiveSingleSaveController(controller)) {
+          return;
+        }
+
         if ("job" in result) {
           persistActiveImportJobId(result.job.id);
           const terminalJob = await waitForImportJobCompletion(
@@ -336,6 +346,9 @@ export function useSingleImportState({
           parsedData,
           { columnMapping, signal: controller.signal },
         );
+        if (!isActiveSingleSaveController(controller)) {
+          return;
+        }
         if ("job" in result) {
           throw new Error("Unexpected background response for an in-browser import.");
         }
@@ -365,6 +378,7 @@ export function useSingleImportState({
     file,
     finishSuccessfulImport,
     importName,
+    isActiveSingleSaveController,
     loading,
     parsedData,
     previewDeferred,
@@ -402,6 +416,9 @@ export function useSingleImportState({
 
     try {
       const resumedJob = await resumeImportJob(backgroundJob.id, { signal: controller.signal });
+      if (!isActiveSingleSaveController(controller)) {
+        return;
+      }
       persistActiveImportJobId(resumedJob.id);
       const terminalJob = await waitForImportJobCompletion(
         resumedJob,
@@ -438,7 +455,13 @@ export function useSingleImportState({
         }
       }
     }
-  }, [backgroundJob, finishSuccessfulImport, loading, setTrackedBackgroundJob]);
+  }, [
+    backgroundJob,
+    finishSuccessfulImport,
+    isActiveSingleSaveController,
+    loading,
+    setTrackedBackgroundJob,
+  ]);
 
   const resetSingleForInactiveTab = useCallback(() => {
     if (backgroundJob) {
@@ -471,6 +494,9 @@ export function useSingleImportState({
     void (async () => {
       try {
         const initialJob = await getImportJob(jobId, { signal: controller.signal });
+        if (!isActiveSingleSaveController(controller)) {
+          return;
+        }
         const terminalJob = await waitForImportJobCompletion(
           initialJob,
           controller.signal,
@@ -517,7 +543,7 @@ export function useSingleImportState({
         singleSaveInFlightRef.current = false;
       }
     };
-  }, [finishSuccessfulImport, setTrackedBackgroundJob]);
+  }, [finishSuccessfulImport, isActiveSingleSaveController, setTrackedBackgroundJob]);
 
   return {
     file,

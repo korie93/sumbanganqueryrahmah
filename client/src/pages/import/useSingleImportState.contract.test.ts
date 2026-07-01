@@ -36,3 +36,24 @@ test("useSingleImportState ignores stale background cancel responses after the a
     /catch \(cancelError\) \{\s*if \(isMountedRef\.current && backgroundJobIdRef\.current === jobId\) \{/s,
   );
 });
+
+test("useSingleImportState guards job persistence behind the active save controller", () => {
+  const source = readFileSync(new URL("./useSingleImportState.ts", import.meta.url), "utf8");
+
+  assert.match(
+    source,
+    /const isActiveSingleSaveController = useCallback\(\(controller: AbortController\) => \(\s*isMountedRef\.current\s*&& !controller\.signal\.aborted\s*&& singleSaveAbortControllerRef\.current === controller\s*\), \[\]\);/s,
+  );
+  assert.match(
+    source,
+    /const result = await createImportFromFile\([\s\S]*?if \(!isActiveSingleSaveController\(controller\)\) \{\s*return;\s*\}\s*if \("job" in result\) \{\s*persistActiveImportJobId\(result\.job\.id\);/s,
+  );
+  assert.match(
+    source,
+    /const resumedJob = await resumeImportJob\(backgroundJob\.id, \{ signal: controller\.signal \}\);\s*if \(!isActiveSingleSaveController\(controller\)\) \{\s*return;\s*\}\s*persistActiveImportJobId\(resumedJob\.id\);/s,
+  );
+  assert.match(
+    source,
+    /const initialJob = await getImportJob\(jobId, \{ signal: controller\.signal \}\);\s*if \(!isActiveSingleSaveController\(controller\)\) \{\s*return;\s*\}/s,
+  );
+});
