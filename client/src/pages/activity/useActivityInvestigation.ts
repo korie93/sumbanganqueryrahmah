@@ -27,6 +27,10 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
     ? relatedPagination.pageSize
     : 5;
 
+  const isActiveInvestigationRequest = useCallback((controller: AbortController) => (
+    controllerRef.current === controller && !controller.signal.aborted
+  ), []);
+
   const retry = useCallback(() => {
     setRequestVersion((version) => version + 1);
   }, []);
@@ -72,7 +76,7 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
       signal: controller.signal,
     })
       .then((investigation) => {
-        if (!controller.signal.aborted) {
+        if (isActiveInvestigationRequest(controller)) {
           setData(investigation);
           if (investigation.relatedSessionsPagination.page !== relatedPage) {
             setRelatedPagination({
@@ -84,7 +88,7 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
         }
       })
       .catch((loadError: unknown) => {
-        if (!controller.signal.aborted && !isAbortError(loadError)) {
+        if (isActiveInvestigationRequest(controller) && !isAbortError(loadError)) {
           setError(getApiErrorMessage(
             loadError,
             "Session investigation could not be loaded.",
@@ -92,7 +96,7 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) {
+        if (isActiveInvestigationRequest(controller)) {
           setLoading(false);
         }
       });
@@ -103,7 +107,14 @@ export function useActivityInvestigation(activityId: string | null, open: boolea
         controllerRef.current = null;
       }
     };
-  }, [activityId, open, relatedPage, relatedPageSize, requestVersion]);
+  }, [
+    activityId,
+    isActiveInvestigationRequest,
+    open,
+    relatedPage,
+    relatedPageSize,
+    requestVersion,
+  ]);
 
   return {
     data,

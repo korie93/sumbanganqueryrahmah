@@ -11,7 +11,13 @@ test("session investigation drawer cancels requests and renders safe correlation
 
   assert.match(hookSource, /controllerRef\.current\?\.abort\(\)/);
   assert.match(hookSource, /return \(\) => \{\s*controller\.abort\(\)/);
-  assert.match(hookSource, /controller\.signal\.aborted/);
+  assert.match(
+    hookSource,
+    /const isActiveInvestigationRequest = useCallback\(\(controller: AbortController\) => \(\s*controllerRef\.current === controller && !controller\.signal\.aborted\s*\), \[\]\);/s,
+  );
+  assert.match(hookSource, /if \(isActiveInvestigationRequest\(controller\)\) \{\s*setData\(investigation\);/s);
+  assert.match(hookSource, /if \(isActiveInvestigationRequest\(controller\) && !isAbortError\(loadError\)\) \{/);
+  assert.match(hookSource, /if \(isActiveInvestigationRequest\(controller\)\) \{\s*setLoading\(false\);/s);
   assert.match(drawerSource, /fingerprintHint/);
   assert.match(drawerSource, /Device class/);
   assert.match(drawerSource, /data\.session\.device\.platform/);
