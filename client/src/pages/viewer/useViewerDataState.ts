@@ -93,6 +93,16 @@ export function useViewerDataState({
     fetchAbortControllerRef.current = null;
   }, []);
 
+  const isActiveViewerFetchRequest = useCallback((
+    controller: AbortController,
+    requestId: number,
+  ) => (
+    mountedRef.current
+    && !controller.signal.aborted
+    && fetchAbortControllerRef.current === controller
+    && requestId === activeRequestIdRef.current
+  ), []);
+
   const applyViewerStatePatch = useCallback((patch: ViewerStatePatch) => {
     if (patch.rows !== undefined) setRows(patch.rows);
     if (patch.headers !== undefined) setHeaders(patch.headers);
@@ -144,11 +154,7 @@ export function useViewerDataState({
         cursor: requestCursor || undefined,
         columnFilters: debouncedColumnFilters,
       });
-      if (
-        controller.signal.aborted ||
-        !mountedRef.current ||
-        requestId !== activeRequestIdRef.current
-      ) {
+      if (!isActiveViewerFetchRequest(controller, requestId)) {
         return;
       }
 
@@ -173,25 +179,28 @@ export function useViewerDataState({
       ];
       pageCursorHistoryRef.current[normalizedPage.page - 1] = requestCursor;
     } catch (fetchError) {
-      if (
-        controller.signal.aborted ||
-        !mountedRef.current ||
-        requestId !== activeRequestIdRef.current
-      ) {
+      if (!isActiveViewerFetchRequest(controller, requestId)) {
         return;
       }
 
       setError(fetchError instanceof Error ? fetchError.message : "Failed to fetch data");
     } finally {
+      const shouldFinalizeRequest = isActiveViewerFetchRequest(controller, requestId);
       if (fetchAbortControllerRef.current === controller) {
         fetchAbortControllerRef.current = null;
       }
-      if (mountedRef.current && requestId === activeRequestIdRef.current) {
+      if (shouldFinalizeRequest) {
         setLoading(false);
         setLoadingMore(false);
       }
     }
-  }, [cancelActiveFetch, debouncedColumnFilters, debouncedSearch, rowsPerPage]);
+  }, [
+    cancelActiveFetch,
+    debouncedColumnFilters,
+    debouncedSearch,
+    isActiveViewerFetchRequest,
+    rowsPerPage,
+  ]);
 
   useEffect(() => {
     if (importId) {
