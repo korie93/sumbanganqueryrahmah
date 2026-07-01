@@ -24,6 +24,16 @@ test("test:security script keeps explicit coverage for core security controls", 
   assert.match(securityScript, /session-jwt\.test\.ts/);
 });
 
+test("test:security script keeps import upload safety controls in the security gate", () => {
+  assert.match(securityScript, /import-upload-parser\.test\.ts/);
+  assert.match(securityScript, /import-column-mapping\.test\.ts/);
+  assert.match(securityScript, /import-background-job\.service\.test\.ts/);
+  assert.match(securityScript, /imports-service-mutation-operations\.test\.ts/);
+  assert.match(securityScript, /imports-upload-quota\.test\.ts/);
+  assert.match(securityScript, /imports-multipart-route\.test\.ts/);
+  assert.match(securityScript, /cleanup-orphaned-uploads\.test\.ts/);
+});
+
 test("test:security script does not depend on production secrets or production database access", () => {
   assert.doesNotMatch(securityScript, /DATABASE_URL=/);
   assert.doesNotMatch(securityScript, /PG_PASSWORD=/);
