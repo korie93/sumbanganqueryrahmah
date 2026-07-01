@@ -73,6 +73,16 @@ function revokeCollectionReceiptDraftPreview(preview: CollectionReceiptDraftPrev
   URL.revokeObjectURL(preview.url);
 }
 
+function clearCollectionReceiptDraftImage(image: HTMLImageElement | null): void {
+  if (!image) {
+    return;
+  }
+
+  image.onload = null;
+  image.onerror = null;
+  image.src = "";
+}
+
 function buildCollectionReceiptDraftPreviewKey(fileId: string): string {
   return fileId;
 }
@@ -102,6 +112,7 @@ async function createImageElementThumbnail(file: File): Promise<CollectionReceip
   try {
     image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const nextImage = new Image();
+      image = nextImage;
       nextImage.onload = () => resolve(nextImage);
       nextImage.onerror = () => reject(new Error("Failed to decode receipt image."));
       nextImage.src = sourceUrl;
@@ -131,9 +142,7 @@ async function createImageElementThumbnail(file: File): Promise<CollectionReceip
       ? { url: URL.createObjectURL(thumbnailBlob), ...dimensions }
       : createEmptyCollectionReceiptDraftThumbnail();
   } finally {
-    if (image) {
-      image.src = "";
-    }
+    clearCollectionReceiptDraftImage(image);
     canvas.width = 0;
     canvas.height = 0;
     URL.revokeObjectURL(sourceUrl);
@@ -258,6 +267,10 @@ export function useCollectionReceiptDraftPreviews(
 
     void (async () => {
       for (const file of missingFiles) {
+        if (disposed) {
+          break;
+        }
+
         const fileId = resolveFileId(file);
         if (previewCache.has(fileId)) {
           continue;

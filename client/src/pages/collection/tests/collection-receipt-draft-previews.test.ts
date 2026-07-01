@@ -57,3 +57,16 @@ test("collection receipt draft preview creation falls back when thumbnail decodi
   assert.match(previewSource, /try\s*\{\s*thumbnail = await createBitmapThumbnail\(file\);/s);
   assert.match(previewSource, /catch\s*\{\s*thumbnail = createEmptyCollectionReceiptDraftThumbnail\(\);/s);
 });
+
+test("collection receipt draft preview lifecycle stops stale async work and cleans image handlers", () => {
+  const previewSource = readFileSync(
+    path.join(collectionSourceDir, "useCollectionReceiptDraftPreviews.ts"),
+    "utf8",
+  );
+
+  assert.match(previewSource, /for \(const file of missingFiles\) \{\s*if \(disposed\) \{\s*break;\s*\}/s);
+  assert.match(previewSource, /function clearCollectionReceiptDraftImage\(image: HTMLImageElement \| null\): void/);
+  assert.match(previewSource, /image\.onload = null;/);
+  assert.match(previewSource, /image\.onerror = null;/);
+  assert.match(previewSource, /image\.src = "";/);
+});
