@@ -65,6 +65,16 @@ export function useActivityFeedState({
     };
   }, []);
 
+  const isActiveActivityFeedRequest = useCallback((
+    controller: AbortController,
+    requestId: number,
+  ) => (
+    mountedRef.current
+    && !controller.signal.aborted
+    && fetchControllerRef.current === controller
+    && requestId === activeRequestIdRef.current
+  ), []);
+
   const recordActivityFeedFailure = useCallback((error: unknown) => {
     const nextErrorMessage = readActivityFeedErrorMessage(error);
     if (!nextErrorMessage) {
@@ -108,7 +118,7 @@ export function useActivityFeedState({
         { signal: controller.signal },
       );
 
-      if (controller.signal.aborted || !mountedRef.current || requestId !== activeRequestIdRef.current) {
+      if (!isActiveActivityFeedRequest(controller, requestId)) {
         return;
       }
 
@@ -127,7 +137,7 @@ export function useActivityFeedState({
 
       if (canModerateActivity) {
         const bannedResponse = await getBannedUsers({ signal: controller.signal });
-        if (controller.signal.aborted || !mountedRef.current || requestId !== activeRequestIdRef.current) {
+        if (!isActiveActivityFeedRequest(controller, requestId)) {
           return;
         }
         setBannedUsers(bannedResponse.users || []);
@@ -135,19 +145,20 @@ export function useActivityFeedState({
         setBannedUsers([]);
       }
     } catch (error) {
-      if (!mountedRef.current || requestId !== activeRequestIdRef.current) {
+      if (!isActiveActivityFeedRequest(controller, requestId)) {
         return;
       }
       recordActivityFeedFailure(error);
     } finally {
+      const shouldFinalizeRequest = isActiveActivityFeedRequest(controller, requestId);
       if (fetchControllerRef.current === controller) {
         fetchControllerRef.current = null;
       }
-      if (mountedRef.current && requestId === activeRequestIdRef.current) {
+      if (shouldFinalizeRequest) {
         setLoading(false);
       }
     }
-  }, [canModerateActivity, filtersRef, recordActivityFeedFailure]);
+  }, [canModerateActivity, filtersRef, isActiveActivityFeedRequest, recordActivityFeedFailure]);
 
   const handleUnexpectedActivityFeedFailure = useCallback((error: unknown) => {
     recordActivityFeedFailure(error);

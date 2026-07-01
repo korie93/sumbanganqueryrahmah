@@ -26,6 +26,15 @@ test("useActivityFeedState attaches catch handlers to background refresh promise
 
 test("useActivityFeedState aborts stale page requests and cleans up lifecycle resources", () => {
   assert.match(source, /fetchControllerRef\.current\?\.abort\(\);/);
+  assert.match(
+    source,
+    /const isActiveActivityFeedRequest = useCallback\(\(\s*controller: AbortController,\s*requestId: number,\s*\) => \(\s*mountedRef\.current\s*&& !controller\.signal\.aborted\s*&& fetchControllerRef\.current === controller\s*&& requestId === activeRequestIdRef\.current\s*\), \[\]\);/s,
+  );
+  assert.match(source, /if \(!isActiveActivityFeedRequest\(controller, requestId\)\) \{\s*return;\s*\}/s);
+  assert.match(
+    source,
+    /const shouldFinalizeRequest = isActiveActivityFeedRequest\(controller, requestId\);\s*if \(fetchControllerRef\.current === controller\) \{\s*fetchControllerRef\.current = null;\s*\}\s*if \(shouldFinalizeRequest\) \{\s*setLoading\(false\);/s,
+  );
   assert.match(source, /window\.clearInterval\(interval\);/);
   assert.match(source, /document\.removeEventListener\("visibilitychange", handleVisibilityChange\);/);
   assert.match(source, /window\.removeEventListener\("activity-heartbeat-synced", handleHeartbeatSynced\);/);
