@@ -107,6 +107,7 @@ export function useSingleImportState({
   const [headers, setHeaders] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<ImportColumnMappingEntry[]>([]);
   const [backgroundJob, setBackgroundJob] = useState<ImportBackgroundJobContract | null>(null);
+  const backgroundJobIdRef = useRef<string | null>(null);
   const [previewDeferred, setPreviewDeferred] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -121,6 +122,11 @@ export function useSingleImportState({
   const isMountedRef = useRef(true);
   const { toast } = useToast();
 
+  const setTrackedBackgroundJob = useCallback((nextJob: ImportBackgroundJobContract | null) => {
+    backgroundJobIdRef.current = nextJob?.id ?? null;
+    setBackgroundJob(nextJob);
+  }, []);
+
   const resetSingleImport = useCallback(() => {
     singleParseRequestIdRef.current += 1;
     singleSaveAbortControllerRef.current?.abort();
@@ -131,7 +137,7 @@ export function useSingleImportState({
     setParsedData([]);
     setHeaders([]);
     setColumnMapping([]);
-    setBackgroundJob(null);
+    setTrackedBackgroundJob(null);
     setPreviewDeferred(false);
     setImportName("");
     setError("");
@@ -140,7 +146,7 @@ export function useSingleImportState({
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, []);
+  }, [setTrackedBackgroundJob]);
 
   const invalidateSinglePreview = useCallback(() => {
     singleParseRequestIdRef.current += 1;
@@ -159,7 +165,7 @@ export function useSingleImportState({
     setParsedData([]);
     setHeaders([]);
     setColumnMapping([]);
-    setBackgroundJob(null);
+    setTrackedBackgroundJob(null);
     persistActiveImportJobId(null);
     setPreviewDeferred(false);
 
@@ -208,7 +214,7 @@ export function useSingleImportState({
       setError("Failed to read file. Please ensure the file format is correct.");
       logClientError("Failed to parse single import preview:", parseError);
     }
-  }, [importUploadLimitBytes]);
+  }, [importUploadLimitBytes, setTrackedBackgroundJob]);
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -270,7 +276,7 @@ export function useSingleImportState({
 
     setLoading(true);
     setError("");
-    setBackgroundJob(null);
+    setTrackedBackgroundJob(null);
     singleSaveInFlightRef.current = true;
     singleSaveAbortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -307,7 +313,7 @@ export function useSingleImportState({
             controller.signal,
             (job) => {
               if (isMountedRef.current) {
-                setBackgroundJob(job);
+                setTrackedBackgroundJob(job);
               }
             },
           );
@@ -362,23 +368,25 @@ export function useSingleImportState({
     loading,
     parsedData,
     previewDeferred,
+    setTrackedBackgroundJob,
   ]);
 
   const handleCancelBackgroundJob = useCallback(async () => {
     if (!backgroundJob?.canCancel) {
       return;
     }
+    const jobId = backgroundJob.id;
     try {
-      const nextJob = await cancelImportJob(backgroundJob.id);
-      if (isMountedRef.current) {
-        setBackgroundJob(nextJob);
+      const nextJob = await cancelImportJob(jobId);
+      if (isMountedRef.current && backgroundJobIdRef.current === jobId) {
+        setTrackedBackgroundJob(nextJob);
       }
     } catch (cancelError) {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && backgroundJobIdRef.current === jobId) {
         setError(cancelError instanceof Error ? cancelError.message : "Failed to cancel import.");
       }
     }
-  }, [backgroundJob]);
+  }, [backgroundJob, setTrackedBackgroundJob]);
 
   const handleResumeBackgroundJob = useCallback(async () => {
     if (!backgroundJob?.canResume || loading || singleSaveInFlightRef.current) {
@@ -400,7 +408,7 @@ export function useSingleImportState({
         controller.signal,
         (job) => {
           if (isMountedRef.current) {
-            setBackgroundJob(job);
+            setTrackedBackgroundJob(job);
           }
         },
       );
@@ -430,7 +438,7 @@ export function useSingleImportState({
         }
       }
     }
-  }, [backgroundJob, finishSuccessfulImport, loading]);
+  }, [backgroundJob, finishSuccessfulImport, loading, setTrackedBackgroundJob]);
 
   const resetSingleForInactiveTab = useCallback(() => {
     if (backgroundJob) {
@@ -468,7 +476,7 @@ export function useSingleImportState({
           controller.signal,
           (job) => {
             if (isMountedRef.current) {
-              setBackgroundJob(job);
+              setTrackedBackgroundJob(job);
             }
           },
         );
@@ -509,7 +517,7 @@ export function useSingleImportState({
         singleSaveInFlightRef.current = false;
       }
     };
-  }, [finishSuccessfulImport]);
+  }, [finishSuccessfulImport, setTrackedBackgroundJob]);
 
   return {
     file,
