@@ -40,18 +40,31 @@ export function useViewerExportState({
   const [exportingPdf, setExportingPdf] = useState(false);
   const exportInFlightRef = useRef<"excel" | "pdf" | null>(null);
   const exportAbortControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       exportAbortControllerRef.current?.abort();
       exportAbortControllerRef.current = null;
+      exportInFlightRef.current = null;
     };
+  }, []);
+
+  const resetExportState = useCallback(() => {
+    exportInFlightRef.current = null;
+    if (mountedRef.current) {
+      setExportingExcel(false);
+      setExportingPdf(false);
+    }
   }, []);
 
   const cancelActiveExport = useCallback(() => {
     exportAbortControllerRef.current?.abort();
     exportAbortControllerRef.current = null;
-  }, []);
+    resetExportState();
+  }, [resetExportState]);
 
   const loadRowsForExport = useCallback(async (exportFiltered = false, exportSelected = false) => {
     const immediateRows = resolveViewerImmediateExportRows({
@@ -105,22 +118,34 @@ export function useViewerExportState({
 
   const startPdfExport = useCallback(() => {
     exportInFlightRef.current = "pdf";
-    setExportingPdf(true);
+    if (mountedRef.current) {
+      setExportingPdf(true);
+    }
   }, []);
 
   const finishPdfExport = useCallback(() => {
-    exportInFlightRef.current = null;
-    setExportingPdf(false);
+    if (exportInFlightRef.current === "pdf") {
+      exportInFlightRef.current = null;
+      if (mountedRef.current) {
+        setExportingPdf(false);
+      }
+    }
   }, []);
 
   const startExcelExport = useCallback(() => {
     exportInFlightRef.current = "excel";
-    setExportingExcel(true);
+    if (mountedRef.current) {
+      setExportingExcel(true);
+    }
   }, []);
 
   const finishExcelExport = useCallback(() => {
-    exportInFlightRef.current = null;
-    setExportingExcel(false);
+    if (exportInFlightRef.current === "excel") {
+      exportInFlightRef.current = null;
+      if (mountedRef.current) {
+        setExportingExcel(false);
+      }
+    }
   }, []);
 
   const exportToCSV = useCallback(async (exportFiltered = false, exportSelected = false) => {
