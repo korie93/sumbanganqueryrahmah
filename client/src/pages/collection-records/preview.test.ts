@@ -227,6 +227,58 @@ test("optimizeImageBlobForPreview falls back to an HTML image decode path when c
   assert.equal(revokedUrlCount, 1);
 });
 
+test("optimizeImageBlobForPreview cleans HTML image setup when src assignment fails", async () => {
+  const originalBlob = new Blob(["image"], { type: "image/png" });
+  let addAbortListenerCalls = 0;
+  let removeAbortListenerCalls = 0;
+  let revokedUrlCount = 0;
+  let clearedImageSrcCount = 0;
+  const signal = {
+    aborted: false,
+    addEventListener(type: string) {
+      assert.equal(type, "abort");
+      addAbortListenerCalls += 1;
+    },
+    removeEventListener(type: string) {
+      assert.equal(type, "abort");
+      removeAbortListenerCalls += 1;
+    },
+  } as unknown as AbortSignal;
+
+  class ThrowingImage {
+    onerror: (() => void) | null = null;
+    onload: (() => void) | null = null;
+
+    set src(value: string) {
+      if (!value) {
+        clearedImageSrcCount += 1;
+        return;
+      }
+
+      throw new Error("synthetic image src failure");
+    }
+  }
+
+  const result = await withPatchedPreviewGlobals(
+    {
+      createImageBitmap: undefined,
+      document: {} as unknown as Document,
+      Image: ThrowingImage as unknown as typeof Image,
+      urlCreateObjectUrl: () => "blob:http://127.0.0.1:5000/failing-preview",
+      urlRevokeObjectUrl: () => {
+        revokedUrlCount += 1;
+      },
+    },
+    () => optimizeImageBlobForPreview(originalBlob, { signal }),
+  );
+
+  assert.equal(result, originalBlob);
+  assert.equal(addAbortListenerCalls, 1);
+  assert.equal(removeAbortListenerCalls, 1);
+  assert.equal(clearedImageSrcCount, 1);
+  assert.equal(revokedUrlCount, 1);
+});
+
 test("optimizeImageBlobForPreview respects abort signals before preview work starts", async () => {
   const controller = new AbortController();
   controller.abort();

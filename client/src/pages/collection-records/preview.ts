@@ -40,6 +40,12 @@ function isAbortError(error: unknown): boolean {
     : error instanceof Error && error.name === "AbortError";
 }
 
+function clearPreviewImageSource(image: HTMLImageElement | null): void {
+  if (image) {
+    image.src = "";
+  }
+}
+
 export function fitImagePreviewDimensions(
   width: number,
   height: number,
@@ -110,37 +116,53 @@ async function loadImageElementForPreview(
   assertPreviewSignalOpen(signal);
 
   const objectUrl = URL.createObjectURL(blob);
+  let image: HTMLImageElement | null = null;
+  let resolvedImage: HTMLImageElement | null = null;
+  let rejectPreview: ((reason?: unknown) => void) | null = null;
+  let abortListenerAttached = false;
+  let cleanupAbortListener = () => undefined;
+
+  const handleAbort = () => {
+    clearPreviewImageSource(image);
+    cleanupAbortListener();
+    rejectPreview?.(createAbortError());
+  };
 
   try {
     return await new Promise<HTMLImageElement>((resolve, reject) => {
-      const image = new Image();
-
-      const cleanupAbortListener = () => {
+      const nextImage = new Image();
+      image = nextImage;
+      rejectPreview = reject;
+      cleanupAbortListener = () => {
+        if (!abortListenerAttached) {
+          return;
+        }
         signal?.removeEventListener("abort", handleAbort);
+        abortListenerAttached = false;
       };
 
-      const handleAbort = () => {
-        image.src = "";
+      nextImage.onload = () => {
         cleanupAbortListener();
-        reject(createAbortError());
+        resolvedImage = nextImage;
+        resolve(nextImage);
       };
-
-      image.onload = () => {
-        cleanupAbortListener();
-        resolve(image);
-      };
-      image.onerror = () => {
+      nextImage.onerror = () => {
         cleanupAbortListener();
         reject(new Error("Failed to decode receipt image."));
       };
 
       if (signal) {
         signal.addEventListener("abort", handleAbort, { once: true });
+        abortListenerAttached = true;
       }
 
-      image.src = objectUrl;
+      nextImage.src = objectUrl;
     });
   } finally {
+    cleanupAbortListener();
+    if (image && image !== resolvedImage) {
+      clearPreviewImageSource(image);
+    }
     URL.revokeObjectURL(objectUrl);
   }
 }
