@@ -110,6 +110,37 @@ test("CollectionNicknameSummaryChartContent exports the active chart metric", ()
   assert.match(chartContentSource, /fromDate,[\s\S]*?metric,[\s\S]*?targetBenchmarks\.benchmarks/);
 });
 
+test("CollectionNicknameSummaryChartContent guards async export lifecycle", () => {
+  assert.match(chartContentSource, /import \{ useCallback, useEffect, useMemo, useRef, useState \} from "react";/);
+  assert.match(chartContentSource, /const mountedRef = useRef\(true\);/);
+  assert.match(chartContentSource, /const exportInFlightRef = useRef\(false\);/);
+  assert.match(
+    chartContentSource,
+    /useEffect\(\(\) => \{\s*mountedRef\.current = true;\s*return \(\) => \{\s*mountedRef\.current = false;\s*exportInFlightRef\.current = false;\s*\};\s*\}, \[\]\);/s,
+  );
+  assert.match(
+    chartContentSource,
+    /if \(busyExportKind \|\| exportInFlightRef\.current \|\| displayedRankedData\.length === 0\) \{/,
+  );
+  assert.match(
+    chartContentSource,
+    /exportInFlightRef\.current = true;\s*if \(mountedRef\.current\) \{\s*setBusyExportKind\(kind\);/s,
+  );
+  assert.match(
+    chartContentSource,
+    /\.then\(\(\) => \{\s*if \(mountedRef\.current\) \{\s*toast\(\{/s,
+  );
+  assert.match(
+    chartContentSource,
+    /\.catch\(\(error: unknown\) => \{\s*logClientError\("Nickname summary export failed", error, \{ kind \}\);\s*if \(mountedRef\.current\) \{\s*toast\(\{/s,
+  );
+  assert.match(
+    chartContentSource,
+    /\.finally\(\(\) => \{\s*exportInFlightRef\.current = false;\s*if \(mountedRef\.current\) \{\s*setBusyExportKind\(null\);/s,
+  );
+  assert.doesNotMatch(chartContentSource, /\.finally\(\(\) => \{\s*setBusyExportKind\(null\);/s);
+});
+
 test("CollectionNicknameSummaryChartPlot renders target benchmark bars when configured", () => {
   assert.match(chartPlotSource, /dataKey="targetAmount"/);
   assert.match(chartPlotSource, /name="Target Collection Daily"/);

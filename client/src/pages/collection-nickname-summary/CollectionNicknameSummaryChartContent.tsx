@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -73,6 +73,8 @@ export function CollectionNicknameSummaryChartContent({
   const [selectedDrilldownRow, setSelectedDrilldownRow] =
     useState<CollectionNicknameSummaryChartDatum | null>(null);
   const [busyExportKind, setBusyExportKind] = useState<CollectionNicknameSummaryExportKind | null>(null);
+  const mountedRef = useRef(true);
+  const exportInFlightRef = useRef(false);
   const chartData = useMemo(
     () => buildCollectionNicknameSummaryChartData(nicknameTotals, totalAmount),
     [nicknameTotals, totalAmount],
@@ -154,6 +156,15 @@ export function CollectionNicknameSummaryChartContent({
     [displayedData, targetBenchmarks.benchmarks],
   );
   const targetModesDisabled = targetBenchmarks.loading || displayedTargetSummary.completeCount === 0;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      exportInFlightRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!targetBenchmarks.loading && displayedTargetSummary.completeCount === 0) {
       setMetric("amount");
@@ -179,7 +190,7 @@ export function CollectionNicknameSummaryChartContent({
     }
   }, []);
   const handleExport = useCallback((kind: CollectionNicknameSummaryExportKind) => {
-    if (busyExportKind || displayedRankedData.length === 0) {
+    if (busyExportKind || exportInFlightRef.current || displayedRankedData.length === 0) {
       return;
     }
 
@@ -198,7 +209,10 @@ export function CollectionNicknameSummaryChartContent({
       totalAmount,
       totalRecords,
     };
-    setBusyExportKind(kind);
+    exportInFlightRef.current = true;
+    if (mountedRef.current) {
+      setBusyExportKind(kind);
+    }
     const exportPromise = Promise.resolve().then(() => {
       if (kind === "pdf") {
         return exportCollectionNicknameSummaryPdf(displayedRankedData, exportContext);
@@ -212,25 +226,32 @@ export function CollectionNicknameSummaryChartContent({
 
     void exportPromise
       .then(() => {
-        toast({
-          title: `Eksport ${kind.toUpperCase()} selesai`,
-          description: `${displayedRankedData.length} nickname telah dimuat turun.`,
-          dedupeKey: `nickname-summary-export-${kind}-success`,
-          historyModule: "collection",
-        });
+        if (mountedRef.current) {
+          toast({
+            title: `Eksport ${kind.toUpperCase()} selesai`,
+            description: `${displayedRankedData.length} nickname telah dimuat turun.`,
+            dedupeKey: `nickname-summary-export-${kind}-success`,
+            historyModule: "collection",
+          });
+        }
       })
       .catch((error: unknown) => {
         logClientError("Nickname summary export failed", error, { kind });
-        toast({
-          title: `Eksport ${kind.toUpperCase()} gagal`,
-          description: "Fail tidak dapat dijana. Sila cuba semula.",
-          variant: "destructive",
-          dedupeKey: `nickname-summary-export-${kind}-failure`,
-          historyModule: "collection",
-        });
+        if (mountedRef.current) {
+          toast({
+            title: `Eksport ${kind.toUpperCase()} gagal`,
+            description: "Fail tidak dapat dijana. Sila cuba semula.",
+            variant: "destructive",
+            dedupeKey: `nickname-summary-export-${kind}-failure`,
+            historyModule: "collection",
+          });
+        }
       })
       .finally(() => {
-        setBusyExportKind(null);
+        exportInFlightRef.current = false;
+        if (mountedRef.current) {
+          setBusyExportKind(null);
+        }
       });
   }, [
     busyExportKind,
