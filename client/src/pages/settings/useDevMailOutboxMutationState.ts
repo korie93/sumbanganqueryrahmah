@@ -39,13 +39,18 @@ export function useDevMailOutboxMutationState({
 
     try {
       await deleteDevMailOutboxPreview(normalizedId);
+      if (!isMountedRef.current) {
+        return;
+      }
       toast(buildMutationSuccessToast({
         title: "Email Preview Deleted",
         description: "The local mail preview has been removed.",
       }));
       await loadDevMailOutbox(getCurrentDevMailOutboxQuery());
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "Delete Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Delete Failed"));
+      }
     } finally {
       deleteDevMailPreviewLocksRef.current.delete(normalizedId);
       if (isMountedRef.current) {
@@ -63,13 +68,18 @@ export function useDevMailOutboxMutationState({
 
     try {
       const response = await clearDevMailOutboxPreviews();
+      if (!isMountedRef.current) {
+        return;
+      }
       toast(buildMutationSuccessToast({
         title: "Mail Outbox Cleared",
         description: `${response?.deletedCount ?? 0} email preview(s) removed.`,
       }));
       await loadDevMailOutbox(getCurrentDevMailOutboxQuery());
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "Clear Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Clear Failed"));
+      }
     } finally {
       if (isMountedRef.current) {
         setClearingDevMailOutbox(false);
