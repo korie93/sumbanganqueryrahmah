@@ -14,6 +14,14 @@ const communicationSource = readFileSync(
   new URL("./useSettingsManagedUserCommunicationActions.ts", import.meta.url),
   "utf8",
 );
+const updateSource = readFileSync(
+  new URL("./useSettingsManagedUserUpdate.ts", import.meta.url),
+  "utf8",
+);
+const createSource = readFileSync(
+  new URL("./useSettingsManagedUserCreateSubmitAction.ts", import.meta.url),
+  "utf8",
+);
 
 test("managed user lifecycle passes mounted state into communication actions", () => {
   assert.match(
@@ -66,5 +74,31 @@ test("managed user communication lifecycle skips dialogs and toasts after unmoun
   assert.match(
     communicationSource,
     /catch \(error: unknown\) \{\s*if \(isMountedRef\.current\) \{\s*toast\(buildSettingsMutationErrorToast\(error, "Activation Failed"\)\);/s,
+  );
+});
+
+test("managed user update skips mutation feedback after unmount", () => {
+  assert.match(
+    updateSource,
+    /if \(!isMountedRef\.current\) return;\s*toast\(buildMutationSuccessToast\(\{\s*title: "Account Updated"/s,
+  );
+  assert.match(
+    updateSource,
+    /catch \(error: unknown\) \{\s*if \(isMountedRef\.current\) \{\s*toast\(buildSettingsMutationErrorToast\(error, "Update Failed"\)\);/s,
+  );
+});
+
+test("managed user create skips mutation feedback and duplicate dialogs after unmount", () => {
+  assert.match(
+    createSource,
+    /const previewUrl = getManagedUserDeliveryPreviewUrl\(activation\?\.previewUrl\);\s*if \(!isMountedRef\.current\) \{\s*return;\s*\}\s*if \(isDevOutboxActivation\(activation\)\)/s,
+  );
+  assert.match(
+    createSource,
+    /if \(duplicate\) \{\s*if \(!isMountedRef\.current\) \{\s*return;\s*\}\s*openManagedSecretDialog\(\{/s,
+  );
+  assert.match(
+    createSource,
+    /catch \(error: unknown\)[\s\S]*?if \(isMountedRef\.current\) \{\s*toast\(buildSettingsMutationErrorToast\(error, "Create Failed"\)\);/s,
   );
 });

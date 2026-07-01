@@ -109,15 +109,17 @@ export function useSettingsManagedUserUpdate({
         });
       }
 
+      if (!isMountedRef.current) return;
       toast(buildMutationSuccessToast({
         title: "Account Updated",
         description: `Updated account settings for ${managedSelectedUser.username}.`,
       }));
-      if (!isMountedRef.current) return;
       onManagedDialogOpenChange(false);
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "Update Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Update Failed"));
+      }
     } finally {
       if (isMountedRef.current) {
         setManagedSaving(false);

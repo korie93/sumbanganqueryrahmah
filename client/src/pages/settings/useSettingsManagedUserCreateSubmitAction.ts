@@ -83,6 +83,10 @@ export function useSettingsManagedUserCreateSubmitAction({
       const expiresAt = formatActivationExpiry(activation?.expiresAt);
       const previewUrl = getManagedUserDeliveryPreviewUrl(activation?.previewUrl);
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       if (isDevOutboxActivation(activation)) {
         toast(buildMutationSuccessToast({
           title: "Account Created",
@@ -142,6 +146,9 @@ export function useSettingsManagedUserCreateSubmitAction({
         });
 
         if (duplicate) {
+          if (!isMountedRef.current) {
+            return;
+          }
           openManagedSecretDialog({
             title: "Account Already Exists",
             description:
@@ -153,7 +160,9 @@ export function useSettingsManagedUserCreateSubmitAction({
         }
       }
 
-      toast(buildSettingsMutationErrorToast(error, "Create Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Create Failed"));
+      }
     } finally {
       createManagedUserLockRef.current = false;
       if (isMountedRef.current) {
