@@ -1,7 +1,8 @@
-const hybridManaged = (allowedSources, notes) => ({
+const hybridManaged = (allowedSources, notes, migrationRoadmap) => ({
   authority: "drizzle-schema",
   mode: "hybrid-managed",
   allowedSources,
+  migrationRoadmap,
   notes,
 });
 
@@ -76,6 +77,7 @@ export const schemaGovernanceManifest = {
     audit_migration_log: hybridManaged(
       ["drizzle-migration"],
       "Forward-only migration audit ledger records reviewed remediation decisions without mutating historical migration SQL.",
+      "SKIPPED_REQUIRES_HUMAN_REVIEW: keep this forward-only migration ledger hybrid-managed until a reviewed Drizzle schema model and non-destructive migration plan are approved; target mode is drizzle-reviewed without rewriting historical audit rows.",
     ),
     debug_audit_log: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration"],

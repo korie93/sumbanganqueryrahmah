@@ -57,6 +57,21 @@ test("resolveCorsAllowedOrigins dedupes entries and includes public origin", () 
   );
 });
 
+test("resolveCorsAllowedOrigins rejects non-origin CORS entries", () => {
+  for (const rawValue of [
+    "sqr.example.com",
+    "https://sqr.example.com?debug=1",
+    "https://sqr.example.com#fragment",
+    "javascript:alert(1)",
+    "https://bad example.com",
+  ]) {
+    assert.throws(
+      () => resolveCorsAllowedOrigins({ rawValue, publicAppUrl: null }),
+      /CORS_ALLOWED_ORIGINS entries must/i,
+    );
+  }
+});
+
 test("resolveTrustedProxies rejects wildcard-style values", () => {
   assert.throws(
     () => resolveTrustedProxies(["loopback", "*"]),

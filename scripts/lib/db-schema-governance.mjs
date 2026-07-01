@@ -341,6 +341,14 @@ function validateManifestEntryMetadata(table, entry, failures) {
       );
     }
   }
+
+  if (entry.mode === "hybrid-managed") {
+    if (typeof entry.migrationRoadmap !== "string" || entry.migrationRoadmap.trim().length < 48) {
+      failures.push(`Manifest entry "${table}" is hybrid-managed but does not include a migrationRoadmap.`);
+    } else if (!/drizzle-reviewed/i.test(entry.migrationRoadmap)) {
+      failures.push(`Manifest entry "${table}" hybrid migrationRoadmap must name drizzle-reviewed as the target mode.`);
+    }
+  }
 }
 
 function validateModeRequirements(table, entry, failures) {
@@ -427,6 +435,17 @@ export function formatSchemaGovernanceReport({ discoveredTables, manifest, valid
     }
   }
 
+  const manifestTables = manifest.tables ?? {};
+  const hybridRoadmaps = Object.entries(manifestTables)
+    .filter(([, entry]) => entry.mode === "hybrid-managed")
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (hybridRoadmaps.length > 0) {
+    lines.push("Hybrid-managed migration roadmap:");
+    for (const [table, entry] of hybridRoadmaps) {
+      lines.push(`- ${table}: ${entry.migrationRoadmap}`);
+    }
+  }
+
   if (validation.failures.length > 0) {
     lines.push("Failures:");
     for (const failure of validation.failures) {
@@ -436,7 +455,6 @@ export function formatSchemaGovernanceReport({ discoveredTables, manifest, valid
     lines.push("All discovered tables are classified in the governance manifest.");
   }
 
-  const manifestTables = manifest.tables ?? {};
   const uncoveredTables = [...discoveredTables.keys()].filter((table) => !manifestTables[table]);
   if (uncoveredTables.length > 0) {
     lines.push(`Uncovered tables: ${uncoveredTables.join(", ")}`);

@@ -34,6 +34,22 @@ function hasConfiguredValue(env: ProductionEnv, name: string): boolean {
   return Boolean(String(env[name] || "").trim());
 }
 
+export function getProductionSessionJwtKeyPairIssue(
+  env: ProductionEnv = getRuntimeEnvironmentSource(),
+): string | null {
+  if (env.NODE_ENV !== "production") {
+    return null;
+  }
+
+  const hasPrivateKey = hasConfiguredValue(env, "SESSION_JWT_PRIVATE_KEY");
+  const hasPublicKey = hasConfiguredValue(env, "SESSION_JWT_PUBLIC_KEY");
+  if (hasPrivateKey === hasPublicKey) {
+    return null;
+  }
+
+  return "FATAL: SESSION_JWT_PRIVATE_KEY and SESSION_JWT_PUBLIC_KEY must be configured together in production.";
+}
+
 export function getMissingProductionEnvironmentVariables(
   env: ProductionEnv = getRuntimeEnvironmentSource(),
 ): string[] {
@@ -49,6 +65,11 @@ export function getMissingProductionEnvironmentVariables(
 export function validateProductionConfig(
   env: ProductionEnv = getRuntimeEnvironmentSource(),
 ): void {
+  const sessionJwtKeyPairIssue = getProductionSessionJwtKeyPairIssue(env);
+  if (sessionJwtKeyPairIssue) {
+    throw new Error(sessionJwtKeyPairIssue);
+  }
+
   const missing = getMissingProductionEnvironmentVariables(env);
   if (missing.length === 0) {
     return;
