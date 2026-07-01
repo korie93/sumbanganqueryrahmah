@@ -87,6 +87,14 @@ export class CollectionRollupRefreshQueueService {
       await this.stopNotificationSubscriber();
     }
     this.notificationSubscriberStarted = false;
+    const activeRun = this.runPromise;
+    if (activeRun) {
+      await activeRun.catch((error) => {
+        logger.warn("Collection rollup background refresh loop failed during stop", {
+          error,
+        });
+      });
+    }
   }
 
   private async ensureStarted(): Promise<void> {

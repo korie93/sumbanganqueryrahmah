@@ -33,6 +33,17 @@ function createSlice(
   };
 }
 
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  return { promise, reject, resolve };
+}
+
 test("CollectionRollupRefreshQueueService waits for ensureReady before touching the repository", async () => {
   const callOrder: string[] = [];
 
@@ -189,6 +200,47 @@ test("CollectionRollupRefreshQueueService stops polling and closes the notificat
 
   assert.equal(subscriberStops, 1);
   assert.equal(claimCount, 1);
+});
+
+test("CollectionRollupRefreshQueueService stop waits for the active refresh pass", async () => {
+  const queuedSlices = [createSlice("2026-03-28", "staff.user", "Collector Delta")];
+  const refreshGate = createDeferred();
+  let stopResolved = false;
+  let refreshStarted = false;
+  let completed = false;
+
+  const service = new CollectionRollupRefreshQueueService({
+    repository: {
+      claimNextSlice: async () => queuedSlices.shift() || null,
+      completeSlice: async () => {
+        completed = true;
+      },
+      failSlice: async () => undefined,
+      refreshSlice: async () => {
+        refreshStarted = true;
+        await refreshGate.promise;
+      },
+      markRunningSlicesQueued: async () => undefined,
+    },
+    idlePollMs: 25,
+  });
+
+  await service.start();
+  await waitFor(() => refreshStarted);
+
+  const stopPromise = service.stop().then(() => {
+    stopResolved = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(stopResolved, false);
+  assert.equal(completed, false);
+
+  refreshGate.resolve();
+  await stopPromise;
+
+  assert.equal(stopResolved, true);
+  assert.equal(completed, true);
 });
 
 test("CollectionRollupRefreshQueueService closes the notification subscriber when stopped during start", async () => {
