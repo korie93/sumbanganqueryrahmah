@@ -43,6 +43,16 @@ export function useBulkImportState({
     setBulkResults(buildBulkImportSelectionResults(files, importUploadLimitBytes));
   }, [importUploadLimitBytes]);
 
+  const isActiveBulkImportRequest = useCallback((
+    controller: AbortController,
+    requestId: number,
+  ) => (
+    isMountedRef.current
+    && !controller.signal.aborted
+    && bulkImportAbortControllerRef.current === controller
+    && requestId === bulkImportRequestIdRef.current
+  ), []);
+
   const handleBulkFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) {
@@ -118,7 +128,7 @@ export function useBulkImportState({
     let processedCount = 0;
 
     for (const index of retryableIndexes) {
-      if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+      if (!isActiveBulkImportRequest(controller, requestId)) {
         break;
       }
       const currentFile = bulkFiles[index];
@@ -138,7 +148,7 @@ export function useBulkImportState({
       };
       workingResults[index] = nextPending;
 
-      if (isMountedRef.current) {
+      if (isActiveBulkImportRequest(controller, requestId)) {
         setBulkResults(workingResults.map((result) => ({ ...result })));
       }
 
@@ -152,7 +162,7 @@ export function useBulkImportState({
             signal: controller.signal,
           },
         );
-        if (controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+        if (!isActiveBulkImportRequest(controller, requestId)) {
           break;
         }
         const importRecord = "job" in importResult
@@ -162,6 +172,9 @@ export function useBulkImportState({
             () => undefined,
           )
           : importResult;
+        if (!isActiveBulkImportRequest(controller, requestId)) {
+          break;
+        }
         if ("status" in importRecord && importRecord.status !== "completed") {
           if (importRecord.status === "duplicate") {
             throw new Error(
@@ -177,7 +190,7 @@ export function useBulkImportState({
         nextPending.rowCount = importRecord.rowCount ?? 0;
         delete nextPending.error;
       } catch (bulkError: unknown) {
-        if (isImportAbortError(bulkError) || controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
+        if (isImportAbortError(bulkError) || !isActiveBulkImportRequest(controller, requestId)) {
           break;
         }
         nextPending.status = "error";
@@ -186,20 +199,22 @@ export function useBulkImportState({
 
       workingResults[index] = nextPending;
       processedCount += 1;
-      if (isMountedRef.current) {
+      if (isActiveBulkImportRequest(controller, requestId)) {
         setBulkResults(workingResults.map((result) => ({ ...result })));
         setBulkProgress((processedCount / retryableIndexes.length) * 100);
       }
     }
 
-    if (bulkImportAbortControllerRef.current === controller) {
+    const ownsBulkController = bulkImportAbortControllerRef.current === controller;
+    const completedActiveRequest = isActiveBulkImportRequest(controller, requestId);
+    if (ownsBulkController) {
       bulkImportAbortControllerRef.current = null;
+      bulkImportInFlightRef.current = false;
+      bulkProcessingRef.current = false;
     }
-    bulkImportInFlightRef.current = false;
-    bulkProcessingRef.current = false;
 
-    if (!isMountedRef.current || controller.signal.aborted || requestId !== bulkImportRequestIdRef.current) {
-      if (isMountedRef.current) {
+    if (!completedActiveRequest) {
+      if (isMountedRef.current && ownsBulkController) {
         setBulkProcessing(false);
       }
       return;
@@ -216,7 +231,7 @@ export function useBulkImportState({
         : `${successCount} file(s) imported successfully, ${errorCount} file(s) failed.`,
       variant: errorCount > 0 || blockedErrorCount > 0 ? "destructive" : "default",
     });
-  }, [bulkFiles, bulkResults, maxUploadSizeLabel, toast]);
+  }, [bulkFiles, bulkResults, isActiveBulkImportRequest, maxUploadSizeLabel, toast]);
 
   useEffect(() => {
     isMountedRef.current = true;
