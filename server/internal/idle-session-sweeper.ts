@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import { logger } from "../lib/logger";
 import { resolveTimestampMs } from "../lib/timestamp";
 import type { PostgresStorage } from "../storage-postgres";
+import { sanitizeRuntimeWebSocketError } from "../ws/ws-lifecycle";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -70,6 +71,41 @@ async function expireIdleActivitiesBatch(
   return expiredActivities;
 }
 
+function closeExpiredIdleSocket(socket: WebSocket, activityId: string): void {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  try {
+    socket.send(JSON.stringify({
+      type: "idle_timeout",
+      reason: "Session expired due to inactivity",
+    }));
+  } catch (error) {
+    logger.warn("Failed to notify idle WebSocket before cleanup", {
+      activityId,
+      error: sanitizeRuntimeWebSocketError(error),
+    });
+  }
+
+  try {
+    socket.close();
+  } catch (error) {
+    logger.warn("Failed to close idle WebSocket cleanly; terminating", {
+      activityId,
+      error: sanitizeRuntimeWebSocketError(error),
+    });
+    try {
+      socket.terminate();
+    } catch (terminateError) {
+      logger.warn("Failed to terminate idle WebSocket after close failure", {
+        activityId,
+        error: sanitizeRuntimeWebSocketError(terminateError),
+      });
+    }
+  }
+}
+
 export async function runIdleSessionSweeperPass(
   options: Pick<
     IdleSessionSweeperOptions,
@@ -112,12 +148,8 @@ export async function runIdleSessionSweeperPass(
     });
 
     const socket = connectedClients.get(expiredActivity.id);
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({
-        type: "idle_timeout",
-        reason: "Session expired due to inactivity",
-      }));
-      socket.close();
+    if (socket) {
+      closeExpiredIdleSocket(socket, expiredActivity.id);
     }
 
     connectedClients.delete(expiredActivity.id);

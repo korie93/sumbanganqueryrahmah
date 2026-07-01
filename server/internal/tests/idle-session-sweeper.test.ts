@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WebSocket } from "ws";
+import { logger } from "../../lib/logger";
 import type { UserActivity } from "../../../shared/schema-postgres";
 import { runIdleSessionSweeperPass, startIdleSessionSweeper } from "../idle-session-sweeper";
 
@@ -178,6 +179,85 @@ test("runIdleSessionSweeperPass falls back to per-session expiry when batch stor
   assert.equal(socketDouble.getCloseCalls(), 1);
   assert.equal(socketDouble.sentPayloads.length, 1);
   assert.equal(connectedClients.has("activity-1"), false);
+});
+
+test("runIdleSessionSweeperPass cleans stale sockets even when idle notification fails", async (t) => {
+  const warningLogs: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  const healthySocket = createSocketDouble();
+  let failingTerminateCalls = 0;
+  const failingSocket = {
+    readyState: WebSocket.OPEN,
+    send: () => {
+      throw Object.assign(new Error("raw idle socket send details must not leak"), {
+        code: "EPIPE",
+      });
+    },
+    close: () => {
+      throw Object.assign(new Error("raw idle socket close details must not leak"), {
+        code: "ECONNRESET",
+      });
+    },
+    terminate: () => {
+      failingTerminateCalls += 1;
+    },
+  } as unknown as WebSocket;
+  const connectedClients = new Map<string, WebSocket>([
+    ["activity-1", failingSocket],
+    ["activity-2", healthySocket.socket],
+  ]);
+
+  t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
+    warningLogs.push({ message, payload });
+  });
+
+  await runIdleSessionSweeperPass({
+    storage: {
+      getActiveActivities: async () => {
+        throw new Error("Batch idle sweeper should not load active activities");
+      },
+      expireIdleActivitySession: async () => {
+        throw new Error("Batch idle sweeper should not expire sessions one-by-one");
+      },
+      expireIdleActivitySessions: async () => [
+        createActiveActivity({ id: "activity-1" }),
+        createActiveActivity({ id: "activity-2" }),
+      ],
+    },
+    connectedClients,
+    getRuntimeSettingsCached: async () => ({
+      sessionTimeoutMinutes: 5,
+      wsIdleMinutes: 5,
+    }),
+    defaultSessionTimeoutMinutes: 30,
+  });
+
+  assert.equal(connectedClients.size, 0);
+  assert.equal(failingTerminateCalls, 1);
+  assert.equal(healthySocket.getCloseCalls(), 1);
+  assert.equal(healthySocket.sentPayloads.length, 1);
+  assert.deepEqual(warningLogs, [
+    {
+      message: "Failed to notify idle WebSocket before cleanup",
+      payload: {
+        activityId: "activity-1",
+        error: {
+          code: "EPIPE",
+          name: "Error",
+        },
+      },
+    },
+    {
+      message: "Failed to close idle WebSocket cleanly; terminating",
+      payload: {
+        activityId: "activity-1",
+        error: {
+          code: "ECONNRESET",
+          name: "Error",
+        },
+      },
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(warningLogs), /raw idle socket/);
 });
 
 test("startIdleSessionSweeper resets its running guard after a failed pass", async () => {
