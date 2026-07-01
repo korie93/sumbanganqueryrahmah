@@ -322,11 +322,14 @@ export function useSingleImportState({
             result.job,
             controller.signal,
             (job) => {
-              if (isMountedRef.current) {
+              if (isActiveSingleSaveController(controller)) {
                 setTrackedBackgroundJob(job);
               }
             },
           );
+          if (!isActiveSingleSaveController(controller)) {
+            return;
+          }
           if (terminalJob.status === "duplicate") {
             persistActiveImportJobId(null);
           }
@@ -424,11 +427,14 @@ export function useSingleImportState({
         resumedJob,
         controller.signal,
         (job) => {
-          if (isMountedRef.current) {
+          if (isActiveSingleSaveController(controller)) {
             setTrackedBackgroundJob(job);
           }
         },
       );
+      if (!isActiveSingleSaveController(controller)) {
+        return;
+      }
       if (terminalJob.status === "duplicate") {
         persistActiveImportJobId(null);
       }
@@ -501,11 +507,14 @@ export function useSingleImportState({
           initialJob,
           controller.signal,
           (job) => {
-            if (isMountedRef.current) {
+            if (isActiveSingleSaveController(controller)) {
               setTrackedBackgroundJob(job);
             }
           },
         );
+        if (!isActiveSingleSaveController(controller)) {
+          return;
+        }
         if (terminalJob.status === "duplicate") {
           persistActiveImportJobId(null);
         }

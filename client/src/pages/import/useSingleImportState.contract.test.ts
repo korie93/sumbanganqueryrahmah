@@ -57,3 +57,24 @@ test("useSingleImportState guards job persistence behind the active save control
     /const initialJob = await getImportJob\(jobId, \{ signal: controller\.signal \}\);\s*if \(!isActiveSingleSaveController\(controller\)\) \{\s*return;\s*\}/s,
   );
 });
+
+test("useSingleImportState ignores stale background job progress and terminal responses", () => {
+  const source = readFileSync(new URL("./useSingleImportState.ts", import.meta.url), "utf8");
+
+  const activeProgressCallback =
+    /\(job\) => \{\s*if \(isActiveSingleSaveController\(controller\)\) \{\s*setTrackedBackgroundJob\(job\);\s*\}\s*\}/g;
+  assert.equal((source.match(activeProgressCallback) || []).length, 3);
+  assert.match(
+    source,
+    /const terminalJob = await waitForImportJobCompletion\(\s*result\.job,\s*controller\.signal,\s*\(job\) => \{[\s\S]*?\},\s*\);\s*if \(!isActiveSingleSaveController\(controller\)\) \{\s*return;\s*\}\s*if \(terminalJob\.status === "duplicate"\)/s,
+  );
+  assert.match(
+    source,
+    /const terminalJob = await waitForImportJobCompletion\(\s*resumedJob,\s*controller\.signal,\s*\(job\) => \{[\s\S]*?\},\s*\);\s*if \(!isActiveSingleSaveController\(controller\)\) \{\s*return;\s*\}\s*if \(terminalJob\.status === "duplicate"\)/s,
+  );
+  assert.match(
+    source,
+    /const terminalJob = await waitForImportJobCompletion\(\s*initialJob,\s*controller\.signal,\s*\(job\) => \{[\s\S]*?\},\s*\);\s*if \(!isActiveSingleSaveController\(controller\)\) \{\s*return;\s*\}\s*if \(terminalJob\.status === "duplicate"\)/s,
+  );
+  assert.doesNotMatch(source, /\(job\) => \{\s*if \(isMountedRef\.current\) \{\s*setTrackedBackgroundJob\(job\);/);
+});
