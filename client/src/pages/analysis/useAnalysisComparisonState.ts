@@ -29,6 +29,15 @@ export function useAnalysisComparisonState({
   const requestIdRef = useRef(0);
   const requestedCurrentIdRef = useRef<string | null | undefined>(undefined);
 
+  const isActiveComparisonRequest = useCallback((
+    controller: AbortController,
+    requestId: number,
+  ) => (
+    !controller.signal.aborted
+    && abortControllerRef.current === controller
+    && requestId === requestIdRef.current
+  ), []);
+
   useEffect(() => {
     const importIds = new Set(imports.map((item) => item.id));
     if (requestedCurrentIdRef.current === undefined) {
@@ -55,6 +64,7 @@ export function useAnalysisComparisonState({
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
+      requestIdRef.current += 1;
     };
   }, []);
 
@@ -98,12 +108,12 @@ export function useAnalysisComparisonState({
         analyzeImport(baselineId, { signal: controller.signal }),
         analyzeImport(currentId, { signal: controller.signal }),
       ]);
-      if (requestId !== requestIdRef.current) return;
+      if (!isActiveComparisonRequest(controller, requestId)) return;
       setComparison(buildAnalysisComparison(baselineResult, currentResult));
     } catch (comparisonError: unknown) {
       if (
         isAnalysisAbortError(comparisonError) ||
-        requestId !== requestIdRef.current
+        !isActiveComparisonRequest(controller, requestId)
       ) {
         return;
       }
@@ -113,11 +123,14 @@ export function useAnalysisComparisonState({
           : "Unable to compare the selected files.",
       );
     } finally {
-      if (requestId === requestIdRef.current) {
+      if (isActiveComparisonRequest(controller, requestId)) {
         setLoading(false);
       }
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
-  }, [baselineId, currentId]);
+  }, [baselineId, currentId, isActiveComparisonRequest]);
 
   return {
     imports,

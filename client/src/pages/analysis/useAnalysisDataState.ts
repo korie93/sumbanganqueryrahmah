@@ -29,6 +29,15 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
   const analysisAbortControllerRef = useRef<AbortController | null>(null);
   const analysisRequestIdRef = useRef(0);
 
+  const isActiveAnalysisRequest = useCallback((
+    controller: AbortController,
+    requestId: number,
+  ) => (
+    !controller.signal.aborted
+    && analysisAbortControllerRef.current === controller
+    && requestId === analysisRequestIdRef.current
+  ), []);
+
   const fetchAllAnalysis = useCallback(async () => {
     analysisAbortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -40,7 +49,7 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
 
     try {
       const data = await analyzeAll({ signal: controller.signal });
-      if (requestId !== analysisRequestIdRef.current) {
+      if (!isActiveAnalysisRequest(controller, requestId)) {
         return;
       }
       if (data.totalImports === 0) {
@@ -49,16 +58,19 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
         setAllResult(data);
       }
     } catch (fetchError: unknown) {
-      if (isAnalysisAbortError(fetchError) || requestId !== analysisRequestIdRef.current) {
+      if (isAnalysisAbortError(fetchError) || !isActiveAnalysisRequest(controller, requestId)) {
         return;
       }
       setError(fetchError instanceof Error ? fetchError.message : "Failed to analyze data.");
     } finally {
-      if (requestId === analysisRequestIdRef.current) {
+      if (isActiveAnalysisRequest(controller, requestId)) {
         setLoading(false);
       }
+      if (analysisAbortControllerRef.current === controller) {
+        analysisAbortControllerRef.current = null;
+      }
     }
-  }, []);
+  }, [isActiveAnalysisRequest]);
 
   const fetchSingleAnalysis = useCallback(async () => {
     const storage = getBrowserLocalStorage();
@@ -81,21 +93,24 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
 
     try {
       const data = await analyzeImport(importId, { signal: controller.signal });
-      if (requestId !== analysisRequestIdRef.current) {
+      if (!isActiveAnalysisRequest(controller, requestId)) {
         return;
       }
       setSingleResult(data);
     } catch (fetchError: unknown) {
-      if (isAnalysisAbortError(fetchError) || requestId !== analysisRequestIdRef.current) {
+      if (isAnalysisAbortError(fetchError) || !isActiveAnalysisRequest(controller, requestId)) {
         return;
       }
       setError(fetchError instanceof Error ? fetchError.message : "Failed to analyze data.");
     } finally {
-      if (requestId === analysisRequestIdRef.current) {
+      if (isActiveAnalysisRequest(controller, requestId)) {
         setLoading(false);
       }
+      if (analysisAbortControllerRef.current === controller) {
+        analysisAbortControllerRef.current = null;
+      }
     }
-  }, [fetchAllAnalysis]);
+  }, [fetchAllAnalysis, isActiveAnalysisRequest]);
 
   useEffect(() => {
     void fetchSingleAnalysis();
@@ -104,6 +119,7 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
   useEffect(() => {
     return () => {
       analysisAbortControllerRef.current?.abort();
+      analysisRequestIdRef.current += 1;
     };
   }, []);
 
