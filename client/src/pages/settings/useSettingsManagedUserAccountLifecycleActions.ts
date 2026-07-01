@@ -45,15 +45,20 @@ export function useSettingsManagedUserAccountLifecycleActions({
       await updateManagedUserStatus(normalizedId, {
         isBanned: nextIsBanned,
       });
+      if (!isMountedRef.current) {
+        return;
+      }
       toast(buildMutationSuccessToast({
         title: nextIsBanned ? "Account Banned" : "Account Unbanned",
         description: `${user.username} has been ${nextIsBanned ? "banned" : "unbanned"}.`,
       }));
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "Status Update Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Status Update Failed"));
+      }
     }
-  }, [loadManagedUsers, loadPendingResetRequests, toast]);
+  }, [isMountedRef, loadManagedUsers, loadPendingResetRequests, toast]);
 
   const handleDeleteManagedUser = useCallback(async (user: ManagedUser) => {
     const normalizedId = normalizeManagedUserLifecycleTargetId(user.id);
@@ -66,6 +71,9 @@ export function useSettingsManagedUserAccountLifecycleActions({
 
     try {
       await deleteManagedUserAccount(normalizedId);
+      if (!isMountedRef.current) {
+        return;
+      }
       if (managedSelectedUser?.id === normalizedId) {
         onManagedDialogOpenChange(false);
       }
@@ -75,7 +83,9 @@ export function useSettingsManagedUserAccountLifecycleActions({
       }));
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "Delete Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Delete Failed"));
+      }
     } finally {
       deleteManagedUserLocksRef.current.delete(normalizedId);
       if (isMountedRef.current) {

@@ -13,6 +13,7 @@ export function useSettingsManagedUserLifecycleActions({
   toast,
 }: UseSettingsManagedUserLifecycleActionsArgs) {
   const communicationActions = useSettingsManagedUserCommunicationActions({
+    isMountedRef,
     loadDevMailOutbox,
     loadManagedUsers,
     loadPendingResetRequests,

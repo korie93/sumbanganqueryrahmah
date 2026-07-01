@@ -23,7 +23,8 @@ import {
 
 type UseSettingsManagedUserCommunicationActionsArgs = Pick<
   UseSettingsManagedUserLifecycleActionsArgs,
-  "loadDevMailOutbox"
+  "isMountedRef"
+  | "loadDevMailOutbox"
   | "loadManagedUsers"
   | "loadPendingResetRequests"
   | "openManagedSecretDialog"
@@ -31,6 +32,7 @@ type UseSettingsManagedUserCommunicationActionsArgs = Pick<
 >;
 
 export function useSettingsManagedUserCommunicationActions({
+  isMountedRef,
   loadDevMailOutbox,
   loadManagedUsers,
   loadPendingResetRequests,
@@ -53,6 +55,10 @@ export function useSettingsManagedUserCommunicationActions({
       const recipientEmail = resolveManagedUserDeliveryRecipient(user, reset?.recipientEmail);
       const expiresAt = formatActivationExpiry(reset?.expiresAt);
       const previewUrl = getManagedUserDeliveryPreviewUrl(reset?.previewUrl);
+
+      if (!isMountedRef.current) {
+        return;
+      }
 
       if (isDevOutboxActivation(reset)) {
         toast(buildMutationSuccessToast({
@@ -98,11 +104,20 @@ export function useSettingsManagedUserCommunicationActions({
 
       await Promise.all([loadManagedUsers(), loadPendingResetRequests(), loadDevMailOutbox()]);
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "Reset Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Reset Failed"));
+      }
     } finally {
       resetPasswordLocksRef.current.delete(normalizedId);
     }
-  }, [loadDevMailOutbox, loadManagedUsers, loadPendingResetRequests, openManagedSecretDialog, toast]);
+  }, [
+    isMountedRef,
+    loadDevMailOutbox,
+    loadManagedUsers,
+    loadPendingResetRequests,
+    openManagedSecretDialog,
+    toast,
+  ]);
 
   const handleResendManagedUserActivation = useCallback(async (user: ManagedUser) => {
     const normalizedId = normalizeManagedUserLifecycleTargetId(user.id);
@@ -117,6 +132,10 @@ export function useSettingsManagedUserCommunicationActions({
       const recipientEmail = resolveManagedUserDeliveryRecipient(user, activation?.recipientEmail);
       const expiresAt = formatActivationExpiry(activation?.expiresAt);
       const previewUrl = getManagedUserDeliveryPreviewUrl(activation?.previewUrl);
+
+      if (!isMountedRef.current) {
+        return;
+      }
 
       if (isDevOutboxActivation(activation)) {
         toast(buildMutationSuccessToast({
@@ -162,11 +181,13 @@ export function useSettingsManagedUserCommunicationActions({
 
       await Promise.all([loadManagedUsers(), loadDevMailOutbox()]);
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "Activation Failed"));
+      if (isMountedRef.current) {
+        toast(buildSettingsMutationErrorToast(error, "Activation Failed"));
+      }
     } finally {
       resendActivationLocksRef.current.delete(normalizedId);
     }
-  }, [loadDevMailOutbox, loadManagedUsers, openManagedSecretDialog, toast]);
+  }, [isMountedRef, loadDevMailOutbox, loadManagedUsers, openManagedSecretDialog, toast]);
 
   return {
     handleResendManagedUserActivation,
