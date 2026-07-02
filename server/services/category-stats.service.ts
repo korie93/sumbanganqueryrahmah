@@ -15,6 +15,7 @@ import {
 export class CategoryStatsService {
   private categoryRulesCache: { ts: number; rules: CategoryRule[] } | null = null;
   private readonly categoryStatsInflight = new Map<string, Promise<void>>();
+  private readonly categoryStatsFailureLoggers = new Set<string>();
 
   constructor(private readonly storage: PostgresStorage) {}
 
@@ -38,10 +39,10 @@ export class CategoryStatsService {
       const computeKeys = staleStats ? keys : Array.from(new Set([...missingKeys, "__all__"]));
       let readyNow = false;
       try {
-        await this.withTimeout(
-          this.storage.computeCategoryStatsForKeys(computeKeys, rules),
-          Math.max(3000, timeoutMs),
-        );
+        const computeTask = this.getOrCreateCategoryStatsComputeTask(computeKeys, rules);
+        if (computeTask) {
+          await this.withTimeout(computeTask, Math.max(3000, timeoutMs));
+        }
         statsRows = await this.storage.getCategoryStats(keys);
         statsMap = new Map(statsRows.map((row) => [row.key, row]));
         totalRow = statsMap.get("__all__");
@@ -84,7 +85,10 @@ export class CategoryStatsService {
 
     const missingKeys = targetKeys.filter((key) => !byKey.has(key));
     const computeKeys = isStale ? targetKeys : Array.from(new Set([...missingKeys, "__all__"]));
-    await this.storage.computeCategoryStatsForKeys(computeKeys, rules);
+    const computeTask = this.getOrCreateCategoryStatsComputeTask(computeKeys, rules);
+    if (computeTask) {
+      await computeTask;
+    }
     return { skipped: false, computeKeys: computeKeys.length };
   }
 
@@ -113,21 +117,47 @@ export class CategoryStatsService {
     }
 
     const queueKey = normalized.join("|");
-    if (this.categoryStatsInflight.has(queueKey)) {
+    const task = this.getOrCreateCategoryStatsComputeTask(normalized, rules);
+    if (!task || this.categoryStatsFailureLoggers.has(queueKey)) {
       return;
+    }
+
+    this.categoryStatsFailureLoggers.add(queueKey);
+    task
+      .catch((error: unknown) => {
+        logger.error("Category stats compute failed", { error });
+      })
+      .finally(() => {
+        this.categoryStatsFailureLoggers.delete(queueKey);
+      });
+  }
+
+  private getOrCreateCategoryStatsComputeTask(
+    keys: string[],
+    rules: CategoryRule[],
+  ): Promise<void> | null {
+    const normalized = normalizeCategoryStatsKeys(keys);
+    if (!normalized.length) {
+      return null;
+    }
+
+    const queueKey = normalized.join("|");
+    const existing = this.categoryStatsInflight.get(queueKey);
+    if (existing) {
+      return existing;
     }
 
     const task = this.storage
       .computeCategoryStatsForKeys(normalized, rules)
       .then(() => undefined)
-      .catch((error) => {
-        logger.error("Category stats compute failed", { error });
-      })
       .finally(() => {
-        this.categoryStatsInflight.delete(queueKey);
+        if (this.categoryStatsInflight.get(queueKey) === task) {
+          this.categoryStatsInflight.delete(queueKey);
+        }
       });
 
     this.categoryStatsInflight.set(queueKey, task);
+    return task;
   }
 
   private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

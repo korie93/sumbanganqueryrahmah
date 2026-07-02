@@ -12,6 +12,8 @@ import {
   getFreshLastAiPerson,
   getFreshTimedCacheEntry,
   getOrCreateAiSearchInflight,
+  isAiSearchTimeoutError,
+  releaseAiSearchInflightIfCurrent,
   resolveAiSearchRequestTimeoutMs,
   shouldLogAiSearchResolveError,
   sweepTimedCacheEntries,
@@ -128,6 +130,13 @@ export class AiSearchService {
         audit: result.audit,
       };
     } catch (error: unknown) {
+      if (isAiSearchTimeoutError(error)) {
+        releaseAiSearchInflightIfCurrent({
+          cacheKey,
+          inflight: this.searchInflight,
+          promise: inflight,
+        });
+      }
       if (shouldLogAiSearchResolveError(error)) {
         logger.error("AI search compute failed", { error });
       }

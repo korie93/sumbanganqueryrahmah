@@ -80,6 +80,10 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+export function isAiSearchTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.message === "timeout";
+}
+
 export function resolveAiSearchRequestTimeoutMs(configuredTimeoutMs: number): number {
   const normalizedTimeoutMs = Math.max(1000, Math.floor(configuredTimeoutMs));
   const processingBufferMs = Math.max(
@@ -103,25 +107,44 @@ export function getOrCreateAiSearchInflight(params: {
     return existing;
   }
 
+  const isCurrent = (promise: Promise<AiSearchResult>) =>
+    params.inflight.get(params.cacheKey) === promise;
+
   const created = params
     .compute()
     .then((result) => {
-      params.cache.set(params.cacheKey, {
-        ts: now(),
-        payload: result.payload,
-        audit: result.audit,
-      });
-      trimTimedCacheEntries(params.cache, params.maxCacheEntries);
-      params.inflight.delete(params.cacheKey);
+      if (isCurrent(created)) {
+        params.cache.set(params.cacheKey, {
+          ts: now(),
+          payload: result.payload,
+          audit: result.audit,
+        });
+        trimTimedCacheEntries(params.cache, params.maxCacheEntries);
+        params.inflight.delete(params.cacheKey);
+      }
       return result;
     })
     .catch((error) => {
-      params.inflight.delete(params.cacheKey);
+      if (isCurrent(created)) {
+        params.inflight.delete(params.cacheKey);
+      }
       throw error;
     });
 
   params.inflight.set(params.cacheKey, created);
   return created;
+}
+
+export function releaseAiSearchInflightIfCurrent(params: {
+  cacheKey: string;
+  inflight: Map<string, Promise<AiSearchResult>>;
+  promise: Promise<AiSearchResult>;
+}): boolean {
+  if (params.inflight.get(params.cacheKey) !== params.promise) {
+    return false;
+  }
+  params.inflight.delete(params.cacheKey);
+  return true;
 }
 
 export function buildAiSearchResolveErrorResponse(error: unknown): AiSearchResponse {

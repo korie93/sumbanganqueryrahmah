@@ -144,3 +144,41 @@ test("read replica health check marks replica degraded without counting a read f
   });
 });
 
+test("read replica health check suppresses late failures after stop", async () => {
+  configureReadReplicaHealth(true);
+  const { increments, metrics } = createMetricsRecorder();
+  const { logger, warnings } = createWarningSink();
+  const queryState: { reject: ((reason?: unknown) => void) | null } = { reject: null };
+  let queryCalls = 0;
+  const replicaPool = createPool(() => {
+    queryCalls += 1;
+    return new Promise((_resolve, reject) => {
+      queryState.reject = reject;
+    });
+  });
+
+  const stop = bindReadReplicaHealthCheck(replicaPool, {
+    intervalMs: 1_000,
+    logger,
+    metrics,
+    timeoutMs: 1_000,
+    warningCooldownMs: 1_000,
+  });
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(queryCalls, 1);
+  stop();
+  queryState.reject?.(Object.assign(new Error("replica stopped"), { code: "ECONNRESET" }));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(increments.get("dbReadReplicaHealthCheckFailuresTotal"), undefined);
+  assert.equal(warnings.length, 0);
+  assert.deepEqual(getReadReplicaHealthSnapshot(), {
+    configured: true,
+    fallbackCount: 0,
+    lastErrorAt: null,
+    lastErrorCode: null,
+    state: "healthy",
+  });
+});
+

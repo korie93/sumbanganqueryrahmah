@@ -94,3 +94,49 @@ test("closeHttpServerForShutdown resolves immediately for unstarted servers", as
   await closeHttpServerForShutdown({ logger, server });
   assert.deepEqual(warnings, []);
 });
+
+test("closeHttpServerForShutdown clears idle sweep when server.close throws synchronously", async (t) => {
+  const { logger, warnings } = createLogger();
+  const closeError = new Error("server close exploded");
+  let intervalUnrefCalls = 0;
+  const intervalHandle = {
+    unref() {
+      intervalUnrefCalls += 1;
+    },
+  } as unknown as ReturnType<typeof setInterval>;
+  const clearIntervalMock = t.mock.method(
+    globalThis,
+    "clearInterval",
+    (((handle?: ReturnType<typeof setInterval>) => {
+      assert.equal(handle, intervalHandle);
+    }) as unknown) as typeof clearInterval,
+  );
+  t.mock.method(
+    globalThis,
+    "setInterval",
+    (((handler: TimerHandler, timeout?: number) => {
+      void handler;
+      assert.equal(timeout, 50);
+      return intervalHandle;
+    }) as unknown) as typeof setInterval,
+  );
+  const server = {
+    listening: true,
+    close() {
+      throw closeError;
+    },
+  } as unknown as ReturnType<typeof createServer>;
+
+  await closeHttpServerForShutdown({ logger, server });
+
+  assert.equal(intervalUnrefCalls, 1);
+  assert.equal(clearIntervalMock.mock.callCount(), 1);
+  assert.deepEqual(warnings, [
+    {
+      message: "HTTP server close reported an error during graceful shutdown",
+      metadata: {
+        error: closeError,
+      },
+    },
+  ]);
+});

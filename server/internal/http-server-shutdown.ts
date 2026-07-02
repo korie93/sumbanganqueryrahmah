@@ -15,6 +15,7 @@ export function closeHttpServerForShutdown(params: {
   }
 
   return new Promise((resolve) => {
+    let resolved = false;
     const closeIdleConnections = () => {
       try {
         server.closeIdleConnections?.();
@@ -27,7 +28,11 @@ export function closeHttpServerForShutdown(params: {
     const idleConnectionSweep = setInterval(closeIdleConnections, IDLE_CONNECTION_SWEEP_MS);
     idleConnectionSweep.unref();
 
-    server.close((error) => {
+    const finish = (error?: Error) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
       clearInterval(idleConnectionSweep);
       if (error) {
         logger.warn("HTTP server close reported an error during graceful shutdown", {
@@ -35,7 +40,14 @@ export function closeHttpServerForShutdown(params: {
         });
       }
       resolve();
-    });
+    };
+
+    try {
+      server.close(finish);
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
 
     closeIdleConnections();
   });

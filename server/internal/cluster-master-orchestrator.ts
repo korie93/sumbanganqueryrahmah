@@ -58,6 +58,8 @@ export function createClusterMasterOrchestrator({
     fatalShutdownScheduled: false,
   };
   let scaleIntervalHandle: ReturnType<typeof setInterval> | null = null;
+  let rollingRestartResetHandle: ReturnType<typeof setTimeout> | null = null;
+  const rollingRestartKillHandles = new Map<number, ReturnType<typeof setTimeout>>();
   let gracefulShutdownScheduled = false;
   const supervisorReadyGate = createSupervisorReadyGate({
     expectedReadyCount: Math.max(1, Math.min(config.initialWorkers, config.maxWorkers)),
@@ -99,12 +101,21 @@ export function createClusterMasterOrchestrator({
   }
 
   function dispose() {
-    if (!scaleIntervalHandle) {
-      return;
+    if (scaleIntervalHandle) {
+      clearInterval(scaleIntervalHandle);
+      scaleIntervalHandle = null;
     }
 
-    clearInterval(scaleIntervalHandle);
-    scaleIntervalHandle = null;
+    if (rollingRestartResetHandle) {
+      clearTimeout(rollingRestartResetHandle);
+      rollingRestartResetHandle = null;
+    }
+
+    for (const handle of rollingRestartKillHandles.values()) {
+      clearTimeout(handle);
+    }
+    rollingRestartKillHandles.clear();
+    state.rollingRestartInProgress = false;
   }
 
   function shutdownGracefully(reason: string) {
@@ -224,6 +235,7 @@ export function createClusterMasterOrchestrator({
     });
 
     const timeout = setTimeout(() => {
+      rollingRestartKillHandles.delete(worker.id);
       try {
         worker.kill();
       } catch (error) {
@@ -234,10 +246,12 @@ export function createClusterMasterOrchestrator({
         });
       }
     }, 30_000);
+    rollingRestartKillHandles.set(worker.id, timeout);
     timeout.unref();
 
     worker.once("exit", () => {
       clearTimeout(timeout);
+      rollingRestartKillHandles.delete(worker.id);
       state.drainingWorkers.delete(worker.id);
     });
   }
@@ -258,10 +272,14 @@ export function createClusterMasterOrchestrator({
       }
       await drainAndRestartWorker(candidate, reason);
     } finally {
-      const resetHandle = setTimeout(() => {
+      if (rollingRestartResetHandle) {
+        clearTimeout(rollingRestartResetHandle);
+      }
+      rollingRestartResetHandle = setTimeout(() => {
         state.rollingRestartInProgress = false;
+        rollingRestartResetHandle = null;
       }, 10_000);
-      resetHandle.unref();
+      rollingRestartResetHandle.unref();
     }
   }
 

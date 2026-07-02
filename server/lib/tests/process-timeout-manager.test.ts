@@ -93,3 +93,25 @@ test("process timeout chain clean exit cancels timers and reports exit details",
   assert.deepEqual(cleanExit, { code: 0, signal: null });
   assert.deepEqual(child.killSignals, []);
 });
+
+test("process timeout chain handles exit before close once", async () => {
+  const child = new FakeTimeoutProcess();
+  const cleanExits: Array<{ code: number | null; signal: NodeJS.Signals | null }> = [];
+
+  createProcessTimeoutChain({
+    hardTimeoutMs: 5,
+    onCleanExit: (code, signal) => {
+      cleanExits.push({ code, signal });
+    },
+    process: child,
+    softTimeoutMs: 20,
+    watchExit: true,
+  });
+
+  child.emit("exit", 0, null);
+  child.emit("close", 0, null);
+  await wait(30);
+
+  assert.deepEqual(cleanExits, [{ code: 0, signal: null }]);
+  assert.deepEqual(child.killSignals, []);
+});

@@ -70,6 +70,7 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
   let subscriberPromise: Promise<RedisRuntimeWsClientLike | null> | null = null;
   let closed = false;
   let retryHandle: NodeJS.Timeout | null = null;
+  let subscriberGeneration = 0;
 
   const logFailure = (operation: string, error: unknown) => {
     if (closed) {
@@ -99,6 +100,40 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
       void ensureSubscriber();
     }, retryMs);
     retryHandle.unref();
+  };
+
+  const closeSubscriberIfIdle = async () => {
+    if (closed || handlers.size > 0) {
+      return;
+    }
+
+    subscriberGeneration += 1;
+    clearRetry();
+    const currentSubscriber = subscriber;
+    const currentSubscriberPromise = subscriberPromise;
+    subscriber = null;
+    subscriberPromise = null;
+
+    const resolvedClients = await Promise.allSettled([currentSubscriberPromise])
+      .then((results) => [
+        currentSubscriber,
+        ...results
+          .filter((result): result is PromiseFulfilledResult<RedisRuntimeWsClientLike | null> =>
+            result.status === "fulfilled")
+          .map((result) => result.value),
+      ])
+      .then((clients) => clients.filter((client): client is RedisRuntimeWsClientLike => Boolean(client)));
+
+    await Promise.allSettled(Array.from(new Set(resolvedClients)).map(async (client) => {
+      try {
+        await client.unsubscribe?.(channel);
+      } catch (error) {
+        logger.debug("Redis WebSocket shared bus unsubscribe failed after last handler removed", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+      await client.quit?.();
+    }));
   };
 
   const createClient = async () => {
@@ -169,9 +204,10 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
       return subscriber;
     }
 
+    const generation = subscriberGeneration;
     subscriberPromise ??= createClient()
       .then(async (client) => {
-        if (closed || handlers.size === 0) {
+        if (closed || handlers.size === 0 || generation !== subscriberGeneration) {
           await client.quit?.();
           return null;
         }
@@ -179,7 +215,7 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
           throw new Error("Redis client does not expose subscribe().");
         }
         await client.subscribe(channel, handleRawMessage);
-        if (closed || handlers.size === 0) {
+        if (closed || handlers.size === 0 || generation !== subscriberGeneration) {
           await client.unsubscribe?.(channel);
           await client.quit?.();
           return null;
@@ -188,9 +224,11 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
         return client;
       })
       .catch((error) => {
-        subscriberPromise = null;
-        logFailure("subscriber-connect", error);
-        scheduleSubscriberRetry();
+        if (generation === subscriberGeneration) {
+          subscriberPromise = null;
+          logFailure("subscriber-connect", error);
+          scheduleSubscriberRetry();
+        }
         return null;
       });
     return subscriberPromise;
@@ -255,7 +293,7 @@ export function createRedisRuntimeWsSharedBus(options: RedisRuntimeWsSharedBusOp
       return () => {
         handlers.delete(handler);
         if (handlers.size === 0) {
-          clearRetry();
+          void closeSubscriberIfIdle();
         }
       };
     },

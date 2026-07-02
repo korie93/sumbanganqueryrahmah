@@ -138,6 +138,50 @@ test("Redis runtime WebSocket shared bus receives remote events and ignores same
   await bus.close();
 });
 
+test("Redis runtime WebSocket shared bus closes subscriber client after last unsubscribe", async () => {
+  const client = new FakeRedisPubSubClient();
+  const bus = createRedisRuntimeWsSharedBus({
+    createRedisClient: () => client,
+    instanceId: "instance-a",
+    redisUrl: "redis://redis.internal:6379/0",
+  });
+
+  const unsubscribe = bus.subscribe(() => undefined);
+  await flushAsyncWork();
+  assert.equal(client.connected, true);
+  assert.equal(client.subscriptions.size, 1);
+
+  unsubscribe();
+  await flushAsyncWork();
+
+  assert.equal(client.subscriptions.size, 0);
+  assert.equal(client.connected, false);
+  assert.equal(client.quitCalls, 1);
+  await bus.close();
+  assert.equal(client.quitCalls, 1);
+});
+
+test("Redis runtime WebSocket shared bus closes pending subscriber after early unsubscribe", async () => {
+  const connectGate = createDeferred();
+  const client = new FakeRedisPubSubClient({ connectGate: connectGate.promise });
+  const bus = createRedisRuntimeWsSharedBus({
+    createRedisClient: () => client,
+    instanceId: "instance-a",
+    redisUrl: "redis://redis.internal:6379/0",
+  });
+
+  const unsubscribe = bus.subscribe(() => undefined);
+  unsubscribe();
+  connectGate.resolve();
+  await flushAsyncWork();
+
+  assert.equal(client.subscriptions.size, 0);
+  assert.equal(client.connected, false);
+  assert.equal(client.quitCalls, 1);
+  await bus.close();
+  assert.equal(client.quitCalls, 1);
+});
+
 test("Redis runtime WebSocket shared bus ignores late client errors after close", async () => {
   const warnings: unknown[] = [];
   const client = new FakeRedisPubSubClient();

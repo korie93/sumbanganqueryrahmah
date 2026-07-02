@@ -4,6 +4,7 @@ import {
   buildBulkImportSelectionResults,
   filterSupportedImportFiles,
   getRetryableBulkImportIndexes,
+  readImportErrorMessage,
   resolveNextImportName,
   shouldSaveSingleImportFromOriginalFile,
   summarizeBulkImportResults,
@@ -106,4 +107,26 @@ test("summarizeBulkImportResults keeps success, failure, and blocked counts sepa
       errorCount: 1,
     },
   );
+});
+
+test("readImportErrorMessage converts duplicate API JSON into a friendly message", () => {
+  const rawError = new Error(
+    '409: {"ok":false,"message":"This file has already been imported.","code":"IMPORT_DUPLICATE_FILE","error":{"code":"IMPORT_DUPLICATE_FILE","message":"This file has already been imported."},"requestId":"api-duplicate-1"}',
+  );
+
+  const message = readImportErrorMessage(rawError, "Failed to import.");
+
+  assert.match(message, /sudah pernah diimport/i);
+  assert.match(message, /Saved Imports/i);
+  assert.doesNotMatch(message, /IMPORT_DUPLICATE_FILE|requestId|^\d+:/);
+});
+
+test("readImportErrorMessage extracts normal API payload messages without raw JSON", () => {
+  const rawError = new Error(
+    '400: {"ok":false,"message":"Column mapping target columns must be unique.","error":{"code":"BAD_REQUEST","message":"Column mapping target columns must be unique."}}',
+  );
+
+  const message = readImportErrorMessage(rawError, "Failed to import.");
+
+  assert.equal(message, "Column mapping target columns must be unique.");
 });

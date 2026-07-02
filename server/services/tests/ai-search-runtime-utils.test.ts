@@ -6,6 +6,8 @@ import {
   getFreshLastAiPerson,
   getFreshTimedCacheEntry,
   getOrCreateAiSearchInflight,
+  isAiSearchTimeoutError,
+  releaseAiSearchInflightIfCurrent,
   resolveAiSearchRequestTimeoutMs,
   shouldLogAiSearchResolveError,
   sweepTimedCacheEntries,
@@ -45,6 +47,14 @@ function createAudit(): AiSearchAudit {
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 test("timed cache helpers return fresh entries and evict stale or excess ones", () => {
   const cache = new Map<string, { ts: number; value: string }>([
     ["stale", { ts: 10, value: "old" }],
@@ -73,6 +83,12 @@ test("getFreshLastAiPerson keeps fresh rows and drops expired session context", 
 test("withTimeout resolves successful promises and rejects timeouts", async () => {
   await assert.doesNotReject(() => withTimeout(Promise.resolve("ok"), 100));
   await assert.rejects(() => withTimeout(new Promise(() => {}), 1), /timeout/);
+});
+
+test("AI search timeout helpers identify only bounded timeout failures", () => {
+  assert.equal(isAiSearchTimeoutError(new Error("timeout")), true);
+  assert.equal(isAiSearchTimeoutError(new Error("Timeout")), false);
+  assert.equal(isAiSearchTimeoutError("timeout"), false);
 });
 
 test("resolveAiSearchRequestTimeoutMs leaves room for post-processing work", () => {
@@ -121,6 +137,97 @@ test("getOrCreateAiSearchInflight dedupes concurrent work and writes cache once"
     audit: createAudit(),
   });
   assert.equal(inflight.size, 0);
+});
+
+test("timed-out AI search inflight releases without letting stale work overwrite newer work", async () => {
+  const inflight = new Map<string, Promise<AiSearchResult>>();
+  const cache = new Map<string, { ts: number; payload: unknown; audit: AiSearchAudit }>();
+  const firstDeferred = createDeferred<AiSearchResult>();
+  const secondDeferred = createDeferred<AiSearchResult>();
+  const firstResult = {
+    payload: { source: "first" },
+    audit: createAudit(),
+  };
+  const secondResult = {
+    payload: { source: "second" },
+    audit: createAudit(),
+  };
+  let computeCalls = 0;
+
+  const first = getOrCreateAiSearchInflight({
+    cacheKey: "search:ali",
+    inflight,
+    cache,
+    compute: () => {
+      computeCalls += 1;
+      return firstDeferred.promise;
+    },
+    maxCacheEntries: 5,
+    now: () => 100,
+  });
+
+  assert.equal(
+    releaseAiSearchInflightIfCurrent({
+      cacheKey: "search:ali",
+      inflight,
+      promise: first,
+    }),
+    true,
+  );
+  assert.equal(inflight.has("search:ali"), false);
+
+  const second = getOrCreateAiSearchInflight({
+    cacheKey: "search:ali",
+    inflight,
+    cache,
+    compute: () => {
+      computeCalls += 1;
+      return secondDeferred.promise;
+    },
+    maxCacheEntries: 5,
+    now: () => 200,
+  });
+
+  assert.equal(computeCalls, 2);
+  firstDeferred.resolve(firstResult);
+  await first;
+  assert.equal(inflight.get("search:ali"), second);
+  assert.equal(cache.has("search:ali"), false);
+
+  secondDeferred.resolve(secondResult);
+  await second;
+  assert.equal(inflight.has("search:ali"), false);
+  assert.deepEqual(cache.get("search:ali"), {
+    ts: 200,
+    payload: { source: "second" },
+    audit: createAudit(),
+  });
+});
+
+test("AI search inflight release ignores stale promise handles", async () => {
+  const inflight = new Map<string, Promise<AiSearchResult>>();
+  const cache = new Map<string, { ts: number; payload: unknown; audit: AiSearchAudit }>();
+  const active = Promise.resolve({ payload: { active: true }, audit: createAudit() });
+  const stale = Promise.resolve({ payload: { stale: true }, audit: createAudit() });
+  inflight.set("search:ali", active);
+
+  assert.equal(
+    releaseAiSearchInflightIfCurrent({
+      cacheKey: "search:ali",
+      inflight,
+      promise: stale,
+    }),
+    false,
+  );
+  assert.equal(inflight.get("search:ali"), active);
+
+  await getOrCreateAiSearchInflight({
+    cacheKey: "search:other",
+    inflight,
+    cache,
+    compute: () => Promise.resolve({ payload: { ok: true }, audit: createAudit() }),
+    maxCacheEntries: 5,
+  });
 });
 
 test("AI search error helpers keep circuit-open and processing fallback responses stable", () => {

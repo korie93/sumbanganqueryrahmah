@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import {
   cleanupOrphanedUploads,
   startOrphanedUploadCleanupJob,
@@ -16,6 +16,73 @@ function emptyResult(): OrphanedUploadCleanupResult {
     removedDirectories: 0,
     errors: 0,
   };
+}
+
+function installCleanupTimerMocks(t: TestContext) {
+  let startupCallback: (() => void) | null = null;
+  let intervalCallback: (() => void) | null = null;
+  const startupHandle = {
+    unrefCalled: false,
+    unref() {
+      this.unrefCalled = true;
+      return this;
+    },
+  };
+  const intervalHandle = {
+    unrefCalled: false,
+    unref() {
+      this.unrefCalled = true;
+      return this;
+    },
+  };
+  const clearTimeoutMock = t.mock.method(
+    globalThis,
+    "clearTimeout",
+    (((handle?: ReturnType<typeof setTimeout>) => {
+      assert.equal(handle, startupHandle as unknown as ReturnType<typeof setTimeout>);
+    }) as unknown) as typeof clearTimeout,
+  );
+  const clearIntervalMock = t.mock.method(
+    globalThis,
+    "clearInterval",
+    (((handle?: ReturnType<typeof setInterval>) => {
+      assert.equal(handle, intervalHandle as unknown as ReturnType<typeof setInterval>);
+    }) as unknown) as typeof clearInterval,
+  );
+
+  t.mock.method(
+    globalThis,
+    "setTimeout",
+    (((handler: TimerHandler) => {
+      if (typeof handler === "function") {
+        startupCallback = handler as () => void;
+      }
+      return startupHandle as unknown as ReturnType<typeof setTimeout>;
+    }) as unknown) as typeof setTimeout,
+  );
+  t.mock.method(
+    globalThis,
+    "setInterval",
+    (((handler: TimerHandler) => {
+      if (typeof handler === "function") {
+        intervalCallback = handler as () => void;
+      }
+      return intervalHandle as unknown as ReturnType<typeof setInterval>;
+    }) as unknown) as typeof setInterval,
+  );
+
+  return {
+    clearIntervalMock,
+    clearTimeoutMock,
+    getIntervalCallback: () => intervalCallback,
+    getStartupCallback: () => startupCallback,
+    intervalHandle,
+    startupHandle,
+  };
+}
+
+async function flushAsyncCleanup() {
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 async function pathExists(targetPath: string) {
@@ -130,4 +197,50 @@ test("startOrphanedUploadCleanupJob keeps a singleton interval and exposes clean
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(cleanupRuns, 2);
   stopThird();
+});
+
+test("startOrphanedUploadCleanupJob skips overlapping sweeps and stops future runs", async (t) => {
+  const timerMocks = installCleanupTimerMocks(t);
+  let cleanupRuns = 0;
+  const cleanupResolvers: Array<() => void> = [];
+  const cleanup = async () => {
+    cleanupRuns += 1;
+    await new Promise<void>((resolve) => {
+      cleanupResolvers.push(resolve);
+    });
+    return emptyResult();
+  };
+
+  const stop = startOrphanedUploadCleanupJob({
+    cleanup,
+    intervalMs: 60_000,
+    startupDelayMs: 30_000,
+  });
+  const startupCallback = timerMocks.getStartupCallback();
+  const intervalCallback = timerMocks.getIntervalCallback();
+
+  assert.equal(timerMocks.startupHandle.unrefCalled, true);
+  assert.equal(timerMocks.intervalHandle.unrefCalled, true);
+  assert.equal(typeof startupCallback, "function");
+  assert.equal(typeof intervalCallback, "function");
+
+  startupCallback?.();
+  assert.equal(cleanupRuns, 1);
+  intervalCallback?.();
+  assert.equal(cleanupRuns, 1);
+
+  cleanupResolvers.shift()?.();
+  await flushAsyncCleanup();
+  intervalCallback?.();
+  assert.equal(cleanupRuns, 2);
+
+  stop();
+  assert.equal(timerMocks.clearTimeoutMock.mock.callCount(), 1);
+  assert.equal(timerMocks.clearIntervalMock.mock.callCount(), 1);
+  startupCallback?.();
+  intervalCallback?.();
+  assert.equal(cleanupRuns, 2);
+
+  cleanupResolvers.shift()?.();
+  await flushAsyncCleanup();
 });
