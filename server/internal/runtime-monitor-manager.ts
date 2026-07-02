@@ -91,6 +91,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   let processHandlersAttached = false;
   let processControlStateHandler: ((message: unknown) => void) | null = null;
   let processGracefulShutdownHandler: ((message: unknown) => void) | null = null;
+  let processGracefulShutdownTimer: ReturnType<typeof setTimeout> | null = null;
   let runtimeLoopHandle: NodeJS.Timeout | null = null;
   let stopped = false;
 
@@ -219,9 +220,17 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
 
     processGracefulShutdownHandler = (message: unknown) => {
       if (!isGracefulShutdownMessage(message)) return;
-      setTimeout(() => {
+      if (processGracefulShutdownTimer) {
+        return;
+      }
+      processGracefulShutdownTimer = setTimeout(() => {
+        processGracefulShutdownTimer = null;
+        if (stopped) {
+          return;
+        }
         onGracefulShutdown();
       }, 50);
+      processGracefulShutdownTimer.unref?.();
     };
 
     process.on("message", processControlStateHandler);
@@ -345,6 +354,11 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
     }
     gcObserverAttached = false;
     eventLoopHistogram.disable();
+
+    if (processGracefulShutdownTimer) {
+      clearTimeout(processGracefulShutdownTimer);
+      processGracefulShutdownTimer = null;
+    }
 
     if (processHandlersAttached && typeof process.off === "function") {
       if (processControlStateHandler) {
