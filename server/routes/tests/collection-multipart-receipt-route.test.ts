@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import { createCollectionReceiptMultipartRoute } from "../collection/collection-multipart-receipt-route";
 import { COLLECTION_RECEIPT_MAX_BYTES } from "../collection-receipt-file-type-utils";
@@ -99,6 +99,39 @@ async function runMultipartHandler(
   });
 
   return result;
+}
+
+function installUploadTimeoutMocks(t: TestContext) {
+  const fakeHandle = {
+    unrefCalled: false,
+    unref() {
+      this.unrefCalled = true;
+      return this;
+    },
+  };
+  let capturedHandler: (() => void) | null = null;
+  const setTimeoutMock = t.mock.method(
+    globalThis,
+    "setTimeout",
+    (((handler: () => void) => {
+      capturedHandler = handler;
+      return fakeHandle as unknown as ReturnType<typeof setTimeout>;
+    }) as unknown) as typeof setTimeout,
+  );
+  const clearTimeoutMock = t.mock.method(
+    globalThis,
+    "clearTimeout",
+    (((handle?: ReturnType<typeof setTimeout>) => {
+      assert.equal(handle, fakeHandle as unknown as ReturnType<typeof setTimeout>);
+    }) as unknown) as typeof clearTimeout,
+  );
+
+  return {
+    clearTimeoutMock,
+    fakeHandle,
+    getCapturedHandler: () => capturedHandler,
+    setTimeoutMock,
+  };
 }
 
 test("createCollectionReceiptMultipartRoute attaches parsed fields and uploaded receipts", async () => {
@@ -548,4 +581,85 @@ test("createCollectionReceiptMultipartRoute fails slow multipart uploads closed 
     },
     statusCode: 408,
   });
+});
+
+test("createCollectionReceiptMultipartRoute cleans up streams when receipt upload aborts", async (t) => {
+  const timerMocks = installUploadTimeoutMocks(t);
+  const boundary = "----codex-aborted-receipt-boundary";
+  const req = new PassThrough() as PassThrough & {
+    headers: Record<string, string>;
+    is: (type: string) => boolean;
+    body?: Record<string, unknown>;
+  };
+  let nextCalls = 0;
+  let responseWrites = 0;
+  let receiptStreamDestroyed = false;
+  const receiptStreamState: { error: Error | null } = { error: null };
+  let resolveReceiptStarted: () => void = () => {
+    throw new Error("Receipt stream did not start.");
+  };
+  const receiptStarted = new Promise<void>((resolve) => {
+    resolveReceiptStarted = resolve;
+  });
+  let resolveReceiptClosed: () => void = () => {
+    throw new Error("Receipt stream did not close.");
+  };
+  const receiptClosed = new Promise<void>((resolve) => {
+    resolveReceiptClosed = resolve;
+  });
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    handleReceipt: async ({ stream }) => {
+      resolveReceiptStarted();
+      stream.once("error", (error) => {
+        receiptStreamState.error = error instanceof Error ? error : new Error(String(error));
+      });
+      stream.once("close", () => {
+        receiptStreamDestroyed = Boolean((stream as { destroyed?: boolean }).destroyed);
+        resolveReceiptClosed();
+      });
+      await receiptClosed;
+      return { filename: "aborted.png" };
+    },
+  });
+
+  req.headers = {
+    "content-type": `multipart/form-data; boundary=${boundary}`,
+  };
+  req.is = (type: string) => type === "multipart/form-data";
+
+  const res = {
+    status() {
+      responseWrites += 1;
+      return {
+        json() {
+          responseWrites += 1;
+        },
+      };
+    },
+  };
+
+  handler(req as never, res as never, () => {
+    nextCalls += 1;
+  });
+  req.write(Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="receipt"; filename="aborted.png"\r\nContent-Type: image/png\r\n\r\npartial`,
+    "utf8",
+  ));
+  await receiptStarted;
+
+  req.emit("aborted");
+  await receiptClosed;
+
+  assert.equal(timerMocks.setTimeoutMock.mock.callCount(), 1);
+  assert.equal(timerMocks.clearTimeoutMock.mock.callCount(), 1);
+  assert.equal(timerMocks.fakeHandle.unrefCalled, true);
+  assert.equal(typeof timerMocks.getCapturedHandler(), "function");
+  assert.equal(receiptStreamDestroyed, true);
+  assert.match(receiptStreamState.error?.message || "", /aborted before completion/i);
+  assert.equal(nextCalls, 0);
+  assert.equal(responseWrites, 0);
 });

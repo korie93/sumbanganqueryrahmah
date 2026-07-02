@@ -174,6 +174,37 @@ export function createCollectionReceiptMultipartRoute<
       cleanupTrackedFileStreams(cleanupError);
     };
 
+    const cleanupCompletedReceiptsAfterAbort = (error: unknown) => {
+      if (!params.cleanupReceipts) {
+        return;
+      }
+
+      void Promise.allSettled(uploadTasks)
+        .then(async () => {
+          if (completedReceipts.length === 0) {
+            return;
+          }
+          await params.cleanupReceipts?.([...completedReceipts]);
+        })
+        .catch((cleanupError) => {
+          logger.error("Multipart cleanup failed after request abort", {
+            cleanupError,
+            originalError: error,
+          });
+        });
+    };
+
+    const abortMultipartParsing = (error: Error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearUploadTimeout();
+      stopMultipartParsing(error);
+      cleanupCompletedReceiptsAfterAbort(error);
+    };
+
     const fail = async (error: unknown, options: { waitForUploads?: boolean } = {}) => {
       if (settled) {
         return;
@@ -302,6 +333,17 @@ export function createCollectionReceiptMultipartRoute<
           originalError: error,
         });
       });
+    });
+
+    req.once("aborted", () => {
+      abortMultipartParsing(new Error("Multipart receipt request aborted before completion."));
+    });
+
+    req.once("close", () => {
+      if ((req as { complete?: boolean; readableEnded?: boolean }).complete || req.readableEnded) {
+        return;
+      }
+      abortMultipartParsing(new Error("Multipart receipt request closed before completion."));
     });
 
     parser.once("finish", async () => {
