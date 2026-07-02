@@ -206,8 +206,14 @@ export function bindReadReplicaHealthCheck(
           timeoutHandle.unref?.();
         }),
       ]);
+      if (stopped) {
+        return;
+      }
       markReadReplicaHealthy();
     } catch (error) {
+      if (stopped) {
+        return;
+      }
       markReadReplicaDegraded({
         error,
         logger: sink,
