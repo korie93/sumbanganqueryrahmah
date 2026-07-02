@@ -627,6 +627,79 @@ test("bindPgPoolHealthCheck skips concurrent probes and releases the running fla
   }
 });
 
+test("bindPgPoolHealthCheck suppresses late probe failures after stop", async () => {
+  const pool = new FakePool();
+  const metrics = createInternalMetrics();
+  const warnings: Array<Record<string, unknown>> = [];
+  const errors: Array<Record<string, unknown>> = [];
+  const queryState: { reject: ((reason?: unknown) => void) | null } = { reject: null };
+  let queryCalls = 0;
+  pool.queryImpl = () => {
+    queryCalls += 1;
+    return new Promise((_resolve, reject) => {
+      queryState.reject = reject;
+    });
+  };
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let intervalCallback: (() => void) | null = null;
+  let clearCalls = 0;
+
+  globalThis.setInterval = (((handler: TimerHandler, _timeout?: number, ..._args: unknown[]) => {
+    intervalCallback = typeof handler === "function" ? () => handler() : null;
+    const fakeHandle = {
+      unref() {
+        return fakeHandle;
+      },
+    } as ReturnType<typeof setInterval>;
+    return fakeHandle;
+  }) as unknown) as typeof setInterval;
+
+  globalThis.clearInterval = (((handle?: Parameters<typeof clearInterval>[0]) => {
+    if (handle) {
+      clearCalls += 1;
+    }
+  }) as unknown) as typeof clearInterval;
+
+  try {
+    const stopHealthCheck = bindPgPoolHealthCheck(pool, {
+      intervalMs: 1_000,
+      timeoutMs: 1_000,
+      metrics,
+      logger: {
+        warn: (_message, meta) => {
+          warnings.push(meta || {});
+        },
+        error: (_message, meta) => {
+          errors.push(meta || {});
+        },
+      },
+    });
+    const triggerInterval = () => {
+      const callback = intervalCallback;
+      if (!callback) {
+        throw new Error("Expected captured interval callback");
+      }
+      callback();
+    };
+
+    triggerInterval();
+    assert.equal(queryCalls, 1);
+    stopHealthCheck();
+    queryState.reject?.(new Error("database stopped"));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const snapshot = metrics.snapshot();
+    assert.equal(clearCalls, 1);
+    assert.equal(snapshot.counters.dbHealthCheckFailuresTotal, 0);
+    assert.equal(warnings.length, 0);
+    assert.equal(errors.length, 0);
+  } finally {
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
 test("bindPgPoolHealthCheck cleanup stops future interval probes", async () => {
   const pool = new FakePool();
   let queryCalls = 0;

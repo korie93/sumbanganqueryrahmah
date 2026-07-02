@@ -387,6 +387,9 @@ export function bindPgPoolHealthCheck(pool: PgPoolLike, options: BindPgPoolHealt
           metrics.increment("dbHealthCheckRecoveryAttemptsTotal");
         }
         await runHealthCheck();
+        if (stopped) {
+          return;
+        }
         if (recoveryMode) {
           metrics.increment("dbHealthCheckRecoverySuccessTotal");
           sink.warn("PostgreSQL pool health check recovered", {
@@ -399,6 +402,9 @@ export function bindPgPoolHealthCheck(pool: PgPoolLike, options: BindPgPoolHealt
         recoveryProbeAfter = 0;
         recoveryMode = false;
       } catch (error) {
+        if (stopped) {
+          return;
+        }
         const enteringRecovery = !recoveryMode && consecutiveFailures + 1 >= maxConsecutiveFailures;
         consecutiveFailures += 1;
         metrics.increment("dbHealthCheckFailuresTotal");
