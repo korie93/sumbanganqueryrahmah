@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { waitForImportJobCompletion } from "@/pages/import/import-background-job";
 import {
   isImportAbortError,
+  readImportErrorMessage,
   resolveNextImportName,
   shouldSaveSingleImportFromOriginalFile,
 } from "@/pages/import/import-page-state-utils";
@@ -86,7 +87,10 @@ function validateColumnMapping(mapping: ImportColumnMappingEntry[]): string | nu
 
 function getBackgroundJobError(job: ImportBackgroundJobContract): string | null {
   if (job.status === "duplicate") {
-    return `This file has already been imported as "${job.duplicateImportName ?? "an existing import"}".`;
+    return job.duplicateImportName
+      ? `Fail ini sudah pernah diimport sebagai "${job.duplicateImportName}". `
+        + "Buka Saved Imports untuk lihat data sedia ada, atau pilih fail lain."
+      : "Fail ini sudah pernah diimport. Buka Saved Imports untuk lihat data sedia ada, atau pilih fail lain.";
   }
   if (job.status === "cancelled") {
     return "Background import was cancelled. You can resume it when ready.";
@@ -366,7 +370,7 @@ export function useSingleImportState({
       if (isImportAbortError(saveError) || !isMountedRef.current) {
         return;
       }
-      setError(saveError instanceof Error ? saveError.message : "Failed to save data.");
+      setError(readImportErrorMessage(saveError, "Failed to save data."));
     } finally {
       if (singleSaveAbortControllerRef.current === controller) {
         singleSaveAbortControllerRef.current = null;
@@ -400,7 +404,7 @@ export function useSingleImportState({
       }
     } catch (cancelError) {
       if (isMountedRef.current && backgroundJobIdRef.current === jobId) {
-        setError(cancelError instanceof Error ? cancelError.message : "Failed to cancel import.");
+        setError(readImportErrorMessage(cancelError, "Failed to cancel import."));
       }
     }
   }, [backgroundJob, setTrackedBackgroundJob]);
@@ -450,7 +454,7 @@ export function useSingleImportState({
       );
     } catch (resumeError) {
       if (!isImportAbortError(resumeError) && isMountedRef.current) {
-        setError(resumeError instanceof Error ? resumeError.message : "Failed to resume import.");
+        setError(readImportErrorMessage(resumeError, "Failed to resume import."));
       }
     } finally {
       if (singleSaveAbortControllerRef.current === controller) {
@@ -529,11 +533,7 @@ export function useSingleImportState({
           return;
         }
         persistActiveImportJobId(null);
-        setError(
-          restoreError instanceof Error
-            ? restoreError.message
-            : "Failed to restore background import status.",
-        );
+        setError(readImportErrorMessage(restoreError, "Failed to restore background import status."));
       } finally {
         if (singleSaveAbortControllerRef.current === controller) {
           singleSaveAbortControllerRef.current = null;

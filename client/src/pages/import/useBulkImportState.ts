@@ -11,6 +11,7 @@ import {
   filterSupportedImportFiles,
   getRetryableBulkImportIndexes,
   isImportAbortError,
+  readImportErrorMessage,
   summarizeBulkImportResults,
 } from "@/pages/import/import-page-state-utils";
 import { stripImportExtension } from "@/pages/import/parsing";
@@ -178,7 +179,10 @@ export function useBulkImportState({
         if ("status" in importRecord && importRecord.status !== "completed") {
           if (importRecord.status === "duplicate") {
             throw new Error(
-              `File already imported as "${importRecord.duplicateImportName ?? "an existing import"}".`,
+              importRecord.duplicateImportName
+                ? `Fail ini sudah pernah diimport sebagai "${importRecord.duplicateImportName}". `
+                  + "Buka Saved Imports untuk lihat data sedia ada, atau pilih fail lain."
+                : "Fail ini sudah pernah diimport. Buka Saved Imports untuk lihat data sedia ada, atau pilih fail lain.",
             );
           }
           if (importRecord.status === "cancelled") {
@@ -194,7 +198,7 @@ export function useBulkImportState({
           break;
         }
         nextPending.status = "error";
-        nextPending.error = bulkError instanceof Error ? bulkError.message : "Failed to import";
+        nextPending.error = readImportErrorMessage(bulkError, "Failed to import");
       }
 
       workingResults[index] = nextPending;
