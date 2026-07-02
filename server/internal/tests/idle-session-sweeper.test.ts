@@ -329,3 +329,73 @@ test("startIdleSessionSweeper resets its running guard after a failed pass", asy
     globalThis.setInterval = originalSetInterval;
   }
 });
+
+test("startIdleSessionSweeper stop clears the interval and blocks late scheduled passes", async (t) => {
+  let scheduledHandler: (() => Promise<void>) | null = null;
+  let intervalUnrefCalls = 0;
+  const intervalHandle = {
+    unref() {
+      intervalUnrefCalls += 1;
+    },
+  } as unknown as ReturnType<typeof setInterval>;
+  const clearIntervalMock = t.mock.method(
+    globalThis,
+    "clearInterval",
+    (((handle?: ReturnType<typeof setInterval>) => {
+      assert.equal(handle, intervalHandle);
+    }) as unknown) as typeof clearInterval,
+  );
+  t.mock.method(
+    globalThis,
+    "setInterval",
+    (((handler: TimerHandler, _timeout?: number, ...args: unknown[]) => {
+      const intervalCallback = handler as (...callbackArgs: unknown[]) => void | Promise<void>;
+      scheduledHandler = async () => {
+        await intervalCallback(...args);
+      };
+      return intervalHandle;
+    }) as unknown) as typeof setInterval,
+  );
+
+  const connectedClients = new Map<string, WebSocket>();
+  let expireCalls = 0;
+  const handle = startIdleSessionSweeper({
+    storage: {
+      getActiveActivities: async () => {
+        throw new Error("Batch idle sweeper should not load active activities");
+      },
+      expireIdleActivitySession: async () => {
+        throw new Error("Batch idle sweeper should not expire sessions one-by-one");
+      },
+      expireIdleActivitySessions: async () => {
+        expireCalls += 1;
+        return [];
+      },
+    },
+    connectedClients,
+    getRuntimeSettingsCached: async () => ({
+      sessionTimeoutMinutes: 5,
+      wsIdleMinutes: 5,
+    }),
+    defaultSessionTimeoutMinutes: 30,
+    intervalMs: 25,
+  });
+
+  assert.equal(handle, intervalHandle);
+  assert.equal(handle.isActive(), true);
+  assert.equal(intervalUnrefCalls, 1);
+
+  handle.stop();
+  handle.stop();
+
+  assert.equal(handle.isActive(), false);
+  assert.equal(clearIntervalMock.mock.callCount(), 1);
+
+  const currentHandler = scheduledHandler as unknown as (() => Promise<void>) | null;
+  if (!currentHandler) {
+    throw new Error("Idle session sweeper test expected a scheduled interval handler");
+  }
+  await currentHandler();
+
+  assert.equal(expireCalls, 0);
+});

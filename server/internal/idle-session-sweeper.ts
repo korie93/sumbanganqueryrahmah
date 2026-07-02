@@ -29,6 +29,11 @@ type IdleSessionSweeperOptions = {
   intervalMs?: number;
 };
 
+export type IdleSessionSweeperHandle = ReturnType<typeof setInterval> & {
+  isActive: () => boolean;
+  stop: () => void;
+};
+
 async function expireIdleActivitiesBatch(
   storage: IdleSessionSweeperOptions["storage"],
   idleCutoff: Date,
@@ -156,7 +161,7 @@ export async function runIdleSessionSweeperPass(
   }
 }
 
-export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
+export function startIdleSessionSweeper(options: IdleSessionSweeperOptions): IdleSessionSweeperHandle {
   const {
     storage,
     connectedClients,
@@ -166,9 +171,10 @@ export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
   } = options;
 
   let running = false;
+  let stopped = false;
 
   const handle = setInterval(async () => {
-    if (running) {
+    if (stopped || running) {
       return;
     }
 
@@ -188,5 +194,16 @@ export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
   }, intervalMs);
 
   handle.unref();
-  return handle;
+  const stop = () => {
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    clearInterval(handle);
+  };
+
+  return Object.assign(handle, {
+    isActive: () => !stopped,
+    stop,
+  });
 }

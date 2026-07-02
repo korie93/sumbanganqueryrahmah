@@ -247,7 +247,7 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     defaultSessionTimeoutMinutes,
   });
   server.once("close", () => {
-    clearInterval(idleSweeperHandle);
+    idleSweeperHandle.stop();
   });
 
   const activityRetentionJob = startActivityRetentionJob?.();
