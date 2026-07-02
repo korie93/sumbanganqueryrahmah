@@ -270,7 +270,12 @@ export async function startLocalServer(options: StartLocalServerOptions) {
   }
 
   // Run precompute in background so startup is fast.
-  const precomputeHandle = setTimeout(async () => {
+  let precomputeCancelled = false;
+  let precomputeHandle: ReturnType<typeof setTimeout> | null = setTimeout(async () => {
+    precomputeHandle = null;
+    if (precomputeCancelled) {
+      return;
+    }
     try {
       const result = await categoryStatsService.warmCategoryStats();
       if (result.skipped) {
@@ -284,4 +289,12 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     }
   }, 0);
   precomputeHandle.unref?.();
+  server.once("close", () => {
+    precomputeCancelled = true;
+    if (!precomputeHandle) {
+      return;
+    }
+    clearTimeout(precomputeHandle);
+    precomputeHandle = null;
+  });
 }
