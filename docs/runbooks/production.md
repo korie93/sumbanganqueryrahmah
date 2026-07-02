@@ -15,6 +15,51 @@ runtime safety checks.
 - Use `pm2 reload sqr --update-env` or an equivalent supervisor restart after
   changing process environment.
 
+## Standard Main Update
+
+Use this path when a reviewed PR has been merged to `main` and the current
+single-host PM2 deployment must be updated to the latest production commit.
+
+```bash
+cd ~/apps/sumbanganqueryrahmah
+
+pm2 stop sqr
+
+git fetch origin --prune
+git switch main
+git reset --hard origin/main
+git log -1 --oneline
+
+BRANCH=main
+bash scripts/verify-server-checkout.sh "$BRANCH"
+
+npm ci
+npm run db:migrate
+npm run build
+
+pm2 restart sqr --update-env
+curl -fsS http://127.0.0.1:5000/api/health/ready
+pm2 status
+pm2 logs sqr --lines 100 --nostream
+```
+
+Stop the deployment if the checkout gate fails, if migrations fail, or if the
+readiness endpoint does not return healthy JSON. Do not continue by editing
+tracked files or committing server-only fixes on the deployment host; fix the
+repository, merge through GitHub, then repeat this update path.
+
+Rollback uses the previous known-good commit only after the current failure is
+captured:
+
+```bash
+git log --oneline -5
+git reset --hard <previous-known-good-commit>
+npm ci
+npm run build
+pm2 restart sqr --update-env
+curl -fsS http://127.0.0.1:5000/api/health/ready
+```
+
 ## Redis TLS
 
 Production-like hosts must use Redis-backed runtime state for rate limiting,
