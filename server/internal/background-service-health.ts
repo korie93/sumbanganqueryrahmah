@@ -110,6 +110,7 @@ export function startBackgroundServiceWithHealthSignal(
         clearTimeout(retryTimer);
         retryTimer = null;
       }
+      clearStartupServiceDegraded(options.service);
     },
   };
 }

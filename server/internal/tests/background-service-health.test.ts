@@ -128,3 +128,37 @@ test("startBackgroundServiceWithHealthSignal stop cancels pending retries", asyn
 
   assert.equal(attempts, 1);
 });
+
+test("startBackgroundServiceWithHealthSignal stop clears stale degraded service state", async (t) => {
+  const service = "background-job-queue";
+  clearStartupServiceDegraded(service);
+  t.mock.method(logger, "error", () => undefined);
+
+  const handle = startBackgroundServiceWithHealthSignal({
+    service,
+    failureReason: "BACKGROUND_JOB_QUEUE_START_FAILED",
+    failureDetails: "Background job queue failed to start; see server logs.",
+    failureLogMessage: "Failed to start background job queue",
+    retryDelayMs: 60_000,
+    start: async () => {
+      throw new Error("queue bootstrap failed");
+    },
+  });
+  t.after(() => {
+    handle.stop();
+    clearStartupServiceDegraded(service);
+  });
+
+  await flushAsyncWork();
+  assert.equal(
+    getStartupHealthSnapshot().degradedServices.some((entry) => entry.service === service),
+    true,
+  );
+
+  handle.stop();
+
+  assert.equal(
+    getStartupHealthSnapshot().degradedServices.some((entry) => entry.service === service),
+    false,
+  );
+});
