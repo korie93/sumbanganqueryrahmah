@@ -108,11 +108,17 @@ export function createProcessTimeoutChain({
 
   if (watchExit && canWatchProcessExit(process)) {
     exitTarget = process;
+    let exitHandled = false;
     exitListener = (code, signal) => {
+      if (exitHandled) {
+        return;
+      }
+      exitHandled = true;
       cancel();
       onCleanExit?.(code, signal);
     };
     process.once("close", exitListener);
+    process.once("exit", exitListener);
   }
 
   return {
