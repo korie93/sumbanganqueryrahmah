@@ -204,3 +204,29 @@ test("AI page typing interval remains owned by runtime cleanup refs", () => {
   assert.match(runtimeSource, /window\.clearInterval\(typingTimerRef\.current\)/);
   assert.match(runtimeSource, /typingTimerRef\.current = null/);
 });
+
+test("receipt and download object URLs stay owned by explicit cleanup paths", () => {
+  const downloadSource = readClientSource("../lib/download.ts");
+  const draftPreviewSource = readClientSource("../pages/collection/useCollectionReceiptDraftPreviews.ts");
+  const dailyReceiptViewerSource = readClientSource("../pages/collection/useCollectionDailyReceiptViewer.ts");
+  const recordsReceiptPreviewSource = readClientSource("../pages/collection-records/useCollectionReceiptPreview.ts");
+
+  assert.match(downloadSource, /const objectUrl = URL\.createObjectURL\(blob\)/);
+  assert.match(downloadSource, /revokeTrackedObjectUrl\(objectUrl\)/);
+  assert.match(downloadSource, /URL\.revokeObjectURL\(objectUrl\)/);
+
+  assert.match(draftPreviewSource, /const sourceUrl = URL\.createObjectURL\(file\)/);
+  assert.match(draftPreviewSource, /URL\.revokeObjectURL\(sourceUrl\)/);
+  assert.match(draftPreviewSource, /function revokeCollectionReceiptDraftPreview/);
+  assert.match(draftPreviewSource, /for \(const preview of previewCache\.values\(\)\) \{[\s\S]*revokeCollectionReceiptDraftPreview\(preview\)/);
+
+  assert.match(dailyReceiptViewerSource, /const clearPreviewObjectUrl = useCallback/);
+  assert.match(dailyReceiptViewerSource, /URL\.revokeObjectURL\(previewObjectUrlRef\.current\)/);
+  assert.match(dailyReceiptViewerSource, /abortPreviewRequest\(\);[\s\S]*abortDownloadRequest\(\);[\s\S]*clearPreviewObjectUrl\(\);/);
+  assert.match(dailyReceiptViewerSource, /URL\.revokeObjectURL\(objectUrl\);[\s\S]*return;/);
+
+  assert.match(recordsReceiptPreviewSource, /const clearReceiptPreviewObjectUrl = useCallback/);
+  assert.match(recordsReceiptPreviewSource, /URL\.revokeObjectURL\(receiptPreviewUrlRef\.current\)/);
+  assert.match(recordsReceiptPreviewSource, /abortReceiptPreviewRequest\(\);[\s\S]*abortReceiptDownloadRequest\(\);[\s\S]*clearReceiptPreviewObjectUrl\(\);/);
+  assert.match(recordsReceiptPreviewSource, /URL\.revokeObjectURL\(objectUrl\);[\s\S]*return;/);
+});
