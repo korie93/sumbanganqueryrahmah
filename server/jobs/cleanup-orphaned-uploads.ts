@@ -325,12 +325,23 @@ export function startOrphanedUploadCleanupJob(
     Math.trunc(options.startupDelayMs ?? DEFAULT_ORPHANED_UPLOAD_STARTUP_DELAY_MS),
   );
   const cleanup = options.cleanup ?? (() => cleanupOrphanedUploads(options));
+  let cleanupRunning = false;
+  let stopped = false;
   const runCleanup = () => {
-    void cleanup().catch((error: unknown) => {
-      logger.error("Orphaned upload cleanup job failed", {
-        errorName: error instanceof Error ? error.name : "UnknownError",
+    if (stopped || cleanupRunning) {
+      return;
+    }
+
+    cleanupRunning = true;
+    void cleanup()
+      .catch((error: unknown) => {
+        logger.error("Orphaned upload cleanup job failed", {
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        });
+      })
+      .finally(() => {
+        cleanupRunning = false;
       });
-    });
   };
 
   const startupTimer = setTimeout(runCleanup, startupDelayMs);
@@ -339,6 +350,7 @@ export function startOrphanedUploadCleanupJob(
   interval.unref();
 
   orphanedUploadCleanupStop = () => {
+    stopped = true;
     clearTimeout(startupTimer);
     clearInterval(interval);
     orphanedUploadCleanupStop = null;
