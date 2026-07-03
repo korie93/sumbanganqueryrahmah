@@ -9,6 +9,7 @@ import {
   captureDashboardElementCanvas,
   collectDashboardFallbackPdfLines,
   DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE,
+  applyDashboardExportCloneTheme,
   assertDashboardExportableElement,
   exportDashboardToPdf,
   isDashboardPdfExportAbortError,
@@ -219,7 +220,17 @@ test("resolveDashboardExportPaintColor converts chart CSS variables for html2can
   assert.equal(resolveDashboardExportPaintColor("none", false), null);
 });
 
+class FakeDashboardExportStyleDeclaration {
+  readonly properties: Array<readonly [string, string, string | undefined]> = [];
+
+  setProperty(name: string, value: string, priority?: string) {
+    this.properties.push([name, value, priority]);
+  }
+}
+
 class FakeDashboardExportElement {
+  readonly style = new FakeDashboardExportStyleDeclaration();
+
   constructor(private readonly attributes: Record<string, string>) {}
 
   getAttribute(name: string) {
@@ -234,6 +245,35 @@ class FakeDashboardExportElement {
     return this.attributes[name] ?? null;
   }
 }
+
+test("applyDashboardExportCloneTheme paints dashboard export clones without important overrides", () => {
+  const cardNode = new FakeDashboardExportElement({});
+  const chartLabel = new FakeDashboardExportElement({});
+  const root = {
+    querySelectorAll: (selector: string) => {
+      if (selector === "*") {
+        return [cardNode, chartLabel];
+      }
+      if (selector === ".recharts-text") {
+        return [chartLabel];
+      }
+      return [];
+    },
+  } as unknown as ParentNode;
+
+  applyDashboardExportCloneTheme(root, false);
+
+  assert.deepEqual(cardNode.style.properties, [
+    ["color", "#1e293b", undefined],
+    ["background-color", "#ffffff", undefined],
+    ["border-color", "#e2e8f0", undefined],
+  ]);
+  assert.equal(chartLabel.readAttribute("fill"), "#1e293b");
+  assert.equal(
+    chartLabel.style.properties.some(([, , priority]) => priority === "important"),
+    false,
+  );
+});
 
 test("sanitizeDashboardExportClone replaces SVG and inline CSS variable colors", () => {
   const svgLine = new FakeDashboardExportElement({

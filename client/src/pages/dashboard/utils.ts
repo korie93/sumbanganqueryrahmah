@@ -1326,6 +1326,53 @@ function getDashboardExportPalette(isDark: boolean) {
   return isDark ? DASHBOARD_EXPORT_DARK_PALETTE : DASHBOARD_EXPORT_LIGHT_PALETTE;
 }
 
+type DashboardExportCloneTheme = {
+  readonly backgroundColor: string;
+  readonly borderColor: string;
+  readonly textColor: string;
+};
+
+function getDashboardExportCloneTheme(isDark: boolean): DashboardExportCloneTheme {
+  const palette = getDashboardExportPalette(isDark);
+  return {
+    backgroundColor: palette["--background"],
+    borderColor: palette["--border"],
+    textColor: palette["--foreground"],
+  };
+}
+
+function getElementStyleDeclaration(node: Element) {
+  const style = (node as { style?: unknown }).style;
+  if (
+    !style ||
+    typeof style !== "object" ||
+    typeof (style as CSSStyleDeclaration).setProperty !== "function"
+  ) {
+    return null;
+  }
+  return style as CSSStyleDeclaration;
+}
+
+export function applyDashboardExportCloneTheme(root: ParentNode, isDark: boolean) {
+  const theme = getDashboardExportCloneTheme(isDark);
+
+  root.querySelectorAll<Element>("*").forEach((node) => {
+    const style = getElementStyleDeclaration(node);
+    if (!style) {
+      return;
+    }
+
+    style.setProperty("color", theme.textColor);
+    style.setProperty("background-color", theme.backgroundColor);
+    style.setProperty("border-color", theme.borderColor);
+  });
+
+  root.querySelectorAll<Element>(".recharts-text").forEach((node) => {
+    node.setAttribute("fill", theme.textColor);
+    getElementStyleDeclaration(node)?.setProperty("fill", theme.textColor);
+  });
+}
+
 export function resolveDashboardExportScale(width: number, height: number) {
   const safeWidth = Math.max(1, Math.ceil(width));
   const safeHeight = Math.max(1, Math.ceil(height));
@@ -1960,16 +2007,7 @@ export async function exportDashboardToPdf(
       scrollY: -window.scrollY,
       ignoreElements: shouldIgnoreDashboardExportElement,
       onclone: (clonedDoc) => {
-        const style = clonedDoc.createElement("style");
-        style.textContent = `
-          * {
-            color: ${isDark ? "#e2e8f0" : "#1e293b"} !important;
-            background-color: ${isDark ? "#1e293b" : "#ffffff"} !important;
-            border-color: ${isDark ? "#475569" : "#e2e8f0"} !important;
-          }
-          .recharts-text { fill: ${isDark ? "#e2e8f0" : "#1e293b"} !important; }
-        `;
-        clonedDoc.head.appendChild(style);
+        applyDashboardExportCloneTheme(clonedDoc, isDark);
         sanitizeDashboardExportClone(clonedDoc, isDark);
       },
     });
