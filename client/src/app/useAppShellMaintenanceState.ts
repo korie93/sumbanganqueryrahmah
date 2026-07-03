@@ -3,6 +3,7 @@ import type { User } from "@/app/types";
 import { getMaintenanceStatus } from "@/lib/api";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import { logClientWarning } from "@/lib/client-logger";
+import { useTimers } from "@/hooks/useTimers";
 import { MAINTENANCE_STATUS_POLL_INTERVAL_MS } from "@/pages/maintenance-state";
 import { buildPathForPage, replaceHistory } from "@/app/routing";
 import { shouldRedirectForMaintenance } from "@/app/maintenance-client-policy";
@@ -42,6 +43,8 @@ export function useAppShellMaintenanceState({
   setCurrentPage,
   user,
 }: UseAppShellMaintenanceStateArgs) {
+  const { clearManagedInterval, setManagedInterval } = useTimers();
+
   useEffect(() => {
     const onMaintenanceUpdated = (event: Event) => {
       const custom = event as CustomEvent<MaintenanceUpdatedDetail>;
@@ -115,7 +118,7 @@ export function useAppShellMaintenanceState({
     };
 
     void checkMaintenance();
-    const timer = window.setInterval(checkMaintenance, MAINTENANCE_STATUS_POLL_INTERVAL_MS);
+    const timer = setManagedInterval(checkMaintenance, MAINTENANCE_STATUS_POLL_INTERVAL_MS);
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibilityChange);
     }
@@ -126,7 +129,7 @@ export function useAppShellMaintenanceState({
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibilityChange);
       }
-      window.clearInterval(timer);
+      clearManagedInterval(timer);
     };
-  }, [currentPage, setCurrentPage, user]);
+  }, [clearManagedInterval, currentPage, setCurrentPage, setManagedInterval, user]);
 }

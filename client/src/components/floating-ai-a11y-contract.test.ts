@@ -78,6 +78,13 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(panelSource, /aria-labelledby=\{panelTitleId\}/);
   assert.match(source, /Desktop floating AI remains a non-modal dialog/);
   assert.match(source, /const assistantLabel = `AI \$\{resolvedSystemName\}`/);
+  assert.match(source, /const minimizedStatusId = useId\(\);/);
+  assert.match(triggerSource, /minimizedStatusId: string;/);
+  assert.match(triggerSource, /const showMinimizedStatus = !isOpen && isThinking && !layoutState\.rootHidden && !isMobile;/);
+  assert.match(triggerSource, /id=\{minimizedStatusId\}/);
+  assert.match(triggerSource, /role="status"/);
+  assert.match(triggerSource, /aria-live="polite"/);
+  assert.match(triggerSource, /aria-describedby=\{showMinimizedStatus \? minimizedStatusId : undefined\}/);
   assert.match(panelSource, /Panel bantuan AI untuk pertanyaan berkaitan koleksi dan rekod/);
   assert.match(source, /const modalDialogA11yProps = isMobile/);
   assert.match(focusSource, /onEscapeKeyDown: handleMinimize/);

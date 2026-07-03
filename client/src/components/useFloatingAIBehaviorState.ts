@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import type { AIChatStatus } from "@/components/AIChat";
 import { useAIContext } from "@/context/AIContext";
 
@@ -17,6 +17,7 @@ export function useFloatingAIBehaviorState({
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
   const cancelAISearchRef = useRef<(() => void) | null>(null);
+  const isMountedRef = useRef(true);
   const {
     messages,
     isThinking,
@@ -31,8 +32,33 @@ export function useFloatingAIBehaviorState({
   const lastAssistantCountRef = useRef(assistantCount);
 
   useEffect(() => {
-    setIsOpen(false);
-  }, [activePage, location]);
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      cancelAISearchRef.current = null;
+    };
+  }, []);
+
+  const setIsOpenIfMounted = useCallback((value: SetStateAction<boolean>) => {
+    if (!isMountedRef.current) {
+      return;
+    }
+
+    setIsOpen(value);
+  }, []);
+
+  const setAiStatusIfMounted = useCallback((status: AIChatStatus) => {
+    if (!isMountedRef.current) {
+      return;
+    }
+
+    setAiStatus(status);
+  }, []);
+
+  useEffect(() => {
+    setIsOpenIfMounted(false);
+  }, [activePage, location, setIsOpenIfMounted]);
 
   useEffect(() => {
     if (isOpen && unreadCount !== 0) {
@@ -41,21 +67,27 @@ export function useFloatingAIBehaviorState({
   }, [isOpen, setUnreadCount, unreadCount]);
 
   useEffect(() => {
+    const assistantCountSnapshot = assistantCount;
     const previousAssistantCount = lastAssistantCountRef.current;
-    if (assistantCount > previousAssistantCount && !isOpen) {
-      setUnreadCount((previous) => previous + (assistantCount - previousAssistantCount));
+    lastAssistantCountRef.current = assistantCountSnapshot;
+
+    if (assistantCountSnapshot > previousAssistantCount && !isOpen) {
+      setUnreadCount((previous) => previous + (assistantCountSnapshot - previousAssistantCount));
     }
-    lastAssistantCountRef.current = assistantCount;
   }, [assistantCount, isOpen, setUnreadCount]);
 
   const handleMinimize = useCallback(() => {
-    setIsOpen(false);
-  }, []);
+    setIsOpenIfMounted(false);
+  }, [setIsOpenIfMounted]);
 
   const handleToggle = useCallback(() => {
+    if (!isMountedRef.current) {
+      return;
+    }
+
     setHasActivated(true);
-    setIsOpen((previous) => !previous);
-  }, []);
+    setIsOpenIfMounted((previous) => !previous);
+  }, [setIsOpenIfMounted]);
 
   const handleReset = useCallback(() => {
     cancelAISearchRef.current?.();
@@ -68,10 +100,10 @@ export function useFloatingAIBehaviorState({
     isThinking,
     unreadCount,
     isOpen,
-    setIsOpen,
+    setIsOpen: setIsOpenIfMounted,
     hasActivated,
     aiStatus,
-    setAiStatus,
+    setAiStatus: setAiStatusIfMounted,
     handleMinimize,
     handleToggle,
     handleReset,

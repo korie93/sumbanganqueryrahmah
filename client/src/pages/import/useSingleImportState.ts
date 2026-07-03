@@ -44,6 +44,18 @@ type UseSingleImportStateOptions = {
 };
 
 const ACTIVE_IMPORT_JOB_STORAGE_KEY = "sqr-active-import-job-id";
+const IMPORT_COLUMN_MAPPING_MAX_ENTRIES = 256;
+const IMPORT_COLUMN_MAPPING_MAX_FIELD_LENGTH = 128;
+const UNSAFE_IMPORT_COLUMN_MAPPING_NAMES = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+
+type ImportColumnMappingSubmissionResult = {
+  columnMapping: ImportColumnMappingEntry[];
+  error: string | null;
+};
 
 function persistActiveImportJobId(jobId: string | null): void {
   const storage = getBrowserSessionStorage();
@@ -60,6 +72,23 @@ function readActiveImportJobId(): string | null {
 
 function buildIdentityColumnMapping(headers: string[]): ImportColumnMappingEntry[] {
   return headers.map((header) => ({ source: header, target: header }));
+}
+
+function normalizeImportColumnMappingField(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length > IMPORT_COLUMN_MAPPING_MAX_FIELD_LENGTH) {
+    return null;
+  }
+
+  if (UNSAFE_IMPORT_COLUMN_MAPPING_NAMES.has(normalized.toLowerCase())) {
+    return null;
+  }
+
+  return normalized;
 }
 
 function validateColumnMapping(mapping: ImportColumnMappingEntry[]): string | null {
@@ -83,6 +112,65 @@ function validateColumnMapping(mapping: ImportColumnMappingEntry[]): string | nu
     return "Target field names must be unique.";
   }
   return null;
+}
+
+export function prepareImportColumnMappingForSubmission(
+  mapping: readonly unknown[],
+): ImportColumnMappingSubmissionResult {
+  if (mapping.length > IMPORT_COLUMN_MAPPING_MAX_ENTRIES) {
+    return {
+      columnMapping: [],
+      error: "Column mapping has too many columns. Please reduce the selected columns and try again.",
+    };
+  }
+
+  const sanitizedMapping: ImportColumnMappingEntry[] = [];
+
+  for (const entry of mapping) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return {
+        columnMapping: [],
+        error: "Column mapping is invalid. Please review the selected columns.",
+      };
+    }
+
+    const rawEntry = entry as Record<string, unknown>;
+    if (
+      !Object.prototype.hasOwnProperty.call(rawEntry, "source")
+      || !Object.prototype.hasOwnProperty.call(rawEntry, "target")
+    ) {
+      return {
+        columnMapping: [],
+        error: "Column mapping is invalid. Please review the selected columns.",
+      };
+    }
+
+    const source = normalizeImportColumnMappingField(rawEntry.source);
+    if (!source) {
+      return {
+        columnMapping: [],
+        error: "Column mapping contains an unsupported source column.",
+      };
+    }
+
+    let target: string | null = null;
+    if (rawEntry.target !== null) {
+      target = normalizeImportColumnMappingField(rawEntry.target);
+      if (!target) {
+        return {
+          columnMapping: [],
+          error: "Column mapping contains an unsupported target field.",
+        };
+      }
+    }
+
+    sanitizedMapping.push({ source, target });
+  }
+
+  return {
+    columnMapping: sanitizedMapping,
+    error: validateColumnMapping(sanitizedMapping),
+  };
 }
 
 function getBackgroundJobError(job: ImportBackgroundJobContract): string | null {
@@ -278,11 +366,12 @@ export function useSingleImportState({
       return;
     }
 
-    const mappingError = validateColumnMapping(columnMapping);
-    if (mappingError) {
-      setError(mappingError);
+    const mappingSubmission = prepareImportColumnMappingForSubmission(columnMapping);
+    if (mappingSubmission.error) {
+      setError(mappingSubmission.error);
       return;
     }
+    const sanitizedColumnMapping = mappingSubmission.columnMapping;
 
     setLoading(true);
     setError("");
@@ -310,7 +399,7 @@ export function useSingleImportState({
           };
         }
         const result = await createImportFromFile(savedName, selectedFile, {
-          columnMapping,
+          columnMapping: sanitizedColumnMapping,
           idempotencyFingerprint: singleSaveMutationIntentRef.current.fingerprint,
           idempotencyKey: singleSaveMutationIntentRef.current.key,
           signal: controller.signal,
@@ -351,7 +440,7 @@ export function useSingleImportState({
           savedName,
           selectedFile?.name || "unknown.csv",
           parsedData,
-          { columnMapping, signal: controller.signal },
+          { columnMapping: sanitizedColumnMapping, signal: controller.signal },
         );
         if (!isActiveSingleSaveController(controller)) {
           return;

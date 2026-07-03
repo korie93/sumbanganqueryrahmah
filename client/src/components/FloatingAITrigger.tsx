@@ -16,6 +16,7 @@ type FloatingAITriggerProps = {
   isThinking: boolean;
   layoutState: FloatingAiLayout;
   minimizedStatus: string;
+  minimizedStatusId: string;
   panelId: string;
   triggerButtonRef: Ref<HTMLButtonElement>;
   unreadCount: number;
@@ -33,6 +34,7 @@ export function FloatingAITrigger({
   isThinking,
   layoutState,
   minimizedStatus,
+  minimizedStatusId,
   panelId,
   triggerButtonRef,
   unreadCount,
@@ -40,6 +42,7 @@ export function FloatingAITrigger({
   const triggerHidden =
     layoutState.triggerHidden
     && (isOpen || layoutState.shouldAutoMinimize);
+  const showMinimizedStatus = !isOpen && isThinking && !layoutState.rootHidden && !isMobile;
 
   return (
     <FloatingTriggerShell
@@ -51,8 +54,13 @@ export function FloatingAITrigger({
       )}
       hidden={triggerHidden}
     >
-      {!isOpen && isThinking && !layoutState.rootHidden && !isMobile ? (
-        <div className={cn("pointer-events-none max-w-[220px] rounded-lg border px-3 py-1.5 text-2xs shadow-sm", styles.floatingMinimizedStatus)}>
+      {showMinimizedStatus ? (
+        <div
+          id={minimizedStatusId}
+          className={cn("pointer-events-none max-w-[220px] rounded-lg border px-3 py-1.5 text-2xs shadow-sm", styles.floatingMinimizedStatus)}
+          role="status"
+          aria-live="polite"
+        >
           {minimizedStatus}
         </div>
       ) : null}
@@ -61,6 +69,7 @@ export function FloatingAITrigger({
         type="button"
         onClick={handleTriggerToggleClick}
         aria-controls={panelId}
+        aria-describedby={showMinimizedStatus ? minimizedStatusId : undefined}
         aria-haspopup="dialog"
         aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}
         {...getAriaExpandedProps(isOpen)}

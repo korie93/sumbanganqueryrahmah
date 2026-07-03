@@ -85,9 +85,10 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
   },
   {
     filePath: "../app/useAppShellMaintenanceState.ts",
-    setupPattern: /const timer = window\.setInterval\(checkMaintenance,\s*MAINTENANCE_STATUS_POLL_INTERVAL_MS\)/,
+    setupPattern: /const timer = setManagedInterval\(checkMaintenance,\s*MAINTENANCE_STATUS_POLL_INTERVAL_MS\)/,
     cleanupPatterns: [
-      /window\.clearInterval\(timer\)/,
+      /const \{ clearManagedInterval, setManagedInterval \} = useTimers\(\)/,
+      /clearManagedInterval\(timer\)/,
       /document\.removeEventListener\("visibilitychange", handleVisibilityChange\)/,
     ],
   },
