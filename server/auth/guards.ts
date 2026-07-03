@@ -345,7 +345,8 @@ function notifySessionRefreshSlotAvailable(): void {
 async function waitForInFlightSessionRefreshSlot(): Promise<boolean> {
   const max = resolveMaxInFlightSessionRefreshes();
   if (getReservedSessionRefreshCapacityUsage() < max) {
-    return false;
+    reservedSessionRefreshSlots += 1;
+    return true;
   }
 
   const maxWaiting = resolveMaxWaitingSessionRefreshes();

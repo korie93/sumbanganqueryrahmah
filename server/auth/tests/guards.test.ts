@@ -1287,6 +1287,141 @@ test("authenticateToken queues new JWT refreshes when the in-flight map reaches 
   }
 });
 
+test("authenticateToken reserves refresh capacity before async token creation", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const previousMaxInFlightRefreshes = process.env.SQR_MAX_INFLIGHT_REFRESHES;
+  process.env.SQR_MAX_INFLIGHT_REFRESHES = "1";
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const revokedJwtIds = new Set<string>();
+  const firstRevokeStarted = createDeferred();
+  const secondRevokeStarted = createDeferred();
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const releaseRevocations: Array<ReturnType<typeof createDeferred<void>>> = [];
+  const startedJwtIds: string[] = [];
+  let activeRevocations = 0;
+  let maxConcurrentRevocations = 0;
+  t.mock.method(Date, "now", () => nowMs);
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
+    revoke: async (record: SessionRevocationRecord) => {
+      activeRevocations += 1;
+      maxConcurrentRevocations = Math.max(maxConcurrentRevocations, activeRevocations);
+      startedJwtIds.push(record.jwtId);
+      const releaseRevoke = createDeferred<void>();
+      releaseRevocations.push(releaseRevoke);
+      if (startedJwtIds.length === 1) {
+        firstRevokeStarted.resolve();
+      } else if (startedJwtIds.length === 2) {
+        secondRevokeStarted.resolve();
+      }
+
+      try {
+        await releaseRevoke.promise;
+        revokedJwtIds.add(record.jwtId);
+      } finally {
+        activeRevocations -= 1;
+      }
+    },
+  });
+
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const createToken = (jwtid: string) => jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid },
+  );
+  const createRefreshRequest = (token: string) => ({
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  });
+  const firstResponse = createMockResponse();
+  const secondResponse = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    const firstAuth = guards.authenticateToken(
+      createRefreshRequest(createToken("atomic-first-jti")) as never,
+      firstResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+    const secondAuth = guards.authenticateToken(
+      createRefreshRequest(createToken("atomic-second-jti")) as never,
+      secondResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    await firstRevokeStarted.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(startedJwtIds.length, 1);
+    assert.equal(activeRevocations, 1);
+    assert.equal(maxConcurrentRevocations, 1);
+
+    releaseRevocations[0]?.resolve();
+    await secondRevokeStarted.promise;
+    assert.equal(maxConcurrentRevocations, 1);
+    releaseRevocations[1]?.resolve();
+    await Promise.all([firstAuth, secondAuth]);
+
+    assert.equal(nextCalls, 2);
+    assert.equal(firstResponse.statusCode, 200);
+    assert.equal(secondResponse.statusCode, 200);
+    assert.notEqual(String(firstResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || ""), "");
+    assert.notEqual(String(secondResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || ""), "");
+    assert.equal(
+      warnings.some((entry) => entry.payload?.event === "session_refresh_inflight_capacity_queued"),
+      true,
+    );
+    assert.doesNotMatch(JSON.stringify(warnings), /atomic-first-jti|atomic-second-jti|guard\.user|user-1/);
+  } finally {
+    for (const releaseRevoke of releaseRevocations) {
+      releaseRevoke.resolve();
+    }
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    guards.clearSessionRefreshDeduplication();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+    if (previousMaxInFlightRefreshes === undefined) {
+      delete process.env.SQR_MAX_INFLIGHT_REFRESHES;
+    } else {
+      process.env.SQR_MAX_INFLIGHT_REFRESHES = previousMaxInFlightRefreshes;
+    }
+  }
+});
+
 test("authenticateToken fails closed when the session refresh backpressure queue times out", async (t) => {
   resetSessionRevocationStoreForTests();
   const previousMaxInFlightRefreshes = process.env.SQR_MAX_INFLIGHT_REFRESHES;

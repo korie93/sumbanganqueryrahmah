@@ -122,6 +122,44 @@ test("memory session revocation store starts one singleton sweep interval", (t) 
   }
 });
 
+test("runtime session revocation cleanup stops memory sweep and fails closed", async () => {
+  let closeCalls = 0;
+  const stopRuntimeRevocationStore = configureSessionRevocationStoreForRuntime({
+    close: () => {
+      closeCalls += 1;
+    },
+    isRevoked: async () => false,
+    revoke: async () => undefined,
+  });
+
+  assert.deepEqual(getSessionRevocationStoreDiagnosticsForTests(), {
+    activeMemoryStores: 0,
+    sweepActive: false,
+    sweepInProgress: false,
+    consecutiveFailures: 0,
+    sweepSuspended: false,
+  });
+
+  stopRuntimeRevocationStore();
+
+  assert.equal(closeCalls, 1);
+  assert.deepEqual(getSessionRevocationStoreDiagnosticsForTests(), {
+    activeMemoryStores: 0,
+    sweepActive: false,
+    sweepInProgress: false,
+    consecutiveFailures: 0,
+    sweepSuspended: false,
+  });
+  assert.equal(await isSessionJwtRevoked("jwt-after-runtime-shutdown"), true);
+  await assert.rejects(
+    () => revokeSessionJwt({
+      jwtId: "jwt-after-runtime-shutdown",
+      expiresAtMs: Date.now() + 1_000,
+    }),
+    /Session revocation store is closed/,
+  );
+});
+
 test("memory session revocation singleton sweep removes expired entries", async (t) => {
   let now = 1_000_000;
   t.mock.method(Date, "now", () => now);

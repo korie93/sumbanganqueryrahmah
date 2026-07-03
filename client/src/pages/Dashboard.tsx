@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
@@ -42,14 +42,12 @@ import {
   resolveVisibleDashboardRefetchInterval,
 } from "@/pages/dashboard/refetch-visibility";
 import { canManageDashboardLoginLogs } from "@/pages/dashboard/dashboard-role-access";
+import { useDashboardRecentLoginActivityControls } from "@/pages/dashboard/useDashboardRecentLoginActivityControls";
 import type {
   LoginTrend,
   PeakHour,
   RecentLoginActivity,
-  RecentLoginActivityFilter,
   RecentLoginActivityPage,
-  RecentLoginActivitySortBy,
-  RecentLoginActivitySortOrder,
   RoleData,
   SummaryData,
   TopUser,
@@ -63,7 +61,6 @@ import {
 type DashboardRefetch = () => Promise<unknown>;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500;
-const RECENT_LOGIN_ACTIVITY_DEFAULT_PAGE_SIZE = 4;
 
 function getRejectedDashboardRefreshResults(results: PromiseSettledResult<unknown>[]) {
   return results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
@@ -90,20 +87,7 @@ function DashboardContent() {
   const shouldDeferSecondaryMobileSections =
     isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
   const [trendDays, setTrendDays] = useState(7);
-  const [recentLoginActivityDateFrom, setRecentLoginActivityDateFrom] = useState("");
-  const [recentLoginActivityDateTo, setRecentLoginActivityDateTo] = useState("");
-  const [recentLoginActivityFilter, setRecentLoginActivityFilter] =
-    useState<RecentLoginActivityFilter>("all");
-  const [recentLoginActivityPageNumber, setRecentLoginActivityPageNumber] = useState(1);
-  const [recentLoginActivityPageSize, setRecentLoginActivityPageSize] =
-    useState(RECENT_LOGIN_ACTIVITY_DEFAULT_PAGE_SIZE);
-  const [recentLoginActivityRole, setRecentLoginActivityRole] = useState("all");
-  const [recentLoginActivitySearch, setRecentLoginActivitySearch] = useState("");
-  const [recentLoginActivitySortBy, setRecentLoginActivitySortBy] =
-    useState<RecentLoginActivitySortBy>("eventTime");
-  const [recentLoginActivitySortOrder, setRecentLoginActivitySortOrder] =
-    useState<RecentLoginActivitySortOrder>("desc");
-  const deferredRecentLoginActivitySearch = useDeferredValue(recentLoginActivitySearch.trim());
+  const recentLoginActivityControls = useDashboardRecentLoginActivityControls();
   const [exportingPdf, setExportingPdf] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -192,32 +176,6 @@ function DashboardContent() {
     refetchIntervalInBackground: false,
   });
 
-  const recentLoginActivityPageQuery = useMemo(
-    () => ({
-      page: recentLoginActivityPageNumber,
-      pageSize: recentLoginActivityPageSize,
-      status: recentLoginActivityFilter,
-      sortBy: recentLoginActivitySortBy,
-      sortOrder: recentLoginActivitySortOrder,
-      ...(recentLoginActivityRole !== "all" ? { role: recentLoginActivityRole } : {}),
-      ...(recentLoginActivityDateFrom ? { dateFrom: recentLoginActivityDateFrom } : {}),
-      ...(recentLoginActivityDateTo ? { dateTo: recentLoginActivityDateTo } : {}),
-      ...(deferredRecentLoginActivitySearch
-        ? { search: deferredRecentLoginActivitySearch }
-        : {}),
-    }),
-    [
-      deferredRecentLoginActivitySearch,
-      recentLoginActivityDateFrom,
-      recentLoginActivityDateTo,
-      recentLoginActivityFilter,
-      recentLoginActivityPageNumber,
-      recentLoginActivityPageSize,
-      recentLoginActivityRole,
-      recentLoginActivitySortBy,
-      recentLoginActivitySortOrder,
-    ],
-  );
   const {
     data: recentLoginActivityPage,
     error: recentLoginActivityPageError,
@@ -229,10 +187,10 @@ function DashboardContent() {
   } = useQuery<RecentLoginActivityPage>({
     queryKey: [
       "/api/analytics/recent-login-activity-page",
-      recentLoginActivityPageQuery,
+      recentLoginActivityControls.query,
     ],
     queryFn: ({ signal }) =>
-      getRecentLoginActivityPage(recentLoginActivityPageQuery, { signal }),
+      getRecentLoginActivityPage(recentLoginActivityControls.query, { signal }),
     placeholderData: keepPreviousData,
     refetchInterval: () =>
       resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
@@ -431,69 +389,16 @@ function DashboardContent() {
   const handleCleanupEndedLoginActivities = useCallback(() => {
     cleanupEndedLoginActivityMutation.mutate();
   }, [cleanupEndedLoginActivityMutation]);
-  const handleRecentLoginActivityFilterChange = useCallback((filter: RecentLoginActivityFilter) => {
-    setRecentLoginActivityFilter(filter);
-    setRecentLoginActivityPageNumber(1);
-  }, []);
-  const handleRecentLoginActivityPageSizeChange = useCallback((pageSize: number) => {
-    setRecentLoginActivityPageSize(pageSize);
-    setRecentLoginActivityPageNumber(1);
-  }, []);
-  const handleRecentLoginActivitySearchChange = useCallback((value: string) => {
-    setRecentLoginActivitySearch(value);
-    setRecentLoginActivityPageNumber(1);
-  }, []);
-  const handleRecentLoginActivityRoleChange = useCallback((value: string) => {
-    setRecentLoginActivityRole(value);
-    setRecentLoginActivityPageNumber(1);
-  }, []);
-  const handleRecentLoginActivitySortChange = useCallback((value: string) => {
-    const [sortBy, sortOrder] = value.split(":");
-    if (
-      (sortBy === "eventTime" || sortBy === "role" || sortBy === "status" || sortBy === "username")
-      && (sortOrder === "asc" || sortOrder === "desc")
-    ) {
-      setRecentLoginActivitySortBy(sortBy);
-      setRecentLoginActivitySortOrder(sortOrder);
-      setRecentLoginActivityPageNumber(1);
-    }
-  }, []);
-  const handleRecentLoginActivityDateFromChange = useCallback((value: string) => {
-    setRecentLoginActivityDateFrom(value);
-    setRecentLoginActivityDateTo((current) =>
-      current && value && current < value ? value : current);
-    setRecentLoginActivityPageNumber(1);
-  }, []);
-  const handleRecentLoginActivityDateToChange = useCallback((value: string) => {
-    setRecentLoginActivityDateTo(value);
-    setRecentLoginActivityDateFrom((current) =>
-      current && value && current > value ? value : current);
-    setRecentLoginActivityPageNumber(1);
-  }, []);
-  const handleClearRecentLoginActivityFilters = useCallback(() => {
-    setRecentLoginActivityDateFrom("");
-    setRecentLoginActivityDateTo("");
-    setRecentLoginActivityFilter("all");
-    setRecentLoginActivityPageNumber(1);
-    setRecentLoginActivityRole("all");
-    setRecentLoginActivitySearch("");
-    setRecentLoginActivitySortBy("eventTime");
-    setRecentLoginActivitySortOrder("desc");
-  }, []);
 
   useEffect(() => {
-    const serverPage = recentLoginActivityPage?.pagination.page;
-    if (
-      !recentLoginActivityPageIsPlaceholderData
-      && serverPage
-      && serverPage !== recentLoginActivityPageNumber
-    ) {
-      setRecentLoginActivityPageNumber(serverPage);
-    }
+    recentLoginActivityControls.syncServerPage(
+      recentLoginActivityPage?.pagination.page,
+      recentLoginActivityPageIsPlaceholderData,
+    );
   }, [
     recentLoginActivityPage?.pagination.page,
     recentLoginActivityPageIsPlaceholderData,
-    recentLoginActivityPageNumber,
+    recentLoginActivityControls.syncServerPage,
   ]);
 
   const handleRefreshAll = useCallback(async () => {
@@ -757,18 +662,18 @@ function DashboardContent() {
           onCleanupEndedLoginActivities={
             canManageLoginLogs ? handleCleanupEndedLoginActivities : undefined
           }
-          onClearRecentLoginActivityFilters={handleClearRecentLoginActivityFilters}
-          onRecentLoginActivityDateFromChange={handleRecentLoginActivityDateFromChange}
-          onRecentLoginActivityDateToChange={handleRecentLoginActivityDateToChange}
+          onClearRecentLoginActivityFilters={recentLoginActivityControls.handleClearFilters}
+          onRecentLoginActivityDateFromChange={recentLoginActivityControls.handleDateFromChange}
+          onRecentLoginActivityDateToChange={recentLoginActivityControls.handleDateToChange}
           onDeleteEndedLoginActivity={
             canManageLoginLogs ? handleDeleteEndedLoginActivity : undefined
           }
-          onRecentLoginActivityFilterChange={handleRecentLoginActivityFilterChange}
-          onRecentLoginActivityPageChange={setRecentLoginActivityPageNumber}
-          onRecentLoginActivityPageSizeChange={handleRecentLoginActivityPageSizeChange}
-          onRecentLoginActivityRoleChange={handleRecentLoginActivityRoleChange}
-          onRecentLoginActivitySearchChange={handleRecentLoginActivitySearchChange}
-          onRecentLoginActivitySortChange={handleRecentLoginActivitySortChange}
+          onRecentLoginActivityFilterChange={recentLoginActivityControls.handleFilterChange}
+          onRecentLoginActivityPageChange={recentLoginActivityControls.setPage}
+          onRecentLoginActivityPageSizeChange={recentLoginActivityControls.handlePageSizeChange}
+          onRecentLoginActivityRoleChange={recentLoginActivityControls.handleRoleChange}
+          onRecentLoginActivitySearchChange={recentLoginActivityControls.handleSearchChange}
+          onRecentLoginActivitySortChange={recentLoginActivityControls.handleSortChange}
           trends={trends ?? []}
           trendsErrorMessage={trendsErrorMessage}
           trendsLoading={trendsLoading}
@@ -778,9 +683,9 @@ function DashboardContent() {
           peakHoursLoading={!secondaryDashboardQueriesEnabled || peakHoursLoading}
           peakHoursRetrying={peakHoursFetching}
           recentLoginActivities={recentLoginActivities ?? []}
-          recentLoginActivityDateFrom={recentLoginActivityDateFrom}
-          recentLoginActivityDateTo={recentLoginActivityDateTo}
-          recentLoginActivityFilter={recentLoginActivityFilter}
+          recentLoginActivityDateFrom={recentLoginActivityControls.dateFrom}
+          recentLoginActivityDateTo={recentLoginActivityControls.dateTo}
+          recentLoginActivityFilter={recentLoginActivityControls.filter}
           recentLoginActivityFilterCounts={recentLoginActivityPage?.filterCounts ?? {
             active: 0,
             all: 0,
@@ -788,12 +693,12 @@ function DashboardContent() {
             ended: 0,
             failed: 0,
           }}
-          recentLoginActivityPage={recentLoginActivityPageNumber}
+          recentLoginActivityPage={recentLoginActivityControls.page}
           recentLoginActivityPageItems={recentLoginActivityPage?.activities ?? []}
-          recentLoginActivityPageSize={recentLoginActivityPageSize}
-          recentLoginActivityRole={recentLoginActivityRole}
-          recentLoginActivitySearch={recentLoginActivitySearch}
-          recentLoginActivitySort={`${recentLoginActivitySortBy}:${recentLoginActivitySortOrder}`}
+          recentLoginActivityPageSize={recentLoginActivityControls.pageSize}
+          recentLoginActivityRole={recentLoginActivityControls.role}
+          recentLoginActivitySearch={recentLoginActivityControls.search}
+          recentLoginActivitySort={recentLoginActivityControls.sortValue}
           recentLoginActivityTotalItems={recentLoginActivityPage?.pagination.totalItems ?? 0}
           recentLoginActivityTotalPages={recentLoginActivityPage?.pagination.totalPages ?? 1}
           recentLoginActivityCleaningEndedLogs={cleanupEndedLoginActivityMutation.isPending}

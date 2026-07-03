@@ -371,11 +371,26 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     };
 
     const detachSocketLifecycleHandlers = () => {
-      ws.removeListener("message", handleSocketMessage);
-      ws.removeListener("pong", markSocketAlive);
-      ws.removeListener("close", handleSocketClose);
-      ws.removeListener("error", handleSocketError);
-      ws.removeAllListeners();
+      type ManagedSocketListener = Parameters<typeof ws.removeListener>[1];
+      const detachManagedListener = (
+        eventName: "close" | "error" | "message" | "pong",
+        listener: ManagedSocketListener,
+      ) => {
+        try {
+          ws.removeListener(eventName, listener);
+        } catch (error) {
+          logger.debug("WebSocket lifecycle handler detach failed during cleanup", {
+            activityId,
+            eventName,
+            error: sanitizeRuntimeWebSocketError(error),
+          });
+        }
+      };
+
+      detachManagedListener("message", handleSocketMessage as ManagedSocketListener);
+      detachManagedListener("pong", markSocketAlive as ManagedSocketListener);
+      detachManagedListener("close", handleSocketClose as ManagedSocketListener);
+      detachManagedListener("error", handleSocketError as ManagedSocketListener);
     };
 
     const queueNicknameSessionClear = (sessionActivityId: string, reason: string) => {

@@ -77,6 +77,12 @@ const EMPTY_RECENT_LOGIN_ACTIVITIES: readonly RecentLoginActivity[] = [];
 const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500;
 const RECENT_LOGIN_ACTIVITY_PAGE_SIZE_OPTIONS = [4, 8, 12] as const;
+const RECENT_LOGIN_ACTIVITY_SKELETON_KEYS = [
+  "recent-login-skeleton-primary",
+  "recent-login-skeleton-secondary",
+  "recent-login-skeleton-tertiary",
+  "recent-login-skeleton-quaternary",
+] as const;
 const RECENT_LOGIN_FILTER_OPTIONS: readonly {
   readonly id: RecentLoginActivityFilter;
   readonly label: string;
@@ -93,6 +99,23 @@ const RISK_NOTE_CLASS_BY_TONE = {
   success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
   warning: "border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200",
 } as const;
+
+function buildDashboardRecentLoginActivityKey(activity: RecentLoginActivity): string {
+  if (activity.id) {
+    return `activity:${activity.id}`;
+  }
+
+  return [
+    "activity-fallback",
+    activity.username,
+    activity.role,
+    activity.status,
+    activity.loginTime ?? "no-login-time",
+    activity.lastActivityTime ?? "no-last-activity-time",
+    activity.logoutTime ?? "no-logout-time",
+    activity.eventType ?? "no-event-type",
+  ].join(":");
+}
 
 function DetailBlock({
   children,
@@ -198,9 +221,9 @@ function DashboardRecentLoginActivitySkeleton() {
       role="status"
       aria-label="Loading recent login activity"
     >
-      {Array.from({ length: 4 }, (_, index) => (
+      {RECENT_LOGIN_ACTIVITY_SKELETON_KEYS.map((skeletonKey) => (
         <div
-          key={index}
+          key={skeletonKey}
           className="rounded-xl border border-border/60 bg-muted/10 p-3"
           aria-hidden="true"
         >
@@ -569,7 +592,7 @@ function DashboardRecentLoginActivityImpl({
 
                       return (
                         <article
-                          key={activity.id ?? `${activity.username}-${activity.loginTime ?? absoluteIndex}`}
+                          key={buildDashboardRecentLoginActivityKey(activity)}
                           role="group"
                           aria-label={buildDashboardRecentLoginActivityRowAriaLabel({
                             activity,

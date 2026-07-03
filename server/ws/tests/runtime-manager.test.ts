@@ -1339,6 +1339,52 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
   }
 });
 
+test("runtime manager preserves unmanaged socket listeners during cleanup", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-preserve-unmanaged-listeners";
+  let unmanagedMessageCalls = 0;
+  socket.on("message", () => {
+    unmanagedMessageCalls += 1;
+  });
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+    assert.equal(socket.listenerCount("message"), 2);
+
+    socket.close();
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.listenerCount("message"), 1);
+    socket.emit("message", Buffer.from("after-cleanup"));
+    assert.equal(unmanagedMessageCalls, 1);
+    assert.deepEqual(manager.getLifecycleSnapshot(), {
+      cleanupCallbacks: 0,
+      connectedClients: 0,
+      socketEntriesByActivity: 0,
+      socketEntriesByInstance: 0,
+      trackedSockets: 0,
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager clears lifecycle registry even when listener cleanup throws", async (t) => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
@@ -1350,9 +1396,13 @@ test("runtime manager clears lifecycle registry even when listener cleanup throw
     debugLogs.push(message);
   });
 
-  socket.removeAllListeners = (() => {
-    throw new Error("listener cleanup failed");
-  }) as typeof socket.removeAllListeners;
+  const originalRemoveListener = socket.removeListener.bind(socket);
+  socket.removeListener = ((eventName, listener) => {
+    if (eventName === "pong") {
+      throw new Error("listener cleanup failed");
+    }
+    return originalRemoveListener(eventName, listener);
+  }) as typeof socket.removeListener;
 
   const manager = createRuntimeWebSocketManager({
     wss: wss as unknown as import("ws").WebSocketServer,

@@ -175,6 +175,8 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(dashboardSource, /<DashboardLoginFocusStrip/);
   assert.match(dashboardSource, /<DashboardLoginSituationSummary/);
   assert.match(dashboardSource, /<DashboardLoginIncidentTimeline/);
+  assert.match(dashboardSource, /useDashboardRecentLoginActivityControls/);
+  assert.doesNotMatch(dashboardSource, /useDeferredValue/);
   assert.match(dashboardSource, /id="dashboard-login-snapshot"/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /Dashboard login review workspace/);
@@ -900,6 +902,10 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /Details/);
   assert.match(markup, /tabindex="0"/);
   assert.match(source, /RECENT_LOGIN_ACTIVITY_PAGE_SIZE_OPTIONS = \[4, 8, 12\]/);
+  assert.match(source, /RECENT_LOGIN_ACTIVITY_SKELETON_KEYS/);
+  assert.match(source, /buildDashboardRecentLoginActivityKey/);
+  assert.doesNotMatch(source, /key=\{index\}/);
+  assert.doesNotMatch(source, /key=\{activity\.id \?\?/);
   assert.match(source, /AppPaginationBar/);
   assert.match(source, /AlertDialog/);
   assert.match(source, /Delete ended login log\?/);
@@ -971,13 +977,18 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
 
 test("Dashboard recent-login pagination does not roll back while placeholder data is visible", () => {
   const source = readFileSync(path.resolve(__dirname, "../../Dashboard.tsx"), "utf8");
+  const controlsSource = readFileSync(
+    path.resolve(__dirname, "../useDashboardRecentLoginActivityControls.ts"),
+    "utf8",
+  );
 
   assert.match(source, /isPlaceholderData: recentLoginActivityPageIsPlaceholderData/);
+  assert.match(source, /recentLoginActivityControls\.syncServerPage\(/);
   assert.match(
-    source,
-    /!recentLoginActivityPageIsPlaceholderData[\s\S]*serverPage !== recentLoginActivityPageNumber/,
+    controlsSource,
+    /!serverPageIsPlaceholder[\s\S]*serverPage !== page/,
   );
-  assert.match(source, /recentLoginActivityPage=\{recentLoginActivityPageNumber\}/);
+  assert.match(source, /recentLoginActivityPage=\{recentLoginActivityControls\.page\}/);
   assert.doesNotMatch(
     source,
     /recentLoginActivityPage=\{recentLoginActivityPage\?\.pagination\.page/,

@@ -187,6 +187,21 @@ class MemorySessionRevocationStore implements SessionRevocationStore {
   }
 }
 
+class ClosedSessionRevocationStore implements SessionRevocationStore {
+  async isRevoked(): Promise<boolean> {
+    return true;
+  }
+
+  async revoke(): Promise<void> {
+    throw new Error("Session revocation store is closed.");
+  }
+
+  close() {
+    // Already closed.
+  }
+}
+
+const closedSessionRevocationStore = new ClosedSessionRevocationStore();
 let activeStore: SessionRevocationStore = new MemorySessionRevocationStore();
 
 function logSessionRevocationStoreCloseFailure(
@@ -245,7 +260,7 @@ export function configureSessionRevocationStoreForRuntime(
 
   return () => {
     const storeToClose = activeStore;
-    activeStore = new MemorySessionRevocationStore();
+    activeStore = closedSessionRevocationStore;
     closeSessionRevocationStoreSafely(
       storeToClose,
       sink,
