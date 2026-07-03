@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import jwt, { type Algorithm, type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
+import { logger } from "../lib/logger";
 import { safeJsonParse } from "../lib/safe-json";
 import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
 
@@ -37,7 +38,7 @@ type SessionJwtStartupValidationOptions = {
   nodeEnv?: string | null | undefined;
   privateKey?: string | null | undefined;
   publicKey?: string | null | undefined;
-  warn?: (message: string) => void;
+  warn?: (message: string, meta?: Record<string, unknown>) => void;
 };
 
 export type SessionJwtKeySet = {
@@ -111,6 +112,23 @@ export function resetSessionJwtStartupValidationWarningForTests(): void {
   sessionJwtFallbackWarningEmitted = false;
 }
 
+function warnSessionJwtHs256Fallback(warn?: SessionJwtStartupValidationOptions["warn"]): void {
+  if (warn) {
+    warn(SESSION_JWT_HS256_FALLBACK_WARNING, {
+      event: "session_jwt_hs256_fallback",
+      mode: "non_production_only",
+      action: "warn_only",
+    });
+    return;
+  }
+
+  logger.warn("Session JWT HS256 fallback is active because RS256 keys are not configured", {
+    event: "session_jwt_hs256_fallback",
+    mode: "non_production_only",
+    action: "configure_rs256_keys_before_production",
+  });
+}
+
 export function validateSessionJwtStartupConfiguration(
   options: SessionJwtStartupValidationOptions = {},
 ): SessionJwtAlgorithm {
@@ -136,8 +154,7 @@ export function validateSessionJwtStartupConfiguration(
   }
 
   if (!sessionJwtFallbackWarningEmitted) {
-    const warn = options.warn ?? console.warn;
-    warn(SESSION_JWT_HS256_FALLBACK_WARNING);
+    warnSessionJwtHs256Fallback(options.warn);
     sessionJwtFallbackWarningEmitted = true;
   }
 

@@ -87,6 +87,7 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAI
   const panelId = useId();
   const panelTitleId = useId();
   const panelDescriptionId = useId();
+  const minimizedStatusId = useId();
   const panelSurfaceRef = useRef<HTMLElement | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -182,6 +183,7 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAI
         isThinking={isThinking}
         layoutState={layoutState}
         minimizedStatus={minimizedStatus}
+        minimizedStatusId={minimizedStatusId}
         panelId={panelId}
         triggerButtonRef={triggerButtonRef}
         unreadCount={unreadCount}

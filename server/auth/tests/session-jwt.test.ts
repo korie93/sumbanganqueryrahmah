@@ -28,6 +28,7 @@ import {
   parseAuthenticatedSessionJwtPayload,
   parseWebSocketSessionJwtPayload,
 } from "../session-jwt-payload";
+import { logger } from "../../lib/logger";
 
 test("signSessionJwt applies the default session expiry when omitted", () => {
   const token = signSessionJwt({ username: "alice", role: "admin" });
@@ -229,6 +230,42 @@ test("session JWT startup validation warns for development HS256 fallback", () =
 
   assert.equal(algorithm, SESSION_JWT_LEGACY_ALGORITHM);
   assert.deepEqual(warnings, [SESSION_JWT_HS256_FALLBACK_WARNING]);
+});
+
+test("session JWT startup validation uses sanitized logger for default HS256 fallback warning", (t) => {
+  resetSessionJwtStartupValidationWarningForTests();
+  const originalConsoleWarn = console.warn;
+  let consoleWarnCalled = false;
+  const warnCalls: Array<{ message: string; meta: Record<string, unknown> | undefined }> = [];
+
+  console.warn = (() => {
+    consoleWarnCalled = true;
+  }) as typeof console.warn;
+  t.after(() => {
+    console.warn = originalConsoleWarn;
+  });
+  t.mock.method(logger, "warn", ((message: string, meta?: Record<string, unknown>) => {
+    warnCalls.push({ message, meta });
+  }) as typeof logger.warn);
+
+  const algorithm = validateSessionJwtStartupConfiguration({
+    nodeEnv: "development",
+    privateKey: "",
+    publicKey: "",
+  });
+
+  assert.equal(algorithm, SESSION_JWT_LEGACY_ALGORITHM);
+  assert.equal(consoleWarnCalled, false);
+  assert.deepEqual(warnCalls, [
+    {
+      message: "Session JWT HS256 fallback is active because RS256 keys are not configured",
+      meta: {
+        event: "session_jwt_hs256_fallback",
+        mode: "non_production_only",
+        action: "configure_rs256_keys_before_production",
+      },
+    },
+  ]);
 });
 
 test("session JWT startup validation accepts matching RS256 key material", () => {

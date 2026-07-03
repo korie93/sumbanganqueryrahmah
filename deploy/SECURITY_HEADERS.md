@@ -45,6 +45,7 @@ curl -I https://sqr-system.com/
 curl -i https://sqr-system.com/api/health/live
 npm run test:http
 npm run test:scripts
+node --test scripts/tests/nginx-production-contract.test.mjs
 ```
 
 Required response headers should include `Content-Security-Policy`,

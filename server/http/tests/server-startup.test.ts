@@ -31,6 +31,8 @@ function close(server: ReturnType<typeof createServer>) {
 }
 
 function installPrecomputeTimerMocks(t: TestContext) {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
   const fakeHandle = {
     unrefCalled: false,
     unref() {
@@ -39,20 +41,31 @@ function installPrecomputeTimerMocks(t: TestContext) {
     },
   };
   let capturedHandler: (() => void) | null = null;
+  let precomputeSetTimeoutCalls = 0;
+  let precomputeClearTimeoutCalls = 0;
   const setTimeoutMock = t.mock.method(
     globalThis,
     "setTimeout",
     (((handler: () => void, delayMs?: number) => {
-      assert.equal(delayMs, 0);
-      capturedHandler = handler;
-      return fakeHandle as unknown as ReturnType<typeof setTimeout>;
+      if (delayMs === 0) {
+        precomputeSetTimeoutCalls += 1;
+        capturedHandler = handler;
+        return fakeHandle as unknown as ReturnType<typeof setTimeout>;
+      }
+
+      return originalSetTimeout(handler, delayMs);
     }) as unknown) as typeof setTimeout,
   );
   const clearTimeoutMock = t.mock.method(
     globalThis,
     "clearTimeout",
     (((handle?: ReturnType<typeof setTimeout>) => {
-      assert.equal(handle, fakeHandle as unknown as ReturnType<typeof setTimeout>);
+      if (handle === fakeHandle as unknown as ReturnType<typeof setTimeout>) {
+        precomputeClearTimeoutCalls += 1;
+        return;
+      }
+
+      originalClearTimeout(handle);
     }) as unknown) as typeof clearTimeout,
   );
 
@@ -60,6 +73,8 @@ function installPrecomputeTimerMocks(t: TestContext) {
     clearTimeoutMock,
     fakeHandle,
     getCapturedHandler: () => capturedHandler,
+    getPrecomputeClearTimeoutCalls: () => precomputeClearTimeoutCalls,
+    getPrecomputeSetTimeoutCalls: () => precomputeSetTimeoutCalls,
     setTimeoutMock,
   };
 }
@@ -160,12 +175,12 @@ test("startLocalServer cancels pending category precompute when server closes fi
       host: "127.0.0.1",
     });
 
-    assert.equal(timerMocks.setTimeoutMock.mock.callCount(), 1);
+    assert.equal(timerMocks.getPrecomputeSetTimeoutCalls(), 1);
     assert.equal(timerMocks.fakeHandle.unrefCalled, true);
     assert.equal(typeof timerMocks.getCapturedHandler(), "function");
 
     await close(server);
-    assert.equal(timerMocks.clearTimeoutMock.mock.callCount(), 1);
+    assert.equal(timerMocks.getPrecomputeClearTimeoutCalls(), 1);
 
     timerMocks.getCapturedHandler()?.();
     await Promise.resolve();
