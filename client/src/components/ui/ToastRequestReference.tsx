@@ -1,5 +1,5 @@
 import { Check, Copy } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { normalizeToastRequestId } from "@/components/ui/toast-request-reference";
 import { logClientError } from "@/lib/client-logger";
 
@@ -7,24 +7,51 @@ type ToastRequestReferenceProps = {
   requestId: string;
 };
 
+type CopyStatus = "idle" | "copied" | "failed";
+
 /** Renders a sanitized support reference with an accessible copy action. */
 export function ToastRequestReference({ requestId }: ToastRequestReferenceProps) {
   const normalizedRequestId = normalizeToastRequestId(requestId);
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+
+  useEffect(() => {
+    setCopyStatus("idle");
+  }, [normalizedRequestId]);
 
   const handleCopy = useCallback(async () => {
     if (!normalizedRequestId || !navigator.clipboard?.writeText) {
       logClientError("[ToastRequestReference] Clipboard access is unavailable");
+      setCopyStatus("failed");
       return;
     }
 
     try {
       await navigator.clipboard.writeText(normalizedRequestId);
-      setCopied(true);
+      setCopyStatus("copied");
     } catch (error: unknown) {
       logClientError("[ToastRequestReference] Failed to copy request ID", error);
+      setCopyStatus("failed");
     }
   }, [normalizedRequestId]);
+
+  const copyText = useMemo(() => {
+    if (copyStatus === "copied") {
+      return {
+        label: "Request ID telah disalin",
+        visible: "Disalin",
+      };
+    }
+    if (copyStatus === "failed") {
+      return {
+        label: "Request ID gagal disalin",
+        visible: "Gagal",
+      };
+    }
+    return {
+      label: "Salin Request ID",
+      visible: "Salin",
+    };
+  }, [copyStatus]);
 
   if (!normalizedRequestId) {
     return null;
@@ -38,18 +65,18 @@ export function ToastRequestReference({ requestId }: ToastRequestReferenceProps)
       <button
         type="button"
         className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-current/25 px-2 text-xs font-semibold transition-colors hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-2 dark:hover:bg-white/10"
-        aria-label={copied ? "Request ID telah disalin" : "Salin Request ID"}
-        title={copied ? "Request ID telah disalin" : "Salin Request ID"}
+        aria-label={copyText.label}
+        title={copyText.label}
         onClick={() => {
           void handleCopy();
         }}
       >
-        {copied ? (
+        {copyStatus === "copied" ? (
           <Check className="h-3.5 w-3.5" aria-hidden="true" />
         ) : (
           <Copy className="h-3.5 w-3.5" aria-hidden="true" />
         )}
-        <span aria-live="polite">{copied ? "Disalin" : "Salin"}</span>
+        <span aria-live="polite">{copyText.visible}</span>
       </button>
     </div>
   );

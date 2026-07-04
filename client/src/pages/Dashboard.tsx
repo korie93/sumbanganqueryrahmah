@@ -27,6 +27,7 @@ import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginComman
 import { DashboardLoginFocusStrip } from "@/pages/dashboard/DashboardLoginFocusStrip";
 import { DashboardLoginIncidentTimeline } from "@/pages/dashboard/DashboardLoginIncidentTimeline";
 import { DashboardLoginSituationSummary } from "@/pages/dashboard/DashboardLoginSituationSummary";
+import { DashboardErrorState } from "@/pages/dashboard/DashboardErrorState";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
@@ -601,21 +602,7 @@ function DashboardContent() {
         className="min-w-0 space-y-4 sm:space-y-6"
         data-dashboard-export-root="true"
       >
-        {dashboardErrorMessages.length > 0 ? (
-          <section
-            className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
-            role="alert"
-            aria-live="polite"
-            data-testid="dashboard-error-state"
-          >
-            <p className="font-semibold">Sebahagian data dashboard gagal dimuat.</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {dashboardErrorMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+        <DashboardErrorState messages={dashboardErrorMessages} />
         <DashboardLoginCommandBar
           loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
           recentLoginActivities={recentLoginActivities ?? []}

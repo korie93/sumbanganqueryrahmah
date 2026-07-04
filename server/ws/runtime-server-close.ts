@@ -59,6 +59,13 @@ export function closeRuntimeWebSocketServerState(options: {
       logger.debug("WebSocket close request failed during server shutdown cleanup", {
         error: sanitizeRuntimeWebSocketError(error),
       });
+      try {
+        ws.terminate();
+      } catch (terminateError) {
+        logger.debug("WebSocket terminate fallback failed during server shutdown cleanup", {
+          error: sanitizeRuntimeWebSocketError(terminateError),
+        });
+      }
     } finally {
       lifecycleRegistry.deregisterSocket(ws);
     }

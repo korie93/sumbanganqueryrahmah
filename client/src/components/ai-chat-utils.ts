@@ -8,6 +8,7 @@ import {
 import type { AIChatMessage, AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { createClientRandomId } from "@/lib/secure-id";
+import { sanitizeUntrustedErrorMessage } from "@/lib/safe-error-message";
 import { safeJsonParseResult, type SafeJsonParseOptions } from "@/lib/utils/safe-json";
 
 export const MAX_AI_CHAT_MESSAGES = 30;
@@ -56,11 +57,14 @@ function looksLikeHtmlDocument(value: string) {
 }
 
 function normalizePlainTextErrorMessage(raw: string, fallbackMessage: string) {
-  const normalized = raw.replace(/\s+/g, " ").trim();
+  if (looksLikeHtmlDocument(raw)) {
+    return fallbackMessage;
+  }
+  const normalized = sanitizeUntrustedErrorMessage(raw, fallbackMessage);
   if (!normalized || looksLikeHtmlDocument(normalized)) {
     return fallbackMessage;
   }
-  return normalized.length > 500 ? `${normalized.slice(0, 497)}...` : normalized;
+  return normalized;
 }
 
 async function readAIChatJsonPayload(response: Pick<AIChatResponseLike, "text">) {
@@ -167,7 +171,9 @@ export function getAIChatErrorDetailsFromPayload(
   const record = payload && typeof payload === "object"
     ? payload as Record<string, unknown>
     : {};
-  const message = typeof record.message === "string" ? record.message.trim() : "";
+  const message = typeof record.message === "string"
+    ? sanitizeUntrustedErrorMessage(record.message, fallbackMessage)
+    : "";
   const gate = record.gate && typeof record.gate === "object"
     ? record.gate as Record<string, unknown>
     : null;

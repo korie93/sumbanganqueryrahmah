@@ -70,6 +70,61 @@ test("read replica fallback pool routes successful reads to the replica", async 
   });
 });
 
+test("read replica fallback pool routes write statements directly to primary", async () => {
+  configureReadReplicaHealth(true);
+  const primaryArgs: unknown[][] = [];
+  let replicaQueries = 0;
+
+  const primaryPool = createPool(async (...args) => {
+    primaryArgs.push(args);
+    return { rows: [{ source: "primary" }] };
+  });
+  const replicaPool = createPool(async () => {
+    replicaQueries += 1;
+    return { rows: [{ source: "replica" }] };
+  });
+
+  const readPool = createReadReplicaFallbackPool(primaryPool, replicaPool);
+  const result = await readPool.query("INSERT INTO audit_log(message) VALUES($1)", ["created"]);
+
+  assert.deepEqual(result, { rows: [{ source: "primary" }] });
+  assert.deepEqual(primaryArgs, [["INSERT INTO audit_log(message) VALUES($1)", ["created"]]]);
+  assert.equal(replicaQueries, 0);
+  assert.deepEqual(getReadReplicaHealthSnapshot(), {
+    configured: true,
+    fallbackCount: 0,
+    lastErrorAt: null,
+    lastErrorCode: null,
+    state: "healthy",
+  });
+});
+
+test("read replica fallback pool routes unknown query config writes directly to primary", async () => {
+  configureReadReplicaHealth(true);
+  const primaryArgs: unknown[][] = [];
+  let replicaQueries = 0;
+
+  const primaryPool = createPool(async (...args) => {
+    primaryArgs.push(args);
+    return { rows: [{ source: "primary" }] };
+  });
+  const replicaPool = createPool(async () => {
+    replicaQueries += 1;
+    return { rows: [{ source: "replica" }] };
+  });
+
+  const readPool = createReadReplicaFallbackPool(primaryPool, replicaPool);
+  const queryConfig = {
+    text: "UPDATE users SET last_seen_at = NOW() WHERE id = $1",
+    values: ["user-1"],
+  };
+  const result = await readPool.query(queryConfig);
+
+  assert.deepEqual(result, { rows: [{ source: "primary" }] });
+  assert.deepEqual(primaryArgs, [[queryConfig]]);
+  assert.equal(replicaQueries, 0);
+});
+
 test("read replica fallback pool falls back to primary and records sanitized health when replica fails", async () => {
   configureReadReplicaHealth(true);
   const { increments, metrics } = createMetricsRecorder();

@@ -386,6 +386,118 @@ test("errorHandler detects deeply nested sensitive production details", async ()
   }
 });
 
+test("errorHandler sanitizes production exposed nested Error causes", async () => {
+  const app = express();
+  app.get("/nested-error-cause", () => {
+    const error = badRequest("Validation failed.", "INVALID_REQUEST", { field: "query" }) as HttpError & {
+      cause?: unknown;
+    };
+    error.cause = new Error("password=secret SELECT * FROM users");
+    throw error;
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/nested-error-cause`);
+    const payload = await response.json();
+    const serialized = JSON.stringify(payload);
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Invalid request.", "INVALID_REQUEST"));
+    assert.equal(serialized.includes("password=secret"), false);
+    assert.equal(serialized.includes("SELECT * FROM users"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler sanitizes production exposed nested error arrays", async () => {
+  const app = express();
+  app.get("/nested-error-array", () => {
+    const error = badRequest("Validation failed.", "INVALID_REQUEST", { field: "api" }) as HttpError & {
+      errors?: unknown;
+    };
+    error.errors = [{ message: "upstream failed", apiKey: "internal-key" }];
+    throw error;
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/nested-error-array`);
+    const payload = await response.json();
+    const serialized = JSON.stringify(payload);
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Invalid request.", "INVALID_REQUEST"));
+    assert.equal(serialized.includes("apiKey"), false);
+    assert.equal(serialized.includes("internal-key"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler tolerates circular nested causes without leaking or crashing", async () => {
+  const app = express();
+  app.get("/circular-cause", () => {
+    const circularCause: { cause?: unknown; message: string } = {
+      message: "retryable upstream timeout",
+    };
+    circularCause.cause = circularCause;
+    const error = badRequest("Validation failed.", "INVALID_REQUEST", { field: "safe" }) as HttpError & {
+      cause?: unknown;
+    };
+    error.cause = circularCause;
+    throw error;
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/circular-cause`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Validation failed.", "INVALID_REQUEST", {
+      details: { field: "safe" },
+    }));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler fail-closes very deep nested causes", async () => {
+  const app = express();
+  app.get("/deep-cause-chain", () => {
+    let cause: { cause?: unknown; message: string } = { message: "level-0" };
+    for (let index = 1; index <= 20; index += 1) {
+      cause = { message: `level-${index}`, cause };
+    }
+    const error = badRequest("Validation failed.", "INVALID_REQUEST", { field: "depth" }) as HttpError & {
+      cause?: unknown;
+    };
+    error.cause = cause;
+    throw error;
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/deep-cause-chain`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Invalid request.", "INVALID_REQUEST"));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("errorHandler keeps detailed exposed messages outside production-like mode", async () => {
   const app = express();
   app.get("/dev-query", () => {

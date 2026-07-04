@@ -81,3 +81,27 @@ test("parseAutoLogoutWebSocketMessage rejects malformed or unsupported payloads"
   assert.equal(parseAutoLogoutWebSocketMessage(JSON.stringify({ type: "unknown" })), null);
   assert.equal(parseAutoLogoutWebSocketMessage(new Uint8Array([1, 2, 3])), null);
 });
+
+test("parseAutoLogoutWebSocketMessage rejects coerced maintenance payload fields", () => {
+  const baseMaintenancePayload = {
+    type: "maintenance_update",
+    maintenance: true,
+    message: "Scheduled maintenance",
+    mode: "soft",
+    startTime: null,
+    endTime: null,
+  };
+
+  assert.equal(parseAutoLogoutWebSocketMessage(JSON.stringify({
+    ...baseMaintenancePayload,
+    maintenance: "true",
+  })), null);
+  assert.equal(parseAutoLogoutWebSocketMessage(JSON.stringify({
+    ...baseMaintenancePayload,
+    mode: "unexpected",
+  })), null);
+  assert.equal(parseAutoLogoutWebSocketMessage(JSON.stringify({
+    ...baseMaintenancePayload,
+    startTime: 0,
+  })), null);
+});

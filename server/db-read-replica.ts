@@ -38,6 +38,7 @@ const READ_REPLICA_FAILURE_DETAILS = "PostgreSQL read replica is unavailable; re
 const DEFAULT_WARNING_COOLDOWN_MS = 30_000;
 const DEFAULT_HEALTH_INTERVAL_MS = 60_000;
 const DEFAULT_HEALTH_TIMEOUT_MS = 5_000;
+const READ_REPLICA_ALLOWED_QUERY_PATTERN = /^\s*(?:select|show)\b/i;
 
 let configured = false;
 let fallbackCount = 0;
@@ -59,6 +60,25 @@ function sanitizeReadReplicaError(error: unknown) {
     code: readErrorCode(error),
     name: error instanceof Error ? error.name : "UnknownError",
   };
+}
+
+function extractQueryText(queryArgs: unknown[]): string | null {
+  const query = queryArgs[0];
+  if (typeof query === "string") {
+    return query;
+  }
+
+  if (typeof query !== "object" || query === null || !("text" in query)) {
+    return null;
+  }
+
+  const text = (query as { text?: unknown }).text;
+  return typeof text === "string" ? text : null;
+}
+
+function isReadReplicaEligibleQuery(queryArgs: unknown[]): boolean {
+  const text = extractQueryText(queryArgs);
+  return text !== null && READ_REPLICA_ALLOWED_QUERY_PATTERN.test(text);
 }
 
 export function configureReadReplicaHealth(isConfigured: boolean): void {
@@ -149,6 +169,11 @@ export function createReadReplicaFallbackPool(
       }
 
       return async (...args: unknown[]) => {
+        if (!isReadReplicaEligibleQuery(args)) {
+          const queryPrimary = primaryPool.query.bind(primaryPool) as (...queryArgs: unknown[]) => Promise<unknown>;
+          return queryPrimary(...args);
+        }
+
         try {
           const queryReplica = target.query.bind(target) as (...queryArgs: unknown[]) => Promise<unknown>;
           const result = await queryReplica(...args);

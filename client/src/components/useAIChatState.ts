@@ -192,7 +192,12 @@ export function useAIChatState({
     isMountedRef,
     processingRef,
     sessionRef,
+    setAiStatus,
+    setGateNotice,
+    setIsProcessing,
     setIsThinking,
+    setSlowNotice,
+    setStreamingText,
     stopTyping,
   ]);
 
@@ -206,7 +211,7 @@ export function useAIChatState({
     if (gateNotice === AI_CHAT_CHARACTER_LIMIT_NOTICE) {
       setGateNotice(null);
     }
-  }, [gateNotice]);
+  }, [gateNotice, setGateNotice, setQuery]);
 
   const resetSession = useCallback(() => {
     cancelAISearch(true);
@@ -243,7 +248,14 @@ export function useAIChatState({
       }
       setSlowNotice(true);
     }, 1500);
-  }, [clearSlowNoticeTimer, isMountedRef, processingRef, sessionRef, slowNoticeTimerRef]);
+  }, [
+    clearSlowNoticeTimer,
+    isMountedRef,
+    processingRef,
+    sessionRef,
+    setSlowNotice,
+    slowNoticeTimerRef,
+  ]);
 
   const executeSearch = useAIChatRequestExecutor({
     abortActiveRequest,
@@ -313,7 +325,13 @@ export function useAIChatState({
     isMobile,
     processingRef,
     query,
+    setAiStatus,
+    setGateNotice,
+    setIsProcessing,
     setIsThinking,
+    setIsTyping,
+    setQuery,
+    setSlowNotice,
     sessionRef,
     startSlowNoticeWatch,
   ]);

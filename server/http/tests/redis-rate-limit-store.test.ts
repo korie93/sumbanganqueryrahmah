@@ -31,6 +31,7 @@ function readWarningEvent(warning: WarningEntry): unknown {
 class FakeRedisClient {
   multiCalls = 0;
   quitCalls = 0;
+  private readonly listeners = new Map<string, Array<(error?: unknown) => void>>();
 
   constructor(private readonly entries: Map<string, FakeRedisEntry>) {}
 
@@ -38,8 +39,17 @@ class FakeRedisClient {
     return undefined;
   }
 
-  on() {
+  on(event: string, listener: (error?: unknown) => void) {
+    const existing = this.listeners.get(event) ?? [];
+    existing.push(listener);
+    this.listeners.set(event, existing);
     return this;
+  }
+
+  emit(event: string, error?: unknown): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener(error);
+    }
   }
 
   async eval(_script: string, options: { arguments: string[]; keys: string[] }): Promise<unknown> {
@@ -346,6 +356,62 @@ test("RedisRateLimitStore closes a failed command client before retrying", async
 
   assert.equal((await store.increment("client-1")).totalHits, 1);
   assert.equal(factoryCalls, 2);
+});
+
+test("RedisRateLimitStore drops disconnected clients so the next request reconnects", async () => {
+  const entries = new Map<string, FakeRedisEntry>();
+  let factoryCalls = 0;
+  const createdClients: FakeRedisClient[] = [];
+
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => {
+      factoryCalls += 1;
+      const client = new FakeRedisClient(entries);
+      createdClients.push(client);
+      return client;
+    },
+    logger: {
+      warn() {},
+    },
+    prefix: "sqr:test:disconnect",
+    warningRepeatMs: 1,
+  });
+  initStore(store);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  createdClients[0]?.emit("end");
+
+  assert.equal((await store.increment("client-1")).totalHits, 2);
+  assert.equal(factoryCalls, 2);
+});
+
+test("RedisRateLimitStore ignores late client errors after shutdown", async () => {
+  const entries = new Map<string, FakeRedisEntry>();
+  const warnings: WarningEntry[] = [];
+  const createdClients: FakeRedisClient[] = [];
+
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => {
+      const client = new FakeRedisClient(entries);
+      createdClients.push(client);
+      return client;
+    },
+    logger: {
+      warn(message, payload) {
+        warnings.push({ message, payload });
+      },
+    },
+    prefix: "sqr:test:late-shutdown-error",
+  });
+  initStore(store);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  await store.shutdown();
+  createdClients[0]?.emit("error", new Error("late redis error after shutdown"));
+
+  assert.equal(warnings.length, 0);
 });
 
 test("RedisRateLimitStore records eval type errors when Lua returns null", async () => {

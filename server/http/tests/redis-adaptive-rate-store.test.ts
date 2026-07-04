@@ -48,6 +48,57 @@ test("RedisAdaptiveRateStateStore increments adaptive buckets through Redis with
   assert.equal(quitCalls, 1);
 });
 
+test("RedisAdaptiveRateStateStore keeps concurrent adaptive increments on atomic Redis eval", async () => {
+  const evalCalls: Array<{ script: string; arguments: string[]; keys: string[] }> = [];
+  let connectCalls = 0;
+  let count = 0;
+  const store = new RedisAdaptiveRateStateStore({
+    config: {
+      distributedStoreConfigured: true,
+      provider: "redis",
+      redisUrl: "redis://localhost:6379/0",
+    },
+    createRedisClient: () => ({
+      async connect() {
+        connectCalls += 1;
+      },
+      async eval(script, options) {
+        evalCalls.push({ script, ...options });
+        await Promise.resolve();
+        count += 1;
+        return [count, Number(options.arguments[0]), Number(options.arguments[0]) + Number(options.arguments[1])];
+      },
+      async quit() {
+        return undefined;
+      },
+    }),
+    prefix: "sqr:test-adaptive-concurrent",
+  });
+
+  const buckets = await Promise.all(
+    Array.from({ length: 50 }, (_value, index) =>
+      store.increment({
+        bucketKey: "203.0.113.10:api",
+        now: 1_000 + index,
+        staleGraceMs: 10_000,
+        windowMs: 10_000,
+      })),
+  );
+
+  assert.equal(connectCalls, 1);
+  assert.equal(evalCalls.length, 50);
+  assert.deepEqual(
+    buckets.map((bucket) => bucket?.count),
+    Array.from({ length: 50 }, (_value, index) => index + 1),
+  );
+  assert.equal(new Set(evalCalls.map((call) => call.keys[0])).size, 1);
+  assert.match(evalCalls[0].script, /redis\.call\("GET", KEYS\[1\]\)/);
+  assert.match(evalCalls[0].script, /redis\.call\("SET", KEYS\[1\], nextBucket, "PX", ttlMs\)/);
+  assert.doesNotMatch(evalCalls[0].script, /\bINCR\b/);
+
+  await store.close();
+});
+
 test("RedisAdaptiveRateStateStore returns null after Redis failures so middleware can fail closed", async () => {
   const warnings: Array<{ message: string; payload: unknown }> = [];
   let now = 1_000;

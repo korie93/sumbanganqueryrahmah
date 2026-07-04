@@ -76,7 +76,7 @@ test("toast notifications expose polite and assertive live-region semantics", ()
   assert.match(toastSource, /data-slot="toast"/);
   assert.match(toastSource, /data-variant=\{resolvedVariant\}/);
   assert.match(requestReferenceSource, /type="button"/);
-  assert.match(requestReferenceSource, /aria-label=\{copied \?/);
+  assert.match(requestReferenceSource, /aria-label=\{copyText\.label\}/);
   assert.match(requestReferenceSource, /aria-live="polite"/);
   assert.match(toasterSource, /aria-label=\{`Notifikasi ini berlaku \$\{countLabel\}`\}/);
 });

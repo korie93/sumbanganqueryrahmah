@@ -27,6 +27,7 @@ import type {
   NotificationHistoryState,
   NotificationHistoryVariant,
 } from "@/hooks/use-notification-history";
+import { NOTIFICATION_HISTORY_LIMIT } from "@/hooks/use-notification-history";
 import { getAriaSelectedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +55,7 @@ type NotificationHistoryModuleGroup = {
 
 const FALLBACK_NOTIFICATION_MODULE = "Sistem";
 const ACTION_REQUIRED_PREVIEW_LIMIT = 2;
+const NOTIFICATION_CENTER_RENDER_LIMIT = NOTIFICATION_HISTORY_LIMIT;
 
 const notificationFilters: ReadonlyArray<{
   id: NotificationHistoryFilter;
@@ -152,17 +154,21 @@ export function NavbarNotificationCenter({
     () => entries.filter((entry) => matchesNotificationFilter(entry, activeFilter)),
     [activeFilter, entries],
   );
-  const groupedVisibleEntries = useMemo(
-    () => groupNotificationEntriesByModule(visibleEntries),
+  const visibleEntriesForRender = useMemo(
+    () => visibleEntries.slice(0, NOTIFICATION_CENTER_RENDER_LIMIT),
     [visibleEntries],
+  );
+  const groupedVisibleEntries = useMemo(
+    () => groupNotificationEntriesByModule(visibleEntriesForRender),
+    [visibleEntriesForRender],
   );
   const actionRequiredEntries = useMemo(
     () => entries.filter(isActionRequiredNotification),
     [entries],
   );
-  const actionRequiredPreviewEntries = actionRequiredEntries.slice(
-    0,
-    ACTION_REQUIRED_PREVIEW_LIMIT,
+  const actionRequiredPreviewEntries = useMemo(
+    () => actionRequiredEntries.slice(0, ACTION_REQUIRED_PREVIEW_LIMIT),
+    [actionRequiredEntries],
   );
   const filterPanelId = `notification-center-${variant}-panel`;
   const activeFilterTabId = `notification-center-${variant}-filter-${activeFilter}`;

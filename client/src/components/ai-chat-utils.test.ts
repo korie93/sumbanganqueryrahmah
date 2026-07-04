@@ -96,6 +96,15 @@ test("getAIChatErrorDetailsFromPayload falls back on malformed payload", () => {
   assert.equal(details.gateNotice, null);
 });
 
+test("getAIChatErrorDetailsFromPayload rejects active HTML messages", () => {
+  const details = getAIChatErrorDetailsFromPayload({
+    message: '<img src=x onerror=alert(1)>',
+  }, "fallback");
+
+  assert.equal(details.message, "fallback");
+  assert.equal(details.gateNotice, null);
+});
+
 test("readAIChatErrorResponse keeps queue notice from valid JSON payloads", async () => {
   const response = {
     headers: {
@@ -120,6 +129,27 @@ test("readAIChatErrorResponse keeps queue notice from valid JSON payloads", asyn
   assert.ok(error instanceof AIChatRequestError);
   assert.equal(error.message, "queue penuh");
   assert.equal(error.gateNotice, "AI queue busy (3/4). Estimated wait 2s.");
+});
+
+test("readAIChatErrorResponse sanitizes untrusted JSON error text", async () => {
+  const response = {
+    headers: {
+      get(name: string) {
+        return name.toLowerCase() === "content-type" ? "application/json; charset=utf-8" : null;
+      },
+    },
+    async text() {
+      return JSON.stringify({
+        message: '<svg onload=alert(1)>',
+      });
+    },
+  };
+
+  const error = await readAIChatErrorResponse(response, "fallback");
+
+  assert.ok(error instanceof AIChatRequestError);
+  assert.equal(error.message, "fallback");
+  assert.doesNotMatch(error.message, /<svg|onload=|javascript:/i);
 });
 
 test("readAIChatErrorResponse falls back cleanly when JSON payload is malformed", async () => {

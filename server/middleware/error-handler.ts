@@ -8,8 +8,10 @@ import { wasRouteErrorLogged } from "../http/route-observability";
 import { logger } from "../lib/logger";
 
 type ErrorLike = {
+  cause?: unknown;
   message?: string;
   code?: string;
+  errors?: unknown;
   type?: string;
   status?: number;
   statusCode?: number;
@@ -35,6 +37,7 @@ const FORBIDDEN_RESPONSE_INFO_PATTERNS = [
 ] as const;
 
 const MAX_RESPONSE_INFO_TOTAL_PROPERTIES_SCAN = 1_000;
+const MAX_RESPONSE_INFO_SCAN_DEPTH = 12;
 const MAX_ERROR_RESPONSE_DECODE_PASSES = 3;
 
 function decodeHtmlEntities(value: string): string {
@@ -135,9 +138,18 @@ function createResponseInfoScanState(): ResponseInfoScanState {
 export function containsForbiddenErrorResponseInfo(
   value: unknown,
   state: ResponseInfoScanState = createResponseInfoScanState(),
+  depth = 0,
 ): boolean {
   if (value === null || value === undefined) {
     return false;
+  }
+
+  if (depth > MAX_RESPONSE_INFO_SCAN_DEPTH) {
+    logger.warn("API error response info scan exceeded depth limit", {
+      event: "api_error_response_info_scan_too_deep",
+      maxDepth: MAX_RESPONSE_INFO_SCAN_DEPTH,
+    });
+    return true;
   }
 
   if (typeof value === "string") {
@@ -162,7 +174,7 @@ export function containsForbiddenErrorResponseInfo(
       if (state.scannedProperties > MAX_RESPONSE_INFO_TOTAL_PROPERTIES_SCAN) {
         return true;
       }
-      if (containsForbiddenErrorResponseInfo(item, state)) {
+      if (containsForbiddenErrorResponseInfo(item, state, depth + 1)) {
         return true;
       }
     }
@@ -178,6 +190,32 @@ export function containsForbiddenErrorResponseInfo(
   }
   state.visited.add(value);
 
+  if (value instanceof Error) {
+    const nestedError = value as Error & {
+      cause?: unknown;
+      details?: unknown;
+      errors?: unknown;
+    };
+    if (
+      containsForbiddenErrorResponseInfo(nestedError.message, state, depth + 1)
+      || containsForbiddenErrorResponseInfo(nestedError.stack, state, depth + 1)
+      || (
+        "cause" in nestedError
+        && containsForbiddenErrorResponseInfo(nestedError.cause, state, depth + 1)
+      )
+      || (
+        "errors" in nestedError
+        && containsForbiddenErrorResponseInfo(nestedError.errors, state, depth + 1)
+      )
+      || (
+        "details" in nestedError
+        && containsForbiddenErrorResponseInfo(nestedError.details, state, depth + 1)
+      )
+    ) {
+      return true;
+    }
+  }
+
   for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
     state.scannedProperties += 1;
     if (state.scannedProperties > MAX_RESPONSE_INFO_TOTAL_PROPERTIES_SCAN) {
@@ -188,8 +226,8 @@ export function containsForbiddenErrorResponseInfo(
       return true;
     }
     if (
-      containsForbiddenErrorResponseInfo(key, state)
-      || containsForbiddenErrorResponseInfo(nestedValue, state)
+      containsForbiddenErrorResponseInfo(key, state, depth + 1)
+      || containsForbiddenErrorResponseInfo(nestedValue, state, depth + 1)
     ) {
       return true;
     }
@@ -199,6 +237,7 @@ export function containsForbiddenErrorResponseInfo(
 }
 
 function sanitizeErrorForResponse(params: {
+  nestedErrorInfo?: unknown;
   message: string;
   details?: unknown;
   statusCode: number;
@@ -209,8 +248,11 @@ function sanitizeErrorForResponse(params: {
   const unsafeDetails = params.productionLike
     && params.details !== undefined
     && containsForbiddenErrorResponseInfo(params.details);
+  const unsafeNestedErrorInfo = params.productionLike
+    && params.nestedErrorInfo !== undefined
+    && containsForbiddenErrorResponseInfo(params.nestedErrorInfo);
 
-  if (!unsafeMessage && !unsafeDetails) {
+  if (!unsafeMessage && !unsafeDetails && !unsafeNestedErrorInfo) {
     return {
       message: params.message,
       ...(params.details !== undefined ? { details: params.details } : {}),
@@ -222,6 +264,27 @@ function sanitizeErrorForResponse(params: {
     message: getGenericProductionMessage(params.statusCode),
     sanitized: true,
   };
+}
+
+function collectNestedErrorResponseInfo(error: unknown): unknown {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const record = error as {
+    cause?: unknown;
+    errors?: unknown;
+  };
+  const nestedInfo: Record<string, unknown> = {};
+
+  if ("cause" in record) {
+    nestedInfo.cause = record.cause;
+  }
+  if ("errors" in record) {
+    nestedInfo.errors = record.errors;
+  }
+
+  return Object.keys(nestedInfo).length > 0 ? nestedInfo : undefined;
 }
 
 function logSanitizedErrorResponse(params: {
@@ -298,6 +361,7 @@ export function createErrorHandler(options: ErrorHandlerOptions = {}) {
       const sanitized = sanitizeErrorForResponse({
         message: err.message,
         details: err.details,
+        nestedErrorInfo: collectNestedErrorResponseInfo(err),
         statusCode: err.statusCode,
         productionLike,
       });

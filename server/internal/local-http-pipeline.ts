@@ -35,6 +35,13 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     maintenanceGuard,
   } = options;
 
+  // Security middleware order is intentional and covered by
+  // server/http/tests/local-http-pipeline-order-contract.test.ts:
+  // 1. response hardening headers, compression, and bounded parsers
+  // 2. CORS and private upload subtree blocking
+  // 3. API response sanitizer before observability/error paths
+  // 4. request identity, proxy warning, timeout, and API no-store cache headers
+  // 5. CSRF before adaptive/system/maintenance guards
   registerLocalHttpSecurityHeaders(app);
   registerLocalHttpCompression(app);
   registerLocalHttpBodyParsers(app, {

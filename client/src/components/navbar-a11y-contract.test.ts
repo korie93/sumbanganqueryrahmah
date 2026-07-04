@@ -45,6 +45,8 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.doesNotMatch(notificationCenterSource, /aria-selected=\{[^}]+\}/);
   assert.match(notificationCenterSource, /aria-label="Ringkasan notifikasi"/);
   assert.match(notificationCenterSource, /groupNotificationEntriesByModule/);
+  assert.match(notificationCenterSource, /NOTIFICATION_CENTER_RENDER_LIMIT = NOTIFICATION_HISTORY_LIMIT/);
+  assert.match(notificationCenterSource, /visibleEntries\.slice\(0, NOTIFICATION_CENTER_RENDER_LIMIT\)/);
   assert.match(notificationCenterSource, /Notifikasi \$\{group\.module\}/);
   assert.match(notificationCenterSource, /entry\.action\.href/);
   assert.match(notificationCenterSource, /onMarkRead\(\)/);

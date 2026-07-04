@@ -22,7 +22,7 @@ type RedisClientLike = {
   ) => Promise<unknown>;
   get: (key: string) => Promise<unknown>;
   multi?: () => RedisMultiLike;
-  on?: (event: string, listener: (error: unknown) => void) => unknown;
+  on?: (event: string, listener: (error?: unknown) => void) => unknown;
   pTTL: (key: string) => Promise<unknown>;
   quit?: () => Promise<unknown>;
 };
@@ -360,7 +360,7 @@ export class RedisRateLimitStore implements Store {
     this.clientPromise = null;
     if (client?.quit) {
       await client.quit().catch((error) => {
-        this.logRedisFailure(error);
+        this.logRedisFailure(error, { allowDuringShutdown: true });
       });
     }
   }
@@ -444,9 +444,7 @@ export class RedisRateLimitStore implements Store {
           reconnectStrategy: createRedisReconnectStrategy(this.logger),
         },
       });
-      client.on?.("error", (error) => {
-        this.logRedisFailure(error);
-      });
+      this.attachRedisClientEventHandlers(client);
       await client.connect();
 
       if (this.shuttingDown) {
@@ -477,7 +475,38 @@ export class RedisRateLimitStore implements Store {
     this.logRedisFailure(error);
   }
 
-  private logRedisFailure(error: unknown) {
+  private attachRedisClientEventHandlers(client: RedisClientLike): void {
+    client.on?.("error", (error) => {
+      if (this.shuttingDown) {
+        return;
+      }
+      this.logRedisFailure(error);
+    });
+    client.on?.("end", () => {
+      this.handleRedisDisconnect(client, "end");
+    });
+    client.on?.("close", () => {
+      this.handleRedisDisconnect(client, "close");
+    });
+  }
+
+  private handleRedisDisconnect(client: RedisClientLike, event: "close" | "end"): void {
+    if (this.shuttingDown) {
+      return;
+    }
+
+    if (this.client === client) {
+      this.client = null;
+    }
+
+    this.logRedisFailure(new Error(`Redis client emitted ${event}`));
+  }
+
+  private logRedisFailure(error: unknown, options: { allowDuringShutdown?: boolean } = {}) {
+    if (this.shuttingDown && !options.allowDuringShutdown) {
+      return;
+    }
+
     const now = this.now();
     if (this.warningEmitted && now - this.lastWarningAt < this.warningRepeatMs) {
       return;

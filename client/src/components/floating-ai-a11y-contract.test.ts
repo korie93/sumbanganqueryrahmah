@@ -102,6 +102,15 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.doesNotMatch(combinedSource, /Smart Query Engine/);
 });
 
+test("FloatingAIPanel keeps typed props without explicit any escape hatches", () => {
+  const panelSource = readComponentSource("FloatingAIPanel.tsx");
+
+  assert.match(panelSource, /type FloatingAIPanelProps = \{/);
+  assert.match(panelSource, /layoutState: FloatingAiLayout;/);
+  assert.match(panelSource, /setAiStatus: \(status: AIChatStatus\) => void;/);
+  assert.doesNotMatch(panelSource, /\bas\s+any\b|:\s*any\b|<\s*any\s*>|Array<\s*any\s*>/);
+});
+
 test("floating AI visual colors are sourced from design tokens", () => {
   const source = readComponentSource("FloatingAI.tsx");
   const panelSource = readComponentSource("FloatingAIPanel.tsx");
@@ -152,6 +161,8 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
   assert.doesNotMatch(aiCss, /scrollbar-gutter:/);
   assert.match(aiCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(floatingCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(floatingCss, /\.floatingRoot\s*\{[\s\S]*overflow:\s*hidden;/);
+  assert.match(floatingCss, /@supports \(overflow: clip\) \{[\s\S]*\.floatingRoot\s*\{[\s\S]*overflow:\s*clip;/);
   assert.match(floatingCss, /max-height:\s*calc\(100vh - 5rem\);[\s\S]*max-height:\s*calc\(100svh - 5rem\);[\s\S]*max-height:\s*calc\(100dvh - 5rem\);/);
   assert.match(floatingCss, /height:\s*var\(--floating-ai-panel-height, 100vh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100svh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100dvh\);/);
   assert.match(floatingCss, /\.aiThinkingRing::after[\s\S]*animation:\s*none/);

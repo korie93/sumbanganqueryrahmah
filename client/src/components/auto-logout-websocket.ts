@@ -33,6 +33,10 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
 export function parseAutoLogoutWebSocketMessage(rawData: unknown): AutoLogoutWebSocketMessage | null {
   if (typeof rawData !== "string") {
     return null;
@@ -64,13 +68,23 @@ export function parseAutoLogoutWebSocketMessage(rawData: unknown): AutoLogoutWeb
   }
 
   if (parsed.type === "maintenance_update") {
+    if (
+      typeof parsed.maintenance !== "boolean"
+      || typeof parsed.message !== "string"
+      || (parsed.mode !== "hard" && parsed.mode !== "soft")
+      || !isNullableString(parsed.startTime)
+      || !isNullableString(parsed.endTime)
+    ) {
+      return null;
+    }
+
     return {
       type: "maintenance_update",
-      maintenance: parsed.maintenance === true,
-      message: typeof parsed.message === "string" ? parsed.message : "",
-      mode: parsed.mode === "hard" ? "hard" : "soft",
-      startTime: typeof parsed.startTime === "string" ? parsed.startTime : null,
-      endTime: typeof parsed.endTime === "string" ? parsed.endTime : null,
+      maintenance: parsed.maintenance,
+      message: parsed.message,
+      mode: parsed.mode,
+      startTime: parsed.startTime,
+      endTime: parsed.endTime,
     };
   }
 
