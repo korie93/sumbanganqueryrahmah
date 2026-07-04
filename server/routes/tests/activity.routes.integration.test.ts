@@ -418,6 +418,15 @@ function createActivityRouteHarness(options?: {
     },
     banVisitor: async (params: Record<string, unknown>) => {
       banVisitorCalls.push(params);
+      bannedSessions.push({
+        banId: `ban-${bannedSessions.length + 1}`,
+        username: String(params.username ?? ""),
+        role: String(params.role ?? ""),
+        fingerprint: typeof params.fingerprint === "string" ? params.fingerprint : null,
+        ipAddress: typeof params.ipAddress === "string" ? params.ipAddress : null,
+        browser: typeof params.browser === "string" ? params.browser : null,
+        bannedAt: new Date("2026-03-19T00:00:00.000Z"),
+      });
     },
     deactivateUserActivities: async (username: string, reason?: string) => {
       deactivateUserActivitiesCalls.push({ username, reason });
@@ -447,6 +456,12 @@ function createActivityRouteHarness(options?: {
     },
     unbanVisitor: async (banId: string) => {
       unbanVisitorCalls.push(banId);
+      const index = bannedSessions.findIndex((session) => session.banId === banId);
+      if (index === -1) {
+        return undefined;
+      }
+      const [removed] = bannedSessions.splice(index, 1);
+      return removed ? { username: removed.username } : undefined;
     },
     getBannedSessions: async () => bannedSessions,
   };
@@ -1159,6 +1174,43 @@ test("POST /api/activity/ban rejects attempts to ban a superuser session", async
   }
 });
 
+test("POST /api/activity/ban marks the target account as banned for account management", async () => {
+  const { app, auditLogs, updateUserBanCalls, banVisitorCalls, activities, socketStates, connectedClients } =
+    createActivityRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/ban`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        activityId: "activity-2",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      success: true,
+    });
+    assert.equal(banVisitorCalls.length, 1);
+    assert.deepEqual(updateUserBanCalls, [{
+      username: "regular.user",
+      isBanned: true,
+    }]);
+    assert.equal(activities.get("activity-2")?.isActive, false);
+    assert.equal(activities.get("activity-2")?.logoutReason, "BANNED");
+    assert.equal(connectedClients.has("activity-2"), false);
+    assert.equal(socketStates.get("activity-2")?.closeCalls, 1);
+    assert.equal(auditLogs[0]?.action, "BAN_USER");
+    assert.equal(auditLogs[0]?.targetUser, "regular.user");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/admin/ban bans the account, deactivates active sessions, and audits the action", async () => {
   const { app, auditLogs, updateUserBanCalls, deactivateUserActivitiesCalls, clearNicknameSessionCalls, socketStates, connectedClients } = createActivityRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -1196,6 +1248,38 @@ test("POST /api/admin/ban bans the account, deactivates active sessions, and aud
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "BAN_USER");
     assert.equal(auditLogs[0].targetUser, "regular.user");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/admin/unban clears the account ban flag when the last ban session is removed", async () => {
+  const { app, auditLogs, updateUserBanCalls, unbanVisitorCalls } = createActivityRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/admin/unban`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        banId: "ban-1",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      success: true,
+    });
+    assert.deepEqual(unbanVisitorCalls, ["ban-1"]);
+    assert.deepEqual(updateUserBanCalls, [{
+      username: "regular.user",
+      isBanned: false,
+    }]);
+    assert.equal(auditLogs[0]?.action, "UNBAN_USER");
+    assert.equal(auditLogs[0]?.targetUser, "regular.user");
   } finally {
     await stopTestServer(server);
   }

@@ -268,6 +268,10 @@ export class AuthAccountManagedLifecycleOperations {
       )
       : [];
 
+    if (nextIsBanned === false) {
+      await this.deps.storage.clearBannedSessionsForUsername(target.username);
+    }
+
     if (nextStatus !== undefined && nextStatus !== target.status) {
       await this.deps.storage.createAuditLog({
         action: "ACCOUNT_STATUS_CHANGED",

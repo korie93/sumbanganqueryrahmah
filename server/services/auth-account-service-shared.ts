@@ -44,6 +44,7 @@ export type AuthAccountStorage = Pick<
   | "createAuditLog"
   | "createManagedUserAccount"
   | "createPasswordResetRequest"
+  | "clearBannedSessionsForUsername"
   | "deactivateUserActivities"
   | "deactivateUserSessionsByFingerprint"
   | "deleteManagedUserAccount"

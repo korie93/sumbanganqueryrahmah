@@ -1,6 +1,7 @@
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
 import {
   banVisitor,
+  clearBannedSessionsForUsername,
   getBannedSessions,
   getBannedUsers,
   isVisitorBanned,
@@ -105,8 +106,12 @@ export class ActivityRepository {
     await banVisitor(this.options, params);
   }
 
-  async unbanVisitor(banId: string): Promise<void> {
-    await unbanVisitor(this.options, banId);
+  async unbanVisitor(banId: string): Promise<{ username: string } | undefined> {
+    return unbanVisitor(this.options, banId);
+  }
+
+  async clearBannedSessionsForUsername(username: string): Promise<number> {
+    return clearBannedSessionsForUsername(this.options, username);
   }
 
   async getBannedSessions(): Promise<Array<{

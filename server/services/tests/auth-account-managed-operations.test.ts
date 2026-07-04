@@ -186,6 +186,7 @@ function createManagedStorage(
   seedUser: AuthAccountManagedUser = buildManagedTarget(),
 ): ManagedStorage {
   return {
+    clearBannedSessionsForUsername: async () => 0,
     consumePasswordResetRequestById: async () => false,
     createAuditLog: async (entry) => buildAuditLog(entry),
     createManagedUserAccount: async (params) =>
@@ -566,6 +567,52 @@ test("AuthAccountManagedLifecycleOperations.updateManagedUserStatus invalidates 
   assert.deepEqual(invalidatedSessions, [
     { username: target.username, reason: "BANNED" },
   ]);
+});
+
+test("AuthAccountManagedLifecycleOperations.updateManagedUserStatus clears visitor bans when unbanning target account", async () => {
+  const actor = buildSuperuserAuth();
+  const actorAccount = buildSuperuser();
+  const target = buildManagedTarget({ isBanned: true });
+  const clearedUsernames: string[] = [];
+  const auditActions: string[] = [];
+  const invalidatedSessions: Array<{ username: string; reason: string }> = [];
+  const operations = new AuthAccountManagedLifecycleOperations({
+    storage: createManagedStorage({
+      clearBannedSessionsForUsername: async (username: string) => {
+        clearedUsernames.push(username);
+        return 2;
+      },
+      updateUserAccount: async (params) => mergeManagedUserAccount(target, params),
+      createAuditLog: async (entry) => {
+        auditActions.push(String(entry.action || ""));
+        return buildAuditLog(entry);
+      },
+    }, target),
+    ensureUniqueIdentity: async () => undefined,
+    invalidateUserSessions: async (username: string, reason: string) => {
+      invalidatedSessions.push({ username, reason });
+      return ["should-not-close"];
+    },
+    requireManageableTarget: async () => target,
+    requireManagedEmail: (email: string | null) => email || "",
+    requireSuperuser: async () => actorAccount,
+    sendActivationEmail: async () => {
+      throw new Error("not used");
+    },
+    sendPasswordResetEmail: async () => buildDelivery(),
+    validateEmail: () => undefined,
+    validateUsername: () => undefined,
+  });
+
+  const result = await operations.updateManagedUserStatus(actor, target.id, {
+    isBanned: false,
+  });
+
+  assert.equal(result.user.isBanned, false);
+  assert.deepEqual(result.closedSessionIds, []);
+  assert.deepEqual(clearedUsernames, [target.username]);
+  assert.deepEqual(invalidatedSessions, []);
+  assert.deepEqual(auditActions, ["ACCOUNT_UNBANNED"]);
 });
 
 test("AuthAccountManagedLifecycleOperations.deleteManagedUser invalidates sessions before deleting account", async () => {

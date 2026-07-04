@@ -90,7 +90,8 @@ export interface ActivitySettingsStorageContract {
     deviceType?: string | null;
     platform?: string | null;
   }): Promise<void>;
-  unbanVisitor(banId: string): Promise<void>;
+  unbanVisitor(banId: string): Promise<{ username: string } | undefined>;
+  clearBannedSessionsForUsername(username: string): Promise<number>;
   getBannedSessions(): Promise<
     Array<{
       banId: string;
