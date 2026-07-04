@@ -127,6 +127,128 @@ test("banActivity blocks superuser targets before visitor ban", async () => {
   assert.equal(banVisitorCalled, false);
 });
 
+test("banActivity syncs account ban state for account management", async () => {
+  const updateUserBanCalls: Array<{ username: string; isBanned: boolean }> = [];
+
+  const operations = createActivityModerationOperations(
+    createStorageMock({
+      getActivityById: async () =>
+        ({
+          id: "act-2",
+          userId: "user-2",
+          username: "ali",
+          role: "user",
+          fingerprint: "fp-2",
+          ipAddress: "127.0.0.2",
+          browser: "Chrome",
+          isActive: true,
+          pcName: null,
+          loginTime: null,
+          logoutTime: null,
+          lastActivityTime: null,
+          logoutReason: null,
+        } as ActivityRecord),
+      getUserByUsername: async () =>
+        ({
+          id: "user-2",
+          username: "ali",
+          email: "ali@example.com",
+          role: "user",
+          isActive: true,
+          isBanned: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          emailVerifiedAt: null,
+          activationToken: null,
+          activationTokenExpiresAt: null,
+          passwordResetToken: null,
+          passwordResetTokenExpiresAt: null,
+          failedLoginAttempts: 0,
+          lockoutUntil: null,
+          lastLoginAt: null,
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+          forcePasswordChange: false,
+        } as unknown as UserRecord),
+      updateUserBan: async (username, isBanned) => {
+        updateUserBanCalls.push({ username, isBanned });
+        return undefined;
+      },
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.banActivity("act-2", "admin");
+
+  assert.deepEqual(result, { status: "ok" });
+  assert.deepEqual(updateUserBanCalls, [{ username: "ali", isBanned: true }]);
+});
+
+test("unbanUser clears account ban state when the final ban session is removed", async () => {
+  const updateUserBanCalls: Array<{ username: string; isBanned: boolean }> = [];
+  const auditTargets: Array<string | null | undefined> = [];
+
+  const operations = createActivityModerationOperations(
+    createStorageMock({
+      unbanVisitor: async () => ({ username: "ali" }),
+      getBannedSessions: async () => [],
+      updateUserBan: async (username, isBanned) => {
+        updateUserBanCalls.push({ username, isBanned });
+        return undefined;
+      },
+      createAuditLog: async (entry) => {
+        auditTargets.push(entry.targetUser);
+        return {
+          id: "audit-unban",
+          action: String(entry.action),
+          performedBy: String(entry.performedBy),
+          details: (entry.details ?? null) as string | null,
+          targetUser: (entry.targetUser ?? null) as string | null,
+          timestamp: new Date("2026-04-08T00:00:00.000Z"),
+          requestId: (entry.requestId ?? null) as string | null,
+          targetResource: (entry.targetResource ?? null) as string | null,
+        } as AuditRecord;
+      },
+    }),
+    async () => undefined,
+  );
+
+  await operations.unbanUser("ban-1", "admin");
+
+  assert.deepEqual(updateUserBanCalls, [{ username: "ali", isBanned: false }]);
+  assert.deepEqual(auditTargets, ["ali"]);
+});
+
+test("unbanUser keeps account banned while another ban session remains", async () => {
+  const updateUserBanCalls: Array<{ username: string; isBanned: boolean }> = [];
+
+  const operations = createActivityModerationOperations(
+    createStorageMock({
+      unbanVisitor: async () => ({ username: "ali" }),
+      getBannedSessions: async () => [
+        {
+          banId: "ban-2",
+          username: "ali",
+          role: "user",
+          fingerprint: "fp-2",
+          ipAddress: "127.0.0.2",
+          browser: "Chrome",
+          bannedAt: new Date("2026-04-08T00:00:00.000Z"),
+        },
+      ],
+      updateUserBan: async (username, isBanned) => {
+        updateUserBanCalls.push({ username, isBanned });
+        return undefined;
+      },
+    }),
+    async () => undefined,
+  );
+
+  await operations.unbanUser("ban-1", "admin");
+
+  assert.deepEqual(updateUserBanCalls, []);
+});
+
 test("banAccount closes all active sessions and writes audit log", async () => {
   const closed: Array<{ id: string; payload?: Record<string, unknown> | undefined }> = [];
   let auditTargetUser = "";

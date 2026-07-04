@@ -149,8 +149,12 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
     return this.activityRepository.banVisitor(params);
   }
 
-  async unbanVisitor(banId: string): Promise<void> {
+  async unbanVisitor(banId: string): Promise<{ username: string } | undefined> {
     return this.activityRepository.unbanVisitor(banId);
+  }
+
+  async clearBannedSessionsForUsername(username: string): Promise<number> {
+    return this.activityRepository.clearBannedSessionsForUsername(username);
   }
 
   async getBannedSessions(): Promise<

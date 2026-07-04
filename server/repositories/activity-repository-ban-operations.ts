@@ -87,9 +87,36 @@ export async function banVisitor(
 export async function unbanVisitor(
   options: ActivityRepositoryOptions,
   banId: string,
-): Promise<void> {
+): Promise<{ username: string } | undefined> {
   await options.ensureBannedSessionsTable();
-  await db.execute(sql`DELETE FROM public.banned_sessions WHERE id = ${banId}`);
+  const result = await db.execute(sql`
+    DELETE FROM public.banned_sessions
+    WHERE id = ${banId}
+    RETURNING username
+  `);
+  const username = result.rows?.[0]?.username;
+  if (typeof username !== "string" || !username.trim()) {
+    return undefined;
+  }
+  return { username };
+}
+
+export async function clearBannedSessionsForUsername(
+  options: ActivityRepositoryOptions,
+  username: string,
+): Promise<number> {
+  await options.ensureBannedSessionsTable();
+  const normalizedUsername = username.trim();
+  if (!normalizedUsername) {
+    return 0;
+  }
+
+  const result = await db.execute(sql`
+    DELETE FROM public.banned_sessions
+    WHERE lower(username) = lower(${normalizedUsername})
+    RETURNING id
+  `);
+  return result.rows?.length ?? 0;
 }
 
 export async function getBannedSessions(options: ActivityRepositoryOptions): Promise<Array<{

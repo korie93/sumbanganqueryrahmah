@@ -57,13 +57,14 @@ export function createActivityModerationOperations(
       }
 
       const targetUser = await storage.getUserByUsername(activity.username);
-      if (targetUser?.role === "superuser") {
+      const targetRole = targetUser?.role ?? activity.role;
+      if (targetRole === "superuser") {
         return { status: "cannot_ban_superuser" };
       }
 
       await storage.banVisitor({
         username: activity.username,
-        role: activity.role,
+        role: targetRole,
         activityId: activity.id,
         fingerprint: activity.fingerprint ?? null,
         ipAddress: activity.ipAddress ?? null,
@@ -72,6 +73,8 @@ export function createActivityModerationOperations(
         deviceType: activity.deviceType ?? null,
         platform: activity.platform ?? null,
       });
+
+      await storage.updateUserBan(activity.username, true);
 
       await storage.updateActivity(activityId, {
         isActive: false,
@@ -127,10 +130,21 @@ export function createActivityModerationOperations(
     },
 
     async unbanUser(banId: string, performedBy: string) {
-      await storage.unbanVisitor(banId);
+      const unbanned = await storage.unbanVisitor(banId);
+      if (unbanned?.username) {
+        const remainingBans = await storage.getBannedSessions();
+        const hasRemainingBanForUser = remainingBans.some(
+          (session) => session.username.toLowerCase() === unbanned.username.toLowerCase(),
+        );
+        if (!hasRemainingBanForUser) {
+          await storage.updateUserBan(unbanned.username, false);
+        }
+      }
+
       await storage.createAuditLog({
         action: "UNBAN_USER",
         performedBy,
+        targetUser: unbanned?.username ?? null,
         details: `Unbanned banId=${banId}`,
       });
     },
