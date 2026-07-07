@@ -52,6 +52,12 @@ test("AuditLogOperationsService cleanup clamps the cutoff and writes an audit lo
       getAuditLogStats: async () => ({
         totalLogs: 0,
         todayLogs: 0,
+        olderThan30Days: 0,
+        olderThan60Days: 0,
+        olderThan90Days: 0,
+        olderThan180Days: 0,
+        olderThan365Days: 0,
+        oldestLogDate: null,
         actionBreakdown: {},
       }),
       cleanupAuditLogsOlderThan: async (cutoffDate: Date) => {
@@ -90,6 +96,12 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
   const stats = {
     totalLogs: 12,
     todayLogs: 3,
+    olderThan30Days: 4,
+    olderThan60Days: 3,
+    olderThan90Days: 2,
+    olderThan180Days: 1,
+    olderThan365Days: 0,
+    oldestLogDate: "2026-01-01T00:00:00.000Z",
     actionBreakdown: {
       LOGIN: 5,
     },

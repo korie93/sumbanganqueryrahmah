@@ -14,6 +14,8 @@ export interface AuditLogStats {
   olderThan30Days: number;
   olderThan60Days: number;
   olderThan90Days: number;
+  olderThan180Days: number;
+  olderThan365Days: number;
   oldestLogDate: string | null;
 }
 

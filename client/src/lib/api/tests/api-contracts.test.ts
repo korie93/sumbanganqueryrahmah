@@ -3238,6 +3238,12 @@ test("audit stats wrapper normalizes current backend counters for cleanup UI", a
       return jsonResponse({
         totalLogs: 12,
         todayLogs: 3,
+        olderThan30Days: 5,
+        olderThan60Days: 4,
+        olderThan90Days: 3,
+        olderThan180Days: 2,
+        olderThan365Days: 1,
+        oldestLogDate: "2026-01-01T00:00:00.000Z",
         actionBreakdown: {
           LOGIN: 9,
           CLEANUP_AUDIT_LOGS: 1,
@@ -3259,10 +3265,12 @@ test("audit stats wrapper normalizes current backend counters for cleanup UI", a
   try {
     assert.deepEqual(await getAuditLogStats(), {
       total: 12,
-      olderThan30Days: 0,
-      olderThan60Days: 0,
-      olderThan90Days: 0,
-      oldestLogDate: null,
+      olderThan30Days: 5,
+      olderThan60Days: 4,
+      olderThan90Days: 3,
+      olderThan180Days: 2,
+      olderThan365Days: 1,
+      oldestLogDate: "2026-01-01T00:00:00.000Z",
     });
     assert.deepEqual(await cleanupAuditLogs(30), {
       success: true,

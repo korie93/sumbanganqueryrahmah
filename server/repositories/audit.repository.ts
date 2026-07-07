@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { gte, sql, type SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import {
   AUDIT_CATEGORY_PATTERNS,
   AUDIT_RISK_PATTERNS,
@@ -15,6 +15,30 @@ import { buildLikePattern } from "./sql-like-utils";
 const QUERY_PAGE_LIMIT = 1000;
 const AUDIT_LIST_DEFAULT_PAGE_SIZE = 50;
 const AUDIT_LIST_MAX_PAGE_SIZE = 100;
+
+function subtractAuditDays(from: Date, days: number) {
+  const cutoff = new Date(from);
+  cutoff.setDate(cutoff.getDate() - days);
+  return cutoff;
+}
+
+function readNonNegativeInteger(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+function normalizeAuditStatsTimestamp(value: unknown) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+  }
+
+  return null;
+}
 
 type AuditLogSort = "newest" | "oldest";
 
@@ -221,30 +245,59 @@ export class AuditRepository {
   async getAuditLogStats(): Promise<{
     totalLogs: number;
     todayLogs: number;
+    olderThan30Days: number;
+    olderThan60Days: number;
+    olderThan90Days: number;
+    olderThan180Days: number;
+    olderThan365Days: number;
+    oldestLogDate: string | null;
     actionBreakdown: Record<string, number>;
   }> {
-    const today = new Date();
+    const now = new Date();
+    const today = new Date(now);
     today.setHours(0, 0, 0, 0);
 
-    const [totalLogs, todayLogs] = await Promise.all([
-      db.select({ value: sql<number>`count(*)` }).from(auditLogs),
-      db.select({ value: sql<number>`count(*)` }).from(auditLogs).where(gte(auditLogs.timestamp, today)),
-    ]);
+    const cutoff30 = subtractAuditDays(now, 30);
+    const cutoff60 = subtractAuditDays(now, 60);
+    const cutoff90 = subtractAuditDays(now, 90);
+    const cutoff180 = subtractAuditDays(now, 180);
+    const cutoff365 = subtractAuditDays(now, 365);
 
-    const actionRows = await db.execute(sql`
-      SELECT action, COUNT(*)::int AS count
-      FROM public.audit_logs
-      GROUP BY action
-    `);
+    const [statsRows, actionRows] = await Promise.all([
+      db.execute(sql`
+        SELECT
+          COUNT(*)::int AS "totalLogs",
+          COUNT(*) FILTER (WHERE timestamp >= ${today})::int AS "todayLogs",
+          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff30})::int AS "olderThan30Days",
+          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff60})::int AS "olderThan60Days",
+          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff90})::int AS "olderThan90Days",
+          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff180})::int AS "olderThan180Days",
+          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff365})::int AS "olderThan365Days",
+          MIN(timestamp) AS "oldestLogDate"
+        FROM public.audit_logs
+      `),
+      db.execute(sql`
+        SELECT action, COUNT(*)::int AS count
+        FROM public.audit_logs
+        GROUP BY action
+      `),
+    ]);
 
     const actionBreakdown: Record<string, number> = {};
     for (const row of (actionRows.rows || []) as Array<{ action?: unknown; count?: unknown }>) {
       actionBreakdown[String(row.action || "UNKNOWN")] = Number(row.count || 0);
     }
+    const stats = (statsRows.rows?.[0] || {}) as Record<string, unknown>;
 
     return {
-      totalLogs: Number(totalLogs[0]?.value || 0),
-      todayLogs: Number(todayLogs[0]?.value || 0),
+      totalLogs: readNonNegativeInteger(stats.totalLogs),
+      todayLogs: readNonNegativeInteger(stats.todayLogs),
+      olderThan30Days: readNonNegativeInteger(stats.olderThan30Days),
+      olderThan60Days: readNonNegativeInteger(stats.olderThan60Days),
+      olderThan90Days: readNonNegativeInteger(stats.olderThan90Days),
+      olderThan180Days: readNonNegativeInteger(stats.olderThan180Days),
+      olderThan365Days: readNonNegativeInteger(stats.olderThan365Days),
+      oldestLogDate: normalizeAuditStatsTimestamp(stats.oldestLogDate),
       actionBreakdown,
     };
   }

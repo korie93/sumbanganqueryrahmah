@@ -8,6 +8,8 @@ type AuditLogStatsResponse = {
   olderThan30Days: number;
   olderThan60Days: number;
   olderThan90Days: number;
+  olderThan180Days: number;
+  olderThan365Days: number;
   oldestLogDate: string | null;
 };
 
@@ -19,24 +21,42 @@ type AuditLogCleanupResponse = {
 
 const nonNegativeIntegerSchema = z.number().int().nonnegative();
 
-const auditLogStatsLegacyResponseSchema: z.ZodType<AuditLogStatsResponse> = z.object({
+const auditLogStatsLegacyResponseSchema = z.object({
   total: nonNegativeIntegerSchema,
   olderThan30Days: nonNegativeIntegerSchema,
   olderThan60Days: nonNegativeIntegerSchema,
   olderThan90Days: nonNegativeIntegerSchema,
+  olderThan180Days: nonNegativeIntegerSchema.optional().default(0),
+  olderThan365Days: nonNegativeIntegerSchema.optional().default(0),
   oldestLogDate: z.string().min(1).nullable(),
-});
+}).transform((stats): AuditLogStatsResponse => ({
+  total: stats.total,
+  olderThan30Days: stats.olderThan30Days,
+  olderThan60Days: stats.olderThan60Days,
+  olderThan90Days: stats.olderThan90Days,
+  olderThan180Days: stats.olderThan180Days,
+  olderThan365Days: stats.olderThan365Days,
+  oldestLogDate: stats.oldestLogDate,
+}));
 
 const auditLogStatsWireResponseSchema = z.object({
   totalLogs: nonNegativeIntegerSchema,
   todayLogs: nonNegativeIntegerSchema,
   actionBreakdown: z.record(nonNegativeIntegerSchema),
+  olderThan30Days: nonNegativeIntegerSchema.optional().default(0),
+  olderThan60Days: nonNegativeIntegerSchema.optional().default(0),
+  olderThan90Days: nonNegativeIntegerSchema.optional().default(0),
+  olderThan180Days: nonNegativeIntegerSchema.optional().default(0),
+  olderThan365Days: nonNegativeIntegerSchema.optional().default(0),
+  oldestLogDate: z.string().min(1).nullable().optional().default(null),
 }).transform((stats): AuditLogStatsResponse => ({
   total: stats.totalLogs,
-  olderThan30Days: 0,
-  olderThan60Days: 0,
-  olderThan90Days: 0,
-  oldestLogDate: null,
+  olderThan30Days: stats.olderThan30Days,
+  olderThan60Days: stats.olderThan60Days,
+  olderThan90Days: stats.olderThan90Days,
+  olderThan180Days: stats.olderThan180Days,
+  olderThan365Days: stats.olderThan365Days,
+  oldestLogDate: stats.oldestLogDate,
 }));
 
 const auditLogStatsResponseSchema = z.union([

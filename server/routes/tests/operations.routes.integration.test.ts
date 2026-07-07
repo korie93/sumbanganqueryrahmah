@@ -142,6 +142,12 @@ function createOperationsRouteHarness(options?: {
     getAuditLogStats: async () => ({
       totalLogs: 12,
       todayLogs: 3,
+      olderThan30Days: 4,
+      olderThan60Days: 3,
+      olderThan90Days: 2,
+      olderThan180Days: 1,
+      olderThan365Days: 0,
+      oldestLogDate: "2026-01-01T00:00:00.000Z",
       actionBreakdown: {
         LOGIN: 5,
       },
@@ -450,6 +456,31 @@ test("GET /api/audit-logs returns audit log rows", async () => {
     const payload = await response.json();
     assert.equal(payload.logs.length, 1);
     assert.equal(payload.logs[0].action, "LOGIN");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/audit-logs/stats returns cleanup retention counts", async () => {
+  const { app } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/audit-logs/stats`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      totalLogs: 12,
+      todayLogs: 3,
+      olderThan30Days: 4,
+      olderThan60Days: 3,
+      olderThan90Days: 2,
+      olderThan180Days: 1,
+      olderThan365Days: 0,
+      oldestLogDate: "2026-01-01T00:00:00.000Z",
+      actionBreakdown: {
+        LOGIN: 5,
+      },
+    });
   } finally {
     await stopTestServer(server);
   }

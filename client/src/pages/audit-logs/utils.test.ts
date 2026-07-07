@@ -4,6 +4,7 @@ import {
   getAuditActionInfo,
   getAuditActionLabel,
   getAuditDetailsPreview,
+  getLogsToDeleteCount,
   formatAuditTime,
   shouldCollapseAuditDetails,
 } from "@/pages/audit-logs/utils";
@@ -47,4 +48,38 @@ test("formatAuditTime normalizes database-style timestamps without timezone", ()
     formatAuditTime("2026-04-02 10:27:00"),
     "02/04/2026, 6:27 PM",
   );
+});
+
+test("getLogsToDeleteCount maps cleanup retention to backend retention counters", () => {
+  const stats = {
+    total: 10,
+    olderThan30Days: 5,
+    olderThan60Days: 4,
+    olderThan90Days: 3,
+    olderThan180Days: 2,
+    olderThan365Days: 1,
+    oldestLogDate: "2026-01-01T00:00:00.000Z",
+  };
+
+  assert.equal(getLogsToDeleteCount(stats, "30"), 5);
+  assert.equal(getLogsToDeleteCount(stats, "60"), 4);
+  assert.equal(getLogsToDeleteCount(stats, "90"), 3);
+  assert.equal(getLogsToDeleteCount(stats, "180"), 2);
+  assert.equal(getLogsToDeleteCount(stats, "365"), 1);
+});
+
+test("getLogsToDeleteCount fails closed for missing stats or unsupported retention", () => {
+  const stats = {
+    total: 10,
+    olderThan30Days: 5,
+    olderThan60Days: 4,
+    olderThan90Days: 3,
+    olderThan180Days: 2,
+    olderThan365Days: 1,
+    oldestLogDate: "2026-01-01T00:00:00.000Z",
+  };
+
+  assert.equal(getLogsToDeleteCount(null, "30"), 0);
+  assert.equal(getLogsToDeleteCount(stats, "invalid"), 0);
+  assert.equal(getLogsToDeleteCount(stats, "730"), 0);
 });

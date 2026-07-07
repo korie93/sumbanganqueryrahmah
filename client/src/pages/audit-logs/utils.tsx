@@ -210,8 +210,11 @@ export function getAuditActionBadge(action: string, className?: string) {
 export function getLogsToDeleteCount(stats: AuditLogStats | null, cleanupDays: string) {
   if (!stats) return 0;
   const days = Number.parseInt(cleanupDays, 10);
+  if (!Number.isFinite(days) || days < 1) return 0;
   if (days <= 30) return stats.olderThan30Days;
   if (days <= 60) return stats.olderThan60Days;
   if (days <= 90) return stats.olderThan90Days;
-  return stats.olderThan90Days;
+  if (days <= 180) return stats.olderThan180Days;
+  if (days <= 365) return stats.olderThan365Days;
+  return 0;
 }
