@@ -40,6 +40,16 @@ function normalizeAuditStatsTimestamp(value: unknown) {
   return null;
 }
 
+async function countAuditLogs(whereSql: SQL = sql``) {
+  const result = await db.execute(sql`
+    SELECT COUNT(*)::int AS count
+    FROM public.audit_logs
+    ${whereSql}
+  `);
+
+  return readNonNegativeInteger((result.rows?.[0] as Record<string, unknown> | undefined)?.count);
+}
+
 type AuditLogSort = "newest" | "oldest";
 
 type AuditLogPageParams = {
@@ -263,18 +273,29 @@ export class AuditRepository {
     const cutoff180 = subtractAuditDays(now, 180);
     const cutoff365 = subtractAuditDays(now, 365);
 
-    const [statsRows, actionRows] = await Promise.all([
+    const [
+      totalLogs,
+      todayLogs,
+      olderThan30Days,
+      olderThan60Days,
+      olderThan90Days,
+      olderThan180Days,
+      olderThan365Days,
+      oldestLogRows,
+      actionRows,
+    ] = await Promise.all([
+      countAuditLogs(),
+      countAuditLogs(sql`WHERE timestamp >= ${today}`),
+      countAuditLogs(sql`WHERE timestamp < ${cutoff30}`),
+      countAuditLogs(sql`WHERE timestamp < ${cutoff60}`),
+      countAuditLogs(sql`WHERE timestamp < ${cutoff90}`),
+      countAuditLogs(sql`WHERE timestamp < ${cutoff180}`),
+      countAuditLogs(sql`WHERE timestamp < ${cutoff365}`),
       db.execute(sql`
-        SELECT
-          COUNT(*)::int AS "totalLogs",
-          COUNT(*) FILTER (WHERE timestamp >= ${today})::int AS "todayLogs",
-          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff30})::int AS "olderThan30Days",
-          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff60})::int AS "olderThan60Days",
-          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff90})::int AS "olderThan90Days",
-          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff180})::int AS "olderThan180Days",
-          COUNT(*) FILTER (WHERE timestamp IS NOT NULL AND timestamp < ${cutoff365})::int AS "olderThan365Days",
-          MIN(timestamp) AS "oldestLogDate"
+        SELECT timestamp AS "oldestLogDate"
         FROM public.audit_logs
+        ORDER BY timestamp ASC
+        LIMIT 1
       `),
       db.execute(sql`
         SELECT action, COUNT(*)::int AS count
@@ -287,17 +308,17 @@ export class AuditRepository {
     for (const row of (actionRows.rows || []) as Array<{ action?: unknown; count?: unknown }>) {
       actionBreakdown[String(row.action || "UNKNOWN")] = Number(row.count || 0);
     }
-    const stats = (statsRows.rows?.[0] || {}) as Record<string, unknown>;
+    const oldestLogRow = (oldestLogRows.rows?.[0] || {}) as Record<string, unknown>;
 
     return {
-      totalLogs: readNonNegativeInteger(stats.totalLogs),
-      todayLogs: readNonNegativeInteger(stats.todayLogs),
-      olderThan30Days: readNonNegativeInteger(stats.olderThan30Days),
-      olderThan60Days: readNonNegativeInteger(stats.olderThan60Days),
-      olderThan90Days: readNonNegativeInteger(stats.olderThan90Days),
-      olderThan180Days: readNonNegativeInteger(stats.olderThan180Days),
-      olderThan365Days: readNonNegativeInteger(stats.olderThan365Days),
-      oldestLogDate: normalizeAuditStatsTimestamp(stats.oldestLogDate),
+      totalLogs,
+      todayLogs,
+      olderThan30Days,
+      olderThan60Days,
+      olderThan90Days,
+      olderThan180Days,
+      olderThan365Days,
+      oldestLogDate: normalizeAuditStatsTimestamp(oldestLogRow.oldestLogDate),
       actionBreakdown,
     };
   }
