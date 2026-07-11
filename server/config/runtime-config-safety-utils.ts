@@ -11,6 +11,7 @@ export { buildRuntimeConfigWarnings } from "./runtime-config-warning-utils";
 
 const AUTO_COOKIE_SECURE_VALUES = new Set(["", "auto", "1", "true", "0", "false"]);
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
+const OLLAMA_HTTP_PROTOCOLS = new Set(["http:", "https:"]);
 
 export const HSTS_PRELOAD_MIN_MAX_AGE_SECONDS = 31_536_000;
 export const HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS = HSTS_PRELOAD_MIN_MAX_AGE_SECONDS;
@@ -313,6 +314,64 @@ export function assertProductionRedisTlsSafety(params: {
   throw new Error(
     "Redis URLs must use rediss:// on production-like hosts so shared rate-limit, session, replay, health, and WebSocket state are encrypted in transit.",
   );
+}
+
+function isLoopbackOllamaHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  return normalized === "localhost"
+    || normalized === "[::1]"
+    || normalized === "::1"
+    || normalized.startsWith("127.");
+}
+
+export function assertProductionOllamaEgressSafety(params: {
+  authToken: string | null;
+  host: string;
+  isProductionLike: boolean;
+  remoteAllowed: boolean;
+}): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(params.host);
+  } catch {
+    throw new Error("OLLAMA_HOST must be a valid absolute http:// or https:// URL.");
+  }
+
+  if (!OLLAMA_HTTP_PROTOCOLS.has(parsed.protocol)) {
+    throw new Error("OLLAMA_HOST must use http:// or https://.");
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error(
+      "OLLAMA_HOST must not contain embedded credentials. Configure OLLAMA_AUTH_TOKEN separately.",
+    );
+  }
+
+  if ((parsed.pathname && parsed.pathname !== "/") || parsed.search || parsed.hash) {
+    throw new Error("OLLAMA_HOST must be a bare origin without a path, query string, or fragment.");
+  }
+
+  if (!params.isProductionLike || isLoopbackOllamaHostname(parsed.hostname)) {
+    return;
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error(
+      "Remote OLLAMA_HOST must use https:// on production-like hosts because AI requests can contain imported row data.",
+    );
+  }
+
+  if (!params.remoteAllowed) {
+    throw new Error(
+      "Remote OLLAMA_HOST is disabled on production-like hosts. Set OLLAMA_ALLOW_REMOTE=1 only after approving the AI data-egress destination.",
+    );
+  }
+
+  if (!params.authToken) {
+    throw new Error(
+      "OLLAMA_AUTH_TOKEN is required for a remote OLLAMA_HOST on production-like hosts.",
+    );
+  }
 }
 
 export function assertRateLimiterMultiWorkerTopologySafety(params: {

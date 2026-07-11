@@ -22,7 +22,7 @@ Jalankan arahan itu beberapa kali dan isi sekurang-kurangnya nilai berikut dalam
 
 ```dotenv
 NODE_ENV=production
-HOST=0.0.0.0
+HOST=127.0.0.1
 PORT=5000
 
 PUBLIC_APP_URL=https://domain-anda.com
@@ -30,6 +30,9 @@ CORS_ALLOWED_ORIGINS=https://domain-anda.com
 TRUSTED_PROXIES=loopback
 
 SESSION_SECRET=ganti-dengan-secret-random-yang-kuat
+SESSION_JWT_PRIVATE_KEY=GENERATE_ME_RS256_PRIVATE_KEY_PEM
+SESSION_JWT_PUBLIC_KEY=GENERATE_ME_RS256_PUBLIC_KEY_PEM
+SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL=
 TWO_FACTOR_ENCRYPTION_KEY=ganti-dengan-secret-random-yang-berbeza
 COLLECTION_PII_ENCRYPTION_KEY=ganti-dengan-secret-random-yang-berbeza
 
@@ -73,7 +76,7 @@ module.exports = {
       shutdown_with_message: true,
       env: {
         NODE_ENV: "production",
-        HOST: "0.0.0.0",
+        HOST: "127.0.0.1",
         PORT: "5000",
         GRACEFUL_SHUTDOWN_TIMEOUT_MS: "10000",
       },

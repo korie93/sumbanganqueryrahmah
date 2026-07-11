@@ -18,7 +18,13 @@ export function registerImportsAnalysisRoutes(context: ImportsRouteContext) {
     asyncHandler(importsController.analyzeImport),
   );
 
-  app.get("/api/analyze/all-summary", authenticateToken, asyncHandler(importsController.analyzeAll));
+  app.get(
+    "/api/analyze/all-summary",
+    authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("analysis"),
+    asyncHandler(importsController.analyzeAll),
+  );
 
   app.get(
     "/api/analyze/all",

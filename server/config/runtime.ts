@@ -46,6 +46,7 @@ import {
   assertNoPlaceholderSecrets,
   assertProductionCorsAllowedOriginsSafety,
   assertProductionDatabaseBootstrapModeSafety,
+  assertProductionOllamaEgressSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionReceiptExternalScanSafety,
   assertProductionRedisTlsSafety,
@@ -162,6 +163,12 @@ const normalizePemEnvSecret = (value: string | null): string | null => {
 };
 const configuredSessionJwtPrivateKey = normalizePemEnvSecret(readOptionalString("SESSION_JWT_PRIVATE_KEY"));
 const configuredSessionJwtPublicKey = normalizePemEnvSecret(readOptionalString("SESSION_JWT_PUBLIC_KEY"));
+const configuredSessionJwtLegacyHs256VerifyUntil = readOptionalString(
+  "SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL",
+);
+const configuredSessionJwtLegacyHs256VerifyUntilMs = configuredSessionJwtLegacyHs256VerifyUntil
+  ? Date.parse(configuredSessionJwtLegacyHs256VerifyUntil)
+  : null;
 const configuredDatabaseUrl = readOptionalString("DATABASE_URL");
 const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
 const configuredDatabaseReplicaUrl = readOptionalString("DATABASE_REPLICA_URL");
@@ -200,6 +207,12 @@ const resolvedMailDevOutboxDir = configuredMailDevOutboxDir
   ? path.resolve(configuredMailDevOutboxDir)
   : path.resolve(process.cwd(), "var", "dev-mail-outbox");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
+const resolvedOllamaHost = normalizeHttpUrl(
+  "OLLAMA_HOST",
+  readOptionalString("OLLAMA_HOST") ?? "http://127.0.0.1:11434",
+) ?? "http://127.0.0.1:11434";
+const configuredOllamaAuthToken = readOptionalString("OLLAMA_AUTH_TOKEN");
+const ollamaRemoteAllowed = readBoolean("OLLAMA_ALLOW_REMOTE", false);
 const trustedProxies = resolveTrustedProxies(readCommaSeparatedList("TRUSTED_PROXIES"));
 const sharedRateLimitStore = resolveSharedRateLimitStoreConfig({
   provider: readOptionalString("SQR_RATE_LIMIT_STORE"),
@@ -365,6 +378,13 @@ assertProductionRedisTlsSafety({
   ],
 });
 
+assertProductionOllamaEgressSafety({
+  authToken: configuredOllamaAuthToken,
+  host: resolvedOllamaHost,
+  isProductionLike,
+  remoteAllowed: ollamaRemoteAllowed,
+});
+
 assertProductionReceiptExternalScanSafety({
   isProductionLike,
   externalScanEnabled: collectionReceiptExternalScanEnabled,
@@ -465,6 +485,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     previousSessionSecrets: configuredPreviousSessionSecrets,
     sessionJwtPrivateKey: configuredSessionJwtPrivateKey,
     sessionJwtPublicKey: configuredSessionJwtPublicKey,
+    sessionJwtLegacyHs256VerifyUntilMs: configuredSessionJwtLegacyHs256VerifyUntilMs,
     auditHmacKey: resolvedAuditHmacKey,
     bcryptCost: readInt("BCRYPT_COST_FACTOR", 12, { min: 12, max: 20 }),
     collectionNicknameTempPassword: readSecretOrThrow(
@@ -479,8 +500,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     cookieSameSite,
   },
   ai: {
-    host: readString("OLLAMA_HOST", "http://127.0.0.1:11434"),
-    authToken: readOptionalString("OLLAMA_AUTH_TOKEN"),
+    host: resolvedOllamaHost,
+    authToken: configuredOllamaAuthToken,
     chatModel: readString("OLLAMA_CHAT_MODEL", "llama3:8b"),
     embedModel: readString("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
     timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 10_000, { min: MIN_TIMEOUT_MS }),

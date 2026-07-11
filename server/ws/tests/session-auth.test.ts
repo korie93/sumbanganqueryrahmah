@@ -2,24 +2,42 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import jwt from "jsonwebtoken";
 import { logger } from "../../lib/logger";
-import { extractWsActivityId, isActiveWebSocketSession } from "../session-auth";
+import {
+  extractWsActivityId,
+  extractWsSessionClaims,
+  isActiveWebSocketSession,
+} from "../session-auth";
 
 const SECRET = "ws-test-secret";
 
 test("extractWsActivityId returns activity id for a valid token", () => {
-  const token = jwt.sign({ activityId: "activity-123" }, SECRET);
+  const token = jwt.sign(
+    { activityId: "activity-123" },
+    SECRET,
+    { jwtid: "jwt-123" },
+  );
 
   assert.equal(extractWsActivityId(token, SECRET), "activity-123");
+  assert.deepEqual(extractWsSessionClaims(token, SECRET), {
+    activityId: "activity-123",
+    jwtId: "jwt-123",
+  });
 });
 
 test("extractWsActivityId rejects invalid or missing activity ids", () => {
-  const missingActivityIdToken = jwt.sign({ userId: "user-1" }, SECRET);
-  const malformedActivityIdToken = jwt.sign({ activityId: "" }, SECRET);
-  const tokenWithUnexpectedClaims = jwt.sign({ activityId: "activity-123", injected: true }, SECRET);
+  const missingActivityIdToken = jwt.sign({ userId: "user-1" }, SECRET, { jwtid: "jwt-1" });
+  const malformedActivityIdToken = jwt.sign({ activityId: "" }, SECRET, { jwtid: "jwt-2" });
+  const missingJwtIdToken = jwt.sign({ activityId: "activity-123" }, SECRET);
+  const tokenWithUnexpectedClaims = jwt.sign(
+    { activityId: "activity-123", injected: true },
+    SECRET,
+    { jwtid: "jwt-3" },
+  );
 
   assert.equal(extractWsActivityId("not-a-token", SECRET), null);
   assert.equal(extractWsActivityId(missingActivityIdToken, SECRET), null);
   assert.equal(extractWsActivityId(malformedActivityIdToken, SECRET), null);
+  assert.equal(extractWsActivityId(missingJwtIdToken, SECRET), null);
   assert.equal(extractWsActivityId(tokenWithUnexpectedClaims, SECRET), null);
   assert.equal(extractWsActivityId("", SECRET), null);
 });

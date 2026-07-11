@@ -5,6 +5,7 @@ import {
   assertProductionCorsAllowedOriginsSafety,
   assertRuntimeSessionSecretMinBytes,
   assertProductionDatabaseBootstrapModeSafety,
+  assertProductionOllamaEgressSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionReceiptExternalScanSafety,
   assertProductionRedisTlsSafety,
@@ -312,6 +313,88 @@ test("assertProductionRedisTlsSafety requires rediss URLs on production-like hos
       redisUrls: ["redis://127.0.0.1:6379/0"],
     }),
   );
+});
+
+test("assertProductionOllamaEgressSafety permits local production Ollama without remote credentials", () => {
+  for (const host of [
+    "http://127.0.0.1:11434",
+    "http://localhost:11434",
+    "http://[::1]:11434",
+  ]) {
+    assert.doesNotThrow(() =>
+      assertProductionOllamaEgressSafety({
+        authToken: null,
+        host,
+        isProductionLike: true,
+        remoteAllowed: false,
+      }),
+    );
+  }
+});
+
+test("assertProductionOllamaEgressSafety rejects unsafe production remote transports", () => {
+  assert.throws(
+    () =>
+      assertProductionOllamaEgressSafety({
+        authToken: "provider-token",
+        host: "http://ollama.internal:11434",
+        isProductionLike: true,
+        remoteAllowed: true,
+      }),
+    /Remote OLLAMA_HOST must use https:\/\//i,
+  );
+
+  assert.throws(
+    () =>
+      assertProductionOllamaEgressSafety({
+        authToken: "provider-token",
+        host: "https://ollama.example.com",
+        isProductionLike: true,
+        remoteAllowed: false,
+      }),
+    /OLLAMA_ALLOW_REMOTE=1/i,
+  );
+
+  assert.throws(
+    () =>
+      assertProductionOllamaEgressSafety({
+        authToken: null,
+        host: "https://ollama.example.com",
+        isProductionLike: true,
+        remoteAllowed: true,
+      }),
+    /OLLAMA_AUTH_TOKEN is required/i,
+  );
+});
+
+test("assertProductionOllamaEgressSafety accepts explicitly approved authenticated HTTPS egress", () => {
+  assert.doesNotThrow(() =>
+    assertProductionOllamaEgressSafety({
+      authToken: "provider-token",
+      host: "https://ollama.example.com",
+      isProductionLike: true,
+      remoteAllowed: true,
+    }),
+  );
+});
+
+test("assertProductionOllamaEgressSafety rejects credential and path leakage in every environment", () => {
+  for (const host of [
+    "http://operator:secret@127.0.0.1:11434",
+    "http://127.0.0.1:11434/proxy",
+    "http://127.0.0.1:11434?token=secret",
+  ]) {
+    assert.throws(
+      () =>
+        assertProductionOllamaEgressSafety({
+          authToken: null,
+          host,
+          isProductionLike: false,
+          remoteAllowed: false,
+        }),
+      /OLLAMA_HOST must not contain embedded credentials|bare origin/i,
+    );
+  }
 });
 
 test("assertRateLimiterMultiWorkerTopologySafety rejects multi-worker memory stores in every environment", () => {

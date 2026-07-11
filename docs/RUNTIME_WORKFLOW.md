@@ -19,6 +19,10 @@
   Worker entrypoint used by the built clustered runtime.
 - `server/cluster-local.ts`
   Source cluster supervisor that becomes `dist-local/server/cluster-local.js`.
+- `server/services/import-upload-excel-worker.ts`
+  Isolated spreadsheet parser that becomes `dist-local/server/import-upload-excel-worker.js`.
+  The prestart build guard requires this artifact so production cannot silently
+  fall back to parsing Excel workbooks in the main server process.
 
 ## Shared Assembly
 

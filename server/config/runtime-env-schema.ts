@@ -41,6 +41,19 @@ function optionalEnvString(name: string, maxLength = DEFAULT_STRING_MAX_LENGTH) 
   );
 }
 
+function optionalIsoTimestampEnv(name: string) {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: `${name} must be an ISO 8601 timestamp.` })
+      .datetime({
+        offset: true,
+        message: `${name} must be an ISO 8601 timestamp with a timezone.`,
+      })
+      .optional(),
+  );
+}
+
 function optionalBooleanEnv(name: string) {
   return z.preprocess(
     normalizeOptionalEnvString,
@@ -283,6 +296,9 @@ const runtimeEnvironmentShape = {
   SESSION_SECRET_PREVIOUS: optionalEnvString("SESSION_SECRET_PREVIOUS", SECRET_STRING_MAX_LENGTH),
   SESSION_JWT_PRIVATE_KEY: optionalEnvString("SESSION_JWT_PRIVATE_KEY", SECRET_STRING_MAX_LENGTH),
   SESSION_JWT_PUBLIC_KEY: optionalEnvString("SESSION_JWT_PUBLIC_KEY", SECRET_STRING_MAX_LENGTH),
+  SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL: optionalIsoTimestampEnv(
+    "SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL",
+  ),
   BCRYPT_COST_FACTOR: optionalIntEnv("BCRYPT_COST_FACTOR", { min: 12, max: 20 }),
   SQR_AUDIT_HMAC_KEY: optionalMinLengthEnvString(
     "SQR_AUDIT_HMAC_KEY",
@@ -383,6 +399,7 @@ const runtimeEnvironmentShape = {
 
   OLLAMA_HOST: optionalEnvString("OLLAMA_HOST"),
   OLLAMA_AUTH_TOKEN: optionalEnvString("OLLAMA_AUTH_TOKEN", SECRET_STRING_MAX_LENGTH),
+  OLLAMA_ALLOW_REMOTE: optionalBooleanEnv("OLLAMA_ALLOW_REMOTE"),
   OLLAMA_CHAT_MODEL: optionalEnvString("OLLAMA_CHAT_MODEL", 255),
   OLLAMA_EMBED_MODEL: optionalEnvString("OLLAMA_EMBED_MODEL", 255),
   OLLAMA_TIMEOUT_MS: optionalIntEnv("OLLAMA_TIMEOUT_MS", { min: 1_000 }),

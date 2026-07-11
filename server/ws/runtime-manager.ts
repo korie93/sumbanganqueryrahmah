@@ -1,8 +1,9 @@
 import type { RawData, WebSocket } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
+import { isSessionJwtRevoked as checkSessionJwtRevocation } from "../auth/session-revocation-store";
 import { logger } from "../lib/logger";
 import { internalMetrics } from "../internal/metrics";
-import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
+import { extractWsSessionClaims, isActiveWebSocketSession } from "./session-auth";
 import {
   firstHeaderValue,
   hasForwardedHeaders,
@@ -108,6 +109,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const isShuttingDown = options.isShuttingDown ?? (() => false);
   const sharedBus = options.sharedBus ?? null;
   const metrics = options.metrics ?? internalMetrics;
+  const isSessionJwtRevoked = options.isSessionJwtRevoked ?? checkSessionJwtRevocation;
   const now = options.now ?? Date.now;
   let suppressSharedClosePublishDepth = 0;
   const isSharedClosePublishSuppressed = () => suppressSharedClosePublishDepth > 0;
@@ -605,10 +607,38 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     }
 
     try {
-      activityId = extractWsActivityId(token, secret);
-      if (!activityId) {
+      const sessionClaims = extractWsSessionClaims(token, secret);
+      if (!sessionClaims) {
         cleanupSocket();
         closeSocketIfNeeded();
+        return;
+      }
+      activityId = sessionClaims.activityId;
+
+      let sessionRevoked: boolean;
+      try {
+        sessionRevoked = await isSessionJwtRevoked(sessionClaims.jwtId);
+      } catch (error) {
+        metrics.increment("webSocketSessionRevocationCheckFailuresTotal");
+        logger.warn("WebSocket session revocation check failed; rejecting connection", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+        cleanupSocket();
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "session invalid");
+        return;
+      }
+
+      if (cleanedUp || !isTrackableSocket(ws)) {
+        cleanupSocket();
+        return;
+      }
+      if (sessionRevoked) {
+        metrics.increment("webSocketRevokedSessionRejectionsTotal");
+        logger.warn("WebSocket rejected revoked session token", {
+          activityId,
+        });
+        cleanupSocket();
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "session invalid");
         return;
       }
 

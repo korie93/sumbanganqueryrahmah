@@ -20,6 +20,9 @@ const PROD_OLDER_SESSION_SECRET = "prod-older-session-secret-minimum-32-characte
 const runtimeConfigTestEnvIsolationDefaults: Record<string, string | null> = {
   COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: null,
   COLLECTION_PII_RETIRED_FIELDS: null,
+  OLLAMA_ALLOW_REMOTE: null,
+  OLLAMA_AUTH_TOKEN: null,
+  OLLAMA_HOST: null,
   VERIFY_COLLECTION_PII_FULL_RETIREMENT: null,
   VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT: null,
 };
@@ -339,6 +342,65 @@ test("runtime config accepts production startup when required hardening env vars
         enabled: true,
         rejectUnauthorized: true,
       });
+    },
+  );
+});
+
+test("runtime config rejects production startup with remote Ollama over plaintext HTTP", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OLLAMA_ALLOW_REMOTE: "1",
+      OLLAMA_AUTH_TOKEN: "provider-token",
+      OLLAMA_HOST: "http://ollama.internal:11434",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /Remote OLLAMA_HOST must use https:\/\//i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production remote Ollama without approval and authentication", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OLLAMA_HOST: "https://ollama.example.com",
+    },
+    async () => {
+      await assert.rejects(importRuntimeFresh(), /OLLAMA_ALLOW_REMOTE=1/i);
+    },
+  );
+
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OLLAMA_ALLOW_REMOTE: "1",
+      OLLAMA_HOST: "https://ollama.example.com",
+    },
+    async () => {
+      await assert.rejects(importRuntimeFresh(), /OLLAMA_AUTH_TOKEN is required/i);
+    },
+  );
+});
+
+test("runtime config accepts explicitly approved authenticated HTTPS Ollama egress", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OLLAMA_ALLOW_REMOTE: "1",
+      OLLAMA_AUTH_TOKEN: "provider-token",
+      OLLAMA_HOST: "https://ollama.example.com/",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.ai.host, "https://ollama.example.com");
     },
   );
 });

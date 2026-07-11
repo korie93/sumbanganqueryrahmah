@@ -1092,6 +1092,11 @@ test("imports routes enforce analysis and delete permissions consistently", asyn
     );
     await assertRoleMatrix(
       baseUrl,
+      { method: "GET", path: "/api/analyze/all-summary" },
+      { anonymous: 401, user: 200, admin: 200, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
       { method: "DELETE", path: "/api/imports/import-1" },
       { anonymous: 401, user: 403, admin: 200, superuser: 200 },
     );
@@ -1104,6 +1109,14 @@ test("imports routes enforce analysis and delete permissions consistently", asyn
     );
     assert.equal(deniedAnalysisTab.status, 403);
 
+    const deniedAnalysisAliasTab = await sendMatrixRequest(
+      baseUrl,
+      { method: "GET", path: "/api/analyze/all-summary" },
+      "user",
+      { "x-test-deny-tabs": "analysis" },
+    );
+    assert.equal(deniedAnalysisAliasTab.status, 403);
+
     const deniedImportTab = await sendMatrixRequest(
       baseUrl,
       { method: "GET", path: "/api/imports" },
@@ -1114,7 +1127,7 @@ test("imports routes enforce analysis and delete permissions consistently", asyn
 
     assert.equal(calls.createImport, 3);
     assert.equal(calls.analyzeImport, 3);
-    assert.equal(calls.analyzeAll, 3);
+    assert.equal(calls.analyzeAll, 6);
     assert.equal(calls.deleteImport, 2);
   } finally {
     await stopTestServer(server);

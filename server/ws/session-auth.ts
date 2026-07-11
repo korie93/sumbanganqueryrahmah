@@ -8,12 +8,23 @@ type ActivitySessionLike = {
   logoutTime?: string | Date | null;
 } | null | undefined;
 
-export function extractWsActivityId(token: string, secret: string | readonly string[]): string | null {
+export type VerifiedWebSocketSessionClaims = {
+  activityId: string;
+  jwtId: string;
+};
+
+export function extractWsSessionClaims(
+  token: string,
+  secret: string | readonly string[],
+): VerifiedWebSocketSessionClaims | null {
   if (!token || !secret) return null;
 
   try {
     const decoded = parseWebSocketSessionJwtPayload(verifySessionJwt<unknown>(token, secret));
-    return decoded.activityId;
+    return {
+      activityId: decoded.activityId,
+      jwtId: decoded.jti,
+    };
   } catch (error) {
     const authError = error as Error;
     logger.warn("WebSocket session token verification failed", {
@@ -22,6 +33,10 @@ export function extractWsActivityId(token: string, secret: string | readonly str
     });
     return null;
   }
+}
+
+export function extractWsActivityId(token: string, secret: string | readonly string[]): string | null {
+  return extractWsSessionClaims(token, secret)?.activityId ?? null;
 }
 
 export function isActiveWebSocketSession(activity: ActivitySessionLike): activity is {

@@ -110,6 +110,26 @@ Rollback:
   `SESSION_SECRET_PREVIOUS`, restart all workers, then verify login/logout.
 - If the old value is compromised, do not roll back to it.
 
+## RS256 Session JWT Migration
+
+Production signs new session JWTs with RS256 and rejects legacy HS256 tokens by
+default. For a planned migration only, set
+`SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL` to an ISO 8601 timestamp with timezone.
+The deadline must be no more than seven days after startup and should normally
+match one existing session TTL.
+
+1. Install the matching `SESSION_JWT_PRIVATE_KEY` and `SESSION_JWT_PUBLIC_KEY`.
+2. Set a short `SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL` deadline only if active
+   HS256 sessions must drain without an immediate logout.
+3. Restart every worker and confirm the migration warning contains the expected
+   deadline but no token or key material.
+4. After the deadline, remove the variable and restart all workers.
+5. Verify login, refresh, logout, and WebSocket reconnection. Legacy HS256
+   attempts should increment the rejection metric rather than authenticate.
+
+Emergency response: leave the deadline blank, rotate compromised session
+secrets, and expect existing HS256 sessions to require login again.
+
 ## TWO_FACTOR_ENCRYPTION_KEY Rotation
 
 This is not a pure zero-downtime data rewrite. The runtime can decrypt with

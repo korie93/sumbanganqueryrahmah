@@ -1,13 +1,17 @@
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const buildArtifact = "dist-local/server/cluster-local.js";
+const buildArtifacts = [
+  "dist-local/server/cluster-local.js",
+  "dist-local/server/import-upload-excel-worker.js",
+];
+const missingBuildArtifacts = buildArtifacts.filter((artifact) => !existsSync(artifact));
 
-if (existsSync(buildArtifact)) {
+if (missingBuildArtifacts.length === 0) {
   process.exit(0);
 }
 
-console.log(`Missing ${buildArtifact}. Running npm run build...`);
+console.log(`Missing ${missingBuildArtifacts.join(", ")}. Running npm run build...`);
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const result = spawnSync(npmCommand, ["run", "build"], {

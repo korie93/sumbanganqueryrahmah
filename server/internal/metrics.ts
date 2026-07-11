@@ -47,6 +47,11 @@ export type InternalMetricName =
   | "sessionRefreshRevocationRetryAttemptsTotal"
   | "sessionRefreshRevocationRetryExhaustedTotal"
   | "sessionRevocationRedisErrorsTotal"
+  | "sessionJwtLegacyHs256RejectionsTotal"
+  | "sessionJwtLegacyHs256VerificationsTotal"
+  | "spreadsheetArchivePreflightRejectionsTotal"
+  | "spreadsheetParserWorkerFailuresTotal"
+  | "spreadsheetParserWorkerTimeoutsTotal"
   | "twoFactorInvalidBase32SecretTotal"
   | "twoFactorTotpSha1VerificationSuccessTotal"
   | "webVitalsAcceptedTotal"
@@ -56,7 +61,9 @@ export type InternalMetricName =
   | "webVitalsLegacyRouteGoneTotal"
   | "webVitalsLegacyRouteUsedTotal"
   | "webSocketOversizedMessagesTotal"
-  | "webSocketPayloadWindowExceededTotal";
+  | "webSocketPayloadWindowExceededTotal"
+  | "webSocketRevokedSessionRejectionsTotal"
+  | "webSocketSessionRevocationCheckFailuresTotal";
 
 export type InternalGaugeName =
   | "authAdaptiveRateLimitCooldownCacheSize"
@@ -129,6 +136,11 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "sessionRefreshRevocationRetryAttemptsTotal",
   "sessionRefreshRevocationRetryExhaustedTotal",
   "sessionRevocationRedisErrorsTotal",
+  "sessionJwtLegacyHs256RejectionsTotal",
+  "sessionJwtLegacyHs256VerificationsTotal",
+  "spreadsheetArchivePreflightRejectionsTotal",
+  "spreadsheetParserWorkerFailuresTotal",
+  "spreadsheetParserWorkerTimeoutsTotal",
   "twoFactorInvalidBase32SecretTotal",
   "twoFactorTotpSha1VerificationSuccessTotal",
   "webVitalsAcceptedTotal",
@@ -139,6 +151,8 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "webVitalsLegacyRouteUsedTotal",
   "webSocketOversizedMessagesTotal",
   "webSocketPayloadWindowExceededTotal",
+  "webSocketRevokedSessionRejectionsTotal",
+  "webSocketSessionRevocationCheckFailuresTotal",
 ];
 
 const INTERNAL_GAUGE_NAMES: readonly InternalGaugeName[] = [

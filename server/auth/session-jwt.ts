@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import jwt, { type Algorithm, type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
+import { internalMetrics } from "../internal/metrics";
 import { logger } from "../lib/logger";
 import { safeJsonParse } from "../lib/safe-json";
 import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
@@ -21,6 +22,11 @@ export const SESSION_JWT_HS256_FALLBACK_WARNING =
   "WARNING: JWT using HS256 fallback. DO NOT use in production.";
 export const SESSION_JWT_RS256_PRODUCTION_REQUIRED_ERROR =
   "FATAL: SESSION_JWT_PRIVATE_KEY and SESSION_JWT_PUBLIC_KEY are required in production; HS256 fallback is not allowed.";
+export const SESSION_JWT_LEGACY_HS256_DISABLED_ERROR =
+  "Legacy HS256 session token verification is disabled.";
+export const SESSION_JWT_LEGACY_HS256_MAX_MIGRATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
+export const SESSION_JWT_LEGACY_HS256_MIGRATION_WARNING =
+  "Legacy HS256 session token verification is temporarily enabled during RS256 migration.";
 export { SESSION_JWT_DEFAULT_EXPIRY } from "./session-lifetime";
 
 const SESSION_JWT_HEADER_SEGMENT_MAX_LENGTH = 1_024;
@@ -35,7 +41,9 @@ type RefreshableSessionClaims = {
 type SessionJwtAlgorithm = typeof SESSION_JWT_ALLOWED_ALGORITHMS[number];
 
 type SessionJwtStartupValidationOptions = {
+  legacyHs256VerifyUntilMs?: number | null | undefined;
   nodeEnv?: string | null | undefined;
+  nowMs?: number | undefined;
   privateKey?: string | null | undefined;
   publicKey?: string | null | undefined;
   warn?: (message: string, meta?: Record<string, unknown>) => void;
@@ -43,6 +51,7 @@ type SessionJwtStartupValidationOptions = {
 
 export type SessionJwtKeySet = {
   hsSecrets: readonly string[];
+  legacyHs256VerifyUntilMs?: number | null | undefined;
   rsPrivateKey?: string | null | undefined;
   rsPublicKeys?: readonly string[] | null | undefined;
 };
@@ -75,6 +84,7 @@ function getRuntimeSessionJwtKeySet(
 ): SessionJwtKeySet {
   return {
     hsSecrets: normalizeVerificationSecrets(hsSecrets),
+    legacyHs256VerifyUntilMs: runtimeConfig.auth.sessionJwtLegacyHs256VerifyUntilMs,
     rsPrivateKey: runtimeConfig.auth.sessionJwtPrivateKey,
     rsPublicKeys: runtimeConfig.auth.sessionJwtPublicKey ? [runtimeConfig.auth.sessionJwtPublicKey] : [],
   };
@@ -86,6 +96,7 @@ function normalizeRsaKey(key: string | null | undefined): string | null {
 }
 
 let sessionJwtFallbackWarningEmitted = false;
+let sessionJwtLegacyMigrationWarningEmitted = false;
 
 function assertValidSessionJwtRsaKeyPair(privateKey: string, publicKey: string): void {
   try {
@@ -110,6 +121,49 @@ function assertValidSessionJwtRsaKeyPair(privateKey: string, publicKey: string):
 
 export function resetSessionJwtStartupValidationWarningForTests(): void {
   sessionJwtFallbackWarningEmitted = false;
+  sessionJwtLegacyMigrationWarningEmitted = false;
+}
+
+function normalizeLegacyHs256VerifyUntilMs(value: number | null | undefined): number | null {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) && normalized > 0
+    ? Math.trunc(normalized)
+    : null;
+}
+
+function warnSessionJwtLegacyHs256Migration(
+  verifyUntilMs: number,
+  warn?: SessionJwtStartupValidationOptions["warn"],
+): void {
+  const metadata = {
+    event: "session_jwt_legacy_hs256_migration_active",
+    action: "remove_legacy_hs256_deadline_after_session_ttl",
+    verifyUntil: new Date(verifyUntilMs).toISOString(),
+  };
+  if (warn) {
+    warn(SESSION_JWT_LEGACY_HS256_MIGRATION_WARNING, metadata);
+    return;
+  }
+  logger.warn(SESSION_JWT_LEGACY_HS256_MIGRATION_WARNING, metadata);
+}
+
+function validateLegacyHs256MigrationWindow(
+  verifyUntilMs: number | null,
+  nowMs: number,
+  warn?: SessionJwtStartupValidationOptions["warn"],
+): void {
+  if (verifyUntilMs === null || verifyUntilMs <= nowMs) {
+    return;
+  }
+  if (verifyUntilMs - nowMs > SESSION_JWT_LEGACY_HS256_MAX_MIGRATION_WINDOW_MS) {
+    throw new Error(
+      "FATAL: SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL cannot extend more than 7 days beyond startup.",
+    );
+  }
+  if (!sessionJwtLegacyMigrationWarningEmitted) {
+    warnSessionJwtLegacyHs256Migration(verifyUntilMs, warn);
+    sessionJwtLegacyMigrationWarningEmitted = true;
+  }
 }
 
 function warnSessionJwtHs256Fallback(warn?: SessionJwtStartupValidationOptions["warn"]): void {
@@ -137,9 +191,19 @@ export function validateSessionJwtStartupConfiguration(
     .toLowerCase();
   const privateKey = normalizeRsaKey(options.privateKey ?? runtimeConfig.auth.sessionJwtPrivateKey);
   const publicKey = normalizeRsaKey(options.publicKey ?? runtimeConfig.auth.sessionJwtPublicKey);
+  const nowMs = Number.isFinite(options.nowMs) ? Number(options.nowMs) : Date.now();
+  const legacyHs256VerifyUntilMs = normalizeLegacyHs256VerifyUntilMs(
+    options.legacyHs256VerifyUntilMs
+      ?? runtimeConfig.auth.sessionJwtLegacyHs256VerifyUntilMs,
+  );
 
   if (privateKey && publicKey) {
     assertValidSessionJwtRsaKeyPair(privateKey, publicKey);
+    validateLegacyHs256MigrationWindow(
+      legacyHs256VerifyUntilMs,
+      nowMs,
+      options.warn,
+    );
     return SESSION_JWT_ALGORITHM;
   }
 
@@ -366,9 +430,24 @@ export function verifySessionJwtWithKeySet<TPayload>(
   keySet: SessionJwtKeySet,
 ): TPayload {
   const algorithm = validateJwtAlgorithm(token);
+  const rsaPublicKeys = normalizeRsaPublicKeys(keySet.rsPublicKeys);
+  const legacyHs256VerifyUntilMs = normalizeLegacyHs256VerifyUntilMs(
+    keySet.legacyHs256VerifyUntilMs,
+  );
+  const nowMs = Date.now();
+  const isRs256MigrationKeySet = rsaPublicKeys.length > 0;
+  const legacyHs256Allowed = !isRs256MigrationKeySet || (
+    legacyHs256VerifyUntilMs !== null
+    && legacyHs256VerifyUntilMs >= nowMs
+    && legacyHs256VerifyUntilMs - nowMs <= SESSION_JWT_LEGACY_HS256_MAX_MIGRATION_WINDOW_MS
+  );
+  if (algorithm === SESSION_JWT_LEGACY_ALGORITHM && !legacyHs256Allowed) {
+    internalMetrics.increment("sessionJwtLegacyHs256RejectionsTotal");
+    throw new JwtAlgorithmError(SESSION_JWT_LEGACY_HS256_DISABLED_ERROR);
+  }
 
   const candidates = algorithm === SESSION_JWT_ALGORITHM
-    ? normalizeRsaPublicKeys(keySet.rsPublicKeys)
+    ? rsaPublicKeys
     : normalizeVerificationSecrets(keySet.hsSecrets);
 
   if (candidates.length === 0) {
@@ -382,9 +461,13 @@ export function verifySessionJwtWithKeySet<TPayload>(
   let lastError: unknown = null;
   for (const key of candidates) {
     try {
-      return jwt.verify(token, key, {
+      const payload = jwt.verify(token, key, {
         algorithms: [algorithm as Algorithm],
       }) as TPayload;
+      if (algorithm === SESSION_JWT_LEGACY_ALGORITHM && isRs256MigrationKeySet) {
+        internalMetrics.increment("sessionJwtLegacyHs256VerificationsTotal");
+      }
+      return payload;
     } catch (error) {
       lastError = error;
     }

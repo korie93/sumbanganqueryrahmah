@@ -8,6 +8,9 @@ import {
   SESSION_JWT_HS256_FALLBACK_WARNING,
   SESSION_JWT_ALGORITHM,
   SESSION_JWT_LEGACY_ALGORITHM,
+  SESSION_JWT_LEGACY_HS256_DISABLED_ERROR,
+  SESSION_JWT_LEGACY_HS256_MAX_MIGRATION_WINDOW_MS,
+  SESSION_JWT_LEGACY_HS256_MIGRATION_WARNING,
   SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS,
   SESSION_JWT_RS256_PRODUCTION_REQUIRED_ERROR,
   resolveSessionJwtExpiresAt,
@@ -28,6 +31,7 @@ import {
   parseAuthenticatedSessionJwtPayload,
   parseWebSocketSessionJwtPayload,
 } from "../session-jwt-payload";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import { logger } from "../../lib/logger";
 
 test("signSessionJwt applies the default session expiry when omitted", () => {
@@ -157,7 +161,7 @@ test("verifyJwtWithAnySecret rejects when none of the configured secrets can ver
   );
 });
 
-test("session JWT keyset signs new tokens with RS256 while accepting legacy HS256 tokens", () => {
+test("session JWT keyset signs with RS256 and accepts HS256 only during an explicit migration window", () => {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
   });
@@ -165,6 +169,7 @@ test("session JWT keyset signs new tokens with RS256 while accepting legacy HS25
   const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
   const keySet = {
     hsSecrets: ["legacy-secret"],
+    legacyHs256VerifyUntilMs: Date.now() + 60_000,
     rsPrivateKey: privatePem,
     rsPublicKeys: [publicPem],
   };
@@ -194,6 +199,7 @@ test("session JWT keyset signs new tokens with RS256 while accepting legacy HS25
     "legacy-secret",
     { algorithm: SESSION_JWT_LEGACY_ALGORITHM },
   );
+  const before = getInternalMetricsSnapshot().counters.sessionJwtLegacyHs256VerificationsTotal;
   const legacyPayload = verifySessionJwtWithKeySet<{ username: string; role: string }>(
     legacyToken,
     keySet,
@@ -201,6 +207,40 @@ test("session JWT keyset signs new tokens with RS256 while accepting legacy HS25
 
   assert.equal(legacyPayload.username, "legacy");
   assert.equal(legacyPayload.role, "user");
+  assert.equal(
+    getInternalMetricsSnapshot().counters.sessionJwtLegacyHs256VerificationsTotal,
+    before + 1,
+  );
+});
+
+test("RS256 keysets reject legacy HS256 tokens without an active migration deadline", () => {
+  const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const legacyToken = jwt.sign(
+    { username: "legacy" },
+    "legacy-secret",
+    { algorithm: SESSION_JWT_LEGACY_ALGORITHM },
+  );
+  const before = getInternalMetricsSnapshot().counters.sessionJwtLegacyHs256RejectionsTotal;
+
+  assert.throws(
+    () => verifySessionJwtWithKeySet(legacyToken, {
+      hsSecrets: ["legacy-secret"],
+      rsPublicKeys: [publicKey.export({ format: "pem", type: "spki" }).toString()],
+    }),
+    new RegExp(SESSION_JWT_LEGACY_HS256_DISABLED_ERROR, "i"),
+  );
+  assert.throws(
+    () => verifySessionJwtWithKeySet(legacyToken, {
+      hsSecrets: ["legacy-secret"],
+      legacyHs256VerifyUntilMs: Date.now() - 1,
+      rsPublicKeys: [publicKey.export({ format: "pem", type: "spki" }).toString()],
+    }),
+    new RegExp(SESSION_JWT_LEGACY_HS256_DISABLED_ERROR, "i"),
+  );
+  assert.equal(
+    getInternalMetricsSnapshot().counters.sessionJwtLegacyHs256RejectionsTotal,
+    before + 2,
+  );
 });
 
 test("session JWT startup validation rejects production HS256 fallback", () => {
@@ -283,6 +323,53 @@ test("session JWT startup validation accepts matching RS256 key material", () =>
   });
 
   assert.equal(algorithm, SESSION_JWT_ALGORITHM);
+});
+
+test("session JWT startup validation bounds and reports the legacy HS256 migration window", () => {
+  resetSessionJwtStartupValidationWarningForTests();
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  });
+  const privatePem = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+  const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+  const nowMs = Date.parse("2026-07-11T00:00:00.000Z");
+  const verifyUntilMs = nowMs + 24 * 60 * 60 * 1_000;
+  const warnings: Array<{
+    message: string;
+    metadata: Record<string, unknown> | undefined;
+  }> = [];
+
+  assert.equal(
+    validateSessionJwtStartupConfiguration({
+      nodeEnv: "production",
+      privateKey: privatePem,
+      publicKey: publicPem,
+      legacyHs256VerifyUntilMs: verifyUntilMs,
+      nowMs,
+      warn: (message, metadata) => warnings.push({ message, metadata }),
+    }),
+    SESSION_JWT_ALGORITHM,
+  );
+  assert.deepEqual(warnings, [{
+    message: SESSION_JWT_LEGACY_HS256_MIGRATION_WARNING,
+    metadata: {
+      event: "session_jwt_legacy_hs256_migration_active",
+      action: "remove_legacy_hs256_deadline_after_session_ttl",
+      verifyUntil: new Date(verifyUntilMs).toISOString(),
+    },
+  }]);
+
+  assert.throws(
+    () => validateSessionJwtStartupConfiguration({
+      nodeEnv: "production",
+      privateKey: privatePem,
+      publicKey: publicPem,
+      legacyHs256VerifyUntilMs:
+        nowMs + SESSION_JWT_LEGACY_HS256_MAX_MIGRATION_WINDOW_MS + 1,
+      nowMs,
+    }),
+    /cannot extend more than 7 days/i,
+  );
 });
 
 test("session JWT startup validation rejects mismatched RS256 keys", () => {
@@ -413,34 +500,45 @@ test("parseAuthenticatedSessionJwtPayload accepts only complete authenticated se
   );
 });
 
-test("parseWebSocketSessionJwtPayload validates activity id while tolerating session identity claims", () => {
+test("parseWebSocketSessionJwtPayload requires revocable identity while tolerating session claims", () => {
   assert.deepEqual(
     parseWebSocketSessionJwtPayload({
       userId: "user-1",
       username: "alice",
       role: "admin",
       activityId: "activity-1",
+      jti: "jwt-1",
     }),
     {
       userId: "user-1",
       username: "alice",
       role: "admin",
       activityId: "activity-1",
+      jti: "jwt-1",
     },
   );
 
   assert.deepEqual(
     parseWebSocketSessionJwtPayload({
       activityId: "activity-1",
+      jti: "jwt-1",
     }),
     {
       activityId: "activity-1",
+      jti: "jwt-1",
     },
   );
 
   assert.throws(
     () => parseWebSocketSessionJwtPayload({
       activityId: " ",
+      jti: "jwt-1",
+    }),
+    /Invalid session JWT payload/,
+  );
+  assert.throws(
+    () => parseWebSocketSessionJwtPayload({
+      activityId: "activity-1",
     }),
     /Invalid session JWT payload/,
   );

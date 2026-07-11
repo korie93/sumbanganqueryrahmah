@@ -35,6 +35,7 @@ export type RuntimeManagerOptions = {
   maxConnections?: number;
   maxConnectionsPerIp?: number;
   metrics?: Pick<InternalMetricsRecorder, "increment">;
+  isSessionJwtRevoked?: (jwtId: string) => Promise<boolean>;
   messageRateLimiterFactory?: () => RuntimeWsMessageRateLimiter;
   now?: () => number;
   sharedBus?: RuntimeWsSharedBus;

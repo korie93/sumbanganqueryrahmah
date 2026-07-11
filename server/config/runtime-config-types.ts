@@ -80,6 +80,7 @@ export type RuntimeConfig = {
     previousSessionSecrets: string[];
     sessionJwtPrivateKey: string | null;
     sessionJwtPublicKey: string | null;
+    sessionJwtLegacyHs256VerifyUntilMs: number | null;
     auditHmacKey: string;
     bcryptCost: number;
     collectionNicknameTempPassword: string;

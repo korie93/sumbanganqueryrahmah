@@ -32,6 +32,7 @@ export const webSocketSessionJwtPayloadSchema = authenticatedSessionJwtPayloadSc
     username: true,
   })
   .extend({
+    jti: nonEmptyString,
     role: optionalNonEmptyString,
     userId: optionalNonEmptyString,
     username: optionalNonEmptyString,

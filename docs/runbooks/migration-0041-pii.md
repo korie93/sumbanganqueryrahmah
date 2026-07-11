@@ -38,6 +38,37 @@ For full retirement, use:
 npm run collection:verify-pii-full-retirement
 ```
 
+### Mandatory Live-Database Evidence
+
+CI and an empty test database cannot prove that production plaintext has been
+retired. Before each production rollout that adds or keeps retired fields, run
+the checks from the deployed application directory with the target production
+database environment loaded:
+
+```bash
+npm run collection:pii-status -- --json
+npm run collection:verify-pii-sensitive-retirement
+```
+
+When `COLLECTION_PII_RETIRED_FIELDS` is non-empty, also run the exact-field
+gate used by startup and release readiness:
+
+```bash
+npm run collection:verify-pii-retired-fields
+```
+
+Record the timestamp, deployed commit, selected field list, and zero-count
+result in the private deployment evidence log. The report contains aggregate
+counts only; do not copy record values, encryption payloads, or keys into a
+ticket. A non-zero plaintext, redactable, or rewrite count is a hard stop: keep
+the field out of `COLLECTION_PII_RETIRED_FIELDS`, complete the documented dry
+run/apply workflow, then repeat all live checks. Do not bypass the startup
+retirement guard.
+
+The full-retirement command is required only when all supported PII fields are
+being retired. A passing sensitive-field gate must not be recorded as proof of
+full retirement.
+
 ## Rollback
 
 - Clear `COLLECTION_PII_RETIRED_FIELDS`.

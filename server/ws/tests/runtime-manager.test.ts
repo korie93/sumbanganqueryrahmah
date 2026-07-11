@@ -70,8 +70,11 @@ class FakeWebSocket extends EventEmitter {
 
 const TEST_SECRET = "runtime-manager-test-secret";
 
-function createWsToken(activityId: string) {
-  return jwt.sign({ activityId }, TEST_SECRET, { algorithm: "HS256" });
+function createWsToken(activityId: string, jwtId = `jwt-${activityId}`) {
+  return jwt.sign({ activityId }, TEST_SECRET, {
+    algorithm: "HS256",
+    jwtid: jwtId,
+  });
 }
 
 type RuntimeConnectionRequest = Pick<IncomingMessage, "url" | "headers" | "socket">;
@@ -843,6 +846,111 @@ test("runtime manager rejects sockets before registration without leaving tracke
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager rejects revoked JWT ids before activity lookup", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const metricCalls: string[] = [];
+  let checkedJwtId = "";
+  let lookupCalls = 0;
+  const activityId = "activity-revoked-token";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return createActiveSession(activityId);
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    isSessionJwtRevoked: async (jwtId) => {
+      checkedJwtId = jwtId;
+      return true;
+    },
+    metrics: {
+      increment(name) {
+        metricCalls.push(name);
+      },
+    },
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(activityId, "revoked-ws-jti")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(checkedJwtId, "revoked-ws-jti");
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.deepEqual(socket.closeCodes, [{ code: 1008, reason: "session invalid" }]);
+    assert.deepEqual(metricCalls, ["webSocketRevokedSessionRejectionsTotal"]);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager fails closed when JWT revocation lookup throws", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const metricCalls: string[] = [];
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+  let lookupCalls = 0;
+  const activityId = "activity-revocation-store-failure";
+
+  t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return createActiveSession(activityId);
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    isSessionJwtRevoked: async () => {
+      throw new Error("revocation store unavailable");
+    },
+    metrics: {
+      increment(name) {
+        metricCalls.push(name);
+      },
+    },
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(activityId, "private-failure-jti")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.deepEqual(socket.closeCodes, [{ code: 1008, reason: "session invalid" }]);
+    assert.deepEqual(metricCalls, ["webSocketSessionRevocationCheckFailuresTotal"]);
+    assert.equal(warnings[0]?.message, "WebSocket session revocation check failed; rejecting connection");
+    assert.doesNotMatch(JSON.stringify(warnings), /private-failure-jti/);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
   } finally {
     wss.emit("close");
   }

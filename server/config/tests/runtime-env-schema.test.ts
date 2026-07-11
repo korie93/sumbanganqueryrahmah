@@ -106,6 +106,27 @@ test("runtime env schema validates bcrypt cost factor bounds", () => {
   );
 });
 
+test("runtime env schema validates the legacy HS256 migration deadline", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL: "2026-07-12T00:00:00Z",
+    });
+  });
+
+  assert.throws(
+    () => validateRuntimeEnvironmentSchema({
+      SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL: "tomorrow",
+    }),
+    /SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL.*ISO 8601 timestamp/i,
+  );
+  assert.throws(
+    () => validateRuntimeEnvironmentSchema({
+      SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL: "2026-07-12T00:00:00",
+    }),
+    /SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL.*timezone/i,
+  );
+});
+
 test("runtime env schema rejects integer values outside configured bounds", () => {
   assert.throws(
     () => {

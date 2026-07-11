@@ -12,6 +12,10 @@ const serverBuilds = [
     entryPoint: path.resolve(cwd, "server/cluster-local.ts"),
     outfile: path.resolve(cwd, "dist-local/server/cluster-local.js"),
   },
+  {
+    entryPoint: path.resolve(cwd, "server/services/import-upload-excel-worker.ts"),
+    outfile: path.resolve(cwd, "dist-local/server/import-upload-excel-worker.js"),
+  },
 ];
 
 for (const target of serverBuilds) {

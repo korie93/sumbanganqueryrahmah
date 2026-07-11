@@ -1,14 +1,16 @@
-import fs from "node:fs";
 import {
-  createUploadFileAccessError,
   createUploadFileTooLargeError,
-  isFileAccessError,
   validateUploadFileSize,
 } from "./import-upload-file-utils";
+import {
+  preflightSpreadsheetArchive,
+  type SpreadsheetArchivePreflightOptions,
+} from "./import-upload-archive-preflight";
+import { parseExcelFileInWorker } from "./import-upload-excel-worker-runner";
 import { getImportUploadSpreadsheetRuntime } from "./import-upload-xlsx-runtime";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
 
-type ParseExcelOptions = {
+export type ParseExcelOptions = SpreadsheetArchivePreflightOptions & {
   maxRows?: number;
   maxBytes?: number;
   maxColumns?: number;
@@ -138,6 +140,15 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
     return createUploadFileTooLargeError(options?.maxBytes);
   }
 
+  const archivePreflight = preflightSpreadsheetArchive(buffer, options);
+  if (!archivePreflight.success) {
+    return {
+      headers: [],
+      rows: [],
+      error: archivePreflight.error,
+    };
+  }
+
   let workbook;
   const spreadsheetRuntime = getImportUploadSpreadsheetRuntime();
   try {
@@ -207,16 +218,5 @@ export async function parseExcelFile(
     return sizeValidation;
   }
 
-  let buffer: Buffer;
-  try {
-    buffer = await fs.promises.readFile(filePath);
-  } catch (error) {
-    if (isFileAccessError(error)) {
-      return createUploadFileAccessError();
-    }
-    const message = error instanceof Error ? error.message : "Failed to read Excel file";
-    return { headers: [], rows: [], error: message };
-  }
-
-  return parseExcelBuffer(buffer, options);
+  return parseExcelFileInWorker(filePath, options);
 }

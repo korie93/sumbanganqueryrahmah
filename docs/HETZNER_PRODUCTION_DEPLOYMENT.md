@@ -210,7 +210,8 @@ Medan paling penting:
 
 ```dotenv
 NODE_ENV=production
-HOST=0.0.0.0
+# Nginx berjalan pada host yang sama, jadi listener Node kekal private.
+HOST=127.0.0.1
 PORT=5000
 
 PUBLIC_APP_URL=https://domain-anda.com
@@ -219,6 +220,10 @@ TRUSTED_PROXIES=loopback
 
 SESSION_SECRET=ganti-dengan-random-secret-yang-panjang-dan-kuat
 SESSION_SECRET_PREVIOUS=
+SESSION_JWT_PRIVATE_KEY=GENERATE_ME_RS256_PRIVATE_KEY_PEM
+SESSION_JWT_PUBLIC_KEY=GENERATE_ME_RS256_PUBLIC_KEY_PEM
+# Kosong = tolak HS256 legacy. Isi deadline ISO bertimezone untuk migrasi <= 7 hari sahaja.
+SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL=
 TWO_FACTOR_ENCRYPTION_KEY=ganti-dengan-secret-2fa-yang-kuat-dan-berbeza
 COLLECTION_PII_ENCRYPTION_KEY=ganti-dengan-secret-pii-yang-kuat-dan-berbeza
 AUTH_COOKIE_SECURE=auto
@@ -237,6 +242,11 @@ COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED=1
 COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND=clamdscan
 COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON='["--fdpass","--no-summary","--infected","{file}"]'
 COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED=1
+
+# Default: Ollama pada server yang sama, tidak boleh dicapai dari internet.
+OLLAMA_HOST=http://127.0.0.1:11434
+OLLAMA_ALLOW_REMOTE=0
+OLLAMA_AUTH_TOKEN=
 
 SEED_DEFAULT_USERS=0
 MAIL_DEV_OUTBOX_ENABLED=0
@@ -272,11 +282,13 @@ BACKUP_ENCRYPTION_KEY_ID=primary
 ```
 
 `TWO_FACTOR_ENCRYPTION_KEY` dan `COLLECTION_PII_ENCRYPTION_KEY` kini dianggap secret wajib di luar strict local development. Jika salah satu kosong, runtime akan fail fast semasa startup supaya server tidak berjalan dalam keadaan tidak selamat.
+Jika `COLLECTION_PII_RETIRED_FIELDS` diisi, jalankan `npm run collection:pii-status -- --json` dan `npm run collection:verify-pii-retired-fields` terhadap database production sebenar sebelum restart. Keputusan CI atau database test tidak menggantikan bukti live ini; sebarang count plaintext, redactable, atau rewrite yang bukan sifar ialah hard stop. Ikuti `docs/runbooks/migration-0041-pii.md` untuk prosedur dan rollback.
 
 Jika anda deploy di belakang Nginx sahaja pada server yang sama, `TRUSTED_PROXIES=loopback` biasanya memadai.
 Untuk production HTTPS di belakang Nginx, biarkan `AUTH_COOKIE_SECURE=auto` atau set `AUTH_COOKIE_SECURE=true`; jangan paksa `false`.
 `HSTS_MAX_AGE_SECONDS=31536000` menyediakan tempoh preload-ready. Kekalkan `HSTS_PRELOAD_ENABLED=0` sehingga semua subdomain production benar-benar HTTPS-only; selepas disahkan, set `HSTS_PRELOAD_ENABLED=1`, deploy, dan submit domain ke `https://hstspreload.org`.
 Receipt upload production perlu melalui ClamAV. Gunakan `clamdscan --fdpass` jika `clamav-daemon` aktif; jika hanya `clamscan` tersedia, tukar command dan args kepada fallback yang dinyatakan dalam `.env.example`. Runtime akan resolve command kepada realpath dan hanya menerima `clamdscan`/`clamscan` dari direktori scanner yang diluluskan seperti `/usr/bin`, `/usr/local/bin`, `/opt/clamav/bin`, atau `/opt/scanner/bin`; Node scanner shim hanya untuk development/test dan ditolak dalam production-like startup.
+Kekalkan `OLLAMA_HOST` pada loopback jika Ollama berjalan pada VPS yang sama. Jika penghantaran data AI ke hos remote benar-benar diluluskan, endpoint mesti `https://`, `OLLAMA_ALLOW_REMOTE=1` mesti ditetapkan secara sengaja, dan `OLLAMA_AUTH_TOKEN` mesti disediakan melalui secret manager. Runtime akan fail fast untuk remote HTTP, remote tanpa token, URL berkredensial, atau URL yang mempunyai path/query supaya data import tidak dihantar melalui konfigurasi egress yang lemah.
 Mulakan `PG_MAX_CONNECTIONS=10` untuk production kecil dan naikkan ke 20 hanya selepas semak `max_connections`, RAM PostgreSQL, dan log `PostgreSQL pool pressure detected`.
 Kekalkan `PG_STATEMENT_TIMEOUT_MS=30000` sebagai guard query runaway PostgreSQL. Jika backup/report production sah memerlukan statement lebih lama, naikkan nilai ini secara deliberate dan pastikan ia masih lebih rendah daripada `HTTP_REQUEST_TIMEOUT_MS` atau selari dengan runbook backup yang dipantau.
 `CORS_ALLOWED_ORIGINS` bukan mekanisme auth. Browser origin yang dibenarkan tetap perlu cookie/token sah, dan request server-to-server tanpa `Origin` masih bergantung pada auth, CSRF guard yang sesuai, rate limit, dan route permission.
