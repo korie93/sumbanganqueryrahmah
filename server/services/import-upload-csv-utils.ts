@@ -5,7 +5,7 @@ import {
   parseCsvRecord,
   validateCsvHeaders,
   validateCsvRowWidth,
-} from "../../shared/csv-record-parser";
+} from "../../shared/common/csv-record-parser";
 import {
   createUploadFileAccessError,
   createUploadFileTooLargeError,
