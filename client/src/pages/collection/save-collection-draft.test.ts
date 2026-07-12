@@ -54,31 +54,39 @@ function installSessionStorageMock() {
   return session;
 }
 
-test("buildSaveCollectionDraftStorageKey normalizes the nickname into a stable session key", () => {
+test("buildSaveCollectionDraftStorageKey preserves distinct nicknames in a stable v2 key", () => {
   assert.equal(
     buildSaveCollectionDraftStorageKey(" Collector Alpha "),
-    "save-collection-draft:collector-alpha:v1",
+    "save-collection-draft:collector%20alpha:v2",
+  );
+  assert.notEqual(
+    buildSaveCollectionDraftStorageKey("Collector Alpha"),
+    buildSaveCollectionDraftStorageKey("Collector-Alpha"),
   );
 });
 
-test("persistSaveCollectionDraft stores non-empty drafts in sessionStorage and restores them safely", () => {
+test("persistSaveCollectionDraft stores only non-PII draft fields at runtime", () => {
   const session = installSessionStorageMock();
-
-  persistSaveCollectionDraft("Collector Alpha", {
+  const contaminatedDraft = {
     customerName: "Siti",
     icNumber: "900101-10-1234",
     customerPhone: "0123456789",
     accountNumber: "ACC-1",
-    batch: "P25",
+    batch: "P25" as const,
     paymentDate: "2026-03-26",
     amount: "100.50",
     hadPendingReceipts: true,
-  });
+  };
+
+  persistSaveCollectionDraft("Collector Alpha", contaminatedDraft);
 
   const stored = readSaveCollectionDraft("Collector Alpha");
-  assert.equal(stored?.customerName, "Siti");
   assert.equal(stored?.batch, "P25");
   assert.equal(stored?.hadPendingReceipts, true);
+  assert.equal("customerName" in (stored ?? {}), false);
+  const raw = String(session.getItem(buildSaveCollectionDraftStorageKey("Collector Alpha")) || "");
+  assert.doesNotMatch(raw, /Siti|900101-10-1234|0123456789|ACC-1/);
+  assert.doesNotMatch(raw, /customerName|icNumber|customerPhone|accountNumber/);
   assert.equal(session.length, 1);
 });
 
@@ -86,10 +94,6 @@ test("persistSaveCollectionDraft clears empty drafts instead of keeping stale se
   installSessionStorageMock();
 
   persistSaveCollectionDraft("Collector Alpha", {
-    customerName: "",
-    icNumber: "",
-    customerPhone: "",
-    accountNumber: "",
     batch: "P10",
     paymentDate: "",
     amount: "",
@@ -99,10 +103,6 @@ test("persistSaveCollectionDraft clears empty drafts instead of keeping stale se
   assert.equal(readSaveCollectionDraft("Collector Alpha"), null);
   assert.equal(
     isSaveCollectionDraftEmpty({
-      customerName: "",
-      icNumber: "",
-      customerPhone: "",
-      accountNumber: "",
       batch: "P10",
       paymentDate: "",
       amount: "",
@@ -112,19 +112,31 @@ test("persistSaveCollectionDraft clears empty drafts instead of keeping stale se
   );
 });
 
-test("parseSaveCollectionDraft rejects malformed payloads and clearSaveCollectionDraft removes stored data", () => {
+test("draft reads purge legacy PII keys and ignore unexpected sensitive fields", () => {
   const session = installSessionStorageMock();
+  const legacyKey = "save-collection-draft:collector-alpha:v1";
+  session.setItem(legacyKey, JSON.stringify({
+    customerName: "Legacy Siti",
+    icNumber: "900101-10-1234",
+    batch: "P25" as const,
+  }));
   session.setItem(
     buildSaveCollectionDraftStorageKey("Collector Alpha"),
     JSON.stringify({
-      customerName: "Siti",
+      customerName: "Unexpected Siti",
       batch: "INVALID",
+      paymentDate: "2026-03-26",
+      amount: "50.00",
+      hadPendingReceipts: "false",
       savedAt: "2026-03-26T00:00:00.000Z",
     }),
   );
 
   const parsed = readSaveCollectionDraft("Collector Alpha");
   assert.equal(parsed?.batch, "P10");
+  assert.equal(parsed?.hadPendingReceipts, false);
+  assert.equal("customerName" in (parsed ?? {}), false);
+  assert.equal(session.getItem(legacyKey), null);
   assert.equal(parseSaveCollectionDraft("{bad-json"), null);
 
   clearSaveCollectionDraft("Collector Alpha");
@@ -162,10 +174,6 @@ test("save collection draft helpers stay safe when sessionStorage access throws"
   assert.doesNotThrow(() => clearSaveCollectionDraft("Collector Alpha"));
   assert.doesNotThrow(() =>
     persistSaveCollectionDraft("Collector Alpha", {
-      customerName: "Siti",
-      icNumber: "",
-      customerPhone: "",
-      accountNumber: "",
       batch: "P10",
       paymentDate: "",
       amount: "",

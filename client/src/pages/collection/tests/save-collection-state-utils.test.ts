@@ -38,8 +38,16 @@ test("save collection state utils derive persist payload and restore state", () 
     savedAt: "2026-04-06T12:00:00.000Z",
   });
 
-  assert.equal(persistPayload.hadPendingReceipts, true);
-  assert.equal(restored.values.customerName, "Siti");
+  assert.deepEqual(persistPayload, {
+    batch: "P25",
+    paymentDate: "2026-03-01",
+    amount: "100.50",
+    hadPendingReceipts: true,
+  });
+  assert.equal(restored.values.customerName, "");
+  assert.equal(restored.values.icNumber, "");
+  assert.equal(restored.values.customerPhone, "");
+  assert.equal(restored.values.accountNumber, "");
   assert.equal(restored.values.batch, "P25");
   assert.deepEqual(restored.notice, {
     restoredAt: "2026-04-06T12:00:00.000Z",

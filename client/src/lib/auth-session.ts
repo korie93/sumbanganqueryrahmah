@@ -1,6 +1,9 @@
 import type { User } from "@/app/types";
 import { z } from "zod";
-import { LEGACY_AUTH_LOCAL_STORAGE_KEYS } from "@/app/constants";
+import {
+  LEGACY_AUTH_LOCAL_STORAGE_KEYS,
+  SAVE_COLLECTION_DRAFT_STORAGE_PREFIX,
+} from "@/app/constants";
 import {
   clearLegacyAuthLocalStorage,
   clearLegacyAuthLocalStorageValue,
@@ -9,6 +12,7 @@ import {
   getBrowserSessionStorage,
   safeGetStorageItem,
   safeRemoveStorageItem,
+  safeRemoveStorageItemsByPrefix,
   safeSetStorageItem,
 } from "@/lib/browser-storage";
 import { safeJsonParseResult } from "@/lib/utils/safe-json";
@@ -214,6 +218,13 @@ function clearStoredAuthSessionValues() {
   }
 }
 
+function clearSensitiveSessionDrafts() {
+  safeRemoveStorageItemsByPrefix(
+    getBrowserSessionStorage(),
+    SAVE_COLLECTION_DRAFT_STORAGE_PREFIX,
+  );
+}
+
 function normalizeAuthNoticeMessage(message: string | null | undefined): string {
   return String(message || "").trim();
 }
@@ -276,11 +287,13 @@ export function hasAuthSessionHintCookie() {
 export function getStoredAuthenticatedUser(): User | null {
   if (isStoredAuthSessionExpired()) {
     clearStoredAuthSessionValues();
+    clearSensitiveSessionDrafts();
     return null;
   }
 
   const raw = readAuthSessionValue("user");
   if (!raw) {
+    clearSensitiveSessionDrafts();
     return null;
   }
 
@@ -291,6 +304,7 @@ export function getStoredAuthenticatedUser(): User | null {
   const parsed = parsedJson.ok ? authSessionUserSchema.safeParse(parsedJson.data) : null;
   if (!parsed?.success) {
     clearStoredAuthSessionValues();
+    clearSensitiveSessionDrafts();
     return null;
   }
   if (readAuthSessionTimestamp(AUTH_SESSION_STORED_AT_KEY) === null) {
@@ -392,4 +406,5 @@ export function clearAuthenticatedUserStorage() {
   const storage = getBrowserSessionStorage();
   safeRemoveStorageItem(storage, "collection_staff_nickname");
   safeRemoveStorageItem(storage, "collection_staff_nickname_auth");
+  clearSensitiveSessionDrafts();
 }

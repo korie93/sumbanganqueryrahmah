@@ -14,6 +14,8 @@ export const DEFAULT_RUNTIME_CONFIG: AppRuntimeConfig = {
 
 export const ACTIVE_SETTINGS_SECTION_KEY = "activeSettingsSection";
 
+export const SAVE_COLLECTION_DRAFT_STORAGE_PREFIX = "save-collection-draft:";
+
 export const LEGACY_AUTH_LOCAL_STORAGE_KEYS = [
   "token",
   "user",

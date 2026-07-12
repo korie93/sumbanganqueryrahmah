@@ -56,6 +56,32 @@ export function safeRemoveStorageItem(
   }
 }
 
+export function safeRemoveStorageItemsByPrefix(
+  storage: BrowserStorageLike | null | undefined,
+  prefix: string,
+): void {
+  if (!storage || !prefix) {
+    return;
+  }
+
+  const matchingKeys: string[] = [];
+  try {
+    const storageLength = storage.length;
+    for (let index = 0; index < storageLength; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(prefix)) {
+        matchingKeys.push(key);
+      }
+    }
+  } catch {
+    return;
+  }
+
+  for (const key of matchingKeys) {
+    safeRemoveStorageItem(storage, key);
+  }
+}
+
 export function safeSetStorageItem(
   storage: Pick<Storage, "setItem"> | null | undefined,
   key: string,

@@ -27,10 +27,6 @@ export function buildSaveCollectionDraftPersistPayload(
   hasPendingReceipts: boolean,
 ): Omit<SaveCollectionDraft, "savedAt"> {
   return {
-    customerName: values.customerName,
-    icNumber: values.icNumber,
-    customerPhone: values.customerPhone,
-    accountNumber: values.accountNumber,
     batch: values.batch,
     paymentDate: values.paymentDate,
     amount: values.amount,
@@ -53,10 +49,10 @@ export function buildSaveCollectionDraftRestoreState(
 
   return {
     values: {
-      customerName: restoredDraft.customerName,
-      icNumber: restoredDraft.icNumber,
-      customerPhone: restoredDraft.customerPhone,
-      accountNumber: restoredDraft.accountNumber,
+      customerName: "",
+      icNumber: "",
+      customerPhone: "",
+      accountNumber: "",
       batch: restoredDraft.batch,
       paymentDate: restoredDraft.paymentDate,
       amount: restoredDraft.amount,

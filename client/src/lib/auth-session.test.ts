@@ -212,6 +212,9 @@ test("clearAuthenticatedUserStorage clears both session auth data and legacy loc
   local.setItem("username", "alice");
   local.setItem("token", "legacy-token");
   local.setItem("activeTab", "home");
+  session.setItem("save-collection-draft:alice:v1", "legacy-sensitive-draft");
+  session.setItem("save-collection-draft:alice:v2", "safe-operational-draft");
+  session.setItem("unrelated-session-setting", "preserved");
 
   clearAuthenticatedUserStorage();
 
@@ -220,6 +223,9 @@ test("clearAuthenticatedUserStorage clears both session auth data and legacy loc
   assert.equal(session.getItem("banned"), null);
   assert.equal(session.getItem("sessionStoredAt"), null);
   assert.equal(session.getItem("sessionExpiresAt"), null);
+  assert.equal(session.getItem("save-collection-draft:alice:v1"), null);
+  assert.equal(session.getItem("save-collection-draft:alice:v2"), null);
+  assert.equal(session.getItem("unrelated-session-setting"), "preserved");
   assert.equal(local.getItem("user"), null);
   assert.equal(local.getItem("token"), null);
   assert.equal(local.getItem("activeTab"), "home");
@@ -233,6 +239,7 @@ test("stored auth session metadata expires stale cached users safely", () => {
   session.setItem("role", "admin");
   session.setItem("sessionStoredAt", "1");
   session.setItem("sessionExpiresAt", "2");
+  session.setItem("save-collection-draft:alice:v1", "legacy-sensitive-draft");
 
   assert.equal(getStoredAuthenticatedUser(), null);
   assert.equal(session.getItem("user"), null);
@@ -240,6 +247,7 @@ test("stored auth session metadata expires stale cached users safely", () => {
   assert.equal(session.getItem("role"), null);
   assert.equal(session.getItem("sessionStoredAt"), null);
   assert.equal(session.getItem("sessionExpiresAt"), null);
+  assert.equal(session.getItem("save-collection-draft:alice:v1"), null);
 });
 
 test("stored auth session recovers missing metadata without accepting corrupted users", () => {
@@ -252,9 +260,21 @@ test("stored auth session recovers missing metadata without accepting corrupted 
   assert.ok(Number(session.getItem("sessionStoredAt") || 0) > 0);
 
   session.setItem("user", "{bad-json");
+  session.setItem("save-collection-draft:alice:v1", "legacy-sensitive-draft");
   assert.equal(getStoredAuthenticatedUser(), null);
   assert.equal(session.getItem("user"), null);
   assert.equal(session.getItem("sessionStoredAt"), null);
+  assert.equal(session.getItem("save-collection-draft:alice:v1"), null);
+});
+
+test("missing auth state clears orphaned collection drafts", () => {
+  const { session } = installStorageMocks();
+  session.setItem("save-collection-draft:alice:v1", "legacy-sensitive-draft");
+  session.setItem("save-collection-draft:alice:v2", "safe-operational-draft");
+
+  assert.equal(getStoredAuthenticatedUser(), null);
+  assert.equal(session.getItem("save-collection-draft:alice:v1"), null);
+  assert.equal(session.getItem("save-collection-draft:alice:v2"), null);
 });
 
 test("stored auth session validates cached user JSON against the session schema", () => {

@@ -6,6 +6,7 @@ import {
   isQuotaExceededStorageError,
   safeGetStorageItem,
   safeRemoveStorageItem,
+  safeRemoveStorageItemsByPrefix,
   safeSetStorageItem,
   type BrowserStorageLike,
 } from "@/lib/browser-storage";
@@ -54,6 +55,42 @@ test("browser storage helpers tolerate read and cleanup failures", () => {
 
   assert.equal(safeGetStorageItem(readFailure, "theme"), null);
   assert.doesNotThrow(() => safeRemoveStorageItem(removeFailure, "theme"));
+});
+
+test("browser storage helpers remove only keys matching a prefix", () => {
+  const storage = createStorageMock({
+    "save-collection-draft:alpha:v1": "legacy-sensitive-draft",
+    "save-collection-draft:alpha:v2": "safe-draft",
+    theme: "dark",
+  });
+
+  safeRemoveStorageItemsByPrefix(storage, "save-collection-draft:");
+
+  assert.equal(storage.getItem("save-collection-draft:alpha:v1"), null);
+  assert.equal(storage.getItem("save-collection-draft:alpha:v2"), null);
+  assert.equal(storage.getItem("theme"), "dark");
+});
+
+test("browser storage prefix cleanup tolerates storage enumeration failures", () => {
+  const deniedStorage = {
+    get length(): number {
+      throw new Error("denied");
+    },
+    key() {
+      throw new Error("denied");
+    },
+    getItem() {
+      throw new Error("denied");
+    },
+    setItem() {
+      throw new Error("denied");
+    },
+    removeItem() {
+      throw new Error("denied");
+    },
+  } satisfies BrowserStorageLike;
+
+  assert.doesNotThrow(() => safeRemoveStorageItemsByPrefix(deniedStorage, "draft:"));
 });
 
 test("getBrowserSessionStorage returns the browser session storage when available", () => {
