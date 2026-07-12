@@ -1,10 +1,11 @@
+import { escapeCsvCell } from "@/lib/csv";
+
 type CollectionMonthlyComparisonEscapableValue = string | number | null | undefined;
 
 export function escapeCollectionMonthlyComparisonCsvValue(
   value: CollectionMonthlyComparisonEscapableValue,
 ) {
-  const text = String(value ?? "");
-  return `"${text.replace(/"/g, '""')}"`;
+  return escapeCsvCell(value);
 }
 
 export function escapeCollectionMonthlyComparisonHtml(

@@ -11,6 +11,7 @@ test("monthly comparison export helpers escape CSV values without changing numer
   assert.equal(escapeCollectionMonthlyComparisonCsvValue('Ali "Alpha", RM'), '"Ali ""Alpha"", RM"');
   assert.equal(escapeCollectionMonthlyComparisonCsvValue(1250.5), '"1250.5"');
   assert.equal(escapeCollectionMonthlyComparisonCsvValue(null), '""');
+  assert.equal(escapeCollectionMonthlyComparisonCsvValue("=1+1"), '"\'=1+1"');
 });
 
 test("monthly comparison export helpers escape report HTML defensively", () => {

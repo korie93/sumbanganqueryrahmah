@@ -43,3 +43,14 @@ test("buildBackupsCsvContent flattens embedded newlines inside cells", () => {
   assert.match(csvContent, /"Nightly Alpha Batch"/);
   assert.doesNotMatch(csvContent, /Nightly\nAlpha/);
 });
+
+test("buildBackupsCsvContent neutralizes spreadsheet formula payloads", () => {
+  const csvContent = buildBackupsCsvContent([
+    {
+      ...sampleBackups[0]!,
+      name: "=HYPERLINK(\"https://example.invalid\")",
+    },
+  ]);
+
+  assert.match(csvContent, /"'=HYPERLINK\(""https:\/\/example\.invalid""\)"/);
+});

@@ -7,6 +7,7 @@ import {
   CSV_MIME_TYPE,
   CSV_UTF8_BOM,
   escapeCsvCell,
+  neutralizeCsvFormulaInjection,
   normalizeCsvCellValue,
 } from "@/lib/csv";
 
@@ -32,6 +33,18 @@ test("buildCsvContent escapes headers and rows with CRLF line endings", () => {
     csv,
     "\"Name, full\",\"Amount\",\"Active\"\r\n\"Ali \"\"Alpha\"\"\",\"0\",\"false\"\r\n\"Siti\",\"125.5\",\"true\"",
   );
+});
+
+test("escapeCsvCell neutralizes spreadsheet formulas without changing numeric primitives", () => {
+  assert.equal(escapeCsvCell("=1+1"), "\"'=1+1\"");
+  assert.equal(escapeCsvCell("+cmd"), "\"'+cmd\"");
+  assert.equal(escapeCsvCell("-1+CMD()"), "\"'-1+CMD()\"");
+  assert.equal(escapeCsvCell("@SUM(A1:A2)"), "\"'@SUM(A1:A2)\"");
+  assert.equal(escapeCsvCell("\t=1+1"), "\"'\t=1+1\"");
+  assert.equal(escapeCsvCell("\r=1+1"), "\"'\r=1+1\"");
+  assert.equal(escapeCsvCell("-42.00"), "\"-42.00\"");
+  assert.equal(escapeCsvCell(-42), "\"-42\"");
+  assert.equal(neutralizeCsvFormulaInjection("ordinary text"), "ordinary text");
 });
 
 test("createCsvBlob prefixes UTF-8 BOM by default for Excel compatibility", async () => {

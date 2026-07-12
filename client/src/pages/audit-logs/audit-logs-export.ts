@@ -1,4 +1,4 @@
-import { downloadCsv } from "@/lib/csv";
+import { buildCsvContent, downloadCsv } from "@/lib/csv";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
 import { buildReadableAuditDetails } from "@/pages/audit-logs/audit-log-readable-details";
@@ -6,10 +6,6 @@ import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import { getAuditActionLabel } from "@/pages/audit-logs/utils";
 
 let auditLogsJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
-
-function escapeCsvValue(value: string) {
-  return `"${(value || "").replace(/"/g, '""')}"`;
-}
 
 function formatAuditExportTime(value: string) {
   return formatDateTimeMalaysia(value, { includeSeconds: true, fallback: value });
@@ -21,23 +17,22 @@ function formatAuditExportDetails(details: string | undefined) {
 
 export function buildAuditLogsCsvContent(logs: AuditLogRecord[]) {
   const headers = ["Action", "Category", "Risk", "Performed By", "Target User", "Resource", "Request ID", "Details", "Timestamp"];
-  return [
-    headers.map(escapeCsvValue).join(","),
-    ...logs.map((log) => {
-      const summary = buildAuditLogSummary(log);
-      return [
-        escapeCsvValue(getAuditActionLabel(log.action)),
-        escapeCsvValue(summary.category.label),
-        escapeCsvValue(summary.risk.label),
-        escapeCsvValue(log.performedBy),
-        escapeCsvValue(log.targetUser || ""),
-        escapeCsvValue(log.targetResource || ""),
-        escapeCsvValue(log.requestId || ""),
-        escapeCsvValue(formatAuditExportDetails(log.details)),
-        escapeCsvValue(formatAuditExportTime(log.timestamp)),
-      ].join(",");
-    }),
-  ].join("\n");
+  const rows = logs.map((log) => {
+    const summary = buildAuditLogSummary(log);
+    return [
+      getAuditActionLabel(log.action),
+      summary.category.label,
+      summary.risk.label,
+      log.performedBy,
+      log.targetUser || "",
+      log.targetResource || "",
+      log.requestId || "",
+      formatAuditExportDetails(log.details),
+      formatAuditExportTime(log.timestamp),
+    ];
+  });
+
+  return buildCsvContent(headers, rows);
 }
 
 export function exportAuditLogsToCsv(logs: AuditLogRecord[]) {

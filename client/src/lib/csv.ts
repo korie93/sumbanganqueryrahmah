@@ -15,6 +15,9 @@ type CsvBlobOptions = {
   withBom?: boolean;
 };
 
+const CSV_FORMULA_INJECTION_PATTERN = /^(?:[\t\r\n]|\s*[=+\-@])/u;
+const CSV_SAFE_NUMERIC_LITERAL_PATTERN = /^[+\-]?(?:\d+(?:\.\d*)?|\.\d+)$/u;
+
 function stringifyCsvObject(value: object) {
   try {
     return JSON.stringify(value);
@@ -51,10 +54,21 @@ export function normalizeCsvCellValue(value: CsvCellValue, emptyValue = ""): str
   return String(value);
 }
 
-export function escapeCsvCell(value: CsvCellValue, options: CsvFormatOptions = {}) {
+export function neutralizeCsvFormulaInjection(value: string): string {
+  if (CSV_SAFE_NUMERIC_LITERAL_PATTERN.test(value)) {
+    return value;
+  }
+
+  return CSV_FORMULA_INJECTION_PATTERN.test(value) ? `'${value}` : value;
+}
+
+export function escapeCsvCell(value: CsvCellValue, options: CsvFormatOptions = {}): string {
   const delimiter = options.delimiter ?? ",";
   const quoteAll = options.quoteAll ?? true;
-  const text = normalizeCsvCellValue(value, options.emptyValue ?? "");
+  const normalizedText = normalizeCsvCellValue(value, options.emptyValue ?? "");
+  const text = typeof value === "number" || typeof value === "bigint"
+    ? normalizedText
+    : neutralizeCsvFormulaInjection(normalizedText);
   const mustQuote =
     quoteAll ||
     text.includes(delimiter) ||

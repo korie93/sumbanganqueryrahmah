@@ -48,3 +48,14 @@ test("buildAuditLogsCsvContent exports readable JSON detail payloads", () => {
     /"Peranan: User; Rekod dipaparkan: 17; Tarikh mula: 01\/05\/2026; Carian digunakan: Tidak"/,
   );
 });
+
+test("buildAuditLogsCsvContent neutralizes spreadsheet formula payloads", () => {
+  const csvContent = buildAuditLogsCsvContent([
+    {
+      ...sampleLogs[0],
+      performedBy: "@SUM(1,1)",
+    },
+  ]);
+
+  assert.match(csvContent, /"'@SUM\(1,1\)"/);
+});

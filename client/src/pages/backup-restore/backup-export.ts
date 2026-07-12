@@ -1,13 +1,11 @@
-import { downloadCsv } from "@/lib/csv";
+import { buildCsvContent, downloadCsv } from "@/lib/csv";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
 import type { BackupRecord } from "@/pages/backup-restore/types";
 
 let backupJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
-function escapeCsvValue(value: string) {
-  return `"${(value || "")
-    .replace(/"/g, '""')
-    .replace(/[\r\n]+/g, " ")}"`;
+function flattenBackupCsvText(value: string) {
+  return value.replace(/[\r\n]+/g, " ");
 }
 
 function formatBackupExportTime(dateStr: string) {
@@ -16,20 +14,17 @@ function formatBackupExportTime(dateStr: string) {
 
 export function buildBackupsCsvContent(backups: BackupRecord[]) {
   const headers = ["Name", "Created By", "Created At", "Imports", "Data Rows", "Users", "Audit Logs"];
-  return [
-    headers.map(escapeCsvValue).join(","),
-    ...backups.map((backup) =>
-      [
-        escapeCsvValue(backup.name),
-        escapeCsvValue(backup.createdBy),
-        escapeCsvValue(formatBackupExportTime(backup.createdAt)),
-        escapeCsvValue(String(backup.metadata?.importsCount || 0)),
-        escapeCsvValue(String(backup.metadata?.dataRowsCount || 0)),
-        escapeCsvValue(String(backup.metadata?.usersCount || 0)),
-        escapeCsvValue(String(backup.metadata?.auditLogsCount || 0)),
-      ].join(","),
-    ),
-  ].join("\n");
+  const rows = backups.map((backup) => [
+    flattenBackupCsvText(backup.name),
+    flattenBackupCsvText(backup.createdBy),
+    flattenBackupCsvText(formatBackupExportTime(backup.createdAt)),
+    backup.metadata?.importsCount ?? 0,
+    backup.metadata?.dataRowsCount ?? 0,
+    backup.metadata?.usersCount ?? 0,
+    backup.metadata?.auditLogsCount ?? 0,
+  ]);
+
+  return buildCsvContent(headers, rows);
 }
 
 export function exportBackupsToCsv(backups: BackupRecord[]) {
