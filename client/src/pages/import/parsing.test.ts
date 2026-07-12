@@ -33,6 +33,46 @@ test("parseCsvLine preserves escaped quotes in quoted cells", () => {
   );
 });
 
+test("parseImportPreview keeps quoted multiline cells in one row", async () => {
+  const file = new File([
+    'name,notes\r\nAlice,"line 1\r\nline 2"\r\n',
+  ], "multiline.csv", { type: "text/csv" });
+
+  const result = await parseImportPreview(file);
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.headers, ["name", "notes"]);
+  assert.deepEqual(result.rows, [{ name: "Alice", notes: "line 1\nline 2" }]);
+});
+
+test("parseImportPreview rejects duplicate or empty CSV headers", async () => {
+  const duplicateResult = await parseImportPreview(
+    new File(["Name,name\nAlice,Alias\n"], "duplicate.csv", { type: "text/csv" }),
+  );
+  const emptyResult = await parseImportPreview(
+    new File(["name,\nAlice,value\n"], "empty-header.csv", { type: "text/csv" }),
+  );
+
+  assert.match(String(duplicateResult.error), /duplicate column headers/i);
+  assert.deepEqual(duplicateResult.rows, []);
+  assert.match(String(emptyResult.error), /empty column header/i);
+  assert.deepEqual(emptyResult.rows, []);
+});
+
+test("parseImportPreview rejects lossy row widths and unterminated quoted fields", async () => {
+  const wideResult = await parseImportPreview(
+    new File(["name,amount\nAlice,10,ignored\n"], "wide-row.csv", { type: "text/csv" }),
+  );
+  const malformedResult = await parseImportPreview(
+    new File(['name,notes\nAlice,"not closed\n'], "malformed.csv", { type: "text/csv" }),
+  );
+
+  assert.match(String(wideResult.error), /more values than column headers/i);
+  assert.deepEqual(wideResult.rows, []);
+  assert.match(String(malformedResult.error), /unterminated quoted field/i);
+  assert.deepEqual(malformedResult.rows, []);
+});
+
 test("shouldDeferImportPreview avoids reading large files into browser memory", () => {
   const atLimit = new File([new Uint8Array(1)], "at-limit.csv");
   Object.defineProperty(atLimit, "size", { value: IMPORT_PREVIEW_MAX_FILE_BYTES });

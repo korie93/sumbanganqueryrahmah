@@ -64,6 +64,36 @@ test("parseCsvBuffer still parses simple CSV rows", () => {
   assert.deepEqual(result.rows, [{ name: "Alice", amount: "10" }]);
 });
 
+test("parseCsvBuffer keeps quoted multiline cells in one row", () => {
+  const result = parseCsvBuffer(
+    Buffer.from('name,notes\r\nAlice,"line 1\r\nline 2"\r\n', "utf8"),
+  );
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.headers, ["name", "notes"]);
+  assert.deepEqual(result.rows, [{ name: "Alice", notes: "line 1\nline 2" }]);
+});
+
+test("parseCsvBuffer rejects duplicate or empty headers before mapping rows", () => {
+  const duplicateResult = parseCsvBuffer(Buffer.from("Name,name\nAlice,Alias\n", "utf8"));
+  const emptyResult = parseCsvBuffer(Buffer.from("name,\nAlice,value\n", "utf8"));
+
+  assert.match(String(duplicateResult.error), /duplicate column headers/i);
+  assert.deepEqual(duplicateResult.rows, []);
+  assert.match(String(emptyResult.error), /empty column header/i);
+  assert.deepEqual(emptyResult.rows, []);
+});
+
+test("parseCsvBuffer rejects lossy row widths and unterminated quoted fields", () => {
+  const wideResult = parseCsvBuffer(Buffer.from("name,amount\nAlice,10,ignored\n", "utf8"));
+  const malformedResult = parseCsvBuffer(Buffer.from('name,notes\nAlice,"not closed\n', "utf8"));
+
+  assert.match(String(wideResult.error), /more values than column headers/i);
+  assert.deepEqual(wideResult.rows, []);
+  assert.match(String(malformedResult.error), /unterminated quoted field/i);
+  assert.deepEqual(malformedResult.rows, []);
+});
+
 test("parseCsvBuffer rejects rows beyond the configured CSV row limit", () => {
   const result = parseCsvBuffer(
     Buffer.from("name,amount\nAlice,10\nBob,20\n", "utf8"),
@@ -199,6 +229,49 @@ test("forEachCsvFileRow streams CSV rows to the caller one by one", async () => 
       { name: "Alice", amount: "10" },
       { name: "Bob", amount: "20" },
     ]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("forEachCsvFileRow streams multiline records without splitting quoted cells", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const filePath = path.join(tempDir, "multiline.csv");
+  const collectedRows: Array<Record<string, string>> = [];
+
+  try {
+    await writeFile(filePath, 'name,notes\r\nAlice,"line 1\r\nline 2"\r\n', "utf8");
+
+    const result = await forEachCsvFileRow(filePath, (row) => {
+      collectedRows.push(row);
+    });
+
+    assert.deepEqual(result, {
+      headers: ["name", "notes"],
+      rowCount: 1,
+    });
+    assert.deepEqual(collectedRows, [{ name: "Alice", notes: "line 1\nline 2" }]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("inspectCsvFile rejects duplicate headers and unterminated multiline records", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const duplicatePath = path.join(tempDir, "duplicate.csv");
+  const malformedPath = path.join(tempDir, "malformed.csv");
+
+  try {
+    await writeFile(duplicatePath, "Name,name\nAlice,Alias\n", "utf8");
+    await writeFile(malformedPath, 'name,notes\nAlice,"not closed\n', "utf8");
+
+    const duplicateResult = await inspectCsvFile(duplicatePath);
+    const malformedResult = await inspectCsvFile(malformedPath);
+
+    assert.match(String(duplicateResult.error), /duplicate column headers/i);
+    assert.equal(duplicateResult.rowCount, 0);
+    assert.match(String(malformedResult.error), /unterminated quoted field/i);
+    assert.equal(malformedResult.rowCount, 0);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

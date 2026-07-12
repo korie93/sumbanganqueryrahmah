@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import readline from "node:readline";
 import {
+  CsvLogicalRecordAccumulator,
+  parseCsvRecord,
+  validateCsvHeaders,
+  validateCsvRowWidth,
+} from "../../shared/csv-record-parser";
+import {
   createUploadFileAccessError,
   createUploadFileTooLargeError,
   isFileAccessError,
@@ -59,6 +65,10 @@ function resolveCsvMaxCellLength(options?: ParseCsvOptions) {
   return Math.max(1, Math.trunc(value));
 }
 
+function createCsvCellLengthError(maxCellLength: number) {
+  return `CSV import contains a cell longer than the configured ${maxCellLength.toLocaleString("en-US")} character limit.`;
+}
+
 function validateCsvValues(values: string[], options?: ParseCsvOptions): string | null {
   const maxColumns = resolveCsvMaxColumns(options);
   if (values.length > maxColumns) {
@@ -67,10 +77,28 @@ function validateCsvValues(values: string[], options?: ParseCsvOptions): string 
 
   const maxCellLength = resolveCsvMaxCellLength(options);
   if (values.some((value) => value.length > maxCellLength)) {
-    return `CSV import contains a cell longer than the configured ${maxCellLength.toLocaleString("en-US")} character limit.`;
+    return createCsvCellLengthError(maxCellLength);
   }
 
   return null;
+}
+
+function validateCsvHeaderValues(headers: string[], options?: ParseCsvOptions): string | null {
+  return validateCsvValues(headers, options) ?? validateCsvHeaders(headers);
+}
+
+function validateCsvRowValues(
+  headers: string[],
+  values: string[],
+  options?: ParseCsvOptions,
+): string | null {
+  return validateCsvValues(values, options) ?? validateCsvRowWidth(headers, values);
+}
+
+function resolveCsvMaxLogicalRecordLength(options?: ParseCsvOptions): number {
+  const maxColumns = resolveCsvMaxColumns(options);
+  const maxCellLength = resolveCsvMaxCellLength(options);
+  return maxColumns * ((maxCellLength * 2) + 3);
 }
 
 function createCsvRowLimitError(maxRows: number): ParsedImportUploadResult {
@@ -99,44 +127,10 @@ function resolveCsvMaterializedMaxRows(options?: ParseCsvOptions) {
   return Math.min(configuredMaxRows, materializedLimit);
 }
 
-function parseCsvLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (char === '"') {
-      if (inQuotes && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === "," && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-
-  result.push(current.trim());
-  return result;
-}
-
-function findHeaderLine(lines: string[]) {
-  let headerLineIndex = 0;
-  while (headerLineIndex < lines.length && !lines[headerLineIndex].trim()) {
-    headerLineIndex += 1;
-  }
-  return headerLineIndex;
-}
-
 function toParsedCsvRow(headers: string[], values: string[]): ImportRow {
   const row: ImportRow = {};
   headers.forEach((header, headerIndex) => {
-    row[header] = values[headerIndex] || "";
+    row[header] = values[headerIndex] ?? "";
   });
   return row;
 }
@@ -202,18 +196,31 @@ async function walkCsvFile(
   let rowCount = 0;
   let rowLimitExceeded = false;
   let structureError: string | null = null;
+  const recordAccumulator = new CsvLogicalRecordAccumulator();
+  const maxLogicalRecordLength = resolveCsvMaxLogicalRecordLength(options);
 
   try {
     for await (const rawLine of lineReader) {
       const line = String(rawLine ?? "");
       const normalizedLine = headerResolved ? line : line.replace(/^\ufeff/, "");
-      if (!normalizedLine.trim()) {
+      const logicalRecord = recordAccumulator.appendPhysicalLine(normalizedLine);
+      if (logicalRecord === null) {
+        if (recordAccumulator.pendingLength > maxLogicalRecordLength) {
+          structureError = createCsvCellLengthError(resolveCsvMaxCellLength(options));
+          closeLineReaderSafely();
+          destroyStreamSafely();
+          break;
+        }
+        continue;
+      }
+
+      if (!logicalRecord.trim()) {
         continue;
       }
 
       if (!headerResolved) {
-        headers = parseCsvLine(normalizedLine);
-        structureError = validateCsvValues(headers, options);
+        headers = parseCsvRecord(logicalRecord);
+        structureError = validateCsvHeaderValues(headers, options);
         if (structureError) {
           closeLineReaderSafely();
           destroyStreamSafely();
@@ -223,8 +230,8 @@ async function walkCsvFile(
         continue;
       }
 
-      const values = parseCsvLine(normalizedLine);
-      structureError = validateCsvValues(values, options);
+      const values = parseCsvRecord(logicalRecord);
+      structureError = validateCsvRowValues(headers, values, options);
       if (structureError) {
         closeLineReaderSafely();
         destroyStreamSafely();
@@ -242,6 +249,10 @@ async function walkCsvFile(
         rowCount += 1;
         await onRow?.(row);
       }
+    }
+
+    if (!structureError) {
+      structureError = recordAccumulator.finish().error;
     }
 
     if (pendingReaderError) {
@@ -289,30 +300,36 @@ export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): Parse
   const maxRows = resolveCsvMaxRows(options);
   const materializedMaxRows = resolveCsvMaterializedMaxRows(options);
   const text = buffer.toString("utf8").replace(/^\ufeff/, "");
-  const lines = text.split(/\r?\n/);
-
-  if (lines.length === 0) {
-    return { headers: [], rows: [], error: "CSV file is empty." };
-  }
-
-  const headerLineIndex = findHeaderLine(lines);
-  if (headerLineIndex >= lines.length) {
-    return { headers: [], rows: [], error: "CSV file is empty." };
-  }
-
-  const headers = parseCsvLine(lines[headerLineIndex]);
-  const headerValidationError = validateCsvValues(headers, options);
-  if (headerValidationError) {
-    return { headers: [], rows: [], error: headerValidationError };
-  }
+  const lines = text.split(/\r\n|\n|\r/);
+  const recordAccumulator = new CsvLogicalRecordAccumulator();
+  const maxLogicalRecordLength = resolveCsvMaxLogicalRecordLength(options);
+  let headers: string[] | null = null;
   const rows: ImportRow[] = [];
 
-  for (let index = headerLineIndex + 1; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line.trim()) continue;
+  for (const line of lines) {
+    const logicalRecord = recordAccumulator.appendPhysicalLine(line);
+    if (logicalRecord === null) {
+      if (recordAccumulator.pendingLength > maxLogicalRecordLength) {
+        return { headers: [], rows: [], error: createCsvCellLengthError(resolveCsvMaxCellLength(options)) };
+      }
+      continue;
+    }
 
-    const values = parseCsvLine(line);
-    const rowValidationError = validateCsvValues(values, options);
+    if (!logicalRecord.trim()) {
+      continue;
+    }
+
+    const values = parseCsvRecord(logicalRecord);
+    if (!headers) {
+      const headerValidationError = validateCsvHeaderValues(values, options);
+      if (headerValidationError) {
+        return { headers: [], rows: [], error: headerValidationError };
+      }
+      headers = values;
+      continue;
+    }
+
+    const rowValidationError = validateCsvRowValues(headers, values, options);
     if (rowValidationError) {
       return { headers: [], rows: [], error: rowValidationError };
     }
@@ -326,6 +343,15 @@ export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): Parse
       }
       rows.push(row);
     }
+  }
+
+  const finalRecord = recordAccumulator.finish();
+  if (finalRecord.error) {
+    return { headers: [], rows: [], error: finalRecord.error };
+  }
+
+  if (!headers) {
+    return { headers: [], rows: [], error: "CSV file is empty." };
   }
 
   return { headers, rows };

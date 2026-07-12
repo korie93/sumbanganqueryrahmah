@@ -1,5 +1,11 @@
 import { loadClientSpreadsheetRuntime } from "@/lib/spreadsheet/xlsx-runtime";
 import type { ImportRow, ParsedBulkResult, ParsedPreviewResult } from "@/pages/import/types";
+import {
+  CsvLogicalRecordAccumulator,
+  parseCsvRecord,
+  validateCsvHeaders,
+  validateCsvRowWidth,
+} from "@shared/csv-record-parser";
 
 type XlsxModule = typeof import("xlsx");
 
@@ -22,31 +28,7 @@ export function stripImportExtension(filename: string) {
   return filename.replace(/\.(csv|xlsx|xlsb)$/i, "");
 }
 
-export function parseCsvLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (char === '"') {
-      if (inQuotes && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === "," && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-
-  result.push(current.trim());
-  return result;
-}
+export const parseCsvLine = parseCsvRecord;
 
 export function normalizeExcelMatrixRows(value: unknown): unknown[][] {
   if (!Array.isArray(value)) {
@@ -56,38 +38,36 @@ export function normalizeExcelMatrixRows(value: unknown): unknown[][] {
   return value.map((row) => (Array.isArray(row) ? row : row == null ? [] : [row]));
 }
 
-function findHeaderLine(lines: string[]) {
-  let headerLineIndex = 0;
-  while (headerLineIndex < lines.length && !lines[headerLineIndex].trim()) {
-    headerLineIndex += 1;
-  }
-  return headerLineIndex;
-}
-
 async function parseCsvFile(file: File): Promise<ParsedPreviewResult> {
-  const text = await file.text();
-  const lines = text.split(/\r?\n/);
-
-  if (lines.length === 0) {
-    return { headers: [], rows: [], error: "CSV file is empty." };
-  }
-
-  const headerLineIndex = findHeaderLine(lines);
-  if (headerLineIndex >= lines.length) {
-    return { headers: [], rows: [], error: "CSV file is empty." };
-  }
-
-  const headers = parseCsvLine(lines[headerLineIndex]);
+  const text = (await file.text()).replace(/^\ufeff/, "");
+  const lines = text.split(/\r\n|\n|\r/);
+  const recordAccumulator = new CsvLogicalRecordAccumulator();
+  let headers: string[] | null = null;
   const rows: ImportRow[] = [];
 
-  for (let index = headerLineIndex + 1; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line.trim()) continue;
+  for (const line of lines) {
+    const logicalRecord = recordAccumulator.appendPhysicalLine(line);
+    if (logicalRecord === null || !logicalRecord.trim()) {
+      continue;
+    }
 
-    const values = parseCsvLine(line);
+    const values = parseCsvLine(logicalRecord);
+    if (!headers) {
+      const headerError = validateCsvHeaders(values);
+      if (headerError) {
+        return { headers: [], rows: [], error: headerError };
+      }
+      headers = values;
+      continue;
+    }
+
+    const rowWidthError = validateCsvRowWidth(headers, values);
+    if (rowWidthError) {
+      return { headers: [], rows: [], error: rowWidthError };
+    }
     const row: ImportRow = {};
     headers.forEach((header, headerIndex) => {
-      row[header] = values[headerIndex] || "";
+      row[header] = values[headerIndex] ?? "";
     });
 
     if (Object.values(row).some((value) => value !== "")) {
@@ -96,6 +76,15 @@ async function parseCsvFile(file: File): Promise<ParsedPreviewResult> {
       }
       rows.push(row);
     }
+  }
+
+  const finalRecord = recordAccumulator.finish();
+  if (finalRecord.error) {
+    return { headers: [], rows: [], error: finalRecord.error };
+  }
+
+  if (!headers) {
+    return { headers: [], rows: [], error: "CSV file is empty." };
   }
 
   return { headers, rows };
@@ -198,12 +187,19 @@ export async function readDeferredCsvHeaders(file: File): Promise<string[]> {
   }
 
   const prefix = await file.slice(0, Math.min(file.size, 64 * 1024)).text();
-  const lines = prefix.replace(/^\ufeff/, "").split(/\r?\n/);
-  const headerLineIndex = findHeaderLine(lines);
-  if (headerLineIndex >= lines.length) {
-    return [];
+  const lines = prefix.replace(/^\ufeff/, "").split(/\r\n|\n|\r/);
+  const recordAccumulator = new CsvLogicalRecordAccumulator();
+  for (const line of lines) {
+    const logicalRecord = recordAccumulator.appendPhysicalLine(line);
+    if (logicalRecord === null || !logicalRecord.trim()) {
+      continue;
+    }
+
+    const headers = parseCsvLine(logicalRecord);
+    return validateCsvHeaders(headers) ? [] : headers;
   }
-  return parseCsvLine(lines[headerLineIndex]).filter((header) => header.length > 0);
+
+  return [];
 }
 
 export async function parseImportPreview(file: File): Promise<ParsedPreviewResult> {
