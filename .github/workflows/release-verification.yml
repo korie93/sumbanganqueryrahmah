@@ -1,5 +1,13 @@
 name: Release Verification
 
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: release-verification-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   NODE_ENV: development
@@ -35,6 +43,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      - name: Require main for production release dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Production release artifacts may only be created from main." >&2
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
@@ -88,6 +104,29 @@ jobs:
       - name: Run release readiness verification
         run: npm run release:verify:local
 
+      - name: Prepare immutable release candidate
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          npm run release:package
+          ARCHIVE_NAME="sqr-release-${GITHUB_SHA}.tar.gz"
+          tar -C artifacts/release/package -czf "artifacts/release/${ARCHIVE_NAME}" .
+          (
+            cd artifacts/release
+            sha512sum "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha512"
+          )
+
+      - name: Upload immutable release candidate
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          path: |
+            artifacts/release/sqr-release-${{ github.sha }}.tar.gz
+            artifacts/release/sqr-release-${{ github.sha }}.tar.gz.sha512
+
       - name: Upload release verification artifacts
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
@@ -98,3 +137,34 @@ jobs:
             artifacts/release-verification
             artifacts/sbom
             var/perf
+
+  approve-production-release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: release-readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://sqr-system.com
+    steps:
+      - name: Download verified release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/approved-release
+
+      - name: Verify approved archive checksum
+        run: |
+          cd artifacts/approved-release
+          sha512sum -c "sqr-release-${GITHUB_SHA}.tar.gz.sha512"
+
+      - name: Publish production-approved release
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: production-release-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+          path: |
+            artifacts/approved-release/sqr-release-${{ github.sha }}.tar.gz
+            artifacts/approved-release/sqr-release-${{ github.sha }}.tar.gz.sha512

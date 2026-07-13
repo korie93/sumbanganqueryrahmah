@@ -13,6 +13,7 @@ BASE_URL="${1:-${SQR_POST_DEPLOY_BASE_URL:-http://127.0.0.1:5000}}"
 BASE_URL="${BASE_URL%/}"
 REQUEST_TIMEOUT_SECONDS="${SQR_POST_DEPLOY_TIMEOUT_SECONDS:-10}"
 RATE_LIMIT_PROBE="${SQR_POST_DEPLOY_RATE_LIMIT_PROBE:-0}"
+EXPECTED_RELEASE_SHA="${SQR_EXPECTED_RELEASE_SHA:-}"
 
 FAILED=0
 WARNED=0
@@ -21,9 +22,10 @@ HEADERS_FILE="$(mktemp)"
 BODY_FILE="$(mktemp)"
 READY_BODY_FILE="$(mktemp)"
 LIVE_BODY_FILE="$(mktemp)"
+VERSION_BODY_FILE="$(mktemp)"
 
 cleanup() {
-  rm -f "$HEADERS_FILE" "$BODY_FILE" "$READY_BODY_FILE" "$LIVE_BODY_FILE"
+  rm -f "$HEADERS_FILE" "$BODY_FILE" "$READY_BODY_FILE" "$LIVE_BODY_FILE" "$VERSION_BODY_FILE"
 }
 trap cleanup EXIT
 
@@ -188,6 +190,38 @@ NODE
   fi
 }
 
+check_release_version() {
+  local status
+
+  if [[ -z "$EXPECTED_RELEASE_SHA" ]]; then
+    warn "Release provenance check skipped; set SQR_EXPECTED_RELEASE_SHA to enable"
+    return
+  fi
+
+  if [[ ! "$EXPECTED_RELEASE_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
+    fail "SQR_EXPECTED_RELEASE_SHA is malformed"
+    return
+  fi
+
+  status="$(fetch_to_file "/api/health/version" "$VERSION_BODY_FILE")"
+  if [[ "$status" != "200" ]]; then
+    fail "/api/health/version returned HTTP $status"
+    return
+  fi
+
+  if node - "$VERSION_BODY_FILE" "$EXPECTED_RELEASE_SHA" <<'NODE'
+const { readFileSync } = require("node:fs");
+const payload = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const expectedSha = process.argv[3];
+process.exit(payload?.status === "ok" && payload?.release?.commitSha === expectedSha ? 0 : 1);
+NODE
+  then
+    pass "/api/health/version matches expected release SHA"
+  else
+    fail "/api/health/version does not match expected release SHA"
+  fi
+}
+
 check_auth_endpoint() {
   local status
 
@@ -266,6 +300,7 @@ check_hsts
 printf '\nApplication health\n'
 check_health_payload "/api/health/live" "$LIVE_BODY_FILE"
 check_health_payload "/api/health/ready" "$READY_BODY_FILE"
+check_release_version
 
 printf '\nAuth surface\n'
 check_auth_endpoint

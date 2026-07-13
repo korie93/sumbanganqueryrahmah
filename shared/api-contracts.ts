@@ -479,6 +479,21 @@ export const publicHealthResponseSchema = z.object({
   ready: z.boolean(),
 }).strict();
 
+const releaseCommitShaSchema = z.union([
+  z.literal("development"),
+  z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+]);
+
+export const publicReleaseVersionResponseSchema = z.object({
+  status: z.literal("ok"),
+  release: z.object({
+    builtAt: z.string().datetime({ offset: true }).nullable(),
+    commitSha: releaseCommitShaSchema,
+    releaseId: z.string().min(1).max(128).regex(/^[0-9A-Za-z][0-9A-Za-z._+-]*$/),
+    version: z.string().min(1).max(128).regex(/^[0-9A-Za-z][0-9A-Za-z._+-]*$/),
+  }).strict(),
+}).strict();
+
 const authNullableTimestampSchema = z.string().datetime({ offset: true }).nullable();
 const authOptionalNullableTimestampSchema = authNullableTimestampSchema.optional().default(null);
 
@@ -1275,6 +1290,7 @@ export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
 export type AppConfigResponse = z.infer<typeof appConfigResponseSchema>;
 export type MaintenanceStatusResponse = z.infer<typeof maintenanceStatusResponseSchema>;
 export type PublicHealthResponse = z.infer<typeof publicHealthResponseSchema>;
+export type PublicReleaseVersionResponse = z.infer<typeof publicReleaseVersionResponseSchema>;
 export type AuthCurrentUserContract = z.infer<typeof authCurrentUserSchema>;
 export type AuthLoginSuccessResponseContract = z.infer<typeof authLoginSuccessResponseSchema>;
 export type AuthLoginResponseContract = z.infer<typeof authLoginResponseSchema>;

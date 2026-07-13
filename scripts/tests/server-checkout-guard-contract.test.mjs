@@ -123,11 +123,11 @@ test("production promotion playbook requires the server checkout gate before dep
   }
 });
 
-test("production runbook documents the standard main update sequence", () => {
+test("production runbook retains the guarded main recovery sequence", () => {
   const runbook = readText(productionRunbookPath);
 
-  const standardUpdateIndex = runbook.indexOf("## Standard Main Update");
-  const fetchIndex = runbook.indexOf("git fetch origin --prune", standardUpdateIndex);
+  const recoveryUpdateIndex = runbook.indexOf("## Legacy Main Update (Recovery Only)");
+  const fetchIndex = runbook.indexOf("git fetch origin --prune", recoveryUpdateIndex);
   const switchIndex = runbook.indexOf("git switch main", fetchIndex);
   const resetIndex = runbook.indexOf("git reset --hard origin/main", switchIndex);
   const logIndex = runbook.indexOf("git log -1 --oneline", resetIndex);
@@ -138,11 +138,11 @@ test("production runbook documents the standard main update sequence", () => {
   const restartIndex = runbook.indexOf("pm2 restart sqr --update-env", buildIndex);
   const readyIndex = runbook.indexOf("curl -fsS http://127.0.0.1:5000/api/health/ready", restartIndex);
 
-  assert.ok(standardUpdateIndex > -1, "production runbook should document the standard main update path");
-  assert.ok(fetchIndex > standardUpdateIndex, "standard update should fetch origin first");
-  assert.ok(switchIndex > fetchIndex, "standard update should switch to main after fetching");
-  assert.ok(resetIndex > switchIndex, "standard update should sync exactly to origin/main");
-  assert.ok(logIndex > resetIndex, "standard update should show the deployed commit");
+  assert.ok(recoveryUpdateIndex > -1, "production runbook should retain the guarded main recovery path");
+  assert.ok(fetchIndex > recoveryUpdateIndex, "recovery update should fetch origin first");
+  assert.ok(switchIndex > fetchIndex, "recovery update should switch to main after fetching");
+  assert.ok(resetIndex > switchIndex, "recovery update should sync exactly to origin/main");
+  assert.ok(logIndex > resetIndex, "recovery update should show the deployed commit");
   assert.ok(guardIndex > logIndex, "checkout guard should run after origin/main sync");
   assert.ok(npmCiIndex > guardIndex, "npm ci should run after checkout verification");
   assert.ok(migrateIndex > npmCiIndex, "migrations should run after deterministic install");

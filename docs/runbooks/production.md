@@ -5,6 +5,10 @@ runtime safety checks.
 
 ## Deployment Baseline
 
+The preferred deployment path is the reviewed immutable artifact flow in
+`docs/IMMUTABLE_RELEASES.md`. It avoids rebuilding from a mutable server checkout
+and verifies the exact commit through `GET /api/health/version`.
+
 - Verify the deployment checkout before install, migration, build, or restart:
   `bash scripts/verify-server-checkout.sh "$BRANCH"`.
 - Run `npm run db:migrate` before app startup.
@@ -15,10 +19,11 @@ runtime safety checks.
 - Use `pm2 reload sqr --update-env` or an equivalent supervisor restart after
   changing process environment.
 
-## Standard Main Update
+## Legacy Main Update (Recovery Only)
 
-Use this path when a reviewed PR has been merged to `main` and the current
-single-host PM2 deployment must be updated to the latest production commit.
+Use this path only during documented recovery while migrating an older
+single-host PM2 deployment. New routine deployments must use the immutable
+release artifact flow.
 
 ```bash
 cd ~/apps/sumbanganqueryrahmah
