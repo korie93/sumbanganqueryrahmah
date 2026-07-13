@@ -123,15 +123,12 @@ function attachPreparedUploadResponseCleanup(params: {
     }
 
     cleanupStarted = true;
+    delete responseLocals.multipartImportUpload;
     void (async () => {
       try {
         await cleanupPreparedMultipartImportUpload(upload);
       } catch (cleanupFailure) {
         onCleanupFailure("prepared-upload-response", cleanupFailure, { reason });
-      } finally {
-        if (responseLocals.multipartImportUpload === upload) {
-          delete responseLocals.multipartImportUpload;
-        }
       }
     })();
   };

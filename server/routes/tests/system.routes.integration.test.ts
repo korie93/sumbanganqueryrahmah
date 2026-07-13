@@ -15,7 +15,10 @@ import type {
 import type { StartupHealthSnapshot } from "../../internal/startup-health";
 import type { ExplainabilityReport } from "../../intelligence/types";
 import type { ChaosEvent } from "../../intelligence/chaos/ChaosEngine";
-import { maintenanceStatusResponseSchema } from "../../../shared/api-contracts";
+import {
+  maintenanceStatusResponseSchema,
+  publicReleaseVersionResponseSchema,
+} from "../../../shared/api-contracts";
 import type { AuditLog, InsertAuditLog } from "../../../shared/schema-postgres";
 import type { WebVitalOverviewPayload } from "../../../shared/web-vitals";
 import {
@@ -459,6 +462,27 @@ test("GET /api/health/live exposes only public-safe liveness fields", async () =
     assert.equal(payload.status, "ok");
     assert.equal(payload.ready, true);
     assert.deepEqual(Object.keys(payload).sort(), ["ready", "status"]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/health/version exposes only immutable public release metadata", async () => {
+  const { app } = createSystemRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/health/version`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+
+    const payload = await response.json();
+    assert.doesNotThrow(() => publicReleaseVersionResponseSchema.parse(payload));
+    assert.deepEqual(Object.keys(payload).sort(), ["release", "status"]);
+    assert.deepEqual(
+      Object.keys(payload.release).sort(),
+      ["builtAt", "commitSha", "releaseId", "version"],
+    );
   } finally {
     await stopTestServer(server);
   }

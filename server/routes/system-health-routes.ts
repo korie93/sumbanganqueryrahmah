@@ -1,6 +1,7 @@
 import { asyncHandler, routeHandler } from "../http/async-handler";
 import { getInternalMetricsSnapshot } from "../internal/metrics";
 import type { StartupHealthSnapshot } from "../internal/startup-health";
+import { getPublicReleaseMetadata } from "../release-metadata";
 import type { SystemRouteContext } from "./system-route-context";
 
 function buildLiveHealthPayload(getStartupHealthSnapshot: () => StartupHealthSnapshot) {
@@ -86,6 +87,14 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
     const dbOk = await checkDbConnectivity();
     const payload = buildReadinessPayload({ dbOk, startup });
     res.status(payload.ready ? 200 : 503).json(buildPublicHealthPayload(payload));
+  }));
+
+  app.get("/api/health/version", routeHandler((_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      status: "ok",
+      release: getPublicReleaseMetadata(),
+    });
   }));
 
   app.get("/api/health", asyncHandler(async (_req, res) => {

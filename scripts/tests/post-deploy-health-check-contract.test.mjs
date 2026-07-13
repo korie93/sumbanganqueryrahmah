@@ -18,6 +18,8 @@ test("post-deploy health script verifies live readiness and app-owned security h
   assert.match(script, /SQR_POST_DEPLOY_BASE_URL/);
   assert.match(script, /\/api\/health\/live/);
   assert.match(script, /\/api\/health\/ready/);
+  assert.match(script, /\/api\/health\/version/);
+  assert.match(script, /SQR_EXPECTED_RELEASE_SHA/);
   assert.match(script, /Content-Security-Policy/);
   assert.match(script, /require-trusted-types-for/);
   assert.match(script, /X-Content-Type-Options/);
