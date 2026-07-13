@@ -80,4 +80,6 @@ test("CollectionDailyTargetControls keeps target actions compact and explicit", 
   assert.match(markup, /Save Changed Days/);
   assert.match(markup, /1 changed day ready to save/);
   assert.match(markup, /border border-border\/70 bg-background p-4 shadow-sm grid rounded-2xl/);
+  assert.match(markup, /md:grid-cols-\[minmax\(0,220px\)_minmax\(0,1fr\)\]/);
+  assert.match(markup, /max-w-full whitespace-normal text-center/);
 });

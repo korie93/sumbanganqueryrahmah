@@ -53,6 +53,16 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.doesNotMatch(phoneInputSource, /\{\.\.\.requiredFieldProps\}/);
 });
 
+test("save collection form grid responds to available width and text scaling", () => {
+  assert.match(
+    saveCollectionPageSource,
+    /grid-cols-\[repeat\(auto-fit,minmax\(min\(100%,24rem\),1fr\)\)\]/,
+  );
+  assert.match(saveCollectionPageSource, /className="col-span-full"/);
+  assert.doesNotMatch(saveCollectionPageSource, /lg:grid-cols-2/);
+  assert.doesNotMatch(saveCollectionPageSource, /lg:col-span-2/);
+});
+
 test("save collection progress exposes non-visual step state text", () => {
   assert.match(saveCollectionProgressSource, /import \{ getAriaCurrentStepProps \} from "@\/lib\/aria-state-props"/);
   assert.match(saveCollectionProgressSource, /function getStepStateLabel/);

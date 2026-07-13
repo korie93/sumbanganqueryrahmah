@@ -128,7 +128,7 @@ export function CollectionSidebar({
           navigationLabel="Collection sections"
           expandedWidth={308}
           collapsedWidth={88}
-          fallbackClassName="w-[19.25rem]"
+          fallbackClassName="w-[308px]"
         />
       ) : null}
     </>

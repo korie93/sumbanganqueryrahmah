@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Menu } from "lucide-react";
 import type { SideTabNavigationProps } from "@/components/navigation/SideTabNavigation";
+import { resolveSideTabWidthClass } from "@/components/navigation/side-tab-navigation-widths";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -21,10 +22,25 @@ function SideTabNavigationFallback({
   mobileOpen,
   menuLabel,
   navigationLabel,
+  collapsed,
+  collapsedWidth,
+  expandedWidth,
 }: Pick<
   LazySideTabNavigationProps,
-  "className" | "fallbackClassName" | "hideMobileTrigger" | "menuLabel" | "mobileOpen" | "navigationLabel"
+  | "className"
+  | "collapsed"
+  | "collapsedWidth"
+  | "expandedWidth"
+  | "fallbackClassName"
+  | "hideMobileTrigger"
+  | "menuLabel"
+  | "mobileOpen"
+  | "navigationLabel"
 >) {
+  const fallbackWidthClassName = collapsed
+    ? resolveSideTabWidthClass(collapsedWidth ?? 84, "w-[84px]")
+    : resolveSideTabWidthClass(expandedWidth ?? 276, "w-[276px]");
+
   return (
     <>
       {!hideMobileTrigger ? (
@@ -36,7 +52,8 @@ function SideTabNavigationFallback({
 
       <aside
         className={cn(
-          "side-tab-nav sticky top-4 hidden w-72 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-background p-3 shadow-sm lg:block",
+          "side-tab-nav sticky top-4 hidden shrink-0 overflow-hidden rounded-xl border border-border/70 bg-background p-3 shadow-sm lg:block",
+          fallbackWidthClassName,
           className,
           fallbackClassName,
         )}
@@ -109,6 +126,9 @@ export function LazySideTabNavigation({
       fallback={(
         <SideTabNavigationFallback
           className={props.className}
+          collapsed={props.collapsed}
+          collapsedWidth={props.collapsedWidth}
+          expandedWidth={props.expandedWidth}
           fallbackClassName={fallbackClassName}
           hideMobileTrigger={props.hideMobileTrigger}
           mobileOpen={props.mobileOpen}

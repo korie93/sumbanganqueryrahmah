@@ -138,11 +138,13 @@
 }
 
 .skip-to-main-link {
+  --skip-to-main-offset: max(var(--spacing-3), var(--safe-area-inset-top));
+
   position: fixed;
   left: var(--spacing-3);
-  top: max(var(--spacing-3), var(--safe-area-inset-top));
+  top: var(--skip-to-main-offset);
   z-index: var(--z-tooltip);
-  transform: translateY(calc(-100% - var(--spacing-2)));
+  transform: translateY(calc(-100% - var(--skip-to-main-offset) - var(--spacing-1)));
   border-radius: 9999px;
   border: 1px solid hsl(var(--border) / 0.9);
   background: hsl(var(--background) / 0.98);

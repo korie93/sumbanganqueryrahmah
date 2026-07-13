@@ -619,6 +619,7 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
       { fontSize: 16, width: 1280 },
       { fontSize: 20, width: 1024 },
       { fontSize: 24, width: 800 },
+      { fontSize: 32, width: 1024 },
     ]) {
       await page.setViewportSize({ width: viewport.width, height: 900 });
       await page.evaluate((fontSize) => {
@@ -630,8 +631,30 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
         const dashboard = document.querySelector("[data-dashboard-export-root]");
         const documentElement = document.documentElement;
         const dashboardRect = dashboard?.getBoundingClientRect();
+        const clippedDashboardActions = dashboard
+          ? [...dashboard.querySelectorAll("a[href], button, input, select, textarea")]
+              .filter((node): node is HTMLElement => node instanceof HTMLElement)
+              .filter((node) => {
+                const style = getComputedStyle(node);
+                if (style.display === "none" || style.visibility === "hidden") return false;
+                const rect = node.getBoundingClientRect();
+                let scrollOwner = node.parentElement;
+                while (scrollOwner && dashboard.contains(scrollOwner)) {
+                  const ownerStyle = getComputedStyle(scrollOwner);
+                  const scrollableX = ownerStyle.overflowX === "auto" || ownerStyle.overflowX === "scroll";
+                  if (scrollableX && scrollOwner.scrollWidth > scrollOwner.clientWidth + 1) break;
+                  scrollOwner = scrollOwner.parentElement;
+                }
+                if (scrollOwner && dashboard.contains(scrollOwner)) return false;
+                return rect.width > 0
+                  && rect.height > 0
+                  && (rect.left < -1 || rect.right > documentElement.clientWidth + 1);
+              })
+              .map((node) => node.getAttribute("aria-label") || node.textContent?.trim() || node.tagName)
+          : ["dashboard root missing"];
 
         return {
+          clippedDashboardActions,
           dashboardRight: dashboardRect?.right ?? Number.POSITIVE_INFINITY,
           documentClientWidth: documentElement.clientWidth,
           documentScrollWidth: documentElement.scrollWidth,
@@ -644,6 +667,7 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
       expect(dashboardLayout.dashboardRight).toBeLessThanOrEqual(
         dashboardLayout.documentClientWidth + 1,
       );
+      expect(dashboardLayout.clippedDashboardActions).toEqual([]);
     }
 
     await page.evaluate(() => {
@@ -875,5 +899,49 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await expectNoSeriousAccessibilityViolations(page, "General search table navigation");
   } finally {
     await logoutVisualSession(page);
+  }
+});
+
+test("landing header keeps its brand readable on narrow and enlarged-text viewports", async ({ page }) => {
+  await installTheme(page, "light");
+
+  for (const viewport of [
+    { fontSize: 16, height: 568, width: 320 },
+    { fontSize: 20, height: 640, width: 360 },
+  ]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.evaluate((fontSize) => {
+      document.documentElement.style.fontSize = `${fontSize}px`;
+    }, viewport.fontSize);
+
+    const brand = page.getByTestId("landing-brand-title");
+    await expect(brand).toBeVisible();
+    await expect(brand).toHaveText("SQR System");
+
+    const layout = await brand.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      documentWidth: document.documentElement.scrollWidth,
+    }));
+
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
+    expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
+    await expect(page.getByRole("button", { name: "Log Masuk", exact: true })).toBeVisible();
+
+    const skipLink = page.getByRole("link", { name: "Langkau ke kandungan utama" });
+    const hiddenSkipLinkBox = await skipLink.boundingBox();
+    expect(hiddenSkipLinkBox?.y).toBeLessThan(0);
+    expect((hiddenSkipLinkBox?.y ?? 0) + (hiddenSkipLinkBox?.height ?? 0)).toBeLessThanOrEqual(0);
+
+    await page.keyboard.press("Tab");
+    await expect(skipLink).toBeFocused();
+    await expect.poll(async () => (await skipLink.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+    const focusedSkipLinkBox = await skipLink.boundingBox();
+    expect(focusedSkipLinkBox?.y).toBeGreaterThanOrEqual(0);
+    expect((focusedSkipLinkBox?.y ?? 0) + (focusedSkipLinkBox?.height ?? 0)).toBeLessThanOrEqual(
+      viewport.height,
+    );
   }
 });

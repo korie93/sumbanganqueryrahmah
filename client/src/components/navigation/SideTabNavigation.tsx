@@ -2,6 +2,7 @@ import { Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { resolveSideTabWidthClass } from "@/components/navigation/side-tab-navigation-widths";
 import { cn } from "@/lib/utils";
 
 export type SideTabNavigationItem = {
@@ -28,18 +29,6 @@ export type SideTabNavigationProps = {
   className?: string | undefined;
 };
 
-const sideTabWidthClassByPixels = new Map<number, string>([
-  [84, "w-[5.25rem]"],
-  [88, "w-[5.5rem]"],
-  [276, "w-[17.25rem]"],
-  [296, "w-[18.5rem]"],
-  [308, "w-[19.25rem]"],
-]);
-
-function resolveSideTabWidthClass(width: number, fallbackClassName: string) {
-  return sideTabWidthClassByPixels.get(width) ?? fallbackClassName;
-}
-
 /**
  * Renders the shared side tab navigation component used across SQR screens.
  */
@@ -63,8 +52,8 @@ export function SideTabNavigation({
     onMobileOpenChange(false);
   };
   const widthClassName = collapsed
-    ? resolveSideTabWidthClass(collapsedWidth, "w-[5.25rem]")
-    : resolveSideTabWidthClass(expandedWidth, "w-[17.25rem]");
+    ? resolveSideTabWidthClass(collapsedWidth, "w-[84px]")
+    : resolveSideTabWidthClass(expandedWidth, "w-[276px]");
 
   return (
     <>

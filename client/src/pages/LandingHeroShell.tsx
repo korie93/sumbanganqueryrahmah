@@ -66,19 +66,24 @@ export function LandingPageShell({ onLoginClick, children }: LandingPageShellPro
   return (
     <div className="landing-page viewport-min-height">
       <div className="mx-auto flex viewport-min-height w-full max-w-[1340px] flex-col px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-        <header className="landing-shell flex items-center justify-between gap-4 rounded-[1.75rem] px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3">
+        <header className="landing-shell flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[1.75rem] px-4 py-3 sm:px-5">
+          <div className="flex min-w-max items-center gap-3">
             <div className="landing-brand-shell flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
               <BrandLogo decorative priority className="h-7 w-7" imageClassName="h-full w-full" />
             </div>
-            <div className="min-w-0">
-              <p className="landing-brand-title truncate text-sm font-semibold tracking-wide">SQR System</p>
-              <p className="landing-brand-copy truncate text-xs">
+            <div>
+              <p
+                className="landing-brand-title whitespace-nowrap text-sm font-semibold tracking-wide"
+                data-testid="landing-brand-title"
+              >
+                SQR System
+              </p>
+              <p className="landing-brand-copy hidden text-xs sm:block">
                 Platform operasi dalaman Sumbangan Query Rahmah
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <nav className="landing-nav hidden items-center gap-1 rounded-xl p-1 md:flex">
               <a
                 href="#features"

@@ -76,8 +76,8 @@ export function AuditLogsCleanupPanel({
           <CardHeader className={isMobile ? "pb-2.5" : "pb-3"}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left sm:w-auto sm:justify-start">
-                  <div className="flex min-w-0 items-center gap-2">
+                <Button variant="ghost" className="h-auto min-w-0 w-full justify-between gap-3 whitespace-normal rounded-xl px-0 py-0 text-left">
+                  <div className="flex min-w-0 items-start gap-2">
                     <Settings className="h-5 w-5 shrink-0" />
                     <div className="min-w-0">
                       <CardTitle className={isMobile ? "text-base" : "text-lg"}>Log Cleanup</CardTitle>
@@ -172,7 +172,7 @@ export function AuditLogsCleanupPanel({
                       variant="destructive"
                       onClick={() => onCleanupDialogOpenChange(true)}
                       disabled={cleanupLoading || logsToDeleteCount === 0}
-                      className="h-11 w-full lg:w-auto"
+                      className="min-h-11 h-auto w-full max-w-full whitespace-normal py-2 text-center lg:w-auto"
                       data-testid="button-cleanup-logs"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />

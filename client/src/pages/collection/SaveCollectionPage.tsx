@@ -293,7 +293,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     <SaveCollectionFormSection
       title="Receipt Upload"
       description="Tambah receipt satu demi satu. Preview resit, jumlah, tarikh dan reference dipaparkan dengan lebih jelas sebelum save."
-      className="lg:col-span-2"
+      className="col-span-full"
     >
       {receiptPanel}
     </SaveCollectionFormSection>
@@ -364,7 +364,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           failure={state.submitFailure}
           visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
         />
-        <div className={cn("grid gap-4", isMobile ? "" : "lg:grid-cols-2")}>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-4">
           {customerSection}
           {paymentSection}
           {receiptSection}

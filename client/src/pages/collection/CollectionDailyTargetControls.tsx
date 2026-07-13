@@ -44,7 +44,9 @@ export function CollectionDailyTargetControls({
     <div
       className={cn(
         "gap-3 border border-border/70 bg-background p-4 shadow-sm",
-        isMobile ? "space-y-4 rounded-2xl" : "grid rounded-2xl md:grid-cols-[220px_auto] md:items-end",
+        isMobile
+          ? "space-y-4 rounded-2xl"
+          : "grid rounded-2xl md:grid-cols-[minmax(0,220px)_minmax(0,1fr)] md:items-end",
       )}
     >
       <div className="space-y-1">
@@ -69,14 +71,17 @@ export function CollectionDailyTargetControls({
       </div>
       <div
         className={cn(
-          "gap-2",
+          "min-w-0 gap-2",
           isMobile ? "grid sm:grid-cols-2" : "flex flex-col sm:flex-row sm:flex-wrap",
         )}
         data-floating-ai-avoid="true"
       >
         <Button
           type="button"
-          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl sm:w-auto")}
+          className={cn(
+            "w-full max-w-full whitespace-normal text-center",
+            isMobile ? "h-12 rounded-2xl" : "min-h-11 h-auto rounded-xl py-2 sm:w-auto",
+          )}
           onClick={onSaveTarget}
           disabled={savingTarget || !canEditTarget}
         >
@@ -90,7 +95,10 @@ export function CollectionDailyTargetControls({
         <Button
           type="button"
           variant="outline"
-          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl sm:w-auto")}
+          className={cn(
+            "w-full max-w-full whitespace-normal text-center",
+            isMobile ? "h-12 rounded-2xl" : "min-h-11 h-auto rounded-xl py-2 sm:w-auto",
+          )}
           onClick={onSaveCalendar}
           disabled={savingCalendar || !canSaveCalendarChanges}
         >

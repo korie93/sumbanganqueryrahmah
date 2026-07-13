@@ -85,7 +85,7 @@ export function ActivityLogsToolbar({
   const selectedValue = `${sortBy}:${sortOrder}`;
 
   return (
-    <div className="mb-3 flex flex-col gap-2 border-y border-border/70 bg-muted/20 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-3 flex flex-col gap-2 border-y border-border/70 bg-muted/20 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="text-xs font-medium text-foreground">
           {totalItems.toLocaleString()} matching record{totalItems === 1 ? "" : "s"}
@@ -94,7 +94,7 @@ export function ActivityLogsToolbar({
           Page {Math.max(1, page)} of {Math.max(1, totalPages)}
         </p>
       </div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 max-w-full flex-col gap-2 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
         {showColumnControls ? (
           <>
             <TableDensityControl
@@ -111,12 +111,12 @@ export function ActivityLogsToolbar({
             />
           </>
         ) : null}
-        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <label className="flex min-w-0 max-w-full items-center gap-2 text-xs font-medium text-muted-foreground">
           <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
           <span>Sort</span>
           <select
             aria-label="Sort activity logs"
-            className="h-9 w-full min-w-[170px] rounded-lg border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-[180px]"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-[180px] sm:flex-none"
             data-testid="select-activity-sort"
             name="activitySort"
             value={selectedValue}

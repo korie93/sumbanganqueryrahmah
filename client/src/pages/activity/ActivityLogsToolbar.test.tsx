@@ -31,4 +31,7 @@ test("ActivityLogsToolbar renders result context and an accessible sort control"
   assert.match(markup, /data-testid="select-activity-sort"/);
   assert.match(markup, /data-testid="button-activity-columns"/);
   assert.match(markup, /data-testid="activity-density-control"/);
+  assert.match(markup, /sm:flex-wrap/);
+  assert.match(markup, /min-w-0 max-w-full flex-col/);
+  assert.match(markup, /min-w-0 flex-1/);
 });
