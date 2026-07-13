@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import dotenv from "dotenv";
 import { resolveManagedLoopbackBaseUrl } from "./lib/local-loopback-server.mjs";
+import { resolveSmokeSessionSecret } from "./lib/smoke-session-secret.mjs";
 
 const smokeEnvPath = path.resolve(process.cwd(), ".env.smoke.local");
 if (existsSync(smokeEnvPath)) {
@@ -83,7 +84,7 @@ const run = async () => {
     PORT: String(resolvedServer.port),
     PUBLIC_APP_URL: baseUrl,
     CORS_ALLOWED_ORIGINS: baseUrl,
-    SESSION_SECRET: process.env.SESSION_SECRET || "sqr-local-smoke-session-secret-32-bytes-minimum",
+    SESSION_SECRET: resolveSmokeSessionSecret(process.env.SESSION_SECRET),
     PG_HOST: process.env.PG_HOST || "127.0.0.1",
     PG_PORT: process.env.PG_PORT || "5432",
     PG_USER: String(process.env.PG_USER || "").trim(),

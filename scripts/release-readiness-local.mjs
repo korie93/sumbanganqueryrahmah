@@ -11,6 +11,7 @@ import {
   startManagedServerProcess,
   stopManagedServerProcess,
 } from "./lib/managed-server-process.mjs";
+import { resolveSmokeSessionSecret } from "./lib/smoke-session-secret.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
@@ -120,7 +121,7 @@ const run = async () => {
     HOST: process.env.HOST || "127.0.0.1",
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || baseUrl,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || baseUrl,
-    SESSION_SECRET: process.env.SESSION_SECRET || "sqr-release-readiness-session-secret-32-bytes-minimum",
+    SESSION_SECRET: resolveSmokeSessionSecret(process.env.SESSION_SECRET),
     PG_HOST: process.env.PG_HOST || "127.0.0.1",
     PG_PORT: process.env.PG_PORT || "5432",
     PG_USER: process.env.PG_USER || "postgres",
