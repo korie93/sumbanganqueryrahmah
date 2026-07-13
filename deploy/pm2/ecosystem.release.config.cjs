@@ -2,6 +2,13 @@ const path = require("node:path");
 
 const releaseRoot = process.env.SQR_RELEASE_ROOT || "/home/deploy/apps/sqr-runtime";
 const nodeExtraCaCerts = process.env.NODE_EXTRA_CA_CERTS;
+const deploymentOnlyEnvironmentPrefixes = [
+  "SQR_EXPECTED_RELEASE_SHA",
+  "SQR_PM2_APP_NAME",
+  "SQR_POST_DEPLOY_",
+  "SQR_PUBLIC_BASE_URL",
+  "SQR_RELEASE_",
+];
 
 module.exports = {
   apps: [
@@ -19,6 +26,7 @@ module.exports = {
         GRACEFUL_SHUTDOWN_TIMEOUT_MS: "10000",
         ...(nodeExtraCaCerts ? { NODE_EXTRA_CA_CERTS: nodeExtraCaCerts } : {}),
       },
+      filter_env: deploymentOnlyEnvironmentPrefixes,
       max_memory_restart: "768M",
       node_args: "--max-old-space-size=600",
       min_uptime: "15s",

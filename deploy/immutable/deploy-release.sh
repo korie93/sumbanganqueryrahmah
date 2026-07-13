@@ -155,25 +155,90 @@ fi
 
 export SQR_RELEASE_ROOT="$APP_ROOT"
 export SQR_PM2_APP_NAME="$PM2_APP_NAME"
-PM2_CONFIG="$CURRENT_LINK/deploy/pm2/ecosystem.release.config.cjs"
+PM2_CONFIG="$RELEASE_DIR/deploy/pm2/ecosystem.release.config.cjs"
+LEGACY_PM2_REPLACED=false
 
-restore_previous_release() {
-  if [[ -z "$OLD_RELEASE" ]]; then
-    return 1
-  fi
-
+restore_release_links() {
   rm -f -- "$APP_ROOT/current.rollback" "$APP_ROOT/previous.rollback"
-  ln -s "$OLD_RELEASE" "$APP_ROOT/current.rollback"
-  mv -Tf "$APP_ROOT/current.rollback" "$CURRENT_LINK"
+  if [[ -n "$OLD_RELEASE" ]]; then
+    ln -s "$OLD_RELEASE" "$APP_ROOT/current.rollback"
+    mv -Tf "$APP_ROOT/current.rollback" "$CURRENT_LINK"
+  else
+    rm -f -- "$CURRENT_LINK"
+  fi
   if [[ -n "$OLD_PREVIOUS_RELEASE" ]]; then
     ln -s "$OLD_PREVIOUS_RELEASE" "$APP_ROOT/previous.rollback"
     mv -Tf "$APP_ROOT/previous.rollback" "$PREVIOUS_LINK"
   else
     rm -f -- "$PREVIOUS_LINK"
   fi
-  pm2 startOrReload "$CURRENT_LINK/deploy/pm2/ecosystem.release.config.cjs" \
-    --only "$PM2_APP_NAME" --update-env || true
 }
+
+restore_previous_release() {
+  restore_release_links
+  if [[ -n "$OLD_RELEASE" ]]; then
+    pm2 startOrReload "$PM2_CONFIG" \
+      --only "$PM2_APP_NAME" --update-env || true
+    return 0
+  fi
+
+  pm2 delete "$PM2_APP_NAME" >/dev/null 2>&1 || true
+  if [[ "$LEGACY_PM2_REPLACED" == "true" ]]; then
+    pm2 resurrect
+  fi
+}
+
+registered_pm2_definition() {
+  pm2 jlist | node -e '
+let raw = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  const appName = process.argv[1];
+  const processes = JSON.parse(raw);
+  const processEntry = processes.find((entry) => entry?.name === appName);
+  if (!processEntry) return;
+  const scriptPath = processEntry?.pm2_env?.pm_exec_path;
+  const workingDirectory = processEntry?.pm2_env?.pm_cwd;
+  process.stdout.write(
+    `${typeof scriptPath === "string" ? scriptPath : ""}\t${
+      typeof workingDirectory === "string" ? workingDirectory : ""
+    }`,
+  );
+});
+' "$PM2_APP_NAME"
+}
+
+REGISTERED_PM2_DEFINITION="$(registered_pm2_definition)" \
+  || {
+    restore_release_links
+    fail "existing PM2 registration could not be inspected"
+  }
+IFS=$'\t' read -r REGISTERED_PM2_SCRIPT REGISTERED_PM2_CWD <<< "$REGISTERED_PM2_DEFINITION"
+PM2_REGISTRATION_IS_MANAGED=true
+if [[ -n "$REGISTERED_PM2_DEFINITION" ]]; then
+  case "$REGISTERED_PM2_SCRIPT" in
+    "$APP_ROOT/current/"*|"$APP_ROOT/releases/"*) ;;
+    *) PM2_REGISTRATION_IS_MANAGED=false ;;
+  esac
+  case "$REGISTERED_PM2_CWD" in
+    "$APP_ROOT/current"|"$APP_ROOT/releases/"*) ;;
+    *) PM2_REGISTRATION_IS_MANAGED=false ;;
+  esac
+fi
+if [[ "$PM2_REGISTRATION_IS_MANAGED" == "false" ]]; then
+  # Preserve the legacy process list before replacing its immutable-incompatible
+  # script and cwd registration. A failed first cutover can resurrect it.
+  if ! pm2 save; then
+    restore_release_links
+    fail "legacy PM2 process list could not be saved before first cutover"
+  fi
+  LEGACY_PM2_REPLACED=true
+  if ! pm2 delete "$PM2_APP_NAME"; then
+    restore_previous_release || true
+    fail "legacy PM2 registration could not be replaced"
+  fi
+fi
 
 verify_release() {
   pm2 startOrReload "$PM2_CONFIG" --only "$PM2_APP_NAME" --update-env
@@ -201,6 +266,11 @@ if [[ -n "$PUBLIC_BASE_URL" ]]; then
     restore_previous_release || true
     fail "public post-deploy gate failed; previous release restored when available"
   fi
+fi
+
+if ! pm2 save; then
+  restore_previous_release || true
+  fail "verified release could not be persisted in the PM2 process list"
 fi
 
 printf 'Release deployed successfully\n'

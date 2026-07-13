@@ -44,7 +44,10 @@ mv -Tf "$APP_ROOT/previous.rollback" "$PREVIOUS_LINK"
 
 export SQR_RELEASE_ROOT="$APP_ROOT"
 export SQR_PM2_APP_NAME="$PM2_APP_NAME"
-PM2_CONFIG="$CURRENT_LINK/deploy/pm2/ecosystem.release.config.cjs"
+# Keep using the known-good control configuration from the release initiating
+# rollback. It filters deployment-only environment variables even when the
+# target release predates that protection.
+PM2_CONFIG="$CURRENT_RELEASE/deploy/pm2/ecosystem.release.config.cjs"
 
 if ! pm2 startOrReload "$PM2_CONFIG" --only "$PM2_APP_NAME" --update-env \
   || ! curl --retry 30 --retry-delay 1 --retry-all-errors -fsS "$LOCAL_BASE_URL/api/health/ready" >/dev/null \
@@ -63,8 +66,18 @@ then
   mv -Tf "$APP_ROOT/current.restore" "$CURRENT_LINK"
   ln -s "$PREVIOUS_RELEASE" "$APP_ROOT/previous.restore"
   mv -Tf "$APP_ROOT/previous.restore" "$PREVIOUS_LINK"
-  pm2 startOrReload "$CURRENT_LINK/deploy/pm2/ecosystem.release.config.cjs" --only "$PM2_APP_NAME" --update-env || true
+  pm2 startOrReload "$PM2_CONFIG" --only "$PM2_APP_NAME" --update-env || true
   fail "rollback target failed verification; original release restored"
+fi
+
+if ! pm2 save; then
+  rm -f -- "$APP_ROOT/current.restore" "$APP_ROOT/previous.restore"
+  ln -s "$CURRENT_RELEASE" "$APP_ROOT/current.restore"
+  mv -Tf "$APP_ROOT/current.restore" "$CURRENT_LINK"
+  ln -s "$PREVIOUS_RELEASE" "$APP_ROOT/previous.restore"
+  mv -Tf "$APP_ROOT/previous.restore" "$PREVIOUS_LINK"
+  pm2 startOrReload "$PM2_CONFIG" --only "$PM2_APP_NAME" --update-env || true
+  fail "rollback process list could not be persisted; original release restored"
 fi
 
 printf 'Rollback completed successfully\n'
