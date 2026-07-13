@@ -1,3 +1,5 @@
+@config "../../tailwind.authenticated.config.ts";
+
 @tailwind components;
 @tailwind utilities;
 
