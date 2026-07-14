@@ -4,7 +4,6 @@ import path from "node:path";
 import test from "node:test";
 import { COLLECTION_RECEIPT_DIR } from "../../lib/collection-receipt-files";
 import {
-  pruneMissingCollectionReceiptRelation,
   resolveSelectedCollectionReceipt,
 } from "../collection-receipt-relation-utils";
 
@@ -40,7 +39,6 @@ test("collection receipt relation helpers prefer hydrated receipt matches before
         return null as never;
       },
       createCollectionRecordReceipts: async () => [],
-      deleteCollectionRecordReceipts: async () => [],
     },
     record: {
       id: "record-1",
@@ -98,7 +96,6 @@ test("collection receipt relation helpers promote legacy receipt files into rece
           createdRows.push(...rows);
           return [];
         },
-        deleteCollectionRecordReceipts: async () => [],
       },
       record: {
         id: "record-legacy",
@@ -120,72 +117,31 @@ test("collection receipt relation helpers promote legacy receipt files into rece
   }
 });
 
-test("collection receipt relation prune helper skips synthetic legacy ids and deletes normalized relation ids", async () => {
-  const deleted: Array<{ recordId: string; receiptIds: string[] }> = [];
+test("collection receipt relation helpers preserve legacy metadata when storage is temporarily missing", async () => {
+  const storagePath = `/uploads/collection-receipts/missing-${Date.now()}.pdf`;
+  const createdRows: Array<Record<string, unknown>> = [];
 
-  await pruneMissingCollectionReceiptRelation({
+  const selected = await resolveSelectedCollectionReceipt({
     storage: {
       listCollectionRecordReceipts: async () => [],
       getCollectionRecordReceiptById: async () => null as never,
-      createCollectionRecordReceipts: async () => [],
-      deleteCollectionRecordReceipts: async (recordId, receiptIds) => {
-        deleted.push({ recordId, receiptIds });
+      createCollectionRecordReceipts: async (_recordId, rows) => {
+        createdRows.push(...rows);
         return [];
       },
     },
-    recordId: "record-1",
-    receipt: {
-      id: "legacy-record-1",
-      collectionRecordId: "record-1",
-      storagePath: "/uploads/collection-receipts/legacy.pdf",
-      originalFileName: "legacy.pdf",
-      originalMimeType: "application/pdf",
-      originalExtension: ".pdf",
-      fileSize: 0,
-      receiptAmount: null,
-      extractedAmount: null,
-      extractionStatus: "unprocessed",
-      extractionConfidence: null,
-      receiptDate: null,
-      receiptReference: null,
-      fileHash: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    record: {
+      id: "record-missing-storage",
+      receiptFile: storagePath,
+      receipts: [],
+      createdAt: "2026-02-01T12:00:00.000Z",
     },
+    receiptIdRaw: null,
   });
 
-  await pruneMissingCollectionReceiptRelation({
-    storage: {
-      listCollectionRecordReceipts: async () => [],
-      getCollectionRecordReceiptById: async () => null as never,
-      createCollectionRecordReceipts: async () => [],
-      deleteCollectionRecordReceipts: async (recordId, receiptIds) => {
-        deleted.push({ recordId, receiptIds });
-        return [];
-      },
-    },
-    recordId: "record-2",
-    receipt: {
-      id: " receipt-2 ",
-      collectionRecordId: "record-2",
-      storagePath: "/uploads/collection-receipts/receipt-2.pdf",
-      originalFileName: "receipt-2.pdf",
-      originalMimeType: "application/pdf",
-      originalExtension: ".pdf",
-      fileSize: 0,
-      receiptAmount: null,
-      extractedAmount: null,
-      extractionStatus: "unprocessed",
-      extractionConfidence: null,
-      receiptDate: null,
-      receiptReference: null,
-      fileHash: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    },
-  });
-
-  assert.equal(deleted.length, 1);
-  assert.deepEqual(deleted[0], {
-    recordId: "record-2",
-    receiptIds: ["receipt-2"],
-  });
+  assert.equal(createdRows.length, 1);
+  assert.equal(createdRows[0]?.storagePath, storagePath);
+  assert.equal(createdRows[0]?.fileSize, 0);
+  assert.equal(selected?.id, "legacy-record-missing-storage");
+  assert.equal(selected?.storagePath, storagePath);
 });

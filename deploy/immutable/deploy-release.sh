@@ -14,6 +14,7 @@ PM2_APP_NAME="${SQR_PM2_APP_NAME:-sqr}"
 LOCAL_BASE_URL="${SQR_RELEASE_LOCAL_BASE_URL:-http://127.0.0.1:5000}"
 PUBLIC_BASE_URL="${SQR_PUBLIC_BASE_URL:-}"
 CHECKSUM_PATH="${SQR_RELEASE_ARCHIVE_CHECKSUM:-${ARCHIVE_PATH}.sha512}"
+LEGACY_UPLOADS_DIR="${SQR_RELEASE_LEGACY_UPLOADS_DIR:-}"
 
 fail() {
   printf 'Release deployment failed: %s\n' "$1" >&2
@@ -104,6 +105,21 @@ RELEASE_SHA="${RELEASE_FIELDS[1]:-}"
 [[ -n "$RELEASE_ID" && -n "$RELEASE_SHA" ]] || fail "release manifest fields are incomplete"
 if [[ -n "${SQR_EXPECTED_RELEASE_SHA:-}" && "$RELEASE_SHA" != "$SQR_EXPECTED_RELEASE_SHA" ]]; then
   fail "release SHA does not match SQR_EXPECTED_RELEASE_SHA"
+fi
+
+if [[ -z "$LEGACY_UPLOADS_DIR" ]]; then
+  LEGACY_UPLOADS_DIR="$(dirname "$ENV_FILE")/uploads"
+fi
+if [[ -e "$LEGACY_UPLOADS_DIR" ]]; then
+  LEGACY_UPLOADS_DIR="$(readlink -f "$LEGACY_UPLOADS_DIR")"
+  [[ -n "$LEGACY_UPLOADS_DIR" && -d "$LEGACY_UPLOADS_DIR" ]] \
+    || fail "legacy uploads source is not a readable directory"
+  case "$LEGACY_UPLOADS_DIR" in
+    "$APP_ROOT/releases/"*) fail "legacy uploads source cannot be inside an immutable release" ;;
+  esac
+  node "$INCOMING_DIR/scripts/migrate-legacy-uploads.mjs" \
+    "$LEGACY_UPLOADS_DIR" "$APP_ROOT/shared/uploads" \
+    || fail "legacy uploads could not be copied into shared storage"
 fi
 
 RELEASE_DIR="$APP_ROOT/releases/$RELEASE_ID"

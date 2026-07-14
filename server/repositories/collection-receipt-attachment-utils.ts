@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import { sql } from "drizzle-orm";
 import type { CollectionRepositoryExecutor } from "./collection-nickname-utils";
-import { collectionReceiptFileExists } from "../lib/collection-receipt-files";
+import { resolveCollectionReceiptStoragePath } from "../lib/collection-receipt-files";
 import type { CollectionRecord, CollectionRecordReceipt } from "../storage-postgres";
 import {
   inferLegacyReceiptMimeType,
@@ -54,8 +54,7 @@ async function promoteLegacyReceiptRelationRow(
     return;
   }
 
-  if (!(await collectionReceiptFileExists(legacyStoragePath))) {
-    await syncCollectionRecordLegacyReceiptCache(executor, normalizedRecordId);
+  if (!resolveCollectionReceiptStoragePath(legacyStoragePath)) {
     return;
   }
 
@@ -88,39 +87,6 @@ async function promoteLegacyReceiptRelationRow(
   `);
 
   await syncCollectionRecordLegacyReceiptCache(executor, normalizedRecordId);
-}
-
-async function pruneMissingCollectionReceiptRelations(
-  executor: CollectionReceiptExecutor,
-  receiptMap: Map<string, CollectionRecordReceipt[]>,
-): Promise<void> {
-  for (const [recordId, receipts] of receiptMap.entries()) {
-    if (!receipts.length) continue;
-
-    const validReceipts: CollectionRecordReceipt[] = [];
-    const missingReceiptIds: string[] = [];
-
-    for (const receipt of receipts) {
-      if (await collectionReceiptFileExists(receipt.storagePath)) {
-        validReceipts.push(receipt);
-      } else {
-        missingReceiptIds.push(receipt.id);
-      }
-    }
-
-    if (!missingReceiptIds.length) {
-      continue;
-    }
-
-    const idSql = sql.join(missingReceiptIds.map((value) => sql`${value}::uuid`), sql`, `);
-    await executor.execute(sql`
-      DELETE FROM public.collection_record_receipts
-      WHERE collection_record_id = ${recordId}::uuid
-        AND id IN (${idSql})
-    `);
-    await syncCollectionRecordLegacyReceiptCache(executor, recordId);
-    receiptMap.set(recordId, validReceipts);
-  }
 }
 
 export async function loadCollectionReceiptMapByRecordIds(
@@ -186,7 +152,6 @@ export async function attachCollectionReceipts(
     executor,
     records.map((record) => record.id),
   );
-  await pruneMissingCollectionReceiptRelations(executor, activeReceiptMap);
 
   const legacyOnlyRecords = records.filter((record) => {
     const receipts = activeReceiptMap.get(record.id) || [];
