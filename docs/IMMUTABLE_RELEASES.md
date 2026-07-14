@@ -17,6 +17,10 @@ The legacy Git checkout procedure remains available in
 - `current` and `previous` are atomic symbolic links under one release root.
 - A failed readiness, provenance, or public post-deploy check restores the
   previous application release when one exists.
+- The first cutover snapshots and replaces an incompatible legacy PM2
+  registration, then resurrects that snapshot if verification fails.
+- Deployment-only shell variables are filtered from the application process
+  before strict runtime environment validation.
 - Production secrets, uploads, generated runtime data, and private CA files are
   never copied into the release artifact.
 
@@ -94,7 +98,6 @@ ARCHIVE="$HOME/release-inbox/sqr-release-<full-commit-sha>.tar.gz"
 export SQR_EXPECTED_RELEASE_SHA="<full-commit-sha>"
 
 bash deploy/immutable/deploy-release.sh "$ARCHIVE"
-pm2 save
 ```
 
 The deployment script performs, in order:
@@ -108,7 +111,8 @@ The deployment script performs, in order:
 7. atomic `current` symlink promotion;
 8. PM2 start/reload with readiness waiting;
 9. local readiness and exact release SHA verification;
-10. public security, health, auth, and provenance checks.
+10. public security, health, auth, and provenance checks;
+11. PM2 process-list persistence only after every verification gate passes.
 
 ## Verify Production Version
 
@@ -127,7 +131,6 @@ export SQR_RELEASE_ROOT="$HOME/apps/sqr-runtime"
 export NODE_EXTRA_CA_CERTS="$HOME/apps/sumbanganqueryrahmah/.runtime/redis-ca.crt"
 
 bash "$SQR_RELEASE_ROOT/current/deploy/immutable/rollback-release.sh"
-pm2 save
 curl -fsS https://sqr-system.com/api/health/version
 ```
 
