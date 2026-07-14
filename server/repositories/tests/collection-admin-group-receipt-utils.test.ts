@@ -297,8 +297,7 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
   }
 });
 
-test("attachCollectionReceipts prunes relation-backed receipts whose files are missing", async () => {
-  const validReceipt = await createManagedCollectionReceiptFixture(".png");
+test("attachCollectionReceipts preserves relation metadata when receipt storage is temporarily missing", async () => {
   const { executor, queries } = createSequenceExecutor<CollectionReceiptExecutor>([
     {
       rows: [
@@ -315,7 +314,7 @@ test("attachCollectionReceipts prunes relation-backed receipts whose files are m
         {
           id: "receipt-valid",
           collection_record_id: "record-1",
-          storage_path: validReceipt.publicPath,
+          storage_path: "/uploads/collection-receipts/valid-file.png",
           original_file_name: "valid.png",
           original_mime_type: "image/png",
           original_extension: ".png",
@@ -325,32 +324,27 @@ test("attachCollectionReceipts prunes relation-backed receipts whose files are m
       ],
     },
     { rows: [] },
-    { rows: [{ storage_path: validReceipt.publicPath }] },
-    { rows: [] },
   ]);
 
-  try {
-    const [record] = await attachCollectionReceipts(executor, [
-      createCollectionRecordFixture({
-        receiptFile: "/uploads/collection-receipts/missing-file.png",
-      }),
-    ]);
+  const [record] = await attachCollectionReceipts(executor, [
+    createCollectionRecordFixture({
+      receiptFile: "/uploads/collection-receipts/missing-file.png",
+    }),
+  ]);
 
-    assert.ok(record);
-    assert.ok(Array.isArray(record.archivedReceipts));
+  assert.ok(record);
+  assert.ok(Array.isArray(record.archivedReceipts));
 
-    assert.equal(record.receiptFile, null);
-    assert.equal(record.receipts.length, 1);
-    assert.equal(record.receipts[0]?.id, "receipt-valid");
-    assert.equal(record.archivedReceipts.length, 0);
-    assert.equal(queries.length, 5);
-    assert.match(collectSqlText(queries[1]), /DELETE FROM public\.collection_record_receipts/i);
-    assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
-    assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
-    assert.match(collectSqlText(queries[4]), /deleted_at IS NOT NULL/i);
-  } finally {
-    await fs.unlink(validReceipt.absolutePath).catch(() => undefined);
-  }
+  assert.equal(record.receiptFile, null);
+  assert.equal(record.receipts.length, 2);
+  assert.equal(record.receipts[0]?.id, "receipt-missing");
+  assert.equal(record.receipts[1]?.id, "receipt-valid");
+  assert.equal(record.archivedReceipts.length, 0);
+  assert.equal(queries.length, 2);
+  assert.doesNotMatch(
+    queries.map((query) => collectSqlText(query)).join("\n"),
+    /DELETE FROM public\.collection_record_receipts/i,
+  );
 });
 
 test("createCollectionRecordReceiptRows inserts receipts and reloads them by generated ids", async () => {

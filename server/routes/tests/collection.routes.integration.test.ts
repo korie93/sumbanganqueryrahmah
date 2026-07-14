@@ -1569,7 +1569,7 @@ test("GET /api/collection/:id/receipt/view rejects users who no longer own the r
 });
 
 test("GET /api/collection/:id/receipt/download returns 404 when receipt file is missing", async () => {
-  const { storage } = createCoreCollectionStorageDouble({
+  const { storage, deleteReceiptCalls } = createCoreCollectionStorageDouble({
     sessionNickname: "Collector Alpha",
     seedRecordOverrides: {
       receiptFile: "/uploads/collection-receipts/missing.pdf",
@@ -1598,6 +1598,7 @@ test("GET /api/collection/:id/receipt/download returns 404 when receipt file is 
     assert.match(String(payload.message), /receipt file not found/i);
     assert.equal(payload.error?.code, "COLLECTION_RECEIPT_NOT_FOUND");
     assert.equal(payload.error?.message, payload.message);
+    assert.equal(deleteReceiptCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }
@@ -1635,6 +1636,22 @@ test("GET /api/collection/:id/receipt/download logs storage access warnings for 
       && (call.arguments[1] as Record<string, unknown> | undefined)?.reason === "receipt_storage_access_failed"
     ));
     assert.ok(storageWarning, "expected a receipt storage access warning to be logged");
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(storageWarning.arguments[1] || {}, "absolutePath"),
+      false,
+    );
+    const compatibilityWarning = warnMock.mock.calls.find((call) => (
+      call.arguments[0] === "Failed to stat legacy collection receipt during compatibility fallback"
+    ));
+    assert.ok(compatibilityWarning, "expected a legacy receipt compatibility warning to be logged");
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(compatibilityWarning.arguments[1] || {}, "error"),
+      false,
+    );
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(compatibilityWarning.arguments[1] || {}, "absolutePath"),
+      false,
+    );
   } finally {
     await stopTestServer(server);
   }
@@ -1960,7 +1977,7 @@ test("PATCH /api/collection/:id keeps removed receipts viewable via receipt id f
   }
 });
 
-test("GET /api/collection/:id/receipt/view prunes a missing relation receipt and falls back to the next valid receipt", async () => {
+test("GET /api/collection/:id/receipt/view preserves missing metadata and falls back to the next valid receipt", async () => {
   const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
   const storedFileName = `route-test-fallback-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.png`;
   const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
@@ -2013,11 +2030,7 @@ test("GET /api/collection/:id/receipt/view prunes a missing relation receipt and
     const response = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/png");
-    assert.equal(deleteReceiptCalls.length, 1);
-    assert.deepEqual(deleteReceiptCalls[0], {
-      recordId: "collection-1",
-      receiptIds: ["receipt-missing"],
-    });
+    assert.equal(deleteReceiptCalls.length, 0);
   } finally {
     await stopTestServer(server);
     await fs.unlink(path.join(uploadsDir, storedFileName)).catch(() => undefined);

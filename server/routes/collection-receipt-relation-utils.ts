@@ -15,7 +15,6 @@ type CollectionReceiptStorageRelationAccess = Pick<
   | "listCollectionRecordReceipts"
   | "getCollectionRecordReceiptById"
   | "createCollectionRecordReceipts"
-  | "deleteCollectionRecordReceipts"
 >;
 
 export type CollectionReceiptRecordLike = {
@@ -24,6 +23,14 @@ export type CollectionReceiptRecordLike = {
   receipts?: CollectionRecordReceipt[] | null;
   createdAt?: Date | string | null;
 };
+
+function buildReceiptCompatibilityErrorMeta(error: unknown) {
+  const errorCode = (error as { code?: unknown } | null)?.code;
+  return {
+    errorName: error instanceof Error ? error.name : "UnknownError",
+    errorCode: typeof errorCode === "string" ? errorCode.slice(0, 64) : null,
+  };
+}
 
 async function promoteLegacyCollectionReceiptRelation(params: {
   storage: CollectionReceiptStorageRelationAccess;
@@ -55,9 +62,7 @@ async function promoteLegacyCollectionReceiptRelation(params: {
   } catch (error) {
     logCollectionReceiptBestEffortFailure("Failed to stat legacy collection receipt during compatibility fallback", {
       recordId: params.recordId,
-      legacyPath: params.legacyPath,
-      absolutePath: params.resolvedLegacyFile.absolutePath,
-      error,
+      ...buildReceiptCompatibilityErrorMeta(error),
     });
   }
 
@@ -79,9 +84,7 @@ async function promoteLegacyCollectionReceiptRelation(params: {
   } catch (error) {
     logCollectionReceiptBestEffortFailure("Failed to auto-promote legacy collection receipt relation", {
       recordId: params.recordId,
-      legacyPath: params.legacyPath,
-      originalFileName: fallbackFileName,
-      error,
+      ...buildReceiptCompatibilityErrorMeta(error),
     });
   }
 
@@ -154,25 +157,4 @@ export async function resolveSelectedCollectionReceipt(params: {
     legacyPath,
     resolvedLegacyFile,
   });
-}
-
-export async function pruneMissingCollectionReceiptRelation(params: {
-  storage: CollectionReceiptStorageRelationAccess;
-  recordId: string;
-  receipt: CollectionRecordReceipt | null;
-}): Promise<void> {
-  const normalizedReceiptId = normalizeCollectionText(params.receipt?.id);
-  if (!normalizedReceiptId || normalizedReceiptId.startsWith("legacy-")) {
-    return;
-  }
-
-  try {
-    await params.storage.deleteCollectionRecordReceipts(params.recordId, [normalizedReceiptId]);
-  } catch (error) {
-    logCollectionReceiptBestEffortFailure("Failed to prune missing collection receipt relation", {
-      recordId: params.recordId,
-      receiptId: normalizedReceiptId,
-      error,
-    });
-  }
 }

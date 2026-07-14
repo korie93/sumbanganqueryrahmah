@@ -21,6 +21,8 @@ The legacy Git checkout procedure remains available in
   registration, then resurrects that snapshot if verification fails.
 - Deployment-only shell variables are filtered from the application process
   before strict runtime environment validation.
+- A legacy `uploads` directory beside the production `.env` is checked on each
+  deploy and copied into shared storage without overwriting existing files.
 - Production secrets, uploads, generated runtime data, and private CA files are
   never copied into the release artifact.
 
@@ -77,6 +79,12 @@ export SQR_RELEASE_RUNTIME_DIR="$HOME/apps/sumbanganqueryrahmah/.runtime"
 export SQR_RELEASE_ROOT="$HOME/apps/sqr-runtime"
 export NODE_EXTRA_CA_CERTS="$HOME/apps/sumbanganqueryrahmah/.runtime/redis-ca.crt"
 ```
+
+On deployment, the script checks for `uploads` beside `SQR_RELEASE_ENV_FILE`
+and merges regular files into `$SQR_RELEASE_ROOT/shared/uploads` with
+no-clobber semantics. Existing shared files win, the legacy source is retained,
+and symbolic links or special files fail the deployment. A different reviewed
+source may be selected with `SQR_RELEASE_LEGACY_UPLOADS_DIR`.
 
 `NODE_EXTRA_CA_CERTS` must be present before Node starts; putting it only inside
 `.env` is too late for Node's TLS initialization.

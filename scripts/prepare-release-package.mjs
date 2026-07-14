@@ -91,6 +91,7 @@ for (const requiredPath of [
   "vendor",
   "drizzle",
   "scripts/db-migrate.mjs",
+  "scripts/migrate-legacy-uploads.mjs",
   "scripts/lib/postgres-migration-lock.mjs",
   "scripts/lib/postgres-preflight.mjs",
   "scripts/post-deploy-health-check.sh",

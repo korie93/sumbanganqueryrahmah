@@ -44,6 +44,7 @@ test("release workflow gates approved artifacts behind the production environmen
 
 test("immutable deploy verifies integrity before install and rolls back failed promotion", () => {
   const deployScript = readText("deploy/immutable/deploy-release.sh");
+  const packageScript = readText("scripts/prepare-release-package.mjs");
   const checksumIndex = deployScript.indexOf("release file inventory verification failed");
   const installIndex = deployScript.indexOf("npm ci --omit=dev");
   const migrationIndex = deployScript.indexOf("npm run db:migrate");
@@ -66,6 +67,10 @@ test("immutable deploy verifies integrity before install and rolls back failed p
   assert.match(deployScript, /PM2_CONFIG="\$RELEASE_DIR\/deploy\/pm2\/ecosystem\.release\.config\.cjs"/);
   assert.match(deployScript, /LEGACY_PM2_REPLACED/);
   assert.match(deployScript, /pm2 resurrect/);
+  assert.match(deployScript, /SQR_RELEASE_LEGACY_UPLOADS_DIR/);
+  assert.match(deployScript, /scripts\/migrate-legacy-uploads\.mjs/);
+  assert.doesNotMatch(deployScript, /rm -rf[^\n]*LEGACY_UPLOADS/);
+  assert.match(packageScript, /scripts\/migrate-legacy-uploads\.mjs/);
   assert.ok(checksumIndex > -1 && checksumIndex < installIndex);
   assert.ok(installIndex < migrationIndex);
   assert.ok(migrationIndex < promotionIndex);
@@ -117,5 +122,6 @@ test("immutable release documentation keeps secrets external and migrations forw
   assert.match(documentation, /required reviewer/);
   assert.match(documentation, /SQR_RELEASE_ENV_FILE/);
   assert.match(documentation, /SQR_EXPECTED_RELEASE_SHA/);
+  assert.match(documentation, /legacy.*uploads/i);
   assert.match(productionRunbook, /preferred deployment path.*immutable artifact/i);
 });
