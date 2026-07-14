@@ -140,6 +140,8 @@ test("receipt storage audit artifact is count-only and has no destructive mode",
 
   assert.match(auditCli, /Mode: READ ONLY \(0 writes\)/);
   assert.match(auditCli, /No filenames, paths, database rows, or files were changed/);
+  assert.match(auditCli, /getRuntimeEnvironmentSource/);
+  assert.doesNotMatch(auditCli, /process\.env/);
   assert.match(auditUtils, /writesPerformed: 0/);
   assert.match(auditUtils, /Receipt storage filesystem audit limit exceeded/);
   assert.doesNotMatch(auditUtils, /fs\.(?:rm|unlink|rename)\s*\(/);
