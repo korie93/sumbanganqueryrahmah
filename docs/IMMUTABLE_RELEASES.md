@@ -178,6 +178,31 @@ records an audit event. It is idempotent. Backups without a stored checksum are
 rejected unless an operator explicitly adds `--allow-unverified-backup` after
 independent review.
 
+## Audit Shared Receipt Storage
+
+After migration or metadata recovery, reconcile PostgreSQL references with the
+shared receipt directory using the count-only, read-only audit tool:
+
+```bash
+cd "$HOME/apps/sqr-runtime/current"
+
+node --env-file=.env \
+  dist-local/scripts/audit-collection-receipt-storage.js \
+  --stale-days 30
+```
+
+The audit counts active, archived, and legacy-cache references; regular receipt
+files; missing referenced files; unreferenced physical files; stale temporary
+uploads; symbolic links; unsupported entries; and bounded inspection failures.
+It does not print filenames or paths and contains no delete mode. Deployment-only
+`SQR_RELEASE_*` shell variables are removed inside this maintenance process before
+strict runtime configuration is loaded.
+
+For automation, `--json` emits the same count-only report and `--strict` exits
+with status `2` when manual review is required. A non-zero strict result is an
+audit signal, not permission to delete files. Investigate and take a verified
+backup before designing any separate quarantine operation.
+
 ## Operational Notes
 
 - Never edit files under `releases/<release-id>`.
