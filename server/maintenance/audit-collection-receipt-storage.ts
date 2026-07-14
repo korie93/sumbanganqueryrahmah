@@ -1,5 +1,6 @@
 import process from "node:process";
 import type { SQL } from "drizzle-orm";
+import { getRuntimeEnvironmentSource } from "../config/runtime-environment";
 import type {
   CollectionReceiptStorageAuditQueryResult,
   CollectionReceiptStorageAuditReport,
@@ -74,8 +75,9 @@ function parseCliOptions(args: string[]): CliOptions | null {
 }
 
 function sanitizeMaintenanceEnvironment(): void {
+  const environment = getRuntimeEnvironmentSource();
   for (const key of DEPLOYMENT_ONLY_ENVIRONMENT_KEYS) {
-    delete process.env[key];
+    delete environment[key];
   }
 }
 
