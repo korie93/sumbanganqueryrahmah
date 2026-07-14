@@ -27,6 +27,10 @@ const serverBuilds = [
     entryPoint: path.resolve(cwd, "server/services/import-upload-excel-worker.ts"),
     outfile: path.resolve(cwd, "dist-local/server/import-upload-excel-worker.js"),
   },
+  {
+    entryPoint: path.resolve(cwd, "server/maintenance/recover-collection-receipt-metadata.ts"),
+    outfile: path.resolve(cwd, "dist-local/scripts/recover-collection-receipt-metadata.js"),
+  },
 ];
 
 for (const target of serverBuilds) {

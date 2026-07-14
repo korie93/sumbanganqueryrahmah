@@ -146,6 +146,38 @@ Rollback swaps `current` and `previous`, reloads PM2, and verifies both readines
 and embedded SHA. If the rollback target fails verification, the script restores
 the release that was active before the rollback attempt.
 
+## Recover Legacy Receipt Metadata
+
+If receipt binaries were migrated into shared storage after an application read
+had already removed their database relations, do not run a full backup restore.
+Use the receipt-only recovery tool from the active immutable release.
+
+```bash
+cd "$HOME/apps/sqr-runtime/current"
+
+# Read-only: show current relation counts and candidate backups.
+node --env-file=.env \
+  dist-local/scripts/recover-collection-receipt-metadata.js --list
+
+# Read-only: validate one backup, its receipt files, and the proposed changes.
+node --env-file=.env \
+  dist-local/scripts/recover-collection-receipt-metadata.js \
+  --backup-id '<pre-incident-backup-id>'
+
+# Apply only after the dry-run counts have been reviewed.
+node --env-file=.env \
+  dist-local/scripts/recover-collection-receipt-metadata.js \
+  --backup-id '<pre-incident-backup-id>' \
+  --apply \
+  --confirm-backup-id '<pre-incident-backup-id>'
+```
+
+The tool verifies the stored backup checksum, validates each managed receipt
+path and file, preserves archived receipts, inserts only missing relations, and
+records an audit event. It is idempotent. Backups without a stored checksum are
+rejected unless an operator explicitly adds `--allow-unverified-backup` after
+independent review.
+
 ## Operational Notes
 
 - Never edit files under `releases/<release-id>`.

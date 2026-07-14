@@ -115,6 +115,7 @@ test("rollback accepts only managed release links and verifies embedded SHA", ()
 test("immutable release documentation keeps secrets external and migrations forward-only", () => {
   const documentation = readText("docs/IMMUTABLE_RELEASES.md");
   const productionRunbook = readText("docs/runbooks/production.md");
+  const buildServer = readText("scripts/build-server.mjs");
 
   assert.match(documentation, /Production secrets, uploads, generated runtime data/i);
   assert.match(documentation, /never copied into the release artifact/i);
@@ -123,5 +124,8 @@ test("immutable release documentation keeps secrets external and migrations forw
   assert.match(documentation, /SQR_RELEASE_ENV_FILE/);
   assert.match(documentation, /SQR_EXPECTED_RELEASE_SHA/);
   assert.match(documentation, /legacy.*uploads/i);
+  assert.match(documentation, /recover-collection-receipt-metadata\.js/);
+  assert.match(documentation, /--confirm-backup-id/);
+  assert.match(buildServer, /dist-local\/scripts\/recover-collection-receipt-metadata\.js/);
   assert.match(productionRunbook, /preferred deployment path.*immutable artifact/i);
 });
