@@ -31,6 +31,10 @@ const serverBuilds = [
     entryPoint: path.resolve(cwd, "server/maintenance/recover-collection-receipt-metadata.ts"),
     outfile: path.resolve(cwd, "dist-local/scripts/recover-collection-receipt-metadata.js"),
   },
+  {
+    entryPoint: path.resolve(cwd, "server/maintenance/audit-collection-receipt-storage.ts"),
+    outfile: path.resolve(cwd, "dist-local/scripts/audit-collection-receipt-storage.js"),
+  },
 ];
 
 for (const target of serverBuilds) {

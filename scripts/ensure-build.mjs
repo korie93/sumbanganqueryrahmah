@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 const buildArtifacts = [
   "dist-local/server/cluster-local.js",
   "dist-local/server/import-upload-excel-worker.js",
+  "dist-local/scripts/audit-collection-receipt-storage.js",
   "dist-local/scripts/recover-collection-receipt-metadata.js",
 ];
 const missingBuildArtifacts = buildArtifacts.filter((artifact) => !existsSync(artifact));

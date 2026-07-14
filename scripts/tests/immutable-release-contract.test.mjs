@@ -125,7 +125,24 @@ test("immutable release documentation keeps secrets external and migrations forw
   assert.match(documentation, /SQR_EXPECTED_RELEASE_SHA/);
   assert.match(documentation, /legacy.*uploads/i);
   assert.match(documentation, /recover-collection-receipt-metadata\.js/);
+  assert.match(documentation, /audit-collection-receipt-storage\.js/);
+  assert.match(documentation, /count-only, read-only audit tool/i);
   assert.match(documentation, /--confirm-backup-id/);
+  assert.match(buildServer, /dist-local\/scripts\/audit-collection-receipt-storage\.js/);
   assert.match(buildServer, /dist-local\/scripts\/recover-collection-receipt-metadata\.js/);
   assert.match(productionRunbook, /preferred deployment path.*immutable artifact/i);
+});
+
+test("receipt storage audit artifact is count-only and has no destructive mode", () => {
+  const auditCli = readText("server/maintenance/audit-collection-receipt-storage.ts");
+  const auditUtils = readText("server/repositories/collection-receipt-storage-audit-utils.ts");
+  const ensureBuild = readText("scripts/ensure-build.mjs");
+
+  assert.match(auditCli, /Mode: READ ONLY \(0 writes\)/);
+  assert.match(auditCli, /No filenames, paths, database rows, or files were changed/);
+  assert.match(auditUtils, /writesPerformed: 0/);
+  assert.match(auditUtils, /Receipt storage filesystem audit limit exceeded/);
+  assert.doesNotMatch(auditUtils, /fs\.(?:rm|unlink|rename)\s*\(/);
+  assert.doesNotMatch(auditUtils, /\b(?:DELETE|INSERT|UPDATE|TRUNCATE|ALTER|DROP)\s+/i);
+  assert.match(ensureBuild, /dist-local\/scripts\/audit-collection-receipt-storage\.js/);
 });
