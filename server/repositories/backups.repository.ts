@@ -41,7 +41,9 @@ export class BackupsRepository {
       BACKUP_ENCRYPTION_KEY: backupEncryptionRuntimeConfig.encryptionKey ?? undefined,
       BACKUP_ENCRYPTION_KEYS: backupEncryptionRuntimeConfig.encryptionKeys ?? undefined,
       BACKUP_ENCRYPTION_KEY_ID: backupEncryptionRuntimeConfig.encryptionKeyId ?? undefined,
-    }, backupEncryptionRuntimeConfig.requireEncryption);
+    }, backupEncryptionRuntimeConfig.requireEncryption, {
+      allowLegacyUnencryptedRead: backupEncryptionRuntimeConfig.allowLegacyUnencryptedRead,
+    });
     assertBackupEncryptionConfig(this.backupEncryption);
   }
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CollectionPiiDecryptionError,
   encryptCollectionPiiFieldValue,
   hashCollectionCustomerNameSearchTerms,
 } from "../../lib/collection-pii-encryption";
@@ -419,6 +420,67 @@ test("normalizeBackupCollectionRecord can recover PII from encrypted backup fiel
     assert.equal(restoredRecord?.accountNumber, "ACC-ENC-1");
     assert.equal(restoredRecord?.collectionStaffNickname, "Collector Alpha");
     assert.equal(restoredRecord?.staffUsername, "Collector Alpha");
+  });
+});
+
+test("collection restore fails closed before writes when encrypted PII is tampered", async () => {
+  await withCollectionPiiEncryptionKey("collection-pii-secret-2026", async () => {
+    const encryptedCustomerName = encryptCollectionPiiFieldValue("Encrypted Alice");
+    assert.ok(encryptedCustomerName);
+    const encryptedParts = encryptedCustomerName.split(".");
+    assert.equal(encryptedParts.length, 3);
+    const ciphertext = encryptedParts[1];
+    assert.ok(ciphertext);
+    encryptedParts[1] = `${ciphertext[0] === "A" ? "B" : "A"}${ciphertext.slice(1)}`;
+    const tamperedCustomerName = encryptedParts.join(".");
+    const executedQueries: string[] = [];
+    const tx = createBackupRestoreExecutor(
+      async (query: unknown) => {
+        executedQueries.push(normalizeSqlText(query));
+        return { rows: [] };
+      },
+      "Unexpected insert() call during tampered PII restore test.",
+    );
+    const backupDataReader = createCollectionRecordReader([
+      {
+        id: "44444444-4444-4444-4444-444444444444",
+        customerName: "Legacy Alice",
+        customerNameEncrypted: tamperedCustomerName,
+        icNumber: "900101015555",
+        customerPhone: "0123000001",
+        accountNumber: "ACC-1001",
+        batch: "P10",
+        paymentDate: "2026-03-31",
+        amount: 100,
+        receiptFile: null,
+        receiptTotalAmountCents: 10000,
+        receiptValidationStatus: "matched",
+        receiptValidationMessage: null,
+        receiptCount: 1,
+        duplicateReceiptFlag: false,
+        createdByLogin: "system",
+        collectionStaffNickname: "Collector Alpha",
+        staffUsername: "Collector Alpha",
+        createdAt: "2026-03-31T08:00:00.000Z",
+      },
+    ]);
+    const stats = createRestoreStats();
+
+    await assert.rejects(
+      () => restoreCollectionRecordsFromBackup(tx, backupDataReader, stats),
+      (error: unknown) => {
+        assert.ok(error instanceof CollectionPiiDecryptionError);
+        assert.equal(error.field, "customerName");
+        return true;
+      },
+    );
+
+    assert.equal(
+      executedQueries.some((query) => query.includes("INSERT INTO public.collection_records")),
+      false,
+    );
+    assert.equal(stats.collectionRecords.processed, 0);
+    assert.equal(stats.collectionRecords.inserted, 0);
   });
 });
 

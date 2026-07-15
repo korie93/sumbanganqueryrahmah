@@ -6,6 +6,7 @@ import { BackupsRepository } from "../backups.repository";
 import { db } from "../../db-postgres";
 import {
   BackupPayloadIntegrityError,
+  LegacyUnencryptedBackupPolicyError,
   decodeBackupDataFromStorage,
   encodeBackupDataForStorage,
 } from "../backups-encryption";
@@ -228,6 +229,118 @@ test("decodeBackupDataFromStorage rejects tampered v3 AEAD backup payloads", () 
 
   const afterFailures = getInternalMetricsSnapshot().counters.backupPayloadIntegrityFailuresTotal;
   assert.equal(afterFailures, beforeFailures + tamperedPayloads.length);
+});
+
+test("decodeBackupDataFromStorage blocks legacy unencrypted payloads in production policy", () => {
+  const payloadJson = JSON.stringify({
+    imports: [],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+  });
+  const beforeAttempts = getInternalMetricsSnapshot()
+    .counters.backupLegacyUnencryptedReadAttemptsTotal;
+  const productionConfig = {
+    requireEncryption: true,
+    primaryKeyId: "primary",
+    keysById: new Map([["primary", Buffer.from("A".repeat(32), "utf8")]]),
+  };
+
+  assert.throws(
+    () => decodeBackupDataFromStorage(payloadJson, productionConfig),
+    LegacyUnencryptedBackupPolicyError,
+  );
+  assert.equal(
+    getInternalMetricsSnapshot().counters.backupLegacyUnencryptedReadAttemptsTotal,
+    beforeAttempts + 1,
+  );
+});
+
+test("decodeBackupDataFromStorage permits reviewed legacy plaintext only with an explicit override", () => {
+  const payloadJson = JSON.stringify({
+    imports: [],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+  });
+  const productionConfig = {
+    requireEncryption: true,
+    allowLegacyUnencryptedRead: true,
+    primaryKeyId: "primary",
+    keysById: new Map([["primary", Buffer.from("A".repeat(32), "utf8")]]),
+  };
+
+  assert.equal(decodeBackupDataFromStorage(payloadJson, productionConfig), payloadJson);
+});
+
+test("BackupsRepository streaming reader blocks legacy unencrypted payloads by default", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+      BACKUP_ALLOW_LEGACY_UNENCRYPTED_READ: null,
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("SELECT backup_data as \"backupData\" FROM public.backups")) {
+          return {
+            rows: [{ backupData: JSON.stringify({ imports: [], dataRows: [] }) }],
+          };
+        }
+        return { rows: [] };
+      });
+
+      try {
+        const chunks = await repository.iterateBackupDataJsonChunksById("backup-1");
+        assert.ok(chunks);
+        await assert.rejects(
+          () => collectChunks(chunks),
+          LegacyUnencryptedBackupPolicyError,
+        );
+      } finally {
+        dbHarness.execute = originalExecute;
+      }
+    },
+  );
+});
+
+test("BackupsRepository streaming reader supports an explicit legacy migration override", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+      BACKUP_ALLOW_LEGACY_UNENCRYPTED_READ: "1",
+    },
+    async () => {
+      const payloadJson = JSON.stringify({ imports: [], dataRows: [] });
+      const repository = new BackupsRepository(repoOptions);
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("SELECT backup_data as \"backupData\" FROM public.backups")) {
+          return { rows: [{ backupData: payloadJson }] };
+        }
+        return { rows: [] };
+      });
+
+      try {
+        const chunks = await repository.iterateBackupDataJsonChunksById("backup-1");
+        assert.ok(chunks);
+        assert.equal(await collectChunks(chunks), payloadJson);
+      } finally {
+        dbHarness.execute = originalExecute;
+      }
+    },
+  );
 });
 
 test("BackupsRepository decodes encrypted v2 payloads when reading backup data", async () => {

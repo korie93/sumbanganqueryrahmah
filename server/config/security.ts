@@ -1,4 +1,8 @@
-import { readCommaSeparatedList, readOptionalString } from "./runtime-config-read-utils";
+import {
+  readBoolean,
+  readCommaSeparatedList,
+  readOptionalString,
+} from "./runtime-config-read-utils";
 import { isProductionLikeEnvironment } from "./runtime-environment";
 import { runtimeConfig } from "./runtime";
 import { isAllowedCollectionPiiRetiredField } from "./collection-pii-field-config";
@@ -88,12 +92,17 @@ export function getBackupEncryptionRuntimeConfig(): {
   encryptionKeys: string | null;
   encryptionKeyId: string | null;
   requireEncryption: boolean;
+  allowLegacyUnencryptedRead: boolean;
 } {
   return {
     encryptionKey: readOptionalString("BACKUP_ENCRYPTION_KEY"),
     encryptionKeys: readOptionalString("BACKUP_ENCRYPTION_KEYS"),
     encryptionKeyId: readOptionalString("BACKUP_ENCRYPTION_KEY_ID"),
     requireEncryption: isProductionLikeEnvironment(),
+    allowLegacyUnencryptedRead: readBoolean(
+      "BACKUP_ALLOW_LEGACY_UNENCRYPTED_READ",
+      false,
+    ),
   };
 }
 

@@ -5,7 +5,7 @@ import {
   parseStoredCollectionAmountCents,
 } from "../../shared/collection-amount-types";
 import {
-  resolveCollectionPiiFieldValue,
+  resolveCollectionRecordPiiValuesFailClosed,
 } from "../lib/collection-pii-encryption";
 import { normalizeCollectionReceiptExtractionState } from "../lib/collection-receipt-extraction-state";
 import type {
@@ -44,26 +44,28 @@ export function normalizeBackupCollectionRecord(
     return null;
   }
 
-  const customerName = resolveCollectionPiiFieldValue({
-    plaintext: record.customerName,
-    encrypted: record.customerNameEncrypted,
-    fallback: "-",
-  }) || "-";
-  const icNumber = resolveCollectionPiiFieldValue({
-    plaintext: record.icNumber,
-    encrypted: record.icNumberEncrypted,
-    fallback: "-",
-  }) || "-";
-  const customerPhone = resolveCollectionPiiFieldValue({
-    plaintext: record.customerPhone,
-    encrypted: record.customerPhoneEncrypted,
-    fallback: "-",
-  }) || "-";
-  const accountNumber = resolveCollectionPiiFieldValue({
-    plaintext: record.accountNumber,
-    encrypted: record.accountNumberEncrypted,
-    fallback: "-",
-  }) || "-";
+  const piiValues = resolveCollectionRecordPiiValuesFailClosed({
+    customerName: {
+      plaintext: record.customerName,
+      encrypted: record.customerNameEncrypted,
+    },
+    icNumber: {
+      plaintext: record.icNumber,
+      encrypted: record.icNumberEncrypted,
+    },
+    customerPhone: {
+      plaintext: record.customerPhone,
+      encrypted: record.customerPhoneEncrypted,
+    },
+    accountNumber: {
+      plaintext: record.accountNumber,
+      encrypted: record.accountNumberEncrypted,
+    },
+  });
+  const customerName = piiValues.customerName || "-";
+  const icNumber = piiValues.icNumber || "-";
+  const customerPhone = piiValues.customerPhone || "-";
+  const accountNumber = piiValues.accountNumber || "-";
 
   const collectionStaffNickname =
     String(record.collectionStaffNickname || record.staffUsername || "unknown").trim()
