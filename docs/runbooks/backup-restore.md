@@ -33,3 +33,20 @@ count, and rejects plans that would create too many restore chunks.
 - Put the app in maintenance mode if restoring into production.
 - Monitor database CPU, locks, and app memory.
 - Verify record counts after restore.
+
+## Legacy Unencrypted Backups
+
+Production rejects stored backup payloads that do not use an `enc:v*` envelope.
+This prevents an unauthenticated legacy payload from being restored silently.
+
+If a reviewed historical backup must be migrated, use the temporary emergency
+override below for the shortest possible maintenance window:
+
+```bash
+BACKUP_ALLOW_LEGACY_UNENCRYPTED_READ=1
+```
+
+Before enabling it, verify the backup source, stored checksum, ownership, and
+expected record counts. Export or migrate the payload into a newly encrypted
+backup, then set the value back to `0` and restart the application. Never leave
+the override enabled during normal production operation.

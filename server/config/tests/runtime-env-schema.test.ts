@@ -66,6 +66,22 @@ test("runtime env schema rejects malformed boolean flags", () => {
   );
 });
 
+test("runtime env schema validates the legacy unencrypted backup read override", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      BACKUP_ALLOW_LEGACY_UNENCRYPTED_READ: "0",
+    });
+  });
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        BACKUP_ALLOW_LEGACY_UNENCRYPTED_READ: "sometimes",
+      });
+    },
+    /BACKUP_ALLOW_LEGACY_UNENCRYPTED_READ.*boolean flag/i,
+  );
+});
+
 test("runtime env schema rejects malformed integer values", () => {
   assert.throws(
     () => {

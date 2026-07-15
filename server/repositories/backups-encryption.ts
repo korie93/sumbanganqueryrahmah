@@ -11,6 +11,7 @@ const BACKUP_DATA_GCM_AUTH_TAG_BYTES = 16;
 
 export type BackupEncryptionConfig = {
   requireEncryption: boolean;
+  allowLegacyUnencryptedRead?: boolean;
   primaryKeyId: string | null;
   keysById: Map<string, Buffer>;
 };
@@ -20,6 +21,37 @@ export class BackupPayloadIntegrityError extends Error {
     super(message);
     this.name = "BackupPayloadIntegrityError";
   }
+}
+
+export class LegacyUnencryptedBackupPolicyError extends Error {
+  constructor() {
+    super("Stored backup payload is unencrypted and blocked by the backup encryption policy.");
+    this.name = "LegacyUnencryptedBackupPolicyError";
+  }
+}
+
+export function assertLegacyUnencryptedBackupReadAllowed(
+  config: BackupEncryptionConfig,
+): void {
+  if (!config.requireEncryption) {
+    return;
+  }
+
+  internalMetrics.increment("backupLegacyUnencryptedReadAttemptsTotal");
+
+  if (config.allowLegacyUnencryptedRead === true) {
+    logger.warn("Legacy unencrypted backup payload read allowed by emergency override", {
+      event: "backup_legacy_unencrypted_read",
+      action: "ALLOWED_BY_OVERRIDE",
+    });
+    return;
+  }
+
+  logger.error("Legacy unencrypted backup payload blocked by encryption policy", {
+    event: "backup_legacy_unencrypted_read",
+    action: "BLOCKED",
+  });
+  throw new LegacyUnencryptedBackupPolicyError();
 }
 
 export function isEncodedBackupDataForStorage(rawPayload: string): boolean {
@@ -172,6 +204,7 @@ function getPrimaryBackupEncryptionKey(config: BackupEncryptionConfig): { keyId:
 export function resolveBackupEncryptionConfig(
   env: Record<string, string | undefined>,
   requireEncryption: boolean,
+  options: { allowLegacyUnencryptedRead?: boolean } = {},
 ): BackupEncryptionConfig {
   const envMap = parseEncryptionKeyMap(String(env.BACKUP_ENCRYPTION_KEYS || ""));
   const singleRawKey = String(env.BACKUP_ENCRYPTION_KEY || "").trim();
@@ -197,6 +230,7 @@ export function resolveBackupEncryptionConfig(
 
   return {
     requireEncryption,
+    allowLegacyUnencryptedRead: options.allowLegacyUnencryptedRead === true,
     primaryKeyId,
     keysById: envMap,
   };
@@ -272,6 +306,7 @@ export function decodeBackupDataFromStorage(rawPayload: string, config: BackupEn
   }
 
   if (!normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)) {
+    assertLegacyUnencryptedBackupReadAllowed(config);
     return normalized;
   }
 

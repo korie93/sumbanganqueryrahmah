@@ -7,6 +7,7 @@ import {
   BACKUP_DATA_ENCRYPTION_PREFIX_V2,
   BACKUP_DATA_ENCRYPTION_PREFIX_V3,
   BackupPayloadIntegrityError,
+  assertLegacyUnencryptedBackupReadAllowed,
   buildBackupPayloadAad,
   decodeBackupDataFromStorage,
   recordBackupIntegrityFailure,
@@ -205,6 +206,7 @@ export async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
   }
 
   if (format === "plaintext") {
+    assertLegacyUnencryptedBackupReadAllowed(backupEncryption);
     yield headerBuffer;
     while (true) {
       const nextChunk = await readNextNonEmptyChunk();
