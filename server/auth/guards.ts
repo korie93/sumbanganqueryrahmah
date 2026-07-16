@@ -224,13 +224,12 @@ async function recordAuthorizationDeniedAudit(params: {
 }): Promise<void> {
   recordAuthorizationDeniedTelemetry(params);
 
-  const createAuditLog = params.storage.createAuditLog;
-  if (typeof createAuditLog !== "function") {
+  if (typeof params.storage.createAuditLog !== "function") {
     return;
   }
 
   try {
-    await createAuditLog({
+    await params.storage.createAuditLog({
       action: params.action,
       performedBy: params.req.user?.username ?? "unknown",
       targetUser: params.req.user?.userId ?? null,

@@ -11,6 +11,7 @@ import {
 import { logger } from "../../lib/logger";
 import { verifySecurityAuditDetails } from "../../lib/security-audit-log";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
+import type { IStorage } from "../../storage-postgres";
 import {
   configureSessionRevocationStoreForRuntime,
   resetSessionRevocationStoreForTests,
@@ -68,33 +69,35 @@ test("requireRole records tamper-evident permission denied audit entries", async
   t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
     warningLogs.push({ message, payload });
   });
-  const guards = createAuthGuards({
-    storage: {
-      getActivityById: async () => undefined,
-      getUser: async () => undefined,
-      getUserByUsername: async () => undefined,
-      isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
-      getRoleTabVisibility: async () => ({}),
-      createAuditLog: async (entry) => {
-        auditLogs.push({
-          action: entry.action,
-          details: entry.details ?? null,
-          targetResource: entry.targetResource ?? null,
-          targetUser: entry.targetUser ?? null,
-        });
-        return {
-          id: `audit-${auditLogs.length}`,
-          action: entry.action,
-          performedBy: entry.performedBy,
-          requestId: entry.requestId ?? null,
-          targetUser: entry.targetUser ?? null,
-          targetResource: entry.targetResource ?? null,
-          details: entry.details ?? null,
-          timestamp: new Date("2026-05-31T00:00:00.000Z"),
-        };
-      },
+  const storage = {
+    auditLogs,
+    getActivityById: async () => undefined,
+    getUser: async () => undefined,
+    getUserByUsername: async () => undefined,
+    isVisitorBanned: async () => false,
+    updateActivity: async () => undefined,
+    getRoleTabVisibility: async () => ({}),
+    async createAuditLog(entry: Parameters<IStorage["createAuditLog"]>[0]) {
+      this.auditLogs.push({
+        action: entry.action,
+        details: entry.details ?? null,
+        targetResource: entry.targetResource ?? null,
+        targetUser: entry.targetUser ?? null,
+      });
+      return {
+        id: `audit-${this.auditLogs.length}`,
+        action: entry.action,
+        performedBy: entry.performedBy,
+        requestId: entry.requestId ?? null,
+        targetUser: entry.targetUser ?? null,
+        targetResource: entry.targetResource ?? null,
+        details: entry.details ?? null,
+        timestamp: new Date("2026-05-31T00:00:00.000Z"),
+      };
     },
+  };
+  const guards = createAuthGuards({
+    storage,
     secret: "guard-test-secret",
   });
   const response = createMockResponse();
