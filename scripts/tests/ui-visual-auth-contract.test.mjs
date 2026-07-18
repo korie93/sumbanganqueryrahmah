@@ -12,6 +12,10 @@ const accessibilityContractSource = readFileSync(
   path.join(repoRoot, "scripts", "ui-accessibility-contract.mjs"),
   "utf8",
 );
+const operationalContractMatrixSource = readFileSync(
+  path.join(repoRoot, "scripts", "lib", "ui-operational-contract-matrix.mjs"),
+  "utf8",
+);
 const authContractUtilsSource = readFileSync(
   path.join(repoRoot, "scripts", "ui-auth-contract-utils.mjs"),
   "utf8",
@@ -113,7 +117,15 @@ test("accessibility contract covers core authenticated work surfaces", () => {
   assert.match(accessibilityContractSource, /id: "dashboard"[\s\S]*path: "\/dashboard"/);
   assert.match(accessibilityContractSource, /id: "dashboard"[\s\S]*contentSelector: '\[data-testid="text-dashboard-title"\]'/);
   assert.match(accessibilityContractSource, /id: "settings"[\s\S]*path: "\/settings"/);
-  assert.match(accessibilityContractSource, /id: "import"[\s\S]*path: "\/import"/);
+  assert.match(operationalContractMatrixSource, /id: "import"[\s\S]*path: "\/import"/);
+  assert.match(accessibilityContractSource, /import \{ operationalContractRouteSpecs \}/);
+  assert.match(accessibilityContractSource, /\.\.\.operationalContractRouteSpecs/);
+  assert.match(
+    accessibilityContractSource,
+    /if \(routeSpec\.readySelector\) \{\s+await page\.locator\(routeSpec\.readySelector\)\.first\(\)\.waitFor\(\{ timeout: 15_000 \}\);\s+\}/,
+  );
+  assert.match(visualContractSource, /operationalContractRouteSpecs/);
+  assert.match(visualContractSource, /\.\.\.operationalContractRouteSpecs/);
 });
 
 test("accessibility contract includes screen-reader interaction scenarios", () => {
