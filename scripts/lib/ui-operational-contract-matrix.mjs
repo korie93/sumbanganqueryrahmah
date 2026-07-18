@@ -29,7 +29,12 @@ export const operationalContractRouteSpecs = Object.freeze([
     id: "saved",
     path: "/saved",
     contentSelector: "main#main-content",
-    readySelector: "[data-testid='text-import-count']",
+    readySelector: [
+      "[data-testid='text-import-count']",
+      "[data-testid='button-import-new']",
+      "[data-testid='button-clear-filters-empty']",
+      "[data-testid='saved-files-scroll-region']",
+    ].join(", "),
     stressViewportId: "compact",
   }),
   Object.freeze({

@@ -41,3 +41,13 @@ test("operational UI routes define stable readiness and bounded stress viewports
     }
   }
 });
+
+test("saved route readiness accepts populated and empty terminal states", () => {
+  const savedRouteSpec = operationalContractRouteSpecs.find((routeSpec) => routeSpec.id === "saved");
+
+  assert.ok(savedRouteSpec);
+  assert.match(savedRouteSpec.readySelector, /text-import-count/);
+  assert.match(savedRouteSpec.readySelector, /button-import-new/);
+  assert.match(savedRouteSpec.readySelector, /button-clear-filters-empty/);
+  assert.match(savedRouteSpec.readySelector, /saved-files-scroll-region/);
+});
