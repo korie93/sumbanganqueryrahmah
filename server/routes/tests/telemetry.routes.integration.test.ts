@@ -1,16 +1,21 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
+import { createClientErrorTelemetryController } from "../../controllers/client-error-telemetry.controller";
 import { createWebVitalsTelemetryController } from "../../controllers/web-vitals-telemetry.controller";
 import { errorHandler } from "../../middleware/error-handler";
 import { createInternalMetrics, type InternalMetricsRecorder } from "../../internal/metrics";
 import {
+  createClientErrorTelemetryDropGuard,
+  createClientErrorTelemetryRequestGuard,
   createCspReportDropGuard,
   createCspReportRequestGuard,
   createWebVitalsTelemetryDropGuard,
   createWebVitalsTelemetryRequestGuard,
+  CANONICAL_CLIENT_ERROR_TELEMETRY_PATH,
   CANONICAL_WEB_VITALS_TELEMETRY_PATH,
   LEGACY_WEB_VITALS_TELEMETRY_SUNSET,
+  registerClientErrorTelemetryDropGuardCleanup,
   registerCspReportDropGuardCleanup,
   registerTelemetryRoutes,
   registerWebVitalsTelemetryDropGuardCleanup,
@@ -24,6 +29,8 @@ import type { Request, Response } from "express";
 import { createTelemetryBucketStore } from "../telemetry-drop-buckets";
 
 function createTelemetryRouteHarness(options: {
+  clientErrorDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["clientErrorDropGuard"];
+  clientErrorRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["clientErrorRequestGuard"];
   cspReportDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["cspReportDropGuard"];
   cspReportRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["cspReportRequestGuard"];
   metrics?: InternalMetricsRecorder;
@@ -31,16 +38,27 @@ function createTelemetryRouteHarness(options: {
   webVitalsDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsDropGuard"];
   webVitalsRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsRequestGuard"];
 } = {}) {
+  const recordedClientErrors: Array<Record<string, unknown>> = [];
   const recordedPayloads: Array<Record<string, unknown>> = [];
 
   const app = createJsonTestApp();
   registerTelemetryRoutes(app, {
+    ...(options.clientErrorDropGuard ? { clientErrorDropGuard: options.clientErrorDropGuard } : {}),
+    ...(options.clientErrorRequestGuard ? { clientErrorRequestGuard: options.clientErrorRequestGuard } : {}),
     ...(options.cspReportDropGuard ? { cspReportDropGuard: options.cspReportDropGuard } : {}),
     ...(options.cspReportRequestGuard ? { cspReportRequestGuard: options.cspReportRequestGuard } : {}),
     ...(options.metrics ? { metrics: options.metrics } : {}),
     ...(options.now ? { now: options.now } : {}),
     ...(options.webVitalsDropGuard ? { webVitalsDropGuard: options.webVitalsDropGuard } : {}),
     ...(options.webVitalsRequestGuard ? { webVitalsRequestGuard: options.webVitalsRequestGuard } : {}),
+    reportClientError: createClientErrorTelemetryController({
+      ...(options.metrics ? { metrics: options.metrics } : {}),
+      clientErrorTelemetryService: {
+        record(payload) {
+          recordedClientErrors.push(payload as Record<string, unknown>);
+        },
+      },
+    }).report,
     reportWebVital: createWebVitalsTelemetryController({
       ...(options.metrics ? { metrics: options.metrics } : {}),
       webVitalsTelemetryService: {
@@ -54,7 +72,23 @@ function createTelemetryRouteHarness(options: {
 
   return {
     app,
+    recordedClientErrors,
     recordedPayloads,
+  };
+}
+
+function createValidClientErrorPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    source: "route_render",
+    errorName: "TypeError",
+    fingerprint: "0123456789abcdef",
+    path: "/monitor",
+    pageType: "authenticated",
+    releaseSha: "a".repeat(40),
+    visibilityState: "visible",
+    online: true,
+    ts: "2026-07-19T08:30:00.000Z",
+    ...overrides,
   };
 }
 
@@ -77,7 +111,10 @@ function createValidWebVitalsPayload(overrides: Record<string, unknown> = {}) {
 }
 
 function runDropGuard(
-  guard: ReturnType<typeof createWebVitalsTelemetryDropGuard> | ReturnType<typeof createCspReportDropGuard>,
+  guard:
+    | ReturnType<typeof createClientErrorTelemetryDropGuard>
+    | ReturnType<typeof createWebVitalsTelemetryDropGuard>
+    | ReturnType<typeof createCspReportDropGuard>,
   ip: string,
 ) {
   let statusCode = 200;
@@ -227,6 +264,193 @@ test("CSP report drop guard lifecycle cleanup stops the guard on server close", 
   };
 
   registerCspReportDropGuardCleanup(server, guard);
+
+  server.emit("close");
+  server.emit("close");
+
+  assert.equal(stopCalls, 1);
+});
+
+test("POST /api/telemetry/client-errors accepts privacy-safe same-origin crash metadata", async () => {
+  const metrics = createInternalMetrics();
+  const { app, recordedClientErrors } = createTelemetryRouteHarness({
+    metrics,
+    clientErrorRequestGuard: createClientErrorTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+      metrics,
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}${CANONICAL_CLIENT_ERROR_TELEMETRY_PATH}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://sqr-system.test",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: JSON.stringify(createValidClientErrorPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedClientErrors.length, 1);
+    assert.equal(recordedClientErrors[0]?.source, "route_render");
+    assert.equal(recordedClientErrors[0]?.fingerprint, "0123456789abcdef");
+    assert.equal(metrics.snapshot().counters.clientErrorsAcceptedTotal, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/telemetry/client-errors silently drops requests without browser provenance", async () => {
+  const metrics = createInternalMetrics();
+  const { app, recordedClientErrors } = createTelemetryRouteHarness({
+    metrics,
+    clientErrorRequestGuard: createClientErrorTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+      metrics,
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}${CANONICAL_CLIENT_ERROR_TELEMETRY_PATH}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(createValidClientErrorPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedClientErrors.length, 0);
+    const snapshot = metrics.snapshot();
+    assert.equal(snapshot.counters.clientErrorsDroppedTotal, 1);
+    assert.equal(snapshot.counters.clientErrorsDroppedRequestGuardTotal, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/telemetry/client-errors silently drops cross-site browser requests", async () => {
+  const metrics = createInternalMetrics();
+  const { app, recordedClientErrors } = createTelemetryRouteHarness({
+    metrics,
+    clientErrorRequestGuard: createClientErrorTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+      metrics,
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}${CANONICAL_CLIENT_ERROR_TELEMETRY_PATH}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://attacker.example",
+        "Sec-Fetch-Site": "cross-site",
+      },
+      body: JSON.stringify(createValidClientErrorPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedClientErrors.length, 0);
+    const snapshot = metrics.snapshot();
+    assert.equal(snapshot.counters.clientErrorsDroppedTotal, 1);
+    assert.equal(snapshot.counters.clientErrorsDroppedRequestGuardTotal, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/telemetry/client-errors rejects sensitive extra fields", async () => {
+  const { app, recordedClientErrors } = createTelemetryRouteHarness({
+    clientErrorRequestGuard: createClientErrorTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}${CANONICAL_CLIENT_ERROR_TELEMETRY_PATH}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://sqr-system.test",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: JSON.stringify(createValidClientErrorPayload({
+        message: "customer input must not be accepted",
+        stack: "raw stack must not be accepted",
+        token: "secret",
+      })),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "REQUEST_BODY_INVALID");
+    assert.equal(recordedClientErrors.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/telemetry/client-errors silently rate limits repeated crash reports", async () => {
+  const metrics = createInternalMetrics();
+  const { app, recordedClientErrors } = createTelemetryRouteHarness({
+    metrics,
+    clientErrorDropGuard: createClientErrorTelemetryDropGuard({
+      maxEventsPerWindow: 1,
+      metrics,
+      now: () => 1_000,
+      windowMs: 10_000,
+    }),
+    clientErrorRequestGuard: createClientErrorTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+      metrics,
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  const postError = (fingerprint: string) => fetch(
+    `${baseUrl}${CANONICAL_CLIENT_ERROR_TELEMETRY_PATH}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://sqr-system.test",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: JSON.stringify(createValidClientErrorPayload({ fingerprint })),
+    },
+  );
+
+  try {
+    const accepted = await postError("0123456789abcdef");
+    const dropped = await postError("fedcba9876543210");
+
+    assert.equal(accepted.status, 204);
+    assert.equal(dropped.status, 204);
+    assert.equal(recordedClientErrors.length, 1);
+    assert.equal(metrics.snapshot().counters.clientErrorsDroppedRateLimitTotal, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("client error drop guard lifecycle cleanup stops the guard on server close", () => {
+  const server = new EventEmitter();
+  let stopCalls = 0;
+  const guard = createClientErrorTelemetryDropGuard({
+    sweepIntervalMs: false,
+  });
+  guard.stopClientErrorTelemetryDropGuard = () => {
+    stopCalls += 1;
+  };
+
+  registerClientErrorTelemetryDropGuardCleanup(server, guard);
 
   server.emit("close");
   server.emit("close");

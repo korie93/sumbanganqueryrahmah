@@ -540,8 +540,10 @@ test("adaptive API protection closes a persistent state store with the sweep cle
   assert.equal(closeCalls, 1);
 });
 
-test("runtime protection route classification includes web-vitals telemetry consistently", () => {
+test("runtime protection route classification includes browser telemetry consistently", () => {
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/api/me" }), true);
+  assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/api/telemetry/client-errors" }), true);
+  assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/api/telemetry/client-errors" }), true);
   assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/api/telemetry/web-vitals" }), true);
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/api/telemetry/web-vitals" }), true);
   assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/telemetry/web-vitals" }), true);

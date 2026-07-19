@@ -103,16 +103,19 @@ test("client entry fails clearly if the app root is missing", () => {
 
 test("client entry installs unhandled rejection logging before low-spec detection and keeps StrictMode always enabled", () => {
   const mainSource = readClientSource("../main.tsx");
-  const unhandledIndex = mainSource.indexOf("installGlobalUnhandledRejectionHandler();");
+  const unhandledIndex = mainSource.indexOf("installGlobalUnhandledRejectionHandler({");
+  const windowErrorIndex = mainSource.indexOf("installGlobalWindowErrorHandler({");
   const lowSpecIndex = mainSource.indexOf("if (detectLowSpecMode())");
   const tokensImportIndex = mainSource.indexOf('import "./styles/tokens/index.css";');
   const publicShellImportIndex = mainSource.indexOf('import "./public-shell.css";');
 
   assert.notEqual(unhandledIndex, -1);
+  assert.notEqual(windowErrorIndex, -1);
   assert.notEqual(lowSpecIndex, -1);
   assert.notEqual(tokensImportIndex, -1);
   assert.notEqual(publicShellImportIndex, -1);
   assert.ok(unhandledIndex < lowSpecIndex);
+  assert.ok(windowErrorIndex < lowSpecIndex);
   assert.ok(tokensImportIndex < publicShellImportIndex);
   assert.match(mainSource, /import \{ StrictMode \} from "react";/);
   assert.match(mainSource, /import \{ detectLowSpecMode \} from "\.\/lib\/low-spec-mode";/);

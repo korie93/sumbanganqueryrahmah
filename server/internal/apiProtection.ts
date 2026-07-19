@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Request, RequestHandler } from "express";
-import { WEB_VITALS_TELEMETRY_PATHS as WEB_VITALS_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
+import { BROWSER_TELEMETRY_PATHS as BROWSER_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
 import type { WorkerControlState } from "./runtime-monitor-manager";
 import { logger as defaultLogger } from "../lib/logger";
 import { createBackgroundSweepJob } from "./background-sweep-job";
@@ -22,7 +22,7 @@ const DEFAULT_USER_LIMITS_PER_MINUTE: AdaptiveRateUserLimitsPerMinute = {
   uploads: 10,
   writes: 100,
 };
-const WEB_VITALS_TELEMETRY_PATHS: ReadonlySet<string> = new Set(WEB_VITALS_TELEMETRY_PATH_VALUES);
+const BROWSER_TELEMETRY_PATHS: ReadonlySet<string> = new Set(BROWSER_TELEMETRY_PATH_VALUES);
 
 type AdaptiveRateBucket = {
   count: number;
@@ -76,15 +76,15 @@ function isHeavyRoute(pathname: string): boolean {
     || pathname.startsWith("/api/backups");
 }
 
-function isWebVitalsTelemetryRoute(req: Pick<Request, "method" | "path">): boolean {
+function isBrowserTelemetryRoute(req: Pick<Request, "method" | "path">): boolean {
   const method = String(req.method || "GET").toUpperCase();
   const path = req.path || "/";
-  return method === "POST" && WEB_VITALS_TELEMETRY_PATHS.has(path);
+  return method === "POST" && BROWSER_TELEMETRY_PATHS.has(path);
 }
 
 export function isRuntimeProtectedRoute(req: Pick<Request, "method" | "path">): boolean {
   const path = req.path || "/";
-  return path.startsWith("/api/") || isWebVitalsTelemetryRoute(req);
+  return path.startsWith("/api/") || isBrowserTelemetryRoute(req);
 }
 
 function isSessionControlRoute(req: Request): boolean {
@@ -371,7 +371,7 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
       bucketScope = "ai";
       baseLimit = 14;
       minLimit = 4;
-    } else if (method === "POST" && WEB_VITALS_TELEMETRY_PATHS.has(path)) {
+    } else if (method === "POST" && BROWSER_TELEMETRY_PATHS.has(path)) {
       bucketScope = "telemetry";
       baseLimit = 30;
       minLimit = 6;

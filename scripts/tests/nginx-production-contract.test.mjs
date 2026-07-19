@@ -187,10 +187,11 @@ test("security header runbook documents app-owned header values and validation",
   assert.match(docText, /can produce conflicting values/i);
 });
 
-test("production Nginx example gives web-vitals telemetry its own bounded edge throttle", () => {
+test("production Nginx example gives browser telemetry its own bounded edge throttle", () => {
   const nginxText = readText(nginxConfigPath);
 
   assert.match(nginxText, /zone=sqr_telemetry_per_ip:10m rate=60r\/m/);
+  assert.match(nginxText, /location = \/api\/telemetry\/client-errors/);
   assert.match(nginxText, /location = \/telemetry\/web-vitals/);
   assert.match(nginxText, /limit_req zone=sqr_telemetry_per_ip burst=20 nodelay/);
   assert.match(nginxText, /Do not send personal data, auth tokens, cookies, or session identifiers/);

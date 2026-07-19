@@ -5,6 +5,7 @@ import {
 } from "../config/body-limit";
 import { runtimeConfig as environmentRuntimeConfig } from "../config/runtime";
 import { createImportsController } from "../controllers/imports.controller";
+import { createClientErrorTelemetryController } from "../controllers/client-error-telemetry.controller";
 import { createOperationsController } from "../controllers/operations.controller";
 import { createSearchController } from "../controllers/search.controller";
 import { createWebVitalsTelemetryController } from "../controllers/web-vitals-telemetry.controller";
@@ -30,8 +31,10 @@ import { registerSearchRoutes } from "../routes/search.routes";
 import { registerSettingsRoutes } from "../routes/settings.routes";
 import { registerSystemRoutes } from "../routes/system.routes";
 import {
+  createClientErrorTelemetryDropGuard,
   createCspReportDropGuard,
   createWebVitalsTelemetryDropGuard,
+  registerClientErrorTelemetryDropGuardCleanup,
   registerCspReportDropGuardCleanup,
   registerTelemetryRoutes,
   registerWebVitalsTelemetryDropGuardCleanup,
@@ -42,6 +45,7 @@ import { AuditLogOperationsService } from "../services/audit-log-operations.serv
 import { BackupJobQueueService } from "../services/backup-job-queue.service";
 import { BackupOperationsService } from "../services/backup-operations.service";
 import { CollectionRollupOperationsService } from "../services/collection-rollup-operations.service";
+import { ClientErrorTelemetryService } from "../services/client-error-telemetry.service";
 import { CollectionRollupRefreshQueueService } from "../services/collection-rollup-refresh-queue.service";
 import { ImportsService } from "../services/imports.service";
 import { ImportBackgroundJobService } from "../services/import-background-job.service";
@@ -154,12 +158,17 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     queueService: collectionRollupRefreshQueueService,
   });
   const monitorAlertHistoryRepository = new MonitorAlertHistoryRepository();
+  const clientErrorTelemetryController = createClientErrorTelemetryController({
+    clientErrorTelemetryService: new ClientErrorTelemetryService(),
+  });
   const webVitalsTelemetryService = new WebVitalsTelemetryService();
   const webVitalsTelemetryController = createWebVitalsTelemetryController({
     webVitalsTelemetryService,
   });
   const cspReportDropGuard = createCspReportDropGuard();
   registerCspReportDropGuardCleanup(server, cspReportDropGuard);
+  const clientErrorDropGuard = createClientErrorTelemetryDropGuard();
+  registerClientErrorTelemetryDropGuardCleanup(server, clientErrorDropGuard);
   const webVitalsDropGuard = createWebVitalsTelemetryDropGuard();
   registerWebVitalsTelemetryDropGuardCleanup(server, webVitalsDropGuard);
   let lastDbConnectivityFailureLogAt = 0;
@@ -222,7 +231,9 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   });
 
   registerTelemetryRoutes(app, {
+    clientErrorDropGuard,
     cspReportDropGuard,
+    reportClientError: clientErrorTelemetryController.report,
     reportWebVital: webVitalsTelemetryController.report,
     webVitalsDropGuard,
   });

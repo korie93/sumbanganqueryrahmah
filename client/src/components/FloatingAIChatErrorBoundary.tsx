@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { reportClientError } from "@/lib/client-error-telemetry";
 import { logClientError } from "@/lib/client-logger";
 
 type FloatingAIChatErrorBoundaryProps = {
@@ -37,6 +38,11 @@ export class FloatingAIChatErrorBoundary extends Component<
       boundaryKey: this.props.boundaryKey,
       error,
       componentStack: errorInfo.componentStack,
+    });
+    reportClientError({
+      source: "floating_ai_render",
+      error,
+      fingerprintContext: errorInfo.componentStack,
     });
   }
 

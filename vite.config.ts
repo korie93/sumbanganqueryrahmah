@@ -12,6 +12,12 @@ const isStagingBuild =
   || process.env.APP_ENV === "staging";
 const isProductionLikeBuild = isProductionBuild || isProductionDeploy;
 const sourcemapsExplicitlyEnabled = process.env.VITE_ENABLE_SOURCEMAPS === "1";
+const configuredClientReleaseSha = String(
+  process.env.SQR_RELEASE_SHA || process.env.GITHUB_SHA || "",
+).trim().toLowerCase();
+const clientReleaseSha = /^[a-f0-9]{40}$/.test(configuredClientReleaseSha)
+  ? configuredClientReleaseSha
+  : "";
 
 if (isProductionLikeBuild && sourcemapsExplicitlyEnabled) {
   throw new Error("FATAL: VITE_ENABLE_SOURCEMAPS=1 cannot be used in production builds.");
@@ -23,6 +29,9 @@ const enableSourceMaps =
   && sourcemapsExplicitlyEnabled;
 
 export default defineConfig({
+  define: {
+    __SQR_CLIENT_RELEASE_SHA__: JSON.stringify(clientReleaseSha),
+  },
   plugins: [react()],
   root: "./client",
   build: {

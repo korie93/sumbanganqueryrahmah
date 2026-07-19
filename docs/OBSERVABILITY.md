@@ -45,7 +45,13 @@ Frontend menghantar Web Vitals ke:
 
 - `POST /api/telemetry/web-vitals`
 
+Frontend juga menghantar metadata crash production ke:
+
+- `POST /api/telemetry/client-errors`
+
 Route canonical berada di bawah `/api/*` untuk konsistensi middleware. Legacy `POST /telemetry/web-vitals` masih diterima sementara untuk client lama, tetapi ingestion baharu perlu guna route canonical. Legacy route dijadualkan untuk dibuang selepas 2026-06-15; jangan tambah client baharu yang menghantar ke path lama. Endpoint ini dikecualikan daripada CSRF token kerana `sendBeacon`/`keepalive` browser telemetry tidak boleh diandaikan membawa header tersebut. Ia bukan endpoint ingestion umum: server masih menguatkuasakan same-site Origin/Referer signal, JSON content type, limit body 4KB, dan drop guard per-IP yang bounded. Lebihan sample dijatuhkan secara senyap dengan `204`, supaya ingestion sah tidak rosak tetapi spam tidak menambah log noise atau churn ring buffer. Jangan hantar data peribadi, token, cookie, session id, atau identifier auth ke payload Web Vitals. Monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
+
+Client-error telemetry hanya aktif dalam build production dan tidak dihantar oleh browser automation. Ia meliputi route/section error boundaries, kegagalan lazy module, `window.error`, dan `unhandledrejection`. Payload strict hanya mengandungi source enum, nama jenis ralat, fingerprint 16 aksara, path tanpa query atau identifier panjang, jenis halaman, keadaan online/visibility, timestamp, dan release SHA jika tersedia. Mesej ralat, stack, URL penuh, request body, nama pengguna, PII, cookie dan token tidak dihantar. Fingerprint berulang disekat selama 60 saat dalam map browser yang maksimum 100 entri. Server memerlukan provenance browser same-site, menghadkan badan kepada 4KB, mengehadkan 20 laporan per IP setiap minit, merekodkan hanya metadata berstruktur, dan mendedahkan aggregate counters `clientErrorsAcceptedTotal`, `clientErrorsDroppedTotal`, `clientErrorsDroppedRequestGuardTotal`, serta `clientErrorsDroppedRateLimitTotal`.
 
 ### Runtime Monitor Signals
 

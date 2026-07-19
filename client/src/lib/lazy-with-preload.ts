@@ -1,4 +1,5 @@
 import { lazy, type LazyExoticComponent } from "react";
+import { reportClientError } from "@/lib/client-error-telemetry";
 import { logClientError } from "@/lib/client-logger";
 
 type IdleCallbackHandle = number;
@@ -25,6 +26,11 @@ export type LazyWithPreload<TModule extends LazyModule> =
 
 function logLazyLoadError(event: string, error: unknown) {
   logClientError("Lazy module load failed", error, { event });
+  reportClientError({
+    source: "lazy_module_load",
+    error,
+    fingerprintContext: event,
+  });
 }
 
 export function lazyWithPreload<TModule extends LazyModule>(
