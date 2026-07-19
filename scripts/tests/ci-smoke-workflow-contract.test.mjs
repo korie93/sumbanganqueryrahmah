@@ -42,6 +42,22 @@ test("smoke-ui workflow keeps auth smoke ahead of slower Lighthouse budgets", ()
   );
 });
 
+test("smoke-ui workflow isolates UI smoke from prior browser rate-limit windows", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const accessibilityIndex = workflow.indexOf("      - name: Run accessibility contracts");
+  const cooldownIndex = workflow.indexOf(
+    "Waiting for the shared adaptive rate-limit window to reset before UI smoke.",
+  );
+  const smokeAttemptIndex = workflow.indexOf("          run_smoke_attempt 1");
+
+  assert.notEqual(accessibilityIndex, -1);
+  assert.notEqual(cooldownIndex, -1);
+  assert.notEqual(smokeAttemptIndex, -1);
+  assert.ok(accessibilityIndex < cooldownIndex);
+  assert.ok(cooldownIndex < smokeAttemptIndex);
+  assert.match(workflow.slice(cooldownIndex, smokeAttemptIndex), /sleep 12/);
+});
+
 test("smoke-ui workflow retries only timeouts and preserves per-attempt artifacts", () => {
   const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
   const smokeStep = extractSection(

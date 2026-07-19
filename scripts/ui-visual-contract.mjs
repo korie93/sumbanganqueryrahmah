@@ -4,6 +4,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 import {
+  operationalContractRouteSpecs,
+  operationalStressViewportSpecs,
+} from "./lib/ui-operational-contract-matrix.mjs";
+import {
   completeTwoFactorLoginIfNeeded,
   ensureLoginPageVisible,
   probeAuthSession,
@@ -115,6 +119,7 @@ const authenticatedRouteSpecs = [
     path: "/settings",
     contentSelector: "main#main-content",
   },
+  ...operationalContractRouteSpecs,
 ];
 
 const viewportSpecs = [
@@ -193,6 +198,7 @@ const readLayoutSummary = async (page, { contentSelector, primarySelector, ready
             scrollWidth: ready.scrollWidth,
           }
         : null,
+      rootFontSizePx: Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize),
       viewportHeight,
       viewportWidth,
     };
@@ -204,6 +210,12 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
     height: viewportSpec.height,
   });
   await navigateForVisualContract(page, routeSpec.path);
+
+  if (viewportSpec.rootFontSizePx) {
+    await page.evaluate((rootFontSizePx) => {
+      document.documentElement.style.fontSize = `${rootFontSizePx}px`;
+    }, viewportSpec.rootFontSizePx);
+  }
 
   if (routeSpec.path === "/login") {
     await ensureLoginPageVisible(page, `${routeSpec.id}/${viewportSpec.id}`);
@@ -224,6 +236,13 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
     !layoutSummary.missingSelector,
     `${routeSpec.id}/${viewportSpec.id}: missing ${layoutSummary.missingSelector}`,
   );
+
+  if (viewportSpec.rootFontSizePx) {
+    assert(
+      Math.abs(layoutSummary.rootFontSizePx - viewportSpec.rootFontSizePx) < 0.1,
+      `${routeSpec.id}/${viewportSpec.id}: enlarged text viewport was not applied`,
+    );
+  }
 
   assert(
     layoutSummary.documentScrollWidth <= layoutSummary.documentClientWidth + 1,
@@ -584,6 +603,14 @@ const run = async () => {
         await verifyDashboardCleanupDialogLayout(page, viewportSpec);
         await verifyDashboardChartDetailLayout(page, viewportSpec);
       }
+    }
+    for (const routeSpec of operationalContractRouteSpecs) {
+      const viewportSpec = operationalStressViewportSpecs[routeSpec.stressViewportId];
+      assert(
+        viewportSpec,
+        `${routeSpec.id}: missing operational stress viewport ${routeSpec.stressViewportId}`,
+      );
+      await verifyRouteLayout(page, routeSpec, viewportSpec);
     }
   } catch (error) {
     primaryError = error;

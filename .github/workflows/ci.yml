@@ -273,6 +273,8 @@ jobs:
           echo "Running smoke-ui on commit: $GITHUB_SHA"
           git rev-parse HEAD
           grep -n "Login should establish an authenticated session." scripts/ui-smoke.mjs
+          echo "Waiting for the shared adaptive rate-limit window to reset before UI smoke."
+          sleep 12
           set +e
           run_smoke_attempt() {
             local attempt="$1"

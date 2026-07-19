@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
+import { operationalContractRouteSpecs } from "./lib/ui-operational-contract-matrix.mjs";
 import {
   completeTwoFactorLoginIfNeeded,
   ensureLoginPageVisible,
@@ -52,11 +53,6 @@ const authenticatedRouteSpecs = [
     contentSelector: "main#main-content",
   },
   {
-    id: "import",
-    path: "/import",
-    contentSelector: "main#main-content",
-  },
-  {
     id: "viewer",
     path: "/viewer",
     contentSelector: "main#main-content",
@@ -76,6 +72,7 @@ const authenticatedRouteSpecs = [
     path: "/settings",
     contentSelector: "main#main-content",
   },
+  ...operationalContractRouteSpecs,
 ];
 
 const viewportSpecs = [
@@ -382,6 +379,9 @@ async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
   });
   await navigateForAccessibilityContract(page, routeSpec.path);
   await page.locator(routeSpec.contentSelector).first().waitFor();
+  if (routeSpec.readySelector) {
+    await page.locator(routeSpec.readySelector).first().waitFor({ timeout: 15_000 });
+  }
 
   const summary = await readAccessibilitySummary(page, routeSpec);
   const label = `${routeSpec.id}/${viewportSpec.id}`;
