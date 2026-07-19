@@ -41,6 +41,9 @@ function createCsrfTestApp() {
   app.post("/api/csp-report", (_req, res) => {
     res.status(204).end();
   });
+  app.post("/api/telemetry/client-errors", (_req, res) => {
+    res.status(204).end();
+  });
   app.post("/api/telemetry/web-vitals", (_req, res) => {
     res.status(204).end();
   });
@@ -505,6 +508,32 @@ test("csrf middleware exempts canonical web-vitals telemetry from token checks",
     });
 
     assert.equal(response.status, 204);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware exempts same-origin client error telemetry from token checks", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/telemetry/client-errors`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "Content-Type": "application/json",
+        Origin: ALLOWED_ORIGIN,
+      },
+      body: JSON.stringify({
+        source: "route_render",
+        fingerprint: "0123456789abcdef",
+      }),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.has(AUTH_SESSION_CSRF_HEADER_NAME), false);
+    assert.doesNotMatch(response.headers.get("set-cookie") || "", /sqr_csrf=/);
   } finally {
     await stopTestServer(server);
   }

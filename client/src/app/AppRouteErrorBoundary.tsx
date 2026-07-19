@@ -1,6 +1,7 @@
 import { Component, createRef, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RefreshCw, RotateCcw } from "lucide-react";
 import { reloadAppPreservingSingleTabLock } from "@/app/single-tab-session";
+import { reportClientError } from "@/lib/client-error-telemetry";
 import { logClientError } from "@/lib/client-logger";
 import {
   resolveRouteErrorDescription,
@@ -44,6 +45,11 @@ export class AppRouteErrorBoundary extends Component<
       routeKey: this.props.routeKey,
       error,
       componentStack: errorInfo.componentStack,
+    });
+    reportClientError({
+      source: "route_render",
+      error,
+      fingerprintContext: errorInfo.componentStack,
     });
   }
 

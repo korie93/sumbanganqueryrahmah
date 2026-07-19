@@ -1,9 +1,9 @@
 import express, { type Express } from "express";
-import { WEB_VITALS_TELEMETRY_PATHS } from "../routes/telemetry-route-constants";
+import { BROWSER_TELEMETRY_PATHS } from "../routes/telemetry-route-constants";
 import { CSP_REPORT_ENDPOINT_PATH } from "./local-http-security";
 
 const CSP_REPORT_BODY_LIMIT = "8kb";
-const WEB_VITALS_BODY_LIMIT = "4kb";
+const BROWSER_TELEMETRY_BODY_LIMIT = "4kb";
 
 type LocalHttpBodyParserOptions = {
   collectionBodyLimit: string;
@@ -22,8 +22,8 @@ export function registerLocalHttpBodyParsers(app: Express, options: LocalHttpBod
     limit: CSP_REPORT_BODY_LIMIT,
     type: ["application/csp-report", "application/reports+json", "application/json"],
   }));
-  for (const telemetryPath of WEB_VITALS_TELEMETRY_PATHS) {
-    app.use(telemetryPath, express.json({ limit: WEB_VITALS_BODY_LIMIT }));
+  for (const telemetryPath of BROWSER_TELEMETRY_PATHS) {
+    app.use(telemetryPath, express.json({ limit: BROWSER_TELEMETRY_BODY_LIMIT }));
   }
   app.use(express.json({ limit: options.defaultBodyLimit }));
   app.use(express.urlencoded({ extended: true, limit: options.defaultBodyLimit }));

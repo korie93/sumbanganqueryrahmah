@@ -545,11 +545,25 @@ server {
         proxy_send_timeout 300s;
     }
 
-    # Canonical Web Vitals telemetry route. The app validates same-site
-    # Origin/Referer signals, JSON content type, a 4KB body limit, and bounded
-    # per-IP drop buckets. Keep the legacy /telemetry/web-vitals block only
+    # Browser telemetry routes. The app validates same-site Origin/Referer
+    # signals, JSON content type, a 4KB body limit, and bounded per-IP drop
+    # buckets. Keep the legacy /telemetry/web-vitals block only
     # until the accelerated 2026-06-15 sunset for older deployed clients.
     # Do not send personal data, auth tokens, cookies, or session identifiers.
+    location = /api/telemetry/client-errors {
+        limit_req zone=sqr_telemetry_per_ip burst=20 nodelay;
+        limit_conn sqr_conn_per_ip 10;
+
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+    }
+
     location = /api/telemetry/web-vitals {
         limit_req zone=sqr_telemetry_per_ip burst=20 nodelay;
         limit_conn sqr_conn_per_ip 10;

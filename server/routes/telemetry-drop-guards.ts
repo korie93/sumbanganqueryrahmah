@@ -11,6 +11,9 @@ const DEFAULT_WEB_VITALS_MAX_EVENTS_PER_WINDOW = 60;
 const DEFAULT_WEB_VITALS_MAX_ANONYMOUS_EVENTS_PER_WINDOW = 10;
 const DEFAULT_WEB_VITALS_MAX_BUCKETS = 2_000;
 const DEFAULT_WEB_VITALS_WINDOW_MS = 60_000;
+const DEFAULT_CLIENT_ERROR_MAX_EVENTS_PER_WINDOW = 20;
+const DEFAULT_CLIENT_ERROR_MAX_BUCKETS = 2_000;
+const DEFAULT_CLIENT_ERROR_WINDOW_MS = 60_000;
 const DEFAULT_CSP_REPORT_MAX_REPORTS_PER_WINDOW = 30;
 const DEFAULT_CSP_REPORT_MAX_BUCKETS = 2_000;
 const DEFAULT_CSP_REPORT_WINDOW_MS = 60_000;
@@ -40,6 +43,19 @@ type WebVitalsTelemetryDropGuardOptions = {
 
 export type WebVitalsTelemetryDropGuard = RequestHandler & {
   stopWebVitalsTelemetryDropGuard?: () => void;
+};
+
+type ClientErrorTelemetryDropGuardOptions = {
+  maxEventsPerWindow?: number;
+  maxBuckets?: number;
+  metrics?: InternalMetricsRecorder;
+  now?: () => number;
+  sweepIntervalMs?: false | number;
+  windowMs?: number;
+};
+
+export type ClientErrorTelemetryDropGuard = RequestHandler & {
+  stopClientErrorTelemetryDropGuard?: () => void;
 };
 
 type CloseLifecycle = {
@@ -147,6 +163,54 @@ export function createWebVitalsTelemetryDropGuard(
   return guard;
 }
 
+export function createClientErrorTelemetryDropGuard(
+  options: ClientErrorTelemetryDropGuardOptions = {},
+): ClientErrorTelemetryDropGuard {
+  const maxEventsPerWindow = clampPositiveInteger(
+    options.maxEventsPerWindow,
+    DEFAULT_CLIENT_ERROR_MAX_EVENTS_PER_WINDOW,
+  );
+  const maxBuckets = clampPositiveInteger(options.maxBuckets, DEFAULT_CLIENT_ERROR_MAX_BUCKETS);
+  const windowMs = clampPositiveInteger(options.windowMs, DEFAULT_CLIENT_ERROR_WINDOW_MS);
+  const metrics = options.metrics ?? internalMetrics;
+  const sweepIntervalMs = options.sweepIntervalMs === false
+    ? 0
+    : clampPositiveInteger(
+        options.sweepIntervalMs,
+        Math.min(windowMs, DEFAULT_CLIENT_ERROR_WINDOW_MS),
+      );
+  const now = options.now ?? Date.now;
+  const bucketStore = createTelemetryBucketStore({
+    maxBuckets,
+    now,
+    sweepIntervalMs,
+    windowMs,
+  });
+
+  const guard: ClientErrorTelemetryDropGuard = (req, res, next) => {
+    const nowMs = now();
+    bucketStore.sweepExpired(nowMs);
+
+    const key = resolveTelemetryBucketKey(req);
+    const bucket = bucketStore.getBucket(key, nowMs);
+
+    if (bucket.count > maxEventsPerWindow) {
+      metrics.increment("clientErrorsDroppedTotal");
+      metrics.increment("clientErrorsDroppedRateLimitTotal");
+      res.status(204).end();
+      return;
+    }
+
+    next();
+  };
+
+  guard.stopClientErrorTelemetryDropGuard = () => {
+    bucketStore.stop();
+  };
+
+  return guard;
+}
+
 export function registerWebVitalsTelemetryDropGuardCleanup(
   server: CloseLifecycle,
   webVitalsDropGuard: WebVitalsTelemetryDropGuard,
@@ -162,5 +226,14 @@ export function registerCspReportDropGuardCleanup(
 ) {
   server.once("close", () => {
     cspReportDropGuard.stopCspReportDropGuard?.();
+  });
+}
+
+export function registerClientErrorTelemetryDropGuardCleanup(
+  server: CloseLifecycle,
+  clientErrorDropGuard: ClientErrorTelemetryDropGuard,
+) {
+  server.once("close", () => {
+    clientErrorDropGuard.stopClientErrorTelemetryDropGuard?.();
   });
 }

@@ -3,16 +3,20 @@ import { routeHandler } from "../http/async-handler";
 import { internalMetrics, type InternalMetricsRecorder } from "../internal/metrics";
 import { logger } from "../lib/logger";
 import {
+  createClientErrorTelemetryDropGuard,
   createCspReportDropGuard,
   createWebVitalsTelemetryDropGuard,
+  type ClientErrorTelemetryDropGuard,
   type CspReportDropGuard,
   type WebVitalsTelemetryDropGuard,
 } from "./telemetry-drop-guards";
 import {
+  createClientErrorTelemetryRequestGuard,
   createCspReportRequestGuard,
   createWebVitalsTelemetryRequestGuard,
 } from "./telemetry-request-guards";
 import {
+  CANONICAL_CLIENT_ERROR_TELEMETRY_PATH,
   CANONICAL_WEB_VITALS_TELEMETRY_PATH,
   LEGACY_TELEMETRY_ROUTE_ENABLED,
   LEGACY_TELEMETRY_SUNSET_DATE,
@@ -21,21 +25,29 @@ import {
 } from "./telemetry-route-constants";
 
 export {
+  createClientErrorTelemetryDropGuard,
   createCspReportDropGuard,
   createWebVitalsTelemetryDropGuard,
+  registerClientErrorTelemetryDropGuardCleanup,
   registerCspReportDropGuardCleanup,
   registerWebVitalsTelemetryDropGuardCleanup,
+  type ClientErrorTelemetryDropGuard,
   type CspReportDropGuard,
   type WebVitalsTelemetryDropGuard,
 } from "./telemetry-drop-guards";
 export {
+  createClientErrorTelemetryRequestGuard,
   createCspReportRequestGuard,
   createWebVitalsTelemetryRequestGuard,
+  type ClientErrorTelemetryRequestGuardOptions,
   type CspReportRequestGuardOptions,
   type WebVitalsTelemetryRequestGuardOptions,
 } from "./telemetry-request-guards";
 export {
+  BROWSER_TELEMETRY_PATHS,
+  CANONICAL_CLIENT_ERROR_TELEMETRY_PATH,
   CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+  CLIENT_ERROR_TELEMETRY_PATHS,
   LEGACY_TELEMETRY_ROUTE_ENABLED,
   LEGACY_TELEMETRY_SUNSET_DATE,
   LEGACY_WEB_VITALS_TELEMETRY_PATH,
@@ -45,10 +57,13 @@ export {
 } from "./telemetry-route-constants";
 
 type TelemetryRouteDeps = {
+  clientErrorDropGuard?: ClientErrorTelemetryDropGuard;
+  clientErrorRequestGuard?: RequestHandler;
   cspReportDropGuard?: CspReportDropGuard;
   cspReportRequestGuard?: RequestHandler;
   metrics?: InternalMetricsRecorder;
   now?: () => Date;
+  reportClientError: RequestHandler;
   reportWebVital: RequestHandler;
   webVitalsDropGuard?: WebVitalsTelemetryDropGuard;
   webVitalsRequestGuard?: RequestHandler;
@@ -57,6 +72,10 @@ type TelemetryRouteDeps = {
 export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) {
   const metrics = deps.metrics ?? internalMetrics;
   const now = deps.now ?? (() => new Date());
+  const clientErrorDropGuard = deps.clientErrorDropGuard
+    ?? createClientErrorTelemetryDropGuard({ metrics });
+  const clientErrorRequestGuard = deps.clientErrorRequestGuard
+    ?? createClientErrorTelemetryRequestGuard({ metrics });
   const cspReportDropGuard = deps.cspReportDropGuard ?? createCspReportDropGuard({ metrics });
   const webVitalsDropGuard = deps.webVitalsDropGuard ?? createWebVitalsTelemetryDropGuard();
   const webVitalsRequestGuard = deps.webVitalsRequestGuard ?? createWebVitalsTelemetryRequestGuard();
@@ -71,6 +90,17 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
       metrics.increment("cspReportsAcceptedTotal");
       res.status(204).end();
     }),
+  );
+
+  // Client crashes are intentionally reported without raw messages, stacks,
+  // URLs, user identifiers, or auth material. Browser provenance, strict JSON
+  // validation, bounded body parsing, and a per-IP drop guard keep this public
+  // append-only endpoint useful without turning it into a general log sink.
+  app.post(
+    CANONICAL_CLIENT_ERROR_TELEMETRY_PATH,
+    clientErrorRequestGuard,
+    clientErrorDropGuard,
+    routeHandler(deps.reportClientError),
   );
 
   // Threat model: this unauthenticated browser telemetry endpoint is

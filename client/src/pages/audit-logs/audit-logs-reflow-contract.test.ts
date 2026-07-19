@@ -25,3 +25,10 @@ test("audit log cleanup action remains bounded when its label wraps", () => {
     /min-h-11 h-auto w-full max-w-full whitespace-normal py-2 text-center lg:w-auto/,
   );
 });
+
+test("audit log cleanup age counters retain accessible light and dark contrast", () => {
+  assert.match(
+    cleanupPanelSource,
+    /text-2xl font-bold text-amber-700 dark:text-amber-300/,
+  );
+});

@@ -123,3 +123,36 @@ test("vite config keeps the chunk warning threshold at the production budget", a
     },
   );
 });
+
+test("vite config embeds only a validated release SHA in the client bundle", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      VITE_ENABLE_SOURCEMAPS: null,
+      GITHUB_SHA: "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
+      SQR_RELEASE_SHA: null,
+    },
+    async () => {
+      const config = await importViteConfigFresh();
+      assert.equal(
+        config.define?.__SQR_CLIENT_RELEASE_SHA__,
+        JSON.stringify("abcdef0123456789abcdef0123456789abcdef01"),
+      );
+    },
+  );
+});
+
+test("vite config omits malformed release identifiers from the client bundle", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      VITE_ENABLE_SOURCEMAPS: null,
+      GITHUB_SHA: "not-a-commit-sha",
+      SQR_RELEASE_SHA: "release-secret-or-tag",
+    },
+    async () => {
+      const config = await importViteConfigFresh();
+      assert.equal(config.define?.__SQR_CLIENT_RELEASE_SHA__, JSON.stringify(""));
+    },
+  );
+});

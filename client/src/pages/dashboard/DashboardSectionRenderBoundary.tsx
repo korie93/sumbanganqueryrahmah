@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { reportClientError } from "@/lib/client-error-telemetry";
 import { logClientError } from "@/lib/client-logger";
 
 type DashboardSectionRenderBoundaryProps = {
@@ -82,6 +83,11 @@ export class DashboardSectionRenderBoundary extends Component<
       section: this.props.sectionName,
       error,
       componentStack: errorInfo.componentStack,
+    });
+    reportClientError({
+      source: "dashboard_section_render",
+      error,
+      fingerprintContext: errorInfo.componentStack,
     });
   }
 

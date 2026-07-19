@@ -9,6 +9,7 @@ import {
 } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
 import {
+  CANONICAL_CLIENT_ERROR_TELEMETRY_PATH,
   CANONICAL_WEB_VITALS_TELEMETRY_PATH,
   LEGACY_WEB_VITALS_TELEMETRY_PATH,
 } from "../routes/telemetry-route-constants";
@@ -18,6 +19,7 @@ import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "./cors";
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const CSRF_TELEMETRY_EXEMPT_PATHS = new Set([
   "/api/csp-report",
+  CANONICAL_CLIENT_ERROR_TELEMETRY_PATH,
   CANONICAL_WEB_VITALS_TELEMETRY_PATH,
   LEGACY_WEB_VITALS_TELEMETRY_PATH,
 ]);

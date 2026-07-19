@@ -22,6 +22,7 @@ const COMMON_SHARED_MODULES = new Set([
   "auth-session-expiry",
   "collection-amount-types",
   "collection-daily-status",
+  "client-error-telemetry",
   "error-codes",
   "json-schema",
   "pagination-contracts",
