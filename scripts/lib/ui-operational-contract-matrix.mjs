@@ -62,7 +62,7 @@ export const operationalContractRouteSpecs = Object.freeze([
     id: "backup-restore",
     path: "/settings?section=backup-restore",
     contentSelector: "main#main-content",
-    readySelector: "[data-testid='text-backup-title']",
+    readySelector: "[data-testid='button-refresh-backups']",
     stressViewportId: "compact",
   }),
 ]);

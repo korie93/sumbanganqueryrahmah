@@ -51,3 +51,12 @@ test("saved route readiness accepts populated and empty terminal states", () => 
   assert.match(savedRouteSpec.readySelector, /button-clear-filters-empty/);
   assert.match(savedRouteSpec.readySelector, /saved-files-scroll-region/);
 });
+
+test("backup route readiness targets the embedded backup workspace", () => {
+  const backupRouteSpec = operationalContractRouteSpecs.find(
+    (routeSpec) => routeSpec.id === "backup-restore",
+  );
+
+  assert.ok(backupRouteSpec);
+  assert.equal(backupRouteSpec.readySelector, "[data-testid='button-refresh-backups']");
+});
