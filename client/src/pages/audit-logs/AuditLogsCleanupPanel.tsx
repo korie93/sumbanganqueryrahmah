@@ -117,7 +117,7 @@ export function AuditLogsCleanupPanel({
                   </div>
                   <div className="space-y-1 rounded-lg bg-muted/30 p-4">
                     <p className="text-sm text-muted-foreground">Older than 30 Days</p>
-                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="text-old-30-days">
+                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300" data-testid="text-old-30-days">
                       {stats?.olderThan30Days ?? 0}
                     </p>
                   </div>
