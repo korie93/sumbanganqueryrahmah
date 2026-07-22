@@ -24,6 +24,7 @@ import {
   buildDashboardSuspiciousLoginItems,
   DashboardSuspiciousLoginWatchlist,
 } from "@/pages/dashboard/DashboardSuspiciousLoginWatchlist";
+import { buildDashboardSuspiciousLoginReviewSteps } from "@/pages/dashboard/dashboard-suspicious-login-model";
 import {
   DashboardUserInsightsGrid,
   sanitizeDashboardRoleDistributionChartSurface,
@@ -356,6 +357,10 @@ test("DashboardLoginSituationSummary explains the current login state in plain o
 
 test("DashboardSuspiciousLoginWatchlist identifies review events with actionable context", () => {
   const source = readFileSync(path.resolve(__dirname, "../DashboardSuspiciousLoginWatchlist.tsx"), "utf8");
+  const investigationSheetSource = readFileSync(
+    path.resolve(__dirname, "../DashboardSuspiciousLoginInvestigationSheet.tsx"),
+    "utf8",
+  );
   const activities = [
     {
       browser: "Chrome 149",
@@ -391,6 +396,7 @@ test("DashboardSuspiciousLoginWatchlist identifies review events with actionable
     },
   ];
   const investigationItems = buildDashboardSuspiciousLoginItems(activities);
+  const reviewSteps = buildDashboardSuspiciousLoginReviewSteps(investigationItems[0]!);
   const markup = renderToStaticMarkup(
     createElement(DashboardSuspiciousLoginWatchlist, {
       activities,
@@ -425,6 +431,8 @@ test("DashboardSuspiciousLoginWatchlist identifies review events with actionable
   assert.equal(investigationItems[0]?.eventTime, "2026-05-06T05:00:00Z");
   assert.equal(investigationItems[1]?.eventTime, "2026-05-06T02:00:00Z");
   assert.equal(investigationItems[1]?.reasonLabel, "Kata laluan tidak sah");
+  assert.deepEqual(reviewSteps.map((step) => step.id), ["identity", "network", "response"]);
+  assert.match(reviewSteps[0]?.description ?? "", /penamatan sesi/i);
   assert.match(markup, /Security Watchlist/);
   assert.match(markup, /Aktiviti login yang perlu disiasat/);
   assert.match(markup, /2 perlu semakan/);
@@ -439,19 +447,29 @@ test("DashboardSuspiciousLoginWatchlist identifies review events with actionable
   assert.match(markup, /data-export-sensitive="true"/);
   assert.match(markup, /role="list"/);
   assert.match(markup, /role="listitem"/);
-  assert.match(markup, /Semak rekod login untuk review\.user/);
+  assert.match(markup, /Buka siasatan login untuk review\.user/);
   assert.match(markup, /href="\/monitor\?section=activity"/);
   assert.doesNotMatch(restrictedMarkup, /href="\/monitor\?section=activity"/);
   assert.match(restrictedMarkup, /Rangkaian \(dimask\)/);
   assert.match(source, /buildDashboardSuspiciousLoginItems/);
   assert.match(source, /isDashboardRecentLoginAttentionActivity/);
   assert.match(source, /resolveDashboardSuspiciousLoginEventTime/);
+  assert.match(source, /DashboardSuspiciousLoginInvestigationSheet/);
+  assert.match(source, /setSelectedItem\(item\)/);
   assert.match(source, /id="dashboard-suspicious-login-watchlist"/);
   assert.match(source, /data-testid="dashboard-suspicious-login-watchlist"/);
   assert.match(source, /canOpenFullAudit \?/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
   assert.doesNotMatch(source, /setInterval\(/);
+  assert.match(investigationSheetSource, /Siasatan login:/);
+  assert.match(investigationSheetSource, /data-testid="dashboard-suspicious-login-investigation-sheet"/);
+  assert.match(investigationSheetSource, /data-export-sensitive="true"/);
+  assert.match(investigationSheetSource, /Semak rekod berkaitan/);
+  assert.match(investigationSheetSource, /canOpenFullAudit \?/);
+  assert.doesNotMatch(investigationSheetSource, /useEffect\(/);
+  assert.doesNotMatch(investigationSheetSource, /setTimeout\(/);
+  assert.doesNotMatch(investigationSheetSource, /setInterval\(/);
 });
 
 test("DashboardLoginReviewSidebar turns scattered login panels into a compact sidebar", () => {

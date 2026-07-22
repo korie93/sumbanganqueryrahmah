@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DashboardSuspiciousLoginInvestigationSheet } from "@/pages/dashboard/DashboardSuspiciousLoginInvestigationSheet";
+import type {
+  DashboardSuspiciousLoginItem,
+  SuspiciousLoginTone,
+} from "@/pages/dashboard/dashboard-suspicious-login-model";
 import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import type { RecentLoginActivity } from "@/pages/dashboard/types";
 import {
@@ -18,18 +23,7 @@ import {
   isDashboardRecentLoginAttentionActivity,
 } from "@/pages/dashboard/utils";
 
-type SuspiciousLoginTone = "danger" | "info" | "warning";
-
-export interface DashboardSuspiciousLoginItem {
-  activity: RecentLoginActivity;
-  deviceLabel: string;
-  eventTime: string | null;
-  eventTimeLabel: string;
-  networkLabel: string;
-  reasonLabel: string;
-  severityLabel: string;
-  tone: SuspiciousLoginTone;
-}
+export type { DashboardSuspiciousLoginItem } from "@/pages/dashboard/dashboard-suspicious-login-model";
 
 interface DashboardSuspiciousLoginWatchlistProps {
   activities: readonly RecentLoginActivity[] | undefined;
@@ -187,6 +181,23 @@ function DashboardSuspiciousLoginWatchlistImpl({
   totalItems,
 }: DashboardSuspiciousLoginWatchlistProps) {
   const items = useMemo(() => buildDashboardSuspiciousLoginItems(activities), [activities]);
+  const [selectedItem, setSelectedItem] = useState<DashboardSuspiciousLoginItem | null>(null);
+
+  const handleInvestigationOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setSelectedItem(null);
+    }
+  }, []);
+
+  const handleReviewRelated = useCallback(() => {
+    if (!selectedItem) {
+      return;
+    }
+
+    const activity = selectedItem.activity;
+    setSelectedItem(null);
+    onInvestigate(activity);
+  }, [onInvestigate, selectedItem]);
 
   if (loading) {
     return <DashboardSuspiciousLoginWatchlistSkeleton />;
@@ -314,10 +325,10 @@ function DashboardSuspiciousLoginWatchlistImpl({
                   variant="outline"
                   size="sm"
                   className="w-full justify-center rounded-lg lg:w-auto"
-                  onClick={() => onInvestigate(item.activity)}
-                  aria-label={`Semak rekod login untuk ${item.activity.username}`}
+                  onClick={() => setSelectedItem(item)}
+                  aria-label={`Buka siasatan login untuk ${item.activity.username}`}
                 >
-                  Semak rekod
+                  Siasat
                   <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Button>
               </article>
@@ -336,6 +347,14 @@ function DashboardSuspiciousLoginWatchlistImpl({
           </div>
         )}
       </div>
+
+      <DashboardSuspiciousLoginInvestigationSheet
+        canOpenFullAudit={canOpenFullAudit}
+        canViewExactNetwork={canViewExactNetwork}
+        item={selectedItem}
+        onOpenChange={handleInvestigationOpenChange}
+        onReviewRelated={handleReviewRelated}
+      />
     </section>
   );
 }
