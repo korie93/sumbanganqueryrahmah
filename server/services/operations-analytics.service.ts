@@ -123,6 +123,7 @@ export class OperationsAnalyticsService {
     return {
       page: readPageLimit(query.page, 1, 100_000),
       pageSize: readPageLimit(query.pageSize ?? query.limit, 4, 25),
+      includeExactIpAddress: viewerRole === "admin" || viewerRole === "superuser",
       includeInternalReason: viewerRole === "superuser",
       ...(roleValue ? { role: roleValue } : {}),
       search: readOptionalString(query.search, 80),

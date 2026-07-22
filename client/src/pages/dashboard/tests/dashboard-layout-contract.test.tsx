@@ -10,7 +10,6 @@ import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
 import { DashboardLoginFocusStrip } from "@/pages/dashboard/DashboardLoginFocusStrip";
-import { DashboardLoginIncidentTimeline } from "@/pages/dashboard/DashboardLoginIncidentTimeline";
 import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
 import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
 import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRiskInsights";
@@ -21,6 +20,10 @@ import { DashboardSectionRenderFallback } from "@/pages/dashboard/DashboardSecti
 import { DashboardSessionHealthStrip } from "@/pages/dashboard/DashboardSessionHealthStrip";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
+import {
+  buildDashboardSuspiciousLoginItems,
+  DashboardSuspiciousLoginWatchlist,
+} from "@/pages/dashboard/DashboardSuspiciousLoginWatchlist";
 import {
   DashboardUserInsightsGrid,
   sanitizeDashboardRoleDistributionChartSurface,
@@ -174,7 +177,9 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(dashboardSource, /<DashboardLoginCommandBar/);
   assert.match(dashboardSource, /<DashboardLoginFocusStrip/);
   assert.match(dashboardSource, /<DashboardLoginSituationSummary/);
-  assert.match(dashboardSource, /<DashboardLoginIncidentTimeline/);
+  assert.match(dashboardSource, /<DashboardSuspiciousLoginWatchlist/);
+  assert.match(dashboardSource, /status: "attention"/);
+  assert.match(dashboardSource, /handleRecentLoginAttentionReview\(activity\.username\)/);
   assert.match(dashboardSource, /useDashboardRecentLoginActivityControls/);
   assert.doesNotMatch(dashboardSource, /useDeferredValue/);
   assert.match(dashboardSource, /id="dashboard-login-snapshot"/);
@@ -276,7 +281,7 @@ test("DashboardLoginFocusStrip gives operators a compact section map without lif
   assert.match(markup, /Jump to/);
   assert.match(markup, /href="#dashboard-login-priority"/);
   assert.match(markup, /href="#dashboard-login-situation-summary"/);
-  assert.match(markup, /href="#dashboard-login-incident-timeline"/);
+  assert.match(markup, /href="#dashboard-suspicious-login-watchlist"/);
   assert.match(markup, /href="#dashboard-login-snapshot"/);
   assert.match(markup, /href="#dashboard-recent-login-activity"/);
   assert.match(markup, /href="#dashboard-login-charts"/);
@@ -349,60 +354,101 @@ test("DashboardLoginSituationSummary explains the current login state in plain o
   assert.doesNotMatch(source, /setInterval\(/);
 });
 
-test("DashboardLoginIncidentTimeline turns login signals into a short operator sequence", () => {
-  const source = readFileSync(path.resolve(__dirname, "../DashboardLoginIncidentTimeline.tsx"), "utf8");
+test("DashboardSuspiciousLoginWatchlist identifies review events with actionable context", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardSuspiciousLoginWatchlist.tsx"), "utf8");
+  const activities = [
+    {
+      browser: "Chrome 149",
+      eventType: "failure" as const,
+      failureReason: "invalid_password",
+      id: "audit:failed-login",
+      ipAddress: "203.0.113.42",
+      lastActivityTime: null,
+      loginTime: "2026-05-06T02:00:00Z",
+      logoutReason: "Login attempt rejected",
+      logoutTime: null,
+      platform: "Windows 10/11",
+      role: "manager",
+      status: "failed" as const,
+      userAgentSummary: "Chrome 149 on Windows 10/11",
+      username: "review.user",
+    },
+    {
+      browser: "Edge",
+      eventType: "success" as const,
+      failureReason: null,
+      id: "activity-locked",
+      ipAddress: "10.42.7.9",
+      lastActivityTime: "2026-05-06T04:30:00Z",
+      loginTime: "2026-05-06T04:00:00Z",
+      logoutReason: "ACCOUNT_LOCKED",
+      logoutTime: "2026-05-06T05:00:00Z",
+      platform: "Windows 10/11",
+      role: "admin",
+      status: "ended" as const,
+      userAgentSummary: "Edge on Windows 10/11",
+      username: "locked.user",
+    },
+  ];
+  const investigationItems = buildDashboardSuspiciousLoginItems(activities);
   const markup = renderToStaticMarkup(
-    createElement(DashboardLoginIncidentTimeline, {
+    createElement(DashboardSuspiciousLoginWatchlist, {
+      activities,
+      canOpenFullAudit: true,
+      canViewExactNetwork: true,
+      errorMessage: null,
       loading: false,
-      recentLoginActivities: [
-        {
-          browser: "Chrome",
-          id: "activity-active-render",
-          ipAddress: "10.42.x.x",
-          lastActivityTime: "2026-05-06T02:30:00Z",
-          loginTime: "2026-05-06T02:00:00Z",
-          logoutReason: "ACCOUNT_LOCKED",
-          logoutTime: "2026-05-06T03:00:00Z",
-          role: "admin",
-          status: "ended",
-          username: "locked.user",
-        },
-      ],
-      summary: {
-        activeSessions: 8,
-        bannedUsers: 1,
-        loginsToday: 12,
-        loginFailures24h: 15,
-        totalDataRows: 100,
-        totalImports: 4,
-        totalUsers: 10,
-      },
-      trends: [
-        { date: "2026-05-04", logins: 3, logouts: 1 },
-        { date: "2026-05-05", logins: 3, logouts: 1 },
-        { date: "2026-05-06", logins: 12, logouts: 2 },
-      ],
+      onInvestigate: () => undefined,
+      onRetry: () => undefined,
+      retrying: false,
+      totalItems: 2,
+    }),
+  );
+  const restrictedMarkup = renderToStaticMarkup(
+    createElement(DashboardSuspiciousLoginWatchlist, {
+      activities: activities.map((activity) => ({
+        ...activity,
+        ipAddress: activity.status === "failed" ? "203.0.x.x" : "10.42.x.x",
+      })),
+      canOpenFullAudit: false,
+      canViewExactNetwork: false,
+      errorMessage: null,
+      loading: false,
+      onInvestigate: () => undefined,
+      onRetry: () => undefined,
+      retrying: false,
+      totalItems: 2,
     }),
   );
 
-  assert.match(markup, /Incident Timeline/);
-  assert.match(markup, /Apa yang berlaku sekarang/);
-  assert.match(markup, /Login incident sequence/);
-  assert.match(markup, /Restricted account event/);
+  assert.equal(investigationItems[0]?.activity.username, "locked.user");
+  assert.equal(investigationItems[0]?.eventTime, "2026-05-06T05:00:00Z");
+  assert.equal(investigationItems[1]?.eventTime, "2026-05-06T02:00:00Z");
+  assert.equal(investigationItems[1]?.reasonLabel, "Kata laluan tidak sah");
+  assert.match(markup, /Security Watchlist/);
+  assert.match(markup, /Aktiviti login yang perlu disiasat/);
+  assert.match(markup, /2 perlu semakan/);
   assert.match(markup, /locked\.user/);
-  assert.match(markup, /Failed login pressure/);
-  assert.match(markup, /15 cubaan gagal/);
-  assert.match(markup, /Sesi aktif sekarang/);
-  assert.match(markup, /8 daripada 10 pengguna/);
-  assert.match(markup, /Trend login meningkat/);
-  assert.match(markup, /12 login dan 2 logout/);
+  assert.match(markup, /review\.user/);
+  assert.match(markup, /203\.0\.113\.42/);
+  assert.match(markup, /10\.42\.7\.9/);
+  assert.match(markup, /Alamat IP/);
+  assert.match(markup, /Tarikh dan waktu/);
+  assert.match(markup, /Kata laluan tidak sah/);
+  assert.match(markup, /Account Locked/);
+  assert.match(markup, /data-export-sensitive="true"/);
+  assert.match(markup, /role="list"/);
+  assert.match(markup, /role="listitem"/);
+  assert.match(markup, /Semak rekod login untuk review\.user/);
   assert.match(markup, /href="\/monitor\?section=activity"/);
-  assert.match(source, /buildDashboardLoginIncidentTimelineItems/);
+  assert.doesNotMatch(restrictedMarkup, /href="\/monitor\?section=activity"/);
+  assert.match(restrictedMarkup, /Rangkaian \(dimask\)/);
+  assert.match(source, /buildDashboardSuspiciousLoginItems/);
   assert.match(source, /isDashboardRecentLoginAttentionActivity/);
-  assert.match(source, /resolveDashboardRecentLoginRiskNote/);
-  assert.match(source, /buildDashboardActionQueueItems/);
-  assert.match(source, /id="dashboard-login-incident-timeline"/);
-  assert.match(source, /data-testid="dashboard-login-incident-timeline"/);
+  assert.match(source, /resolveDashboardSuspiciousLoginEventTime/);
+  assert.match(source, /id="dashboard-suspicious-login-watchlist"/);
+  assert.match(source, /data-testid="dashboard-suspicious-login-watchlist"/);
+  assert.match(source, /canOpenFullAudit \?/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
   assert.doesNotMatch(source, /setInterval\(/);
@@ -799,7 +845,7 @@ test("DashboardLoginRiskInsights keeps warning status contrast above axe thresho
   assert.doesNotMatch(markup, /text-amber-700/);
 });
 
-test("DashboardRecentLoginActivity renders masked access rows with retryable error state", () => {
+test("DashboardRecentLoginActivity renders privileged exact IP rows with retryable error state", () => {
   const source = readFileSync(path.resolve(__dirname, "../DashboardRecentLoginActivity.tsx"), "utf8");
   const markup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {
@@ -807,7 +853,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
         {
           browser: "Chrome",
           id: "activity-active-render",
-          ipAddress: "10.42.x.x",
+          ipAddress: "10.42.7.9",
           lastActivityTime: "2026-05-06T02:30:00Z",
           loginTime: "2026-05-06T02:00:00Z",
           logoutReason: null,
@@ -819,7 +865,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
         {
           browser: "Edge",
           id: "activity-ended-render",
-          ipAddress: "10.43.x.x",
+          ipAddress: "10.43.8.10",
           lastActivityTime: "2026-05-06T04:30:00Z",
           loginTime: "2026-05-06T04:00:00Z",
           logoutReason: "IDLE_TIMEOUT",
@@ -829,6 +875,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
           username: "watch.user",
         },
       ],
+      canViewExactNetwork: true,
       dateFrom: "",
       dateTo: "",
       errorMessage: null,
@@ -865,10 +912,11 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   );
 
   assert.match(markup, /Recent Login Activity/);
-  assert.match(markup, /Latest access events with masked network details/);
+  assert.match(markup, /Latest access events with exact IP addresses/);
   assert.match(markup, /super\.user/);
   assert.match(markup, /watch\.user/);
-  assert.match(markup, /10\.42\.x\.x/);
+  assert.match(markup, /10\.42\.7\.9/);
+  assert.match(markup, />IP</);
   assert.match(markup, /Chrome/);
   assert.match(markup, /10 matched/);
   assert.match(markup, /Search recent login activity by username/);
@@ -936,6 +984,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   const errorMarkup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {
       activities: [],
+      canViewExactNetwork: false,
       dateFrom: "",
       dateTo: "",
       errorMessage: "Recent login API gagal.",
@@ -983,7 +1032,7 @@ test("Dashboard recent-login pagination does not roll back while placeholder dat
   );
 
   assert.match(source, /isPlaceholderData: recentLoginActivityPageIsPlaceholderData/);
-  assert.match(source, /recentLoginActivityControls\.syncServerPage\(/);
+  assert.match(source, /syncRecentLoginActivityServerPage\(/);
   assert.match(
     controlsSource,
     /!serverPageIsPlaceholder[\s\S]*serverPage !== page/,
@@ -1028,7 +1077,7 @@ test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
 test("Dashboard compact decision surfaces reflow and preserve text at zoomed widths", () => {
   const commandSource = readFileSync(path.resolve(__dirname, "../DashboardLoginCommandBar.tsx"), "utf8");
   const situationSource = readFileSync(path.resolve(__dirname, "../DashboardLoginSituationSummary.tsx"), "utf8");
-  const timelineSource = readFileSync(path.resolve(__dirname, "../DashboardLoginIncidentTimeline.tsx"), "utf8");
+  const watchlistSource = readFileSync(path.resolve(__dirname, "../DashboardSuspiciousLoginWatchlist.tsx"), "utf8");
   const sidebarSource = readFileSync(path.resolve(__dirname, "../DashboardLoginReviewSidebar.tsx"), "utf8");
 
   assert.match(commandSource, /grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5/);
@@ -1037,7 +1086,8 @@ test("Dashboard compact decision surfaces reflow and preserve text at zoomed wid
   assert.doesNotMatch(commandSource, /mt-2 truncate text-lg/);
   assert.match(situationSource, /mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2/);
   assert.match(situationSource, /mt-1 break-words text-sm font-bold/);
-  assert.match(timelineSource, /md:grid-cols-2 xl:grid-cols-4/);
+  assert.match(watchlistSource, /lg:grid-cols-\[minmax\(0,1\.05fr\)_minmax\(10rem,0\.9fr\)_minmax\(12rem,1fr\)_auto\]/);
+  assert.match(watchlistSource, /break-all font-semibold text-foreground/);
   assert.match(sidebarSource, /flex flex-wrap items-start justify-between gap-3/);
 });
 

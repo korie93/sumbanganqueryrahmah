@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { sql } from "drizzle-orm";
 import { runtimeConfig } from "../config/runtime";
 
@@ -77,6 +78,7 @@ export type RecentLoginActivity = {
 export type RecentLoginActivityPageOptions = {
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
+  includeExactIpAddress?: boolean | undefined;
   includeInternalReason?: boolean | undefined;
   page: number;
   pageSize: number;
@@ -149,6 +151,22 @@ export function maskAnalyticsIpAddress(value: string | null | undefined): string
   }
 
   return "Unknown";
+}
+
+export function resolveAnalyticsIpAddress(
+  value: string | null | undefined,
+  includeExactIpAddress = false,
+): string | null {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (includeExactIpAddress && isIP(normalized) > 0) {
+    return normalized.toLowerCase();
+  }
+
+  return maskAnalyticsIpAddress(normalized);
 }
 
 export function summarizeAnalyticsBrowser(value: string | null | undefined): string | null {

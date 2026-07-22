@@ -43,6 +43,7 @@ import {
 
 interface DashboardRecentLoginActivityProps {
   activities: RecentLoginActivity[] | undefined;
+  canViewExactNetwork: boolean;
   cleaningEndedActivityLogs?: boolean | undefined;
   deletingActivityId?: string | null | undefined;
   dateFrom: string;
@@ -134,10 +135,12 @@ function DetailBlock({
 
 function DashboardRecentLoginActivityDetailSheet({
   activity,
+  canViewExactNetwork,
   onCloseAutoFocus,
   onOpenChange,
 }: {
   activity: RecentLoginActivity | null;
+  canViewExactNetwork: boolean;
   onCloseAutoFocus: (event: Event) => void;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -196,7 +199,9 @@ function DashboardRecentLoginActivityDetailSheet({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <DetailBlock label="Browser">{activity.browser ?? "Unknown browser"}</DetailBlock>
-              <DetailBlock label="Network">{activity.ipAddress ?? "Unknown network"}</DetailBlock>
+              <DetailBlock label={canViewExactNetwork ? "IP address" : "Masked network"}>
+                {activity.ipAddress ?? "Unknown network"}
+              </DetailBlock>
               <DetailBlock label="Platform">{activity.platform ?? "Unknown platform"}</DetailBlock>
               <DetailBlock label="User agent summary">
                 {activity.userAgentSummary ?? activity.browser ?? "Unknown"}
@@ -242,6 +247,7 @@ function DashboardRecentLoginActivitySkeleton() {
 
 function DashboardRecentLoginActivityImpl({
   activities,
+  canViewExactNetwork,
   cleaningEndedActivityLogs = false,
   deletingActivityId = null,
   dateFrom,
@@ -375,7 +381,7 @@ function DashboardRecentLoginActivityImpl({
                 Recent Login Activity
               </CardTitle>
               <p className="text-xs leading-5 text-muted-foreground sm:text-sm">
-                Latest access events with masked network details for fast operator review.
+                Latest access events with {canViewExactNetwork ? "exact IP addresses" : "masked network details"} for fast operator review.
               </p>
             </div>
             <div className="flex max-w-full flex-wrap items-center gap-2">
@@ -643,7 +649,12 @@ function DashboardRecentLoginActivityImpl({
                                 {activity.platform ? `${browser} · ${activity.platform}` : browser}
                               </span>
                             </span>
-                            <span className="min-w-0 break-all font-medium text-foreground sm:max-w-[45%] sm:text-right">{ipAddress}</span>
+                            <span className="min-w-0 break-all font-medium text-foreground sm:max-w-[45%] sm:text-right">
+                              <span className="mr-1 text-muted-foreground">
+                                {canViewExactNetwork ? "IP" : "Rangkaian"}
+                              </span>
+                              {ipAddress}
+                            </span>
                           </div>
 
                           {activity.logoutReason ? (
@@ -705,6 +716,7 @@ function DashboardRecentLoginActivityImpl({
       </Card>
       <DashboardRecentLoginActivityDetailSheet
         activity={selectedActivity}
+        canViewExactNetwork={canViewExactNetwork}
         onCloseAutoFocus={handleDetailCloseAutoFocus}
         onOpenChange={handleDetailSheetOpenChange}
       />

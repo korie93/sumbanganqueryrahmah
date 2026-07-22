@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, BarChart3, ClipboardList, Gauge, ListChecks, ShieldCheck } from "lucide-react";
+import { Activity, BarChart3, Gauge, ListChecks, ShieldAlert, ShieldCheck } from "lucide-react";
 
 interface DashboardLoginFocusItem {
   description: string;
@@ -23,10 +23,10 @@ const DASHBOARD_LOGIN_FOCUS_ITEMS: readonly DashboardLoginFocusItem[] = [
     label: "Summary",
   },
   {
-    description: "Urutan incident semasa",
-    href: "#dashboard-login-incident-timeline",
-    icon: ClipboardList,
-    label: "Timeline",
+    description: "User, IP, masa dan sebab",
+    href: "#dashboard-suspicious-login-watchlist",
+    icon: ShieldAlert,
+    label: "Amaran",
   },
   {
     description: "KPI akses utama",

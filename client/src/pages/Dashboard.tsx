@@ -25,7 +25,7 @@ import { getCurrentRole } from "@/pages/collection/utils";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
 import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
 import { DashboardLoginFocusStrip } from "@/pages/dashboard/DashboardLoginFocusStrip";
-import { DashboardLoginIncidentTimeline } from "@/pages/dashboard/DashboardLoginIncidentTimeline";
+import { DashboardSuspiciousLoginWatchlist } from "@/pages/dashboard/DashboardSuspiciousLoginWatchlist";
 import { DashboardLoginSituationSummary } from "@/pages/dashboard/DashboardLoginSituationSummary";
 import { DashboardErrorState } from "@/pages/dashboard/DashboardErrorState";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
@@ -62,6 +62,13 @@ import {
 type DashboardRefetch = () => Promise<unknown>;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_DAYS = 30;
 const RECENT_LOGIN_ACTIVITY_CLEANUP_LIMIT = 500;
+const SUSPICIOUS_LOGIN_ACTIVITY_QUERY = {
+  page: 1,
+  pageSize: 4,
+  sortBy: "eventTime",
+  sortOrder: "desc",
+  status: "attention",
+} as const;
 
 function getRejectedDashboardRefreshResults(results: PromiseSettledResult<unknown>[]) {
   return results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
@@ -89,6 +96,10 @@ function DashboardContent() {
     isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
   const [trendDays, setTrendDays] = useState(7);
   const recentLoginActivityControls = useDashboardRecentLoginActivityControls();
+  const {
+    handleAttentionReview: handleRecentLoginAttentionReview,
+    syncServerPage: syncRecentLoginActivityServerPage,
+  } = recentLoginActivityControls;
   const [exportingPdf, setExportingPdf] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -198,6 +209,27 @@ function DashboardContent() {
     refetchIntervalInBackground: false,
   });
 
+  const {
+    data: suspiciousLoginActivityPage,
+    dataUpdatedAt: suspiciousLoginActivityUpdatedAt,
+    error: suspiciousLoginActivityError,
+    isError: suspiciousLoginActivityIsError,
+    isFetching: suspiciousLoginActivityFetching,
+    isLoading: suspiciousLoginActivityLoading,
+    refetch: refetchSuspiciousLoginActivity,
+  } = useQuery<RecentLoginActivityPage>({
+    queryKey: [
+      "/api/analytics/recent-login-activity-page",
+      "dashboard-security-watchlist",
+      SUSPICIOUS_LOGIN_ACTIVITY_QUERY,
+    ],
+    queryFn: ({ signal }) =>
+      getRecentLoginActivityPage(SUSPICIOUS_LOGIN_ACTIVITY_QUERY, { signal }),
+    refetchInterval: () =>
+      resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
+    refetchIntervalInBackground: false,
+  });
+
   const secondaryDashboardQueriesEnabled = !summaryLoading && !trendsLoading && !topUsersLoading;
 
   const {
@@ -253,6 +285,14 @@ function DashboardContent() {
     ),
     [recentLoginActivityPageError, recentLoginActivityPageIsError],
   );
+  const suspiciousLoginActivityErrorMessage = useMemo(
+    () => (
+      suspiciousLoginActivityIsError
+        ? getDashboardQueryErrorDetail(suspiciousLoginActivityError)
+        : null
+    ),
+    [suspiciousLoginActivityError, suspiciousLoginActivityIsError],
+  );
   const peakHoursErrorMessage = useMemo(
     () => (peakHoursIsError ? getDashboardQueryErrorDetail(peakHoursError) : null),
     [peakHoursError, peakHoursIsError],
@@ -272,12 +312,14 @@ function DashboardContent() {
         trendsUpdatedAt,
         topUsersUpdatedAt,
         recentLoginActivityUpdatedAt,
+        suspiciousLoginActivityUpdatedAt,
         peakHoursUpdatedAt,
         roleDistributionUpdatedAt,
       ]),
     [
       peakHoursUpdatedAt,
       recentLoginActivityUpdatedAt,
+      suspiciousLoginActivityUpdatedAt,
       roleDistributionUpdatedAt,
       summaryUpdatedAt,
       topUsersUpdatedAt,
@@ -291,6 +333,7 @@ function DashboardContent() {
         { error: trendsError, failed: trendsIsError, label: "Trend login" },
         { error: topUsersError, failed: topUsersIsError, label: "Pengguna aktif" },
         { error: recentLoginActivityError, failed: recentLoginActivityIsError, label: "Aktiviti login" },
+        { error: suspiciousLoginActivityError, failed: suspiciousLoginActivityIsError, label: "Watchlist login" },
         { error: peakHoursError, failed: peakHoursIsError, label: "Waktu puncak" },
         { error: roleDistributionError, failed: roleDistributionIsError, label: "Taburan peranan" },
       ]),
@@ -301,6 +344,8 @@ function DashboardContent() {
       roleDistributionIsError,
       recentLoginActivityError,
       recentLoginActivityIsError,
+      suspiciousLoginActivityError,
+      suspiciousLoginActivityIsError,
       summaryError,
       summaryIsError,
       topUsersError,
@@ -313,6 +358,7 @@ function DashboardContent() {
   const handleRetryTrends = useDashboardRetryHandler(refetchTrends);
   const handleRetryTopUsers = useDashboardRetryHandler(refetchTopUsers);
   const handleRetryRecentLoginActivity = useDashboardRetryHandler(refetchRecentLoginActivityPage);
+  const handleRetrySuspiciousLoginActivity = useDashboardRetryHandler(refetchSuspiciousLoginActivity);
   const handleRetryPeakHours = useDashboardRetryHandler(refetchPeakHours);
   const handleRetryRoles = useDashboardRetryHandler(refetchRoles);
   const deleteRecentLoginActivityMutation = useMutation<unknown, Error, RecentLoginActivity>({
@@ -390,16 +436,20 @@ function DashboardContent() {
   const handleCleanupEndedLoginActivities = useCallback(() => {
     cleanupEndedLoginActivityMutation.mutate();
   }, [cleanupEndedLoginActivityMutation]);
+  const handleInvestigateSuspiciousLogin = useCallback((activity: RecentLoginActivity) => {
+    handleRecentLoginAttentionReview(activity.username);
+    document.getElementById("dashboard-recent-login-activity")?.scrollIntoView({ block: "start" });
+  }, [handleRecentLoginAttentionReview]);
 
   useEffect(() => {
-    recentLoginActivityControls.syncServerPage(
+    syncRecentLoginActivityServerPage(
       recentLoginActivityPage?.pagination.page,
       recentLoginActivityPageIsPlaceholderData,
     );
   }, [
     recentLoginActivityPage?.pagination.page,
     recentLoginActivityPageIsPlaceholderData,
-    recentLoginActivityControls.syncServerPage,
+    syncRecentLoginActivityServerPage,
   ]);
 
   const handleRefreshAll = useCallback(async () => {
@@ -414,6 +464,7 @@ function DashboardContent() {
         refetchTopUsers(),
         refetchRecentLoginActivity(),
         refetchRecentLoginActivityPage(),
+        refetchSuspiciousLoginActivity(),
         refetchPeakHours(),
         refetchRoles(),
       ]);
@@ -476,6 +527,7 @@ function DashboardContent() {
     refetchPeakHours,
     refetchRecentLoginActivity,
     refetchRecentLoginActivityPage,
+    refetchSuspiciousLoginActivity,
     refetchRoles,
     refetchSummary,
     refetchTopUsers,
@@ -616,11 +668,16 @@ function DashboardContent() {
           summary={summary}
           trends={trends ?? []}
         />
-        <DashboardLoginIncidentTimeline
-          loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
-          recentLoginActivities={recentLoginActivities ?? []}
-          summary={summary}
-          trends={trends ?? []}
+        <DashboardSuspiciousLoginWatchlist
+          activities={suspiciousLoginActivityPage?.activities ?? []}
+          canOpenFullAudit={canManageLoginLogs}
+          canViewExactNetwork={canManageLoginLogs}
+          errorMessage={suspiciousLoginActivityErrorMessage}
+          loading={suspiciousLoginActivityLoading}
+          onInvestigate={handleInvestigateSuspiciousLogin}
+          onRetry={handleRetrySuspiciousLoginActivity}
+          retrying={suspiciousLoginActivityFetching}
+          totalItems={suspiciousLoginActivityPage?.pagination.totalItems ?? 0}
         />
         <div id="dashboard-login-snapshot" className="scroll-mt-24">
           <DashboardSectionRenderBoundary
@@ -638,6 +695,7 @@ function DashboardContent() {
           </DashboardSectionRenderBoundary>
         </div>
         <DashboardDeferredSections
+          canViewExactNetwork={canManageLoginLogs}
           defer={shouldDeferSecondaryMobileSections}
           trendDays={trendDays}
           onTrendDaysChange={setTrendDays}

@@ -7,7 +7,7 @@ import {
   buildAuditActionList,
   COLLECTION_RECORD_VERSION_CONFLICT_ACTION,
   LOGIN_FAILURE_ACTIONS,
-  maskAnalyticsIpAddress,
+  resolveAnalyticsIpAddress,
   sanitizeAnalyticsShortText,
   summarizeAnalyticsBrowser,
   type RecentLoginActivity,
@@ -26,7 +26,10 @@ export { serializeAnalyticsTimestamp } from "./analytics-repository-shared";
 export class AnalyticsRepository {
   private mapRecentLoginActivityRow(
     row: RecentLoginActivityRow,
-    options: { includeInternalReason?: boolean | undefined } = {},
+    options: {
+      includeExactIpAddress?: boolean | undefined;
+      includeInternalReason?: boolean | undefined;
+    } = {},
   ): RecentLoginActivity {
     const status = row.status ?? (row.isActive ? "active" : "ended");
     const eventType = row.eventType === "failure" || status === "failed" ? "failure" : "success";
@@ -38,7 +41,7 @@ export class AnalyticsRepository {
         ? sanitizeAnalyticsShortText(row.failureReason, 80)
         : null,
       id: row.id,
-      ipAddress: maskAnalyticsIpAddress(row.ipAddress),
+      ipAddress: resolveAnalyticsIpAddress(row.ipAddress, options.includeExactIpAddress),
       lastActivityTime: serializeAnalyticsTimestamp(row.lastActivityTime),
       loginTime: serializeAnalyticsTimestamp(row.loginTime),
       logoutReason: status === "failed"
@@ -394,6 +397,7 @@ export class AnalyticsRepository {
     return {
       activities: (rowsResult.rows as RecentLoginActivityRow[]).map((row) =>
         this.mapRecentLoginActivityRow(row, {
+          includeExactIpAddress: options.includeExactIpAddress,
           includeInternalReason: options.includeInternalReason,
         })),
       filterCounts,

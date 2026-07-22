@@ -90,6 +90,7 @@ function createOperationsRouteHarness(options?: {
   backupExportDelayMs?: number;
   backupRestoreDelayMs?: number;
   maxPayloadBytes?: number;
+  viewerRole?: "manager" | "superuser";
 }) {
   const auditLogs: AuditEntry[] = [];
   const debugAuditEntries: DebugAuditEntry[] = [];
@@ -398,7 +399,7 @@ function createOperationsRouteHarness(options?: {
     authenticateToken: createTestAuthenticateToken({
       userId: "super-1",
       username: "super.user",
-      role: "superuser",
+      role: options?.viewerRole ?? "superuser",
       activityId: "activity-1",
     }),
     requireRole: createTestRequireRole(),
@@ -636,6 +637,7 @@ test("GET /api/analytics/recent-login-activity-page forwards validated server fi
     assert.deepEqual(recentLoginActivityPageCalls, [{
       dateFrom: "2026-03-01",
       dateTo: "2026-03-31",
+      includeExactIpAddress: true,
       includeInternalReason: true,
       page: 2,
       pageSize: 4,
@@ -665,6 +667,25 @@ test("GET /api/analytics/recent-login-activity-page forwards validated server fi
         totalPages: 2,
       },
     });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/analytics/recent-login-activity-page keeps exact IP access disabled for managers", async () => {
+  const { app, recentLoginActivityPageCalls } = createOperationsRouteHarness({
+    viewerRole: "manager",
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/analytics/recent-login-activity-page?status=attention`,
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(recentLoginActivityPageCalls[0]?.includeExactIpAddress, false);
+    assert.equal(recentLoginActivityPageCalls[0]?.includeInternalReason, false);
   } finally {
     await stopTestServer(server);
   }

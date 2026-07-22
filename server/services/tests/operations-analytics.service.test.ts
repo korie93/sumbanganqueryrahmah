@@ -122,6 +122,7 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
   assert.deepEqual(recentLoginActivityPageCalls, [{
     dateFrom: "2026-05-01",
     dateTo: "2026-05-31",
+    includeExactIpAddress: false,
     includeInternalReason: false,
     page: 2,
     pageSize: 25,
@@ -176,7 +177,7 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
   );
 });
 
-test("OperationsAnalyticsService exposes internal login failure reasons only to superusers", async () => {
+test("OperationsAnalyticsService exposes exact IPs only to admins and superusers", async () => {
   const calls: Array<
     Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0]
   > = [];
@@ -221,11 +222,16 @@ test("OperationsAnalyticsService exposes internal login failure reasons only to 
     sortOrder: "asc",
     status: "failed",
   }, "manager");
+  await service.getRecentLoginActivityPage({ status: "failed" }, "admin");
   await service.getRecentLoginActivityPage({ status: "failed" }, "superuser");
 
+  assert.equal(calls[0]?.includeExactIpAddress, false);
   assert.equal(calls[0]?.includeInternalReason, false);
   assert.equal(calls[0]?.role, "manager");
   assert.equal(calls[0]?.sortBy, "username");
   assert.equal(calls[0]?.sortOrder, "asc");
-  assert.equal(calls[1]?.includeInternalReason, true);
+  assert.equal(calls[1]?.includeExactIpAddress, true);
+  assert.equal(calls[1]?.includeInternalReason, false);
+  assert.equal(calls[2]?.includeExactIpAddress, true);
+  assert.equal(calls[2]?.includeInternalReason, true);
 });

@@ -217,6 +217,7 @@ function useDeferredDashboardSectionMount({
 }
 
 type DashboardDeferredSectionsProps = {
+  canViewExactNetwork: boolean;
   defer: boolean;
   trendDays: number;
   onTrendDaysChange: (days: number) => void;
@@ -276,6 +277,7 @@ type DashboardDeferredSectionsProps = {
 };
 
 export function DashboardDeferredSections({
+  canViewExactNetwork,
   defer,
   trendDays,
   onTrendDaysChange,
@@ -470,6 +472,7 @@ export function DashboardDeferredSections({
                   >
                     <DashboardRecentLoginActivity
                       activities={recentLoginActivityPageItems}
+                      canViewExactNetwork={canViewExactNetwork}
                       cleaningEndedActivityLogs={recentLoginActivityCleaningEndedLogs}
                       deletingActivityId={recentLoginActivityDeletingId}
                       dateFrom={recentLoginActivityDateFrom}

@@ -100,6 +100,17 @@ export function useDashboardRecentLoginActivityControls() {
     setSortOrder("desc");
   }, []);
 
+  const handleAttentionReview = useCallback((username = "") => {
+    setDateFrom("");
+    setDateTo("");
+    setFilter("attention");
+    setPage(1);
+    setRole("all");
+    setSearch(username);
+    setSortBy("eventTime");
+    setSortOrder("desc");
+  }, []);
+
   const syncServerPage = useCallback((serverPage: number | undefined, serverPageIsPlaceholder: boolean) => {
     if (!serverPageIsPlaceholder && serverPage && serverPage !== page) {
       setPage(serverPage);
@@ -110,6 +121,7 @@ export function useDashboardRecentLoginActivityControls() {
     dateFrom,
     dateTo,
     filter,
+    handleAttentionReview,
     handleClearFilters,
     handleDateFromChange,
     handleDateToChange,

@@ -4,6 +4,7 @@ import { dbRead } from "../../db-postgres";
 import { AnalyticsRepository, serializeAnalyticsTimestamp } from "../analytics.repository";
 import {
   maskAnalyticsIpAddress,
+  resolveAnalyticsIpAddress,
   sanitizeAnalyticsShortText,
   summarizeAnalyticsBrowser,
 } from "../analytics-repository-shared";
@@ -59,6 +60,9 @@ test("analytics activity sanitizers mask network details and browser labels", ()
   assert.equal(maskAnalyticsIpAddress("10.42.7.9"), "10.42.x.x");
   assert.equal(maskAnalyticsIpAddress("2001:db8::1"), "2001:db8:...");
   assert.equal(maskAnalyticsIpAddress("not an ip"), "Unknown");
+  assert.equal(resolveAnalyticsIpAddress("10.42.7.9", true), "10.42.7.9");
+  assert.equal(resolveAnalyticsIpAddress("10.42.7.9", false), "10.42.x.x");
+  assert.equal(resolveAnalyticsIpAddress("10.42.x.x", true), "10.42.x.x");
   assert.equal(summarizeAnalyticsBrowser("Mozilla/5.0 Chrome/124.0 Safari/537.36"), "Chrome 124");
   assert.equal(summarizeAnalyticsBrowser("Known Browser"), "Known Browser");
   assert.equal(sanitizeAnalyticsShortText("manual logout\r\nSet-Cookie: evil"), "manual logout Set-Cookie: evil");
@@ -156,6 +160,7 @@ test("AnalyticsRepository.getRecentLoginActivityPage returns bounded page metada
       page: 9,
       pageSize: 4,
       search: "watch%_user",
+      includeExactIpAddress: true,
       sortBy: "eventTime",
       sortOrder: "desc",
       status: "ended",
@@ -168,7 +173,7 @@ test("AnalyticsRepository.getRecentLoginActivityPage returns bounded page metada
         eventType: "success",
         failureReason: null,
         id: "activity-page-1",
-        ipAddress: "10.42.x.x",
+        ipAddress: "10.42.7.9",
         lastActivityTime: "2026-05-05T03:20:00.000Z",
         loginTime: "2026-05-05T03:15:00.000Z",
         logoutReason: "IDLE_TIMEOUT",
@@ -220,7 +225,7 @@ test("AnalyticsRepository.getRecentLoginActivityPage maps failed attempts and re
         eventType: "failure",
         failureReason: "invalid_password",
         id: "audit:failure-1",
-        ipAddress: "203.0.x.x",
+        ipAddress: "203.0.113.42",
         isActive: false,
         lastActivityTime: null,
         loginTime: new Date("2026-06-11T06:10:00.000Z"),
@@ -246,10 +251,12 @@ test("AnalyticsRepository.getRecentLoginActivityPage maps failed attempts and re
   try {
     const managerResult = await repository.getRecentLoginActivityPage({
       ...baseOptions,
+      includeExactIpAddress: false,
       includeInternalReason: false,
     });
     const superuserResult = await repository.getRecentLoginActivityPage({
       ...baseOptions,
+      includeExactIpAddress: true,
       includeInternalReason: true,
     });
 
@@ -262,6 +269,7 @@ test("AnalyticsRepository.getRecentLoginActivityPage maps failed attempts and re
       "Chrome 149 on Windows 10/11",
     );
     assert.equal(superuserResult.activities[0]?.failureReason, "invalid_password");
+    assert.equal(superuserResult.activities[0]?.ipAddress, "203.0.113.42");
     assert.equal(superuserResult.filterCounts.failed, 1);
     assert.equal(superuserResult.filterCounts.attention, 1);
   } finally {

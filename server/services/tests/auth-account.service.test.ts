@@ -753,13 +753,14 @@ test("AuthAccountService.verifyTwoFactorLogin rejects replayed authenticator cod
   assert.ok(auditActions.includes("LOGIN_2FA_FAILED"));
   assert.match(failedTwoFactorAuditDetails, /"failure_reason":"invalid_code"/);
   assert.equal(failedTwoFactorAuditDetails.includes("admin-replay-1"), false);
-  assert.equal(failedTwoFactorAuditDetails.includes("127.0.0.1"), false);
+  assert.equal(failedTwoFactorAuditDetails.includes("127.0.0.1"), true);
   assert.doesNotMatch(failedTwoFactorAuditDetails, new RegExp(code));
   const auditVerification = verifySecurityAuditDetails(failedTwoFactorAuditDetails);
   assert.equal(auditVerification.ok, true);
   if (auditVerification.ok) {
     assert.equal(auditVerification.entry.event, "AUTH_2FA_FAILURE");
     assert.equal(auditVerification.entry.outcome, "failure");
+    assert.equal(auditVerification.entry.metadata.network, "127.0.0.1");
   }
 });
 
@@ -1097,7 +1098,7 @@ test("AuthAccountService.login keeps invalid usernames generic and does not reco
   if (!failedLoginAudit.ok) return;
   assert.equal(failedLoginAudit.entry.event, "AUTH_LOGIN_FAILURE");
   assert.equal(failedLoginAudit.entry.metadata.failure_reason, "user_not_found");
-  assert.equal(failedLoginAudit.entry.metadata.network, "127.0.x.x");
+  assert.equal(failedLoginAudit.entry.metadata.network, "127.0.0.1");
   assert.equal(failedLoginAudit.entry.metadata.browser, "chrome");
   assert.doesNotMatch(auditDetails[0] || "", /WrongPassword|password|token/i);
 });
