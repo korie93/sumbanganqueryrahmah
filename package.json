@@ -126,9 +126,9 @@
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/auto-instrumentations-node": "0.77.0",
-    "@opentelemetry/exporter-trace-otlp-http": "0.219.0",
-    "@opentelemetry/sdk-node": "0.219.0",
+    "@opentelemetry/auto-instrumentations-node": "0.78.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.220.0",
+    "@opentelemetry/sdk-node": "0.220.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -165,7 +165,7 @@
     "cmdk": "^1.1.1",
     "compression": "1.8.1",
     "date-fns": "^3.6.0",
-    "dompurify": "3.4.11",
+    "dompurify": "3.4.12",
     "dotenv": "16.6.1",
     "drizzle-orm": "0.45.2",
     "drizzle-zod": "0.7.1",
@@ -248,13 +248,13 @@
     "rollup": "^4.59.0",
     "esbuild": "^0.28.1",
     "ip-address": "^10.2.0",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^4.3.0"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,
     "core-js@3.47.0": true,
     "esbuild@0.28.1": true,
     "msgpackr-extract@3.0.4": true,
-    "protobufjs@7.6.4": true
+    "protobufjs@7.6.5": true
   }
 }
