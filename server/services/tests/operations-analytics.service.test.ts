@@ -47,7 +47,10 @@ test("OperationsAnalyticsService proxies summary and distribution reads", async 
 test("OperationsAnalyticsService clamps login-trend days and validates active-user limits", async () => {
   const loginTrendCalls: number[] = [];
   const topUserCalls: number[] = [];
-  const recentLoginActivityCalls: number[] = [];
+  const recentLoginActivityCalls: Array<{
+    includeExactIpAddress: boolean | undefined;
+    limit: number;
+  }> = [];
   const recentLoginActivityPageCalls: Array<
     Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0]
   > = [];
@@ -71,8 +74,11 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
       topUserCalls.push(limit);
       return [{ username: "super.user", role: "superuser", loginCount: limit, lastLogin: null }];
     },
-    getRecentLoginActivity: async (limit: number) => {
-      recentLoginActivityCalls.push(limit);
+    getRecentLoginActivity: async (limit, options) => {
+      recentLoginActivityCalls.push({
+        includeExactIpAddress: options?.includeExactIpAddress,
+        limit: limit ?? 8,
+      });
       return [{
         browser: "Chrome",
         id: "activity-1",
@@ -118,7 +124,10 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
 
   assert.deepEqual(loginTrendCalls, [1]);
   assert.deepEqual(topUserCalls, [1]);
-  assert.deepEqual(recentLoginActivityCalls, [2]);
+  assert.deepEqual(recentLoginActivityCalls, [{
+    includeExactIpAddress: false,
+    limit: 2,
+  }]);
   assert.deepEqual(recentLoginActivityPageCalls, [{
     dateFrom: "2026-05-01",
     dateTo: "2026-05-31",
@@ -178,6 +187,9 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
 });
 
 test("OperationsAnalyticsService exposes exact IPs only to admins and superusers", async () => {
+  const recentCalls: Array<
+    Parameters<OperationsAnalyticsRepository["getRecentLoginActivity"]>
+  > = [];
   const calls: Array<
     Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0]
   > = [];
@@ -195,7 +207,10 @@ test("OperationsAnalyticsService exposes exact IPs only to admins and superusers
     }),
     getLoginTrends: async () => [],
     getTopActiveUsers: async () => [],
-    getRecentLoginActivity: async () => [],
+    getRecentLoginActivity: async (...args) => {
+      recentCalls.push(args);
+      return [];
+    },
     getRecentLoginActivityPage: async (
       options: Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0],
     ) => {
@@ -216,6 +231,9 @@ test("OperationsAnalyticsService exposes exact IPs only to admins and superusers
   } satisfies OperationsAnalyticsRepository;
   const service = new OperationsAnalyticsService(analyticsRepository);
 
+  await service.getRecentLoginActivity(8, "manager");
+  await service.getRecentLoginActivity(8, "admin");
+  await service.getRecentLoginActivity(8, "superuser");
   await service.getRecentLoginActivityPage({
     role: "manager",
     sortBy: "username",
@@ -225,6 +243,9 @@ test("OperationsAnalyticsService exposes exact IPs only to admins and superusers
   await service.getRecentLoginActivityPage({ status: "failed" }, "admin");
   await service.getRecentLoginActivityPage({ status: "failed" }, "superuser");
 
+  assert.equal(recentCalls[0]?.[1]?.includeExactIpAddress, false);
+  assert.equal(recentCalls[1]?.[1]?.includeExactIpAddress, true);
+  assert.equal(recentCalls[2]?.[1]?.includeExactIpAddress, true);
   assert.equal(calls[0]?.includeExactIpAddress, false);
   assert.equal(calls[0]?.includeInternalReason, false);
   assert.equal(calls[0]?.role, "manager");

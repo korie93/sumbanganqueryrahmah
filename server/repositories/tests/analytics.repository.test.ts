@@ -58,9 +58,11 @@ test("AnalyticsRepository.getTopActiveUsers returns normalized last login timest
 
 test("analytics activity sanitizers mask network details and browser labels", () => {
   assert.equal(maskAnalyticsIpAddress("10.42.7.9"), "10.42.x.x");
+  assert.equal(maskAnalyticsIpAddress("::ffff:10.42.7.9"), "10.42.x.x");
   assert.equal(maskAnalyticsIpAddress("2001:db8::1"), "2001:db8:...");
   assert.equal(maskAnalyticsIpAddress("not an ip"), "Unknown");
   assert.equal(resolveAnalyticsIpAddress("10.42.7.9", true), "10.42.7.9");
+  assert.equal(resolveAnalyticsIpAddress("::ffff:10.42.7.9", true), "10.42.7.9");
   assert.equal(resolveAnalyticsIpAddress("10.42.7.9", false), "10.42.x.x");
   assert.equal(resolveAnalyticsIpAddress("10.42.x.x", true), "10.42.x.x");
   assert.equal(summarizeAnalyticsBrowser("Mozilla/5.0 Chrome/124.0 Safari/537.36"), "Chrome 124");
@@ -79,7 +81,7 @@ test("AnalyticsRepository.getRecentLoginActivity returns sanitized recent access
       {
         browser: "Mozilla/5.0 Firefox/126.0",
         id: "activity-1",
-        ipAddress: "192.168.10.25",
+        ipAddress: "::ffff:192.168.10.25",
         isActive: true,
         lastActivityTime: new Date("2026-04-05T03:20:00.000Z"),
         loginTime: new Date("2026-04-05T03:15:00.000Z"),
@@ -111,6 +113,11 @@ test("AnalyticsRepository.getRecentLoginActivity returns sanitized recent access
         username: "super.user",
       },
     ]);
+
+    const exactResult = await repository.getRecentLoginActivity(8, {
+      includeExactIpAddress: true,
+    });
+    assert.equal(exactResult[0]?.ipAddress, "192.168.10.25");
   } finally {
     (dbRead as unknown as {
       execute: typeof dbRead.execute;

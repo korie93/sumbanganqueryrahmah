@@ -278,7 +278,10 @@ export class AnalyticsRepository {
     }));
   }
 
-  async getRecentLoginActivity(limit = 8): Promise<RecentLoginActivity[]> {
+  async getRecentLoginActivity(
+    limit = 8,
+    options: { includeExactIpAddress?: boolean | undefined } = {},
+  ): Promise<RecentLoginActivity[]> {
     const result = await dbRead.execute(sql`
       SELECT
         id,
@@ -299,7 +302,7 @@ export class AnalyticsRepository {
     `);
 
     return (result.rows as RecentLoginActivityRow[]).map((row) =>
-      this.mapRecentLoginActivityRow(row));
+      this.mapRecentLoginActivityRow(row, options));
   }
 
   async getRecentLoginActivityPage(

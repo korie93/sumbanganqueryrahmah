@@ -92,7 +92,10 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
 
   const getRecentLoginActivity = async (req: AuthenticatedRequest, res: Response) => {
     return res.json(
-      await operationsAnalyticsService.getRecentLoginActivity(req.query.pageSize ?? req.query.limit),
+      await operationsAnalyticsService.getRecentLoginActivity(
+        req.query.pageSize ?? req.query.limit,
+        req.user?.role,
+      ),
     );
   };
 

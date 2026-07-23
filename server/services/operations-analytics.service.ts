@@ -40,8 +40,11 @@ export class OperationsAnalyticsService {
     return this.analyticsRepository.getTopActiveUsers(readPageLimit(limit, 10, 100));
   }
 
-  async getRecentLoginActivity(limit?: unknown) {
-    return this.analyticsRepository.getRecentLoginActivity(readPageLimit(limit, 8, 25));
+  async getRecentLoginActivity(limit?: unknown, viewerRole?: string | null) {
+    return this.analyticsRepository.getRecentLoginActivity(
+      readPageLimit(limit, 8, 25),
+      { includeExactIpAddress: this.canViewExactIpAddress(viewerRole) },
+    );
   }
 
   async getRecentLoginActivityPage(
@@ -123,7 +126,7 @@ export class OperationsAnalyticsService {
     return {
       page: readPageLimit(query.page, 1, 100_000),
       pageSize: readPageLimit(query.pageSize ?? query.limit, 4, 25),
-      includeExactIpAddress: viewerRole === "admin" || viewerRole === "superuser",
+      includeExactIpAddress: this.canViewExactIpAddress(viewerRole),
       includeInternalReason: viewerRole === "superuser",
       ...(roleValue ? { role: roleValue } : {}),
       search: readOptionalString(query.search, 80),
@@ -133,6 +136,10 @@ export class OperationsAnalyticsService {
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
     };
+  }
+
+  private canViewExactIpAddress(viewerRole?: string | null): boolean {
+    return viewerRole === "admin" || viewerRole === "superuser";
   }
 
   private readOptionalDateFilter(value: unknown, field: string): string | undefined {

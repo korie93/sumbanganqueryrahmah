@@ -1,6 +1,6 @@
-import { isIP } from "node:net";
 import { sql } from "drizzle-orm";
 import { runtimeConfig } from "../config/runtime";
+import { normalizeClientIpAddress } from "../http/client-ip";
 
 export const ANALYTICS_TZ = runtimeConfig.runtime.analyticsTimeZone;
 export const COLLECTION_RECORD_VERSION_CONFLICT_ACTION = "COLLECTION_RECORD_VERSION_CONFLICT";
@@ -118,7 +118,8 @@ export function serializeAnalyticsTimestamp(value: Date | string | null | undefi
 }
 
 export function maskAnalyticsIpAddress(value: string | null | undefined): string | null {
-  const normalized = value?.trim();
+  const rawValue = value?.trim();
+  const normalized = normalizeClientIpAddress(rawValue) ?? rawValue;
   if (!normalized) {
     return null;
   }
@@ -157,13 +158,17 @@ export function resolveAnalyticsIpAddress(
   value: string | null | undefined,
   includeExactIpAddress = false,
 ): string | null {
-  const normalized = value?.trim();
+  const rawValue = value?.trim();
+  const normalized = normalizeClientIpAddress(rawValue) ?? rawValue;
   if (!normalized) {
     return null;
   }
 
-  if (includeExactIpAddress && isIP(normalized) > 0) {
-    return normalized.toLowerCase();
+  if (includeExactIpAddress) {
+    const exactIpAddress = normalizeClientIpAddress(normalized);
+    if (exactIpAddress) {
+      return exactIpAddress;
+    }
   }
 
   return maskAnalyticsIpAddress(normalized);

@@ -96,7 +96,9 @@ function createOperationsRouteHarness(options?: {
   const debugAuditEntries: DebugAuditEntry[] = [];
   const cleanupCalls: Date[] = [];
   const topUserCalls: number[] = [];
-  const recentLoginActivityCalls: number[] = [];
+  const recentLoginActivityCalls: Array<
+    Parameters<OperationsAnalyticsRepository["getRecentLoginActivity"]>
+  > = [];
   const recentLoginActivityPageCalls: Array<
     Parameters<OperationsAnalyticsRepository["getRecentLoginActivityPage"]>[0]
   > = [];
@@ -176,8 +178,8 @@ function createOperationsRouteHarness(options?: {
       topUserCalls.push(limit);
       return [{ username: "super.user", role: "superuser", loginCount: 9, lastLogin: null }];
     },
-    getRecentLoginActivity: async (limit: number) => {
-      recentLoginActivityCalls.push(limit);
+    getRecentLoginActivity: async (...args) => {
+      recentLoginActivityCalls.push(args);
       return [{
         browser: "Chrome",
         id: "activity-1",
@@ -589,7 +591,9 @@ test("GET /api/analytics/recent-login-activity returns sanitized dashboard activ
   try {
     const response = await fetch(`${baseUrl}/api/analytics/recent-login-activity?pageSize=2`);
     assert.equal(response.status, 200);
-    assert.deepEqual(recentLoginActivityCalls, [2]);
+    assert.deepEqual(recentLoginActivityCalls, [[2, {
+      includeExactIpAddress: true,
+    }]]);
     assert.deepEqual(await response.json(), [
       {
         browser: "Chrome",
@@ -673,16 +677,21 @@ test("GET /api/analytics/recent-login-activity-page forwards validated server fi
 });
 
 test("GET /api/analytics/recent-login-activity-page keeps exact IP access disabled for managers", async () => {
-  const { app, recentLoginActivityPageCalls } = createOperationsRouteHarness({
+  const { app, recentLoginActivityCalls, recentLoginActivityPageCalls } = createOperationsRouteHarness({
     viewerRole: "manager",
   });
   const { server, baseUrl } = await startTestServer(app);
 
   try {
+    const snapshotResponse = await fetch(
+      `${baseUrl}/api/analytics/recent-login-activity?pageSize=2`,
+    );
     const response = await fetch(
       `${baseUrl}/api/analytics/recent-login-activity-page?status=attention`,
     );
 
+    assert.equal(snapshotResponse.status, 200);
+    assert.equal(recentLoginActivityCalls[0]?.[1]?.includeExactIpAddress, false);
     assert.equal(response.status, 200);
     assert.equal(recentLoginActivityPageCalls[0]?.includeExactIpAddress, false);
     assert.equal(recentLoginActivityPageCalls[0]?.includeInternalReason, false);
