@@ -74,6 +74,10 @@ const documentedOverrideReasons = new Map([
     "js-yaml",
     "Pins patched YAML parsing for ESLint transitive config loading until @eslint/eslintrc resolves the patched range by default.",
   ],
+  [
+    "minimatch",
+    "Pins the patched minimatch 10 line while legacy React ESLint plugins still request the vulnerable minimatch 3 range.",
+  ],
 ]);
 
 const securityCriticalDirectDependencies = Object.freeze([

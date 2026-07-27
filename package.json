@@ -203,7 +203,7 @@
     "zod-validation-error": "3.5.4"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
+    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/bcrypt": "^6.0.0",
@@ -225,7 +225,7 @@
     "c8": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.1",
-    "eslint": "^9.39.4",
+    "eslint": "^9.39.5",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^6.1.1",
@@ -233,7 +233,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "playwright": "^1.59.1",
-    "postcss": "^8.5.10",
+    "postcss": "^8.5.23",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
@@ -248,7 +248,8 @@
     "rollup": "^4.59.0",
     "esbuild": "^0.28.1",
     "ip-address": "^10.2.0",
-    "js-yaml": "^4.3.0"
+    "js-yaml": "^4.3.0",
+    "minimatch": "10.2.5"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,

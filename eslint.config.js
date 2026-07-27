@@ -1,9 +1,11 @@
 import js from "@eslint/js";
 import globals from "globals";
-import jsxA11y from "eslint-plugin-jsx-a11y";
-import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
+import {
+  jsxA11y,
+  react,
+} from "./scripts/lib/eslint-plugin-minimatch-compat.mjs";
 
 const clientFiles = ["client/src/**/*.{ts,tsx}"];
 const serverFiles = ["server/**/*.ts", "shared/**/*.ts"];

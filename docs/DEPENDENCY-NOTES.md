@@ -66,13 +66,14 @@ Operational notes:
 | `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. | Dev-server exposure and vulnerable nested esbuild advisory class. | `drizzle-kit` and Vite dependencies no longer pull an affected esbuild range. |
 | `ip-address` | Pins patched IP address parsing helpers for `express-rate-limit` until the upstream dependency advances. | Rate-limit client identity parsing hardening. | `express-rate-limit` resolves a patched `ip-address` transitively without an override. |
 | `js-yaml` | Pins patched YAML parsing for ESLint transitive config loading until `@eslint/eslintrc` resolves the patched range by default. | Quadratic-complexity YAML merge-key DoS advisory class in older transitive parser versions. | ESLint resolves patched `js-yaml` transitively and `npm run audit:dependencies` stays clean without the override. |
+| `minimatch` | Pins patched minimatch 10 while legacy React ESLint plugins still request minimatch 3; `scripts/lib/eslint-plugin-minimatch-compat.mjs` preserves their callable API. | Brace-expansion memory-exhaustion DoS through vulnerable glob expansion. | Both React ESLint plugins support the minimatch 10 object API or remove their minimatch dependency. |
 
 Quarterly review checklist:
 
 ```bash
 npm run audit:dependencies
 npm outdated
-npm ls @babel/core gaxios qs lodash rollup esbuild ip-address
+npm ls @babel/core gaxios qs lodash rollup esbuild ip-address minimatch
 ```
 
 ## Install Script Allowlist
