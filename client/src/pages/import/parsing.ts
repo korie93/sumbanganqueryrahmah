@@ -6,6 +6,10 @@ import {
   validateCsvHeaders,
   validateCsvRowWidth,
 } from "@shared/common/csv-record-parser";
+import {
+  findSpreadsheetHeaderRowIndex,
+  normalizeSpreadsheetIdentifierCells,
+} from "@shared/common/spreadsheet-identifier-normalization";
 
 type XlsxModule = typeof import("xlsx");
 
@@ -126,6 +130,18 @@ function parseExcelBuffer(
   const jsonData = normalizeExcelMatrixRows(
     xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }),
   );
+  const worksheetRange = worksheet["!ref"]
+    ? xlsx.utils.decode_range(worksheet["!ref"])
+    : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+
+  normalizeSpreadsheetIdentifierCells(jsonData, (rowIndex, columnIndex) => {
+    const cellAddress = xlsx.utils.encode_cell({
+      r: worksheetRange.s.r + rowIndex,
+      c: worksheetRange.s.c + columnIndex,
+    });
+    const cell = worksheet[cellAddress] as { v?: unknown } | undefined;
+    return cell?.v;
+  });
 
   // Null out workbook references early to allow GC to reclaim memory
   workbook.SheetNames = [];
@@ -136,17 +152,7 @@ function parseExcelBuffer(
     return { headers: [], rows: [], error: "Excel file is empty." };
   }
 
-  let headerRowIndex = 0;
-  let maxNonEmptyCols = 0;
-
-  for (let index = 0; index < Math.min(5, jsonData.length); index += 1) {
-    const row = jsonData[index];
-    const nonEmptyCount = row.filter((cell) => cell !== "" && cell !== null && cell !== undefined).length;
-    if (nonEmptyCount > maxNonEmptyCols) {
-      maxNonEmptyCols = nonEmptyCount;
-      headerRowIndex = index;
-    }
-  }
+  const headerRowIndex = findSpreadsheetHeaderRowIndex(jsonData);
 
   const headers = jsonData[headerRowIndex].map((header, index) => {
     const value = String(header || "").trim();

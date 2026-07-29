@@ -59,6 +59,42 @@ test("parseImportPreview rejects duplicate or empty CSV headers", async () => {
   assert.deepEqual(emptyResult.rows, []);
 });
 
+test("parseImportPreview preserves numeric phone and Malaysian IC identifiers as exact text", async () => {
+  const xlsx = await import("xlsx");
+  const workbook = xlsx.utils.book_new();
+  const worksheet = xlsx.utils.aoa_to_sheet([
+    ["Name", "Phone", "IC No", "Overdue Days"],
+    ["Alice", 601234567890, 10203561001, 181],
+    ["Bob", 6591234567, 780101010197, 61],
+  ]);
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+  const workbookBuffer = xlsx.write(workbook, {
+    type: "array",
+    bookType: "xlsx",
+  }) as ArrayBuffer;
+  const file = new File([workbookBuffer], "identifiers.xlsx", {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  const result = await parseImportPreview(file);
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.rows, [
+    {
+      Name: "Alice",
+      Phone: "601234567890",
+      "IC No": "010203561001",
+      "Overdue Days": "181",
+    },
+    {
+      Name: "Bob",
+      Phone: "6591234567",
+      "IC No": "780101010197",
+      "Overdue Days": "61",
+    },
+  ]);
+});
+
 test("parseImportPreview rejects lossy row widths and unterminated quoted fields", async () => {
   const wideResult = await parseImportPreview(
     new File(["name,amount\nAlice,10,ignored\n"], "wide-row.csv", { type: "text/csv" }),

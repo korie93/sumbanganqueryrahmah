@@ -9,6 +9,10 @@ import {
 import { parseExcelFileInWorker } from "./import-upload-excel-worker-runner";
 import { getImportUploadSpreadsheetRuntime } from "./import-upload-xlsx-runtime";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
+import {
+  findSpreadsheetHeaderRowIndex,
+  normalizeSpreadsheetIdentifierCells,
+} from "../../shared/common/spreadsheet-identifier-normalization";
 
 export type ParseExcelOptions = SpreadsheetArchivePreflightOptions & {
   maxRows?: number;
@@ -89,17 +93,7 @@ function parseWorkbookJsonData(jsonData: unknown[][], options?: ParseExcelOption
     }
   }
 
-  let headerRowIndex = 0;
-  let maxNonEmptyCols = 0;
-
-  for (let index = 0; index < Math.min(5, jsonData.length); index += 1) {
-    const row = jsonData[index];
-    const nonEmptyCount = row.filter((cell) => cell !== "" && cell !== null && cell !== undefined).length;
-    if (nonEmptyCount > maxNonEmptyCols) {
-      maxNonEmptyCols = nonEmptyCount;
-      headerRowIndex = index;
-    }
-  }
+  const headerRowIndex = findSpreadsheetHeaderRowIndex(jsonData);
 
   const headers = jsonData[headerRowIndex].map((header, index) => {
     const value = String(header || "").trim();
@@ -200,6 +194,18 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
       defval: "",
       raw: false,
     }) as unknown[][];
+    const worksheetRange = worksheetRef
+      ? spreadsheetRuntime.decodeRange(worksheetRef)
+      : { s: { r: 0, c: 0 } };
+
+    normalizeSpreadsheetIdentifierCells(jsonData, (rowIndex, columnIndex) => {
+      const cellAddress = spreadsheetRuntime.encodeCell({
+        r: worksheetRange.s.r + rowIndex,
+        c: worksheetRange.s.c + columnIndex,
+      });
+      const cell = worksheet[cellAddress] as { v?: unknown } | undefined;
+      return cell?.v;
+    });
 
     return parseWorkbookJsonData(jsonData, options);
   } finally {

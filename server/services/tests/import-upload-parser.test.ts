@@ -96,6 +96,38 @@ test("parseImportUploadFile parses Excel uploads from a temporary file", async (
   }
 });
 
+test("Excel imports preserve numeric phone and Malaysian IC identifiers as exact text", () => {
+  const workbook = xlsx.utils.book_new();
+  const worksheet = xlsx.utils.aoa_to_sheet([
+    ["Name", "Phone", "IC No", "Overdue Days"],
+    ["Alice", 601234567890, 10203561001, 181],
+    ["Bob", 6591234567, 780101010197, 61],
+  ]);
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+  const workbookBuffer = xlsx.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+  }) as Buffer;
+
+  const result = parseImportUploadBuffer("identifiers.xlsx", workbookBuffer);
+
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.rows, [
+    {
+      Name: "Alice",
+      Phone: "601234567890",
+      "IC No": "010203561001",
+      "Overdue Days": "181",
+    },
+    {
+      Name: "Bob",
+      Phone: "6591234567",
+      "IC No": "780101010197",
+      "Overdue Days": "61",
+    },
+  ]);
+});
+
 test("parseImportUploadBuffer parses XLSB uploads through the spreadsheet adapter", () => {
   const workbook = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(
