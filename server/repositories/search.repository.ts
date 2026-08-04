@@ -15,11 +15,14 @@ import {
   normalizeSearchOffset,
   SEARCH_ALLOWED_OPERATORS,
 } from "./search-repository-shared";
-import type {
-  AdvancedSearchDataRow,
-  SearchColumnFilter,
-  SearchDataRow,
-  SearchGlobalDataRow,
+import {
+  MAX_SEARCH_COLLECTION_STATUS_CANDIDATES,
+  type AdvancedSearchDataRow,
+  type SearchColumnFilter,
+  type SearchCollectionStatusCandidate,
+  type SearchCollectionStatusMatch,
+  type SearchDataRow,
+  type SearchGlobalDataRow,
 } from "./search-repository-types";
 
 export { MAX_SEARCH_LIMIT, MAX_SEARCH_OFFSET } from "./search-repository-shared";
@@ -37,6 +40,146 @@ type ColumnNameCacheEntry = {
 
 export class SearchRepository {
   private allColumnNamesCache: ColumnNameCacheEntry | null = null;
+
+  async findCollectionStatusesForRows(
+    candidates: SearchCollectionStatusCandidate[],
+  ): Promise<SearchCollectionStatusMatch[]> {
+    const boundedCandidates = candidates.slice(0, MAX_SEARCH_COLLECTION_STATUS_CANDIDATES);
+    if (boundedCandidates.length === 0) {
+      return [];
+    }
+
+    const candidateJson = JSON.stringify(boundedCandidates.map((candidate) => ({
+      row_id: candidate.rowId,
+      source_import_id: candidate.sourceImportId,
+      ic_hash: candidate.icHash,
+      ic_value: candidate.icValue,
+      phone_hash: candidate.phoneHash,
+      phone_value: candidate.phoneValue,
+      account_hash: candidate.accountHash,
+      account_value: candidate.accountValue,
+    })));
+    const result = await dbRead.execute(sql`
+      WITH candidates AS (
+        SELECT *
+        FROM jsonb_to_recordset(${candidateJson}::jsonb) AS candidate(
+          row_id text,
+          source_import_id text,
+          ic_hash text,
+          ic_value text,
+          phone_hash text,
+          phone_value text,
+          account_hash text,
+          account_value text
+        )
+      )
+      SELECT
+        candidate.row_id,
+        matched.record_count,
+        matched.payment_date,
+        matched.created_at,
+        matched.collection_staff_nickname,
+        matched.source_import_name,
+        matched.source_filename,
+        matched.match_basis
+      FROM candidates candidate
+      JOIN LATERAL (
+        SELECT
+          record.payment_date,
+          record.created_at,
+          record.collection_staff_nickname,
+          record.source_import_name,
+          record.source_filename,
+          CASE
+            WHEN record.source_import_id = candidate.source_import_id
+              THEN 'source_and_identifier'
+            ELSE 'identifier_only'
+          END AS match_basis,
+          COUNT(*) OVER()::int AS record_count
+        FROM public.collection_records record
+        CROSS JOIN LATERAL (
+          SELECT regexp_replace(COALESCE(record.customer_phone, ''), '[^0-9]+', '', 'g') AS phone_digits
+        ) normalized_record
+        CROSS JOIN LATERAL (
+          SELECT
+            COALESCE((
+              (candidate.ic_hash IS NOT NULL AND record.ic_number_search_hash = candidate.ic_hash)
+              OR (
+                record.ic_number_search_hash IS NULL
+                AND candidate.ic_value IS NOT NULL
+                AND regexp_replace(upper(COALESCE(record.ic_number, '')), '[^0-9A-Z]+', '', 'g') = candidate.ic_value
+              )
+            ), false) AS ic_match,
+            COALESCE((
+              (candidate.phone_hash IS NOT NULL AND record.customer_phone_search_hash = candidate.phone_hash)
+              OR (
+                record.customer_phone_search_hash IS NULL
+                AND candidate.phone_value IS NOT NULL
+                AND CASE
+                  WHEN normalized_record.phone_digits LIKE '0060%' AND length(normalized_record.phone_digits) > 4
+                    THEN '0' || substr(normalized_record.phone_digits, 5)
+                  WHEN normalized_record.phone_digits LIKE '60%' AND length(normalized_record.phone_digits) > 2
+                    THEN '0' || substr(normalized_record.phone_digits, 3)
+                  ELSE normalized_record.phone_digits
+                END = candidate.phone_value
+              )
+            ), false) AS phone_match,
+            COALESCE((
+              (candidate.account_hash IS NOT NULL AND record.account_number_search_hash = candidate.account_hash)
+              OR (
+                record.account_number_search_hash IS NULL
+                AND candidate.account_value IS NOT NULL
+                AND regexp_replace(upper(COALESCE(record.account_number, '')), '\\s+', '', 'g') = candidate.account_value
+              )
+            ), false) AS account_match
+        ) identity_match
+        WHERE (
+          record.source_import_id = candidate.source_import_id
+          AND (identity_match.ic_match OR identity_match.phone_match OR identity_match.account_match)
+        ) OR (
+          record.source_import_id IS NULL
+          AND (
+            identity_match.ic_match::int
+            + identity_match.phone_match::int
+            + identity_match.account_match::int
+          ) >= 2
+        )
+        ORDER BY
+          (record.source_import_id = candidate.source_import_id) DESC,
+          record.payment_date DESC,
+          record.created_at DESC,
+          record.id DESC
+        LIMIT 1
+      ) matched ON true
+    `);
+
+    return (result.rows || []).map((row): SearchCollectionStatusMatch => {
+      const value = row as Record<string, unknown>;
+      const createdAt = value.created_at;
+      return {
+        rowId: String(value.row_id || ""),
+        recordCount: Math.max(1, Number(value.record_count || 1)),
+        latestPaymentDate: value.payment_date == null ? null : String(value.payment_date),
+        latestCreatedAt: createdAt instanceof Date
+          ? createdAt.toISOString()
+          : createdAt == null
+            ? null
+            : String(createdAt),
+        latestStaffNickname: typeof value.collection_staff_nickname === "string"
+          ? value.collection_staff_nickname
+          : null,
+        sourceImportName: typeof value.source_import_name === "string"
+          ? value.source_import_name
+          : null,
+        sourceFilename: typeof value.source_filename === "string"
+          ? value.source_filename
+          : null,
+        matchBasis: value.match_basis === "identifier_only"
+          ? "identifier_only"
+          : "source_and_identifier",
+      };
+    }).filter((match) => match.rowId);
+  }
 
   private async getGlobalSearchTotal(search: string): Promise<number> {
     const jsonSearchCondition = buildJsonTextContainsCondition(search);

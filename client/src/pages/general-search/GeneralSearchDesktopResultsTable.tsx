@@ -2,12 +2,14 @@ import type { ReactNode, UIEvent } from "react";
 import { Eye } from "lucide-react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Button } from "@/components/ui/button";
+import { GeneralSearchCollectionStatus } from "@/pages/general-search/GeneralSearchCollectionStatus";
 import { buildGeneralSearchRowAriaLabel } from "@/pages/general-search/general-search-row-aria";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText, getPriorityRank } from "@/pages/general-search/utils";
 
 interface GeneralSearchDesktopResultsTableProps {
   bottomSpacerHeight: number;
+  canSeeSourceFile: boolean;
   enableVirtualRows: boolean;
   headers: string[];
   onRecordSelect: (record: SearchResultRow) => void;
@@ -20,6 +22,7 @@ interface GeneralSearchDesktopResultsTableProps {
 
 export function GeneralSearchDesktopResultsTable({
   bottomSpacerHeight,
+  canSeeSourceFile,
   enableVirtualRows,
   headers,
   onRecordSelect,
@@ -59,6 +62,7 @@ export function GeneralSearchDesktopResultsTable({
           <tr>
             <th scope="col" className="p-3 text-left font-medium text-muted-foreground">#</th>
             <th scope="col" className="p-3 text-left font-medium text-muted-foreground">Action</th>
+            <th scope="col" className="p-3 text-left font-medium text-muted-foreground">Collection</th>
             {headers.map((header) => (
               <th key={header} scope="col" className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
                 {header}
@@ -69,7 +73,7 @@ export function GeneralSearchDesktopResultsTable({
         <tbody>
           {enableVirtualRows && topSpacerHeight > 0 ? (
             <tr aria-hidden="true">
-              <td aria-hidden="true" colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
+              <td aria-hidden="true" colSpan={headers.length + 3} height={topSpacerHeight} className="p-0" />
             </tr>
           ) : null}
           {virtualRows.map((row, rowIndex) => {
@@ -98,6 +102,12 @@ export function GeneralSearchDesktopResultsTable({
                     View
                   </Button>
                 </td>
+                <td className="p-3 align-top">
+                  <GeneralSearchCollectionStatus
+                    canSeeSourceFile={canSeeSourceFile}
+                    row={row}
+                  />
+                </td>
                 {headers.map((header) => {
                   const safeText = getCellDisplayText(row?.[header]);
                   return (
@@ -117,7 +127,7 @@ export function GeneralSearchDesktopResultsTable({
           })}
           {enableVirtualRows && bottomSpacerHeight > 0 ? (
             <tr aria-hidden="true">
-              <td aria-hidden="true" colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
+              <td aria-hidden="true" colSpan={headers.length + 3} height={bottomSpacerHeight} className="p-0" />
             </tr>
           ) : null}
         </tbody>

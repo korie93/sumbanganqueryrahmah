@@ -35,6 +35,12 @@ type CollectionRecordDbRow = {
   accountNumber?: unknown;
   account_number_encrypted?: unknown;
   accountNumberEncrypted?: unknown;
+  source_import_id?: unknown;
+  sourceImportId?: unknown;
+  source_import_name?: unknown;
+  sourceImportName?: unknown;
+  source_filename?: unknown;
+  sourceFilename?: unknown;
   batch?: unknown;
   payment_date?: unknown;
   paymentDate?: unknown;
@@ -196,6 +202,12 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     icNumber: piiValues.icNumber,
     customerPhone: piiValues.customerPhone,
     accountNumber: piiValues.accountNumber,
+    sourceImportId:
+      (normalizedRow.source_import_id ?? normalizedRow.sourceImportId ?? null) as string | null,
+    sourceImportName:
+      (normalizedRow.source_import_name ?? normalizedRow.sourceImportName ?? null) as string | null,
+    sourceFilename:
+      (normalizedRow.source_filename ?? normalizedRow.sourceFilename ?? null) as string | null,
     batch: String(normalizedRow.batch ?? "") as CollectionBatch,
     paymentDate,
     amount: formatCollectionAmountMyrString(normalizedRow.amount ?? 0),

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { GeneralSearchCollectionStatus } from "@/pages/general-search/GeneralSearchCollectionStatus";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import {
   collectSearchHeaders,
@@ -71,6 +72,12 @@ export function GeneralSearchRecordDialog({
                   : "space-y-4"
               }
             >
+              <GeneralSearchCollectionStatus
+                canSeeSourceFile={canSeeSourceFile}
+                className="mb-4 border-b border-border/60 pb-4"
+                row={record}
+                showDetails
+              />
               {primarySummary.length > 0 ? (
                 <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   {primarySummary.map((entry) => (

@@ -300,7 +300,7 @@ async function verifyLoginFormErrorAnnouncement(page) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await navigateForAccessibilityContract(page, "/login");
   await ensureLoginPageVisible(page, "Accessibility screen reader login validation");
-  await page.getByTestId("button-login").click();
+  await page.getByTestId("input-password").press("Enter");
   await page.locator("#login-username-error[role='alert']").waitFor({ timeout: 10_000 });
   await page.locator("#login-password-error[role='alert']").waitFor({ timeout: 10_000 });
 

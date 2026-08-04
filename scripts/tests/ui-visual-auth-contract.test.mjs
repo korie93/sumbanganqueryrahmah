@@ -90,6 +90,17 @@ test("visual contract guards dashboard recent activity across browser zoom width
   );
 });
 
+test("visual artifact screenshots retry only bounded Playwright timeouts", () => {
+  assert.match(visualContractSource, /const VISUAL_SCREENSHOT_TIMEOUT_MS = 45_000/);
+  assert.match(visualContractSource, /const VISUAL_SCREENSHOT_MAX_ATTEMPTS = 2/);
+  assert.match(visualContractSource, /name === "TimeoutError" && message\.includes\("page\.screenshot"\)/);
+  assert.match(visualContractSource, /attempt <= VISUAL_SCREENSHOT_MAX_ATTEMPTS/);
+  assert.match(visualContractSource, /animations: "disabled"/);
+  assert.match(visualContractSource, /caret: "hide"/);
+  assert.match(visualContractSource, /await page\.waitForTimeout\(500\)/);
+  assert.match(visualContractSource, /await captureFullPageScreenshot/);
+});
+
 test("visual and accessibility contracts verify the session through /api/me before authenticated route checks", () => {
   assert.match(visualContractSource, /probeAuthSession/);
   assert.match(visualContractSource, /waitForAuthenticatedShell/);
@@ -129,6 +140,10 @@ test("accessibility contract covers core authenticated work surfaces", () => {
 });
 
 test("accessibility contract includes screen-reader interaction scenarios", () => {
+  assert.match(
+    accessibilityContractSource,
+    /getByTestId\("input-password"\)\.press\("Enter"\)/,
+  );
   assert.match(accessibilityContractSource, /verifyLoginFormErrorAnnouncement/);
   assert.match(accessibilityContractSource, /#login-username-error\[role='alert'\]/);
   assert.match(accessibilityContractSource, /aria-describedby/);

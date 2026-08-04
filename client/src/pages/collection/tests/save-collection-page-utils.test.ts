@@ -8,9 +8,16 @@ import {
   validateSaveCollectionFormFields,
 } from "@/pages/collection/save-collection-page-utils";
 
+const sourceFields = {
+  sourceImportId: "import-1",
+  sourceImportName: "NPL CC P10 JULY",
+  sourceFilename: "npl-cc-p10-july.xlsx",
+};
+
 test("validateSaveCollectionForm rejects invalid customer and payment inputs", () => {
   assert.equal(
     validateSaveCollectionForm({
+      ...sourceFields,
       staffNickname: "ab",
       customerName: "",
       icNumber: "900101-10-1234",
@@ -25,6 +32,7 @@ test("validateSaveCollectionForm rejects invalid customer and payment inputs", (
 
   assert.equal(
     validateSaveCollectionForm({
+      ...sourceFields,
       staffNickname: "ab",
       customerName: "Siti",
       icNumber: "900101-10-1234",
@@ -41,6 +49,8 @@ test("validateSaveCollectionForm rejects invalid customer and payment inputs", (
 test("validateSaveCollectionFormFields returns inline field-level errors", () => {
   assert.deepEqual(
     validateSaveCollectionFormFields({
+      ...sourceFields,
+      sourceImportId: "",
       staffNickname: "ab",
       customerName: "",
       icNumber: "",
@@ -51,6 +61,7 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
       amount: "0",
     }),
     {
+      sourceImportId: "Source File is required. Select an active file from Saved.",
       customerName: "Customer Name is required.",
       icNumber: "IC Number is required.",
       customerPhone: "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.",
@@ -64,6 +75,7 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
 test("buildSaveCollectionMutationPayload trims values and maps receipt metadata", () => {
   const payload = buildSaveCollectionMutationPayload({
     values: {
+      ...sourceFields,
       staffNickname: " staff1 ",
       customerName: " Siti ",
       icNumber: " 900101-10-1234 ",
@@ -84,6 +96,7 @@ test("buildSaveCollectionMutationPayload trims values and maps receipt metadata"
   });
 
   assert.equal(payload.customerName, "Siti");
+  assert.equal(payload.sourceImportId, "import-1");
   assert.equal(payload.collectionStaffNickname, "staff1");
   assert.equal(payload.amount, 100.5);
   assert.deepEqual(payload.newReceiptMetadata, [
@@ -100,6 +113,7 @@ test("buildSaveCollectionMutationPayload trims values and maps receipt metadata"
 test("buildSaveCollectionMutationPayload normalizes grouped amount strings", () => {
   const payload = buildSaveCollectionMutationPayload({
     values: {
+      ...sourceFields,
       staffNickname: " staff1 ",
       customerName: " Siti ",
       icNumber: " 900101-10-1234 ",

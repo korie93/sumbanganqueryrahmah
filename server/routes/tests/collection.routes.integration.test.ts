@@ -317,6 +317,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        sourceImportId: "import-1",
         customerName: "Bob Lee",
         icNumber: "880202026666",
         customerPhone: "0129876543",
@@ -333,19 +334,68 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(payload.ok, true);
     assert.equal(payload.record.customerName, "Bob Lee");
     assert.equal(payload.record.batch, "P25");
+    assert.equal(payload.record.sourceImportId, "import-1");
+    assert.equal(payload.record.sourceImportName, "NPL CC P10 JULY");
+    assert.equal(payload.record.sourceFilename, "npl-cc-p10-july.xlsx");
     assert.equal(createCalls.length, 1);
+    assert.equal(createCalls[0].sourceImportId, "import-1");
+    assert.equal(createCalls[0].sourceImportName, "NPL CC P10 JULY");
+    assert.equal(createCalls[0].sourceFilename, "npl-cc-p10-july.xlsx");
     assert.equal(createCalls[0].createdByLogin, "staff.user");
     assert.equal(createCalls[0].amount, 245.9);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_CREATED");
     const auditDetails = parseAuditDetails(auditLogs[0]);
     assert.equal(auditDetails.event, "collection_record_created");
+    assert.equal(auditDetails.sourceImportId, "import-1");
+    assert.equal(auditDetails.sourceImportName, "NPL CC P10 JULY");
     assert.equal(auditDetails.snapshot.customerName, maskCollectionAuditCustomerName("Bob Lee"));
     assert.equal(auditDetails.snapshot.paymentDate, "2026-03-15");
     assert.equal(auditDetails.snapshot.amount, 245.9);
     assert.equal(auditDetails.snapshot.collectionStaffNickname, "Collector Alpha");
     assert.equal(auditDetails.snapshot.activeReceiptCount, 0);
     assert.equal(auditDetails.snapshot.activeReceiptSource, "none");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection rejects a deleted or unknown Saved source before creating a record", async () => {
+  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceImportId: "missing-import",
+        customerName: "Bob Lee",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 245.9,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).message, /no longer available/i);
+    assert.equal(createCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }

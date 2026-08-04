@@ -154,6 +154,59 @@ test("SearchRepository.searchSimpleDataRows parameterizes LIKE injection attempt
   }
 });
 
+test("SearchRepository.findCollectionStatusesForRows uses one parameterized bounded lookup", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = dbRead.execute;
+
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (query) => {
+    rawQueries.push(query);
+    return {
+      rows: [{
+        row_id: "row-1",
+        record_count: 2,
+        payment_date: "2026-08-01",
+        created_at: new Date("2026-08-01T08:00:00.000Z"),
+        collection_staff_nickname: "Collector Alpha",
+        source_import_name: "NPL CC P10 JULY",
+        source_filename: "npl.xlsx",
+        match_basis: "source_and_identifier",
+      }],
+    };
+  }) as typeof dbRead.execute;
+
+  try {
+    const matches = await repository.findCollectionStatusesForRows([{
+      rowId: "row-1",
+      sourceImportId: "import-1",
+      icHash: null,
+      icValue: "900101101234",
+      phoneHash: null,
+      phoneValue: "0123456789",
+      accountHash: null,
+      accountValue: "ACC1001",
+    }]);
+
+    assert.equal(rawQueries.length, 1);
+    assert.match(collectSqlText(rawQueries[0]), /jsonb_to_recordset/i);
+    assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
+      typeof value === "string" && value.includes('"row_id":"row-1"')),
+    );
+    assert.deepEqual(matches, [{
+      rowId: "row-1",
+      recordCount: 2,
+      latestPaymentDate: "2026-08-01",
+      latestCreatedAt: "2026-08-01T08:00:00.000Z",
+      latestStaffNickname: "Collector Alpha",
+      sourceImportName: "NPL CC P10 JULY",
+      sourceFilename: "npl.xlsx",
+      matchBasis: "source_and_identifier",
+    }]);
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
 test("SearchRepository.searchDataRows skips deep offset data queries without using cursor pagination", async () => {
   const repository = new SearchRepository();
   const queries: string[] = [];

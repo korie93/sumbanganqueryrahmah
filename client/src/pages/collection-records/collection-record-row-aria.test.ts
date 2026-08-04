@@ -66,6 +66,6 @@ test("buildCollectionRecordRowAriaLabel summarizes key record details", () => {
       },
       recordNumber: 7,
     }),
-    "Collection record 7, customer Siti Aminah, amount RM 125.00, payment date 14/04/2026, batch P10, staff nickname alpha, 2 receipts attached",
+    "Collection record 7, customer Siti Aminah, amount RM 125.00, payment date 14/04/2026, batch P10, staff nickname alpha, source file Source not recorded, 2 receipts attached",
   );
 });

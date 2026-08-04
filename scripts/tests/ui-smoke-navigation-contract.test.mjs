@@ -17,6 +17,41 @@ test("UI smoke navigation avoids networkidle for authenticated SPA routes", () =
   assert.doesNotMatch(smokeSource, /networkidle/);
 });
 
+test("UI smoke bounds the landing login click and falls back to the canonical login route", () => {
+  assert.match(
+    smokeSource,
+    /const loginHeading = page\.locator\("h1\.login-title"\)\.first\(\);/,
+  );
+  assert.match(
+    smokeSource,
+    /page\.locator\("html\.app-ready"\)\.waitFor\(\{\s+state: "attached",\s+timeout: SMOKE_NAVIGATION_TIMEOUT_MS,\s+\}\)/,
+  );
+  assert.match(
+    smokeSource,
+    /publicLoginButton\.click\(\{ force: true, timeout: 5_000 \}\)/,
+  );
+  assert.match(
+    smokeSource,
+    /if \(page\.isClosed\(\)\) \{\s+throw error;\s+\}/,
+  );
+  assert.match(
+    smokeSource,
+    /await navigateForSmoke\(page, "\/login"\);\s+await waitForInteractiveLogin\(\);/,
+  );
+});
+
+test("UI smoke pairs login submission with its response without a dangling rejection", () => {
+  assert.match(
+    smokeSource,
+    /const \[loginResponse\] = await Promise\.all\(\[\s+page\.waitForResponse\(/,
+  );
+  assert.match(
+    smokeSource,
+    /page\.getByTestId\("button-login"\)\.click\(\),\s+\]\);/,
+  );
+  assert.doesNotMatch(smokeSource, /const loginResponsePromise = page\.waitForResponse/);
+});
+
 test("backup smoke consumes only recovered GET list rate limits after the destructive flow succeeds", () => {
   const consumeCallIndex = smokeSource.indexOf("consumeExpectedRecoveredBackupListRateLimit(tracker);");
   const backupDeletedIndex = smokeSource.indexOf("backupDeleted = true;", consumeCallIndex - 1_000);

@@ -9,6 +9,9 @@ import {
 
 test("save collection state utils build an empty restored form shape", () => {
   assert.deepEqual(createEmptySaveCollectionRestoredFormValues(), {
+    sourceImportId: "",
+    sourceImportName: "",
+    sourceFilename: "",
     customerName: "",
     icNumber: "",
     customerPhone: "",
@@ -23,6 +26,9 @@ test("save collection state utils derive persist payload and restore state", () 
   const persistPayload = buildSaveCollectionDraftPersistPayload(
     {
       staffNickname: "collector-1",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL CC P10 JULY",
+      sourceFilename: "npl-cc-p10-july.xlsx",
       customerName: "Siti",
       icNumber: "900101-10-1234",
       customerPhone: "0123456789",
@@ -45,6 +51,7 @@ test("save collection state utils derive persist payload and restore state", () 
     hadPendingReceipts: true,
   });
   assert.equal(restored.values.customerName, "");
+  assert.equal(restored.values.sourceImportId, "");
   assert.equal(restored.values.icNumber, "");
   assert.equal(restored.values.customerPhone, "");
   assert.equal(restored.values.accountNumber, "");

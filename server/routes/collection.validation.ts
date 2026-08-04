@@ -47,6 +47,7 @@ export type CollectionCreatePayload = {
   icNumber?: string;
   customerPhone?: string;
   accountNumber?: string;
+  sourceImportId?: string;
   batch?: string;
   paymentDate?: string;
   amount?: number | string;

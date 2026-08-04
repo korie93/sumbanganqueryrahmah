@@ -5,6 +5,9 @@ export type RestorableCollectionRecordRow = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId: string | null;
+  sourceImportName: string | null;
+  sourceFilename: string | null;
   batch: string;
   paymentDate: string;
   amount: number;

@@ -16,6 +16,6 @@ test("buildGeneralSearchRowAriaLabel summarizes the most useful visible fields",
 
   assert.equal(
     label,
-    "Search result 3. Name: Siti Aminah. Account: ACC-001. Phone: 0123456789"
+    "Search result 3. Name: Siti Aminah. Account: ACC-001. Phone: 0123456789. Status collection tidak dapat disahkan"
   )
 })

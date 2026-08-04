@@ -1,6 +1,7 @@
 import { getGeneralSearchPopulatedHeaders } from "@/pages/general-search/general-search-results-utils"
 import type { SearchResultRow } from "@/pages/general-search/types"
 import { getCellDisplayText } from "@/pages/general-search/utils"
+import { getGeneralSearchCollectionStatusAriaLabel } from "@/pages/general-search/collection-status"
 
 export function buildGeneralSearchRowAriaLabel(input: {
   headers: string[]
@@ -13,8 +14,8 @@ export function buildGeneralSearchRowAriaLabel(input: {
   })
 
   if (preview.length === 0) {
-    return `Search result ${input.resultNumber}`
+    return `Search result ${input.resultNumber}. ${getGeneralSearchCollectionStatusAriaLabel(input.row)}`
   }
 
-  return `Search result ${input.resultNumber}. ${preview.join(". ")}`
+  return `Search result ${input.resultNumber}. ${preview.join(". ")}. ${getGeneralSearchCollectionStatusAriaLabel(input.row)}`
 }

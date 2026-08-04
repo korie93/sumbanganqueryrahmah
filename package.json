@@ -171,7 +171,7 @@
     "drizzle-zod": "0.7.1",
     "embla-carousel-react": "^8.6.0",
     "express": "5.2.1",
-    "express-rate-limit": "8.4.1",
+    "express-rate-limit": "8.6.1",
     "fflate": "0.8.2",
     "helmet": "8.1.0",
     "html2canvas": "^1.4.1",
@@ -247,7 +247,7 @@
     "lodash": "^4.17.23",
     "rollup": "^4.59.0",
     "esbuild": "^0.28.1",
-    "ip-address": "^10.2.0",
+    "ip-address": "^10.4.0",
     "js-yaml": "^4.3.0",
     "minimatch": "10.2.5"
   },

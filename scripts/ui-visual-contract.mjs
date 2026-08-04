@@ -22,6 +22,8 @@ const authUsername = String(process.env.VISUAL_TEST_USERNAME || process.env.SMOK
 const authPassword = String(process.env.VISUAL_TEST_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
 const VISUAL_NAVIGATION_TIMEOUT_MS = 30_000;
 const VISUAL_LOAD_STATE_TIMEOUT_MS = 10_000;
+const VISUAL_SCREENSHOT_TIMEOUT_MS = 45_000;
+const VISUAL_SCREENSHOT_MAX_ATTEMPTS = 2;
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -38,6 +40,37 @@ const ensureArtifactsDir = async () => {
   await mkdir(artifactsDir, { recursive: true });
 };
 
+const isScreenshotTimeoutError = (error) => {
+  const name = error instanceof Error ? error.name : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return name === "TimeoutError" && message.includes("page.screenshot");
+};
+
+const captureFullPageScreenshot = async (page, screenshotPath) => {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= VISUAL_SCREENSHOT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await page.screenshot({
+        path: screenshotPath,
+        fullPage: true,
+        animations: "disabled",
+        caret: "hide",
+        timeout: VISUAL_SCREENSHOT_TIMEOUT_MS,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isScreenshotTimeoutError(error) || attempt === VISUAL_SCREENSHOT_MAX_ATTEMPTS) {
+        throw error;
+      }
+      await page.waitForTimeout(500);
+    }
+  }
+
+  throw lastError ?? new Error("Visual screenshot capture failed without an error.");
+};
+
 const captureRouteArtifacts = async (page, routeId, viewportId, layoutSummary) => {
   if (!artifactsDir) {
     return;
@@ -45,10 +78,10 @@ const captureRouteArtifacts = async (page, routeId, viewportId, layoutSummary) =
 
   await ensureArtifactsDir();
 
-  await page.screenshot({
-    path: path.join(artifactsDir, `${routeId}-${viewportId}.png`),
-    fullPage: true,
-  });
+  await captureFullPageScreenshot(
+    page,
+    path.join(artifactsDir, `${routeId}-${viewportId}.png`),
+  );
   await writeFile(
     path.join(artifactsDir, `${routeId}-${viewportId}.json`),
     JSON.stringify(layoutSummary, null, 2),

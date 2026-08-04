@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GeneralSearchCollectionStatus } from "@/pages/general-search/GeneralSearchCollectionStatus";
 import { buildGeneralSearchRowAriaLabel } from "@/pages/general-search/general-search-row-aria";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import {
@@ -9,6 +10,7 @@ import {
 import { getCellDisplayText, getPriorityRank } from "@/pages/general-search/utils";
 
 interface GeneralSearchMobileResultsListProps {
+  canSeeSourceFile: boolean;
   headers: string[];
   onRecordSelect: (record: SearchResultRow) => void;
   rangeStart: number;
@@ -17,6 +19,7 @@ interface GeneralSearchMobileResultsListProps {
 }
 
 export function GeneralSearchMobileResultsList({
+  canSeeSourceFile,
   headers,
   onRecordSelect,
   rangeStart,
@@ -72,6 +75,12 @@ export function GeneralSearchMobileResultsList({
                 View
               </Button>
             </div>
+
+            <GeneralSearchCollectionStatus
+              canSeeSourceFile={canSeeSourceFile}
+              className="mt-3 border-t border-border/60 pt-3"
+              row={row}
+            />
 
             {visibleDetailHeaders.length > 0 ? (
               <dl className="mt-3 space-y-2">

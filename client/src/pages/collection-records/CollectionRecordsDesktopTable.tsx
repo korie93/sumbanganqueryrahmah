@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CollectionRecordsTableProps } from "@/pages/collection-records/CollectionRecordsTable";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
+import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatAmountRM } from "@/pages/collection/utils";
 
@@ -21,7 +22,7 @@ export function CollectionRecordsDesktopTable({
 }: CollectionRecordsDesktopTableProps) {
   return (
     <div className="min-h-[420px] max-h-[64vh] overflow-auto rounded-[1.5rem] border border-border/60 bg-background shadow-sm">
-      <Table className="min-w-[1280px] text-sm">
+      <Table className="min-w-[1440px] text-sm">
         <TableHeader>
           <TableRow>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-[72px] border-b border-border/70 bg-background/95 sqr-backdrop-blur">No.</TableHead>
@@ -34,19 +35,20 @@ export function CollectionRecordsDesktopTable({
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Payment Date</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Receipt</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Staff Nickname</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Source File</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 text-right sqr-backdrop-blur">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loadingRecords ? (
             <TableRow>
-              <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={12} className="text-center text-muted-foreground py-6">
                 Loading records...
               </TableCell>
             </TableRow>
           ) : visibleRecords.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={12} className="text-center text-muted-foreground py-6">
                 No collection records found.
               </TableCell>
             </TableRow>
@@ -90,6 +92,9 @@ export function CollectionRecordsDesktopTable({
                   )}
                 </TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.collectionStaffNickname}</TableCell>
+                <TableCell className="max-w-[240px] truncate py-2" title={getCollectionRecordSourceLabel(record)}>
+                  {getCollectionRecordSourceLabel(record)}
+                </TableCell>
                 <TableCell className="py-2 text-right whitespace-nowrap">
                   <div className="inline-flex items-center gap-2">
                     {canEdit ? (

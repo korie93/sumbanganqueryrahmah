@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
+import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 const CollectionRecordsDesktopTable = lazy(() =>
@@ -107,6 +108,10 @@ export function CollectionRecordsTable({
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Staff Nickname</dt>
                   <dd>{record.collectionStaffNickname || "-"}</dd>
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Source File</dt>
+                  <dd className="break-words">{getCollectionRecordSourceLabel(record)}</dd>
                 </div>
               </dl>
 

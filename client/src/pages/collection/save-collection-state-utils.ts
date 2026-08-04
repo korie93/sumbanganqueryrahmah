@@ -12,6 +12,9 @@ export type SaveCollectionRestoredFormValues = Omit<
 
 export function createEmptySaveCollectionRestoredFormValues(): SaveCollectionRestoredFormValues {
   return {
+    sourceImportId: "",
+    sourceImportName: "",
+    sourceFilename: "",
     customerName: "",
     icNumber: "",
     customerPhone: "",
@@ -49,6 +52,9 @@ export function buildSaveCollectionDraftRestoreState(
 
   return {
     values: {
+      sourceImportId: "",
+      sourceImportName: "",
+      sourceFilename: "",
       customerName: "",
       icNumber: "",
       customerPhone: "",

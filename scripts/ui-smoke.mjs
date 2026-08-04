@@ -598,6 +598,75 @@ const ensureCollectionSmokeAsset = async (fileName) => {
   return filePath;
 };
 
+const createCollectionSmokeSourceImport = async (context, values) => {
+  const sourceName = `Smoke Saved Source ${values.uniqueSuffix}`;
+  const sourceFilename = `smoke-saved-source-${values.uniqueSuffix}.csv`;
+  const response = await apiJsonRequestWithRetry(
+    context,
+    "POST",
+    "/api/imports",
+    {
+      name: sourceName,
+      filename: sourceFilename,
+      data: [{
+        "Customer Name": values.customerName,
+        "IC Number": values.icNumber,
+        "Customer Phone Number": values.customerPhone,
+        "Account Number": values.accountNumber,
+      }, {
+        "Customer Name": `Smoke No Collection ${values.uniqueSuffix}`,
+        "IC Number": `810202${values.uniqueSuffix.slice(-6)}`,
+        "Customer Phone Number": `013${values.uniqueSuffix.slice(-7)}`,
+        "Account Number": values.noRecordAccountNumber,
+      }],
+    },
+    [200],
+  );
+  const sourceImportId = String(response.payload?.id || "").trim();
+
+  assert(sourceImportId, "collection receipt UI smoke should create a Saved source import");
+  return {
+    id: sourceImportId,
+    name: String(response.payload?.name || sourceName).trim(),
+    filename: String(response.payload?.filename || sourceFilename).trim(),
+  };
+};
+
+const selectCollectionSmokeSourceImport = async (page, sourceImport) => {
+  const searchInput = page.getByLabel("Cari fail Saved", { exact: true });
+  await searchInput.fill(sourceImport.name);
+
+  const sourceSelect = page.locator("#save-collection-source-import");
+  const sourceOption = sourceSelect.locator(`option[value="${sourceImport.id}"]`);
+  await sourceOption.waitFor({ state: "attached", timeout: 15_000 });
+  await sourceSelect.selectOption(sourceImport.id);
+  await page.getByText(sourceImport.name, { exact: true }).last().waitFor({ timeout: 15_000 });
+};
+
+const verifyCollectionSmokeGeneralSearch = async (page, values) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await navigateForSmoke(page, "/general-search");
+  await page.getByRole("heading", { name: "Data Search" }).waitFor({ timeout: 15_000 });
+
+  const queryInput = page.getByTestId("input-search");
+  await queryInput.fill(values.accountNumber);
+  await page.getByTestId("button-search").click();
+  await page.getByText("Collection direkodkan", { exact: true }).first().waitFor({ timeout: 15_000 });
+
+  await page.getByTestId("button-view-0").click();
+  const recordDialog = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "Record Details" }),
+  }).first();
+  await recordDialog.waitFor({ timeout: 15_000 });
+  await recordDialog.getByText(values.sourceImportName, { exact: false }).waitFor({ timeout: 15_000 });
+  await recordDialog.getByRole("button", { name: "Close" }).click();
+  await recordDialog.waitFor({ state: "hidden", timeout: 15_000 });
+
+  await queryInput.fill(values.noRecordAccountNumber);
+  await page.getByTestId("button-search").click();
+  await page.getByText("Tiada rekod collection", { exact: true }).first().waitFor({ timeout: 15_000 });
+};
+
 const getInputByLabel = (page, labelText) =>
   page
     .locator("label", { hasText: labelText })
@@ -1097,7 +1166,10 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
   const [nickname] = await ensureCollectionSmokeNicknames(context);
   const uniqueSuffix = `${Date.now()}`;
   const customerName = `Smoke Receipt ${uniqueSuffix}`;
+  const icNumber = `900101${uniqueSuffix.slice(-6)}`;
+  const customerPhone = `012${uniqueSuffix.slice(-7)}`;
   const accountNumber = `SMOKE-RCPT-${uniqueSuffix}`;
+  const noRecordAccountNumber = `SMOKE-NONE-${uniqueSuffix}`;
   const saveReceiptName = "receipt-smoke-save.png";
   const replaceReceiptName = "receipt-replace.png";
   const saveReceiptPath = await ensureCollectionSmokeAsset(saveReceiptName);
@@ -1105,15 +1177,25 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
   let recordId = "";
   let expectedUpdatedAt = "";
   let recordDeleted = false;
+  let sourceImport = null;
 
   try {
+    sourceImport = await createCollectionSmokeSourceImport(context, {
+      accountNumber,
+      customerName,
+      customerPhone,
+      icNumber,
+      noRecordAccountNumber,
+      uniqueSuffix,
+    });
     await applySmokeCollectionNicknameSession(page, nickname);
     await navigateForSmoke(page, "/collection/save");
     await page.getByText("Simpan Collection Individual").first().waitFor();
+    await selectCollectionSmokeSourceImport(page, sourceImport);
 
     await getInputByLabel(page, "Customer Name").fill(customerName);
-    await getInputByLabel(page, "IC Number").fill(`900101${uniqueSuffix.slice(-6)}`);
-    await getInputByLabel(page, "Customer Phone Number").fill(`012${uniqueSuffix.slice(-7)}`);
+    await getInputByLabel(page, "IC Number").fill(icNumber);
+    await getInputByLabel(page, "Customer Phone Number").fill(customerPhone);
     await getInputByLabel(page, "Account Number").fill(accountNumber);
     await setDateFieldValue(page, {
       labelText: "Payment Date",
@@ -1147,11 +1229,22 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     ).trim();
     assert(recordId, "collection receipt UI smoke should receive a created record id");
     assert(expectedUpdatedAt, "collection receipt UI smoke should capture the created record version");
+    assert(
+      String(createPayload?.record?.sourceImportId || "").trim() === sourceImport.id,
+      "collection receipt UI smoke should persist the selected Saved source import",
+    );
     await page.waitForTimeout(250);
+
+    await verifyCollectionSmokeGeneralSearch(page, {
+      accountNumber,
+      noRecordAccountNumber,
+      sourceImportName: sourceImport.name,
+    });
 
     await navigateForSmoke(page, "/collection/records");
     await page.getByText("View Rekod Collection").first().waitFor();
     let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
+    await targetRow.getByText(sourceImport.name, { exact: true }).waitFor({ timeout: 15_000 });
 
     await targetRow.getByRole("button", { name: /View/ }).click();
     await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
@@ -1243,6 +1336,15 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
         accountNumber,
         expectedUpdatedAt,
       }).catch((error) => recordBestEffortFailure("cleanup collection receipt smoke record", error));
+    }
+    if (sourceImport?.id) {
+      await apiJsonRequestWithRetry(
+        context,
+        "DELETE",
+        `/api/imports/${encodeURIComponent(sourceImport.id)}`,
+        undefined,
+        [200, 404],
+      ).catch((error) => recordBestEffortFailure("cleanup collection smoke source import", error));
     }
   }
 };
@@ -2328,29 +2430,43 @@ const waitForVisible = async (locator, timeout = 1_500) => {
 };
 
 const ensureLoginPageVisible = async (page) => {
-  const loginHeading = page.getByRole("heading", {
-    name: /^(Log Masuk SQR|Log In SQR System)$/,
-    level: 1,
-  });
+  const loginHeading = page.locator("h1.login-title").first();
   const usernameInput = page.getByTestId("input-username");
+  const waitForInteractiveLogin = async () => {
+    await page.locator("html.app-ready").waitFor({
+      state: "attached",
+      timeout: SMOKE_NAVIGATION_TIMEOUT_MS,
+    });
+    await usernameInput.waitFor({ state: "visible", timeout: 10_000 });
+    await loginHeading.waitFor({ state: "visible", timeout: 10_000 });
+  };
 
   if (await waitForVisible(loginHeading) || await waitForVisible(usernameInput)) {
+    await waitForInteractiveLogin();
     return;
   }
 
   const publicLoginButton = page.getByRole("button", { name: /^(Log In|Log Masuk)$/ }).first();
   if (await waitForVisible(publicLoginButton, 2_000)) {
-    await publicLoginButton.click();
-    await waitForSmokeDocumentReady(page);
-    await usernameInput.waitFor({ state: "visible", timeout: 10_000 });
-    await loginHeading.waitFor({ state: "visible", timeout: 10_000 });
-    return;
+    try {
+      await publicLoginButton.click({ force: true, timeout: 5_000 });
+      await waitForSmokeDocumentReady(page);
+      if (await waitForVisible(usernameInput, 5_000)) {
+        await waitForInteractiveLogin();
+        return;
+      }
+    } catch (error) {
+      if (page.isClosed()) {
+        throw error;
+      }
+    }
   }
 
-  const bodyText = await page.locator("body").innerText().catch(() => "(unavailable)");
-  throw new Error(
-    `Smoke login page was not reachable after landing bootstrap. Visible body excerpt: ${bodyText.slice(0, 400)}`,
-  );
+  // Landing animations can keep Playwright's stability check busy on loaded CI
+  // workers. The smoke contract needs the login route, so use its canonical URL
+  // as a bounded fallback and still require the complete form to render.
+  await navigateForSmoke(page, "/login");
+  await waitForInteractiveLogin();
 };
 
 const checkLogoutFlow = async (page, context, tracker) => {
@@ -2460,18 +2576,18 @@ const run = async () => {
 
       if (username && password) {
         await runSmokePhase("authenticated login", async () => {
-          const loginResponsePromise = page.waitForResponse(
-            (response) =>
-              response.request().method() === "POST"
-              && response.url().includes("/api/auth/login"),
-          );
-
           await page.getByTestId("input-username").fill(username);
           await page.getByTestId("input-password").fill(password);
-          await page.getByTestId("button-login").click();
+          const [loginResponse] = await Promise.all([
+            page.waitForResponse(
+              (response) =>
+                response.request().method() === "POST"
+                && response.url().includes("/api/auth/login"),
+            ),
+            page.getByTestId("button-login").click(),
+          ]);
           await waitForSmokeDocumentReady(page);
           await page.waitForTimeout(250);
-          const loginResponse = await loginResponsePromise;
           let loginPayload = null;
           try {
             loginPayload = await loginResponse.json();

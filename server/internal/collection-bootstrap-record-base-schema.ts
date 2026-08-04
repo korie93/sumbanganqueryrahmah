@@ -26,6 +26,9 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         account_number text,
         account_number_encrypted text,
         account_number_search_hash text,
+        source_import_id text,
+        source_import_name text,
+        source_filename text,
         batch text NOT NULL,
         payment_date date NOT NULL,
         amount numeric(14,2) NOT NULL,
@@ -55,6 +58,9 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_search_hash text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_import_id text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_import_name text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_filename text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`,
@@ -197,6 +203,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_source_import_id ON public.collection_records(source_import_id)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
     sql`
@@ -225,6 +232,26 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`
       CREATE INDEX IF NOT EXISTS idx_collection_records_lower_created_by_payment_created_id
       ON public.collection_records ((lower(created_by_login)), payment_date, created_at, id)
+    `,
+    sql`
+      DO $$
+      BEGIN
+        IF to_regclass('public.imports') IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'fk_collection_records_source_import_id'
+              AND conrelid = 'public.collection_records'::regclass
+              AND contype = 'f'
+          ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT fk_collection_records_source_import_id
+          FOREIGN KEY (source_import_id)
+          REFERENCES public.imports(id)
+          ON DELETE SET NULL
+          ON UPDATE CASCADE;
+        END IF;
+      END $$;
     `,
     sql`
       DO $$

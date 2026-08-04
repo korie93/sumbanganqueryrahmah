@@ -22,6 +22,9 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     isDbProtected,
   } = deps;
 
+  const canSeeSourceDetails = (req: AuthenticatedRequest) =>
+    req.user?.role === "superuser" || req.user?.role === "admin";
+
   const getColumns = async (_req: AuthenticatedRequest, res: Response) => {
     return res.json(await searchService.getColumns());
   };
@@ -42,6 +45,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
       requestedLimit,
       maxTotal: runtimeSettings.searchResultLimit,
       isDbProtected: isDbProtected(),
+      includeSourceDetails: canSeeSourceDetails(req),
     }));
   };
 
@@ -67,6 +71,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
       page,
       requestedLimit,
       maxTotal: runtimeSettings.searchResultLimit,
+      includeSourceDetails: canSeeSourceDetails(req),
     }));
   };
 
