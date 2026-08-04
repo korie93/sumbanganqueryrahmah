@@ -6,6 +6,7 @@ export type RestorableCollectionRecordRow = {
   customerPhone: string;
   accountNumber: string;
   sourceImportId: string | null;
+  sourceDataRowId: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
   batch: string;

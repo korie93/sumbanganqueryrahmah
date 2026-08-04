@@ -27,6 +27,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         account_number_encrypted text,
         account_number_search_hash text,
         source_import_id text,
+        source_data_row_id text,
         source_import_name text,
         source_filename text,
         batch text NOT NULL,
@@ -59,6 +60,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_search_hash text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_import_id text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_data_row_id text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_import_name text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_filename text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`,
@@ -204,6 +206,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_source_import_id ON public.collection_records(source_import_id)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_source_data_row_id ON public.collection_records(source_data_row_id)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
     sql`
@@ -248,6 +251,26 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
           ADD CONSTRAINT fk_collection_records_source_import_id
           FOREIGN KEY (source_import_id)
           REFERENCES public.imports(id)
+          ON DELETE SET NULL
+          ON UPDATE CASCADE;
+        END IF;
+      END $$;
+    `,
+    sql`
+      DO $$
+      BEGIN
+        IF to_regclass('public.data_rows') IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'fk_collection_records_source_data_row_id'
+              AND conrelid = 'public.collection_records'::regclass
+              AND contype = 'f'
+          ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT fk_collection_records_source_data_row_id
+          FOREIGN KEY (source_data_row_id)
+          REFERENCES public.data_rows(id)
           ON DELETE SET NULL
           ON UPDATE CASCADE;
         END IF;

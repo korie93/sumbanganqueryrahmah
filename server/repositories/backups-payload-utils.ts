@@ -172,6 +172,7 @@ export async function prepareBackupPayloadFileForCreate(
           ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "accountNumber", "accountNumber")},
           account_number_encrypted as "accountNumberEncrypted",
           source_import_id as "sourceImportId",
+          source_data_row_id as "sourceDataRowId",
           source_import_name as "sourceImportName",
           source_filename as "sourceFilename",
           batch,

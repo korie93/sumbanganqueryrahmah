@@ -81,6 +81,7 @@ export async function syncCollectionRecordReceiptValidation(
       ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
       account_number_encrypted,
       source_import_id,
+      source_data_row_id,
       source_import_name,
       source_filename,
       batch,

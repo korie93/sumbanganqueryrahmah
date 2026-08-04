@@ -14,9 +14,6 @@ import {
 
 const baseValues: SaveCollectionFormValues = {
   staffNickname: "Korie",
-  sourceImportId: "import-1",
-  sourceImportName: "NPL CC P10 JULY",
-  sourceFilename: "npl-cc-p10-july.xlsx",
   customerName: "Test Customer",
   icNumber: "900101010101",
   customerPhone: "0123456789",
@@ -33,7 +30,7 @@ test("buildSaveCollectionReadySummary exposes key save fields", () => {
   });
 
   assert.equal(summary.find((item) => item.label === "Customer")?.value, "Test Customer");
-  assert.equal(summary.find((item) => item.label === "Source File")?.value, "NPL CC P10 JULY");
+  assert.equal(summary.some((item) => item.label === "Source File"), false);
   assert.match(summary.find((item) => item.label === "Amount")?.value || "", /1,650\.00/);
   assert.equal(summary.find((item) => item.label === "Receipt")?.value, "1 receipt");
 });
@@ -71,6 +68,7 @@ test("buildSaveCollectionSuccessDescription includes amount, nickname, batch, an
   const description = buildSaveCollectionSuccessDescription({
     values: baseValues,
     receiptCount: 1,
+    sourceLabel: "NPL CC P10 JULY",
   });
 
   assert.match(description, /1,650\.00/);
@@ -84,6 +82,7 @@ test("buildSaveCollectionLastSavedSummary keeps post-save action copy non-sensit
   const summary = buildSaveCollectionLastSavedSummary({
     values: baseValues,
     receiptCount: 2,
+    sourceLabel: "NPL CC P10 JULY",
     savedAt: new Date("2026-05-18T09:30:00.000Z"),
   });
 

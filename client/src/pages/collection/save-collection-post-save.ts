@@ -19,14 +19,13 @@ export function buildSaveCollectionReceiptLabel(receiptCount: number): string {
 export function buildSaveCollectionLastSavedSummary(params: {
   values: SaveCollectionFormValues;
   receiptCount: number;
+  sourceLabel?: string | null;
   savedAt?: Date;
 }): SaveCollectionLastSavedSummary {
   const savedAt = params.savedAt ?? new Date();
   return {
     customerName: params.values.customerName.trim() || "Customer",
-    sourceLabel: params.values.sourceImportName.trim()
-      || params.values.sourceFilename.trim()
-      || "Source not recorded",
+    sourceLabel: String(params.sourceLabel || "").trim() || "Tiada padanan Saved",
     staffNickname: params.values.staffNickname.trim() || "staff dipilih",
     batch: params.values.batch,
     amountLabel: formatAmountRM(params.values.amount),

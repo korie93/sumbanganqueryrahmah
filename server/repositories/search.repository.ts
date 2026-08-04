@@ -1,5 +1,9 @@
 import { sql, type SQL } from "drizzle-orm";
-import { dbRead } from "../db-postgres";
+import { db, dbRead } from "../db-postgres";
+import {
+  buildSavedCollectionLookupTerms,
+  selectSavedCollectionSourceMatch,
+} from "../lib/saved-collection-link-utils";
 import {
   mapAdvancedSearchDataRow,
   mapSearchDataRow,
@@ -21,8 +25,12 @@ import {
   type SearchColumnFilter,
   type SearchCollectionStatusCandidate,
   type SearchCollectionStatusMatch,
+  type SearchCollectionViewerScope,
   type SearchDataRow,
   type SearchGlobalDataRow,
+  type SavedCollectionSourceCandidate,
+  type SavedCollectionSourceLookup,
+  type SavedCollectionSourceMatch,
 } from "./search-repository-types";
 
 export { MAX_SEARCH_LIMIT, MAX_SEARCH_OFFSET } from "./search-repository-shared";
@@ -41,13 +49,69 @@ type ColumnNameCacheEntry = {
 export class SearchRepository {
   private allColumnNamesCache: ColumnNameCacheEntry | null = null;
 
+  async findSavedCollectionSourceForRecord(
+    lookup: SavedCollectionSourceLookup,
+  ): Promise<SavedCollectionSourceMatch | null> {
+    const terms = buildSavedCollectionLookupTerms(lookup);
+    if (terms.length === 0) {
+      return null;
+    }
+
+    const termConditions = terms.map((term) => buildJsonTextContainsCondition(term));
+    const result = await db.execute(sql`
+      SELECT
+        dr.id AS row_id,
+        dr.import_id AS source_import_id,
+        dr.json_data AS json_data_jsonb,
+        imp.name AS source_import_name,
+        imp.filename AS source_filename,
+        imp.created_at AS source_created_at
+      FROM public.data_rows dr
+      JOIN public.imports imp ON imp.id = dr.import_id
+      WHERE imp.is_deleted = false
+        AND (${sql.join(termConditions, sql` OR `)})
+      ORDER BY imp.created_at DESC, dr.id DESC
+      LIMIT ${MAX_SEARCH_COLLECTION_STATUS_CANDIDATES}
+    `);
+
+    const candidates = (result.rows || []).map((row): SavedCollectionSourceCandidate => {
+      const value = row as Record<string, unknown>;
+      return {
+        rowId: String(value.row_id || ""),
+        sourceImportId: String(value.source_import_id || ""),
+        sourceImportName: typeof value.source_import_name === "string" ? value.source_import_name : null,
+        sourceFilename: typeof value.source_filename === "string" ? value.source_filename : null,
+        sourceCreatedAt: value.source_created_at instanceof Date
+          ? value.source_created_at
+          : typeof value.source_created_at === "string"
+            ? value.source_created_at
+            : null,
+        jsonDataJsonb: value.json_data_jsonb,
+      };
+    }).filter((candidate) => candidate.rowId && candidate.sourceImportId);
+
+    return selectSavedCollectionSourceMatch(lookup, candidates);
+  }
+
   async findCollectionStatusesForRows(
     candidates: SearchCollectionStatusCandidate[],
+    viewerScope: SearchCollectionViewerScope,
   ): Promise<SearchCollectionStatusMatch[]> {
     const boundedCandidates = candidates.slice(0, MAX_SEARCH_COLLECTION_STATUS_CANDIDATES);
-    if (boundedCandidates.length === 0) {
+    if (boundedCandidates.length === 0 || viewerScope.kind === "none") {
       return [];
     }
+
+    const scopeCondition = viewerScope.kind === "all"
+      ? sql`true`
+      : viewerScope.kind === "created_by"
+        ? sql`lower(record.created_by_login) = ${viewerScope.username.trim().toLowerCase()}`
+        : viewerScope.nicknames.length > 0
+          ? sql`lower(record.collection_staff_nickname) IN (${sql.join(
+              viewerScope.nicknames.slice(0, 200).map((nickname) => sql`${nickname.trim().toLowerCase()}`),
+              sql`, `,
+            )})`
+          : sql`false`;
 
     const candidateJson = JSON.stringify(boundedCandidates.map((candidate) => ({
       row_id: candidate.rowId,
@@ -79,6 +143,8 @@ export class SearchRepository {
         matched.payment_date,
         matched.created_at,
         matched.collection_staff_nickname,
+        matched.created_by_login,
+        matched.amount,
         matched.source_import_name,
         matched.source_filename,
         matched.match_basis
@@ -88,9 +154,13 @@ export class SearchRepository {
           record.payment_date,
           record.created_at,
           record.collection_staff_nickname,
+          record.created_by_login,
+          record.amount,
           record.source_import_name,
           record.source_filename,
           CASE
+            WHEN record.source_data_row_id = candidate.row_id
+              THEN 'source_row'
             WHEN record.source_import_id = candidate.source_import_id
               THEN 'source_and_identifier'
             ELSE 'identifier_only'
@@ -133,21 +203,24 @@ export class SearchRepository {
               )
             ), false) AS account_match
         ) identity_match
-        WHERE (
-          record.source_import_id = candidate.source_import_id
-          AND (identity_match.ic_match OR identity_match.phone_match OR identity_match.account_match)
-        ) OR (
-          record.source_import_id IS NULL
+        WHERE ${scopeCondition}
           AND (
-            identity_match.ic_match::int
-            + identity_match.phone_match::int
-            + identity_match.account_match::int
-          ) >= 2
-        )
+            record.source_data_row_id = candidate.row_id
+            OR (
+              record.source_import_id = candidate.source_import_id
+              AND (identity_match.ic_match OR identity_match.phone_match OR identity_match.account_match)
+            )
+            OR identity_match.ic_match
+            OR (identity_match.phone_match AND identity_match.account_match)
+          )
         ORDER BY
-          (record.source_import_id = candidate.source_import_id) DESC,
           record.payment_date DESC,
           record.created_at DESC,
+          CASE
+            WHEN record.source_data_row_id = candidate.row_id THEN 3
+            WHEN record.source_import_id = candidate.source_import_id THEN 2
+            ELSE 1
+          END DESC,
           record.id DESC
         LIMIT 1
       ) matched ON true
@@ -168,15 +241,21 @@ export class SearchRepository {
         latestStaffNickname: typeof value.collection_staff_nickname === "string"
           ? value.collection_staff_nickname
           : null,
+        latestCreatedByLogin: typeof value.created_by_login === "string"
+          ? value.created_by_login
+          : null,
+        latestAmount: value.amount == null ? null : String(value.amount),
         sourceImportName: typeof value.source_import_name === "string"
           ? value.source_import_name
           : null,
         sourceFilename: typeof value.source_filename === "string"
           ? value.source_filename
           : null,
-        matchBasis: value.match_basis === "identifier_only"
-          ? "identifier_only"
-          : "source_and_identifier",
+        matchBasis: value.match_basis === "source_row"
+          ? "source_row"
+          : value.match_basis === "identifier_only"
+            ? "identifier_only"
+            : "source_and_identifier",
       };
     }).filter((match) => match.rowId);
   }

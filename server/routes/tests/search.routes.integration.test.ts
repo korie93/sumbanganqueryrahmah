@@ -3,7 +3,9 @@ import test from "node:test";
 import { createSearchController } from "../../controllers/search.controller";
 import { errorHandler } from "../../middleware/error-handler";
 import type { SearchRepository } from "../../repositories/search.repository";
+import type { SearchCollectionViewerScope } from "../../repositories/search-repository-types";
 import { SearchService } from "../../services/search.service";
+import type { CollectionStoragePort } from "../../services/collection/collection-service-support";
 import { registerSearchRoutes } from "../search.routes";
 import {
   createJsonTestApp,
@@ -15,6 +17,7 @@ import {
 function createSearchRouteHarness(options?: {
   searchResultLimit?: number;
   isDbProtected?: boolean;
+  hasNicknameSession?: boolean;
   role?: "admin" | "manager" | "superuser" | "user";
 }) {
   const globalSearchCalls: Array<Record<string, unknown>> = [];
@@ -22,6 +25,7 @@ function createSearchRouteHarness(options?: {
   const advancedSearchCalls: Array<Record<string, unknown>> = [];
   const searchRateLimiterCalls: string[] = [];
   const collectionStatusCalls: Array<Array<Record<string, unknown>>> = [];
+  const collectionStatusScopes: SearchCollectionViewerScope[] = [];
   let getColumnsCallCount = 0;
 
   const searchRepository = {
@@ -47,8 +51,12 @@ function createSearchRouteHarness(options?: {
         total: 25,
       };
     },
-    findCollectionStatusesForRows: async (candidates: Array<Record<string, unknown>>) => {
+    findCollectionStatusesForRows: async (
+      candidates: Array<Record<string, unknown>>,
+      viewerScope: SearchCollectionViewerScope,
+    ) => {
       collectionStatusCalls.push(candidates);
+      collectionStatusScopes.push(viewerScope);
       return candidates
         .filter((candidate) => candidate.rowId === "row-1")
         .map(() => ({
@@ -57,6 +65,8 @@ function createSearchRouteHarness(options?: {
           latestPaymentDate: "2026-08-01",
           latestCreatedAt: "2026-08-01T08:00:00.000Z",
           latestStaffNickname: "Collector Alpha",
+          latestCreatedByLogin: "user.one",
+          latestAmount: "150.50",
           sourceImportName: "March Import",
           sourceFilename: "march.csv",
           matchBasis: "source_and_identifier" as const,
@@ -105,6 +115,28 @@ function createSearchRouteHarness(options?: {
       };
     },
   } as unknown as SearchRepository;
+  const role = options?.role ?? "user";
+  const collectionStorage = {
+    getCollectionNicknameSessionByActivity: async () => options?.hasNicknameSession === false
+      ? null
+      : ({
+          activityId: "activity-1",
+          username: "user.one",
+          userRole: role,
+          nickname: "Collector Alpha",
+          verifiedAt: new Date(),
+          updatedAt: new Date(),
+        }),
+    getCollectionAdminGroupVisibleNicknameValuesByLeader: async () => ["Collector Alpha"],
+    getCollectionStaffNicknameByName: async () => ({
+      id: "nickname-1",
+      nickname: "Collector Alpha",
+      isActive: true,
+      roleScope: "both" as const,
+      createdBy: null,
+      createdAt: new Date(),
+    }),
+  } as unknown as CollectionStoragePort;
 
   const app = createJsonTestApp();
   registerSearchRoutes(app, {
@@ -114,11 +146,12 @@ function createSearchRouteHarness(options?: {
         searchResultLimit: options?.searchResultLimit ?? 200,
       }),
       isDbProtected: () => options?.isDbProtected ?? false,
+      collectionStorage,
     }),
     authenticateToken: createTestAuthenticateToken({
       userId: "user-1",
       username: "user.one",
-      role: options?.role ?? "user",
+      role,
       activityId: "activity-1",
     }),
     searchRateLimiter: (req, _res, next) => {
@@ -135,6 +168,7 @@ function createSearchRouteHarness(options?: {
     advancedSearchCalls,
     searchRateLimiterCalls,
     collectionStatusCalls,
+    collectionStatusScopes,
     getColumnsCallCount: () => getColumnsCallCount,
   };
 }
@@ -203,7 +237,7 @@ test("GET /api/search/global returns an empty payload for short queries without 
 });
 
 test("GET /api/search/global applies the protected limit cap and returns a privacy-safe collection status", async () => {
-  const { app, collectionStatusCalls, globalSearchCalls } = createSearchRouteHarness({
+  const { app, collectionStatusCalls, collectionStatusScopes, globalSearchCalls } = createSearchRouteHarness({
     searchResultLimit: 200,
     isDbProtected: true,
   });
@@ -239,7 +273,9 @@ test("GET /api/search/global applies the protected limit cap and returns a priva
           recordCount: 2,
           latestPaymentDate: "2026-08-01",
           latestCreatedAt: "2026-08-01T08:00:00.000Z",
-          latestStaffNickname: null,
+          latestStaffNickname: "Collector Alpha",
+          latestCreatedByLogin: "user.one",
+          latestAmount: "150.50",
           sourceImportName: null,
           sourceFilename: null,
           matchBasis: "source_and_identifier",
@@ -249,6 +285,10 @@ test("GET /api/search/global applies the protected limit cap and returns a priva
     assert.equal(collectionStatusCalls.length, 1);
     assert.equal(collectionStatusCalls[0]?.[0]?.rowId, "row-1");
     assert.equal(collectionStatusCalls[0]?.[0]?.sourceImportId, "import-1");
+    assert.deepEqual(collectionStatusScopes, [{
+      kind: "nicknames",
+      nicknames: ["Collector Alpha"],
+    }]);
     assert.deepEqual(globalSearchCalls, [{
       search: "Alice",
       limit: 80,
@@ -260,7 +300,7 @@ test("GET /api/search/global applies the protected limit cap and returns a priva
 });
 
 test("GET /api/search/global exposes source details only to an authorized admin", async () => {
-  const { app } = createSearchRouteHarness({ role: "admin" });
+  const { app, collectionStatusScopes } = createSearchRouteHarness({ role: "admin" });
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -275,10 +315,52 @@ test("GET /api/search/global exposes source details only to an authorized admin"
       latestPaymentDate: "2026-08-01",
       latestCreatedAt: "2026-08-01T08:00:00.000Z",
       latestStaffNickname: "Collector Alpha",
+      latestCreatedByLogin: "user.one",
+      latestAmount: "150.50",
       sourceImportName: "March Import",
       sourceFilename: "march.csv",
       matchBasis: "source_and_identifier",
     });
+    assert.deepEqual(collectionStatusScopes, [{
+      kind: "nicknames",
+      nicknames: ["Collector Alpha"],
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/global limits collection details to the authenticated owner without a nickname session", async () => {
+  const { app, collectionStatusScopes } = createSearchRouteHarness({
+    hasNicknameSession: false,
+    role: "user",
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=1&pageSize=20`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(collectionStatusScopes, [{
+      kind: "created_by",
+      username: "user.one",
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/global grants manager all-staff collection visibility without Saved source details", async () => {
+  const { app, collectionStatusScopes } = createSearchRouteHarness({ role: "manager" });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=1&pageSize=20`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.deepEqual(collectionStatusScopes, [{ kind: "all" }]);
+    assert.equal(payload.rows[0]?.["Source File"], undefined);
+    assert.equal(payload.rows[0]?._collectionStatus?.sourceImportName, null);
+    assert.equal(payload.rows[0]?._collectionStatus?.latestCreatedByLogin, "user.one");
   } finally {
     await stopTestServer(server);
   }
@@ -422,6 +504,8 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
           latestPaymentDate: null,
           latestCreatedAt: null,
           latestStaffNickname: null,
+          latestCreatedByLogin: null,
+          latestAmount: null,
           sourceImportName: null,
           sourceFilename: null,
           matchBasis: null,

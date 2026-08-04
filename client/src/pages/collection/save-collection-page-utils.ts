@@ -19,9 +19,6 @@ export type SaveCollectionDraftRestoreNotice = {
 
 export type SaveCollectionFormValues = {
   staffNickname: string;
-  sourceImportId: string;
-  sourceImportName: string;
-  sourceFilename: string;
   customerName: string;
   icNumber: string;
   customerPhone: string;
@@ -33,7 +30,6 @@ export type SaveCollectionFormValues = {
 
 export type SaveCollectionFieldName =
   | "staffNickname"
-  | "sourceImportId"
   | "customerName"
   | "icNumber"
   | "customerPhone"
@@ -45,7 +41,6 @@ export type SaveCollectionFieldName =
 export type SaveCollectionFieldErrors = Partial<Record<SaveCollectionFieldName, string>>;
 
 export type SaveCollectionMutationPayload = {
-  sourceImportId: string;
   customerName: string;
   icNumber: string;
   customerPhone: string;
@@ -74,7 +69,6 @@ export function validateSaveCollectionForm(values: SaveCollectionFormValues): st
   const errors = validateSaveCollectionFormFields(values);
   const orderedFields: SaveCollectionFieldName[] = [
     "staffNickname",
-    "sourceImportId",
     "customerName",
     "icNumber",
     "customerPhone",
@@ -96,9 +90,6 @@ export function validateSaveCollectionFormFields(values: SaveCollectionFormValue
 
   if (!values.staffNickname || values.staffNickname.trim().length < 2) {
     errors.staffNickname = "Staff nickname is required.";
-  }
-  if (!values.sourceImportId.trim()) {
-    errors.sourceImportId = "Source File is required. Select an active file from Saved.";
   }
   if (!values.customerName.trim()) {
     errors.customerName = "Customer Name is required.";
@@ -134,7 +125,6 @@ export function buildSaveCollectionMutationPayload(options: {
   const { values, receiptDrafts } = options;
 
   return {
-    sourceImportId: values.sourceImportId.trim(),
     customerName: values.customerName.trim(),
     icNumber: values.icNumber.trim(),
     customerPhone: values.customerPhone.trim(),

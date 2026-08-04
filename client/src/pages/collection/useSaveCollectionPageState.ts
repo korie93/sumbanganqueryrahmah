@@ -99,9 +99,6 @@ export function useSaveCollectionPageState({
 
   return {
     fileInputRef: receiptState.fileInputRef,
-    sourceImportId: formState.sourceImportId,
-    sourceImportName: formState.sourceImportName,
-    sourceFilename: formState.sourceFilename,
     customerName: formState.customerName,
     icNumber: formState.icNumber,
     customerPhone: formState.customerPhone,
@@ -122,7 +119,6 @@ export function useSaveCollectionPageState({
     draftRestoreNotice: draftState.draftRestoreNotice,
     restoreNoticeLabel: draftState.restoreNoticeLabel,
     setCustomerName: formState.setCustomerName,
-    setSourceImport: formState.setSourceImport,
     setIcNumber: formState.setIcNumber,
     setCustomerPhone: formState.setCustomerPhone,
     setAccountNumber: formState.setAccountNumber,

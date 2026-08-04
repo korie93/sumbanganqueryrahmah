@@ -108,6 +108,26 @@ export async function updateCollectionRecord(
     }
     updateChunks.push(sql`account_number_search_hash = ${hashCollectionPiiSearchValue("accountNumber", data.accountNumber)}`);
   }
+  if (data.sourceImportId !== undefined) {
+    updateChunks.push(sql`source_import_id = ${data.sourceImportId}`);
+  }
+  if (data.sourceDataRowId !== undefined) {
+    updateChunks.push(data.sourceDataRowId && data.sourceImportId
+      ? sql`source_data_row_id = (
+          SELECT source_row.id
+          FROM public.data_rows source_row
+          WHERE source_row.id = ${data.sourceDataRowId}
+            AND source_row.import_id = ${data.sourceImportId}
+          LIMIT 1
+        )`
+      : sql`source_data_row_id = NULL`);
+  }
+  if (data.sourceImportName !== undefined) {
+    updateChunks.push(sql`source_import_name = ${data.sourceImportName}`);
+  }
+  if (data.sourceFilename !== undefined) {
+    updateChunks.push(sql`source_filename = ${data.sourceFilename}`);
+  }
   if (data.batch !== undefined) {
     updateChunks.push(sql`batch = ${data.batch}`);
   }
@@ -191,6 +211,7 @@ export async function updateCollectionRecord(
         ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
         account_number_encrypted,
         source_import_id,
+        source_data_row_id,
         source_import_name,
         source_filename,
         batch,

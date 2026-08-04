@@ -72,6 +72,7 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         account_number_encrypted,
         account_number_search_hash,
         source_import_id,
+        source_data_row_id,
         source_import_name,
         source_filename,
         batch,
@@ -102,6 +103,15 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         ${encryptedPii?.accountNumberEncrypted ?? null},
         ${piiSearchHashes?.accountNumberSearchHash ?? null},
         ${data.sourceImportId ?? null},
+        ${data.sourceDataRowId && data.sourceImportId
+          ? sql`(
+              SELECT source_row.id
+              FROM public.data_rows source_row
+              WHERE source_row.id = ${data.sourceDataRowId}
+                AND source_row.import_id = ${data.sourceImportId}
+              LIMIT 1
+            )`
+          : null},
         ${data.sourceImportName ?? null},
         ${data.sourceFilename ?? null},
         ${data.batch},
@@ -134,6 +144,7 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
         account_number_encrypted,
         source_import_id,
+        source_data_row_id,
         source_import_name,
         source_filename,
         batch,

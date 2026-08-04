@@ -4,6 +4,10 @@ import type {
   InsertDataRow,
   InsertImport,
 } from "../shared/schema-postgres";
+import type {
+  SavedCollectionSourceLookup,
+  SavedCollectionSourceMatch,
+} from "./repositories/search-repository-types";
 
 type CategoryRule = {
   key: string;
@@ -46,6 +50,9 @@ export interface ImportAiStorageContract {
   createDataRows(rows: InsertDataRow[]): Promise<DataRow[]>;
   getDataRowsByImport(importId: string): Promise<DataRow[]>;
   getDataRowCountByImport(importId: string): Promise<number>;
+  findSavedCollectionSourceForRecord(
+    lookup: SavedCollectionSourceLookup,
+  ): Promise<SavedCollectionSourceMatch | null>;
   advancedSearchDataRows(
     filters: Array<{ field: string; operator: string; value: string }>,
     logic: "AND" | "OR",

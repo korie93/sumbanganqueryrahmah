@@ -22,6 +22,7 @@ export type CollectionRecordShape = {
   customerPhone: string;
   accountNumber: string;
   sourceImportId?: string | null;
+  sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   batch: string;
@@ -303,6 +304,7 @@ export function createCoreCollectionStorageDouble(options?: {
     customerPhone: "0123456789",
     accountNumber: "ACC-1001",
     sourceImportId: null,
+    sourceDataRowId: null,
     sourceImportName: null,
     sourceFilename: null,
     batch: "P10",
@@ -409,20 +411,16 @@ export function createCoreCollectionStorageDouble(options?: {
   }
 
   const storage = {
-    getImportById: async (id: string) => (
-      id === "import-1"
-        ? {
-            id,
-            name: "NPL CC P10 JULY",
-            filename: "npl-cc-p10-july.xlsx",
-            createdAt: new Date("2026-03-01T00:00:00.000Z"),
-            lastOpenedAt: null,
-            isDeleted: false,
-            createdBy: "superuser",
-            contentHashSha256: null,
-            sourceSizeBytes: null,
+    findSavedCollectionSourceForRecord: async (lookup: Record<string, string>) => (
+      lookup.accountNumber === "NO-SAVED-MATCH"
+        ? null
+        : {
+            rowId: "saved-row-1",
+            sourceImportId: "import-1",
+            sourceImportName: "NPL CC P10 JULY",
+            sourceFilename: "npl-cc-p10-july.xlsx",
+            matchBasis: "ic" as const,
           }
-        : undefined
     ),
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
       if (!options?.sessionNickname) {
@@ -448,6 +446,7 @@ export function createCoreCollectionStorageDouble(options?: {
         customerPhone: String(data.customerPhone),
         accountNumber: String(data.accountNumber),
         sourceImportId: (data.sourceImportId as string | null | undefined) ?? null,
+        sourceDataRowId: (data.sourceDataRowId as string | null | undefined) ?? null,
         sourceImportName: (data.sourceImportName as string | null | undefined) ?? null,
         sourceFilename: (data.sourceFilename as string | null | undefined) ?? null,
         batch: String(data.batch),

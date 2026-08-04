@@ -27,7 +27,7 @@ test("search collection status candidates normalize recognized IC, phone, and ac
   assert.equal(candidates[0]?.accountValue, "ACC1001");
 });
 
-test("search collection statuses distinguish recorded, missing, and unverifiable rows while redacting details", () => {
+test("search collection statuses expose authorized collection details while redacting Saved source", () => {
   const rows = [
     { id: "row-1", importId: "import-1", jsonDataJsonb: { IC: "900101101234" } },
     { id: "row-2", importId: "import-1", jsonDataJsonb: { Phone: "0123456789" } },
@@ -43,16 +43,20 @@ test("search collection statuses distinguish recorded, missing, and unverifiable
       latestPaymentDate: "2026-08-01",
       latestCreatedAt: "2026-08-01T08:00:00.000Z",
       latestStaffNickname: "Collector Alpha",
+      latestCreatedByLogin: "collector.login",
+      latestAmount: "150.50",
       sourceImportName: "NPL CC P10 JULY",
       sourceFilename: "npl.xlsx",
       matchBasis: "source_and_identifier",
     }],
-    includeSensitiveDetails: false,
+    includeSourceDetails: false,
   });
 
   assert.equal(statuses.get("row-1")?.state, "recorded");
   assert.equal(statuses.get("row-1")?.recordCount, 2);
-  assert.equal(statuses.get("row-1")?.latestStaffNickname, null);
+  assert.equal(statuses.get("row-1")?.latestStaffNickname, "Collector Alpha");
+  assert.equal(statuses.get("row-1")?.latestCreatedByLogin, "collector.login");
+  assert.equal(statuses.get("row-1")?.latestAmount, "150.50");
   assert.equal(statuses.get("row-1")?.sourceImportName, null);
   assert.equal(statuses.get("row-2")?.state, "not_recorded");
   assert.equal(statuses.get("row-3")?.state, "unavailable");
@@ -73,7 +77,7 @@ test("search collection status candidates stay bounded without creating false mi
     rows,
     candidates,
     matches: [],
-    includeSensitiveDetails: false,
+    includeSourceDetails: false,
   });
 
   assert.equal(candidates.length, MAX_SEARCH_COLLECTION_STATUS_CANDIDATES);

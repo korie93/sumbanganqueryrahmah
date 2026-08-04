@@ -34,9 +34,11 @@ export type SearchCollectionStatus = {
   latestPaymentDate: string | null;
   latestCreatedAt: string | null;
   latestStaffNickname: string | null;
+  latestCreatedByLogin: string | null;
+  latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
-  matchBasis: "source_and_identifier" | "identifier_only" | null;
+  matchBasis: "source_row" | "source_and_identifier" | "identifier_only" | null;
 };
 
 function normalizeHeader(value: string): string {
@@ -121,7 +123,7 @@ export function buildSearchCollectionStatuses(params: {
   rows: SearchRowForCollectionStatus[];
   candidates: SearchCollectionStatusCandidate[];
   matches: SearchCollectionStatusMatch[];
-  includeSensitiveDetails: boolean;
+  includeSourceDetails: boolean;
 }): Map<string, SearchCollectionStatus> {
   const candidateIds = new Set(params.candidates.map((candidate) => candidate.rowId));
   const matchesByRowId = new Map(params.matches.map((match) => [match.rowId, match]));
@@ -138,9 +140,11 @@ export function buildSearchCollectionStatuses(params: {
         recordCount: Math.max(1, Math.trunc(match.recordCount || 1)),
         latestPaymentDate: match.latestPaymentDate,
         latestCreatedAt: match.latestCreatedAt,
-        latestStaffNickname: params.includeSensitiveDetails ? match.latestStaffNickname : null,
-        sourceImportName: params.includeSensitiveDetails ? match.sourceImportName : null,
-        sourceFilename: params.includeSensitiveDetails ? match.sourceFilename : null,
+        latestStaffNickname: match.latestStaffNickname,
+        latestCreatedByLogin: match.latestCreatedByLogin,
+        latestAmount: match.latestAmount,
+        sourceImportName: params.includeSourceDetails ? match.sourceImportName : null,
+        sourceFilename: params.includeSourceDetails ? match.sourceFilename : null,
         matchBasis: match.matchBasis,
       });
       continue;
@@ -152,6 +156,8 @@ export function buildSearchCollectionStatuses(params: {
       latestPaymentDate: null,
       latestCreatedAt: null,
       latestStaffNickname: null,
+      latestCreatedByLogin: null,
+      latestAmount: null,
       sourceImportName: null,
       sourceFilename: null,
       matchBasis: null,

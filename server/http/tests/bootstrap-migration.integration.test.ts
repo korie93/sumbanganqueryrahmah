@@ -141,6 +141,10 @@ const collectionDailyCalendarAuditMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", collectionDailyCalendarAuditMigrationFileName),
   "utf8",
 );
+const collectionRecordSourceDataRowMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0048_collection_record_source_data_row.sql"),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -393,6 +397,60 @@ async function foreignKeyRules(
   );
   return result.rows;
 }
+
+test(
+  "collection source row migration enforces a safe nullable Saved row link",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.data_rows (
+          id text PRIMARY KEY,
+          import_id text NOT NULL
+        );
+
+        CREATE TABLE public.collection_records (
+          id text PRIMARY KEY,
+          source_import_id text
+        );
+      `);
+
+      await applySql(pool, collectionRecordSourceDataRowMigrationSql);
+      await applySql(pool, collectionRecordSourceDataRowMigrationSql);
+
+      assert.equal(await indexExists(pool, "idx_collection_records_source_data_row_id"), true);
+      assert.equal(await constraintExists(pool, "fk_collection_records_source_data_row_id"), true);
+      assert.match(
+        await constraintDefinition(pool, "fk_collection_records_source_data_row_id"),
+        /FOREIGN KEY \(source_data_row_id\).*ON UPDATE CASCADE ON DELETE SET NULL/i,
+      );
+
+      await pool.query(`
+        INSERT INTO public.data_rows (id, import_id)
+        VALUES ('saved-row-1', 'import-1');
+
+        INSERT INTO public.collection_records (id, source_import_id, source_data_row_id)
+        VALUES ('collection-1', 'import-1', 'saved-row-1');
+      `);
+
+      await assert.rejects(
+        pool.query(`
+          INSERT INTO public.collection_records (id, source_import_id, source_data_row_id)
+          VALUES ('collection-invalid', 'import-1', 'missing-row');
+        `),
+        /foreign key constraint/i,
+      );
+
+      await pool.query("DELETE FROM public.data_rows WHERE id = 'saved-row-1'");
+      const linkedRecord = await pool.query<{ source_data_row_id: string | null }>(`
+        SELECT source_data_row_id
+        FROM public.collection_records
+        WHERE id = 'collection-1'
+      `);
+      assert.equal(linkedRecord.rows[0]?.source_data_row_id, null);
+    });
+  },
+);
 
 test(
   "reviewed AI migrations remain compatible on a fresh database even when the early index migration runs first",

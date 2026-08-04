@@ -632,17 +632,6 @@ const createCollectionSmokeSourceImport = async (context, values) => {
   };
 };
 
-const selectCollectionSmokeSourceImport = async (page, sourceImport) => {
-  const searchInput = page.getByLabel("Cari fail Saved", { exact: true });
-  await searchInput.fill(sourceImport.name);
-
-  const sourceSelect = page.locator("#save-collection-source-import");
-  const sourceOption = sourceSelect.locator(`option[value="${sourceImport.id}"]`);
-  await sourceOption.waitFor({ state: "attached", timeout: 15_000 });
-  await sourceSelect.selectOption(sourceImport.id);
-  await page.getByText(sourceImport.name, { exact: true }).last().waitFor({ timeout: 15_000 });
-};
-
 const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await navigateForSmoke(page, "/general-search");
@@ -659,6 +648,13 @@ const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   }).first();
   await recordDialog.waitFor({ timeout: 15_000 });
   await recordDialog.getByText(values.sourceImportName, { exact: false }).waitFor({ timeout: 15_000 });
+  await recordDialog.getByText(`Disimpan oleh: ${values.nickname}`, { exact: true }).waitFor({ timeout: 15_000 });
+  await recordDialog.getByText("Jumlah terkini", { exact: true }).waitFor({ timeout: 15_000 });
+  await recordDialog.getByText(/RM\s*12\.34/).first().waitFor({ timeout: 15_000 });
+  await recordDialog
+    .getByText(formatIsoDateForSmokeButtonLabel(values.paymentDate), { exact: true })
+    .first()
+    .waitFor({ timeout: 15_000 });
   await recordDialog.getByRole("button", { name: "Close" }).click();
   await recordDialog.waitFor({ state: "hidden", timeout: 15_000 });
 
@@ -1174,6 +1170,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
   const replaceReceiptName = "receipt-replace.png";
   const saveReceiptPath = await ensureCollectionSmokeAsset(saveReceiptName);
   const replaceReceiptPath = await ensureCollectionSmokeAsset(replaceReceiptName);
+  const paymentDate = getLocalIsoDate();
   let recordId = "";
   let expectedUpdatedAt = "";
   let recordDeleted = false;
@@ -1191,7 +1188,6 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await applySmokeCollectionNicknameSession(page, nickname);
     await navigateForSmoke(page, "/collection/save");
     await page.getByText("Simpan Collection Individual").first().waitFor();
-    await selectCollectionSmokeSourceImport(page, sourceImport);
 
     await getInputByLabel(page, "Customer Name").fill(customerName);
     await getInputByLabel(page, "IC Number").fill(icNumber);
@@ -1199,7 +1195,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await getInputByLabel(page, "Account Number").fill(accountNumber);
     await setDateFieldValue(page, {
       labelText: "Payment Date",
-      value: getLocalIsoDate(),
+      value: paymentDate,
       buttonTestId: "save-collection-payment-date",
     });
     await getInputByLabel(page, "Amount (RM)").fill("12.34");
@@ -1231,13 +1227,19 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     assert(expectedUpdatedAt, "collection receipt UI smoke should capture the created record version");
     assert(
       String(createPayload?.record?.sourceImportId || "").trim() === sourceImport.id,
-      "collection receipt UI smoke should persist the selected Saved source import",
+      "collection receipt UI smoke should auto-link the matching Saved source import",
+    );
+    assert(
+      String(createPayload?.record?.sourceDataRowId || "").trim(),
+      "collection receipt UI smoke should auto-link the exact matching Saved data row",
     );
     await page.waitForTimeout(250);
 
     await verifyCollectionSmokeGeneralSearch(page, {
       accountNumber,
+      nickname,
       noRecordAccountNumber,
+      paymentDate,
       sourceImportName: sourceImport.name,
     });
 

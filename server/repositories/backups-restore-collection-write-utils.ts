@@ -115,6 +115,15 @@ export async function restoreCollectionRecordsFromBackup(
               LIMIT 1
             )`
           : sql`NULL`;
+        const sourceDataRowIdSql = row.sourceDataRowId && row.sourceImportId
+          ? sql`(
+              SELECT source_row.id
+              FROM public.data_rows source_row
+              WHERE source_row.id = ${row.sourceDataRowId}
+                AND source_row.import_id = ${row.sourceImportId}
+              LIMIT 1
+            )`
+          : sql`NULL`;
         return sql`(
           ${row.id}::uuid,
           ${persistedCustomerName},
@@ -133,6 +142,7 @@ export async function restoreCollectionRecordsFromBackup(
           ${encryptedPii?.accountNumberEncrypted ?? null},
           ${piiSearchHashes?.accountNumberSearchHash ?? null},
           ${sourceImportIdSql},
+          ${sourceDataRowIdSql},
           ${row.sourceImportName},
           ${row.sourceFilename},
           ${row.batch},
@@ -170,6 +180,7 @@ export async function restoreCollectionRecordsFromBackup(
         account_number_encrypted,
         account_number_search_hash,
         source_import_id,
+        source_data_row_id,
         source_import_name,
         source_filename,
         batch,
