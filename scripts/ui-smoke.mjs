@@ -651,7 +651,10 @@ const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   await recordDialog.getByText(`Disimpan oleh: ${values.nickname}`, { exact: true }).waitFor({ timeout: 15_000 });
   await recordDialog.getByText("Jumlah terkini", { exact: true }).waitFor({ timeout: 15_000 });
   await recordDialog.getByText(/RM\s*12\.34/).first().waitFor({ timeout: 15_000 });
-  await recordDialog.getByText(values.paymentDate, { exact: true }).first().waitFor({ timeout: 15_000 });
+  await recordDialog
+    .getByText(formatIsoDateForSmokeButtonLabel(values.paymentDate), { exact: true })
+    .first()
+    .waitFor({ timeout: 15_000 });
   await recordDialog.getByRole("button", { name: "Close" }).click();
   await recordDialog.waitFor({ state: "hidden", timeout: 15_000 });
 
