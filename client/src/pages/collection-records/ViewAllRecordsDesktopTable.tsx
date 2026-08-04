@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
+import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { ViewAllRecordsDialogProps } from "@/pages/collection-records/ViewAllRecordsDialog";
 
@@ -30,7 +31,7 @@ export function ViewAllRecordsDesktopTable({
   onViewReceipt,
 }: ViewAllRecordsDesktopTableProps) {
   return (
-    <Table className="min-w-[1100px] text-sm">
+    <Table className="min-w-[1260px] text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">No.</TableHead>
@@ -43,18 +44,19 @@ export function ViewAllRecordsDesktopTable({
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Payment Date</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Receipt</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Staff Nickname</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Source File</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {loading ? (
           <TableRow>
-            <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">
+            <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">
               Loading full records...
             </TableCell>
           </TableRow>
         ) : viewAllRecords.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">
+            <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">
               Tiada rekod dalam julat tarikh yang dipilih.
             </TableCell>
           </TableRow>
@@ -96,6 +98,9 @@ export function ViewAllRecordsDesktopTable({
                 )}
               </TableCell>
               <TableCell className="py-2">{record.collectionStaffNickname}</TableCell>
+              <TableCell className="max-w-[220px] truncate py-2" title={getCollectionRecordSourceLabel(record)}>
+                {getCollectionRecordSourceLabel(record)}
+              </TableCell>
             </TableRow>
           ))
         )}

@@ -30,7 +30,8 @@ export function SaveCollectionPostSaveActions({
             <h3 className="text-sm font-semibold text-foreground">Collection berjaya disimpan</h3>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {summary.amountLabel} disimpan untuk {summary.staffNickname}, batch {summary.batch},{" "}
-              {summary.receiptLabel}. Customer: {summary.customerName}. Masa: {summary.savedAtLabel}.
+              {summary.receiptLabel}. Source: {summary.sourceLabel}. Customer: {summary.customerName}. Masa:{" "}
+              {summary.savedAtLabel}.
             </p>
           </div>
         </div>

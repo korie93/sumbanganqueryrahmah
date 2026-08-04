@@ -105,6 +105,18 @@ export function mapBackupCollectionRecordRow(
   return {
     id: String(row.id || ""),
     ...buildCollectionRecordBackupPiiFields(row),
+    sourceImportId:
+      typeof row.sourceImportId === "string" && row.sourceImportId.trim()
+        ? row.sourceImportId.trim()
+        : null,
+    sourceImportName:
+      typeof row.sourceImportName === "string" && row.sourceImportName.trim()
+        ? row.sourceImportName.trim()
+        : null,
+    sourceFilename:
+      typeof row.sourceFilename === "string" && row.sourceFilename.trim()
+        ? row.sourceFilename.trim()
+        : null,
     batch: String(row.batch || ""),
     paymentDate: String(row.paymentDate || ""),
     amount: row.amount as BackupCollectionRecord["amount"],

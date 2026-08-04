@@ -323,6 +323,13 @@
       "when": 1781438400000,
       "tag": "0046_import_last_opened",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1785772800000,
+      "tag": "0047_collection_record_source_import",
+      "breakpoints": true
     }
   ]
 }

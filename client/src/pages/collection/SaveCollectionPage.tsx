@@ -11,6 +11,7 @@ import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { getAriaInvalidProps, getAriaRequiredProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
+import { CollectionSourceFileField } from "@/pages/collection/CollectionSourceFileField";
 import { SaveCollectionFormSection } from "@/pages/collection/SaveCollectionFormSection";
 import { SaveCollectionPostSaveActions } from "@/pages/collection/SaveCollectionPostSaveActions";
 import { SaveCollectionProgress } from "@/pages/collection/SaveCollectionProgress";
@@ -273,6 +274,23 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
     />
   );
+  const sourceSection = (
+    <SaveCollectionFormSection
+      title="Source File"
+      description="Pilih fail Saved yang menjadi sumber rekod ini. Pautan ini digunakan semasa semakan dan General Search."
+      className="col-span-full"
+    >
+      <CollectionSourceFileField
+        disabled={state.submitting}
+        errorMessage={state.fieldErrors.sourceImportId}
+        onBlur={() => state.validateField("sourceImportId")}
+        onChange={state.setSourceImport}
+        sourceFilename={state.sourceFilename}
+        sourceImportId={state.sourceImportId}
+        sourceImportName={state.sourceImportName}
+      />
+    </SaveCollectionFormSection>
+  );
   const customerSection = (
     <SaveCollectionFormSection
       title="Customer Details"
@@ -300,6 +318,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   );
   const readySummaryValues = {
     staffNickname,
+    sourceImportId: state.sourceImportId,
+    sourceImportName: state.sourceImportName,
+    sourceFilename: state.sourceFilename,
     customerName: state.customerName,
     icNumber: state.icNumber,
     customerPhone: state.customerPhone,
@@ -365,6 +386,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
         />
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-4">
+          {sourceSection}
           {customerSection}
           {paymentSection}
           {receiptSection}

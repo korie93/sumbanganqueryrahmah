@@ -92,6 +92,7 @@ export default function GeneralSearch({
               activeFilterSummaries={state.activeFilterSummaries}
               advancedMode={state.advancedMode}
               canExport={canExport}
+              canSeeSourceFile={canSeeSourceFile}
               currentPage={state.currentPage}
               exportingPdf={state.exportingPdf}
               filtersCount={state.activeFiltersCount}

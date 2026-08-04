@@ -15,11 +15,13 @@ import {
 function createSearchRouteHarness(options?: {
   searchResultLimit?: number;
   isDbProtected?: boolean;
+  role?: "admin" | "manager" | "superuser" | "user";
 }) {
   const globalSearchCalls: Array<Record<string, unknown>> = [];
   const simpleSearchCalls: string[] = [];
   const advancedSearchCalls: Array<Record<string, unknown>> = [];
   const searchRateLimiterCalls: string[] = [];
+  const collectionStatusCalls: Array<Array<Record<string, unknown>>> = [];
   let getColumnsCallCount = 0;
 
   const searchRepository = {
@@ -44,6 +46,21 @@ function createSearchRouteHarness(options?: {
         ],
         total: 25,
       };
+    },
+    findCollectionStatusesForRows: async (candidates: Array<Record<string, unknown>>) => {
+      collectionStatusCalls.push(candidates);
+      return candidates
+        .filter((candidate) => candidate.rowId === "row-1")
+        .map(() => ({
+          rowId: "row-1",
+          recordCount: 2,
+          latestPaymentDate: "2026-08-01",
+          latestCreatedAt: "2026-08-01T08:00:00.000Z",
+          latestStaffNickname: "Collector Alpha",
+          sourceImportName: "March Import",
+          sourceFilename: "march.csv",
+          matchBasis: "source_and_identifier" as const,
+        }));
     },
     searchSimpleDataRows: async (search: string) => {
       simpleSearchCalls.push(search);
@@ -101,7 +118,7 @@ function createSearchRouteHarness(options?: {
     authenticateToken: createTestAuthenticateToken({
       userId: "user-1",
       username: "user.one",
-      role: "user",
+      role: options?.role ?? "user",
       activityId: "activity-1",
     }),
     searchRateLimiter: (req, _res, next) => {
@@ -117,6 +134,7 @@ function createSearchRouteHarness(options?: {
     simpleSearchCalls,
     advancedSearchCalls,
     searchRateLimiterCalls,
+    collectionStatusCalls,
     getColumnsCallCount: () => getColumnsCallCount,
   };
 }
@@ -184,8 +202,8 @@ test("GET /api/search/global returns an empty payload for short queries without 
   }
 });
 
-test("GET /api/search/global applies the protected limit cap and formats rows with source data", async () => {
-  const { app, globalSearchCalls } = createSearchRouteHarness({
+test("GET /api/search/global applies the protected limit cap and returns a privacy-safe collection status", async () => {
+  const { app, collectionStatusCalls, globalSearchCalls } = createSearchRouteHarness({
     searchResultLimit: 200,
     isDbProtected: true,
   });
@@ -211,19 +229,56 @@ test("GET /api/search/global applies the protected limit cap and formats rows wi
       hasNextPage: false,
       hasPreviousPage: true,
     });
-    assert.deepEqual(payload.columns, ["name", "ic", "Source File"]);
+    assert.deepEqual(payload.columns, ["name", "ic"]);
     assert.deepEqual(payload.rows, [
       {
         name: "Alice",
         ic: "900101015555",
-        "Source File": "march.csv",
+        _collectionStatus: {
+          state: "recorded",
+          recordCount: 2,
+          latestPaymentDate: "2026-08-01",
+          latestCreatedAt: "2026-08-01T08:00:00.000Z",
+          latestStaffNickname: null,
+          sourceImportName: null,
+          sourceFilename: null,
+          matchBasis: "source_and_identifier",
+        },
       },
     ]);
+    assert.equal(collectionStatusCalls.length, 1);
+    assert.equal(collectionStatusCalls[0]?.[0]?.rowId, "row-1");
+    assert.equal(collectionStatusCalls[0]?.[0]?.sourceImportId, "import-1");
     assert.deepEqual(globalSearchCalls, [{
       search: "Alice",
       limit: 80,
       offset: 80,
     }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/global exposes source details only to an authorized admin", async () => {
+  const { app } = createSearchRouteHarness({ role: "admin" });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=1&pageSize=20`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.deepEqual(payload.columns, ["name", "ic", "Source File"]);
+    assert.equal(payload.rows[0]?.["Source File"], "march.csv");
+    assert.deepEqual(payload.rows[0]?._collectionStatus, {
+      state: "recorded",
+      recordCount: 2,
+      latestPaymentDate: "2026-08-01",
+      latestCreatedAt: "2026-08-01T08:00:00.000Z",
+      latestStaffNickname: "Collector Alpha",
+      sourceImportName: "March Import",
+      sourceFilename: "march.csv",
+      matchBasis: "source_and_identifier",
+    });
   } finally {
     await stopTestServer(server);
   }
@@ -356,12 +411,21 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
       hasNextPage: false,
       hasPreviousPage: true,
     });
-    assert.deepEqual(payload.headers, ["name", "phone", "Source File"]);
+    assert.deepEqual(payload.headers, ["name", "phone"]);
     assert.deepEqual(payload.results, [
       {
         name: "Bob",
         phone: "0123456789",
-        "Source File": "april.csv",
+        _collectionStatus: {
+          state: "not_recorded",
+          recordCount: 0,
+          latestPaymentDate: null,
+          latestCreatedAt: null,
+          latestStaffNickname: null,
+          sourceImportName: null,
+          sourceFilename: null,
+          matchBasis: null,
+        },
       },
     ]);
     assert.deepEqual(advancedSearchCalls, [{

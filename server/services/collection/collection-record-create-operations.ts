@@ -3,6 +3,7 @@ import { badRequest } from "../../http/errors";
 import { logger } from "../../lib/logger";
 import {
   ensureLooseObject,
+  normalizeCollectionText,
   type CollectionBatchValue,
   type CollectionCreatePayload,
 } from "../../routes/collection.validation";
@@ -49,6 +50,20 @@ export class CollectionRecordCreateOperations {
       assertValidCollectionCreateFields(fields);
       await assertCollectionStaffNicknameWriteAccess(this.storage, user, fields.collectionStaffNickname);
 
+      const sourceImportId = normalizeCollectionText(body.sourceImportId);
+      if (sourceImportId.length > 200) {
+        throw badRequest("Selected source file is invalid.", "INVALID_IDENTIFIER");
+      }
+      const sourceImport = sourceImportId
+        ? await this.storage.getImportById(sourceImportId)
+        : undefined;
+      if (sourceImportId && !sourceImport) {
+        throw badRequest(
+          "Selected source file is no longer available. Please choose an active file from Saved.",
+          "NOT_FOUND",
+        );
+      }
+
       const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
       const newReceiptInputs = buildCollectionNewReceiptInputs(uploadedReceipts, newReceiptMetadata);
@@ -77,6 +92,9 @@ export class CollectionRecordCreateOperations {
         icNumber: fields.icNumber,
         customerPhone: fields.customerPhone,
         accountNumber: fields.accountNumber,
+        sourceImportId: sourceImport?.id ?? null,
+        sourceImportName: sourceImport?.name ?? null,
+        sourceFilename: sourceImport?.filename ?? null,
         batch: fields.batch as CollectionBatchValue,
         paymentDate: fields.paymentDate,
         amount: fields.amount,
@@ -118,6 +136,8 @@ export class CollectionRecordCreateOperations {
           event: "collection_record_created",
           actor: user.username,
           recordId: finalRecord.id,
+          sourceImportId: finalRecord.sourceImportId,
+          sourceImportName: finalRecord.sourceImportName,
           snapshot: buildCollectionAuditSnapshot({
             customerName: finalRecord.customerName,
             paymentDate: finalRecord.paymentDate,

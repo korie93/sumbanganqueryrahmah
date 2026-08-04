@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { CollectionBatch } from "@/lib/api";
+import type { CollectionSourceImport } from "@/pages/collection/useCollectionSourceImports";
 import {
   type SaveCollectionFieldErrors,
   type SaveCollectionFieldName,
@@ -17,6 +18,9 @@ type UseSaveCollectionFormStateOptions = {
 export function useSaveCollectionFormState({
   staffNickname,
 }: UseSaveCollectionFormStateOptions) {
+  const [sourceImportId, setSourceImportId] = useState("");
+  const [sourceImportName, setSourceImportName] = useState("");
+  const [sourceFilename, setSourceFilename] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [icNumber, setIcNumber] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -31,6 +35,9 @@ export function useSaveCollectionFormState({
 
   const values = useMemo<SaveCollectionFormValues>(() => ({
     staffNickname,
+    sourceImportId,
+    sourceImportName,
+    sourceFilename,
     customerName,
     icNumber,
     customerPhone,
@@ -46,10 +53,16 @@ export function useSaveCollectionFormState({
     customerPhone,
     icNumber,
     paymentDate,
+    sourceFilename,
+    sourceImportId,
+    sourceImportName,
     staffNickname,
   ]);
 
   const applyRestoredFormValues = useCallback((restored: SaveCollectionRestoredFormValues) => {
+    setSourceImportId(restored.sourceImportId);
+    setSourceImportName(restored.sourceImportName);
+    setSourceFilename(restored.sourceFilename);
     setCustomerName(restored.customerName);
     setIcNumber(restored.icNumber);
     setCustomerPhone(restored.customerPhone);
@@ -93,6 +106,13 @@ export function useSaveCollectionFormState({
     clearFieldError("customerName");
   }, [clearFieldError]);
 
+  const setSourceImportInput = useCallback((source: CollectionSourceImport | null) => {
+    setSourceImportId(source?.id ?? "");
+    setSourceImportName(source?.name ?? "");
+    setSourceFilename(source?.filename ?? "");
+    clearFieldError("sourceImportId");
+  }, [clearFieldError]);
+
   const setIcNumberInput = useCallback((value: string) => {
     setIcNumber(value);
     clearFieldError("icNumber");
@@ -124,6 +144,9 @@ export function useSaveCollectionFormState({
   }, [clearFieldError]);
 
   return {
+    sourceImportId,
+    sourceImportName,
+    sourceFilename,
     customerName,
     icNumber,
     customerPhone,
@@ -136,6 +159,7 @@ export function useSaveCollectionFormState({
     fieldErrors,
     values,
     setCustomerName: setCustomerNameInput,
+    setSourceImport: setSourceImportInput,
     setIcNumber: setIcNumberInput,
     setCustomerPhone: setCustomerPhoneInput,
     setAccountNumber: setAccountNumberInput,

@@ -107,6 +107,14 @@ export async function restoreCollectionRecordsFromBackup(
           ),
           ${RESTORE_SYSTEM_ACTOR_USERNAME}
         )`;
+        const sourceImportIdSql = row.sourceImportId
+          ? sql`(
+              SELECT imp.id
+              FROM public.imports imp
+              WHERE imp.id = ${row.sourceImportId}
+              LIMIT 1
+            )`
+          : sql`NULL`;
         return sql`(
           ${row.id}::uuid,
           ${persistedCustomerName},
@@ -124,6 +132,9 @@ export async function restoreCollectionRecordsFromBackup(
           ${persistedAccountNumber},
           ${encryptedPii?.accountNumberEncrypted ?? null},
           ${piiSearchHashes?.accountNumberSearchHash ?? null},
+          ${sourceImportIdSql},
+          ${row.sourceImportName},
+          ${row.sourceFilename},
           ${row.batch},
           ${row.paymentDate}::date,
           ${row.amount},
@@ -158,6 +169,9 @@ export async function restoreCollectionRecordsFromBackup(
         account_number,
         account_number_encrypted,
         account_number_search_hash,
+        source_import_id,
+        source_import_name,
+        source_filename,
         batch,
         payment_date,
         amount,

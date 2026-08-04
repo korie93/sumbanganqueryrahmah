@@ -1,4 +1,5 @@
 import type { CollectionRecord } from "@/lib/api/collection-types";
+import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 
 type CollectionRecordRowAriaOptions = {
   formattedAmount: string;
@@ -22,6 +23,7 @@ export function buildCollectionRecordRowAriaLabel({
     `payment date ${formattedPaymentDate}`,
     `batch ${record.batch || "-"}`,
     `staff nickname ${record.collectionStaffNickname || "-"}`,
+    `source file ${getCollectionRecordSourceLabel(record)}`,
     receiptCount > 0
       ? `${receiptCount} receipt${receiptCount === 1 ? "" : "s"} attached`
       : "no receipts attached",

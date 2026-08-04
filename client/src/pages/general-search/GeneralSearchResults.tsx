@@ -22,6 +22,7 @@ interface GeneralSearchResultsProps {
   activeFilterSummaries: string[];
   advancedMode: boolean;
   canExport: boolean;
+  canSeeSourceFile: boolean;
   currentPage: number;
   exportingPdf: boolean;
   filtersCount: number;
@@ -46,6 +47,7 @@ export function GeneralSearchResults({
   activeFilterSummaries,
   advancedMode,
   canExport,
+  canSeeSourceFile,
   currentPage,
   exportingPdf,
   filtersCount,
@@ -166,6 +168,7 @@ export function GeneralSearchResults({
 
       {isMobile ? (
         <GeneralSearchMobileResultsList
+          canSeeSourceFile={canSeeSourceFile}
           headers={headers}
           onRecordSelect={onRecordSelect}
           rangeStart={rangeStart}
@@ -183,6 +186,7 @@ export function GeneralSearchResults({
           <GeneralSearchDesktopResultsTable
             bottomSpacerHeight={bottomSpacerHeight}
             enableVirtualRows={enableVirtualRows}
+            canSeeSourceFile={canSeeSourceFile}
             headers={headers}
             onRecordSelect={onRecordSelect}
             onScroll={handleDesktopTableScroll}

@@ -1,8 +1,14 @@
 import type { DataRow } from "../../shared/schema-postgres";
 import { buildOffsetPaginationMeta } from "../http/pagination";
 import type { SearchRepository } from "../repositories/search.repository";
+import {
+  buildSearchCollectionStatusCandidates,
+  buildSearchCollectionStatuses,
+} from "./search-collection-status-utils";
 
 type SearchGlobalRow = {
+  id?: string | null;
+  importId?: string | null;
   jsonDataJsonb?: unknown;
   importFilename?: string | null;
   importName?: string | null;
@@ -22,6 +28,7 @@ type AdvancedSearchRow = DataRow & {
 type SearchRepositoryPort = Pick<
   SearchRepository,
   | "advancedSearchDataRows"
+  | "findCollectionStatusesForRows"
   | "getAllColumnNames"
   | "searchGlobalDataRows"
   | "searchSimpleDataRows"
@@ -29,14 +36,31 @@ type SearchRepositoryPort = Pick<
 
 type SearchGlobalRepositoryResult = Awaited<ReturnType<SearchRepositoryPort["searchGlobalDataRows"]>>;
 
-function buildRowsWithSource(rows: SearchGlobalRow[]) {
-  return rows.map((row) => {
+function buildRowsWithSource(params: {
+  rows: SearchGlobalRow[];
+  statuses: ReturnType<typeof buildSearchCollectionStatuses>;
+  includeSourceDetails: boolean;
+}) {
+  return params.rows.map((row) => {
     const base = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object"
       ? row.jsonDataJsonb as Record<string, unknown>
       : {};
+    const rowId = String(row.id || "").trim();
     return {
       ...base,
-      "Source File": row.importFilename || row.importName || "",
+      ...(params.includeSourceDetails
+        ? { "Source File": row.importFilename || row.importName || "" }
+        : {}),
+      _collectionStatus: params.statuses.get(rowId) ?? {
+        state: "unavailable",
+        recordCount: 0,
+        latestPaymentDate: null,
+        latestCreatedAt: null,
+        latestStaffNickname: null,
+        sourceImportName: null,
+        sourceFilename: null,
+        matchBasis: null,
+      },
     };
   });
 }
@@ -44,7 +68,9 @@ function buildRowsWithSource(rows: SearchGlobalRow[]) {
 function collectColumns(rows: Array<Record<string, unknown>>) {
   return Array.from(
     rows.reduce((set, row) => {
-      Object.keys(row).forEach((key) => set.add(key));
+      Object.keys(row).forEach((key) => {
+        if (!key.startsWith("_")) set.add(key);
+      });
       return set;
     }, new Set<string>()),
   );
@@ -52,6 +78,24 @@ function collectColumns(rows: Array<Record<string, unknown>>) {
 
 export class SearchService {
   constructor(private readonly searchRepository: SearchRepositoryPort) {}
+
+  private async enrichRowsWithCollectionStatus(
+    rows: SearchGlobalRow[],
+    includeSourceDetails: boolean,
+  ) {
+    const candidates = buildSearchCollectionStatusCandidates(rows);
+    const matches = candidates.length > 0
+      ? await this.searchRepository.findCollectionStatusesForRows(candidates)
+      : [];
+    const statuses = buildSearchCollectionStatuses({
+      rows,
+      candidates,
+      matches,
+      includeSensitiveDetails: includeSourceDetails,
+    });
+
+    return buildRowsWithSource({ rows, statuses, includeSourceDetails });
+  }
 
   async getColumns() {
     return this.searchRepository.getAllColumnNames();
@@ -63,6 +107,7 @@ export class SearchService {
     requestedLimit: number;
     maxTotal: number;
     isDbProtected: boolean;
+    includeSourceDetails: boolean;
   }) {
     const normalizedSearch = String(params.search || "").trim();
     const maxLimit = params.isDbProtected ? Math.min(params.maxTotal, 80) : params.maxTotal;
@@ -112,7 +157,10 @@ export class SearchService {
       offset,
     });
 
-    const parsedRows = buildRowsWithSource(result.rows as SearchGlobalRow[]);
+    const parsedRows = await this.enrichRowsWithCollectionStatus(
+      result.rows as SearchGlobalRow[],
+      params.includeSourceDetails,
+    );
     const columns = collectColumns(parsedRows);
 
     return {
@@ -160,6 +208,7 @@ export class SearchService {
     page: number;
     requestedLimit: number;
     maxTotal: number;
+    includeSourceDetails: boolean;
   }) {
     const limit = Math.max(10, Math.min(params.requestedLimit, params.maxTotal));
     const offset = (params.page - 1) * limit;
@@ -191,7 +240,10 @@ export class SearchService {
       offset,
     );
 
-    const parsedResults = buildRowsWithSource(rawResult.rows as AdvancedSearchRow[]);
+    const parsedResults = await this.enrichRowsWithCollectionStatus(
+      rawResult.rows as AdvancedSearchRow[],
+      params.includeSourceDetails,
+    );
     const headers = collectColumns(parsedResults);
 
     return {

@@ -40,6 +40,7 @@ export type CollectionStoragePort = Pick<
   | "getCollectionStaffNicknameById"
   | "getCollectionStaffNicknameByName"
   | "getCollectionStaffNicknames"
+  | "getImportById"
   | "getUser"
   | "getUserByUsername"
   | "isCollectionStaffNicknameActive"

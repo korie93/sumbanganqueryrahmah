@@ -21,6 +21,9 @@ export type CollectionRecordShape = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId?: string | null;
+  sourceImportName?: string | null;
+  sourceFilename?: string | null;
   batch: string;
   paymentDate: string;
   amount: string;
@@ -299,6 +302,9 @@ export function createCoreCollectionStorageDouble(options?: {
     icNumber: "900101015555",
     customerPhone: "0123456789",
     accountNumber: "ACC-1001",
+    sourceImportId: null,
+    sourceImportName: null,
+    sourceFilename: null,
     batch: "P10",
     paymentDate: "2026-03-01",
     amount: "120.50",
@@ -403,6 +409,21 @@ export function createCoreCollectionStorageDouble(options?: {
   }
 
   const storage = {
+    getImportById: async (id: string) => (
+      id === "import-1"
+        ? {
+            id,
+            name: "NPL CC P10 JULY",
+            filename: "npl-cc-p10-july.xlsx",
+            createdAt: new Date("2026-03-01T00:00:00.000Z"),
+            lastOpenedAt: null,
+            isDeleted: false,
+            createdBy: "superuser",
+            contentHashSha256: null,
+            sourceSizeBytes: null,
+          }
+        : undefined
+    ),
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
       if (!options?.sessionNickname) {
         return null;
@@ -426,6 +447,9 @@ export function createCoreCollectionStorageDouble(options?: {
         icNumber: String(data.icNumber),
         customerPhone: String(data.customerPhone),
         accountNumber: String(data.accountNumber),
+        sourceImportId: (data.sourceImportId as string | null | undefined) ?? null,
+        sourceImportName: (data.sourceImportName as string | null | undefined) ?? null,
+        sourceFilename: (data.sourceFilename as string | null | undefined) ?? null,
         batch: String(data.batch),
         paymentDate: String(data.paymentDate),
         amount: Number(data.amount).toFixed(2),

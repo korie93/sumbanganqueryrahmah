@@ -14,6 +14,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
+import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
@@ -250,6 +251,10 @@ export function ViewAllRecordsDialog({
                                   <div className="space-y-1">
                                     <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Staff Nickname</dt>
                                     <dd className="break-words">{record.collectionStaffNickname}</dd>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Source File</dt>
+                                    <dd className="break-words">{getCollectionRecordSourceLabel(record)}</dd>
                                   </div>
                                 </dl>
 

@@ -32,6 +32,11 @@ export function buildSaveCollectionReadySummary(params: {
 
   return [
     {
+      label: "Source File",
+      value: formatSummaryValue(params.values.sourceImportName || params.values.sourceFilename),
+      missing: !params.values.sourceImportId.trim(),
+    },
+    {
       label: "Customer",
       value: formatSummaryValue(params.values.customerName),
       missing: !params.values.customerName.trim(),
@@ -115,5 +120,8 @@ export function buildSaveCollectionSuccessDescription(params: {
   const staffNickname = params.values.staffNickname.trim() || "staff dipilih";
   const amountLabel = formatAmountRM(params.values.amount);
   const receiptLabel = `${receiptCount} ${receiptCount === 1 ? "receipt" : "receipts"}`;
-  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, ${receiptLabel}.`;
+  const sourceLabel = params.values.sourceImportName.trim()
+    || params.values.sourceFilename.trim()
+    || "fail sumber dipilih";
+  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, ${receiptLabel}. Source: ${sourceLabel}.`;
 }

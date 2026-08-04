@@ -3,6 +3,7 @@ import { formatAmountRM } from "@/pages/collection/utils";
 
 export type SaveCollectionLastSavedSummary = {
   customerName: string;
+  sourceLabel: string;
   staffNickname: string;
   batch: string;
   amountLabel: string;
@@ -23,6 +24,9 @@ export function buildSaveCollectionLastSavedSummary(params: {
   const savedAt = params.savedAt ?? new Date();
   return {
     customerName: params.values.customerName.trim() || "Customer",
+    sourceLabel: params.values.sourceImportName.trim()
+      || params.values.sourceFilename.trim()
+      || "Source not recorded",
     staffNickname: params.values.staffNickname.trim() || "staff dipilih",
     batch: params.values.batch,
     amountLabel: formatAmountRM(params.values.amount),

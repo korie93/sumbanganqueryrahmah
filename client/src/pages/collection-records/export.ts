@@ -1,5 +1,6 @@
 import { formatAmountRM } from "@/pages/collection/utils";
 import { fitCollectionRecordText } from "@/pages/collection-records/utils";
+import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import type { CollectionRecord } from "@/lib/api";
 import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { loadClientSpreadsheetRuntime } from "@/lib/spreadsheet/xlsx-runtime";
@@ -45,6 +46,7 @@ export async function exportCollectionRecordsToExcel({
     parseCollectionAmountMyrNumber(record.amount),
     record.paymentDate,
     hasReceiptAttachment(record) ? "Available" : "-",
+    getCollectionRecordSourceLabel(record),
     record.collectionStaffNickname,
   ]);
 
@@ -63,6 +65,7 @@ export async function exportCollectionRecordsToExcel({
       "Amount",
       "Payment Date",
       "Receipt",
+      "Source File",
       "Staff Nickname",
     ],
     ...reportRows,
@@ -72,7 +75,7 @@ export async function exportCollectionRecordsToExcel({
   const maxColumnLength = (columnIndex: number) =>
     Math.max(...sheetData.map((row) => String(row[columnIndex] ?? "").length), 12);
 
-  worksheet["!cols"] = Array.from({ length: 8 }).map((_, index) => ({
+  worksheet["!cols"] = Array.from({ length: 9 }).map((_, index) => ({
     wch: Math.min(38, maxColumnLength(index) + 2),
   }));
 
@@ -110,8 +113,8 @@ export async function exportCollectionRecordsToPdf({
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const rowHeight = 7;
-  const headers = ["Customer", "IC", "Account", "Phone", "Amount", "Pay Date", "Receipt", "Staff"];
-  const colWidths = [46, 28, 36, 30, 22, 23, 17, 42];
+  const headers = ["Customer", "IC", "Account", "Phone", "Amount", "Pay Date", "Receipt", "Source", "Staff"];
+  const colWidths = [43, 28, 34, 28, 22, 23, 17, 34, 36];
   let y = 12;
   let pageNo = 1;
 
@@ -174,6 +177,7 @@ export async function exportCollectionRecordsToPdf({
       fitCollectionRecordText(formatAmountRM(record.amount), 12),
       fitCollectionRecordText(formatIsoDateToDDMMYYYY(record.paymentDate), 10),
       hasReceiptAttachment(record) ? "Yes" : "-",
+      fitCollectionRecordText(getCollectionRecordSourceLabel(record), 16),
       fitCollectionRecordText(record.collectionStaffNickname, 18),
     ];
 

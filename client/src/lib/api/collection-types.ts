@@ -48,6 +48,9 @@ export type CollectionRecord = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId?: string | null;
+  sourceImportName?: string | null;
+  sourceFilename?: string | null;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrString;
@@ -118,6 +121,7 @@ export type CreateCollectionPayload = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId: string;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrNumber;
