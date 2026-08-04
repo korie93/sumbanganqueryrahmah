@@ -135,7 +135,7 @@ export function useSaveCollectionSubmitState({
         };
       }
 
-      await createCollectionRecord(
+      const result = await createCollectionRecord(
         buildCollectionRecordFormData(mutationPayload, receiptFiles),
         {
           idempotencyFingerprint: submitMutationIntentRef.current.fingerprint,
@@ -148,11 +148,13 @@ export function useSaveCollectionSubmitState({
         return;
       }
 
+      const sourceLabel = result.record.sourceImportName || result.record.sourceFilename || null;
       mutationFeedback.notifyMutationSuccess({
         title: "Collection Saved",
         description: buildSaveCollectionSuccessDescription({
           values,
           receiptCount: receiptFiles.length,
+          sourceLabel,
         }),
       });
       emitCollectionDataChanged();
@@ -161,6 +163,7 @@ export function useSaveCollectionSubmitState({
         buildSaveCollectionLastSavedSummary({
           values,
           receiptCount: receiptFiles.length,
+          sourceLabel,
         }),
       );
       setSubmitFailure(null);

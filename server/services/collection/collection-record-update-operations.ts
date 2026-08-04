@@ -79,6 +79,23 @@ export class CollectionRecordUpdateOperations {
         updatePayload.collectionStaffNickname = updateDraft.nextCollectionStaffNickname;
       }
 
+      const identityChanged = ["customerName", "icNumber", "customerPhone", "accountNumber"]
+        .some((field) => Object.prototype.hasOwnProperty.call(updatePayload, field));
+      const sourceMatch = identityChanged
+        ? await this.storage.findSavedCollectionSourceForRecord({
+            customerName: String(updatePayload.customerName ?? existing.customerName),
+            icNumber: String(updatePayload.icNumber ?? existing.icNumber),
+            customerPhone: String(updatePayload.customerPhone ?? existing.customerPhone),
+            accountNumber: String(updatePayload.accountNumber ?? existing.accountNumber),
+          })
+        : null;
+      if (identityChanged) {
+        updatePayload.sourceImportId = sourceMatch?.sourceImportId ?? null;
+        updatePayload.sourceDataRowId = sourceMatch?.rowId ?? null;
+        updatePayload.sourceImportName = sourceMatch?.sourceImportName ?? null;
+        updatePayload.sourceFilename = sourceMatch?.sourceFilename ?? null;
+      }
+
       const shouldRemoveReceipt = body.removeReceipt === true;
       const removeReceiptIds = Array.isArray(body.removeReceiptIds)
         ? normalizeCollectionStringList(body.removeReceiptIds)
@@ -249,6 +266,15 @@ export class CollectionRecordUpdateOperations {
           before: beforeSnapshot,
           after: afterSnapshot,
           changes: buildCollectionAuditFieldChanges(beforeSnapshot, afterSnapshot),
+          ...(identityChanged
+            ? {
+                sourceLink: {
+                  sourceImportId: updated.sourceImportId ?? null,
+                  sourceDataRowId: updated.sourceDataRowId ?? null,
+                  matchBasis: sourceMatch?.matchBasis ?? null,
+                },
+              }
+            : {}),
           receipts: {
             beforeCount: beforeReceiptState.count,
             afterCount: afterReceiptState.count,

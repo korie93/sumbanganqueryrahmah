@@ -14,7 +14,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { imports, userActivity, users } from "./schema-postgres-core";
+import { dataRows, imports, userActivity, users } from "./schema-postgres-core";
 
 const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -35,6 +35,8 @@ export const collectionRecords = pgTable("collection_records", {
   accountNumberSearchHash: text("account_number_search_hash"),
   sourceImportId: text("source_import_id")
     .references(() => imports.id, { onDelete: "set null", onUpdate: "cascade" }),
+  sourceDataRowId: text("source_data_row_id")
+    .references(() => dataRows.id, { onDelete: "set null", onUpdate: "cascade" }),
   sourceImportName: text("source_import_name"),
   sourceFilename: text("source_filename"),
   batch: text("batch").notNull(),
@@ -62,6 +64,7 @@ export const collectionRecords = pgTable("collection_records", {
   createdByLoginIdx: index("idx_collection_records_created_by_login").on(table.createdByLogin),
   staffNicknameIdx: index("idx_collection_records_staff_nickname").on(table.collectionStaffNickname),
   sourceImportIdIdx: index("idx_collection_records_source_import_id").on(table.sourceImportId),
+  sourceDataRowIdIdx: index("idx_collection_records_source_data_row_id").on(table.sourceDataRowId),
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
   customerNameSearchHashIdx: index("idx_collection_records_customer_name_search_hash").on(
     table.customerNameSearchHash,

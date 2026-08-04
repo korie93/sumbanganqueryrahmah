@@ -317,7 +317,6 @@ test("POST /api/collection creates a collection record and writes an audit log",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        sourceImportId: "import-1",
         customerName: "Bob Lee",
         icNumber: "880202026666",
         customerPhone: "0129876543",
@@ -326,6 +325,8 @@ test("POST /api/collection creates a collection record and writes an audit log",
         paymentDate: "2026-03-15",
         amount: 245.9,
         collectionStaffNickname: "Collector Alpha",
+        sourceImportId: "client-controlled-import",
+        sourceDataRowId: "client-controlled-row",
       }),
     });
 
@@ -335,10 +336,12 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(payload.record.customerName, "Bob Lee");
     assert.equal(payload.record.batch, "P25");
     assert.equal(payload.record.sourceImportId, "import-1");
+    assert.equal(payload.record.sourceDataRowId, "saved-row-1");
     assert.equal(payload.record.sourceImportName, "NPL CC P10 JULY");
     assert.equal(payload.record.sourceFilename, "npl-cc-p10-july.xlsx");
     assert.equal(createCalls.length, 1);
     assert.equal(createCalls[0].sourceImportId, "import-1");
+    assert.equal(createCalls[0].sourceDataRowId, "saved-row-1");
     assert.equal(createCalls[0].sourceImportName, "NPL CC P10 JULY");
     assert.equal(createCalls[0].sourceFilename, "npl-cc-p10-july.xlsx");
     assert.equal(createCalls[0].createdByLogin, "staff.user");
@@ -348,6 +351,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
     const auditDetails = parseAuditDetails(auditLogs[0]);
     assert.equal(auditDetails.event, "collection_record_created");
     assert.equal(auditDetails.sourceImportId, "import-1");
+    assert.equal(auditDetails.sourceDataRowId, "saved-row-1");
     assert.equal(auditDetails.sourceImportName, "NPL CC P10 JULY");
     assert.equal(auditDetails.snapshot.customerName, maskCollectionAuditCustomerName("Bob Lee"));
     assert.equal(auditDetails.snapshot.paymentDate, "2026-03-15");
@@ -360,7 +364,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
   }
 });
 
-test("POST /api/collection rejects a deleted or unknown Saved source before creating a record", async () => {
+test("POST /api/collection saves safely without provenance when no Saved row matches", async () => {
   const { storage, createCalls } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -381,11 +385,10 @@ test("POST /api/collection rejects a deleted or unknown Saved source before crea
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sourceImportId: "missing-import",
         customerName: "Bob Lee",
         icNumber: "880202026666",
         customerPhone: "0129876543",
-        accountNumber: "ACC-2002",
+        accountNumber: "NO-SAVED-MATCH",
         batch: "P25",
         paymentDate: "2026-03-15",
         amount: 245.9,
@@ -393,9 +396,11 @@ test("POST /api/collection rejects a deleted or unknown Saved source before crea
       }),
     });
 
-    assert.equal(response.status, 400);
-    assert.match((await response.json()).message, /no longer available/i);
-    assert.equal(createCalls.length, 0);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.record.sourceImportId, null);
+    assert.equal(payload.record.sourceDataRowId, null);
+    assert.equal(createCalls.length, 1);
   } finally {
     await stopTestServer(server);
   }
@@ -1259,6 +1264,45 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
     });
     assert.equal(auditDetails.receipts.beforeCount, 0);
     assert.equal(auditDetails.receipts.afterCount, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id refreshes the server-owned Saved row link when identity changes", async () => {
+  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        accountNumber: "ACC-LINKED-1001",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.record.sourceImportId, "import-1");
+    assert.equal(payload.record.sourceDataRowId, "saved-row-1");
+    assert.equal(payload.record.sourceImportName, "NPL CC P10 JULY");
+    assert.equal(updateCalls[0]?.data.sourceImportId, "import-1");
+    assert.equal(updateCalls[0]?.data.sourceDataRowId, "saved-row-1");
   } finally {
     await stopTestServer(server);
   }

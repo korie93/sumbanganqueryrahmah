@@ -109,6 +109,10 @@ export function mapBackupCollectionRecordRow(
       typeof row.sourceImportId === "string" && row.sourceImportId.trim()
         ? row.sourceImportId.trim()
         : null,
+    sourceDataRowId:
+      typeof row.sourceDataRowId === "string" && row.sourceDataRowId.trim()
+        ? row.sourceDataRowId.trim()
+        : null,
     sourceImportName:
       typeof row.sourceImportName === "string" && row.sourceImportName.trim()
         ? row.sourceImportName.trim()

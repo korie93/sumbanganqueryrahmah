@@ -804,6 +804,10 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
                 customerPhoneEncrypted: "enc.customer-phone",
                 accountNumber: "ACC-1001",
                 accountNumberEncrypted: "enc.account-number",
+                sourceImportId: "import-1",
+                sourceDataRowId: "saved-row-1",
+                sourceImportName: "NPL CC P10 JULY",
+                sourceFilename: "npl-cc-p10-july.xlsx",
                 batch: "P10",
                 paymentDate: "2026-03-31",
                 amount: "100.00",
@@ -879,6 +883,10 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal(parsed.collectionRecords?.[0]?.icNumberEncrypted, "enc.ic-number");
         assert.equal(parsed.collectionRecords?.[0]?.customerPhoneEncrypted, "enc.customer-phone");
         assert.equal(parsed.collectionRecords?.[0]?.accountNumberEncrypted, "enc.account-number");
+        assert.equal(parsed.collectionRecords?.[0]?.sourceImportId, "import-1");
+        assert.equal(parsed.collectionRecords?.[0]?.sourceDataRowId, "saved-row-1");
+        assert.equal(parsed.collectionRecords?.[0]?.sourceImportName, "NPL CC P10 JULY");
+        assert.equal(parsed.collectionRecords?.[0]?.sourceFilename, "npl-cc-p10-july.xlsx");
         assert.equal(parsed.collectionRecordReceipts?.[0]?.receiptAmountCents, "505");
         assert.equal(parsed.collectionRecordReceipts?.[0]?.extractedAmountCents, "500");
         assert.equal("receiptAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);

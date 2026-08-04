@@ -59,6 +59,7 @@ export type BackupCollectionRecord = {
   accountNumber?: string | null;
   accountNumberEncrypted?: string | null;
   sourceImportId?: string | null;
+  sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   batch: string;

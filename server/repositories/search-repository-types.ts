@@ -41,13 +41,45 @@ export type SearchCollectionStatusCandidate = {
   accountValue: string | null;
 };
 
+export type SavedCollectionSourceLookup = {
+  customerName: string;
+  icNumber: string;
+  customerPhone: string;
+  accountNumber: string;
+};
+
+export type SavedCollectionSourceCandidate = {
+  rowId: string;
+  sourceImportId: string;
+  sourceImportName: string | null;
+  sourceFilename: string | null;
+  sourceCreatedAt: string | Date | null;
+  jsonDataJsonb: unknown;
+};
+
+export type SavedCollectionSourceMatch = {
+  rowId: string;
+  sourceImportId: string;
+  sourceImportName: string | null;
+  sourceFilename: string | null;
+  matchBasis: "ic" | "phone_and_account";
+};
+
+export type SearchCollectionViewerScope =
+  | { kind: "all" }
+  | { kind: "created_by"; username: string }
+  | { kind: "nicknames"; nicknames: string[] }
+  | { kind: "none" };
+
 export type SearchCollectionStatusMatch = {
   rowId: string;
   recordCount: number;
   latestPaymentDate: string | null;
   latestCreatedAt: string | null;
   latestStaffNickname: string | null;
+  latestCreatedByLogin: string | null;
+  latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
-  matchBasis: "source_and_identifier" | "identifier_only";
+  matchBasis: "source_row" | "source_and_identifier" | "identifier_only";
 };

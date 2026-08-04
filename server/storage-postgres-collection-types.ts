@@ -63,6 +63,7 @@ export type CollectionRecord = {
   customerPhone: string;
   accountNumber: string;
   sourceImportId?: string | null;
+  sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   batch: CollectionBatch;
@@ -262,6 +263,7 @@ export type CreateCollectionRecordInput = {
   customerPhone: string;
   accountNumber: string;
   sourceImportId?: string | null;
+  sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   batch: CollectionBatch;
@@ -302,6 +304,10 @@ export type UpdateCollectionRecordInput = {
   icNumber?: string;
   customerPhone?: string;
   accountNumber?: string;
+  sourceImportId?: string | null;
+  sourceDataRowId?: string | null;
+  sourceImportName?: string | null;
+  sourceFilename?: string | null;
   batch?: CollectionBatch;
   paymentDate?: string;
   amount?: CollectionAmountMyrNumber;

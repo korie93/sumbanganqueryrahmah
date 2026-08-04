@@ -37,6 +37,8 @@ type CollectionRecordDbRow = {
   accountNumberEncrypted?: unknown;
   source_import_id?: unknown;
   sourceImportId?: unknown;
+  source_data_row_id?: unknown;
+  sourceDataRowId?: unknown;
   source_import_name?: unknown;
   sourceImportName?: unknown;
   source_filename?: unknown;
@@ -204,6 +206,8 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     accountNumber: piiValues.accountNumber,
     sourceImportId:
       (normalizedRow.source_import_id ?? normalizedRow.sourceImportId ?? null) as string | null,
+    sourceDataRowId:
+      (normalizedRow.source_data_row_id ?? normalizedRow.sourceDataRowId ?? null) as string | null,
     sourceImportName:
       (normalizedRow.source_import_name ?? normalizedRow.sourceImportName ?? null) as string | null,
     sourceFilename:

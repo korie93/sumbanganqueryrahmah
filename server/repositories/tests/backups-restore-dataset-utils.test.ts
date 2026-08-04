@@ -350,6 +350,10 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
     icNumber: "",
     customerPhone: "",
     accountNumber: "",
+    sourceImportId: "import-1",
+    sourceDataRowId: "saved-row-1",
+    sourceImportName: " NPL CC P10 JULY ",
+    sourceFilename: " npl-cc-p10-july.xlsx ",
     batch: "",
     paymentDate: new Date("2026-03-31T08:00:00.000Z"),
     amount: "12.50",
@@ -371,6 +375,10 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
   assert.deepEqual(restoredRecord.customerNameSearchHashes, ["hash.customer.al", "hash.customer.alice"]);
   assert.equal(restoredRecord.paymentDate, "2026-03-31");
   assert.equal(restoredRecord.amount, 12.5);
+  assert.equal(restoredRecord.sourceImportId, "import-1");
+  assert.equal(restoredRecord.sourceDataRowId, "saved-row-1");
+  assert.equal(restoredRecord.sourceImportName, "NPL CC P10 JULY");
+  assert.equal(restoredRecord.sourceFilename, "npl-cc-p10-july.xlsx");
   assert.equal(restoredRecord.receiptFile, null);
   assert.equal(restoredRecord.receiptTotalAmount, 1234);
   assert.equal(restoredRecord.receiptValidationStatus, "needs_review");

@@ -8,6 +8,10 @@ import { logger } from "../../lib/logger";
 import { PostgresAuthAccountStorage } from "./postgres-auth-account-storage";
 import { STORAGE_DEBUG_LOGS } from "./postgres-storage-core";
 import type { SearchDataRow, SearchGlobalDataRow } from "../../repositories/search.repository";
+import type {
+  SavedCollectionSourceLookup,
+  SavedCollectionSourceMatch,
+} from "../../repositories/search-repository-types";
 
 export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
   async searchGlobalDataRows(params: {
@@ -82,6 +86,12 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
 
   async getDataRowCountByImport(importId: string): Promise<number> {
     return this.importsRepository.getDataRowCountByImport(importId);
+  }
+
+  async findSavedCollectionSourceForRecord(
+    lookup: SavedCollectionSourceLookup,
+  ): Promise<SavedCollectionSourceMatch | null> {
+    return this.searchRepository.findSavedCollectionSourceForRecord(lookup);
   }
 
   async searchDataRows(params: {

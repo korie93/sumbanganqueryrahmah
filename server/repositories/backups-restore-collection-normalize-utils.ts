@@ -80,6 +80,7 @@ export function normalizeBackupCollectionRecord(
     customerPhone,
     accountNumber,
     sourceImportId: String(record.sourceImportId || "").trim() || null,
+    sourceDataRowId: String(record.sourceDataRowId || "").trim() || null,
     sourceImportName: String(record.sourceImportName || "").trim() || null,
     sourceFilename: String(record.sourceFilename || "").trim() || null,
     batch: String(record.batch || "P10"),

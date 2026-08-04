@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dbRead } from "../../db-postgres";
+import { db, dbRead } from "../../db-postgres";
 import { normalizeSearchJsonPayload } from "../search-repository-shared";
 import {
   MAX_SEARCH_OFFSET,
@@ -168,6 +168,8 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
         payment_date: "2026-08-01",
         created_at: new Date("2026-08-01T08:00:00.000Z"),
         collection_staff_nickname: "Collector Alpha",
+        created_by_login: "collector.login",
+        amount: "150.50",
         source_import_name: "NPL CC P10 JULY",
         source_filename: "npl.xlsx",
         match_basis: "source_and_identifier",
@@ -185,10 +187,11 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
       phoneValue: "0123456789",
       accountHash: null,
       accountValue: "ACC1001",
-    }]);
+    }], { kind: "all" });
 
     assert.equal(rawQueries.length, 1);
     assert.match(collectSqlText(rawQueries[0]), /jsonb_to_recordset/i);
+    assert.match(collectSqlText(rawQueries[0]), /source_data_row_id/i);
     assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
       typeof value === "string" && value.includes('"row_id":"row-1"')),
     );
@@ -198,12 +201,95 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
       latestPaymentDate: "2026-08-01",
       latestCreatedAt: "2026-08-01T08:00:00.000Z",
       latestStaffNickname: "Collector Alpha",
+      latestCreatedByLogin: "collector.login",
+      latestAmount: "150.50",
       sourceImportName: "NPL CC P10 JULY",
       sourceFilename: "npl.xlsx",
       matchBasis: "source_and_identifier",
     }]);
   } finally {
     (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.findCollectionStatusesForRows applies the authorized owner scope", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = dbRead.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (
+    query: Parameters<typeof dbRead.execute>[0],
+  ) => {
+    rawQueries.push(query);
+    return { rows: [] };
+  }) as unknown as typeof dbRead.execute;
+
+  try {
+    await repository.findCollectionStatusesForRows([{
+      rowId: "row-1",
+      sourceImportId: "import-1",
+      icHash: "hash",
+      icValue: "931120115437",
+      phoneHash: null,
+      phoneValue: null,
+      accountHash: null,
+      accountValue: null,
+    }], { kind: "created_by", username: "User.One" });
+
+    const text = collectSqlText(rawQueries[0]);
+    const values = collectBoundValues(rawQueries[0]);
+    assert.match(text, /lower\(record\.created_by_login\)/i);
+    assert.ok(values.includes("user.one"));
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.findSavedCollectionSourceForRecord uses bounded parameters and exact matching", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = db.execute;
+  (db as unknown as { execute: typeof db.execute }).execute = (async (query) => {
+    rawQueries.push(query);
+    return {
+      rows: [{
+        row_id: "row-1",
+        source_import_id: "import-1",
+        source_import_name: "NPL JULY",
+        source_filename: "july.xlsx",
+        source_created_at: new Date("2026-07-01T00:00:00.000Z"),
+        json_data_jsonb: {
+          Name: "Mohd Bin Sudin",
+          IC: "931120-11-5437",
+          Phone: "0123456789",
+          "Account Number": "ACC1001'; DROP TABLE imports; --",
+        },
+      }],
+    };
+  }) as typeof db.execute;
+
+  try {
+    const match = await repository.findSavedCollectionSourceForRecord({
+      customerName: "Mohd Bin Sudin",
+      icNumber: "931120115437",
+      customerPhone: "0123456789",
+      accountNumber: "ACC1001'; DROP TABLE imports; --",
+    });
+
+    assert.equal(rawQueries.length, 1);
+    assert.deepEqual(match, {
+      rowId: "row-1",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      matchBasis: "ic",
+    });
+    const sqlText = collectSqlText(rawQueries[0]);
+    assert.doesNotMatch(sqlText, /DROP TABLE imports/i);
+    assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
+      typeof value === "string" && value.includes("931120115437"),
+    ));
+  } finally {
+    (db as unknown as { execute: typeof db.execute }).execute = originalExecute;
   }
 });
 

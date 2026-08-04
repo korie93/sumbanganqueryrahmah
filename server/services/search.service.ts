@@ -5,6 +5,7 @@ import {
   buildSearchCollectionStatusCandidates,
   buildSearchCollectionStatuses,
 } from "./search-collection-status-utils";
+import type { SearchCollectionViewerScope } from "../repositories/search-repository-types";
 
 type SearchGlobalRow = {
   id?: string | null;
@@ -57,6 +58,8 @@ function buildRowsWithSource(params: {
         latestPaymentDate: null,
         latestCreatedAt: null,
         latestStaffNickname: null,
+        latestCreatedByLogin: null,
+        latestAmount: null,
         sourceImportName: null,
         sourceFilename: null,
         matchBasis: null,
@@ -82,16 +85,17 @@ export class SearchService {
   private async enrichRowsWithCollectionStatus(
     rows: SearchGlobalRow[],
     includeSourceDetails: boolean,
+    collectionViewerScope: SearchCollectionViewerScope,
   ) {
     const candidates = buildSearchCollectionStatusCandidates(rows);
     const matches = candidates.length > 0
-      ? await this.searchRepository.findCollectionStatusesForRows(candidates)
+      ? await this.searchRepository.findCollectionStatusesForRows(candidates, collectionViewerScope)
       : [];
     const statuses = buildSearchCollectionStatuses({
       rows,
       candidates,
       matches,
-      includeSensitiveDetails: includeSourceDetails,
+      includeSourceDetails,
     });
 
     return buildRowsWithSource({ rows, statuses, includeSourceDetails });
@@ -108,6 +112,7 @@ export class SearchService {
     maxTotal: number;
     isDbProtected: boolean;
     includeSourceDetails: boolean;
+    collectionViewerScope: SearchCollectionViewerScope;
   }) {
     const normalizedSearch = String(params.search || "").trim();
     const maxLimit = params.isDbProtected ? Math.min(params.maxTotal, 80) : params.maxTotal;
@@ -160,6 +165,7 @@ export class SearchService {
     const parsedRows = await this.enrichRowsWithCollectionStatus(
       result.rows as SearchGlobalRow[],
       params.includeSourceDetails,
+      params.collectionViewerScope,
     );
     const columns = collectColumns(parsedRows);
 
@@ -209,6 +215,7 @@ export class SearchService {
     requestedLimit: number;
     maxTotal: number;
     includeSourceDetails: boolean;
+    collectionViewerScope: SearchCollectionViewerScope;
   }) {
     const limit = Math.max(10, Math.min(params.requestedLimit, params.maxTotal));
     const offset = (params.page - 1) * limit;
@@ -243,6 +250,7 @@ export class SearchService {
     const parsedResults = await this.enrichRowsWithCollectionStatus(
       rawResult.rows as AdvancedSearchRow[],
       params.includeSourceDetails,
+      params.collectionViewerScope,
     );
     const headers = collectColumns(parsedResults);
 

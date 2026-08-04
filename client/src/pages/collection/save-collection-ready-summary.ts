@@ -32,11 +32,6 @@ export function buildSaveCollectionReadySummary(params: {
 
   return [
     {
-      label: "Source File",
-      value: formatSummaryValue(params.values.sourceImportName || params.values.sourceFilename),
-      missing: !params.values.sourceImportId.trim(),
-    },
-    {
       label: "Customer",
       value: formatSummaryValue(params.values.customerName),
       missing: !params.values.customerName.trim(),
@@ -115,13 +110,15 @@ export function buildSaveCollectionReceiptReviewHints(params: {
 export function buildSaveCollectionSuccessDescription(params: {
   values: SaveCollectionFormValues;
   receiptCount: number;
+  sourceLabel?: string | null;
 }): string {
   const receiptCount = Math.max(0, Number.isFinite(params.receiptCount) ? Math.trunc(params.receiptCount) : 0);
   const staffNickname = params.values.staffNickname.trim() || "staff dipilih";
   const amountLabel = formatAmountRM(params.values.amount);
   const receiptLabel = `${receiptCount} ${receiptCount === 1 ? "receipt" : "receipts"}`;
-  const sourceLabel = params.values.sourceImportName.trim()
-    || params.values.sourceFilename.trim()
-    || "fail sumber dipilih";
-  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, ${receiptLabel}. Source: ${sourceLabel}.`;
+  const sourceLabel = String(params.sourceLabel || "").trim();
+  const sourceMessage = sourceLabel
+    ? ` Dipautkan automatik kepada Saved: ${sourceLabel}.`
+    : " Tiada baris Saved yang sepadan ditemui; rekod collection tetap disimpan.";
+  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, ${receiptLabel}.${sourceMessage}`;
 }

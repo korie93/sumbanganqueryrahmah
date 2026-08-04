@@ -1156,6 +1156,7 @@ export const collectionRecordResponseSchema = z.object({
   customerPhone: z.string(),
   accountNumber: z.string(),
   sourceImportId: nullableStringSchema.optional(),
+  sourceDataRowId: nullableStringSchema.optional(),
   sourceImportName: nullableStringSchema.optional(),
   sourceFilename: nullableStringSchema.optional(),
   batch: z.enum(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]),

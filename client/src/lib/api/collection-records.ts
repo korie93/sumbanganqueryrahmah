@@ -58,7 +58,6 @@ export function buildCollectionRecordFormData(
   appendCollectionFormValue(formData, "icNumber", payload.icNumber);
   appendCollectionFormValue(formData, "customerPhone", payload.customerPhone);
   appendCollectionFormValue(formData, "accountNumber", payload.accountNumber);
-  appendCollectionFormValue(formData, "sourceImportId", payload.sourceImportId);
   appendCollectionFormValue(formData, "batch", payload.batch);
   appendCollectionFormValue(formData, "paymentDate", payload.paymentDate);
   appendCollectionFormValue(formData, "amount", payload.amount);

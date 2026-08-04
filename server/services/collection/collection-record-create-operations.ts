@@ -3,7 +3,6 @@ import { badRequest } from "../../http/errors";
 import { logger } from "../../lib/logger";
 import {
   ensureLooseObject,
-  normalizeCollectionText,
   type CollectionBatchValue,
   type CollectionCreatePayload,
 } from "../../routes/collection.validation";
@@ -50,19 +49,12 @@ export class CollectionRecordCreateOperations {
       assertValidCollectionCreateFields(fields);
       await assertCollectionStaffNicknameWriteAccess(this.storage, user, fields.collectionStaffNickname);
 
-      const sourceImportId = normalizeCollectionText(body.sourceImportId);
-      if (sourceImportId.length > 200) {
-        throw badRequest("Selected source file is invalid.", "INVALID_IDENTIFIER");
-      }
-      const sourceImport = sourceImportId
-        ? await this.storage.getImportById(sourceImportId)
-        : undefined;
-      if (sourceImportId && !sourceImport) {
-        throw badRequest(
-          "Selected source file is no longer available. Please choose an active file from Saved.",
-          "NOT_FOUND",
-        );
-      }
+      const sourceMatch = await this.storage.findSavedCollectionSourceForRecord({
+        customerName: fields.customerName,
+        icNumber: fields.icNumber,
+        customerPhone: fields.customerPhone,
+        accountNumber: fields.accountNumber,
+      });
 
       const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
@@ -92,9 +84,10 @@ export class CollectionRecordCreateOperations {
         icNumber: fields.icNumber,
         customerPhone: fields.customerPhone,
         accountNumber: fields.accountNumber,
-        sourceImportId: sourceImport?.id ?? null,
-        sourceImportName: sourceImport?.name ?? null,
-        sourceFilename: sourceImport?.filename ?? null,
+        sourceImportId: sourceMatch?.sourceImportId ?? null,
+        sourceDataRowId: sourceMatch?.rowId ?? null,
+        sourceImportName: sourceMatch?.sourceImportName ?? null,
+        sourceFilename: sourceMatch?.sourceFilename ?? null,
         batch: fields.batch as CollectionBatchValue,
         paymentDate: fields.paymentDate,
         amount: fields.amount,
@@ -137,7 +130,9 @@ export class CollectionRecordCreateOperations {
           actor: user.username,
           recordId: finalRecord.id,
           sourceImportId: finalRecord.sourceImportId,
+          sourceDataRowId: finalRecord.sourceDataRowId,
           sourceImportName: finalRecord.sourceImportName,
+          sourceMatchBasis: sourceMatch?.matchBasis ?? null,
           snapshot: buildCollectionAuditSnapshot({
             customerName: finalRecord.customerName,
             paymentDate: finalRecord.paymentDate,
