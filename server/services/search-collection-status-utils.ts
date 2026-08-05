@@ -9,6 +9,7 @@ import { resolveSpreadsheetIdentifierKind } from "../../shared/common/spreadshee
 
 const MAX_SEARCH_ROW_FIELDS = 200;
 const MAX_IDENTIFIER_INPUT_LENGTH = 256;
+const MAX_COLLECTION_ACCOUNT_DISPLAY_LENGTH = 256;
 const ACCOUNT_HEADERS = new Set([
   "acc",
   "accno",
@@ -35,6 +36,7 @@ export type SearchCollectionStatus = {
   latestCreatedAt: string | null;
   latestStaffNickname: string | null;
   latestCreatedByLogin: string | null;
+  latestAccountNumber: string | null;
   latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
@@ -135,6 +137,9 @@ export function buildSearchCollectionStatuses(params: {
 
     const match = matchesByRowId.get(rowId);
     if (match) {
+      const latestAccountNumber = String(match.latestAccountNumber || "")
+        .trim()
+        .slice(0, MAX_COLLECTION_ACCOUNT_DISPLAY_LENGTH) || null;
       statuses.set(rowId, {
         state: "recorded",
         recordCount: Math.max(1, Math.trunc(match.recordCount || 1)),
@@ -142,6 +147,7 @@ export function buildSearchCollectionStatuses(params: {
         latestCreatedAt: match.latestCreatedAt,
         latestStaffNickname: match.latestStaffNickname,
         latestCreatedByLogin: match.latestCreatedByLogin,
+        latestAccountNumber,
         latestAmount: match.latestAmount,
         sourceImportName: params.includeSourceDetails ? match.sourceImportName : null,
         sourceFilename: params.includeSourceDetails ? match.sourceFilename : null,
@@ -157,6 +163,7 @@ export function buildSearchCollectionStatuses(params: {
       latestCreatedAt: null,
       latestStaffNickname: null,
       latestCreatedByLogin: null,
+      latestAccountNumber: null,
       latestAmount: null,
       sourceImportName: null,
       sourceFilename: null,

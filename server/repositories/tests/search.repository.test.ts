@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { db, dbRead } from "../../db-postgres";
+import { encryptCollectionPiiWithSecret } from "../../lib/collection-pii-encryption-crypto";
 import { normalizeSearchJsonPayload } from "../search-repository-shared";
 import {
   MAX_SEARCH_OFFSET,
@@ -169,6 +170,8 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
         created_at: new Date("2026-08-01T08:00:00.000Z"),
         collection_staff_nickname: "Collector Alpha",
         created_by_login: "collector.login",
+        account_number: "ACC-1001",
+        account_number_encrypted: null,
         amount: "150.50",
         source_import_name: "NPL CC P10 JULY",
         source_filename: "npl.xlsx",
@@ -192,6 +195,11 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
     assert.equal(rawQueries.length, 1);
     assert.match(collectSqlText(rawQueries[0]), /jsonb_to_recordset/i);
     assert.match(collectSqlText(rawQueries[0]), /source_data_row_id/i);
+    assert.match(collectSqlText(rawQueries[0]), /account_number_encrypted/i);
+    assert.match(
+      collectSqlText(rawQueries[0]),
+      /candidate\.account_hash IS NULL AND candidate\.account_value IS NULL/i,
+    );
     assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
       typeof value === "string" && value.includes('"row_id":"row-1"')),
     );
@@ -202,6 +210,7 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
       latestCreatedAt: "2026-08-01T08:00:00.000Z",
       latestStaffNickname: "Collector Alpha",
       latestCreatedByLogin: "collector.login",
+      latestAccountNumber: "ACC-1001",
       latestAmount: "150.50",
       sourceImportName: "NPL CC P10 JULY",
       sourceFilename: "npl.xlsx",
@@ -241,6 +250,62 @@ test("SearchRepository.findCollectionStatusesForRows applies the authorized owne
     assert.ok(values.includes("user.one"));
   } finally {
     (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.findCollectionStatusesForRows decrypts retired account shadows fail closed", async () => {
+  const repository = new SearchRepository();
+  const originalExecute = dbRead.execute;
+  const previousKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  const previousRetiredFields = process.env.COLLECTION_PII_RETIRED_FIELDS;
+  const secret = "search-repository-test-collection-pii-key";
+
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = secret;
+  process.env.COLLECTION_PII_RETIRED_FIELDS = "accountNumber";
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (
+    _query: Parameters<typeof dbRead.execute>[0],
+  ) => ({
+    rows: [{
+      row_id: "row-encrypted",
+      record_count: 1,
+      payment_date: "2026-08-02",
+      created_at: new Date("2026-08-02T08:00:00.000Z"),
+      collection_staff_nickname: "Collector Alpha",
+      created_by_login: "collector.login",
+      account_number: null,
+      account_number_encrypted: encryptCollectionPiiWithSecret("ACC-ENCRYPTED-1002", secret),
+      amount: "200.00",
+      source_import_name: "NPL AUGUST",
+      source_filename: "august.xlsx",
+      match_basis: "source_row",
+    }],
+  })) as unknown as typeof dbRead.execute;
+
+  try {
+    const matches = await repository.findCollectionStatusesForRows([{
+      rowId: "row-encrypted",
+      sourceImportId: "import-2",
+      icHash: null,
+      icValue: null,
+      phoneHash: null,
+      phoneValue: null,
+      accountHash: "account-hash",
+      accountValue: null,
+    }], { kind: "all" });
+
+    assert.equal(matches[0]?.latestAccountNumber, "ACC-ENCRYPTED-1002");
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+    if (previousKey === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = previousKey;
+    }
+    if (previousRetiredFields === undefined) {
+      delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+    } else {
+      process.env.COLLECTION_PII_RETIRED_FIELDS = previousRetiredFields;
+    }
   }
 });
 

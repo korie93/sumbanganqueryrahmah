@@ -121,6 +121,23 @@ export const COLLECTION_PII_ROLLOUT_CONTRACT_REQUIREMENTS = Object.freeze([
     ]),
   },
   {
+    filePath: "server/repositories/search.repository.ts",
+    checks: Object.freeze([
+      {
+        label: "general search protects collection account plaintext selection",
+        snippet: "${buildProtectedCollectionPiiSelect(",
+      },
+      {
+        label: "general search resolves collection account PII fail closed",
+        snippet: "latestAccountNumber: resolveCollectionPiiFieldValueFailClosed({",
+      },
+      {
+        label: "general search requires account agreement when a candidate account exists",
+        snippet: "(candidate.account_hash IS NULL AND candidate.account_value IS NULL)",
+      },
+    ]),
+  },
+  {
     filePath: "server/repositories/backups-payload-utils.ts",
     checks: Object.freeze([
       {

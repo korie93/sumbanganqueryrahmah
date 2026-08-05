@@ -78,6 +78,7 @@ export type SearchCollectionStatusMatch = {
   latestCreatedAt: string | null;
   latestStaffNickname: string | null;
   latestCreatedByLogin: string | null;
+  latestAccountNumber: string | null;
   latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
