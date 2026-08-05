@@ -98,12 +98,32 @@ export type BackupCollectionReceipt = {
   createdAt: string | Date;
 };
 
+export type BackupCollectionRecordPurgeHistory = {
+  id: string;
+  sourceImportId?: string | null;
+  sourceDataRowId?: string | null;
+  sourceImportName?: string | null;
+  sourceFilename?: string | null;
+  icNumberSearchHash?: string | null;
+  customerPhoneSearchHash?: string | null;
+  accountNumberSearchHash?: string | null;
+  paymentDate: string;
+  amount: BackupAmountMyr;
+  createdByLogin: string;
+  collectionStaffNickname: string;
+  originalCreatedAt: string | Date;
+  purgedAt: string | Date;
+  purgedBy: string;
+  purgeReason: "retention_policy";
+};
+
 export type BackupDataPayload = {
   imports: Import[];
   dataRows: DataRow[];
   users: BackupUserRecord[];
   auditLogs: AuditLog[];
   collectionRecords?: BackupCollectionRecord[];
+  collectionRecordPurgeHistory?: BackupCollectionRecordPurgeHistory[];
   collectionRecordReceipts?: BackupCollectionReceipt[];
 };
 
@@ -113,6 +133,7 @@ export type BackupPayloadCounts = {
   usersCount: number;
   auditLogsCount: number;
   collectionRecordsCount: number;
+  collectionRecordPurgeHistoryCount: number;
   collectionRecordReceiptsCount: number;
 };
 
@@ -155,6 +176,7 @@ export type RestoreStats = {
   users: RestoreDatasetStats;
   auditLogs: RestoreDatasetStats;
   collectionRecords: RestoreDatasetStats;
+  collectionRecordPurgeHistory: RestoreDatasetStats;
   collectionRecordReceipts: RestoreDatasetStats;
   warnings: string[];
   totalProcessed: number;

@@ -87,14 +87,18 @@ test("search collection statuses expose authorized collection details while reda
     matches: [{
       rowId: "row-1",
       recordCount: 2,
+      isHistorical: false,
       latestPaymentDate: "2026-08-01",
       latestCreatedAt: "2026-08-01T08:00:00.000Z",
       latestStaffNickname: "Collector Alpha",
       latestCreatedByLogin: "collector.login",
       latestAccountNumber: "ACC-1001",
+      matchedAccountHash: null,
       latestAmount: "150.50",
       sourceImportName: "NPL CC P10 JULY",
       sourceFilename: "npl.xlsx",
+      purgedAt: null,
+      purgedBy: null,
       matchBasis: "source_and_identifier",
     }],
     includeSourceDetails: false,
@@ -132,4 +136,67 @@ test("search collection status candidates stay bounded without creating false mi
   assert.equal(candidates.length, MAX_SEARCH_COLLECTION_STATUS_CANDIDATES);
   assert.equal(statuses.get("row-199")?.state, "not_recorded");
   assert.equal(statuses.get("row-200")?.state, "unavailable");
+});
+
+test("purged collection matches become historical and reuse only the matching Saved account", () => {
+  const previousEncryptionKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "purge-history-status-test-key";
+
+  try {
+    const rows = [{
+      id: "row-history",
+      importId: "import-history",
+      jsonDataJsonb: {
+        IC: "900101015555",
+        "Account No": "SOURCE-1001",
+        "Card No": "COLLECTION-2002",
+      },
+    }];
+    const candidates = buildSearchCollectionStatusCandidates(rows);
+    const matchedAccountHash = candidates[0]?.accountHashes[1] || null;
+    const statuses = buildSearchCollectionStatuses({
+      rows,
+      candidates,
+      matches: [{
+        rowId: "row-history",
+        recordCount: 1,
+        isHistorical: true,
+        latestPaymentDate: "2025-12-15",
+        latestCreatedAt: "2025-12-15T04:00:00.000Z",
+        latestStaffNickname: "Collector History",
+        latestCreatedByLogin: "collector.history",
+        latestAccountNumber: null,
+        matchedAccountHash,
+        latestAmount: "99.90",
+        sourceImportName: "Historical Source",
+        sourceFilename: "historical.xlsx",
+        purgedAt: "2026-08-05T05:00:00.000Z",
+        purgedBy: "superuser.audit",
+        matchBasis: "source_row",
+      }],
+      includeSourceDetails: true,
+    });
+
+    assert.deepEqual(statuses.get("row-history"), {
+      state: "historical",
+      recordCount: 1,
+      latestPaymentDate: "2025-12-15",
+      latestCreatedAt: "2025-12-15T04:00:00.000Z",
+      latestStaffNickname: "Collector History",
+      latestCreatedByLogin: "collector.history",
+      latestAccountNumber: "COLLECTION-2002",
+      latestAmount: "99.90",
+      sourceImportName: "Historical Source",
+      sourceFilename: "historical.xlsx",
+      purgedAt: "2026-08-05T05:00:00.000Z",
+      purgedBy: "superuser.audit",
+      matchBasis: "source_row",
+    });
+  } finally {
+    if (previousEncryptionKey === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = previousEncryptionKey;
+    }
+  }
 });

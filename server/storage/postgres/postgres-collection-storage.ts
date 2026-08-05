@@ -282,12 +282,12 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.summarizeCollectionRecordsOlderThan(beforeDate);
   }
 
-  async purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
+  async purgeCollectionRecordsOlderThan(beforeDate: string, purgedBy: string): Promise<{
     totalRecords: number;
     totalAmount: CollectionAmountMyrNumber;
     receiptPaths: string[];
   }> {
-    return this.collectionRepository.purgeCollectionRecordsOlderThan(beforeDate);
+    return this.collectionRepository.purgeCollectionRecordsOlderThan(beforeDate, purgedBy);
   }
 
   async getCollectionMonthlySummary(filters: {

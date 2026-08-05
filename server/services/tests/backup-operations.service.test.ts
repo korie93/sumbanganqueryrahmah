@@ -224,6 +224,7 @@ function createBackupOperationsHarness(options?: {
           usersCount: 1,
           auditLogsCount: 1,
           collectionRecordsCount: 1,
+          collectionRecordPurgeHistoryCount: 1,
           collectionRecordReceiptsCount: 1,
         },
         payloadBytes: (await fs.stat(tempFilePath)).size,
@@ -334,6 +335,7 @@ function createBackupOperationsHarness(options?: {
           users: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
           auditLogs: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
           collectionRecords: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
+          collectionRecordPurgeHistory: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
           collectionRecordReceipts: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
           warnings: [],
           totalProcessed: 3,
@@ -448,6 +450,7 @@ test("BackupOperationsService createBackup persists backup metadata and audits e
   assert.equal(metadata.usersCount, 1);
   assert.equal(metadata.auditLogsCount, 1);
   assert.equal(metadata.collectionRecordsCount, 1);
+  assert.equal(metadata.collectionRecordPurgeHistoryCount, 1);
   assert.equal(metadata.collectionRecordReceiptsCount, 1);
   assert.equal(typeof metadata.maxSerializedRowBytes, "number");
   assert.equal(typeof metadata.memoryRssBytes, "number");

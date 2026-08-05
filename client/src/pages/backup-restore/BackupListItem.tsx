@@ -1,4 +1,4 @@
-import { Archive, Clock, Database, FileText, HardDrive, RotateCcw, Trash2, User, Users } from "lucide-react";
+import { Archive, Clock, Database, FileText, HardDrive, History, RotateCcw, Trash2, User, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -94,6 +94,12 @@ export function BackupListItem({
             <div className="flex items-center gap-1 text-muted-foreground">
               <Database className="h-4 w-4" />
               <span>{backup.metadata.collectionRecordsCount} collection records</span>
+            </div>
+          ) : null}
+          {backup.metadata.collectionRecordPurgeHistoryCount ? (
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <History className="h-4 w-4" />
+              <span>{backup.metadata.collectionRecordPurgeHistoryCount} collection history</span>
             </div>
           ) : null}
         </div>

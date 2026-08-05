@@ -10,18 +10,25 @@ import {
   rebuildCollectionRecordMonthlyRollups,
 } from "./collection-record-rollup-utils";
 
-export async function purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
+export async function purgeCollectionRecordsOlderThan(
+  beforeDate: string,
+  purgedBy: string,
+): Promise<{
   totalRecords: number;
   totalAmount: CollectionAmountMyrNumber;
   receiptPaths: string[];
 }> {
   const normalizedBeforeDate = String(beforeDate || "").trim();
+  const normalizedPurgedBy = String(purgedBy || "").trim().slice(0, 200);
   if (!normalizedBeforeDate) {
     return {
       totalRecords: 0,
       totalAmount: 0,
       receiptPaths: [],
     };
+  }
+  if (!normalizedPurgedBy) {
+    throw new Error("Collection purge actor is required.");
   }
 
   return db.transaction(async (tx) => {
@@ -58,6 +65,62 @@ export async function purgeCollectionRecordsOlderThan(beforeDate: string): Promi
       SELECT storage_path
       FROM public.collection_record_receipts
       WHERE collection_record_id IN (${recordIdSql})
+    `);
+
+    await tx.execute(sql`
+      INSERT INTO public.collection_record_purge_history (
+        original_record_id,
+        source_import_id,
+        source_data_row_id,
+        source_import_name,
+        source_filename,
+        ic_number_search_hash,
+        customer_phone_search_hash,
+        account_number_search_hash,
+        payment_date,
+        amount,
+        created_by_login,
+        collection_staff_nickname,
+        original_created_at,
+        purged_at,
+        purged_by,
+        purge_reason
+      )
+      SELECT
+        id,
+        source_import_id,
+        source_data_row_id,
+        source_import_name,
+        source_filename,
+        ic_number_search_hash,
+        customer_phone_search_hash,
+        account_number_search_hash,
+        payment_date,
+        amount,
+        created_by_login,
+        collection_staff_nickname,
+        created_at,
+        now(),
+        ${normalizedPurgedBy},
+        'retention_policy'
+      FROM public.collection_records
+      WHERE id IN (${recordIdSql})
+      ON CONFLICT (original_record_id) DO UPDATE SET
+        source_import_id = EXCLUDED.source_import_id,
+        source_data_row_id = EXCLUDED.source_data_row_id,
+        source_import_name = EXCLUDED.source_import_name,
+        source_filename = EXCLUDED.source_filename,
+        ic_number_search_hash = EXCLUDED.ic_number_search_hash,
+        customer_phone_search_hash = EXCLUDED.customer_phone_search_hash,
+        account_number_search_hash = EXCLUDED.account_number_search_hash,
+        payment_date = EXCLUDED.payment_date,
+        amount = EXCLUDED.amount,
+        created_by_login = EXCLUDED.created_by_login,
+        collection_staff_nickname = EXCLUDED.collection_staff_nickname,
+        original_created_at = EXCLUDED.original_created_at,
+        purged_at = EXCLUDED.purged_at,
+        purged_by = EXCLUDED.purged_by,
+        purge_reason = EXCLUDED.purge_reason
     `);
 
     await tx.execute(sql`

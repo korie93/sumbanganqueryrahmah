@@ -63,6 +63,8 @@ function buildRowsWithSource(params: {
         latestAmount: null,
         sourceImportName: null,
         sourceFilename: null,
+        purgedAt: null,
+        purgedBy: null,
         matchBasis: null,
       },
     };

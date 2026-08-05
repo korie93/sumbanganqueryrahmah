@@ -83,6 +83,7 @@ const backupRestoreResponseSchema = z.object({
     users: backupRestoreStatsSchema,
     auditLogs: backupRestoreStatsSchema,
     collectionRecords: backupRestoreStatsSchema,
+    collectionRecordPurgeHistory: backupRestoreStatsSchema.optional(),
     collectionRecordReceipts: backupRestoreStatsSchema,
     warnings: z.array(z.string()),
     totalProcessed: z.number().int().nonnegative(),

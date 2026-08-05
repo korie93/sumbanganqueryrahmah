@@ -47,6 +47,24 @@ export interface AuditBackupStorageContract {
       staffUsername?: string | null;
       createdAt: string | Date;
     }>;
+    collectionRecordPurgeHistory?: Array<{
+      id: string;
+      sourceImportId?: string | null;
+      sourceDataRowId?: string | null;
+      sourceImportName?: string | null;
+      sourceFilename?: string | null;
+      icNumberSearchHash?: string | null;
+      customerPhoneSearchHash?: string | null;
+      accountNumberSearchHash?: string | null;
+      paymentDate: string;
+      amount: string | number;
+      createdByLogin: string;
+      collectionStaffNickname: string;
+      originalCreatedAt: string | Date;
+      purgedAt: string | Date;
+      purgedBy: string;
+      purgeReason: "retention_policy";
+    }>;
     collectionRecordReceipts?: Array<{
       id: string;
       collectionRecordId: string;
@@ -65,6 +83,12 @@ export interface AuditBackupStorageContract {
       users: { processed: number; inserted: number; skipped: number; reactivated: number };
       auditLogs: { processed: number; inserted: number; skipped: number; reactivated: number };
       collectionRecords: {
+        processed: number;
+        inserted: number;
+        skipped: number;
+        reactivated: number;
+      };
+      collectionRecordPurgeHistory: {
         processed: number;
         inserted: number;
         skipped: number;

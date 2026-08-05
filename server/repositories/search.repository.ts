@@ -138,19 +138,72 @@ export class SearchRepository {
           account_hashes jsonb,
           account_values jsonb
         )
+      ),
+      collection_status_records AS (
+        SELECT
+          id,
+          source_import_id,
+          source_data_row_id,
+          source_import_name,
+          source_filename,
+          ic_number,
+          ic_number_search_hash,
+          customer_phone,
+          customer_phone_search_hash,
+          account_number,
+          account_number_encrypted,
+          account_number_search_hash,
+          payment_date,
+          amount,
+          created_by_login,
+          collection_staff_nickname,
+          created_at,
+          false AS is_historical,
+          NULL::timestamptz AS purged_at,
+          NULL::text AS purged_by
+        FROM public.collection_records
+
+        UNION ALL
+
+        SELECT
+          original_record_id AS id,
+          source_import_id,
+          source_data_row_id,
+          source_import_name,
+          source_filename,
+          NULL::text AS ic_number,
+          ic_number_search_hash,
+          NULL::text AS customer_phone,
+          customer_phone_search_hash,
+          NULL::text AS account_number,
+          NULL::text AS account_number_encrypted,
+          account_number_search_hash,
+          payment_date,
+          amount,
+          created_by_login,
+          collection_staff_nickname,
+          original_created_at AS created_at,
+          true AS is_historical,
+          purged_at,
+          purged_by
+        FROM public.collection_record_purge_history
       )
       SELECT
         candidate.row_id,
         matched.record_count,
+        matched.is_historical,
         matched.payment_date,
         matched.created_at,
         matched.collection_staff_nickname,
         matched.created_by_login,
         matched.account_number,
         matched.account_number_encrypted,
+        matched.account_number_search_hash,
         matched.amount,
         matched.source_import_name,
         matched.source_filename,
+        matched.purged_at,
+        matched.purged_by,
         matched.match_basis
       FROM candidates candidate
       JOIN LATERAL (
@@ -166,9 +219,13 @@ export class SearchRepository {
             "accountNumber",
           )},
           record.account_number_encrypted,
+          record.account_number_search_hash,
           record.amount,
           record.source_import_name,
           record.source_filename,
+          record.is_historical,
+          record.purged_at,
+          record.purged_by,
           CASE
             WHEN record.source_data_row_id = candidate.row_id
               THEN 'source_row'
@@ -176,8 +233,8 @@ export class SearchRepository {
               THEN 'source_and_identifier'
             ELSE 'identifier_only'
           END AS match_basis,
-          COUNT(*) OVER()::int AS record_count
-        FROM public.collection_records record
+          COUNT(*) OVER (PARTITION BY record.is_historical)::int AS record_count
+        FROM collection_status_records record
         CROSS JOIN LATERAL (
           SELECT regexp_replace(COALESCE(record.customer_phone, ''), '[^0-9]+', '', 'g') AS phone_digits
         ) normalized_record
@@ -252,6 +309,7 @@ export class SearchRepository {
             OR (identity_match.phone_match AND identity_match.account_match)
           )
         ORDER BY
+          record.is_historical ASC,
           record.payment_date DESC,
           record.created_at DESC,
           CASE
@@ -270,6 +328,7 @@ export class SearchRepository {
       return {
         rowId: String(value.row_id || ""),
         recordCount: Math.max(1, Number(value.record_count || 1)),
+        isHistorical: value.is_historical === true,
         latestPaymentDate: value.payment_date == null ? null : String(value.payment_date),
         latestCreatedAt: createdAt instanceof Date
           ? createdAt.toISOString()
@@ -287,6 +346,9 @@ export class SearchRepository {
           plaintext: value.account_number,
           encrypted: value.account_number_encrypted,
         }) || null,
+        matchedAccountHash: typeof value.account_number_search_hash === "string"
+          ? value.account_number_search_hash
+          : null,
         latestAmount: value.amount == null ? null : String(value.amount),
         sourceImportName: typeof value.source_import_name === "string"
           ? value.source_import_name
@@ -294,6 +356,12 @@ export class SearchRepository {
         sourceFilename: typeof value.source_filename === "string"
           ? value.source_filename
           : null,
+        purgedAt: value.purged_at instanceof Date
+          ? value.purged_at.toISOString()
+          : typeof value.purged_at === "string"
+            ? value.purged_at
+            : null,
+        purgedBy: typeof value.purged_by === "string" ? value.purged_by : null,
         matchBasis: value.match_basis === "source_row"
           ? "source_row"
           : value.match_basis === "identifier_only"

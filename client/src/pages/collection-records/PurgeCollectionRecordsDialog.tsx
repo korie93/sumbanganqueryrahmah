@@ -45,9 +45,10 @@ export function PurgeCollectionRecordsDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Purge Rekod Collection Lama</AlertDialogTitle>
           <AlertDialogDescription>
-            Rekod dengan tarikh bayaran sebelum {summary?.cutoffDate || "-"} akan dipadam secara kekal
-            bersama lampiran receipt yang berkaitan. Tindakan ini hanya untuk superuser dan tidak boleh
-            dibatalkan.
+            Rekod aktif dengan tarikh bayaran sebelum {summary?.cutoffDate || "-"} akan dipadam bersama
+            lampiran receipt. Metadata audit minimum tanpa PII pelanggan dalam bentuk asal akan dikekalkan supaya sejarah
+            collection masih boleh disemak melalui General Search. Tindakan ini hanya untuk superuser dan
+            tidak boleh dibatalkan.
           </AlertDialogDescription>
         </AlertDialogHeader>
 

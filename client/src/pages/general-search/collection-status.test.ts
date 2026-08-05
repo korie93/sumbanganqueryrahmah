@@ -21,8 +21,36 @@ test("collection status parser rejects malformed payloads safely", () => {
     latestAmount: null,
     sourceImportName: null,
     sourceFilename: null,
+    purgedAt: null,
+    purgedBy: null,
     matchBasis: null,
   });
+});
+
+test("collection status parser and aria label distinguish purged history", () => {
+  const row = {
+    _collectionStatus: {
+      state: "historical",
+      recordCount: 1,
+      latestPaymentDate: "2025-12-15",
+      latestCreatedAt: "2025-12-15T04:00:00.000Z",
+      latestStaffNickname: "Collector History",
+      latestCreatedByLogin: "collector.history",
+      latestAccountNumber: "COLLECTION-2002",
+      latestAmount: "99.90",
+      sourceImportName: "Historical Source",
+      sourceFilename: "historical.xlsx",
+      purgedAt: "2026-08-05T05:00:00.000Z",
+      purgedBy: "superuser.audit",
+      matchBasis: "source_row",
+    },
+  };
+
+  const status = getGeneralSearchCollectionStatus(row);
+  assert.equal(status.state, "historical");
+  assert.equal(status.purgedBy, "superuser.audit");
+  assert.match(getGeneralSearchCollectionStatusAriaLabel(row), /Rekod sejarah collection/);
+  assert.match(getGeneralSearchCollectionStatusAriaLabel(row), /dipurge oleh superuser\.audit/);
 });
 
 test("collection status parser bounds count and text from the API", () => {

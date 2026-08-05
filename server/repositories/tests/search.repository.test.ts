@@ -166,15 +166,19 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
       rows: [{
         row_id: "row-1",
         record_count: 2,
+        is_historical: false,
         payment_date: "2026-08-01",
         created_at: new Date("2026-08-01T08:00:00.000Z"),
         collection_staff_nickname: "Collector Alpha",
         created_by_login: "collector.login",
         account_number: "ACC-1001",
         account_number_encrypted: null,
+        account_number_search_hash: "account-hash-1001",
         amount: "150.50",
         source_import_name: "NPL CC P10 JULY",
         source_filename: "npl.xlsx",
+        purged_at: null,
+        purged_by: null,
         match_basis: "source_and_identifier",
       }],
     };
@@ -195,6 +199,8 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
     assert.equal(rawQueries.length, 1);
     assert.match(collectSqlText(rawQueries[0]), /jsonb_to_recordset/i);
     assert.match(collectSqlText(rawQueries[0]), /source_data_row_id/i);
+    assert.match(collectSqlText(rawQueries[0]), /collection_record_purge_history/i);
+    assert.match(collectSqlText(rawQueries[0]), /record\.is_historical ASC/i);
     assert.match(collectSqlText(rawQueries[0]), /account_number_encrypted/i);
     assert.match(collectSqlText(rawQueries[0]), /jsonb_array_elements_text/i);
     assert.match(collectSqlText(rawQueries[0]), /account_candidate_present/i);
@@ -206,15 +212,78 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
     assert.deepEqual(matches, [{
       rowId: "row-1",
       recordCount: 2,
+      isHistorical: false,
       latestPaymentDate: "2026-08-01",
       latestCreatedAt: "2026-08-01T08:00:00.000Z",
       latestStaffNickname: "Collector Alpha",
       latestCreatedByLogin: "collector.login",
       latestAccountNumber: "ACC-1001",
+      matchedAccountHash: "account-hash-1001",
       latestAmount: "150.50",
       sourceImportName: "NPL CC P10 JULY",
       sourceFilename: "npl.xlsx",
+      purgedAt: null,
+      purgedBy: null,
       matchBasis: "source_and_identifier",
+    }]);
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.findCollectionStatusesForRows maps minimal purge history", async () => {
+  const repository = new SearchRepository();
+  const originalExecute = dbRead.execute;
+
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async () => ({
+    rows: [{
+      row_id: "row-history",
+      record_count: 1,
+      is_historical: true,
+      payment_date: "2025-12-15",
+      created_at: new Date("2025-12-15T04:00:00.000Z"),
+      collection_staff_nickname: "Collector History",
+      created_by_login: "collector.history",
+      account_number: null,
+      account_number_encrypted: null,
+      account_number_search_hash: "history-account-hash",
+      amount: "99.90",
+      source_import_name: "Historical Source",
+      source_filename: "historical.xlsx",
+      purged_at: new Date("2026-08-05T05:00:00.000Z"),
+      purged_by: "superuser.audit",
+      match_basis: "source_row",
+    }],
+  })) as unknown as typeof dbRead.execute;
+
+  try {
+    const matches = await repository.findCollectionStatusesForRows([{
+      rowId: "row-history",
+      sourceImportId: "import-history",
+      icHash: "history-ic-hash",
+      icValue: null,
+      phoneHash: null,
+      phoneValue: null,
+      accountHashes: ["history-account-hash"],
+      accountValues: ["COLLECTION-2002"],
+    }], { kind: "all" });
+
+    assert.deepEqual(matches, [{
+      rowId: "row-history",
+      recordCount: 1,
+      isHistorical: true,
+      latestPaymentDate: "2025-12-15",
+      latestCreatedAt: "2025-12-15T04:00:00.000Z",
+      latestStaffNickname: "Collector History",
+      latestCreatedByLogin: "collector.history",
+      latestAccountNumber: null,
+      matchedAccountHash: "history-account-hash",
+      latestAmount: "99.90",
+      sourceImportName: "Historical Source",
+      sourceFilename: "historical.xlsx",
+      purgedAt: "2026-08-05T05:00:00.000Z",
+      purgedBy: "superuser.audit",
+      matchBasis: "source_row",
     }]);
   } finally {
     (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
@@ -268,15 +337,19 @@ test("SearchRepository.findCollectionStatusesForRows decrypts retired account sh
     rows: [{
       row_id: "row-encrypted",
       record_count: 1,
+      is_historical: false,
       payment_date: "2026-08-02",
       created_at: new Date("2026-08-02T08:00:00.000Z"),
       collection_staff_nickname: "Collector Alpha",
       created_by_login: "collector.login",
       account_number: null,
       account_number_encrypted: encryptCollectionPiiWithSecret("ACC-ENCRYPTED-1002", secret),
+      account_number_search_hash: "account-hash",
       amount: "200.00",
       source_import_name: "NPL AUGUST",
       source_filename: "august.xlsx",
+      purged_at: null,
+      purged_by: null,
       match_basis: "source_row",
     }],
   })) as unknown as typeof dbRead.execute;

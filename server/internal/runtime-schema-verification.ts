@@ -24,6 +24,7 @@ export const RUNTIME_REQUIRED_SCHEMA_TABLES = [
   "collection_record_daily_rollup_refresh_queue",
   "collection_record_daily_rollups",
   "collection_record_monthly_rollups",
+  "collection_record_purge_history",
   "collection_record_receipts",
   "collection_records",
   "collection_staff_nicknames",

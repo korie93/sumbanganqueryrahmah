@@ -5,7 +5,7 @@ import {
 } from "@/lib/date-format";
 
 export type GeneralSearchCollectionStatus = {
-  state: "recorded" | "not_recorded" | "unavailable";
+  state: "recorded" | "historical" | "not_recorded" | "unavailable";
   recordCount: number;
   latestPaymentDate: string | null;
   latestCreatedAt: string | null;
@@ -15,6 +15,8 @@ export type GeneralSearchCollectionStatus = {
   latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
+  purgedAt: string | null;
+  purgedBy: string | null;
   matchBasis: "source_row" | "source_and_identifier" | "identifier_only" | null;
 };
 
@@ -50,19 +52,23 @@ export function getGeneralSearchCollectionStatus(
       latestAmount: null,
       sourceImportName: null,
       sourceFilename: null,
+      purgedAt: null,
+      purgedBy: null,
       matchBasis: null,
     };
   }
 
   const value = raw as Record<string, unknown>;
-  const state = value.state === "recorded" || value.state === "not_recorded"
+  const state = value.state === "recorded"
+    || value.state === "historical"
+    || value.state === "not_recorded"
     ? value.state
     : "unavailable";
   const numericCount = Number(value.recordCount);
 
   return {
     state,
-    recordCount: state === "recorded" && Number.isFinite(numericCount)
+    recordCount: (state === "recorded" || state === "historical") && Number.isFinite(numericCount)
       ? Math.max(1, Math.min(1_000_000, Math.trunc(numericCount)))
       : 0,
     latestPaymentDate: readNullableText(value.latestPaymentDate, 64),
@@ -73,6 +79,8 @@ export function getGeneralSearchCollectionStatus(
     latestAmount: readNullableText(value.latestAmount, 64),
     sourceImportName: readNullableText(value.sourceImportName),
     sourceFilename: readNullableText(value.sourceFilename),
+    purgedAt: readNullableText(value.purgedAt, 64),
+    purgedBy: readNullableText(value.purgedBy),
     matchBasis: value.matchBasis === "source_row"
       || value.matchBasis === "source_and_identifier"
       || value.matchBasis === "identifier_only"
@@ -96,6 +104,22 @@ export function getGeneralSearchCollectionStatusAriaLabel(row: SearchResultRow):
       status.latestCreatedAt
         ? `direkod pada ${formatGeneralSearchCollectionRecordedAt(status.latestCreatedAt)}`
         : null,
+    ].filter(Boolean).join(", ");
+  }
+  if (status.state === "historical") {
+    const savedBy = status.latestStaffNickname || status.latestCreatedByLogin;
+    return [
+      `Rekod sejarah collection, ${status.recordCount} rekod telah dipurge`,
+      savedBy ? `asalnya disimpan oleh ${savedBy}` : null,
+      status.latestAccountNumber ? `nombor akaun ${status.latestAccountNumber}` : null,
+      status.latestAmount ? `jumlah RM ${status.latestAmount}` : null,
+      status.latestPaymentDate
+        ? `tarikh bayaran ${formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate)}`
+        : null,
+      status.purgedAt
+        ? `dipurge pada ${formatGeneralSearchCollectionRecordedAt(status.purgedAt)}`
+        : null,
+      status.purgedBy ? `dipurge oleh ${status.purgedBy}` : null,
     ].filter(Boolean).join(", ");
   }
   if (status.state === "not_recorded") {

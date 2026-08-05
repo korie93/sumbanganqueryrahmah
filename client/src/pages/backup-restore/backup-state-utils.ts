@@ -89,6 +89,9 @@ export function buildRestoreSuccessSummary(result: RestoreResponse) {
   if (stats.collectionRecords.inserted > 0) {
     parts.push(`${stats.collectionRecords.inserted} collection records`);
   }
+  if ((stats.collectionRecordPurgeHistory?.inserted ?? 0) > 0) {
+    parts.push(`${stats.collectionRecordPurgeHistory?.inserted} collection history records`);
+  }
   if (stats.collectionRecordReceipts.inserted > 0) {
     parts.push(`${stats.collectionRecordReceipts.inserted} collection receipts`);
   }

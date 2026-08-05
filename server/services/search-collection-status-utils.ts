@@ -22,7 +22,7 @@ type SearchRowForCollectionStatus = {
 };
 
 export type SearchCollectionStatus = {
-  state: "recorded" | "not_recorded" | "unavailable";
+  state: "recorded" | "historical" | "not_recorded" | "unavailable";
   recordCount: number;
   latestPaymentDate: string | null;
   latestCreatedAt: string | null;
@@ -32,8 +32,27 @@ export type SearchCollectionStatus = {
   latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
+  purgedAt: string | null;
+  purgedBy: string | null;
   matchBasis: "source_row" | "source_and_identifier" | "identifier_only" | null;
 };
+
+function resolveHistoricalAccountNumber(
+  candidate: SearchCollectionStatusCandidate | undefined,
+  matchedAccountHash: string | null,
+): string | null {
+  if (!candidate || !matchedAccountHash) {
+    return null;
+  }
+
+  const accountIndex = candidate.accountHashes.indexOf(matchedAccountHash);
+  if (accountIndex < 0) {
+    return null;
+  }
+
+  return candidate.accountValues[accountIndex]?.slice(0, MAX_COLLECTION_ACCOUNT_DISPLAY_LENGTH)
+    || null;
+}
 
 function readIdentifierValue(value: unknown): string {
   if (typeof value === "string") {
@@ -122,6 +141,9 @@ export function buildSearchCollectionStatuses(params: {
   includeSourceDetails: boolean;
 }): Map<string, SearchCollectionStatus> {
   const candidateIds = new Set(params.candidates.map((candidate) => candidate.rowId));
+  const candidatesByRowId = new Map(
+    params.candidates.map((candidate) => [candidate.rowId, candidate]),
+  );
   const matchesByRowId = new Map(params.matches.map((match) => [match.rowId, match]));
   const statuses = new Map<string, SearchCollectionStatus>();
 
@@ -131,11 +153,20 @@ export function buildSearchCollectionStatuses(params: {
 
     const match = matchesByRowId.get(rowId);
     if (match) {
-      const latestAccountNumber = String(match.latestAccountNumber || "")
+      const latestAccountNumber = String(
+        match.latestAccountNumber
+        || (match.isHistorical
+          ? resolveHistoricalAccountNumber(
+              candidatesByRowId.get(rowId),
+              match.matchedAccountHash,
+            )
+          : "")
+        || "",
+      )
         .trim()
         .slice(0, MAX_COLLECTION_ACCOUNT_DISPLAY_LENGTH) || null;
       statuses.set(rowId, {
-        state: "recorded",
+        state: match.isHistorical ? "historical" : "recorded",
         recordCount: Math.max(1, Math.trunc(match.recordCount || 1)),
         latestPaymentDate: match.latestPaymentDate,
         latestCreatedAt: match.latestCreatedAt,
@@ -145,6 +176,8 @@ export function buildSearchCollectionStatuses(params: {
         latestAmount: match.latestAmount,
         sourceImportName: params.includeSourceDetails ? match.sourceImportName : null,
         sourceFilename: params.includeSourceDetails ? match.sourceFilename : null,
+        purgedAt: match.isHistorical ? match.purgedAt : null,
+        purgedBy: match.isHistorical ? match.purgedBy : null,
         matchBasis: match.matchBasis,
       });
       continue;
@@ -161,6 +194,8 @@ export function buildSearchCollectionStatuses(params: {
       latestAmount: null,
       sourceImportName: null,
       sourceFilename: null,
+      purgedAt: null,
+      purgedBy: null,
       matchBasis: null,
     });
   }

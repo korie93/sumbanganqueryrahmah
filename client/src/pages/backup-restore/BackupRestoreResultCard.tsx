@@ -55,6 +55,11 @@ export function BackupRestoreResultCard({
           <div>Users: +{lastRestoreResult.stats.users.inserted} inserted</div>
           <div>Audit logs: +{lastRestoreResult.stats.auditLogs.inserted} inserted</div>
           <div>Collection records: +{lastRestoreResult.stats.collectionRecords.inserted} inserted</div>
+          {lastRestoreResult.stats.collectionRecordPurgeHistory ? (
+            <div>
+              Collection history: +{lastRestoreResult.stats.collectionRecordPurgeHistory.inserted} inserted
+            </div>
+          ) : null}
           <div>Collection receipts: +{lastRestoreResult.stats.collectionRecordReceipts.inserted} inserted</div>
         </div>
         <div className={`${isMobile ? "text-xs" : "text-sm"} text-muted-foreground`}>

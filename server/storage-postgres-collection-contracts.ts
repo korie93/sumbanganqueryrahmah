@@ -50,7 +50,7 @@ export interface CollectionStorageContract {
     filters?: CollectionRecordAggregateFilters,
   ): Promise<CollectionNicknameDailyAggregate[]>;
   summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate>;
-  purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
+  purgeCollectionRecordsOlderThan(beforeDate: string, purgedBy: string): Promise<{
     totalRecords: number;
     totalAmount: CollectionAmountMyrNumber;
     receiptPaths: string[];

@@ -8,6 +8,7 @@ export function createRestoreStats(): RestoreStats {
     users: createRestoreDatasetStats(),
     auditLogs: createRestoreDatasetStats(),
     collectionRecords: createRestoreDatasetStats(),
+    collectionRecordPurgeHistory: createRestoreDatasetStats(),
     collectionRecordReceipts: createRestoreDatasetStats(),
     warnings: [],
     totalProcessed: 0,
@@ -24,6 +25,7 @@ export function updateRestoreTotals(stats: RestoreStats) {
     stats.users,
     stats.auditLogs,
     stats.collectionRecords,
+    stats.collectionRecordPurgeHistory,
     stats.collectionRecordReceipts,
   ];
   stats.totalProcessed = datasets.reduce((sum, item) => sum + item.processed, 0);

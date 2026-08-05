@@ -64,6 +64,11 @@ export function normalizeBackup(raw: unknown): BackupRecord {
           collectionRecordsCount: Number(
             metadata.collectionRecordsCount ?? metadata.collection_records_count ?? 0,
           ),
+          collectionRecordPurgeHistoryCount: Number(
+            metadata.collectionRecordPurgeHistoryCount
+            ?? metadata.collection_record_purge_history_count
+            ?? 0,
+          ),
           collectionRecordReceiptsCount: Number(
             metadata.collectionRecordReceiptsCount
             ?? metadata.collection_record_receipts_count

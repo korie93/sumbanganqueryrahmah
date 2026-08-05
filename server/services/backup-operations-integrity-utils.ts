@@ -31,6 +31,7 @@ export function buildBackupMetadata(
     usersCount: counts.usersCount,
     auditLogsCount: counts.auditLogsCount,
     collectionRecordsCount: counts.collectionRecordsCount,
+    collectionRecordPurgeHistoryCount: counts.collectionRecordPurgeHistoryCount,
     collectionRecordReceiptsCount: counts.collectionRecordReceiptsCount,
     payloadBytes: backupData.payloadBytes,
     ...(typeof backupData.maxSerializedRowBytes === "number"

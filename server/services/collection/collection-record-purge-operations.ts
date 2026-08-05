@@ -51,7 +51,7 @@ export class CollectionRecordPurgeOperations {
     }
 
     const cutoffDate = buildCollectionPurgeCutoffDate();
-    const purged = await this.storage.purgeCollectionRecordsOlderThan(cutoffDate);
+    const purged = await this.storage.purgeCollectionRecordsOlderThan(cutoffDate, user.username);
     if (purged.receiptPaths.length > 0) {
       await Promise.allSettled(
         purged.receiptPaths.map((receiptPath) => removeCollectionReceiptFile(receiptPath)),
@@ -63,7 +63,7 @@ export class CollectionRecordPurgeOperations {
         action: "COLLECTION_RECORDS_PURGED",
         performedBy: user.username,
         targetResource: "collection-records",
-        details: `Purged ${purged.totalRecords} collection records older than ${cutoffDate} by ${user.username}`,
+        details: `Purged ${purged.totalRecords} active collection records older than ${cutoffDate}; minimal search history retained by ${user.username}`,
       });
     }
 

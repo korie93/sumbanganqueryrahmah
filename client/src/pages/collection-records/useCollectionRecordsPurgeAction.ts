@@ -114,7 +114,7 @@ export function useCollectionRecordsPurgeAction({
         title: response.deletedRecords > 0 ? "Purge Completed" : "No Old Records Found",
         description:
           response.deletedRecords > 0
-            ? `${response.deletedRecords} rekod collection lama berjaya dipadam.`
+            ? `${response.deletedRecords} rekod aktif dipurge. Metadata sejarah minimum dikekalkan untuk semakan General Search.`
             : "Tiada rekod collection melebihi enam bulan untuk dipurge.",
       });
       emitCollectionDataChanged();
