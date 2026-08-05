@@ -10,6 +10,7 @@ import {
   QUERY_PAGE_LIMIT,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
+  type BackupCollectionRecordPurgeHistory,
   type BackupUserRecord,
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
@@ -195,6 +196,37 @@ export async function prepareBackupPayloadFileForCreate(
       `).then((rows) =>
         rows.map((row) => mapBackupCollectionRecordRow(row)),
       ),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionRecordPurgeHistoryCount = await appendPagedJsonArray(
+      state,
+      "collectionRecordPurgeHistory",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionRecordPurgeHistory & BackupCursorRow>(sql`
+          SELECT
+            original_record_id as id,
+            source_import_id as "sourceImportId",
+            source_data_row_id as "sourceDataRowId",
+            source_import_name as "sourceImportName",
+            source_filename as "sourceFilename",
+            ic_number_search_hash as "icNumberSearchHash",
+            customer_phone_search_hash as "customerPhoneSearchHash",
+            account_number_search_hash as "accountNumberSearchHash",
+            payment_date as "paymentDate",
+            amount,
+            created_by_login as "createdByLogin",
+            collection_staff_nickname as "collectionStaffNickname",
+            original_created_at as "originalCreatedAt",
+            purged_at as "purgedAt",
+            purged_by as "purgedBy",
+            purge_reason as "purgeReason"
+          FROM public.collection_record_purge_history
+          WHERE ${lastId ? sql`original_record_id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY original_record_id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `),
     );
 
     await writeBackupChunk(state, ",");

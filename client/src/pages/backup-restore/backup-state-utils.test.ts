@@ -93,10 +93,11 @@ test("buildRestoreSuccessSummary reports restored entity counts and duration", (
       users: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
       auditLogs: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
       collectionRecords: { processed: 3, inserted: 1, skipped: 2, reactivated: 0 },
+      collectionRecordPurgeHistory: { processed: 2, inserted: 2, skipped: 0, reactivated: 0 },
       collectionRecordReceipts: { processed: 0, inserted: 0, skipped: 0, reactivated: 0 },
       warnings: [],
-      totalProcessed: 6,
-      totalInserted: 4,
+      totalProcessed: 8,
+      totalInserted: 6,
       totalSkipped: 2,
       totalReactivated: 0,
     },
@@ -106,5 +107,6 @@ test("buildRestoreSuccessSummary reports restored entity counts and duration", (
   assert.match(summary.description, /1 imports/);
   assert.match(summary.description, /2 data rows/);
   assert.match(summary.description, /1 collection records/);
+  assert.match(summary.description, /2 collection history records/);
   assert.match(summary.description, /2\.5s/);
 });

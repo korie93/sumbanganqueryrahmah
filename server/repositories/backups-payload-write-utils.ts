@@ -63,6 +63,7 @@ export function createEmptyBackupPayloadCounts(): BackupPayloadCounts {
     usersCount: 0,
     auditLogsCount: 0,
     collectionRecordsCount: 0,
+    collectionRecordPurgeHistoryCount: 0,
     collectionRecordReceiptsCount: 0,
   };
 }

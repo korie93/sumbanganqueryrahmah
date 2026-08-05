@@ -8,12 +8,14 @@ import {
 import {
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
+  type BackupCollectionRecordPurgeHistory,
   type RestoreStats,
 } from "./backups-repository-types";
 import { resolveRestoreChunkSize } from "./backups-restore-config";
 import {
   normalizeBackupCollectionReceipt,
   normalizeBackupCollectionRecord,
+  normalizeBackupCollectionRecordPurgeHistory,
 } from "./backups-restore-collection-normalize-utils";
 import { rebuildCollectionRecordDailyRollups } from "./collection-record-repository-utils";
 import {
@@ -28,6 +30,9 @@ const RESTORE_SYSTEM_ACTOR_USERNAME = "system";
 
 type NormalizedBackupCollectionRecord = NonNullable<ReturnType<typeof normalizeBackupCollectionRecord>>;
 type NormalizedBackupCollectionReceipt = NonNullable<ReturnType<typeof normalizeBackupCollectionReceipt>>;
+type NormalizedBackupCollectionRecordPurgeHistory = NonNullable<
+  ReturnType<typeof normalizeBackupCollectionRecordPurgeHistory>
+>;
 
 export async function initializeRestoreTrackingTempTable(tx: BackupRestoreExecutor) {
   await tx.execute(sql`
@@ -311,6 +316,94 @@ export async function restoreCollectionRecordReceiptsFromBackup(
     }
 
     await flushReceiptInsertBatch(pendingBatch);
+  }
+}
+
+export async function restoreCollectionRecordPurgeHistoryFromBackup(
+  tx: BackupRestoreExecutor,
+  backupDataReader: BackupPayloadChunkReader,
+  stats: RestoreStats,
+) {
+  const restoreChunkSize = resolveRestoreChunkSize();
+  const flushHistoryInsertBatch = async (
+    insertBatch: NormalizedBackupCollectionRecordPurgeHistory[],
+  ) => {
+    if (!insertBatch.length) {
+      return;
+    }
+
+    const valuesSql = sql.join(
+      insertBatch.map((row) => sql`(
+        ${row.id}::uuid,
+        ${row.sourceImportId},
+        ${row.sourceDataRowId},
+        ${row.sourceImportName},
+        ${row.sourceFilename},
+        ${row.icNumberSearchHash},
+        ${row.customerPhoneSearchHash},
+        ${row.accountNumberSearchHash},
+        ${row.paymentDate}::date,
+        ${row.amount},
+        ${row.createdByLogin},
+        ${row.collectionStaffNickname},
+        ${row.originalCreatedAt},
+        ${row.purgedAt},
+        ${row.purgedBy},
+        ${row.purgeReason}
+      )`),
+      sql`, `,
+    );
+    const insertedResult = await tx.execute(sql`
+      INSERT INTO public.collection_record_purge_history (
+        original_record_id,
+        source_import_id,
+        source_data_row_id,
+        source_import_name,
+        source_filename,
+        ic_number_search_hash,
+        customer_phone_search_hash,
+        account_number_search_hash,
+        payment_date,
+        amount,
+        created_by_login,
+        collection_staff_nickname,
+        original_created_at,
+        purged_at,
+        purged_by,
+        purge_reason
+      )
+      VALUES ${valuesSql}
+      ON CONFLICT (original_record_id) DO NOTHING
+      RETURNING original_record_id
+    `);
+    const insertedCount = insertedResult.rows?.length || 0;
+    stats.collectionRecordPurgeHistory.inserted += insertedCount;
+    stats.collectionRecordPurgeHistory.skipped += insertBatch.length - insertedCount;
+  };
+
+  for await (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionRecordPurgeHistory>(
+    "collectionRecordPurgeHistory",
+    restoreChunkSize,
+  )) {
+    const pendingBatch: NormalizedBackupCollectionRecordPurgeHistory[] = [];
+
+    for (const record of chunk) {
+      const normalized = normalizeBackupCollectionRecordPurgeHistory(record);
+      if (!normalized) {
+        stats.collectionRecordPurgeHistory.skipped += 1;
+        continue;
+      }
+
+      stats.collectionRecordPurgeHistory.processed += 1;
+      pendingBatch.push(normalized);
+
+      if (pendingBatch.length >= RESTORE_INSERT_BATCH_SIZE) {
+        await flushHistoryInsertBatch(pendingBatch);
+        pendingBatch.length = 0;
+      }
+    }
+
+    await flushHistoryInsertBatch(pendingBatch);
   }
 }
 

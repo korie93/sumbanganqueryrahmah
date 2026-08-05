@@ -71,12 +71,15 @@ export async function summarizeCollectionRecordsOlderThanRepository(
   return summarizeCollectionRecordsOlderThan(beforeDate);
 }
 
-export async function purgeCollectionRecordsOlderThanRepository(beforeDate: string): Promise<{
+export async function purgeCollectionRecordsOlderThanRepository(
+  beforeDate: string,
+  purgedBy: string,
+): Promise<{
   totalRecords: number;
   totalAmount: number;
   receiptPaths: string[];
 }> {
-  return purgeCollectionRecordsOlderThan(beforeDate);
+  return purgeCollectionRecordsOlderThan(beforeDate, purgedBy);
 }
 
 export async function getCollectionMonthlySummaryRepository(filters: {

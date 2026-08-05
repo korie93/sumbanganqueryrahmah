@@ -12,6 +12,7 @@ test("buildBackupRowAriaLabel summarizes backup metadata", () => {
         id: "backup-1",
         metadata: {
           auditLogsCount: 75,
+          collectionRecordPurgeHistoryCount: 7,
           collectionRecordReceiptsCount: 0,
           collectionRecordsCount: 18,
           createdAt: "2026-04-14T00:00:00.000Z",
@@ -23,7 +24,7 @@ test("buildBackupRowAriaLabel summarizes backup metadata", () => {
       },
       formattedCreatedAt: "14/04/2026, 08:00 PM",
     }),
-    "Backup Nightly Backup, created by superuser, created 14/04/2026, 08:00 PM, 12 imports, 1200 data rows, 8 users, 75 audit logs, 18 collection records",
+    "Backup Nightly Backup, created by superuser, created 14/04/2026, 08:00 PM, 12 imports, 1200 data rows, 8 users, 75 audit logs, 18 collection records, 7 collection history records",
   );
 });
 

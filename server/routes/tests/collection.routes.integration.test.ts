@@ -254,7 +254,7 @@ test("DELETE /api/collection/purge-old logs a rejected attempt when the superuse
 
 test("DELETE /api/collection/purge-old purges and audits when the superuser password is valid", async () => {
   const actorPasswordHash = await hashPassword("SuperSecret123");
-  const { storage, getPurgeCallCount, auditLogs } = createCollectionStorageDouble({
+  const { storage, getPurgeCallCount, getPurgeActors, auditLogs } = createCollectionStorageDouble({
     actorPasswordHash,
   });
   const app = createJsonTestApp();
@@ -286,6 +286,7 @@ test("DELETE /api/collection/purge-old purges and audits when the superuser pass
     assert.equal(payload.deletedRecords, 2);
     assert.equal(payload.totalAmount, 450.75);
     assert.equal(getPurgeCallCount(), 1);
+    assert.deepEqual(getPurgeActors(), ["superuser"]);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORDS_PURGED");
     assert.equal(auditLogs[0].performedBy, "superuser");

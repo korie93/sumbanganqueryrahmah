@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleHelp, CircleMinus } from "lucide-react";
+import { CheckCircle2, CircleHelp, CircleMinus, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatGeneralSearchCollectionPaymentDate,
@@ -80,6 +80,68 @@ export function GeneralSearchCollectionStatus({
             Rekod dipadankan melalui IC atau gabungan telefon dan akaun kerana pautan baris Saved belum tersedia.
           </p>
         ) : null}
+      </div>
+    );
+  }
+
+  if (status.state === "historical") {
+    const source = status.sourceImportName || status.sourceFilename;
+    const savedBy = status.latestStaffNickname || status.latestCreatedByLogin || "Tidak dinyatakan";
+    const accountNumber = status.latestAccountNumber || "Tidak dinyatakan";
+    const paymentDate = formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate);
+    const recordedAt = formatGeneralSearchCollectionRecordedAt(status.latestCreatedAt);
+    const purgedAt = formatGeneralSearchCollectionRecordedAt(status.purgedAt);
+    const amount = status.latestAmount ? formatAmountRM(status.latestAmount) : "Tidak dinyatakan";
+
+    return (
+      <div className={cn("min-w-[13rem] space-y-1.5", className)}>
+        <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+          <History className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Rekod sejarah collection</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {status.recordCount} {status.recordCount === 1 ? "rekod" : "rekod berkaitan"}
+          {` - ${amount} - ${paymentDate}`}
+        </p>
+        <p className="break-words text-xs text-muted-foreground">
+          Asalnya disimpan oleh: {savedBy}
+        </p>
+        {!showDetails ? (
+          <p className="min-w-0 text-xs text-muted-foreground">
+            Akaun sepadan: <span className="break-all font-medium text-foreground">{accountNumber}</span>
+          </p>
+        ) : null}
+        {showDetails ? (
+          <dl className="grid grid-cols-[minmax(6rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 pt-1 text-xs">
+            <dt className="text-muted-foreground">Status</dt>
+            <dd className="font-medium text-foreground">Telah dipurge daripada rekod aktif</dd>
+            <dt className="text-muted-foreground">Akaun sepadan</dt>
+            <dd className="min-w-0 break-all font-medium text-foreground">{accountNumber}</dd>
+            <dt className="text-muted-foreground">Jumlah asal</dt>
+            <dd className="font-medium text-foreground">{amount}</dd>
+            <dt className="text-muted-foreground">Tarikh bayaran</dt>
+            <dd className="font-medium text-foreground">{paymentDate}</dd>
+            <dt className="text-muted-foreground">Direkod pada</dt>
+            <dd className="font-medium text-foreground">{recordedAt}</dd>
+            <dt className="text-muted-foreground">Dipurge pada</dt>
+            <dd className="font-medium text-foreground">{purgedAt}</dd>
+            <dt className="text-muted-foreground">Dipurge oleh</dt>
+            <dd className="min-w-0 break-words font-medium text-foreground">
+              {status.purgedBy || "Tidak dinyatakan"}
+            </dd>
+            {canSeeSourceFile ? (
+              <>
+                <dt className="text-muted-foreground">Fail Saved</dt>
+                <dd className="min-w-0 break-words font-medium text-foreground">
+                  {source || "Tidak direkodkan"}
+                </dd>
+              </>
+            ) : null}
+          </dl>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          Metadata audit minimum dikekalkan; resit dan PII pelanggan dalam bentuk asal tidak disimpan dalam sejarah purge.
+        </p>
       </div>
     );
   }

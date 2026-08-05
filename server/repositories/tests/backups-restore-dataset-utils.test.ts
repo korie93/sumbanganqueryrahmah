@@ -8,16 +8,19 @@ import {
 import {
   createRestoreStats,
   initializeRestoreTrackingTempTable,
+  restoreCollectionRecordPurgeHistoryFromBackup,
   restoreCollectionRecordsFromBackup,
   syncRestoredCollectionReceiptCache,
 } from "../backups-restore-dataset-utils";
 import {
   normalizeBackupCollectionReceipt,
   normalizeBackupCollectionRecord,
+  normalizeBackupCollectionRecordPurgeHistory,
 } from "../backups-restore-collection-datasets-utils";
 import type {
   BackupCollectionReceipt,
   BackupCollectionRecord,
+  BackupCollectionRecordPurgeHistory,
 } from "../backups-repository-types";
 import type {
   BackupPayloadChunkReader,
@@ -80,6 +83,81 @@ function createCollectionRecordReader(
     },
   };
 }
+
+function createCollectionPurgeHistoryReader(
+  records: BackupCollectionRecordPurgeHistory[],
+): BackupPayloadChunkReader {
+  return {
+    async *iterateArrayChunks<T>(key: string, chunkSize: number): AsyncGenerator<T[]> {
+      if (key !== "collectionRecordPurgeHistory") {
+        return;
+      }
+
+      for (let index = 0; index < records.length; index += chunkSize) {
+        yield records.slice(index, index + chunkSize) as unknown as T[];
+      }
+    },
+  };
+}
+
+test("collection purge history restore accepts only minimal validated metadata", async () => {
+  const validHistory: BackupCollectionRecordPurgeHistory = {
+    id: "11111111-1111-4111-8111-111111111111",
+    sourceImportId: "import-1",
+    sourceDataRowId: "saved-row-1",
+    sourceImportName: "NPL CC P10 JULY",
+    sourceFilename: "npl-cc-p10-july.xlsx",
+    icNumberSearchHash: "A".repeat(64),
+    customerPhoneSearchHash: "b".repeat(64),
+    accountNumberSearchHash: "c".repeat(64),
+    paymentDate: "2026-03-31",
+    amount: "100.00",
+    createdByLogin: "system",
+    collectionStaffNickname: "Collector Alpha",
+    originalCreatedAt: "2026-03-31T08:00:00.000Z",
+    purgedAt: "2026-08-05T08:00:00.000Z",
+    purgedBy: "superuser",
+    purgeReason: "retention_policy",
+  };
+  const normalized = normalizeBackupCollectionRecordPurgeHistory(validHistory);
+
+  assert.ok(normalized);
+  assert.equal(normalized.icNumberSearchHash, "a".repeat(64));
+  assert.equal(
+    normalizeBackupCollectionRecordPurgeHistory({
+      ...validHistory,
+      id: "not-a-uuid",
+    }),
+    null,
+  );
+
+  const executedQueries: string[] = [];
+  const tx = createBackupRestoreExecutor(
+    async (query: unknown) => {
+      const sqlText = normalizeSqlText(query);
+      executedQueries.push(sqlText);
+      return sqlText.includes("INSERT INTO public.collection_record_purge_history")
+        ? { rows: [{ original_record_id: validHistory.id }] }
+        : { rows: [] };
+    },
+    "Unexpected insert() call during purge history restore test.",
+  );
+  const stats = createRestoreStats();
+
+  await restoreCollectionRecordPurgeHistoryFromBackup(
+    tx,
+    createCollectionPurgeHistoryReader([validHistory]),
+    stats,
+  );
+
+  assert.equal(
+    executedQueries.some((query) => query.includes("collection_record_purge_history")),
+    true,
+  );
+  assert.equal(stats.collectionRecordPurgeHistory.processed, 1);
+  assert.equal(stats.collectionRecordPurgeHistory.inserted, 1);
+  assert.equal(stats.collectionRecordPurgeHistory.skipped, 0);
+});
 
 async function withCollectionPiiEncryptionKey<T>(secret: string, fn: () => Promise<T> | T): Promise<T> {
   const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY;

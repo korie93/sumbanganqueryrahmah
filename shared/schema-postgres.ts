@@ -26,6 +26,7 @@ import {
   collectionDailyCalendar,
   collectionDailyTargets,
   collectionNicknameSessions,
+  collectionRecordPurgeHistory,
   collectionRecordReceipts,
   collectionRecords,
   collectionStaffNicknames,
@@ -68,6 +69,7 @@ export {
 export { mutationIdempotencyKeys } from "./schema-postgres-core";
 export {
   collectionRecords,
+  collectionRecordPurgeHistory,
   collectionRecordReceipts,
   collectionRecordDailyRollups,
   collectionRecordMonthlyRollups,
@@ -271,6 +273,7 @@ export type RoleSettingPermissionRow = typeof roleSettingPermissions.$inferSelec
 export type SettingVersionRow = typeof settingVersions.$inferSelect;
 export type FeatureFlagRow = typeof featureFlags.$inferSelect;
 export type CollectionRecordRow = typeof collectionRecords.$inferSelect;
+export type CollectionRecordPurgeHistoryRow = typeof collectionRecordPurgeHistory.$inferSelect;
 export type CollectionRecordReceiptRow = typeof collectionRecordReceipts.$inferSelect;
 export type CollectionRecordMonthlyRollupRow = typeof collectionRecordMonthlyRollups.$inferSelect;
 export type CollectionStaffNicknameRow = typeof collectionStaffNicknames.$inferSelect;

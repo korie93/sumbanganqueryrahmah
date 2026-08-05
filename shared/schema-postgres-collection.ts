@@ -132,6 +132,47 @@ export const collectionRecords = pgTable("collection_records", {
   ),
 }));
 
+export const collectionRecordPurgeHistory = pgTable("collection_record_purge_history", {
+  originalRecordId: uuid("original_record_id").primaryKey(),
+  sourceImportId: text("source_import_id"),
+  sourceDataRowId: text("source_data_row_id"),
+  sourceImportName: text("source_import_name"),
+  sourceFilename: text("source_filename"),
+  icNumberSearchHash: text("ic_number_search_hash"),
+  customerPhoneSearchHash: text("customer_phone_search_hash"),
+  accountNumberSearchHash: text("account_number_search_hash"),
+  paymentDate: date("payment_date", { mode: "string" }).notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  createdByLogin: text("created_by_login").notNull(),
+  collectionStaffNickname: text("collection_staff_nickname").notNull(),
+  originalCreatedAt: utcTimestamp("original_created_at").notNull(),
+  purgedAt: utcTimestamp("purged_at").defaultNow().notNull(),
+  purgedBy: text("purged_by").notNull(),
+  purgeReason: text("purge_reason").notNull().default("retention_policy"),
+}, (table) => ({
+  sourceImportIdIdx: index("idx_collection_record_purge_history_source_import_id")
+    .on(table.sourceImportId),
+  sourceDataRowIdIdx: index("idx_collection_record_purge_history_source_data_row_id")
+    .on(table.sourceDataRowId),
+  icNumberSearchHashIdx: index("idx_collection_record_purge_history_ic_search_hash")
+    .on(table.icNumberSearchHash),
+  customerPhoneSearchHashIdx: index("idx_collection_record_purge_history_phone_search_hash")
+    .on(table.customerPhoneSearchHash),
+  accountNumberSearchHashIdx: index("idx_collection_record_purge_history_account_search_hash")
+    .on(table.accountNumberSearchHash),
+  createdByLoginIdx: index("idx_collection_record_purge_history_created_by")
+    .on(table.createdByLogin),
+  nicknameLowerIdx: index("idx_collection_record_purge_history_nickname_lower").using(
+    "btree",
+    sql`lower(${table.collectionStaffNickname})`,
+  ),
+  purgedAtIdx: index("idx_collection_record_purge_history_purged_at").on(table.purgedAt.desc()),
+  purgeReasonCheck: check(
+    "chk_collection_record_purge_history_reason",
+    sql`${table.purgeReason} IN ('retention_policy')`,
+  ),
+}));
+
 export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   id: uuid("id").primaryKey(),
   collectionRecordId: uuid("collection_record_id")

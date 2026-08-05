@@ -24,6 +24,7 @@ export {
 export {
   finalizeRestoredCollectionRollups,
   initializeRestoreTrackingTempTable,
+  restoreCollectionRecordPurgeHistoryFromBackup,
   restoreCollectionRecordReceiptsFromBackup,
   restoreCollectionRecordsFromBackup,
   syncRestoredCollectionReceiptCache,

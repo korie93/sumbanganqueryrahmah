@@ -130,6 +130,10 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Second-level collection monthly rollups now have a reviewed Drizzle migration while runtime bootstrap remains additive for backfill and compatibility refreshes.",
     ),
+    collection_record_purge_history: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration"],
+      "Collection retention purge history stores non-plaintext audit metadata so Saved search results can retain an authorization-scoped historical status.",
+    ),
     collection_record_daily_rollup_refresh_queue: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Collection rollup refresh queue now has a reviewed Drizzle migration while runtime bootstrap remains additive for recovery and compatibility.",

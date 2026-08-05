@@ -41,3 +41,22 @@ export type RestorableCollectionReceiptRow = {
   fileHash: string | null;
   createdAt: Date;
 };
+
+export type RestorableCollectionRecordPurgeHistoryRow = {
+  id: string;
+  sourceImportId: string | null;
+  sourceDataRowId: string | null;
+  sourceImportName: string | null;
+  sourceFilename: string | null;
+  icNumberSearchHash: string | null;
+  customerPhoneSearchHash: string | null;
+  accountNumberSearchHash: string | null;
+  paymentDate: string;
+  amount: number;
+  createdByLogin: string;
+  collectionStaffNickname: string;
+  originalCreatedAt: Date;
+  purgedAt: Date;
+  purgedBy: string;
+  purgeReason: "retention_policy";
+};

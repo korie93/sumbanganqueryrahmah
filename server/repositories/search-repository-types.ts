@@ -74,13 +74,17 @@ export type SearchCollectionViewerScope =
 export type SearchCollectionStatusMatch = {
   rowId: string;
   recordCount: number;
+  isHistorical: boolean;
   latestPaymentDate: string | null;
   latestCreatedAt: string | null;
   latestStaffNickname: string | null;
   latestCreatedByLogin: string | null;
   latestAccountNumber: string | null;
+  matchedAccountHash: string | null;
   latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
+  purgedAt: string | null;
+  purgedBy: string | null;
   matchBasis: "source_row" | "source_and_identifier" | "identifier_only";
 };

@@ -161,6 +161,7 @@ export function createCollectionStorageDouble(options: {
 }) {
   const auditLogs: AuditEntry[] = [];
   let purgeCallCount = 0;
+  const purgeActors: string[] = [];
   const idempotency = createMutationIdempotencyDouble();
 
   const actor = {
@@ -187,8 +188,9 @@ export function createCollectionStorageDouble(options: {
     ) => {
       idempotency.release(params);
     },
-    purgeCollectionRecordsOlderThan: async (_cutoffDate: string) => {
+    purgeCollectionRecordsOlderThan: async (_cutoffDate: string, purgedBy: string) => {
       purgeCallCount += 1;
+      purgeActors.push(purgedBy);
       return {
         totalRecords: 2,
         totalAmount: 450.75,
@@ -201,6 +203,7 @@ export function createCollectionStorageDouble(options: {
     storage,
     auditLogs,
     getPurgeCallCount: () => purgeCallCount,
+    getPurgeActors: () => [...purgeActors],
   };
 }
 

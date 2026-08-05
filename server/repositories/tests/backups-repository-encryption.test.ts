@@ -649,6 +649,7 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
           "users",
           "auditLogs",
           "collectionRecords",
+          "collectionRecordPurgeHistory",
           "collectionRecordReceipts",
         ]);
       } finally {
@@ -848,6 +849,30 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
             ],
           };
         }
+        if (sqlText.includes("FROM public.collection_record_purge_history")) {
+          return {
+            rows: [
+              {
+                id: "11111111-1111-4111-8111-111111111111",
+                sourceImportId: "import-1",
+                sourceDataRowId: "saved-row-1",
+                sourceImportName: "NPL CC P10 JULY",
+                sourceFilename: "npl-cc-p10-july.xlsx",
+                icNumberSearchHash: "a".repeat(64),
+                customerPhoneSearchHash: "b".repeat(64),
+                accountNumberSearchHash: "c".repeat(64),
+                paymentDate: "2026-03-31",
+                amount: "100.00",
+                createdByLogin: "system",
+                collectionStaffNickname: "Collector Alpha",
+                originalCreatedAt: new Date("2026-03-31T08:00:00.000Z"),
+                purgedAt: new Date("2026-08-05T08:00:00.000Z"),
+                purgedBy: "superuser",
+                purgeReason: "retention_policy",
+              },
+            ],
+          };
+        }
         return { rows: [] };
       });
 
@@ -865,6 +890,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         });
         const parsed = JSON.parse(decryptedPayload) as {
           collectionRecords?: Array<Record<string, unknown>>;
+          collectionRecordPurgeHistory?: Array<Record<string, unknown>>;
           collectionRecordReceipts?: Array<Record<string, unknown>>;
         };
 
@@ -887,6 +913,13 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal(parsed.collectionRecords?.[0]?.sourceDataRowId, "saved-row-1");
         assert.equal(parsed.collectionRecords?.[0]?.sourceImportName, "NPL CC P10 JULY");
         assert.equal(parsed.collectionRecords?.[0]?.sourceFilename, "npl-cc-p10-july.xlsx");
+        assert.equal(parsed.collectionRecordPurgeHistory?.[0]?.accountNumberSearchHash, "c".repeat(64));
+        assert.equal(parsed.collectionRecordPurgeHistory?.[0]?.purgedBy, "superuser");
+        assert.equal("customerName" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);
+        assert.equal("icNumber" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);
+        assert.equal("customerPhone" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);
+        assert.equal("accountNumber" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);
+        assert.equal("receiptFile" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);
         assert.equal(parsed.collectionRecordReceipts?.[0]?.receiptAmountCents, "505");
         assert.equal(parsed.collectionRecordReceipts?.[0]?.extractedAmountCents, "500");
         assert.equal("receiptAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);

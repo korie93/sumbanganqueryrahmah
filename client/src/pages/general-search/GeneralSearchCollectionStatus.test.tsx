@@ -56,3 +56,26 @@ test("collection account content remains escaped when rendered", () => {
   assert.equal(markup.includes("<script>"), false);
   assert.equal(markup.includes("&lt;script&gt;"), true);
 });
+
+test("historical collection status is clearly separated from an active record", () => {
+  const markup = renderToStaticMarkup(
+    <GeneralSearchCollectionStatus
+      canSeeSourceFile
+      showDetails
+      row={{
+        _collectionStatus: {
+          ...recordedStatus,
+          state: "historical",
+          purgedAt: "2026-08-05T05:00:00.000Z",
+          purgedBy: "superuser.audit",
+        },
+      }}
+    />,
+  );
+
+  assert.match(markup, /Rekod sejarah collection/);
+  assert.match(markup, /Telah dipurge daripada rekod aktif/);
+  assert.match(markup, /Dipurge pada/);
+  assert.match(markup, /superuser\.audit/);
+  assert.doesNotMatch(markup, />Collection direkodkan</);
+});

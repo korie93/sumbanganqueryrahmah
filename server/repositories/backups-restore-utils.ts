@@ -10,6 +10,7 @@ import {
   finalizeRestoredCollectionRollups,
   initializeRestoreTrackingTempTable,
   restoreAuditLogsFromBackup,
+  restoreCollectionRecordPurgeHistoryFromBackup,
   restoreCollectionRecordReceiptsFromBackup,
   restoreCollectionRecordsFromBackup,
   restoreDataRowsFromBackup,
@@ -26,6 +27,7 @@ const BACKUP_PAYLOAD_DATASET_KEYS = [
   "users",
   "auditLogs",
   "collectionRecords",
+  "collectionRecordPurgeHistory",
   "collectionRecordReceipts",
 ] as const;
 
@@ -145,6 +147,7 @@ export async function restoreFromBackup(
     await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
     await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionRecordPurgeHistoryFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);
     await syncRestoredCollectionReceiptCache(restoreTx);
     await finalizeRestoredCollectionRollups(restoreTx);

@@ -11,12 +11,27 @@ import { normalizeCollectionReceiptExtractionState } from "../lib/collection-rec
 import type {
   BackupCollectionReceipt,
   BackupCollectionRecord,
+  BackupCollectionRecordPurgeHistory,
 } from "./backups-repository-types";
 import { toDate } from "./backups-restore-shared-utils";
 import type {
   RestorableCollectionReceiptRow,
   RestorableCollectionRecordRow,
+  RestorableCollectionRecordPurgeHistoryRow,
 } from "./backups-restore-collection-dataset-types";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SEARCH_HASH_PATTERN = /^[0-9a-f]{64}$/i;
+
+function normalizeBoundedOptionalText(value: unknown, maxLength = 512): string | null {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function normalizeBackupSearchHash(value: unknown): string | null {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return SEARCH_HASH_PATTERN.test(normalized) ? normalized : null;
+}
 
 function normalizeBackupCustomerNameSearchHashes(value: unknown): string[] | null {
   if (!Array.isArray(value)) {
@@ -139,5 +154,61 @@ export function normalizeBackupCollectionReceipt(
     receiptReference: String(receipt.receiptReference || "").trim() || null,
     fileHash: String(receipt.fileHash || "").trim().toLowerCase() || null,
     createdAt: toDate(receipt.createdAt) ?? new Date(),
+  };
+}
+
+export function normalizeBackupCollectionRecordPurgeHistory(
+  record: BackupCollectionRecordPurgeHistory,
+): RestorableCollectionRecordPurgeHistoryRow | null {
+  const id = String(record.id ?? "").trim();
+  const paymentDate = typeof record.paymentDate === "string"
+    ? record.paymentDate.slice(0, 10)
+    : "";
+  const parsedPaymentDate = /^\d{4}-\d{2}-\d{2}$/.test(paymentDate)
+    ? toDate(`${paymentDate}T00:00:00.000Z`)
+    : null;
+  const originalCreatedAt = toDate(record.originalCreatedAt);
+  const purgedAt = toDate(record.purgedAt);
+  const amountCents = parseCollectionAmountToCents(record.amount, { allowZero: true });
+  const amount = amountCents === null ? null : parseCollectionAmountMyrNumber(record.amount);
+  const createdByLogin = normalizeBoundedOptionalText(record.createdByLogin, 160);
+  const collectionStaffNickname = normalizeBoundedOptionalText(
+    record.collectionStaffNickname,
+    160,
+  );
+  const purgedBy = normalizeBoundedOptionalText(record.purgedBy, 160);
+
+  if (
+    !UUID_PATTERN.test(id)
+    || !parsedPaymentDate
+    || parsedPaymentDate.toISOString().slice(0, 10) !== paymentDate
+    || amount === null
+    || !originalCreatedAt
+    || !purgedAt
+    || !createdByLogin
+    || !collectionStaffNickname
+    || !purgedBy
+    || record.purgeReason !== "retention_policy"
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    sourceImportId: normalizeBoundedOptionalText(record.sourceImportId),
+    sourceDataRowId: normalizeBoundedOptionalText(record.sourceDataRowId),
+    sourceImportName: normalizeBoundedOptionalText(record.sourceImportName),
+    sourceFilename: normalizeBoundedOptionalText(record.sourceFilename),
+    icNumberSearchHash: normalizeBackupSearchHash(record.icNumberSearchHash),
+    customerPhoneSearchHash: normalizeBackupSearchHash(record.customerPhoneSearchHash),
+    accountNumberSearchHash: normalizeBackupSearchHash(record.accountNumberSearchHash),
+    paymentDate,
+    amount,
+    createdByLogin,
+    collectionStaffNickname,
+    originalCreatedAt,
+    purgedAt,
+    purgedBy,
+    purgeReason: "retention_policy",
   };
 }

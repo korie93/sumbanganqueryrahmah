@@ -4,6 +4,7 @@ export interface BackupMetadata {
   usersCount: number;
   auditLogsCount: number;
   collectionRecordsCount?: number;
+  collectionRecordPurgeHistoryCount?: number;
   collectionRecordReceiptsCount?: number;
   createdAt: string;
 }
@@ -39,6 +40,7 @@ export interface RestoreResponse {
     users: RestoreDatasetStats;
     auditLogs: RestoreDatasetStats;
     collectionRecords: RestoreDatasetStats;
+    collectionRecordPurgeHistory?: RestoreDatasetStats;
     collectionRecordReceipts: RestoreDatasetStats;
     warnings: string[];
     totalProcessed: number;

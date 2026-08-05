@@ -23,6 +23,9 @@ export function buildBackupRowAriaLabel({
     if (backup.metadata.collectionRecordsCount) {
       details.push(`${backup.metadata.collectionRecordsCount} collection records`);
     }
+    if (backup.metadata.collectionRecordPurgeHistoryCount) {
+      details.push(`${backup.metadata.collectionRecordPurgeHistoryCount} collection history records`);
+    }
   }
 
   return details.join(", ");

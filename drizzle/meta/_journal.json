@@ -337,6 +337,13 @@
       "when": 1785862800000,
       "tag": "0048_collection_record_source_data_row",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1785930873582,
+      "tag": "0049_collection_record_purge_history",
+      "breakpoints": true
     }
   ]
 }
