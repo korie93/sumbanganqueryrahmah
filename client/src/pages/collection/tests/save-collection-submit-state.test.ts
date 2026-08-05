@@ -6,7 +6,7 @@ import test from "node:test";
 const submitStateSource = readFileSync(
   path.resolve(process.cwd(), "client/src/pages/collection/useSaveCollectionSubmitState.ts"),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 
 test("save collection submit skips UI side effects after unmount", () => {
   const successGuardIndex = submitStateSource.indexOf(
