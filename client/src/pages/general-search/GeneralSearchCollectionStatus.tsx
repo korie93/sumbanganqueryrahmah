@@ -26,6 +26,7 @@ export function GeneralSearchCollectionStatus({
   if (status.state === "recorded") {
     const source = status.sourceImportName || status.sourceFilename;
     const savedBy = status.latestStaffNickname || status.latestCreatedByLogin || "Tidak dinyatakan";
+    const accountNumber = status.latestAccountNumber || "Tidak dinyatakan";
     const paymentDate = formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate);
     const recordedAt = formatGeneralSearchCollectionRecordedAt(status.latestCreatedAt);
     const amount = status.latestAmount ? formatAmountRM(status.latestAmount) : "Tidak dinyatakan";
@@ -40,8 +41,16 @@ export function GeneralSearchCollectionStatus({
           {` - ${amount} - ${paymentDate}`}
         </p>
         <p className="break-words text-xs text-muted-foreground">Disimpan oleh: {savedBy}</p>
+        {!showDetails ? (
+          <p className="min-w-0 text-xs text-muted-foreground">
+            Akaun Collection:{" "}
+            <span className="break-all font-medium text-foreground">{accountNumber}</span>
+          </p>
+        ) : null}
         {showDetails ? (
           <dl className="grid grid-cols-[minmax(6rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 pt-1 text-xs">
+            <dt className="text-muted-foreground">Akaun Collection</dt>
+            <dd className="min-w-0 break-all font-medium text-foreground">{accountNumber}</dd>
             <dt className="text-muted-foreground">Jumlah terkini</dt>
             <dd className="min-w-0 font-medium text-foreground">{amount}</dd>
             <dt className="text-muted-foreground">Tarikh bayaran</dt>

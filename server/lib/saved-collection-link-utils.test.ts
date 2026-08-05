@@ -77,6 +77,22 @@ test("Saved collection matching accepts exact IC and chooses the newest stronges
   });
 });
 
+test("Saved collection matching rejects an exact IC when a known account conflicts", () => {
+  const match = selectSavedCollectionSourceMatch(lookup, [{
+    rowId: "row-other-account",
+    sourceImportId: "import-1",
+    sourceImportName: "NPL JULY",
+    sourceFilename: "july.xlsx",
+    sourceCreatedAt: "2026-07-01T00:00:00.000Z",
+    jsonDataJsonb: {
+      IC: "931120-11-5437",
+      "Account Number": "ACC 9999",
+    },
+  }]);
+
+  assert.equal(match, null);
+});
+
 test("Saved collection matching requires phone and account together when IC is unavailable", () => {
   const candidate = {
     rowId: "row-1",

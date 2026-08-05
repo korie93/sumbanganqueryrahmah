@@ -44,6 +44,7 @@ test("search collection statuses expose authorized collection details while reda
       latestCreatedAt: "2026-08-01T08:00:00.000Z",
       latestStaffNickname: "Collector Alpha",
       latestCreatedByLogin: "collector.login",
+      latestAccountNumber: "ACC-1001",
       latestAmount: "150.50",
       sourceImportName: "NPL CC P10 JULY",
       sourceFilename: "npl.xlsx",
@@ -56,6 +57,7 @@ test("search collection statuses expose authorized collection details while reda
   assert.equal(statuses.get("row-1")?.recordCount, 2);
   assert.equal(statuses.get("row-1")?.latestStaffNickname, "Collector Alpha");
   assert.equal(statuses.get("row-1")?.latestCreatedByLogin, "collector.login");
+  assert.equal(statuses.get("row-1")?.latestAccountNumber, "ACC-1001");
   assert.equal(statuses.get("row-1")?.latestAmount, "150.50");
   assert.equal(statuses.get("row-1")?.sourceImportName, null);
   assert.equal(statuses.get("row-2")?.state, "not_recorded");

@@ -154,13 +154,18 @@ export function selectSavedCollectionSourceMatch(
       && saved.accountNumber
       && requested.accountNumber === saved.accountNumber,
     );
+    const conflictingAccount = Boolean(
+      requested.accountNumber
+      && saved.accountNumber
+      && requested.accountNumber !== saved.accountNumber,
+    );
     const conflictingIc = Boolean(
       requested.icNumber
       && saved.icNumber
       && requested.icNumber !== saved.icNumber,
     );
     const phoneAndAccountMatch = !conflictingIc && phoneMatch && accountMatch;
-    if (!icMatch && !phoneAndAccountMatch) {
+    if ((!icMatch || conflictingAccount) && !phoneAndAccountMatch) {
       return [];
     }
 

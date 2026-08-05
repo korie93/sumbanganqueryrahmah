@@ -4,6 +4,8 @@ import {
   buildSavedCollectionLookupTerms,
   selectSavedCollectionSourceMatch,
 } from "../lib/saved-collection-link-utils";
+import { resolveCollectionPiiFieldValueFailClosed } from "../lib/collection-pii-encryption";
+import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import {
   mapAdvancedSearchDataRow,
   mapSearchDataRow,
@@ -144,6 +146,8 @@ export class SearchRepository {
         matched.created_at,
         matched.collection_staff_nickname,
         matched.created_by_login,
+        matched.account_number,
+        matched.account_number_encrypted,
         matched.amount,
         matched.source_import_name,
         matched.source_filename,
@@ -155,6 +159,13 @@ export class SearchRepository {
           record.created_at,
           record.collection_staff_nickname,
           record.created_by_login,
+          ${buildProtectedCollectionPiiSelect(
+            "account_number",
+            "account_number_encrypted",
+            "account_number",
+            "accountNumber",
+          )},
+          record.account_number_encrypted,
           record.amount,
           record.source_import_name,
           record.source_filename,
@@ -209,8 +220,18 @@ export class SearchRepository {
             OR (
               record.source_import_id = candidate.source_import_id
               AND (identity_match.ic_match OR identity_match.phone_match OR identity_match.account_match)
+              AND (
+                (candidate.account_hash IS NULL AND candidate.account_value IS NULL)
+                OR identity_match.account_match
+              )
             )
-            OR identity_match.ic_match
+            OR (
+              identity_match.ic_match
+              AND (
+                (candidate.account_hash IS NULL AND candidate.account_value IS NULL)
+                OR identity_match.account_match
+              )
+            )
             OR (identity_match.phone_match AND identity_match.account_match)
           )
         ORDER BY
@@ -244,6 +265,11 @@ export class SearchRepository {
         latestCreatedByLogin: typeof value.created_by_login === "string"
           ? value.created_by_login
           : null,
+        latestAccountNumber: resolveCollectionPiiFieldValueFailClosed({
+          field: "accountNumber",
+          plaintext: value.account_number,
+          encrypted: value.account_number_encrypted,
+        }) || null,
         latestAmount: value.amount == null ? null : String(value.amount),
         sourceImportName: typeof value.source_import_name === "string"
           ? value.source_import_name

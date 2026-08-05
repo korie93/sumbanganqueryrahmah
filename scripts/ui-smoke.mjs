@@ -649,6 +649,8 @@ const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   await recordDialog.waitFor({ timeout: 15_000 });
   await recordDialog.getByText(values.sourceImportName, { exact: false }).waitFor({ timeout: 15_000 });
   await recordDialog.getByText(`Disimpan oleh: ${values.nickname}`, { exact: true }).waitFor({ timeout: 15_000 });
+  await recordDialog.getByText("Akaun Collection", { exact: true }).waitFor({ timeout: 15_000 });
+  await recordDialog.getByText(values.accountNumber, { exact: true }).first().waitFor({ timeout: 15_000 });
   await recordDialog.getByText("Jumlah terkini", { exact: true }).waitFor({ timeout: 15_000 });
   await recordDialog.getByText(/RM\s*12\.34/).first().waitFor({ timeout: 15_000 });
   await recordDialog
