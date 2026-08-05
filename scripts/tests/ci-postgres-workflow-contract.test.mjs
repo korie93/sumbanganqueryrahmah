@@ -24,15 +24,40 @@ test("CI workflows bootstrap local PostgreSQL instead of pulling Docker Hub serv
 test("PostgreSQL bootstrap runs before CI steps that need a live database", () => {
   const ciWorkflow = readText(CI_WORKFLOW_PATH);
   const releaseWorkflow = readText(RELEASE_WORKFLOW_PATH);
+  const ciPostgresIndex = ciWorkflow.indexOf("Start CI PostgreSQL");
+  const ciMigrationIndex = ciWorkflow.indexOf("Apply database migrations");
+  const ciIntegrationIndex = ciWorkflow.indexOf("Run DB bootstrap integration tests");
+  const ciServerIndex = ciWorkflow.indexOf("Start built server");
+  const releasePostgresIndex = releaseWorkflow.indexOf("Start CI PostgreSQL");
+  const releaseMigrationIndex = releaseWorkflow.indexOf("Apply database migrations");
+  const releaseReadinessIndex = releaseWorkflow.indexOf("Run release readiness verification");
 
+  for (const [label, index] of [
+    ["CI PostgreSQL bootstrap", ciPostgresIndex],
+    ["CI database migration", ciMigrationIndex],
+    ["CI DB integration tests", ciIntegrationIndex],
+    ["CI built server", ciServerIndex],
+    ["release PostgreSQL bootstrap", releasePostgresIndex],
+    ["release database migration", releaseMigrationIndex],
+    ["release readiness", releaseReadinessIndex],
+  ]) {
+    assert.notEqual(index, -1, `${label} step must be present`);
+  }
+
+  assert.ok(ciPostgresIndex < ciMigrationIndex, "CI must start PostgreSQL before migrations");
+  assert.ok(ciMigrationIndex < ciIntegrationIndex, "CI must migrate before DB integration tests");
+  assert.ok(ciMigrationIndex < ciServerIndex, "CI must migrate before starting the browser-test server");
   assert.ok(
-    ciWorkflow.indexOf("Start CI PostgreSQL") < ciWorkflow.indexOf("Run DB bootstrap integration tests"),
-    "CI smoke job must start PostgreSQL before DB integration tests",
+    releasePostgresIndex < releaseMigrationIndex,
+    "release verification must start PostgreSQL before migrations",
   );
   assert.ok(
-    releaseWorkflow.indexOf("Start CI PostgreSQL") < releaseWorkflow.indexOf("Run release readiness verification"),
-    "release verification must start PostgreSQL before release readiness",
+    releaseMigrationIndex < releaseReadinessIndex,
+    "release verification must migrate before release readiness",
   );
+
+  assert.match(ciWorkflow, /name:\s*Apply database migrations\s+run:\s*npm run db:migrate/);
+  assert.match(releaseWorkflow, /name:\s*Apply database migrations\s+run:\s*npm run db:migrate/);
 });
 
 test("CI build job runs every backend regression suite", () => {

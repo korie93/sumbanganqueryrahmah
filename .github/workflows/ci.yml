@@ -215,6 +215,9 @@ jobs:
       - name: Verify DB migration rollback governance
         run: npm run verify:db-migration-rollback
 
+      - name: Apply database migrations
+        run: npm run db:migrate
+
       - name: Run DB bootstrap integration tests
         run: npm run test:db-integration
 
