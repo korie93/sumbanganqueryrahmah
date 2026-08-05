@@ -53,6 +53,6 @@ test("collection account content remains escaped when rendered", () => {
     />,
   );
 
-  assert.doesNotMatch(markup, /<script>/);
-  assert.match(markup, /&lt;script&gt;/);
+  assert.equal(markup.includes("<script>"), false);
+  assert.equal(markup.includes("&lt;script&gt;"), true);
 });
