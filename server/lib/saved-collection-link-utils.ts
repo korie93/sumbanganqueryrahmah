@@ -1,5 +1,9 @@
 import { normalizeCollectionPiiSearchValue } from "./collection-pii-encryption-normalize";
-import { resolveSpreadsheetIdentifierKind } from "../../shared/common/spreadsheet-identifier-normalization";
+import {
+  isSpreadsheetAccountHeader,
+  MAX_SPREADSHEET_ACCOUNT_VALUES,
+  resolveSpreadsheetIdentifierKind,
+} from "../../shared/common/spreadsheet-identifier-normalization";
 import type {
   SavedCollectionSourceCandidate,
   SavedCollectionSourceLookup,
@@ -9,19 +13,6 @@ import type {
 const MAX_ROW_FIELDS = 200;
 const MAX_FIELD_VALUE_LENGTH = 256;
 const MAX_LOOKUP_TERMS = 8;
-
-const ACCOUNT_HEADERS = new Set([
-  "acc",
-  "accno",
-  "account",
-  "accountno",
-  "accountnumber",
-  "acct",
-  "acctno",
-  "akaun",
-  "noakaun",
-  "nomborakaun",
-]);
 
 const NAME_HEADERS = new Set([
   "customer",
@@ -34,11 +25,15 @@ const NAME_HEADERS = new Set([
   "namapelanggan",
 ]);
 
-type NormalizedSavedIdentity = {
+type NormalizedSavedLookup = {
   customerName: string;
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+};
+
+type NormalizedSavedIdentity = Omit<NormalizedSavedLookup, "accountNumber"> & {
+  accountNumbers: string[];
 };
 
 function normalizeHeader(value: string): string {
@@ -61,7 +56,7 @@ function readBoundedScalar(value: unknown): string {
   return "";
 }
 
-function normalizeLookup(input: SavedCollectionSourceLookup): NormalizedSavedIdentity {
+function normalizeLookup(input: SavedCollectionSourceLookup): NormalizedSavedLookup {
   return {
     customerName: normalizeCollectionPiiSearchValue("customerName", input.customerName),
     icNumber: normalizeCollectionPiiSearchValue("icNumber", input.icNumber),
@@ -75,7 +70,7 @@ export function extractSavedCollectionIdentity(value: unknown): NormalizedSavedI
     customerName: "",
     icNumber: "",
     customerPhone: "",
-    accountNumber: "",
+    accountNumbers: [],
   };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return identity;
@@ -95,8 +90,15 @@ export function extractSavedCollectionIdentity(value: unknown): NormalizedSavedI
       identity.customerPhone = normalizeCollectionPiiSearchValue("customerPhone", scalar);
       continue;
     }
-    if (!identity.accountNumber && ACCOUNT_HEADERS.has(normalizedHeader)) {
-      identity.accountNumber = normalizeCollectionPiiSearchValue("accountNumber", scalar);
+    if (isSpreadsheetAccountHeader(header)) {
+      const accountNumber = normalizeCollectionPiiSearchValue("accountNumber", scalar);
+      if (
+        accountNumber
+        && identity.accountNumbers.length < MAX_SPREADSHEET_ACCOUNT_VALUES
+        && !identity.accountNumbers.includes(accountNumber)
+      ) {
+        identity.accountNumbers.push(accountNumber);
+      }
       continue;
     }
     if (!identity.customerName && NAME_HEADERS.has(normalizedHeader)) {
@@ -151,13 +153,12 @@ export function selectSavedCollectionSourceMatch(
     );
     const accountMatch = Boolean(
       requested.accountNumber
-      && saved.accountNumber
-      && requested.accountNumber === saved.accountNumber,
+      && saved.accountNumbers.includes(requested.accountNumber),
     );
     const conflictingAccount = Boolean(
       requested.accountNumber
-      && saved.accountNumber
-      && requested.accountNumber !== saved.accountNumber,
+      && saved.accountNumbers.length > 0
+      && !accountMatch,
     );
     const conflictingIc = Boolean(
       requested.icNumber

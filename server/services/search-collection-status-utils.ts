@@ -5,23 +5,15 @@ import {
   type SearchCollectionStatusCandidate,
   type SearchCollectionStatusMatch,
 } from "../repositories/search-repository-types";
-import { resolveSpreadsheetIdentifierKind } from "../../shared/common/spreadsheet-identifier-normalization";
+import {
+  isSpreadsheetAccountHeader,
+  MAX_SPREADSHEET_ACCOUNT_VALUES,
+  resolveSpreadsheetIdentifierKind,
+} from "../../shared/common/spreadsheet-identifier-normalization";
 
 const MAX_SEARCH_ROW_FIELDS = 200;
 const MAX_IDENTIFIER_INPUT_LENGTH = 256;
 const MAX_COLLECTION_ACCOUNT_DISPLAY_LENGTH = 256;
-const ACCOUNT_HEADERS = new Set([
-  "acc",
-  "accno",
-  "account",
-  "accountno",
-  "accountnumber",
-  "acct",
-  "acctno",
-  "akaun",
-  "noakaun",
-  "nomborakaun",
-]);
 
 type SearchRowForCollectionStatus = {
   id?: string | null;
@@ -42,13 +34,6 @@ export type SearchCollectionStatus = {
   sourceFilename: string | null;
   matchBasis: "source_row" | "source_and_identifier" | "identifier_only" | null;
 };
-
-function normalizeHeader(value: string): string {
-  return value
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
 
 function readIdentifierValue(value: unknown): string {
   if (typeof value === "string") {
@@ -74,7 +59,7 @@ function buildCandidate(
 
   let icValue = "";
   let phoneValue = "";
-  let accountValue = "";
+  const accountValues = new Set<string>();
   const entries = Object.entries(row.jsonDataJsonb as Record<string, unknown>)
     .slice(0, MAX_SEARCH_ROW_FIELDS);
 
@@ -91,12 +76,19 @@ function buildCandidate(
       phoneValue = normalizeCollectionPiiSearchValue("customerPhone", value);
       continue;
     }
-    if (!accountValue && ACCOUNT_HEADERS.has(normalizeHeader(header))) {
-      accountValue = normalizeCollectionPiiSearchValue("accountNumber", value);
+    if (
+      accountValues.size < MAX_SPREADSHEET_ACCOUNT_VALUES
+      && isSpreadsheetAccountHeader(header)
+    ) {
+      const accountValue = normalizeCollectionPiiSearchValue("accountNumber", value);
+      if (accountValue) {
+        accountValues.add(accountValue);
+      }
     }
   }
 
-  if (!icValue && !phoneValue && !accountValue) {
+  const normalizedAccountValues = Array.from(accountValues);
+  if (!icValue && !phoneValue && normalizedAccountValues.length === 0) {
     return null;
   }
 
@@ -107,8 +99,10 @@ function buildCandidate(
     icValue: icValue || null,
     phoneHash: phoneValue ? hashCollectionPiiSearchValue("customerPhone", phoneValue) : null,
     phoneValue: phoneValue || null,
-    accountHash: accountValue ? hashCollectionPiiSearchValue("accountNumber", accountValue) : null,
-    accountValue: accountValue || null,
+    accountHashes: normalizedAccountValues
+      .map((accountValue) => hashCollectionPiiSearchValue("accountNumber", accountValue))
+      .filter((accountHash): accountHash is string => Boolean(accountHash)),
+    accountValues: normalizedAccountValues,
   };
 }
 

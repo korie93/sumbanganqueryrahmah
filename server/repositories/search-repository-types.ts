@@ -37,8 +37,8 @@ export type SearchCollectionStatusCandidate = {
   icValue: string | null;
   phoneHash: string | null;
   phoneValue: string | null;
-  accountHash: string | null;
-  accountValue: string | null;
+  accountHashes: string[];
+  accountValues: string[];
 };
 
 export type SavedCollectionSourceLookup = {

@@ -188,20 +188,20 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
       icValue: "900101101234",
       phoneHash: null,
       phoneValue: "0123456789",
-      accountHash: null,
-      accountValue: "ACC1001",
+      accountHashes: [],
+      accountValues: ["ACC9999", "ACC1001"],
     }], { kind: "all" });
 
     assert.equal(rawQueries.length, 1);
     assert.match(collectSqlText(rawQueries[0]), /jsonb_to_recordset/i);
     assert.match(collectSqlText(rawQueries[0]), /source_data_row_id/i);
     assert.match(collectSqlText(rawQueries[0]), /account_number_encrypted/i);
-    assert.match(
-      collectSqlText(rawQueries[0]),
-      /candidate\.account_hash IS NULL AND candidate\.account_value IS NULL/i,
-    );
+    assert.match(collectSqlText(rawQueries[0]), /jsonb_array_elements_text/i);
+    assert.match(collectSqlText(rawQueries[0]), /account_candidate_present/i);
     assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
-      typeof value === "string" && value.includes('"row_id":"row-1"')),
+      typeof value === "string"
+      && value.includes('"row_id":"row-1"')
+      && value.includes('"account_values":["ACC9999","ACC1001"]')),
     );
     assert.deepEqual(matches, [{
       rowId: "row-1",
@@ -240,8 +240,8 @@ test("SearchRepository.findCollectionStatusesForRows applies the authorized owne
       icValue: "931120115437",
       phoneHash: null,
       phoneValue: null,
-      accountHash: null,
-      accountValue: null,
+      accountHashes: [],
+      accountValues: [],
     }], { kind: "created_by", username: "User.One" });
 
     const text = collectSqlText(rawQueries[0]);
@@ -289,8 +289,8 @@ test("SearchRepository.findCollectionStatusesForRows decrypts retired account sh
       icValue: null,
       phoneHash: null,
       phoneValue: null,
-      accountHash: "account-hash",
-      accountValue: null,
+      accountHashes: ["account-hash"],
+      accountValues: [],
     }], { kind: "all" });
 
     assert.equal(matches[0]?.latestAccountNumber, "ACC-ENCRYPTED-1002");

@@ -4,6 +4,7 @@ type RawCellReader = (rowIndex: number, columnIndex: number) => unknown;
 
 const MALAYSIAN_IC_DIGITS = 12;
 const HEADER_SCAN_ROWS = 5;
+export const MAX_SPREADSHEET_ACCOUNT_VALUES = 8;
 
 const MALAYSIAN_IC_HEADERS = new Set([
   "ic",
@@ -45,6 +46,22 @@ const PHONE_HEADERS = new Set([
   "telephonenumber",
 ]);
 
+const ACCOUNT_HEADERS = new Set([
+  "acc",
+  "accno",
+  "account",
+  "accountno",
+  "accountnumber",
+  "acct",
+  "acctno",
+  "akaun",
+  "cardno",
+  "cardnumber",
+  "noakaun",
+  "nomborakaun",
+  "nomborakaunbankpemohon",
+]);
+
 function normalizeHeader(value: unknown) {
   return String(value ?? "")
     .normalize("NFKD")
@@ -63,6 +80,10 @@ export function resolveSpreadsheetIdentifierKind(
     return "phone";
   }
   return null;
+}
+
+export function isSpreadsheetAccountHeader(header: unknown): boolean {
+  return ACCOUNT_HEADERS.has(normalizeHeader(header));
 }
 
 export function findSpreadsheetHeaderRowIndex(rows: unknown[][]) {

@@ -122,8 +122,8 @@ export class SearchRepository {
       ic_value: candidate.icValue,
       phone_hash: candidate.phoneHash,
       phone_value: candidate.phoneValue,
-      account_hash: candidate.accountHash,
-      account_value: candidate.accountValue,
+      account_hashes: candidate.accountHashes,
+      account_values: candidate.accountValues,
     })));
     const result = await dbRead.execute(sql`
       WITH candidates AS (
@@ -135,8 +135,8 @@ export class SearchRepository {
           ic_value text,
           phone_hash text,
           phone_value text,
-          account_hash text,
-          account_value text
+          account_hashes jsonb,
+          account_values jsonb
         )
       )
       SELECT
@@ -205,12 +205,35 @@ export class SearchRepository {
                 END = candidate.phone_value
               )
             ), false) AS phone_match,
+            (
+              jsonb_array_length(COALESCE(candidate.account_hashes, '[]'::jsonb)) > 0
+              OR jsonb_array_length(COALESCE(candidate.account_values, '[]'::jsonb)) > 0
+            ) AS account_candidate_present,
             COALESCE((
-              (candidate.account_hash IS NOT NULL AND record.account_number_search_hash = candidate.account_hash)
+              (
+                record.account_number_search_hash IS NOT NULL
+                AND EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(
+                    COALESCE(candidate.account_hashes, '[]'::jsonb)
+                  ) candidate_account_hash(value)
+                  WHERE candidate_account_hash.value = record.account_number_search_hash
+                )
+              )
               OR (
                 record.account_number_search_hash IS NULL
-                AND candidate.account_value IS NOT NULL
-                AND regexp_replace(upper(COALESCE(record.account_number, '')), '\\s+', '', 'g') = candidate.account_value
+                AND EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(
+                    COALESCE(candidate.account_values, '[]'::jsonb)
+                  ) candidate_account_value(value)
+                  WHERE candidate_account_value.value = regexp_replace(
+                    upper(COALESCE(record.account_number, '')),
+                    '\\s+',
+                    '',
+                    'g'
+                  )
+                )
               )
             ), false) AS account_match
         ) identity_match
@@ -220,17 +243,11 @@ export class SearchRepository {
             OR (
               record.source_import_id = candidate.source_import_id
               AND (identity_match.ic_match OR identity_match.phone_match OR identity_match.account_match)
-              AND (
-                (candidate.account_hash IS NULL AND candidate.account_value IS NULL)
-                OR identity_match.account_match
-              )
+              AND (NOT identity_match.account_candidate_present OR identity_match.account_match)
             )
             OR (
               identity_match.ic_match
-              AND (
-                (candidate.account_hash IS NULL AND candidate.account_value IS NULL)
-                OR identity_match.account_match
-              )
+              AND (NOT identity_match.account_candidate_present OR identity_match.account_match)
             )
             OR (identity_match.phone_match AND identity_match.account_match)
           )

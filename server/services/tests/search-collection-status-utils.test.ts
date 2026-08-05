@@ -6,7 +6,7 @@ import {
 } from "../search-collection-status-utils";
 import { MAX_SEARCH_COLLECTION_STATUS_CANDIDATES } from "../../repositories/search-repository-types";
 
-test("search collection status candidates normalize recognized IC, phone, and account columns", () => {
+test("search collection status candidates normalize every recognized account column", () => {
   const candidates = buildSearchCollectionStatusCandidates([
     {
       id: "row-1",
@@ -14,7 +14,8 @@ test("search collection status candidates normalize recognized IC, phone, and ac
       jsonDataJsonb: {
         "No. KP": "900101-10-1234",
         "No Telefon": "+60 12-345 6789",
-        "Account No": " ACC 1001 ",
+        "Account No": " ACC 9999 ",
+        "Card No": " ACC 1001 ",
       },
     },
   ]);
@@ -24,7 +25,53 @@ test("search collection status candidates normalize recognized IC, phone, and ac
   assert.equal(candidates[0]?.sourceImportId, "import-1");
   assert.equal(candidates[0]?.icValue, "900101101234");
   assert.equal(candidates[0]?.phoneValue, "0123456789");
-  assert.equal(candidates[0]?.accountValue, "ACC1001");
+  assert.deepEqual(candidates[0]?.accountValues, ["ACC9999", "ACC1001"]);
+});
+
+test("search collection status candidates support rows with distinct account and card numbers", () => {
+  const candidates = buildSearchCollectionStatusCandidates([{
+    id: "row-multi-account",
+    importId: "import-test",
+    jsonDataJsonb: {
+      "Customer Name": "Test Customer Multi Account",
+      "ID No": "900101015555",
+      "Account No": "SOURCE1001",
+      "Card No": "COLLECTION2002",
+    },
+  }]);
+
+  assert.equal(candidates[0]?.icValue, "900101015555");
+  assert.deepEqual(candidates[0]?.accountValues, ["SOURCE1001", "COLLECTION2002"]);
+});
+
+test("search collection status candidates bound account values per row", () => {
+  const candidates = buildSearchCollectionStatusCandidates([{
+    id: "row-bounded",
+    importId: "import-1",
+    jsonDataJsonb: {
+      Acc: "ACC-1",
+      "Acc No": "ACC-2",
+      Account: "ACC-3",
+      "Account No": "ACC-4",
+      "Account Number": "ACC-5",
+      Acct: "ACC-6",
+      "Acct No": "ACC-7",
+      Akaun: "ACC-8",
+      "Card No": "ACC-9",
+      "Card Number": "ACC-10",
+    },
+  }]);
+
+  assert.deepEqual(candidates[0]?.accountValues, [
+    "ACC-1",
+    "ACC-2",
+    "ACC-3",
+    "ACC-4",
+    "ACC-5",
+    "ACC-6",
+    "ACC-7",
+    "ACC-8",
+  ]);
 });
 
 test("search collection statuses expose authorized collection details while redacting Saved source", () => {
