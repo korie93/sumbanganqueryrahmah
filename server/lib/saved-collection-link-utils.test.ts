@@ -23,7 +23,7 @@ test("Saved collection lookup recognizes common spreadsheet headers and bounded 
     customerName: "mohd bin sudin",
     icNumber: "931120115437",
     customerPhone: "0123456789",
-    accountNumber: "ACC1001",
+    accountNumbers: ["ACC1001"],
   });
 
   assert.deepEqual(buildSavedCollectionLookupTerms(lookup), [
@@ -91,6 +91,35 @@ test("Saved collection matching rejects an exact IC when a known account conflic
   }]);
 
   assert.equal(match, null);
+});
+
+test("Saved collection matching accepts a matching Card No when Account No differs", () => {
+  const match = selectSavedCollectionSourceMatch({
+    customerName: "Test Customer Multi Account",
+    icNumber: "900101015555",
+    customerPhone: "",
+    accountNumber: "COLLECTION2002",
+  }, [{
+    rowId: "row-multi-account",
+    sourceImportId: "import-test",
+    sourceImportName: "TEST MULTI ACCOUNT",
+    sourceFilename: "test-multi-account.xlsx",
+    sourceCreatedAt: "2026-08-05T00:00:00.000Z",
+    jsonDataJsonb: {
+      "Customer Name": "Test Customer Multi Account",
+      "ID No": "900101015555",
+      "Account No": "SOURCE1001",
+      "Card No": "COLLECTION2002",
+    },
+  }]);
+
+  assert.deepEqual(match, {
+    rowId: "row-multi-account",
+    sourceImportId: "import-test",
+    sourceImportName: "TEST MULTI ACCOUNT",
+    sourceFilename: "test-multi-account.xlsx",
+    matchBasis: "ic",
+  });
 });
 
 test("Saved collection matching requires phone and account together when IC is unavailable", () => {

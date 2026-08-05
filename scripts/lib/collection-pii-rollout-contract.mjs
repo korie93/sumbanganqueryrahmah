@@ -133,7 +133,7 @@ export const COLLECTION_PII_ROLLOUT_CONTRACT_REQUIREMENTS = Object.freeze([
       },
       {
         label: "general search requires account agreement when a candidate account exists",
-        snippet: "(candidate.account_hash IS NULL AND candidate.account_value IS NULL)",
+        snippet: "NOT identity_match.account_candidate_present OR identity_match.account_match",
       },
     ]),
   },
