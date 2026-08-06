@@ -5,7 +5,6 @@ import { errorHandler } from "../../middleware/error-handler";
 import type { SearchRepository } from "../../repositories/search.repository";
 import type { SearchCollectionViewerScope } from "../../repositories/search-repository-types";
 import { SearchService } from "../../services/search.service";
-import type { CollectionStoragePort } from "../../services/collection/collection-service-support";
 import { registerSearchRoutes } from "../search.routes";
 import {
   createJsonTestApp,
@@ -17,7 +16,6 @@ import {
 function createSearchRouteHarness(options?: {
   searchResultLimit?: number;
   isDbProtected?: boolean;
-  hasNicknameSession?: boolean;
   role?: "admin" | "manager" | "superuser" | "user";
 }) {
   const globalSearchCalls: Array<Record<string, unknown>> = [];
@@ -121,28 +119,6 @@ function createSearchRouteHarness(options?: {
     },
   } as unknown as SearchRepository;
   const role = options?.role ?? "user";
-  const collectionStorage = {
-    getCollectionNicknameSessionByActivity: async () => options?.hasNicknameSession === false
-      ? null
-      : ({
-          activityId: "activity-1",
-          username: "user.one",
-          userRole: role,
-          nickname: "Collector Alpha",
-          verifiedAt: new Date(),
-          updatedAt: new Date(),
-        }),
-    getCollectionAdminGroupVisibleNicknameValuesByLeader: async () => ["Collector Alpha"],
-    getCollectionStaffNicknameByName: async () => ({
-      id: "nickname-1",
-      nickname: "Collector Alpha",
-      isActive: true,
-      roleScope: "both" as const,
-      createdBy: null,
-      createdAt: new Date(),
-    }),
-  } as unknown as CollectionStoragePort;
-
   const app = createJsonTestApp();
   registerSearchRoutes(app, {
     searchController: createSearchController({
@@ -151,11 +127,10 @@ function createSearchRouteHarness(options?: {
         searchResultLimit: options?.searchResultLimit ?? 200,
       }),
       isDbProtected: () => options?.isDbProtected ?? false,
-      collectionStorage,
     }),
     authenticateToken: createTestAuthenticateToken({
       userId: "user-1",
-      username: "user.one",
+      username: "viewer.two",
       role,
       activityId: "activity-1",
     }),
@@ -293,10 +268,7 @@ test("GET /api/search/global applies the protected limit cap and returns a priva
     assert.equal(collectionStatusCalls.length, 1);
     assert.equal(collectionStatusCalls[0]?.[0]?.rowId, "row-1");
     assert.equal(collectionStatusCalls[0]?.[0]?.sourceImportId, "import-1");
-    assert.deepEqual(collectionStatusScopes, [{
-      kind: "nicknames",
-      nicknames: ["Collector Alpha"],
-    }]);
+    assert.deepEqual(collectionStatusScopes, [{ kind: "all" }]);
     assert.deepEqual(globalSearchCalls, [{
       search: "Alice",
       limit: 80,
@@ -332,29 +304,24 @@ test("GET /api/search/global exposes source details only to an authorized admin"
       purgedBy: null,
       matchBasis: "source_and_identifier",
     });
-    assert.deepEqual(collectionStatusScopes, [{
-      kind: "nicknames",
-      nicknames: ["Collector Alpha"],
-    }]);
+    assert.deepEqual(collectionStatusScopes, [{ kind: "all" }]);
   } finally {
     await stopTestServer(server);
   }
 });
 
-test("GET /api/search/global limits collection details to the authenticated owner without a nickname session", async () => {
-  const { app, collectionStatusScopes } = createSearchRouteHarness({
-    hasNicknameSession: false,
-    role: "user",
-  });
+test("GET /api/search/global exposes cross-user collection status to an authenticated user", async () => {
+  const { app, collectionStatusScopes } = createSearchRouteHarness({ role: "user" });
   const { server, baseUrl } = await startTestServer(app);
 
   try {
     const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=1&pageSize=20`);
     assert.equal(response.status, 200);
-    assert.deepEqual(collectionStatusScopes, [{
-      kind: "created_by",
-      username: "user.one",
-    }]);
+    const payload = await response.json();
+    assert.deepEqual(collectionStatusScopes, [{ kind: "all" }]);
+    assert.equal(payload.rows[0]?._collectionStatus?.state, "recorded");
+    assert.equal(payload.rows[0]?._collectionStatus?.latestCreatedByLogin, "user.one");
+    assert.equal(payload.rows[0]?._collectionStatus?.sourceImportName, null);
   } finally {
     await stopTestServer(server);
   }

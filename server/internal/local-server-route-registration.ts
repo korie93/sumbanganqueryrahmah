@@ -276,7 +276,6 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       searchService: new SearchService(searchRepository),
       getRuntimeSettingsCached,
       isDbProtected: getDbProtection,
-      collectionStorage: storage,
     }),
     authenticateToken,
     searchRateLimiter,
