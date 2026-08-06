@@ -10,7 +10,21 @@ const source = readFileSync(
   "utf8",
 );
 
-test("general search record dialog has a bounded desktop viewport width", () => {
-  assert.match(source, /w-\[min\(95vw,600px\)\]/);
-  assert.doesNotMatch(source, /w-\[95vw\]\s+max-w-5xl/);
+test("general search record dialog uses a bounded responsive workspace", () => {
+  assert.match(source, /w-\[min\(94vw,960px\)\]/);
+  assert.match(source, /sm:w-\[min\(94vw,960px\)\]/);
+  assert.match(source, /sm:max-w-none/);
+  assert.match(source, /max-h-\[88dvh\]/);
+  assert.match(source, /min-h-0 flex-1 overflow-y-auto/);
+  assert.doesNotMatch(source, /orderedHeaders\.map/);
+});
+
+test("general search record dialog keeps status and grouped detail sections", () => {
+  assert.match(source, /Customer &amp; Account 360/);
+  assert.match(source, /Status collection/);
+  assert.match(source, /Identiti & akaun/);
+  assert.match(source, /Hubungan & alamat/);
+  assert.match(source, /Sumber data/);
+  assert.match(source, /Maklumat tambahan/);
+  assert.match(source, /Medan kosong/);
 });

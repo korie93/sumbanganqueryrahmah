@@ -57,15 +57,64 @@ function normalizeKey(key: string) {
   return key.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function tokenizeKey(key: string) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([a-zA-Z])([0-9])/g, "$1 $2")
+    .replace(/([0-9])([a-zA-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
 export function getPriorityRank(key: string): number {
   const normalizedKey = normalizeKey(key);
-  if (/(ic|mykad|nric|no?kp|kadpengenalan)/.test(normalizedKey)) return 0;
-  if (/(fullname|namapenuh|nama)/.test(normalizedKey)) return 1;
-  if (/(account|akaun|acct|accno|accountno)/.test(normalizedKey)) return 2;
-  if (/(card|kad|cardno)/.test(normalizedKey)) return 3;
-  if (/(address|alamat|addr|residential|homeaddress|officeaddress)/.test(normalizedKey)) return 4;
-  if (/(phone|telefon|tel|hp|handphone|mobile)/.test(normalizedKey)) return 5;
-  if (/(age|umur)/.test(normalizedKey)) return 6;
+  const tokens = new Set(tokenizeKey(key));
+
+  const isIdentityNumber =
+    [
+      "ic",
+      "icno",
+      "icnumber",
+      "idno",
+      "idnumber",
+      "kadpengenalan",
+      "mykad",
+      "nokp",
+      "nric",
+      "nomborpengenalan",
+      "nopengenalan",
+    ].includes(normalizedKey)
+    || tokens.has("ic")
+    || tokens.has("mykad")
+    || tokens.has("nric")
+    || (tokens.has("id") && (tokens.has("no") || tokens.has("number")));
+  if (isIdentityNumber) return 0;
+
+  if (
+    ["customerfullname", "customername", "fullname", "nama", "namapenuh", "name"].includes(
+      normalizedKey,
+    )
+  ) return 1;
+  if (tokens.has("account") || tokens.has("akaun") || tokens.has("acct")) return 2;
+  if (tokens.has("card") || tokens.has("kad")) return 3;
+  if (
+    tokens.has("address")
+    || tokens.has("alamat")
+    || tokens.has("addr")
+    || tokens.has("postcode")
+    || tokens.has("poskod")
+    || tokens.has("zip")
+  ) return 4;
+  if (
+    tokens.has("email")
+    || tokens.has("handphone")
+    || tokens.has("mobile")
+    || tokens.has("phone")
+    || tokens.has("telefon")
+    || tokens.has("tel")
+  ) return 5;
+  if (tokens.has("age") || tokens.has("umur")) return 6;
   return 999;
 }
 
