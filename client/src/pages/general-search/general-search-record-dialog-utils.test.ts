@@ -33,7 +33,10 @@ test("record dialog groups fields without repeating summary values", () => {
   const visibleHeaders = [
     ...view.summaryFields,
     ...view.identityFields,
+    ...view.homeAddressFields,
+    ...view.officeAddressFields,
     ...view.contactFields,
+    ...view.paymentFields,
     ...view.additionalFields,
     ...view.sourceFields,
     ...view.emptyFields,
@@ -100,9 +103,55 @@ test("record dialog does not mistake Office fields for an IC number", () => {
     "Customer Name",
     "Account No",
   ]);
-  assert.deepEqual(view.contactFields.map((field) => field.header), [
+  assert.deepEqual(view.officeAddressFields.map((field) => field.header), [
     "OfficeAddress1",
     "OfficePostcode",
     "OfficePhone",
   ]);
+  assert.equal(view.contactFields.length, 0);
+  assert.deepEqual(view.officeAddressFields.map((field) => field.label), [
+    "Alamat pejabat 1",
+    "Poskod pejabat",
+    "Telefon pejabat",
+  ]);
+});
+
+test("record dialog separates home and office addresses and keeps payment fields adjacent", () => {
+  const view = buildGeneralSearchRecordDialogView(
+    {
+      "IC Number": "910731135359",
+      "Customer Name": "Chua Ee Ka",
+      "Account No": "ACC-1001",
+      HomeAddress1: "12 Jalan Damai",
+      HomeAddress2: "Taman Murni",
+      HomePostcode: "43000",
+      OfficeAddress1: "Menara Usahawan",
+      OfficePostcode: "50000",
+      Handphone: "0123456789",
+      PaymentAmount: "250.00",
+      LastPaidDate: "2026-08-05",
+      Segment: "P10",
+    },
+    true,
+  );
+
+  assert.deepEqual(view.homeAddressFields.map((field) => field.header), [
+    "HomeAddress1",
+    "HomeAddress2",
+    "HomePostcode",
+  ]);
+  assert.deepEqual(view.officeAddressFields.map((field) => field.header), [
+    "OfficeAddress1",
+    "OfficePostcode",
+  ]);
+  assert.deepEqual(view.contactFields.map((field) => field.header), ["Handphone"]);
+  assert.deepEqual(view.paymentFields.map((field) => field.header), [
+    "LastPaidDate",
+    "PaymentAmount",
+  ]);
+  assert.deepEqual(view.paymentFields.map((field) => field.label), [
+    "Tarikh bayaran terakhir",
+    "Jumlah bayaran",
+  ]);
+  assert.deepEqual(view.additionalFields.map((field) => field.header), ["Segment"]);
 });

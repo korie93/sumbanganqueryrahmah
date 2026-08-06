@@ -137,7 +137,9 @@ export default function GeneralSearch({
             onOpenChange={(open) => {
               if (!open) actions.setSelectedRecord(null);
             }}
+            onRecordSelect={actions.setSelectedRecord}
             record={state.selectedRecord}
+            relatedRecords={state.results}
           />
         </Suspense>
       ) : null}
