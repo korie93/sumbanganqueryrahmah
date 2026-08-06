@@ -21,9 +21,13 @@ test("general search record dialog uses a bounded responsive workspace", () => {
 
 test("general search record dialog keeps status and grouped detail sections", () => {
   assert.match(source, /Customer &amp; Account 360/);
+  assert.match(source, /GeneralSearchRelatedAccounts/);
   assert.match(source, /Status collection/);
   assert.match(source, /Identiti & akaun/);
-  assert.match(source, /Hubungan & alamat/);
+  assert.match(source, /Alamat rumah/);
+  assert.match(source, /Alamat pejabat/);
+  assert.match(source, /Maklumat hubungan/);
+  assert.match(source, /Pembayaran terkini/);
   assert.match(source, /Sumber data/);
   assert.match(source, /Maklumat tambahan/);
   assert.match(source, /Medan kosong/);

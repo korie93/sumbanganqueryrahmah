@@ -26,7 +26,7 @@ function GeneralSearchRecordFieldList({ fields }: { fields: GeneralSearchRecordF
           key={field.header}
         >
           <dt className="min-w-0 break-words text-xs font-medium text-muted-foreground">
-            {field.header}
+            {field.label}
           </dt>
           <dd className="mt-1 min-w-0 break-words text-sm font-medium text-foreground [overflow-wrap:anywhere] sm:mt-0">
             {field.value}
@@ -78,7 +78,7 @@ export function GeneralSearchRecordSummary({ fields }: GeneralSearchRecordSummar
             key={field.header}
           >
             <dt className="break-words text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
-              {field.header}
+              {field.label}
             </dt>
             <dd className="mt-1 min-w-0 break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
               {field.value}
