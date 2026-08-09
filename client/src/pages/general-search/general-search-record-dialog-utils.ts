@@ -64,6 +64,22 @@ const PAYMENT_AMOUNT_HEADERS = new Set([
   "paymentamount",
 ]);
 
+type AddressLocalityKind = "district" | "state";
+
+const OFFICE_CONTEXT_MARKERS = ["business", "employer", "office", "pejabat"] as const;
+const HOME_CONTEXT_MARKERS = [
+  "home",
+  "kediaman",
+  "permanent",
+  "residential",
+  "rumah",
+] as const;
+
+const EXCEL_SERIAL_MIN = 20_000;
+const EXCEL_SERIAL_MAX = 100_000;
+const EXCEL_EPOCH_UTC_MS = Date.UTC(1899, 11, 30);
+const MILLISECONDS_PER_DAY = 86_400_000;
+
 function normalizeRecordHeader(header: string): string {
   return header
     .normalize("NFKD")
@@ -76,12 +92,56 @@ function includesMarker(header: string, markers: readonly string[]): boolean {
   return markers.some((marker) => normalizedHeader.includes(marker));
 }
 
+function tokenizeRecordHeader(header: string): Set<string> {
+  return new Set(
+    header
+      .normalize("NFKD")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean),
+  );
+}
+
+function getAddressLocalityKind(header: string): AddressLocalityKind | null {
+  const normalizedHeader = normalizeRecordHeader(header);
+  const tokens = tokenizeRecordHeader(header);
+
+  if (tokens.has("district")
+    || tokens.has("daerah")
+    || normalizedHeader.includes("district")
+    || normalizedHeader.includes("daerah")) {
+    return "district";
+  }
+
+  if (tokens.has("state")
+    || tokens.has("negeri")
+    || normalizedHeader.includes("negeri")
+    || /^(?:home|residential|permanent|office|business|employer)?state(?:name|code|desc|description)?$/.test(
+      normalizedHeader,
+    )) {
+    return "state";
+  }
+
+  return null;
+}
+
+function hasOfficeContext(header: string): boolean {
+  return includesMarker(header, OFFICE_CONTEXT_MARKERS);
+}
+
+function hasHomeContext(header: string): boolean {
+  return includesMarker(header, HOME_CONTEXT_MARKERS);
+}
+
 function isHomeField(header: string): boolean {
-  return includesMarker(header, HOME_FIELD_MARKERS);
+  if (includesMarker(header, HOME_FIELD_MARKERS)) return true;
+  return getAddressLocalityKind(header) !== null && !hasOfficeContext(header);
 }
 
 function isOfficeField(header: string): boolean {
-  return includesMarker(header, OFFICE_FIELD_MARKERS);
+  if (includesMarker(header, OFFICE_FIELD_MARKERS)) return true;
+  return getAddressLocalityKind(header) !== null && hasOfficeContext(header);
 }
 
 function isPaymentDateField(header: string): boolean {
@@ -101,8 +161,98 @@ function getAddressLineSuffix(header: string): string {
   return lineNumber ? ` ${lineNumber}` : "";
 }
 
+function getAddressFieldRank(header: string): number {
+  const normalizedHeader = normalizeRecordHeader(header);
+  if (normalizedHeader.includes("address") || normalizedHeader.includes("alamat")) return 0;
+  if (getAddressLocalityKind(header) === "district") return 1;
+  if (getAddressLocalityKind(header) === "state") return 2;
+  if (normalizedHeader.includes("postcode") || normalizedHeader.includes("poskod")) return 3;
+  if (normalizedHeader.includes("phone")
+    || normalizedHeader.includes("telephone")
+    || normalizedHeader.includes("telefon")) {
+    return 4;
+  }
+  return 5;
+}
+
+function sortAddressFields(fields: GeneralSearchRecordField[]): GeneralSearchRecordField[] {
+  return fields.sort((left, right) => {
+    const rankDifference = getAddressFieldRank(left.header) - getAddressFieldRank(right.header);
+    return rankDifference || left.header.localeCompare(right.header);
+  });
+}
+
+function getAddressLocalityLabel(header: string): string | null {
+  const kind = getAddressLocalityKind(header);
+  if (!kind) return null;
+
+  const baseLabel = kind === "district" ? "Daerah" : "Negeri";
+  if (hasOfficeContext(header)) return `${baseLabel} pejabat`;
+  if (hasHomeContext(header)) return `${baseLabel} rumah`;
+  return baseLabel;
+}
+
+function formatDateParts(year: number, month: number, day: number): string | null {
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (candidate.getUTCFullYear() !== year
+    || candidate.getUTCMonth() !== month - 1
+    || candidate.getUTCDate() !== day) {
+    return null;
+  }
+
+  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${String(year).padStart(4, "0")}`;
+}
+
+function formatExcelSerialDate(value: number): string | null {
+  if (!Number.isFinite(value) || value < EXCEL_SERIAL_MIN || value > EXCEL_SERIAL_MAX) {
+    return null;
+  }
+
+  const candidate = new Date(EXCEL_EPOCH_UTC_MS + Math.floor(value) * MILLISECONDS_PER_DAY);
+  return formatDateParts(
+    candidate.getUTCFullYear(),
+    candidate.getUTCMonth() + 1,
+    candidate.getUTCDate(),
+  );
+}
+
+function formatPaymentDateValue(rawValue: unknown): string {
+  const fallback = getCellDisplayText(rawValue).trim();
+
+  if (typeof rawValue === "number") {
+    return formatExcelSerialDate(rawValue) ?? fallback;
+  }
+
+  if (typeof rawValue !== "string") return fallback;
+
+  const value = rawValue.trim();
+  const isoMatch = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
+  if (isoMatch) {
+    return formatDateParts(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3])) ?? fallback;
+  }
+
+  const dayFirstMatch = value.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
+  if (dayFirstMatch) {
+    return formatDateParts(
+      Number(dayFirstMatch[3]),
+      Number(dayFirstMatch[2]),
+      Number(dayFirstMatch[1]),
+    ) ?? fallback;
+  }
+
+  const numericValue = Number(value);
+  if (/^\d{5}(?:\.\d+)?$/.test(value)) {
+    return formatExcelSerialDate(numericValue) ?? fallback;
+  }
+
+  return fallback;
+}
+
 function getRecordFieldLabel(header: string): string {
   const normalizedHeader = normalizeRecordHeader(header);
+  const localityLabel = getAddressLocalityLabel(header);
+
+  if (localityLabel) return localityLabel;
 
   if (normalizedHeader.includes("homeaddress")
     || normalizedHeader.includes("residentialaddress")
@@ -147,7 +297,9 @@ function buildRecordField(record: SearchResultRow, header: string): GeneralSearc
   return {
     header,
     label: getRecordFieldLabel(header),
-    value: getCellDisplayText(record[header]),
+    value: isPaymentDateField(header)
+      ? formatPaymentDateValue(record[header])
+      : getCellDisplayText(record[header]),
   };
 }
 
@@ -188,10 +340,14 @@ export function buildGeneralSearchRecordDialogView(
   const paymentFields = remainingFields
     .filter(({ header }) => isPaymentField(header))
     .sort((left, right) => Number(isPaymentAmountField(left.header)) - Number(isPaymentAmountField(right.header)));
-  const officeAddressFields = remainingFields.filter(({ header }) => isOfficeField(header));
+  const officeAddressFields = sortAddressFields(
+    remainingFields.filter(({ header }) => isOfficeField(header)),
+  );
   const officeAddressHeaders = new Set(officeAddressFields.map(({ header }) => header));
-  const homeAddressFields = remainingFields.filter(
-    ({ header }) => isHomeField(header) && !officeAddressHeaders.has(header),
+  const homeAddressFields = sortAddressFields(
+    remainingFields.filter(
+      ({ header }) => isHomeField(header) && !officeAddressHeaders.has(header),
+    ),
   );
   const groupedHeaders = new Set([
     ...paymentFields.map(({ header }) => header),
