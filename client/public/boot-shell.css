@@ -43,7 +43,8 @@ body {
     sans-serif;
 }
 
-html[data-boot-shell="public-auth"] .public-auth-boot-shell {
+html[data-boot-shell="public-auth"] .public-auth-boot-shell,
+html[data-boot-shell="landing"] .public-auth-boot-shell {
   display: flex;
 }
 
@@ -68,6 +69,37 @@ html.app-ready .public-auth-boot-shell {
   display: grid;
   gap: 18px;
   padding: 28px 24px;
+}
+
+html[data-boot-shell="landing"] .public-auth-boot-shell {
+  align-items: flex-start;
+}
+
+html[data-boot-shell="landing"] .public-auth-boot-shell__panel {
+  width: min(100%, 1276px);
+  margin-top: 20px;
+  border-radius: 32px;
+}
+
+html[data-boot-shell="landing"] .public-auth-boot-shell__content {
+  min-height: 260px;
+  align-content: center;
+  padding: 32px;
+}
+
+html[data-boot-shell="landing"] .public-auth-boot-shell__title {
+  max-width: 780px;
+  font-size: 3.4rem;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+html[data-boot-shell="landing"] .public-auth-boot-shell__copy {
+  max-width: 620px;
+}
+
+html[data-boot-shell="landing"] .public-auth-boot-shell__fields {
+  display: none;
 }
 
 .public-auth-boot-shell__eyebrow {
@@ -156,5 +188,19 @@ html.app-ready .public-auth-boot-shell {
   .public-auth-boot-shell__content {
     gap: 16px;
     padding: 24px 20px;
+  }
+
+  html[data-boot-shell="landing"] .public-auth-boot-shell__panel {
+    margin-top: 0;
+    border-radius: 24px;
+  }
+
+  html[data-boot-shell="landing"] .public-auth-boot-shell__content {
+    min-height: 280px;
+    padding: 28px 22px;
+  }
+
+  html[data-boot-shell="landing"] .public-auth-boot-shell__title {
+    font-size: 2.4rem;
   }
 }
