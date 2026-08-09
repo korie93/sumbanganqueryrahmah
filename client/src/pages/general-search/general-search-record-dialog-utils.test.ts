@@ -125,11 +125,15 @@ test("record dialog separates home and office addresses and keeps payment fields
       HomeAddress1: "12 Jalan Damai",
       HomeAddress2: "Taman Murni",
       HomePostcode: "43000",
+      District: "Hulu Langat",
+      State: "Selangor",
       OfficeAddress1: "Menara Usahawan",
+      OfficeDistrict: "Kuala Lumpur",
+      OfficeState: "W.P. Kuala Lumpur",
       OfficePostcode: "50000",
       Handphone: "0123456789",
       PaymentAmount: "250.00",
-      LastPaidDate: "2026-08-05",
+      LastPaidDate: "2026-08-05T00:00:00.000Z",
       Segment: "P10",
     },
     true,
@@ -138,11 +142,28 @@ test("record dialog separates home and office addresses and keeps payment fields
   assert.deepEqual(view.homeAddressFields.map((field) => field.header), [
     "HomeAddress1",
     "HomeAddress2",
+    "District",
+    "State",
     "HomePostcode",
+  ]);
+  assert.deepEqual(view.homeAddressFields.map((field) => field.label), [
+    "Alamat rumah 1",
+    "Alamat rumah 2",
+    "Daerah",
+    "Negeri",
+    "Poskod rumah",
   ]);
   assert.deepEqual(view.officeAddressFields.map((field) => field.header), [
     "OfficeAddress1",
+    "OfficeDistrict",
+    "OfficeState",
     "OfficePostcode",
+  ]);
+  assert.deepEqual(view.officeAddressFields.map((field) => field.label), [
+    "Alamat pejabat 1",
+    "Daerah pejabat",
+    "Negeri pejabat",
+    "Poskod pejabat",
   ]);
   assert.deepEqual(view.contactFields.map((field) => field.header), ["Handphone"]);
   assert.deepEqual(view.paymentFields.map((field) => field.header), [
@@ -153,5 +174,20 @@ test("record dialog separates home and office addresses and keeps payment fields
     "Tarikh bayaran terakhir",
     "Jumlah bayaran",
   ]);
+  assert.equal(view.paymentFields[0]?.value, "05/08/2026");
   assert.deepEqual(view.additionalFields.map((field) => field.header), ["Segment"]);
+});
+
+test("record dialog preserves valid day-first payment dates and converts Excel serial dates", () => {
+  const dayFirstView = buildGeneralSearchRecordDialogView(
+    { LastPaidDate: "5/8/2026" },
+    true,
+  );
+  const excelSerialView = buildGeneralSearchRecordDialogView(
+    { LastPaidDate: 45_874 },
+    true,
+  );
+
+  assert.equal(dayFirstView.paymentFields[0]?.value, "05/08/2026");
+  assert.equal(excelSerialView.paymentFields[0]?.value, "05/08/2025");
 });
