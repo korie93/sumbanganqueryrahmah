@@ -115,13 +115,13 @@ export function GeneralSearchRecordDialog({
                     fields={dialogView.homeAddressFields}
                     icon={House}
                     id="general-search-record-home-address-heading"
-                    title="Alamat rumah"
+                    title="Alamat & telefon rumah"
                   />
                   <GeneralSearchRecordSection
                     fields={dialogView.officeAddressFields}
                     icon={Building2}
                     id="general-search-record-office-address-heading"
-                    title="Alamat pejabat"
+                    title="Alamat & telefon pejabat"
                   />
                   <GeneralSearchRecordSection
                     fields={dialogView.contactFields}

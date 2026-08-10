@@ -151,7 +151,7 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
       cellDates: true,
       cellFormula: false,
       cellNF: false,
-      cellText: false,
+      cellText: true,
     });
   } catch (error: unknown) {
     return mapExcelReadError(error);

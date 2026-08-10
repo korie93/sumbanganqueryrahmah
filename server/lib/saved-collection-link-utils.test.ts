@@ -35,6 +35,20 @@ test("Saved collection lookup recognizes common spreadsheet headers and bounded 
   ]);
 });
 
+test("Saved collection identity never treats home or office phone columns as customer phone", () => {
+  assert.deepEqual(extractSavedCollectionIdentity({
+    "Customer Name": "Shared Office Example",
+    "No. Telefon Rumah": "041234567",
+    OfficePhone: "0312345678",
+    "Account No": "ACC-2002",
+  }), {
+    customerName: "shared office example",
+    icNumber: "",
+    customerPhone: "",
+    accountNumbers: ["ACC-2002"],
+  });
+});
+
 test("Saved collection matching never links on customer name alone", () => {
   const match = selectSavedCollectionSourceMatch(lookup, [{
     rowId: "row-name-only",

@@ -24,8 +24,12 @@ test("record dialog groups fields without repeating summary values", () => {
     "Customer Name",
     "Account No",
   ]);
-  assert.deepEqual(view.identityFields.map((field) => field.header), ["Card No"]);
-  assert.deepEqual(view.contactFields.map((field) => field.header), ["Address", "Phone"]);
+  assert.deepEqual(view.identityFields.map((field) => field.header), ["Card No", "Phone"]);
+  assert.deepEqual(view.identityFields.map((field) => field.label), [
+    "Card No",
+    "Telefon pelanggan",
+  ]);
+  assert.deepEqual(view.contactFields.map((field) => field.header), ["Address"]);
   assert.deepEqual(view.additionalFields.map((field) => field.header), ["Segment"]);
   assert.deepEqual(view.sourceFields.map((field) => field.header), ["Source File"]);
   assert.deepEqual(view.emptyFields.map((field) => field.header), ["Notes"]);
@@ -92,7 +96,7 @@ test("record dialog does not mistake Office fields for an IC number", () => {
       "Customer Name": "Example Customer",
       "Account No": "10002957986000014",
       OfficeAddress1: "PERSIARAN USAHAWAN",
-      OfficePhone: "60351634137",
+      OfficePhone: "0312345678",
       OfficePostcode: "40150",
     },
     true,
@@ -114,6 +118,28 @@ test("record dialog does not mistake Office fields for an IC number", () => {
     "Poskod pejabat",
     "Telefon pejabat",
   ]);
+});
+
+test("record dialog classifies office telephone aliases by column rather than number pattern", () => {
+  const view = buildGeneralSearchRecordDialogView(
+    {
+      "Customer Name": "Office Contact Example",
+      "Office Telephone No": "0312345678",
+      "No. Telefon Pejabat": "60123456789",
+    },
+    true,
+  );
+
+  assert.deepEqual(view.officeAddressFields.map((field) => field.header), [
+    "No. Telefon Pejabat",
+    "Office Telephone No",
+  ]);
+  assert.deepEqual(view.officeAddressFields.map((field) => field.label), [
+    "Telefon pejabat",
+    "Telefon pejabat",
+  ]);
+  assert.equal(view.identityFields.length, 0);
+  assert.equal(view.contactFields.length, 0);
 });
 
 test("record dialog separates home and office addresses and keeps payment fields adjacent", () => {
@@ -165,7 +191,9 @@ test("record dialog separates home and office addresses and keeps payment fields
     "Negeri pejabat",
     "Poskod pejabat",
   ]);
-  assert.deepEqual(view.contactFields.map((field) => field.header), ["Handphone"]);
+  assert.deepEqual(view.identityFields.map((field) => field.header), ["Handphone"]);
+  assert.deepEqual(view.identityFields.map((field) => field.label), ["Telefon pelanggan"]);
+  assert.equal(view.contactFields.length, 0);
   assert.deepEqual(view.paymentFields.map((field) => field.header), [
     "LastPaidDate",
     "PaymentAmount",

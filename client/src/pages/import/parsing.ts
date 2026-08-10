@@ -105,7 +105,7 @@ function parseExcelBuffer(
 ): { headers: string[]; rows: ImportRow[]; error?: string } {
   let workbook: ReturnType<XlsxModule["read"]> | null;
   try {
-    workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: false });
+    workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true, cellNF: false, cellText: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to read Excel file";
     if (message.includes("password") || message.includes("encrypt")) {

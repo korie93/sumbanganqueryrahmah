@@ -44,6 +44,21 @@ test("search collection status candidates support rows with distinct account and
   assert.deepEqual(candidates[0]?.accountValues, ["SOURCE1001", "COLLECTION2002"]);
 });
 
+test("search collection status candidates exclude home and office phones from customer identity", () => {
+  const candidates = buildSearchCollectionStatusCandidates([{
+    id: "row-office-phone",
+    importId: "import-test",
+    jsonDataJsonb: {
+      "No. Telefon Rumah": "041234567",
+      OfficePhone: "0312345678",
+      "Account No": "OFFICE-1001",
+    },
+  }]);
+
+  assert.equal(candidates[0]?.phoneValue, null);
+  assert.deepEqual(candidates[0]?.accountValues, ["OFFICE-1001"]);
+});
+
 test("search collection status candidates bound account values per row", () => {
   const candidates = buildSearchCollectionStatusCandidates([{
     id: "row-bounded",
