@@ -1,4 +1,8 @@
-export type SpreadsheetIdentifierKind = "malaysianIc" | "phone";
+export type SpreadsheetIdentifierKind =
+  | "malaysianIc"
+  | "phone"
+  | "homePhone"
+  | "officePhone";
 
 type RawCellReader = (rowIndex: number, columnIndex: number) => unknown;
 
@@ -24,9 +28,16 @@ const MALAYSIAN_IC_HEADERS = new Set([
 ]);
 
 const PHONE_HEADERS = new Set([
+  "cellphone",
+  "cellphoneno",
   "contact",
   "contactno",
   "contactnumber",
+  "contactphone",
+  "contactphoneno",
+  "customerphone",
+  "customerphoneno",
+  "customerphonenumber",
   "handphone",
   "hp",
   "mobile",
@@ -37,13 +48,61 @@ const PHONE_HEADERS = new Set([
   "notelefon",
   "nomborhp",
   "nombortelefon",
+  "nombortelefonbimbit",
   "phone",
   "phoneno",
   "phonenumber",
   "tel",
+  "telefonbimbit",
   "telephone",
   "telephoneno",
   "telephonenumber",
+  "notelefonbimbit",
+]);
+
+const HOME_PHONE_HEADERS = new Set([
+  "homephone",
+  "homephoneno",
+  "homephonenumber",
+  "hometel",
+  "hometelno",
+  "hometelephone",
+  "hometelephoneno",
+  "hometelephonenumber",
+  "notelefonrumah",
+  "nombortelefonrumah",
+  "residentialphone",
+  "residentialphoneno",
+  "telefonrumah",
+  "telrumah",
+]);
+
+const OFFICE_PHONE_HEADERS = new Set([
+  "businessphone",
+  "businessphoneno",
+  "businessphonenumber",
+  "businesstel",
+  "businesstelephone",
+  "companyphone",
+  "companytel",
+  "employerphone",
+  "employertel",
+  "notelefonpejabat",
+  "nombortelefonpejabat",
+  "officephone",
+  "officephoneno",
+  "officephonenumber",
+  "officetel",
+  "officetelno",
+  "officetelephone",
+  "officetelephoneno",
+  "officetelephonenumber",
+  "phoneoffice",
+  "telefonpejabat",
+  "telpejabat",
+  "workphone",
+  "workphoneno",
+  "worktel",
 ]);
 
 const ACCOUNT_HEADERS = new Set([
@@ -75,6 +134,12 @@ export function resolveSpreadsheetIdentifierKind(
   const normalizedHeader = normalizeHeader(header);
   if (MALAYSIAN_IC_HEADERS.has(normalizedHeader)) {
     return "malaysianIc";
+  }
+  if (OFFICE_PHONE_HEADERS.has(normalizedHeader)) {
+    return "officePhone";
+  }
+  if (HOME_PHONE_HEADERS.has(normalizedHeader)) {
+    return "homePhone";
   }
   if (PHONE_HEADERS.has(normalizedHeader)) {
     return "phone";
@@ -118,7 +183,7 @@ export function normalizeSpreadsheetIdentifierValue(
 
   const formattedDigits = String(formattedValue ?? "").trim();
   if (/^\d+$/.test(formattedDigits)) {
-    if (kind === "phone") {
+    if (kind !== "malaysianIc") {
       return formattedDigits;
     }
     if (formattedDigits.length === MALAYSIAN_IC_DIGITS) {

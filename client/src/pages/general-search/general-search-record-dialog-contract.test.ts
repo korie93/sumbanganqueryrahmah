@@ -24,8 +24,8 @@ test("general search record dialog keeps status and grouped detail sections", ()
   assert.match(source, /GeneralSearchRelatedAccounts/);
   assert.match(source, /Status collection/);
   assert.match(source, /Identiti & akaun/);
-  assert.match(source, /Alamat rumah/);
-  assert.match(source, /Alamat pejabat/);
+  assert.match(source, /Alamat & telefon rumah/);
+  assert.match(source, /Alamat & telefon pejabat/);
   assert.match(source, /Maklumat hubungan/);
   assert.match(source, /Pembayaran terkini/);
   assert.match(source, /Sumber data/);

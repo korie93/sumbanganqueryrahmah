@@ -4,6 +4,7 @@ import {
   getCellDisplayText,
   getPriorityRank,
 } from "@/pages/general-search/utils";
+import { resolveSpreadsheetIdentifierKind } from "@shared/common/spreadsheet-identifier-normalization";
 
 export type GeneralSearchRecordField = {
   header: string;
@@ -135,13 +136,19 @@ function hasHomeContext(header: string): boolean {
 }
 
 function isHomeField(header: string): boolean {
+  if (resolveSpreadsheetIdentifierKind(header) === "homePhone") return true;
   if (includesMarker(header, HOME_FIELD_MARKERS)) return true;
   return getAddressLocalityKind(header) !== null && !hasOfficeContext(header);
 }
 
 function isOfficeField(header: string): boolean {
+  if (resolveSpreadsheetIdentifierKind(header) === "officePhone") return true;
   if (includesMarker(header, OFFICE_FIELD_MARKERS)) return true;
   return getAddressLocalityKind(header) !== null && hasOfficeContext(header);
+}
+
+function isCustomerPhoneField(header: string): boolean {
+  return resolveSpreadsheetIdentifierKind(header) === "phone";
 }
 
 function isPaymentDateField(header: string): boolean {
@@ -251,8 +258,12 @@ function formatPaymentDateValue(rawValue: unknown): string {
 function getRecordFieldLabel(header: string): string {
   const normalizedHeader = normalizeRecordHeader(header);
   const localityLabel = getAddressLocalityLabel(header);
+  const identifierKind = resolveSpreadsheetIdentifierKind(header);
 
   if (localityLabel) return localityLabel;
+  if (identifierKind === "phone") return "Telefon pelanggan";
+  if (identifierKind === "homePhone") return "Telefon rumah";
+  if (identifierKind === "officePhone") return "Telefon pejabat";
 
   if (normalizedHeader.includes("homeaddress")
     || normalizedHeader.includes("residentialaddress")
@@ -349,10 +360,14 @@ export function buildGeneralSearchRecordDialogView(
       ({ header }) => isHomeField(header) && !officeAddressHeaders.has(header),
     ),
   );
+  const customerPhoneFields = remainingFields.filter(
+    ({ header }) => isCustomerPhoneField(header),
+  );
   const groupedHeaders = new Set([
     ...paymentFields.map(({ header }) => header),
     ...homeAddressFields.map(({ header }) => header),
     ...officeAddressFields.map(({ header }) => header),
+    ...customerPhoneFields.map(({ header }) => header),
   ]);
   const ungroupedFields = remainingFields.filter(({ header }) => !groupedHeaders.has(header));
 
@@ -364,7 +379,10 @@ export function buildGeneralSearchRecordDialogView(
     }),
     emptyFields,
     homeAddressFields,
-    identityFields: ungroupedFields.filter(({ header }) => getPriorityRank(header) <= 3),
+    identityFields: [
+      ...ungroupedFields.filter(({ header }) => getPriorityRank(header) <= 3),
+      ...customerPhoneFields,
+    ],
     officeAddressFields,
     paymentFields,
     sourceFields,

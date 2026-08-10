@@ -59,14 +59,17 @@ test("parseImportPreview rejects duplicate or empty CSV headers", async () => {
   assert.deepEqual(emptyResult.rows, []);
 });
 
-test("parseImportPreview preserves numeric phone and Malaysian IC identifiers as exact text", async () => {
+test("parseImportPreview preserves numeric customer, home, and office phones as exact text", async () => {
   const xlsx = await import("xlsx");
   const workbook = xlsx.utils.book_new();
   const worksheet = xlsx.utils.aoa_to_sheet([
-    ["Name", "Phone", "IC No", "Overdue Days"],
-    ["Alice", 601234567890, 10203561001, 181],
-    ["Bob", 6591234567, 780101010197, 61],
+    ["Name", "Phone", "IC No", "OfficePhone", "No. Telefon Rumah", "Overdue Days"],
+    ["Alice", 123456789, 10203561001, 312345678, 41234567, 181],
+    ["Bob", 6591234567, 780101010197, 60351634137, 60398765432, 61],
   ]);
+  (worksheet.B2 as { z?: string }).z = "0000000000";
+  (worksheet.D2 as { z?: string }).z = "0000000000";
+  (worksheet.E2 as { z?: string }).z = "000000000";
   xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
   const workbookBuffer = xlsx.write(workbook, {
     type: "array",
@@ -82,14 +85,18 @@ test("parseImportPreview preserves numeric phone and Malaysian IC identifiers as
   assert.deepEqual(result.rows, [
     {
       Name: "Alice",
-      Phone: "601234567890",
+      Phone: "0123456789",
       "IC No": "010203561001",
+      OfficePhone: "0312345678",
+      "No. Telefon Rumah": "041234567",
       "Overdue Days": "181",
     },
     {
       Name: "Bob",
       Phone: "6591234567",
       "IC No": "780101010197",
+      OfficePhone: "60351634137",
+      "No. Telefon Rumah": "60398765432",
       "Overdue Days": "61",
     },
   ]);
