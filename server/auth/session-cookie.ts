@@ -134,12 +134,8 @@ export function readCookieValueFromHeader(cookieHeader: HeaderValue, cookieName:
 
 function readBearerToken(authorizationHeader: HeaderValue): string | null {
   const rawAuthorization = firstHeaderValue(authorizationHeader).trim();
-  if (!rawAuthorization.toLowerCase().startsWith("bearer ")) {
-    return null;
-  }
-
-  const token = rawAuthorization.slice(7).trim();
-  return token || null;
+  const match = /^Bearer[\t ]+(\S+)$/i.exec(rawAuthorization);
+  return match?.[1] || null;
 }
 
 export function readAuthSessionTokenFromHeaders(

@@ -102,7 +102,7 @@ test("websocket auth helper falls back to localhost when host is missing", () =>
   );
 });
 
-test("websocket auth helper rejects missing origins unless explicitly allowed", () => {
+test("websocket auth helper always rejects missing origins", () => {
   const req = {
     headers: {
       host: "localhost",
@@ -114,13 +114,12 @@ test("websocket auth helper rejects missing origins unless explicitly allowed", 
     isSameOriginWebSocketRequest(req, { trustForwardedHeaders: false }),
     false,
   );
-  assert.equal(
-    isSameOriginWebSocketRequest(req, {
-      trustForwardedHeaders: false,
-      allowMissingOrigin: true,
-    }),
-    true,
-  );
+
+  const legacyBypassOptions = {
+    trustForwardedHeaders: false,
+    allowMissingOrigin: true,
+  };
+  assert.equal(isSameOriginWebSocketRequest(req, legacyBypassOptions), false);
 });
 
 test("websocket heartbeat interval normalization keeps runtime bounds", () => {

@@ -1,4 +1,6 @@
-import { pool } from "../../db-postgres";
+import { count, eq, sql } from "drizzle-orm";
+import { systemStabilityPatterns } from "../../../shared/schema-postgres";
+import { db } from "../../db-postgres";
 import type { RecommendedAction, SeverityLevel, SystemSnapshot } from "../types";
 import { logIntelligenceFailSafe } from "../intelligence-failsafe-logger";
 
@@ -17,7 +19,7 @@ export class StabilityDnaEngine {
   public async ensureTable(): Promise<void> {
     if (this.ensurePromise) return this.ensurePromise;
     this.ensurePromise = (async () => {
-      await pool.query(`
+      await db.execute(sql`
         CREATE TABLE IF NOT EXISTS system_stability_patterns (
           id BIGSERIAL PRIMARY KEY,
           metric_signature TEXT NOT NULL,
@@ -29,7 +31,7 @@ export class StabilityDnaEngine {
           created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )
       `);
-      await pool.query(`
+      await db.execute(sql`
         CREATE INDEX IF NOT EXISTS idx_stability_patterns_signature_window
         ON system_stability_patterns (metric_signature, hour, weekday, severity)
       `);
@@ -53,16 +55,12 @@ export class StabilityDnaEngine {
   public async getMutationFactor(metricSignature: string): Promise<number> {
     try {
       await this.ensureTable();
-      const result = await pool.query(
-        `
-          SELECT COUNT(*)::int AS count
-          FROM system_stability_patterns
-          WHERE metric_signature = $1
-        `,
-        [metricSignature],
-      );
-      const count = Number(result.rows?.[0]?.count || 0);
-      if (count > 5) return 0.85;
+      const rows = await db
+        .select({ value: count() })
+        .from(systemStabilityPatterns)
+        .where(eq(systemStabilityPatterns.metricSignature, metricSignature));
+      const patternCount = Number(rows[0]?.value ?? 0);
+      if (patternCount > 5) return 0.85;
       return 1;
     } catch (error) {
       logIntelligenceFailSafe({
@@ -77,27 +75,14 @@ export class StabilityDnaEngine {
   public async recordPattern(input: StabilityPatternInput): Promise<void> {
     try {
       await this.ensureTable();
-      await pool.query(
-        `
-          INSERT INTO system_stability_patterns (
-            metric_signature,
-            hour,
-            weekday,
-            severity,
-            action_taken,
-            duration_ms
-          )
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `,
-        [
-          input.metricSignature,
-          input.hour,
-          input.weekday,
-          input.severity,
-          input.actionTaken,
-          Math.max(0, Math.round(input.durationMs)),
-        ],
-      );
+      await db.insert(systemStabilityPatterns).values({
+        metricSignature: input.metricSignature,
+        hour: input.hour,
+        weekday: input.weekday,
+        severity: input.severity,
+        actionTaken: input.actionTaken,
+        durationMs: Math.max(0, Math.round(input.durationMs)),
+      });
     } catch (error) {
       logIntelligenceFailSafe({
         engine: "StabilityDnaEngine",

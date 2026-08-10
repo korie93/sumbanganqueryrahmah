@@ -7,6 +7,7 @@ import {
   AUTH_SESSION_CSRF_COOKIE_NAME,
   AUTH_SESSION_CSRF_HEADER_NAME,
   compareAuthSessionCsrfTokens,
+  readAuthSessionTokenFromHeaders,
   readAuthSessionCsrfTokenFromHeaders,
   readCookieValueFromHeader,
   rotateAuthSessionCsrfCookie,
@@ -68,6 +69,29 @@ test("rotateAuthSessionCsrfCookie refreshes only the csrf cookie", () => {
   assert.equal(cookies[0]?.options.httpOnly, false);
   assert.equal(cookies[0]?.options.sameSite, "strict");
   assert.equal(cookies[0]?.options.maxAge, AUTH_SESSION_MAX_AGE_MS);
+});
+
+test("readAuthSessionTokenFromHeaders accepts one well-formed bearer token", () => {
+  assert.equal(
+    readAuthSessionTokenFromHeaders({ authorization: "Bearer header.payload.signature" }),
+    "header.payload.signature",
+  );
+  assert.equal(
+    readAuthSessionTokenFromHeaders({ authorization: "bearer\tapi-token" }),
+    "api-token",
+  );
+});
+
+test("readAuthSessionTokenFromHeaders rejects empty or ambiguous bearer values", () => {
+  for (const authorization of [
+    "Bearer",
+    "Bearer ",
+    "Bearer\t",
+    "Bearer token extra",
+    "Basic token",
+  ]) {
+    assert.equal(readAuthSessionTokenFromHeaders({ authorization }), null);
+  }
 });
 
 test("readAuthSessionCsrfTokenFromHeaders accepts matching fixed-length csrf tokens", () => {
