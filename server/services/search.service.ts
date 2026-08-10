@@ -6,6 +6,7 @@ import {
   buildSearchCollectionStatuses,
 } from "./search-collection-status-utils";
 import type { SearchCollectionViewerScope } from "../repositories/search-repository-types";
+import { enrichSavedRowLocation } from "../lib/saved-row-location-enrichment";
 
 type SearchGlobalRow = {
   id?: string | null;
@@ -43,9 +44,7 @@ function buildRowsWithSource(params: {
   includeSourceDetails: boolean;
 }) {
   return params.rows.map((row) => {
-    const base = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object"
-      ? row.jsonDataJsonb as Record<string, unknown>
-      : {};
+    const base = enrichSavedRowLocation(row.jsonDataJsonb) ?? {};
     const rowId = String(row.id || "").trim();
     return {
       ...base,
@@ -200,7 +199,7 @@ export class SearchService {
     const queryResult = await this.searchRepository.searchSimpleDataRows(normalizedSearch);
     const rows = ((queryResult as { rows?: SearchSimpleRow[] }).rows || []);
     const results = rows.map((row) => ({
-      ...(row.jsonDataJsonb || {}),
+      ...(enrichSavedRowLocation(row.jsonDataJsonb) || {}),
       _importId: row.importId,
       _importName: row.importName,
     }));

@@ -155,6 +155,33 @@ test("SearchRepository.searchSimpleDataRows parameterizes LIKE injection attempt
   }
 });
 
+test("SearchRepository searches equivalent local and international Malaysian phone values", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = dbRead.execute;
+
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (query: unknown) => {
+    rawQueries.push(query);
+    return { rows: [] };
+  }) as unknown as typeof dbRead.execute;
+
+  try {
+    await repository.searchSimpleDataRows("012-345 6789");
+
+    assert.equal(rawQueries.length, 1);
+    const sqlText = collectSqlText(rawQueries[0]);
+    const boundValues = collectBoundValues(rawQueries[0]);
+    assert.match(sqlText, /jsonb_each_text/i);
+    assert.match(sqlText, /regexp_replace\(phone_field\.value/i);
+    assert.ok(boundValues.includes("0123456789"));
+    assert.ok(boundValues.includes("123456789"));
+    assert.ok(boundValues.includes("60123456789"));
+    assert.ok(boundValues.includes("0060123456789"));
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
 test("SearchRepository.findCollectionStatusesForRows uses one parameterized bounded lookup", async () => {
   const repository = new SearchRepository();
   const rawQueries: unknown[] = [];

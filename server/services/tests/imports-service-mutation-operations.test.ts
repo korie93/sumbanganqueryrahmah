@@ -352,6 +352,34 @@ test("createImport writes legacy JSON rows with bounded multi-row inserts", asyn
   }
 });
 
+test("createImport stores derived Malaysian postal location fields for Saved rows", async () => {
+  const storedRows: Array<Record<string, unknown>> = [];
+  const operations = new ImportsServiceMutationOperations(createStorageStub({
+    createDataRows: async (rows) => {
+      storedRows.push(...rows.map((row) => row.jsonDataJsonb as Record<string, unknown>));
+      return rows.map((row, index) => ({
+        id: `location-row-${index + 1}`,
+        importId: row.importId,
+        jsonDataJsonb: row.jsonDataJsonb,
+      }));
+    },
+  }));
+
+  await operations.createImport({
+    name: "Location Import",
+    filename: "location.json",
+    dataRows: [{ HomeAddress1: "12 Jalan Damai", HomePostcode: 9600 }],
+    createdBy: "superuser",
+  });
+
+  assert.deepEqual(storedRows, [{
+    HomeAddress1: "12 Jalan Damai",
+    HomePostcode: "09600",
+    "Home Postal District": "Lunas",
+    "Home State": "Kedah",
+  }]);
+});
+
 test("createImportFromCsvFile rejects empty CSV files before creating an import", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-mutation-"));
   const filePath = path.join(tempDir, "empty.csv");

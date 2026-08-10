@@ -13,6 +13,7 @@ import {
   validateImportColumnMappingSources,
 } from "./import-column-mapping";
 import { DuplicateImportError, ImportJobCancelledError } from "./import-operation-errors";
+import { enrichSavedRowLocation } from "../lib/saved-row-location-enrichment";
 
 const IMPORT_INSERT_CHUNK_SIZE = 20;
 const DEFAULT_IMPORT_ROW_BYTE_BUDGET = 64 * 1024;
@@ -54,8 +55,10 @@ function assertImportRowByteBudget(row: unknown, maxBytes: number) {
 function normalizeBoundedImportRow(row: unknown, maxBytes: number) {
   assertImportRowByteBudget(row, maxBytes);
   const normalized = normalizeImportRow(row);
-  assertImportRowByteBudget(normalized, maxBytes);
-  return normalized;
+  const enriched = enrichSavedRowLocation(normalized) ?? normalized;
+  const validated = enriched === normalized ? normalized : normalizeImportRow(enriched);
+  assertImportRowByteBudget(validated, maxBytes);
+  return validated;
 }
 
 async function insertImportRows(

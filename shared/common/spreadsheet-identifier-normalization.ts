@@ -1,3 +1,5 @@
+import { restoreMissingMalaysianMobilePrefix } from "./malaysian-phone";
+
 export type SpreadsheetIdentifierKind =
   | "malaysianIc"
   | "phone"
@@ -121,6 +123,33 @@ const ACCOUNT_HEADERS = new Set([
   "nomborakaunbankpemohon",
 ]);
 
+const PHONE_TOKEN = "(?:phone|telephone|telefon|tel|mobile|handphone|hp)";
+const PHONE_SUFFIX = "(?:no|number)?\\d*";
+const OFFICE_PHONE_HEADER_PATTERNS = [
+  new RegExp(`^(?:business|company|employer|office|pejabat|work)${PHONE_TOKEN}${PHONE_SUFFIX}$`),
+  new RegExp(`^(?:no|nombor)?${PHONE_TOKEN}(?:business|company|employer|office|pejabat|work)\\d*$`),
+];
+const HOME_PHONE_HEADER_PATTERNS = [
+  new RegExp(`^(?:home|kediaman|residential|rumah)${PHONE_TOKEN}${PHONE_SUFFIX}$`),
+  new RegExp(`^(?:no|nombor)?${PHONE_TOKEN}(?:home|kediaman|residential|rumah)\\d*$`),
+];
+const CUSTOMER_PHONE_HEADER_PATTERNS = [
+  new RegExp(`^(?:(?:customer|contact|primary|pelanggan))?${PHONE_TOKEN}${PHONE_SUFFIX}$`),
+  new RegExp(`^(?:no|nombor)${PHONE_TOKEN}(?:bimbit|customer|pelanggan)?\\d*$`),
+];
+
+function matchesPhoneHeader(
+  normalizedHeader: string,
+  context: "customer" | "home" | "office",
+): boolean {
+  const patterns = context === "office"
+    ? OFFICE_PHONE_HEADER_PATTERNS
+    : context === "home"
+      ? HOME_PHONE_HEADER_PATTERNS
+      : CUSTOMER_PHONE_HEADER_PATTERNS;
+  return patterns.some((pattern) => pattern.test(normalizedHeader));
+}
+
 function normalizeHeader(value: unknown) {
   return String(value ?? "")
     .normalize("NFKD")
@@ -135,13 +164,13 @@ export function resolveSpreadsheetIdentifierKind(
   if (MALAYSIAN_IC_HEADERS.has(normalizedHeader)) {
     return "malaysianIc";
   }
-  if (OFFICE_PHONE_HEADERS.has(normalizedHeader)) {
+  if (OFFICE_PHONE_HEADERS.has(normalizedHeader) || matchesPhoneHeader(normalizedHeader, "office")) {
     return "officePhone";
   }
-  if (HOME_PHONE_HEADERS.has(normalizedHeader)) {
+  if (HOME_PHONE_HEADERS.has(normalizedHeader) || matchesPhoneHeader(normalizedHeader, "home")) {
     return "homePhone";
   }
-  if (PHONE_HEADERS.has(normalizedHeader)) {
+  if (PHONE_HEADERS.has(normalizedHeader) || matchesPhoneHeader(normalizedHeader, "customer")) {
     return "phone";
   }
   return null;
@@ -184,7 +213,7 @@ export function normalizeSpreadsheetIdentifierValue(
   const formattedDigits = String(formattedValue ?? "").trim();
   if (/^\d+$/.test(formattedDigits)) {
     if (kind !== "malaysianIc") {
-      return formattedDigits;
+      return restoreMissingMalaysianMobilePrefix(formattedDigits);
     }
     if (formattedDigits.length === MALAYSIAN_IC_DIGITS) {
       return formattedDigits;
@@ -194,6 +223,10 @@ export function normalizeSpreadsheetIdentifierValue(
   const digits = value.toFixed(0);
   if (kind === "malaysianIc" && digits.length < MALAYSIAN_IC_DIGITS) {
     return digits.padStart(MALAYSIAN_IC_DIGITS, "0");
+  }
+
+  if (kind !== "malaysianIc") {
+    return restoreMissingMalaysianMobilePrefix(digits);
   }
 
   return digits;

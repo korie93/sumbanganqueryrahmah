@@ -148,6 +148,7 @@ test("record dialog separates home and office addresses and keeps payment fields
       "IC Number": "910731135359",
       "Customer Name": "Chua Ee Ka",
       "Account No": "ACC-1001",
+      EmployerName: "Syarikat Contoh Sdn Bhd",
       HomeAddress1: "12 Jalan Damai",
       HomeAddress2: "Taman Murni",
       HomePostcode: "43000",
@@ -180,12 +181,14 @@ test("record dialog separates home and office addresses and keeps payment fields
     "Poskod rumah",
   ]);
   assert.deepEqual(view.officeAddressFields.map((field) => field.header), [
+    "EmployerName",
     "OfficeAddress1",
     "OfficeDistrict",
     "OfficeState",
     "OfficePostcode",
   ]);
   assert.deepEqual(view.officeAddressFields.map((field) => field.label), [
+    "Nama majikan",
     "Alamat pejabat 1",
     "Daerah pejabat",
     "Negeri pejabat",
@@ -218,4 +221,34 @@ test("record dialog preserves valid day-first payment dates and converts Excel s
 
   assert.equal(dayFirstView.paymentFields[0]?.value, "05/08/2026");
   assert.equal(excelSerialView.paymentFields[0]?.value, "05/08/2025");
+});
+
+test("record dialog labels derived postal locations without overstating district accuracy", () => {
+  const view = buildGeneralSearchRecordDialogView(
+    {
+      "Customer Name": "Location Example",
+      HomeAddress1: "12 Jalan Damai",
+      HomePostcode: "47500",
+      "Home Postal District": "Subang Jaya",
+      "Home State": "Selangor",
+      OfficeAddress1: "Menara Usahawan",
+      OfficePostcode: "50470",
+      "Office Postal District": "Kuala Lumpur",
+      "Office State": "W.P. Kuala Lumpur",
+    },
+    true,
+  );
+
+  assert.deepEqual(view.homeAddressFields.map((field) => field.label), [
+    "Alamat rumah 1",
+    "Daerah/bandar pos rumah",
+    "Negeri rumah",
+    "Poskod rumah",
+  ]);
+  assert.deepEqual(view.officeAddressFields.map((field) => field.label), [
+    "Alamat pejabat 1",
+    "Daerah/bandar pos pejabat",
+    "Negeri pejabat",
+    "Poskod pejabat",
+  ]);
 });

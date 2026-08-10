@@ -66,6 +66,7 @@ test("parseImportPreview preserves numeric customer, home, and office phones as 
     ["Name", "Phone", "IC No", "OfficePhone", "No. Telefon Rumah", "Overdue Days"],
     ["Alice", 123456789, 10203561001, 312345678, 41234567, 181],
     ["Bob", 6591234567, 780101010197, 60351634137, 60398765432, 61],
+    ["Charlie", 123456789, 900101101234, 1123456789, "", 30],
   ]);
   (worksheet.B2 as { z?: string }).z = "0000000000";
   (worksheet.D2 as { z?: string }).z = "0000000000";
@@ -98,6 +99,14 @@ test("parseImportPreview preserves numeric customer, home, and office phones as 
       OfficePhone: "60351634137",
       "No. Telefon Rumah": "60398765432",
       "Overdue Days": "61",
+    },
+    {
+      Name: "Charlie",
+      Phone: "0123456789",
+      "IC No": "900101101234",
+      OfficePhone: "01123456789",
+      "No. Telefon Rumah": "",
+      "Overdue Days": "30",
     },
   ]);
 });
