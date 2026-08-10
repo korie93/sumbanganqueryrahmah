@@ -13,6 +13,7 @@ import type {
   SearchImportRowsInput,
 } from "./imports-service-types";
 import { encodeImportDataPageCursor, parseImportDataPageCursor } from "./imports-service-parsers";
+import { enrichSavedDataRow } from "../lib/saved-row-location-enrichment";
 
 export class ImportsServiceReadOperations {
   constructor(
@@ -22,7 +23,7 @@ export class ImportsServiceReadOperations {
   ) {}
 
   async searchImportRows(params: SearchImportRowsInput): Promise<SearchDataRowsResult> {
-    return this.storage.searchDataRows({
+    const result = await this.storage.searchDataRows({
       importId: params.importId,
       search: params.search ?? "",
       limit: params.limit,
@@ -30,6 +31,10 @@ export class ImportsServiceReadOperations {
       columnFilters: params.columnFilters ?? [],
       cursor: params.cursor ?? null,
     });
+    return {
+      ...result,
+      rows: (result.rows || []).map(enrichSavedDataRow),
+    };
   }
 
   async listImports(params: ListImportsInput = {}) {
@@ -54,7 +59,7 @@ export class ImportsServiceReadOperations {
       return null;
     }
 
-    const rows = await this.storage.getDataRowsByImport(importId);
+    const rows = (await this.storage.getDataRowsByImport(importId)).map(enrichSavedDataRow);
     return {
       import: importRecord,
       rows,
@@ -114,11 +119,20 @@ export class ImportsServiceReadOperations {
     const logicalOffset = Math.max(0, (effectivePage - 1) * limit);
     const total = result.total || 0;
     const totalPages = Math.max(1, Math.ceil(total / limit));
+    const enrichedRows = (result.rows || []).map(enrichSavedDataRow);
     const resolvedHeaders = headers.length > 0
-      ? headers
+      ? Array.from(new Set([
+          ...headers,
+          ...enrichedRows.flatMap((row) => {
+            const record = row?.jsonDataJsonb;
+            return record && typeof record === "object" && !Array.isArray(record)
+              ? Object.keys(record as Record<string, unknown>)
+              : [];
+          }),
+        ]))
       : Array.from(
           new Set(
-            (result.rows || []).flatMap((row) => {
+            enrichedRows.flatMap((row) => {
               const record = row?.jsonDataJsonb;
               if (!record || typeof record !== "object" || Array.isArray(record)) {
                 return [];
@@ -132,7 +146,7 @@ export class ImportsServiceReadOperations {
         );
 
     return {
-      rows: (result.rows || []).map((row) => ({
+      rows: enrichedRows.map((row) => ({
         id: row.id,
         importId: row.importId,
         jsonDataJsonb: row.jsonDataJsonb,

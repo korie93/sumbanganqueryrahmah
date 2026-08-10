@@ -181,6 +181,7 @@
     "jspdf": "^4.2.0",
     "lru-cache": "11.5.1",
     "lucide-react": "^0.453.0",
+    "malaysia-postcodes": "3.0.0",
     "nodemailer": "9.0.1",
     "pg": "8.20.0",
     "pino": "10.3.1",

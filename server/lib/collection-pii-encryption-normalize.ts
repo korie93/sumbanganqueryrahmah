@@ -1,4 +1,5 @@
 import type { CollectionPiiFieldName } from "./collection-pii-encryption-types";
+import { normalizeMalaysianPhoneSearchValue } from "../../shared/common/malaysian-phone";
 
 const MIN_CUSTOMER_NAME_SEARCH_TOKEN_LENGTH = 2;
 const MAX_CUSTOMER_NAME_SEARCH_PREFIX_LENGTH = 12;
@@ -22,14 +23,7 @@ export function normalizeCollectionPiiSearchValue(
   }
 
   if (field === "customerPhone") {
-    const digits = normalized.replace(/\D+/g, "");
-    if (digits.startsWith("0060") && digits.length > 4) {
-      return `0${digits.slice(4)}`;
-    }
-    if (digits.startsWith("60") && digits.length > 2) {
-      return `0${digits.slice(2)}`;
-    }
-    return digits;
+    return normalizeMalaysianPhoneSearchValue(normalized);
   }
   if (field === "icNumber") {
     return normalized.replace(/[^0-9A-Za-z]+/g, "").toUpperCase();

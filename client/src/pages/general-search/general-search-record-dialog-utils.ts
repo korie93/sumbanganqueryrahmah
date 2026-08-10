@@ -65,6 +65,15 @@ const PAYMENT_AMOUNT_HEADERS = new Set([
   "paymentamount",
 ]);
 
+const EMPLOYER_NAME_HEADERS = new Set([
+  "company",
+  "companyname",
+  "employername",
+  "majikan",
+  "namamajikan",
+  "namasyarikat",
+]);
+
 type AddressLocalityKind = "district" | "state";
 
 const OFFICE_CONTEXT_MARKERS = ["business", "employer", "office", "pejabat"] as const;
@@ -110,8 +119,13 @@ function getAddressLocalityKind(header: string): AddressLocalityKind | null {
 
   if (tokens.has("district")
     || tokens.has("daerah")
+    || tokens.has("city")
+    || tokens.has("town")
+    || tokens.has("bandar")
+    || tokens.has("mukim")
     || normalizedHeader.includes("district")
-    || normalizedHeader.includes("daerah")) {
+    || normalizedHeader.includes("daerah")
+    || normalizedHeader.includes("postalcity")) {
     return "district";
   }
 
@@ -142,9 +156,14 @@ function isHomeField(header: string): boolean {
 }
 
 function isOfficeField(header: string): boolean {
+  if (isEmployerNameField(header)) return true;
   if (resolveSpreadsheetIdentifierKind(header) === "officePhone") return true;
   if (includesMarker(header, OFFICE_FIELD_MARKERS)) return true;
   return getAddressLocalityKind(header) !== null && hasOfficeContext(header);
+}
+
+function isEmployerNameField(header: string): boolean {
+  return EMPLOYER_NAME_HEADERS.has(normalizeRecordHeader(header));
 }
 
 function isCustomerPhoneField(header: string): boolean {
@@ -170,6 +189,7 @@ function getAddressLineSuffix(header: string): string {
 
 function getAddressFieldRank(header: string): number {
   const normalizedHeader = normalizeRecordHeader(header);
+  if (isEmployerNameField(header)) return -1;
   if (normalizedHeader.includes("address") || normalizedHeader.includes("alamat")) return 0;
   if (getAddressLocalityKind(header) === "district") return 1;
   if (getAddressLocalityKind(header) === "state") return 2;
@@ -193,7 +213,14 @@ function getAddressLocalityLabel(header: string): string | null {
   const kind = getAddressLocalityKind(header);
   if (!kind) return null;
 
-  const baseLabel = kind === "district" ? "Daerah" : "Negeri";
+  const normalizedHeader = normalizeRecordHeader(header);
+  const baseLabel = kind === "state"
+    ? "Negeri"
+    : normalizedHeader.includes("postaldistrict")
+      ? "Daerah/bandar pos"
+      : /(?:city|town|bandar|mukim)/.test(normalizedHeader)
+        ? "Bandar/daerah"
+        : "Daerah";
   if (hasOfficeContext(header)) return `${baseLabel} pejabat`;
   if (hasHomeContext(header)) return `${baseLabel} rumah`;
   return baseLabel;
@@ -261,6 +288,7 @@ function getRecordFieldLabel(header: string): string {
   const identifierKind = resolveSpreadsheetIdentifierKind(header);
 
   if (localityLabel) return localityLabel;
+  if (isEmployerNameField(header)) return "Nama majikan";
   if (identifierKind === "phone") return "Telefon pelanggan";
   if (identifierKind === "homePhone") return "Telefon rumah";
   if (identifierKind === "officePhone") return "Telefon pejabat";

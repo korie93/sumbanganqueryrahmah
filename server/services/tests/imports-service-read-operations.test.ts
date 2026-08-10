@@ -130,6 +130,44 @@ test("getImportDataPage emits stable hybrid pagination metadata", async () => {
   });
 });
 
+test("getImportDataPage enriches legacy Saved rows and exposes derived location headers", async () => {
+  const operations = createReadOperations({
+    storage: {
+      searchDataRows: async () => ({
+        rows: [{
+          id: "row-location",
+          importId: "import-location",
+          jsonDataJsonb: { HomePostcode: "9600" },
+        }],
+        total: 1,
+        nextCursorRowId: null,
+      }),
+    },
+    repository: {
+      getImportColumnNames: async () => ["HomePostcode"],
+    },
+  });
+
+  const result = await operations.getImportDataPage({
+    importId: "import-location",
+    page: 1,
+    requestedLimit: 20,
+    viewerRowsPerPage: 20,
+    isDbProtected: false,
+  });
+
+  assert.deepEqual(result.headers, [
+    "HomePostcode",
+    "Home Postal District",
+    "Home State",
+  ]);
+  assert.deepEqual(result.rows[0]?.jsonDataJsonb, {
+    HomePostcode: "09600",
+    "Home Postal District": "Lunas",
+    "Home State": "Kedah",
+  });
+});
+
 test("getImportDataPage honors cursors while preserving logical page offsets", async () => {
   const cursor = encodeImportDataPageCursor({
     lastRowId: "row-40",

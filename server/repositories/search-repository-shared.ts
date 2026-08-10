@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { safeJsonParse } from "../lib/safe-json";
 import { buildLikePattern } from "./sql-like-utils";
 import type { SearchQueryRow } from "./search-repository-types";
+import { buildMalaysianPhoneSearchVariants } from "../../shared/common/malaysian-phone";
 
 export const MAX_SEARCH_LIMIT = 200;
 // Bound deep OFFSET scans on JSON-heavy search queries while leaving cursor paging available for deeper traversal.
@@ -124,7 +125,28 @@ export function buildSearchFieldCondition(field: string, operator: string, value
 
 export function buildJsonTextContainsCondition(search: string): SQL {
   const searchPattern = buildLikePattern(search.toLowerCase(), "contains");
-  return sql`lower(dr.json_data::text) LIKE ${searchPattern} ESCAPE '\'`;
+  const textCondition = sql`lower(dr.json_data::text) LIKE ${searchPattern} ESCAPE '\'`;
+  const phoneVariants = buildMalaysianPhoneSearchVariants(search);
+  if (phoneVariants.length === 0) {
+    return textCondition;
+  }
+
+  const phoneConditions = phoneVariants.map(
+    (variant) => sql`regexp_replace(phone_field.value, '[^0-9]+', '', 'g') = ${variant}`,
+  );
+  return sql`(
+    ${textCondition}
+    OR EXISTS (
+      SELECT 1
+      FROM jsonb_each_text(
+        CASE
+          WHEN jsonb_typeof(dr.json_data::jsonb) = 'object' THEN dr.json_data::jsonb
+          ELSE '{}'::jsonb
+        END
+      ) AS phone_field(key, value)
+      WHERE ${sql.join(phoneConditions, sql` OR `)}
+    )
+  )`;
 }
 
 export function normalizeSearchOffset(offset: number): number {
