@@ -41,6 +41,7 @@ import {
 import { getAnalysisColumnTypeLabel } from "@/pages/analysis/analysis-quality-utils";
 import type { AllAnalysisResult } from "@/pages/analysis/types";
 import { useAnalysisComparisonState } from "@/pages/analysis/useAnalysisComparisonState";
+import { SavedCustomerComparison } from "@/pages/analysis/SavedCustomerComparison";
 
 type AnalysisComparisonSectionProps = {
   allResult: AllAnalysisResult;
@@ -634,6 +635,12 @@ export function AnalysisComparisonSection({
               </CollapsibleContent>
             </div>
           </Collapsible>
+
+          <SavedCustomerComparison
+            key={`${baselineId}:${currentId}`}
+            baselineId={baselineId}
+            currentId={currentId}
+          />
         </>
       ) : null}
     </OperationalSectionCard>

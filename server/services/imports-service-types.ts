@@ -8,6 +8,10 @@ import type {
 import type { ImportAnalysisService } from "./import-analysis.service";
 import type { PostgresStorage } from "../storage-postgres";
 import type { ImportColumnMappingEntry } from "./import-column-mapping";
+import type {
+  ImportComparisonCategory,
+  ImportComparisonResponse,
+} from "../../shared/common/import-comparison-contract";
 
 type SearchDataRowsResult = Awaited<ReturnType<PostgresStorage["searchDataRows"]>>;
 type AnalyzeImportResult = Awaited<ReturnType<ImportAnalysisService["analyzeImport"]>>;
@@ -69,6 +73,16 @@ export type ImportDataPageInput = {
   isDbProtected: boolean;
   search?: string | null | undefined;
   columnFilters?: ImportDataColumnFilter[] | undefined;
+};
+
+export type CompareImportsInput = {
+  baselineImportId: string;
+  currentImportId: string;
+  category: ImportComparisonCategory;
+  search: string;
+  page: number;
+  pageSize: number;
+  signal?: AbortSignal | undefined;
 };
 
 export type SearchImportRowsInput = {
@@ -145,6 +159,7 @@ export type ImportsServiceStorage = ImportsStorage;
 export type ImportsServiceRepository = Pick<
   ImportsRepository,
   | "getDataRowCountByImport"
+  | "getDataRowsByImportPageAfterId"
   | "getImportColumnNames"
   | "getImportsWithRowCounts"
   | "listImportsWithRowCountsOffsetPage"
@@ -163,4 +178,5 @@ export type {
   SearchDataRowsResult,
   ImportListOffsetPage,
   ImportListPage,
+  ImportComparisonResponse,
 };

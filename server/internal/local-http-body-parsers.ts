@@ -4,6 +4,7 @@ import { CSP_REPORT_ENDPOINT_PATH } from "./local-http-security";
 
 const CSP_REPORT_BODY_LIMIT = "8kb";
 const BROWSER_TELEMETRY_BODY_LIMIT = "4kb";
+const IMPORT_COMPARISON_BODY_LIMIT = "8kb";
 
 type LocalHttpBodyParserOptions = {
   collectionBodyLimit: string;
@@ -14,6 +15,14 @@ type LocalHttpBodyParserOptions = {
 export function registerLocalHttpBodyParsers(app: Express, options: LocalHttpBodyParserOptions) {
   // Keep default parser small; enable larger payloads only for known import
   // and collection endpoints that need them.
+  app.use(
+    "/api/imports/comparison",
+    express.json({ limit: IMPORT_COMPARISON_BODY_LIMIT }),
+  );
+  app.use(
+    "/api/imports/comparison",
+    express.urlencoded({ extended: true, limit: IMPORT_COMPARISON_BODY_LIMIT }),
+  );
   app.use("/api/imports", express.json({ limit: options.importBodyLimit }));
   app.use("/api/imports", express.urlencoded({ extended: true, limit: options.importBodyLimit }));
   app.use("/api/collection", express.json({ limit: options.collectionBodyLimit }));
