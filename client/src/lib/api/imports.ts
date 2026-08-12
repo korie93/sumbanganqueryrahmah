@@ -9,9 +9,11 @@ import {
   importMutationResultSchema,
   importRecordSchema,
   importSummaryResponseSchema,
+  importComparisonResponseSchema,
   importsListResponseSchema,
   singleImportAnalysisResponseSchema,
 } from "@shared/api-contracts";
+import type { ImportComparisonCategory } from "@shared/common/import-comparison-contract";
 
 const IMPORT_UPLOAD_TIMEOUT_MS = 5 * 60_000 + 30_000;
 
@@ -49,6 +51,10 @@ export type ImportDataColumnFilter = {
 
 type ImportDataRequestOptions = ImportRequestOptions & {
   columnFilters?: ImportDataColumnFilter[] | undefined;
+};
+
+type ImportComparisonRequestOptions = ImportRequestOptions & {
+  category?: ImportComparisonCategory | undefined;
 };
 
 function hashImportFingerprintInput(input: string): string {
@@ -141,6 +147,39 @@ export async function getImportSummary(id: string, options?: ImportRequestOption
     response,
     importSummaryResponseSchema,
     `/api/imports/${id}/summary`,
+  );
+}
+
+export async function compareSavedImports(
+  baselineId: string,
+  currentId: string,
+  options?: ImportComparisonRequestOptions,
+) {
+  const response = await apiRequest(
+    "POST",
+    "/api/imports/comparison",
+    {
+      baselineId,
+      currentId,
+      category: options?.category ?? "all",
+      search: options?.search?.trim() ?? "",
+      page: options?.page ?? 1,
+      pageSize: options?.pageSize ?? 25,
+    },
+    {
+      ...options,
+      retry: {
+        baseDelayMs: 2_000,
+        jitterRatio: 0,
+        maxDelayMs: 2_000,
+        maxRetries: 1,
+      },
+    },
+  );
+  return parseApiJson(
+    response,
+    importComparisonResponseSchema,
+    "/api/imports/comparison",
   );
 }
 

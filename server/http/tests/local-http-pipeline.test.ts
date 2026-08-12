@@ -268,6 +268,48 @@ test("registerLocalHttpPipeline marks API responses as non-cacheable by default"
   }
 });
 
+test("registerLocalHttpPipeline applies a small body limit to saved file comparisons", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.post("/api/imports/comparison", (_req, res) => {
+    res.json({ ok: true });
+  });
+  app.post("/api/imports", (_req, res) => {
+    res.json({ ok: true });
+  });
+  app.use(errorHandler);
+
+  const body = JSON.stringify({ value: "x".repeat(9 * 1024) });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const comparisonResponse = await fetch(`${baseUrl}/api/imports/comparison`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    assert.equal(comparisonResponse.status, 413);
+
+    const importResponse = await fetch(`${baseUrl}/api/imports`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    assert.equal(importResponse.status, 200);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("registerLocalHttpPipeline strips sensitive fields from API JSON responses only", async (t) => {
   const warningLogs: Array<{ message: string; payload: unknown }> = [];
   t.mock.method(logger, "warn", (message: string, payload: unknown) => {

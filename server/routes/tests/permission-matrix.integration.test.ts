@@ -430,6 +430,7 @@ function createActivityPermissionHarness() {
 function createImportsPermissionHarness() {
   const calls = {
     createImport: 0,
+    compareImports: 0,
     analyzeImport: 0,
     analyzeAll: 0,
     deleteImport: 0,
@@ -440,6 +441,10 @@ function createImportsPermissionHarness() {
     importsController: {
       listDataRows: async (_req: Request, res: Response) => res.json({ rows: [], total: 0 }),
       listImports: async (_req: Request, res: Response) => res.json({ imports: [] }),
+      compareImports: async (_req: Request, res: Response) => {
+        calls.compareImports += 1;
+        return res.json({ items: [] });
+      },
       createImport: async (_req: Request, res: Response) => {
         calls.createImport += 1;
         return res.json({ id: "import-1" });
@@ -1087,6 +1092,15 @@ test("imports routes enforce analysis and delete permissions consistently", asyn
     );
     await assertRoleMatrix(
       baseUrl,
+      {
+        method: "POST",
+        path: "/api/imports/comparison",
+        body: { baselineId: "import-1", currentId: "import-2" },
+      },
+      { anonymous: 401, user: 200, admin: 200, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
       { method: "GET", path: "/api/analyze/all" },
       { anonymous: 401, user: 200, admin: 200, superuser: 200 },
     );
@@ -1125,7 +1139,20 @@ test("imports routes enforce analysis and delete permissions consistently", asyn
     );
     assert.equal(deniedImportTab.status, 403);
 
+    const deniedComparisonTab = await sendMatrixRequest(
+      baseUrl,
+      {
+        method: "POST",
+        path: "/api/imports/comparison",
+        body: { baselineId: "import-1", currentId: "import-2" },
+      },
+      "manager",
+      { "x-test-deny-tabs": "import" },
+    );
+    assert.equal(deniedComparisonTab.status, 403);
+
     assert.equal(calls.createImport, 3);
+    assert.equal(calls.compareImports, 3);
     assert.equal(calls.analyzeImport, 3);
     assert.equal(calls.analyzeAll, 6);
     assert.equal(calls.deleteImport, 2);

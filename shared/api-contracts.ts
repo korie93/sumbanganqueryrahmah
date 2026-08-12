@@ -3,6 +3,22 @@ import { jsonObjectSchema, jsonValueSchema } from "./json-schema";
 import { sharedErrorCodeSchema, type ErrorCode } from "./error-codes";
 import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "./pagination-contracts";
 
+export {
+  importComparisonCategorySchema,
+  importComparisonItemSchema,
+  importComparisonMatchBasisSchema,
+  importComparisonResponseSchema,
+  importComparisonSideSchema,
+  importComparisonSourceSchema,
+  importComparisonSummarySchema,
+} from "./common/import-comparison-contract";
+export type {
+  ImportComparisonCategory,
+  ImportComparisonItem,
+  ImportComparisonResponse,
+  ImportComparisonSide,
+} from "./common/import-comparison-contract";
+
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nullableStringSchema = z.string().nullable();
 const nullishStringSchema = z.string().nullish();

@@ -6,6 +6,7 @@ import {
   allImportsAnalysisResponseSchema,
   deleteImportResponseSchema,
   importDataPageResponseSchema,
+  importComparisonResponseSchema,
   importMutationResultSchema,
   importRecordSchema,
   importsListResponseSchema,
@@ -144,6 +145,7 @@ function createImportsRouteHarness(options?: {
   analysisDelayMs?: number;
   analysisAllDelayMs?: number;
   analysisRequestTimeoutMs?: number;
+  comparisonRowDelayMs?: number;
   multipartMaxFileSizeBytes?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
@@ -156,6 +158,7 @@ function createImportsRouteHarness(options?: {
   const analyzeImportCalls: string[] = [];
   const analyzeAllCalls: string[][] = [];
   const listImportsPageCalls: Array<Record<string, unknown>> = [];
+  const comparisonPageLoadCalls: string[] = [];
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
@@ -225,6 +228,15 @@ function createImportsRouteHarness(options?: {
   ]);
   const dataRowsByImport = new Map<string, DataRow[]>([
     [seedImport.id, seedImportRows],
+    [secondImport.id, [{
+      id: "row-second-1",
+      importId: secondImport.id,
+      jsonDataJsonb: {
+        "Customer Name": "Alice",
+        "IC Number": "900101101234",
+        "Account No": "A200",
+      },
+    }]],
   ]);
 
   const listImportsWithCounts = (): ImportWithRowCount[] =>
@@ -534,6 +546,21 @@ function createImportsRouteHarness(options?: {
     }) => listImportsWithCursor(params),
     getImportColumnNames: async (importId: string) =>
       getImportHeaders(dataRowsByImport.get(importId) ?? []),
+    getDataRowsByImportPageAfterId: async (
+      importId: string,
+      limit: number,
+      afterRowId: string | null,
+    ) => {
+      comparisonPageLoadCalls.push(importId);
+      if (options?.comparisonRowDelayMs) {
+        await sleep(options.comparisonRowDelayMs);
+      }
+      const rows = dataRowsByImport.get(importId) ?? [];
+      return rows
+        .filter((row) => !afterRowId || row.id > afterRowId)
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .slice(0, limit);
+    },
     markImportOpened: async (importId: string) => {
       const record = importRecords.get(importId);
       if (record) {
@@ -610,6 +637,7 @@ function createImportsRouteHarness(options?: {
     deleteCalls,
     analyzeImportCalls,
     analyzeAllCalls,
+    comparisonPageLoadCalls,
     listImportsPageCalls,
   };
 }
@@ -776,6 +804,106 @@ test("GET /api/imports rejects malformed cursor tokens", async () => {
       await response.json(),
       expectApiError("Invalid imports cursor.", ERROR_CODES.REQUEST_BODY_INVALID),
     );
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports/comparison returns a paginated customer and account comparison", async () => {
+  const { app } = createImportsRouteHarness({
+    seedImportRows: [{
+      id: "row-baseline-1",
+      importId: "import-1",
+      jsonDataJsonb: {
+        "Customer Name": "Alice",
+        "IC Number": "900101101234",
+        "Account No": "A100",
+      },
+    }],
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/imports/comparison`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baselineId: "import-1",
+          currentId: "import-2",
+          category: "account_changed",
+          page: 1,
+          pageSize: 10,
+        }),
+      },
+    );
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(importComparisonResponseSchema.safeParse(payload).success, true);
+    assert.equal(payload.summary.accountChanged, 1);
+    assert.equal(payload.pagination.total, 1);
+    assert.equal(payload.items[0]?.baseline?.accountNumbers[0], "A100");
+    assert.equal(payload.items[0]?.current?.accountNumbers[0], "A200");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports/comparison rejects identical file selections", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/imports/comparison`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baselineId: "import-1",
+          currentId: "import-1",
+        }),
+      },
+    );
+    assert.equal(response.status, 400);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/imports/comparison rejects overlapping expensive comparisons", async () => {
+  const { app, comparisonPageLoadCalls } = createImportsRouteHarness({
+    comparisonRowDelayMs: 150,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+  const requestComparison = () => fetch(`${baseUrl}/api/imports/comparison`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      baselineId: "import-1",
+      currentId: "import-2",
+    }),
+  });
+
+  try {
+    const firstResponsePromise = requestComparison();
+    for (let attempt = 0; attempt < 50 && comparisonPageLoadCalls.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.ok(comparisonPageLoadCalls.length > 0);
+
+    const secondResponse = await requestComparison();
+    assert.equal(secondResponse.status, 503);
+    assert.equal(secondResponse.headers.get("retry-after"), "2");
+    assert.match(
+      String((await secondResponse.json()).message),
+      /comparison is still running/i,
+    );
+
+    const firstResponse = await firstResponsePromise;
+    assert.equal(firstResponse.status, 200);
   } finally {
     await stopTestServer(server);
   }

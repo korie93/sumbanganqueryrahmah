@@ -50,6 +50,7 @@ import {
   collectionPurgeResponseSchema,
   collectionPurgeSummaryResponseSchema,
   importListItemSchema,
+  importComparisonResponseSchema,
   maintenanceStatusResponseSchema,
   normalizeApiPaginationMeta,
   publicHealthResponseSchema,
@@ -60,6 +61,7 @@ import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "@shared/pagination-contracts";
 import {
   analyzeAll,
   analyzeImport,
+  compareSavedImports,
   deleteImport,
   getImportData,
   getImports,
@@ -2522,6 +2524,93 @@ test("analysis API wrappers validate their response contracts", async () => {
   try {
     assert.equal((await analyzeImport("import-1")).analysis.quality.grade, "no_data");
     assert.equal((await analyzeAll()).analysis.columns.length, 0);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("saved import comparison contract and API wrapper preserve bounded filters", async () => {
+  const payload = {
+    baseline: {
+      id: "baseline",
+      name: "Baseline",
+      filename: "baseline.xlsx",
+      rowCount: 1,
+    },
+    current: {
+      id: "current",
+      name: "Current",
+      filename: "current.xlsx",
+      rowCount: 1,
+    },
+    summary: {
+      baselineIdentities: 1,
+      currentIdentities: 1,
+      matched: 0,
+      accountChanged: 1,
+      baselineOnly: 0,
+      currentOnly: 0,
+      conflicts: 0,
+      unidentified: 0,
+      baselineDuplicateRows: 0,
+      currentDuplicateRows: 0,
+    },
+    items: [{
+      id: "comparison-item-1",
+      category: "account_changed",
+      matchBasis: "ic",
+      baseline: {
+        customerName: "Alice",
+        icNumber: "900101101234",
+        customerPhone: null,
+        accountNumbers: ["A100"],
+        occurrences: 1,
+      },
+      current: {
+        customerName: "Alice",
+        icNumber: "900101101234",
+        customerPhone: null,
+        accountNumbers: ["A200"],
+        occurrences: 1,
+      },
+    }],
+    pagination: {
+      mode: "offset",
+      page: 2,
+      pageSize: 25,
+      total: 26,
+      totalPages: 2,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    },
+    matching: {
+      strategy: "deterministic_customer_account_v1",
+      identifiers: ["ic", "phone_and_name", "account", "none"],
+    },
+  } as const;
+  const restoreFetch = withMockFetch((async (input, init) => {
+    assert.equal(String(input), "/api/imports/comparison");
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      baselineId: "baseline",
+      currentId: "current",
+      category: "account_changed",
+      search: "Alice",
+      page: 2,
+      pageSize: 25,
+    });
+    return jsonResponse(payload);
+  }) as typeof fetch);
+
+  try {
+    assert.equal(importComparisonResponseSchema.safeParse(payload).success, true);
+    const result = await compareSavedImports("baseline", "current", {
+      category: "account_changed",
+      search: " Alice ",
+      page: 2,
+      pageSize: 25,
+    });
+    assert.equal(result.items[0]?.category, "account_changed");
   } finally {
     restoreFetch();
   }

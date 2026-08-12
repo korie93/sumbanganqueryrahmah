@@ -19,6 +19,14 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
     requireTabAccess("import"),
     asyncHandler(importsController.listImports),
   );
+  app.post(
+    "/api/imports/comparison",
+    authenticateToken,
+    requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("import"),
+    searchRateLimiter,
+    asyncHandler(importsController.compareImports),
+  );
   app.get(
     "/api/imports/:id/summary",
     authenticateToken,

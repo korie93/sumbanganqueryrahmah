@@ -1,6 +1,7 @@
 import type {
   AnalyzeAllImportsResult,
   AnalyzeImportResult,
+  CompareImportsInput,
   ImportDataPageInput,
   ImportDataPageResult,
   ImportDetailsResult,
@@ -14,6 +15,11 @@ import type {
 } from "./imports-service-types";
 import { encodeImportDataPageCursor, parseImportDataPageCursor } from "./imports-service-parsers";
 import { enrichSavedDataRow } from "../lib/saved-row-location-enrichment";
+import {
+  buildImportCustomerComparisonPage,
+  collectImportComparisonDataset,
+  runWithImportComparisonCapacity,
+} from "./import-customer-comparison";
 
 export class ImportsServiceReadOperations {
   constructor(
@@ -51,6 +57,71 @@ export class ImportsServiceReadOperations {
       });
     }
     return this.importsRepository.listImportsWithRowCountsPage(params);
+  }
+
+  async compareImports(params: CompareImportsInput) {
+    return runWithImportComparisonCapacity(async () => {
+      const [baselineImport, currentImport, baselineRowCount, currentRowCount] = await Promise.all([
+        this.storage.getImportById(params.baselineImportId),
+        this.storage.getImportById(params.currentImportId),
+        this.importsRepository.getDataRowCountByImport(params.baselineImportId),
+        this.importsRepository.getDataRowCountByImport(params.currentImportId),
+      ]);
+      if (!baselineImport || !currentImport) {
+        return null;
+      }
+
+      const loadPage = (
+        importId: string,
+        limit: number,
+        afterRowId: string | null,
+      ) => this.importsRepository.getDataRowsByImportPageAfterId(
+        importId,
+        limit,
+        afterRowId,
+      );
+      const baseline = await collectImportComparisonDataset({
+        importId: baselineImport.id,
+        expectedRowCount: baselineRowCount,
+        signal: params.signal,
+        loadPage,
+      });
+      const current = await collectImportComparisonDataset({
+        importId: currentImport.id,
+        expectedRowCount: currentRowCount,
+        signal: params.signal,
+        loadPage,
+      });
+      const comparison = buildImportCustomerComparisonPage({
+        baseline,
+        current,
+        category: params.category,
+        search: params.search,
+        page: params.page,
+        pageSize: params.pageSize,
+      });
+
+      await Promise.all([
+        this.importsRepository.markImportOpened(baselineImport.id),
+        this.importsRepository.markImportOpened(currentImport.id),
+      ]);
+
+      return {
+        baseline: {
+          id: baselineImport.id,
+          name: baselineImport.name,
+          filename: baselineImport.filename,
+          rowCount: baselineRowCount,
+        },
+        current: {
+          id: currentImport.id,
+          name: currentImport.name,
+          filename: currentImport.filename,
+          rowCount: currentRowCount,
+        },
+        ...comparison,
+      };
+    });
   }
 
   async getImportDetails(importId: string): Promise<ImportDetailsResult | null> {

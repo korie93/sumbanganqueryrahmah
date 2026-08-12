@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { badRequest, conflict, notFound } from "../http/errors";
+import { badRequest, conflict, HttpError, notFound } from "../http/errors";
 import { runWithRequestDeadline } from "../http/request-deadline";
 import { readInteger, readNonEmptyString, readPageLimit, readRouteParam } from "../http/validation";
 import {
@@ -20,6 +20,11 @@ import { DuplicateImportError } from "../services/import-operation-errors";
 import { parseImportUploadFile } from "../services/import-upload-parser";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { safeJsonParse } from "../lib/safe-json";
+import { importComparisonCategorySchema } from "../../shared/common/import-comparison-contract";
+import {
+  ImportComparisonBusyError,
+  ImportComparisonLimitError,
+} from "../services/import-customer-comparison";
 
 type RuntimeSettings = {
   viewerRowsPerPage: number;
@@ -46,6 +51,14 @@ const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
 const savedWorkspaceViewSchema = z.enum(["all", "recent", "large", "duplicates", "review"]);
 const savedPageSchema = z.coerce.number().int().min(1).max(1_000_000);
 const savedRowCountSchema = z.coerce.number().int().min(0).max(2_147_483_647);
+const importComparisonRequestSchema = z.object({
+  baselineId: z.string().trim().min(1).max(200),
+  currentId: z.string().trim().min(1).max(200),
+  category: importComparisonCategorySchema.default("all"),
+  search: z.string().trim().max(120).default(""),
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+  pageSize: z.coerce.number().int().min(10).max(100).default(25),
+}).strict();
 const VIEWER_COLUMN_FILTERS_JSON_MAX_BYTES = 16 * 1024;
 const savedCreatedOnSchema = z.string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -217,6 +230,61 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     } catch (error) {
       if (error instanceof Error && /invalid imports cursor/i.test(error.message)) {
         throw badRequest("Invalid imports cursor.");
+      }
+      throw error;
+    }
+  };
+
+  const compareImports = async (req: AuthenticatedRequest, res: Response) => {
+    const requestResult = importComparisonRequestSchema.safeParse(req.body);
+    if (!requestResult.success) {
+      throw badRequest("Invalid saved file comparison request.");
+    }
+    if (requestResult.data.baselineId === requestResult.data.currentId) {
+      throw badRequest("Baseline and comparison files must be different.");
+    }
+    const {
+      baselineId,
+      currentId,
+      category,
+      search,
+      page,
+      pageSize,
+    } = requestResult.data;
+
+    try {
+      const outcome = await runWithRequestDeadline(
+        res,
+        {
+          timeoutMs: analysisRequestTimeoutMs ?? 60_000,
+          operationName: "imports-customer-comparison",
+          timeoutMessage:
+            "Customer comparison is taking longer than expected. Please retry in a moment.",
+        },
+        (signal) => importsService.compareImports({
+          baselineImportId: baselineId,
+          currentImportId: currentId,
+          category,
+          search,
+          page,
+          pageSize,
+          signal,
+        }),
+      );
+      if (outcome.timedOut) {
+        return;
+      }
+      if (!outcome.value) {
+        throw notFound("One or both saved files were not found.");
+      }
+      return res.json(outcome.value);
+    } catch (error) {
+      if (error instanceof ImportComparisonLimitError) {
+        throw badRequest(error.message);
+      }
+      if (error instanceof ImportComparisonBusyError) {
+        res.setHeader("Retry-After", "2");
+        throw new HttpError(503, error.message, { expose: true });
       }
       throw error;
     }
@@ -485,6 +553,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   return {
     listDataRows,
     listImports,
+    compareImports,
     createImport,
     getImportJob,
     cancelImportJob,

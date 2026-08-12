@@ -7,6 +7,7 @@ import { ImportsServiceReadOperations } from "./imports-service-read-operations"
 import type {
   CreateImportFromCsvFileInput,
   CreateImportInput,
+  CompareImportsInput,
   ImportDataPageInput,
   ImportsServiceAnalysis,
   ImportsServiceRepository,
@@ -39,6 +40,10 @@ export class ImportsService {
 
   async listImports(params: ListImportsInput = {}) {
     return this.readOperations.listImports(params);
+  }
+
+  async compareImports(params: CompareImportsInput) {
+    return this.readOperations.compareImports(params);
   }
 
   async createImport(params: CreateImportInput) {
