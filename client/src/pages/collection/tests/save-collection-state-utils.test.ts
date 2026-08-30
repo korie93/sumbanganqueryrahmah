@@ -13,6 +13,8 @@ test("save collection state utils build an empty restored form shape", () => {
     icNumber: "",
     customerPhone: "",
     accountNumber: "",
+    sourceImportId: "",
+    agingBucket: "D3",
     batch: "P10",
     paymentDate: "",
     amount: "",
@@ -27,6 +29,8 @@ test("save collection state utils derive persist payload and restore state", () 
       icNumber: "900101-10-1234",
       customerPhone: "0123456789",
       accountNumber: "ACC-1",
+      sourceImportId: "import-1",
+      agingBucket: "D5",
       batch: "P25",
       paymentDate: "2026-03-01",
       amount: "100.50",
@@ -42,12 +46,15 @@ test("save collection state utils derive persist payload and restore state", () 
     batch: "P25",
     paymentDate: "2026-03-01",
     amount: "100.50",
+    agingBucket: "D5",
     hadPendingReceipts: true,
   });
   assert.equal(restored.values.customerName, "");
   assert.equal(restored.values.icNumber, "");
   assert.equal(restored.values.customerPhone, "");
   assert.equal(restored.values.accountNumber, "");
+  assert.equal(restored.values.sourceImportId, "");
+  assert.equal(restored.values.agingBucket, "D5");
   assert.equal(restored.values.batch, "P25");
   assert.deepEqual(restored.notice, {
     restoredAt: "2026-04-06T12:00:00.000Z",

@@ -7,6 +7,7 @@ import {
   type CollectionCreatePayload,
 } from "../../routes/collection.validation";
 import type { CollectionStoragePort } from "./collection-service-support";
+import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
 import { findDuplicateCollectionReceiptHashes } from "./collection-receipt-validation";
 import {
   assertValidCollectionCreateFields,
@@ -54,7 +55,30 @@ export class CollectionRecordCreateOperations {
         icNumber: fields.icNumber,
         customerPhone: fields.customerPhone,
         accountNumber: fields.accountNumber,
+        sourceImportId: fields.sourceImportId || null,
       });
+      if (
+        fields.sourceImportId
+        && (!sourceMatch || sourceMatch.sourceImportId !== fields.sourceImportId)
+      ) {
+        throw badRequest(
+          "The selected Saved file no longer contains a matching customer row. Run matching again.",
+          "COLLECTION_SOURCE_MATCH_STALE",
+        );
+      }
+      const matchedTotalDue = sourceMatch?.totalDue === null || sourceMatch?.totalDue === undefined
+        ? null
+        : parseCollectionAmountMyrInput(sourceMatch.totalDue, { allowZero: true });
+      const matchedBillingPrincipalOsp = sourceMatch?.billingPrincipalOsp === null
+        || sourceMatch?.billingPrincipalOsp === undefined
+        ? null
+        : parseCollectionAmountMyrInput(sourceMatch.billingPrincipalOsp, { allowZero: true });
+      if (fields.sourceImportId && matchedTotalDue === null) {
+        throw badRequest(
+          "The matched Saved row does not contain a valid TOTAL DUE value.",
+          "COLLECTION_SOURCE_TOTAL_DUE_MISSING",
+        );
+      }
 
       const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
@@ -88,6 +112,13 @@ export class CollectionRecordCreateOperations {
         sourceDataRowId: sourceMatch?.rowId ?? null,
         sourceImportName: sourceMatch?.sourceImportName ?? null,
         sourceFilename: sourceMatch?.sourceFilename ?? null,
+        agingBucket: fields.agingBucket
+          ? fields.agingBucket as "D3" | "D4" | "D5" | "D6"
+          : null,
+        totalDue: matchedTotalDue,
+        billingPrincipalOsp: matchedBillingPrincipalOsp,
+        sourceMatchBasis: sourceMatch?.matchBasis ?? null,
+        sourceMatchAccuracy: sourceMatch?.matchAccuracy ?? null,
         batch: fields.batch as CollectionBatchValue,
         paymentDate: fields.paymentDate,
         amount: fields.amount,
@@ -133,6 +164,11 @@ export class CollectionRecordCreateOperations {
           sourceDataRowId: finalRecord.sourceDataRowId,
           sourceImportName: finalRecord.sourceImportName,
           sourceMatchBasis: sourceMatch?.matchBasis ?? null,
+          sourceMatchAccuracy: sourceMatch?.matchAccuracy ?? null,
+          agingBucket: finalRecord.agingBucket,
+          totalDue: finalRecord.totalDue,
+          billingPrincipalOsp: finalRecord.billingPrincipalOsp,
+          cpStatus: finalRecord.cpStatus,
           snapshot: buildCollectionAuditSnapshot({
             customerName: finalRecord.customerName,
             paymentDate: finalRecord.paymentDate,

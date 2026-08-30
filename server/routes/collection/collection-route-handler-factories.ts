@@ -33,6 +33,7 @@ const SLOW_COLLECTION_ROUTE_THRESHOLD_MS = Math.max(
 const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
   "/api/collection/summary",
   "/api/collection/list",
+  "/api/collection/source-matches",
   "/api/collection/nickname-summary",
   "/api/collection/monthly-target",
   "/api/collection/daily/overview",

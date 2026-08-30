@@ -1,5 +1,6 @@
 import {
   type CollectionBatch,
+  type CollectionAgingBucket,
   type CollectionReceiptMetadata,
 } from "@/lib/api";
 import { buildCollectionReceiptMetadataPayload, type CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
@@ -23,6 +24,8 @@ export type SaveCollectionFormValues = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId?: string;
+  agingBucket?: CollectionAgingBucket;
   batch: CollectionBatch;
   paymentDate: string;
   amount: string;
@@ -34,6 +37,8 @@ export type SaveCollectionFieldName =
   | "icNumber"
   | "customerPhone"
   | "accountNumber"
+  | "sourceImportId"
+  | "agingBucket"
   | "batch"
   | "paymentDate"
   | "amount";
@@ -45,6 +50,8 @@ export type SaveCollectionMutationPayload = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId: string;
+  agingBucket: CollectionAgingBucket;
   batch: CollectionBatch;
   paymentDate: string;
   amount: number;
@@ -73,6 +80,8 @@ export function validateSaveCollectionForm(values: SaveCollectionFormValues): st
     "icNumber",
     "customerPhone",
     "accountNumber",
+    "sourceImportId",
+    "agingBucket",
     "batch",
     "paymentDate",
     "amount",
@@ -103,6 +112,12 @@ export function validateSaveCollectionFormFields(values: SaveCollectionFormValue
   if (!values.accountNumber.trim()) {
     errors.accountNumber = "Account Number is required.";
   }
+  if (values.sourceImportId !== undefined && !values.sourceImportId.trim()) {
+    errors.sourceImportId = "Pilih fail Saved yang telah disahkan matching.";
+  }
+  if (values.agingBucket !== undefined && !["D3", "D4", "D5", "D6"].includes(values.agingBucket)) {
+    errors.agingBucket = "Aging mesti D3, D4, D5, atau D6.";
+  }
   if (!COLLECTION_BATCH_OPTIONS.includes(values.batch)) {
     errors.batch = "Batch is not valid.";
   }
@@ -129,6 +144,8 @@ export function buildSaveCollectionMutationPayload(options: {
     icNumber: values.icNumber.trim(),
     customerPhone: values.customerPhone.trim(),
     accountNumber: values.accountNumber.trim(),
+    sourceImportId: values.sourceImportId?.trim() || "",
+    agingBucket: values.agingBucket ?? "D3",
     batch: values.batch,
     paymentDate: values.paymentDate,
     amount: parseCollectionAmountMyrNumber(values.amount),

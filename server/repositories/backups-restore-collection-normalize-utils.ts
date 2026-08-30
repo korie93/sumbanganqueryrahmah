@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import {
   parseCollectionAmountMyrNumber,
+  parseCollectionAmountMyrInput,
   parseCollectionAmountToCents,
   parseStoredCollectionAmountCents,
 } from "../../shared/collection-amount-types";
@@ -86,6 +87,29 @@ export function normalizeBackupCollectionRecord(
     String(record.collectionStaffNickname || record.staffUsername || "unknown").trim()
     || "unknown";
   const createdByLogin = String(record.createdByLogin || "system").trim() || "system";
+  const agingBucketRaw = String(record.agingBucket || "").toUpperCase();
+  const agingBucket = agingBucketRaw === "D3"
+    || agingBucketRaw === "D4"
+    || agingBucketRaw === "D5"
+    || agingBucketRaw === "D6"
+    ? agingBucketRaw
+    : null;
+  const totalDue = record.totalDue == null
+    ? null
+    : parseCollectionAmountMyrInput(record.totalDue, { allowZero: true });
+  const billingPrincipalOsp = record.billingPrincipalOsp == null
+    ? null
+    : parseCollectionAmountMyrInput(record.billingPrincipalOsp, { allowZero: true });
+  const sourceMatchBasis = record.sourceMatchBasis === "ic"
+    || record.sourceMatchBasis === "phone_and_account"
+    ? record.sourceMatchBasis
+    : null;
+  const sourceMatchAccuracyRaw = Number(record.sourceMatchAccuracy);
+  const sourceMatchAccuracy = Number.isInteger(sourceMatchAccuracyRaw)
+    && sourceMatchAccuracyRaw >= 0
+    && sourceMatchAccuracyRaw <= 100
+    ? sourceMatchAccuracyRaw
+    : null;
 
   return {
     id: String(record.id || crypto.randomUUID()),
@@ -98,6 +122,11 @@ export function normalizeBackupCollectionRecord(
     sourceDataRowId: String(record.sourceDataRowId || "").trim() || null,
     sourceImportName: String(record.sourceImportName || "").trim() || null,
     sourceFilename: String(record.sourceFilename || "").trim() || null,
+    agingBucket,
+    totalDue,
+    billingPrincipalOsp,
+    sourceMatchBasis,
+    sourceMatchAccuracy,
     batch: String(record.batch || "P10"),
     paymentDate,
     amount: parseCollectionAmountMyrNumber(record.amount),

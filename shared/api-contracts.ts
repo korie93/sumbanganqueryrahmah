@@ -1175,6 +1175,13 @@ export const collectionRecordResponseSchema = z.object({
   sourceDataRowId: nullableStringSchema.optional(),
   sourceImportName: nullableStringSchema.optional(),
   sourceFilename: nullableStringSchema.optional(),
+  agingBucket: z.enum(["D3", "D4", "D5", "D6"]).nullable().optional(),
+  totalDue: z.string().nullable().optional(),
+  billingPrincipalOsp: z.string().nullable().optional(),
+  sourceMatchBasis: z.enum(["ic", "phone_and_account"]).nullable().optional(),
+  sourceMatchAccuracy: z.number().int().min(0).max(100).nullable().optional(),
+  totalDueCovered: z.boolean().nullable().optional(),
+  cpStatus: z.enum(["cp", "abort_cp", "unverified"]).optional(),
   batch: z.enum(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]),
   paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   amount: z.string(),
@@ -1190,6 +1197,33 @@ export const collectionRecordResponseSchema = z.object({
   collectionStaffNickname: z.string(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }).optional(),
+});
+
+export const collectionSourceMatchSchema = z.object({
+  sourceImportId: nonEmptyStringSchema,
+  sourceImportName: nullableStringSchema,
+  sourceFilename: nullableStringSchema,
+  matchBasis: z.enum(["ic", "phone_and_account"]),
+  matchAccuracy: z.number().int().min(0).max(100),
+  matchedFields: z.array(z.enum([
+    "customer_name",
+    "ic_number",
+    "customer_phone",
+    "account_number",
+  ])).max(4),
+  comparedFields: z.array(z.enum([
+    "customer_name",
+    "ic_number",
+    "customer_phone",
+    "account_number",
+  ])).max(4),
+  totalDue: z.string().nullable(),
+  billingPrincipalOsp: z.string().nullable(),
+});
+
+export const collectionSourceMatchesResponseSchema = z.object({
+  ok: z.literal(true),
+  matches: z.array(collectionSourceMatchSchema).max(25),
 });
 
 const collectionRecordListPageLimitSchema = z.number().int().min(1).max(5000);

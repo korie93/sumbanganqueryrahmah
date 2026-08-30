@@ -51,6 +51,15 @@ export function buildSaveCollectionReadySummary(params: {
       value: params.values.batch,
     },
     {
+      label: "Aging",
+      value: params.values.agingBucket ?? "D3",
+    },
+    {
+      label: "Saved Match",
+      value: params.values.sourceImportId ? "Verified" : "Belum disahkan",
+      missing: !params.values.sourceImportId,
+    },
+    {
       label: "Date",
       value: formatSummaryValue(params.values.paymentDate),
       missing: !params.values.paymentDate.trim(),
@@ -118,7 +127,7 @@ export function buildSaveCollectionSuccessDescription(params: {
   const receiptLabel = `${receiptCount} ${receiptCount === 1 ? "receipt" : "receipts"}`;
   const sourceLabel = String(params.sourceLabel || "").trim();
   const sourceMessage = sourceLabel
-    ? ` Dipautkan automatik kepada Saved: ${sourceLabel}.`
-    : " Tiada baris Saved yang sepadan ditemui; rekod collection tetap disimpan.";
-  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, ${receiptLabel}.${sourceMessage}`;
+    ? ` Dipautkan kepada Saved yang disahkan: ${sourceLabel}.`
+    : " Status Saved tidak tersedia.";
+  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, aging ${params.values.agingBucket ?? "D3"}, ${receiptLabel}.${sourceMessage}`;
 }

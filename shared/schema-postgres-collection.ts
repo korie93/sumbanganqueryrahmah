@@ -39,6 +39,11 @@ export const collectionRecords = pgTable("collection_records", {
     .references(() => dataRows.id, { onDelete: "set null", onUpdate: "cascade" }),
   sourceImportName: text("source_import_name"),
   sourceFilename: text("source_filename"),
+  agingBucket: text("aging_bucket"),
+  totalDue: numeric("total_due", { precision: 14, scale: 2 }),
+  billingPrincipalOsp: numeric("billing_principal_osp", { precision: 14, scale: 2 }),
+  sourceMatchBasis: text("source_match_basis"),
+  sourceMatchAccuracy: integer("source_match_accuracy"),
   batch: text("batch").notNull(),
   paymentDate: date("payment_date", { mode: "string" }).notNull(),
   // Primary payment total is stored in MYR using a fixed decimal numeric column.
@@ -129,6 +134,18 @@ export const collectionRecords = pgTable("collection_records", {
   accountNumberPiiXor: check(
     "chk_collection_records_account_number_pii_xor",
     sql`NULLIF(trim(COALESCE(${table.accountNumber}, '')), '') IS NULL OR NULLIF(trim(COALESCE(${table.accountNumberEncrypted}, '')), '') IS NULL`,
+  ),
+  agingBucketCheck: check(
+    "chk_collection_records_aging_bucket",
+    sql`${table.agingBucket} IS NULL OR ${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6')`,
+  ),
+  sourceMatchBasisCheck: check(
+    "chk_collection_records_source_match_basis",
+    sql`${table.sourceMatchBasis} IS NULL OR ${table.sourceMatchBasis} IN ('ic', 'phone_and_account')`,
+  ),
+  sourceMatchAccuracyCheck: check(
+    "chk_collection_records_source_match_accuracy",
+    sql`${table.sourceMatchAccuracy} IS NULL OR (${table.sourceMatchAccuracy} >= 0 AND ${table.sourceMatchAccuracy} <= 100)`,
   ),
 }));
 

@@ -5,14 +5,20 @@ import {
   resolveSpreadsheetIdentifierKind,
 } from "../../shared/common/spreadsheet-identifier-normalization";
 import type {
+  SavedCollectionMatchField,
   SavedCollectionSourceCandidate,
   SavedCollectionSourceLookup,
   SavedCollectionSourceMatch,
 } from "../repositories/search-repository-types";
+import {
+  formatCollectionAmountFromCents,
+  parseCollectionAmountToCents,
+} from "../../shared/collection-amount-types";
 
 const MAX_ROW_FIELDS = 200;
 const MAX_FIELD_VALUE_LENGTH = 256;
 const MAX_LOOKUP_TERMS = 8;
+export const MAX_SAVED_COLLECTION_SOURCE_MATCHES = 25;
 
 const NAME_HEADERS = new Set([
   "customer",
@@ -25,6 +31,25 @@ const NAME_HEADERS = new Set([
   "namapelanggan",
 ]);
 
+const TOTAL_DUE_HEADERS = new Set([
+  "amountdue",
+  "currenttotaldue",
+  "jumlahtertunggak",
+  "outstandingamount",
+  "totalamountdue",
+  "totaldue",
+  "totaloutstanding",
+]);
+
+const BILLING_PRINCIPAL_OSP_HEADERS = new Set([
+  "billingosp",
+  "billingprincipal",
+  "billingprincipalosp",
+  "osp",
+  "outstandingprincipal",
+  "principalosp",
+]);
+
 type NormalizedSavedLookup = {
   customerName: string;
   icNumber: string;
@@ -34,6 +59,11 @@ type NormalizedSavedLookup = {
 
 type NormalizedSavedIdentity = Omit<NormalizedSavedLookup, "accountNumber"> & {
   accountNumbers: string[];
+};
+
+type SavedCollectionFinancials = {
+  billingPrincipalOsp: string | null;
+  totalDue: string | null;
 };
 
 function normalizeHeader(value: string): string {
@@ -54,6 +84,46 @@ function readBoundedScalar(value: unknown): string {
     return String(value).slice(0, MAX_FIELD_VALUE_LENGTH);
   }
   return "";
+}
+
+function parseSavedCollectionMoney(value: unknown): string | null {
+  const scalar = readBoundedScalar(value).trim();
+  if (!scalar) return null;
+
+  const normalized = scalar
+    .replace(/^rm\s*/i, "")
+    .replace(/\s+/g, "")
+    .replace(/,/g, "");
+  const cents = parseCollectionAmountToCents(normalized, { allowZero: true });
+  return cents === null ? null : formatCollectionAmountFromCents(cents);
+}
+
+export function extractSavedCollectionFinancials(value: unknown): SavedCollectionFinancials {
+  const financials: SavedCollectionFinancials = {
+    billingPrincipalOsp: null,
+    totalDue: null,
+  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return financials;
+  }
+
+  for (const [header, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, MAX_ROW_FIELDS)) {
+    const normalizedHeader = normalizeHeader(header);
+    if (financials.totalDue === null && TOTAL_DUE_HEADERS.has(normalizedHeader)) {
+      financials.totalDue = parseSavedCollectionMoney(rawValue);
+    }
+    if (
+      financials.billingPrincipalOsp === null
+      && BILLING_PRINCIPAL_OSP_HEADERS.has(normalizedHeader)
+    ) {
+      financials.billingPrincipalOsp = parseSavedCollectionMoney(rawValue);
+    }
+    if (financials.totalDue !== null && financials.billingPrincipalOsp !== null) {
+      break;
+    }
+  }
+
+  return financials;
 }
 
 function normalizeLookup(input: SavedCollectionSourceLookup): NormalizedSavedLookup {
@@ -138,10 +208,10 @@ function getCandidateTimestamp(value: string | Date | null): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function selectSavedCollectionSourceMatch(
+function buildSavedCollectionSourceMatches(
   input: SavedCollectionSourceLookup,
   candidates: SavedCollectionSourceCandidate[],
-): SavedCollectionSourceMatch | null {
+): Array<SavedCollectionSourceMatch & { rankScore: number; timestamp: number }> {
   const requested = normalizeLookup(input);
   const ranked = candidates.flatMap((candidate) => {
     const saved = extractSavedCollectionIdentity(candidate.jsonDataJsonb);
@@ -175,27 +245,89 @@ export function selectSavedCollectionSourceMatch(
       && saved.customerName
       && requested.customerName === saved.customerName,
     );
+    const comparisons: Array<{ field: SavedCollectionMatchField; comparable: boolean; matched: boolean }> = [
+      {
+        field: "customer_name",
+        comparable: Boolean(requested.customerName && saved.customerName),
+        matched: nameMatch,
+      },
+      {
+        field: "ic_number",
+        comparable: Boolean(requested.icNumber && saved.icNumber),
+        matched: icMatch,
+      },
+      {
+        field: "customer_phone",
+        comparable: Boolean(requested.customerPhone && saved.customerPhone),
+        matched: phoneMatch,
+      },
+      {
+        field: "account_number",
+        comparable: Boolean(requested.accountNumber && saved.accountNumbers.length > 0),
+        matched: accountMatch,
+      },
+    ];
+    const comparedFields = comparisons.filter((item) => item.comparable).map((item) => item.field);
+    const matchedFields = comparisons.filter((item) => item.comparable && item.matched).map((item) => item.field);
+    const matchAccuracy = comparedFields.length > 0
+      ? Math.round((matchedFields.length / comparedFields.length) * 100)
+      : 0;
+    const financials = extractSavedCollectionFinancials(candidate.jsonDataJsonb);
     return [{
-      candidate,
+      rowId: candidate.rowId,
+      sourceImportId: candidate.sourceImportId,
+      sourceImportName: candidate.sourceImportName,
+      sourceFilename: candidate.sourceFilename,
       matchBasis: icMatch ? "ic" as const : "phone_and_account" as const,
-      score: (icMatch ? 100 : 60) + (phoneMatch ? 10 : 0) + (accountMatch ? 10 : 0) + (nameMatch ? 5 : 0),
+      matchAccuracy,
+      matchedFields,
+      comparedFields,
+      totalDue: financials.totalDue,
+      billingPrincipalOsp: financials.billingPrincipalOsp,
+      rankScore: (icMatch ? 100 : 60) + (phoneMatch ? 10 : 0) + (accountMatch ? 10 : 0) + (nameMatch ? 5 : 0),
       timestamp: getCandidateTimestamp(candidate.sourceCreatedAt),
     }];
   });
 
   ranked.sort((left, right) =>
-    right.score - left.score
+    right.rankScore - left.rankScore
     || right.timestamp - left.timestamp
-    || right.candidate.rowId.localeCompare(left.candidate.rowId),
+    || right.rowId.localeCompare(left.rowId),
   );
-  const selected = ranked[0];
+
+  return ranked;
+}
+
+export function selectSavedCollectionSourceMatches(
+  input: SavedCollectionSourceLookup,
+  candidates: SavedCollectionSourceCandidate[],
+  limit = MAX_SAVED_COLLECTION_SOURCE_MATCHES,
+): SavedCollectionSourceMatch[] {
+  const matches = buildSavedCollectionSourceMatches(input, candidates);
+  const selectedImportIds = new Set<string>();
+  const boundedLimit = Math.max(1, Math.min(limit, MAX_SAVED_COLLECTION_SOURCE_MATCHES));
+  const result: SavedCollectionSourceMatch[] = [];
+
+  for (const match of matches) {
+    if (selectedImportIds.has(match.sourceImportId)) continue;
+    selectedImportIds.add(match.sourceImportId);
+    const { rankScore: _rankScore, timestamp: _timestamp, ...publicMatch } = match;
+    result.push(publicMatch);
+    if (result.length >= boundedLimit) break;
+  }
+
+  return result;
+}
+
+export function selectSavedCollectionSourceMatch(
+  input: SavedCollectionSourceLookup,
+  candidates: SavedCollectionSourceCandidate[],
+): SavedCollectionSourceMatch | null {
+  const selected = buildSavedCollectionSourceMatches(input, candidates)[0];
   if (!selected) return null;
 
+  const { rankScore: _rankScore, timestamp: _timestamp, ...match } = selected;
   return {
-    rowId: selected.candidate.rowId,
-    sourceImportId: selected.candidate.sourceImportId,
-    sourceImportName: selected.candidate.sourceImportName,
-    sourceFilename: selected.candidate.sourceFilename,
-    matchBasis: selected.matchBasis,
+    ...match,
   };
 }

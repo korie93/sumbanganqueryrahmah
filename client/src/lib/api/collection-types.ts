@@ -9,6 +9,8 @@ import type {
 } from "@shared/collection-daily-status";
 
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
+export type CollectionAgingBucket = "D3" | "D4" | "D5" | "D6";
+export type CollectionCpStatus = "cp" | "abort_cp" | "unverified";
 
 export type CollectionRecordReceipt = {
   id: string;
@@ -52,6 +54,13 @@ export type CollectionRecord = {
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
+  agingBucket?: CollectionAgingBucket | null;
+  totalDue?: CollectionAmountMyrString | null;
+  billingPrincipalOsp?: CollectionAmountMyrString | null;
+  sourceMatchBasis?: "ic" | "phone_and_account" | null;
+  sourceMatchAccuracy?: number | null;
+  totalDueCovered?: boolean | null;
+  cpStatus?: CollectionCpStatus;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrString;
@@ -122,6 +131,8 @@ export type CreateCollectionPayload = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId?: string | null;
+  agingBucket?: CollectionAgingBucket | null;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrNumber;
@@ -129,6 +140,29 @@ export type CreateCollectionPayload = {
   receipt?: CollectionReceiptPayload | null;
   receipts?: CollectionReceiptPayload[] | null;
   newReceiptMetadata?: CollectionReceiptMetadata[] | null;
+};
+
+export type CollectionSourceMatchField =
+  | "customer_name"
+  | "ic_number"
+  | "customer_phone"
+  | "account_number";
+
+export type CollectionSourceMatch = {
+  sourceImportId: string;
+  sourceImportName: string | null;
+  sourceFilename: string | null;
+  matchBasis: "ic" | "phone_and_account";
+  matchAccuracy: number;
+  matchedFields: CollectionSourceMatchField[];
+  comparedFields: CollectionSourceMatchField[];
+  totalDue: CollectionAmountMyrString | null;
+  billingPrincipalOsp: CollectionAmountMyrString | null;
+};
+
+export type CollectionSourceMatchesResponse = {
+  ok: true;
+  matches: CollectionSourceMatch[];
 };
 
 export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {

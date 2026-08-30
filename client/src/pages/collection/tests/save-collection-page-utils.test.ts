@@ -46,6 +46,7 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
       icNumber: "",
       customerPhone: "bad",
       accountNumber: "",
+      sourceImportId: "",
       batch: "P10",
       paymentDate: "not-a-date",
       amount: "0",
@@ -55,6 +56,7 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
       icNumber: "IC Number is required.",
       customerPhone: "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.",
       accountNumber: "Account Number is required.",
+      sourceImportId: "Pilih fail Saved yang telah disahkan matching.",
       paymentDate: "Payment Date is invalid.",
       amount: "Amount must be greater than 0.",
     },
@@ -69,6 +71,8 @@ test("buildSaveCollectionMutationPayload trims values and maps receipt metadata"
       icNumber: " 900101-10-1234 ",
       customerPhone: " 0123456789 ",
       accountNumber: " ACC-1 ",
+      sourceImportId: " import-verified ",
+      agingBucket: "D5",
       batch: "P25",
       paymentDate: "2026-03-01",
       amount: "100.50",
@@ -84,7 +88,8 @@ test("buildSaveCollectionMutationPayload trims values and maps receipt metadata"
   });
 
   assert.equal(payload.customerName, "Siti");
-  assert.equal("sourceImportId" in payload, false);
+  assert.equal(payload.sourceImportId, "import-verified");
+  assert.equal(payload.agingBucket, "D5");
   assert.equal(payload.collectionStaffNickname, "staff1");
   assert.equal(payload.amount, 100.5);
   assert.deepEqual(payload.newReceiptMetadata, [

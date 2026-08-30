@@ -340,6 +340,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     authenticateToken,
     requireRole,
     requireTabAccess,
+    searchRateLimiter,
   });
 
   app.use(errorHandler);

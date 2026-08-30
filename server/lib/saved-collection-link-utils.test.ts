@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildSavedCollectionLookupTerms,
+  extractSavedCollectionFinancials,
   extractSavedCollectionIdentity,
   selectSavedCollectionSourceMatch,
+  selectSavedCollectionSourceMatches,
 } from "./saved-collection-link-utils";
 
 const lookup = {
@@ -49,6 +51,24 @@ test("Saved collection identity never treats home or office phone columns as cus
   });
 });
 
+test("Saved collection financial extraction recognizes TOTAL DUE and Billing Principal (OSP)", () => {
+  assert.deepEqual(extractSavedCollectionFinancials({
+    "TOTAL DUE": "RM 1,250.50",
+    "Billing Principal (OSP)": 980.25,
+  }), {
+    totalDue: "1250.50",
+    billingPrincipalOsp: "980.25",
+  });
+
+  assert.deepEqual(extractSavedCollectionFinancials({
+    "TOTAL DUE": "=2+2",
+    OSP: { nested: "not accepted" },
+  }), {
+    totalDue: null,
+    billingPrincipalOsp: null,
+  });
+});
+
 test("Saved collection matching never links on customer name alone", () => {
   const match = selectSavedCollectionSourceMatch(lookup, [{
     rowId: "row-name-only",
@@ -88,6 +108,11 @@ test("Saved collection matching accepts exact IC and chooses the newest stronges
     sourceImportName: "NPL JULY",
     sourceFilename: "july.xlsx",
     matchBasis: "ic",
+    matchAccuracy: 100,
+    matchedFields: ["customer_name", "ic_number"],
+    comparedFields: ["customer_name", "ic_number"],
+    totalDue: null,
+    billingPrincipalOsp: null,
   });
 });
 
@@ -133,6 +158,11 @@ test("Saved collection matching accepts a matching Card No when Account No diffe
     sourceImportName: "TEST MULTI ACCOUNT",
     sourceFilename: "test-multi-account.xlsx",
     matchBasis: "ic",
+    matchAccuracy: 100,
+    matchedFields: ["customer_name", "ic_number", "account_number"],
+    comparedFields: ["customer_name", "ic_number", "account_number"],
+    totalDue: null,
+    billingPrincipalOsp: null,
   });
 });
 
@@ -171,4 +201,37 @@ test("Saved collection matching rejects phone-account matches that conflict with
   }]);
 
   assert.equal(match, null);
+});
+
+test("Saved collection matching returns at most one verified row per source file", () => {
+  const matches = selectSavedCollectionSourceMatches(lookup, [
+    {
+      rowId: "row-newer",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-02T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        Phone: "0123456789",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "1200.00",
+        "Billing Principal (OSP)": "950.00",
+      },
+    },
+    {
+      rowId: "row-duplicate",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-01T00:00:00.000Z",
+      jsonDataJsonb: { IC: "931120115437" },
+    },
+  ]);
+
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0]?.rowId, "row-newer");
+  assert.equal(matches[0]?.totalDue, "1200.00");
+  assert.equal(matches[0]?.billingPrincipalOsp, "950.00");
+  assert.equal(matches[0]?.matchAccuracy, 100);
 });

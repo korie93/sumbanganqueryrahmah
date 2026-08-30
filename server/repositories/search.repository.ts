@@ -3,6 +3,7 @@ import { db, dbRead } from "../db-postgres";
 import {
   buildSavedCollectionLookupTerms,
   selectSavedCollectionSourceMatch,
+  selectSavedCollectionSourceMatches,
 } from "../lib/saved-collection-link-utils";
 import { resolveCollectionPiiFieldValueFailClosed } from "../lib/collection-pii-encryption";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
@@ -51,14 +52,15 @@ type ColumnNameCacheEntry = {
 export class SearchRepository {
   private allColumnNamesCache: ColumnNameCacheEntry | null = null;
 
-  async findSavedCollectionSourceForRecord(
+  private async loadSavedCollectionSourceCandidates(
     lookup: SavedCollectionSourceLookup,
-  ): Promise<SavedCollectionSourceMatch | null> {
+  ): Promise<SavedCollectionSourceCandidate[]> {
     const terms = buildSavedCollectionLookupTerms(lookup);
     if (terms.length === 0) {
-      return null;
+      return [];
     }
 
+    const sourceImportId = String(lookup.sourceImportId || "").trim();
     const termConditions = terms.map((term) => buildJsonTextContainsCondition(term));
     const result = await db.execute(sql`
       SELECT
@@ -71,12 +73,13 @@ export class SearchRepository {
       FROM public.data_rows dr
       JOIN public.imports imp ON imp.id = dr.import_id
       WHERE imp.is_deleted = false
+        ${sourceImportId ? sql`AND imp.id = ${sourceImportId}` : sql``}
         AND (${sql.join(termConditions, sql` OR `)})
       ORDER BY imp.created_at DESC, dr.id DESC
       LIMIT ${MAX_SEARCH_COLLECTION_STATUS_CANDIDATES}
     `);
 
-    const candidates = (result.rows || []).map((row): SavedCollectionSourceCandidate => {
+    return (result.rows || []).map((row): SavedCollectionSourceCandidate => {
       const value = row as Record<string, unknown>;
       return {
         rowId: String(value.row_id || ""),
@@ -91,7 +94,19 @@ export class SearchRepository {
         jsonDataJsonb: value.json_data_jsonb,
       };
     }).filter((candidate) => candidate.rowId && candidate.sourceImportId);
+  }
 
+  async findSavedCollectionSourcesForRecord(
+    lookup: SavedCollectionSourceLookup,
+  ): Promise<SavedCollectionSourceMatch[]> {
+    const candidates = await this.loadSavedCollectionSourceCandidates(lookup);
+    return selectSavedCollectionSourceMatches(lookup, candidates);
+  }
+
+  async findSavedCollectionSourceForRecord(
+    lookup: SavedCollectionSourceLookup,
+  ): Promise<SavedCollectionSourceMatch | null> {
+    const candidates = await this.loadSavedCollectionSourceCandidates(lookup);
     return selectSavedCollectionSourceMatch(lookup, candidates);
   }
 

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import type { CollectionBatch } from "@/lib/api";
+import type { CollectionAgingBucket, CollectionBatch } from "@/lib/api";
 import {
   type SaveCollectionFieldErrors,
   type SaveCollectionFieldName,
@@ -21,6 +21,8 @@ export function useSaveCollectionFormState({
   const [icNumber, setIcNumber] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [sourceImportId, setSourceImportId] = useState("");
+  const [agingBucket, setAgingBucket] = useState<CollectionAgingBucket>("D3");
   const [batch, setBatch] = useState<CollectionBatch>("P10");
   const [paymentDate, setPaymentDate] = useState("");
   const [amount, setAmount] = useState("");
@@ -35,17 +37,21 @@ export function useSaveCollectionFormState({
     icNumber,
     customerPhone,
     accountNumber,
+    sourceImportId,
+    agingBucket,
     batch,
     paymentDate,
     amount,
   }), [
     accountNumber,
+    agingBucket,
     amount,
     batch,
     customerName,
     customerPhone,
     icNumber,
     paymentDate,
+    sourceImportId,
     staffNickname,
   ]);
 
@@ -54,6 +60,8 @@ export function useSaveCollectionFormState({
     setIcNumber(restored.icNumber);
     setCustomerPhone(restored.customerPhone);
     setAccountNumber(restored.accountNumber);
+    setSourceImportId(restored.sourceImportId ?? "");
+    setAgingBucket(restored.agingBucket ?? "D3");
     setBatch(restored.batch);
     setPaymentDate(restored.paymentDate);
     setAmount(restored.amount);
@@ -108,6 +116,16 @@ export function useSaveCollectionFormState({
     clearFieldError("accountNumber");
   }, [clearFieldError]);
 
+  const setSourceImportIdInput = useCallback((value: string) => {
+    setSourceImportId(value);
+    clearFieldError("sourceImportId");
+  }, [clearFieldError]);
+
+  const setAgingBucketInput = useCallback((value: CollectionAgingBucket) => {
+    setAgingBucket(value);
+    clearFieldError("agingBucket");
+  }, [clearFieldError]);
+
   const setBatchInput = useCallback((value: CollectionBatch) => {
     setBatch(value);
     clearFieldError("batch");
@@ -128,6 +146,8 @@ export function useSaveCollectionFormState({
     icNumber,
     customerPhone,
     accountNumber,
+    sourceImportId,
+    agingBucket,
     batch,
     paymentDate,
     amount,
@@ -139,6 +159,8 @@ export function useSaveCollectionFormState({
     setIcNumber: setIcNumberInput,
     setCustomerPhone: setCustomerPhoneInput,
     setAccountNumber: setAccountNumberInput,
+    setSourceImportId: setSourceImportIdInput,
+    setAgingBucket: setAgingBucketInput,
     setBatch: setBatchInput,
     setPaymentDate: setPaymentDateInput,
     setAmount: setAmountInput,

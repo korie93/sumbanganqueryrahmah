@@ -25,6 +25,13 @@ export type CollectionRecordShape = {
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
+  agingBucket?: "D3" | "D4" | "D5" | "D6" | null;
+  totalDue?: string | null;
+  billingPrincipalOsp?: string | null;
+  sourceMatchBasis?: "ic" | "phone_and_account" | null;
+  sourceMatchAccuracy?: number | null;
+  totalDueCovered?: boolean | null;
+  cpStatus?: "cp" | "abort_cp" | "unverified";
   batch: string;
   paymentDate: string;
   amount: string;
@@ -416,6 +423,7 @@ export function createCoreCollectionStorageDouble(options?: {
   const storage = {
     findSavedCollectionSourceForRecord: async (lookup: Record<string, string>) => (
       lookup.accountNumber === "NO-SAVED-MATCH"
+      || (lookup.sourceImportId && lookup.sourceImportId !== "import-1")
         ? null
         : {
             rowId: "saved-row-1",
@@ -423,7 +431,28 @@ export function createCoreCollectionStorageDouble(options?: {
             sourceImportName: "NPL CC P10 JULY",
             sourceFilename: "npl-cc-p10-july.xlsx",
             matchBasis: "ic" as const,
+            matchAccuracy: 100,
+            matchedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
+            comparedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
+            totalDue: "200.00",
+            billingPrincipalOsp: "180.00",
           }
+    ),
+    findSavedCollectionSourcesForRecord: async (lookup: Record<string, string>) => (
+      lookup.accountNumber === "NO-SAVED-MATCH"
+        ? []
+        : [{
+            rowId: "saved-row-1",
+            sourceImportId: "import-1",
+            sourceImportName: "NPL CC P10 JULY",
+            sourceFilename: "npl-cc-p10-july.xlsx",
+            matchBasis: "ic" as const,
+            matchAccuracy: 100,
+            matchedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
+            comparedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
+            totalDue: "200.00",
+            billingPrincipalOsp: "180.00",
+          }]
     ),
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
       if (!options?.sessionNickname) {
@@ -452,6 +481,19 @@ export function createCoreCollectionStorageDouble(options?: {
         sourceDataRowId: (data.sourceDataRowId as string | null | undefined) ?? null,
         sourceImportName: (data.sourceImportName as string | null | undefined) ?? null,
         sourceFilename: (data.sourceFilename as string | null | undefined) ?? null,
+        agingBucket: (data.agingBucket as CollectionRecordShape["agingBucket"]) ?? null,
+        totalDue: data.totalDue == null ? null : Number(data.totalDue).toFixed(2),
+        billingPrincipalOsp:
+          data.billingPrincipalOsp == null ? null : Number(data.billingPrincipalOsp).toFixed(2),
+        sourceMatchBasis: (data.sourceMatchBasis as CollectionRecordShape["sourceMatchBasis"]) ?? null,
+        sourceMatchAccuracy:
+          data.sourceMatchAccuracy == null ? null : Number(data.sourceMatchAccuracy),
+        totalDueCovered:
+          data.totalDue == null ? null : Number(data.amount) >= Number(data.totalDue),
+        cpStatus:
+          data.totalDue == null
+            ? "unverified"
+            : Number(data.amount) >= Number(data.totalDue) ? "abort_cp" : "cp",
         batch: String(data.batch),
         paymentDate: String(data.paymentDate),
         amount: Number(data.amount).toFixed(2),

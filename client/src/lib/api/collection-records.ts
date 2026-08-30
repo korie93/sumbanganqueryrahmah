@@ -5,6 +5,7 @@ import {
   collectionPurgeSummaryResponseSchema,
   collectionRecordListResponseSchema,
   collectionRecordResponseSchema,
+  collectionSourceMatchesResponseSchema,
 } from "@shared/api-contracts";
 import { parseApiJson } from "./contract";
 import type {
@@ -13,6 +14,7 @@ import type {
   CollectionRecordListResponse,
   CreateCollectionPayload,
   UpdateCollectionPayload,
+  CollectionSourceMatchesResponse,
 } from "./collection-types";
 import { z } from "zod";
 
@@ -58,6 +60,8 @@ export function buildCollectionRecordFormData(
   appendCollectionFormValue(formData, "icNumber", payload.icNumber);
   appendCollectionFormValue(formData, "customerPhone", payload.customerPhone);
   appendCollectionFormValue(formData, "accountNumber", payload.accountNumber);
+  appendCollectionFormValue(formData, "sourceImportId", payload.sourceImportId);
+  appendCollectionFormValue(formData, "agingBucket", payload.agingBucket);
   appendCollectionFormValue(formData, "batch", payload.batch);
   appendCollectionFormValue(formData, "paymentDate", payload.paymentDate);
   appendCollectionFormValue(formData, "amount", payload.amount);
@@ -175,6 +179,28 @@ export async function createCollectionRecord(
     collectionRecordMutationResponseSchema,
     "/api/collection",
   );
+}
+
+export async function getCollectionSourceMatches(
+  payload: {
+    customerName: string;
+    icNumber: string;
+    customerPhone: string;
+    accountNumber: string;
+  },
+  options?: { signal?: AbortSignal | undefined },
+) {
+  const response = await apiRequest(
+    "POST",
+    "/api/collection/source-matches",
+    payload,
+    { signal: options?.signal },
+  );
+  return parseApiJson(
+    response,
+    collectionSourceMatchesResponseSchema,
+    "/api/collection/source-matches",
+  ) as Promise<CollectionSourceMatchesResponse>;
 }
 
 export async function getCollectionRecords(filters?: {

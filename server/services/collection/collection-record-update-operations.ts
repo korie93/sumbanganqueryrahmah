@@ -7,6 +7,7 @@ import {
   type CollectionUpdatePayload,
 } from "../../routes/collection.validation";
 import type { CollectionStoragePort } from "./collection-service-support";
+import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
 import {
   COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE,
   parseRecordVersionTimestamp,
@@ -81,19 +82,48 @@ export class CollectionRecordUpdateOperations {
 
       const identityChanged = ["customerName", "icNumber", "customerPhone", "accountNumber"]
         .some((field) => Object.prototype.hasOwnProperty.call(updatePayload, field));
-      const sourceMatch = identityChanged
+      const sourceSelectionChanged = body.sourceImportId !== undefined;
+      const shouldRematchSource = identityChanged || sourceSelectionChanged;
+      const sourceMatch = shouldRematchSource
         ? await this.storage.findSavedCollectionSourceForRecord({
             customerName: String(updatePayload.customerName ?? existing.customerName),
             icNumber: String(updatePayload.icNumber ?? existing.icNumber),
             customerPhone: String(updatePayload.customerPhone ?? existing.customerPhone),
             accountNumber: String(updatePayload.accountNumber ?? existing.accountNumber),
+            sourceImportId: sourceSelectionChanged ? fields.sourceImportId || null : null,
           })
         : null;
-      if (identityChanged) {
+      if (
+        fields.sourceImportId
+        && shouldRematchSource
+        && (!sourceMatch || sourceMatch.sourceImportId !== fields.sourceImportId)
+      ) {
+        throw badRequest(
+          "The selected Saved file no longer contains a matching customer row. Run matching again.",
+          "COLLECTION_SOURCE_MATCH_STALE",
+        );
+      }
+      const matchedTotalDue = sourceMatch?.totalDue == null
+        ? null
+        : parseCollectionAmountMyrInput(sourceMatch.totalDue, { allowZero: true });
+      const matchedBillingPrincipalOsp = sourceMatch?.billingPrincipalOsp == null
+        ? null
+        : parseCollectionAmountMyrInput(sourceMatch.billingPrincipalOsp, { allowZero: true });
+      if (fields.sourceImportId && shouldRematchSource && matchedTotalDue === null) {
+        throw badRequest(
+          "The matched Saved row does not contain a valid TOTAL DUE value.",
+          "COLLECTION_SOURCE_TOTAL_DUE_MISSING",
+        );
+      }
+      if (shouldRematchSource) {
         updatePayload.sourceImportId = sourceMatch?.sourceImportId ?? null;
         updatePayload.sourceDataRowId = sourceMatch?.rowId ?? null;
         updatePayload.sourceImportName = sourceMatch?.sourceImportName ?? null;
         updatePayload.sourceFilename = sourceMatch?.sourceFilename ?? null;
+        updatePayload.totalDue = matchedTotalDue;
+        updatePayload.billingPrincipalOsp = matchedBillingPrincipalOsp;
+        updatePayload.sourceMatchBasis = sourceMatch?.matchBasis ?? null;
+        updatePayload.sourceMatchAccuracy = sourceMatch?.matchAccuracy ?? null;
       }
 
       const shouldRemoveReceipt = body.removeReceipt === true;
@@ -266,12 +296,13 @@ export class CollectionRecordUpdateOperations {
           before: beforeSnapshot,
           after: afterSnapshot,
           changes: buildCollectionAuditFieldChanges(beforeSnapshot, afterSnapshot),
-          ...(identityChanged
+          ...(shouldRematchSource
             ? {
                 sourceLink: {
                   sourceImportId: updated.sourceImportId ?? null,
                   sourceDataRowId: updated.sourceDataRowId ?? null,
                   matchBasis: sourceMatch?.matchBasis ?? null,
+                  matchAccuracy: sourceMatch?.matchAccuracy ?? null,
                 },
               }
             : {}),

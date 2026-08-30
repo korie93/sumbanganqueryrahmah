@@ -3,7 +3,9 @@ import { safeParseInteger } from "../lib/safe-parse";
 import { parseCollectionAmountMyrInput } from "../../shared/collection-amount-types";
 
 export const COLLECTION_BATCHES = new Set(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]);
+export const COLLECTION_AGING_BUCKETS = new Set(["D3", "D4", "D5", "D6"]);
 export const COLLECTION_STAFF_NICKNAME_MIN_LENGTH = 2;
+export const COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH = 200;
 export const COLLECTION_SUMMARY_MONTH_NAMES = [
   "January",
   "February",
@@ -47,6 +49,8 @@ export type CollectionCreatePayload = {
   icNumber?: string;
   customerPhone?: string;
   accountNumber?: string;
+  sourceImportId?: string | null;
+  agingBucket?: string | null;
   batch?: string;
   paymentDate?: string;
   amount?: number | string;
@@ -55,6 +59,13 @@ export type CollectionCreatePayload = {
   receipts?: CollectionReceiptPayload[] | null;
   newReceiptMetadata?: CollectionReceiptMetadataPayload[] | string | null;
   receiptValidationOverrideReason?: string | null;
+};
+
+export type CollectionSourceMatchPayload = {
+  customerName?: string;
+  icNumber?: string;
+  customerPhone?: string;
+  accountNumber?: string;
 };
 
 export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {
@@ -94,6 +105,7 @@ export type CollectionNicknameAuthPayload = {
 };
 
 export type CollectionBatchValue = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
+export type CollectionAgingBucketValue = "D3" | "D4" | "D5" | "D6";
 
 export function ensureLooseObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object") {

@@ -128,6 +128,21 @@ export async function updateCollectionRecord(
   if (data.sourceFilename !== undefined) {
     updateChunks.push(sql`source_filename = ${data.sourceFilename}`);
   }
+  if (data.agingBucket !== undefined) {
+    updateChunks.push(sql`aging_bucket = ${data.agingBucket}`);
+  }
+  if (data.totalDue !== undefined) {
+    updateChunks.push(sql`total_due = ${data.totalDue}`);
+  }
+  if (data.billingPrincipalOsp !== undefined) {
+    updateChunks.push(sql`billing_principal_osp = ${data.billingPrincipalOsp}`);
+  }
+  if (data.sourceMatchBasis !== undefined) {
+    updateChunks.push(sql`source_match_basis = ${data.sourceMatchBasis}`);
+  }
+  if (data.sourceMatchAccuracy !== undefined) {
+    updateChunks.push(sql`source_match_accuracy = ${data.sourceMatchAccuracy}`);
+  }
   if (data.batch !== undefined) {
     updateChunks.push(sql`batch = ${data.batch}`);
   }
@@ -214,6 +229,11 @@ export async function updateCollectionRecord(
         source_data_row_id,
         source_import_name,
         source_filename,
+        aging_bucket,
+        total_due,
+        billing_principal_osp,
+        source_match_basis,
+        source_match_accuracy,
         batch,
         payment_date,
         amount,

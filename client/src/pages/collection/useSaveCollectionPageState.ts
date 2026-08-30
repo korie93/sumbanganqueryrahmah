@@ -5,6 +5,7 @@ import { useSaveCollectionFormState } from "@/pages/collection/useSaveCollection
 import type { CollectionReceiptPendingStatus } from "@/pages/collection/collection-receipt-pending-status";
 import { useSaveCollectionReceiptState } from "@/pages/collection/useSaveCollectionReceiptState";
 import { useSaveCollectionSubmitState } from "@/pages/collection/useSaveCollectionSubmitState";
+import { useCollectionSourceMatching } from "@/pages/collection/useCollectionSourceMatching";
 
 type MutationFeedbackApi = {
   notifyMutationError: ReturnType<typeof useMutationFeedback>["notifyMutationError"];
@@ -24,18 +25,29 @@ export function useSaveCollectionPageState({
 }: UseSaveCollectionPageStateOptions) {
   const formState = useSaveCollectionFormState({ staffNickname });
   const receiptState = useSaveCollectionReceiptState({ mutationFeedback });
+  const sourceMatchState = useCollectionSourceMatching({
+    customerName: formState.customerName,
+    icNumber: formState.icNumber,
+    customerPhone: formState.customerPhone,
+    accountNumber: formState.accountNumber,
+  }, formState.setSourceImportId);
   const draftState = useSaveCollectionDraftState({
     staffNickname,
     values: formState.values,
     hasPendingReceipts: receiptState.receiptFiles.length > 0,
     applyRestoredFormValues: formState.applyRestoredFormValues,
   });
+  const clearFormValues = formState.clearFormValues;
+  const clearReceiptState = receiptState.clearReceiptState;
+  const resetSourceMatches = sourceMatchState.resetMatches;
+  const clearDraftState = draftState.clearDraftState;
 
   const clearPageState = useCallback(() => {
-    formState.clearFormValues();
-    receiptState.clearReceiptState();
-    draftState.clearDraftState();
-  }, [draftState, formState, receiptState]);
+    clearFormValues();
+    clearReceiptState();
+    resetSourceMatches();
+    clearDraftState();
+  }, [clearDraftState, clearFormValues, clearReceiptState, resetSourceMatches]);
 
   const submitState = useSaveCollectionSubmitState({
     values: formState.values,
@@ -57,7 +69,6 @@ export function useSaveCollectionPageState({
     submitting,
   } = submitState;
   const {
-    clearReceiptState,
     handlePendingDraftChange,
     handleReceiptChange: applyReceiptChange,
     handleRemoveReceipt: applyRemoveReceipt,
@@ -103,6 +114,8 @@ export function useSaveCollectionPageState({
     icNumber: formState.icNumber,
     customerPhone: formState.customerPhone,
     accountNumber: formState.accountNumber,
+    sourceImportId: formState.sourceImportId,
+    agingBucket: formState.agingBucket,
     batch: formState.batch,
     paymentDate: formState.paymentDate,
     amount: formState.amount,
@@ -122,6 +135,7 @@ export function useSaveCollectionPageState({
     setIcNumber: formState.setIcNumber,
     setCustomerPhone: formState.setCustomerPhone,
     setAccountNumber: formState.setAccountNumber,
+    setAgingBucket: formState.setAgingBucket,
     setBatch: formState.setBatch,
     setPaymentDate: formState.setPaymentDate,
     setAmount: formState.setAmount,
@@ -133,6 +147,16 @@ export function useSaveCollectionPageState({
     handleRemoveReceipt,
     handleClearPendingReceipts,
     handlePendingDraftChange,
+    sourceMatching: {
+      error: sourceMatchState.error,
+      hasSearched: sourceMatchState.hasSearched,
+      loading: sourceMatchState.loading,
+      matches: sourceMatchState.matches,
+      selectedImportId: sourceMatchState.selectedImportId,
+      selectedMatch: sourceMatchState.selectedMatch,
+      runMatching: sourceMatchState.runMatching,
+      selectMatch: sourceMatchState.selectMatch,
+    },
     handleSubmit,
   };
 }

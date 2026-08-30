@@ -344,6 +344,13 @@
       "when": 1785930873582,
       "tag": "0049_collection_record_purge_history",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1788048000000,
+      "tag": "0050_collection_saved_match_details",
+      "breakpoints": true
     }
   ]
 }

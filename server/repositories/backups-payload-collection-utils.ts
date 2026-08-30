@@ -121,6 +121,25 @@ export function mapBackupCollectionRecordRow(
       typeof row.sourceFilename === "string" && row.sourceFilename.trim()
         ? row.sourceFilename.trim()
         : null,
+    agingBucket:
+      typeof row.agingBucket === "string" && ["D3", "D4", "D5", "D6"].includes(row.agingBucket)
+        ? row.agingBucket
+        : null,
+    totalDue: row.totalDue == null
+      ? null
+      : row.totalDue as NonNullable<BackupCollectionRecord["totalDue"]>,
+    billingPrincipalOsp:
+      row.billingPrincipalOsp == null
+        ? null
+        : row.billingPrincipalOsp as NonNullable<BackupCollectionRecord["billingPrincipalOsp"]>,
+    sourceMatchBasis:
+      row.sourceMatchBasis === "ic" || row.sourceMatchBasis === "phone_and_account"
+        ? row.sourceMatchBasis
+        : null,
+    sourceMatchAccuracy:
+      Number.isInteger(Number(row.sourceMatchAccuracy))
+        ? Number(row.sourceMatchAccuracy)
+        : null,
     batch: String(row.batch || ""),
     paymentDate: String(row.paymentDate || ""),
     amount: row.amount as BackupCollectionRecord["amount"],

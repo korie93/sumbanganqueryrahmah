@@ -3,10 +3,12 @@ import { registerCollectionRecordMutationRoutes } from "./collection-record-muta
 import { registerCollectionReceiptRoutes } from "./collection-receipt-routes";
 import { registerCollectionSummaryRoutes } from "./collection-summary-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
+import { registerCollectionSourceMatchRoutes } from "./collection-source-match-routes";
 
 export function registerCollectionReportRoutes(context: CollectionRouteContext) {
   registerCollectionSummaryRoutes(context);
   registerCollectionDailyRoutes(context);
   registerCollectionReceiptRoutes(context);
   registerCollectionRecordMutationRoutes(context);
+  registerCollectionSourceMatchRoutes(context);
 }

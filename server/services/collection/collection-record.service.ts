@@ -6,11 +6,13 @@ import {
 import { CollectionRecordReadOperations } from "./collection-record-read-operations";
 import { CollectionRecordMutationOperations } from "./collection-record-mutation-operations";
 import { CollectionDailyOperations } from "./collection-daily-operations";
+import { CollectionSourceMatchOperations } from "./collection-source-match-operations";
 
 export class CollectionRecordService extends CollectionServiceSupport {
   private readonly readOperations: CollectionRecordReadOperations;
   private readonly mutationOperations: CollectionRecordMutationOperations;
   private readonly dailyOperations: CollectionDailyOperations;
+  private readonly sourceMatchOperations: CollectionSourceMatchOperations;
 
   constructor(storage: ConstructorParameters<typeof CollectionServiceSupport>[0]) {
     super(storage);
@@ -23,10 +25,21 @@ export class CollectionRecordService extends CollectionServiceSupport {
       this.storage,
       this.requireUser.bind(this),
     );
+    this.sourceMatchOperations = new CollectionSourceMatchOperations(
+      this.storage,
+      this.requireUser.bind(this),
+    );
   }
 
   async createRecord(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], bodyRaw: unknown) {
     return this.mutationOperations.createRecord(userInput, bodyRaw);
+  }
+
+  async listSourceMatches(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    bodyRaw: unknown,
+  ) {
+    return this.sourceMatchOperations.listMatches(userInput, bodyRaw);
   }
 
   async getSummary(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: SummaryQuery) {

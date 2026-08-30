@@ -94,6 +94,12 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     return this.searchRepository.findSavedCollectionSourceForRecord(lookup);
   }
 
+  async findSavedCollectionSourcesForRecord(
+    lookup: SavedCollectionSourceLookup,
+  ): Promise<SavedCollectionSourceMatch[]> {
+    return this.searchRepository.findSavedCollectionSourcesForRecord(lookup);
+  }
+
   async searchDataRows(params: {
     importId: string;
     search?: string | null;

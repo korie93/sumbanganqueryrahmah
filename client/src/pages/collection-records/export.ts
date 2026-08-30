@@ -2,6 +2,10 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import type { CollectionRecord } from "@/lib/api";
+import {
+  getCollectionCpStatusLabel,
+  getCollectionMatchAccuracyLabel,
+} from "@/pages/collection-records/collection-coverage";
 import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { loadClientSpreadsheetRuntime } from "@/lib/spreadsheet/xlsx-runtime";
 import {
@@ -31,6 +35,19 @@ function hasReceiptAttachment(record: CollectionRecord): boolean {
   return (record.receipts?.length || 0) > 0;
 }
 
+const SPREADSHEET_FORMULA_PREFIX = /^(?:[\t\r\n]|\s*[=+\-@])/u;
+
+function safeSpreadsheetText(value: unknown): string {
+  const text = String(value ?? "");
+  return SPREADSHEET_FORMULA_PREFIX.test(text) ? `'${text}` : text;
+}
+
+function optionalCollectionAmount(value: string | null | undefined): number | string {
+  return value === null || value === undefined || value === ""
+    ? ""
+    : parseCollectionAmountMyrNumber(value);
+}
+
 export async function exportCollectionRecordsToExcel({
   visibleRecords,
   fromDate,
@@ -39,15 +56,20 @@ export async function exportCollectionRecordsToExcel({
 }: CollectionRecordsExportParams) {
   const { module: XLSX } = await loadClientSpreadsheetRuntime();
   const reportRows = visibleRecords.map((record) => [
-    record.customerName,
-    record.icNumber,
-    record.accountNumber,
-    record.customerPhone,
+    safeSpreadsheetText(record.customerName),
+    safeSpreadsheetText(record.icNumber),
+    safeSpreadsheetText(record.accountNumber),
+    safeSpreadsheetText(record.customerPhone),
+    optionalCollectionAmount(record.billingPrincipalOsp),
+    optionalCollectionAmount(record.totalDue),
     parseCollectionAmountMyrNumber(record.amount),
+    getCollectionCpStatusLabel(record),
+    record.agingBucket || "",
     record.paymentDate,
     hasReceiptAttachment(record) ? "Available" : "-",
-    getCollectionRecordSourceLabel(record),
-    record.collectionStaffNickname,
+    safeSpreadsheetText(getCollectionRecordSourceLabel(record)),
+    getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy),
+    safeSpreadsheetText(record.collectionStaffNickname),
   ]);
 
   const sheetData: (string | number)[][] = [
@@ -62,10 +84,15 @@ export async function exportCollectionRecordsToExcel({
       "IC Number",
       "Account Number",
       "Customer Phone Number",
+      "Billing Principal (OSP)",
+      "TOTAL DUE",
       "Amount",
+      "CP Status",
+      "Aging",
       "Payment Date",
       "Receipt",
       "Source File",
+      "Match Accuracy",
       "Staff Nickname",
     ],
     ...reportRows,
@@ -75,7 +102,7 @@ export async function exportCollectionRecordsToExcel({
   const maxColumnLength = (columnIndex: number) =>
     Math.max(...sheetData.map((row) => String(row[columnIndex] ?? "").length), 12);
 
-  worksheet["!cols"] = Array.from({ length: 9 }).map((_, index) => ({
+  worksheet["!cols"] = Array.from({ length: 14 }).map((_, index) => ({
     wch: Math.min(38, maxColumnLength(index) + 2),
   }));
 
@@ -86,10 +113,11 @@ export async function exportCollectionRecordsToExcel({
   }
 
   for (let row = 8; row < 8 + reportRows.length; row += 1) {
-    const amountCell = `E${row}`;
-    const worksheetCell = getWorksheetCell(worksheet, amountCell);
-    if (worksheetCell) {
-      worksheetCell.z = "\"RM\" #,##0.00";
+    for (const column of ["E", "F", "G"]) {
+      const worksheetCell = getWorksheetCell(worksheet, `${column}${row}`);
+      if (worksheetCell) {
+        worksheetCell.z = "\"RM\" #,##0.00";
+      }
     }
   }
 
@@ -113,8 +141,23 @@ export async function exportCollectionRecordsToPdf({
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const rowHeight = 7;
-  const headers = ["Customer", "IC", "Account", "Phone", "Amount", "Pay Date", "Receipt", "Source", "Staff"];
-  const colWidths = [43, 28, 34, 28, 22, 23, 17, 34, 36];
+  const headers: Array<string | string[]> = [
+    "Customer",
+    "IC",
+    "Account",
+    "Phone",
+    ["Billing Principal", "(OSP)"],
+    "TOTAL DUE",
+    "Amount",
+    "CP",
+    "Aging",
+    "Pay Date",
+    "Receipt",
+    "Source",
+    "Match",
+    "Staff",
+  ];
+  const colWidths = [28, 22, 24, 20, 20, 20, 20, 16, 12, 19, 12, 24, 14, 25];
   let y = 12;
   let pageNo = 1;
 
@@ -139,7 +182,7 @@ export async function exportCollectionRecordsToPdf({
     pdf.setFontSize(9);
     let x = margin;
     headers.forEach((header, index) => {
-      pdf.text(header, x + 1.5, y + 4.5);
+      pdf.text(header, x + 1, Array.isArray(header) ? y + 3 : y + 4.5);
       x += colWidths[index];
     });
     y += rowHeight;
@@ -174,11 +217,16 @@ export async function exportCollectionRecordsToPdf({
       fitCollectionRecordText(record.icNumber, 16),
       fitCollectionRecordText(record.accountNumber, 18),
       fitCollectionRecordText(record.customerPhone, 15),
+      record.billingPrincipalOsp ? fitCollectionRecordText(formatAmountRM(record.billingPrincipalOsp), 11) : "-",
+      record.totalDue ? fitCollectionRecordText(formatAmountRM(record.totalDue), 11) : "-",
       fitCollectionRecordText(formatAmountRM(record.amount), 12),
+      fitCollectionRecordText(getCollectionCpStatusLabel(record), 9),
+      record.agingBucket || "-",
       fitCollectionRecordText(formatIsoDateToDDMMYYYY(record.paymentDate), 10),
       hasReceiptAttachment(record) ? "Yes" : "-",
-      fitCollectionRecordText(getCollectionRecordSourceLabel(record), 16),
-      fitCollectionRecordText(record.collectionStaffNickname, 18),
+      fitCollectionRecordText(getCollectionRecordSourceLabel(record), 12),
+      getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy),
+      fitCollectionRecordText(record.collectionStaffNickname, 13),
     ];
 
     let x = margin;

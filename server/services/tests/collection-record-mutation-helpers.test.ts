@@ -106,6 +106,8 @@ test("collection record field helpers normalize create/update payloads", () => {
     customerName: " Customer A ",
     customerPhone: "+60123456789",
     icNumber: " 900101 ",
+    sourceImportId: " import-1 ",
+    agingBucket: " d4 ",
     paymentDate: "2020-01-01",
   });
 
@@ -118,6 +120,8 @@ test("collection record field helpers normalize create/update payloads", () => {
     customerName: "Customer A",
     customerPhone: "+60123456789",
     icNumber: "900101",
+    sourceImportId: "import-1",
+    agingBucket: "D4",
     paymentDate: "2020-01-01",
   });
 
@@ -134,6 +138,8 @@ test("collection record field helpers normalize create/update payloads", () => {
       customerName: "",
       customerPhone: "",
       icNumber: "",
+      sourceImportId: "",
+      agingBucket: "",
       paymentDate: "",
     },
   );

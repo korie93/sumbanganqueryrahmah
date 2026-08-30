@@ -43,6 +43,16 @@ type CollectionRecordDbRow = {
   sourceImportName?: unknown;
   source_filename?: unknown;
   sourceFilename?: unknown;
+  aging_bucket?: unknown;
+  agingBucket?: unknown;
+  total_due?: unknown;
+  totalDue?: unknown;
+  billing_principal_osp?: unknown;
+  billingPrincipalOsp?: unknown;
+  source_match_basis?: unknown;
+  sourceMatchBasis?: unknown;
+  source_match_accuracy?: unknown;
+  sourceMatchAccuracy?: unknown;
   batch?: unknown;
   payment_date?: unknown;
   paymentDate?: unknown;
@@ -197,6 +207,38 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
       encrypted: normalizedRow.account_number_encrypted ?? normalizedRow.accountNumberEncrypted,
     },
   });
+  const amount = formatCollectionAmountMyrString(normalizedRow.amount ?? 0);
+  const totalDueRaw = normalizedRow.total_due ?? normalizedRow.totalDue;
+  const totalDue = totalDueRaw === null || totalDueRaw === undefined
+    ? null
+    : formatCollectionAmountMyrString(totalDueRaw);
+  const billingPrincipalOspRaw = normalizedRow.billing_principal_osp
+    ?? normalizedRow.billingPrincipalOsp;
+  const billingPrincipalOsp = billingPrincipalOspRaw === null
+    || billingPrincipalOspRaw === undefined
+    ? null
+    : formatCollectionAmountMyrString(billingPrincipalOspRaw);
+  const totalDueCovered = totalDue === null
+    ? null
+    : parseCollectionAmountMyrNumber(amount) >= parseCollectionAmountMyrNumber(totalDue);
+  const matchBasisRaw = normalizedRow.source_match_basis ?? normalizedRow.sourceMatchBasis;
+  const sourceMatchBasis = matchBasisRaw === "ic" || matchBasisRaw === "phone_and_account"
+    ? matchBasisRaw
+    : null;
+  const matchAccuracyRaw = normalizedRow.source_match_accuracy ?? normalizedRow.sourceMatchAccuracy;
+  const matchAccuracyNumber = Number(matchAccuracyRaw);
+  const sourceMatchAccuracy = Number.isInteger(matchAccuracyNumber)
+    && matchAccuracyNumber >= 0
+    && matchAccuracyNumber <= 100
+    ? matchAccuracyNumber
+    : null;
+  const agingBucketRaw = String(normalizedRow.aging_bucket ?? normalizedRow.agingBucket ?? "").toUpperCase();
+  const agingBucket = agingBucketRaw === "D3"
+    || agingBucketRaw === "D4"
+    || agingBucketRaw === "D5"
+    || agingBucketRaw === "D6"
+    ? agingBucketRaw
+    : null;
 
   return {
     id: String(normalizedRow.id ?? ""),
@@ -212,9 +254,16 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
       (normalizedRow.source_import_name ?? normalizedRow.sourceImportName ?? null) as string | null,
     sourceFilename:
       (normalizedRow.source_filename ?? normalizedRow.sourceFilename ?? null) as string | null,
+    agingBucket,
+    totalDue,
+    billingPrincipalOsp,
+    sourceMatchBasis,
+    sourceMatchAccuracy,
+    totalDueCovered,
+    cpStatus: totalDueCovered === null ? "unverified" : totalDueCovered ? "abort_cp" : "cp",
     batch: String(normalizedRow.batch ?? "") as CollectionBatch,
     paymentDate,
-    amount: formatCollectionAmountMyrString(normalizedRow.amount ?? 0),
+    amount,
     receiptFile: (normalizedRow.receipt_file ?? normalizedRow.receiptFile ?? null) as string | null,
     receipts: [],
     archivedReceipts: [],

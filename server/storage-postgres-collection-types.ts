@@ -9,6 +9,9 @@ import type {
 } from "../shared/collection-daily-status";
 
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
+export type CollectionAgingBucket = "D3" | "D4" | "D5" | "D6";
+export type CollectionCpStatus = "cp" | "abort_cp" | "unverified";
+export type CollectionSourceMatchBasis = "ic" | "phone_and_account";
 
 export type CollectionReceiptValidationStatus =
   | "matched"
@@ -66,6 +69,13 @@ export type CollectionRecord = {
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
+  agingBucket?: CollectionAgingBucket | null;
+  totalDue?: CollectionAmountMyrString | null;
+  billingPrincipalOsp?: CollectionAmountMyrString | null;
+  sourceMatchBasis?: CollectionSourceMatchBasis | null;
+  sourceMatchAccuracy?: number | null;
+  totalDueCovered?: boolean | null;
+  cpStatus?: CollectionCpStatus;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrString;
@@ -266,6 +276,11 @@ export type CreateCollectionRecordInput = {
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
+  agingBucket?: CollectionAgingBucket | null;
+  totalDue?: CollectionAmountMyrNumber | null;
+  billingPrincipalOsp?: CollectionAmountMyrNumber | null;
+  sourceMatchBasis?: CollectionSourceMatchBasis | null;
+  sourceMatchAccuracy?: number | null;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrNumber;
@@ -308,6 +323,11 @@ export type UpdateCollectionRecordInput = {
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
+  agingBucket?: CollectionAgingBucket | null;
+  totalDue?: CollectionAmountMyrNumber | null;
+  billingPrincipalOsp?: CollectionAmountMyrNumber | null;
+  sourceMatchBasis?: CollectionSourceMatchBasis | null;
+  sourceMatchAccuracy?: number | null;
   batch?: CollectionBatch;
   paymentDate?: string;
   amount?: CollectionAmountMyrNumber;

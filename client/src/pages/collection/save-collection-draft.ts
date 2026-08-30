@@ -1,4 +1,4 @@
-import type { CollectionBatch } from "@/lib/api";
+import type { CollectionAgingBucket, CollectionBatch } from "@/lib/api";
 import { SAVE_COLLECTION_DRAFT_STORAGE_PREFIX } from "@/app/constants";
 import {
   getBrowserSessionStorage,
@@ -13,6 +13,7 @@ export type SaveCollectionDraft = {
   batch: CollectionBatch;
   paymentDate: string;
   amount: string;
+  agingBucket?: CollectionAgingBucket;
   hadPendingReceipts: boolean;
   savedAt: string;
 };
@@ -43,6 +44,7 @@ export function isSaveCollectionDraftEmpty(draft: Omit<SaveCollectionDraft, "sav
   return !draft.paymentDate.trim()
     && !draft.amount.trim()
     && draft.batch === "P10"
+    && (draft.agingBucket ?? "D3") === "D3"
     && !draft.hadPendingReceipts;
 }
 
@@ -64,11 +66,16 @@ export function parseSaveCollectionDraft(raw: string | null | undefined): SaveCo
   const batch = COLLECTION_BATCH_OPTIONS.includes(batchCandidate as CollectionBatch)
     ? batchCandidate as CollectionBatch
     : "P10";
+  const agingCandidate = normalizeDraftString(parsed.agingBucket, 8).toUpperCase();
+  const agingBucket = ["D3", "D4", "D5", "D6"].includes(agingCandidate)
+    ? agingCandidate as CollectionAgingBucket
+    : "D3";
 
   return {
     batch,
     paymentDate: normalizeDraftString(parsed.paymentDate, 32),
     amount: normalizeDraftString(parsed.amount, 64),
+    agingBucket,
     hadPendingReceipts: parsed.hadPendingReceipts === true,
     savedAt: normalizeDraftString(parsed.savedAt, 64),
   };
@@ -117,6 +124,7 @@ export function persistSaveCollectionDraft(
     batch: draft.batch,
     paymentDate: draft.paymentDate,
     amount: draft.amount,
+    agingBucket: draft.agingBucket ?? "D3",
     hadPendingReceipts: draft.hadPendingReceipts,
     savedAt: new Date().toISOString(),
   };

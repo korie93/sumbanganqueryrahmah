@@ -13,6 +13,7 @@ export type CollectionRouteDeps = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
+  searchRateLimiter?: RequestHandler;
 };
 
 export type CollectionRouteContext = {
@@ -21,6 +22,7 @@ export type CollectionRouteContext = {
   collectionService: CollectionService;
   reportAccess: RequestHandler[];
   recordMutationAccess: RequestHandler[];
+  sourceMatchAccess: RequestHandler[];
   superuserReportAccess: RequestHandler[];
   adminSummaryAccess: RequestHandler[];
   staffSummaryAccess: RequestHandler[];
@@ -49,6 +51,10 @@ export function createCollectionRouteContext(
     requireRole("user", "admin", "superuser"),
     requireTabAccess("collection-report"),
   ];
+  const sourceMatchAccess = [
+    ...recordMutationAccess,
+    ...(deps.searchRateLimiter ? [deps.searchRateLimiter] : []),
+  ];
   const superuserReportAccess = [
     authenticateToken,
     requireRole("superuser"),
@@ -71,6 +77,7 @@ export function createCollectionRouteContext(
     collectionService,
     reportAccess,
     recordMutationAccess,
+    sourceMatchAccess,
     superuserReportAccess,
     adminSummaryAccess,
     staffSummaryAccess,

@@ -4,6 +4,8 @@ import {
 } from "../../../shared/collection-amount-types";
 import {
   COLLECTION_BATCHES,
+  COLLECTION_AGING_BUCKETS,
+  COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH,
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
   isFutureCollectionDate,
   isValidCollectionDate,
@@ -19,6 +21,8 @@ export type NormalizedCollectionRecordFields = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId: string;
+  agingBucket: string;
   batch: string;
   paymentDate: string;
   collectionStaffNickname: string;
@@ -34,6 +38,8 @@ export function normalizeCollectionRecordFields(
     icNumber: normalizeCollectionText(body.icNumber),
     customerPhone: normalizeCollectionText(body.customerPhone),
     accountNumber: normalizeCollectionText(body.accountNumber),
+    sourceImportId: normalizeCollectionText(body.sourceImportId),
+    agingBucket: normalizeCollectionText(body.agingBucket).toUpperCase(),
     batch: normalizeCollectionText(body.batch).toUpperCase(),
     paymentDate: normalizeCollectionText(body.paymentDate),
     collectionStaffNickname: normalizeCollectionText(body.collectionStaffNickname),
@@ -57,6 +63,12 @@ export function assertValidCollectionCreateFields(
     throw badRequest("Customer Phone Number is invalid.");
   }
   if (!fields.accountNumber) throw badRequest("Account Number is required.");
+  if (fields.sourceImportId.length > COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH) {
+    throw badRequest("Saved source ID is invalid.");
+  }
+  if (fields.agingBucket && !COLLECTION_AGING_BUCKETS.has(fields.agingBucket)) {
+    throw badRequest("Aging must be D3, D4, D5, or D6.");
+  }
   if (!COLLECTION_BATCHES.has(fields.batch)) throw badRequest("Invalid batch value.");
   if (!fields.paymentDate || !isValidCollectionDate(fields.paymentDate)) {
     throw badRequest("Invalid payment date.");
@@ -99,6 +111,15 @@ export function buildCollectionRecordUpdateDraft(
   if (body.accountNumber !== undefined) {
     if (!fields.accountNumber) throw badRequest("Account Number cannot be empty.");
     updatePayload.accountNumber = fields.accountNumber;
+  }
+  if (body.sourceImportId !== undefined && fields.sourceImportId.length > COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH) {
+    throw badRequest("Saved source ID is invalid.");
+  }
+  if (body.agingBucket !== undefined) {
+    if (!COLLECTION_AGING_BUCKETS.has(fields.agingBucket)) {
+      throw badRequest("Aging must be D3, D4, D5, or D6.");
+    }
+    updatePayload.agingBucket = fields.agingBucket;
   }
   if (body.batch !== undefined) {
     if (!COLLECTION_BATCHES.has(fields.batch)) throw badRequest("Invalid batch value.");

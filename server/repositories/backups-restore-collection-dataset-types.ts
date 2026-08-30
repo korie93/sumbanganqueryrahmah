@@ -9,6 +9,11 @@ export type RestorableCollectionRecordRow = {
   sourceDataRowId: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
+  agingBucket: "D3" | "D4" | "D5" | "D6" | null;
+  totalDue: number | null;
+  billingPrincipalOsp: number | null;
+  sourceMatchBasis: "ic" | "phone_and_account" | null;
+  sourceMatchAccuracy: number | null;
   batch: string;
   paymentDate: string;
   amount: number;

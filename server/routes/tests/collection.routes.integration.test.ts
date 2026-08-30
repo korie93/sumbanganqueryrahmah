@@ -326,8 +326,9 @@ test("POST /api/collection creates a collection record and writes an audit log",
         paymentDate: "2026-03-15",
         amount: 245.9,
         collectionStaffNickname: "Collector Alpha",
-        sourceImportId: "client-controlled-import",
+        sourceImportId: "import-1",
         sourceDataRowId: "client-controlled-row",
+        agingBucket: "D4",
       }),
     });
 
@@ -340,11 +341,19 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(payload.record.sourceDataRowId, "saved-row-1");
     assert.equal(payload.record.sourceImportName, "NPL CC P10 JULY");
     assert.equal(payload.record.sourceFilename, "npl-cc-p10-july.xlsx");
+    assert.equal(payload.record.totalDue, "200.00");
+    assert.equal(payload.record.billingPrincipalOsp, "180.00");
+    assert.equal(payload.record.cpStatus, "abort_cp");
+    assert.equal(payload.record.agingBucket, "D4");
     assert.equal(createCalls.length, 1);
     assert.equal(createCalls[0].sourceImportId, "import-1");
     assert.equal(createCalls[0].sourceDataRowId, "saved-row-1");
     assert.equal(createCalls[0].sourceImportName, "NPL CC P10 JULY");
     assert.equal(createCalls[0].sourceFilename, "npl-cc-p10-july.xlsx");
+    assert.equal(createCalls[0].totalDue, 200);
+    assert.equal(createCalls[0].billingPrincipalOsp, 180);
+    assert.equal(createCalls[0].sourceMatchAccuracy, 100);
+    assert.equal(createCalls[0].agingBucket, "D4");
     assert.equal(createCalls[0].createdByLogin, "staff.user");
     assert.equal(createCalls[0].amount, 245.9);
     assert.equal(auditLogs.length, 1);
@@ -402,6 +411,97 @@ test("POST /api/collection saves safely without provenance when no Saved row mat
     assert.equal(payload.record.sourceImportId, null);
     assert.equal(payload.record.sourceDataRowId, null);
     assert.equal(createCalls.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection rejects a selected Saved file that no longer matches", async () => {
+  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Bob Lee",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        sourceImportId: "client-spoofed-import",
+        agingBucket: "D3",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 245.9,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_MATCH_STALE");
+    assert.equal(createCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection/source-matches returns only server-owned match details", async () => {
+  const { storage, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+  let limiterCalls = 0;
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+    searchRateLimiter: (_req, _res, next) => {
+      limiterCalls += 1;
+      next();
+    },
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/source-matches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Bob Lee",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(limiterCalls, 1);
+    assert.equal(payload.matches.length, 1);
+    assert.equal(payload.matches[0].sourceImportId, "import-1");
+    assert.equal(payload.matches[0].totalDue, "200.00");
+    assert.equal(payload.matches[0].billingPrincipalOsp, "180.00");
+    assert.equal(payload.matches[0].matchAccuracy, 100);
+    assert.equal("rowId" in payload.matches[0], false);
+    assert.equal(auditLogs[auditLogs.length - 1]?.action, "COLLECTION_SOURCE_MATCH_PREVIEW");
   } finally {
     await stopTestServer(server);
   }

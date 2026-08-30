@@ -62,6 +62,11 @@ export type BackupCollectionRecord = {
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
   sourceFilename?: string | null;
+  agingBucket?: string | null;
+  totalDue?: BackupAmountMyr | null;
+  billingPrincipalOsp?: BackupAmountMyr | null;
+  sourceMatchBasis?: string | null;
+  sourceMatchAccuracy?: number | null;
   batch: string;
   paymentDate: string;
   amount: BackupAmountMyr;

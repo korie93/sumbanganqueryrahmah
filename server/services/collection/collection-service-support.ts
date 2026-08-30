@@ -41,6 +41,7 @@ export type CollectionStoragePort = Pick<
   | "getCollectionStaffNicknameByName"
   | "getCollectionStaffNicknames"
   | "findSavedCollectionSourceForRecord"
+  | "findSavedCollectionSourcesForRecord"
   | "getUser"
   | "getUserByUsername"
   | "isCollectionStaffNicknameActive"

@@ -13,6 +13,11 @@ import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/co
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { ViewAllRecordsDialogProps } from "@/pages/collection-records/ViewAllRecordsDialog";
+import {
+  formatCollectionOptionalAmount,
+  getCollectionCpStatusLabel,
+  getCollectionMatchAccuracyLabel,
+} from "@/pages/collection-records/collection-coverage";
 
 type ViewAllRecordsDesktopTableProps = Pick<
   ViewAllRecordsDialogProps,
@@ -31,7 +36,7 @@ export function ViewAllRecordsDesktopTable({
   onViewReceipt,
 }: ViewAllRecordsDesktopTableProps) {
   return (
-    <Table className="min-w-[1260px] text-sm">
+    <Table className="min-w-[1840px] text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">No.</TableHead>
@@ -41,6 +46,11 @@ export function ViewAllRecordsDesktopTable({
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Phone Number</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Batch</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Amount</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">TOTAL DUE</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Billing Principal (OSP)</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">CP Status</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Aging</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Match</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Payment Date</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Receipt</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Staff Nickname</TableHead>
@@ -50,13 +60,13 @@ export function ViewAllRecordsDesktopTable({
       <TableBody>
         {loading ? (
           <TableRow>
-            <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">
+            <TableCell colSpan={16} className="py-6 text-center text-muted-foreground">
               Loading full records...
             </TableCell>
           </TableRow>
         ) : viewAllRecords.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">
+            <TableCell colSpan={16} className="py-6 text-center text-muted-foreground">
               Tiada rekod dalam julat tarikh yang dipilih.
             </TableCell>
           </TableRow>
@@ -80,6 +90,11 @@ export function ViewAllRecordsDesktopTable({
               <TableCell className="py-2">{record.customerPhone}</TableCell>
               <TableCell className="py-2">{record.batch}</TableCell>
               <TableCell className="py-2 font-semibold text-emerald-700 dark:text-emerald-300">{formatAmountRM(record.amount)}</TableCell>
+              <TableCell className="py-2">{formatCollectionOptionalAmount(record.totalDue)}</TableCell>
+              <TableCell className="py-2">{formatCollectionOptionalAmount(record.billingPrincipalOsp)}</TableCell>
+              <TableCell className="py-2 font-medium">{getCollectionCpStatusLabel(record)}</TableCell>
+              <TableCell className="py-2">{record.agingBucket || "-"}</TableCell>
+              <TableCell className="py-2">{getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy)}</TableCell>
               <TableCell className="py-2">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
               <TableCell className="py-2">
                 {(record.receipts?.length || 0) > 0 ? (

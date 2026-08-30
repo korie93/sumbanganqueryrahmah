@@ -7,6 +7,11 @@ import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
+import {
+  formatCollectionOptionalAmount,
+  getCollectionCpStatusLabel,
+  getCollectionMatchAccuracyLabel,
+} from "@/pages/collection-records/collection-coverage";
 
 const CollectionRecordsDesktopTable = lazy(() =>
   import("@/pages/collection-records/CollectionRecordsDesktopTable").then((module) => ({
@@ -104,6 +109,22 @@ export function CollectionRecordsTable({
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Batch</dt>
                   <dd>{record.batch || "-"}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">TOTAL DUE</dt>
+                  <dd>{formatCollectionOptionalAmount(record.totalDue)}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Billing Principal (OSP)</dt>
+                  <dd>{formatCollectionOptionalAmount(record.billingPrincipalOsp)}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">CP Status</dt>
+                  <dd className="font-medium">{getCollectionCpStatusLabel(record)}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Aging / Match</dt>
+                  <dd>{record.agingBucket || "-"} / {getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy)}</dd>
                 </div>
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Staff Nickname</dt>

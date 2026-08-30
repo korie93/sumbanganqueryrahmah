@@ -46,6 +46,7 @@ export type SavedCollectionSourceLookup = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  sourceImportId?: string | null;
 };
 
 export type SavedCollectionSourceCandidate = {
@@ -63,7 +64,18 @@ export type SavedCollectionSourceMatch = {
   sourceImportName: string | null;
   sourceFilename: string | null;
   matchBasis: "ic" | "phone_and_account";
+  matchAccuracy: number;
+  matchedFields: SavedCollectionMatchField[];
+  comparedFields: SavedCollectionMatchField[];
+  totalDue: string | null;
+  billingPrincipalOsp: string | null;
 };
+
+export type SavedCollectionMatchField =
+  | "customer_name"
+  | "ic_number"
+  | "customer_phone"
+  | "account_number";
 
 export type SearchCollectionViewerScope =
   | { kind: "all" }

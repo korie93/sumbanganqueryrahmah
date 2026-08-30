@@ -438,6 +438,7 @@ test("SearchRepository.findSavedCollectionSourceForRecord uses bounded parameter
       icNumber: "931120115437",
       customerPhone: "0123456789",
       accountNumber: "ACC1001'; DROP TABLE imports; --",
+      sourceImportId: "import-1'; DROP TABLE data_rows; --",
     });
 
     assert.equal(rawQueries.length, 1);
@@ -447,11 +448,19 @@ test("SearchRepository.findSavedCollectionSourceForRecord uses bounded parameter
       sourceImportName: "NPL JULY",
       sourceFilename: "july.xlsx",
       matchBasis: "ic",
+      matchAccuracy: 100,
+      matchedFields: ["customer_name", "ic_number", "customer_phone", "account_number"],
+      comparedFields: ["customer_name", "ic_number", "customer_phone", "account_number"],
+      totalDue: null,
+      billingPrincipalOsp: null,
     });
     const sqlText = collectSqlText(rawQueries[0]);
     assert.doesNotMatch(sqlText, /DROP TABLE imports/i);
     assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
       typeof value === "string" && value.includes("931120115437"),
+    ));
+    assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
+      value === "import-1'; DROP TABLE data_rows; --",
     ));
   } finally {
     (db as unknown as { execute: typeof db.execute }).execute = originalExecute;
