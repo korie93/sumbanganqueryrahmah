@@ -52,6 +52,35 @@ test("UI smoke pairs login submission with its response without a dangling rejec
   assert.doesNotMatch(smokeSource, /const loginResponsePromise = page\.waitForResponse/);
 });
 
+test("collection receipt smoke verifies Saved coverage before submitting the required source", () => {
+  const sourceMatchIndex = smokeSource.indexOf(
+    'page.getByRole("button", { name: "Semak Matching" }).click()',
+  );
+  const createWaitIndex = smokeSource.indexOf("const createResponsePromise", sourceMatchIndex);
+  const saveIndex = smokeSource.indexOf(
+    'page.getByRole("button", { name: "Save Collection" }).click()',
+    createWaitIndex,
+  );
+
+  assert.match(smokeSource, /"TOTAL DUE": "12\.34"/);
+  assert.match(smokeSource, /"Billing Principal \(OSP\)": "10\.00"/);
+  assert.match(
+    smokeSource,
+    /new URL\(response\.url\(\)\)\.pathname === "\/api\/collection\/source-matches"/,
+  );
+  assert.match(
+    smokeSource,
+    /document\.querySelector\("#save-collection-source-match"\)\?\.value === expectedSourceImportId/,
+  );
+  assert.match(
+    smokeSource,
+    /page\.getByLabel\("Aging", \{ exact: true \}\)\.selectOption\("D6"\)/,
+  );
+  assert.match(smokeSource, /page\.getByText\("Abort CP", \{ exact: true \}\)/);
+  assert.ok(sourceMatchIndex >= 0 && sourceMatchIndex < createWaitIndex);
+  assert.ok(createWaitIndex < saveIndex);
+});
+
 test("backup smoke consumes only recovered GET list rate limits after the destructive flow succeeds", () => {
   const consumeCallIndex = smokeSource.indexOf("consumeExpectedRecoveredBackupListRateLimit(tracker);");
   const backupDeletedIndex = smokeSource.indexOf("backupDeleted = true;", consumeCallIndex - 1_000);

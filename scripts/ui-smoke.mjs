@@ -614,6 +614,8 @@ const createCollectionSmokeSourceImport = async (context, values) => {
         "Customer Phone Number": values.customerPhone,
         "Account Number": `LEGACY-${values.uniqueSuffix}`,
         "Card No": values.accountNumber,
+        "TOTAL DUE": "12.34",
+        "Billing Principal (OSP)": "10.00",
       }, {
         "Customer Name": `Smoke No Collection ${values.uniqueSuffix}`,
         "IC Number": `810202${values.uniqueSuffix.slice(-6)}`,
@@ -1203,14 +1205,54 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       buttonTestId: "save-collection-payment-date",
     });
     await getInputByLabel(page, "Amount (RM)").fill("12.34");
+    await page.getByLabel("Aging", { exact: true }).selectOption("D6");
     await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
     await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
     await fillReceiptAmountInput(page, "12.34");
 
+    const [sourceMatchResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST"
+          && new URL(response.url()).pathname === "/api/collection/source-matches",
+      ),
+      page.getByRole("button", { name: "Semak Matching" }).click(),
+    ]);
+    const sourceMatchRawText = await sourceMatchResponse.text();
+    const sourceMatchPayload = sourceMatchRawText ? JSON.parse(sourceMatchRawText) : {};
+    assert(
+      sourceMatchResponse.status() === 200,
+      [
+        `collection receipt UI smoke should match a Saved source with HTTP 200, got ${sourceMatchResponse.status()}`,
+        `response body: ${sourceMatchRawText || "(empty)"}`,
+      ].join("\n"),
+    );
+    const matchedSource = Array.isArray(sourceMatchPayload?.matches)
+      ? sourceMatchPayload.matches.find((match) => match?.sourceImportId === sourceImport.id)
+      : null;
+    assert(matchedSource, "collection receipt UI smoke should find its Saved source import");
+    assert(
+      String(matchedSource.totalDue || "") === "12.34",
+      "collection receipt UI smoke should receive TOTAL DUE from the Saved source",
+    );
+
+    const sourceSelect = page.getByLabel("Verified Saved Source");
+    await sourceSelect.waitFor({ state: "visible", timeout: 15_000 });
+    await page.waitForFunction(
+      (expectedSourceImportId) =>
+        document.querySelector("#save-collection-source-match")?.value === expectedSourceImportId,
+      sourceImport.id,
+    );
+    assert(
+      await sourceSelect.inputValue() === sourceImport.id,
+      "collection receipt UI smoke should select the verified Saved source",
+    );
+    await page.getByText("Abort CP", { exact: true }).waitFor({ timeout: 15_000 });
+
     const createResponsePromise = page.waitForResponse(
       (response) =>
         response.request().method() === "POST"
-        && response.url().includes("/api/collection"),
+        && new URL(response.url()).pathname === "/api/collection",
     );
     await page.getByRole("button", { name: "Save Collection" }).click();
     const createResponse = await createResponsePromise;
@@ -1231,11 +1273,21 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     assert(expectedUpdatedAt, "collection receipt UI smoke should capture the created record version");
     assert(
       String(createPayload?.record?.sourceImportId || "").trim() === sourceImport.id,
-      "collection receipt UI smoke should auto-link the matching Saved source import",
+      "collection receipt UI smoke should persist the selected verified Saved source import",
     );
     assert(
       String(createPayload?.record?.sourceDataRowId || "").trim(),
-      "collection receipt UI smoke should auto-link the exact matching Saved data row",
+      "collection receipt UI smoke should server-link the exact matching Saved data row",
+    );
+    assert(
+      createPayload?.record?.agingBucket === "D6",
+      "collection receipt UI smoke should persist the selected Aging bucket",
+    );
+    assert(
+      createPayload?.record?.totalDue === "12.34"
+      && createPayload?.record?.billingPrincipalOsp === "10.00"
+      && createPayload?.record?.cpStatus === "abort_cp",
+      "collection receipt UI smoke should persist Saved coverage and derive Abort CP at TOTAL DUE",
     );
     await page.waitForTimeout(250);
 
