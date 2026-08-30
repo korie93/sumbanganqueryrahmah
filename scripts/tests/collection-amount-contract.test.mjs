@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   COLLECTION_AMOUNT_CONTRACT_REQUIREMENTS,
   formatCollectionAmountContractReport,
+  loadCollectionAmountContractFiles,
   validateCollectionAmountContract,
 } from "../lib/collection-amount-contract.mjs";
 
@@ -26,6 +27,28 @@ test("collection amount contract validation accepts repositories that preserve e
     validation.summary.snippetCount,
     COLLECTION_AMOUNT_CONTRACT_REQUIREMENTS.reduce((total, requirement) => total + requirement.checks.length, 0),
   );
+});
+
+test("live repository preserves every collection amount boundary marker", () => {
+  const validation = validateCollectionAmountContract({
+    filesByPath: loadCollectionAmountContractFiles(),
+  });
+
+  assert.deepEqual(validation.failures, []);
+});
+
+test("collection amount contract validation requires the hoisted MYR formatter", () => {
+  const filesByPath = buildCompliantFilesByPath();
+  filesByPath["server/repositories/collection-repository-mappers.ts"] =
+    filesByPath["server/repositories/collection-repository-mappers.ts"].replace(
+      "const amount = formatCollectionAmountMyrString(normalizedRow.amount ?? 0);",
+      "const amount = String(normalizedRow.amount ?? 0);",
+    );
+
+  const validation = validateCollectionAmountContract({ filesByPath });
+
+  assert.equal(validation.failures.length, 1);
+  assert.match(validation.failures[0], /maps collection record amount via MYR formatter/i);
 });
 
 test("collection amount contract validation flags missing required files", () => {

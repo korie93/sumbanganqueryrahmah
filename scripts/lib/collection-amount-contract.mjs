@@ -111,7 +111,7 @@ export const COLLECTION_AMOUNT_CONTRACT_REQUIREMENTS = Object.freeze([
     checks: Object.freeze([
       {
         label: "maps collection record amount via MYR formatter",
-        snippet: "amount: formatCollectionAmountMyrString(normalizedRow.amount ?? 0),",
+        snippet: "const amount = formatCollectionAmountMyrString(normalizedRow.amount ?? 0);",
       },
       {
         label: "maps receipt totals from cents into MYR strings",
