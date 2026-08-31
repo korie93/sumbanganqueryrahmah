@@ -1,6 +1,11 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { User } from "@/app/types";
-import { getImports } from "@/lib/api";
+import {
+  getSavedImportCount,
+  SAVED_IMPORTS_CHANGED_EVENT,
+} from "@/lib/api/imports";
+
+const SAVED_COUNT_REFRESH_DEBOUNCE_MS = 150;
 
 type UseAppShellSavedCountArgs = {
   currentPage: string;
@@ -8,50 +13,100 @@ type UseAppShellSavedCountArgs = {
   user: User | null;
 };
 
-export function useAppShellSavedCount({
-  currentPage,
-  setSavedCount,
-  user,
-}: UseAppShellSavedCountArgs) {
-  useEffect(() => {
-    let cancelled = false;
+type SavedCountSyncRuntimeOptions = {
+  cancelScheduledRefresh?: ((handle: unknown) => void) | undefined;
+  eventTarget: Pick<EventTarget, "addEventListener" | "removeEventListener">;
+  fetchCount: (signal: AbortSignal) => Promise<number>;
+  onCount: (count: number) => void;
+  scheduleRefresh?: ((callback: () => void) => unknown) | undefined;
+};
+
+export function startSavedCountSyncRuntime({
+  cancelScheduledRefresh = (handle) => {
+    globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>);
+  },
+  eventTarget,
+  fetchCount,
+  onCount,
+  scheduleRefresh = (callback) => globalThis.setTimeout(
+    callback,
+    SAVED_COUNT_REFRESH_DEBOUNCE_MS,
+  ),
+}: SavedCountSyncRuntimeOptions) {
+  let activeController: AbortController | null = null;
+  let scheduledRefresh: unknown = null;
+  let stopped = false;
+
+  const syncSavedCount = async () => {
+    activeController?.abort();
     const controller = new AbortController();
+    activeController = controller;
 
-    const syncSavedCount = async () => {
-      if (!user || user.role === "user" || user.role === "manager") {
-        if (!cancelled) {
-          setSavedCount(0);
-        }
-        return;
+    try {
+      const count = await fetchCount(controller.signal);
+      if (!stopped && !controller.signal.aborted && activeController === controller) {
+        onCount(count);
       }
-
-      if (currentPage === "saved") {
-        return;
+    } catch {
+      // Keep the last known badge value on transient failures such as rate limiting.
+    } finally {
+      if (activeController === controller) {
+        activeController = null;
       }
+    }
+  };
 
-      try {
-        const data = await getImports({ limit: 1, signal: controller.signal });
-        if (!cancelled) {
-          setSavedCount(
-            typeof data?.pagination?.total === "number"
-              ? data.pagination.total
-              : (data.imports?.length || 0),
-          );
-        }
-      } catch {
-        if (controller.signal.aborted) {
-          return;
-        }
-        if (!cancelled) {
-          setSavedCount(0);
-        }
-      }
-    };
-
+  const runScheduledRefresh = () => {
+    scheduledRefresh = null;
     void syncSavedCount();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [currentPage, setSavedCount, user]);
+  };
+
+  const scheduleSavedCountRefresh = () => {
+    if (stopped) {
+      return;
+    }
+    if (scheduledRefresh !== null) {
+      cancelScheduledRefresh(scheduledRefresh);
+    }
+    scheduledRefresh = scheduleRefresh(runScheduledRefresh);
+  };
+
+  eventTarget.addEventListener(
+    SAVED_IMPORTS_CHANGED_EVENT,
+    scheduleSavedCountRefresh,
+  );
+  void syncSavedCount();
+
+  return () => {
+    stopped = true;
+    eventTarget.removeEventListener(
+      SAVED_IMPORTS_CHANGED_EVENT,
+      scheduleSavedCountRefresh,
+    );
+    if (scheduledRefresh !== null) {
+      cancelScheduledRefresh(scheduledRefresh);
+      scheduledRefresh = null;
+    }
+    activeController?.abort();
+    activeController = null;
+  };
+}
+
+export function useAppShellSavedCount(args: UseAppShellSavedCountArgs) {
+  const savedCountIdentity = args.user?.id || args.user?.username || null;
+  const setSavedCount = args.setSavedCount;
+  const userRole = args.user?.role || null;
+
+  useEffect(() => {
+    if (!savedCountIdentity || userRole === "user" || userRole === "manager") {
+      setSavedCount(0);
+      return;
+    }
+
+    return startSavedCountSyncRuntime({
+      eventTarget: window,
+      fetchCount: (signal) => getSavedImportCount({ signal }),
+      onCount: setSavedCount,
+    });
+  }, [savedCountIdentity, setSavedCount, userRole]);
 }

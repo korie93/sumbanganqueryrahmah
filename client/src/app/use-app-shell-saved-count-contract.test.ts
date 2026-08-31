@@ -7,9 +7,27 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const source = readFileSync(path.join(repoRoot, "client/src/app/useAppShellSavedCount.ts"), "utf8");
 
-test("app shell saved-count probe is cancellable and skips the saved page", () => {
+test("app shell saved-count probe is cancellable and independent of page navigation", () => {
   assert.match(source, /new AbortController\(\)/);
-  assert.match(source, /signal:\s*controller\.signal/);
-  assert.match(source, /controller\.abort\(\)/);
-  assert.match(source, /currentPage\s*===\s*"saved"/);
+  assert.match(source, /activeController\?\.abort\(\)/);
+  assert.match(source, /getSavedImportCount\(\{ signal \}\)/);
+  assert.match(
+    source,
+    /\}, \[savedCountIdentity, setSavedCount, userRole\]\);/,
+  );
+  assert.doesNotMatch(source, /currentPage\s*===/);
+  assert.doesNotMatch(source, /\[[^\]]*currentPage[^\]]*\]/);
+});
+
+test("app shell saved-count refresh is mutation-driven and cleans up listeners and timers", () => {
+  assert.match(
+    source,
+    /eventTarget\.addEventListener\(\s*SAVED_IMPORTS_CHANGED_EVENT,/,
+  );
+  assert.match(
+    source,
+    /eventTarget\.removeEventListener\(\s*SAVED_IMPORTS_CHANGED_EVENT,/,
+  );
+  assert.match(source, /SAVED_COUNT_REFRESH_DEBOUNCE_MS\s*=\s*150/);
+  assert.match(source, /cancelScheduledRefresh\(scheduledRefresh\)/);
 });

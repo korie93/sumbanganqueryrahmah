@@ -1,4 +1,5 @@
 import { apiRequest } from "../api-client";
+import type { ApiRetryOptions } from "../api-client-retry";
 import { createClientRandomId } from "../secure-id";
 import { parseApiJson } from "./contract";
 import {
@@ -17,6 +18,8 @@ import type { ImportComparisonCategory } from "@shared/common/import-comparison-
 
 const IMPORT_UPLOAD_TIMEOUT_MS = 5 * 60_000 + 30_000;
 
+export const SAVED_IMPORTS_CHANGED_EVENT = "saved-imports-changed";
+
 type ImportRequestOptions = {
   cursor?: string | undefined;
   limit?: number | undefined;
@@ -28,6 +31,7 @@ type ImportRequestOptions = {
   minRows?: number | undefined;
   maxRows?: number | undefined;
   view?: "all" | "recent" | "large" | "duplicates" | "review" | undefined;
+  retry?: ApiRetryOptions | undefined;
   signal?: AbortSignal | undefined;
 };
 
@@ -85,6 +89,29 @@ function buildImportMutationHeaders(options?: ImportMutationRequestOptions) {
   return headers;
 }
 
+function notifySavedImportsChanged() {
+  if (
+    typeof window === "undefined"
+    || typeof window.dispatchEvent !== "function"
+  ) {
+    return;
+  }
+
+  window.dispatchEvent(new Event(SAVED_IMPORTS_CHANGED_EVENT));
+}
+
+function notifyIfImportCompleted(
+  result: Awaited<ReturnType<typeof parseImportMutationResult>>,
+) {
+  if (!("job" in result) || result.job.status === "completed") {
+    notifySavedImportsChanged();
+  }
+}
+
+function parseImportMutationResult(response: Response) {
+  return parseApiJson(response, importMutationResultSchema, "/api/imports");
+}
+
 export function createImportMutationIdempotencyKey() {
   return createClientRandomId("import");
 }
@@ -134,6 +161,18 @@ export async function getImports(options?: ImportRequestOptions) {
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   const response = await apiRequest("GET", `/api/imports${suffix}`, undefined, options);
   return parseApiJson(response, importsListResponseSchema, "/api/imports");
+}
+
+export async function getSavedImportCount(options?: Pick<ImportRequestOptions, "signal">) {
+  const data = await getImports({
+    limit: 1,
+    retry: false,
+    ...(options?.signal ? { signal: options.signal } : {}),
+  });
+
+  return typeof data.pagination.total === "number"
+    ? data.pagination.total
+    : data.imports.length;
 }
 
 export async function getImportSummary(id: string, options?: ImportRequestOptions) {
@@ -203,7 +242,9 @@ export async function createImport(
       headers: buildImportMutationHeaders(options),
     },
   );
-  return parseApiJson(response, importMutationResultSchema, "/api/imports");
+  const result = await parseImportMutationResult(response);
+  notifyIfImportCompleted(result);
+  return result;
 }
 
 export async function createImportFromFile(
@@ -229,7 +270,9 @@ export async function createImportFromFile(
       timeoutMs: IMPORT_UPLOAD_TIMEOUT_MS,
     },
   );
-  return parseApiJson(response, importMutationResultSchema, "/api/imports");
+  const result = await parseImportMutationResult(response);
+  notifyIfImportCompleted(result);
+  return result;
 }
 
 export async function getImportJob(jobId: string, options?: ImportRequestOptions) {
@@ -239,7 +282,15 @@ export async function getImportJob(jobId: string, options?: ImportRequestOptions
     undefined,
     options,
   );
-  return parseApiJson(response, importBackgroundJobSchema, `/api/import-jobs/${jobId}`);
+  const job = await parseApiJson(
+    response,
+    importBackgroundJobSchema,
+    `/api/import-jobs/${jobId}`,
+  );
+  if (job.status === "completed") {
+    notifySavedImportsChanged();
+  }
+  return job;
 }
 
 export async function cancelImportJob(jobId: string, options?: ImportRequestOptions) {
@@ -259,12 +310,26 @@ export async function resumeImportJob(jobId: string, options?: ImportRequestOpti
     undefined,
     options,
   );
-  return parseApiJson(response, importBackgroundJobSchema, `/api/import-jobs/${jobId}/resume`);
+  const job = await parseApiJson(
+    response,
+    importBackgroundJobSchema,
+    `/api/import-jobs/${jobId}/resume`,
+  );
+  if (job.status === "completed") {
+    notifySavedImportsChanged();
+  }
+  return job;
 }
 
 export async function deleteImport(id: string, options?: ImportRequestOptions) {
   const response = await apiRequest("DELETE", `/api/imports/${id}`, undefined, options);
-  return parseApiJson(response, deleteImportResponseSchema, `/api/imports/${id}`);
+  const result = await parseApiJson(
+    response,
+    deleteImportResponseSchema,
+    `/api/imports/${id}`,
+  );
+  notifySavedImportsChanged();
+  return result;
 }
 
 export async function renameImport(id: string, name: string, options?: ImportRequestOptions) {
