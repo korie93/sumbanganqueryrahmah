@@ -289,13 +289,23 @@ function buildSavedCollectionSourceMatches(
     }];
   });
 
-  ranked.sort((left, right) =>
-    right.rankScore - left.rankScore
-    || right.timestamp - left.timestamp
-    || right.rowId.localeCompare(left.rowId),
-  );
-
   return ranked;
+}
+
+type RankedSavedCollectionSourceMatch = ReturnType<typeof buildSavedCollectionSourceMatches>[number];
+
+function compareSavedCollectionSourceMatches(
+  left: RankedSavedCollectionSourceMatch,
+  right: RankedSavedCollectionSourceMatch,
+): number {
+  return right.rankScore - left.rankScore
+    || right.matchAccuracy - left.matchAccuracy
+    // Only prefer a usable TOTAL DUE after identity strength and accuracy tie.
+    // This prevents a duplicate blank financial row from hiding an equally
+    // verified row without allowing weaker identity evidence to win.
+    || Number(right.totalDue !== null) - Number(left.totalDue !== null)
+    || right.timestamp - left.timestamp
+    || right.rowId.localeCompare(left.rowId);
 }
 
 export function selectSavedCollectionSourceMatches(
@@ -303,7 +313,8 @@ export function selectSavedCollectionSourceMatches(
   candidates: SavedCollectionSourceCandidate[],
   limit = MAX_SAVED_COLLECTION_SOURCE_MATCHES,
 ): SavedCollectionSourceMatch[] {
-  const matches = buildSavedCollectionSourceMatches(input, candidates);
+  const matches = buildSavedCollectionSourceMatches(input, candidates)
+    .sort(compareSavedCollectionSourceMatches);
   const selectedImportIds = new Set<string>();
   const boundedLimit = Math.max(1, Math.min(limit, MAX_SAVED_COLLECTION_SOURCE_MATCHES));
   const result: SavedCollectionSourceMatch[] = [];
@@ -323,7 +334,8 @@ export function selectSavedCollectionSourceMatch(
   input: SavedCollectionSourceLookup,
   candidates: SavedCollectionSourceCandidate[],
 ): SavedCollectionSourceMatch | null {
-  const selected = buildSavedCollectionSourceMatches(input, candidates)[0];
+  const selected = buildSavedCollectionSourceMatches(input, candidates)
+    .sort(compareSavedCollectionSourceMatches)[0];
   if (!selected) return null;
 
   const { rankScore: _rankScore, timestamp: _timestamp, ...match } = selected;

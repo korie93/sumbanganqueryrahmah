@@ -80,23 +80,34 @@ export class CollectionRecordUpdateOperations {
         updatePayload.collectionStaffNickname = updateDraft.nextCollectionStaffNickname;
       }
 
-      const identityChanged = ["customerName", "icNumber", "customerPhone", "accountNumber"]
-        .some((field) => Object.prototype.hasOwnProperty.call(updatePayload, field));
+      const identityFields = ["customerName", "icNumber", "customerPhone", "accountNumber"] as const;
+      const identityChanged = identityFields.some((field) => (
+        Object.prototype.hasOwnProperty.call(updatePayload, field)
+        && String(updatePayload[field] ?? "").trim() !== String(existing[field] ?? "").trim()
+      ));
       const sourceSelectionChanged = body.sourceImportId !== undefined;
       const shouldRematchSource = identityChanged || sourceSelectionChanged;
+      const selectedSourceImportId = sourceSelectionChanged
+        ? fields.sourceImportId
+        : String(existing.sourceImportId || "").trim();
+      if (shouldRematchSource && !selectedSourceImportId) {
+        throw badRequest(
+          "Select and verify a Saved source when changing customer identity or source.",
+          "COLLECTION_SOURCE_REQUIRED",
+        );
+      }
       const sourceMatch = shouldRematchSource
         ? await this.storage.findSavedCollectionSourceForRecord({
             customerName: String(updatePayload.customerName ?? existing.customerName),
             icNumber: String(updatePayload.icNumber ?? existing.icNumber),
             customerPhone: String(updatePayload.customerPhone ?? existing.customerPhone),
             accountNumber: String(updatePayload.accountNumber ?? existing.accountNumber),
-            sourceImportId: sourceSelectionChanged ? fields.sourceImportId || null : null,
+            sourceImportId: selectedSourceImportId,
           })
         : null;
       if (
-        fields.sourceImportId
-        && shouldRematchSource
-        && (!sourceMatch || sourceMatch.sourceImportId !== fields.sourceImportId)
+        shouldRematchSource
+        && (!sourceMatch || sourceMatch.sourceImportId !== selectedSourceImportId)
       ) {
         throw badRequest(
           "The selected Saved file no longer contains a matching customer row. Run matching again.",
@@ -109,7 +120,7 @@ export class CollectionRecordUpdateOperations {
       const matchedBillingPrincipalOsp = sourceMatch?.billingPrincipalOsp == null
         ? null
         : parseCollectionAmountMyrInput(sourceMatch.billingPrincipalOsp, { allowZero: true });
-      if (fields.sourceImportId && shouldRematchSource && matchedTotalDue === null) {
+      if (shouldRematchSource && matchedTotalDue === null) {
         throw badRequest(
           "The matched Saved row does not contain a valid TOTAL DUE value.",
           "COLLECTION_SOURCE_TOTAL_DUE_MISSING",

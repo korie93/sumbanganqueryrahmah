@@ -4,6 +4,7 @@ import {
   type SaveCollectionFieldErrors,
   type SaveCollectionFieldName,
   type SaveCollectionFormValues,
+  getSaveCollectionReadiness,
   validateSaveCollectionFormFields,
 } from "@/pages/collection/save-collection-page-utils";
 import type { SaveCollectionRestoredFormValues } from "@/pages/collection/save-collection-state-utils";
@@ -54,6 +55,7 @@ export function useSaveCollectionFormState({
     sourceImportId,
     staffNickname,
   ]);
+  const readiness = useMemo(() => getSaveCollectionReadiness(values), [values]);
 
   const applyRestoredFormValues = useCallback((restored: SaveCollectionRestoredFormValues) => {
     setCustomerName(restored.customerName);
@@ -94,6 +96,29 @@ export function useSaveCollectionFormState({
 
   const applyFieldErrors = useCallback((errors: SaveCollectionFieldErrors) => {
     setFieldErrors(errors);
+  }, []);
+
+  const applyIdentityFieldErrors = useCallback((errors: SaveCollectionFieldErrors) => {
+    setFieldErrors((current) => {
+      const next = { ...current };
+      const identityFields = [
+        "customerName",
+        "icNumber",
+        "customerPhone",
+        "accountNumber",
+      ] as const;
+
+      identityFields.forEach((field) => {
+        const message = errors[field];
+        if (message) {
+          next[field] = message;
+        } else {
+          delete next[field];
+        }
+      });
+
+      return next;
+    });
   }, []);
 
   const setCustomerNameInput = useCallback((value: string) => {
@@ -154,6 +179,7 @@ export function useSaveCollectionFormState({
     maxPaymentDate,
     isPaymentDateInFuture,
     fieldErrors,
+    readiness,
     values,
     setCustomerName: setCustomerNameInput,
     setIcNumber: setIcNumberInput,
@@ -166,6 +192,7 @@ export function useSaveCollectionFormState({
     setAmount: setAmountInput,
     validateField,
     applyFieldErrors,
+    applyIdentityFieldErrors,
     applyRestoredFormValues,
     clearFormValues,
   };

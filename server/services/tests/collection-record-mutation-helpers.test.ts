@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertValidCollectionCreateFields,
   buildCollectionAuditFieldChanges,
   buildCollectionAuditSnapshot,
   buildCreateReceiptInput,
@@ -164,6 +165,29 @@ test("collection record field helpers normalize create/update payloads", () => {
       customerName: "Customer B",
     },
   });
+});
+
+test("collection create validation requires an explicitly selected Saved source", () => {
+  const fields = normalizeCollectionRecordFields({
+    accountNumber: "ACC-1",
+    amount: "100.00",
+    batch: "P10",
+    collectionStaffNickname: "Collector Alpha",
+    customerName: "Customer A",
+    customerPhone: "0123456789",
+    icNumber: "900101015555",
+    paymentDate: "2020-01-01",
+  });
+
+  assert.throws(
+    () => assertValidCollectionCreateFields(fields),
+    (error: unknown) => (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "COLLECTION_SOURCE_REQUIRED"
+    ),
+  );
 });
 
 test("collection receipt helpers normalize metadata and uploaded receipt rows", () => {

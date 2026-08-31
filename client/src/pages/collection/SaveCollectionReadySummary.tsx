@@ -1,6 +1,9 @@
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
-import type { SaveCollectionFormValues } from "@/pages/collection/save-collection-page-utils";
+import type {
+  SaveCollectionFormValues,
+  SaveCollectionReadiness,
+} from "@/pages/collection/save-collection-page-utils";
 import {
   buildSaveCollectionReadySummary,
   buildSaveCollectionReceiptReviewHints,
@@ -8,29 +11,50 @@ import {
 
 type SaveCollectionReadySummaryProps = {
   values: SaveCollectionFormValues;
+  readiness: SaveCollectionReadiness;
   receiptCount: number;
   receiptDrafts: CollectionReceiptDraftInput[];
 };
 
 export function SaveCollectionReadySummary({
   values,
+  readiness,
   receiptCount,
   receiptDrafts,
 }: SaveCollectionReadySummaryProps) {
-  const items = buildSaveCollectionReadySummary({ values, receiptCount });
+  const items = buildSaveCollectionReadySummary({ values, receiptCount, readiness });
   const reviewHints = buildSaveCollectionReceiptReviewHints({ values, receiptDrafts });
+  const isReady = readiness.isReady;
 
   return (
     <section
-      className="rounded-xl border border-border/60 bg-background/75 p-3"
-      aria-label="Ready to save summary"
+      className={isReady
+        ? "rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3"
+        : "rounded-xl border border-amber-500/35 bg-amber-500/5 p-3"}
+      aria-label={isReady ? "Ready to save summary" : "Incomplete save summary"}
+      data-ready={isReady ? "true" : "false"}
+      data-testid="save-collection-readiness"
     >
-      <div className="mb-3 flex items-start gap-3">
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+      <div
+        id="save-collection-readiness-status"
+        className="mb-3 flex items-start gap-3"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {isReady ? (
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+        ) : (
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+        )}
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground">Ready to Save</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {isReady ? "Ready to Save" : "Belum Sedia Disimpan"}
+          </h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Semak ringkasan ini sebelum klik Save Collection.
+            {isReady
+              ? "Semak ringkasan ini sebelum klik Save Collection."
+              : `${readiness.invalidFields.length} medan perlu dilengkapkan atau diperbetulkan.`}
           </p>
         </div>
       </div>
@@ -40,9 +64,15 @@ export function SaveCollectionReadySummary({
             <dt className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               {item.label}
             </dt>
-            <dd className={item.missing ? "text-sm font-medium text-destructive" : "text-sm font-medium text-foreground"}>
+            <dd className={item.missing
+              ? "break-words text-sm font-medium text-destructive"
+              : "break-words text-sm font-medium text-foreground"}
+            >
               {item.value}
             </dd>
+            {item.error ? (
+              <dd className="mt-1 text-xs leading-relaxed text-destructive">{item.error}</dd>
+            ) : null}
           </div>
         ))}
       </dl>

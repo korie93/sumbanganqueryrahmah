@@ -4,8 +4,10 @@ import {
   buildSaveCollectionMutationPayload,
   formatSaveCollectionRestoreNoticeLabel,
   removeSaveCollectionReceiptAtIndex,
+  getSaveCollectionReadiness,
   validateSaveCollectionForm,
   validateSaveCollectionFormFields,
+  validateSaveCollectionIdentityFields,
 } from "@/pages/collection/save-collection-page-utils";
 
 test("validateSaveCollectionForm rejects invalid customer and payment inputs", () => {
@@ -16,6 +18,8 @@ test("validateSaveCollectionForm rejects invalid customer and payment inputs", (
       icNumber: "900101-10-1234",
       customerPhone: "0123456789",
       accountNumber: "ACC-1",
+      sourceImportId: "import-1",
+      agingBucket: "D3",
       batch: "P10",
       paymentDate: "2026-03-01",
       amount: "10.00",
@@ -30,6 +34,8 @@ test("validateSaveCollectionForm rejects invalid customer and payment inputs", (
       icNumber: "900101-10-1234",
       customerPhone: "bad",
       accountNumber: "ACC-1",
+      sourceImportId: "import-1",
+      agingBucket: "D3",
       batch: "P10",
       paymentDate: "2026-03-01",
       amount: "10.00",
@@ -47,6 +53,7 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
       customerPhone: "bad",
       accountNumber: "",
       sourceImportId: "",
+      agingBucket: "D3",
       batch: "P10",
       paymentDate: "not-a-date",
       amount: "0",
@@ -61,6 +68,61 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
       amount: "Amount must be greater than 0.",
     },
   );
+});
+
+test("source matching identity validation catches incomplete and oversized values locally", () => {
+  assert.deepEqual(
+    validateSaveCollectionIdentityFields({
+      customerName: " ",
+      icNumber: "1".repeat(65),
+      customerPhone: "not-a-phone",
+      accountNumber: "A".repeat(129),
+    }),
+    {
+      customerName: "Customer Name is required.",
+      icNumber: "IC Number must not exceed 64 characters.",
+      customerPhone: "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.",
+      accountNumber: "Account Number must not exceed 128 characters.",
+    },
+  );
+});
+
+test("save readiness requires a verified source even when a legacy value is undefined", () => {
+  const readiness = getSaveCollectionReadiness({
+    staffNickname: "staff1",
+    customerName: "Siti",
+    icNumber: "900101101234",
+    customerPhone: "0123456789",
+    accountNumber: "ACC-1",
+    sourceImportId: undefined,
+    agingBucket: "D3",
+    batch: "P10",
+    paymentDate: "2026-03-01",
+    amount: "10.00",
+  } as unknown as Parameters<typeof getSaveCollectionReadiness>[0]);
+
+  assert.equal(readiness.isReady, false);
+  assert.equal(readiness.firstError, "Pilih fail Saved yang telah disahkan matching.");
+  assert.deepEqual(readiness.invalidFields, ["sourceImportId"]);
+});
+
+test("save readiness is true only when the shared field validator has no errors", () => {
+  const readiness = getSaveCollectionReadiness({
+    staffNickname: "staff1",
+    customerName: "Siti",
+    icNumber: "900101101234",
+    customerPhone: "0123456789",
+    accountNumber: "ACC-1",
+    sourceImportId: "import-verified",
+    agingBucket: "D5",
+    batch: "P25",
+    paymentDate: "2026-03-01",
+    amount: "10.00",
+  });
+
+  assert.equal(readiness.isReady, true);
+  assert.equal(readiness.firstError, null);
+  assert.deepEqual(readiness.errors, {});
 });
 
 test("buildSaveCollectionMutationPayload trims values and maps receipt metadata", () => {
@@ -111,6 +173,8 @@ test("buildSaveCollectionMutationPayload normalizes grouped amount strings", () 
       icNumber: " 900101-10-1234 ",
       customerPhone: " 0123456789 ",
       accountNumber: " ACC-1 ",
+      sourceImportId: " import-verified ",
+      agingBucket: "D3",
       batch: "P25",
       paymentDate: "2026-03-01",
       amount: "1,200.50",

@@ -11,6 +11,10 @@ const saveCollectionProgressSource = readFileSync(
   path.resolve(process.cwd(), "client/src/pages/collection/SaveCollectionProgress.tsx"),
   "utf8",
 );
+const readySummarySource = readFileSync(
+  path.resolve(process.cwd(), "client/src/pages/collection/SaveCollectionReadySummary.tsx"),
+  "utf8",
+);
 
 test("save collection fields use explicit invalid props for Edge a11y inspection", () => {
   assert.match(saveCollectionPageSource, /function getInvalidFieldProps/);
@@ -50,7 +54,22 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.notEqual(phoneInputStart, -1);
   assert.notEqual(phoneInputEnd, -1);
   const phoneInputSource = saveCollectionPageSource.slice(phoneInputStart, phoneInputEnd + 2);
-  assert.doesNotMatch(phoneInputSource, /\{\.\.\.requiredFieldProps\}/);
+  assert.match(phoneInputSource, /\{\.\.\.requiredFieldProps\}/);
+});
+
+test("save action remains discoverable without presenting an incomplete form as save-ready", () => {
+  assert.match(saveCollectionPageSource, /variant=\{state\.readiness\.isReady \? "default" : "outline"\}/);
+  assert.match(saveCollectionPageSource, /aria-describedby="save-collection-readiness-status"/);
+  assert.match(saveCollectionPageSource, /state\.readiness\.isReady[\s\S]*\? "Save Collection"[\s\S]*: "Semak Medan Wajib"/);
+  assert.match(saveCollectionPageSource, /onClick=\{state\.handleSubmit\}/);
+});
+
+test("save readiness definition list keeps validation details in valid dd elements", () => {
+  assert.match(
+    readySummarySource,
+    /<dd className="mt-1 text-xs leading-relaxed text-destructive">\{item\.error\}<\/dd>/,
+  );
+  assert.doesNotMatch(readySummarySource, /<p[^>]*>\{item\.error\}<\/p>/);
 });
 
 test("save collection form grid responds to available width and text scaling", () => {

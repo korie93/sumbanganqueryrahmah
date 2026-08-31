@@ -3,6 +3,11 @@ import {
   getCollectionSourceMatches,
   type CollectionSourceMatch,
 } from "@/lib/api";
+import { resolveMutationErrorMessage } from "@/lib/mutation-feedback";
+import {
+  type SaveCollectionFieldErrors,
+  validateSaveCollectionIdentityFields,
+} from "@/pages/collection/save-collection-page-utils";
 
 type CollectionSourceIdentity = {
   customerName: string;
@@ -20,6 +25,7 @@ function isAbortError(error: unknown) {
 export function useCollectionSourceMatching(
   identity: CollectionSourceIdentity,
   onSelectionChange: (sourceImportId: string) => void,
+  onValidationErrors?: (errors: SaveCollectionFieldErrors) => void,
 ) {
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
@@ -70,6 +76,15 @@ export function useCollectionSourceMatching(
   }, [matches, onSelectionChange]);
 
   const runMatching = useCallback(async () => {
+    const validationErrors = validateSaveCollectionIdentityFields(identity);
+    if (Object.keys(validationErrors).length > 0) {
+      resetMatches();
+      onValidationErrors?.(validationErrors);
+      setError("Lengkapkan maklumat customer yang ditanda sebelum semak matching.");
+      return;
+    }
+
+    onValidationErrors?.({});
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -97,9 +112,10 @@ export function useCollectionSourceMatching(
       setSelectedImportId("");
       setHasSearched(true);
       onSelectionChange("");
-      setError(matchingError instanceof Error
-        ? matchingError.message
-        : "Saved source matching failed.");
+      setError(resolveMutationErrorMessage(
+        matchingError,
+        "Semakan matching gagal. Cuba lagi sebentar.",
+      ));
     } finally {
       if (!controller.signal.aborted && requestId === requestIdRef.current) {
         setLoading(false);
@@ -112,6 +128,8 @@ export function useCollectionSourceMatching(
     identity.customerPhone,
     identity.icNumber,
     onSelectionChange,
+    onValidationErrors,
+    resetMatches,
   ]);
 
   const selectedMatch = useMemo(

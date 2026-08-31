@@ -3,8 +3,11 @@ import {
   parseCollectionAmountToCents,
 } from "../../../shared/collection-amount-types";
 import {
+  COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH,
   COLLECTION_BATCHES,
+  COLLECTION_CUSTOMER_NAME_MAX_LENGTH,
   COLLECTION_AGING_BUCKETS,
+  COLLECTION_IC_NUMBER_MAX_LENGTH,
   COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH,
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
   isFutureCollectionDate,
@@ -58,11 +61,26 @@ export function assertValidCollectionCreateFields(
   amountCents: number;
 } {
   if (!fields.customerName) throw badRequest("Customer Name is required.");
+  if (fields.customerName.length > COLLECTION_CUSTOMER_NAME_MAX_LENGTH) {
+    throw badRequest("Customer Name must not exceed 200 characters.");
+  }
   if (!fields.icNumber) throw badRequest("IC Number is required.");
+  if (fields.icNumber.length > COLLECTION_IC_NUMBER_MAX_LENGTH) {
+    throw badRequest("IC Number must not exceed 64 characters.");
+  }
   if (!isValidCollectionPhone(fields.customerPhone)) {
     throw badRequest("Customer Phone Number is invalid.");
   }
   if (!fields.accountNumber) throw badRequest("Account Number is required.");
+  if (fields.accountNumber.length > COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH) {
+    throw badRequest("Account Number must not exceed 128 characters.");
+  }
+  if (!fields.sourceImportId) {
+    throw badRequest(
+      "Select and verify a Saved source before saving.",
+      "COLLECTION_SOURCE_REQUIRED",
+    );
+  }
   if (fields.sourceImportId.length > COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH) {
     throw badRequest("Saved source ID is invalid.");
   }
@@ -96,10 +114,16 @@ export function buildCollectionRecordUpdateDraft(
 
   if (body.customerName !== undefined) {
     if (!fields.customerName) throw badRequest("Customer Name cannot be empty.");
+    if (fields.customerName.length > COLLECTION_CUSTOMER_NAME_MAX_LENGTH) {
+      throw badRequest("Customer Name must not exceed 200 characters.");
+    }
     updatePayload.customerName = fields.customerName;
   }
   if (body.icNumber !== undefined) {
     if (!fields.icNumber) throw badRequest("IC Number cannot be empty.");
+    if (fields.icNumber.length > COLLECTION_IC_NUMBER_MAX_LENGTH) {
+      throw badRequest("IC Number must not exceed 64 characters.");
+    }
     updatePayload.icNumber = fields.icNumber;
   }
   if (body.customerPhone !== undefined) {
@@ -110,6 +134,9 @@ export function buildCollectionRecordUpdateDraft(
   }
   if (body.accountNumber !== undefined) {
     if (!fields.accountNumber) throw badRequest("Account Number cannot be empty.");
+    if (fields.accountNumber.length > COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH) {
+      throw badRequest("Account Number must not exceed 128 characters.");
+    }
     updatePayload.accountNumber = fields.accountNumber;
   }
   if (body.sourceImportId !== undefined && fields.sourceImportId.length > COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH) {

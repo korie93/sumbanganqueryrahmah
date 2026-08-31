@@ -131,8 +131,8 @@ export type CreateCollectionPayload = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
-  sourceImportId?: string | null;
-  agingBucket?: CollectionAgingBucket | null;
+  sourceImportId: string;
+  agingBucket: CollectionAgingBucket;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrNumber;

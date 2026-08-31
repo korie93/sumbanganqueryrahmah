@@ -24,3 +24,21 @@ test("collection source matching ignores aborted and superseded responses", () =
     /controller\.signal\.aborted \|\| requestId !== requestIdRef\.current \|\| isAbortError\(matchingError\)/,
   );
 });
+
+test("collection source matching validates identity before starting the API request", () => {
+  const validationIndex = source.indexOf("validateSaveCollectionIdentityFields(identity)");
+  const requestIndex = source.indexOf("await getCollectionSourceMatches(identity");
+
+  assert.notEqual(validationIndex, -1);
+  assert.notEqual(requestIndex, -1);
+  assert.ok(validationIndex < requestIndex);
+  assert.match(source, /if \(Object\.keys\(validationErrors\)\.length > 0\) \{/);
+  assert.match(source, /onValidationErrors\?\.\(validationErrors\)/);
+  assert.match(source, /Lengkapkan maklumat customer yang ditanda sebelum semak matching\./);
+});
+
+test("collection source matching turns backend failures into safe user-facing messages", () => {
+  assert.match(source, /import \{ resolveMutationErrorMessage \} from "@\/lib\/mutation-feedback"/);
+  assert.match(source, /setError\(resolveMutationErrorMessage\(/);
+  assert.doesNotMatch(source, /matchingError instanceof Error\s*\? matchingError\.message/);
+});

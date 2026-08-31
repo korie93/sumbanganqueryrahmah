@@ -30,7 +30,7 @@ export function useSaveCollectionPageState({
     icNumber: formState.icNumber,
     customerPhone: formState.customerPhone,
     accountNumber: formState.accountNumber,
-  }, formState.setSourceImportId);
+  }, formState.setSourceImportId, formState.applyIdentityFieldErrors);
   const draftState = useSaveCollectionDraftState({
     staffNickname,
     values: formState.values,
@@ -129,6 +129,7 @@ export function useSaveCollectionPageState({
     maxPaymentDate: formState.maxPaymentDate,
     isPaymentDateInFuture: formState.isPaymentDateInFuture,
     fieldErrors: formState.fieldErrors,
+    readiness: formState.readiness,
     draftRestoreNotice: draftState.draftRestoreNotice,
     restoreNoticeLabel: draftState.restoreNoticeLabel,
     setCustomerName: formState.setCustomerName,

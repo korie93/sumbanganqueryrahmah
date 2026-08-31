@@ -1,6 +1,9 @@
 import type { AuthenticatedUser } from "../../auth/guards";
 import { badRequest } from "../../http/errors";
 import {
+  COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH,
+  COLLECTION_CUSTOMER_NAME_MAX_LENGTH,
+  COLLECTION_IC_NUMBER_MAX_LENGTH,
   ensureLooseObject,
   isValidCollectionPhone,
   normalizeCollectionText,
@@ -10,10 +13,6 @@ import type { CollectionStoragePort } from "./collection-service-support";
 import { logger } from "../../lib/logger";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
-
-const MAX_CUSTOMER_NAME_LENGTH = 200;
-const MAX_IC_NUMBER_LENGTH = 64;
-const MAX_ACCOUNT_NUMBER_LENGTH = 128;
 
 export class CollectionSourceMatchOperations {
   constructor(
@@ -29,16 +28,16 @@ export class CollectionSourceMatchOperations {
     const customerPhone = normalizeCollectionText(body.customerPhone);
     const accountNumber = normalizeCollectionText(body.accountNumber);
 
-    if (!customerName || customerName.length > MAX_CUSTOMER_NAME_LENGTH) {
+    if (!customerName || customerName.length > COLLECTION_CUSTOMER_NAME_MAX_LENGTH) {
       throw badRequest("Customer Name is required and must not exceed 200 characters.");
     }
-    if (!icNumber || icNumber.length > MAX_IC_NUMBER_LENGTH) {
+    if (!icNumber || icNumber.length > COLLECTION_IC_NUMBER_MAX_LENGTH) {
       throw badRequest("IC Number is required and must not exceed 64 characters.");
     }
     if (!isValidCollectionPhone(customerPhone)) {
       throw badRequest("Customer Phone Number is invalid.");
     }
-    if (!accountNumber || accountNumber.length > MAX_ACCOUNT_NUMBER_LENGTH) {
+    if (!accountNumber || accountNumber.length > COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH) {
       throw badRequest("Account Number is required and must not exceed 128 characters.");
     }
 

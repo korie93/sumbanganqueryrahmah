@@ -601,6 +601,26 @@ const ensureCollectionSmokeAsset = async (fileName) => {
 const createCollectionSmokeSourceImport = async (context, values) => {
   const sourceName = `Smoke Saved Source ${values.uniqueSuffix}`;
   const sourceFilename = `smoke-saved-source-${values.uniqueSuffix}.csv`;
+  const data = [{
+    "Customer Name": values.customerName,
+    "IC Number": values.icNumber,
+    "Customer Phone Number": values.customerPhone,
+    "Account Number": `LEGACY-${values.uniqueSuffix}`,
+    "Card No": values.accountNumber,
+    "TOTAL DUE": String(values.totalDue ?? "12.34"),
+    "Billing Principal (OSP)": String(values.billingPrincipalOsp ?? "10.00"),
+  }];
+  if (values.noRecordAccountNumber) {
+    data.push({
+      "Customer Name": `Smoke No Collection ${values.uniqueSuffix}`,
+      "IC Number": `810202${values.uniqueSuffix.slice(-6)}`,
+      "Customer Phone Number": `013${values.uniqueSuffix.slice(-7)}`,
+      "Account Number": `LEGACY-NO-RECORD-${values.uniqueSuffix}`,
+      "Card No": values.noRecordAccountNumber,
+      "TOTAL DUE": "",
+      "Billing Principal (OSP)": "",
+    });
+  }
   const response = await apiJsonRequestWithRetry(
     context,
     "POST",
@@ -608,27 +628,13 @@ const createCollectionSmokeSourceImport = async (context, values) => {
     {
       name: sourceName,
       filename: sourceFilename,
-      data: [{
-        "Customer Name": values.customerName,
-        "IC Number": values.icNumber,
-        "Customer Phone Number": values.customerPhone,
-        "Account Number": `LEGACY-${values.uniqueSuffix}`,
-        "Card No": values.accountNumber,
-        "TOTAL DUE": "12.34",
-        "Billing Principal (OSP)": "10.00",
-      }, {
-        "Customer Name": `Smoke No Collection ${values.uniqueSuffix}`,
-        "IC Number": `810202${values.uniqueSuffix.slice(-6)}`,
-        "Customer Phone Number": `013${values.uniqueSuffix.slice(-7)}`,
-        "Account Number": `LEGACY-NO-RECORD-${values.uniqueSuffix}`,
-        "Card No": values.noRecordAccountNumber,
-      }],
+      data,
     },
     [200],
   );
   const sourceImportId = String(response.payload?.id || "").trim();
 
-  assert(sourceImportId, "collection receipt UI smoke should create a Saved source import");
+  assert(sourceImportId, "collection smoke should create a Saved source import");
   return {
     id: sourceImportId,
     name: String(response.payload?.name || sourceName).trim(),
@@ -1570,18 +1576,33 @@ const checkCollectionMutationConsistency = async (context) => {
   let createdAccountNumber = "";
   let expectedUpdatedAt = "";
   let recordDeleted = false;
+  let sourceImport = null;
+  const uniqueSuffix = `${Date.now()}`;
+  const customerName = `Smoke Mutation ${uniqueSuffix}`;
+  const icNumber = `900101${uniqueSuffix.slice(-6)}`;
+  const customerPhone = `012${uniqueSuffix.slice(-7)}`;
+  const accountNumber = `SMOKE-MUT-${uniqueSuffix}`;
 
   try {
-    const uniqueSuffix = `${Date.now()}`;
+    sourceImport = await createCollectionSmokeSourceImport(context, {
+      accountNumber,
+      customerName,
+      customerPhone,
+      icNumber,
+      totalDue: "1000.00",
+      uniqueSuffix,
+    });
     const createResponse = await apiJsonRequestWithRetry(
       context,
       "POST",
       "/api/collection",
       {
-        customerName: `Smoke Mutation ${uniqueSuffix}`,
-        icNumber: `900101${uniqueSuffix.slice(-6)}`,
-        customerPhone: `012${uniqueSuffix.slice(-7)}`,
-        accountNumber: `SMOKE-MUT-${uniqueSuffix}`,
+        customerName,
+        icNumber,
+        customerPhone,
+        accountNumber,
+        sourceImportId: sourceImport.id,
+        agingBucket: "D3",
         batch: "P10",
         paymentDate: dateA,
         amount: initialAmount,
@@ -1773,6 +1794,15 @@ const checkCollectionMutationConsistency = async (context) => {
         expectedUpdatedAt,
       }).catch((error) => recordBestEffortFailure("cleanup stale delete conflict record", error));
     }
+    if (sourceImport?.id) {
+      await apiJsonRequestWithRetry(
+        context,
+        "DELETE",
+        `/api/imports/${encodeURIComponent(sourceImport.id)}`,
+        undefined,
+        [200, 404],
+      ).catch((error) => recordBestEffortFailure("cleanup collection mutation source import", error));
+    }
   }
 };
 
@@ -1826,10 +1856,22 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
     tracker.assertClean("collection records stale-delete conflict");
     tracker.clear();
   } finally {
-    await cleanupStaleDeleteConflictRecord(context, {
-      ...smokeRecord,
-      expectedUpdatedAt: cleanupVersion,
-    });
+    try {
+      await cleanupStaleDeleteConflictRecord(context, {
+        ...smokeRecord,
+        expectedUpdatedAt: cleanupVersion,
+      });
+    } finally {
+      if (smokeRecord.sourceImportId) {
+        await apiJsonRequestWithRetry(
+          context,
+          "DELETE",
+          `/api/imports/${encodeURIComponent(smokeRecord.sourceImportId)}`,
+          undefined,
+          [200, 404],
+        ).catch((error) => recordBestEffortFailure("cleanup stale-delete source import", error));
+      }
+    }
   }
 };
 
@@ -2157,36 +2199,66 @@ const provisionStaleDeleteConflictRecord = async (context) => {
   const uniqueSuffix = String(Date.now());
   const customerName = `Smoke Stale Delete ${uniqueSuffix}`;
   const accountNumber = `SMK-${uniqueSuffix}`;
-  const createRecordResponse = await apiJsonRequest(
-    context,
-    "POST",
-    "/api/collection",
-    {
-      customerName,
-      icNumber: `900101${uniqueSuffix.slice(-6)}`,
-      customerPhone: `012${uniqueSuffix.slice(-7)}`,
+  const icNumber = `900101${uniqueSuffix.slice(-6)}`;
+  const customerPhone = `012${uniqueSuffix.slice(-7)}`;
+  let sourceImport = null;
+
+  try {
+    sourceImport = await createCollectionSmokeSourceImport(context, {
       accountNumber,
-      batch: "P10",
-      paymentDate: getLocalIsoDate(),
-      amount: 55.3,
-      collectionStaffNickname: targetNickname,
-    },
-    [200],
-  );
+      customerName,
+      customerPhone,
+      icNumber,
+      totalDue: "100.00",
+      uniqueSuffix,
+    });
+    const createRecordResponse = await apiJsonRequest(
+      context,
+      "POST",
+      "/api/collection",
+      {
+        customerName,
+        icNumber,
+        customerPhone,
+        accountNumber,
+        sourceImportId: sourceImport.id,
+        agingBucket: "D3",
+        batch: "P10",
+        paymentDate: getLocalIsoDate(),
+        amount: 55.3,
+        collectionStaffNickname: targetNickname,
+      },
+      [200],
+    );
 
-  const createdRecord = createRecordResponse.payload?.record;
-  const id = String(createdRecord?.id || "");
-  const expectedUpdatedAt = String(createdRecord?.updatedAt || createdRecord?.createdAt || "");
-  assert(id, "stale-delete smoke should receive a record id from create API");
-  assert(expectedUpdatedAt, "stale-delete smoke should receive a record version timestamp from create API");
+    const createdRecord = createRecordResponse.payload?.record;
+    const id = String(createdRecord?.id || "");
+    const expectedUpdatedAt = String(createdRecord?.updatedAt || createdRecord?.createdAt || "");
+    assert(id, "stale-delete smoke should receive a record id from create API");
+    assert(expectedUpdatedAt, "stale-delete smoke should receive a record version timestamp from create API");
 
-  return {
-    id,
-    customerName,
-    accountNumber,
-    expectedUpdatedAt,
-    bumpedAmount: 77.7,
-  };
+    return {
+      id,
+      customerName,
+      accountNumber,
+      expectedUpdatedAt,
+      bumpedAmount: 77.7,
+      sourceImportId: sourceImport.id,
+    };
+  } catch (error) {
+    if (sourceImport?.id) {
+      await apiJsonRequestWithRetry(
+        context,
+        "DELETE",
+        `/api/imports/${encodeURIComponent(sourceImport.id)}`,
+        undefined,
+        [200, 404],
+      ).catch((cleanupError) => (
+        recordBestEffortFailure("cleanup failed stale-delete source import", cleanupError)
+      ));
+    }
+    throw error;
+  }
 };
 
 const waitForRateLimitRecovery = async (payload, fallbackMs = 1_000) => {

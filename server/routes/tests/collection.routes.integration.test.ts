@@ -374,7 +374,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
   }
 });
 
-test("POST /api/collection saves safely without provenance when no Saved row matches", async () => {
+test("POST /api/collection rejects a new record without an explicitly verified Saved source", async () => {
   const { storage, createCalls } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -406,11 +406,10 @@ test("POST /api/collection saves safely without provenance when no Saved row mat
       }),
     });
 
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 400);
     const payload = await response.json();
-    assert.equal(payload.record.sourceImportId, null);
-    assert.equal(payload.record.sourceDataRowId, null);
-    assert.equal(createCalls.length, 1);
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_REQUIRED");
+    assert.equal(createCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }
@@ -453,6 +452,105 @@ test("POST /api/collection rejects a selected Saved file that no longer matches"
     assert.equal(response.status, 400);
     const payload = await response.json();
     assert.equal(payload.error.code, "COLLECTION_SOURCE_MATCH_STALE");
+    assert.equal(createCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection rejects oversized identity fields from direct API callers", async () => {
+  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const cases = [
+    { field: "customerName", value: "N".repeat(201), limit: 200 },
+    { field: "icNumber", value: "1".repeat(65), limit: 64 },
+    { field: "accountNumber", value: "A".repeat(129), limit: 128 },
+  ] as const;
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const testCase of cases) {
+      const response = await fetch(`${baseUrl}/api/collection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: "Bob Lee",
+          icNumber: "880202026666",
+          customerPhone: "0129876543",
+          accountNumber: "ACC-2002",
+          sourceImportId: "import-1",
+          agingBucket: "D3",
+          batch: "P25",
+          paymentDate: "2026-03-15",
+          amount: 245.9,
+          collectionStaffNickname: "Collector Alpha",
+          [testCase.field]: testCase.value,
+        }),
+      });
+
+      assert.equal(response.status, 400);
+      const payload = await response.json();
+      assert.match(
+        String(payload.message || payload.error?.message || ""),
+        new RegExp(`must not exceed ${testCase.limit} characters`, "i"),
+      );
+    }
+    assert.equal(createCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection rejects a matched Saved row without usable TOTAL DUE", async () => {
+  const { storage, createCalls } = createCoreCollectionStorageDouble({
+    sourceMatchTotalDue: null,
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Bob Lee",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        sourceImportId: "import-1",
+        agingBucket: "D3",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 245.9,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_TOTAL_DUE_MISSING");
     assert.equal(createCalls.length, 0);
   } finally {
     await stopTestServer(server);
@@ -534,6 +632,7 @@ test("POST /api/collection stores matched receipt totals and allows save", async
         icNumber: "880202026666",
         customerPhone: "0129876543",
         accountNumber: "ACC-2002",
+        sourceImportId: "import-1",
         batch: "P25",
         paymentDate: "2026-03-15",
         amount: 3000,
@@ -593,6 +692,7 @@ test("POST /api/collection allows regular users to save when receipt total is un
         icNumber: "880202026666",
         customerPhone: "0129876543",
         accountNumber: "ACC-2003",
+        sourceImportId: "import-1",
         batch: "P25",
         paymentDate: "2026-03-15",
         amount: 1000,
@@ -645,6 +745,7 @@ test("POST /api/collection accepts receiptValidationOverrideReason without enfor
         icNumber: "880202026667",
         customerPhone: "0129876543",
         accountNumber: "ACC-2004",
+        sourceImportId: "import-1",
         batch: "P25",
         paymentDate: "2026-03-15",
         amount: 1000,
@@ -698,6 +799,7 @@ test("POST /api/collection replays a successful create when the same idempotency
       icNumber: "880202026666",
       customerPhone: "0129876543",
       accountNumber: "ACC-2002",
+      sourceImportId: "import-1",
       batch: "P25",
       paymentDate: "2026-03-15",
       amount: 245.9,
@@ -760,6 +862,7 @@ test("POST /api/collection rejects reused idempotency keys when the payload fing
         icNumber: "880202026666",
         customerPhone: "0129876543",
         accountNumber: "ACC-2002",
+        sourceImportId: "import-1",
         batch: "P25",
         paymentDate: "2026-03-15",
         amount: 245.9,
@@ -777,6 +880,7 @@ test("POST /api/collection rejects reused idempotency keys when the payload fing
         icNumber: "880202026666",
         customerPhone: "0129876543",
         accountNumber: "ACC-2002",
+        sourceImportId: "import-1",
         batch: "P25",
         paymentDate: "2026-03-15",
         amount: 999,
@@ -814,6 +918,7 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
   formData.set("icNumber", "880202026777");
   formData.set("customerPhone", "0129876543");
   formData.set("accountNumber", "ACC-2003");
+  formData.set("sourceImportId", "import-1");
   formData.set("batch", "P25");
   formData.set("paymentDate", "2026-03-15");
   formData.set("amount", "245.90");
@@ -877,6 +982,7 @@ test("POST /api/collection accepts multipart progressive-style JPEG receipts", a
   formData.set("icNumber", "880202026778");
   formData.set("customerPhone", "0129876543");
   formData.set("accountNumber", "ACC-2004");
+  formData.set("sourceImportId", "import-1");
   formData.set("batch", "P25");
   formData.set("paymentDate", "2026-03-15");
   formData.set("amount", "245.90");
@@ -986,6 +1092,7 @@ test("POST /api/collection rejects future payment dates", async () => {
         icNumber: "880202026666",
         customerPhone: "0129876543",
         accountNumber: "ACC-2999",
+        sourceImportId: "import-1",
         batch: "P25",
         paymentDate: "2999-01-01",
         amount: 100,
@@ -1371,7 +1478,18 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
 });
 
 test("PATCH /api/collection/:id refreshes the server-owned Saved row link when identity changes", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls } = createCoreCollectionStorageDouble({
+    seedRecordOverrides: {
+      sourceImportId: "import-1",
+      sourceDataRowId: "saved-row-old",
+      sourceImportName: "NPL CC P10 JULY",
+      sourceFilename: "npl-cc-p10-july.xlsx",
+      totalDue: "200.00",
+      billingPrincipalOsp: "180.00",
+      sourceMatchBasis: "ic",
+      sourceMatchAccuracy: 100,
+    },
+  });
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1404,6 +1522,195 @@ test("PATCH /api/collection/:id refreshes the server-owned Saved row link when i
     assert.equal(payload.record.sourceImportName, "NPL CC P10 JULY");
     assert.equal(updateCalls[0]?.data.sourceImportId, "import-1");
     assert.equal(updateCalls[0]?.data.sourceDataRowId, "saved-row-1");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id accepts the full edit UI payload when identity values are unchanged", async () => {
+  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Alice Tan",
+        icNumber: "900101015555",
+        customerPhone: "0123456789",
+        accountNumber: "ACC-1001",
+        batch: "P10",
+        paymentDate: "2026-03-01",
+        amount: 55.3,
+        expectedUpdatedAt: "2026-03-01T09:00:00.000Z",
+        existingReceiptMetadata: [],
+        newReceiptMetadata: [],
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.record.amount, "55.30");
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0]?.data.amount, 55.3);
+    assert.equal(updateCalls[0]?.data.sourceImportId, undefined);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id rejects oversized identity fields from direct API callers", async () => {
+  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const cases = [
+    { field: "customerName", value: "N".repeat(201), limit: 200 },
+    { field: "icNumber", value: "1".repeat(65), limit: 64 },
+    { field: "accountNumber", value: "A".repeat(129), limit: 128 },
+  ] as const;
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const testCase of cases) {
+      const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [testCase.field]: testCase.value }),
+      });
+
+      assert.equal(response.status, 400);
+      const payload = await response.json();
+      assert.match(
+        String(payload.message || payload.error?.message || ""),
+        new RegExp(`must not exceed ${testCase.limit} characters`, "i"),
+      );
+    }
+    assert.equal(updateCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id rejects identity edits on legacy records without a verified Saved source", async () => {
+  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountNumber: "ACC-LINKED-1001" }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_REQUIRED");
+    assert.equal(updateCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id rejects identity edits when existing Saved provenance is stale", async () => {
+  const { storage, updateCalls } = createCoreCollectionStorageDouble({
+    seedRecordOverrides: { sourceImportId: "import-1" },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountNumber: "NO-SAVED-MATCH" }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_MATCH_STALE");
+    assert.equal(updateCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("PATCH /api/collection/:id rejects identity edits when matched TOTAL DUE is unusable", async () => {
+  const { storage, updateCalls } = createCoreCollectionStorageDouble({
+    sourceMatchTotalDue: null,
+    seedRecordOverrides: { sourceImportId: "import-1" },
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountNumber: "ACC-LINKED-1001" }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_TOTAL_DUE_MISSING");
+    assert.equal(updateCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }

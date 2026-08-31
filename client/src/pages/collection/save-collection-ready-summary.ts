@@ -1,5 +1,10 @@
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
-import type { SaveCollectionFormValues } from "@/pages/collection/save-collection-page-utils";
+import {
+  getSaveCollectionReadiness,
+  type SaveCollectionFieldName,
+  type SaveCollectionFormValues,
+  type SaveCollectionReadiness,
+} from "@/pages/collection/save-collection-page-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
@@ -7,6 +12,7 @@ export type SaveCollectionReadySummaryItem = {
   label: string;
   value: string;
   missing?: boolean;
+  error?: string;
 };
 
 export type SaveCollectionReviewHint = {
@@ -23,52 +29,93 @@ function formatSummaryValue(value: string): SaveCollectionReadySummaryItem["valu
   return normalized || "Belum diisi";
 }
 
+function buildValidatedSummaryItem(params: {
+  field: SaveCollectionFieldName;
+  label: string;
+  value: string;
+  readiness: SaveCollectionReadiness;
+}): SaveCollectionReadySummaryItem {
+  const error = params.readiness.errors[params.field];
+  const normalizedValue = formatSummaryValue(params.value);
+
+  return {
+    label: params.label,
+    value: error && normalizedValue !== "Belum diisi" ? "Perlu diperbetulkan" : normalizedValue,
+    missing: Boolean(error),
+    ...(error ? { error } : {}),
+  };
+}
+
 export function buildSaveCollectionReadySummary(params: {
   values: SaveCollectionFormValues;
   receiptCount: number;
+  readiness?: SaveCollectionReadiness;
 }): SaveCollectionReadySummaryItem[] {
   const amount = parseCollectionAmountMyrNumber(params.values.amount);
   const receiptCount = Math.max(0, Number.isFinite(params.receiptCount) ? Math.trunc(params.receiptCount) : 0);
+  const readiness = params.readiness ?? getSaveCollectionReadiness(params.values);
 
   return [
-    {
+    buildValidatedSummaryItem({
+      field: "staffNickname",
+      label: "Staff",
+      value: params.values.staffNickname,
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "customerName",
       label: "Customer",
-      value: formatSummaryValue(params.values.customerName),
-      missing: !params.values.customerName.trim(),
-    },
-    {
+      value: params.values.customerName,
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "icNumber",
       label: "IC",
-      value: formatSummaryValue(params.values.icNumber),
-      missing: !params.values.icNumber.trim(),
-    },
-    {
+      value: params.values.icNumber,
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "customerPhone",
+      label: "Phone",
+      value: params.values.customerPhone,
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "accountNumber",
       label: "Account",
-      value: formatSummaryValue(params.values.accountNumber),
-      missing: !params.values.accountNumber.trim(),
-    },
-    {
+      value: params.values.accountNumber,
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "batch",
       label: "Batch",
       value: params.values.batch,
-    },
-    {
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "agingBucket",
       label: "Aging",
       value: params.values.agingBucket ?? "D3",
-    },
-    {
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "sourceImportId",
       label: "Saved Match",
       value: params.values.sourceImportId ? "Verified" : "Belum disahkan",
-      missing: !params.values.sourceImportId,
-    },
-    {
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "paymentDate",
       label: "Date",
-      value: formatSummaryValue(params.values.paymentDate),
-      missing: !params.values.paymentDate.trim(),
-    },
-    {
+      value: params.values.paymentDate,
+      readiness,
+    }),
+    buildValidatedSummaryItem({
+      field: "amount",
       label: "Amount",
-      value: amount > 0 ? formatAmountRM(amount) : "Belum diisi",
-      missing: amount <= 0,
-    },
+      value: amount > 0 ? formatAmountRM(amount) : "",
+      readiness,
+    }),
     {
       label: "Receipt",
       value: `${receiptCount} ${receiptCount === 1 ? "receipt" : "receipts"}`,

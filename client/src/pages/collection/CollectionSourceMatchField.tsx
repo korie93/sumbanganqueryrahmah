@@ -4,6 +4,11 @@ import { Label } from "@/components/ui/label";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import type { CollectionSourceMatch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import {
+  buildUnusableCollectionSourceMatchDiagnostics,
+  formatCollectionSourceMatchedFields,
+  getCollectionSourceLabel,
+} from "@/pages/collection/collection-source-match-diagnostics";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { parseCollectionAmountToCents } from "@shared/collection-amount-types";
 
@@ -20,17 +25,6 @@ type CollectionSourceMatchFieldProps = {
   selectedImportId: string;
   selectedMatch: CollectionSourceMatch | null;
 };
-
-const MATCH_FIELD_LABELS = {
-  customer_name: "Name",
-  ic_number: "IC",
-  customer_phone: "Phone",
-  account_number: "Account",
-} as const;
-
-function getSourceLabel(match: CollectionSourceMatch) {
-  return match.sourceImportName || match.sourceFilename || "Saved file";
-}
 
 function resolveCpStatus(amount: string, totalDue: string | null) {
   const amountCents = parseCollectionAmountToCents(amount);
@@ -55,6 +49,7 @@ export function CollectionSourceMatchField({
   const cpStatus = resolveCpStatus(amount, selectedMatch?.totalDue ?? null);
   const sourceMatchInvalidProps = getAriaInvalidProps(Boolean(fieldError));
   const validMatchCount = matches.filter((match) => match.totalDue !== null).length;
+  const unusableMatchDiagnostics = buildUnusableCollectionSourceMatchDiagnostics(matches);
 
   return (
     <div className="space-y-3">
@@ -70,6 +65,7 @@ export function CollectionSourceMatchField({
           variant="outline"
           onClick={onMatch}
           disabled={disabled || loading}
+          aria-describedby={error ? "save-collection-source-match-action-error" : undefined}
           className="w-full shrink-0 sm:w-auto"
         >
           <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} aria-hidden="true" />
@@ -97,7 +93,7 @@ export function CollectionSourceMatchField({
             value={match.sourceImportId}
             disabled={match.totalDue === null}
           >
-            {getSourceLabel(match)} — {match.matchAccuracy}%{match.totalDue === null ? " (TOTAL DUE missing)" : ""}
+            {getCollectionSourceLabel(match)} — {match.matchAccuracy}%{match.totalDue === null ? " (TOTAL DUE missing)" : ""}
           </option>
         ))}
       </select>
@@ -108,7 +104,9 @@ export function CollectionSourceMatchField({
         </p>
       ) : null}
       {error ? (
-        <p className="text-xs text-destructive" role="alert">{error}</p>
+        <p id="save-collection-source-match-action-error" className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
       ) : null}
       {hasSearched && matches.length === 0 && !error ? (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-sm">
@@ -119,7 +117,43 @@ export function CollectionSourceMatchField({
       {hasSearched && matches.length > 0 && validMatchCount === 0 ? (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
-          <p>Padanan dijumpai, tetapi kolum TOTAL DUE tiada atau nilainya tidak sah.</p>
+          <div className="min-w-0 flex-1">
+            <p>Padanan dijumpai, tetapi kolum TOTAL DUE tiada atau nilainya tidak sah.</p>
+            <ul
+              className="mt-3 grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2"
+              aria-label="Saved files matched without usable TOTAL DUE"
+            >
+              {unusableMatchDiagnostics.items.map((item) => (
+                <li
+                  key={item.displayKey}
+                  className="min-w-0 rounded-lg border border-amber-500/25 bg-background/80 p-2.5"
+                >
+                  <p className="break-words text-sm font-semibold text-foreground">{item.sourceLabel}</p>
+                  {item.sourceFilename ? (
+                    <p className="break-all text-xs text-muted-foreground">{item.sourceFilename}</p>
+                  ) : null}
+                  <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Accuracy</dt>
+                      <dd className="font-semibold text-foreground">{item.matchAccuracy}%</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">TOTAL DUE</dt>
+                      <dd className="font-semibold text-destructive">Tidak sah</dd>
+                    </div>
+                  </dl>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Matched: {item.matchedFieldsLabel}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {unusableMatchDiagnostics.omittedCount > 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {unusableMatchDiagnostics.omittedCount} lagi padanan tidak dipaparkan. Perincikan maklumat customer untuk mengecilkan hasil.
+              </p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -129,7 +163,7 @@ export function CollectionSourceMatchField({
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
             <div className="min-w-0 flex-1 space-y-3">
               <div>
-                <p className="break-words text-sm font-semibold text-foreground">{getSourceLabel(selectedMatch)}</p>
+                <p className="break-words text-sm font-semibold text-foreground">{getCollectionSourceLabel(selectedMatch)}</p>
                 <p className="break-all text-xs text-muted-foreground">{selectedMatch.sourceFilename || "-"}</p>
               </div>
               <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -158,7 +192,7 @@ export function CollectionSourceMatchField({
               <div className="flex min-w-0 items-start gap-2 text-xs text-muted-foreground">
                 <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>
-                  Matched: {selectedMatch.matchedFields.map((field) => MATCH_FIELD_LABELS[field]).join(", ") || "-"}
+                  Matched: {formatCollectionSourceMatchedFields(selectedMatch)}
                 </span>
               </div>
             </div>

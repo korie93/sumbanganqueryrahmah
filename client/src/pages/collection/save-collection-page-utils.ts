@@ -24,8 +24,8 @@ export type SaveCollectionFormValues = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
-  sourceImportId?: string;
-  agingBucket?: CollectionAgingBucket;
+  sourceImportId: string;
+  agingBucket: CollectionAgingBucket;
   batch: CollectionBatch;
   paymentDate: string;
   amount: string;
@@ -44,6 +44,37 @@ export type SaveCollectionFieldName =
   | "amount";
 
 export type SaveCollectionFieldErrors = Partial<Record<SaveCollectionFieldName, string>>;
+
+export type SaveCollectionIdentityValues = Pick<
+  SaveCollectionFormValues,
+  "customerName" | "icNumber" | "customerPhone" | "accountNumber"
+>;
+
+export type SaveCollectionReadiness = {
+  errors: SaveCollectionFieldErrors;
+  invalidFields: SaveCollectionFieldName[];
+  isReady: boolean;
+  firstError: string | null;
+};
+
+export const SAVE_COLLECTION_IDENTITY_FIELD_LIMITS = {
+  customerName: 200,
+  icNumber: 64,
+  accountNumber: 128,
+} as const;
+
+const SAVE_COLLECTION_FIELD_ORDER: SaveCollectionFieldName[] = [
+  "staffNickname",
+  "customerName",
+  "icNumber",
+  "customerPhone",
+  "accountNumber",
+  "sourceImportId",
+  "agingBucket",
+  "batch",
+  "paymentDate",
+  "amount",
+];
 
 export type SaveCollectionMutationPayload = {
   customerName: string;
@@ -73,49 +104,46 @@ export function formatSaveCollectionRestoreNoticeLabel(restoredAt: string | null
 }
 
 export function validateSaveCollectionForm(values: SaveCollectionFormValues): string | null {
-  const errors = validateSaveCollectionFormFields(values);
-  const orderedFields: SaveCollectionFieldName[] = [
-    "staffNickname",
-    "customerName",
-    "icNumber",
-    "customerPhone",
-    "accountNumber",
-    "sourceImportId",
-    "agingBucket",
-    "batch",
-    "paymentDate",
-    "amount",
-  ];
-  for (const field of orderedFields) {
-    if (errors[field]) {
-      return errors[field] ?? null;
-    }
-  }
-  return null;
+  return getSaveCollectionReadiness(values).firstError;
 }
 
-export function validateSaveCollectionFormFields(values: SaveCollectionFormValues): SaveCollectionFieldErrors {
+export function validateSaveCollectionIdentityFields(
+  values: SaveCollectionIdentityValues,
+): SaveCollectionFieldErrors {
   const errors: SaveCollectionFieldErrors = {};
 
-  if (!values.staffNickname || values.staffNickname.trim().length < 2) {
-    errors.staffNickname = "Staff nickname is required.";
-  }
   if (!values.customerName.trim()) {
     errors.customerName = "Customer Name is required.";
+  } else if (values.customerName.trim().length > SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.customerName) {
+    errors.customerName = "Customer Name must not exceed 200 characters.";
   }
   if (!values.icNumber.trim()) {
     errors.icNumber = "IC Number is required.";
+  } else if (values.icNumber.trim().length > SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.icNumber) {
+    errors.icNumber = "IC Number must not exceed 64 characters.";
   }
   if (!isValidCustomerPhone(values.customerPhone)) {
     errors.customerPhone = "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.";
   }
   if (!values.accountNumber.trim()) {
     errors.accountNumber = "Account Number is required.";
+  } else if (values.accountNumber.trim().length > SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber) {
+    errors.accountNumber = "Account Number must not exceed 128 characters.";
   }
-  if (values.sourceImportId !== undefined && !values.sourceImportId.trim()) {
+
+  return errors;
+}
+
+export function validateSaveCollectionFormFields(values: SaveCollectionFormValues): SaveCollectionFieldErrors {
+  const errors: SaveCollectionFieldErrors = validateSaveCollectionIdentityFields(values);
+
+  if (!values.staffNickname || values.staffNickname.trim().length < 2) {
+    errors.staffNickname = "Staff nickname is required.";
+  }
+  if (!String(values.sourceImportId || "").trim()) {
     errors.sourceImportId = "Pilih fail Saved yang telah disahkan matching.";
   }
-  if (values.agingBucket !== undefined && !["D3", "D4", "D5", "D6"].includes(values.agingBucket)) {
+  if (!["D3", "D4", "D5", "D6"].includes(values.agingBucket)) {
     errors.agingBucket = "Aging mesti D3, D4, D5, atau D6.";
   }
   if (!COLLECTION_BATCH_OPTIONS.includes(values.batch)) {
@@ -133,6 +161,18 @@ export function validateSaveCollectionFormFields(values: SaveCollectionFormValue
   return errors;
 }
 
+export function getSaveCollectionReadiness(values: SaveCollectionFormValues): SaveCollectionReadiness {
+  const errors = validateSaveCollectionFormFields(values);
+  const invalidFields = SAVE_COLLECTION_FIELD_ORDER.filter((field) => Boolean(errors[field]));
+
+  return {
+    errors,
+    invalidFields,
+    isReady: invalidFields.length === 0,
+    firstError: invalidFields.length > 0 ? errors[invalidFields[0]!] ?? null : null,
+  };
+}
+
 export function buildSaveCollectionMutationPayload(options: {
   values: SaveCollectionFormValues;
   receiptDrafts: CollectionReceiptDraftInput[];
@@ -144,8 +184,8 @@ export function buildSaveCollectionMutationPayload(options: {
     icNumber: values.icNumber.trim(),
     customerPhone: values.customerPhone.trim(),
     accountNumber: values.accountNumber.trim(),
-    sourceImportId: values.sourceImportId?.trim() || "",
-    agingBucket: values.agingBucket ?? "D3",
+    sourceImportId: values.sourceImportId.trim(),
+    agingBucket: values.agingBucket,
     batch: values.batch,
     paymentDate: values.paymentDate,
     amount: parseCollectionAmountMyrNumber(values.amount),

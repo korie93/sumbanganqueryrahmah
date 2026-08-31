@@ -17,6 +17,7 @@ import { SaveCollectionProgress } from "@/pages/collection/SaveCollectionProgres
 import { SaveCollectionReadySummary } from "@/pages/collection/SaveCollectionReadySummary";
 import { SaveCollectionSubmitAlert } from "@/pages/collection/SaveCollectionSubmitAlert";
 import { CollectionSourceMatchField } from "@/pages/collection/CollectionSourceMatchField";
+import { SAVE_COLLECTION_IDENTITY_FIELD_LIMITS } from "@/pages/collection/save-collection-page-utils";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
 import type { CollectionAgingBucket, CollectionBatch } from "@/lib/api";
@@ -113,6 +114,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("customerName")}
           disabled={state.submitting}
           autoComplete="name"
+          maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.customerName}
           {...requiredFieldProps}
           {...customerNameValidationProps}
         />
@@ -133,6 +135,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           inputMode="numeric"
           autoComplete="off"
+          maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.icNumber}
           {...requiredFieldProps}
           {...icNumberValidationProps}
         />
@@ -155,6 +158,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           placeholder="+60 12-345 6789"
           inputMode="tel"
           autoComplete="tel"
+          minLength={8}
+          maxLength={20}
+          {...requiredFieldProps}
           {...customerPhoneValidationProps}
         />
         {state.fieldErrors.customerPhone ? (
@@ -178,6 +184,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onBlur={() => state.validateField("accountNumber")}
           disabled={state.submitting}
           autoComplete="off"
+          maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber}
           {...requiredFieldProps}
           {...accountNumberValidationProps}
         />
@@ -430,6 +437,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
 
         <SaveCollectionReadySummary
           values={readySummaryValues}
+          readiness={state.readiness}
           receiptCount={state.receiptFiles.length}
           receiptDrafts={state.receiptDrafts}
         />
@@ -450,8 +458,24 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           >
             Reset Form
           </Button>
-          <Button type="button" onClick={state.handleSubmit} disabled={state.submitting} className="w-full sm:w-auto">
-            {state.submitting ? "Saving..." : "Save Collection"}
+          <Button
+            type="button"
+            variant={state.readiness.isReady ? "default" : "outline"}
+            onClick={state.handleSubmit}
+            disabled={state.submitting}
+            aria-describedby="save-collection-readiness-status"
+            data-ready={state.readiness.isReady ? "true" : "false"}
+            className={cn(
+              "w-full sm:w-auto",
+              !state.readiness.isReady
+                && "border-amber-500/45 text-amber-800 hover:bg-amber-500/10 dark:text-amber-200",
+            )}
+          >
+            {state.submitting
+              ? "Saving..."
+              : state.readiness.isReady
+                ? "Save Collection"
+                : "Semak Medan Wajib"}
           </Button>
         </div>
       </CardContent>

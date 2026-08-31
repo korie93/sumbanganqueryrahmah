@@ -18,6 +18,8 @@ const baseValues: SaveCollectionFormValues = {
   icNumber: "900101010101",
   customerPhone: "0123456789",
   accountNumber: "1234567890",
+  sourceImportId: "import-verified",
+  agingBucket: "D3",
   batch: "P10",
   paymentDate: "2026-05-17",
   amount: "1650",
@@ -35,13 +37,22 @@ test("buildSaveCollectionReadySummary exposes key save fields", () => {
   assert.equal(summary.find((item) => item.label === "Receipt")?.value, "1 receipt");
 });
 
-test("buildSaveCollectionReadySummary marks missing values", () => {
+test("buildSaveCollectionReadySummary marks missing and invalid values from shared validation", () => {
   const summary = buildSaveCollectionReadySummary({
-    values: { ...baseValues, customerName: "", amount: "" },
+    values: {
+      ...baseValues,
+      customerName: "",
+      customerPhone: "bad",
+      sourceImportId: "",
+      amount: "",
+    },
     receiptCount: 0,
   });
 
   assert.equal(summary.find((item) => item.label === "Customer")?.missing, true);
+  assert.equal(summary.find((item) => item.label === "Phone")?.value, "Perlu diperbetulkan");
+  assert.match(summary.find((item) => item.label === "Phone")?.error || "", /invalid/i);
+  assert.equal(summary.find((item) => item.label === "Saved Match")?.missing, true);
   assert.equal(summary.find((item) => item.label === "Amount")?.missing, true);
   assert.equal(summary.find((item) => item.label === "Receipt")?.value, "0 receipts");
 });

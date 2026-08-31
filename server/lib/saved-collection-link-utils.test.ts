@@ -235,3 +235,71 @@ test("Saved collection matching returns at most one verified row per source file
   assert.equal(matches[0]?.billingPrincipalOsp, "950.00");
   assert.equal(matches[0]?.matchAccuracy, 100);
 });
+
+test("Saved collection matching prefers usable TOTAL DUE for equally verified duplicate rows", () => {
+  const matches = selectSavedCollectionSourceMatches(lookup, [
+    {
+      rowId: "row-newer-blank-total-due",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-02T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        Phone: "0123456789",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "",
+      },
+    },
+    {
+      rowId: "row-older-usable-total-due",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-01T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        Phone: "0123456789",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "1200.00",
+      },
+    },
+  ]);
+
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0]?.rowId, "row-older-usable-total-due");
+  assert.equal(matches[0]?.totalDue, "1200.00");
+});
+
+test("Saved collection matching never lets usable TOTAL DUE outrank stronger identity evidence", () => {
+  const match = selectSavedCollectionSourceMatch(lookup, [
+    {
+      rowId: "row-strong-identity",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-01T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        Phone: "0123456789",
+        "Account Number": "ACC1001",
+      },
+    },
+    {
+      rowId: "row-weaker-identity-with-total-due",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-02T00:00:00.000Z",
+      jsonDataJsonb: {
+        Phone: "0123456789",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "999.00",
+      },
+    },
+  ]);
+
+  assert.equal(match?.rowId, "row-strong-identity");
+  assert.equal(match?.matchBasis, "ic");
+  assert.equal(match?.totalDue, null);
+});

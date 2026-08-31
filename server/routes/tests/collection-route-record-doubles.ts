@@ -216,6 +216,7 @@ export function createCollectionStorageDouble(options: {
 
 export function createCoreCollectionStorageDouble(options?: {
   sessionNickname?: string | null;
+  sourceMatchTotalDue?: string | null;
   seedRecordOverrides?: Partial<CollectionRecordShape>;
   receiptRowsByRecordId?: Record<string, Array<{
     id: string;
@@ -434,7 +435,9 @@ export function createCoreCollectionStorageDouble(options?: {
             matchAccuracy: 100,
             matchedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
             comparedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
-            totalDue: "200.00",
+            totalDue: options?.sourceMatchTotalDue === undefined
+              ? "200.00"
+              : options.sourceMatchTotalDue,
             billingPrincipalOsp: "180.00",
           }
     ),
@@ -450,7 +453,9 @@ export function createCoreCollectionStorageDouble(options?: {
             matchAccuracy: 100,
             matchedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
             comparedFields: ["customer_name", "ic_number", "customer_phone", "account_number"] as const,
-            totalDue: "200.00",
+            totalDue: options?.sourceMatchTotalDue === undefined
+              ? "200.00"
+              : options.sourceMatchTotalDue,
             billingPrincipalOsp: "180.00",
           }]
     ),

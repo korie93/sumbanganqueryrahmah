@@ -62,8 +62,11 @@ test("collection receipt smoke verifies Saved coverage before submitting the req
     createWaitIndex,
   );
 
-  assert.match(smokeSource, /"TOTAL DUE": "12\.34"/);
-  assert.match(smokeSource, /"Billing Principal \(OSP\)": "10\.00"/);
+  assert.match(smokeSource, /"TOTAL DUE": String\(values\.totalDue \?\? "12\.34"\)/);
+  assert.match(
+    smokeSource,
+    /"Billing Principal \(OSP\)": String\(values\.billingPrincipalOsp \?\? "10\.00"\)/,
+  );
   assert.match(
     smokeSource,
     /new URL\(response\.url\(\)\)\.pathname === "\/api\/collection\/source-matches"/,
@@ -79,6 +82,24 @@ test("collection receipt smoke verifies Saved coverage before submitting the req
   assert.match(smokeSource, /page\.getByText\("Abort CP", \{ exact: true \}\)/);
   assert.ok(sourceMatchIndex >= 0 && sourceMatchIndex < createWaitIndex);
   assert.ok(createWaitIndex < saveIndex);
+});
+
+test("direct collection smoke fixtures create and clean verified Saved sources", () => {
+  const mutationStart = smokeSource.indexOf("const checkCollectionMutationConsistency = async");
+  const mutationEnd = smokeSource.indexOf("const checkCollectionRecordsStaleDeleteConflict", mutationStart);
+  const mutationSource = smokeSource.slice(mutationStart, mutationEnd);
+  const staleFixtureStart = smokeSource.indexOf("const provisionStaleDeleteConflictRecord = async");
+  const staleFixtureEnd = smokeSource.indexOf("const waitForRateLimitRecovery", staleFixtureStart);
+  const staleFixtureSource = smokeSource.slice(staleFixtureStart, staleFixtureEnd);
+
+  assert.ok(mutationStart >= 0 && mutationEnd > mutationStart);
+  assert.ok(staleFixtureStart >= 0 && staleFixtureEnd > staleFixtureStart);
+  assert.match(mutationSource, /createCollectionSmokeSourceImport\(context,/);
+  assert.match(mutationSource, /sourceImportId: sourceImport\.id/);
+  assert.match(mutationSource, /cleanup collection mutation source import/);
+  assert.match(staleFixtureSource, /createCollectionSmokeSourceImport\(context,/);
+  assert.match(staleFixtureSource, /sourceImportId: sourceImport\.id/);
+  assert.match(staleFixtureSource, /cleanup failed stale-delete source import/);
 });
 
 test("backup smoke consumes only recovered GET list rate limits after the destructive flow succeeds", () => {
