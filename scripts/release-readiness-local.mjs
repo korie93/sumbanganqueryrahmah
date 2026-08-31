@@ -12,6 +12,7 @@ import {
   stopManagedServerProcess,
 } from "./lib/managed-server-process.mjs";
 import { resolveSmokeSessionSecret } from "./lib/smoke-session-secret.mjs";
+import { buildRegressionTestEnv } from "./lib/release-readiness-env.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
@@ -95,18 +96,6 @@ const runNpmCapture = (args, options = {}) =>
     npmCliPath ? [npmCliPath, ...args] : args,
     options,
   );
-
-const buildRegressionTestEnv = (sourceEnv) => {
-  const {
-    COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: _collectionPiiEncryptionKeyPrevious,
-    COLLECTION_PII_RETIRED_FIELDS: _collectionPiiRetiredFields,
-    VERIFY_COLLECTION_PII_FULL_RETIREMENT: _verifyCollectionPiiFullRetirement,
-    VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT: _verifyCollectionPiiSensitiveRetirement,
-    ...regressionTestEnv
-  } = sourceEnv;
-
-  return regressionTestEnv;
-};
 
 const run = async () => {
   await mkdir(artifactsDir, { recursive: true });

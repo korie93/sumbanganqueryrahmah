@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { buildRegressionTestEnv } from "../lib/release-readiness-env.mjs";
 
 const repoRoot = process.cwd();
 
@@ -102,7 +103,7 @@ test("release readiness runs every backend regression suite before building", ()
   }
 });
 
-test("release readiness runs regression suites with isolated PII rollout env", () => {
+test("release readiness isolates production runtime settings from regression suites", () => {
   const script = readReleaseReadinessScript();
   const suiteNames = [
     "test:contracts",
@@ -118,11 +119,48 @@ test("release readiness runs regression suites with isolated PII rollout env", (
     "test:intelligence",
   ];
 
+  assert.match(script, /import \{ buildRegressionTestEnv \} from "\.\/lib\/release-readiness-env\.mjs"/);
   assert.match(script, /const regressionTestEnv = buildRegressionTestEnv\(env\)/);
-  assert.match(script, /COLLECTION_PII_RETIRED_FIELDS: _collectionPiiRetiredFields/);
-  assert.match(script, /COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: _collectionPiiEncryptionKeyPrevious/);
-  assert.match(script, /VERIFY_COLLECTION_PII_FULL_RETIREMENT: _verifyCollectionPiiFullRetirement/);
-  assert.match(script, /VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT: _verifyCollectionPiiSensitiveRetirement/);
+
+  const isolated = buildRegressionTestEnv({
+    NODE_ENV: "production",
+    HOST: "0.0.0.0",
+    PUBLIC_APP_URL: "https://sqr-system.com",
+    APP_BASE_URL: "https://sqr-system.com",
+    CLIENT_APP_URL: "https://sqr-system.com",
+    CORS_ALLOWED_ORIGINS: "https://sqr-system.com",
+    COLLECTION_PII_RETIRED_FIELDS: "customer_name",
+    COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: "production-key",
+    DATABASE_SSL: "verify-full",
+    DATABASE_SSL_CA: "production-ca",
+    DATABASE_SSL_CA_FILE: "/production/ca.pem",
+    SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL: "2099-01-01T00:00:00.000Z",
+    SESSION_JWT_PRIVATE_KEY: "production-private-key",
+    SESSION_JWT_PUBLIC_KEY: "production-public-key",
+    SQR_DB_BOOTSTRAP_MODE: "migration",
+    VERIFY_COLLECTION_PII_FULL_RETIREMENT: "1",
+    VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT: "1",
+    PG_HOST: "127.0.0.1",
+  });
+
+  assert.equal(isolated.NODE_ENV, "development");
+  assert.equal(isolated.HOST, "127.0.0.1");
+  assert.equal(isolated.PUBLIC_APP_URL, "http://127.0.0.1:5000");
+  assert.equal(isolated.APP_BASE_URL, "http://127.0.0.1:5000");
+  assert.equal(isolated.CLIENT_APP_URL, "http://127.0.0.1:5000");
+  assert.equal(isolated.CORS_ALLOWED_ORIGINS, "http://127.0.0.1:5000");
+  assert.equal(isolated.PG_HOST, "127.0.0.1");
+  assert.equal(isolated.COLLECTION_PII_RETIRED_FIELDS, undefined);
+  assert.equal(isolated.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS, undefined);
+  assert.equal(isolated.DATABASE_SSL, undefined);
+  assert.equal(isolated.DATABASE_SSL_CA, undefined);
+  assert.equal(isolated.DATABASE_SSL_CA_FILE, undefined);
+  assert.equal(isolated.SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL, undefined);
+  assert.equal(isolated.SESSION_JWT_PRIVATE_KEY, undefined);
+  assert.equal(isolated.SESSION_JWT_PUBLIC_KEY, undefined);
+  assert.equal(isolated.SQR_DB_BOOTSTRAP_MODE, undefined);
+  assert.equal(isolated.VERIFY_COLLECTION_PII_FULL_RETIREMENT, undefined);
+  assert.equal(isolated.VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT, undefined);
   for (const suiteName of suiteNames) {
     assert.match(
       script,
