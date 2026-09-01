@@ -14,6 +14,7 @@ import {
   normalizeAndValidateImportUploadFilename,
   validateImportUploadMimeType,
 } from "../import-upload-file-utils";
+import { extractSavedCollectionFinancials } from "../../lib/saved-collection-link-utils";
 
 test("parseImportUploadBuffer parses CSV uploads directly from memory", () => {
   const result = parseImportUploadBuffer(
@@ -163,6 +164,31 @@ test("parseImportUploadBuffer parses XLSB uploads through the spreadsheet adapte
 
   assert.equal(result.error, undefined);
   assert.deepEqual(result.rows, [{ name: "Alice", amount: "15" }]);
+});
+
+test("XLSB master-list TOTAL DUE header remains detectable after import parsing", () => {
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(
+    workbook,
+    xlsx.utils.aoa_to_sheet([
+      ["Account No", "Total Amount Due (TOTAL DUE)", "Calling Date"],
+      ["SYNTHETIC-1001", 1234.5, "20260901"],
+    ]),
+    "Synthetic Master List",
+  );
+  const workbookBuffer = xlsx.write(workbook, {
+    type: "buffer",
+    bookType: "xlsb",
+  }) as Buffer;
+
+  const result = parseImportUploadBuffer("synthetic-master-list.xlsb", workbookBuffer);
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.rows.length, 1);
+  assert.equal(
+    extractSavedCollectionFinancials(result.rows[0]).totalDue,
+    "1234.50",
+  );
 });
 
 test("parseImportUploadBuffer rejects executable content disguised as CSV", () => {

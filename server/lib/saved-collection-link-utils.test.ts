@@ -76,6 +76,15 @@ test("Saved collection financial extraction recognizes trusted financials and Ca
   });
 });
 
+test("Saved collection financial extraction recognizes the production master-list TOTAL DUE header", () => {
+  assert.equal(
+    extractSavedCollectionFinancials({
+      "Total Amount Due (TOTAL DUE)": 1234.5,
+    }).totalDue,
+    "1234.50",
+  );
+});
+
 test("Saved collection financial extraction rejects invalid Calling Date without guessing", () => {
   assert.deepEqual(extractSavedCollectionFinancials({
     "TOTAL DUE": "200.00",

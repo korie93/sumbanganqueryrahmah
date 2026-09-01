@@ -41,6 +41,7 @@ const TOTAL_DUE_HEADERS = new Set([
   "jumlahtertunggak",
   "outstandingamount",
   "totalamountdue",
+  "totalamountduetotaldue",
   "totaldue",
   "totaloutstanding",
 ]);
