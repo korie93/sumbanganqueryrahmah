@@ -6,6 +6,10 @@ type BuildCollectionRecordFilterSnapshotArgs = {
   searchInput?: string;
   canUseNicknameFilter: boolean;
   nicknameFilter?: string;
+  sourceImportFilter?: string;
+  agingFilter?: string;
+  classificationFilter?: string;
+  sortValue?: string;
   limit?: number;
   offset?: number;
 };
@@ -21,10 +25,30 @@ export function buildCollectionRecordFilterSnapshot({
   searchInput,
   canUseNicknameFilter,
   nicknameFilter,
+  sourceImportFilter,
+  agingFilter,
+  classificationFilter,
+  sortValue,
   limit,
   offset,
 }: BuildCollectionRecordFilterSnapshotArgs): CollectionRecordFilters {
   const normalizedNickname = normalizeCollectionFilterText(nicknameFilter);
+  const normalizedSourceImport = normalizeCollectionFilterText(sourceImportFilter);
+  const normalizedAging = normalizeCollectionFilterText(agingFilter)?.toUpperCase();
+  const normalizedClassification = normalizeCollectionFilterText(classificationFilter)?.toLowerCase();
+  const [sortByCandidate, sortDirectionCandidate] = String(sortValue || "paymentDate_desc").split("_");
+  const allowedSortFields = new Set([
+    "paymentDate",
+    "amount",
+    "customerName",
+    "source",
+    "aging",
+    "classification",
+  ]);
+  const sortBy = allowedSortFields.has(sortByCandidate || "")
+    ? sortByCandidate as CollectionRecordFilters["sortBy"]
+    : "paymentDate";
+  const sortDirection = sortDirectionCandidate === "asc" ? "asc" : "desc";
 
   return {
     from: normalizeCollectionFilterText(fromDate),
@@ -36,6 +60,20 @@ export function buildCollectionRecordFilterSnapshot({
       && normalizedNickname !== "all"
         ? normalizedNickname
         : undefined,
+    sourceImportIds:
+      normalizedSourceImport && normalizedSourceImport !== "all"
+        ? [normalizedSourceImport]
+        : undefined,
+    agingBuckets:
+      normalizedAging && ["D3", "D4", "D5", "D6"].includes(normalizedAging)
+        ? [normalizedAging as "D3" | "D4" | "D5" | "D6"]
+        : undefined,
+    classifications:
+      normalizedClassification === "cp" || normalizedClassification === "abort_cp"
+        ? [normalizedClassification]
+        : undefined,
+    sortBy,
+    sortDirection,
     limit,
     offset,
   };

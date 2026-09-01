@@ -175,6 +175,51 @@ function createJsonReceiptPayload(
   };
 }
 
+function buildEligibleCollectionSourceMatch(input: {
+  accountNumber?: string;
+  cardNumber?: string;
+  paymentDate: string;
+}) {
+  const parsed = new Date(`${input.paymentDate}T00:00:00.000Z`);
+  const start = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), 1));
+  const endExclusive = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth() + 1, 1));
+  const endInclusive = new Date(endExclusive.getTime() - 86_400_000);
+  const formatDate = (value: Date) => value.toISOString().slice(0, 10);
+  const accountNumber = String(input.accountNumber || "").trim();
+  const cardNumber = String(input.cardNumber || "").trim();
+  const obligationIdentifier = accountNumber || cardNumber || "account-test";
+  const sourceObligationKey = accountNumber
+    ? `account:${accountNumber.toLowerCase()}`
+    : `card:${obligationIdentifier.toLowerCase()}`;
+  const callingDate = formatDate(start);
+
+  return {
+    eligibleSourceCount: 1,
+    matches: [{
+      sourceImportId: "import-governed-1",
+      sourceDataRowId: `row-${obligationIdentifier.toLowerCase()}`,
+      sourceImportName: "Governed Collection Source",
+      sourceFilename: "governed-source.xlsx",
+      sourceObligationKey,
+      settlementCycleKey: `${callingDate}:${sourceObligationKey}`,
+      cardNumberLast4: cardNumber ? cardNumber.slice(-4) : null,
+      matchBasis: accountNumber && cardNumber
+        ? "account_and_card" as const
+        : cardNumber
+          ? "card_number" as const
+          : "account_number" as const,
+      totalDue: "999999.00",
+      billingPrincipalOsp: "5000.00",
+      totalOsb: null,
+      agingBucket: "D3" as const,
+      callingDate,
+      callingWindowEnd: formatDate(endInclusive),
+      callingWindowEndExclusive: formatDate(endExclusive),
+      duplicateSourceCount: 1,
+    }],
+  };
+}
+
 test("DELETE /api/collection/purge-old rejects non-superuser access before service work begins", async () => {
   const actorPasswordHash = await hashPassword("SuperSecret123");
   const { storage, getPurgeCallCount, auditLogs } = createCollectionStorageDouble({
@@ -388,7 +433,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
   }
 });
 
-test("POST /api/collection rejects a new record without an explicitly verified Saved source", async () => {
+test("POST /api/collection rejects a new record when no governed source row matches", async () => {
   const { storage, createCalls } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -422,14 +467,62 @@ test("POST /api/collection rejects a new record without an explicitly verified S
 
     assert.equal(response.status, 400);
     const payload = await response.json();
-    assert.equal(payload.error.code, "COLLECTION_SOURCE_REQUIRED");
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_NO_MATCH");
     assert.equal(createCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }
 });
 
-test("POST /api/collection rejects a selected Saved file that no longer matches", async () => {
+test("POST /api/collection supports exact Card-only matching without persisting or auditing the full card", async () => {
+  const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+  const cardNumber = "0000123412345678";
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Card Only Customer",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "",
+        cardNumber,
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 245.9,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.record.accountNumber, "");
+    assert.equal(payload.record.cardNumberLast4, "5678");
+    assert.equal(payload.record.sourceMatchBasis, "card_number");
+    assert.equal(createCalls[0]?.sourceCardNumber, cardNumber);
+    assert.equal("cardNumber" in payload.record, false);
+    assert.doesNotMatch(JSON.stringify(payload), new RegExp(cardNumber));
+    assert.doesNotMatch(auditLogs.map((entry) => entry.details || "").join("\n"), new RegExp(cardNumber));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection ignores a browser-supplied source ID and uses the governed backend match", async () => {
   const { storage, createCalls } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -463,10 +556,14 @@ test("POST /api/collection rejects a selected Saved file that no longer matches"
       }),
     });
 
-    assert.equal(response.status, 404);
+    assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.error.code, "COLLECTION_SOURCE_FILE_NOT_FOUND");
-    assert.equal(createCalls.length, 0);
+    assert.equal(payload.record.sourceImportId, "import-1");
+    assert.equal(payload.record.sourceDataRowId, "saved-row-1");
+    assert.equal(payload.record.agingBucket, "D4");
+    assert.equal(createCalls.length, 1);
+    assert.equal(createCalls[0].sourceImportId, "import-1");
+    assert.notEqual(createCalls[0].sourceImportId, "client-spoofed-import");
   } finally {
     await stopTestServer(server);
   }
@@ -1878,7 +1975,7 @@ test("PATCH /api/collection/:id rejects oversized identity fields from direct AP
   }
 });
 
-test("PATCH /api/collection/:id rejects identity edits on legacy records without a verified Saved source", async () => {
+test("PATCH /api/collection/:id auto-links legacy identity edits to a governed Saved source", async () => {
   const { storage, updateCalls } = createCoreCollectionStorageDouble();
   const app = createJsonTestApp();
 
@@ -1901,10 +1998,12 @@ test("PATCH /api/collection/:id rejects identity edits on legacy records without
       body: JSON.stringify({ accountNumber: "ACC-LINKED-1001" }),
     });
 
-    assert.equal(response.status, 400);
+    assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.error.code, "COLLECTION_SOURCE_REQUIRED");
-    assert.equal(updateCalls.length, 0);
+    assert.equal(payload.record.sourceImportId, "import-1");
+    assert.equal(payload.record.sourceDataRowId, "saved-row-1");
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0].data.sourceImportId, "import-1");
   } finally {
     await stopTestServer(server);
   }
@@ -3855,6 +3954,11 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
     getCollectionStaffNicknames: async () => nicknameProfiles,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    findEligibleCollectionSourceMatches: async (input: {
+      accountNumber?: string;
+      cardNumber?: string;
+      paymentDate: string;
+    }) => buildEligibleCollectionSourceMatch(input),
     isCollectionStaffNicknameActive: async (nickname: string) =>
       nicknameProfiles.some((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase() && item.isActive),
     getCollectionDailyTarget: async (params: { username: string; year: number; month: number }) => {
@@ -4284,6 +4388,11 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
   const storage = {
     getCollectionNicknameSessionByActivity: async () => null,
     getCollectionStaffNicknameByName: async () => null,
+    findEligibleCollectionSourceMatches: async (input: {
+      accountNumber?: string;
+      cardNumber?: string;
+      paymentDate: string;
+    }) => buildEligibleCollectionSourceMatch(input),
     getCollectionRecordById: async (id: string) => (id === record.id ? { ...storedRecord } : null),
     updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
       updateCalls.push({ id, data });

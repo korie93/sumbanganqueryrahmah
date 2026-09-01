@@ -11,6 +11,11 @@ export function formatCollectionOptionalAmount(value: string | null | undefined)
   return value === null || value === undefined || value === "" ? "-" : formatAmountRM(value);
 }
 
+export function formatCollectionMaskedCard(last4: string | null | undefined) {
+  const normalized = String(last4 || "").trim().slice(-4);
+  return normalized ? `**** ${normalized}` : "-";
+}
+
 export function getCollectionMatchAccuracyLabel(
   value: number | null | undefined,
 ) {

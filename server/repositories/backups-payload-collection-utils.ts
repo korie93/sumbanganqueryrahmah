@@ -121,6 +121,10 @@ export function mapBackupCollectionRecordRow(
       typeof row.sourceFilename === "string" && row.sourceFilename.trim()
         ? row.sourceFilename.trim()
         : null,
+    cardNumberLast4:
+      typeof row.cardNumberLast4 === "string" && row.cardNumberLast4.trim().length <= 4
+        ? row.cardNumberLast4.trim() || null
+        : null,
     agingBucket:
       typeof row.agingBucket === "string" && ["D3", "D4", "D5", "D6"].includes(row.agingBucket)
         ? row.agingBucket
@@ -141,13 +145,37 @@ export function mapBackupCollectionRecordRow(
         ? row.callingWindowEndExclusive.slice(0, 10)
         : null,
     sourceMatchBasis:
-      row.sourceMatchBasis === "ic" || row.sourceMatchBasis === "phone_and_account"
+      row.sourceMatchBasis === "ic"
+      || row.sourceMatchBasis === "phone_and_account"
+      || row.sourceMatchBasis === "account_number"
+      || row.sourceMatchBasis === "card_number"
+      || row.sourceMatchBasis === "account_and_card"
         ? row.sourceMatchBasis
         : null,
     sourceMatchAccuracy:
       Number.isInteger(Number(row.sourceMatchAccuracy))
         ? Number(row.sourceMatchAccuracy)
         : null,
+    sourceObligationKey:
+      typeof row.sourceObligationKey === "string" && row.sourceObligationKey.trim()
+        ? row.sourceObligationKey.trim()
+        : null,
+    settlementCycleKey:
+      typeof row.settlementCycleKey === "string" && row.settlementCycleKey.trim()
+        ? row.settlementCycleKey.trim()
+        : null,
+    classification:
+      row.classification === "cp" || row.classification === "abort_cp"
+        ? row.classification
+        : null,
+    cumulativeCollected:
+      row.cumulativeCollected == null
+        ? null
+        : row.cumulativeCollected as NonNullable<BackupCollectionRecord["cumulativeCollected"]>,
+    remainingAmount:
+      row.remainingAmount == null
+        ? null
+        : row.remainingAmount as NonNullable<BackupCollectionRecord["remainingAmount"]>,
     batch: String(row.batch || ""),
     paymentDate: String(row.paymentDate || ""),
     amount: row.amount as BackupCollectionRecord["amount"],

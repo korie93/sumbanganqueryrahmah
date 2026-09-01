@@ -75,6 +75,9 @@ test("buildBackupMetadata includes payload size and temp encryption flags", () =
         dataRowsCount: 2,
         usersCount: 3,
         auditLogsCount: 4,
+        collectionSourceConfigsCount: 8,
+        collectionSourceRowsCount: 9,
+        collectionOspTargetsCount: 10,
         collectionRecordsCount: 5,
         collectionRecordPurgeHistoryCount: 7,
         collectionRecordReceiptsCount: 6,
@@ -95,4 +98,7 @@ test("buildBackupMetadata includes payload size and temp encryption flags", () =
   assert.equal(metadata.tempPayloadEncrypted, true);
   assert.equal(metadata.collectionRecordPurgeHistoryCount, 7);
   assert.equal(metadata.collectionRecordReceiptsCount, 6);
+  assert.equal(metadata.collectionSourceConfigsCount, 8);
+  assert.equal(metadata.collectionSourceRowsCount, 9);
+  assert.equal(metadata.collectionOspTargetsCount, 10);
 });

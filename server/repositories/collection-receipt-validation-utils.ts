@@ -80,6 +80,7 @@ export async function syncCollectionRecordReceiptValidation(
       customer_phone_encrypted,
       ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
       account_number_encrypted,
+      card_number_last4,
       source_import_id,
       source_data_row_id,
       source_import_name,
@@ -91,6 +92,11 @@ export async function syncCollectionRecordReceiptValidation(
       billing_principal_osp,
       source_match_basis,
       source_match_accuracy,
+      source_obligation_key,
+      settlement_cycle_key,
+      classification,
+      cumulative_collected,
+      remaining_amount,
       batch,
       payment_date,
       amount,
@@ -100,19 +106,6 @@ export async function syncCollectionRecordReceiptValidation(
       receipt_validation_message,
       receipt_count,
       duplicate_receipt_flag,
-      (
-        SELECT COALESCE(SUM(child.amount), 0)::numeric(14,2)
-        FROM public.collection_records child
-        WHERE child.source_import_id = record.source_import_id
-          AND child.source_data_row_id = record.source_data_row_id
-          AND child.calling_date = record.calling_date
-          AND child.calling_window_end_exclusive = record.calling_window_end_exclusive
-          AND child.payment_date >= child.calling_date
-          AND child.payment_date < child.calling_window_end_exclusive
-          AND child.source_match_basis IS NOT NULL
-          AND child.total_due IS NOT NULL
-          AND child.duplicate_receipt_flag = false
-      ) AS cumulative_collected,
       created_by_login,
       collection_staff_nickname,
       staff_username,

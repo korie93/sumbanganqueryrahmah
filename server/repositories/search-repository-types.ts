@@ -97,6 +97,7 @@ export type CollectionSettlementProjectionInput = {
   paymentDate: string;
   sourceDataRowId: string;
   sourceImportId: string;
+  settlementCycleKey?: string | null;
   totalDue: string;
 };
 

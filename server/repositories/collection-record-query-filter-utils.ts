@@ -94,6 +94,31 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
     conditions.push(sql`duplicate_receipt_flag = true`);
   }
 
+  const sourceImportIds = Array.isArray(filters?.sourceImportIds)
+    ? Array.from(new Set(filters.sourceImportIds.map((value) => String(value || "").trim()).filter(Boolean)))
+    : [];
+  if (sourceImportIds.length > 0) {
+    conditions.push(sql`source_import_id = ANY(${buildTextArraySql(sourceImportIds)})`);
+  }
+
+  const agingBuckets = Array.isArray(filters?.agingBuckets)
+    ? Array.from(new Set(filters.agingBuckets.filter((value) => (
+        value === "D3" || value === "D4" || value === "D5" || value === "D6"
+      ))))
+    : [];
+  if (agingBuckets.length > 0) {
+    conditions.push(sql`aging_bucket = ANY(${buildTextArraySql(agingBuckets)})`);
+  }
+
+  const classifications = Array.isArray(filters?.classifications)
+    ? Array.from(new Set(filters.classifications.filter((value) => (
+        value === "cp" || value === "abort_cp"
+      ))))
+    : [];
+  if (classifications.length > 0) {
+    conditions.push(sql`classification = ANY(${buildTextArraySql(classifications)})`);
+  }
+
   return conditions;
 }
 
@@ -107,6 +132,9 @@ export function canUseCollectionRecordDailyRollups(filters?: CollectionRecordFil
     String(filters?.search || "").trim().length === 0
     && String(filters?.receiptValidationStatus || "").trim().length === 0
     && filters?.duplicateOnly !== true
+    && (!filters?.sourceImportIds || filters.sourceImportIds.length === 0)
+    && (!filters?.agingBuckets || filters.agingBuckets.length === 0)
+    && (!filters?.classifications || filters.classifications.length === 0)
   );
 }
 

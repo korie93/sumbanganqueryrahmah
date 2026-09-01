@@ -2,9 +2,9 @@ import type { AuthenticatedUser } from "../../auth/guards";
 import { badRequest } from "../../http/errors";
 import {
   COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH,
+  COLLECTION_CARD_NUMBER_MAX_LENGTH,
   COLLECTION_CUSTOMER_NAME_MAX_LENGTH,
   COLLECTION_IC_NUMBER_MAX_LENGTH,
-  COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH,
   ensureLooseObject,
   isFutureCollectionDate,
   isValidCollectionDate,
@@ -17,7 +17,7 @@ import type { CollectionStoragePort } from "./collection-service-support";
 import { logger } from "../../lib/logger";
 import { formatCollectionAmountMyrString } from "../../../shared/collection-amount-types";
 import { isDateInsideCollectionCallingWindow } from "../../lib/collection-calling-window";
-import { verifySelectedSavedCollectionSource } from "./collection-source-verification";
+import { verifyEligibleSavedCollectionSource } from "./collection-source-verification";
 
 type RequireUserFn = (user?: AuthenticatedUser) => AuthenticatedUser;
 
@@ -61,7 +61,7 @@ export class CollectionSourceMatchOperations {
     const icNumber = normalizeCollectionText(body.icNumber);
     const customerPhone = normalizeCollectionText(body.customerPhone);
     const accountNumber = normalizeCollectionText(body.accountNumber);
-    const sourceImportId = normalizeCollectionText(body.sourceImportId);
+    const cardNumber = normalizeCollectionText(body.cardNumber);
     const paymentDate = normalizeCollectionText(body.paymentDate);
     const amount = parseCollectionAmount(body.amount);
 
@@ -74,11 +74,14 @@ export class CollectionSourceMatchOperations {
     if (!isValidCollectionPhone(customerPhone)) {
       throw badRequest("Customer Phone Number is invalid.");
     }
-    if (!accountNumber || accountNumber.length > COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH) {
-      throw badRequest("Account Number is required and must not exceed 128 characters.");
+    if (!accountNumber && !cardNumber) {
+      throw badRequest("Account Number or Card Number is required.");
     }
-    if (!sourceImportId || sourceImportId.length > COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH) {
-      throw badRequest("Select a valid Saved source file.", "COLLECTION_SOURCE_REQUIRED");
+    if (accountNumber.length > COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH) {
+      throw badRequest("Account Number must not exceed 128 characters.");
+    }
+    if (cardNumber.length > COLLECTION_CARD_NUMBER_MAX_LENGTH) {
+      throw badRequest("Card Number must not exceed 128 characters.");
     }
     if (!paymentDate || !isValidCollectionDate(paymentDate) || isFutureCollectionDate(paymentDate)) {
       throw badRequest("A valid non-future Payment Date is required for matching.");
@@ -87,12 +90,10 @@ export class CollectionSourceMatchOperations {
       throw badRequest("A valid positive Amount is required for matching.");
     }
 
-    const match = await verifySelectedSavedCollectionSource(this.storage, {
-      customerName,
-      icNumber,
-      customerPhone,
-      accountNumber,
-      sourceImportId,
+    const match = await verifyEligibleSavedCollectionSource(this.storage, {
+      paymentDate,
+      ...(accountNumber ? { accountNumber } : {}),
+      ...(cardNumber ? { cardNumber } : {}),
     });
     if (match.totalDue === null) {
       throw badRequest(
@@ -114,8 +115,9 @@ export class CollectionSourceMatchOperations {
       callingWindowEndExclusive: match.callingWindowEndExclusive as string,
       currentAmount: formatCollectionAmountMyrString(amount),
       paymentDate,
-      sourceDataRowId: match.rowId,
-      sourceImportId,
+      sourceDataRowId: match.sourceDataRowId,
+      sourceImportId: match.sourceImportId,
+      settlementCycleKey: match.settlementCycleKey,
       totalDue: match.totalDue,
     });
 
@@ -128,8 +130,8 @@ export class CollectionSourceMatchOperations {
           event: "collection_source_match_preview",
           actor: user.username,
           matchCount: 1,
-          sourceImportId,
-          sourceDataRowId: match.rowId,
+          sourceImportId: match.sourceImportId,
+          sourceDataRowId: match.sourceDataRowId,
         }),
       });
     } catch (error) {
@@ -146,9 +148,16 @@ export class CollectionSourceMatchOperations {
         sourceImportName: match.sourceImportName,
         sourceFilename: match.sourceFilename,
         matchBasis: match.matchBasis,
-        matchAccuracy: match.matchAccuracy,
-        matchedFields: match.matchedFields,
-        comparedFields: match.comparedFields,
+        matchAccuracy: 100,
+        matchedFields: match.matchBasis === "account_and_card"
+          ? ["account_number", "card_number"]
+          : [match.matchBasis],
+        comparedFields: [
+          ...(accountNumber ? ["account_number"] : []),
+          ...(cardNumber ? ["card_number"] : []),
+        ],
+        agingBucket: match.agingBucket,
+        cardNumberLast4: match.cardNumberLast4,
         totalDue: match.totalDue,
         billingPrincipalOsp: match.billingPrincipalOsp,
         callingDate: match.callingDate,

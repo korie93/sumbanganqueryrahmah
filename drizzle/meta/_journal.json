@@ -358,6 +358,13 @@
       "when": 1788134400000,
       "tag": "0051_collection_calling_window_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1788220800000,
+      "tag": "0052_collection_source_governance_osp",
+      "breakpoints": true
     }
   ]
 }

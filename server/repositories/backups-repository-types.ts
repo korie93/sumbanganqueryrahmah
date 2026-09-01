@@ -58,6 +58,7 @@ export type BackupCollectionRecord = {
   customerPhoneEncrypted?: string | null;
   accountNumber?: string | null;
   accountNumberEncrypted?: string | null;
+  cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
@@ -69,6 +70,11 @@ export type BackupCollectionRecord = {
   callingWindowEndExclusive?: string | null;
   sourceMatchBasis?: string | null;
   sourceMatchAccuracy?: number | null;
+  sourceObligationKey?: string | null;
+  settlementCycleKey?: string | null;
+  classification?: "cp" | "abort_cp" | string | null;
+  cumulativeCollected?: BackupAmountMyr | null;
+  remainingAmount?: BackupAmountMyr | null;
   batch: string;
   paymentDate: string;
   amount: BackupAmountMyr;
@@ -83,6 +89,49 @@ export type BackupCollectionRecord = {
   collectionStaffNickname: string;
   staffUsername?: string | null;
   createdAt: string | Date;
+};
+
+export type BackupCollectionSourceConfig = {
+  id: string;
+  validFrom: string;
+  validTo: string;
+  cycleKey: string;
+  enabled: boolean;
+  compatibilityStatus: "compatible" | "incompatible" | string;
+  compatibilityIssues?: string[] | null;
+  indexedRowCount: number;
+  configuredBy: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+export type BackupCollectionSourceRow = {
+  id: string;
+  sourceImportId: string;
+  accountNumberHash?: string | null;
+  cardNumberHash?: string | null;
+  cardNumberLast4?: string | null;
+  canonicalObligationKey: string;
+  totalDue: BackupAmountMyr;
+  billingPrincipalOsp: BackupAmountMyr;
+  totalOsb?: BackupAmountMyr | null;
+  agingBucket: "D3" | "D4" | "D5" | "D6" | string;
+  callingDate: string;
+  createdAt: string | Date;
+};
+
+export type BackupCollectionOspTarget = {
+  id: string;
+  sourceScopeHash: string;
+  sourceImportIds: string[];
+  periodFrom: string;
+  periodTo: string;
+  agingBucket: "D3" | "D4" | "D5" | "D6" | string;
+  totalOspBaseline?: BackupAmountMyr | null;
+  targetPercentage: BackupAmountMyr;
+  configuredBy: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 };
 
 export type BackupCollectionReceipt = {
@@ -129,6 +178,9 @@ export type BackupDataPayload = {
   dataRows: DataRow[];
   users: BackupUserRecord[];
   auditLogs: AuditLog[];
+  collectionSourceConfigs?: BackupCollectionSourceConfig[];
+  collectionSourceRows?: BackupCollectionSourceRow[];
+  collectionOspTargets?: BackupCollectionOspTarget[];
   collectionRecords?: BackupCollectionRecord[];
   collectionRecordPurgeHistory?: BackupCollectionRecordPurgeHistory[];
   collectionRecordReceipts?: BackupCollectionReceipt[];
@@ -139,6 +191,9 @@ export type BackupPayloadCounts = {
   dataRowsCount: number;
   usersCount: number;
   auditLogsCount: number;
+  collectionSourceConfigsCount: number;
+  collectionSourceRowsCount: number;
+  collectionOspTargetsCount: number;
   collectionRecordsCount: number;
   collectionRecordPurgeHistoryCount: number;
   collectionRecordReceiptsCount: number;
@@ -182,6 +237,9 @@ export type RestoreStats = {
   dataRows: RestoreDatasetStats;
   users: RestoreDatasetStats;
   auditLogs: RestoreDatasetStats;
+  collectionSourceConfigs: RestoreDatasetStats;
+  collectionSourceRows: RestoreDatasetStats;
+  collectionOspTargets: RestoreDatasetStats;
   collectionRecords: RestoreDatasetStats;
   collectionRecordPurgeHistory: RestoreDatasetStats;
   collectionRecordReceipts: RestoreDatasetStats;

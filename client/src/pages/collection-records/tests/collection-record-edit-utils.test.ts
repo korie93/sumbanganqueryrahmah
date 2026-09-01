@@ -87,3 +87,20 @@ test("getCollectionRecordEditValidationError rejects invalid phone before save",
     "Customer Phone Number is invalid.",
   );
 });
+
+test("getCollectionRecordEditValidationError permits an existing Card-only governed record", () => {
+  assert.equal(
+    getCollectionRecordEditValidationError(
+      buildValidationArgs({
+        accountNumber: "",
+        editingRecord: {
+          ...baseEditingRecord,
+          accountNumber: "",
+          cardNumberLast4: "5678",
+          sourceMatchBasis: "card_number",
+        } as CollectionRecord,
+      }),
+    ),
+    null,
+  );
+});

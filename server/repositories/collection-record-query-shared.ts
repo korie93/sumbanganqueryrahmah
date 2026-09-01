@@ -30,6 +30,11 @@ export type CollectionRecordFilters = {
   nicknames?: string[] | undefined;
   receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged" | undefined;
   duplicateOnly?: boolean | undefined;
+  sourceImportIds?: string[] | undefined;
+  agingBuckets?: Array<"D3" | "D4" | "D5" | "D6"> | undefined;
+  classifications?: Array<"cp" | "abort_cp"> | undefined;
+  sortBy?: "paymentDate" | "amount" | "customerName" | "source" | "aging" | "classification" | undefined;
+  sortDirection?: "asc" | "desc" | undefined;
 };
 
 export type CollectionRollupFilters = Omit<CollectionRecordFilters, "search">;

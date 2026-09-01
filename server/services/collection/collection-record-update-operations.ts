@@ -46,7 +46,7 @@ import {
   type RequireUserFn,
 } from "./collection-record-write-shared";
 import { isDateInsideCollectionCallingWindow } from "../../lib/collection-calling-window";
-import { verifySelectedSavedCollectionSource } from "./collection-source-verification";
+import { verifyEligibleSavedCollectionSource } from "./collection-source-verification";
 
 export class CollectionRecordUpdateOperations {
   constructor(
@@ -79,46 +79,44 @@ export class CollectionRecordUpdateOperations {
       const updatePayload: Record<string, unknown> = {};
       const fields = normalizeCollectionRecordFields(body);
       const updateDraft = buildCollectionRecordUpdateDraft(body, fields);
+      if (
+        body.accountNumber !== undefined
+        && !fields.accountNumber
+        && !fields.cardNumber
+        && existing.sourceMatchBasis !== "card_number"
+        && existing.sourceMatchBasis !== "account_and_card"
+      ) {
+        throw badRequest("Account Number cannot be empty unless Card Number is provided.");
+      }
       Object.assign(updatePayload, updateDraft.updatePayload);
       if (updateDraft.nextCollectionStaffNickname) {
         await assertCollectionStaffNicknameWriteAccess(this.storage, user, updateDraft.nextCollectionStaffNickname);
         updatePayload.collectionStaffNickname = updateDraft.nextCollectionStaffNickname;
       }
 
-      const identityFields = ["customerName", "icNumber", "customerPhone", "accountNumber"] as const;
+      // Governed matching is keyed only by strong account/card identifiers.
+      // Editing descriptive customer fields must not force users to re-enter a
+      // full card number that is deliberately never persisted.
+      const identityFields = ["accountNumber"] as const;
       const identityChanged = identityFields.some((field) => (
         Object.prototype.hasOwnProperty.call(updatePayload, field)
         && String(updatePayload[field] ?? "").trim() !== String(existing[field] ?? "").trim()
       ));
-      const sourceSelectionChanged = body.sourceImportId !== undefined;
-      const shouldRematchSource = identityChanged || sourceSelectionChanged;
-      const selectedSourceImportId = sourceSelectionChanged
-        ? fields.sourceImportId
-        : String(existing.sourceImportId || "").trim();
-      if (shouldRematchSource && !selectedSourceImportId) {
-        throw badRequest(
-          "Select and verify a Saved source when changing customer identity or source.",
-          "COLLECTION_SOURCE_REQUIRED",
-        );
-      }
+      const nextPaymentDate = String(updatePayload.paymentDate ?? existing.paymentDate);
+      const paymentDateChanged = Object.prototype.hasOwnProperty.call(updatePayload, "paymentDate")
+        && nextPaymentDate !== String(existing.paymentDate);
+      const cardNumberSupplied = body.cardNumber !== undefined && Boolean(fields.cardNumber);
+      const hasTrustedSourceLink = Boolean(existing.sourceImportId && existing.sourceDataRowId);
+      const shouldRematchSource = identityChanged
+        || cardNumberSupplied
+        || (paymentDateChanged && !hasTrustedSourceLink);
       const sourceMatch = shouldRematchSource
-        ? await verifySelectedSavedCollectionSource(this.storage, {
-            customerName: String(updatePayload.customerName ?? existing.customerName),
-            icNumber: String(updatePayload.icNumber ?? existing.icNumber),
-            customerPhone: String(updatePayload.customerPhone ?? existing.customerPhone),
+        ? await verifyEligibleSavedCollectionSource(this.storage, {
+            paymentDate: nextPaymentDate,
             accountNumber: String(updatePayload.accountNumber ?? existing.accountNumber),
-            sourceImportId: selectedSourceImportId,
+            ...(cardNumberSupplied ? { cardNumber: fields.cardNumber } : {}),
           })
         : null;
-      if (
-        shouldRematchSource
-        && (!sourceMatch || sourceMatch.sourceImportId !== selectedSourceImportId)
-      ) {
-        throw badRequest(
-          "The selected Saved file no longer contains a matching customer row. Run matching again.",
-          "COLLECTION_SOURCE_MATCH_STALE",
-        );
-      }
       const matchedTotalDue = sourceMatch?.totalDue == null
         ? null
         : parseCollectionAmountMyrInput(sourceMatch.totalDue, { allowZero: true });
@@ -132,25 +130,27 @@ export class CollectionRecordUpdateOperations {
         );
       }
       if (shouldRematchSource) {
+        updatePayload.sourceCardNumber = fields.cardNumber || null;
+        updatePayload.cardNumberLast4 = sourceMatch?.cardNumberLast4 ?? null;
         updatePayload.sourceImportId = sourceMatch?.sourceImportId ?? null;
-        updatePayload.sourceDataRowId = sourceMatch?.rowId ?? null;
+        updatePayload.sourceDataRowId = sourceMatch?.sourceDataRowId ?? null;
         updatePayload.sourceImportName = sourceMatch?.sourceImportName ?? null;
         updatePayload.sourceFilename = sourceMatch?.sourceFilename ?? null;
         updatePayload.callingDate = sourceMatch?.callingDate ?? null;
         updatePayload.callingWindowEndExclusive = sourceMatch?.callingWindowEndExclusive ?? null;
+        updatePayload.agingBucket = sourceMatch?.agingBucket ?? null;
         updatePayload.totalDue = matchedTotalDue;
         updatePayload.billingPrincipalOsp = matchedBillingPrincipalOsp;
         updatePayload.sourceMatchBasis = sourceMatch?.matchBasis ?? null;
-        updatePayload.sourceMatchAccuracy = sourceMatch?.matchAccuracy ?? null;
+        updatePayload.sourceMatchAccuracy = sourceMatch ? 100 : null;
+        updatePayload.sourceObligationKey = sourceMatch?.sourceObligationKey ?? null;
+        updatePayload.settlementCycleKey = sourceMatch?.settlementCycleKey ?? null;
       }
       const trustedCallingDate = sourceMatch?.callingDate ?? existing.callingDate ?? null;
       const trustedCallingWindowEnd = sourceMatch?.callingWindowEnd ?? existing.callingWindowEnd ?? null;
       const trustedCallingWindowEndExclusive = sourceMatch?.callingWindowEndExclusive
         ?? existing.callingWindowEndExclusive
         ?? null;
-      const nextPaymentDate = String(updatePayload.paymentDate ?? existing.paymentDate);
-      const paymentDateChanged = Object.prototype.hasOwnProperty.call(updatePayload, "paymentDate")
-        && nextPaymentDate !== String(existing.paymentDate);
       const nextAmountCents = parseCollectionAmountToCents(
         updatePayload.amount ?? existing.amount,
         { allowZero: true },
@@ -362,7 +362,7 @@ export class CollectionRecordUpdateOperations {
                   sourceImportId: updated.sourceImportId ?? null,
                   sourceDataRowId: updated.sourceDataRowId ?? null,
                   matchBasis: sourceMatch?.matchBasis ?? null,
-                  matchAccuracy: sourceMatch?.matchAccuracy ?? null,
+                  matchAccuracy: sourceMatch ? 100 : null,
                 },
               }
             : {}),

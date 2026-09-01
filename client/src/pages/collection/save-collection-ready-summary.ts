@@ -29,6 +29,11 @@ function formatSummaryValue(value: string): SaveCollectionReadySummaryItem["valu
   return normalized || "Belum diisi";
 }
 
+function maskCardNumber(value: string): string {
+  const compact = String(value || "").trim().replace(/\s+/g, "");
+  return compact ? `Card ending ${compact.slice(-4)}` : "";
+}
+
 function buildValidatedSummaryItem(params: {
   field: SaveCollectionFieldName;
   label: string;
@@ -87,21 +92,15 @@ export function buildSaveCollectionReadySummary(params: {
       readiness,
     }),
     buildValidatedSummaryItem({
+      field: "cardNumber",
+      label: "Card",
+      value: maskCardNumber(params.values.cardNumber),
+      readiness,
+    }),
+    buildValidatedSummaryItem({
       field: "batch",
       label: "Batch",
       value: params.values.batch,
-      readiness,
-    }),
-    buildValidatedSummaryItem({
-      field: "agingBucket",
-      label: "Aging",
-      value: params.values.agingBucket ?? "D3",
-      readiness,
-    }),
-    buildValidatedSummaryItem({
-      field: "sourceImportId",
-      label: "Saved Match",
-      value: params.values.sourceImportId ? "Verified" : "Belum disahkan",
       readiness,
     }),
     buildValidatedSummaryItem({
@@ -175,6 +174,6 @@ export function buildSaveCollectionSuccessDescription(params: {
   const sourceLabel = String(params.sourceLabel || "").trim();
   const sourceMessage = sourceLabel
     ? ` Dipautkan kepada Saved yang disahkan: ${sourceLabel}.`
-    : " Status Saved tidak tersedia.";
-  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, aging ${params.values.agingBucket ?? "D3"}, ${receiptLabel}.${sourceMessage}`;
+    : " Source Saved ditentukan secara auto-matching.";
+  return `${amountLabel} disimpan untuk ${staffNickname}, batch ${params.values.batch}, ${receiptLabel}.${sourceMessage}`;
 }

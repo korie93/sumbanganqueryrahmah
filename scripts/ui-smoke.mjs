@@ -605,10 +605,11 @@ const createCollectionSmokeSourceImport = async (context, values) => {
     "Customer Name": values.customerName,
     "IC Number": values.icNumber,
     "Customer Phone Number": values.customerPhone,
-    "Account Number": `LEGACY-${values.uniqueSuffix}`,
-    "Card No": values.accountNumber,
+    "Account No": values.accountNumber,
+    "Card No": values.cardNumber || "",
     "TOTAL DUE": String(values.totalDue ?? "12.34"),
     "Billing Principal (OSP)": String(values.billingPrincipalOsp ?? "10.00"),
+    "DC_STS": String(values.dcSts ?? "6"),
     "Calling Date": String(values.callingDate ?? getLocalIsoDate()),
   }];
   if (values.noRecordAccountNumber) {
@@ -616,10 +617,11 @@ const createCollectionSmokeSourceImport = async (context, values) => {
       "Customer Name": `Smoke No Collection ${values.uniqueSuffix}`,
       "IC Number": `810202${values.uniqueSuffix.slice(-6)}`,
       "Customer Phone Number": `013${values.uniqueSuffix.slice(-7)}`,
-      "Account Number": `LEGACY-NO-RECORD-${values.uniqueSuffix}`,
-      "Card No": values.noRecordAccountNumber,
-      "TOTAL DUE": "",
-      "Billing Principal (OSP)": "",
+      "Account No": values.noRecordAccountNumber,
+      "Card No": "",
+      "TOTAL DUE": "99.00",
+      "Billing Principal (OSP)": "88.00",
+      "DC_STS": String(values.dcSts ?? "6"),
       "Calling Date": String(values.callingDate ?? getLocalIsoDate()),
     });
   }
@@ -637,6 +639,17 @@ const createCollectionSmokeSourceImport = async (context, values) => {
   const sourceImportId = String(response.payload?.id || "").trim();
 
   assert(sourceImportId, "collection smoke should create a Saved source import");
+  await apiJsonRequestWithRetry(
+    context,
+    "PUT",
+    `/api/collection/source-configs/${encodeURIComponent(sourceImportId)}`,
+    {
+      validFrom: "2000-01-01",
+      validTo: "2099-12-31",
+      enabled: true,
+    },
+    [200],
+  );
   return {
     id: sourceImportId,
     name: String(response.payload?.name || sourceName).trim(),
@@ -1214,13 +1227,6 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       buttonTestId: "save-collection-payment-date",
     });
     await getInputByLabel(page, "Amount (RM)").fill("12.34");
-    await page.getByLabel("Aging", { exact: true }).selectOption("D6");
-    const sourceSelect = page.locator("#save-collection-source-file");
-    await sourceSelect.selectOption(sourceImport.id);
-    assert(
-      await sourceSelect.inputValue() === sourceImport.id,
-      "collection receipt UI smoke should select its Saved source file before matching",
-    );
     await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
     await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
     await fillReceiptAmountInput(page, "12.34");
@@ -1231,7 +1237,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
           response.request().method() === "POST"
           && new URL(response.url()).pathname === "/api/collection/source-matches",
       ),
-      page.getByRole("button", { name: "Semak Matching" }).click(),
+      page.getByRole("button", { name: "Semak Auto-matching" }).click(),
     ]);
     const sourceMatchRawText = await sourceMatchResponse.text();
     const sourceMatchPayload = sourceMatchRawText ? JSON.parse(sourceMatchRawText) : {};
@@ -1284,7 +1290,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     assert(expectedUpdatedAt, "collection receipt UI smoke should capture the created record version");
     assert(
       String(createPayload?.record?.sourceImportId || "").trim() === sourceImport.id,
-      "collection receipt UI smoke should persist the selected verified Saved source import",
+      "collection receipt UI smoke should persist the backend-selected verified Saved source import",
     );
     assert(
       String(createPayload?.record?.sourceDataRowId || "").trim(),
@@ -1292,7 +1298,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     );
     assert(
       createPayload?.record?.agingBucket === "D6",
-      "collection receipt UI smoke should persist the selected Aging bucket",
+      "collection receipt UI smoke should persist the source-row Aging bucket",
     );
     assert(
       createPayload?.record?.totalDue === "12.34"

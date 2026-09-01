@@ -37,6 +37,8 @@ type CollectionRecordDbRow = {
   accountNumber?: unknown;
   account_number_encrypted?: unknown;
   accountNumberEncrypted?: unknown;
+  card_number_last4?: unknown;
+  cardNumberLast4?: unknown;
   source_import_id?: unknown;
   sourceImportId?: unknown;
   source_data_row_id?: unknown;
@@ -61,6 +63,11 @@ type CollectionRecordDbRow = {
   sourceMatchBasis?: unknown;
   source_match_accuracy?: unknown;
   sourceMatchAccuracy?: unknown;
+  source_obligation_key?: unknown;
+  sourceObligationKey?: unknown;
+  settlement_cycle_key?: unknown;
+  settlementCycleKey?: unknown;
+  classification?: unknown;
   cumulative_collected?: unknown;
   cumulativeCollected?: unknown;
   remaining_amount?: unknown;
@@ -255,34 +262,73 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
   const sourceDataRowId = String(
     normalizedRow.source_data_row_id ?? normalizedRow.sourceDataRowId ?? "",
   ).trim() || null;
+  const sourceObligationKey = String(
+    normalizedRow.source_obligation_key ?? normalizedRow.sourceObligationKey ?? "",
+  ).trim() || null;
+  const settlementCycleKey = String(
+    normalizedRow.settlement_cycle_key ?? normalizedRow.settlementCycleKey ?? "",
+  ).trim() || null;
+  const cardNumberLast4Raw = String(
+    normalizedRow.card_number_last4 ?? normalizedRow.cardNumberLast4 ?? "",
+  ).trim();
+  const cardNumberLast4 = cardNumberLast4Raw && cardNumberLast4Raw.length <= 4
+    ? cardNumberLast4Raw
+    : null;
   const matchBasisRaw = normalizedRow.source_match_basis ?? normalizedRow.sourceMatchBasis;
-  const sourceMatchBasis = matchBasisRaw === "ic" || matchBasisRaw === "phone_and_account"
+  const sourceMatchBasis = matchBasisRaw === "ic"
+    || matchBasisRaw === "phone_and_account"
+    || matchBasisRaw === "account_number"
+    || matchBasisRaw === "card_number"
+    || matchBasisRaw === "account_and_card"
     ? matchBasisRaw
     : null;
+  const duplicateReceiptFlag = Boolean(
+    normalizedRow.duplicate_receipt_flag
+    ?? normalizedRow.duplicateReceiptFlag
+    ?? false,
+  );
   const hasVerifiedSettlement = Boolean(
     sourceImportId
     && sourceDataRowId
     && sourceMatchBasis
+    && sourceObligationKey
+    && settlementCycleKey
     && totalDue !== null
     && callingDate
     && callingWindowEndExclusive
     && callingWindowEnd
+    && paymentDate >= callingDate
+    && paymentDate < callingWindowEndExclusive
+    && !duplicateReceiptFlag
   );
+  const classificationRaw = normalizedRow.classification;
+  const classification = classificationRaw === "cp" || classificationRaw === "abort_cp"
+    ? classificationRaw
+    : null;
   const cumulativeRaw = normalizedRow.cumulative_collected ?? normalizedRow.cumulativeCollected;
-  const cumulativeCents = !hasVerifiedSettlement
-    ? 0
-    : cumulativeRaw === null || cumulativeRaw === undefined
-      ? parseCollectionAmountToCents(amount, { allowZero: true }) ?? 0
-      : parseCollectionAmountToCents(cumulativeRaw, { allowZero: true }) ?? 0;
+  const cumulativeCents = cumulativeRaw === null || cumulativeRaw === undefined
+    ? null
+    : parseCollectionAmountToCents(cumulativeRaw, { allowZero: true });
+  const remainingRaw = normalizedRow.remaining_amount ?? normalizedRow.remainingAmount;
+  const remainingCents = remainingRaw === null || remainingRaw === undefined
+    ? null
+    : parseCollectionAmountToCents(remainingRaw, { allowZero: true });
   const totalDueCents = totalDue === null
     ? null
-    : parseCollectionAmountToCents(totalDue, { allowZero: true });
-  const totalDueCovered = !hasVerifiedSettlement || totalDueCents === null
+    : parseCollectionAmountToCents(totalDue, { allowZero: false });
+  const settlementAmountsConsistent = cumulativeCents !== null
+    && remainingCents !== null
+    && totalDueCents !== null
+    && remainingCents === Math.max(0, totalDueCents - cumulativeCents);
+  const hasPersistedSettlement = Boolean(
+    hasVerifiedSettlement
+    && classification
+    && settlementAmountsConsistent
+    && (classification !== "abort_cp" || remainingCents === 0)
+  );
+  const totalDueCovered = !hasPersistedSettlement || remainingCents === null
     ? null
-    : cumulativeCents >= totalDueCents;
-  const remainingAmount = !hasVerifiedSettlement || totalDueCents === null
-    ? null
-    : formatCollectionAmountFromCents(Math.max(0, totalDueCents - cumulativeCents));
+    : remainingCents === 0;
   const matchAccuracyRaw = normalizedRow.source_match_accuracy ?? normalizedRow.sourceMatchAccuracy;
   const matchAccuracyNumber = Number(matchAccuracyRaw);
   const sourceMatchAccuracy = Number.isInteger(matchAccuracyNumber)
@@ -304,6 +350,7 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     icNumber: piiValues.icNumber,
     customerPhone: piiValues.customerPhone,
     accountNumber: piiValues.accountNumber,
+    cardNumberLast4,
     sourceImportId:
       (normalizedRow.source_import_id ?? normalizedRow.sourceImportId ?? null) as string | null,
     sourceDataRowId:
@@ -320,12 +367,16 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     billingPrincipalOsp,
     sourceMatchBasis,
     sourceMatchAccuracy,
+    sourceObligationKey,
+    settlementCycleKey,
     totalDueCovered,
-    cumulativeCollected: hasVerifiedSettlement
+    cumulativeCollected: hasPersistedSettlement && cumulativeCents !== null
       ? formatCollectionAmountFromCents(cumulativeCents)
       : null,
-    remainingAmount,
-    cpStatus: totalDueCovered === null ? "unverified" : totalDueCovered ? "abort_cp" : "cp",
+    remainingAmount: hasPersistedSettlement && remainingCents !== null
+      ? formatCollectionAmountFromCents(remainingCents)
+      : null,
+    cpStatus: hasPersistedSettlement && classification ? classification : "unverified",
     batch: String(normalizedRow.batch ?? "") as CollectionBatch,
     paymentDate,
     amount,
@@ -343,11 +394,7 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     receiptValidationMessage:
       (normalizedRow.receipt_validation_message ?? normalizedRow.receiptValidationMessage ?? null) as string | null,
     receiptCount: Math.max(0, Number(normalizedRow.receipt_count ?? normalizedRow.receiptCount ?? 0) || 0),
-    duplicateReceiptFlag: Boolean(
-      normalizedRow.duplicate_receipt_flag
-      ?? normalizedRow.duplicateReceiptFlag
-      ?? false,
-    ),
+    duplicateReceiptFlag,
     createdByLogin: String(
       normalizedRow.created_by_login
       ?? normalizedRow.createdByLogin

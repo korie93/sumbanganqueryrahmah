@@ -171,8 +171,8 @@ test("XLSB master-list TOTAL DUE header remains detectable after import parsing"
   xlsx.utils.book_append_sheet(
     workbook,
     xlsx.utils.aoa_to_sheet([
-      ["Account No", "Total Amount Due (TOTAL DUE)", "Calling Date"],
-      ["SYNTHETIC-1001", 1234.5, "20260901"],
+      ["Account No", "Card No", "Total Amount Due (TOTAL DUE)", "Calling Date"],
+      ["00000000000000001", "0000000000000002", 1234.5, "20260115"],
     ]),
     "Synthetic Master List",
   );
@@ -185,10 +185,54 @@ test("XLSB master-list TOTAL DUE header remains detectable after import parsing"
 
   assert.equal(result.error, undefined);
   assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0]?.["Account No"], "00000000000000001");
+  assert.equal(result.rows[0]?.["Card No"], "0000000000000002");
   assert.equal(
     extractSavedCollectionFinancials(result.rows[0]).totalDue,
     "1234.50",
   );
+});
+
+test("XLSB imports fail closed for numeric 16-digit Account/Card identifiers", () => {
+  for (const header of ["Account No", "Card No"] as const) {
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(
+      workbook,
+      xlsx.utils.aoa_to_sheet([
+        [header, "Total Amount Due (TOTAL DUE)"],
+        [1_234_567_890_123_456, 125],
+      ]),
+      "Synthetic Identifiers",
+    );
+    const workbookBuffer = xlsx.write(workbook, {
+      type: "buffer",
+      bookType: "xlsb",
+    }) as Buffer;
+
+    const result = parseImportUploadBuffer("numeric-identifiers.xlsb", workbookBuffer);
+
+    assert.match(String(result.error), /unsafe numeric Account\/Card identifier/i);
+    assert.deepEqual(result.rows, []);
+  }
+});
+
+test("XLSB imports reject numeric Account/Card cells padded to 16 displayed digits", () => {
+  const workbook = xlsx.utils.book_new();
+  const worksheet = xlsx.utils.aoa_to_sheet([
+    ["Card No", "Total Amount Due (TOTAL DUE)"],
+    [123_456_789_012, 125],
+  ]);
+  (worksheet.A2 as { z?: string }).z = "0000000000000000";
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Synthetic Identifiers");
+  const workbookBuffer = xlsx.write(workbook, {
+    type: "buffer",
+    bookType: "xlsb",
+  }) as Buffer;
+
+  const result = parseImportUploadBuffer("padded-numeric-identifier.xlsb", workbookBuffer);
+
+  assert.match(String(result.error), /unsafe numeric Account\/Card identifier/i);
+  assert.deepEqual(result.rows, []);
 });
 
 test("parseImportUploadBuffer rejects executable content disguised as CSV", () => {

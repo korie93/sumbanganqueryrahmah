@@ -4,6 +4,7 @@ import {
 } from "../../../shared/collection-amount-types";
 import {
   COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH,
+  COLLECTION_CARD_NUMBER_MAX_LENGTH,
   COLLECTION_BATCHES,
   COLLECTION_CUSTOMER_NAME_MAX_LENGTH,
   COLLECTION_AGING_BUCKETS,
@@ -24,6 +25,7 @@ export type NormalizedCollectionRecordFields = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  cardNumber: string;
   sourceImportId: string;
   agingBucket: string;
   batch: string;
@@ -41,6 +43,7 @@ export function normalizeCollectionRecordFields(
     icNumber: normalizeCollectionText(body.icNumber),
     customerPhone: normalizeCollectionText(body.customerPhone),
     accountNumber: normalizeCollectionText(body.accountNumber),
+    cardNumber: normalizeCollectionText(body.cardNumber),
     sourceImportId: normalizeCollectionText(body.sourceImportId),
     agingBucket: normalizeCollectionText(body.agingBucket).toUpperCase(),
     batch: normalizeCollectionText(body.batch).toUpperCase(),
@@ -71,15 +74,14 @@ export function assertValidCollectionCreateFields(
   if (!isValidCollectionPhone(fields.customerPhone)) {
     throw badRequest("Customer Phone Number is invalid.");
   }
-  if (!fields.accountNumber) throw badRequest("Account Number is required.");
+  if (!fields.accountNumber && !fields.cardNumber) {
+    throw badRequest("Account Number or Card Number is required.");
+  }
   if (fields.accountNumber.length > COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH) {
     throw badRequest("Account Number must not exceed 128 characters.");
   }
-  if (!fields.sourceImportId) {
-    throw badRequest(
-      "Select and verify a Saved source before saving.",
-      "COLLECTION_SOURCE_REQUIRED",
-    );
+  if (fields.cardNumber.length > COLLECTION_CARD_NUMBER_MAX_LENGTH) {
+    throw badRequest("Card Number must not exceed 128 characters.");
   }
   if (fields.sourceImportId.length > COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH) {
     throw badRequest("Saved source ID is invalid.");
@@ -133,21 +135,20 @@ export function buildCollectionRecordUpdateDraft(
     updatePayload.customerPhone = fields.customerPhone;
   }
   if (body.accountNumber !== undefined) {
-    if (!fields.accountNumber) throw badRequest("Account Number cannot be empty.");
     if (fields.accountNumber.length > COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH) {
       throw badRequest("Account Number must not exceed 128 characters.");
     }
     updatePayload.accountNumber = fields.accountNumber;
   }
+  if (body.cardNumber !== undefined) {
+    if (fields.cardNumber.length > COLLECTION_CARD_NUMBER_MAX_LENGTH) {
+      throw badRequest("Card Number must not exceed 128 characters.");
+    }
+  }
   if (body.sourceImportId !== undefined && fields.sourceImportId.length > COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH) {
     throw badRequest("Saved source ID is invalid.");
   }
-  if (body.agingBucket !== undefined) {
-    if (!COLLECTION_AGING_BUCKETS.has(fields.agingBucket)) {
-      throw badRequest("Aging must be D3, D4, D5, or D6.");
-    }
-    updatePayload.agingBucket = fields.agingBucket;
-  }
+  // Aging is always copied from the trusted Saved master row during matching.
   if (body.batch !== undefined) {
     if (!COLLECTION_BATCHES.has(fields.batch)) throw badRequest("Invalid batch value.");
     updatePayload.batch = fields.batch;

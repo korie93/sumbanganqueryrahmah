@@ -68,6 +68,7 @@ const MIGRATION_TAGS = Object.freeze([
   "0049_collection_record_purge_history",
   "0050_collection_saved_match_details",
   "0051_collection_calling_window_settlement",
+  "0052_collection_source_governance_osp",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(

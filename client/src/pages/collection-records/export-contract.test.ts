@@ -9,11 +9,13 @@ const exportSource = readFileSync(
 ).replace(/\r\n/g, "\n");
 
 test("collection record exports include Billing Principal OSP and coverage fields", () => {
+  assert.match(exportSource, /"Card Number \(masked\)"/);
   assert.match(exportSource, /"Billing Principal \(OSP\)"/);
   assert.match(exportSource, /"TOTAL DUE"/);
   assert.match(exportSource, /"CP Status"/);
   assert.match(exportSource, /"Match Accuracy"/);
   assert.match(exportSource, /record\.billingPrincipalOsp/);
+  assert.match(exportSource, /formatCollectionMaskedCard\(record\.cardNumberLast4\)/);
 });
 
 test("collection Excel export neutralizes untrusted spreadsheet formula prefixes", () => {

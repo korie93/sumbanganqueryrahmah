@@ -116,14 +116,27 @@ export class SearchRepository {
     input: CollectionSettlementProjectionInput,
   ): Promise<CollectionSettlementProjection> {
     const excludeRecordId = String(input.excludeRecordId || "").trim();
-    const result = await db.execute(sql`
-      WITH existing_settlement AS (
-        SELECT COALESCE(SUM(record.amount), 0)::numeric(14,2) AS existing_cumulative
-        FROM public.collection_records record
-        WHERE record.source_import_id = ${input.sourceImportId}
+    const settlementCycleKey = String(input.settlementCycleKey || "").trim();
+    const settlementScope = settlementCycleKey
+      ? sql`record.settlement_cycle_key = ${settlementCycleKey}`
+      : sql`
+          record.source_import_id = ${input.sourceImportId}
           AND record.source_data_row_id = ${input.sourceDataRowId}
           AND record.calling_date = ${input.callingDate}::date
           AND record.calling_window_end_exclusive = ${input.callingWindowEndExclusive}::date
+        `;
+    const result = await db.execute(sql`
+      WITH existing_settlement AS (
+        SELECT
+          COALESCE(SUM(record.amount), 0)::numeric(14,2) AS existing_cumulative,
+          COALESCE(
+            SUM(record.amount) FILTER (
+              WHERE record.payment_date <= ${input.paymentDate}::date
+            ),
+            0
+          )::numeric(14,2) AS prior_cumulative
+        FROM public.collection_records record
+        WHERE ${settlementScope}
           AND record.payment_date >= ${input.callingDate}::date
           AND record.payment_date < ${input.callingWindowEndExclusive}::date
           AND record.source_match_basis IS NOT NULL
@@ -133,6 +146,7 @@ export class SearchRepository {
       ), projected_settlement AS (
         SELECT
           existing_cumulative,
+          prior_cumulative,
           ${input.currentAmount}::numeric(14,2) AS current_entry,
           (existing_cumulative + ${input.currentAmount}::numeric(14,2))::numeric(14,2)
             AS projected_cumulative,
@@ -144,19 +158,22 @@ export class SearchRepository {
         current_entry::text AS current_entry,
         projected_cumulative::text AS projected_cumulative,
         GREATEST(total_due - projected_cumulative, 0)::numeric(14,2)::text AS remaining_after_save,
-        projected_cumulative >= total_due AS projected_total_due_covered
+        projected_cumulative >= total_due AS projected_total_due_covered,
+        prior_cumulative < total_due
+          AND prior_cumulative + current_entry >= total_due AS projected_entry_is_abort
       FROM projected_settlement
     `);
 
     const row = (result.rows?.[0] || {}) as Record<string, unknown>;
     const covered = row.projected_total_due_covered === true;
+    const existingCumulative = String(row.existing_cumulative || "0.00");
     return {
-      existingCumulative: String(row.existing_cumulative || "0.00"),
+      existingCumulative,
       currentEntry: String(row.current_entry || input.currentAmount),
       projectedCumulative: String(row.projected_cumulative || input.currentAmount),
       remainingAfterSave: String(row.remaining_after_save || "0.00"),
       projectedTotalDueCovered: covered,
-      projectedCpStatus: covered ? "abort_cp" : "cp",
+      projectedCpStatus: row.projected_entry_is_abort === true ? "abort_cp" : "cp",
     };
   }
 

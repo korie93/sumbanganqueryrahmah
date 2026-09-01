@@ -20,6 +20,7 @@ export function getSubPageFromPath(pathname: string): CollectionSubPage {
   if (normalized.startsWith("/collection/nicknames")) return "manage-nicknames";
   if (normalized.startsWith("/collection/nickname-summary")) return "nickname-summary";
   if (normalized.startsWith("/collection/daily")) return "daily";
+  if (normalized.startsWith("/collection/billing-principal")) return "billing-principal";
   if (normalized.startsWith("/collection/monthly-comparison")) return "monthly-comparison";
   if (normalized.startsWith("/collection/summary")) return "summary";
   if (normalized.startsWith("/collection/records")) return "records";
@@ -30,6 +31,7 @@ export function getPathForSubPage(subPage: CollectionSubPage) {
   if (subPage === "manage-nicknames") return "/collection/nicknames";
   if (subPage === "nickname-summary") return "/collection/nickname-summary";
   if (subPage === "daily") return "/collection/daily";
+  if (subPage === "billing-principal") return "/collection/billing-principal";
   if (subPage === "monthly-comparison") return "/collection/monthly-comparison";
   if (subPage === "summary") return "/collection/summary";
   return subPage === "records" ? "/collection/records" : "/collection/save";

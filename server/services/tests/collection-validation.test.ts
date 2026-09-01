@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isValidCollectionMonthKey } from "../../routes/collection.validation";
+import {
+  isValidCollectionDate,
+  isValidCollectionMonthKey,
+} from "../../routes/collection.validation";
+
+test("collection date validation rejects calendar rollover dates", () => {
+  assert.equal(isValidCollectionDate("2026-02-28"), true);
+  assert.equal(isValidCollectionDate("2024-02-29"), true);
+  assert.equal(isValidCollectionDate("2026-02-29"), false);
+  assert.equal(isValidCollectionDate("2026-02-31"), false);
+  assert.equal(isValidCollectionDate("2026-13-01"), false);
+});
 
 test("collection month key validation accepts strict bounded YYYY-MM values", () => {
   assert.equal(isValidCollectionMonthKey("2026-03"), true);

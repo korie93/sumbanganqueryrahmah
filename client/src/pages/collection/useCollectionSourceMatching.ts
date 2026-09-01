@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  getCollectionSavedSourceFiles,
-  getCollectionSourceMatches,
-  type CollectionSavedSourceFile,
-  type CollectionSourceMatch,
-} from "@/lib/api";
+import { getCollectionSourceMatches, type CollectionSourceMatch } from "@/lib/api";
 import { resolveMutationErrorMessage } from "@/lib/mutation-feedback";
 import {
   type SaveCollectionFieldErrors,
@@ -17,6 +12,7 @@ type CollectionSourceMatchingInput = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  cardNumber: string;
   paymentDate: string;
   amount: string;
 };
@@ -29,34 +25,25 @@ function isAbortError(error: unknown) {
 
 export function useCollectionSourceMatching(
   identity: CollectionSourceMatchingInput,
-  onSelectionChange: (sourceImportId: string) => void,
   onValidationErrors?: (errors: SaveCollectionFieldErrors) => void,
 ) {
   const matchingControllerRef = useRef<AbortController | null>(null);
   const matchingRequestIdRef = useRef(0);
-  const sourceFilesRequestIdRef = useRef(0);
   const [matches, setMatches] = useState<CollectionSourceMatch[]>([]);
-  const [selectedImportId, setSelectedImportId] = useState("");
-  const [selectedSourceFile, setSelectedSourceFile] = useState<CollectionSavedSourceFile | null>(null);
-  const [sourceFiles, setSourceFiles] = useState<CollectionSavedSourceFile[]>([]);
-  const [sourceFilesTotal, setSourceFilesTotal] = useState(0);
-  const [sourceSearch, setSourceSearch] = useState("");
-  const [sourceFilesReloadToken, setSourceFilesReloadToken] = useState(0);
-  const [sourceFilesLoading, setSourceFilesLoading] = useState(true);
-  const [sourceFilesError, setSourceFilesError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const selectedSourceFileId = selectedSourceFile?.id ?? "";
   const identityFingerprint = useMemo(() => JSON.stringify({
     customerName: identity.customerName.trim(),
     icNumber: identity.icNumber.trim(),
     customerPhone: identity.customerPhone.trim(),
     accountNumber: identity.accountNumber.trim(),
+    cardNumber: identity.cardNumber.trim(),
     paymentDate: identity.paymentDate.trim(),
     amount: identity.amount.trim(),
   }), [
     identity.accountNumber,
+    identity.cardNumber,
     identity.amount,
     identity.customerName,
     identity.customerPhone,
@@ -66,91 +53,24 @@ export function useCollectionSourceMatching(
   const identityFingerprintRef = useRef(identityFingerprint);
   identityFingerprintRef.current = identityFingerprint;
 
-  const invalidateVerifiedMatch = useCallback(() => {
+  const resetMatches = useCallback(() => {
     matchingControllerRef.current?.abort();
     matchingControllerRef.current = null;
     matchingRequestIdRef.current += 1;
     setMatches([]);
-    setSelectedImportId("");
     setLoading(false);
     setError("");
     setHasSearched(false);
-    onSelectionChange("");
-  }, [onSelectionChange]);
-
-  const resetMatches = useCallback(() => {
-    invalidateVerifiedMatch();
-    setSelectedSourceFile(null);
-    setSourceSearch("");
-    setSourceFilesError("");
-  }, [invalidateVerifiedMatch]);
+  }, []);
 
   useEffect(() => {
-    invalidateVerifiedMatch();
-  }, [identityFingerprint, invalidateVerifiedMatch]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const requestId = ++sourceFilesRequestIdRef.current;
-    const delayMs = sourceSearch.trim() ? 250 : 0;
-    setSourceFilesLoading(true);
-    setSourceFilesError("");
-
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const response = await getCollectionSavedSourceFiles({
-            limit: 100,
-            search: sourceSearch.trim(),
-          }, {
-            signal: controller.signal,
-          });
-          if (controller.signal.aborted || requestId !== sourceFilesRequestIdRef.current) return;
-          setSourceFiles(response.sourceFiles);
-          setSourceFilesTotal(response.pagination.total);
-          setSelectedSourceFile((current) => {
-            if (!current) return null;
-            return response.sourceFiles.find((item) => item.id === current.id) ?? current;
-          });
-        } catch (sourceFilesLoadError: unknown) {
-          if (
-            controller.signal.aborted
-            || requestId !== sourceFilesRequestIdRef.current
-            || isAbortError(sourceFilesLoadError)
-          ) {
-            return;
-          }
-          setSourceFiles([]);
-          setSourceFilesTotal(0);
-          setSourceFilesError(resolveMutationErrorMessage(
-            sourceFilesLoadError,
-            "Senarai fail Saved tidak dapat dimuatkan. Cuba lagi sebentar.",
-          ));
-        } finally {
-          if (!controller.signal.aborted && requestId === sourceFilesRequestIdRef.current) {
-            setSourceFilesLoading(false);
-          }
-        }
-      })();
-    }, delayMs);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [sourceFilesReloadToken, sourceSearch]);
+    resetMatches();
+  }, [identityFingerprint, resetMatches]);
 
   useEffect(() => () => {
     matchingControllerRef.current?.abort();
     matchingRequestIdRef.current += 1;
-    sourceFilesRequestIdRef.current += 1;
   }, []);
-
-  const selectSourceFile = useCallback((sourceImportId: string) => {
-    const nextSource = sourceFiles.find((sourceFile) => sourceFile.id === sourceImportId) ?? null;
-    invalidateVerifiedMatch();
-    setSelectedSourceFile(nextSource);
-  }, [invalidateVerifiedMatch, sourceFiles]);
 
   const runMatching = useCallback(async () => {
     const validationErrors = validateSaveCollectionIdentityFields(identity);
@@ -162,13 +82,10 @@ export function useCollectionSourceMatching(
     if (!isPositiveAmount(identity.amount)) {
       validationErrors.amount = "Amount must be greater than 0.";
     }
-    if (!selectedSourceFileId) {
-      validationErrors.sourceImportId = "Pilih fail Saved sebelum semak matching.";
-    }
     if (Object.keys(validationErrors).length > 0) {
-      invalidateVerifiedMatch();
+      resetMatches();
       onValidationErrors?.(validationErrors);
-      setError("Lengkapkan fail Saved dan maklumat collection yang ditanda sebelum semak matching.");
+      setError("Lengkapkan maklumat customer, payment date, dan amount sebelum semak auto-matching.");
       return;
     }
 
@@ -182,28 +99,18 @@ export function useCollectionSourceMatching(
     setError("");
     setHasSearched(false);
     setMatches([]);
-    setSelectedImportId("");
-    onSelectionChange("");
 
     try {
-      const response = await getCollectionSourceMatches(identity, selectedSourceFileId, {
-        signal: controller.signal,
-      });
+      const response = await getCollectionSourceMatches(identity, { signal: controller.signal });
       if (
         controller.signal.aborted
         || requestId !== matchingRequestIdRef.current
         || requestFingerprint !== identityFingerprintRef.current
       ) return;
-      const verifiedMatch = response.matches.find((match) => (
-        match.sourceImportId === selectedSourceFileId
-      )) ?? null;
-      setMatches(verifiedMatch ? [verifiedMatch] : []);
+      setMatches(response.matches);
       setHasSearched(true);
-      const nextId = verifiedMatch?.sourceImportId ?? "";
-      setSelectedImportId(nextId);
-      onSelectionChange(nextId);
-      if (!verifiedMatch) {
-        setError("Fail Saved yang dipilih tidak mengembalikan padanan yang sah.");
+      if (response.matches.length === 0) {
+        setError("Tiada padanan Saved yang sah untuk maklumat ini.");
       }
     } catch (matchingError: unknown) {
       if (
@@ -211,16 +118,12 @@ export function useCollectionSourceMatching(
         || requestId !== matchingRequestIdRef.current
         || requestFingerprint !== identityFingerprintRef.current
         || isAbortError(matchingError)
-      ) {
-        return;
-      }
+      ) return;
       setMatches([]);
-      setSelectedImportId("");
       setHasSearched(true);
-      onSelectionChange("");
       setError(resolveMutationErrorMessage(
         matchingError,
-        "Semakan matching gagal. Cuba lagi sebentar.",
+        "Auto-matching gagal. Cuba lagi sebentar.",
       ));
     } finally {
       if (
@@ -232,42 +135,17 @@ export function useCollectionSourceMatching(
         matchingControllerRef.current = null;
       }
     }
-  }, [
-    identity,
-    identityFingerprint,
-    invalidateVerifiedMatch,
-    onSelectionChange,
-    onValidationErrors,
-    selectedSourceFileId,
-  ]);
+  }, [identity, identityFingerprint, onValidationErrors, resetMatches]);
 
-  const selectedMatch = useMemo(
-    () => matches.find((match) => match.sourceImportId === selectedImportId) ?? null,
-    [matches, selectedImportId],
-  );
-
-  const refreshSourceFiles = useCallback(() => {
-    setSourceFilesReloadToken((current) => current + 1);
-  }, []);
+  const selectedMatch = matches.length === 1 ? matches[0]! : null;
 
   return {
     error,
     hasSearched,
     loading,
     matches,
-    selectedImportId,
     selectedMatch,
-    selectedSourceFile,
-    selectedSourceFileId,
-    sourceFiles,
-    sourceFilesError,
-    sourceFilesLoading,
-    sourceFilesTotal,
-    sourceSearch,
-    refreshSourceFiles,
     resetMatches,
     runMatching,
-    selectSourceFile,
-    setSourceSearch,
   };
 }

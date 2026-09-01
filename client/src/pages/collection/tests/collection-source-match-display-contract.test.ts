@@ -8,18 +8,18 @@ const source = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 
-test("collection matching UI is source-file-first and blocks matching without a selected file", () => {
-  assert.match(source, /1\. Pilih Saved Source File/);
-  assert.match(source, /id="save-collection-source-file"/);
-  assert.match(source, /disabled=\{disabled \|\| loading \|\| !selectedSourceFileId\}/);
-  assert.match(source, /selectedSourceFile\.createdAt/);
-  assert.match(source, /sourceFile\.rowCount/);
+test("collection matching UI delegates source and Aging selection to the backend", () => {
+  assert.match(source, /Auto-matching Saved/);
+  assert.match(source, /Sumber, Aging, Calling Date, TOTAL DUE, dan OSP ditentukan oleh backend/);
+  assert.match(source, /disabled=\{disabled \|\| loading\}/);
+  assert.doesNotMatch(source, /save-collection-source-file/);
+  assert.doesNotMatch(source, /selectedSourceFileId/);
 });
 
 test("collection matching action keeps its visible accessible name", () => {
   assert.doesNotMatch(source, /htmlFor="save-collection-source-match-action"/);
   assert.match(source, /id="save-collection-source-match-action"/);
-  assert.match(source, /\{loading \? "Checking\.\.\." : "Semak Matching"\}/);
+  assert.match(source, /\{loading \? "Checking\.\.\." : "Semak Auto-matching"\}/);
 });
 
 test("collection matching UI renders only the server-authoritative settlement projection", () => {

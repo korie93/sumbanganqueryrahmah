@@ -17,7 +17,13 @@ import type {
   CollectionRecordListFilters,
   CollectionRecordReceipt,
   CollectionRollupFreshnessSnapshot,
+  CollectionBillingPrincipalReport,
+  CollectionLegacyBackfillStats,
+  CollectionOspTargetInput,
+  CollectionSourceConfig,
+  CollectionSourceMatchResult,
   CollectionStaffNickname,
+  ConfigureCollectionSourceInput,
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
@@ -31,6 +37,12 @@ import type { CollectionAmountMyrNumber } from "../../../shared/collection-amoun
 import { PostgresSettingsStorage } from "./postgres-settings-storage";
 
 export class PostgresCollectionStorage extends PostgresSettingsStorage {
+  async backfillLegacyCollectionRecordsForSource(
+    sourceImportId: string,
+  ): Promise<CollectionLegacyBackfillStats> {
+    return this.collectionRepository.backfillLegacyCollectionRecordsForSource(sourceImportId);
+  }
+
   async getCollectionStaffNicknames(filters?: {
     activeOnly?: boolean;
     allowedRole?: "admin" | "user";
@@ -243,6 +255,55 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
 
   async isCollectionStaffNicknameActive(nickname: string): Promise<boolean> {
     return this.collectionRepository.isCollectionStaffNicknameActive(nickname);
+  }
+
+  async configureCollectionSource(
+    input: ConfigureCollectionSourceInput,
+  ): Promise<CollectionSourceConfig> {
+    return this.collectionRepository.configureCollectionSource(input);
+  }
+
+  async deleteCollectionSource(sourceImportId: string): Promise<boolean> {
+    return this.collectionRepository.deleteCollectionSource(sourceImportId);
+  }
+
+  async getCollectionSourceConfig(
+    sourceImportId: string,
+  ): Promise<CollectionSourceConfig | undefined> {
+    return this.collectionRepository.getCollectionSourceConfig(sourceImportId);
+  }
+
+  async listCollectionSourceConfigs(): Promise<CollectionSourceConfig[]> {
+    return this.collectionRepository.listCollectionSourceConfigs();
+  }
+
+  async findEligibleCollectionSourceMatches(input: {
+    paymentDate: string;
+    accountNumber?: string;
+    cardNumber?: string;
+  }): Promise<CollectionSourceMatchResult> {
+    return this.collectionRepository.findEligibleCollectionSourceMatches(input);
+  }
+
+  async getCollectionBillingPrincipalReport(input: {
+    sourceImportIds: string[];
+    from: string;
+    to: string;
+    agingBuckets?: Array<"D3" | "D4" | "D5" | "D6"> | undefined;
+    nicknames?: string[] | undefined;
+    createdByLogin?: string | undefined;
+  }): Promise<CollectionBillingPrincipalReport> {
+    return this.collectionRepository.getCollectionBillingPrincipalReport(input);
+  }
+
+  async upsertCollectionOspTargets(input: {
+    sourceImportIds: string[];
+    from: string;
+    to: string;
+    targets: CollectionOspTargetInput[];
+    configuredBy: string;
+  }): Promise<CollectionOspTargetInput[]> {
+    return this.collectionRepository.upsertCollectionOspTargets(input);
   }
 
   async createCollectionRecord(

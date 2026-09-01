@@ -20,6 +20,7 @@ import type {
 } from "@/lib/api";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
+import { formatCollectionMaskedCard } from "@/pages/collection-records/collection-coverage";
 
 export interface EditCollectionRecordDialogProps {
   open: boolean;
@@ -158,6 +159,11 @@ export function EditCollectionRecordDialog({
               autoComplete="off"
               disabled={savingEdit}
             />
+            {editingRecord?.cardNumberLast4 ? (
+              <p className="text-xs text-muted-foreground">
+                Matched Card: {formatCollectionMaskedCard(editingRecord.cardNumberLast4)}
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor={batchTriggerId}>Batch</Label>

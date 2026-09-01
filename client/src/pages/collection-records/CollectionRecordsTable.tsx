@@ -8,6 +8,7 @@ import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/co
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
+  formatCollectionMaskedCard,
   formatCollectionOptionalAmount,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
@@ -101,6 +102,10 @@ export function CollectionRecordsTable({
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Account Number</dt>
                   <dd className="break-all">{record.accountNumber || "-"}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Card Number</dt>
+                  <dd>{formatCollectionMaskedCard(record.cardNumberLast4)}</dd>
                 </div>
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Customer Phone</dt>

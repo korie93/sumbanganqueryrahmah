@@ -14,6 +14,7 @@ import {
 test("buildCollectionRecordFormData appends scalar fields and repeated receipt ids", () => {
   const formData = buildCollectionRecordFormData({
     customerName: "Collector Test",
+    cardNumber: "0000123412345678",
     amount: 55.3,
     removeReceipt: true,
     removeReceiptIds: ["receipt-1", "receipt-2"],
@@ -23,6 +24,7 @@ test("buildCollectionRecordFormData appends scalar fields and repeated receipt i
   });
 
   assert.equal(formData.get("customerName"), "Collector Test");
+  assert.equal(formData.get("cardNumber"), "0000123412345678");
   assert.equal(formData.get("amount"), "55.3");
   assert.equal(formData.get("removeReceipt"), "true");
   assert.deepEqual(formData.getAll("removeReceiptIds"), ["receipt-1", "receipt-2"]);

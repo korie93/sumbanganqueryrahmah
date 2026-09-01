@@ -8,6 +8,11 @@ export type SpreadsheetIdentifierKind =
 
 type RawCellReader = (rowIndex: number, columnIndex: number) => unknown;
 
+export type UnsafeSpreadsheetAccountIdentifierCell = {
+  columnIndex: number;
+  rowIndex: number;
+};
+
 const MALAYSIAN_IC_DIGITS = 12;
 const HEADER_SCAN_ROWS = 5;
 export const MAX_SPREADSHEET_ACCOUNT_VALUES = 8;
@@ -178,6 +183,71 @@ export function resolveSpreadsheetIdentifierKind(
 
 export function isSpreadsheetAccountHeader(header: unknown): boolean {
   return ACCOUNT_HEADERS.has(normalizeHeader(header));
+}
+
+/**
+ * Excel only guarantees 15 significant decimal digits for numeric cells.
+ * Account and card identifiers at or above 16 displayed digits therefore
+ * must be supplied as text; accepting the numeric value could persist an
+ * identifier that Excel or JavaScript has already rounded.
+ */
+export function isUnsafeNumericSpreadsheetAccountIdentifier(
+  value: unknown,
+  formattedValue?: unknown,
+): boolean {
+  if (typeof value !== "number") {
+    return false;
+  }
+  if (!Number.isFinite(value) || !Number.isSafeInteger(value) || value < 0) {
+    return true;
+  }
+  if (value >= 1_000_000_000_000_000) {
+    return true;
+  }
+
+  const formattedDigits = String(formattedValue ?? "")
+    .trim()
+    .replace(/[\s-]/g, "");
+  return /^\d{16,}$/.test(formattedDigits);
+}
+
+/**
+ * Locate an unsafe numeric Account/Card cell without returning its value.
+ * Callers can fail the whole import closed while keeping customer data out of
+ * diagnostics and logs.
+ */
+export function findUnsafeSpreadsheetAccountIdentifierCell(
+  rows: unknown[][],
+  readRawCell: RawCellReader,
+): UnsafeSpreadsheetAccountIdentifierCell | null {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const headerRowIndex = findSpreadsheetHeaderRowIndex(rows);
+  const accountColumnIndexes = rows[headerRowIndex]
+    .map((header, columnIndex) => ({
+      columnIndex,
+      isAccount: isSpreadsheetAccountHeader(header),
+    }))
+    .filter((column) => column.isAccount)
+    .map((column) => column.columnIndex);
+
+  for (let rowIndex = headerRowIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    for (const columnIndex of accountColumnIndexes) {
+      if (
+        isUnsafeNumericSpreadsheetAccountIdentifier(
+          readRawCell(rowIndex, columnIndex),
+          row[columnIndex],
+        )
+      ) {
+        return { columnIndex, rowIndex };
+      }
+    }
+  }
+
+  return null;
 }
 
 export function findSpreadsheetHeaderRowIndex(rows: unknown[][]) {

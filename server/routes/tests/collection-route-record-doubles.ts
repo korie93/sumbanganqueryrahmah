@@ -23,6 +23,7 @@ export type CollectionRecordShape = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
@@ -33,7 +34,13 @@ export type CollectionRecordShape = {
   callingWindowEndExclusive?: string | null;
   totalDue?: string | null;
   billingPrincipalOsp?: string | null;
-  sourceMatchBasis?: "ic" | "phone_and_account" | null;
+  sourceMatchBasis?:
+    | "ic"
+    | "phone_and_account"
+    | "account_number"
+    | "card_number"
+    | "account_and_card"
+    | null;
   sourceMatchAccuracy?: number | null;
   totalDueCovered?: boolean | null;
   cumulativeCollected?: string | null;
@@ -497,6 +504,54 @@ export function createCoreCollectionStorageDouble(options?: {
       nextCursor: null,
       total: 1,
     }),
+    findEligibleCollectionSourceMatches: async (lookup: Record<string, string>) => {
+      const accountNumber = String(lookup.accountNumber || "").trim();
+      const cardNumber = String(lookup.cardNumber || "").trim();
+      if (accountNumber === "NO-SAVED-MATCH" || cardNumber === "NO-SAVED-MATCH") {
+        return { eligibleSourceCount: 1, matches: [] };
+      }
+
+      const callingDate = options?.sourceMatchCallingDate === undefined
+        ? "2026-03-01"
+        : options.sourceMatchCallingDate;
+      const callingWindowEnd = options?.sourceMatchCallingWindowEnd === undefined
+        ? "2026-03-31"
+        : options.sourceMatchCallingWindowEnd;
+      const callingWindowEndExclusive = options?.sourceMatchCallingWindowEndExclusive === undefined
+        ? "2026-04-01"
+        : options.sourceMatchCallingWindowEndExclusive;
+      const sourceObligationKey = accountNumber
+        ? `account:${accountNumber.toLowerCase()}`
+        : `card:${cardNumber.toLowerCase() || "card-2002"}`;
+
+      return {
+        eligibleSourceCount: 1,
+        matches: [{
+          sourceImportId: "import-1",
+          sourceDataRowId: "saved-row-1",
+          sourceImportName: "NPL CC P10 JULY",
+          sourceFilename: "npl-cc-p10-july.xlsx",
+          sourceObligationKey,
+          settlementCycleKey: `${callingDate || "missing"}:${sourceObligationKey}`,
+          cardNumberLast4: cardNumber ? cardNumber.slice(-4) : null,
+          matchBasis: accountNumber && cardNumber
+            ? "account_and_card" as const
+            : cardNumber
+              ? "card_number" as const
+              : "account_number" as const,
+          totalDue: options?.sourceMatchTotalDue === undefined
+            ? "200.00"
+            : options.sourceMatchTotalDue,
+          billingPrincipalOsp: "180.00",
+          totalOsb: "250.00",
+          agingBucket: "D4" as const,
+          callingDate,
+          callingWindowEnd,
+          callingWindowEndExclusive,
+          duplicateSourceCount: 1,
+        }],
+      };
+    },
     findSavedCollectionSourceForRecord: async (lookup: Record<string, string>) => (
       lookup.accountNumber === "NO-SAVED-MATCH"
       || (lookup.sourceImportId && lookup.sourceImportId !== "import-1")
@@ -605,6 +660,7 @@ export function createCoreCollectionStorageDouble(options?: {
         icNumber: String(data.icNumber),
         customerPhone: String(data.customerPhone),
         accountNumber: String(data.accountNumber),
+        cardNumberLast4: (data.cardNumberLast4 as string | null | undefined) ?? null,
         sourceImportId: (data.sourceImportId as string | null | undefined) ?? null,
         sourceDataRowId: (data.sourceDataRowId as string | null | undefined) ?? null,
         sourceImportName: (data.sourceImportName as string | null | undefined) ?? null,
@@ -895,9 +951,12 @@ export function createCoreCollectionStorageDouble(options?: {
       ) {
         return null;
       }
+      const persistedData = Object.fromEntries(
+        Object.entries(data).filter(([key]) => key !== "sourceCardNumber"),
+      );
       const updated: CollectionRecordShape = {
         ...existing,
-        ...data,
+        ...persistedData,
         amount: data.amount !== undefined ? Number(data.amount).toFixed(2) : existing.amount,
         updatedAt: new Date("2026-03-16T10:00:00.000Z"),
       };

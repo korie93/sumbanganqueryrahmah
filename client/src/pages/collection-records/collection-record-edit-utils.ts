@@ -66,8 +66,8 @@ export function getCollectionRecordEditValidationError({
   if (!isValidCustomerPhone(customerPhone)) {
     return "Customer Phone Number is invalid.";
   }
-  if (!accountNumber.trim()) {
-    return "Account Number is required.";
+  if (!accountNumber.trim() && !editingRecord?.cardNumberLast4) {
+    return "Account Number or a previously matched Card Number is required.";
   }
   if (!COLLECTION_BATCH_OPTIONS.includes(batch)) {
     return "Batch is not valid.";

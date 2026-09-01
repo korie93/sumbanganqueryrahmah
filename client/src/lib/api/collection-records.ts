@@ -62,6 +62,7 @@ export function buildCollectionRecordFormData(
   appendCollectionFormValue(formData, "icNumber", payload.icNumber);
   appendCollectionFormValue(formData, "customerPhone", payload.customerPhone);
   appendCollectionFormValue(formData, "accountNumber", payload.accountNumber);
+  appendCollectionFormValue(formData, "cardNumber", payload.cardNumber);
   appendCollectionFormValue(formData, "sourceImportId", payload.sourceImportId);
   appendCollectionFormValue(formData, "agingBucket", payload.agingBucket);
   appendCollectionFormValue(formData, "batch", payload.batch);
@@ -189,16 +190,16 @@ export async function getCollectionSourceMatches(
     icNumber: string;
     customerPhone: string;
     accountNumber: string;
+    cardNumber?: string;
     paymentDate: string;
     amount: string;
   },
-  sourceImportId: string,
   options?: { signal?: AbortSignal | undefined },
 ) {
   const response = await apiRequest(
     "POST",
     "/api/collection/source-matches",
-    { ...payload, sourceImportId },
+    payload,
     { signal: options?.signal },
   );
   return parseApiJson(
@@ -244,6 +245,11 @@ export async function getCollectionRecords(filters?: {
   search?: string | undefined;
   nickname?: string | undefined;
   nicknames?: string[] | undefined;
+  sourceImportIds?: string[] | undefined;
+  agingBuckets?: Array<"D3" | "D4" | "D5" | "D6"> | undefined;
+  classifications?: Array<"cp" | "abort_cp"> | undefined;
+  sortBy?: "paymentDate" | "amount" | "customerName" | "source" | "aging" | "classification" | undefined;
+  sortDirection?: "asc" | "desc" | undefined;
   receiptValidationStatus?: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review" | "flagged" | undefined;
   duplicateOnly?: boolean | undefined;
   page?: number | undefined;
@@ -263,6 +269,20 @@ export async function getCollectionRecords(filters?: {
       filters.nicknames.map((value) => String(value || "").trim()).filter(Boolean).join(","),
     );
   }
+  if (Array.isArray(filters?.sourceImportIds) && filters.sourceImportIds.length > 0) {
+    params.set(
+      "sourceImportIds",
+      filters.sourceImportIds.map((value) => String(value || "").trim()).filter(Boolean).join(","),
+    );
+  }
+  if (Array.isArray(filters?.agingBuckets) && filters.agingBuckets.length > 0) {
+    params.set("agingBuckets", filters.agingBuckets.join(","));
+  }
+  if (Array.isArray(filters?.classifications) && filters.classifications.length > 0) {
+    params.set("classifications", filters.classifications.join(","));
+  }
+  if (filters?.sortBy) params.set("sortBy", filters.sortBy);
+  if (filters?.sortDirection) params.set("sortDirection", filters.sortDirection);
   if (filters?.receiptValidationStatus) {
     params.set("receiptValidationStatus", filters.receiptValidationStatus);
   }

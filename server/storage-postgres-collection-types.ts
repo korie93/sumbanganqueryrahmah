@@ -11,7 +11,12 @@ import type {
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 export type CollectionAgingBucket = "D3" | "D4" | "D5" | "D6";
 export type CollectionCpStatus = "cp" | "abort_cp" | "unverified";
-export type CollectionSourceMatchBasis = "ic" | "phone_and_account";
+export type CollectionSourceMatchBasis =
+  | "ic"
+  | "phone_and_account"
+  | "account_number"
+  | "card_number"
+  | "account_and_card";
 
 export type CollectionReceiptValidationStatus =
   | "matched"
@@ -65,6 +70,7 @@ export type CollectionRecord = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
@@ -77,6 +83,8 @@ export type CollectionRecord = {
   billingPrincipalOsp?: CollectionAmountMyrString | null;
   sourceMatchBasis?: CollectionSourceMatchBasis | null;
   sourceMatchAccuracy?: number | null;
+  sourceObligationKey?: string | null;
+  settlementCycleKey?: string | null;
   totalDueCovered?: boolean | null;
   cumulativeCollected?: CollectionAmountMyrString | null;
   remainingAmount?: CollectionAmountMyrString | null;
@@ -111,8 +119,107 @@ export type CollectionRecordListFilters = {
   nicknames?: string[] | undefined;
   receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged" | undefined;
   duplicateOnly?: boolean | undefined;
+  sourceImportIds?: string[] | undefined;
+  agingBuckets?: CollectionAgingBucket[] | undefined;
+  classifications?: Array<"cp" | "abort_cp"> | undefined;
+  sortBy?: "paymentDate" | "amount" | "customerName" | "source" | "aging" | "classification" | undefined;
+  sortDirection?: "asc" | "desc" | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
+};
+
+export type CollectionSourceConfigStatus = "active" | "upcoming" | "expired" | "disabled" | "incompatible";
+
+export type CollectionSourceConfig = {
+  sourceImportId: string;
+  sourceImportName: string;
+  sourceFilename: string;
+  rowCount: number;
+  validFrom: string;
+  validTo: string;
+  cycleKey: string;
+  enabled: boolean;
+  compatibilityStatus: "compatible" | "incompatible";
+  compatibilityIssues: string[];
+  indexedRowCount: number;
+  configuredBy: string;
+  configuredAt: Date;
+  updatedAt: Date;
+  status: CollectionSourceConfigStatus;
+};
+
+export type ConfigureCollectionSourceInput = {
+  sourceImportId: string;
+  validFrom: string;
+  validTo: string;
+  enabled: boolean;
+  configuredBy: string;
+};
+
+export type CollectionLegacyBackfillReason =
+  | "incomplete_source_link"
+  | "missing_source_row"
+  | "source_not_authorized"
+  | "outside_source_validity"
+  | "account_match_unavailable"
+  | "account_mismatch"
+  | "ambiguous_account_match"
+  | "incomplete_trusted_source"
+  | "snapshot_conflict"
+  | "concurrent_change"
+  | "settlement_conflict";
+
+export type CollectionLegacyBackfillStats = {
+  scannedRecords: number;
+  backfilledRecords: number;
+  unresolvedRecords: number;
+  recalculatedCycles: number;
+  reasonCounts: Partial<Record<CollectionLegacyBackfillReason, number>>;
+};
+
+export type CollectionIndexedSourceMatch = {
+  sourceImportId: string;
+  sourceDataRowId: string;
+  sourceImportName: string;
+  sourceFilename: string;
+  sourceObligationKey: string;
+  settlementCycleKey: string;
+  cardNumberLast4: string | null;
+  matchBasis: "account_number" | "card_number" | "account_and_card";
+  totalDue: CollectionAmountMyrString;
+  billingPrincipalOsp: CollectionAmountMyrString;
+  totalOsb: CollectionAmountMyrString | null;
+  agingBucket: CollectionAgingBucket;
+  callingDate: string;
+  callingWindowEnd: string;
+  callingWindowEndExclusive: string;
+  duplicateSourceCount: number;
+};
+
+export type CollectionSourceMatchResult = {
+  eligibleSourceCount: number;
+  matches: CollectionIndexedSourceMatch[];
+};
+
+export type CollectionBillingPrincipalAgingRow = {
+  aging: CollectionAgingBucket;
+  totalOsp: CollectionAmountMyrString;
+  targetPercentage: string;
+  targetOsp: CollectionAmountMyrString;
+  resultPercentage: string;
+  ospClosed: CollectionAmountMyrString;
+  closedAccountCount: number;
+};
+
+export type CollectionBillingPrincipalReport = {
+  rows: CollectionBillingPrincipalAgingRow[];
+  all: Omit<CollectionBillingPrincipalAgingRow, "aging"> & { aging: "ALL" };
+};
+
+export type CollectionOspTargetInput = {
+  agingBucket: CollectionAgingBucket;
+  totalOspBaseline: string | null;
+  targetPercentage: string;
 };
 
 export type CollectionRecordAggregateFilters = Omit<
@@ -277,6 +384,9 @@ export type CreateCollectionRecordInput = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  /** Ephemeral matching input. Never persisted or returned. */
+  sourceCardNumber?: string | null;
+  cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
@@ -288,6 +398,8 @@ export type CreateCollectionRecordInput = {
   billingPrincipalOsp?: CollectionAmountMyrNumber | null;
   sourceMatchBasis?: CollectionSourceMatchBasis | null;
   sourceMatchAccuracy?: number | null;
+  sourceObligationKey?: string | null;
+  settlementCycleKey?: string | null;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrNumber;
@@ -326,6 +438,9 @@ export type UpdateCollectionRecordInput = {
   icNumber?: string;
   customerPhone?: string;
   accountNumber?: string;
+  /** Ephemeral matching input. Never persisted or returned. */
+  sourceCardNumber?: string | null;
+  cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
@@ -337,6 +452,8 @@ export type UpdateCollectionRecordInput = {
   billingPrincipalOsp?: CollectionAmountMyrNumber | null;
   sourceMatchBasis?: CollectionSourceMatchBasis | null;
   sourceMatchAccuracy?: number | null;
+  sourceObligationKey?: string | null;
+  settlementCycleKey?: string | null;
   batch?: CollectionBatch;
   paymentDate?: string;
   amount?: CollectionAmountMyrNumber;

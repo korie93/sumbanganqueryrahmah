@@ -3,6 +3,7 @@ import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import type { CollectionRecord } from "@/lib/api";
 import {
+  formatCollectionMaskedCard,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
 } from "@/pages/collection-records/collection-coverage";
@@ -59,6 +60,7 @@ export async function exportCollectionRecordsToExcel({
     safeSpreadsheetText(record.customerName),
     safeSpreadsheetText(record.icNumber),
     safeSpreadsheetText(record.accountNumber),
+    safeSpreadsheetText(formatCollectionMaskedCard(record.cardNumberLast4)),
     safeSpreadsheetText(record.customerPhone),
     optionalCollectionAmount(record.billingPrincipalOsp),
     optionalCollectionAmount(record.totalDue),
@@ -83,6 +85,7 @@ export async function exportCollectionRecordsToExcel({
       "Customer Name",
       "IC Number",
       "Account Number",
+      "Card Number (masked)",
       "Customer Phone Number",
       "Billing Principal (OSP)",
       "TOTAL DUE",
@@ -102,7 +105,7 @@ export async function exportCollectionRecordsToExcel({
   const maxColumnLength = (columnIndex: number) =>
     Math.max(...sheetData.map((row) => String(row[columnIndex] ?? "").length), 12);
 
-  worksheet["!cols"] = Array.from({ length: 14 }).map((_, index) => ({
+  worksheet["!cols"] = Array.from({ length: 15 }).map((_, index) => ({
     wch: Math.min(38, maxColumnLength(index) + 2),
   }));
 
@@ -113,7 +116,7 @@ export async function exportCollectionRecordsToExcel({
   }
 
   for (let row = 8; row < 8 + reportRows.length; row += 1) {
-    for (const column of ["E", "F", "G"]) {
+    for (const column of ["F", "G", "H"]) {
       const worksheetCell = getWorksheetCell(worksheet, `${column}${row}`);
       if (worksheetCell) {
         worksheetCell.z = "\"RM\" #,##0.00";
@@ -145,6 +148,7 @@ export async function exportCollectionRecordsToPdf({
     "Customer",
     "IC",
     "Account",
+    "Card",
     "Phone",
     ["Billing Principal", "(OSP)"],
     "TOTAL DUE",
@@ -157,7 +161,7 @@ export async function exportCollectionRecordsToPdf({
     "Match",
     "Staff",
   ];
-  const colWidths = [28, 22, 24, 20, 20, 20, 20, 16, 12, 19, 12, 24, 14, 25];
+  const colWidths = [25, 20, 20, 15, 18, 18, 18, 18, 15, 11, 18, 11, 22, 13, 22];
   let y = 12;
   let pageNo = 1;
 
@@ -216,6 +220,7 @@ export async function exportCollectionRecordsToPdf({
       fitCollectionRecordText(record.customerName, 22),
       fitCollectionRecordText(record.icNumber, 16),
       fitCollectionRecordText(record.accountNumber, 18),
+      formatCollectionMaskedCard(record.cardNumberLast4),
       fitCollectionRecordText(record.customerPhone, 15),
       record.billingPrincipalOsp ? fitCollectionRecordText(formatAmountRM(record.billingPrincipalOsp), 11) : "-",
       record.totalDue ? fitCollectionRecordText(formatAmountRM(record.totalDue), 11) : "-",

@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import type { CollectionMonthlySummary, CollectionRecord } from "@/lib/api";
 import { buildCollectionMonthDetailsRowAriaLabel } from "@/pages/collection-summary/collection-summary-row-aria";
+import { formatCollectionMaskedCard } from "@/pages/collection-records/collection-coverage";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 export type CollectionMonthDetailsDialogProps = {
@@ -177,7 +178,11 @@ export function CollectionMonthDetailsDialog({
                       <dl className="grid gap-2 rounded-xl border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
                         <div className="space-y-1">
                           <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Account Number</dt>
-                          <dd className="break-words">{row.accountNumber}</dd>
+                          <dd className="break-words">{row.accountNumber || "-"}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Card Number</dt>
+                          <dd>{formatCollectionMaskedCard(row.cardNumberLast4)}</dd>
                         </div>
                         <div className="space-y-1">
                           <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Batch</dt>

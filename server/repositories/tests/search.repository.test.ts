@@ -490,6 +490,7 @@ test("SearchRepository.getCollectionSettlementProjection scopes an exact numeric
         projected_cumulative: "200.00",
         remaining_after_save: "0.00",
         projected_total_due_covered: true,
+        projected_entry_is_abort: true,
       }],
     };
   }) as typeof db.execute;
@@ -516,6 +517,8 @@ test("SearchRepository.getCollectionSettlementProjection scopes an exact numeric
     });
     const sqlText = collectSqlText(capturedQuery);
     assert.match(sqlText, /SUM\(record\.amount\)/i);
+    assert.match(sqlText, /prior_cumulative/i);
+    assert.match(sqlText, /projected_entry_is_abort/i);
     assert.match(sqlText, /record\.source_import_id\s*=/i);
     assert.match(sqlText, /record\.source_data_row_id\s*=/i);
     assert.match(sqlText, /record\.calling_date\s*=/i);

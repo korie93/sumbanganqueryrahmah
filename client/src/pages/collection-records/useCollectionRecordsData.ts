@@ -1,6 +1,10 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import type { CollectionStaffNickname } from "@/lib/api";
+import {
+  getCollectionSourceConfigs,
+  type CollectionSourceConfig,
+  type CollectionStaffNickname,
+} from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { DEFAULT_COLLECTION_RECORDS_PAGE_SIZE } from "@/pages/collection-records/collection-records-data-utils";
 import { COLLECTION_DATA_CHANGED_EVENT, isValidDate } from "@/pages/collection/utils";
@@ -17,6 +21,8 @@ export function useCollectionRecordsData({
   canUseNicknameFilter,
 }: UseCollectionRecordsDataArgs) {
   const { toast } = useToast();
+  const [sourceOptions, setSourceOptions] = useState<CollectionSourceConfig[]>([]);
+  const [loadingSources, setLoadingSources] = useState(false);
   const {
     records,
     loadingRecords,
@@ -41,6 +47,10 @@ export function useCollectionRecordsData({
     toDate,
     searchInput,
     nicknameFilter,
+    sourceImportFilter,
+    agingFilter,
+    classificationFilter,
+    sortValue,
     deferredSearchInput,
     fromDateRef,
     toDateRef,
@@ -49,6 +59,10 @@ export function useCollectionRecordsData({
     handleToDateChange,
     handleSearchInputChange,
     handleNicknameFilterChange,
+    handleSourceImportFilterChange,
+    handleAgingFilterChange,
+    handleClassificationFilterChange,
+    handleSortValueChange,
     buildCurrentFilters,
     markSkipNextAutoFetch,
     consumeInitialAutoFetch,
@@ -67,6 +81,31 @@ export function useCollectionRecordsData({
       resetHistory: true,
     });
   }, [fetchRecordsPage]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadingSources(true);
+
+    void getCollectionSourceConfigs({ signal: controller.signal })
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setSourceOptions(Array.isArray(response.sourceConfigs) ? response.sourceConfigs : []);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          logClientError("Failed to load Collection source filter options.", error);
+          setSourceOptions([]);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoadingSources(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -138,6 +177,10 @@ export function useCollectionRecordsData({
     fromDate,
     loadFirstPage,
     nicknameFilter,
+    sourceImportFilter,
+    agingFilter,
+    classificationFilter,
+    sortValue,
     pageSize,
     toDate,
   ]);
@@ -192,10 +235,18 @@ export function useCollectionRecordsData({
     handleToDateChange("");
     handleSearchInputChange("");
     handleNicknameFilterChange("all");
+    handleSourceImportFilterChange("all");
+    handleAgingFilterChange("all");
+    handleClassificationFilterChange("all");
+    handleSortValueChange("paymentDate_desc");
     void loadFirstPage({});
   }, [
     handleFromDateChange,
     handleNicknameFilterChange,
+    handleSourceImportFilterChange,
+    handleAgingFilterChange,
+    handleClassificationFilterChange,
+    handleSortValueChange,
     handleSearchInputChange,
     handleToDateChange,
     loadFirstPage,
@@ -209,8 +260,14 @@ export function useCollectionRecordsData({
     toDate,
     searchInput,
     nicknameFilter,
+    sourceImportFilter,
+    agingFilter,
+    classificationFilter,
+    sortValue,
     nicknameOptions,
     loadingNicknames,
+    sourceOptions,
+    loadingSources,
     page,
     pageSize,
     pageOffset: pagination.pageOffset,
@@ -225,6 +282,10 @@ export function useCollectionRecordsData({
     setToDate: handleToDateChange,
     setSearchInput: handleSearchInputChange,
     setNicknameFilter: handleNicknameFilterChange,
+    setSourceImportFilter: handleSourceImportFilterChange,
+    setAgingFilter: handleAgingFilterChange,
+    setClassificationFilter: handleClassificationFilterChange,
+    setSortValue: handleSortValueChange,
     buildCurrentFilters,
     loadRecords: loadFirstPage,
     handleFilter,

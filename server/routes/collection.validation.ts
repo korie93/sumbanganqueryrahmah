@@ -9,6 +9,7 @@ export const COLLECTION_SOURCE_IMPORT_ID_MAX_LENGTH = 200;
 export const COLLECTION_CUSTOMER_NAME_MAX_LENGTH = 200;
 export const COLLECTION_IC_NUMBER_MAX_LENGTH = 64;
 export const COLLECTION_ACCOUNT_NUMBER_MAX_LENGTH = 128;
+export const COLLECTION_CARD_NUMBER_MAX_LENGTH = 128;
 export const COLLECTION_SUMMARY_MONTH_NAMES = [
   "January",
   "February",
@@ -52,6 +53,7 @@ export type CollectionCreatePayload = {
   icNumber?: string;
   customerPhone?: string;
   accountNumber?: string;
+  cardNumber?: string;
   sourceImportId?: string | null;
   agingBucket?: string | null;
   batch?: string;
@@ -69,6 +71,7 @@ export type CollectionSourceMatchPayload = {
   icNumber?: string;
   customerPhone?: string;
   accountNumber?: string;
+  cardNumber?: string;
   sourceImportId?: string | null;
   paymentDate?: string;
   amount?: number | string;
@@ -151,7 +154,8 @@ export function isNicknameScopeAllowedForRole(scope: "admin" | "user" | "both", 
 export function isValidCollectionDate(value: string): boolean {
   if (!COLLECTION_DATE_REGEX.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(parsed.getTime());
+  return Number.isFinite(parsed.getTime())
+    && parsed.toISOString().slice(0, 10) === value;
 }
 
 export function isValidCollectionMonthKey(value: string): boolean {

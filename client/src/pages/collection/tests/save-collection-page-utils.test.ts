@@ -18,8 +18,7 @@ test("validateSaveCollectionForm rejects invalid customer and payment inputs", (
       icNumber: "900101-10-1234",
       customerPhone: "0123456789",
       accountNumber: "ACC-1",
-      sourceImportId: "import-1",
-      agingBucket: "D3",
+      cardNumber: "",
       batch: "P10",
       paymentDate: "2026-03-01",
       amount: "10.00",
@@ -34,8 +33,7 @@ test("validateSaveCollectionForm rejects invalid customer and payment inputs", (
       icNumber: "900101-10-1234",
       customerPhone: "bad",
       accountNumber: "ACC-1",
-      sourceImportId: "import-1",
-      agingBucket: "D3",
+      cardNumber: "",
       batch: "P10",
       paymentDate: "2026-03-01",
       amount: "10.00",
@@ -52,8 +50,7 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
       icNumber: "",
       customerPhone: "bad",
       accountNumber: "",
-      sourceImportId: "",
-      agingBucket: "D3",
+      cardNumber: "",
       batch: "P10",
       paymentDate: "not-a-date",
       amount: "0",
@@ -62,8 +59,8 @@ test("validateSaveCollectionFormFields returns inline field-level errors", () =>
       customerName: "Customer Name is required.",
       icNumber: "IC Number is required.",
       customerPhone: "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.",
-      accountNumber: "Account Number is required.",
-      sourceImportId: "Pilih fail Saved yang telah disahkan matching.",
+      accountNumber: "Enter an Account Number or Card Number.",
+      cardNumber: "Enter an Account Number or Card Number.",
       paymentDate: "Payment Date is invalid.",
       amount: "Amount must be greater than 0.",
     },
@@ -77,6 +74,7 @@ test("source matching identity validation catches incomplete and oversized value
       icNumber: "1".repeat(65),
       customerPhone: "not-a-phone",
       accountNumber: "A".repeat(129),
+      cardNumber: "",
     }),
     {
       customerName: "Customer Name is required.",
@@ -87,23 +85,22 @@ test("source matching identity validation catches incomplete and oversized value
   );
 });
 
-test("save readiness requires a verified source even when a legacy value is undefined", () => {
+test("save readiness does not require a manually selected source", () => {
   const readiness = getSaveCollectionReadiness({
     staffNickname: "staff1",
     customerName: "Siti",
     icNumber: "900101101234",
     customerPhone: "0123456789",
     accountNumber: "ACC-1",
-    sourceImportId: undefined,
-    agingBucket: "D3",
+    cardNumber: "",
     batch: "P10",
     paymentDate: "2026-03-01",
     amount: "10.00",
   } as unknown as Parameters<typeof getSaveCollectionReadiness>[0]);
 
-  assert.equal(readiness.isReady, false);
-  assert.equal(readiness.firstError, "Pilih fail Saved yang telah disahkan matching.");
-  assert.deepEqual(readiness.invalidFields, ["sourceImportId"]);
+  assert.equal(readiness.isReady, true);
+  assert.equal(readiness.firstError, null);
+  assert.deepEqual(readiness.invalidFields, []);
 });
 
 test("save readiness is true only when the shared field validator has no errors", () => {
@@ -113,8 +110,7 @@ test("save readiness is true only when the shared field validator has no errors"
     icNumber: "900101101234",
     customerPhone: "0123456789",
     accountNumber: "ACC-1",
-    sourceImportId: "import-verified",
-    agingBucket: "D5",
+    cardNumber: "",
     batch: "P25",
     paymentDate: "2026-03-01",
     amount: "10.00",
@@ -133,8 +129,7 @@ test("buildSaveCollectionMutationPayload trims values and maps receipt metadata"
       icNumber: " 900101-10-1234 ",
       customerPhone: " 0123456789 ",
       accountNumber: " ACC-1 ",
-      sourceImportId: " import-verified ",
-      agingBucket: "D5",
+      cardNumber: " 0000123412345678 ",
       batch: "P25",
       paymentDate: "2026-03-01",
       amount: "100.50",
@@ -150,8 +145,9 @@ test("buildSaveCollectionMutationPayload trims values and maps receipt metadata"
   });
 
   assert.equal(payload.customerName, "Siti");
-  assert.equal(payload.sourceImportId, "import-verified");
-  assert.equal(payload.agingBucket, "D5");
+  assert.equal(payload.cardNumber, "0000123412345678");
+  assert.equal("sourceImportId" in payload, false);
+  assert.equal("agingBucket" in payload, false);
   assert.equal(payload.collectionStaffNickname, "staff1");
   assert.equal(payload.amount, 100.5);
   assert.deepEqual(payload.newReceiptMetadata, [
@@ -173,8 +169,7 @@ test("buildSaveCollectionMutationPayload normalizes grouped amount strings", () 
       icNumber: " 900101-10-1234 ",
       customerPhone: " 0123456789 ",
       accountNumber: " ACC-1 ",
-      sourceImportId: " import-verified ",
-      agingBucket: "D3",
+      cardNumber: "",
       batch: "P25",
       paymentDate: "2026-03-01",
       amount: "1,200.50",
@@ -183,6 +178,25 @@ test("buildSaveCollectionMutationPayload normalizes grouped amount strings", () 
   });
 
   assert.equal(payload.amount, 1200.5);
+});
+
+test("save validation and payload preserve an exact 16-digit Card-only identifier", () => {
+  const values = {
+    staffNickname: "staff1",
+    customerName: "Siti",
+    icNumber: "900101101234",
+    customerPhone: "0123456789",
+    accountNumber: "",
+    cardNumber: "0000123412345678",
+    batch: "P10" as const,
+    paymentDate: "2026-03-01",
+    amount: "10.00",
+  };
+
+  assert.deepEqual(validateSaveCollectionIdentityFields(values), {});
+  const payload = buildSaveCollectionMutationPayload({ values, receiptDrafts: [] });
+  assert.equal(payload.accountNumber, "");
+  assert.equal(payload.cardNumber, "0000123412345678");
 });
 
 test("removeSaveCollectionReceiptAtIndex removes only the targeted item", () => {

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   CalendarDays,
+  CircleDollarSign,
   FolderPlus,
   LayoutGrid,
   ListChecks,
@@ -67,6 +68,12 @@ export function useCollectionReportNavigation({
         label: "Collection Daily",
         icon: CalendarDays,
         description: "Jejaki prestasi harian dan kalendar collection.",
+      },
+      {
+        key: "billing-principal",
+        label: "Billing Principal (OSP)",
+        icon: CircleDollarSign,
+        description: "Ukur OSP yang ditutup oleh peristiwa Abort CP sahaja.",
       },
     ];
     if (canAccessNicknameSummary) {

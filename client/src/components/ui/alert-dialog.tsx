@@ -10,6 +10,9 @@ import { buttonVariants } from "@/components/ui/button"
  */
 const AlertDialog = AlertDialogPrimitive.Root
 
+/**
+ * Renders the control that opens the shared alert dialog.
+ */
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger
 
 /**

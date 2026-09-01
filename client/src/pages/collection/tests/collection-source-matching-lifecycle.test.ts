@@ -8,59 +8,31 @@ const source = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 
-test("collection source matching aborts requests on identity change and unmount", () => {
+test("auto matching aborts in-flight requests on identity change and unmount", () => {
   assert.match(source, /matchingControllerRef\.current\?\.abort\(\)/);
   assert.match(source, /useEffect\(\(\) => \(\) => \{/);
   assert.match(source, /matchingRequestIdRef\.current \+= 1/);
-  assert.match(source, /sourceFilesRequestIdRef\.current \+= 1/);
-  assert.match(source, /return \(\) => \{\n\s+window\.clearTimeout\(timer\);\n\s+controller\.abort\(\);/);
 });
 
-test("collection source matching ignores aborted and superseded responses", () => {
-  assert.match(
-    source,
-    /requestId !== matchingRequestIdRef\.current\n\s+\|\| requestFingerprint !== identityFingerprintRef\.current/,
-  );
-  assert.match(
-    source,
-    /requestFingerprint !== identityFingerprintRef\.current\n\s+\|\| isAbortError\(matchingError\)/,
-  );
-  assert.match(source, /requestId !== sourceFilesRequestIdRef\.current/);
-  assert.match(source, /identityFingerprintRef\.current = identityFingerprint/);
+test("auto matching ignores aborted and superseded responses", () => {
+  assert.match(source, /requestId !== matchingRequestIdRef\.current/);
+  assert.match(source, /requestFingerprint !== identityFingerprintRef\.current/);
+  assert.match(source, /isAbortError\(matchingError\)/);
 });
 
-test("collection source matching validates identity before starting the API request", () => {
+test("auto matching validates identity, date, and amount before its request", () => {
   const validationIndex = source.indexOf("validateSaveCollectionIdentityFields(identity)");
-  const sourceSelectionIndex = source.indexOf("if (!selectedSourceFileId)");
-  const requestIndex = source.indexOf("await getCollectionSourceMatches(identity, selectedSourceFileId");
+  const requestIndex = source.indexOf("await getCollectionSourceMatches(identity, { signal: controller.signal })");
 
   assert.notEqual(validationIndex, -1);
-  assert.notEqual(sourceSelectionIndex, -1);
   assert.notEqual(requestIndex, -1);
   assert.ok(validationIndex < requestIndex);
-  assert.ok(sourceSelectionIndex < requestIndex);
-  assert.match(source, /if \(Object\.keys\(validationErrors\)\.length > 0\) \{/);
-  assert.match(source, /onValidationErrors\?\.\(validationErrors\)/);
-  assert.match(source, /Pilih fail Saved sebelum semak matching\./);
+  assert.doesNotMatch(source, /sourceImportId/);
+  assert.doesNotMatch(source, /getCollectionSavedSourceFiles/);
 });
 
-test("collection source matching loads only bounded file metadata before matching one selected file", () => {
-  assert.match(source, /await getCollectionSavedSourceFiles\(\{/);
-  assert.match(source, /limit: 100/);
-  assert.match(source, /setSelectedSourceFile\(nextSource\)/);
-  assert.match(source, /match\.sourceImportId === selectedSourceFileId/);
-  assert.doesNotMatch(source, /find\(\(match\) => match\.totalDue !== null\)/);
-});
-
-test("collection source verification is invalidated when identity, payment date, or amount changes", () => {
-  assert.match(source, /paymentDate: identity\.paymentDate\.trim\(\)/);
-  assert.match(source, /amount: identity\.amount\.trim\(\)/);
-  assert.match(source, /invalidateVerifiedMatch\(\);\n\s+\}, \[identityFingerprint/);
-  assert.match(source, /onSelectionChange\(""\)/);
-});
-
-test("collection source matching turns backend failures into safe user-facing messages", () => {
-  assert.match(source, /import \{ resolveMutationErrorMessage \} from "@\/lib\/mutation-feedback"/);
-  assert.match(source, /setError\(resolveMutationErrorMessage\(/);
-  assert.doesNotMatch(source, /matchingError instanceof Error\s*\? matchingError\.message/);
+test("auto matching sends only identity, payment date, and amount", () => {
+  assert.match(source, /getCollectionSourceMatches\(identity, \{ signal: controller\.signal \}\)/);
+  assert.doesNotMatch(source, /selectedSourceFile/);
+  assert.doesNotMatch(source, /sourceFiles/);
 });

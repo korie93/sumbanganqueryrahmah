@@ -16,9 +16,15 @@ import {
 } from "../lib/collection-pii-encryption";
 import { buildTextArraySql } from "./sql-array-utils";
 import {
+  acquireCollectionSettlementCycleLocks,
+  applyCollectionSettlementState,
+  recalculateCollectionSettlementCycles,
+} from "./collection-settlement-repository-utils";
+import {
   createCollectionRecordReceiptRows,
   syncCollectionRecordReceiptValidation,
 } from "./collection-receipt-utils";
+import { assertAuthorizedCollectionSourceSnapshot } from "./collection-source-authority-repository-utils";
 
 export async function createCollectionRecord(
   data: CreateCollectionRecordInput,
@@ -57,25 +63,30 @@ export async function createCollectionRecord(
     plaintext: data.accountNumber,
     encrypted: encryptedPii?.accountNumberEncrypted,
   });
+  const settlementCycleKey = String(data.settlementCycleKey ?? "").trim() || null;
   return db.transaction(async (tx) => {
-    if (data.sourceImportId && data.sourceDataRowId) {
-      await tx.execute(sql`
-        SELECT pg_advisory_xact_lock(
-          hashtextextended(${`${data.sourceImportId}:${data.sourceDataRowId}`}, 0)
-        )
-      `);
-      const sourceRow = await tx.execute(sql`
-        SELECT source_row.id
-        FROM public.data_rows source_row
-        JOIN public.imports imp ON imp.id = source_row.import_id
-        WHERE source_row.id = ${data.sourceDataRowId}
-          AND source_row.import_id = ${data.sourceImportId}
-          AND imp.is_deleted = false
-        FOR SHARE OF source_row, imp
-      `);
-      if (!sourceRow.rows?.[0]) {
-        throw new Error("Selected Saved source row no longer exists in the selected file.");
+    await acquireCollectionSettlementCycleLocks(tx, [settlementCycleKey]);
+    if (data.sourceImportId || data.sourceDataRowId || settlementCycleKey) {
+      if (!data.sourceImportId || !data.sourceDataRowId) {
+        throw new Error("Selected Collection source snapshot is incomplete.");
       }
+      await assertAuthorizedCollectionSourceSnapshot(tx, {
+        sourceImportId: data.sourceImportId,
+        sourceDataRowId: data.sourceDataRowId,
+        paymentDate: data.paymentDate,
+        accountNumber: data.accountNumber,
+        cardNumber: data.sourceCardNumber ?? null,
+        requireFullIdentifierMatch: true,
+        cardNumberLast4: data.cardNumberLast4 ?? null,
+        agingBucket: data.agingBucket ?? null,
+        callingDate: data.callingDate ?? null,
+        callingWindowEndExclusive: data.callingWindowEndExclusive ?? null,
+        totalDue: data.totalDue ?? null,
+        billingPrincipalOsp: data.billingPrincipalOsp ?? null,
+        sourceMatchBasis: data.sourceMatchBasis ?? null,
+        sourceObligationKey: data.sourceObligationKey ?? null,
+        settlementCycleKey,
+      });
     }
     await tx.execute(sql`
       INSERT INTO public.collection_records (
@@ -93,6 +104,7 @@ export async function createCollectionRecord(
         account_number,
         account_number_encrypted,
         account_number_search_hash,
+        card_number_last4,
         source_import_id,
         source_data_row_id,
         source_import_name,
@@ -104,6 +116,8 @@ export async function createCollectionRecord(
         billing_principal_osp,
         source_match_basis,
         source_match_accuracy,
+        source_obligation_key,
+        settlement_cycle_key,
         batch,
         payment_date,
         amount,
@@ -131,6 +145,7 @@ export async function createCollectionRecord(
         ${persistedAccountNumber},
         ${encryptedPii?.accountNumberEncrypted ?? null},
         ${piiSearchHashes?.accountNumberSearchHash ?? null},
+        ${data.cardNumberLast4 ?? null},
         ${data.sourceImportId ?? null},
         ${data.sourceDataRowId && data.sourceImportId
           ? sql`(
@@ -150,6 +165,8 @@ export async function createCollectionRecord(
         ${data.billingPrincipalOsp ?? null},
         ${data.sourceMatchBasis ?? null},
         ${data.sourceMatchAccuracy ?? null},
+        ${data.sourceObligationKey ?? null},
+        ${settlementCycleKey},
         ${data.batch},
         ${data.paymentDate}::date,
         ${data.amount},
@@ -176,6 +193,7 @@ export async function createCollectionRecord(
     if (!created) {
       throw new Error("Failed to load created collection record.");
     }
-    return created;
+    const settlementStates = await recalculateCollectionSettlementCycles(tx, [settlementCycleKey]);
+    return applyCollectionSettlementState(created, settlementStates.get(id));
   });
 }

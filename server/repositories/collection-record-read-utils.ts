@@ -32,6 +32,25 @@ function normalizeQueryRows(rows: unknown[] | undefined): unknown[] {
   return Array.isArray(rows) ? rows : [];
 }
 
+function buildCollectionRecordOrderSql(filters?: CollectionRecordListFilters) {
+  const direction = filters?.sortDirection === "asc" ? sql`ASC` : sql`DESC`;
+  switch (filters?.sortBy) {
+    case "amount":
+      return sql`amount ${direction}, payment_date ${direction}, created_at ${direction}, id ${direction}`;
+    case "customerName":
+      return sql`lower(COALESCE(customer_name, '')) ${direction}, payment_date ${direction}, created_at ${direction}, id ${direction}`;
+    case "source":
+      return sql`lower(COALESCE(source_filename, source_import_name, '')) ${direction}, payment_date ${direction}, created_at ${direction}, id ${direction}`;
+    case "aging":
+      return sql`aging_bucket ${direction} NULLS LAST, payment_date ${direction}, created_at ${direction}, id ${direction}`;
+    case "classification":
+      return sql`classification ${direction} NULLS LAST, payment_date ${direction}, created_at ${direction}, id ${direction}`;
+    case "paymentDate":
+    default:
+      return sql`payment_date ${direction}, created_at ${direction}, id ${direction}`;
+  }
+}
+
 export async function listCollectionRecords(
   filters?: CollectionRecordListFilters,
 ): Promise<CollectionRecord[]> {
@@ -44,6 +63,7 @@ export async function listCollectionRecords(
   const safeOffset = Number.isFinite(parsedOffset)
     ? Math.max(0, Math.floor(parsedOffset))
     : 0;
+  const orderSql = buildCollectionRecordOrderSql(filters);
 
   const result = await db.execute(sql`
     SELECT
@@ -56,6 +76,7 @@ export async function listCollectionRecords(
       customer_phone_encrypted,
       ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
       account_number_encrypted,
+      card_number_last4,
       source_import_id,
       source_data_row_id,
       source_import_name,
@@ -67,6 +88,11 @@ export async function listCollectionRecords(
       billing_principal_osp,
       source_match_basis,
       source_match_accuracy,
+      source_obligation_key,
+      settlement_cycle_key,
+      classification,
+      cumulative_collected,
+      remaining_amount,
       batch,
       payment_date,
       amount,
@@ -76,23 +102,6 @@ export async function listCollectionRecords(
       receipt_validation_message,
       receipt_count,
       duplicate_receipt_flag,
-      (
-        SELECT COALESCE(SUM(child.amount), 0)::numeric(14,2)
-        FROM public.collection_records child
-        WHERE child.source_import_id = record.source_import_id
-          AND child.source_data_row_id = record.source_data_row_id
-          AND child.calling_date = record.calling_date
-          AND child.calling_window_end_exclusive = record.calling_window_end_exclusive
-          AND child.source_import_id IS NOT NULL
-          AND child.source_data_row_id IS NOT NULL
-          AND child.calling_date IS NOT NULL
-          AND child.calling_window_end_exclusive IS NOT NULL
-          AND child.payment_date >= child.calling_date
-          AND child.payment_date < child.calling_window_end_exclusive
-          AND child.source_match_basis IS NOT NULL
-          AND child.total_due IS NOT NULL
-          AND child.duplicate_receipt_flag = false
-      ) AS cumulative_collected,
       created_by_login,
       collection_staff_nickname,
       staff_username,
@@ -100,7 +109,7 @@ export async function listCollectionRecords(
       updated_at
     FROM public.collection_records record
     ${whereSql}
-    ORDER BY payment_date ASC, created_at ASC, id ASC
+    ORDER BY ${orderSql}
     LIMIT ${safeLimit}
     OFFSET ${safeOffset}
   `);
@@ -362,6 +371,7 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
       customer_phone_encrypted,
       ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
       account_number_encrypted,
+      card_number_last4,
       source_import_id,
       source_data_row_id,
       source_import_name,
@@ -373,6 +383,11 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
       billing_principal_osp,
       source_match_basis,
       source_match_accuracy,
+      source_obligation_key,
+      settlement_cycle_key,
+      classification,
+      cumulative_collected,
+      remaining_amount,
       batch,
       payment_date,
       amount,
@@ -382,23 +397,6 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
       receipt_validation_message,
       receipt_count,
       duplicate_receipt_flag,
-      (
-        SELECT COALESCE(SUM(child.amount), 0)::numeric(14,2)
-        FROM public.collection_records child
-        WHERE child.source_import_id = record.source_import_id
-          AND child.source_data_row_id = record.source_data_row_id
-          AND child.calling_date = record.calling_date
-          AND child.calling_window_end_exclusive = record.calling_window_end_exclusive
-          AND child.source_import_id IS NOT NULL
-          AND child.source_data_row_id IS NOT NULL
-          AND child.calling_date IS NOT NULL
-          AND child.calling_window_end_exclusive IS NOT NULL
-          AND child.payment_date >= child.calling_date
-          AND child.payment_date < child.calling_window_end_exclusive
-          AND child.source_match_basis IS NOT NULL
-          AND child.total_due IS NOT NULL
-          AND child.duplicate_receipt_flag = false
-      ) AS cumulative_collected,
       created_by_login,
       collection_staff_nickname,
       staff_username,

@@ -1,6 +1,5 @@
 import {
   type CollectionBatch,
-  type CollectionAgingBucket,
   type CollectionReceiptMetadata,
 } from "@/lib/api";
 import { buildCollectionReceiptMetadataPayload, type CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
@@ -24,8 +23,7 @@ export type SaveCollectionFormValues = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
-  sourceImportId: string;
-  agingBucket: CollectionAgingBucket;
+  cardNumber: string;
   batch: CollectionBatch;
   paymentDate: string;
   amount: string;
@@ -37,8 +35,7 @@ export type SaveCollectionFieldName =
   | "icNumber"
   | "customerPhone"
   | "accountNumber"
-  | "sourceImportId"
-  | "agingBucket"
+  | "cardNumber"
   | "batch"
   | "paymentDate"
   | "amount";
@@ -47,7 +44,7 @@ export type SaveCollectionFieldErrors = Partial<Record<SaveCollectionFieldName, 
 
 export type SaveCollectionIdentityValues = Pick<
   SaveCollectionFormValues,
-  "customerName" | "icNumber" | "customerPhone" | "accountNumber"
+  "customerName" | "icNumber" | "customerPhone" | "accountNumber" | "cardNumber"
 >;
 
 export type SaveCollectionReadiness = {
@@ -61,6 +58,7 @@ export const SAVE_COLLECTION_IDENTITY_FIELD_LIMITS = {
   customerName: 200,
   icNumber: 64,
   accountNumber: 128,
+  cardNumber: 128,
 } as const;
 
 const SAVE_COLLECTION_FIELD_ORDER: SaveCollectionFieldName[] = [
@@ -69,8 +67,7 @@ const SAVE_COLLECTION_FIELD_ORDER: SaveCollectionFieldName[] = [
   "icNumber",
   "customerPhone",
   "accountNumber",
-  "sourceImportId",
-  "agingBucket",
+  "cardNumber",
   "batch",
   "paymentDate",
   "amount",
@@ -81,8 +78,7 @@ export type SaveCollectionMutationPayload = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
-  sourceImportId: string;
-  agingBucket: CollectionAgingBucket;
+  cardNumber: string;
   batch: CollectionBatch;
   paymentDate: string;
   amount: number;
@@ -125,10 +121,18 @@ export function validateSaveCollectionIdentityFields(
   if (!isValidCustomerPhone(values.customerPhone)) {
     errors.customerPhone = "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.";
   }
-  if (!values.accountNumber.trim()) {
-    errors.accountNumber = "Account Number is required.";
-  } else if (values.accountNumber.trim().length > SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber) {
+  const accountNumber = values.accountNumber.trim();
+  const cardNumber = values.cardNumber.trim();
+  if (!accountNumber && !cardNumber) {
+    const message = "Enter an Account Number or Card Number.";
+    errors.accountNumber = message;
+    errors.cardNumber = message;
+  }
+  if (accountNumber.length > SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber) {
     errors.accountNumber = "Account Number must not exceed 128 characters.";
+  }
+  if (cardNumber.length > SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber) {
+    errors.cardNumber = "Card Number must not exceed 128 characters.";
   }
 
   return errors;
@@ -139,12 +143,6 @@ export function validateSaveCollectionFormFields(values: SaveCollectionFormValue
 
   if (!values.staffNickname || values.staffNickname.trim().length < 2) {
     errors.staffNickname = "Staff nickname is required.";
-  }
-  if (!String(values.sourceImportId || "").trim()) {
-    errors.sourceImportId = "Pilih fail Saved yang telah disahkan matching.";
-  }
-  if (!["D3", "D4", "D5", "D6"].includes(values.agingBucket)) {
-    errors.agingBucket = "Aging mesti D3, D4, D5, atau D6.";
   }
   if (!COLLECTION_BATCH_OPTIONS.includes(values.batch)) {
     errors.batch = "Batch is not valid.";
@@ -184,8 +182,7 @@ export function buildSaveCollectionMutationPayload(options: {
     icNumber: values.icNumber.trim(),
     customerPhone: values.customerPhone.trim(),
     accountNumber: values.accountNumber.trim(),
-    sourceImportId: values.sourceImportId.trim(),
-    agingBucket: values.agingBucket,
+    cardNumber: values.cardNumber.trim(),
     batch: values.batch,
     paymentDate: values.paymentDate,
     amount: parseCollectionAmountMyrNumber(values.amount),

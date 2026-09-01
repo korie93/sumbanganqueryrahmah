@@ -14,9 +14,17 @@ test("collection purge archives minimal metadata before deleting active records"
       execute: async (query: unknown) => {
         queries.push(query);
         const text = collectSqlText(query);
-        if (/SELECT\s+id,\s+amount,\s+receipt_file/si.test(text)) {
+        if (/SELECT\s+id\s+FROM public\.collection_records\s+WHERE payment_date/si.test(text)) {
+          return { rows: [{ id: recordId }] };
+        }
+        if (/SELECT\s+id,\s+amount,\s+receipt_file,\s+settlement_cycle_key/si.test(text)) {
           return {
-            rows: [{ id: recordId, amount: "125.50", receipt_file: "receipts/legacy.jpg" }],
+            rows: [{
+              id: recordId,
+              amount: "125.50",
+              receipt_file: "receipts/legacy.jpg",
+              settlement_cycle_key: "cycle-dummy-1",
+            }],
           };
         }
         if (/SELECT\s+storage_path\s+FROM public\.collection_record_receipts/si.test(text)) {
@@ -46,6 +54,7 @@ test("collection purge archives minimal metadata before deleting active records"
     ]);
     assert.ok(archiveIndex >= 0);
     assert.ok(deleteIndex > archiveIndex);
+    assert.ok(queryTexts.some((text) => /ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING/i.test(text)));
 
     const archiveSql = queryTexts[archiveIndex] || "";
     const archiveValues = collectBoundValues(queries[archiveIndex]);

@@ -10,6 +10,7 @@ import { parseExcelFileInWorker } from "./import-upload-excel-worker-runner";
 import { getImportUploadSpreadsheetRuntime } from "./import-upload-xlsx-runtime";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
 import {
+  findUnsafeSpreadsheetAccountIdentifierCell,
   findSpreadsheetHeaderRowIndex,
   normalizeSpreadsheetIdentifierCells,
 } from "../../shared/common/spreadsheet-identifier-normalization";
@@ -198,14 +199,22 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
       ? spreadsheetRuntime.decodeRange(worksheetRef)
       : { s: { r: 0, c: 0 } };
 
-    normalizeSpreadsheetIdentifierCells(jsonData, (rowIndex, columnIndex) => {
+    const readRawCell = (rowIndex: number, columnIndex: number) => {
       const cellAddress = spreadsheetRuntime.encodeCell({
         r: worksheetRange.s.r + rowIndex,
         c: worksheetRange.s.c + columnIndex,
       });
       const cell = worksheet[cellAddress] as { v?: unknown } | undefined;
       return cell?.v;
-    });
+    };
+
+    if (findUnsafeSpreadsheetAccountIdentifierCell(jsonData, readRawCell)) {
+      return createSpreadsheetStructureError(
+        "The spreadsheet contains an unsafe numeric Account/Card identifier. Format Account No and Card No cells as Text, preserving every digit, and upload the file again.",
+      );
+    }
+
+    normalizeSpreadsheetIdentifierCells(jsonData, readRawCell);
 
     return parseWorkbookJsonData(jsonData, options);
   } finally {

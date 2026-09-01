@@ -50,6 +50,7 @@ export type CollectionRecord = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
   sourceImportName?: string | null;
@@ -57,7 +58,13 @@ export type CollectionRecord = {
   agingBucket?: CollectionAgingBucket | null;
   totalDue?: CollectionAmountMyrString | null;
   billingPrincipalOsp?: CollectionAmountMyrString | null;
-  sourceMatchBasis?: "ic" | "phone_and_account" | null;
+  sourceMatchBasis?:
+    | "ic"
+    | "phone_and_account"
+    | "account_number"
+    | "card_number"
+    | "account_and_card"
+    | null;
   sourceMatchAccuracy?: number | null;
   callingDate?: string | null;
   callingWindowEnd?: string | null;
@@ -136,8 +143,9 @@ export type CreateCollectionPayload = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
-  sourceImportId: string;
-  agingBucket: CollectionAgingBucket;
+  cardNumber?: string;
+  sourceImportId?: string;
+  agingBucket?: CollectionAgingBucket;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrNumber;
@@ -151,16 +159,19 @@ export type CollectionSourceMatchField =
   | "customer_name"
   | "ic_number"
   | "customer_phone"
-  | "account_number";
+  | "account_number"
+  | "card_number";
 
 export type CollectionSourceMatch = {
   sourceImportId: string;
   sourceImportName: string | null;
   sourceFilename: string | null;
-  matchBasis: "ic" | "phone_and_account";
+  matchBasis: "ic" | "phone_and_account" | "account_number" | "card_number" | "account_and_card";
   matchAccuracy: number;
   matchedFields: CollectionSourceMatchField[];
   comparedFields: CollectionSourceMatchField[];
+  agingBucket?: CollectionAgingBucket;
+  cardNumberLast4?: string | null;
   totalDue: CollectionAmountMyrString | null;
   billingPrincipalOsp: CollectionAmountMyrString | null;
   callingDate: string;

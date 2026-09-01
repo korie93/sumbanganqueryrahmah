@@ -10,6 +10,7 @@ const MATCH_FIELD_LABELS: Record<CollectionSourceMatchField, string> = {
   ic_number: "IC",
   customer_phone: "Phone",
   account_number: "Account",
+  card_number: "Card",
 };
 
 export type CollectionSourceMatchDiagnostic = {

@@ -6,6 +6,7 @@ export type CollectionSubPage =
   | "summary"
   | "monthly-comparison"
   | "daily"
+  | "billing-principal"
   | "nickname-summary"
   | "manage-nicknames";
 export type NicknameDialogStep = "nickname" | "setup" | "login";

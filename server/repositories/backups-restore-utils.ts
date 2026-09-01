@@ -10,9 +10,12 @@ import {
   finalizeRestoredCollectionRollups,
   initializeRestoreTrackingTempTable,
   restoreAuditLogsFromBackup,
+  restoreCollectionOspTargetsFromBackup,
   restoreCollectionRecordPurgeHistoryFromBackup,
   restoreCollectionRecordReceiptsFromBackup,
   restoreCollectionRecordsFromBackup,
+  restoreCollectionSourceConfigsFromBackup,
+  restoreCollectionSourceRowsFromBackup,
   restoreDataRowsFromBackup,
   restoreImportsFromBackup,
   restoreUsersFromBackup,
@@ -26,6 +29,9 @@ const BACKUP_PAYLOAD_DATASET_KEYS = [
   "dataRows",
   "users",
   "auditLogs",
+  "collectionSourceConfigs",
+  "collectionSourceRows",
+  "collectionOspTargets",
   "collectionRecords",
   "collectionRecordPurgeHistory",
   "collectionRecordReceipts",
@@ -146,6 +152,9 @@ export async function restoreFromBackup(
     await restoreDataRowsFromBackup(restoreTx, backupDataReader, stats);
     await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
     await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionSourceConfigsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionSourceRowsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspTargetsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionRecordPurgeHistoryFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);

@@ -32,7 +32,7 @@ import {
   type RequireUserFn,
 } from "./collection-record-write-shared";
 import { isDateInsideCollectionCallingWindow } from "../../lib/collection-calling-window";
-import { verifySelectedSavedCollectionSource } from "./collection-source-verification";
+import { verifyEligibleSavedCollectionSource } from "./collection-source-verification";
 
 export class CollectionRecordCreateOperations {
   constructor(
@@ -52,19 +52,11 @@ export class CollectionRecordCreateOperations {
       assertValidCollectionCreateFields(fields);
       await assertCollectionStaffNicknameWriteAccess(this.storage, user, fields.collectionStaffNickname);
 
-      const sourceMatch = await verifySelectedSavedCollectionSource(this.storage, {
-        customerName: fields.customerName,
-        icNumber: fields.icNumber,
-        customerPhone: fields.customerPhone,
-        accountNumber: fields.accountNumber,
-        sourceImportId: fields.sourceImportId,
+      const sourceMatch = await verifyEligibleSavedCollectionSource(this.storage, {
+        paymentDate: fields.paymentDate,
+        ...(fields.accountNumber ? { accountNumber: fields.accountNumber } : {}),
+        ...(fields.cardNumber ? { cardNumber: fields.cardNumber } : {}),
       });
-      if (sourceMatch.sourceImportId !== fields.sourceImportId) {
-        throw badRequest(
-          "The selected Saved file no longer contains a matching customer row. Run matching again.",
-          "COLLECTION_SOURCE_MATCH_STALE",
-        );
-      }
       const matchedTotalDue = sourceMatch?.totalDue === null || sourceMatch?.totalDue === undefined
         ? null
         : parseCollectionAmountMyrInput(sourceMatch.totalDue, { allowZero: true });
@@ -116,19 +108,21 @@ export class CollectionRecordCreateOperations {
         icNumber: fields.icNumber,
         customerPhone: fields.customerPhone,
         accountNumber: fields.accountNumber,
-        sourceImportId: sourceMatch?.sourceImportId ?? null,
-        sourceDataRowId: sourceMatch?.rowId ?? null,
-        sourceImportName: sourceMatch?.sourceImportName ?? null,
-        sourceFilename: sourceMatch?.sourceFilename ?? null,
+        sourceCardNumber: fields.cardNumber || null,
+        cardNumberLast4: sourceMatch.cardNumberLast4,
+        sourceImportId: sourceMatch.sourceImportId,
+        sourceDataRowId: sourceMatch.sourceDataRowId,
+        sourceImportName: sourceMatch.sourceImportName,
+        sourceFilename: sourceMatch.sourceFilename,
         callingDate: sourceMatch.callingDate,
         callingWindowEndExclusive: sourceMatch.callingWindowEndExclusive,
-        agingBucket: fields.agingBucket
-          ? fields.agingBucket as "D3" | "D4" | "D5" | "D6"
-          : null,
+        agingBucket: sourceMatch.agingBucket,
         totalDue: matchedTotalDue,
         billingPrincipalOsp: matchedBillingPrincipalOsp,
-        sourceMatchBasis: sourceMatch?.matchBasis ?? null,
-        sourceMatchAccuracy: sourceMatch?.matchAccuracy ?? null,
+        sourceMatchBasis: sourceMatch.matchBasis,
+        sourceMatchAccuracy: 100,
+        sourceObligationKey: sourceMatch.sourceObligationKey,
+        settlementCycleKey: sourceMatch.settlementCycleKey,
         batch: fields.batch as CollectionBatchValue,
         paymentDate: fields.paymentDate,
         amount: fields.amount,
@@ -168,8 +162,8 @@ export class CollectionRecordCreateOperations {
           sourceImportId: finalRecord.sourceImportId,
           sourceDataRowId: finalRecord.sourceDataRowId,
           sourceImportName: finalRecord.sourceImportName,
-          sourceMatchBasis: sourceMatch?.matchBasis ?? null,
-          sourceMatchAccuracy: sourceMatch?.matchAccuracy ?? null,
+          sourceMatchBasis: sourceMatch.matchBasis,
+          sourceMatchAccuracy: 100,
           agingBucket: finalRecord.agingBucket,
           totalDue: finalRecord.totalDue,
           billingPrincipalOsp: finalRecord.billingPrincipalOsp,

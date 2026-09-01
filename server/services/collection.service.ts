@@ -95,6 +95,44 @@ export class CollectionService {
     return this.recordService.listSourceFiles(user, queryRaw);
   }
 
+  listSourceConfigs(user: AuthenticatedUser | undefined) {
+    return this.recordService.listSourceConfigs(user);
+  }
+
+  getSourceConfig(user: AuthenticatedUser | undefined, sourceImportIdRaw: unknown) {
+    return this.recordService.getSourceConfig(user, sourceImportIdRaw);
+  }
+
+  configureSource(
+    user: AuthenticatedUser | undefined,
+    sourceImportIdRaw: unknown,
+    bodyRaw: unknown,
+  ) {
+    return this.recordService.configureSource(user, sourceImportIdRaw, bodyRaw);
+  }
+
+  deleteSourceConfig(user: AuthenticatedUser | undefined, sourceImportIdRaw: unknown) {
+    return this.recordService.deleteSourceConfig(user, sourceImportIdRaw);
+  }
+
+  getBillingPrincipalReport(
+    user: AuthenticatedUser | undefined,
+    queryRaw: Record<string, unknown>,
+  ) {
+    return this.recordService.getBillingPrincipalReport(user, queryRaw);
+  }
+
+  getBillingPrincipalTargets(
+    user: AuthenticatedUser | undefined,
+    queryRaw: Record<string, unknown>,
+  ) {
+    return this.recordService.getBillingPrincipalTargets(user, queryRaw);
+  }
+
+  upsertBillingPrincipalTargets(user: AuthenticatedUser | undefined, bodyRaw: unknown) {
+    return this.recordService.upsertBillingPrincipalTargets(user, bodyRaw);
+  }
+
   getSummary(user: AuthenticatedUser | undefined, query: SummaryQuery) {
     return this.recordService.getSummary(user, query);
   }

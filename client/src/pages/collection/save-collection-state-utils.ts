@@ -16,8 +16,7 @@ export function createEmptySaveCollectionRestoredFormValues(): SaveCollectionRes
     icNumber: "",
     customerPhone: "",
     accountNumber: "",
-    sourceImportId: "",
-    agingBucket: "D3",
+    cardNumber: "",
     batch: "P10",
     paymentDate: "",
     amount: "",
@@ -32,7 +31,6 @@ export function buildSaveCollectionDraftPersistPayload(
     batch: values.batch,
     paymentDate: values.paymentDate,
     amount: values.amount,
-    agingBucket: values.agingBucket ?? "D3",
     hadPendingReceipts: hasPendingReceipts,
   };
 }
@@ -56,8 +54,7 @@ export function buildSaveCollectionDraftRestoreState(
       icNumber: "",
       customerPhone: "",
       accountNumber: "",
-      sourceImportId: "",
-      agingBucket: restoredDraft.agingBucket ?? "D3",
+      cardNumber: "",
       batch: restoredDraft.batch,
       paymentDate: restoredDraft.paymentDate,
       amount: restoredDraft.amount,

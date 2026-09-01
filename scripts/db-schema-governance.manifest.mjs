@@ -142,6 +142,18 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
       "Collection records now have a reviewed Drizzle migration while runtime bootstrap remains additive for normalization and legacy receipt compatibility caching.",
     ),
+    collection_source_configs: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Collection source validity and compatibility are governed by reviewed schema and additive runtime bootstrap.",
+    ),
+    collection_source_rows: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Normalized hashed Collection matching rows are governed by reviewed schema and additive runtime bootstrap.",
+    ),
+    collection_osp_targets: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Auditable Billing Principal target settings are governed by reviewed schema and additive runtime bootstrap.",
+    ),
     collection_staff_nicknames: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Collection staff nickname access now has a reviewed Drizzle migration while runtime bootstrap remains additive for cleanup and seeding compatibility.",

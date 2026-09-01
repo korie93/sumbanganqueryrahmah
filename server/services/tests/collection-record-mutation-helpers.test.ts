@@ -114,6 +114,7 @@ test("collection record field helpers normalize create/update payloads", () => {
 
   assert.deepEqual(fields, {
     accountNumber: "acc-1",
+    cardNumber: "",
     amount: 1200.5,
     amountCents: 120050,
     batch: "P10",
@@ -132,6 +133,7 @@ test("collection record field helpers normalize create/update payloads", () => {
     }),
     {
       accountNumber: "",
+      cardNumber: "",
       amount: null,
       amountCents: null,
       batch: "",
@@ -167,7 +169,7 @@ test("collection record field helpers normalize create/update payloads", () => {
   });
 });
 
-test("collection create validation requires an explicitly selected Saved source", () => {
+test("collection create validation leaves Saved source selection to backend auto-matching", () => {
   const fields = normalizeCollectionRecordFields({
     accountNumber: "ACC-1",
     amount: "100.00",
@@ -179,14 +181,35 @@ test("collection create validation requires an explicitly selected Saved source"
     paymentDate: "2020-01-01",
   });
 
+  assert.doesNotThrow(() => assertValidCollectionCreateFields(fields));
+  assert.equal(fields.sourceImportId, "");
+});
+
+test("collection create validation accepts Card-only identity and rejects a missing Account/Card pair", () => {
+  const base = {
+    amount: "100.00",
+    batch: "P10",
+    collectionStaffNickname: "Collector Alpha",
+    customerName: "Customer A",
+    customerPhone: "0123456789",
+    icNumber: "900101015555",
+    paymentDate: "2020-01-01",
+  };
+  const cardOnly = normalizeCollectionRecordFields({
+    ...base,
+    accountNumber: "",
+    cardNumber: "0000123412345678",
+  });
+  const missingBoth = normalizeCollectionRecordFields({
+    ...base,
+    accountNumber: "",
+    cardNumber: "",
+  });
+
+  assert.doesNotThrow(() => assertValidCollectionCreateFields(cardOnly));
   assert.throws(
-    () => assertValidCollectionCreateFields(fields),
-    (error: unknown) => (
-      typeof error === "object"
-      && error !== null
-      && "code" in error
-      && error.code === "COLLECTION_SOURCE_REQUIRED"
-    ),
+    () => assertValidCollectionCreateFields(missingBoth),
+    /Account Number or Card Number is required/,
   );
 });
 

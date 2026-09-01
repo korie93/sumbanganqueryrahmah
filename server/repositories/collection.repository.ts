@@ -60,9 +60,21 @@ import {
   syncCollectionRecordReceiptValidationRepository,
   updateCollectionRecordReceiptsRepository,
 } from "./collection-repository-receipt-operations";
+import {
+  configureCollectionSource,
+  deleteCollectionSource,
+  findEligibleCollectionSourceMatches,
+  getCollectionBillingPrincipalReport,
+  getCollectionSourceConfig,
+  listCollectionSourceConfigs,
+  upsertCollectionOspTargets,
+} from "./collection-source-repository-utils";
+import { backfillLegacyCollectionRecordsForSource } from "./collection-source-legacy-backfill-utils";
 
 export class CollectionRepository {
+  readonly backfillLegacyCollectionRecordsForSource = backfillLegacyCollectionRecordsForSource;
   readonly clearCollectionNicknameSessionByActivity = clearCollectionNicknameSessionByActivityRepository;
+  readonly configureCollectionSource = configureCollectionSource;
   readonly createCollectionAdminGroup = createCollectionAdminGroupRepository;
   readonly createCollectionRecord = createCollectionRecordRepository;
   readonly createCollectionRecordReceipts = createCollectionRecordReceiptsRepository;
@@ -73,7 +85,9 @@ export class CollectionRepository {
   readonly deleteCollectionRecordReceipts = deleteCollectionRecordReceiptsRepository;
   readonly deleteCollectionStaffNickname = deleteCollectionStaffNicknameRepository;
   readonly deleteCollectionDailyCalendarDay = deleteCollectionDailyCalendarDayRepository;
+  readonly deleteCollectionSource = deleteCollectionSource;
   readonly findCollectionReceiptDuplicateSummaries = findCollectionReceiptDuplicateSummariesRepository;
+  readonly findEligibleCollectionSourceMatches = findEligibleCollectionSourceMatches;
   readonly getCollectionAdminAssignedNicknameIds = getCollectionAdminAssignedNicknameIdsRepository;
   readonly getCollectionAdminGroupById = getCollectionAdminGroupByIdRepository;
   readonly getCollectionAdminGroups = getCollectionAdminGroupsRepository;
@@ -83,6 +97,7 @@ export class CollectionRepository {
   readonly getCollectionAdminUsers = getCollectionAdminUsersRepository;
   readonly getCollectionAdminVisibleNicknames = getCollectionAdminVisibleNicknamesRepository;
   readonly getCollectionDailyTarget = getCollectionDailyTargetRepository;
+  readonly getCollectionBillingPrincipalReport = getCollectionBillingPrincipalReport;
   readonly getCollectionMonthlyComparison = getCollectionMonthlyComparisonRepository;
   readonly getCollectionMonthlySummary = getCollectionMonthlySummaryRepository;
   readonly getCollectionNicknameAuthProfileByName = getCollectionNicknameAuthProfileByNameRepository;
@@ -93,6 +108,7 @@ export class CollectionRepository {
   readonly getCollectionStaffNicknameById = getCollectionStaffNicknameByIdRepository;
   readonly getCollectionStaffNicknameByName = getCollectionStaffNicknameByNameRepository;
   readonly getCollectionStaffNicknames = getCollectionStaffNicknamesRepository;
+  readonly getCollectionSourceConfig = getCollectionSourceConfig;
   readonly isCollectionStaffNicknameActive = isCollectionStaffNicknameActiveRepository;
   readonly listCollectionDailyCalendar = listCollectionDailyCalendarRepository;
   readonly listCollectionDailyCalendarAudit = listCollectionDailyCalendarAuditRepository;
@@ -100,6 +116,7 @@ export class CollectionRepository {
   readonly listCollectionDailyUsers = listCollectionDailyUsersRepository;
   readonly listCollectionRecordReceipts = listCollectionRecordReceiptsRepository;
   readonly listCollectionRecords = listCollectionRecordsRepository;
+  readonly listCollectionSourceConfigs = listCollectionSourceConfigs;
   readonly purgeCollectionRecordsOlderThan = purgeCollectionRecordsOlderThanRepository;
   readonly setCollectionAdminAssignedNicknameIds = setCollectionAdminAssignedNicknameIdsRepository;
   readonly setCollectionNicknamePassword = setCollectionNicknamePasswordRepository;
@@ -116,4 +133,5 @@ export class CollectionRepository {
   readonly updateCollectionStaffNickname = updateCollectionStaffNicknameRepository;
   readonly upsertCollectionDailyCalendarDays = upsertCollectionDailyCalendarDaysRepository;
   readonly upsertCollectionDailyTarget = upsertCollectionDailyTargetRepository;
+  readonly upsertCollectionOspTargets = upsertCollectionOspTargets;
 }

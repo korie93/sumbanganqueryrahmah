@@ -319,6 +319,9 @@ export class PostgresStorageCore {
         "collection_record_daily_rollups",
         "collection_record_monthly_rollups",
         "collection_record_daily_rollup_refresh_queue",
+        "collection_source_configs",
+        "collection_source_rows",
+        "collection_osp_targets",
       ],
       () => this.collectionBootstrap.ensureRecordsTable(),
     );

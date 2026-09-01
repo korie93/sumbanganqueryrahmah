@@ -20,22 +20,25 @@ import { CollectionSourceMatchField } from "@/pages/collection/CollectionSourceM
 import { SAVE_COLLECTION_IDENTITY_FIELD_LIMITS } from "@/pages/collection/save-collection-page-utils";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
-import type { CollectionAgingBucket, CollectionBatch } from "@/lib/api";
+import type { CollectionBatch } from "@/lib/api";
 
 type SaveCollectionPageProps = {
   staffNickname: string;
   onSaved?: () => void;
 };
 
-function getInvalidFieldProps(errorMessage: string | undefined, errorId: string) {
+function getInvalidFieldProps(
+  errorMessage: string | undefined,
+  errorId: string,
+  descriptionId?: string,
+) {
   const invalidProps = getAriaInvalidProps(Boolean(errorMessage));
+  const describedBy = [descriptionId, errorMessage ? errorId : null].filter(Boolean).join(" ");
 
-  return errorMessage
-    ? {
-      "aria-describedby": errorId,
-      ...invalidProps,
-    }
-    : {};
+  return {
+    ...(describedBy ? { "aria-describedby": describedBy } : {}),
+    ...invalidProps,
+  };
 }
 
 function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
@@ -46,8 +49,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const customerIcNumberInputId = "save-collection-customer-ic-number";
   const customerPhoneInputId = "save-collection-customer-phone";
   const accountNumberInputId = "save-collection-account-number";
+  const cardNumberInputId = "save-collection-card-number";
+  const accountCardHelpId = "save-collection-account-card-help";
   const batchInputId = "save-collection-batch";
-  const agingInputId = "save-collection-aging";
   const paymentDateButtonId = "save-collection-payment-date-button";
   const amountInputId = "save-collection-amount";
   const state = useSaveCollectionPageState({
@@ -59,8 +63,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const icNumberErrorId = `${customerIcNumberInputId}-error`;
   const customerPhoneErrorId = `${customerPhoneInputId}-error`;
   const accountNumberErrorId = `${accountNumberInputId}-error`;
+  const cardNumberErrorId = `${cardNumberInputId}-error`;
   const batchErrorId = `${batchInputId}-error`;
-  const agingErrorId = `${agingInputId}-error`;
   const paymentDateErrorId = `${paymentDateButtonId}-error`;
   const amountErrorId = `${amountInputId}-error`;
   const paymentDateError = state.fieldErrors.paymentDate
@@ -80,9 +84,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const accountNumberValidationProps = getInvalidFieldProps(
     state.fieldErrors.accountNumber,
     accountNumberErrorId,
+    accountCardHelpId,
+  );
+  const cardNumberValidationProps = getInvalidFieldProps(
+    state.fieldErrors.cardNumber,
+    cardNumberErrorId,
+    accountCardHelpId,
   );
   const batchValidationProps = getInvalidFieldProps(state.fieldErrors.batch, batchErrorId);
-  const agingValidationProps = getInvalidFieldProps(state.fieldErrors.agingBucket, agingErrorId);
   const paymentDateValidationProps = getInvalidFieldProps(
     paymentDateError,
     paymentDateErrorId,
@@ -185,12 +194,35 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           autoComplete="off"
           maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber}
-          {...requiredFieldProps}
           {...accountNumberValidationProps}
         />
+        <p id={accountCardHelpId} className="text-xs text-muted-foreground">
+          Isi sekurang-kurangnya satu: Account Number atau Card Number.
+        </p>
         {state.fieldErrors.accountNumber ? (
           <p id={accountNumberErrorId} className="text-xs text-destructive" role="alert">
             {state.fieldErrors.accountNumber}
+          </p>
+        ) : null}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={cardNumberInputId}>Card Number</Label>
+        <Input
+          id={cardNumberInputId}
+          name="cardNumber"
+          type="password"
+          value={state.cardNumber}
+          onChange={(event) => state.setCardNumber(event.target.value)}
+          onBlur={() => state.validateField("cardNumber")}
+          disabled={state.submitting}
+          autoComplete="off"
+          inputMode="numeric"
+          maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber}
+          {...cardNumberValidationProps}
+        />
+        {state.fieldErrors.cardNumber ? (
+          <p id={cardNumberErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.cardNumber}
           </p>
         ) : null}
       </div>
@@ -220,32 +252,6 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         {state.fieldErrors.batch ? (
           <p id={batchErrorId} className="text-xs text-destructive" role="alert">
             {state.fieldErrors.batch}
-          </p>
-        ) : null}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor={agingInputId}>Aging</Label>
-        <select
-          id={agingInputId}
-          name="collectionAging"
-          value={state.agingBucket}
-          onChange={(event) => state.setAgingBucket(event.target.value as CollectionAgingBucket)}
-          onBlur={() => state.validateField("agingBucket")}
-          disabled={state.submitting}
-          {...requiredFieldProps}
-          {...agingValidationProps}
-          className={cn(
-            "w-full border border-input bg-background px-3 text-sm",
-            isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md",
-          )}
-        >
-          {(["D3", "D4", "D5", "D6"] as const).map((aging) => (
-            <option key={aging} value={aging}>{aging}</option>
-          ))}
-        </select>
-        {state.fieldErrors.agingBucket ? (
-          <p id={agingErrorId} className="text-xs text-destructive" role="alert">
-            {state.fieldErrors.agingBucket}
           </p>
         ) : null}
       </div>
@@ -313,7 +319,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const customerSection = (
     <SaveCollectionFormSection
       title="Customer Details"
-      description="Isi maklumat customer untuk disahkan terhadap fail Saved yang anda pilih."
+      description="Isi maklumat customer untuk auto-matching terhadap Saved source yang aktif."
     >
       {customerFields}
     </SaveCollectionFormSection>
@@ -321,7 +327,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const paymentSection = (
     <SaveCollectionFormSection
       title="Payment Details"
-      description="Semak account, batch, payment date, dan amount sebelum upload receipt."
+      description="Semak account atau card, batch, payment date, dan amount sebelum upload receipt."
     >
       {paymentFields}
     </SaveCollectionFormSection>
@@ -338,31 +344,20 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const sourceMatchSection = (
     <SaveCollectionFormSection
       title="Saved Matching & Coverage"
-      description="Pilih fail Saved dahulu. Backend mengesahkan Calling Date dan menentukan CP daripada jumlah collection kumulatif berbanding TOTAL DUE."
+      description="Backend memilih source, Aging, Calling Date, dan status CP berdasarkan rekod Saved yang sepadan."
       className="col-span-full"
     >
       <div className="col-span-full">
         <CollectionSourceMatchField
           disabled={state.submitting}
           error={state.sourceMatching.error}
-          fieldError={state.fieldErrors.sourceImportId}
           hasSearched={state.sourceMatching.hasSearched}
           loading={state.sourceMatching.loading}
           matches={state.sourceMatching.matches}
           onMatch={() => {
             void state.sourceMatching.runMatching();
           }}
-          onRefreshSourceFiles={state.sourceMatching.refreshSourceFiles}
-          onSelectSourceFile={state.sourceMatching.selectSourceFile}
-          onSourceSearchChange={state.sourceMatching.setSourceSearch}
           selectedMatch={state.sourceMatching.selectedMatch}
-          selectedSourceFile={state.sourceMatching.selectedSourceFile}
-          selectedSourceFileId={state.sourceMatching.selectedSourceFileId}
-          sourceFiles={state.sourceMatching.sourceFiles}
-          sourceFilesError={state.sourceMatching.sourceFilesError}
-          sourceFilesLoading={state.sourceMatching.sourceFilesLoading}
-          sourceFilesTotal={state.sourceMatching.sourceFilesTotal}
-          sourceSearch={state.sourceMatching.sourceSearch}
         />
       </div>
     </SaveCollectionFormSection>
@@ -373,8 +368,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     icNumber: state.icNumber,
     customerPhone: state.customerPhone,
     accountNumber: state.accountNumber,
-    sourceImportId: state.sourceImportId,
-    agingBucket: state.agingBucket,
+    cardNumber: state.cardNumber,
     batch: state.batch,
     paymentDate: state.paymentDate,
     amount: state.amount,

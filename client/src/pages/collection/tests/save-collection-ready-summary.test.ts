@@ -18,8 +18,7 @@ const baseValues: SaveCollectionFormValues = {
   icNumber: "900101010101",
   customerPhone: "0123456789",
   accountNumber: "1234567890",
-  sourceImportId: "import-verified",
-  agingBucket: "D3",
+  cardNumber: "0000123412345678",
   batch: "P10",
   paymentDate: "2026-05-17",
   amount: "1650",
@@ -33,6 +32,8 @@ test("buildSaveCollectionReadySummary exposes key save fields", () => {
 
   assert.equal(summary.find((item) => item.label === "Customer")?.value, "Test Customer");
   assert.equal(summary.some((item) => item.label === "Source File"), false);
+  assert.equal(summary.find((item) => item.label === "Card")?.value, "Card ending 5678");
+  assert.doesNotMatch(JSON.stringify(summary), /0000123412345678/);
   assert.match(summary.find((item) => item.label === "Amount")?.value || "", /1,650\.00/);
   assert.equal(summary.find((item) => item.label === "Receipt")?.value, "1 receipt");
 });
@@ -43,7 +44,6 @@ test("buildSaveCollectionReadySummary marks missing and invalid values from shar
       ...baseValues,
       customerName: "",
       customerPhone: "bad",
-      sourceImportId: "",
       amount: "",
     },
     receiptCount: 0,
@@ -52,7 +52,6 @@ test("buildSaveCollectionReadySummary marks missing and invalid values from shar
   assert.equal(summary.find((item) => item.label === "Customer")?.missing, true);
   assert.equal(summary.find((item) => item.label === "Phone")?.value, "Perlu diperbetulkan");
   assert.match(summary.find((item) => item.label === "Phone")?.error || "", /invalid/i);
-  assert.equal(summary.find((item) => item.label === "Saved Match")?.missing, true);
   assert.equal(summary.find((item) => item.label === "Amount")?.missing, true);
   assert.equal(summary.find((item) => item.label === "Receipt")?.value, "0 receipts");
 });

@@ -22,7 +22,10 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.match(saveCollectionPageSource, /getAriaInvalidProps\(Boolean\(errorMessage\)\)/);
   assert.match(saveCollectionPageSource, /name="customerName"[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.customerNameValidationProps\}/);
   assert.match(saveCollectionPageSource, /name="customerIcNumber"[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.icNumberValidationProps\}/);
-  assert.match(saveCollectionPageSource, /name="accountNumber"[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.accountNumberValidationProps\}/);
+  assert.match(saveCollectionPageSource, /name="accountNumber"[\s\S]*\{\.\.\.accountNumberValidationProps\}/);
+  assert.match(saveCollectionPageSource, /name="cardNumber"[\s\S]*\{\.\.\.cardNumberValidationProps\}/);
+  assert.match(saveCollectionPageSource, /type="password"[\s\S]*name="cardNumber"|name="cardNumber"[\s\S]*type="password"/);
+  assert.match(saveCollectionPageSource, /Isi sekurang-kurangnya satu: Account Number atau Card Number\./);
   assert.match(saveCollectionPageSource, /const batchValidationProps = getInvalidFieldProps/);
   assert.match(saveCollectionPageSource, /const paymentDateValidationProps = getInvalidFieldProps/);
   assert.match(saveCollectionPageSource, /<select[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.batchValidationProps\}/);
@@ -55,6 +58,16 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.notEqual(phoneInputEnd, -1);
   const phoneInputSource = saveCollectionPageSource.slice(phoneInputStart, phoneInputEnd + 2);
   assert.match(phoneInputSource, /\{\.\.\.requiredFieldProps\}/);
+
+  for (const name of ["accountNumber", "cardNumber"]) {
+    const nameIndex = saveCollectionPageSource.indexOf(`name="${name}"`);
+    assert.notEqual(nameIndex, -1);
+    const inputStart = saveCollectionPageSource.lastIndexOf("<Input", nameIndex);
+    const inputEnd = saveCollectionPageSource.indexOf("/>", nameIndex);
+    const inputSource = saveCollectionPageSource.slice(inputStart, inputEnd + 2);
+    assert.doesNotMatch(inputSource, /\{\.\.\.requiredFieldProps\}/);
+    assert.match(inputSource, new RegExp(`\\{\\.\\.\\.${name === "accountNumber" ? "accountNumber" : "cardNumber"}ValidationProps\\}`));
+  }
 });
 
 test("save action remains discoverable without presenting an incomplete form as save-ready", () => {

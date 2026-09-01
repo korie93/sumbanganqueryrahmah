@@ -142,6 +142,11 @@ export function useCollectionRecordsQueryState() {
         to: filters.to,
         search: filters.search,
         nickname: filters.nickname,
+        sourceImportIds: filters.sourceImportIds,
+        agingBuckets: filters.agingBuckets,
+        classifications: filters.classifications,
+        sortBy: filters.sortBy,
+        sortDirection: filters.sortDirection,
         limit: safePageSize,
         cursor,
       };
@@ -158,6 +163,11 @@ export function useCollectionRecordsQueryState() {
           to: requestFilters.to,
           search: requestFilters.search,
           nickname: requestFilters.nickname,
+          sourceImportIds: requestFilters.sourceImportIds,
+          agingBuckets: requestFilters.agingBuckets,
+          classifications: requestFilters.classifications,
+          sortBy: requestFilters.sortBy,
+          sortDirection: requestFilters.sortDirection,
         };
         cursorHistoryRef.current = cursorHistoryRef.current.slice(0, Math.max(0, page - 1));
         cursorHistoryRef.current[page - 1] = cursor;
@@ -219,6 +229,11 @@ export function useCollectionRecordsQueryState() {
           to: requestFilters.to,
           search: requestFilters.search,
           nickname: requestFilters.nickname,
+          sourceImportIds: requestFilters.sourceImportIds,
+          agingBuckets: requestFilters.agingBuckets,
+          classifications: requestFilters.classifications,
+          sortBy: requestFilters.sortBy,
+          sortDirection: requestFilters.sortDirection,
         };
         cursorHistoryRef.current = cursorHistoryRef.current.slice(0, Math.max(0, page - 1));
         cursorHistoryRef.current[page - 1] = cursor;
@@ -261,6 +276,11 @@ export function useCollectionRecordsQueryState() {
         to: filters?.to,
         search: filters?.search,
         nickname: filters?.nickname,
+        sourceImportIds: filters?.sourceImportIds,
+        agingBuckets: filters?.agingBuckets,
+        classifications: filters?.classifications,
+        sortBy: filters?.sortBy,
+        sortDirection: filters?.sortDirection,
       };
       await fetchRecordsPage({
         cursor: null,

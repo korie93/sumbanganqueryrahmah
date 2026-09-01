@@ -17,6 +17,9 @@ const CollectionMonthlyComparisonPage = lazy(
 const CollectionDailyPage = lazy(
   () => import("@/pages/collection/CollectionDailyPage"),
 );
+const BillingPrincipalReportPage = lazy(
+  () => import("@/pages/collection/BillingPrincipalReportPage"),
+);
 const CollectionNicknameSummaryPage = lazy(
   () => import("@/pages/collection/CollectionNicknameSummaryPage"),
 );
@@ -101,6 +104,12 @@ export function CollectionReportContent({
   }
   if (subPage === "daily") {
     return renderCollectionSection("daily", <CollectionDailyPage role={role} />);
+  }
+  if (subPage === "billing-principal") {
+    return renderCollectionSection(
+      "billing-principal",
+      <BillingPrincipalReportPage role={role} />,
+    );
   }
   if (subPage === "nickname-summary") {
     return renderCollectionSection(

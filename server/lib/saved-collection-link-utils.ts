@@ -1,6 +1,7 @@
 import { normalizeCollectionPiiSearchValue } from "./collection-pii-encryption-normalize";
 import {
   isSpreadsheetAccountHeader,
+  isUnsafeNumericSpreadsheetAccountIdentifier,
   MAX_SPREADSHEET_ACCOUNT_VALUES,
   resolveSpreadsheetIdentifierKind,
 } from "../../shared/common/spreadsheet-identifier-normalization";
@@ -55,6 +56,41 @@ const BILLING_PRINCIPAL_OSP_HEADERS = new Set([
   "principalosp",
 ]);
 
+// These canonical headers intentionally stay separate. Some source files carry
+// both Account No and Card No, and one must never silently replace the other.
+const ACCOUNT_NUMBER_CANONICAL_HEADERS = new Set([
+  "account",
+  "accountno",
+  "accountnumber",
+  "acct",
+  "acctno",
+  "akaun",
+  "noakaun",
+  "nomborakaun",
+  "nomborakaunbankpemohon",
+]);
+
+const CARD_NUMBER_CANONICAL_HEADERS = new Set([
+  "cardno",
+  "cardnumber",
+  "nocard",
+  "nomborkad",
+]);
+
+const TOTAL_OSB_HEADERS = new Set([
+  "totalosb",
+  "totalosbstatementclosingbalance",
+  "statementclosingbalance",
+]);
+
+const AGING_STATUS_HEADERS = new Set([
+  "dcsts",
+  "dcstatus",
+  "delinquencystatusdcsts",
+  "aging",
+  "agingbucket",
+]);
+
 const CALLING_DATE_HEADERS = new Set([
   "calldate",
   "callingdate",
@@ -82,6 +118,36 @@ type SavedCollectionFinancials = {
   totalDue: string | null;
 };
 
+export type CanonicalSavedCollectionMasterRow = {
+  accountNumber: string | null;
+  cardNumber: string | null;
+  totalDue: string | null;
+  billingPrincipalOsp: string | null;
+  totalOsb: string | null;
+  agingBucket: "D3" | "D4" | "D5" | "D6" | null;
+  callingDate: string | null;
+  callingWindowEnd: string | null;
+  callingWindowEndExclusive: string | null;
+};
+
+export type CanonicalSavedCollectionCompatibilityIssue =
+  | "missing_account_or_card"
+  | "invalid_account_or_card"
+  | "missing_total_due"
+  | "invalid_total_due"
+  | "missing_billing_principal_osp"
+  | "invalid_billing_principal_osp"
+  | "missing_dc_sts"
+  | "invalid_dc_sts"
+  | "missing_calling_date"
+  | "invalid_calling_date";
+
+export type CanonicalSavedCollectionCompatibility = {
+  compatible: boolean;
+  issues: CanonicalSavedCollectionCompatibilityIssue[];
+  row: CanonicalSavedCollectionMasterRow;
+};
+
 function normalizeHeader(value: string): string {
   return value
     .normalize("NFKD")
@@ -102,7 +168,10 @@ function readBoundedScalar(value: unknown): string {
   return "";
 }
 
-function parseSavedCollectionMoney(value: unknown): string | null {
+function parseSavedCollectionMoney(
+  value: unknown,
+  options: { allowZero?: boolean } = {},
+): string | null {
   const scalar = readBoundedScalar(value).trim();
   if (!scalar) return null;
 
@@ -110,8 +179,22 @@ function parseSavedCollectionMoney(value: unknown): string | null {
     .replace(/^rm\s*/i, "")
     .replace(/\s+/g, "")
     .replace(/,/g, "");
-  const cents = parseCollectionAmountToCents(normalized, { allowZero: true });
+  const cents = parseCollectionAmountToCents(normalized, {
+    allowZero: options.allowZero ?? true,
+  });
   return cents === null ? null : formatCollectionAmountFromCents(cents);
+}
+
+function parseCanonicalSavedIdentifier(value: unknown): string | null {
+  if (isUnsafeNumericSpreadsheetAccountIdentifier(value)) {
+    return null;
+  }
+
+  const scalar = readBoundedScalar(value).trim();
+  if (!scalar || /^[+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(scalar)) {
+    return null;
+  }
+  return scalar;
 }
 
 export function extractSavedCollectionFinancials(value: unknown): SavedCollectionFinancials {
@@ -129,7 +212,7 @@ export function extractSavedCollectionFinancials(value: unknown): SavedCollectio
   for (const [header, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, MAX_ROW_FIELDS)) {
     const normalizedHeader = normalizeHeader(header);
     if (financials.totalDue === null && TOTAL_DUE_HEADERS.has(normalizedHeader)) {
-      financials.totalDue = parseSavedCollectionMoney(rawValue);
+      financials.totalDue = parseSavedCollectionMoney(rawValue, { allowZero: false });
     }
     if (
       financials.billingPrincipalOsp === null
@@ -154,6 +237,130 @@ export function extractSavedCollectionFinancials(value: unknown): SavedCollectio
   }
 
   return financials;
+}
+
+function normalizeCanonicalAgingBucket(value: unknown): CanonicalSavedCollectionMasterRow["agingBucket"] {
+  const normalized = readBoundedScalar(value).trim().toUpperCase();
+  const prefixed = /^[3-6]$/.test(normalized) ? `D${normalized}` : normalized;
+  return prefixed === "D3"
+    || prefixed === "D4"
+    || prefixed === "D5"
+    || prefixed === "D6"
+    ? prefixed
+    : null;
+}
+
+/**
+ * Extract the small, non-PII contract surface required by collection matching.
+ * Account/Card identifiers remain bounded strings so leading zeroes and 16
+ * digit values are not coerced through JavaScript Number.
+ */
+export function extractCanonicalSavedCollectionMasterRow(
+  value: unknown,
+): CanonicalSavedCollectionMasterRow {
+  const row: CanonicalSavedCollectionMasterRow = {
+    accountNumber: null,
+    cardNumber: null,
+    totalDue: null,
+    billingPrincipalOsp: null,
+    totalOsb: null,
+    agingBucket: null,
+    callingDate: null,
+    callingWindowEnd: null,
+    callingWindowEndExclusive: null,
+  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return row;
+  }
+
+  for (const [header, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, MAX_ROW_FIELDS)) {
+    const normalizedHeader = normalizeHeader(header);
+    if (row.accountNumber === null && ACCOUNT_NUMBER_CANONICAL_HEADERS.has(normalizedHeader)) {
+      row.accountNumber = parseCanonicalSavedIdentifier(rawValue);
+    }
+    if (row.cardNumber === null && CARD_NUMBER_CANONICAL_HEADERS.has(normalizedHeader)) {
+      row.cardNumber = parseCanonicalSavedIdentifier(rawValue);
+    }
+    if (row.totalDue === null && TOTAL_DUE_HEADERS.has(normalizedHeader)) {
+      row.totalDue = parseSavedCollectionMoney(rawValue, { allowZero: false });
+    }
+    if (
+      row.billingPrincipalOsp === null
+      && BILLING_PRINCIPAL_OSP_HEADERS.has(normalizedHeader)
+    ) {
+      row.billingPrincipalOsp = parseSavedCollectionMoney(rawValue);
+    }
+    if (row.totalOsb === null && TOTAL_OSB_HEADERS.has(normalizedHeader)) {
+      row.totalOsb = parseSavedCollectionMoney(rawValue);
+    }
+    if (row.agingBucket === null && AGING_STATUS_HEADERS.has(normalizedHeader)) {
+      row.agingBucket = normalizeCanonicalAgingBucket(rawValue);
+    }
+    if (row.callingDate === null && CALLING_DATE_HEADERS.has(normalizedHeader)) {
+      const parsedCallingDate = parseSavedCallingDate(rawValue);
+      const window = parsedCallingDate ? buildCollectionCallingWindow(parsedCallingDate) : null;
+      row.callingDate = window?.start ?? null;
+      row.callingWindowEnd = window?.endInclusive ?? null;
+      row.callingWindowEndExclusive = window?.endExclusive ?? null;
+    }
+  }
+
+  return row;
+}
+
+/**
+ * Return deterministic compatibility diagnostics without exposing raw master
+ * row values. Malformed present fields are distinguished from missing fields.
+ */
+export function assessCanonicalSavedCollectionCompatibility(
+  value: unknown,
+): CanonicalSavedCollectionCompatibility {
+  const row = extractCanonicalSavedCollectionMasterRow(value);
+  const invalid = new Set<string>();
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    for (const [header, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, MAX_ROW_FIELDS)) {
+      const normalizedHeader = normalizeHeader(header);
+      if (
+        (ACCOUNT_NUMBER_CANONICAL_HEADERS.has(normalizedHeader)
+          || CARD_NUMBER_CANONICAL_HEADERS.has(normalizedHeader))
+        && readBoundedScalar(rawValue).trim()
+        && parseCanonicalSavedIdentifier(rawValue) === null
+      ) {
+        invalid.add("accountOrCard");
+      }
+      if (TOTAL_DUE_HEADERS.has(normalizedHeader)) {
+        if (
+          parseSavedCollectionMoney(rawValue, { allowZero: false }) === null
+          && readBoundedScalar(rawValue).trim()
+        ) invalid.add("totalDue");
+      }
+      if (BILLING_PRINCIPAL_OSP_HEADERS.has(normalizedHeader)) {
+        if (parseSavedCollectionMoney(rawValue) === null && readBoundedScalar(rawValue).trim()) invalid.add("osp");
+      }
+      if (AGING_STATUS_HEADERS.has(normalizedHeader)) {
+        if (normalizeCanonicalAgingBucket(rawValue) === null && readBoundedScalar(rawValue).trim()) invalid.add("dcSts");
+      }
+      if (CALLING_DATE_HEADERS.has(normalizedHeader)) {
+        if (readBoundedScalar(rawValue).trim() && !parseSavedCallingDate(rawValue)) invalid.add("callingDate");
+      }
+    }
+  }
+
+  const issues: CanonicalSavedCollectionCompatibilityIssue[] = [];
+  if (!row.accountNumber && !row.cardNumber) {
+    issues.push(invalid.has("accountOrCard") ? "invalid_account_or_card" : "missing_account_or_card");
+  }
+  if (!row.totalDue) issues.push(invalid.has("totalDue") ? "invalid_total_due" : "missing_total_due");
+  if (!row.billingPrincipalOsp) {
+    issues.push(invalid.has("osp") ? "invalid_billing_principal_osp" : "missing_billing_principal_osp");
+  }
+  // Total OSB is intentionally optional. The OSP report must use Billing
+  // Principal and must never reject a valid source merely because Total OSB
+  // is absent.
+  if (!row.agingBucket) issues.push(invalid.has("dcSts") ? "invalid_dc_sts" : "missing_dc_sts");
+  if (!row.callingDate) issues.push(invalid.has("callingDate") ? "invalid_calling_date" : "missing_calling_date");
+
+  return { compatible: issues.length === 0, issues, row };
 }
 
 function normalizeLookup(input: SavedCollectionSourceLookup): NormalizedSavedLookup {

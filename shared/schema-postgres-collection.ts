@@ -33,6 +33,7 @@ export const collectionRecords = pgTable("collection_records", {
   accountNumber: text("account_number"),
   accountNumberEncrypted: text("account_number_encrypted"),
   accountNumberSearchHash: text("account_number_search_hash"),
+  cardNumberLast4: text("card_number_last4"),
   sourceImportId: text("source_import_id")
     .references(() => imports.id, { onDelete: "set null", onUpdate: "cascade" }),
   sourceDataRowId: text("source_data_row_id")
@@ -46,6 +47,11 @@ export const collectionRecords = pgTable("collection_records", {
   billingPrincipalOsp: numeric("billing_principal_osp", { precision: 14, scale: 2 }),
   sourceMatchBasis: text("source_match_basis"),
   sourceMatchAccuracy: integer("source_match_accuracy"),
+  sourceObligationKey: text("source_obligation_key"),
+  settlementCycleKey: text("settlement_cycle_key"),
+  classification: text("classification"),
+  cumulativeCollected: numeric("cumulative_collected", { precision: 14, scale: 2 }),
+  remainingAmount: numeric("remaining_amount", { precision: 14, scale: 2 }),
   batch: text("batch").notNull(),
   paymentDate: date("payment_date", { mode: "string" }).notNull(),
   // Primary payment total is stored in MYR using a fixed decimal numeric column.
@@ -77,6 +83,15 @@ export const collectionRecords = pgTable("collection_records", {
     table.sourceDataRowId,
     table.paymentDate,
   ),
+  settlementCycleOrderIdx: index("idx_collection_records_settlement_cycle_order").on(
+    table.settlementCycleKey,
+    table.paymentDate,
+    table.createdAt,
+    table.id,
+  ),
+  soleAbortPerCycleIdx: uniqueIndex("idx_collection_records_sole_abort_per_cycle")
+    .on(table.settlementCycleKey)
+    .where(sql`${table.classification} = 'abort_cp' AND ${table.settlementCycleKey} IS NOT NULL`),
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
   customerNameSearchHashIdx: index("idx_collection_records_customer_name_search_hash").on(
     table.customerNameSearchHash,
@@ -148,7 +163,7 @@ export const collectionRecords = pgTable("collection_records", {
   ),
   sourceMatchBasisCheck: check(
     "chk_collection_records_source_match_basis",
-    sql`${table.sourceMatchBasis} IS NULL OR ${table.sourceMatchBasis} IN ('ic', 'phone_and_account')`,
+    sql`${table.sourceMatchBasis} IS NULL OR ${table.sourceMatchBasis} IN ('ic', 'phone_and_account', 'account_number', 'card_number', 'account_and_card')`,
   ),
   sourceMatchAccuracyCheck: check(
     "chk_collection_records_source_match_accuracy",
@@ -157,6 +172,169 @@ export const collectionRecords = pgTable("collection_records", {
   callingWindowCheck: check(
     "chk_collection_records_calling_window",
     sql`(${table.callingDate} IS NULL AND ${table.callingWindowEndExclusive} IS NULL) OR (${table.callingDate} IS NOT NULL AND ${table.callingWindowEndExclusive} = (${table.callingDate} + INTERVAL '1 month')::date)`,
+  ),
+  cardNumberLast4Check: check(
+    "chk_collection_records_card_number_last4",
+    sql`${table.cardNumberLast4} IS NULL OR char_length(${table.cardNumberLast4}) <= 4`,
+  ),
+  classificationCheck: check(
+    "chk_collection_records_classification",
+    sql`${table.classification} IS NULL OR ${table.classification} IN ('cp', 'abort_cp')`,
+  ),
+  settlementStateCheck: check(
+    "chk_collection_records_settlement_state",
+    sql`(
+      ${table.classification} IS NULL
+      AND ${table.cumulativeCollected} IS NULL
+      AND ${table.remainingAmount} IS NULL
+    ) OR (
+      ${table.classification} IN ('cp', 'abort_cp')
+      AND ${table.settlementCycleKey} IS NOT NULL
+      AND ${table.sourceObligationKey} IS NOT NULL
+      AND ${table.cumulativeCollected} >= 0
+      AND ${table.remainingAmount} >= 0
+    )`,
+  ),
+}));
+
+export const collectionSourceConfigs = pgTable("collection_source_configs", {
+  sourceImportId: text("source_import_id")
+    .primaryKey()
+    .references(() => imports.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  validFrom: date("valid_from", { mode: "string" }).notNull(),
+  validTo: date("valid_to", { mode: "string" }).notNull(),
+  cycleKey: text("cycle_key").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  compatibilityStatus: text("compatibility_status").notNull().default("incompatible"),
+  compatibilityIssues: text("compatibility_issues").array().notNull().default(sql`ARRAY[]::text[]`),
+  indexedRowCount: integer("indexed_row_count").notNull().default(0),
+  configuredBy: text("configured_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  enabledValidityIdx: index("idx_collection_source_configs_enabled_validity").on(
+    table.enabled,
+    table.validFrom,
+    table.validTo,
+  ),
+  cycleKeyIdx: index("idx_collection_source_configs_cycle_key").on(table.cycleKey),
+  validityCheck: check(
+    "chk_collection_source_configs_validity",
+    sql`${table.validFrom} <= ${table.validTo}`,
+  ),
+  compatibilityCheck: check(
+    "chk_collection_source_configs_compatibility",
+    sql`${table.compatibilityStatus} IN ('compatible', 'incompatible')`,
+  ),
+  indexedRowCountCheck: check(
+    "chk_collection_source_configs_indexed_row_count",
+    sql`${table.indexedRowCount} >= 0`,
+  ),
+  enabledCompatibilityCheck: check(
+    "chk_collection_source_configs_enabled_compatibility",
+    sql`${table.enabled} = false OR ${table.compatibilityStatus} = 'compatible'`,
+  ),
+}));
+
+export const collectionSourceRows = pgTable("collection_source_rows", {
+  sourceImportId: text("source_import_id")
+    .notNull()
+    .references(() => imports.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  sourceDataRowId: text("source_data_row_id")
+    .notNull()
+    .references(() => dataRows.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  accountNumberHash: text("account_number_hash"),
+  cardNumberHash: text("card_number_hash"),
+  cardNumberLast4: text("card_number_last4"),
+  canonicalObligationKey: text("canonical_obligation_key").notNull(),
+  totalDue: numeric("total_due", { precision: 14, scale: 2 }).notNull(),
+  billingPrincipalOsp: numeric("billing_principal_osp", { precision: 14, scale: 2 }).notNull(),
+  totalOsb: numeric("total_osb", { precision: 14, scale: 2 }),
+  agingBucket: text("aging_bucket").notNull(),
+  callingDate: date("calling_date", { mode: "string" }).notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  primaryKey: primaryKey({
+    name: "pk_collection_source_rows",
+    columns: [table.sourceImportId, table.sourceDataRowId],
+  }),
+  dataRowUnique: uniqueIndex("idx_collection_source_rows_data_row_unique").on(table.sourceDataRowId),
+  accountLookupIdx: index("idx_collection_source_rows_account_lookup").on(
+    table.sourceImportId,
+    table.accountNumberHash,
+  ),
+  cardLookupIdx: index("idx_collection_source_rows_card_lookup").on(
+    table.sourceImportId,
+    table.cardNumberHash,
+  ),
+  agingIdx: index("idx_collection_source_rows_aging").on(table.sourceImportId, table.agingBucket),
+  obligationIdx: index("idx_collection_source_rows_obligation").on(table.canonicalObligationKey),
+  identifierCheck: check(
+    "chk_collection_source_rows_identifier",
+    sql`${table.accountNumberHash} IS NOT NULL OR ${table.cardNumberHash} IS NOT NULL`,
+  ),
+  agingCheck: check(
+    "chk_collection_source_rows_aging",
+    sql`${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6')`,
+  ),
+  accountHashCheck: check(
+    "chk_collection_source_rows_account_hash",
+    sql`${table.accountNumberHash} IS NULL OR char_length(${table.accountNumberHash}) = 64`,
+  ),
+  cardHashCheck: check(
+    "chk_collection_source_rows_card_hash",
+    sql`${table.cardNumberHash} IS NULL OR char_length(${table.cardNumberHash}) = 64`,
+  ),
+  cardLast4Check: check(
+    "chk_collection_source_rows_card_last4",
+    sql`${table.cardNumberLast4} IS NULL OR char_length(${table.cardNumberLast4}) <= 4`,
+  ),
+  moneyCheck: check(
+    "chk_collection_source_rows_money",
+    sql`${table.totalDue} > 0 AND ${table.billingPrincipalOsp} >= 0 AND (${table.totalOsb} IS NULL OR ${table.totalOsb} >= 0)`,
+  ),
+}));
+
+export const collectionOspTargets = pgTable("collection_osp_targets", {
+  id: uuid("id").primaryKey(),
+  sourceScopeHash: text("source_scope_hash").notNull(),
+  sourceImportIds: text("source_import_ids").array().notNull(),
+  periodFrom: date("period_from", { mode: "string" }).notNull(),
+  periodTo: date("period_to", { mode: "string" }).notNull(),
+  agingBucket: text("aging_bucket").notNull(),
+  totalOspBaseline: numeric("total_osp_baseline", { precision: 16, scale: 2 }),
+  targetPercentage: numeric("target_percentage", { precision: 7, scale: 4 }).notNull(),
+  configuredBy: text("configured_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  scopePeriodAgingUnique: uniqueIndex("idx_collection_osp_targets_scope_period_aging_unique").on(
+    table.sourceScopeHash,
+    table.periodFrom,
+    table.periodTo,
+    table.agingBucket,
+  ),
+  periodIdx: index("idx_collection_osp_targets_period").on(table.periodFrom, table.periodTo),
+  periodCheck: check("chk_collection_osp_targets_period", sql`${table.periodFrom} <= ${table.periodTo}`),
+  agingCheck: check(
+    "chk_collection_osp_targets_aging",
+    sql`${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6')`,
+  ),
+  targetPercentageCheck: check(
+    "chk_collection_osp_targets_percentage",
+    sql`${table.targetPercentage} >= 0 AND ${table.targetPercentage} <= 100`,
+  ),
+  sourceCountCheck: check(
+    "chk_collection_osp_targets_source_count",
+    sql`cardinality(${table.sourceImportIds}) BETWEEN 1 AND 5`,
+  ),
+  baselineCheck: check(
+    "chk_collection_osp_targets_baseline",
+    sql`${table.totalOspBaseline} IS NULL OR ${table.totalOspBaseline} >= 0`,
   ),
 }));
 

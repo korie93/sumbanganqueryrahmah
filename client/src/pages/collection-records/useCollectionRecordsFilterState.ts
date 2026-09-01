@@ -17,11 +17,19 @@ export function useCollectionRecordsFilterState({
   const toDateRef = useRef("");
   const searchInputRef = useRef("");
   const nicknameFilterRef = useRef("all");
+  const sourceImportFilterRef = useRef("all");
+  const agingFilterRef = useRef("all");
+  const classificationFilterRef = useRef("all");
+  const sortValueRef = useRef("paymentDate_desc");
 
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [nicknameFilter, setNicknameFilter] = useState<string>("all");
+  const [sourceImportFilter, setSourceImportFilter] = useState("all");
+  const [agingFilter, setAgingFilter] = useState("all");
+  const [classificationFilter, setClassificationFilter] = useState("all");
+  const [sortValue, setSortValue] = useState("paymentDate_desc");
 
   const deferredSearchInput = useDeferredValue(searchInput);
 
@@ -45,6 +53,26 @@ export function useCollectionRecordsFilterState({
     setNicknameFilter(value);
   }, []);
 
+  const handleSourceImportFilterChange = useCallback((value: string) => {
+    sourceImportFilterRef.current = value;
+    setSourceImportFilter(value);
+  }, []);
+
+  const handleAgingFilterChange = useCallback((value: string) => {
+    agingFilterRef.current = value;
+    setAgingFilter(value);
+  }, []);
+
+  const handleClassificationFilterChange = useCallback((value: string) => {
+    classificationFilterRef.current = value;
+    setClassificationFilter(value);
+  }, []);
+
+  const handleSortValueChange = useCallback((value: string) => {
+    sortValueRef.current = value;
+    setSortValue(value);
+  }, []);
+
   const buildCurrentFilters = useCallback(
     (
       searchValue = searchInputRef.current,
@@ -57,6 +85,10 @@ export function useCollectionRecordsFilterState({
         searchInput: searchValue,
         canUseNicknameFilter,
         nicknameFilter: nicknameFilterRef.current,
+        sourceImportFilter: sourceImportFilterRef.current,
+        agingFilter: agingFilterRef.current,
+        classificationFilter: classificationFilterRef.current,
+        sortValue: sortValueRef.current,
         limit,
         offset,
       }),
@@ -84,6 +116,10 @@ export function useCollectionRecordsFilterState({
     toDate,
     searchInput,
     nicknameFilter,
+    sourceImportFilter,
+    agingFilter,
+    classificationFilter,
+    sortValue,
     deferredSearchInput,
     fromDateRef,
     toDateRef,
@@ -92,6 +128,10 @@ export function useCollectionRecordsFilterState({
     handleToDateChange,
     handleSearchInputChange,
     handleNicknameFilterChange,
+    handleSourceImportFilterChange,
+    handleAgingFilterChange,
+    handleClassificationFilterChange,
+    handleSortValueChange,
     buildCurrentFilters,
     markSkipNextAutoFetch,
     consumeInitialAutoFetch,

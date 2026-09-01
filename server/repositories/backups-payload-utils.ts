@@ -8,9 +8,12 @@ import type {
 } from "../../shared/schema-postgres";
 import {
   QUERY_PAGE_LIMIT,
+  type BackupCollectionOspTarget,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
   type BackupCollectionRecordPurgeHistory,
+  type BackupCollectionSourceConfig,
+  type BackupCollectionSourceRow,
   type BackupUserRecord,
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
@@ -159,6 +162,89 @@ export async function prepareBackupPayloadFileForCreate(
 
     await writeBackupChunk(state, ",");
 
+    counts.collectionSourceConfigsCount = await appendPagedJsonArray(
+      state,
+      "collectionSourceConfigs",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionSourceConfig & BackupCursorRow>(sql`
+          SELECT
+            config.source_import_id as id,
+            config.valid_from as "validFrom",
+            config.valid_to as "validTo",
+            config.cycle_key as "cycleKey",
+            config.enabled,
+            config.compatibility_status as "compatibilityStatus",
+            config.compatibility_issues as "compatibilityIssues",
+            config.indexed_row_count as "indexedRowCount",
+            config.configured_by as "configuredBy",
+            config.created_at as "createdAt",
+            config.updated_at as "updatedAt"
+          FROM public.collection_source_configs config
+          JOIN public.imports imp ON imp.id = config.source_import_id
+          WHERE imp.is_deleted = false
+            ${lastId ? sql`AND config.source_import_id > ${lastId}` : sql``}
+          ORDER BY config.source_import_id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionSourceRowsCount = await appendPagedJsonArray(
+      state,
+      "collectionSourceRows",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionSourceRow & BackupCursorRow>(sql`
+          SELECT
+            source_row.source_data_row_id as id,
+            source_row.source_import_id as "sourceImportId",
+            source_row.account_number_hash as "accountNumberHash",
+            source_row.card_number_hash as "cardNumberHash",
+            source_row.card_number_last4 as "cardNumberLast4",
+            source_row.canonical_obligation_key as "canonicalObligationKey",
+            source_row.total_due as "totalDue",
+            source_row.billing_principal_osp as "billingPrincipalOsp",
+            source_row.total_osb as "totalOsb",
+            source_row.aging_bucket as "agingBucket",
+            source_row.calling_date as "callingDate",
+            source_row.created_at as "createdAt"
+          FROM public.collection_source_rows source_row
+          JOIN public.imports imp ON imp.id = source_row.source_import_id
+          WHERE imp.is_deleted = false
+            ${lastId ? sql`AND source_row.source_data_row_id > ${lastId}` : sql``}
+          ORDER BY source_row.source_data_row_id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspTargetsCount = await appendPagedJsonArray(
+      state,
+      "collectionOspTargets",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionOspTarget & BackupCursorRow>(sql`
+          SELECT
+            id,
+            source_scope_hash as "sourceScopeHash",
+            source_import_ids as "sourceImportIds",
+            period_from as "periodFrom",
+            period_to as "periodTo",
+            aging_bucket as "agingBucket",
+            total_osp_baseline as "totalOspBaseline",
+            target_percentage as "targetPercentage",
+            configured_by as "configuredBy",
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          FROM public.collection_osp_targets
+          WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `),
+    );
+
+    await writeBackupChunk(state, ",");
+
     counts.collectionRecordsCount = await appendPagedJsonArray(state, "collectionRecords", (lastId) =>
       safeSelectBackupRows<(BackupCollectionRecord & BackupCursorRow) & Record<string, unknown>>(sql`
         SELECT
@@ -172,6 +258,7 @@ export async function prepareBackupPayloadFileForCreate(
           customer_phone_encrypted as "customerPhoneEncrypted",
           ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "accountNumber", "accountNumber")},
           account_number_encrypted as "accountNumberEncrypted",
+          card_number_last4 as "cardNumberLast4",
           source_import_id as "sourceImportId",
           source_data_row_id as "sourceDataRowId",
           source_import_name as "sourceImportName",
@@ -183,6 +270,11 @@ export async function prepareBackupPayloadFileForCreate(
           calling_window_end_exclusive as "callingWindowEndExclusive",
           source_match_basis as "sourceMatchBasis",
           source_match_accuracy as "sourceMatchAccuracy",
+          source_obligation_key as "sourceObligationKey",
+          settlement_cycle_key as "settlementCycleKey",
+          classification,
+          cumulative_collected as "cumulativeCollected",
+          remaining_amount as "remainingAmount",
           batch,
           payment_date as "paymentDate",
           amount,

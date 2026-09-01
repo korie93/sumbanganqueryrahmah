@@ -9,6 +9,11 @@ import {
 import {
   rebuildCollectionRecordMonthlyRollups,
 } from "./collection-record-rollup-utils";
+import {
+  acquireCollectionRecordMutationLock,
+  acquireCollectionSettlementCycleLocks,
+  recalculateCollectionSettlementCycles,
+} from "./collection-settlement-repository-utils";
 
 export async function purgeCollectionRecordsOlderThan(
   beforeDate: string,
@@ -32,14 +37,57 @@ export async function purgeCollectionRecordsOlderThan(
   }
 
   return db.transaction(async (tx) => {
+    const candidateRecordsResult = await tx.execute(sql`
+      SELECT id
+      FROM public.collection_records
+      WHERE payment_date < ${normalizedBeforeDate}::date
+      ORDER BY id ASC
+    `);
+    const candidateRecordIds = extractCollectionRecordIds(
+      Array.isArray(candidateRecordsResult.rows) ? candidateRecordsResult.rows : [],
+    ).sort();
+    if (!candidateRecordIds.length) {
+      return {
+        totalRecords: 0,
+        totalAmount: 0,
+        receiptPaths: [],
+      };
+    }
+    for (const recordId of candidateRecordIds) {
+      await acquireCollectionRecordMutationLock(tx, recordId);
+    }
+
+    const candidateRecordIdSql = sql.join(
+      candidateRecordIds.map((value) => sql`${value}::uuid`),
+      sql`, `,
+    );
+    const settlementMetadataResult = await tx.execute(sql`
+      SELECT
+        id,
+        amount,
+        receipt_file,
+        settlement_cycle_key
+      FROM public.collection_records
+      WHERE id IN (${candidateRecordIdSql})
+        AND payment_date < ${normalizedBeforeDate}::date
+      ORDER BY payment_date ASC, created_at ASC, id ASC
+    `);
+    const settlementCycleKeys = (settlementMetadataResult.rows ?? []).map((row) =>
+      String((row as { settlement_cycle_key?: unknown }).settlement_cycle_key ?? "").trim() || null
+    );
+    await acquireCollectionSettlementCycleLocks(tx, settlementCycleKeys);
+
     const oldRecordsResult = await tx.execute(sql`
       SELECT
         id,
         amount,
-        receipt_file
+        receipt_file,
+        settlement_cycle_key
       FROM public.collection_records
-      WHERE payment_date < ${normalizedBeforeDate}::date
+      WHERE id IN (${candidateRecordIdSql})
+        AND payment_date < ${normalizedBeforeDate}::date
       ORDER BY payment_date ASC, created_at ASC, id ASC
+      FOR UPDATE
     `);
 
     const oldRecordRows = Array.isArray(oldRecordsResult.rows) ? oldRecordsResult.rows : [];
@@ -132,6 +180,7 @@ export async function purgeCollectionRecordsOlderThan(
       DELETE FROM public.collection_records
       WHERE id IN (${recordIdSql})
     `);
+    await recalculateCollectionSettlementCycles(tx, settlementCycleKeys);
 
     await tx.execute(sql`
       DELETE FROM public.collection_record_daily_rollups

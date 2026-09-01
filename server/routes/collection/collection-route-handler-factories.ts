@@ -34,6 +34,7 @@ const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
   "/api/collection/summary",
   "/api/collection/list",
   "/api/collection/source-matches",
+  "/api/collection/report/billing-principal",
   "/api/collection/nickname-summary",
   "/api/collection/monthly-target",
   "/api/collection/daily/overview",

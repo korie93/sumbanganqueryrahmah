@@ -7,6 +7,7 @@ import { getCollectionRecordSourceLabel } from "@/pages/collection-records/colle
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
+  formatCollectionMaskedCard,
   formatCollectionOptionalAmount,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
@@ -27,13 +28,14 @@ export function CollectionRecordsDesktopTable({
 }: CollectionRecordsDesktopTableProps) {
   return (
     <div className="min-h-[420px] max-h-[64vh] overflow-auto rounded-[1.5rem] border border-border/60 bg-background shadow-sm">
-      <Table className="min-w-[2020px] text-sm">
+      <Table className="min-w-[2140px] text-sm">
         <TableHeader>
           <TableRow>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-[72px] border-b border-border/70 bg-background/95 sqr-backdrop-blur">No.</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Name</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">IC Number</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Account Number</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Card Number</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Phone Number</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Batch</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Amount</TableHead>
@@ -52,13 +54,13 @@ export function CollectionRecordsDesktopTable({
         <TableBody>
           {loadingRecords ? (
             <TableRow>
-              <TableCell colSpan={17} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={18} className="text-center text-muted-foreground py-6">
                 Loading records...
               </TableCell>
             </TableRow>
           ) : visibleRecords.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={17} className="text-center text-muted-foreground py-6">
+              <TableCell colSpan={18} className="text-center text-muted-foreground py-6">
                 No collection records found.
               </TableCell>
             </TableRow>
@@ -78,7 +80,8 @@ export function CollectionRecordsDesktopTable({
                 </TableCell>
                 <TableCell className="py-2 font-medium">{record.customerName}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.icNumber}</TableCell>
-                <TableCell className="py-2 whitespace-nowrap">{record.accountNumber}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{record.accountNumber || "-"}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{formatCollectionMaskedCard(record.cardNumberLast4)}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.customerPhone}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.batch}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-300">

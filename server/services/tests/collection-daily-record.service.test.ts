@@ -48,6 +48,53 @@ function buildAuthUser(
   };
 }
 
+function buildEligibleCollectionSourceMatch(input: {
+  accountNumber?: string;
+  cardNumber?: string;
+  paymentDate: string;
+}) {
+  const paymentDate = new Date(`${input.paymentDate}T00:00:00.000Z`);
+  const year = paymentDate.getUTCFullYear();
+  const month = paymentDate.getUTCMonth();
+  const start = new Date(Date.UTC(year, month, 1));
+  const endExclusive = new Date(Date.UTC(year, month + 1, 1));
+  const endInclusive = new Date(endExclusive.getTime() - 86_400_000);
+  const formatDate = (value: Date) => value.toISOString().slice(0, 10);
+  const accountNumber = String(input.accountNumber || "").trim();
+  const cardNumber = String(input.cardNumber || "").trim();
+  const obligationIdentifier = accountNumber || cardNumber || "account-test";
+  const sourceObligationKey = accountNumber
+    ? `account:${accountNumber.toLowerCase()}`
+    : `card:${obligationIdentifier.toLowerCase()}`;
+  const callingDate = formatDate(start);
+
+  return {
+    eligibleSourceCount: 1,
+    matches: [{
+      sourceImportId: "import-governed-1",
+      sourceDataRowId: `row-${obligationIdentifier.toLowerCase()}`,
+      sourceImportName: "Governed Collection Source",
+      sourceFilename: "governed-source.xlsx",
+      sourceObligationKey,
+      settlementCycleKey: `${callingDate}:${sourceObligationKey}`,
+      cardNumberLast4: cardNumber ? cardNumber.slice(-4) : null,
+      matchBasis: accountNumber && cardNumber
+        ? "account_and_card" as const
+        : cardNumber
+          ? "card_number" as const
+          : "account_number" as const,
+      totalDue: "999999.00",
+      billingPrincipalOsp: "5000.00",
+      totalOsb: null,
+      agingBucket: "D3" as const,
+      callingDate,
+      callingWindowEnd: formatDate(endInclusive),
+      callingWindowEndExclusive: formatDate(endExclusive),
+      duplicateSourceCount: 1,
+    }],
+  };
+}
+
 function buildCalendarMonth(year: number, month: number, workingDays: number[]) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const workingSet = new Set(workingDays);
@@ -746,6 +793,11 @@ function createMutableCollectionDailyService() {
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
     getCollectionNicknameSessionByActivity: async () => null,
+    findEligibleCollectionSourceMatches: async (input: {
+      accountNumber?: string;
+      cardNumber?: string;
+      paymentDate: string;
+    }) => buildEligibleCollectionSourceMatch(input),
     getCollectionDailyTarget: async (params: { username: string; year: number; month: number }) => {
       const normalized = String(params.username || "").toLowerCase();
       if (params.year !== 2026 || params.month !== 3) {
@@ -1018,6 +1070,11 @@ function createMutableCollectionSummaryService() {
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
     getCollectionNicknameSessionByActivity: async () => null,
+    findEligibleCollectionSourceMatches: async (input: {
+      accountNumber?: string;
+      cardNumber?: string;
+      paymentDate: string;
+    }) => buildEligibleCollectionSourceMatch(input),
     isCollectionStaffNicknameActive: async (nickname: string) =>
       nicknameProfiles.some((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase() && item.isActive),
     getCollectionMonthlySummary: async (filters: {

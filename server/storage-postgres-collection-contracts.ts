@@ -20,6 +20,12 @@ import type {
   CollectionReceiptDuplicateSummary,
   CollectionRollupFreshnessSnapshot,
   CollectionStaffNickname,
+  CollectionSourceConfig,
+  CollectionLegacyBackfillStats,
+  ConfigureCollectionSourceInput,
+  CollectionSourceMatchResult,
+  CollectionBillingPrincipalReport,
+  CollectionOspTargetInput,
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
@@ -36,6 +42,31 @@ import type {
 } from "../shared/collection-daily-status";
 
 export interface CollectionStorageContract {
+  backfillLegacyCollectionRecordsForSource(sourceImportId: string): Promise<CollectionLegacyBackfillStats>;
+  configureCollectionSource(input: ConfigureCollectionSourceInput): Promise<CollectionSourceConfig>;
+  deleteCollectionSource(sourceImportId: string): Promise<boolean>;
+  getCollectionSourceConfig(sourceImportId: string): Promise<CollectionSourceConfig | undefined>;
+  listCollectionSourceConfigs(): Promise<CollectionSourceConfig[]>;
+  findEligibleCollectionSourceMatches(input: {
+    paymentDate: string;
+    accountNumber?: string;
+    cardNumber?: string;
+  }): Promise<CollectionSourceMatchResult>;
+  getCollectionBillingPrincipalReport(input: {
+    sourceImportIds: string[];
+    from: string;
+    to: string;
+    agingBuckets?: Array<"D3" | "D4" | "D5" | "D6"> | undefined;
+    nicknames?: string[] | undefined;
+    createdByLogin?: string | undefined;
+  }): Promise<CollectionBillingPrincipalReport>;
+  upsertCollectionOspTargets(input: {
+    sourceImportIds: string[];
+    from: string;
+    to: string;
+    targets: CollectionOspTargetInput[];
+    configuredBy: string;
+  }): Promise<CollectionOspTargetInput[]>;
   createCollectionRecord(
     data: CreateCollectionRecordInput,
     receipts?: CreateCollectionRecordReceiptInput[],

@@ -6,6 +6,7 @@ import {
 } from "./collection-bootstrap-record-schema";
 import { ensureCollectionRollupSchema } from "./collection-bootstrap-rollup-schema";
 import type { BootstrapSqlExecutor } from "./collection-bootstrap-records-shared";
+import { ensureCollectionSourceGovernanceSchema } from "./collection-bootstrap-source-schema";
 
 export async function ensureCollectionRecordsTables(
   database: BootstrapSqlExecutor = db,
@@ -14,4 +15,5 @@ export async function ensureCollectionRecordsTables(
   await ensureCollectionRecordBaseSchema(database);
   await ensureCollectionReceiptSchema(database);
   await ensureCollectionRollupSchema(database);
+  await ensureCollectionSourceGovernanceSchema(database);
 }

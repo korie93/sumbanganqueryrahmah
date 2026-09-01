@@ -26,6 +26,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         account_number text,
         account_number_encrypted text,
         account_number_search_hash text,
+        card_number_last4 text,
         source_import_id text,
         source_data_row_id text,
         source_import_name text,
@@ -37,6 +38,11 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         billing_principal_osp numeric(14,2),
         source_match_basis text,
         source_match_accuracy integer,
+        source_obligation_key text,
+        settlement_cycle_key text,
+        classification text,
+        cumulative_collected numeric(14,2),
+        remaining_amount numeric(14,2),
         batch text NOT NULL,
         payment_date date NOT NULL,
         amount numeric(14,2) NOT NULL,
@@ -66,6 +72,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_search_hash text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS card_number_last4 text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_import_id text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_data_row_id text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_import_name text`,
@@ -77,6 +84,11 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS billing_principal_osp numeric(14,2)`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_match_basis text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_match_accuracy integer`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_obligation_key text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS settlement_cycle_key text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS classification text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS cumulative_collected numeric(14,2)`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS remaining_amount numeric(14,2)`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`,
@@ -225,6 +237,15 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
       CREATE INDEX IF NOT EXISTS idx_collection_records_source_settlement_window
       ON public.collection_records(source_import_id, source_data_row_id, payment_date)
     `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_settlement_cycle_order
+      ON public.collection_records(settlement_cycle_key, payment_date, created_at, id)
+    `,
+    sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_records_sole_abort_per_cycle
+      ON public.collection_records(settlement_cycle_key)
+      WHERE classification = 'abort_cp' AND settlement_cycle_key IS NOT NULL
+    `,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
     sql`
@@ -259,12 +280,65 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint
+          WHERE conname = 'chk_collection_records_classification'
+            AND conrelid = 'public.collection_records'::regclass
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_classification
+          CHECK (classification IS NULL OR classification IN ('cp', 'abort_cp'));
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'chk_collection_records_settlement_state'
+            AND conrelid = 'public.collection_records'::regclass
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_settlement_state
+          CHECK (
+            (classification IS NULL AND cumulative_collected IS NULL AND remaining_amount IS NULL)
+            OR (
+              classification IN ('cp', 'abort_cp')
+              AND settlement_cycle_key IS NOT NULL
+              AND source_obligation_key IS NOT NULL
+              AND cumulative_collected >= 0
+              AND remaining_amount >= 0
+            )
+          );
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'chk_collection_records_card_number_last4'
+            AND conrelid = 'public.collection_records'::regclass
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_card_number_last4
+          CHECK (card_number_last4 IS NULL OR char_length(card_number_last4) <= 4);
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
           WHERE conname = 'chk_collection_records_aging_bucket'
             AND conrelid = 'public.collection_records'::regclass
         ) THEN
           ALTER TABLE public.collection_records
           ADD CONSTRAINT chk_collection_records_aging_bucket
           CHECK (aging_bucket IS NULL OR aging_bucket IN ('D3', 'D4', 'D5', 'D6'));
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'chk_collection_records_source_match_basis'
+            AND conrelid = 'public.collection_records'::regclass
+            AND (
+              pg_get_constraintdef(oid) NOT LIKE '%account_number%'
+              OR pg_get_constraintdef(oid) NOT LIKE '%card_number%'
+              OR pg_get_constraintdef(oid) NOT LIKE '%account_and_card%'
+            )
+        ) THEN
+          ALTER TABLE public.collection_records
+          DROP CONSTRAINT chk_collection_records_source_match_basis;
         END IF;
 
         IF NOT EXISTS (
@@ -274,7 +348,16 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         ) THEN
           ALTER TABLE public.collection_records
           ADD CONSTRAINT chk_collection_records_source_match_basis
-          CHECK (source_match_basis IS NULL OR source_match_basis IN ('ic', 'phone_and_account'));
+          CHECK (source_match_basis IS NULL OR source_match_basis IN (
+            'ic',
+            'phone_and_account',
+            'account_number',
+            'card_number',
+            'account_and_card'
+          )) NOT VALID;
+
+          ALTER TABLE public.collection_records
+          VALIDATE CONSTRAINT chk_collection_records_source_match_basis;
         END IF;
 
         IF NOT EXISTS (

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { buildSavedImportRowAriaLabel } from "@/pages/saved/saved-import-row-aria";
+import { SavedSourceConfigCardControl } from "@/pages/saved/SavedSourceConfigCardControl";
 import { formatSavedFileSize, getSavedImportSizeBytes, getSavedImportStatus } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
 import type { SavedListDensity } from "@/pages/saved/useSavedListDensity";
@@ -54,9 +55,7 @@ export function SavedImportCard({
   const activePressedProps = isActive ? { "aria-pressed": "true" as const } : { "aria-pressed": "false" as const };
   const handleSelectionChange = (checked: boolean) => {
     onToggleSelected(item.id, checked);
-    if (checked) {
-      onInspect(item);
-    }
+    if (checked) { onInspect(item); }
   };
   return (
     <div
@@ -214,6 +213,7 @@ export function SavedImportCard({
           ) : null}
         </div>
       </div>
+      {isSuperuser ? <SavedSourceConfigCardControl disabled={actionsDisabled} item={item} /> : null}
     </div>
   );
 }

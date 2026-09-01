@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { buildCollectionMonthDetailsRowAriaLabel } from "@/pages/collection-summary/collection-summary-row-aria";
+import { formatCollectionMaskedCard } from "@/pages/collection-records/collection-coverage";
 import type { CollectionMonthDetailsDialogProps } from "@/pages/collection-summary/CollectionMonthDetailsDialog";
 
 type CollectionMonthDetailsDesktopTableProps = Pick<
@@ -25,7 +26,7 @@ export function CollectionMonthDetailsDesktopTable({
   toDisplayDate,
 }: CollectionMonthDetailsDesktopTableProps) {
   return (
-    <Table className="min-w-[980px] text-sm">
+    <Table className="min-w-[1080px] text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className={stickyHeaderClassName}>No.</TableHead>
@@ -34,6 +35,7 @@ export function CollectionMonthDetailsDesktopTable({
           <TableHead className={stickyHeaderClassName}>IC Number</TableHead>
           <TableHead className={stickyHeaderClassName}>Customer Phone</TableHead>
           <TableHead className={stickyHeaderClassName}>Account Number</TableHead>
+          <TableHead className={stickyHeaderClassName}>Card Number</TableHead>
           <TableHead className={stickyHeaderClassName}>Batch</TableHead>
           <TableHead className={stickyHeaderClassName}>Amount</TableHead>
           <TableHead className={stickyHeaderClassName}>Staff Nickname</TableHead>
@@ -42,13 +44,13 @@ export function CollectionMonthDetailsDesktopTable({
       <TableBody>
         {loading ? (
           <TableRow>
-            <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+            <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
               Loading monthly records...
             </TableCell>
           </TableRow>
         ) : records.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+            <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
               Tiada rekod kutipan untuk bulan yang dipilih.
             </TableCell>
           </TableRow>
@@ -73,7 +75,8 @@ export function CollectionMonthDetailsDesktopTable({
                 <TableCell className="font-medium">{row.customerName}</TableCell>
                 <TableCell>{row.icNumber}</TableCell>
                 <TableCell>{row.customerPhone}</TableCell>
-                <TableCell>{row.accountNumber}</TableCell>
+                <TableCell>{row.accountNumber || "-"}</TableCell>
+                <TableCell>{formatCollectionMaskedCard(row.cardNumberLast4)}</TableCell>
                 <TableCell>{row.batch}</TableCell>
                 <TableCell>{formattedAmount}</TableCell>
                 <TableCell>{row.collectionStaffNickname}</TableCell>

@@ -115,6 +115,11 @@ export function useCollectionViewAllRecords({
       to: viewAllFiltersSnapshot.to,
       search: viewAllFiltersSnapshot.search,
       nickname: viewAllFiltersSnapshot.nickname,
+      sourceImportIds: viewAllFiltersSnapshot.sourceImportIds,
+      agingBuckets: viewAllFiltersSnapshot.agingBuckets,
+      classifications: viewAllFiltersSnapshot.classifications,
+      sortBy: viewAllFiltersSnapshot.sortBy,
+      sortDirection: viewAllFiltersSnapshot.sortDirection,
       page: viewAllPage,
       pageSize: viewAllPageSize,
     };

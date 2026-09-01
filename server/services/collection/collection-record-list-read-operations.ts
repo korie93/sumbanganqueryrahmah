@@ -22,6 +22,15 @@ import {
 } from "./collection-record-read-shared";
 import { canViewAllStaff } from "../../../shared/user-roles";
 
+function readBoundedList(value: unknown, maximum: number): string[] {
+  const candidates = Array.isArray(value) ? value : [value];
+  const values = candidates.flatMap((candidate) => String(candidate ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean));
+  return Array.from(new Set(values)).slice(0, maximum);
+}
+
 export class CollectionRecordListReadOperations extends CollectionServiceSupport {
   async listRecords(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: ListQuery) {
     const user = this.requireUser(userInput);
@@ -32,6 +41,18 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
     const receiptValidationStatus = parseCollectionReceiptValidationFilter(query.receiptValidationStatus);
     const duplicateOnly = parseCollectionBooleanQueryValue(query.duplicateOnly);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
+    const sourceImportIds = readBoundedList(
+      query.sourceImportIds ?? query.sourceImportId ?? query.source,
+      50,
+    );
+    const agingBucketsRaw = readBoundedList(query.agingBuckets ?? query.aging, 4)
+      .map((value) => value.toUpperCase());
+    const classificationsRaw = readBoundedList(
+      query.classifications ?? query.classification,
+      2,
+    ).map((value) => value.toLowerCase());
+    const sortByRaw = normalizeCollectionText(query.sortBy);
+    const sortDirectionRaw = normalizeCollectionText(query.sortDirection).toLowerCase();
     const pageRaw = safeParseInteger(query.page);
     const offsetRaw = safeParseInteger(query.offset);
     const limit = readPageLimit(query.pageSize ?? query.limit, 1000, 5000);
@@ -59,6 +80,29 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
     }
     if (normalizeCollectionText(query.duplicateOnly) && duplicateOnly === undefined) {
       throw badRequest("Invalid duplicate receipt filter.");
+    }
+    if (sourceImportIds.some((value) => value.length > 200)) {
+      throw badRequest("Invalid Saved source filter.");
+    }
+    if (agingBucketsRaw.some((value) => !["D3", "D4", "D5", "D6"].includes(value))) {
+      throw badRequest("Invalid aging filter.");
+    }
+    if (classificationsRaw.some((value) => value !== "cp" && value !== "abort_cp")) {
+      throw badRequest("Invalid Collection classification filter.");
+    }
+    const allowedSortFields = new Set([
+      "paymentDate",
+      "amount",
+      "customerName",
+      "source",
+      "aging",
+      "classification",
+    ]);
+    if (sortByRaw && !allowedSortFields.has(sortByRaw)) {
+      throw badRequest("Invalid Collection sort field.");
+    }
+    if (sortDirectionRaw && sortDirectionRaw !== "asc" && sortDirectionRaw !== "desc") {
+      throw badRequest("Invalid Collection sort direction.");
     }
 
     let nicknameFilters: string[] | undefined;
@@ -114,6 +158,17 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
       duplicateOnly,
       createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
       nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
+      sourceImportIds: sourceImportIds.length > 0 ? sourceImportIds : undefined,
+      agingBuckets: agingBucketsRaw.length > 0
+        ? agingBucketsRaw as Array<"D3" | "D4" | "D5" | "D6">
+        : undefined,
+      classifications: classificationsRaw.length > 0
+        ? classificationsRaw as Array<"cp" | "abort_cp">
+        : undefined,
+      sortBy: sortByRaw
+        ? sortByRaw as "paymentDate" | "amount" | "customerName" | "source" | "aging" | "classification"
+        : undefined,
+      sortDirection: sortDirectionRaw === "asc" ? "asc" as const : "desc" as const,
     };
     const [aggregate, records] = await Promise.all([
       this.storage.summarizeCollectionRecords(baseFilters),

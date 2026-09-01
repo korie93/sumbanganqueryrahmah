@@ -13,3 +13,14 @@ test("collection report utils resolve the monthly comparison subpage path", () =
   );
 });
 
+test("collection report utils resolve the Billing Principal OSP path", () => {
+  assert.equal(
+    getSubPageFromPath("/collection/billing-principal"),
+    "billing-principal",
+  );
+  assert.equal(
+    getPathForSubPage("billing-principal"),
+    "/collection/billing-principal",
+  );
+});
+

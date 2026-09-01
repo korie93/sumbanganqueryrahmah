@@ -24,8 +24,11 @@ export {
 export {
   finalizeRestoredCollectionRollups,
   initializeRestoreTrackingTempTable,
+  restoreCollectionOspTargetsFromBackup,
   restoreCollectionRecordPurgeHistoryFromBackup,
   restoreCollectionRecordReceiptsFromBackup,
   restoreCollectionRecordsFromBackup,
+  restoreCollectionSourceConfigsFromBackup,
+  restoreCollectionSourceRowsFromBackup,
   syncRestoredCollectionReceiptCache,
 } from "./backups-restore-collection-datasets-utils";

@@ -14,6 +14,7 @@ import { getCollectionRecordSourceLabel } from "@/pages/collection-records/colle
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { ViewAllRecordsDialogProps } from "@/pages/collection-records/ViewAllRecordsDialog";
 import {
+  formatCollectionMaskedCard,
   formatCollectionOptionalAmount,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
@@ -36,13 +37,14 @@ export function ViewAllRecordsDesktopTable({
   onViewReceipt,
 }: ViewAllRecordsDesktopTableProps) {
   return (
-    <Table className="min-w-[1840px] text-sm">
+    <Table className="min-w-[1960px] text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">No.</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Name</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">IC Number</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Account Number</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Card Number</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Phone Number</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Batch</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Amount</TableHead>
@@ -60,13 +62,13 @@ export function ViewAllRecordsDesktopTable({
       <TableBody>
         {loading ? (
           <TableRow>
-            <TableCell colSpan={16} className="py-6 text-center text-muted-foreground">
+            <TableCell colSpan={17} className="py-6 text-center text-muted-foreground">
               Loading full records...
             </TableCell>
           </TableRow>
         ) : viewAllRecords.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={16} className="py-6 text-center text-muted-foreground">
+            <TableCell colSpan={17} className="py-6 text-center text-muted-foreground">
               Tiada rekod dalam julat tarikh yang dipilih.
             </TableCell>
           </TableRow>
@@ -86,7 +88,8 @@ export function ViewAllRecordsDesktopTable({
               </TableCell>
               <TableCell className="py-2 font-medium">{record.customerName}</TableCell>
               <TableCell className="py-2">{record.icNumber}</TableCell>
-              <TableCell className="py-2">{record.accountNumber}</TableCell>
+              <TableCell className="py-2">{record.accountNumber || "-"}</TableCell>
+              <TableCell className="py-2">{formatCollectionMaskedCard(record.cardNumberLast4)}</TableCell>
               <TableCell className="py-2">{record.customerPhone}</TableCell>
               <TableCell className="py-2">{record.batch}</TableCell>
               <TableCell className="py-2 font-semibold text-emerald-700 dark:text-emerald-300">{formatAmountRM(record.amount)}</TableCell>

@@ -52,12 +52,12 @@ test("UI smoke pairs login submission with its response without a dangling rejec
   assert.doesNotMatch(smokeSource, /const loginResponsePromise = page\.waitForResponse/);
 });
 
-test("collection receipt smoke verifies Saved coverage before submitting the required source", () => {
-  const sourceSelectIndex = smokeSource.indexOf(
-    'const sourceSelect = page.locator("#save-collection-source-file")',
+test("collection receipt smoke configures a governed source before automatic matching", () => {
+  const sourceConfigIndex = smokeSource.indexOf(
+    '`/api/collection/source-configs/${encodeURIComponent(sourceImportId)}`',
   );
   const sourceMatchIndex = smokeSource.indexOf(
-    'page.getByRole("button", { name: "Semak Matching" }).click()',
+    'page.getByRole("button", { name: "Semak Auto-matching" }).click()',
   );
   const createWaitIndex = smokeSource.indexOf("const createResponsePromise", sourceMatchIndex);
   const saveIndex = smokeSource.indexOf(
@@ -74,21 +74,18 @@ test("collection receipt smoke verifies Saved coverage before submitting the req
     smokeSource,
     /"Calling Date": String\(values\.callingDate \?\? getLocalIsoDate\(\)\)/,
   );
+  assert.match(smokeSource, /"DC_STS": String\(values\.dcSts \?\? "6"\)/);
   assert.match(
     smokeSource,
     /new URL\(response\.url\(\)\)\.pathname === "\/api\/collection\/source-matches"/,
   );
-  assert.match(
-    smokeSource,
-    /await sourceSelect\.selectOption\(sourceImport\.id\)/,
-  );
-  assert.match(
-    smokeSource,
-    /page\.getByLabel\("Aging", \{ exact: true \}\)\.selectOption\("D6"\)/,
-  );
+  assert.match(smokeSource, /validFrom: "2000-01-01"/);
+  assert.match(smokeSource, /validTo: "2099-12-31"/);
+  assert.doesNotMatch(smokeSource, /save-collection-source-file/);
+  assert.doesNotMatch(smokeSource, /getByLabel\("Aging"/);
   assert.match(smokeSource, /page\.getByText\("Abort CP", \{ exact: true \}\)/);
   assert.match(smokeSource, /String\(matchedSource\.projectedCumulative \|\| ""\) === "12\.34"/);
-  assert.ok(sourceSelectIndex >= 0 && sourceSelectIndex < sourceMatchIndex);
+  assert.ok(sourceConfigIndex >= 0 && sourceConfigIndex < sourceMatchIndex);
   assert.ok(sourceMatchIndex >= 0 && sourceMatchIndex < createWaitIndex);
   assert.ok(createWaitIndex < saveIndex);
 });

@@ -6,10 +6,15 @@ import type {
   UpdateCollectionRecordInput,
   UpdateCollectionRecordOptions,
 } from "../storage-postgres";
+import type {
+  CollectionAgingBucket,
+  CollectionSourceMatchBasis,
+} from "../storage-postgres-collection-types";
 import {
   encryptCollectionPiiFieldValue,
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
+  resolveCollectionPiiFieldValueFailClosed,
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
 import {
@@ -30,6 +35,13 @@ import {
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import { buildTextArraySql } from "./sql-array-utils";
+import { assertAuthorizedCollectionSourceSnapshot } from "./collection-source-authority-repository-utils";
+import {
+  acquireCollectionRecordMutationLock,
+  acquireCollectionSettlementCycleLocks,
+  applyCollectionSettlementState,
+  recalculateCollectionSettlementCycles,
+} from "./collection-settlement-repository-utils";
 
 function resolveExpectedCollectionRecordUpdatedAt(
   value: Date | undefined,
@@ -108,6 +120,9 @@ export async function updateCollectionRecord(
     }
     updateChunks.push(sql`account_number_search_hash = ${hashCollectionPiiSearchValue("accountNumber", data.accountNumber)}`);
   }
+  if (data.cardNumberLast4 !== undefined) {
+    updateChunks.push(sql`card_number_last4 = ${data.cardNumberLast4}`);
+  }
   if (data.sourceImportId !== undefined) {
     updateChunks.push(sql`source_import_id = ${data.sourceImportId}`);
   }
@@ -149,6 +164,12 @@ export async function updateCollectionRecord(
   if (data.sourceMatchAccuracy !== undefined) {
     updateChunks.push(sql`source_match_accuracy = ${data.sourceMatchAccuracy}`);
   }
+  if (data.sourceObligationKey !== undefined) {
+    updateChunks.push(sql`source_obligation_key = ${data.sourceObligationKey}`);
+  }
+  if (data.settlementCycleKey !== undefined) {
+    updateChunks.push(sql`settlement_cycle_key = ${String(data.settlementCycleKey ?? "").trim() || null}`);
+  }
   if (data.batch !== undefined) {
     updateChunks.push(sql`batch = ${data.batch}`);
   }
@@ -181,7 +202,13 @@ export async function updateCollectionRecord(
   const newReceipts = Array.isArray(options?.newReceipts)
     ? options.newReceipts
     : [];
-  const hasReceiptMutation = removeAllReceipts || removeReceiptIds.length > 0 || newReceipts.length > 0;
+  const receiptUpdates = Array.isArray(options?.receiptUpdates)
+    ? options.receiptUpdates
+    : [];
+  const hasReceiptMutation = removeAllReceipts
+    || removeReceiptIds.length > 0
+    || newReceipts.length > 0
+    || receiptUpdates.length > 0;
 
   if (!updateChunks.length && !hasReceiptMutation) {
     const current = await getCollectionRecordById(id);
@@ -206,46 +233,128 @@ export async function updateCollectionRecord(
   }
 
   return db.transaction(async (tx) => {
-    await tx.execute(sql`
-      SELECT pg_advisory_xact_lock(
-        hashtextextended(
-          COALESCE(source_import_id, '') || ':' || COALESCE(source_data_row_id, ''),
-          0
-        )
-      )
-      FROM public.collection_records
-      WHERE id = ${id}::uuid
-        AND source_import_id IS NOT NULL
-        AND source_data_row_id IS NOT NULL
-    `);
-    if (data.sourceImportId && data.sourceDataRowId) {
-      await tx.execute(sql`
-        SELECT pg_advisory_xact_lock(
-          hashtextextended(${`${data.sourceImportId}:${data.sourceDataRowId}`}, 0)
-        )
-      `);
-      const sourceRow = await tx.execute(sql`
-        SELECT source_row.id
-        FROM public.data_rows source_row
-        JOIN public.imports imp ON imp.id = source_row.import_id
-        WHERE source_row.id = ${data.sourceDataRowId}
-          AND source_row.import_id = ${data.sourceImportId}
-          AND imp.is_deleted = false
-        FOR SHARE OF source_row, imp
-      `);
-      if (!sourceRow.rows?.[0]) {
-        throw new Error("Selected Saved source row no longer exists in the selected file.");
-      }
-    }
+    await acquireCollectionRecordMutationLock(tx, id);
     const existingSliceResult = await tx.execute(sql`
-      SELECT payment_date, created_by_login, collection_staff_nickname
+      SELECT
+        payment_date,
+        created_by_login,
+        collection_staff_nickname,
+        account_number,
+        account_number_encrypted,
+        card_number_last4,
+        source_import_id,
+        source_data_row_id,
+        aging_bucket,
+        calling_date,
+        calling_window_end_exclusive,
+        total_due,
+        billing_principal_osp,
+        source_match_basis,
+        source_obligation_key,
+        settlement_cycle_key
       FROM public.collection_records
       WHERE id = ${id}::uuid
       LIMIT 1
     `);
-    const existingSlice = mapCollectionRecordRowToDailyRollupSlice(
-      (existingSliceResult.rows?.[0] || null) as Record<string, unknown> | null,
-    );
+    const existingRow = (existingSliceResult.rows?.[0] || null) as Record<string, unknown> | null;
+    if (!existingRow) return undefined;
+    const existingSlice = mapCollectionRecordRowToDailyRollupSlice(existingRow);
+    const existingSettlementCycleKey = String(existingRow?.settlement_cycle_key ?? "").trim() || null;
+    const sourceIdentityChanged = data.sourceImportId !== undefined
+      || data.sourceDataRowId !== undefined
+      || data.callingDate !== undefined;
+    const sourceSnapshotRefreshed = data.sourceImportId !== undefined
+      || data.sourceDataRowId !== undefined
+      || data.sourceObligationKey !== undefined
+      || data.sourceMatchBasis !== undefined;
+    const nextSettlementCycleKey = data.settlementCycleKey !== undefined
+      ? String(data.settlementCycleKey ?? "").trim() || null
+      : sourceIdentityChanged
+        ? null
+        : existingSettlementCycleKey;
+    if (data.settlementCycleKey === undefined && sourceIdentityChanged) {
+      updateChunks.push(sql`settlement_cycle_key = ${nextSettlementCycleKey}`);
+      if (data.sourceObligationKey === undefined) {
+        updateChunks.push(sql`source_obligation_key = NULL`);
+      }
+    }
+    await acquireCollectionSettlementCycleLocks(tx, [
+      existingSettlementCycleKey,
+      nextSettlementCycleKey,
+    ]);
+
+    const effectiveSourceImportId = data.sourceImportId !== undefined
+      ? data.sourceImportId
+      : String(existingRow?.source_import_id ?? "").trim() || null;
+    const effectiveSourceDataRowId = data.sourceDataRowId !== undefined
+      ? data.sourceDataRowId
+      : String(existingRow?.source_data_row_id ?? "").trim() || null;
+    const effectiveAccountNumber = data.accountNumber !== undefined
+      ? data.accountNumber
+      : resolveCollectionPiiFieldValueFailClosed({
+        field: "accountNumber",
+        plaintext: existingRow?.account_number,
+        encrypted: existingRow?.account_number_encrypted,
+      });
+    const existingAgingBucket = String(existingRow?.aging_bucket ?? "").trim();
+    const effectiveAgingBucket: CollectionAgingBucket | null = data.agingBucket !== undefined
+      ? data.agingBucket ?? null
+      : existingAgingBucket === "D3"
+        || existingAgingBucket === "D4"
+        || existingAgingBucket === "D5"
+        || existingAgingBucket === "D6"
+        ? existingAgingBucket
+        : null;
+    const existingSourceMatchBasis = String(existingRow?.source_match_basis ?? "").trim();
+    const effectiveSourceMatchBasis: CollectionSourceMatchBasis | null = data.sourceMatchBasis !== undefined
+      ? data.sourceMatchBasis ?? null
+      : existingSourceMatchBasis === "ic"
+        || existingSourceMatchBasis === "phone_and_account"
+        || existingSourceMatchBasis === "account_number"
+        || existingSourceMatchBasis === "card_number"
+        || existingSourceMatchBasis === "account_and_card"
+        ? existingSourceMatchBasis
+        : null;
+    if (
+      nextSettlementCycleKey
+      || data.sourceImportId !== undefined
+      || data.sourceDataRowId !== undefined
+      || data.sourceObligationKey !== undefined
+    ) {
+      if (!effectiveSourceImportId || !effectiveSourceDataRowId) {
+        throw new Error("Selected Collection source snapshot is incomplete.");
+      }
+      await assertAuthorizedCollectionSourceSnapshot(tx, {
+        sourceImportId: effectiveSourceImportId,
+        sourceDataRowId: effectiveSourceDataRowId,
+        paymentDate: data.paymentDate
+          ?? String(existingRow?.payment_date ?? "").slice(0, 10),
+        accountNumber: effectiveAccountNumber,
+        cardNumber: data.sourceCardNumber ?? null,
+        requireFullIdentifierMatch: sourceSnapshotRefreshed,
+        cardNumberLast4: data.cardNumberLast4 !== undefined
+          ? data.cardNumberLast4
+          : String(existingRow?.card_number_last4 ?? "").trim() || null,
+        agingBucket: effectiveAgingBucket,
+        callingDate: data.callingDate !== undefined
+          ? data.callingDate
+          : String(existingRow?.calling_date ?? "").slice(0, 10) || null,
+        callingWindowEndExclusive: data.callingWindowEndExclusive !== undefined
+          ? data.callingWindowEndExclusive
+          : String(existingRow?.calling_window_end_exclusive ?? "").slice(0, 10) || null,
+        totalDue: data.totalDue !== undefined
+          ? data.totalDue
+          : (existingRow?.total_due as string | number | null | undefined) ?? null,
+        billingPrincipalOsp: data.billingPrincipalOsp !== undefined
+          ? data.billingPrincipalOsp
+          : (existingRow?.billing_principal_osp as string | number | null | undefined) ?? null,
+        sourceMatchBasis: effectiveSourceMatchBasis,
+        sourceObligationKey: data.sourceObligationKey !== undefined
+          ? data.sourceObligationKey
+          : String(existingRow?.source_obligation_key ?? "").trim() || null,
+        settlementCycleKey: nextSettlementCycleKey,
+      });
+    }
 
     const result = await tx.execute(sql`
       UPDATE public.collection_records
@@ -262,6 +371,7 @@ export async function updateCollectionRecord(
         customer_phone_encrypted,
         ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
         account_number_encrypted,
+        card_number_last4,
         source_import_id,
         source_data_row_id,
         source_import_name,
@@ -273,6 +383,11 @@ export async function updateCollectionRecord(
         billing_principal_osp,
         source_match_basis,
         source_match_accuracy,
+        source_obligation_key,
+        settlement_cycle_key,
+        classification,
+        cumulative_collected,
+        remaining_amount,
         batch,
         payment_date,
         amount,
@@ -301,11 +416,15 @@ export async function updateCollectionRecord(
     if (newReceipts.length > 0) {
       await createCollectionRecordReceiptRows(tx, id, newReceipts);
     }
-    if (Array.isArray(options?.receiptUpdates) && options.receiptUpdates.length > 0) {
-      await updateCollectionRecordReceiptRows(tx, id, options.receiptUpdates);
+    if (receiptUpdates.length > 0) {
+      await updateCollectionRecordReceiptRows(tx, id, receiptUpdates);
     }
 
     const syncedRecord = await syncCollectionRecordReceiptValidation(tx, id);
+    const settlementStates = await recalculateCollectionSettlementCycles(tx, [
+      existingSettlementCycleKey,
+      nextSettlementCycleKey,
+    ]);
 
     await refreshCollectionRecordDailyRollupSlices(tx, [
       existingSlice,
@@ -313,11 +432,14 @@ export async function updateCollectionRecord(
     ]);
 
     if (syncedRecord) {
-      return syncedRecord;
+      return applyCollectionSettlementState(syncedRecord, settlementStates.get(id));
     }
 
     const [hydrated] = await attachCollectionReceipts(tx, [mapCollectionRecordRow(row)]);
-    return hydrated || mapCollectionRecordRow(row);
+    return applyCollectionSettlementState(
+      hydrated || mapCollectionRecordRow(row),
+      settlementStates.get(id),
+    );
   });
 }
 
@@ -333,6 +455,23 @@ export async function deleteCollectionRecord(
   }
 
   return db.transaction(async (tx) => {
+    await acquireCollectionRecordMutationLock(tx, id);
+    const existingSliceResult = await tx.execute(sql`
+      SELECT
+        payment_date,
+        created_by_login,
+        collection_staff_nickname,
+        settlement_cycle_key
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+      LIMIT 1
+    `);
+    const existingRow = (existingSliceResult.rows?.[0] || null) as Record<string, unknown> | null;
+    if (!existingRow) return false;
+    const existingSlice = mapCollectionRecordRowToDailyRollupSlice(existingRow);
+    const existingSettlementCycleKey = String(existingRow?.settlement_cycle_key ?? "").trim() || null;
+    await acquireCollectionSettlementCycleLocks(tx, [existingSettlementCycleKey]);
+
     await tx.execute(sql`
       SELECT pg_advisory_xact_lock(
         hashtextextended(
@@ -345,15 +484,6 @@ export async function deleteCollectionRecord(
         AND source_import_id IS NOT NULL
         AND source_data_row_id IS NOT NULL
     `);
-    const existingSliceResult = await tx.execute(sql`
-      SELECT payment_date, created_by_login, collection_staff_nickname
-      FROM public.collection_records
-      WHERE id = ${id}::uuid
-      LIMIT 1
-    `);
-    const existingSlice = mapCollectionRecordRowToDailyRollupSlice(
-      (existingSliceResult.rows?.[0] || null) as Record<string, unknown> | null,
-    );
 
     const deletedRecord = await tx.execute(sql`
       DELETE FROM public.collection_records
@@ -370,6 +500,7 @@ export async function deleteCollectionRecord(
       WHERE collection_record_id = ${deletedId}::uuid
     `);
 
+    await recalculateCollectionSettlementCycles(tx, [existingSettlementCycleKey]);
     await refreshCollectionRecordDailyRollupSlices(tx, [existingSlice]);
     return true;
   });
