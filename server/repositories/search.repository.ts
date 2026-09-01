@@ -34,6 +34,8 @@ import {
   type SavedCollectionSourceCandidate,
   type SavedCollectionSourceLookup,
   type SavedCollectionSourceMatch,
+  type CollectionSettlementProjection,
+  type CollectionSettlementProjectionInput,
 } from "./search-repository-types";
 
 export { MAX_SEARCH_LIMIT, MAX_SEARCH_OFFSET } from "./search-repository-shared";
@@ -108,6 +110,54 @@ export class SearchRepository {
   ): Promise<SavedCollectionSourceMatch | null> {
     const candidates = await this.loadSavedCollectionSourceCandidates(lookup);
     return selectSavedCollectionSourceMatch(lookup, candidates);
+  }
+
+  async getCollectionSettlementProjection(
+    input: CollectionSettlementProjectionInput,
+  ): Promise<CollectionSettlementProjection> {
+    const excludeRecordId = String(input.excludeRecordId || "").trim();
+    const result = await db.execute(sql`
+      WITH existing_settlement AS (
+        SELECT COALESCE(SUM(record.amount), 0)::numeric(14,2) AS existing_cumulative
+        FROM public.collection_records record
+        WHERE record.source_import_id = ${input.sourceImportId}
+          AND record.source_data_row_id = ${input.sourceDataRowId}
+          AND record.calling_date = ${input.callingDate}::date
+          AND record.calling_window_end_exclusive = ${input.callingWindowEndExclusive}::date
+          AND record.payment_date >= ${input.callingDate}::date
+          AND record.payment_date < ${input.callingWindowEndExclusive}::date
+          AND record.source_match_basis IS NOT NULL
+          AND record.total_due IS NOT NULL
+          AND record.duplicate_receipt_flag = false
+          AND (${excludeRecordId} = '' OR record.id::text <> ${excludeRecordId})
+      ), projected_settlement AS (
+        SELECT
+          existing_cumulative,
+          ${input.currentAmount}::numeric(14,2) AS current_entry,
+          (existing_cumulative + ${input.currentAmount}::numeric(14,2))::numeric(14,2)
+            AS projected_cumulative,
+          ${input.totalDue}::numeric(14,2) AS total_due
+        FROM existing_settlement
+      )
+      SELECT
+        existing_cumulative::text AS existing_cumulative,
+        current_entry::text AS current_entry,
+        projected_cumulative::text AS projected_cumulative,
+        GREATEST(total_due - projected_cumulative, 0)::numeric(14,2)::text AS remaining_after_save,
+        projected_cumulative >= total_due AS projected_total_due_covered
+      FROM projected_settlement
+    `);
+
+    const row = (result.rows?.[0] || {}) as Record<string, unknown>;
+    const covered = row.projected_total_due_covered === true;
+    return {
+      existingCumulative: String(row.existing_cumulative || "0.00"),
+      currentEntry: String(row.current_entry || input.currentAmount),
+      projectedCumulative: String(row.projected_cumulative || input.currentAmount),
+      remainingAfterSave: String(row.remaining_after_save || "0.00"),
+      projectedTotalDueCovered: covered,
+      projectedCpStatus: covered ? "abort_cp" : "cp",
+    };
   }
 
   async findCollectionStatusesForRows(

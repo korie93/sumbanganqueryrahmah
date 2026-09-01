@@ -53,6 +53,9 @@ test("UI smoke pairs login submission with its response without a dangling rejec
 });
 
 test("collection receipt smoke verifies Saved coverage before submitting the required source", () => {
+  const sourceSelectIndex = smokeSource.indexOf(
+    'const sourceSelect = page.locator("#save-collection-source-file")',
+  );
   const sourceMatchIndex = smokeSource.indexOf(
     'page.getByRole("button", { name: "Semak Matching" }).click()',
   );
@@ -69,17 +72,23 @@ test("collection receipt smoke verifies Saved coverage before submitting the req
   );
   assert.match(
     smokeSource,
+    /"Calling Date": String\(values\.callingDate \?\? getLocalIsoDate\(\)\)/,
+  );
+  assert.match(
+    smokeSource,
     /new URL\(response\.url\(\)\)\.pathname === "\/api\/collection\/source-matches"/,
   );
   assert.match(
     smokeSource,
-    /document\.querySelector\("#save-collection-source-match"\)\?\.value === expectedSourceImportId/,
+    /await sourceSelect\.selectOption\(sourceImport\.id\)/,
   );
   assert.match(
     smokeSource,
     /page\.getByLabel\("Aging", \{ exact: true \}\)\.selectOption\("D6"\)/,
   );
   assert.match(smokeSource, /page\.getByText\("Abort CP", \{ exact: true \}\)/);
+  assert.match(smokeSource, /String\(matchedSource\.projectedCumulative \|\| ""\) === "12\.34"/);
+  assert.ok(sourceSelectIndex >= 0 && sourceSelectIndex < sourceMatchIndex);
   assert.ok(sourceMatchIndex >= 0 && sourceMatchIndex < createWaitIndex);
   assert.ok(createWaitIndex < saveIndex);
 });

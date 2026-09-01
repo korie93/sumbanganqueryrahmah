@@ -296,7 +296,11 @@ test("DELETE /api/collection/purge-old purges and audits when the superuser pass
 });
 
 test("POST /api/collection creates a collection record and writes an audit log", async () => {
-  const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble({
+    sourceMatchCallingDate: "2026-08-12",
+    sourceMatchCallingWindowEnd: "2026-09-11",
+    sourceMatchCallingWindowEndExclusive: "2026-09-12",
+  });
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -323,11 +327,17 @@ test("POST /api/collection creates a collection record and writes an audit log",
         customerPhone: "0129876543",
         accountNumber: "ACC-2002",
         batch: "P25",
-        paymentDate: "2026-03-15",
+        paymentDate: "2026-08-13",
         amount: 245.9,
         collectionStaffNickname: "Collector Alpha",
         sourceImportId: "import-1",
         sourceDataRowId: "client-controlled-row",
+        callingDate: "2026-08-01",
+        callingWindowEndExclusive: "2026-09-01",
+        totalDue: "999999.99",
+        billingPrincipalOsp: "888888.88",
+        cumulativeCollected: "0.00",
+        cpStatus: "cp",
         agingBucket: "D4",
       }),
     });
@@ -343,6 +353,8 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(payload.record.sourceFilename, "npl-cc-p10-july.xlsx");
     assert.equal(payload.record.totalDue, "200.00");
     assert.equal(payload.record.billingPrincipalOsp, "180.00");
+    assert.equal(payload.record.callingDate, "2026-08-12");
+    assert.equal(payload.record.callingWindowEnd, "2026-09-11");
     assert.equal(payload.record.cpStatus, "abort_cp");
     assert.equal(payload.record.agingBucket, "D4");
     assert.equal(createCalls.length, 1);
@@ -352,6 +364,8 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(createCalls[0].sourceFilename, "npl-cc-p10-july.xlsx");
     assert.equal(createCalls[0].totalDue, 200);
     assert.equal(createCalls[0].billingPrincipalOsp, 180);
+    assert.equal(createCalls[0].callingDate, "2026-08-12");
+    assert.equal(createCalls[0].callingWindowEndExclusive, "2026-09-12");
     assert.equal(createCalls[0].sourceMatchAccuracy, 100);
     assert.equal(createCalls[0].agingBucket, "D4");
     assert.equal(createCalls[0].createdByLogin, "staff.user");
@@ -364,7 +378,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(auditDetails.sourceDataRowId, "saved-row-1");
     assert.equal(auditDetails.sourceImportName, "NPL CC P10 JULY");
     assert.equal(auditDetails.snapshot.customerName, maskCollectionAuditCustomerName("Bob Lee"));
-    assert.equal(auditDetails.snapshot.paymentDate, "2026-03-15");
+    assert.equal(auditDetails.snapshot.paymentDate, "2026-08-13");
     assert.equal(auditDetails.snapshot.amount, 245.9);
     assert.equal(auditDetails.snapshot.collectionStaffNickname, "Collector Alpha");
     assert.equal(auditDetails.snapshot.activeReceiptCount, 0);
@@ -449,9 +463,9 @@ test("POST /api/collection rejects a selected Saved file that no longer matches"
       }),
     });
 
-    assert.equal(response.status, 400);
+    assert.equal(response.status, 404);
     const payload = await response.json();
-    assert.equal(payload.error.code, "COLLECTION_SOURCE_MATCH_STALE");
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_FILE_NOT_FOUND");
     assert.equal(createCalls.length, 0);
   } finally {
     await stopTestServer(server);
@@ -587,6 +601,9 @@ test("POST /api/collection/source-matches returns only server-owned match detail
         icNumber: "880202026666",
         customerPhone: "0129876543",
         accountNumber: "ACC-2002",
+        sourceImportId: "import-1",
+        paymentDate: "2026-03-15",
+        amount: 80,
       }),
     });
 
@@ -597,9 +614,255 @@ test("POST /api/collection/source-matches returns only server-owned match detail
     assert.equal(payload.matches[0].sourceImportId, "import-1");
     assert.equal(payload.matches[0].totalDue, "200.00");
     assert.equal(payload.matches[0].billingPrincipalOsp, "180.00");
+    assert.equal(payload.matches[0].callingDate, "2026-03-01");
+    assert.equal(payload.matches[0].callingWindowEnd, "2026-03-31");
+    assert.equal(payload.matches[0].existingCumulative, "0.00");
+    assert.equal(payload.matches[0].currentEntry, "80.00");
+    assert.equal(payload.matches[0].projectedCumulative, "80.00");
+    assert.equal(payload.matches[0].remainingAfterSave, "120.00");
+    assert.equal(payload.matches[0].projectedTotalDueCovered, false);
+    assert.equal(payload.matches[0].projectedCpStatus, "cp");
     assert.equal(payload.matches[0].matchAccuracy, 100);
     assert.equal("rowId" in payload.matches[0], false);
     assert.equal(auditLogs[auditLogs.length - 1]?.action, "COLLECTION_SOURCE_MATCH_PREVIEW");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/source-files returns bounded metadata without Saved master rows", async () => {
+  const { storage } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/source-files?limit=100`);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.deepEqual(payload.sourceFiles, [{
+      id: "import-1",
+      name: "NPL CC P10 JULY",
+      filename: "npl-cc-p10-july.xlsx",
+      createdAt: "2026-03-01T00:00:00.000Z",
+      rowCount: 2,
+    }]);
+    assert.deepEqual(payload.pagination, {
+      limit: 100,
+      nextCursor: null,
+      total: 1,
+    });
+    assert.equal("rows" in payload, false);
+    assert.equal("jsonDataJsonb" in payload.sourceFiles[0], false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection/source-matches rejects a Payment Date outside the exact Calling Date window", async () => {
+  const { storage } = createCoreCollectionStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/source-matches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Bob Lee",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        sourceImportId: "import-1",
+        paymentDate: "2026-04-01",
+        amount: 80,
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "COLLECTION_PAYMENT_OUTSIDE_CALLING_WINDOW");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/collection rejects a Saved match whose Calling Date is missing", async () => {
+  const { storage, createCalls } = createCoreCollectionStorageDouble({
+    sourceMatchCallingDate: null,
+    sourceMatchCallingWindowEnd: null,
+    sourceMatchCallingWindowEndExclusive: null,
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Bob Lee",
+        icNumber: "880202026666",
+        customerPhone: "0129876543",
+        accountNumber: "ACC-2002",
+        sourceImportId: "import-1",
+        batch: "P25",
+        paymentDate: "2026-03-15",
+        amount: 80,
+        collectionStaffNickname: "Collector Alpha",
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_CALLING_DATE_INVALID");
+    assert.equal(createCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("collection create, edit, and delete recalculate cumulative Abort CP for one Saved row", async () => {
+  const { storage, createCalls } = createCoreCollectionStorageDouble({
+    sourceMatchTotalDue: "1000.00",
+    sourceMatchCallingDate: "2026-08-12",
+    sourceMatchCallingWindowEnd: "2026-09-11",
+    sourceMatchCallingWindowEndExclusive: "2026-09-12",
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  const create = (
+    amount: number,
+    paymentDate: string,
+    idempotencyKey: string,
+  ) => fetch(`${baseUrl}/api/collection`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-idempotency-key": idempotencyKey,
+    },
+    body: JSON.stringify({
+      customerName: "Bob Lee",
+      icNumber: "880202026666",
+      customerPhone: "0129876543",
+      accountNumber: "ACC-2002",
+      sourceImportId: "import-1",
+      batch: "P25",
+      paymentDate,
+      amount,
+      collectionStaffNickname: "Collector Alpha",
+    }),
+  });
+
+  try {
+    const firstResponse = await create(300, "2026-08-13", "cumulative-create-1");
+    const firstPayload = await firstResponse.json();
+    assert.equal(firstResponse.status, 200);
+    assert.equal(firstPayload.record.cumulativeCollected, "300.00");
+    assert.equal(firstPayload.record.remainingAmount, "700.00");
+    assert.equal(firstPayload.record.totalDueCovered, false);
+    assert.equal(firstPayload.record.cpStatus, "cp");
+
+    const secondResponse = await create(200, "2026-08-14", "cumulative-create-2");
+    const secondPayload = await secondResponse.json();
+    assert.equal(secondResponse.status, 200);
+    assert.equal(secondPayload.record.cumulativeCollected, "500.00");
+    assert.equal(secondPayload.record.remainingAmount, "500.00");
+    assert.equal(secondPayload.record.totalDueCovered, false);
+    assert.equal(secondPayload.record.cpStatus, "cp");
+
+    const thirdResponse = await create(500, "2026-08-20", "cumulative-create-3");
+    const thirdPayload = await thirdResponse.json();
+    assert.equal(thirdResponse.status, 200);
+    assert.equal(thirdPayload.record.cumulativeCollected, "1000.00");
+    assert.equal(thirdPayload.record.remainingAmount, "0.00");
+    assert.equal(thirdPayload.record.totalDueCovered, true);
+    assert.equal(thirdPayload.record.cpStatus, "abort_cp");
+    assert.equal(createCalls.length, 3);
+
+    const thirdRecordId = String(thirdPayload.record.id || "");
+    const editBelowResponse = await fetch(`${baseUrl}/api/collection/${thirdRecordId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: 490 }),
+    });
+    const editBelowPayload = await editBelowResponse.json();
+    assert.equal(editBelowResponse.status, 200);
+    assert.equal(editBelowPayload.record.cumulativeCollected, "990.00");
+    assert.equal(editBelowPayload.record.remainingAmount, "10.00");
+    assert.equal(editBelowPayload.record.cpStatus, "cp");
+
+    const editCoveredResponse = await fetch(`${baseUrl}/api/collection/${thirdRecordId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: 500 }),
+    });
+    const editCoveredPayload = await editCoveredResponse.json();
+    assert.equal(editCoveredResponse.status, 200);
+    assert.equal(editCoveredPayload.record.cumulativeCollected, "1000.00");
+    assert.equal(editCoveredPayload.record.remainingAmount, "0.00");
+    assert.equal(editCoveredPayload.record.cpStatus, "abort_cp");
+
+    const deleteResponse = await fetch(`${baseUrl}/api/collection/${thirdRecordId}`, {
+      method: "DELETE",
+    });
+    assert.equal(deleteResponse.status, 200);
+
+    const listResponse = await fetch(`${baseUrl}/api/collection/list?page=1&pageSize=100`);
+    const listPayload = await listResponse.json();
+    assert.equal(listResponse.status, 200);
+    const survivingRecord = listPayload.records.find(
+      (record: { id?: string }) => record.id === firstPayload.record.id,
+    );
+    assert.ok(survivingRecord);
+    assert.equal(survivingRecord.cumulativeCollected, "500.00");
+    assert.equal(survivingRecord.remainingAmount, "500.00");
+    assert.equal(survivingRecord.cpStatus, "cp");
   } finally {
     await stopTestServer(server);
   }
@@ -1674,7 +1937,7 @@ test("PATCH /api/collection/:id rejects identity edits when existing Saved prove
 
     assert.equal(response.status, 400);
     const payload = await response.json();
-    assert.equal(payload.error.code, "COLLECTION_SOURCE_MATCH_STALE");
+    assert.equal(payload.error.code, "COLLECTION_SOURCE_NO_MATCH");
     assert.equal(updateCalls.length, 0);
   } finally {
     await stopTestServer(server);
@@ -3421,6 +3684,9 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
         icNumber: "900101050001",
         customerPhone: "0161111111",
         accountNumber: "ACC-SA1",
+        callingDate: "2026-01-10",
+        callingWindowEnd: "2026-02-09",
+        callingWindowEndExclusive: "2026-02-10",
         batch: "P10",
         paymentDate: "2026-01-10",
         amount: "1000.00",
@@ -3914,15 +4180,22 @@ test("PATCH /api/collection/:id correctly reassigns the staff nickname on the re
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
     updatedAt: new Date("2026-03-01T09:00:00.000Z"),
   };
+  let storedRecord = { ...record };
 
   const storage = {
     getCollectionNicknameSessionByActivity: async () => null,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((n) => n.nickname === nickname) ?? null,
-    getCollectionRecordById: async (id: string) => (id === record.id ? { ...record } : null),
+    getCollectionRecordById: async (id: string) => (id === record.id ? { ...storedRecord } : null),
     updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
       updateCalls.push({ id, data });
-      return { ...record, ...data, amount: record.amount, updatedAt: new Date("2026-03-02T10:00:00.000Z") };
+      storedRecord = {
+        ...storedRecord,
+        ...data,
+        amount: storedRecord.amount,
+        updatedAt: new Date("2026-03-02T10:00:00.000Z"),
+      };
+      return { ...storedRecord };
     },
     createAuditLog: async (entry: { action: string; details?: string }) => {
       auditLogs.push(entry);
@@ -3988,6 +4261,9 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
     icNumber: "900101050088",
     customerPhone: "0123456789",
     accountNumber: "ACC-DR1",
+    callingDate: "2026-03-01",
+    callingWindowEnd: "2026-03-31",
+    callingWindowEndExclusive: "2026-04-01",
     batch: "P10",
     paymentDate: "2026-03-01",
     amount: "300.00",
@@ -4003,14 +4279,21 @@ test("PATCH /api/collection/:id correctly updates the payment date on the record
     createdAt: new Date("2026-03-01T09:00:00.000Z"),
     updatedAt: new Date("2026-03-01T09:00:00.000Z"),
   };
+  let storedRecord = { ...record };
 
   const storage = {
     getCollectionNicknameSessionByActivity: async () => null,
     getCollectionStaffNicknameByName: async () => null,
-    getCollectionRecordById: async (id: string) => (id === record.id ? { ...record } : null),
+    getCollectionRecordById: async (id: string) => (id === record.id ? { ...storedRecord } : null),
     updateCollectionRecord: async (id: string, data: Record<string, unknown>) => {
       updateCalls.push({ id, data });
-      return { ...record, ...data, amount: record.amount, updatedAt: new Date("2026-03-02T10:00:00.000Z") };
+      storedRecord = {
+        ...storedRecord,
+        ...data,
+        amount: storedRecord.amount,
+        updatedAt: new Date("2026-03-02T10:00:00.000Z"),
+      };
+      return { ...storedRecord };
     },
     createAuditLog: async (entry: { action: string; details?: string }) => {
       auditLogs.push(entry);

@@ -5,6 +5,7 @@ import {
   collectionPurgeSummaryResponseSchema,
   collectionRecordListResponseSchema,
   collectionRecordResponseSchema,
+  collectionSavedSourceFilesResponseSchema,
   collectionSourceMatchesResponseSchema,
 } from "@shared/api-contracts";
 import { parseApiJson } from "./contract";
@@ -12,6 +13,7 @@ import type {
   CollectionPurgeResponse,
   CollectionPurgeSummaryResponse,
   CollectionRecordListResponse,
+  CollectionSavedSourceFilesResponse,
   CreateCollectionPayload,
   UpdateCollectionPayload,
   CollectionSourceMatchesResponse,
@@ -187,13 +189,16 @@ export async function getCollectionSourceMatches(
     icNumber: string;
     customerPhone: string;
     accountNumber: string;
+    paymentDate: string;
+    amount: string;
   },
+  sourceImportId: string,
   options?: { signal?: AbortSignal | undefined },
 ) {
   const response = await apiRequest(
     "POST",
     "/api/collection/source-matches",
-    payload,
+    { ...payload, sourceImportId },
     { signal: options?.signal },
   );
   return parseApiJson(
@@ -201,6 +206,36 @@ export async function getCollectionSourceMatches(
     collectionSourceMatchesResponseSchema,
     "/api/collection/source-matches",
   ) as Promise<CollectionSourceMatchesResponse>;
+}
+
+export async function getCollectionSavedSourceFiles(
+  filters?: {
+    search?: string | undefined;
+    limit?: number | undefined;
+    cursor?: string | null | undefined;
+  },
+  options?: { signal?: AbortSignal | undefined },
+) {
+  const params = new URLSearchParams();
+  const search = String(filters?.search || "").trim();
+  if (search) params.set("search", search);
+  if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
+    params.set("limit", String(Math.max(1, Math.min(100, Math.trunc(filters.limit)))));
+  }
+  const cursor = String(filters?.cursor || "").trim();
+  if (cursor) params.set("cursor", cursor);
+  const query = params.toString();
+  const endpoint = query
+    ? `/api/collection/source-files?${query}`
+    : "/api/collection/source-files";
+  const response = await apiRequest("GET", endpoint, undefined, {
+    signal: options?.signal,
+  });
+  return parseApiJson(
+    response,
+    collectionSavedSourceFilesResponseSchema,
+    "/api/collection/source-files",
+  ) as Promise<CollectionSavedSourceFilesResponse>;
 }
 
 export async function getCollectionRecords(filters?: {

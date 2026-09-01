@@ -69,6 +69,9 @@ export type CollectionSourceMatchPayload = {
   icNumber?: string;
   customerPhone?: string;
   accountNumber?: string;
+  sourceImportId?: string | null;
+  paymentDate?: string;
+  amount?: number | string;
 };
 
 export type CollectionUpdatePayload = Partial<CollectionCreatePayload> & {

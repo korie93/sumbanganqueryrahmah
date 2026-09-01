@@ -26,6 +26,27 @@ function normalizeUniqueValues(values: string[]): string[] {
   );
 }
 
+export async function acquireCollectionReceiptHashLocks(
+  executor: CollectionReceiptExecutor,
+  receipts: Array<Pick<CreateCollectionRecordReceiptInput, "fileHash">>,
+): Promise<void> {
+  const fileHashes = Array.from(
+    new Set(
+      receipts
+        .map((receipt) => String(receipt.fileHash || "").trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ).sort();
+
+  for (const fileHash of fileHashes) {
+    await executor.execute(sql`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(${`collection-receipt:${fileHash}`}, 0)
+      )
+    `);
+  }
+}
+
 export async function createCollectionRecordReceiptRows(
   executor: CollectionReceiptExecutor,
   recordId: string,
@@ -35,6 +56,8 @@ export async function createCollectionRecordReceiptRows(
   if (!normalizedRecordId || !Array.isArray(receipts) || !receipts.length) {
     return [];
   }
+
+  await acquireCollectionReceiptHashLocks(executor, receipts);
 
   const insertedIds: string[] = [];
   for (const receipt of receipts) {

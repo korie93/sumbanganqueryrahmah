@@ -40,6 +40,8 @@ export const collectionRecords = pgTable("collection_records", {
   sourceImportName: text("source_import_name"),
   sourceFilename: text("source_filename"),
   agingBucket: text("aging_bucket"),
+  callingDate: date("calling_date", { mode: "string" }),
+  callingWindowEndExclusive: date("calling_window_end_exclusive", { mode: "string" }),
   totalDue: numeric("total_due", { precision: 14, scale: 2 }),
   billingPrincipalOsp: numeric("billing_principal_osp", { precision: 14, scale: 2 }),
   sourceMatchBasis: text("source_match_basis"),
@@ -70,6 +72,11 @@ export const collectionRecords = pgTable("collection_records", {
   staffNicknameIdx: index("idx_collection_records_staff_nickname").on(table.collectionStaffNickname),
   sourceImportIdIdx: index("idx_collection_records_source_import_id").on(table.sourceImportId),
   sourceDataRowIdIdx: index("idx_collection_records_source_data_row_id").on(table.sourceDataRowId),
+  sourceSettlementWindowIdx: index("idx_collection_records_source_settlement_window").on(
+    table.sourceImportId,
+    table.sourceDataRowId,
+    table.paymentDate,
+  ),
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
   customerNameSearchHashIdx: index("idx_collection_records_customer_name_search_hash").on(
     table.customerNameSearchHash,
@@ -146,6 +153,10 @@ export const collectionRecords = pgTable("collection_records", {
   sourceMatchAccuracyCheck: check(
     "chk_collection_records_source_match_accuracy",
     sql`${table.sourceMatchAccuracy} IS NULL OR (${table.sourceMatchAccuracy} >= 0 AND ${table.sourceMatchAccuracy} <= 100)`,
+  ),
+  callingWindowCheck: check(
+    "chk_collection_records_calling_window",
+    sql`(${table.callingDate} IS NULL AND ${table.callingWindowEndExclusive} IS NULL) OR (${table.callingDate} IS NOT NULL AND ${table.callingWindowEndExclusive} = (${table.callingDate} + INTERVAL '1 month')::date)`,
   ),
 }));
 

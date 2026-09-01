@@ -8,6 +8,7 @@ import {
 import {
   resolveCollectionRecordPiiValuesFailClosed,
 } from "../lib/collection-pii-encryption";
+import { buildCollectionCallingWindow, parseSavedCallingDate } from "../lib/collection-calling-window";
 import { normalizeCollectionReceiptExtractionState } from "../lib/collection-receipt-extraction-state";
 import type {
   BackupCollectionReceipt,
@@ -100,6 +101,15 @@ export function normalizeBackupCollectionRecord(
   const billingPrincipalOsp = record.billingPrincipalOsp == null
     ? null
     : parseCollectionAmountMyrInput(record.billingPrincipalOsp, { allowZero: true });
+  const callingDate = parseSavedCallingDate(record.callingDate);
+  const callingWindow = callingDate ? buildCollectionCallingWindow(callingDate) : null;
+  const suppliedCallingWindowEndExclusive = parseSavedCallingDate(
+    record.callingWindowEndExclusive,
+  );
+  const callingWindowEndExclusive = callingWindow
+    && suppliedCallingWindowEndExclusive === callingWindow.endExclusive
+    ? suppliedCallingWindowEndExclusive
+    : null;
   const sourceMatchBasis = record.sourceMatchBasis === "ic"
     || record.sourceMatchBasis === "phone_and_account"
     ? record.sourceMatchBasis
@@ -125,6 +135,8 @@ export function normalizeBackupCollectionRecord(
     agingBucket,
     totalDue,
     billingPrincipalOsp,
+    callingDate: callingWindowEndExclusive ? callingDate : null,
+    callingWindowEndExclusive,
     sourceMatchBasis,
     sourceMatchAccuracy,
     batch: String(record.batch || "P10"),

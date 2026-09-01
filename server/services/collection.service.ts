@@ -91,6 +91,10 @@ export class CollectionService {
     return this.recordService.listSourceMatches(user, bodyRaw);
   }
 
+  listSourceFiles(user: AuthenticatedUser | undefined, queryRaw: Record<string, unknown>) {
+    return this.recordService.listSourceFiles(user, queryRaw);
+  }
+
   getSummary(user: AuthenticatedUser | undefined, query: SummaryQuery) {
     return this.recordService.getSummary(user, query);
   }

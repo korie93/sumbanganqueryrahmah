@@ -9,32 +9,54 @@ const source = readFileSync(
 ).replace(/\r\n/g, "\n");
 
 test("collection source matching aborts requests on identity change and unmount", () => {
-  assert.match(source, /controllerRef\.current\?\.abort\(\)/);
+  assert.match(source, /matchingControllerRef\.current\?\.abort\(\)/);
   assert.match(source, /useEffect\(\(\) => \(\) => \{/);
-  assert.match(source, /requestIdRef\.current \+= 1/);
+  assert.match(source, /matchingRequestIdRef\.current \+= 1/);
+  assert.match(source, /sourceFilesRequestIdRef\.current \+= 1/);
+  assert.match(source, /return \(\) => \{\n\s+window\.clearTimeout\(timer\);\n\s+controller\.abort\(\);/);
 });
 
 test("collection source matching ignores aborted and superseded responses", () => {
   assert.match(
     source,
-    /if \(controller\.signal\.aborted \|\| requestId !== requestIdRef\.current\) return;/,
+    /requestId !== matchingRequestIdRef\.current\n\s+\|\| requestFingerprint !== identityFingerprintRef\.current/,
   );
   assert.match(
     source,
-    /controller\.signal\.aborted \|\| requestId !== requestIdRef\.current \|\| isAbortError\(matchingError\)/,
+    /requestFingerprint !== identityFingerprintRef\.current\n\s+\|\| isAbortError\(matchingError\)/,
   );
+  assert.match(source, /requestId !== sourceFilesRequestIdRef\.current/);
+  assert.match(source, /identityFingerprintRef\.current = identityFingerprint/);
 });
 
 test("collection source matching validates identity before starting the API request", () => {
   const validationIndex = source.indexOf("validateSaveCollectionIdentityFields(identity)");
-  const requestIndex = source.indexOf("await getCollectionSourceMatches(identity");
+  const sourceSelectionIndex = source.indexOf("if (!selectedSourceFileId)");
+  const requestIndex = source.indexOf("await getCollectionSourceMatches(identity, selectedSourceFileId");
 
   assert.notEqual(validationIndex, -1);
+  assert.notEqual(sourceSelectionIndex, -1);
   assert.notEqual(requestIndex, -1);
   assert.ok(validationIndex < requestIndex);
+  assert.ok(sourceSelectionIndex < requestIndex);
   assert.match(source, /if \(Object\.keys\(validationErrors\)\.length > 0\) \{/);
   assert.match(source, /onValidationErrors\?\.\(validationErrors\)/);
-  assert.match(source, /Lengkapkan maklumat customer yang ditanda sebelum semak matching\./);
+  assert.match(source, /Pilih fail Saved sebelum semak matching\./);
+});
+
+test("collection source matching loads only bounded file metadata before matching one selected file", () => {
+  assert.match(source, /await getCollectionSavedSourceFiles\(\{/);
+  assert.match(source, /limit: 100/);
+  assert.match(source, /setSelectedSourceFile\(nextSource\)/);
+  assert.match(source, /match\.sourceImportId === selectedSourceFileId/);
+  assert.doesNotMatch(source, /find\(\(match\) => match\.totalDue !== null\)/);
+});
+
+test("collection source verification is invalidated when identity, payment date, or amount changes", () => {
+  assert.match(source, /paymentDate: identity\.paymentDate\.trim\(\)/);
+  assert.match(source, /amount: identity\.amount\.trim\(\)/);
+  assert.match(source, /invalidateVerifiedMatch\(\);\n\s+\}, \[identityFingerprint/);
+  assert.match(source, /onSelectionChange\(""\)/);
 });
 
 test("collection source matching turns backend failures into safe user-facing messages", () => {

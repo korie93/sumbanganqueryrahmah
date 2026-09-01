@@ -49,6 +49,8 @@ import {
   collectionNicknameSummaryResponseSchema,
   collectionPurgeResponseSchema,
   collectionPurgeSummaryResponseSchema,
+  collectionSavedSourceFilesResponseSchema,
+  collectionSourceMatchesResponseSchema,
   importListItemSchema,
   importComparisonResponseSchema,
   maintenanceStatusResponseSchema,
@@ -2882,6 +2884,68 @@ test("collection purge contracts reject negative counts and malformed dates", ()
     ...sharedPayload,
     cutoffDate: "27-12-2025",
     deletedRecords: -1,
+  }).success, false);
+});
+
+test("collection Saved source file contract exposes bounded metadata without master rows", () => {
+  const payload = {
+    ok: true,
+    sourceFiles: [{
+      id: "saved-import-1",
+      name: "Calling August",
+      filename: "calling-august.xlsx",
+      createdAt: "2026-08-12T03:00:00.000Z",
+      rowCount: 1250,
+    }],
+    pagination: {
+      limit: 100,
+      nextCursor: null,
+      total: 1,
+    },
+  };
+
+  assert.equal(collectionSavedSourceFilesResponseSchema.safeParse(payload).success, true);
+  const sanitized = collectionSavedSourceFilesResponseSchema.parse({
+    ...payload,
+    sourceFiles: [{ ...payload.sourceFiles[0], rows: [{ IC: "secret" }] }],
+  });
+  assert.equal("rows" in sanitized.sourceFiles[0]!, false);
+  assert.equal(collectionSavedSourceFilesResponseSchema.safeParse({
+    ...payload,
+    pagination: { ...payload.pagination, limit: 101 },
+  }).success, false);
+});
+
+test("collection source match contract requires server-authoritative Calling window and cumulative projection", () => {
+  const match = {
+    sourceImportId: "saved-import-1",
+    sourceImportName: "Calling August",
+    sourceFilename: "calling-august.xlsx",
+    matchBasis: "ic",
+    matchAccuracy: 100,
+    matchedFields: ["customer_name", "ic_number"],
+    comparedFields: ["customer_name", "ic_number"],
+    totalDue: "100.00",
+    billingPrincipalOsp: "500.00",
+    callingDate: "2026-08-12",
+    callingWindowEnd: "2026-09-11",
+    callingWindowEndExclusive: "2026-09-12",
+    currentEntry: "40.00",
+    existingCumulative: "60.00",
+    projectedCumulative: "100.00",
+    remainingAfterSave: "0.00",
+    projectedTotalDueCovered: true,
+    projectedCpStatus: "abort_cp",
+  };
+
+  assert.equal(collectionSourceMatchesResponseSchema.safeParse({ ok: true, matches: [match] }).success, true);
+  assert.equal(collectionSourceMatchesResponseSchema.safeParse({
+    ok: true,
+    matches: [{ ...match, callingDate: "12/08/2026" }],
+  }).success, false);
+  assert.equal(collectionSourceMatchesResponseSchema.safeParse({
+    ok: true,
+    matches: [{ ...match, projectedCpStatus: "unverified" }],
   }).success, false);
 });
 

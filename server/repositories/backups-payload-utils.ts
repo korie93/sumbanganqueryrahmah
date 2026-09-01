@@ -179,6 +179,8 @@ export async function prepareBackupPayloadFileForCreate(
           aging_bucket as "agingBucket",
           total_due as "totalDue",
           billing_principal_osp as "billingPrincipalOsp",
+          calling_date as "callingDate",
+          calling_window_end_exclusive as "callingWindowEndExclusive",
           source_match_basis as "sourceMatchBasis",
           source_match_accuracy as "sourceMatchAccuracy",
           batch,

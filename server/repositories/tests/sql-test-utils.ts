@@ -37,6 +37,25 @@ export function collectSqlText(value: unknown): string {
   return "";
 }
 
+export function collectSqlLiteralText(value: unknown, inStringChunk = false): string {
+  if (typeof value === "string") {
+    return inStringChunk ? value : "";
+  }
+  if (Array.isArray(value)) {
+    return value.map((chunk) => collectSqlLiteralText(chunk, inStringChunk)).join("");
+  }
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  if (hasQueryChunks(value)) {
+    return value.queryChunks.map((chunk) => collectSqlLiteralText(chunk, false)).join("");
+  }
+  if (hasValueChunks(value)) {
+    return value.value.map((chunk) => collectSqlLiteralText(chunk, true)).join("");
+  }
+  return "";
+}
+
 export function collectBoundValues(value: unknown, inFragment = false): unknown[] {
   if (
     typeof value === "string" ||

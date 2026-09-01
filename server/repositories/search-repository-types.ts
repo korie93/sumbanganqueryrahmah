@@ -69,6 +69,44 @@ export type SavedCollectionSourceMatch = {
   comparedFields: SavedCollectionMatchField[];
   totalDue: string | null;
   billingPrincipalOsp: string | null;
+  callingDate: string | null;
+  callingWindowEnd: string | null;
+  callingWindowEndExclusive: string | null;
+};
+
+export type CollectionSavedSourceFile = {
+  id: string;
+  name: string;
+  filename: string;
+  createdAt: string;
+  rowCount: number;
+};
+
+export type CollectionSavedSourceFilePage = {
+  items: CollectionSavedSourceFile[];
+  limit: number;
+  nextCursor: string | null;
+  total: number;
+};
+
+export type CollectionSettlementProjectionInput = {
+  callingDate: string;
+  callingWindowEndExclusive: string;
+  currentAmount: string;
+  excludeRecordId?: string | null;
+  paymentDate: string;
+  sourceDataRowId: string;
+  sourceImportId: string;
+  totalDue: string;
+};
+
+export type CollectionSettlementProjection = {
+  currentEntry: string;
+  existingCumulative: string;
+  projectedCpStatus: "abort_cp" | "cp";
+  projectedCumulative: string;
+  projectedTotalDueCovered: boolean;
+  remainingAfterSave: string;
 };
 
 export type SavedCollectionMatchField =

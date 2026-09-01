@@ -6,6 +6,7 @@ import type {
   CollectionRecordAggregateFilters,
   CollectionRecordListFilters,
   CreateCollectionRecordInput,
+  CreateCollectionRecordReceiptInput,
   DeleteCollectionRecordOptions,
   UpdateCollectionRecordInput,
   UpdateCollectionRecordOptions,
@@ -28,8 +29,9 @@ import {
 
 export async function createCollectionRecordRepository(
   data: CreateCollectionRecordInput,
+  receipts: CreateCollectionRecordReceiptInput[] = [],
 ): Promise<CollectionRecord> {
-  return createCollectionRecord(data);
+  return createCollectionRecord(data, receipts);
 }
 
 export async function listCollectionRecordsRepository(

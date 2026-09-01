@@ -132,6 +132,14 @@ export function mapBackupCollectionRecordRow(
       row.billingPrincipalOsp == null
         ? null
         : row.billingPrincipalOsp as NonNullable<BackupCollectionRecord["billingPrincipalOsp"]>,
+    callingDate:
+      typeof row.callingDate === "string" && row.callingDate.trim()
+        ? row.callingDate.slice(0, 10)
+        : null,
+    callingWindowEndExclusive:
+      typeof row.callingWindowEndExclusive === "string" && row.callingWindowEndExclusive.trim()
+        ? row.callingWindowEndExclusive.slice(0, 10)
+        : null,
     sourceMatchBasis:
       row.sourceMatchBasis === "ic" || row.sourceMatchBasis === "phone_and_account"
         ? row.sourceMatchBasis

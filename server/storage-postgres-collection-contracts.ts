@@ -36,7 +36,10 @@ import type {
 } from "../shared/collection-daily-status";
 
 export interface CollectionStorageContract {
-  createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord>;
+  createCollectionRecord(
+    data: CreateCollectionRecordInput,
+    receipts?: CreateCollectionRecordReceiptInput[],
+  ): Promise<CollectionRecord>;
   listCollectionRecords(filters?: CollectionRecordListFilters): Promise<CollectionRecord[]>;
   summarizeCollectionRecords(filters?: CollectionRecordAggregateFilters): Promise<CollectionRecordAggregate>;
   summarizeCollectionRecordsByNickname(filters?: CollectionRecordAggregateFilters): Promise<CollectionNicknameAggregate[]>;

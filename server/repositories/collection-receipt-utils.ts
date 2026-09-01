@@ -9,6 +9,7 @@ export {
   mapCollectionRecordReceiptRow,
 } from "./collection-receipt-read-utils";
 export {
+  acquireCollectionReceiptHashLocks,
   createCollectionRecordReceiptRows,
   deleteAllCollectionRecordReceiptRows,
   deleteCollectionRecordReceiptRows,

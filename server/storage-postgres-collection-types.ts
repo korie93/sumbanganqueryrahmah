@@ -70,11 +70,16 @@ export type CollectionRecord = {
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   agingBucket?: CollectionAgingBucket | null;
+  callingDate?: string | null;
+  callingWindowEnd?: string | null;
+  callingWindowEndExclusive?: string | null;
   totalDue?: CollectionAmountMyrString | null;
   billingPrincipalOsp?: CollectionAmountMyrString | null;
   sourceMatchBasis?: CollectionSourceMatchBasis | null;
   sourceMatchAccuracy?: number | null;
   totalDueCovered?: boolean | null;
+  cumulativeCollected?: CollectionAmountMyrString | null;
+  remainingAmount?: CollectionAmountMyrString | null;
   cpStatus?: CollectionCpStatus;
   batch: CollectionBatch;
   paymentDate: string;
@@ -277,6 +282,8 @@ export type CreateCollectionRecordInput = {
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   agingBucket?: CollectionAgingBucket | null;
+  callingDate?: string | null;
+  callingWindowEndExclusive?: string | null;
   totalDue?: CollectionAmountMyrNumber | null;
   billingPrincipalOsp?: CollectionAmountMyrNumber | null;
   sourceMatchBasis?: CollectionSourceMatchBasis | null;
@@ -324,6 +331,8 @@ export type UpdateCollectionRecordInput = {
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   agingBucket?: CollectionAgingBucket | null;
+  callingDate?: string | null;
+  callingWindowEndExclusive?: string | null;
   totalDue?: CollectionAmountMyrNumber | null;
   billingPrincipalOsp?: CollectionAmountMyrNumber | null;
   sourceMatchBasis?: CollectionSourceMatchBasis | null;

@@ -31,6 +31,8 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         source_import_name text,
         source_filename text,
         aging_bucket text,
+        calling_date date,
+        calling_window_end_exclusive date,
         total_due numeric(14,2),
         billing_principal_osp numeric(14,2),
         source_match_basis text,
@@ -69,6 +71,8 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_import_name text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_filename text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS aging_bucket text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS calling_date date`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS calling_window_end_exclusive date`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS total_due numeric(14,2)`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS billing_principal_osp numeric(14,2)`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS source_match_basis text`,
@@ -217,6 +221,10 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_source_import_id ON public.collection_records(source_import_id)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_source_data_row_id ON public.collection_records(source_data_row_id)`,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_source_settlement_window
+      ON public.collection_records(source_import_id, source_data_row_id, payment_date)
+    `,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
     sql`
@@ -279,6 +287,22 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
           CHECK (
             source_match_accuracy IS NULL
             OR (source_match_accuracy >= 0 AND source_match_accuracy <= 100)
+          );
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'chk_collection_records_calling_window'
+            AND conrelid = 'public.collection_records'::regclass
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_calling_window
+          CHECK (
+            (calling_date IS NULL AND calling_window_end_exclusive IS NULL)
+            OR (
+              calling_date IS NOT NULL
+              AND calling_window_end_exclusive = (calling_date + INTERVAL '1 month')::date
+            )
           );
         END IF;
       END $$;

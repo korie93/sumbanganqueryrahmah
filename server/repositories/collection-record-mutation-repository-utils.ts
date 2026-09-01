@@ -131,6 +131,12 @@ export async function updateCollectionRecord(
   if (data.agingBucket !== undefined) {
     updateChunks.push(sql`aging_bucket = ${data.agingBucket}`);
   }
+  if (data.callingDate !== undefined) {
+    updateChunks.push(sql`calling_date = ${data.callingDate ?? null}::date`);
+  }
+  if (data.callingWindowEndExclusive !== undefined) {
+    updateChunks.push(sql`calling_window_end_exclusive = ${data.callingWindowEndExclusive ?? null}::date`);
+  }
   if (data.totalDue !== undefined) {
     updateChunks.push(sql`total_due = ${data.totalDue}`);
   }
@@ -200,6 +206,37 @@ export async function updateCollectionRecord(
   }
 
   return db.transaction(async (tx) => {
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(
+          COALESCE(source_import_id, '') || ':' || COALESCE(source_data_row_id, ''),
+          0
+        )
+      )
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+        AND source_import_id IS NOT NULL
+        AND source_data_row_id IS NOT NULL
+    `);
+    if (data.sourceImportId && data.sourceDataRowId) {
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`${data.sourceImportId}:${data.sourceDataRowId}`}, 0)
+        )
+      `);
+      const sourceRow = await tx.execute(sql`
+        SELECT source_row.id
+        FROM public.data_rows source_row
+        JOIN public.imports imp ON imp.id = source_row.import_id
+        WHERE source_row.id = ${data.sourceDataRowId}
+          AND source_row.import_id = ${data.sourceImportId}
+          AND imp.is_deleted = false
+        FOR SHARE OF source_row, imp
+      `);
+      if (!sourceRow.rows?.[0]) {
+        throw new Error("Selected Saved source row no longer exists in the selected file.");
+      }
+    }
     const existingSliceResult = await tx.execute(sql`
       SELECT payment_date, created_by_login, collection_staff_nickname
       FROM public.collection_records
@@ -230,6 +267,8 @@ export async function updateCollectionRecord(
         source_import_name,
         source_filename,
         aging_bucket,
+        calling_date,
+        calling_window_end_exclusive,
         total_due,
         billing_principal_osp,
         source_match_basis,
@@ -294,6 +333,18 @@ export async function deleteCollectionRecord(
   }
 
   return db.transaction(async (tx) => {
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(
+          COALESCE(source_import_id, '') || ':' || COALESCE(source_data_row_id, ''),
+          0
+        )
+      )
+      FROM public.collection_records
+      WHERE id = ${id}::uuid
+        AND source_import_id IS NOT NULL
+        AND source_data_row_id IS NOT NULL
+    `);
     const existingSliceResult = await tx.execute(sql`
       SELECT payment_date, created_by_login, collection_staff_nickname
       FROM public.collection_records

@@ -61,6 +61,8 @@ export async function listCollectionRecords(
       source_import_name,
       source_filename,
       aging_bucket,
+      calling_date,
+      calling_window_end_exclusive,
       total_due,
       billing_principal_osp,
       source_match_basis,
@@ -74,12 +76,29 @@ export async function listCollectionRecords(
       receipt_validation_message,
       receipt_count,
       duplicate_receipt_flag,
+      (
+        SELECT COALESCE(SUM(child.amount), 0)::numeric(14,2)
+        FROM public.collection_records child
+        WHERE child.source_import_id = record.source_import_id
+          AND child.source_data_row_id = record.source_data_row_id
+          AND child.calling_date = record.calling_date
+          AND child.calling_window_end_exclusive = record.calling_window_end_exclusive
+          AND child.source_import_id IS NOT NULL
+          AND child.source_data_row_id IS NOT NULL
+          AND child.calling_date IS NOT NULL
+          AND child.calling_window_end_exclusive IS NOT NULL
+          AND child.payment_date >= child.calling_date
+          AND child.payment_date < child.calling_window_end_exclusive
+          AND child.source_match_basis IS NOT NULL
+          AND child.total_due IS NOT NULL
+          AND child.duplicate_receipt_flag = false
+      ) AS cumulative_collected,
       created_by_login,
       collection_staff_nickname,
       staff_username,
       created_at,
       updated_at
-    FROM public.collection_records
+    FROM public.collection_records record
     ${whereSql}
     ORDER BY payment_date ASC, created_at ASC, id ASC
     LIMIT ${safeLimit}
@@ -348,6 +367,8 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
       source_import_name,
       source_filename,
       aging_bucket,
+      calling_date,
+      calling_window_end_exclusive,
       total_due,
       billing_principal_osp,
       source_match_basis,
@@ -361,12 +382,29 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
       receipt_validation_message,
       receipt_count,
       duplicate_receipt_flag,
+      (
+        SELECT COALESCE(SUM(child.amount), 0)::numeric(14,2)
+        FROM public.collection_records child
+        WHERE child.source_import_id = record.source_import_id
+          AND child.source_data_row_id = record.source_data_row_id
+          AND child.calling_date = record.calling_date
+          AND child.calling_window_end_exclusive = record.calling_window_end_exclusive
+          AND child.source_import_id IS NOT NULL
+          AND child.source_data_row_id IS NOT NULL
+          AND child.calling_date IS NOT NULL
+          AND child.calling_window_end_exclusive IS NOT NULL
+          AND child.payment_date >= child.calling_date
+          AND child.payment_date < child.calling_window_end_exclusive
+          AND child.source_match_basis IS NOT NULL
+          AND child.total_due IS NOT NULL
+          AND child.duplicate_receipt_flag = false
+      ) AS cumulative_collected,
       created_by_login,
       collection_staff_nickname,
       staff_username,
       created_at,
       updated_at
-    FROM public.collection_records
+    FROM public.collection_records record
     WHERE id = ${id}::uuid
     LIMIT 1
   `);

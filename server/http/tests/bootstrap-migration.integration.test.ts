@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { ensureCollectionRecordsTables } from "../../internal/collection-bootstrap-records";
@@ -15,6 +16,7 @@ import {
 import { ensureSettingsSchema } from "../../internal/settings-bootstrap-schema";
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
 import { decryptCollectionPiiValue } from "../../lib/collection-pii-encryption";
+import { acquireCollectionReceiptHashLocks } from "../../repositories/collection-receipt-utils";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const aiMessagesIndexMigrationSql = readFileSync(
@@ -397,6 +399,60 @@ async function foreignKeyRules(
   );
   return result.rows;
 }
+
+test(
+  "collection receipt hash advisory lock serializes concurrent duplicate checks",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ databaseName }) => {
+      const concurrencyPool = new pg.Pool({
+        ...pgBaseConfig,
+        database: databaseName,
+        max: 2,
+        connectionTimeoutMillis: 5_000,
+        idleTimeoutMillis: 5_000,
+      });
+      const concurrencyDb = drizzle(concurrencyPool);
+      const receiptHash = "a".repeat(64);
+      let releaseFirstLock: () => void = () => undefined;
+      let signalFirstLock: () => void = () => undefined;
+      const holdFirstLock = new Promise<void>((resolve) => {
+        releaseFirstLock = resolve;
+      });
+      const firstLockAcquired = new Promise<void>((resolve) => {
+        signalFirstLock = resolve;
+      });
+
+      try {
+        const firstTransaction = concurrencyDb.transaction(async (tx) => {
+          await acquireCollectionReceiptHashLocks(tx, [{ fileHash: receiptHash.toUpperCase() }]);
+          signalFirstLock();
+          await holdFirstLock;
+          await tx.execute(sql`SELECT 1`);
+        });
+        await firstLockAcquired;
+
+        let secondLockAcquired = false;
+        const secondTransaction = concurrencyDb.transaction(async (tx) => {
+          await acquireCollectionReceiptHashLocks(tx, [{ fileHash: receiptHash }]);
+          secondLockAcquired = true;
+          await tx.execute(sql`SELECT 1`);
+        });
+
+        await delay(75);
+        const acquiredWhileFirstTransactionWasOpen = secondLockAcquired;
+        releaseFirstLock();
+        await Promise.all([firstTransaction, secondTransaction]);
+
+        assert.equal(acquiredWhileFirstTransactionWasOpen, false);
+        assert.equal(secondLockAcquired, true);
+      } finally {
+        releaseFirstLock();
+        await concurrencyPool.end().catch(() => undefined);
+      }
+    });
+  },
+);
 
 test(
   "collection source row migration enforces a safe nullable Saved row link",

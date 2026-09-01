@@ -4,6 +4,7 @@ import { db } from "../db-postgres";
 import type {
   CollectionRecord,
   CreateCollectionRecordInput,
+  CreateCollectionRecordReceiptInput,
 } from "../storage-postgres";
 import {
   refreshCollectionRecordDailyRollupSlices,
@@ -14,13 +15,15 @@ import {
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
 import { buildTextArraySql } from "./sql-array-utils";
-import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import {
-  attachCollectionReceipts,
+  createCollectionRecordReceiptRows,
+  syncCollectionRecordReceiptValidation,
 } from "./collection-receipt-utils";
-import { mapCollectionRecordRow } from "./collection-repository-mappers";
 
-export async function createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
+export async function createCollectionRecord(
+  data: CreateCollectionRecordInput,
+  receipts: CreateCollectionRecordReceiptInput[] = [],
+): Promise<CollectionRecord> {
   const id = randomUUID();
   const encryptedPii = buildEncryptedCollectionRecordPiiValues({
     customerName: data.customerName,
@@ -55,6 +58,25 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
     encrypted: encryptedPii?.accountNumberEncrypted,
   });
   return db.transaction(async (tx) => {
+    if (data.sourceImportId && data.sourceDataRowId) {
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`${data.sourceImportId}:${data.sourceDataRowId}`}, 0)
+        )
+      `);
+      const sourceRow = await tx.execute(sql`
+        SELECT source_row.id
+        FROM public.data_rows source_row
+        JOIN public.imports imp ON imp.id = source_row.import_id
+        WHERE source_row.id = ${data.sourceDataRowId}
+          AND source_row.import_id = ${data.sourceImportId}
+          AND imp.is_deleted = false
+        FOR SHARE OF source_row, imp
+      `);
+      if (!sourceRow.rows?.[0]) {
+        throw new Error("Selected Saved source row no longer exists in the selected file.");
+      }
+    }
     await tx.execute(sql`
       INSERT INTO public.collection_records (
         id,
@@ -76,6 +98,8 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         source_import_name,
         source_filename,
         aging_bucket,
+        calling_date,
+        calling_window_end_exclusive,
         total_due,
         billing_principal_osp,
         source_match_basis,
@@ -120,6 +144,8 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         ${data.sourceImportName ?? null},
         ${data.sourceFilename ?? null},
         ${data.agingBucket ?? null},
+        ${data.callingDate ?? null}::date,
+        ${data.callingWindowEndExclusive ?? null}::date,
         ${data.totalDue ?? null},
         ${data.billingPrincipalOsp ?? null},
         ${data.sourceMatchBasis ?? null},
@@ -142,50 +168,14 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
       collectionStaffNickname: data.collectionStaffNickname,
     }]);
 
-    const result = await tx.execute(sql`
-      SELECT
-        id,
-        ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customer_name", "customerName")},
-        customer_name_encrypted,
-        ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted", "ic_number", "icNumber")},
-        ic_number_encrypted,
-        ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted", "customer_phone", "customerPhone")},
-        customer_phone_encrypted,
-        ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
-        account_number_encrypted,
-        source_import_id,
-        source_data_row_id,
-        source_import_name,
-        source_filename,
-        aging_bucket,
-        total_due,
-        billing_principal_osp,
-        source_match_basis,
-        source_match_accuracy,
-        batch,
-        payment_date,
-        amount,
-        receipt_file,
-        receipt_total_amount,
-        receipt_validation_status,
-        receipt_validation_message,
-        receipt_count,
-        duplicate_receipt_flag,
-        created_by_login,
-        collection_staff_nickname,
-        staff_username,
-        created_at,
-        updated_at
-      FROM public.collection_records
-      WHERE id = ${id}::uuid
-      LIMIT 1
-    `);
-    const row = result.rows?.[0];
-    if (!row) {
-      throw new Error("Failed to load created collection record.");
+    if (receipts.length > 0) {
+      await createCollectionRecordReceiptRows(tx, id, receipts);
     }
 
-    const [created] = await attachCollectionReceipts(tx, [mapCollectionRecordRow(row)]);
-    return created || mapCollectionRecordRow(row);
+    const created = await syncCollectionRecordReceiptValidation(tx, id);
+    if (!created) {
+      throw new Error("Failed to load created collection record.");
+    }
+    return created;
   });
 }

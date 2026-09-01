@@ -59,6 +59,11 @@ export type CollectionRecord = {
   billingPrincipalOsp?: CollectionAmountMyrString | null;
   sourceMatchBasis?: "ic" | "phone_and_account" | null;
   sourceMatchAccuracy?: number | null;
+  callingDate?: string | null;
+  callingWindowEnd?: string | null;
+  callingWindowEndExclusive?: string | null;
+  cumulativeCollected?: CollectionAmountMyrString | null;
+  remainingAmount?: CollectionAmountMyrString | null;
   totalDueCovered?: boolean | null;
   cpStatus?: CollectionCpStatus;
   batch: CollectionBatch;
@@ -158,11 +163,38 @@ export type CollectionSourceMatch = {
   comparedFields: CollectionSourceMatchField[];
   totalDue: CollectionAmountMyrString | null;
   billingPrincipalOsp: CollectionAmountMyrString | null;
+  callingDate: string;
+  callingWindowEnd: string;
+  callingWindowEndExclusive: string;
+  currentEntry: CollectionAmountMyrString;
+  existingCumulative: CollectionAmountMyrString;
+  projectedCumulative: CollectionAmountMyrString;
+  remainingAfterSave: CollectionAmountMyrString;
+  projectedTotalDueCovered: boolean;
+  projectedCpStatus: Exclude<CollectionCpStatus, "unverified">;
 };
 
 export type CollectionSourceMatchesResponse = {
   ok: true;
   matches: CollectionSourceMatch[];
+};
+
+export type CollectionSavedSourceFile = {
+  id: string;
+  name: string;
+  filename: string;
+  createdAt: string;
+  rowCount: number;
+};
+
+export type CollectionSavedSourceFilesResponse = {
+  ok: true;
+  sourceFiles: CollectionSavedSourceFile[];
+  pagination: {
+    limit: number;
+    nextCursor: string | null;
+    total: number;
+  };
 };
 
 export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {

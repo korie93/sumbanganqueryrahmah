@@ -245,8 +245,11 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.isCollectionStaffNicknameActive(nickname);
   }
 
-  async createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
-    return this.collectionRepository.createCollectionRecord(data);
+  async createCollectionRecord(
+    data: CreateCollectionRecordInput,
+    receipts: CreateCollectionRecordReceiptInput[] = [],
+  ): Promise<CollectionRecord> {
+    return this.collectionRepository.createCollectionRecord(data, receipts);
   }
 
   async listCollectionRecords(filters?: CollectionRecordListFilters): Promise<CollectionRecord[]> {

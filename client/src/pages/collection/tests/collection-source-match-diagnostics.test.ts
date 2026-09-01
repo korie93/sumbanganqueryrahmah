@@ -16,6 +16,15 @@ function createUnusableMatch(index: number): CollectionSourceMatch {
     comparedFields: ["customer_name", "ic_number"],
     totalDue: null,
     billingPrincipalOsp: null,
+    callingDate: "2026-08-12",
+    callingWindowEnd: "2026-09-11",
+    callingWindowEndExclusive: "2026-09-12",
+    currentEntry: "10.00",
+    existingCumulative: "0.00",
+    projectedCumulative: "10.00",
+    remainingAfterSave: "90.00",
+    projectedTotalDueCovered: false,
+    projectedCpStatus: "cp",
   };
 }
 

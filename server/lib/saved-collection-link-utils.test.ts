@@ -51,13 +51,17 @@ test("Saved collection identity never treats home or office phone columns as cus
   });
 });
 
-test("Saved collection financial extraction recognizes TOTAL DUE and Billing Principal (OSP)", () => {
+test("Saved collection financial extraction recognizes trusted financials and Calling Date", () => {
   assert.deepEqual(extractSavedCollectionFinancials({
     "TOTAL DUE": "RM 1,250.50",
     "Billing Principal (OSP)": 980.25,
+    "Calling Date": "20260812",
   }), {
     totalDue: "1250.50",
     billingPrincipalOsp: "980.25",
+    callingDate: "2026-08-12",
+    callingWindowEnd: "2026-09-11",
+    callingWindowEndExclusive: "2026-09-12",
   });
 
   assert.deepEqual(extractSavedCollectionFinancials({
@@ -66,6 +70,22 @@ test("Saved collection financial extraction recognizes TOTAL DUE and Billing Pri
   }), {
     totalDue: null,
     billingPrincipalOsp: null,
+    callingDate: null,
+    callingWindowEnd: null,
+    callingWindowEndExclusive: null,
+  });
+});
+
+test("Saved collection financial extraction rejects invalid Calling Date without guessing", () => {
+  assert.deepEqual(extractSavedCollectionFinancials({
+    "TOTAL DUE": "200.00",
+    "Calling Date": "31/02/2026",
+  }), {
+    totalDue: "200.00",
+    billingPrincipalOsp: null,
+    callingDate: null,
+    callingWindowEnd: null,
+    callingWindowEndExclusive: null,
   });
 });
 
@@ -113,6 +133,9 @@ test("Saved collection matching accepts exact IC and chooses the newest stronges
     comparedFields: ["customer_name", "ic_number"],
     totalDue: null,
     billingPrincipalOsp: null,
+    callingDate: null,
+    callingWindowEnd: null,
+    callingWindowEndExclusive: null,
   });
 });
 
@@ -163,6 +186,9 @@ test("Saved collection matching accepts a matching Card No when Account No diffe
     comparedFields: ["customer_name", "ic_number", "account_number"],
     totalDue: null,
     billingPrincipalOsp: null,
+    callingDate: null,
+    callingWindowEnd: null,
+    callingWindowEndExclusive: null,
   });
 });
 
@@ -234,6 +260,107 @@ test("Saved collection matching returns at most one verified row per source file
   assert.equal(matches[0]?.totalDue, "1200.00");
   assert.equal(matches[0]?.billingPrincipalOsp, "950.00");
   assert.equal(matches[0]?.matchAccuracy, 100);
+});
+
+test("Saved collection matching remains hard-scoped to the user-selected source file", () => {
+  const fileAMatches = selectSavedCollectionSourceMatches({
+    ...lookup,
+    sourceImportId: "import-a",
+  }, [
+    {
+      rowId: "row-file-b",
+      sourceImportId: "import-b",
+      sourceImportName: "FILE B",
+      sourceFilename: "file-b.xlsx",
+      sourceCreatedAt: "2026-08-12T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "5000.00",
+        "Calling Date": "20260812",
+      },
+    },
+    {
+      rowId: "row-file-a",
+      sourceImportId: "import-a",
+      sourceImportName: "FILE A",
+      sourceFilename: "file-a.xlsx",
+      sourceCreatedAt: "2026-08-11T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "1000.00",
+        "Calling Date": "20260812",
+      },
+    },
+  ]);
+
+  const fileBMatches = selectSavedCollectionSourceMatches({
+    ...lookup,
+    sourceImportId: "import-b",
+  }, [
+    {
+      rowId: "row-file-a",
+      sourceImportId: "import-a",
+      sourceImportName: "FILE A",
+      sourceFilename: "file-a.xlsx",
+      sourceCreatedAt: "2026-08-11T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "1000.00",
+        "Calling Date": "20260812",
+      },
+    },
+    {
+      rowId: "row-file-b",
+      sourceImportId: "import-b",
+      sourceImportName: "FILE B",
+      sourceFilename: "file-b.xlsx",
+      sourceCreatedAt: "2026-08-12T00:00:00.000Z",
+      jsonDataJsonb: {
+        IC: "931120115437",
+        "Account Number": "ACC1001",
+        "TOTAL DUE": "5000.00",
+        "Calling Date": "20260812",
+      },
+    },
+  ]);
+
+  assert.equal(fileAMatches.length, 1);
+  assert.equal(fileAMatches[0]?.sourceImportId, "import-a");
+  assert.equal(fileAMatches[0]?.rowId, "row-file-a");
+  assert.equal(fileAMatches[0]?.totalDue, "1000.00");
+  assert.equal(fileBMatches.length, 1);
+  assert.equal(fileBMatches[0]?.sourceImportId, "import-b");
+  assert.equal(fileBMatches[0]?.rowId, "row-file-b");
+  assert.equal(fileBMatches[0]?.totalDue, "5000.00");
+});
+
+test("Saved collection matching exposes equal rows in one selected file for ambiguity rejection", () => {
+  const matches = selectSavedCollectionSourceMatches({
+    ...lookup,
+    sourceImportId: "import-1",
+  }, [
+    {
+      rowId: "row-one",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-01T00:00:00.000Z",
+      jsonDataJsonb: { IC: "931120115437", "Account Number": "ACC1001" },
+    },
+    {
+      rowId: "row-two",
+      sourceImportId: "import-1",
+      sourceImportName: "NPL JULY",
+      sourceFilename: "july.xlsx",
+      sourceCreatedAt: "2026-07-02T00:00:00.000Z",
+      jsonDataJsonb: { IC: "931120115437", "Account Number": "ACC1001" },
+    },
+  ]);
+
+  assert.deepEqual(matches.map(({ rowId }) => rowId), ["row-two", "row-one"]);
 });
 
 test("Saved collection matching prefers usable TOTAL DUE for equally verified duplicate rows", () => {

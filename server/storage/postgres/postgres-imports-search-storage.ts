@@ -9,6 +9,9 @@ import { PostgresAuthAccountStorage } from "./postgres-auth-account-storage";
 import { STORAGE_DEBUG_LOGS } from "./postgres-storage-core";
 import type { SearchDataRow, SearchGlobalDataRow } from "../../repositories/search.repository";
 import type {
+  CollectionSavedSourceFilePage,
+  CollectionSettlementProjection,
+  CollectionSettlementProjectionInput,
   SavedCollectionSourceLookup,
   SavedCollectionSourceMatch,
 } from "../../repositories/search-repository-types";
@@ -88,6 +91,28 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     return this.importsRepository.getDataRowCountByImport(importId);
   }
 
+  async listCollectionSavedSourceFiles(params: {
+    cursor?: string | null;
+    limit?: number;
+    search?: string | null;
+  } = {}): Promise<CollectionSavedSourceFilePage> {
+    const page = await this.importsRepository.listImportsWithRowCountsPage(params);
+    return {
+      items: page.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        filename: item.filename,
+        createdAt: item.createdAt instanceof Date
+          ? item.createdAt.toISOString()
+          : new Date(item.createdAt).toISOString(),
+        rowCount: item.rowCount,
+      })),
+      limit: page.limit,
+      nextCursor: page.nextCursor,
+      total: page.total,
+    };
+  }
+
   async findSavedCollectionSourceForRecord(
     lookup: SavedCollectionSourceLookup,
   ): Promise<SavedCollectionSourceMatch | null> {
@@ -98,6 +123,12 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     lookup: SavedCollectionSourceLookup,
   ): Promise<SavedCollectionSourceMatch[]> {
     return this.searchRepository.findSavedCollectionSourcesForRecord(lookup);
+  }
+
+  async getCollectionSettlementProjection(
+    input: CollectionSettlementProjectionInput,
+  ): Promise<CollectionSettlementProjection> {
+    return this.searchRepository.getCollectionSettlementProjection(input);
   }
 
   async searchDataRows(params: {

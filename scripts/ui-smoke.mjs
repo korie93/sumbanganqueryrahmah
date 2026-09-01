@@ -609,6 +609,7 @@ const createCollectionSmokeSourceImport = async (context, values) => {
     "Card No": values.accountNumber,
     "TOTAL DUE": String(values.totalDue ?? "12.34"),
     "Billing Principal (OSP)": String(values.billingPrincipalOsp ?? "10.00"),
+    "Calling Date": String(values.callingDate ?? getLocalIsoDate()),
   }];
   if (values.noRecordAccountNumber) {
     data.push({
@@ -619,6 +620,7 @@ const createCollectionSmokeSourceImport = async (context, values) => {
       "Card No": values.noRecordAccountNumber,
       "TOTAL DUE": "",
       "Billing Principal (OSP)": "",
+      "Calling Date": String(values.callingDate ?? getLocalIsoDate()),
     });
   }
   const response = await apiJsonRequestWithRetry(
@@ -1195,6 +1197,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       customerPhone,
       icNumber,
       noRecordAccountNumber,
+      callingDate: paymentDate,
       uniqueSuffix,
     });
     await applySmokeCollectionNicknameSession(page, nickname);
@@ -1212,6 +1215,12 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     });
     await getInputByLabel(page, "Amount (RM)").fill("12.34");
     await page.getByLabel("Aging", { exact: true }).selectOption("D6");
+    const sourceSelect = page.locator("#save-collection-source-file");
+    await sourceSelect.selectOption(sourceImport.id);
+    assert(
+      await sourceSelect.inputValue() === sourceImport.id,
+      "collection receipt UI smoke should select its Saved source file before matching",
+    );
     await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
     await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
     await fillReceiptAmountInput(page, "12.34");
@@ -1241,18 +1250,14 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       String(matchedSource.totalDue || "") === "12.34",
       "collection receipt UI smoke should receive TOTAL DUE from the Saved source",
     );
-
-    const sourceSelect = page.getByLabel("Verified Saved Source");
-    await sourceSelect.waitFor({ state: "visible", timeout: 15_000 });
-    await page.waitForFunction(
-      (expectedSourceImportId) =>
-        document.querySelector("#save-collection-source-match")?.value === expectedSourceImportId,
-      sourceImport.id,
-    );
     assert(
-      await sourceSelect.inputValue() === sourceImport.id,
-      "collection receipt UI smoke should select the verified Saved source",
+      String(matchedSource.callingDate || "") === paymentDate
+      && String(matchedSource.existingCumulative || "") === "0.00"
+      && String(matchedSource.projectedCumulative || "") === "12.34"
+      && matchedSource.projectedCpStatus === "abort_cp",
+      "collection receipt UI smoke should receive authoritative Calling Date and cumulative settlement",
     );
+
     await page.getByText("Abort CP", { exact: true }).waitFor({ timeout: 15_000 });
 
     const createResponsePromise = page.waitForResponse(
@@ -1292,6 +1297,8 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     assert(
       createPayload?.record?.totalDue === "12.34"
       && createPayload?.record?.billingPrincipalOsp === "10.00"
+      && createPayload?.record?.callingDate === paymentDate
+      && createPayload?.record?.cumulativeCollected === "12.34"
       && createPayload?.record?.cpStatus === "abort_cp",
       "collection receipt UI smoke should persist Saved coverage and derive Abort CP at TOTAL DUE",
     );
@@ -1589,6 +1596,7 @@ const checkCollectionMutationConsistency = async (context) => {
       customerName,
       customerPhone,
       icNumber,
+      callingDate: dateB,
       totalDue: "1000.00",
       uniqueSuffix,
     });
@@ -2209,6 +2217,7 @@ const provisionStaleDeleteConflictRecord = async (context) => {
       customerName,
       customerPhone,
       icNumber,
+      callingDate: getLocalIsoDate(),
       totalDue: "100.00",
       uniqueSuffix,
     });

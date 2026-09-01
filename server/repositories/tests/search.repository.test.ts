@@ -7,7 +7,11 @@ import {
   MAX_SEARCH_OFFSET,
   SearchRepository,
 } from "../search.repository";
-import { collectBoundValues, collectSqlText } from "./sql-test-utils";
+import {
+  collectBoundValues,
+  collectSqlLiteralText,
+  collectSqlText,
+} from "./sql-test-utils";
 
 function withMockedDbExecute(
   handler: (queryText: string) => { rows?: unknown[] },
@@ -411,6 +415,7 @@ test("SearchRepository.findCollectionStatusesForRows decrypts retired account sh
 
 test("SearchRepository.findSavedCollectionSourceForRecord uses bounded parameters and exact matching", async () => {
   const repository = new SearchRepository();
+  const selectedSourceImportId = "import-1'; DROP TABLE data_rows; --";
   const rawQueries: unknown[] = [];
   const originalExecute = db.execute;
   (db as unknown as { execute: typeof db.execute }).execute = (async (query) => {
@@ -418,7 +423,7 @@ test("SearchRepository.findSavedCollectionSourceForRecord uses bounded parameter
     return {
       rows: [{
         row_id: "row-1",
-        source_import_id: "import-1",
+        source_import_id: selectedSourceImportId,
         source_import_name: "NPL JULY",
         source_filename: "july.xlsx",
         source_created_at: new Date("2026-07-01T00:00:00.000Z"),
@@ -438,13 +443,13 @@ test("SearchRepository.findSavedCollectionSourceForRecord uses bounded parameter
       icNumber: "931120115437",
       customerPhone: "0123456789",
       accountNumber: "ACC1001'; DROP TABLE imports; --",
-      sourceImportId: "import-1'; DROP TABLE data_rows; --",
+      sourceImportId: selectedSourceImportId,
     });
 
     assert.equal(rawQueries.length, 1);
     assert.deepEqual(match, {
       rowId: "row-1",
-      sourceImportId: "import-1",
+      sourceImportId: selectedSourceImportId,
       sourceImportName: "NPL JULY",
       sourceFilename: "july.xlsx",
       matchBasis: "ic",
@@ -453,15 +458,83 @@ test("SearchRepository.findSavedCollectionSourceForRecord uses bounded parameter
       comparedFields: ["customer_name", "ic_number", "customer_phone", "account_number"],
       totalDue: null,
       billingPrincipalOsp: null,
+      callingDate: null,
+      callingWindowEnd: null,
+      callingWindowEndExclusive: null,
     });
-    const sqlText = collectSqlText(rawQueries[0]);
+    const sqlText = collectSqlLiteralText(rawQueries[0]);
     assert.doesNotMatch(sqlText, /DROP TABLE imports/i);
+    assert.doesNotMatch(sqlText, /DROP TABLE data_rows/i);
+    assert.match(sqlText, /imp\.id\s*=/i);
     assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
       typeof value === "string" && value.includes("931120115437"),
     ));
     assert.ok(collectBoundValues(rawQueries[0]).some((value) =>
-      value === "import-1'; DROP TABLE data_rows; --",
+      value === selectedSourceImportId,
     ));
+  } finally {
+    (db as unknown as { execute: typeof db.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.getCollectionSettlementProjection scopes an exact numeric cumulative window", async () => {
+  const repository = new SearchRepository();
+  let capturedQuery: unknown;
+  const originalExecute = db.execute;
+  (db as unknown as { execute: typeof db.execute }).execute = (async (query) => {
+    capturedQuery = query;
+    return {
+      rows: [{
+        existing_cumulative: "120.00",
+        current_entry: "80.00",
+        projected_cumulative: "200.00",
+        remaining_after_save: "0.00",
+        projected_total_due_covered: true,
+      }],
+    };
+  }) as typeof db.execute;
+
+  try {
+    const projection = await repository.getCollectionSettlementProjection({
+      sourceImportId: "import-a",
+      sourceDataRowId: "row-a",
+      callingDate: "2026-08-12",
+      callingWindowEndExclusive: "2026-09-12",
+      paymentDate: "2026-09-11",
+      currentAmount: "80.00",
+      totalDue: "200.00",
+      excludeRecordId: "record-edit",
+    });
+
+    assert.deepEqual(projection, {
+      existingCumulative: "120.00",
+      currentEntry: "80.00",
+      projectedCumulative: "200.00",
+      remainingAfterSave: "0.00",
+      projectedTotalDueCovered: true,
+      projectedCpStatus: "abort_cp",
+    });
+    const sqlText = collectSqlText(capturedQuery);
+    assert.match(sqlText, /SUM\(record\.amount\)/i);
+    assert.match(sqlText, /record\.source_import_id\s*=/i);
+    assert.match(sqlText, /record\.source_data_row_id\s*=/i);
+    assert.match(sqlText, /record\.calling_date\s*=/i);
+    assert.match(sqlText, /record\.payment_date\s*>=/i);
+    assert.match(sqlText, /record\.payment_date\s*</i);
+    assert.match(sqlText, /record\.duplicate_receipt_flag\s*=\s*false/i);
+    assert.doesNotMatch(sqlText, /parseFloat|::float|double precision/i);
+    const boundValues = collectBoundValues(capturedQuery);
+    for (const expected of [
+      "import-a",
+      "row-a",
+      "2026-08-12",
+      "2026-09-12",
+      "80.00",
+      "200.00",
+      "record-edit",
+    ]) {
+      assert.ok(boundValues.includes(expected), `missing bound settlement value ${expected}`);
+    }
   } finally {
     (db as unknown as { execute: typeof db.execute }).execute = originalExecute;
   }

@@ -41,7 +41,7 @@ export async function createCollectionRecordReceiptsRepository(
   recordId: string,
   receipts: CreateCollectionRecordReceiptInput[],
 ): Promise<CollectionRecordReceipt[]> {
-  return createCollectionRecordReceiptRows(db, recordId, receipts);
+  return db.transaction((tx) => createCollectionRecordReceiptRows(tx, recordId, receipts));
 }
 
 export async function updateCollectionRecordReceiptsRepository(

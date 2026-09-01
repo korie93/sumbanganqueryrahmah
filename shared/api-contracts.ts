@@ -1180,6 +1180,11 @@ export const collectionRecordResponseSchema = z.object({
   billingPrincipalOsp: z.string().nullable().optional(),
   sourceMatchBasis: z.enum(["ic", "phone_and_account"]).nullable().optional(),
   sourceMatchAccuracy: z.number().int().min(0).max(100).nullable().optional(),
+  callingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  callingWindowEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  callingWindowEndExclusive: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  cumulativeCollected: z.string().nullable().optional(),
+  remainingAmount: z.string().nullable().optional(),
   totalDueCovered: z.boolean().nullable().optional(),
   cpStatus: z.enum(["cp", "abort_cp", "unverified"]).optional(),
   batch: z.enum(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]),
@@ -1219,11 +1224,38 @@ export const collectionSourceMatchSchema = z.object({
   ])).max(4),
   totalDue: z.string().nullable(),
   billingPrincipalOsp: z.string().nullable(),
+  callingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  callingWindowEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  callingWindowEndExclusive: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  currentEntry: z.string(),
+  existingCumulative: z.string(),
+  projectedCumulative: z.string(),
+  remainingAfterSave: z.string(),
+  projectedTotalDueCovered: z.boolean(),
+  projectedCpStatus: z.enum(["cp", "abort_cp"]),
 });
 
 export const collectionSourceMatchesResponseSchema = z.object({
   ok: z.literal(true),
-  matches: z.array(collectionSourceMatchSchema).max(25),
+  matches: z.array(collectionSourceMatchSchema).max(1),
+});
+
+export const collectionSavedSourceFileSchema = z.object({
+  id: nonEmptyStringSchema,
+  name: nonEmptyStringSchema,
+  filename: nonEmptyStringSchema,
+  createdAt: z.string().datetime({ offset: true }),
+  rowCount: nonNegativeIntSchema,
+});
+
+export const collectionSavedSourceFilesResponseSchema = z.object({
+  ok: z.literal(true),
+  sourceFiles: z.array(collectionSavedSourceFileSchema).max(100),
+  pagination: z.object({
+    limit: z.number().int().min(1).max(100),
+    nextCursor: nullableStringSchema,
+    total: nonNegativeIntSchema,
+  }),
 });
 
 const collectionRecordListPageLimitSchema = z.number().int().min(1).max(5000);

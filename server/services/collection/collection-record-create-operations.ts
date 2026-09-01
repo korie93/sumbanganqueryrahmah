@@ -31,6 +31,8 @@ import {
   assertCollectionStaffNicknameWriteAccess,
   type RequireUserFn,
 } from "./collection-record-write-shared";
+import { isDateInsideCollectionCallingWindow } from "../../lib/collection-calling-window";
+import { verifySelectedSavedCollectionSource } from "./collection-source-verification";
 
 export class CollectionRecordCreateOperations {
   constructor(
@@ -50,17 +52,14 @@ export class CollectionRecordCreateOperations {
       assertValidCollectionCreateFields(fields);
       await assertCollectionStaffNicknameWriteAccess(this.storage, user, fields.collectionStaffNickname);
 
-      const sourceMatch = await this.storage.findSavedCollectionSourceForRecord({
+      const sourceMatch = await verifySelectedSavedCollectionSource(this.storage, {
         customerName: fields.customerName,
         icNumber: fields.icNumber,
         customerPhone: fields.customerPhone,
         accountNumber: fields.accountNumber,
-        sourceImportId: fields.sourceImportId || null,
+        sourceImportId: fields.sourceImportId,
       });
-      if (
-        fields.sourceImportId
-        && (!sourceMatch || sourceMatch.sourceImportId !== fields.sourceImportId)
-      ) {
+      if (sourceMatch.sourceImportId !== fields.sourceImportId) {
         throw badRequest(
           "The selected Saved file no longer contains a matching customer row. Run matching again.",
           "COLLECTION_SOURCE_MATCH_STALE",
@@ -73,10 +72,19 @@ export class CollectionRecordCreateOperations {
         || sourceMatch?.billingPrincipalOsp === undefined
         ? null
         : parseCollectionAmountMyrInput(sourceMatch.billingPrincipalOsp, { allowZero: true });
-      if (fields.sourceImportId && matchedTotalDue === null) {
+      if (matchedTotalDue === null) {
         throw badRequest(
           "The matched Saved row does not contain a valid TOTAL DUE value.",
           "COLLECTION_SOURCE_TOTAL_DUE_MISSING",
+        );
+      }
+      if (!isDateInsideCollectionCallingWindow(fields.paymentDate, {
+        start: sourceMatch.callingDate as string,
+        endExclusive: sourceMatch.callingWindowEndExclusive as string,
+      })) {
+        throw badRequest(
+          `Payment Date must be between ${sourceMatch.callingDate} and ${sourceMatch.callingWindowEnd}.`,
+          "COLLECTION_PAYMENT_OUTSIDE_CALLING_WINDOW",
         );
       }
 
@@ -112,6 +120,8 @@ export class CollectionRecordCreateOperations {
         sourceDataRowId: sourceMatch?.rowId ?? null,
         sourceImportName: sourceMatch?.sourceImportName ?? null,
         sourceFilename: sourceMatch?.sourceFilename ?? null,
+        callingDate: sourceMatch.callingDate,
+        callingWindowEndExclusive: sourceMatch.callingWindowEndExclusive,
         agingBucket: fields.agingBucket
           ? fields.agingBucket as "D3" | "D4" | "D5" | "D6"
           : null,
@@ -125,14 +135,9 @@ export class CollectionRecordCreateOperations {
         receiptFile: null,
         createdByLogin: user.username,
         collectionStaffNickname: fields.collectionStaffNickname,
-      });
+      }, newReceiptInputs);
       createdRecordId = record.id;
-      if (newReceiptInputs.length > 0) {
-        await this.storage.createCollectionRecordReceipts(record.id, newReceiptInputs);
-      }
-      const syncedRecord = await this.storage.syncCollectionRecordReceiptValidation(record.id);
-      const hydratedRecord = syncedRecord || await this.storage.getCollectionRecordById(record.id);
-      const finalRecord = hydratedRecord || record;
+      const finalRecord = record;
       const finalReceiptState = resolveCollectionAuditReceiptState({
         relationCount: newReceiptInputs.length,
         legacyReceiptFile: null,
@@ -168,6 +173,9 @@ export class CollectionRecordCreateOperations {
           agingBucket: finalRecord.agingBucket,
           totalDue: finalRecord.totalDue,
           billingPrincipalOsp: finalRecord.billingPrincipalOsp,
+          callingDate: finalRecord.callingDate,
+          callingWindowEnd: finalRecord.callingWindowEnd,
+          cumulativeCollected: finalRecord.cumulativeCollected,
           cpStatus: finalRecord.cpStatus,
           snapshot: buildCollectionAuditSnapshot({
             customerName: finalRecord.customerName,

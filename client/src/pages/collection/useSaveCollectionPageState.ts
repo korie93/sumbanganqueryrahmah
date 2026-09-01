@@ -30,7 +30,9 @@ export function useSaveCollectionPageState({
     icNumber: formState.icNumber,
     customerPhone: formState.customerPhone,
     accountNumber: formState.accountNumber,
-  }, formState.setSourceImportId, formState.applyIdentityFieldErrors);
+    paymentDate: formState.paymentDate,
+    amount: formState.amount,
+  }, formState.setSourceImportId, formState.applyFieldErrors);
   const draftState = useSaveCollectionDraftState({
     staffNickname,
     values: formState.values,
@@ -153,10 +155,19 @@ export function useSaveCollectionPageState({
       hasSearched: sourceMatchState.hasSearched,
       loading: sourceMatchState.loading,
       matches: sourceMatchState.matches,
+      refreshSourceFiles: sourceMatchState.refreshSourceFiles,
       selectedImportId: sourceMatchState.selectedImportId,
       selectedMatch: sourceMatchState.selectedMatch,
+      selectedSourceFile: sourceMatchState.selectedSourceFile,
+      selectedSourceFileId: sourceMatchState.selectedSourceFileId,
+      selectSourceFile: sourceMatchState.selectSourceFile,
+      setSourceSearch: sourceMatchState.setSourceSearch,
+      sourceFiles: sourceMatchState.sourceFiles,
+      sourceFilesError: sourceMatchState.sourceFilesError,
+      sourceFilesLoading: sourceMatchState.sourceFilesLoading,
+      sourceFilesTotal: sourceMatchState.sourceFilesTotal,
+      sourceSearch: sourceMatchState.sourceSearch,
       runMatching: sourceMatchState.runMatching,
-      selectMatch: sourceMatchState.selectMatch,
     },
     handleSubmit,
   };

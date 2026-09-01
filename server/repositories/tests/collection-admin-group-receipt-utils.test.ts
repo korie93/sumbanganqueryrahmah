@@ -11,6 +11,7 @@ import {
   type CollectionAdminGroupExecutor,
 } from "../collection-admin-group-utils";
 import {
+  acquireCollectionReceiptHashLocks,
   attachCollectionReceipts,
   createCollectionRecordReceiptRows,
   deleteAllCollectionRecordReceiptRows,
@@ -405,6 +406,28 @@ test("createCollectionRecordReceiptRows inserts receipts and reloads them by gen
   assert.match(collectSqlText(queries[2]), /SELECT storage_path/i);
   assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
   assert.match(collectSqlText(queries[4]), /WHERE id IN/i);
+});
+
+test("receipt hash locks are normalized, deduplicated, and acquired in deadlock-safe order", async () => {
+  const { executor, queries } = createSequenceExecutor<CollectionReceiptExecutor>([
+    { rows: [] },
+    { rows: [] },
+  ]);
+  const lowerHash = "a".repeat(64);
+  const higherHash = "b".repeat(64);
+
+  await acquireCollectionReceiptHashLocks(executor, [
+    { fileHash: higherHash },
+    { fileHash: lowerHash.toUpperCase() },
+    { fileHash: ` ${lowerHash} ` },
+    { fileHash: null },
+  ]);
+
+  assert.equal(queries.length, 2);
+  assert.match(collectSqlText(queries[0]), /pg_advisory_xact_lock/i);
+  assert.match(collectSqlText(queries[1]), /pg_advisory_xact_lock/i);
+  assert.deepEqual(collectBoundValues(queries[0]), [`collection-receipt:${lowerHash}`]);
+  assert.deepEqual(collectBoundValues(queries[1]), [`collection-receipt:${higherHash}`]);
 });
 
 test("getCollectionRecordReceiptByIdForRecord and delete receipt helpers short-circuit safely and return deleted rows", async () => {

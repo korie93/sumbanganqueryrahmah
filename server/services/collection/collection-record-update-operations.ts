@@ -7,7 +7,10 @@ import {
   type CollectionUpdatePayload,
 } from "../../routes/collection.validation";
 import type { CollectionStoragePort } from "./collection-service-support";
-import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
+import {
+  parseCollectionAmountMyrInput,
+  parseCollectionAmountToCents,
+} from "../../../shared/collection-amount-types";
 import {
   COLLECTION_RECORD_VERSION_CONFLICT_MESSAGE,
   parseRecordVersionTimestamp,
@@ -42,6 +45,8 @@ import {
   requireCollectionRecordId,
   type RequireUserFn,
 } from "./collection-record-write-shared";
+import { isDateInsideCollectionCallingWindow } from "../../lib/collection-calling-window";
+import { verifySelectedSavedCollectionSource } from "./collection-source-verification";
 
 export class CollectionRecordUpdateOperations {
   constructor(
@@ -97,7 +102,7 @@ export class CollectionRecordUpdateOperations {
         );
       }
       const sourceMatch = shouldRematchSource
-        ? await this.storage.findSavedCollectionSourceForRecord({
+        ? await verifySelectedSavedCollectionSource(this.storage, {
             customerName: String(updatePayload.customerName ?? existing.customerName),
             icNumber: String(updatePayload.icNumber ?? existing.icNumber),
             customerPhone: String(updatePayload.customerPhone ?? existing.customerPhone),
@@ -131,10 +136,53 @@ export class CollectionRecordUpdateOperations {
         updatePayload.sourceDataRowId = sourceMatch?.rowId ?? null;
         updatePayload.sourceImportName = sourceMatch?.sourceImportName ?? null;
         updatePayload.sourceFilename = sourceMatch?.sourceFilename ?? null;
+        updatePayload.callingDate = sourceMatch?.callingDate ?? null;
+        updatePayload.callingWindowEndExclusive = sourceMatch?.callingWindowEndExclusive ?? null;
         updatePayload.totalDue = matchedTotalDue;
         updatePayload.billingPrincipalOsp = matchedBillingPrincipalOsp;
         updatePayload.sourceMatchBasis = sourceMatch?.matchBasis ?? null;
         updatePayload.sourceMatchAccuracy = sourceMatch?.matchAccuracy ?? null;
+      }
+      const trustedCallingDate = sourceMatch?.callingDate ?? existing.callingDate ?? null;
+      const trustedCallingWindowEnd = sourceMatch?.callingWindowEnd ?? existing.callingWindowEnd ?? null;
+      const trustedCallingWindowEndExclusive = sourceMatch?.callingWindowEndExclusive
+        ?? existing.callingWindowEndExclusive
+        ?? null;
+      const nextPaymentDate = String(updatePayload.paymentDate ?? existing.paymentDate);
+      const paymentDateChanged = Object.prototype.hasOwnProperty.call(updatePayload, "paymentDate")
+        && nextPaymentDate !== String(existing.paymentDate);
+      const nextAmountCents = parseCollectionAmountToCents(
+        updatePayload.amount ?? existing.amount,
+        { allowZero: true },
+      );
+      const existingAmountCents = parseCollectionAmountToCents(existing.amount, { allowZero: true });
+      const amountChanged = Object.prototype.hasOwnProperty.call(updatePayload, "amount")
+        && nextAmountCents !== existingAmountCents;
+      const changesSettlement = shouldRematchSource
+        || paymentDateChanged
+        || amountChanged;
+      if (
+        shouldRematchSource
+        && (!trustedCallingDate || !trustedCallingWindowEnd || !trustedCallingWindowEndExclusive)
+      ) {
+        throw badRequest(
+          "The selected Saved source has no verified Calling Date.",
+          "COLLECTION_SOURCE_CALLING_DATE_INVALID",
+        );
+      }
+      if (
+        changesSettlement
+        && trustedCallingDate
+        && trustedCallingWindowEndExclusive
+        && !isDateInsideCollectionCallingWindow(nextPaymentDate, {
+          start: trustedCallingDate,
+          endExclusive: trustedCallingWindowEndExclusive,
+        })
+      ) {
+        throw badRequest(
+          `Payment Date must be between ${trustedCallingDate} and ${trustedCallingWindowEnd}.`,
+          "COLLECTION_PAYMENT_OUTSIDE_CALLING_WINDOW",
+        );
       }
 
       const shouldRemoveReceipt = body.removeReceipt === true;
@@ -219,7 +267,7 @@ export class CollectionRecordUpdateOperations {
         updatePayload.receiptFile = null;
       }
 
-      const updated = await this.storage.updateCollectionRecord(id, updatePayload, {
+      const updatedMutation = await this.storage.updateCollectionRecord(id, updatePayload, {
         expectedUpdatedAt: expectedUpdatedAt ?? undefined,
         removeAllReceipts: shouldRemoveReceipt,
         removeReceiptIds: shouldRemoveReceipt ? [] : removeReceiptIds,
@@ -227,7 +275,7 @@ export class CollectionRecordUpdateOperations {
         receiptUpdates: activeExistingDrafts.map((draft) =>
           buildReceiptUpdateInput(String(draft.receiptId || ""), draft)),
       });
-      if (!updated) {
+      if (!updatedMutation) {
         await cleanupStoredCollectionReceipts(uploadedReceipts);
         if (expectedUpdatedAt) {
           const freshRecord = await this.storage.getCollectionRecordById(id);
@@ -243,6 +291,7 @@ export class CollectionRecordUpdateOperations {
         }
         throw notFound("Collection record not found.");
       }
+      const updated = await this.storage.getCollectionRecordById(id) || updatedMutation;
 
       if (shouldClearLegacyReceiptFallback && existing.receiptFile) {
         await removeCollectionReceiptFile(existing.receiptFile);

@@ -313,7 +313,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const customerSection = (
     <SaveCollectionFormSection
       title="Customer Details"
-      description="Isi maklumat customer; sistem akan memadankan rekod Saved secara automatik."
+      description="Isi maklumat customer untuk disahkan terhadap fail Saved yang anda pilih."
     >
       {customerFields}
     </SaveCollectionFormSection>
@@ -338,12 +338,11 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const sourceMatchSection = (
     <SaveCollectionFormSection
       title="Saved Matching & Coverage"
-      description="Pilih hanya fail yang disahkan sepadan. Status CP ditentukan automatik daripada Amount berbanding TOTAL DUE."
+      description="Pilih fail Saved dahulu. Backend mengesahkan Calling Date dan menentukan CP daripada jumlah collection kumulatif berbanding TOTAL DUE."
       className="col-span-full"
     >
       <div className="col-span-full">
         <CollectionSourceMatchField
-          amount={state.amount}
           disabled={state.submitting}
           error={state.sourceMatching.error}
           fieldError={state.fieldErrors.sourceImportId}
@@ -353,9 +352,17 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onMatch={() => {
             void state.sourceMatching.runMatching();
           }}
-          onSelect={state.sourceMatching.selectMatch}
-          selectedImportId={state.sourceMatching.selectedImportId}
+          onRefreshSourceFiles={state.sourceMatching.refreshSourceFiles}
+          onSelectSourceFile={state.sourceMatching.selectSourceFile}
+          onSourceSearchChange={state.sourceMatching.setSourceSearch}
           selectedMatch={state.sourceMatching.selectedMatch}
+          selectedSourceFile={state.sourceMatching.selectedSourceFile}
+          selectedSourceFileId={state.sourceMatching.selectedSourceFileId}
+          sourceFiles={state.sourceMatching.sourceFiles}
+          sourceFilesError={state.sourceMatching.sourceFilesError}
+          sourceFilesLoading={state.sourceMatching.sourceFilesLoading}
+          sourceFilesTotal={state.sourceMatching.sourceFilesTotal}
+          sourceSearch={state.sourceMatching.sourceSearch}
         />
       </div>
     </SaveCollectionFormSection>

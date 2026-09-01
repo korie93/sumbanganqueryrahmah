@@ -1,12 +1,14 @@
-import type { PostgresStorage } from "../../storage-postgres";
 import type {
+  CreateCollectionRecordReceiptInput,
   MutationIdempotencyAcquireInput,
   MutationIdempotencyCompleteInput,
+  PostgresStorage,
 } from "../../storage-postgres";
 import {
   buildCollectionReceiptValidationResult,
   normalizeCollectionReceiptExtractionStatus,
 } from "../../services/collection/collection-receipt-validation";
+import { subtractOneDayDateOnly } from "../../lib/collection-calling-window";
 
 export type AuditEntry = {
   action: string;
@@ -26,11 +28,16 @@ export type CollectionRecordShape = {
   sourceImportName?: string | null;
   sourceFilename?: string | null;
   agingBucket?: "D3" | "D4" | "D5" | "D6" | null;
+  callingDate?: string | null;
+  callingWindowEnd?: string | null;
+  callingWindowEndExclusive?: string | null;
   totalDue?: string | null;
   billingPrincipalOsp?: string | null;
   sourceMatchBasis?: "ic" | "phone_and_account" | null;
   sourceMatchAccuracy?: number | null;
   totalDueCovered?: boolean | null;
+  cumulativeCollected?: string | null;
+  remainingAmount?: string | null;
   cpStatus?: "cp" | "abort_cp" | "unverified";
   batch: string;
   paymentDate: string;
@@ -217,6 +224,9 @@ export function createCollectionStorageDouble(options: {
 export function createCoreCollectionStorageDouble(options?: {
   sessionNickname?: string | null;
   sourceMatchTotalDue?: string | null;
+  sourceMatchCallingDate?: string | null;
+  sourceMatchCallingWindowEnd?: string | null;
+  sourceMatchCallingWindowEndExclusive?: string | null;
   seedRecordOverrides?: Partial<CollectionRecordShape>;
   receiptRowsByRecordId?: Record<string, Array<{
     id: string;
@@ -318,6 +328,9 @@ export function createCoreCollectionStorageDouble(options?: {
     sourceDataRowId: null,
     sourceImportName: null,
     sourceFilename: null,
+    callingDate: "2026-03-01",
+    callingWindowEnd: "2026-03-31",
+    callingWindowEndExclusive: "2026-04-01",
     batch: "P10",
     paymentDate: "2026-03-01",
     amount: "120.50",
@@ -359,8 +372,47 @@ export function createCoreCollectionStorageDouble(options?: {
   const getArchivedReceiptsForRecord = (recordId: string) =>
     getAllReceiptsForRecord(recordId).filter((receipt) => Boolean(receipt.deletedAt));
 
+  const applySettlementProjection = (record: CollectionRecordShape): CollectionRecordShape => {
+    if (
+      !record.sourceImportId
+      || !record.sourceDataRowId
+      || !record.callingDate
+      || !record.callingWindowEndExclusive
+      || record.totalDue == null
+    ) {
+      return {
+        ...record,
+        cumulativeCollected: null,
+        remainingAmount: null,
+        totalDueCovered: null,
+        cpStatus: "unverified",
+      };
+    }
+
+    const cumulativeCents = Array.from(records.values())
+      .filter((candidate) => (
+        candidate.sourceImportId === record.sourceImportId
+        && candidate.sourceDataRowId === record.sourceDataRowId
+        && candidate.callingDate === record.callingDate
+        && candidate.callingWindowEndExclusive === record.callingWindowEndExclusive
+        && candidate.paymentDate >= record.callingDate!
+        && candidate.paymentDate < record.callingWindowEndExclusive!
+        && !candidate.duplicateReceiptFlag
+      ))
+      .reduce((total, candidate) => total + parseAmountToCents(candidate.amount), 0);
+    const totalDueCents = parseAmountToCents(record.totalDue);
+    const covered = cumulativeCents >= totalDueCents;
+    return {
+      ...record,
+      cumulativeCollected: formatAmountFromCents(cumulativeCents),
+      remainingAmount: formatAmountFromCents(Math.max(totalDueCents - cumulativeCents, 0)),
+      totalDueCovered: covered,
+      cpStatus: covered ? "abort_cp" : "cp",
+    };
+  };
+
   const hydrateRecord = (record: CollectionRecordShape): CollectionRecordShape => ({
-    ...record,
+    ...applySettlementProjection(record),
     receipts: getActiveReceiptsForRecord(record.id),
     archivedReceipts: getArchivedReceiptsForRecord(record.id),
   });
@@ -422,6 +474,29 @@ export function createCoreCollectionStorageDouble(options?: {
   }
 
   const storage = {
+    getImportById: async (sourceImportId: string) => (
+      sourceImportId === "import-1"
+        ? {
+            id: "import-1",
+            name: "NPL CC P10 JULY",
+            filename: "npl-cc-p10-july.xlsx",
+            createdAt: new Date("2026-03-01T00:00:00.000Z"),
+            isDeleted: false,
+          }
+        : null
+    ),
+    listCollectionSavedSourceFiles: async () => ({
+      items: [{
+        id: "import-1",
+        name: "NPL CC P10 JULY",
+        filename: "npl-cc-p10-july.xlsx",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        rowCount: 2,
+      }],
+      limit: 100,
+      nextCursor: null,
+      total: 1,
+    }),
     findSavedCollectionSourceForRecord: async (lookup: Record<string, string>) => (
       lookup.accountNumber === "NO-SAVED-MATCH"
       || (lookup.sourceImportId && lookup.sourceImportId !== "import-1")
@@ -439,10 +514,20 @@ export function createCoreCollectionStorageDouble(options?: {
               ? "200.00"
               : options.sourceMatchTotalDue,
             billingPrincipalOsp: "180.00",
+            callingDate: options?.sourceMatchCallingDate === undefined
+              ? "2026-03-01"
+              : options.sourceMatchCallingDate,
+            callingWindowEnd: options?.sourceMatchCallingWindowEnd === undefined
+              ? "2026-03-31"
+              : options.sourceMatchCallingWindowEnd,
+            callingWindowEndExclusive: options?.sourceMatchCallingWindowEndExclusive === undefined
+              ? "2026-04-01"
+              : options.sourceMatchCallingWindowEndExclusive,
           }
     ),
     findSavedCollectionSourcesForRecord: async (lookup: Record<string, string>) => (
       lookup.accountNumber === "NO-SAVED-MATCH"
+      || lookup.sourceImportId !== "import-1"
         ? []
         : [{
             rowId: "saved-row-1",
@@ -457,8 +542,43 @@ export function createCoreCollectionStorageDouble(options?: {
               ? "200.00"
               : options.sourceMatchTotalDue,
             billingPrincipalOsp: "180.00",
+            callingDate: options?.sourceMatchCallingDate === undefined
+              ? "2026-03-01"
+              : options.sourceMatchCallingDate,
+            callingWindowEnd: options?.sourceMatchCallingWindowEnd === undefined
+              ? "2026-03-31"
+              : options.sourceMatchCallingWindowEnd,
+            callingWindowEndExclusive: options?.sourceMatchCallingWindowEndExclusive === undefined
+              ? "2026-04-01"
+              : options.sourceMatchCallingWindowEndExclusive,
           }]
     ),
+    getCollectionSettlementProjection: async (input: Record<string, unknown>) => {
+      const currentAmountCents = parseAmountToCents(input.currentAmount);
+      const existingCents = Array.from(records.values())
+        .filter((candidate) => candidate.id !== String(input.excludeRecordId || ""))
+        .filter((candidate) => (
+          candidate.sourceImportId === input.sourceImportId
+          && candidate.sourceDataRowId === input.sourceDataRowId
+          && candidate.callingDate === input.callingDate
+          && candidate.callingWindowEndExclusive === input.callingWindowEndExclusive
+          && candidate.paymentDate >= String(input.callingDate)
+          && candidate.paymentDate < String(input.callingWindowEndExclusive)
+          && !candidate.duplicateReceiptFlag
+        ))
+        .reduce((total, candidate) => total + parseAmountToCents(candidate.amount), 0);
+      const projectedCents = existingCents + currentAmountCents;
+      const totalDueCents = parseAmountToCents(input.totalDue);
+      const covered = projectedCents >= totalDueCents;
+      return {
+        currentEntry: formatAmountFromCents(currentAmountCents),
+        existingCumulative: formatAmountFromCents(existingCents),
+        projectedCumulative: formatAmountFromCents(projectedCents),
+        remainingAfterSave: formatAmountFromCents(Math.max(totalDueCents - projectedCents, 0)),
+        projectedTotalDueCovered: covered,
+        projectedCpStatus: covered ? "abort_cp" as const : "cp" as const,
+      };
+    },
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
       if (!options?.sessionNickname) {
         return null;
@@ -474,7 +594,10 @@ export function createCoreCollectionStorageDouble(options?: {
     },
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nickname === activeNickname.nickname ? activeNickname : null,
-    createCollectionRecord: async (data: Record<string, unknown>) => {
+    createCollectionRecord: async (
+      data: Record<string, unknown>,
+      receipts: CreateCollectionRecordReceiptInput[] = [],
+    ) => {
       createCalls.push(data);
       const created: CollectionRecordShape = {
         id: `collection-${records.size + 1}`,
@@ -487,18 +610,23 @@ export function createCoreCollectionStorageDouble(options?: {
         sourceImportName: (data.sourceImportName as string | null | undefined) ?? null,
         sourceFilename: (data.sourceFilename as string | null | undefined) ?? null,
         agingBucket: (data.agingBucket as CollectionRecordShape["agingBucket"]) ?? null,
+        callingDate: (data.callingDate as string | null | undefined) ?? null,
+        callingWindowEnd:
+          data.callingWindowEndExclusive == null
+            ? null
+            : subtractOneDayDateOnly(String(data.callingWindowEndExclusive)),
+        callingWindowEndExclusive:
+          (data.callingWindowEndExclusive as string | null | undefined) ?? null,
         totalDue: data.totalDue == null ? null : Number(data.totalDue).toFixed(2),
         billingPrincipalOsp:
           data.billingPrincipalOsp == null ? null : Number(data.billingPrincipalOsp).toFixed(2),
         sourceMatchBasis: (data.sourceMatchBasis as CollectionRecordShape["sourceMatchBasis"]) ?? null,
         sourceMatchAccuracy:
           data.sourceMatchAccuracy == null ? null : Number(data.sourceMatchAccuracy),
-        totalDueCovered:
-          data.totalDue == null ? null : Number(data.amount) >= Number(data.totalDue),
-        cpStatus:
-          data.totalDue == null
-            ? "unverified"
-            : Number(data.amount) >= Number(data.totalDue) ? "abort_cp" : "cp",
+        totalDueCovered: null,
+        cumulativeCollected: null,
+        remainingAmount: null,
+        cpStatus: "unverified",
         batch: String(data.batch),
         paymentDate: String(data.paymentDate),
         amount: Number(data.amount).toFixed(2),
@@ -515,7 +643,12 @@ export function createCoreCollectionStorageDouble(options?: {
         updatedAt: new Date("2026-03-15T10:00:00.000Z"),
       };
       records.set(created.id, created);
-      return hydrateRecord(created);
+      if (receipts.length > 0) {
+        await storage.createCollectionRecordReceipts(created.id, receipts);
+      } else {
+        syncRecordReceiptState(created.id);
+      }
+      return hydrateRecord(records.get(created.id) || created);
     },
     getCollectionRecordById: async (id: string) => {
       const record = records.get(id);

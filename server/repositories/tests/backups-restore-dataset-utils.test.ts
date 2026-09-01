@@ -204,13 +204,23 @@ test("collection restore tracks restored record ids through a temp table before 
     },
     "Unexpected insert() call during collection restore test.",
   );
-  const backupDataReader = createCollectionRecordReader([
-    {
+  const sourceRecord: BackupCollectionRecord = {
       id: "11111111-1111-1111-1111-111111111111",
       customerName: "Alice Tan",
       icNumber: "900101015555",
       customerPhone: "0123000001",
       accountNumber: "ACC-1001",
+      sourceImportId: "import-1",
+      sourceDataRowId: "saved-row-1",
+      sourceImportName: "NPL CC P10 JULY",
+      sourceFilename: "npl-cc-p10-july.xlsx",
+      agingBucket: "D5",
+      totalDue: "200.00",
+      billingPrincipalOsp: "180.00",
+      callingDate: "2026-03-01",
+      callingWindowEndExclusive: "2026-04-01",
+      sourceMatchBasis: "ic",
+      sourceMatchAccuracy: 100,
       batch: "P10",
       paymentDate: "2026-03-31",
       amount: 100,
@@ -224,8 +234,12 @@ test("collection restore tracks restored record ids through a temp table before 
       collectionStaffNickname: "Collector Alpha",
       staffUsername: "Collector Alpha",
       createdAt: "2026-03-31T08:00:00.000Z",
-    },
-  ]);
+  };
+  const normalizedSourceRecord = normalizeBackupCollectionRecord(sourceRecord);
+  assert.ok(normalizedSourceRecord);
+  assert.equal(normalizedSourceRecord.callingDate, "2026-03-01");
+  assert.equal(normalizedSourceRecord.callingWindowEndExclusive, "2026-04-01");
+  const backupDataReader = createCollectionRecordReader([sourceRecord]);
   const stats = createRestoreStats();
 
   await initializeRestoreTrackingTempTable(tx);
@@ -249,6 +263,14 @@ test("collection restore tracks restored record ids through a temp table before 
   assert.ok(trackIdsIndex > createTempTableIndex);
   assert.ok(insertRecordsIndex > trackIdsIndex);
   assert.ok(syncReceiptCacheIndex > insertRecordsIndex);
+  assert.equal(
+    executedQueries[insertRecordsIndex]?.includes("calling_date"),
+    true,
+  );
+  assert.equal(
+    executedQueries[insertRecordsIndex]?.includes("calling_window_end_exclusive"),
+    true,
+  );
   assert.equal(stats.collectionRecords.processed, 1);
   assert.equal(stats.collectionRecords.inserted, 1);
   assert.equal(stats.collectionRecords.skipped, 0);

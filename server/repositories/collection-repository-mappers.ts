@@ -7,6 +7,7 @@ import type {
 import {
   formatCollectionAmountFromCents,
   formatCollectionAmountMyrString,
+  parseCollectionAmountToCents,
   parseCollectionAmountMyrNumber,
 } from "../../shared/collection-amount-types";
 import {
@@ -14,6 +15,7 @@ import {
   isCollectionDailyLeaveType,
 } from "../../shared/collection-daily-status";
 import { resolveCollectionRecordPiiValuesFailClosed } from "../lib/collection-pii-encryption";
+import { subtractOneDayDateOnly } from "../lib/collection-calling-window";
 
 type CollectionBatch = CollectionRecord["batch"];
 
@@ -45,6 +47,12 @@ type CollectionRecordDbRow = {
   sourceFilename?: unknown;
   aging_bucket?: unknown;
   agingBucket?: unknown;
+  calling_date?: unknown;
+  callingDate?: unknown;
+  calling_window_end?: unknown;
+  callingWindowEnd?: unknown;
+  calling_window_end_exclusive?: unknown;
+  callingWindowEndExclusive?: unknown;
   total_due?: unknown;
   totalDue?: unknown;
   billing_principal_osp?: unknown;
@@ -53,6 +61,10 @@ type CollectionRecordDbRow = {
   sourceMatchBasis?: unknown;
   source_match_accuracy?: unknown;
   sourceMatchAccuracy?: unknown;
+  cumulative_collected?: unknown;
+  cumulativeCollected?: unknown;
+  remaining_amount?: unknown;
+  remainingAmount?: unknown;
   batch?: unknown;
   payment_date?: unknown;
   paymentDate?: unknown;
@@ -175,6 +187,17 @@ function normalizeCollectionDate(value: unknown, fallback: Date | number = Date.
   return new Date(fallback);
 }
 
+function normalizeCollectionDateOnly(value: unknown): string | null {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString().slice(0, 10) : null;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const normalized = String(value).trim();
+    return normalized ? normalized.slice(0, 10) : null;
+  }
+  return null;
+}
+
 export function mapCollectionRecordRow(row: unknown): CollectionRecord {
   const normalizedRow = normalizeCollectionDbRow<CollectionRecordDbRow>(row);
   const paymentDateRaw = normalizedRow.payment_date ?? normalizedRow.paymentDate;
@@ -218,13 +241,48 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     || billingPrincipalOspRaw === undefined
     ? null
     : formatCollectionAmountMyrString(billingPrincipalOspRaw);
-  const totalDueCovered = totalDue === null
-    ? null
-    : parseCollectionAmountMyrNumber(amount) >= parseCollectionAmountMyrNumber(totalDue);
+  const callingDateRaw = normalizedRow.calling_date ?? normalizedRow.callingDate;
+  const callingDate = normalizeCollectionDateOnly(callingDateRaw);
+  const callingWindowEndExclusiveRaw = normalizedRow.calling_window_end_exclusive
+    ?? normalizedRow.callingWindowEndExclusive;
+  const callingWindowEndExclusive = normalizeCollectionDateOnly(callingWindowEndExclusiveRaw);
+  const callingWindowEnd = callingWindowEndExclusive
+    ? subtractOneDayDateOnly(callingWindowEndExclusive)
+    : null;
+  const sourceImportId = String(
+    normalizedRow.source_import_id ?? normalizedRow.sourceImportId ?? "",
+  ).trim() || null;
+  const sourceDataRowId = String(
+    normalizedRow.source_data_row_id ?? normalizedRow.sourceDataRowId ?? "",
+  ).trim() || null;
   const matchBasisRaw = normalizedRow.source_match_basis ?? normalizedRow.sourceMatchBasis;
   const sourceMatchBasis = matchBasisRaw === "ic" || matchBasisRaw === "phone_and_account"
     ? matchBasisRaw
     : null;
+  const hasVerifiedSettlement = Boolean(
+    sourceImportId
+    && sourceDataRowId
+    && sourceMatchBasis
+    && totalDue !== null
+    && callingDate
+    && callingWindowEndExclusive
+    && callingWindowEnd
+  );
+  const cumulativeRaw = normalizedRow.cumulative_collected ?? normalizedRow.cumulativeCollected;
+  const cumulativeCents = !hasVerifiedSettlement
+    ? 0
+    : cumulativeRaw === null || cumulativeRaw === undefined
+      ? parseCollectionAmountToCents(amount, { allowZero: true }) ?? 0
+      : parseCollectionAmountToCents(cumulativeRaw, { allowZero: true }) ?? 0;
+  const totalDueCents = totalDue === null
+    ? null
+    : parseCollectionAmountToCents(totalDue, { allowZero: true });
+  const totalDueCovered = !hasVerifiedSettlement || totalDueCents === null
+    ? null
+    : cumulativeCents >= totalDueCents;
+  const remainingAmount = !hasVerifiedSettlement || totalDueCents === null
+    ? null
+    : formatCollectionAmountFromCents(Math.max(0, totalDueCents - cumulativeCents));
   const matchAccuracyRaw = normalizedRow.source_match_accuracy ?? normalizedRow.sourceMatchAccuracy;
   const matchAccuracyNumber = Number(matchAccuracyRaw);
   const sourceMatchAccuracy = Number.isInteger(matchAccuracyNumber)
@@ -255,11 +313,18 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     sourceFilename:
       (normalizedRow.source_filename ?? normalizedRow.sourceFilename ?? null) as string | null,
     agingBucket,
+    callingDate,
+    callingWindowEnd,
+    callingWindowEndExclusive,
     totalDue,
     billingPrincipalOsp,
     sourceMatchBasis,
     sourceMatchAccuracy,
     totalDueCovered,
+    cumulativeCollected: hasVerifiedSettlement
+      ? formatCollectionAmountFromCents(cumulativeCents)
+      : null,
+    remainingAmount,
     cpStatus: totalDueCovered === null ? "unverified" : totalDueCovered ? "abort_cp" : "cp",
     batch: String(normalizedRow.batch ?? "") as CollectionBatch,
     paymentDate,

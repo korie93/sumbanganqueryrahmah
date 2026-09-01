@@ -65,6 +65,8 @@ export type BackupCollectionRecord = {
   agingBucket?: string | null;
   totalDue?: BackupAmountMyr | null;
   billingPrincipalOsp?: BackupAmountMyr | null;
+  callingDate?: string | null;
+  callingWindowEndExclusive?: string | null;
   sourceMatchBasis?: string | null;
   sourceMatchAccuracy?: number | null;
   batch: string;

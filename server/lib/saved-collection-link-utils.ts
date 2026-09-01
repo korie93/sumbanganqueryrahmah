@@ -14,6 +14,10 @@ import {
   formatCollectionAmountFromCents,
   parseCollectionAmountToCents,
 } from "../../shared/collection-amount-types";
+import {
+  buildCollectionCallingWindow,
+  parseSavedCallingDate,
+} from "./collection-calling-window";
 
 const MAX_ROW_FIELDS = 200;
 const MAX_FIELD_VALUE_LENGTH = 256;
@@ -50,6 +54,14 @@ const BILLING_PRINCIPAL_OSP_HEADERS = new Set([
   "principalosp",
 ]);
 
+const CALLING_DATE_HEADERS = new Set([
+  "calldate",
+  "callingdate",
+  "callingdt",
+  "tarikhcalling",
+  "tarikhpanggilan",
+]);
+
 type NormalizedSavedLookup = {
   customerName: string;
   icNumber: string;
@@ -63,6 +75,9 @@ type NormalizedSavedIdentity = Omit<NormalizedSavedLookup, "accountNumber"> & {
 
 type SavedCollectionFinancials = {
   billingPrincipalOsp: string | null;
+  callingDate: string | null;
+  callingWindowEnd: string | null;
+  callingWindowEndExclusive: string | null;
   totalDue: string | null;
 };
 
@@ -101,6 +116,9 @@ function parseSavedCollectionMoney(value: unknown): string | null {
 export function extractSavedCollectionFinancials(value: unknown): SavedCollectionFinancials {
   const financials: SavedCollectionFinancials = {
     billingPrincipalOsp: null,
+    callingDate: null,
+    callingWindowEnd: null,
+    callingWindowEndExclusive: null,
     totalDue: null,
   };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -118,7 +136,18 @@ export function extractSavedCollectionFinancials(value: unknown): SavedCollectio
     ) {
       financials.billingPrincipalOsp = parseSavedCollectionMoney(rawValue);
     }
-    if (financials.totalDue !== null && financials.billingPrincipalOsp !== null) {
+    if (financials.callingDate === null && CALLING_DATE_HEADERS.has(normalizedHeader)) {
+      const callingDate = parseSavedCallingDate(rawValue);
+      const window = callingDate ? buildCollectionCallingWindow(callingDate) : null;
+      financials.callingDate = window?.start ?? null;
+      financials.callingWindowEnd = window?.endInclusive ?? null;
+      financials.callingWindowEndExclusive = window?.endExclusive ?? null;
+    }
+    if (
+      financials.totalDue !== null
+      && financials.billingPrincipalOsp !== null
+      && financials.callingDate !== null
+    ) {
       break;
     }
   }
@@ -284,6 +313,9 @@ function buildSavedCollectionSourceMatches(
       comparedFields,
       totalDue: financials.totalDue,
       billingPrincipalOsp: financials.billingPrincipalOsp,
+      callingDate: financials.callingDate,
+      callingWindowEnd: financials.callingWindowEnd,
+      callingWindowEndExclusive: financials.callingWindowEndExclusive,
       rankScore: (icMatch ? 100 : 60) + (phoneMatch ? 10 : 0) + (accountMatch ? 10 : 0) + (nameMatch ? 5 : 0),
       timestamp: getCandidateTimestamp(candidate.sourceCreatedAt),
     }];
@@ -313,10 +345,21 @@ export function selectSavedCollectionSourceMatches(
   candidates: SavedCollectionSourceCandidate[],
   limit = MAX_SAVED_COLLECTION_SOURCE_MATCHES,
 ): SavedCollectionSourceMatch[] {
-  const matches = buildSavedCollectionSourceMatches(input, candidates)
+  const selectedSourceImportId = String(input.sourceImportId || "").trim();
+  const scopedCandidates = selectedSourceImportId
+    ? candidates.filter((candidate) => candidate.sourceImportId === selectedSourceImportId)
+    : candidates;
+  const matches = buildSavedCollectionSourceMatches(input, scopedCandidates)
     .sort(compareSavedCollectionSourceMatches);
-  const selectedImportIds = new Set<string>();
   const boundedLimit = Math.max(1, Math.min(limit, MAX_SAVED_COLLECTION_SOURCE_MATCHES));
+  if (selectedSourceImportId) {
+    return matches.slice(0, boundedLimit).map((match) => {
+      const { rankScore: _rankScore, timestamp: _timestamp, ...publicMatch } = match;
+      return publicMatch;
+    });
+  }
+
+  const selectedImportIds = new Set<string>();
   const result: SavedCollectionSourceMatch[] = [];
 
   for (const match of matches) {

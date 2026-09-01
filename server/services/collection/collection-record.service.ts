@@ -42,6 +42,13 @@ export class CollectionRecordService extends CollectionServiceSupport {
     return this.sourceMatchOperations.listMatches(userInput, bodyRaw);
   }
 
+  async listSourceFiles(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    queryRaw: Record<string, unknown>,
+  ) {
+    return this.sourceMatchOperations.listSourceFiles(userInput, queryRaw);
+  }
+
   async getSummary(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: SummaryQuery) {
     return this.readOperations.getSummary(userInput, query);
   }

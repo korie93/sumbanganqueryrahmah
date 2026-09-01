@@ -809,6 +809,8 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
                 sourceDataRowId: "saved-row-1",
                 sourceImportName: "NPL CC P10 JULY",
                 sourceFilename: "npl-cc-p10-july.xlsx",
+                callingDate: "2026-03-01",
+                callingWindowEndExclusive: "2026-04-01",
                 batch: "P10",
                 paymentDate: "2026-03-31",
                 amount: "100.00",
@@ -913,6 +915,8 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal(parsed.collectionRecords?.[0]?.sourceDataRowId, "saved-row-1");
         assert.equal(parsed.collectionRecords?.[0]?.sourceImportName, "NPL CC P10 JULY");
         assert.equal(parsed.collectionRecords?.[0]?.sourceFilename, "npl-cc-p10-july.xlsx");
+        assert.equal(parsed.collectionRecords?.[0]?.callingDate, "2026-03-01");
+        assert.equal(parsed.collectionRecords?.[0]?.callingWindowEndExclusive, "2026-04-01");
         assert.equal(parsed.collectionRecordPurgeHistory?.[0]?.accountNumberSearchHash, "c".repeat(64));
         assert.equal(parsed.collectionRecordPurgeHistory?.[0]?.purgedBy, "superuser");
         assert.equal("customerName" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);

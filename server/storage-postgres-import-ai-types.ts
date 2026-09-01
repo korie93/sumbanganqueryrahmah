@@ -5,6 +5,9 @@ import type {
   InsertImport,
 } from "../shared/schema-postgres";
 import type {
+  CollectionSavedSourceFilePage,
+  CollectionSettlementProjection,
+  CollectionSettlementProjectionInput,
   SavedCollectionSourceLookup,
   SavedCollectionSourceMatch,
 } from "./repositories/search-repository-types";
@@ -50,9 +53,20 @@ export interface ImportAiStorageContract {
   createDataRows(rows: InsertDataRow[]): Promise<DataRow[]>;
   getDataRowsByImport(importId: string): Promise<DataRow[]>;
   getDataRowCountByImport(importId: string): Promise<number>;
+  listCollectionSavedSourceFiles(params?: {
+    cursor?: string | null;
+    limit?: number;
+    search?: string | null;
+  }): Promise<CollectionSavedSourceFilePage>;
   findSavedCollectionSourceForRecord(
     lookup: SavedCollectionSourceLookup,
   ): Promise<SavedCollectionSourceMatch | null>;
+  findSavedCollectionSourcesForRecord(
+    lookup: SavedCollectionSourceLookup,
+  ): Promise<SavedCollectionSourceMatch[]>;
+  getCollectionSettlementProjection(
+    input: CollectionSettlementProjectionInput,
+  ): Promise<CollectionSettlementProjection>;
   advancedSearchDataRows(
     filters: Array<{ field: string; operator: string; value: string }>,
     logic: "AND" | "OR",
