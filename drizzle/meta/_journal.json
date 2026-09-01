@@ -365,6 +365,13 @@
       "when": 1788220800000,
       "tag": "0052_collection_source_governance_osp",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1788307200000,
+      "tag": "0053_collection_source_governance_deferred_foreign_keys",
+      "breakpoints": true
     }
   ]
 }

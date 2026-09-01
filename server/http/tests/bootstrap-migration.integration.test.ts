@@ -147,6 +147,14 @@ const collectionRecordSourceDataRowMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0048_collection_record_source_data_row.sql"),
   "utf8",
 );
+const collectionSourceGovernanceMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0052_collection_source_governance_osp.sql"),
+  "utf8",
+);
+const collectionSourceGovernanceDeferredForeignKeysMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0053_collection_source_governance_deferred_foreign_keys.sql"),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -504,6 +512,58 @@ test(
         WHERE id = 'collection-1'
       `);
       assert.equal(linkedRecord.rows[0]?.source_data_row_id, null);
+    });
+  },
+);
+
+test(
+  "collection source governance bootstrap defers and restores dependency foreign keys",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      const database = drizzle(pool);
+
+      await ensureCollectionRecordsTables(database);
+
+      for (const constraintName of [
+        "collection_source_configs_source_import_id_fkey",
+        "collection_source_configs_configured_by_fkey",
+        "collection_source_rows_source_import_id_fkey",
+        "collection_source_rows_source_data_row_id_fkey",
+        "collection_osp_targets_configured_by_fkey",
+      ]) {
+        assert.equal(await constraintExists(pool, constraintName), false);
+      }
+
+      await ensureUsersBootstrapSchema(database);
+      await ensureCoreImportsTable(database);
+      await ensureCoreDataRowsTable(database);
+      await applySql(pool, collectionSourceGovernanceMigrationSql);
+      await applySql(pool, collectionSourceGovernanceDeferredForeignKeysMigrationSql);
+      await applySql(pool, collectionSourceGovernanceDeferredForeignKeysMigrationSql);
+
+      for (const constraintName of [
+        "collection_source_configs_source_import_id_fkey",
+        "collection_source_configs_configured_by_fkey",
+        "collection_source_rows_source_import_id_fkey",
+        "collection_source_rows_source_data_row_id_fkey",
+        "collection_osp_targets_configured_by_fkey",
+      ]) {
+        assert.equal(await constraintExists(pool, constraintName), true);
+      }
+
+      for (const [table, column, expectedDeleteRule] of [
+        ["collection_source_configs", "source_import_id", "CASCADE"],
+        ["collection_source_configs", "configured_by", "RESTRICT"],
+        ["collection_source_rows", "source_import_id", "CASCADE"],
+        ["collection_source_rows", "source_data_row_id", "CASCADE"],
+        ["collection_osp_targets", "configured_by", "RESTRICT"],
+      ] as const) {
+        const rules = await foreignKeyRules(pool, table, column);
+        assert.equal(rules.length, 1);
+        assert.equal(rules[0]?.update_rule, "CASCADE");
+        assert.equal(rules[0]?.delete_rule, expectedDeleteRule);
+      }
     });
   },
 );

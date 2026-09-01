@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { ensureCollectionSourceGovernanceForeignKeys } from "../collection-bootstrap-source-schema";
 import type { BootstrapSqlExecutor } from "./schema-types";
 
 export async function ensureUsersBootstrapIntegrity(
@@ -148,4 +149,5 @@ export async function ensureUsersBootstrapIntegrity(
     CREATE INDEX IF NOT EXISTS idx_password_reset_requests_created_at
     ON public.password_reset_requests (created_at DESC)
   `);
+  await ensureCollectionSourceGovernanceForeignKeys(database);
 }

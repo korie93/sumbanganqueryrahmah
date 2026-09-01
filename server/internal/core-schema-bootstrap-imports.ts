@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { readBooleanEnvFlag } from "../config/runtime-environment";
+import { ensureCollectionSourceGovernanceForeignKeys } from "./collection-bootstrap-source-schema";
 import type { CoreSchemaSqlExecutor } from "./core-schema-bootstrap-utils";
 
 function isLegacyImportsBackfillEnabled(): boolean {
@@ -122,6 +123,7 @@ export async function ensureCoreImportsTable(
       AND created_by IS NOT NULL
       AND content_hash_sha256 IS NOT NULL
   `);
+  await ensureCollectionSourceGovernanceForeignKeys(database);
 }
 
 export async function ensureCoreDataRowsTable(
@@ -243,4 +245,5 @@ export async function ensureCoreDataRowsTable(
   `);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON public.data_rows(import_id)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id_id ON public.data_rows(import_id, id)`);
+  await ensureCollectionSourceGovernanceForeignKeys(database);
 }

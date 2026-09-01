@@ -10,8 +10,7 @@ export async function ensureCollectionSourceGovernanceSchema(
   await executeBootstrapStatements(database, [
     sql`
       CREATE TABLE IF NOT EXISTS public.collection_source_configs (
-        source_import_id text PRIMARY KEY
-          REFERENCES public.imports(id) ON DELETE CASCADE ON UPDATE CASCADE,
+        source_import_id text PRIMARY KEY,
         valid_from date NOT NULL,
         valid_to date NOT NULL,
         cycle_key text NOT NULL,
@@ -19,8 +18,7 @@ export async function ensureCollectionSourceGovernanceSchema(
         compatibility_status text NOT NULL DEFAULT 'incompatible',
         compatibility_issues text[] NOT NULL DEFAULT ARRAY[]::text[],
         indexed_row_count integer NOT NULL DEFAULT 0,
-        configured_by text NOT NULL
-          REFERENCES public.users(username) ON DELETE RESTRICT ON UPDATE CASCADE,
+        configured_by text NOT NULL,
         created_at timestamp with time zone NOT NULL DEFAULT now(),
         updated_at timestamp with time zone NOT NULL DEFAULT now(),
         CONSTRAINT chk_collection_source_configs_validity CHECK (valid_from <= valid_to),
@@ -41,10 +39,8 @@ export async function ensureCollectionSourceGovernanceSchema(
     `,
     sql`
       CREATE TABLE IF NOT EXISTS public.collection_source_rows (
-        source_import_id text NOT NULL
-          REFERENCES public.imports(id) ON DELETE CASCADE ON UPDATE CASCADE,
-        source_data_row_id text NOT NULL
-          REFERENCES public.data_rows(id) ON DELETE CASCADE ON UPDATE CASCADE,
+        source_import_id text NOT NULL,
+        source_data_row_id text NOT NULL,
         account_number_hash text,
         card_number_hash text,
         card_number_last4 text,
@@ -100,8 +96,7 @@ export async function ensureCollectionSourceGovernanceSchema(
         aging_bucket text NOT NULL,
         total_osp_baseline numeric(16,2),
         target_percentage numeric(7,4) NOT NULL,
-        configured_by text NOT NULL
-          REFERENCES public.users(username) ON DELETE RESTRICT ON UPDATE CASCADE,
+        configured_by text NOT NULL,
         created_at timestamp with time zone NOT NULL DEFAULT now(),
         updated_at timestamp with time zone NOT NULL DEFAULT now(),
         CONSTRAINT chk_collection_osp_targets_period CHECK (period_from <= period_to),
@@ -124,4 +119,138 @@ export async function ensureCollectionSourceGovernanceSchema(
       ON public.collection_osp_targets(period_from, period_to)
     `,
   ]);
+
+  await ensureCollectionSourceGovernanceForeignKeys(database);
+}
+
+/**
+ * Restores governance foreign keys after whichever dependency bootstrap runs last.
+ */
+export async function ensureCollectionSourceGovernanceForeignKeys(
+  database: BootstrapSqlExecutor,
+): Promise<void> {
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF to_regclass('public.collection_source_configs') IS NOT NULL
+        AND to_regclass('public.imports') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'collection_source_configs_source_import_id_fkey'
+            AND conrelid = to_regclass('public.collection_source_configs')
+            AND contype = 'f'
+        ) THEN
+        DELETE FROM public.collection_source_configs config
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.imports imp
+          WHERE imp.id = config.source_import_id
+        );
+
+        ALTER TABLE public.collection_source_configs
+        ADD CONSTRAINT collection_source_configs_source_import_id_fkey
+        FOREIGN KEY (source_import_id)
+        REFERENCES public.imports(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE;
+      END IF;
+
+      IF to_regclass('public.collection_source_configs') IS NOT NULL
+        AND to_regclass('public.users') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'collection_source_configs_configured_by_fkey'
+            AND conrelid = to_regclass('public.collection_source_configs')
+            AND contype = 'f'
+        ) THEN
+        DELETE FROM public.collection_source_configs config
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.users usr
+          WHERE usr.username = config.configured_by
+        );
+
+        ALTER TABLE public.collection_source_configs
+        ADD CONSTRAINT collection_source_configs_configured_by_fkey
+        FOREIGN KEY (configured_by)
+        REFERENCES public.users(username)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE;
+      END IF;
+
+      IF to_regclass('public.collection_source_rows') IS NOT NULL
+        AND to_regclass('public.imports') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'collection_source_rows_source_import_id_fkey'
+            AND conrelid = to_regclass('public.collection_source_rows')
+            AND contype = 'f'
+        ) THEN
+        DELETE FROM public.collection_source_rows source_row
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.imports imp
+          WHERE imp.id = source_row.source_import_id
+        );
+
+        ALTER TABLE public.collection_source_rows
+        ADD CONSTRAINT collection_source_rows_source_import_id_fkey
+        FOREIGN KEY (source_import_id)
+        REFERENCES public.imports(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE;
+      END IF;
+
+      IF to_regclass('public.collection_source_rows') IS NOT NULL
+        AND to_regclass('public.data_rows') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'collection_source_rows_source_data_row_id_fkey'
+            AND conrelid = to_regclass('public.collection_source_rows')
+            AND contype = 'f'
+        ) THEN
+        DELETE FROM public.collection_source_rows source_row
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.data_rows data_row
+          WHERE data_row.id = source_row.source_data_row_id
+        );
+
+        ALTER TABLE public.collection_source_rows
+        ADD CONSTRAINT collection_source_rows_source_data_row_id_fkey
+        FOREIGN KEY (source_data_row_id)
+        REFERENCES public.data_rows(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE;
+      END IF;
+
+      IF to_regclass('public.collection_osp_targets') IS NOT NULL
+        AND to_regclass('public.users') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'collection_osp_targets_configured_by_fkey'
+            AND conrelid = to_regclass('public.collection_osp_targets')
+            AND contype = 'f'
+        ) THEN
+        DELETE FROM public.collection_osp_targets osp_target
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.users usr
+          WHERE usr.username = osp_target.configured_by
+        );
+
+        ALTER TABLE public.collection_osp_targets
+        ADD CONSTRAINT collection_osp_targets_configured_by_fkey
+        FOREIGN KEY (configured_by)
+        REFERENCES public.users(username)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE;
+      END IF;
+    END $$;
+  `);
 }

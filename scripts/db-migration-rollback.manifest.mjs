@@ -69,6 +69,7 @@ const MIGRATION_TAGS = Object.freeze([
   "0050_collection_saved_match_details",
   "0051_collection_calling_window_settlement",
   "0052_collection_source_governance_osp",
+  "0053_collection_source_governance_deferred_foreign_keys",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(
