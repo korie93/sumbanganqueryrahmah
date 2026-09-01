@@ -181,7 +181,7 @@ export function CollectionSourceMatchField({
 
       <div className="flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <Label htmlFor="save-collection-source-match-action">2. Verify Customer &amp; Coverage</Label>
+          <p className="text-sm font-medium leading-none">2. Verify Customer &amp; Coverage</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
             IC atau Phone + Account, Calling Date, TOTAL DUE dan jumlah kumulatif disahkan oleh backend.
           </p>

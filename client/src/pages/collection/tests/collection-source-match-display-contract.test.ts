@@ -16,6 +16,12 @@ test("collection matching UI is source-file-first and blocks matching without a 
   assert.match(source, /sourceFile\.rowCount/);
 });
 
+test("collection matching action keeps its visible accessible name", () => {
+  assert.doesNotMatch(source, /htmlFor="save-collection-source-match-action"/);
+  assert.match(source, /id="save-collection-source-match-action"/);
+  assert.match(source, /\{loading \? "Checking\.\.\." : "Semak Matching"\}/);
+});
+
 test("collection matching UI renders only the server-authoritative settlement projection", () => {
   assert.match(source, /selectedMatch\.callingDate/);
   assert.match(source, /selectedMatch\.callingWindowEnd/);
