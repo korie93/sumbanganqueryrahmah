@@ -31,46 +31,16 @@ export async function createCollectionRecord(
   receipts: CreateCollectionRecordReceiptInput[] = [],
 ): Promise<CollectionRecord> {
   const id = randomUUID();
-  const encryptedPii = buildEncryptedCollectionRecordPiiValues({
-    customerName: data.customerName,
-    icNumber: data.icNumber,
-    customerPhone: data.customerPhone,
-    accountNumber: data.accountNumber,
-  });
-  const piiSearchHashes = buildCollectionRecordPiiSearchHashes({
-    customerName: data.customerName,
-    icNumber: data.icNumber,
-    customerPhone: data.customerPhone,
-    accountNumber: data.accountNumber,
-  });
-  const persistedCustomerName = resolveStoredCollectionPiiPlaintextValue({
-    field: "customerName",
-    plaintext: data.customerName,
-    encrypted: encryptedPii?.customerNameEncrypted,
-  });
-  const persistedIcNumber = resolveStoredCollectionPiiPlaintextValue({
-    field: "icNumber",
-    plaintext: data.icNumber,
-    encrypted: encryptedPii?.icNumberEncrypted,
-  });
-  const persistedCustomerPhone = resolveStoredCollectionPiiPlaintextValue({
-    field: "customerPhone",
-    plaintext: data.customerPhone,
-    encrypted: encryptedPii?.customerPhoneEncrypted,
-  });
-  const persistedAccountNumber = resolveStoredCollectionPiiPlaintextValue({
-    field: "accountNumber",
-    plaintext: data.accountNumber,
-    encrypted: encryptedPii?.accountNumberEncrypted,
-  });
   const settlementCycleKey = String(data.settlementCycleKey ?? "").trim() || null;
   return db.transaction(async (tx) => {
     await acquireCollectionSettlementCycleLocks(tx, [settlementCycleKey]);
+    let trustedSourceAccountNumber: string | null = null;
+    let trustedSourceCardNumberLast4: string | null | undefined;
     if (data.sourceImportId || data.sourceDataRowId || settlementCycleKey) {
       if (!data.sourceImportId || !data.sourceDataRowId) {
         throw new Error("Selected Collection source snapshot is incomplete.");
       }
-      await assertAuthorizedCollectionSourceSnapshot(tx, {
+      const authorizedSource = await assertAuthorizedCollectionSourceSnapshot(tx, {
         sourceImportId: data.sourceImportId,
         sourceDataRowId: data.sourceDataRowId,
         paymentDate: data.paymentDate,
@@ -87,7 +57,45 @@ export async function createCollectionRecord(
         sourceObligationKey: data.sourceObligationKey ?? null,
         settlementCycleKey,
       });
+      trustedSourceAccountNumber = authorizedSource.accountNumber;
+      trustedSourceCardNumberLast4 = authorizedSource.cardNumberLast4;
     }
+    const accountNumber = trustedSourceAccountNumber ?? data.accountNumber;
+    const cardNumberLast4 = trustedSourceCardNumberLast4 === undefined
+      ? data.cardNumberLast4 ?? null
+      : trustedSourceCardNumberLast4;
+    const encryptedPii = buildEncryptedCollectionRecordPiiValues({
+      customerName: data.customerName,
+      icNumber: data.icNumber,
+      customerPhone: data.customerPhone,
+      accountNumber,
+    });
+    const piiSearchHashes = buildCollectionRecordPiiSearchHashes({
+      customerName: data.customerName,
+      icNumber: data.icNumber,
+      customerPhone: data.customerPhone,
+      accountNumber,
+    });
+    const persistedCustomerName = resolveStoredCollectionPiiPlaintextValue({
+      field: "customerName",
+      plaintext: data.customerName,
+      encrypted: encryptedPii?.customerNameEncrypted,
+    });
+    const persistedIcNumber = resolveStoredCollectionPiiPlaintextValue({
+      field: "icNumber",
+      plaintext: data.icNumber,
+      encrypted: encryptedPii?.icNumberEncrypted,
+    });
+    const persistedCustomerPhone = resolveStoredCollectionPiiPlaintextValue({
+      field: "customerPhone",
+      plaintext: data.customerPhone,
+      encrypted: encryptedPii?.customerPhoneEncrypted,
+    });
+    const persistedAccountNumber = resolveStoredCollectionPiiPlaintextValue({
+      field: "accountNumber",
+      plaintext: accountNumber,
+      encrypted: encryptedPii?.accountNumberEncrypted,
+    });
     await tx.execute(sql`
       INSERT INTO public.collection_records (
         id,
@@ -145,7 +153,7 @@ export async function createCollectionRecord(
         ${persistedAccountNumber},
         ${encryptedPii?.accountNumberEncrypted ?? null},
         ${piiSearchHashes?.accountNumberSearchHash ?? null},
-        ${data.cardNumberLast4 ?? null},
+        ${cardNumberLast4},
         ${data.sourceImportId ?? null},
         ${data.sourceDataRowId && data.sourceImportId
           ? sql`(

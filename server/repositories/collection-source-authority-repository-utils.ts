@@ -4,7 +4,11 @@ import type {
   CollectionSourceMatchBasis,
 } from "../storage-postgres-collection-types";
 import type { CollectionRepositoryExecutor } from "./collection-nickname-utils";
-import { hashCollectionSourceIdentifier } from "./collection-source-repository-utils";
+import { extractCanonicalSavedCollectionMasterRow } from "../lib/saved-collection-link-utils";
+import {
+  hashCollectionSourceIdentifier,
+  normalizeCollectionSourceIdentifier,
+} from "./collection-source-repository-utils";
 
 export type AuthorizedCollectionSourceSnapshotInput = {
   sourceImportId: string;
@@ -24,6 +28,13 @@ export type AuthorizedCollectionSourceSnapshotInput = {
   settlementCycleKey: string | null;
 };
 
+export type AuthorizedCollectionSourceIdentity = {
+  /** Trusted Account value from the exact Saved row. Full Card is never returned. */
+  accountNumber: string | null;
+  /** Safe display-only suffix derived from the hash-verified Saved Card. */
+  cardNumberLast4: string | null;
+};
+
 function normalizeRequiredText(value: unknown): string | null {
   const normalized = String(value ?? "").trim();
   return normalized || null;
@@ -36,7 +47,7 @@ function normalizeRequiredText(value: unknown): string | null {
 export async function assertAuthorizedCollectionSourceSnapshot(
   executor: CollectionRepositoryExecutor,
   input: AuthorizedCollectionSourceSnapshotInput,
-): Promise<void> {
+): Promise<AuthorizedCollectionSourceIdentity> {
   const sourceImportId = normalizeRequiredText(input.sourceImportId);
   const sourceDataRowId = normalizeRequiredText(input.sourceDataRowId);
   const paymentDate = normalizeRequiredText(input.paymentDate)?.slice(0, 10) ?? null;
@@ -85,7 +96,11 @@ export async function assertAuthorizedCollectionSourceSnapshot(
     : sql``;
 
   const result = await executor.execute(sql`
-    SELECT source_row.source_data_row_id
+    SELECT source_row.source_data_row_id,
+      source_row.account_number_hash,
+      source_row.card_number_hash,
+      source_row.card_number_last4,
+      data_row.json_data
     FROM public.collection_source_rows source_row
     JOIN public.collection_source_configs config
       ON config.source_import_id = source_row.source_import_id
@@ -114,4 +129,45 @@ export async function assertAuthorizedCollectionSourceSnapshot(
   if (!result.rows?.[0]) {
     throw new Error("Selected Collection source is no longer authorized for this payment.");
   }
+
+  const authorizedRow = result.rows[0] as Record<string, unknown>;
+  const canonicalRow = extractCanonicalSavedCollectionMasterRow(authorizedRow.json_data);
+  const indexedAccountHash = normalizeRequiredText(authorizedRow.account_number_hash);
+  const indexedCardHash = normalizeRequiredText(authorizedRow.card_number_hash);
+  const indexedCardLast4 = normalizeRequiredText(authorizedRow.card_number_last4);
+  const canonicalAccountHash = hashCollectionSourceIdentifier(
+    canonicalRow.accountNumber,
+    "account_number",
+  );
+  const canonicalCardHash = hashCollectionSourceIdentifier(
+    canonicalRow.cardNumber,
+    "card_number",
+  );
+  const normalizedCanonicalCard = normalizeCollectionSourceIdentifier(canonicalRow.cardNumber);
+  const canonicalCardLast4 = canonicalCardHash && /^\d{4}$/.test(normalizedCanonicalCard.slice(-4))
+    ? normalizedCanonicalCard.slice(-4)
+    : null;
+  const canonicalObligationKey = canonicalAccountHash
+    ? `account:${canonicalAccountHash}`
+    : canonicalCardHash
+      ? `card:${canonicalCardHash}`
+      : null;
+
+  // The raw Saved row is used only after both identifiers agree with the
+  // governed blind indexes. This prevents stale or modified JSON data from
+  // being copied into a Collection record after matching.
+  if (
+    !canonicalObligationKey
+    || indexedAccountHash !== canonicalAccountHash
+    || indexedCardHash !== canonicalCardHash
+    || indexedCardLast4 !== canonicalCardLast4
+    || sourceObligationKey !== canonicalObligationKey
+  ) {
+    throw new Error("Selected Collection source is no longer authorized for this payment.");
+  }
+
+  return {
+    accountNumber: canonicalRow.accountNumber,
+    cardNumberLast4: canonicalCardLast4,
+  };
 }

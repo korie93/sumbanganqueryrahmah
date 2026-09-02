@@ -1171,6 +1171,7 @@ export const collectionRecordResponseSchema = z.object({
   icNumber: z.string(),
   customerPhone: z.string(),
   accountNumber: z.string(),
+  cardNumberLast4: z.string().regex(/^\d{4}$/).nullable(),
   sourceImportId: nullableStringSchema.optional(),
   sourceDataRowId: nullableStringSchema.optional(),
   sourceImportName: nullableStringSchema.optional(),

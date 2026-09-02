@@ -203,6 +203,7 @@ function buildCollectionRecordPayload(overrides?: Record<string, unknown>) {
     icNumber: "900101015555",
     customerPhone: "0123456789",
     accountNumber: "ACC-1001",
+    cardNumberLast4: "2537",
     batch: "P25",
     paymentDate: "2026-03-24",
     amount: "120.50",
@@ -235,6 +236,34 @@ test("getCollectionRecords accepts the backend maximum page size", async () => {
     const payload = await getCollectionRecords({ pageSize: 5000 });
     assert.equal(payload.pageSize, 5000);
     assert.equal(payload.pagination.limit, 5000);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("getCollectionRecords preserves the masked card suffix returned by the backend", async () => {
+  const fullCardNumber = "5555555555554444";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(
+    JSON.stringify(buildCollectionListPayload({
+      records: [buildCollectionRecordPayload({
+        accountNumber: "",
+        cardNumber: fullCardNumber,
+      })],
+      total: 1,
+    })),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  )) as typeof fetch;
+
+  try {
+    const payload = await getCollectionRecords();
+    assert.equal(payload.records[0]?.accountNumber, "");
+    assert.equal(payload.records[0]?.cardNumberLast4, "2537");
+    assert.equal("cardNumber" in (payload.records[0] || {}), false);
+    assert.doesNotMatch(JSON.stringify(payload), new RegExp(fullCardNumber));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -308,6 +337,7 @@ test("collection mutation API wrappers validate create, update, and delete paylo
     const deleted = await deleteCollectionRecord("collection-1");
 
     assert.equal(created.record.id, "collection-1");
+    assert.equal(created.record.cardNumberLast4, "2537");
     assert.equal(updated.record.collectionStaffNickname, "Collector Alpha");
     assert.equal(deleted.ok, true);
   } finally {

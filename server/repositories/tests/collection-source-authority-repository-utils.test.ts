@@ -9,12 +9,19 @@ import {
   collectSqlText,
 } from "./sql-test-utils";
 
+const DUMMY_ACCOUNT_NUMBER = "ACCOUNT-DUMMY-1";
+const DUMMY_ACCOUNT_HASH = hashCollectionSourceIdentifier(
+  DUMMY_ACCOUNT_NUMBER,
+  "account_number",
+);
+if (!DUMMY_ACCOUNT_HASH) throw new Error("Test Account blind index was not generated.");
+
 const DUMMY_SNAPSHOT = {
   sourceImportId: "source-dummy-1",
   sourceDataRowId: "row-dummy-1",
   paymentDate: "2026-09-01",
-  accountNumber: "ACCOUNT-DUMMY-1",
-  cardNumber: "4111111111111111",
+  accountNumber: DUMMY_ACCOUNT_NUMBER,
+  cardNumber: "4111111111111234",
   cardNumberLast4: "1234",
   agingBucket: "D3" as const,
   callingDate: "2026-08-12",
@@ -22,9 +29,28 @@ const DUMMY_SNAPSHOT = {
   totalDue: "1000.00",
   billingPrincipalOsp: "5000.00",
   sourceMatchBasis: "account_and_card" as const,
-  sourceObligationKey: "account:dummy-hash",
-  settlementCycleKey: "2026-08-12:account:dummy-hash",
+  sourceObligationKey: `account:${DUMMY_ACCOUNT_HASH}`,
+  settlementCycleKey: `2026-08-12:account:${DUMMY_ACCOUNT_HASH}`,
 };
+
+function buildAuthorizedSourceRow(input: {
+  sourceDataRowId: string;
+  accountNumber?: string | null;
+  cardNumber?: string | null;
+}) {
+  const accountNumber = String(input.accountNumber || "").trim() || null;
+  const cardNumber = String(input.cardNumber || "").trim() || null;
+  return {
+    source_data_row_id: input.sourceDataRowId,
+    account_number_hash: hashCollectionSourceIdentifier(accountNumber, "account_number"),
+    card_number_hash: hashCollectionSourceIdentifier(cardNumber, "card_number"),
+    card_number_last4: cardNumber ? cardNumber.slice(-4) : null,
+    json_data: {
+      ...(accountNumber ? { "Account Number": accountNumber } : {}),
+      ...(cardNumber ? { "Card Number": cardNumber } : {}),
+    },
+  };
+}
 
 test("source authority recheck locks and verifies the governed indexed snapshot", async () => {
   const statements: string[] = [];
@@ -33,7 +59,7 @@ test("source authority recheck locks and verifies the governed indexed snapshot"
       const statement = collectSqlText(query);
       statements.push(statement);
       return /SELECT source_row\.source_data_row_id/i.test(statement)
-        ? { rows: [{ source_data_row_id: DUMMY_SNAPSHOT.sourceDataRowId }] }
+        ? { rows: [buildAuthorizedSourceRow(DUMMY_SNAPSHOT)] }
         : { rows: [] };
     },
   } as CollectionRepositoryExecutor;
@@ -58,7 +84,7 @@ test("source authority recheck requires both full-card and account HMACs for acc
   const executor = {
     execute: async (query: unknown) => {
       queries.push(query);
-      return { rows: [{ source_data_row_id: DUMMY_SNAPSHOT.sourceDataRowId }] };
+      return { rows: [buildAuthorizedSourceRow(DUMMY_SNAPSHOT)] };
     },
   } as CollectionRepositoryExecutor;
   console.error = (...values: unknown[]) => emitted.push(values.map(String).join(" "));
@@ -110,7 +136,7 @@ test("source authority recheck permits card-only authority using the full-card H
   const executor = {
     execute: async (query: unknown) => {
       queries.push(query);
-      return { rows: [{ source_data_row_id: cardOnlySnapshot.sourceDataRowId }] };
+      return { rows: [buildAuthorizedSourceRow(cardOnlySnapshot)] };
     },
   } as CollectionRepositoryExecutor;
 
@@ -126,6 +152,92 @@ test("source authority recheck permits card-only authority using the full-card H
   assert.doesNotMatch(
     collectSqlLiteralText(queries[0]),
     new RegExp(cardOnlySnapshot.cardNumber, "i"),
+  );
+});
+
+test("source authority returns only a hash-verified Account and masked Card suffix", async () => {
+  const accountNumber = "000012345678";
+  const cardNumber = "5555555555554444";
+  const accountHash = hashCollectionSourceIdentifier(accountNumber, "account_number");
+  const cardHash = hashCollectionSourceIdentifier(cardNumber, "card_number");
+  assert.ok(accountHash);
+  assert.ok(cardHash);
+  const snapshot = {
+    ...DUMMY_SNAPSHOT,
+    accountNumber: "",
+    cardNumber,
+    cardNumberLast4: "4444",
+    sourceMatchBasis: "card_number" as const,
+    sourceObligationKey: `account:${accountHash}`,
+    settlementCycleKey: `2026-08-12:account:${accountHash}`,
+  };
+  const executor = {
+    execute: async () => ({
+      rows: [{
+        source_data_row_id: snapshot.sourceDataRowId,
+        account_number_hash: accountHash,
+        card_number_hash: cardHash,
+        card_number_last4: "4444",
+        json_data: {
+          "Account Number": accountNumber,
+          "Card Number": cardNumber,
+        },
+      }],
+    }),
+  } as CollectionRepositoryExecutor;
+
+  const identity = await assertAuthorizedCollectionSourceSnapshot(executor, snapshot);
+
+  assert.deepEqual(identity, { accountNumber, cardNumberLast4: "4444" });
+  assert.equal(Object.prototype.hasOwnProperty.call(identity, "cardNumber"), false);
+});
+
+test("source authority rejects a governed Card suffix that disagrees with the Saved Card", async () => {
+  const cardNumber = "5555555555554444";
+  const executor = {
+    execute: async () => ({
+      rows: [{
+        ...buildAuthorizedSourceRow({
+          sourceDataRowId: DUMMY_SNAPSHOT.sourceDataRowId,
+          accountNumber: DUMMY_SNAPSHOT.accountNumber,
+          cardNumber,
+        }),
+        card_number_last4: "1111",
+      }],
+    }),
+  } as CollectionRepositoryExecutor;
+
+  await assert.rejects(
+    () => assertAuthorizedCollectionSourceSnapshot(executor, {
+      ...DUMMY_SNAPSHOT,
+      cardNumber,
+      cardNumberLast4: "1111",
+    }),
+    /no longer authorized/i,
+  );
+});
+
+test("source authority rejects a Saved identifier that no longer agrees with its blind index", async () => {
+  const cardNumber = "5555555555554444";
+  const cardHash = hashCollectionSourceIdentifier(cardNumber, "card_number");
+  assert.ok(cardHash);
+  const executor = {
+    execute: async () => ({
+      rows: [{
+        source_data_row_id: DUMMY_SNAPSHOT.sourceDataRowId,
+        account_number_hash: hashCollectionSourceIdentifier("ACCOUNT-ORIGINAL", "account_number"),
+        card_number_hash: cardHash,
+        json_data: {
+          "Account Number": "ACCOUNT-MODIFIED",
+          "Card Number": cardNumber,
+        },
+      }],
+    }),
+  } as CollectionRepositoryExecutor;
+
+  await assert.rejects(
+    () => assertAuthorizedCollectionSourceSnapshot(executor, DUMMY_SNAPSHOT),
+    /no longer authorized/i,
   );
 });
 

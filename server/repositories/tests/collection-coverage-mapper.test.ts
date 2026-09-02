@@ -106,3 +106,22 @@ test("collection mapper compares integer cents without floating-point drift", ()
   assert.equal(below.cpStatus, "cp");
   assert.equal(below.remainingAmount, "0.01");
 });
+
+test("collection mapper emits only a four-digit masked Card suffix", () => {
+  const validLeadingZero = mapCollectionRecordRow({
+    ...buildRow("10.00", "100.00"),
+    card_number_last4: "0123",
+  });
+  const tooShort = mapCollectionRecordRow({
+    ...buildRow("10.00", "100.00"),
+    card_number_last4: "123",
+  });
+  const nonNumeric = mapCollectionRecordRow({
+    ...buildRow("10.00", "100.00"),
+    card_number_last4: "ABCD",
+  });
+
+  assert.equal(validLeadingZero.cardNumberLast4, "0123");
+  assert.equal(tooShort.cardNumberLast4, null);
+  assert.equal(nonNumeric.cardNumberLast4, null);
+});

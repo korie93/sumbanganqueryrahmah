@@ -27,6 +27,7 @@ import { hasPendingCollectionRecordDailyRollupSlices } from "./collection-record
 import { attachCollectionReceipts } from "./collection-receipt-utils";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
+import { hydrateCollectionRecordSourceAccounts } from "./collection-record-source-account-utils";
 
 function normalizeQueryRows(rows: unknown[] | undefined): unknown[] {
   return Array.isArray(rows) ? rows : [];
@@ -115,7 +116,8 @@ export async function listCollectionRecords(
   `);
 
   const records = normalizeQueryRows(result.rows).map((row) => mapCollectionRecordRow(row));
-  return attachCollectionReceipts(db, records);
+  const recordsWithSourceAccounts = await hydrateCollectionRecordSourceAccounts(db, records);
+  return attachCollectionReceipts(db, recordsWithSourceAccounts);
 }
 
 export async function summarizeCollectionRecords(
@@ -409,6 +411,10 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
 
   const row = result.rows?.[0];
   if (!row) return undefined;
-  const [record] = await attachCollectionReceipts(db, [mapCollectionRecordRow(row)]);
+  const recordsWithSourceAccounts = await hydrateCollectionRecordSourceAccounts(
+    db,
+    [mapCollectionRecordRow(row)],
+  );
+  const [record] = await attachCollectionReceipts(db, recordsWithSourceAccounts);
   return record;
 }

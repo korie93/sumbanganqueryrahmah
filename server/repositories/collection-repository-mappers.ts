@@ -271,7 +271,7 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
   const cardNumberLast4Raw = String(
     normalizedRow.card_number_last4 ?? normalizedRow.cardNumberLast4 ?? "",
   ).trim();
-  const cardNumberLast4 = cardNumberLast4Raw && cardNumberLast4Raw.length <= 4
+  const cardNumberLast4 = /^\d{4}$/.test(cardNumberLast4Raw)
     ? cardNumberLast4Raw
     : null;
   const matchBasisRaw = normalizedRow.source_match_basis ?? normalizedRow.sourceMatchBasis;
