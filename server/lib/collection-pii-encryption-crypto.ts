@@ -29,8 +29,16 @@ export function getCollectionPiiBlindIndexKey(secret: string) {
 }
 
 function decryptCollectionPiiValueWithKey(payload: string, key: Buffer): string {
-  const [ivRaw, ciphertextRaw, tagRaw] = String(payload || "").split(".");
-  if (!ivRaw || !ciphertextRaw || !tagRaw) {
+  const payloadParts = String(payload || "").split(".");
+  if (payloadParts.length !== 3) {
+    throw new Error("Invalid collection PII payload.");
+  }
+  const [ivRaw, ciphertextRaw, tagRaw] = payloadParts;
+  // AES-GCM has a valid authenticated representation for an empty plaintext:
+  // `<iv>..<tag>`. Older writes could produce that representation for optional
+  // blank fields, so accept the empty ciphertext while still requiring exactly
+  // three segments plus a non-empty IV and authentication tag.
+  if (!ivRaw || ciphertextRaw === undefined || !tagRaw) {
     throw new Error("Invalid collection PII payload.");
   }
 

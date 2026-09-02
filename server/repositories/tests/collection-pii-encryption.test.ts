@@ -8,6 +8,7 @@ import {
   decryptCollectionPiiValue,
   decryptCollectionPiiValueResult,
   decryptCollectionPiiValueSafe,
+  encryptCollectionPiiFieldValue,
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
   hasCollectionPiiEncryptionConfigured,
@@ -107,6 +108,83 @@ test("collection PII helpers encrypt and decrypt collection record shadow fields
       }),
       "900101015555",
     );
+  });
+});
+
+test("collection PII helpers keep optional blank fields empty instead of storing unreadable encrypted placeholders", () => {
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    const encrypted = buildEncryptedCollectionRecordPiiValues({
+      customerName: "Card Only Customer",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "   ",
+    });
+
+    assert.ok(encrypted);
+    assert.equal(encrypted?.accountNumberEncrypted, null);
+    assert.equal(encryptCollectionPiiFieldValue(""), null);
+    assert.equal(
+      resolveCollectionPiiFieldValueFailClosed({
+        field: "accountNumber",
+        plaintext: null,
+        encrypted: encrypted?.accountNumberEncrypted,
+      }),
+      "",
+    );
+  });
+});
+
+test("collection PII decryption accepts authenticated legacy empty-field payloads", () => {
+  const secret = "test-collection-pii-encryption-key";
+  const payload = encryptCollectionPiiWithSecret("", secret);
+
+  assert.match(payload, /^[^.]+\.\.[^.]+$/);
+  assert.equal(decryptCollectionPiiValueWithSecret(payload, secret), "");
+});
+
+test("collection record mapper safely reads a legacy encrypted blank Account Number", () => {
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    const encrypted = buildEncryptedCollectionRecordPiiValues({
+      customerName: "Card Only Customer",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "",
+    });
+    const legacyBlankAccount = encryptCollectionPiiWithSecret(
+      "",
+      "test-collection-pii-encryption-key",
+    );
+
+    const record = mapCollectionRecordRow({
+      id: "11111111-1111-1111-1111-111111111112",
+      customer_name: null,
+      customer_name_encrypted: encrypted?.customerNameEncrypted,
+      ic_number: null,
+      ic_number_encrypted: encrypted?.icNumberEncrypted,
+      customer_phone: null,
+      customer_phone_encrypted: encrypted?.customerPhoneEncrypted,
+      account_number: null,
+      account_number_encrypted: legacyBlankAccount,
+      card_number_last4: "9999",
+      batch: "P10",
+      payment_date: "2026-09-02",
+      amount: "1450.00",
+      receipt_file: null,
+      receipt_total_amount: 145000,
+      receipt_validation_status: "matched",
+      receipt_validation_message: null,
+      receipt_count: 2,
+      duplicate_receipt_flag: false,
+      created_by_login: "system",
+      collection_staff_nickname: "Collector Alpha",
+      staff_username: "Collector Alpha",
+      created_at: new Date("2026-09-02T00:00:00.000Z"),
+      updated_at: new Date("2026-09-02T00:00:00.000Z"),
+    });
+
+    assert.equal(record.accountNumber, "");
+    assert.equal(record.cardNumberLast4, "9999");
+    assert.equal(record.receiptCount, 2);
   });
 });
 

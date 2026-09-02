@@ -105,16 +105,18 @@ export function hasCollectionPiiEncryptionConfigured(): boolean {
   return Boolean(getCollectionPiiEncryptionSecret());
 }
 
+function encryptCollectionPiiValueOrNull(value: unknown, secret: string): string | null {
+  const normalized = normalizeCollectionPiiValue(value);
+  return normalized ? encryptCollectionPiiWithSecret(normalized, secret) : null;
+}
+
 export function encryptCollectionPiiFieldValue(value: unknown): string | null {
   const encryptionSecret = getCollectionPiiEncryptionSecret();
   if (!encryptionSecret) {
     return null;
   }
 
-  return encryptCollectionPiiWithSecret(
-    normalizeCollectionPiiValue(value),
-    encryptionSecret,
-  );
+  return encryptCollectionPiiValueOrNull(value, encryptionSecret);
 }
 
 export function buildEncryptedCollectionRecordPiiValues(values: {
@@ -129,10 +131,10 @@ export function buildEncryptedCollectionRecordPiiValues(values: {
   }
 
   return {
-    customerNameEncrypted: encryptCollectionPiiWithSecret(normalizeCollectionPiiValue(values.customerName), encryptionSecret),
-    icNumberEncrypted: encryptCollectionPiiWithSecret(normalizeCollectionPiiValue(values.icNumber), encryptionSecret),
-    customerPhoneEncrypted: encryptCollectionPiiWithSecret(normalizeCollectionPiiValue(values.customerPhone), encryptionSecret),
-    accountNumberEncrypted: encryptCollectionPiiWithSecret(normalizeCollectionPiiValue(values.accountNumber), encryptionSecret),
+    customerNameEncrypted: encryptCollectionPiiValueOrNull(values.customerName, encryptionSecret),
+    icNumberEncrypted: encryptCollectionPiiValueOrNull(values.icNumber, encryptionSecret),
+    customerPhoneEncrypted: encryptCollectionPiiValueOrNull(values.customerPhone, encryptionSecret),
+    accountNumberEncrypted: encryptCollectionPiiValueOrNull(values.accountNumber, encryptionSecret),
   };
 }
 

@@ -38,6 +38,17 @@ test("buildSaveCollectionReadySummary exposes key save fields", () => {
   assert.equal(summary.find((item) => item.label === "Receipt")?.value, "1 receipt");
 });
 
+test("buildSaveCollectionReadySummary never exposes the full card number by default", () => {
+  const cardNumber = "5555444433332222";
+  const summary = buildSaveCollectionReadySummary({
+    values: { ...baseValues, cardNumber },
+    receiptCount: 0,
+  });
+
+  assert.equal(summary.find((item) => item.label === "Card")?.value, "Card ending 2222");
+  assert.doesNotMatch(JSON.stringify(summary), new RegExp(cardNumber));
+});
+
 test("buildSaveCollectionReadySummary marks missing and invalid values from shared validation", () => {
   const summary = buildSaveCollectionReadySummary({
     values: {

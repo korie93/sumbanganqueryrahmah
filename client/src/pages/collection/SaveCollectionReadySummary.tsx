@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { getAriaPressedProps } from "@/lib/aria-state-props";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import type {
   SaveCollectionFormValues,
@@ -14,6 +15,9 @@ type SaveCollectionReadySummaryProps = {
   readiness: SaveCollectionReadiness;
   receiptCount: number;
   receiptDrafts: CollectionReceiptDraftInput[];
+  cardNumberVisible: boolean;
+  cardNumberVisibilityDisabled?: boolean;
+  onToggleCardNumberVisibility: () => void;
 };
 
 export function SaveCollectionReadySummary({
@@ -21,10 +25,14 @@ export function SaveCollectionReadySummary({
   readiness,
   receiptCount,
   receiptDrafts,
+  cardNumberVisible,
+  cardNumberVisibilityDisabled = false,
+  onToggleCardNumberVisibility,
 }: SaveCollectionReadySummaryProps) {
   const items = buildSaveCollectionReadySummary({ values, receiptCount, readiness });
   const reviewHints = buildSaveCollectionReceiptReviewHints({ values, receiptDrafts });
   const isReady = readiness.isReady;
+  const fullCardNumber = values.cardNumber.trim();
 
   return (
     <section
@@ -68,7 +76,35 @@ export function SaveCollectionReadySummary({
               ? "break-words text-sm font-medium text-destructive"
               : "break-words text-sm font-medium text-foreground"}
             >
-              {item.value}
+              {item.label === "Card" && fullCardNumber && !item.error ? (
+                <span className="flex min-w-0 items-center justify-between gap-2">
+                  <span
+                    id="save-collection-card-review-value"
+                    className="min-w-0 break-all tabular-nums"
+                  >
+                    {cardNumberVisible ? fullCardNumber : item.value}
+                  </span>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                    onClick={onToggleCardNumberVisibility}
+                    disabled={cardNumberVisibilityDisabled}
+                    aria-label={cardNumberVisible
+                      ? "Hide full card number in review"
+                      : "Show full card number in review"}
+                    aria-controls="save-collection-card-review-value"
+                    data-testid="toggle-card-number-review"
+                    {...getAriaPressedProps(cardNumberVisible)}
+                  >
+                    {cardNumberVisible ? (
+                      <EyeOff className="h-3.5 w-3.5" aria-hidden="true" focusable="false" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" aria-hidden="true" focusable="false" />
+                    )}
+                    <span>{cardNumberVisible ? "Hide" : "Show"}</span>
+                  </button>
+                </span>
+              ) : item.value}
             </dd>
             {item.error ? (
               <dd className="mt-1 text-xs leading-relaxed text-destructive">{item.error}</dd>

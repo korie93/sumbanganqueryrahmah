@@ -23,6 +23,8 @@ export function useSaveCollectionFormState({
   const [customerPhone, setCustomerPhone] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [cardNumber, setCardNumber] = useState("");
+  const [isCardNumberInputVisible, setIsCardNumberInputVisible] = useState(false);
+  const [isCardNumberReviewVisible, setIsCardNumberReviewVisible] = useState(false);
   const [batch, setBatch] = useState<CollectionBatch>("P10");
   const [paymentDate, setPaymentDate] = useState("");
   const [amount, setAmount] = useState("");
@@ -60,6 +62,8 @@ export function useSaveCollectionFormState({
     setCustomerPhone(restored.customerPhone);
     setAccountNumber(restored.accountNumber);
     setCardNumber(restored.cardNumber);
+    setIsCardNumberInputVisible(false);
+    setIsCardNumberReviewVisible(false);
     setBatch(restored.batch);
     setPaymentDate(restored.paymentDate);
     setAmount(restored.amount);
@@ -141,9 +145,19 @@ export function useSaveCollectionFormState({
 
   const setCardNumberInput = useCallback((value: string) => {
     setCardNumber(value);
+    setIsCardNumberInputVisible(false);
+    setIsCardNumberReviewVisible(false);
     clearFieldError("cardNumber");
     clearFieldError("accountNumber");
   }, [clearFieldError]);
+
+  const toggleCardNumberInputVisibility = useCallback(() => {
+    setIsCardNumberInputVisible((current) => !current);
+  }, []);
+
+  const toggleCardNumberReviewVisibility = useCallback(() => {
+    setIsCardNumberReviewVisible((current) => !current);
+  }, []);
 
   const setBatchInput = useCallback((value: CollectionBatch) => {
     setBatch(value);
@@ -166,6 +180,8 @@ export function useSaveCollectionFormState({
     customerPhone,
     accountNumber,
     cardNumber,
+    isCardNumberInputVisible,
+    isCardNumberReviewVisible,
     batch,
     paymentDate,
     amount,
@@ -179,6 +195,8 @@ export function useSaveCollectionFormState({
     setCustomerPhone: setCustomerPhoneInput,
     setAccountNumber: setAccountNumberInput,
     setCardNumber: setCardNumberInput,
+    toggleCardNumberInputVisibility,
+    toggleCardNumberReviewVisibility,
     setBatch: setBatchInput,
     setPaymentDate: setPaymentDateInput,
     setAmount: setAmountInput,

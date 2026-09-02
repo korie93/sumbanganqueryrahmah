@@ -15,6 +15,10 @@ const readySummarySource = readFileSync(
   path.resolve(process.cwd(), "client/src/pages/collection/SaveCollectionReadySummary.tsx"),
   "utf8",
 );
+const formStateSource = readFileSync(
+  path.resolve(process.cwd(), "client/src/pages/collection/useSaveCollectionFormState.ts"),
+  "utf8",
+);
 
 test("save collection fields use explicit invalid props for Edge a11y inspection", () => {
   assert.match(saveCollectionPageSource, /function getInvalidFieldProps/);
@@ -24,7 +28,11 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.match(saveCollectionPageSource, /name="customerIcNumber"[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.icNumberValidationProps\}/);
   assert.match(saveCollectionPageSource, /name="accountNumber"[\s\S]*\{\.\.\.accountNumberValidationProps\}/);
   assert.match(saveCollectionPageSource, /name="cardNumber"[\s\S]*\{\.\.\.cardNumberValidationProps\}/);
-  assert.match(saveCollectionPageSource, /type="password"[\s\S]*name="cardNumber"|name="cardNumber"[\s\S]*type="password"/);
+  assert.match(saveCollectionPageSource, /name="cardNumber"[\s\S]*type=\{state\.isCardNumberInputVisible \? "text" : "password"\}/);
+  assert.match(saveCollectionPageSource, /data-testid="toggle-card-number-input"/);
+  assert.match(saveCollectionPageSource, /aria-label=\{state\.isCardNumberInputVisible \? "Hide card number" : "Show card number"\}/);
+  assert.match(saveCollectionPageSource, /aria-controls=\{cardNumberInputId\}/);
+  assert.match(saveCollectionPageSource, /getAriaPressedProps\(state\.isCardNumberInputVisible\)/);
   assert.match(saveCollectionPageSource, /Isi sekurang-kurangnya satu: Account Number atau Card Number\./);
   assert.match(saveCollectionPageSource, /const batchValidationProps = getInvalidFieldProps/);
   assert.match(saveCollectionPageSource, /const paymentDateValidationProps = getInvalidFieldProps/);
@@ -83,6 +91,30 @@ test("save readiness definition list keeps validation details in valid dd elemen
     /<dd className="mt-1 text-xs leading-relaxed text-destructive">\{item\.error\}<\/dd>/,
   );
   assert.doesNotMatch(readySummarySource, /<p[^>]*>\{item\.error\}<\/p>/);
+});
+
+test("save collection review masks card number and exposes an accessible visibility control", () => {
+  assert.match(readySummarySource, /cardNumberVisible: boolean/);
+  assert.match(readySummarySource, /cardNumberVisible \? fullCardNumber : item\.value/);
+  assert.match(readySummarySource, /data-testid="toggle-card-number-review"/);
+  assert.match(readySummarySource, /"Hide full card number in review"/);
+  assert.match(readySummarySource, /"Show full card number in review"/);
+  assert.match(readySummarySource, /aria-controls="save-collection-card-review-value"/);
+  assert.match(readySummarySource, /getAriaPressedProps\(cardNumberVisible\)/);
+});
+
+test("card number visibility resets when input or restored record changes", () => {
+  const restoredValuesStart = formStateSource.indexOf("const applyRestoredFormValues");
+  const restoredValuesEnd = formStateSource.indexOf("const clearFormValues", restoredValuesStart);
+  const restoredValuesSource = formStateSource.slice(restoredValuesStart, restoredValuesEnd);
+  assert.match(restoredValuesSource, /setIsCardNumberInputVisible\(false\)/);
+  assert.match(restoredValuesSource, /setIsCardNumberReviewVisible\(false\)/);
+
+  const cardInputStart = formStateSource.indexOf("const setCardNumberInput");
+  const cardInputEnd = formStateSource.indexOf("const toggleCardNumberInputVisibility", cardInputStart);
+  const cardInputSource = formStateSource.slice(cardInputStart, cardInputEnd);
+  assert.match(cardInputSource, /setIsCardNumberInputVisible\(false\)/);
+  assert.match(cardInputSource, /setIsCardNumberReviewVisible\(false\)/);
 });
 
 test("save collection form grid responds to available width and text scaling", () => {

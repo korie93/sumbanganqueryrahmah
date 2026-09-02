@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePickerField } from "@/components/ui/date-picker-field";
@@ -8,7 +9,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
-import { getAriaInvalidProps, getAriaRequiredProps } from "@/lib/aria-state-props";
+import {
+  getAriaInvalidProps,
+  getAriaPressedProps,
+  getAriaRequiredProps,
+} from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import { SaveCollectionFormSection } from "@/pages/collection/SaveCollectionFormSection";
@@ -207,19 +212,38 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       </div>
       <div className="space-y-2">
         <Label htmlFor={cardNumberInputId}>Card Number</Label>
-        <Input
-          id={cardNumberInputId}
-          name="cardNumber"
-          type="password"
-          value={state.cardNumber}
-          onChange={(event) => state.setCardNumber(event.target.value)}
-          onBlur={() => state.validateField("cardNumber")}
-          disabled={state.submitting}
-          autoComplete="off"
-          inputMode="numeric"
-          maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber}
-          {...cardNumberValidationProps}
-        />
+        <div className="relative">
+          <Input
+            id={cardNumberInputId}
+            name="cardNumber"
+            type={state.isCardNumberInputVisible ? "text" : "password"}
+            value={state.cardNumber}
+            onChange={(event) => state.setCardNumber(event.target.value)}
+            onBlur={() => state.validateField("cardNumber")}
+            disabled={state.submitting}
+            autoComplete="off"
+            inputMode="numeric"
+            maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber}
+            className="pr-12 tabular-nums"
+            {...cardNumberValidationProps}
+          />
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            onClick={state.toggleCardNumberInputVisibility}
+            disabled={state.submitting || !state.cardNumber}
+            aria-label={state.isCardNumberInputVisible ? "Hide card number" : "Show card number"}
+            aria-controls={cardNumberInputId}
+            data-testid="toggle-card-number-input"
+            {...getAriaPressedProps(state.isCardNumberInputVisible)}
+          >
+            {state.isCardNumberInputVisible ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" focusable="false" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" focusable="false" />
+            )}
+          </button>
+        </div>
         {state.fieldErrors.cardNumber ? (
           <p id={cardNumberErrorId} className="text-xs text-destructive" role="alert">
             {state.fieldErrors.cardNumber}
@@ -441,6 +465,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           readiness={state.readiness}
           receiptCount={state.receiptFiles.length}
           receiptDrafts={state.receiptDrafts}
+          cardNumberVisible={state.isCardNumberReviewVisible}
+          cardNumberVisibilityDisabled={state.submitting}
+          onToggleCardNumberVisibility={state.toggleCardNumberReviewVisibility}
         />
 
         <div

@@ -24,6 +24,10 @@ export function getAriaInvalidProps(invalid: AriaInvalidInput): { "aria-invalid"
   return {};
 }
 
+export function getAriaPressedProps(pressed: boolean): { "aria-pressed": AriaBooleanString } {
+  return { "aria-pressed": pressed ? "true" : "false" };
+}
+
 export function getAriaRequiredProps(required: boolean): { "aria-required"?: "true" } {
   return required ? { "aria-required": "true" } : {};
 }
