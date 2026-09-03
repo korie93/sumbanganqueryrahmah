@@ -25,6 +25,21 @@ test("smoke-ui workflow configures a deterministic receipt scanner shim for read
   assert.match(smokeJob, /production templates still require clamdscan fail-closed/);
 });
 
+test("smoke-ui workflow configures a dedicated per-run collection PII key", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const smokeJob = extractSection(workflow, "  smoke-ui:", "\n    steps:");
+
+  assert.match(
+    smokeJob,
+    /COLLECTION_PII_ENCRYPTION_KEY:\s*sqr-ci-collection-pii-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-ephemeral-key-48chars/,
+  );
+  assert.doesNotMatch(
+    smokeJob,
+    /COLLECTION_PII_ENCRYPTION_KEY:\s*sqr-ci-session-/,
+    "Collection PII encryption must not reuse the session secret",
+  );
+});
+
 test("smoke-ui workflow keeps auth smoke ahead of slower Lighthouse budgets", () => {
   const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
   const startIndex = workflow.indexOf("  smoke-ui:");

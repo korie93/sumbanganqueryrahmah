@@ -85,6 +85,14 @@ const assert = (condition, message) => {
   }
 };
 
+const assertSmokeResponseStatus = (response, expectedStatus, operation) => {
+  const actualStatus = response.status();
+  assert(
+    actualStatus === expectedStatus,
+    `${operation} returned unexpected status ${actualStatus}; expected ${expectedStatus}.`,
+  );
+};
+
 const waitMs = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 const waitForSmokeDocumentReady = async (page) => {
@@ -685,6 +693,13 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
 
     const sourceButtons = page.locator('button[id^="billing-source-"]');
     await sourceButtons.first().waitFor({ timeout: 20_000 });
+    const finalReportResponse = page.waitForResponse((response) => {
+      if (response.request().method() !== "GET") return false;
+      const url = new URL(response.url());
+      return url.pathname === "/api/collection/report/billing-principal"
+        && url.searchParams.get("sourceImportIds") === sourceImport.id
+        && url.searchParams.get("agingBuckets") === "D3";
+    }, { timeout: 20_000 });
     const sourceCount = await sourceButtons.count();
     for (let index = 0; index < sourceCount; index += 1) {
       const button = sourceButtons.nth(index);
@@ -699,20 +714,19 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
       if (await button.getAttribute("data-state") === "checked") await button.click();
     }
 
+    assertSmokeResponseStatus(await finalReportResponse, 200, "Load final Billing Principal report");
     await page.getByRole("table", { name: "Billing Principal OSP performance by aging" }).waitFor({ timeout: 20_000 });
     const saveTargetButton = page.getByRole("button", { name: "Save Current Target" });
     await saveTargetButton.waitFor({ timeout: 20_000 });
-    assert(await saveTargetButton.isEnabled(), "Billing Principal V7 smoke requires a ready governed target");
-    await saveTargetButton.click();
+    await saveTargetButton.click({ timeout: 20_000 });
     await page.getByRole("heading", { name: "Create Saved Target" }).waitFor({ timeout: 15_000 });
     await page.getByLabel("Target name").fill(targetName);
     const createTargetResponse = page.waitForResponse((response) => (
       response.request().method() === "POST"
       && new URL(response.url()).pathname === "/api/collection/report/billing-principal/saved-targets"
-      && response.status() === 200
     ));
     await page.getByRole("button", { name: "Create Target" }).click();
-    await createTargetResponse;
+    assertSmokeResponseStatus(await createTargetResponse, 200, "Create Billing Principal Saved Target");
     await page.getByRole("heading", { name: targetName }).waitFor({ timeout: 20_000 });
     await page.getByText(sourceImport.name, { exact: true }).first().waitFor({ timeout: 20_000 });
     await page.getByText(sourceImport.filename, { exact: true }).first().waitFor({ timeout: 20_000 });
@@ -728,10 +742,9 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
     const clientResultResponse = page.waitForResponse((response) => (
       response.request().method() === "PUT"
       && /\/client-results$/.test(new URL(response.url()).pathname)
-      && response.status() === 200
     ));
     await page.getByRole("button", { name: "Save Client Results" }).click();
-    await clientResultResponse;
+    assertSmokeResponseStatus(await clientResultResponse, 200, "Save Billing Principal Client Results");
     await clientResultDialogHeading.waitFor({ state: "hidden", timeout: 15_000 });
     await page.getByRole("table", { name: "Client Billing Principal result" }).getByText(asOf, { exact: true }).first().waitFor({ timeout: 20_000 });
 
@@ -751,10 +764,9 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
     const createEntryResponse = page.waitForResponse((response) => (
       response.request().method() === "POST"
       && /\/reconciliations$/.test(new URL(response.url()).pathname)
-      && response.status() === 200
     ));
     await page.getByRole("button", { name: "Create Entry" }).click();
-    await createEntryResponse;
+    assertSmokeResponseStatus(await createEntryResponse, 200, "Create Billing Principal Table C entry");
     await page.getByRole("heading", { name: createManualReconciliationHeading }).waitFor({ state: "hidden", timeout: 15_000 });
 
     const tableC = page.getByRole("table", { name: "Table C manual reconciliation entries" });
@@ -774,10 +786,9 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
     const updateEntryResponse = page.waitForResponse((response) => (
       response.request().method() === "PATCH"
       && /\/reconciliations\/[^/]+$/.test(new URL(response.url()).pathname)
-      && response.status() === 200
     ));
     await page.getByRole("button", { name: "Save Changes" }).click();
-    await updateEntryResponse;
+    assertSmokeResponseStatus(await updateEntryResponse, 200, "Update Billing Principal Table C entry");
     await page.getByRole("heading", { name: "Edit Table C Entry" }).waitFor({ state: "hidden", timeout: 15_000 });
 
     const historyButton = tableC.locator('button[aria-label^="View history"]').first();
@@ -794,10 +805,9 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
     const voidResponse = page.waitForResponse((response) => (
       response.request().method() === "POST"
       && /\/reconciliations\/[^/]+\/void$/.test(new URL(response.url()).pathname)
-      && response.status() === 200
     ));
     await page.getByRole("button", { name: "Void Entry" }).click();
-    await voidResponse;
+    assertSmokeResponseStatus(await voidResponse, 200, "Void Billing Principal Table C entry");
     await page.getByRole("heading", { name: "Void Table C Entry" }).waitFor({ state: "hidden", timeout: 15_000 });
 
     const tableCStatusFilterLabel = ["Filter", "Table", "C", "by status"].join(" ");
@@ -809,10 +819,9 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
     const deleteTargetResponse = page.waitForResponse((response) => (
       response.request().method() === "DELETE"
       && /\/saved-targets\/[^/]+$/.test(new URL(response.url()).pathname)
-      && response.status() === 200
     ));
     await page.getByRole("button", { name: "Delete Target" }).last().click();
-    await deleteTargetResponse;
+    assertSmokeResponseStatus(await deleteTargetResponse, 200, "Delete Billing Principal Saved Target");
     await page.getByRole("heading", { name: targetName }).waitFor({ state: "hidden", timeout: 20_000 });
     targetDeleted = true;
 

@@ -119,12 +119,17 @@ test("Billing Principal V7 smoke exercises governed UI creation, exact snapshots
   assert.match(flowSource, /createCollectionSmokeSourceImport\(context,/);
   assert.match(flowSource, /await applySmokeCollectionNicknameSession\(page, nickname\)/);
   assert.match(flowSource, /await navigateForSmoke\(page, "\/collection\/billing-principal"\)/);
+  assert.match(flowSource, /url\.searchParams\.get\("sourceImportIds"\) === sourceImport\.id/);
+  assert.match(flowSource, /url\.searchParams\.get\("agingBuckets"\) === "D3"/);
+  assert.match(flowSource, /assertSmokeResponseStatus\(await finalReportResponse, 200/);
   assert.match(flowSource, /Save Current Target/);
   assert.match(flowSource, /Exact Client snapshot: 50\.00%/);
   assert.match(flowSource, /createManualReconciliationHeading = \["Create", "Table", "C", "Reconciliation"\]\.join\(" "\)/);
   assert.match(flowSource, /Table C Reconciliation Details/);
   assert.match(flowSource, /Edit Table C Entry/);
   assert.match(flowSource, /response\.request\(\)\.method\(\) === "PATCH"/);
+  assert.match(flowSource, /assertSmokeResponseStatus\(await createTargetResponse, 200/);
+  assert.doesNotMatch(flowSource, /response\.status\(\) === 200/);
   assert.match(flowSource, /Table C Audit History/);
   assert.match(flowSource, /getByText\("UPDATE", \{ exact: true \}\)/);
   assert.match(flowSource, /Void Table C Entry/);
