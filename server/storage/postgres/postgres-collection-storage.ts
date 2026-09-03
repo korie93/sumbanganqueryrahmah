@@ -20,6 +20,7 @@ import type {
   CollectionBillingPrincipalReport,
   CollectionLegacyBackfillStats,
   CollectionOspTargetInput,
+  CollectionOspManualReasonCode,
   CollectionSourceConfig,
   CollectionSourceMatchResult,
   CollectionStaffNickname,
@@ -304,6 +305,84 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     configuredBy: string;
   }): Promise<CollectionOspTargetInput[]> {
     return this.collectionRepository.upsertCollectionOspTargets(input);
+  }
+
+  async listCollectionOspSavedTargets(options?: { includeDeleted?: boolean }) {
+    return this.collectionRepository.listCollectionOspSavedTargets(options);
+  }
+
+  async getCollectionOspSavedTarget(targetId: string, revisionId?: string) {
+    return this.collectionRepository.getCollectionOspSavedTarget(targetId, revisionId);
+  }
+
+  async createCollectionOspSavedTarget(input: Parameters<typeof this.collectionRepository.createCollectionOspSavedTarget>[0]) {
+    return this.collectionRepository.createCollectionOspSavedTarget(input);
+  }
+
+  async updateCollectionOspSavedTarget(input: Parameters<typeof this.collectionRepository.updateCollectionOspSavedTarget>[0]) {
+    return this.collectionRepository.updateCollectionOspSavedTarget(input);
+  }
+
+  async deleteCollectionOspSavedTarget(input: Parameters<typeof this.collectionRepository.deleteCollectionOspSavedTarget>[0]) {
+    return this.collectionRepository.deleteCollectionOspSavedTarget(input);
+  }
+
+  async getCollectionOspTargetOverview(input: Parameters<typeof this.collectionRepository.getCollectionOspTargetOverview>[0]) {
+    return this.collectionRepository.getCollectionOspTargetOverview(input);
+  }
+
+  async listCollectionOspReconciliationCandidates(input: Parameters<typeof this.collectionRepository.listCollectionOspReconciliationCandidates>[0]) {
+    return this.collectionRepository.listCollectionOspReconciliationCandidates(input);
+  }
+
+  async listCollectionOspManualReconciliations(input: Parameters<typeof this.collectionRepository.listCollectionOspManualReconciliations>[0]) {
+    return this.collectionRepository.listCollectionOspManualReconciliations(input);
+  }
+
+  async createCollectionOspManualReconciliation(input: {
+    targetId: string;
+    revisionId: string;
+    sourceImportId: string;
+    sourceDataRowId: string;
+    manualPriorAmount: string;
+    asOfDate: string;
+    actualPaymentDate?: string | null;
+    reason: CollectionOspManualReasonCode;
+    note?: string | null;
+    reference?: string | null;
+    actor: string;
+    actorRole: string;
+    requestId?: string | null;
+  }) {
+    return this.collectionRepository.createCollectionOspManualReconciliation(input);
+  }
+
+  async updateCollectionOspManualReconciliation(input: Parameters<typeof this.collectionRepository.updateCollectionOspManualReconciliation>[0]) {
+    return this.collectionRepository.updateCollectionOspManualReconciliation(input);
+  }
+
+  async voidCollectionOspManualReconciliation(input: Parameters<typeof this.collectionRepository.voidCollectionOspManualReconciliation>[0]) {
+    return this.collectionRepository.voidCollectionOspManualReconciliation(input);
+  }
+
+  async listCollectionOspReconciliationHistory(input: Parameters<typeof this.collectionRepository.listCollectionOspReconciliationHistory>[0]) {
+    return this.collectionRepository.listCollectionOspReconciliationHistory(input);
+  }
+
+  async upsertCollectionOspClientResults(input: Parameters<typeof this.collectionRepository.upsertCollectionOspClientResults>[0]) {
+    return this.collectionRepository.upsertCollectionOspClientResults(input);
+  }
+
+  async getCollectionOspCalendar(input: Parameters<typeof this.collectionRepository.getCollectionOspCalendar>[0]) {
+    return this.collectionRepository.getCollectionOspCalendar(input);
+  }
+
+  async getCollectionOspDrilldown(input: Parameters<typeof this.collectionRepository.getCollectionOspDrilldown>[0]) {
+    return this.collectionRepository.getCollectionOspDrilldown(input);
+  }
+
+  async getCollectionOspExportDataset(input: Parameters<typeof this.collectionRepository.getCollectionOspExportDataset>[0]) {
+    return this.collectionRepository.getCollectionOspExportDataset(input);
   }
 
   async createCollectionRecord(

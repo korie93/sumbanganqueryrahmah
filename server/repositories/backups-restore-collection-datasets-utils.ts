@@ -23,6 +23,17 @@ export {
 } from "./backups-restore-collection-governance-utils";
 
 export {
+  restoreCollectionOspClientResultsFromBackup,
+  restoreCollectionOspManualReconciliationAuditFromBackup,
+  restoreCollectionOspManualReconciliationsFromBackup,
+  restoreCollectionOspSavedTargetsFromBackup,
+  restoreCollectionOspTargetAgingRowsFromBackup,
+  restoreCollectionOspTargetRevisionsFromBackup,
+  restoreCollectionOspTargetSourceRowsFromBackup,
+  restoreCollectionOspTargetSourcesFromBackup,
+} from "./backups-restore-collection-v7-write-utils";
+
+export {
   finalizeRestoredCollectionRollups,
   initializeRestoreTrackingTempTable,
   restoreCollectionRecordPurgeHistoryFromBackup,

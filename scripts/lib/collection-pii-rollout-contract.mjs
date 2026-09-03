@@ -183,6 +183,10 @@ export const COLLECTION_PII_ROLLOUT_CONTRACT_REQUIREMENTS = Object.freeze([
         snippet: "[\"run\", \"collection:pii-status\", \"--\", \"--json\"]",
       },
       {
+        label: "release readiness captures Collection V7 snapshot PII status",
+        snippet: "[\"run\", \"collection:v7-pii-status\", \"--\", \"--json\"]",
+      },
+      {
         label: "release readiness captures rollout readiness",
         snippet: "[\"run\", \"collection:rollout-readiness\", \"--\", \"--json\"]",
       },
@@ -206,6 +210,10 @@ export const COLLECTION_PII_ROLLOUT_CONTRACT_REQUIREMENTS = Object.freeze([
       {
         label: "package exposes collection PII status script",
         snippet: "\"collection:pii-status\": \"tsx scripts/collection-pii-status.ts\",",
+      },
+      {
+        label: "package exposes Collection V7 snapshot PII status script",
+        snippet: "\"collection:v7-pii-status\": \"tsx scripts/collection-v7-pii-status.ts\",",
       },
       {
         label: "package exposes rollout readiness script",

@@ -24,6 +24,10 @@ test("resolveCollectionPiiReadinessConfig disables PII readiness checks without 
     config.statusArtifactPath,
     path.join("artifacts/release-readiness-local", "collection-pii-status.json"),
   );
+  assert.equal(
+    config.v7StatusArtifactPath,
+    path.join("artifacts/release-readiness-local", "collection-v7-pii-status.json"),
+  );
   assert.equal(config.verifySensitiveRetirement, true);
   assert.equal(config.verifyFullRetirement, true);
 });
@@ -44,6 +48,10 @@ test("resolveCollectionPiiReadinessConfig enables artifact capture when the encr
   assert.equal(
     config.rolloutReadinessArtifactPath,
     path.join("artifacts/release-readiness-local", "collection-pii-rollout-readiness.json"),
+  );
+  assert.equal(
+    config.v7StatusArtifactPath,
+    path.join("artifacts/release-readiness-local", "collection-v7-pii-status.json"),
   );
   assert.equal(config.verifySensitiveRetirement, true);
   assert.equal(config.verifyFullRetirement, false);

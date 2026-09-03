@@ -3,8 +3,10 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   primaryKey,
@@ -175,7 +177,7 @@ export const collectionRecords = pgTable("collection_records", {
   ),
   cardNumberLast4Check: check(
     "chk_collection_records_card_number_last4",
-    sql`${table.cardNumberLast4} IS NULL OR char_length(${table.cardNumberLast4}) <= 4`,
+    sql`${table.cardNumberLast4} IS NULL OR ${table.cardNumberLast4} ~ '^[0-9]{4}$'`,
   ),
   classificationCheck: check(
     "chk_collection_records_classification",
@@ -289,7 +291,7 @@ export const collectionSourceRows = pgTable("collection_source_rows", {
   ),
   cardLast4Check: check(
     "chk_collection_source_rows_card_last4",
-    sql`${table.cardNumberLast4} IS NULL OR char_length(${table.cardNumberLast4}) <= 4`,
+    sql`${table.cardNumberLast4} IS NULL OR ${table.cardNumberLast4} ~ '^[0-9]{4}$'`,
   ),
   moneyCheck: check(
     "chk_collection_source_rows_money",
@@ -337,6 +339,552 @@ export const collectionOspTargets = pgTable("collection_osp_targets", {
     sql`${table.totalOspBaseline} IS NULL OR ${table.totalOspBaseline} >= 0`,
   ),
 }));
+
+/**
+ * Stable, user-facing identity for a named Billing Principal target.
+ *
+ * Structural reporting inputs live in immutable revision tables below. Updating
+ * a target definition therefore creates another revision instead of changing
+ * the historical denominator used by an older report/calendar view.
+ */
+export const collectionOspSavedTargets = pgTable("collection_osp_saved_targets", {
+  id: uuid("id").primaryKey(),
+  targetName: text("target_name").notNull(),
+  normalizedName: text("normalized_name").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("ACTIVE"),
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedBy: text("updated_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+  deletedBy: text("deleted_by")
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  deletedAt: utcTimestamp("deleted_at"),
+}, (table) => ({
+  activeNameUnique: uniqueIndex("idx_collection_osp_saved_targets_active_name_unique")
+    .on(table.normalizedName)
+    .where(sql`${table.status} = 'ACTIVE'`),
+  updatedAtIdx: index("idx_collection_osp_saved_targets_updated_at").on(table.updatedAt.desc()),
+  creatorIdx: index("idx_collection_osp_saved_targets_created_by").on(table.createdBy),
+  targetNameCheck: check(
+    "chk_collection_osp_saved_targets_name",
+    sql`char_length(${table.targetName}) BETWEEN 1 AND 120
+      AND ${table.targetName} = trim(${table.targetName})
+      AND ${table.targetName} !~ '[[:cntrl:]]'`,
+  ),
+  normalizedNameCheck: check(
+    "chk_collection_osp_saved_targets_normalized_name",
+    sql`char_length(${table.normalizedName}) BETWEEN 1 AND 120
+      AND ${table.normalizedName} = lower(trim(${table.normalizedName}))
+      AND ${table.normalizedName} !~ '[[:cntrl:]]'`,
+  ),
+  descriptionCheck: check(
+    "chk_collection_osp_saved_targets_description",
+    sql`${table.description} IS NULL OR char_length(${table.description}) <= 1000`,
+  ),
+  statusCheck: check(
+    "chk_collection_osp_saved_targets_status",
+    sql`${table.status} IN ('ACTIVE', 'DELETED')`,
+  ),
+  versionCheck: check("chk_collection_osp_saved_targets_version", sql`${table.version} >= 1`),
+  deletionStateCheck: check(
+    "chk_collection_osp_saved_targets_deletion_state",
+    sql`(
+      ${table.status} = 'ACTIVE'
+      AND ${table.deletedAt} IS NULL
+      AND ${table.deletedBy} IS NULL
+    ) OR (
+      ${table.status} = 'DELETED'
+      AND ${table.deletedAt} IS NOT NULL
+      AND ${table.deletedBy} IS NOT NULL
+    )`,
+  ),
+}));
+
+export const collectionOspTargetRevisions = pgTable("collection_osp_target_revisions", {
+  id: uuid("id").primaryKey(),
+  targetId: uuid("target_id")
+    .notNull()
+    .references(() => collectionOspSavedTargets.id, { onDelete: "restrict", onUpdate: "cascade" }),
+  revisionNumber: integer("revision_number").notNull(),
+  sourceScopeHash: text("source_scope_hash").notNull(),
+  periodFrom: date("period_from", { mode: "string" }).notNull(),
+  periodTo: date("period_to", { mode: "string" }).notNull(),
+  trackingStartDate: date("tracking_start_date", { mode: "string" }).notNull(),
+  trackingEndDate: date("tracking_end_date", { mode: "string" }),
+  timezone: text("timezone").notNull().default("Asia/Kuala_Lumpur"),
+  nicknameScope: text("nickname_scope").array().notNull().default(sql`ARRAY[]::text[]`),
+  agingScope: text("aging_scope").array().notNull()
+    .default(sql`ARRAY['D3', 'D4', 'D5', 'D6']::text[]`),
+  calculationVersion: text("calculation_version").notNull().default("osp-reconciliation-v1"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  targetRevisionUnique: uniqueIndex("idx_collection_osp_target_revisions_target_number_unique")
+    .on(table.targetId, table.revisionNumber),
+  targetIdRevisionIdUnique: uniqueIndex("idx_collection_osp_target_revisions_target_id_id_unique")
+    .on(table.targetId, table.id),
+  targetCreatedAtIdx: index("idx_collection_osp_target_revisions_target_created_at")
+    .on(table.targetId, table.createdAt.desc()),
+  periodIdx: index("idx_collection_osp_target_revisions_period").on(table.periodFrom, table.periodTo),
+  revisionNumberCheck: check(
+    "chk_collection_osp_target_revisions_number",
+    sql`${table.revisionNumber} >= 1`,
+  ),
+  sourceScopeHashCheck: check(
+    "chk_collection_osp_target_revisions_source_scope_hash",
+    sql`${table.sourceScopeHash} ~ '^[0-9a-f]{64}$'`,
+  ),
+  periodCheck: check(
+    "chk_collection_osp_target_revisions_period",
+    sql`${table.periodFrom} <= ${table.periodTo}`,
+  ),
+  trackingPeriodCheck: check(
+    "chk_collection_osp_target_revisions_tracking_period",
+    sql`${table.trackingStartDate} BETWEEN ${table.periodFrom} AND ${table.periodTo}
+      AND (${table.trackingEndDate} IS NULL OR (
+        ${table.trackingEndDate} BETWEEN ${table.trackingStartDate} AND ${table.periodTo}
+      ))`,
+  ),
+  timezoneCheck: check(
+    "chk_collection_osp_target_revisions_timezone",
+    sql`char_length(trim(${table.timezone})) BETWEEN 1 AND 80
+      AND ${table.timezone} !~ '[[:cntrl:]]'`,
+  ),
+  nicknameScopeCheck: check(
+    "chk_collection_osp_target_revisions_nickname_scope",
+    sql`cardinality(${table.nicknameScope}) <= 200`,
+  ),
+  agingScopeCheck: check(
+    "chk_collection_osp_target_revisions_aging_scope",
+    sql`cardinality(${table.agingScope}) BETWEEN 1 AND 4
+      AND ${table.agingScope} <@ ARRAY['D3', 'D4', 'D5', 'D6']::text[]
+      AND cardinality(${table.agingScope}) = (
+        CASE WHEN 'D3' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
+        + CASE WHEN 'D4' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
+        + CASE WHEN 'D5' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
+        + CASE WHEN 'D6' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
+      )`,
+  ),
+  calculationVersionCheck: check(
+    "chk_collection_osp_target_revisions_calculation_version",
+    sql`char_length(trim(${table.calculationVersion})) BETWEEN 1 AND 80`,
+  ),
+}));
+
+/**
+ * Minimal immutable source metadata retained by a target revision. There is
+ * deliberately no FK to imports: disabling or permanently removing an import
+ * must not erase the historical target label or source identity.
+ */
+export const collectionOspTargetSources = pgTable("collection_osp_target_sources", {
+  targetRevisionId: uuid("target_revision_id")
+    .notNull()
+    .references(() => collectionOspTargetRevisions.id, { onDelete: "restrict", onUpdate: "cascade" }),
+  sourceImportId: text("source_import_id").notNull(),
+  sourceNameSnapshot: text("source_name_snapshot").notNull(),
+  sourceFilenameSnapshot: text("source_filename_snapshot").notNull(),
+  sourceVersionSnapshot: text("source_version_snapshot"),
+  sourceContentHashSnapshot: text("source_content_hash_snapshot"),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  primaryKey: primaryKey({
+    name: "pk_collection_osp_target_sources",
+    columns: [table.targetRevisionId, table.sourceImportId],
+  }),
+  sourceImportIdx: index("idx_collection_osp_target_sources_import_id").on(table.sourceImportId),
+  sourceTextCheck: check(
+    "chk_collection_osp_target_sources_text",
+    sql`char_length(trim(${table.sourceImportId})) BETWEEN 1 AND 200
+      AND char_length(${table.sourceNameSnapshot}) BETWEEN 1 AND 300
+      AND char_length(${table.sourceFilenameSnapshot}) BETWEEN 1 AND 500
+      AND ${table.sourceNameSnapshot} !~ '[[:cntrl:]]'
+      AND ${table.sourceFilenameSnapshot} !~ '[[:cntrl:]]'`,
+  ),
+  sourceHashCheck: check(
+    "chk_collection_osp_target_sources_content_hash",
+    sql`${table.sourceContentHashSnapshot} IS NULL
+      OR ${table.sourceContentHashSnapshot} ~ '^[0-9a-f]{64}$'`,
+  ),
+}));
+
+/**
+ * Immutable row-level source facts captured when a target revision is created.
+ *
+ * Reports and reconciliation candidates read these snapshots instead of the
+ * mutable source index, so disabling or deleting an import cannot rewrite a
+ * previously saved target's history. Plaintext account/customer identifiers are
+ * deliberately excluded.
+ */
+export const collectionOspTargetSourceRows = pgTable("collection_osp_target_source_rows", {
+  targetRevisionId: uuid("target_revision_id").notNull(),
+  sourceImportId: text("source_import_id").notNull(),
+  sourceDataRowId: text("source_data_row_id").notNull(),
+  canonicalObligationKey: text("canonical_obligation_key").notNull(),
+  cycleKey: text("cycle_key").notNull(),
+  accountNumberEncrypted: text("account_number_encrypted"),
+  accountNumberSearchHash: text("account_number_search_hash"),
+  cardNumberLast4: text("card_number_last4"),
+  customerNameEncrypted: text("customer_name_encrypted"),
+  customerNameSearchHashes: text("customer_name_search_hashes").array(),
+  agingBucket: text("aging_bucket").notNull(),
+  callingDate: date("calling_date", { mode: "string" }).notNull(),
+  callingWindowEndExclusive: date("calling_window_end_exclusive", { mode: "string" }).notNull(),
+  totalDue: numeric("total_due", { precision: 16, scale: 2 }).notNull(),
+  billingPrincipalOsp: numeric("billing_principal_osp", { precision: 16, scale: 2 }).notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  primaryKey: primaryKey({
+    name: "pk_collection_osp_target_source_rows",
+    columns: [table.targetRevisionId, table.sourceImportId, table.sourceDataRowId],
+  }),
+  targetSourceForeignKey: foreignKey({
+    name: "collection_osp_target_source_rows_target_source_fkey",
+    columns: [table.targetRevisionId, table.sourceImportId],
+    foreignColumns: [collectionOspTargetSources.targetRevisionId, collectionOspTargetSources.sourceImportId],
+  }).onDelete("restrict").onUpdate("cascade"),
+  revisionCycleUnique: uniqueIndex("idx_collection_osp_target_source_rows_revision_cycle_unique")
+    .on(table.targetRevisionId, table.cycleKey),
+  revisionAgingCallingIdx: index("idx_collection_osp_target_source_rows_revision_aging_calling")
+    .on(table.targetRevisionId, table.agingBucket, table.callingDate),
+  accountSearchIdx: index("idx_collection_osp_target_source_rows_account_search_hash")
+    .on(table.accountNumberSearchHash),
+  customerSearchIdx: index("idx_collection_osp_target_source_rows_customer_search_hashes")
+    .using("gin", table.customerNameSearchHashes),
+  identityCheck: check(
+    "chk_collection_osp_target_source_rows_identity",
+    sql`char_length(trim(${table.sourceImportId})) BETWEEN 1 AND 200
+      AND char_length(trim(${table.sourceDataRowId})) BETWEEN 1 AND 200
+      AND char_length(${table.canonicalObligationKey}) BETWEEN 1 AND 160
+      AND char_length(${table.cycleKey}) BETWEEN 1 AND 192
+      AND (${table.accountNumberEncrypted} IS NOT NULL OR ${table.cardNumberLast4} IS NOT NULL)
+      AND (
+        (${table.accountNumberEncrypted} IS NULL AND ${table.accountNumberSearchHash} IS NULL)
+        OR (
+          char_length(${table.accountNumberEncrypted}) > 0
+          AND ${table.accountNumberSearchHash} ~ '^[0-9a-f]{64}$'
+        )
+      )
+      AND (${table.cardNumberLast4} IS NULL OR ${table.cardNumberLast4} ~ '^[0-9]{4}$')
+      AND (${table.customerNameEncrypted} IS NULL OR char_length(${table.customerNameEncrypted}) > 0)`,
+  ),
+  customerSearchHashesCheck: check(
+    "chk_collection_osp_target_source_rows_customer_hashes",
+    sql`${table.customerNameSearchHashes} IS NULL
+      OR (
+        cardinality(${table.customerNameSearchHashes}) BETWEEN 0 AND 128
+        AND array_position(${table.customerNameSearchHashes}, NULL) IS NULL
+      )`,
+  ),
+  trustedSnapshotCheck: check(
+    "chk_collection_osp_target_source_rows_snapshot",
+    sql`${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6')
+      AND ${table.totalDue} > 0
+      AND ${table.billingPrincipalOsp} >= 0
+      AND ${table.callingWindowEndExclusive} = (${table.callingDate} + INTERVAL '1 month')::date`,
+  ),
+}));
+
+export const collectionOspTargetAgingRows = pgTable("collection_osp_target_aging_rows", {
+  targetRevisionId: uuid("target_revision_id")
+    .notNull()
+    .references(() => collectionOspTargetRevisions.id, { onDelete: "restrict", onUpdate: "cascade" }),
+  agingBucket: text("aging_bucket").notNull(),
+  totalOspBaseline: numeric("total_osp_baseline", { precision: 16, scale: 2 }).notNull(),
+  targetPercentage: numeric("target_percentage", { precision: 7, scale: 4 }).notNull(),
+  targetOsp: numeric("target_osp", { precision: 16, scale: 2 }).notNull(),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  primaryKey: primaryKey({
+    name: "pk_collection_osp_target_aging_rows",
+    columns: [table.targetRevisionId, table.agingBucket],
+  }),
+  agingCheck: check(
+    "chk_collection_osp_target_aging_rows_aging",
+    sql`${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6')`,
+  ),
+  moneyCheck: check(
+    "chk_collection_osp_target_aging_rows_money",
+    sql`${table.totalOspBaseline} >= 0 AND ${table.targetOsp} >= 0`,
+  ),
+  targetPercentageCheck: check(
+    "chk_collection_osp_target_aging_rows_percentage",
+    sql`${table.targetPercentage} >= 0 AND ${table.targetPercentage} <= 100`,
+  ),
+  targetConsistencyCheck: check(
+    "chk_collection_osp_target_aging_rows_consistency",
+    sql`${table.targetOsp} = round(${table.totalOspBaseline} * ${table.targetPercentage} / 100, 2)`,
+  ),
+}));
+
+export const collectionOspClientResults = pgTable("collection_osp_client_results", {
+  id: uuid("id").primaryKey(),
+  targetId: uuid("target_id").notNull(),
+  targetRevisionId: uuid("target_revision_id").notNull(),
+  asOfDate: date("as_of_date", { mode: "string" }).notNull(),
+  agingBucket: text("aging_bucket").notNull(),
+  resultPercentage: numeric("result_percentage", { precision: 9, scale: 4 }).notNull(),
+  ospClosed: numeric("osp_closed", { precision: 16, scale: 2 }).notNull(),
+  clientReference: text("client_reference"),
+  note: text("note"),
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedBy: text("updated_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  targetRevisionForeignKey: foreignKey({
+    name: "collection_osp_client_results_target_revision_fkey",
+    columns: [table.targetId, table.targetRevisionId],
+    foreignColumns: [collectionOspTargetRevisions.targetId, collectionOspTargetRevisions.id],
+  }).onDelete("restrict").onUpdate("cascade"),
+  targetDateAgingUnique: uniqueIndex("idx_collection_osp_client_results_revision_date_aging_unique")
+    .on(table.targetRevisionId, table.asOfDate, table.agingBucket),
+  targetDateIdx: index("idx_collection_osp_client_results_target_date")
+    .on(table.targetId, table.asOfDate.desc()),
+  agingCheck: check(
+    "chk_collection_osp_client_results_aging",
+    sql`${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6', 'ALL')`,
+  ),
+  amountCheck: check(
+    "chk_collection_osp_client_results_amount",
+    sql`${table.ospClosed} >= 0 AND ${table.resultPercentage} >= 0 AND ${table.resultPercentage} <= 100`,
+  ),
+  textCheck: check(
+    "chk_collection_osp_client_results_text",
+    sql`(${table.clientReference} IS NULL OR char_length(${table.clientReference}) <= 300)
+      AND (${table.note} IS NULL OR char_length(${table.note}) <= 2000)`,
+  ),
+  versionCheck: check("chk_collection_osp_client_results_version", sql`${table.version} >= 1`),
+}));
+
+export const collectionOspManualReconciliations = pgTable("collection_osp_manual_reconciliations", {
+  id: uuid("id").primaryKey(),
+  targetId: uuid("target_id").notNull(),
+  targetRevisionId: uuid("target_revision_id").notNull(),
+  sourceImportId: text("source_import_id").notNull(),
+  sourceDataRowId: text("source_data_row_id").notNull(),
+  canonicalObligationKey: text("canonical_obligation_key").notNull(),
+  cycleKey: text("cycle_key").notNull(),
+  accountNumberEncrypted: text("account_number_encrypted"),
+  accountNumberSearchHash: text("account_number_search_hash"),
+  cardNumberLast4: text("card_number_last4"),
+  customerNameEncrypted: text("customer_name_encrypted"),
+  agingBucket: text("aging_bucket").notNull(),
+  callingDate: date("calling_date", { mode: "string" }).notNull(),
+  callingWindowEndExclusive: date("calling_window_end_exclusive", { mode: "string" }).notNull(),
+  totalDue: numeric("total_due", { precision: 16, scale: 2 }).notNull(),
+  billingPrincipalOsp: numeric("billing_principal_osp", { precision: 16, scale: 2 }).notNull(),
+  manualPriorAmount: numeric("manual_prior_amount", { precision: 16, scale: 2 }).notNull(),
+  manualAsOfDate: date("manual_as_of_date", { mode: "string" }).notNull(),
+  actualPaymentDate: date("actual_payment_date", { mode: "string" }),
+  dateSource: text("date_source").notNull(),
+  reasonCode: text("reason_code").notNull(),
+  note: text("note"),
+  evidenceReference: text("evidence_reference"),
+  status: text("status").notNull().default("ACTIVE"),
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedBy: text("updated_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+  voidedBy: text("voided_by")
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  voidedAt: utcTimestamp("voided_at"),
+  voidReason: text("void_reason"),
+}, (table) => ({
+  targetRevisionForeignKey: foreignKey({
+    name: "collection_osp_manual_reconciliations_target_revision_fkey",
+    columns: [table.targetId, table.targetRevisionId],
+    foreignColumns: [collectionOspTargetRevisions.targetId, collectionOspTargetRevisions.id],
+  }).onDelete("restrict").onUpdate("cascade"),
+  targetSourceForeignKey: foreignKey({
+    name: "collection_osp_manual_reconciliations_target_source_fkey",
+    columns: [table.targetRevisionId, table.sourceImportId],
+    foreignColumns: [collectionOspTargetSources.targetRevisionId, collectionOspTargetSources.sourceImportId],
+  }).onDelete("restrict").onUpdate("cascade"),
+  targetSourceRowForeignKey: foreignKey({
+    name: "collection_osp_manual_reconciliations_source_row_fkey",
+    columns: [table.targetRevisionId, table.sourceImportId, table.sourceDataRowId],
+    foreignColumns: [
+      collectionOspTargetSourceRows.targetRevisionId,
+      collectionOspTargetSourceRows.sourceImportId,
+      collectionOspTargetSourceRows.sourceDataRowId,
+    ],
+  }).onDelete("restrict").onUpdate("cascade"),
+  activeAccountUnique: uniqueIndex("idx_collection_osp_manual_reconciliations_active_account_unique")
+    .on(table.targetRevisionId, table.canonicalObligationKey, table.cycleKey)
+    .where(sql`${table.status} = 'ACTIVE'`),
+  targetStatusDateIdx: index("idx_collection_osp_manual_reconciliations_target_status_date")
+    .on(table.targetRevisionId, table.status, table.manualAsOfDate),
+  targetAgingDateIdx: index("idx_collection_osp_manual_reconciliations_target_aging_date")
+    .on(table.targetRevisionId, table.agingBucket, table.manualAsOfDate),
+  sourceRowIdx: index("idx_collection_osp_manual_reconciliations_source_row")
+    .on(table.sourceImportId, table.sourceDataRowId),
+  accountSearchIdx: index("idx_collection_osp_manual_reconciliations_account_search_hash")
+    .on(table.accountNumberSearchHash),
+  identityCheck: check(
+    "chk_collection_osp_manual_reconciliations_identity",
+    sql`char_length(${table.canonicalObligationKey}) BETWEEN 1 AND 160
+      AND char_length(${table.cycleKey}) BETWEEN 1 AND 192
+      AND char_length(trim(${table.sourceDataRowId})) BETWEEN 1 AND 200
+      AND (${table.accountNumberEncrypted} IS NOT NULL OR ${table.cardNumberLast4} IS NOT NULL)
+      AND (
+        (${table.accountNumberEncrypted} IS NULL AND ${table.accountNumberSearchHash} IS NULL)
+        OR (
+          char_length(${table.accountNumberEncrypted}) > 0
+          AND ${table.accountNumberSearchHash} ~ '^[0-9a-f]{64}$'
+        )
+      )
+      AND (${table.cardNumberLast4} IS NULL OR ${table.cardNumberLast4} ~ '^[0-9]{4}$')`,
+  ),
+  trustedSnapshotCheck: check(
+    "chk_collection_osp_manual_reconciliations_trusted_snapshot",
+    sql`${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6')
+      AND ${table.totalDue} > 0
+      AND ${table.billingPrincipalOsp} >= 0
+      AND ${table.callingWindowEndExclusive} = (${table.callingDate} + INTERVAL '1 month')::date`,
+  ),
+  manualAmountCheck: check(
+    "chk_collection_osp_manual_reconciliations_manual_amount",
+    sql`${table.manualPriorAmount} > 0`,
+  ),
+  manualDateCheck: check(
+    "chk_collection_osp_manual_reconciliations_manual_date",
+    sql`${table.manualAsOfDate} >= ${table.callingDate}
+      AND ${table.manualAsOfDate} < ${table.callingWindowEndExclusive}
+      AND (${table.actualPaymentDate} IS NULL OR (
+        ${table.actualPaymentDate} >= ${table.callingDate}
+        AND ${table.actualPaymentDate} < ${table.callingWindowEndExclusive}
+        AND ${table.actualPaymentDate} <= ${table.manualAsOfDate}
+      ))`,
+  ),
+  dateSourceCheck: check(
+    "chk_collection_osp_manual_reconciliations_date_source",
+    sql`(
+      ${table.dateSource} = 'ACTUAL_PAYMENT_DATE'
+      AND ${table.actualPaymentDate} IS NOT NULL
+    ) OR (
+      ${table.dateSource} IN ('CLIENT_AS_OF', 'MANUAL_AS_OF')
+      AND ${table.actualPaymentDate} IS NULL
+    )`,
+  ),
+  reasonCodeCheck: check(
+    "chk_collection_osp_manual_reconciliations_reason_code",
+    sql`${table.reasonCode} IN (
+      'PRIOR_PAYMENT_NOT_IN_SYSTEM',
+      'CLIENT_CONFIRMED_PRIOR_PAYMENT',
+      'HISTORICAL_PAYMENT_MISSING',
+      'MIGRATED_HISTORY_GAP',
+      'OTHER_WITH_REQUIRED_NOTE'
+    ) AND (${table.reasonCode} <> 'OTHER_WITH_REQUIRED_NOTE' OR char_length(trim(COALESCE(${table.note}, ''))) > 0)`,
+  ),
+  textCheck: check(
+    "chk_collection_osp_manual_reconciliations_text",
+    sql`(${table.note} IS NULL OR char_length(${table.note}) <= 2000)
+      AND (${table.evidenceReference} IS NULL OR char_length(${table.evidenceReference}) <= 300)
+      AND (${table.voidReason} IS NULL OR char_length(${table.voidReason}) <= 500)`,
+  ),
+  versionCheck: check("chk_collection_osp_manual_reconciliations_version", sql`${table.version} >= 1`),
+  statusCheck: check(
+    "chk_collection_osp_manual_reconciliations_status",
+    sql`${table.status} IN ('ACTIVE', 'VOIDED')`,
+  ),
+  voidStateCheck: check(
+    "chk_collection_osp_manual_reconciliations_void_state",
+    sql`(
+      ${table.status} = 'ACTIVE'
+      AND ${table.voidedAt} IS NULL
+      AND ${table.voidedBy} IS NULL
+      AND ${table.voidReason} IS NULL
+    ) OR (
+      ${table.status} = 'VOIDED'
+      AND ${table.voidedAt} IS NOT NULL
+      AND ${table.voidedBy} IS NOT NULL
+      AND char_length(trim(COALESCE(${table.voidReason}, ''))) BETWEEN 1 AND 500
+    )`,
+  ),
+}));
+
+export const collectionOspManualReconciliationAudit = pgTable("collection_osp_manual_reconciliation_audit", {
+    id: uuid("id").primaryKey(),
+    reconciliationId: uuid("reconciliation_id").notNull(),
+    targetId: uuid("target_id").notNull(),
+    targetRevisionId: uuid("target_revision_id").notNull(),
+    operation: text("operation").notNull(),
+    fromVersion: integer("from_version"),
+    toVersion: integer("to_version").notNull(),
+    beforeState: jsonb("before_state"),
+    afterState: jsonb("after_state"),
+    actorUsername: text("actor_username")
+      .notNull()
+      .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+    actorRole: text("actor_role").notNull(),
+    requestId: text("request_id"),
+    createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    reconciliationForeignKey: foreignKey({
+      name: "collection_osp_manual_reconciliation_audit_reconciliation_fkey",
+      columns: [table.reconciliationId],
+      foreignColumns: [collectionOspManualReconciliations.id],
+    }).onDelete("restrict").onUpdate("cascade"),
+    targetRevisionForeignKey: foreignKey({
+      name: "collection_osp_manual_reconciliation_audit_target_revision_fkey",
+      columns: [table.targetId, table.targetRevisionId],
+      foreignColumns: [collectionOspTargetRevisions.targetId, collectionOspTargetRevisions.id],
+    }).onDelete("restrict").onUpdate("cascade"),
+    reconciliationCreatedIdx: index("idx_collection_osp_manual_reconciliation_audit_reconciliation_created")
+      .on(table.reconciliationId, table.createdAt.desc()),
+    targetCreatedIdx: index("idx_collection_osp_manual_reconciliation_audit_target_created")
+      .on(table.targetRevisionId, table.createdAt.desc()),
+    operationCheck: check(
+      "chk_collection_osp_manual_reconciliation_audit_operation",
+      sql`${table.operation} IN ('CREATE', 'UPDATE', 'VOID', 'RESTORE')`,
+    ),
+    versionCheck: check(
+      "chk_collection_osp_manual_reconciliation_audit_version",
+      sql`${table.toVersion} >= 1
+        AND (${table.fromVersion} IS NULL OR ${table.fromVersion} >= 1)
+        AND (
+          (${table.operation} = 'CREATE' AND ${table.fromVersion} IS NULL AND ${table.toVersion} = 1)
+          OR (
+            ${table.operation} <> 'CREATE'
+            AND ${table.fromVersion} IS NOT NULL
+            AND ${table.toVersion} = ${table.fromVersion} + 1
+          )
+        )`,
+    ),
+    stateCheck: check(
+      "chk_collection_osp_manual_reconciliation_audit_state",
+      sql`(${table.operation} = 'CREATE' AND ${table.beforeState} IS NULL AND ${table.afterState} IS NOT NULL)
+        OR (${table.operation} <> 'CREATE' AND ${table.beforeState} IS NOT NULL AND ${table.afterState} IS NOT NULL)`,
+    ),
+    actorRoleCheck: check(
+      "chk_collection_osp_manual_reconciliation_audit_actor_role",
+      sql`${table.actorRole} = 'superuser'`,
+    ),
+    requestIdCheck: check(
+      "chk_collection_osp_manual_reconciliation_audit_request_id",
+      sql`${table.requestId} IS NULL OR char_length(${table.requestId}) <= 160`,
+    ),
+  }),
+);
 
 export const collectionRecordPurgeHistory = pgTable("collection_record_purge_history", {
   originalRecordId: uuid("original_record_id").primaryKey(),

@@ -4,6 +4,7 @@ import { registerCollectionReceiptRoutes } from "./collection-receipt-routes";
 import { registerCollectionSummaryRoutes } from "./collection-summary-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
 import { registerCollectionSourceMatchRoutes } from "./collection-source-match-routes";
+import { registerCollectionBillingPrincipalV7Routes } from "./collection-billing-principal-v7-routes";
 
 export function registerCollectionReportRoutes(context: CollectionRouteContext) {
   registerCollectionSummaryRoutes(context);
@@ -11,4 +12,5 @@ export function registerCollectionReportRoutes(context: CollectionRouteContext) 
   registerCollectionReceiptRoutes(context);
   registerCollectionRecordMutationRoutes(context);
   registerCollectionSourceMatchRoutes(context);
+  registerCollectionBillingPrincipalV7Routes(context);
 }

@@ -18,6 +18,7 @@ export function resolveCollectionPiiReadinessConfig(env, artifactsDir) {
     rolloutReadinessArtifactPath: path.join(artifactsDir, "collection-pii-rollout-readiness.json"),
     retiredFieldsConfigured,
     statusArtifactPath: path.join(artifactsDir, "collection-pii-status.json"),
+    v7StatusArtifactPath: path.join(artifactsDir, "collection-v7-pii-status.json"),
     verifyFullRetirement: isTruthyEnvFlag(env.VERIFY_COLLECTION_PII_FULL_RETIREMENT),
     verifySensitiveRetirement: isTruthyEnvFlag(env.VERIFY_COLLECTION_PII_SENSITIVE_RETIREMENT),
   };

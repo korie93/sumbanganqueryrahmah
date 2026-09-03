@@ -19,8 +19,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { BillingPrincipalTargetDialog } from "./BillingPrincipalTargetDialog";
+import { BillingPrincipalSavedTargetShell } from "./BillingPrincipalSavedTargetShell";
 import {
   BILLING_PRINCIPAL_AGINGS,
+  buildBillingPrincipalSavedTargetRows,
   filterBillingPrincipalRows,
   formatOspCurrency,
   formatOspPercentage,
@@ -43,7 +45,7 @@ export default function BillingPrincipalReportPage({ role }: { role: string }) {
     : [];
   const sourceSelectionFull = state.selectedSourceIds.length >= 5;
 
-  return (
+  const legacyView = (
     <OperationalSectionCard
       title="Billing Principal (OSP)"
       description="TT OSP comes from the trusted Billing Principal field. OSP CLOSED counts only the sole Abort CP event for each logical account."
@@ -272,5 +274,34 @@ export default function BillingPrincipalReportPage({ role }: { role: string }) {
         {state.loadingReport ? "Loading Billing Principal report." : state.report ? "Billing Principal report loaded." : ""}
       </p>
     </OperationalSectionCard>
+  );
+
+  return (
+    <BillingPrincipalSavedTargetShell
+      role={role}
+      defaults={{
+        sourceImportIds: state.selectedSourceIds,
+        from: state.from,
+        to: state.to,
+        nicknameScope: state.selectedNickname ? [state.selectedNickname] : [],
+        agingScope: state.selectedAgings,
+        targets: buildBillingPrincipalSavedTargetRows(
+          state.report?.rows ?? [],
+          state.selectedAgings,
+        ),
+        ready: Boolean(
+          state.report
+          && !state.loadingReport
+          && state.selectedSourceIds.length >= 1
+          && state.selectedSourceIds.length <= 5
+          && state.selectedAgings.length > 0
+          && state.from
+          && state.to
+          && state.from <= state.to
+        ),
+      }}
+    >
+      {legacyView}
+    </BillingPrincipalSavedTargetShell>
   );
 }

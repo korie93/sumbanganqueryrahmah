@@ -13,6 +13,7 @@ import {
 } from "./lib/managed-server-process.mjs";
 import { resolveSmokeSessionSecret } from "./lib/smoke-session-secret.mjs";
 import { buildRegressionTestEnv } from "./lib/release-readiness-env.mjs";
+import { normalizeJsonCommandOutput } from "./lib/json-command-output.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
@@ -193,7 +194,18 @@ const run = async () => {
     const statusResult = await runNpmCapture(["run", "collection:pii-status", "--", "--json"], { env });
     await writeFile(
       collectionPiiReadiness.statusArtifactPath,
-      statusResult.stdout,
+      normalizeJsonCommandOutput(statusResult.stdout, { label: "Collection PII status" }),
+      "utf8",
+    );
+
+    console.log("Release readiness: capturing Collection V7 snapshot PII status...");
+    const v7StatusResult = await runNpmCapture(
+      ["run", "collection:v7-pii-status", "--", "--json"],
+      { env },
+    );
+    await writeFile(
+      collectionPiiReadiness.v7StatusArtifactPath,
+      normalizeJsonCommandOutput(v7StatusResult.stdout, { label: "Collection V7 PII status" }),
       "utf8",
     );
 
@@ -204,7 +216,9 @@ const run = async () => {
     );
     await writeFile(
       collectionPiiReadiness.rolloutReadinessArtifactPath,
-      rolloutReadinessResult.stdout,
+      normalizeJsonCommandOutput(rolloutReadinessResult.stdout, {
+        label: "Collection PII rollout readiness",
+      }),
       "utf8",
     );
 

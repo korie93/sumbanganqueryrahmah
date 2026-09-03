@@ -33,6 +33,16 @@ export function buildBackupMetadata(
     collectionSourceConfigsCount: counts.collectionSourceConfigsCount,
     collectionSourceRowsCount: counts.collectionSourceRowsCount,
     collectionOspTargetsCount: counts.collectionOspTargetsCount,
+    collectionOspSavedTargetsCount: counts.collectionOspSavedTargetsCount,
+    collectionOspTargetRevisionsCount: counts.collectionOspTargetRevisionsCount,
+    collectionOspTargetSourcesCount: counts.collectionOspTargetSourcesCount,
+    collectionOspTargetSourceRowsCount: counts.collectionOspTargetSourceRowsCount,
+    collectionOspTargetAgingRowsCount: counts.collectionOspTargetAgingRowsCount,
+    collectionOspClientResultsCount: counts.collectionOspClientResultsCount,
+    collectionOspManualReconciliationsCount:
+      counts.collectionOspManualReconciliationsCount,
+    collectionOspManualReconciliationAuditCount:
+      counts.collectionOspManualReconciliationAuditCount,
     collectionRecordsCount: counts.collectionRecordsCount,
     collectionRecordPurgeHistoryCount: counts.collectionRecordPurgeHistoryCount,
     collectionRecordReceiptsCount: counts.collectionRecordReceiptsCount,

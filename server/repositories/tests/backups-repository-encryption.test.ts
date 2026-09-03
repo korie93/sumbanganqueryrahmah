@@ -49,11 +49,32 @@ function setDbExecute(harness: DbTestHarness, implementation: DbExecuteImplement
 }
 
 type DbTransactionImplementation = (
-  callback: (tx: { execute: (query: unknown) => Promise<{ rows: unknown[] }> }) => Promise<unknown>,
+  callback: (tx: {
+    execute: (query: unknown) => Promise<{ rows: unknown[] }>;
+    transaction?: DbTransactionImplementation;
+  }) => Promise<unknown>,
+  config?: unknown,
 ) => Promise<unknown>;
 
 function setDbTransaction(harness: DbTestHarness, implementation: DbTransactionImplementation) {
   harness.transaction = implementation as unknown as typeof db.transaction;
+}
+
+function setDbBackupSnapshotHarness(
+  harness: DbTestHarness,
+  implementation: DbExecuteImplementation,
+  seenConfigs?: unknown[],
+) {
+  setDbExecute(harness, implementation);
+  const runTransaction: DbTransactionImplementation = async (callback, config) => {
+    seenConfigs?.push(config);
+    const executor = {
+      execute: (query: unknown) => implementation(query),
+      transaction: runTransaction,
+    };
+    return callback(executor);
+  };
+  setDbTransaction(harness, runTransaction);
 }
 
 function flattenSqlChunk(chunk: unknown): string {
@@ -622,9 +643,11 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
 
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
-      setDbExecute(dbHarness, async () => ({
+      const originalTransaction = dbHarness.transaction;
+      const snapshotConfigs: unknown[] = [];
+      setDbBackupSnapshotHarness(dbHarness, async () => ({
         rows: [],
-      }));
+      }), snapshotConfigs);
 
       let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
         null;
@@ -651,12 +674,25 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
           "collectionSourceConfigs",
           "collectionSourceRows",
           "collectionOspTargets",
+          "collectionOspSavedTargets",
+          "collectionOspTargetRevisions",
+          "collectionOspTargetSources",
+          "collectionOspTargetSourceRows",
+          "collectionOspTargetAgingRows",
+          "collectionOspClientResults",
+          "collectionOspManualReconciliations",
+          "collectionOspManualReconciliationAudit",
           "collectionRecords",
           "collectionRecordPurgeHistory",
           "collectionRecordReceipts",
         ]);
+        assert.deepEqual(snapshotConfigs[0], {
+          isolationLevel: "repeatable read",
+          accessMode: "read only",
+        });
       } finally {
         dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
         await prepared?.cleanup();
       }
     },
@@ -677,7 +713,7 @@ test("BackupsRepository stores prepared backup payload chunks without rebuilding
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
       const originalTransaction = dbHarness.transaction;
-      setDbExecute(dbHarness, async () => ({
+      setDbBackupSnapshotHarness(dbHarness, async () => ({
         rows: [],
       }));
 
@@ -753,7 +789,8 @@ test("BackupsRepository iterates encrypted temp backup payload storage chunks wi
 
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
-      setDbExecute(dbHarness, async () => ({
+      const originalTransaction = dbHarness.transaction;
+      setDbBackupSnapshotHarness(dbHarness, async () => ({
         rows: [],
       }));
 
@@ -773,6 +810,7 @@ test("BackupsRepository iterates encrypted temp backup payload storage chunks wi
         assert.equal(iteratedChunks.join(""), manualStoragePayload);
       } finally {
         dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
         await prepared?.cleanup();
       }
     },
@@ -792,7 +830,8 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
 
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
-      setDbExecute(dbHarness, async (query: unknown) => {
+      const originalTransaction = dbHarness.transaction;
+      setDbBackupSnapshotHarness(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -933,6 +972,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal("extractedAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);
       } finally {
         dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
         await prepared?.cleanup();
       }
     },
@@ -953,7 +993,8 @@ test("BackupsRepository recomputes customer-name blind indexes from encrypted co
 
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
-      setDbExecute(dbHarness, async (query: unknown) => {
+      const originalTransaction = dbHarness.transaction;
+      setDbBackupSnapshotHarness(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -1011,6 +1052,7 @@ test("BackupsRepository recomputes customer-name blind indexes from encrypted co
         );
       } finally {
         dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
         await prepared?.cleanup();
       }
     },
@@ -1030,7 +1072,8 @@ test("BackupsRepository keeps plaintext collection PII in backup payloads when e
 
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
-      setDbExecute(dbHarness, async (query: unknown) => {
+      const originalTransaction = dbHarness.transaction;
+      setDbBackupSnapshotHarness(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -1088,6 +1131,7 @@ test("BackupsRepository keeps plaintext collection PII in backup payloads when e
         assert.equal("customerNameEncrypted" in (parsed.collectionRecords?.[0] || {}), false);
       } finally {
         dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
         await prepared?.cleanup();
       }
     },
@@ -1109,7 +1153,8 @@ test("BackupsRepository rejects retired collection PII plaintext rows without en
 
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
-      setDbExecute(dbHarness, async (query: unknown) => {
+      const originalTransaction = dbHarness.transaction;
+      setDbBackupSnapshotHarness(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -1159,6 +1204,7 @@ test("BackupsRepository rejects retired collection PII plaintext rows without en
         );
       } finally {
         dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
       }
     },
   );
@@ -1177,7 +1223,8 @@ test("BackupsRepository rejects backup export rows that exceed the serialization
 
       const dbHarness = getDbTestHarness();
       const originalExecute = dbHarness.execute;
-      setDbExecute(dbHarness, async (query: unknown) => {
+      const originalTransaction = dbHarness.transaction;
+      setDbBackupSnapshotHarness(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.data_rows")) {
           return {
@@ -1205,6 +1252,7 @@ test("BackupsRepository rejects backup export rows that exceed the serialization
         assert.match(thrownError.message, /exceeds the .* serialization limit/i);
       } finally {
         dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
       }
     },
   );

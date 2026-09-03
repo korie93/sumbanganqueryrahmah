@@ -8,6 +8,7 @@ import { CollectionRecordMutationOperations } from "./collection-record-mutation
 import { CollectionDailyOperations } from "./collection-daily-operations";
 import { CollectionSourceMatchOperations } from "./collection-source-match-operations";
 import { CollectionSourceGovernanceOperations } from "./collection-source-governance-operations";
+import { CollectionOspV7Operations } from "./collection-osp-v7-operations";
 
 export class CollectionRecordService extends CollectionServiceSupport {
   private readonly readOperations: CollectionRecordReadOperations;
@@ -15,6 +16,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
   private readonly dailyOperations: CollectionDailyOperations;
   private readonly sourceMatchOperations: CollectionSourceMatchOperations;
   private readonly sourceGovernanceOperations: CollectionSourceGovernanceOperations;
+  private readonly ospV7Operations: CollectionOspV7Operations;
 
   constructor(storage: ConstructorParameters<typeof CollectionServiceSupport>[0]) {
     super(storage);
@@ -32,6 +34,10 @@ export class CollectionRecordService extends CollectionServiceSupport {
       this.requireUser.bind(this),
     );
     this.sourceGovernanceOperations = new CollectionSourceGovernanceOperations(
+      this.storage,
+      this.requireUser.bind(this),
+    );
+    this.ospV7Operations = new CollectionOspV7Operations(
       this.storage,
       this.requireUser.bind(this),
     );
@@ -102,6 +108,70 @@ export class CollectionRecordService extends CollectionServiceSupport {
     bodyRaw: unknown,
   ) {
     return this.sourceGovernanceOperations.upsertBillingPrincipalTargets(userInput, bodyRaw);
+  }
+
+  listBillingPrincipalSavedTargets(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0]) {
+    return this.ospV7Operations.listTargets(userInput);
+  }
+
+  getBillingPrincipalSavedTarget(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown) {
+    return this.ospV7Operations.getTarget(userInput, targetId);
+  }
+
+  createBillingPrincipalSavedTarget(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], body: unknown) {
+    return this.ospV7Operations.createTarget(userInput, body);
+  }
+
+  updateBillingPrincipalSavedTarget(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, body: unknown) {
+    return this.ospV7Operations.updateTarget(userInput, targetId, body);
+  }
+
+  deleteBillingPrincipalSavedTarget(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, version: unknown) {
+    return this.ospV7Operations.deleteTarget(userInput, targetId, version);
+  }
+
+  getBillingPrincipalTargetOverview(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.ospV7Operations.overview(userInput, targetId, revisionId, query);
+  }
+
+  listBillingPrincipalReconciliationCandidates(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.ospV7Operations.candidates(userInput, targetId, revisionId, query);
+  }
+
+  listBillingPrincipalReconciliations(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.ospV7Operations.reconciliations(userInput, targetId, revisionId, query);
+  }
+
+  createBillingPrincipalReconciliation(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, body: unknown, requestId?: unknown) {
+    return this.ospV7Operations.createReconciliation(userInput, targetId, revisionId, body, requestId);
+  }
+
+  updateBillingPrincipalReconciliation(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
+    return this.ospV7Operations.updateReconciliation(userInput, targetId, revisionId, reconciliationId, body, requestId);
+  }
+
+  voidBillingPrincipalReconciliation(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
+    return this.ospV7Operations.voidReconciliation(userInput, targetId, revisionId, reconciliationId, body, requestId);
+  }
+
+  listBillingPrincipalReconciliationHistory(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, reconciliationId: unknown) {
+    return this.ospV7Operations.history(userInput, targetId, revisionId, reconciliationId);
+  }
+
+  upsertBillingPrincipalClientResults(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, body: unknown) {
+    return this.ospV7Operations.upsertClientResults(userInput, targetId, revisionId, body);
+  }
+
+  getBillingPrincipalCalendar(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.ospV7Operations.calendar(userInput, targetId, revisionId, query);
+  }
+
+  getBillingPrincipalDrilldown(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.ospV7Operations.drilldown(userInput, targetId, revisionId, query);
+  }
+
+  exportBillingPrincipalTarget(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.ospV7Operations.exportReport(userInput, targetId, revisionId, query);
   }
 
   async getSummary(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: SummaryQuery) {

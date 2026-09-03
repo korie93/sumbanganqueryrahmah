@@ -10,6 +10,14 @@ import {
   finalizeRestoredCollectionRollups,
   initializeRestoreTrackingTempTable,
   restoreAuditLogsFromBackup,
+  restoreCollectionOspClientResultsFromBackup,
+  restoreCollectionOspManualReconciliationAuditFromBackup,
+  restoreCollectionOspManualReconciliationsFromBackup,
+  restoreCollectionOspSavedTargetsFromBackup,
+  restoreCollectionOspTargetAgingRowsFromBackup,
+  restoreCollectionOspTargetRevisionsFromBackup,
+  restoreCollectionOspTargetSourceRowsFromBackup,
+  restoreCollectionOspTargetSourcesFromBackup,
   restoreCollectionOspTargetsFromBackup,
   restoreCollectionRecordPurgeHistoryFromBackup,
   restoreCollectionRecordReceiptsFromBackup,
@@ -32,6 +40,14 @@ const BACKUP_PAYLOAD_DATASET_KEYS = [
   "collectionSourceConfigs",
   "collectionSourceRows",
   "collectionOspTargets",
+  "collectionOspSavedTargets",
+  "collectionOspTargetRevisions",
+  "collectionOspTargetSources",
+  "collectionOspTargetSourceRows",
+  "collectionOspTargetAgingRows",
+  "collectionOspClientResults",
+  "collectionOspManualReconciliations",
+  "collectionOspManualReconciliationAudit",
   "collectionRecords",
   "collectionRecordPurgeHistory",
   "collectionRecordReceipts",
@@ -155,6 +171,18 @@ export async function restoreFromBackup(
     await restoreCollectionSourceConfigsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionSourceRowsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionOspTargetsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspSavedTargetsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspTargetRevisionsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspTargetSourcesFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspTargetSourceRowsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspTargetAgingRowsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspClientResultsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspManualReconciliationsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspManualReconciliationAuditFromBackup(
+      restoreTx,
+      backupDataReader,
+      stats,
+    );
     await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionRecordPurgeHistoryFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);

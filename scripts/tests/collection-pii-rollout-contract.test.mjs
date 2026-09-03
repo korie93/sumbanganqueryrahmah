@@ -42,6 +42,7 @@ test("collection PII rollout contract validation reports missing rollout markers
   const filesByPath = buildCompliantFilesByPath();
   filesByPath["scripts/release-readiness-local.mjs"] = [
     "[\"run\", \"collection:pii-status\", \"--\", \"--json\"]",
+    "[\"run\", \"collection:v7-pii-status\", \"--\", \"--json\"]",
     "[\"run\", \"collection:rollout-readiness\", \"--\", \"--json\"]",
     "await runNpm([\"run\", \"collection:verify-pii-sensitive-retirement\"], { env });",
     "await runNpm([\"run\", \"collection:verify-pii-retired-fields\"], { env });",

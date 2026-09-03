@@ -150,6 +150,38 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Normalized hashed Collection matching rows are governed by reviewed schema and additive runtime bootstrap.",
     ),
+    collection_osp_client_results: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Versioned client-provided Billing Principal results are constrained to an immutable saved-target revision and retain actor attribution.",
+    ),
+    collection_osp_manual_reconciliation_audit: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Append-only superuser audit snapshots preserve every Billing Principal manual reconciliation mutation and request context; PostgreSQL triggers reject UPDATE, DELETE, and TRUNCATE at the database boundary.",
+    ),
+    collection_osp_manual_reconciliations: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Manual prior-payment reconciliation state is revision-scoped, versioned, PII-protected, and governed by reviewed constraints.",
+    ),
+    collection_osp_saved_targets: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Stable named Billing Principal target identities use soft deletion while immutable child revisions preserve reporting history.",
+    ),
+    collection_osp_target_aging_rows: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Immutable per-aging target baselines and percentages retain the exact denominator used by each saved-target revision.",
+    ),
+    collection_osp_target_revisions: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Immutable Billing Principal target revisions preserve source scope, reporting period, tracking dates, and calculation version.",
+    ),
+    collection_osp_target_source_rows: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Encrypted and hashed row snapshots keep saved-target reports deterministic after source configuration or import lifecycle changes.",
+    ),
+    collection_osp_target_sources: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Immutable source metadata snapshots keep saved-target labels and source identity independent from later import deletion.",
+    ),
     collection_osp_targets: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Auditable Billing Principal target settings are governed by reviewed schema and additive runtime bootstrap.",

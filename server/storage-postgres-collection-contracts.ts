@@ -26,6 +26,15 @@ import type {
   CollectionSourceMatchResult,
   CollectionBillingPrincipalReport,
   CollectionOspTargetInput,
+  CollectionOspSavedTargetView,
+  CollectionOspManualReasonCode,
+  CollectionOspManualReconciliationView,
+  CollectionOspReconciliationCandidateView,
+  CollectionOspReconciliationHistoryView,
+  CollectionOspClientResultView,
+  CollectionOspCalendarDayView,
+  CollectionOspDrilldownItemView,
+  CollectionOspPagination,
   CreateCollectionRecordInput,
   CreateCollectionRecordReceiptInput,
   CreateCollectionStaffNicknameInput,
@@ -67,6 +76,152 @@ export interface CollectionStorageContract {
     targets: CollectionOspTargetInput[];
     configuredBy: string;
   }): Promise<CollectionOspTargetInput[]>;
+  listCollectionOspSavedTargets(options?: { includeDeleted?: boolean }): Promise<CollectionOspSavedTargetView[]>;
+  getCollectionOspSavedTarget(targetId: string, revisionId?: string): Promise<CollectionOspSavedTargetView | undefined>;
+  createCollectionOspSavedTarget(input: {
+    name: string;
+    description?: string | null;
+    sourceImportIds: string[];
+    from: string;
+    to: string;
+    trackingStartDate: string;
+    trackingEndDate?: string | null;
+    timezone: string;
+    nicknameScope: string[];
+    agingScope: Array<"D3" | "D4" | "D5" | "D6">;
+    targets: CollectionOspTargetInput[];
+    actor: string;
+  }): Promise<CollectionOspSavedTargetView>;
+  updateCollectionOspSavedTarget(input: {
+    targetId: string;
+    name?: string;
+    description?: string | null;
+    expectedVersion?: number;
+    actor: string;
+  }): Promise<CollectionOspSavedTargetView>;
+  deleteCollectionOspSavedTarget(input: {
+    targetId: string;
+    expectedVersion?: number;
+    actor: string;
+  }): Promise<CollectionOspSavedTargetView>;
+  getCollectionOspTargetOverview(input: {
+    targetId: string;
+    revisionId: string;
+    asOfDate: string;
+  }): Promise<unknown>;
+  listCollectionOspReconciliationCandidates(input: {
+    targetId: string;
+    revisionId: string;
+    asOfDate: string;
+    search: string;
+    aging?: "D3" | "D4" | "D5" | "D6";
+    page: number;
+    pageSize: number;
+  }): Promise<{ candidates: CollectionOspReconciliationCandidateView[]; pagination: CollectionOspPagination }>;
+  listCollectionOspManualReconciliations(input: {
+    targetId: string;
+    revisionId: string;
+    asOfDate: string;
+    search: string;
+    aging?: "D3" | "D4" | "D5" | "D6";
+    status?: "ACTIVE" | "VOIDED";
+    page: number;
+    pageSize: number;
+  }): Promise<{ reconciliations: CollectionOspManualReconciliationView[]; pagination: CollectionOspPagination }>;
+  createCollectionOspManualReconciliation(input: {
+    targetId: string;
+    revisionId: string;
+    sourceImportId: string;
+    sourceDataRowId: string;
+    manualPriorAmount: string;
+    asOfDate: string;
+    actualPaymentDate?: string | null;
+    reason: CollectionOspManualReasonCode;
+    note?: string | null;
+    reference?: string | null;
+    actor: string;
+    actorRole: string;
+    requestId?: string | null;
+  }): Promise<CollectionOspManualReconciliationView>;
+  updateCollectionOspManualReconciliation(input: {
+    targetId: string;
+    revisionId: string;
+    reconciliationId: string;
+    expectedVersion: number;
+    manualPriorAmount: string;
+    asOfDate: string;
+    actualPaymentDate?: string | null;
+    reason: CollectionOspManualReasonCode;
+    note?: string | null;
+    reference?: string | null;
+    actor: string;
+    actorRole: string;
+    requestId?: string | null;
+  }): Promise<CollectionOspManualReconciliationView>;
+  voidCollectionOspManualReconciliation(input: {
+    targetId: string;
+    revisionId: string;
+    reconciliationId: string;
+    expectedVersion: number;
+    reason: string;
+    asOfDate: string;
+    actor: string;
+    actorRole: string;
+    requestId?: string | null;
+  }): Promise<CollectionOspManualReconciliationView>;
+  listCollectionOspReconciliationHistory(input: {
+    targetId: string;
+    revisionId: string;
+    reconciliationId: string;
+    limit: number;
+  }): Promise<CollectionOspReconciliationHistoryView[]>;
+  upsertCollectionOspClientResults(input: {
+    targetId: string;
+    revisionId: string;
+    asOfDate: string;
+    rows: Array<{
+      aging: "D3" | "D4" | "D5" | "D6";
+      resultPercentage: string;
+      ospClosed: string;
+      note?: string | null;
+      reference?: string | null;
+      expectedVersion?: number | null;
+    }>;
+    actor: string;
+  }): Promise<CollectionOspClientResultView[]>;
+  getCollectionOspCalendar(input: {
+    targetId: string;
+    revisionId: string;
+    from: string;
+    to: string;
+    asOfDate: string;
+    aging?: "D3" | "D4" | "D5" | "D6";
+  }): Promise<{
+    from: string;
+    to: string;
+    aging: "D3" | "D4" | "D5" | "D6" | "ALL";
+    days: CollectionOspCalendarDayView[];
+  }>;
+  getCollectionOspDrilldown(input: {
+    targetId: string;
+    revisionId: string;
+    asOfDate: string;
+    date?: string;
+    aging?: "D3" | "D4" | "D5" | "D6";
+    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION";
+    page: number;
+    pageSize: number;
+  }): Promise<{ items: CollectionOspDrilldownItemView[]; pagination: CollectionOspPagination }>;
+  getCollectionOspExportDataset(input: {
+    targetId: string;
+    revisionId: string;
+    asOfDate: string;
+    from: string;
+    to: string;
+    date?: string;
+    aging?: "D3" | "D4" | "D5" | "D6";
+    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION";
+  }): Promise<Record<string, unknown>>;
   createCollectionRecord(
     data: CreateCollectionRecordInput,
     receipts?: CreateCollectionRecordReceiptInput[],

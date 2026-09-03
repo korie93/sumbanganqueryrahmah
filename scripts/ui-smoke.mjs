@@ -657,6 +657,197 @@ const createCollectionSmokeSourceImport = async (context, values) => {
   };
 };
 
+const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const [nickname] = await ensureCollectionSmokeNicknames(context);
+  const uniqueSuffix = `${Date.now()}`;
+  const asOf = getLocalIsoDate();
+  const targetName = `Smoke V7 Target ${uniqueSuffix}`;
+  const createManualReconciliationHeading = ["Create", "Table", "C", "Reconciliation"].join(" ");
+  const sourceImport = await createCollectionSmokeSourceImport(context, {
+    uniqueSuffix,
+    customerName: `Smoke V7 Customer ${uniqueSuffix}`,
+    icNumber: `900101${uniqueSuffix.slice(-6)}`,
+    customerPhone: `012${uniqueSuffix.slice(-7)}`,
+    accountNumber: `SMOKE-V7-${uniqueSuffix}`,
+    cardNumber: `V7${uniqueSuffix.slice(-8)}`,
+    callingDate: asOf,
+    dcSts: "3",
+    totalDue: "100.00",
+    billingPrincipalOsp: "100.00",
+  });
+  let targetDeleted = false;
+
+  try {
+    await applySmokeCollectionNicknameSession(page, nickname);
+    await navigateForSmoke(page, "/collection/billing-principal");
+    await page.getByRole("heading", { name: "Billing Principal Workspace" }).waitFor({ timeout: 20_000 });
+
+    const sourceButtons = page.locator('button[id^="billing-source-"]');
+    await sourceButtons.first().waitFor({ timeout: 20_000 });
+    const sourceCount = await sourceButtons.count();
+    for (let index = 0; index < sourceCount; index += 1) {
+      const button = sourceButtons.nth(index);
+      const label = String(await button.getAttribute("aria-label") || "");
+      const selected = await button.getAttribute("data-state") === "checked";
+      const isSmokeSource = label === `Select ${sourceImport.filename}`;
+      if (selected !== isSmokeSource) await button.click();
+    }
+
+    for (const aging of ["D4", "D5", "D6"]) {
+      const button = page.locator(`#billing-aging-${aging}`);
+      if (await button.getAttribute("data-state") === "checked") await button.click();
+    }
+
+    await page.getByRole("table", { name: "Billing Principal OSP performance by aging" }).waitFor({ timeout: 20_000 });
+    const saveTargetButton = page.getByRole("button", { name: "Save Current Target" });
+    await saveTargetButton.waitFor({ timeout: 20_000 });
+    assert(await saveTargetButton.isEnabled(), "Billing Principal V7 smoke requires a ready governed target");
+    await saveTargetButton.click();
+    await page.getByRole("heading", { name: "Create Saved Target" }).waitFor({ timeout: 15_000 });
+    await page.getByLabel("Target name").fill(targetName);
+    const createTargetResponse = page.waitForResponse((response) => (
+      response.request().method() === "POST"
+      && new URL(response.url()).pathname === "/api/collection/report/billing-principal/saved-targets"
+      && response.status() === 200
+    ));
+    await page.getByRole("button", { name: "Create Target" }).click();
+    await createTargetResponse;
+    await page.getByRole("heading", { name: targetName }).waitFor({ timeout: 20_000 });
+    await page.getByText(sourceImport.name, { exact: true }).first().waitFor({ timeout: 20_000 });
+    await page.getByText(sourceImport.filename, { exact: true }).first().waitFor({ timeout: 20_000 });
+
+    await page.getByRole("button", { name: "Enter Client Results" }).click();
+    const clientResultDialogHeading = page.getByRole("heading", {
+      name: `Client Result · ${asOf}`,
+      exact: true,
+    });
+    await clientResultDialogHeading.waitFor({ timeout: 15_000 });
+    await page.locator("#client-result-D3").fill("50.0000");
+    await page.locator("#client-osp-D3").fill("50.00");
+    const clientResultResponse = page.waitForResponse((response) => (
+      response.request().method() === "PUT"
+      && /\/client-results$/.test(new URL(response.url()).pathname)
+      && response.status() === 200
+    ));
+    await page.getByRole("button", { name: "Save Client Results" }).click();
+    await clientResultResponse;
+    await clientResultDialogHeading.waitFor({ state: "hidden", timeout: 15_000 });
+    await page.getByRole("table", { name: "Client Billing Principal result" }).getByText(asOf, { exact: true }).first().waitFor({ timeout: 20_000 });
+
+    await page.getByRole("tab", { name: "Calendar" }).click();
+    await page.getByLabel(/Billing Principal month calendar/).waitFor({ timeout: 20_000 });
+    await page.getByText("Exact Client snapshot: 50.00%", { exact: true }).waitFor({ timeout: 20_000 });
+    await page.getByRole("table", { name: "Billing Principal daily calendar" }).getByText(asOf, { exact: true }).first().click();
+    await page.getByText("Exact Client snapshot: 50.00%", { exact: true }).waitFor({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: "Add Table C Entry" }).click();
+    await page.getByRole("heading", { name: createManualReconciliationHeading }).waitFor({ timeout: 15_000 });
+    const candidate = page.locator('button[aria-pressed]').filter({ hasText: sourceImport.filename }).first();
+    await candidate.waitFor({ timeout: 20_000 });
+    await candidate.click();
+    await page.locator("#table-c-reference").fill(`V7-SMOKE-${uniqueSuffix}`);
+    await page.locator("#table-c-note").fill("Synthetic smoke reconciliation evidence.");
+    const createEntryResponse = page.waitForResponse((response) => (
+      response.request().method() === "POST"
+      && /\/reconciliations$/.test(new URL(response.url()).pathname)
+      && response.status() === 200
+    ));
+    await page.getByRole("button", { name: "Create Entry" }).click();
+    await createEntryResponse;
+    await page.getByRole("heading", { name: createManualReconciliationHeading }).waitFor({ state: "hidden", timeout: 15_000 });
+
+    const tableC = page.getByRole("table", { name: "Table C manual reconciliation entries" });
+    await tableC.getByText(sourceImport.filename, { exact: true }).waitFor({ timeout: 20_000 });
+    const viewButton = tableC.locator('button[aria-label^="View "]').first();
+    await viewButton.click();
+    await page.getByRole("heading", { name: "Table C Reconciliation Details" }).waitFor({ timeout: 15_000 });
+    await page.getByText(sourceImport.name, { exact: true }).last().waitFor({ timeout: 15_000 });
+    await page.getByText(sourceImport.filename, { exact: true }).last().waitFor({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Close" }).last().click();
+
+    const editButton = tableC.locator('button[aria-label^="Edit "]').first();
+    await editButton.click();
+    await page.getByRole("heading", { name: "Edit Table C Entry" }).waitFor({ timeout: 15_000 });
+    await page.locator("#table-c-manual-amount").fill("55.00");
+    await page.locator("#table-c-note").fill("Synthetic smoke reconciliation evidence updated.");
+    const updateEntryResponse = page.waitForResponse((response) => (
+      response.request().method() === "PATCH"
+      && /\/reconciliations\/[^/]+$/.test(new URL(response.url()).pathname)
+      && response.status() === 200
+    ));
+    await page.getByRole("button", { name: "Save Changes" }).click();
+    await updateEntryResponse;
+    await page.getByRole("heading", { name: "Edit Table C Entry" }).waitFor({ state: "hidden", timeout: 15_000 });
+
+    const historyButton = tableC.locator('button[aria-label^="View history"]').first();
+    await historyButton.click();
+    await page.getByRole("heading", { name: "Table C Audit History" }).waitFor({ timeout: 15_000 });
+    await page.getByText("CREATE", { exact: true }).waitFor({ timeout: 15_000 });
+    await page.getByText("UPDATE", { exact: true }).waitFor({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Close" }).last().click();
+
+    const voidButton = tableC.locator('button[aria-label^="Void "]').first();
+    await voidButton.click();
+    await page.getByRole("heading", { name: "Void Table C Entry" }).waitFor({ timeout: 15_000 });
+    await page.getByLabel("Reason").fill("Synthetic smoke cleanup.");
+    const voidResponse = page.waitForResponse((response) => (
+      response.request().method() === "POST"
+      && /\/reconciliations\/[^/]+\/void$/.test(new URL(response.url()).pathname)
+      && response.status() === 200
+    ));
+    await page.getByRole("button", { name: "Void Entry" }).click();
+    await voidResponse;
+    await page.getByRole("heading", { name: "Void Table C Entry" }).waitFor({ state: "hidden", timeout: 15_000 });
+
+    const tableCStatusFilterLabel = ["Filter", "Table", "C", "by status"].join(" ");
+    await page.getByLabel(tableCStatusFilterLabel).selectOption("VOIDED");
+    await tableC.getByText("VOIDED", { exact: true }).waitFor({ timeout: 20_000 });
+
+    await page.getByRole("button", { name: "Delete Target" }).click();
+    await page.getByRole("heading", { name: "Delete saved target?" }).waitFor({ timeout: 15_000 });
+    const deleteTargetResponse = page.waitForResponse((response) => (
+      response.request().method() === "DELETE"
+      && /\/saved-targets\/[^/]+$/.test(new URL(response.url()).pathname)
+      && response.status() === 200
+    ));
+    await page.getByRole("button", { name: "Delete Target" }).last().click();
+    await deleteTargetResponse;
+    await page.getByRole("heading", { name: targetName }).waitFor({ state: "hidden", timeout: 20_000 });
+    targetDeleted = true;
+
+    tracker.assertClean("Billing Principal V7 UI flow");
+    tracker.clear();
+  } finally {
+    if (!targetDeleted) {
+      const targetsResponse = await apiJsonRequestWithRetry(
+        context,
+        "GET",
+        "/api/collection/report/billing-principal/saved-targets",
+        undefined,
+        [200],
+      ).catch(() => null);
+      const target = targetsResponse?.payload?.targets?.find((item) => item?.name === targetName);
+      if (target?.id && target?.version) {
+        await apiJsonRequestWithRetry(
+          context,
+          "DELETE",
+          `/api/collection/report/billing-principal/saved-targets/${encodeURIComponent(target.id)}?version=${encodeURIComponent(target.version)}`,
+          undefined,
+          [200, 404],
+        ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V7 target", error));
+      }
+    }
+    await apiJsonRequestWithRetry(
+      context,
+      "DELETE",
+      `/api/imports/${encodeURIComponent(sourceImport.id)}`,
+      undefined,
+      [200, 404],
+    ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V7 source import", error));
+  }
+};
+
 const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await navigateForSmoke(page, "/general-search");
@@ -2777,6 +2968,10 @@ const run = async () => {
         await runSmokePhase(
           "collection stale delete conflict",
           () => checkCollectionRecordsStaleDeleteConflict(page, context, tracker),
+        );
+        await runSmokePhase(
+          "Billing Principal V7 UI flow",
+          () => checkBillingPrincipalV7UiFlow(page, context, tracker),
         );
         await runSmokePhase(
           "collection receipt flow",

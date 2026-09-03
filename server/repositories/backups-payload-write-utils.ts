@@ -4,6 +4,7 @@ import {
   QUERY_PAGE_LIMIT,
 } from "./backups-repository-types";
 import type {
+  BackupCompositeCursorRow,
   BackupCursorRow,
   BackupPageFetcher,
 } from "./backups-payload-db-utils";
@@ -12,7 +13,21 @@ import {
   writeBackupChunk,
 } from "./backups-payload-file-utils";
 
-export async function appendPagedJsonArray<T extends BackupCursorRow>(
+function getBackupRowCursor(row: BackupCursorRow | BackupCompositeCursorRow): string {
+  return "backupCursor" in row ? row.backupCursor : row.id;
+}
+
+function serializeBackupRow(row: BackupCursorRow | BackupCompositeCursorRow): string {
+  if ("backupCursor" in row) {
+    const { backupCursor: _backupCursor, ...payloadRow } = row;
+    return JSON.stringify(payloadRow);
+  }
+  return JSON.stringify(row);
+}
+
+export async function appendPagedJsonArray<
+  T extends BackupCursorRow | BackupCompositeCursorRow,
+>(
   state: PreparedBackupWriteState,
   key: string,
   fetchPage: BackupPageFetcher<T>,
@@ -34,7 +49,7 @@ export async function appendPagedJsonArray<T extends BackupCursorRow>(
         await writeBackupChunk(state, ",");
       }
       isFirstRow = false;
-      const serializedRow = JSON.stringify(row);
+      const serializedRow = serializeBackupRow(row);
       const serializedRowBytes = Buffer.byteLength(serializedRow, "utf8");
       if (serializedRowBytes > BACKUP_MAX_SERIALIZED_ROW_BYTES) {
         throw new Error(
@@ -44,7 +59,7 @@ export async function appendPagedJsonArray<T extends BackupCursorRow>(
       state.maxSerializedRowBytes = Math.max(state.maxSerializedRowBytes, serializedRowBytes);
       await writeBackupChunk(state, serializedRow);
       total += 1;
-      lastId = row.id;
+      lastId = getBackupRowCursor(row);
     }
 
     if (rows.length < QUERY_PAGE_LIMIT) {
@@ -68,5 +83,13 @@ export function createEmptyBackupPayloadCounts(): BackupPayloadCounts {
     collectionRecordsCount: 0,
     collectionRecordPurgeHistoryCount: 0,
     collectionRecordReceiptsCount: 0,
+    collectionOspSavedTargetsCount: 0,
+    collectionOspTargetRevisionsCount: 0,
+    collectionOspTargetSourcesCount: 0,
+    collectionOspTargetSourceRowsCount: 0,
+    collectionOspTargetAgingRowsCount: 0,
+    collectionOspClientResultsCount: 0,
+    collectionOspManualReconciliationsCount: 0,
+    collectionOspManualReconciliationAuditCount: 0,
   };
 }

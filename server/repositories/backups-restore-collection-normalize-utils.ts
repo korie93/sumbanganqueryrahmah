@@ -148,7 +148,7 @@ export function normalizeBackupCollectionSourceRow(
   const callingDate = normalizeBackupDate(record.callingDate);
   const createdAt = toDate(record.createdAt);
   const cardNumberLast4Raw = String(record.cardNumberLast4 ?? "").trim();
-  const cardNumberLast4 = cardNumberLast4Raw.length > 0 && cardNumberLast4Raw.length <= 4
+  const cardNumberLast4 = /^\d{4}$/.test(cardNumberLast4Raw)
     ? cardNumberLast4Raw
     : null;
 
@@ -316,7 +316,7 @@ export function normalizeBackupCollectionRecord(
     ? sourceMatchAccuracyRaw
     : null;
   const cardNumberLast4Raw = String(record.cardNumberLast4 ?? "").trim();
-  const cardNumberLast4 = cardNumberLast4Raw.length > 0 && cardNumberLast4Raw.length <= 4
+  const cardNumberLast4 = /^\d{4}$/.test(cardNumberLast4Raw)
     ? cardNumberLast4Raw
     : null;
   const sourceObligationKey = normalizeBoundedOptionalText(record.sourceObligationKey, 160);

@@ -70,6 +70,24 @@ import {
   upsertCollectionOspTargets,
 } from "./collection-source-repository-utils";
 import { backfillLegacyCollectionRecordsForSource } from "./collection-source-legacy-backfill-utils";
+import {
+  createCollectionOspManualReconciliationRepository,
+  createCollectionOspSavedTargetRepository,
+  deleteCollectionOspSavedTargetRepository,
+  getCollectionOspCalendarRepository,
+  getCollectionOspDrilldownRepository,
+  getCollectionOspExportDatasetRepository,
+  getCollectionOspSavedTargetRepository,
+  getCollectionOspTargetOverviewRepository,
+  listCollectionOspManualReconciliationsRepository,
+  listCollectionOspReconciliationCandidatesRepository,
+  listCollectionOspReconciliationHistoryRepository,
+  listCollectionOspSavedTargetsRepository,
+  updateCollectionOspManualReconciliationRepository,
+  updateCollectionOspSavedTargetRepository,
+  upsertCollectionOspClientResultsRepository,
+  voidCollectionOspManualReconciliationRepository,
+} from "./collection-osp-v7-repository-utils";
 
 export class CollectionRepository {
   readonly backfillLegacyCollectionRecordsForSource = backfillLegacyCollectionRecordsForSource;
@@ -134,4 +152,20 @@ export class CollectionRepository {
   readonly upsertCollectionDailyCalendarDays = upsertCollectionDailyCalendarDaysRepository;
   readonly upsertCollectionDailyTarget = upsertCollectionDailyTargetRepository;
   readonly upsertCollectionOspTargets = upsertCollectionOspTargets;
+  readonly listCollectionOspSavedTargets = listCollectionOspSavedTargetsRepository;
+  readonly getCollectionOspSavedTarget = getCollectionOspSavedTargetRepository;
+  readonly createCollectionOspSavedTarget = createCollectionOspSavedTargetRepository;
+  readonly updateCollectionOspSavedTarget = updateCollectionOspSavedTargetRepository;
+  readonly deleteCollectionOspSavedTarget = deleteCollectionOspSavedTargetRepository;
+  readonly getCollectionOspTargetOverview = getCollectionOspTargetOverviewRepository;
+  readonly listCollectionOspReconciliationCandidates = listCollectionOspReconciliationCandidatesRepository;
+  readonly listCollectionOspManualReconciliations = listCollectionOspManualReconciliationsRepository;
+  readonly createCollectionOspManualReconciliation = createCollectionOspManualReconciliationRepository;
+  readonly updateCollectionOspManualReconciliation = updateCollectionOspManualReconciliationRepository;
+  readonly voidCollectionOspManualReconciliation = voidCollectionOspManualReconciliationRepository;
+  readonly listCollectionOspReconciliationHistory = listCollectionOspReconciliationHistoryRepository;
+  readonly upsertCollectionOspClientResults = upsertCollectionOspClientResultsRepository;
+  readonly getCollectionOspCalendar = getCollectionOspCalendarRepository;
+  readonly getCollectionOspDrilldown = getCollectionOspDrilldownRepository;
+  readonly getCollectionOspExportDataset = getCollectionOspExportDatasetRepository;
 }

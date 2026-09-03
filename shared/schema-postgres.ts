@@ -29,6 +29,14 @@ import {
   collectionRecordPurgeHistory,
   collectionRecordReceipts,
   collectionRecords,
+  collectionOspClientResults,
+  collectionOspManualReconciliationAudit,
+  collectionOspManualReconciliations,
+  collectionOspSavedTargets,
+  collectionOspTargetAgingRows,
+  collectionOspTargetRevisions,
+  collectionOspTargetSourceRows,
+  collectionOspTargetSources,
   collectionSourceConfigs,
   collectionSourceRows,
   collectionOspTargets,
@@ -72,6 +80,14 @@ export {
 export { mutationIdempotencyKeys } from "./schema-postgres-core";
 export {
   collectionRecords,
+  collectionOspClientResults,
+  collectionOspManualReconciliationAudit,
+  collectionOspManualReconciliations,
+  collectionOspSavedTargets,
+  collectionOspTargetAgingRows,
+  collectionOspTargetRevisions,
+  collectionOspTargetSourceRows,
+  collectionOspTargetSources,
   collectionSourceConfigs,
   collectionSourceRows,
   collectionOspTargets,
@@ -279,6 +295,16 @@ export type RoleSettingPermissionRow = typeof roleSettingPermissions.$inferSelec
 export type SettingVersionRow = typeof settingVersions.$inferSelect;
 export type FeatureFlagRow = typeof featureFlags.$inferSelect;
 export type CollectionRecordRow = typeof collectionRecords.$inferSelect;
+export type CollectionOspClientResultRow = typeof collectionOspClientResults.$inferSelect;
+export type CollectionOspManualReconciliationAuditRow =
+  typeof collectionOspManualReconciliationAudit.$inferSelect;
+export type CollectionOspManualReconciliationRow =
+  typeof collectionOspManualReconciliations.$inferSelect;
+export type CollectionOspSavedTargetRow = typeof collectionOspSavedTargets.$inferSelect;
+export type CollectionOspTargetAgingRow = typeof collectionOspTargetAgingRows.$inferSelect;
+export type CollectionOspTargetRevisionRow = typeof collectionOspTargetRevisions.$inferSelect;
+export type CollectionOspTargetSourceRowSnapshot = typeof collectionOspTargetSourceRows.$inferSelect;
+export type CollectionOspTargetSourceRow = typeof collectionOspTargetSources.$inferSelect;
 export type CollectionSourceConfigRow = typeof collectionSourceConfigs.$inferSelect;
 export type CollectionSourceRow = typeof collectionSourceRows.$inferSelect;
 export type CollectionOspTargetRow = typeof collectionOspTargets.$inferSelect;

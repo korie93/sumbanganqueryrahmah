@@ -47,7 +47,9 @@ test("safe child process env keeps explicit runtime values and drops unrelated s
       AWS_SECRET_ACCESS_KEY: "not-forwarded",
       OPENAI_API_KEY: "not-forwarded",
       PATH: "/usr/bin",
+      CHROME_PATH: "/opt/google/chrome",
       PG_PASSWORD: "required-postgres-password",
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: "/opt/google/chrome",
       SESSION_SECRET: "required-session-secret-32-characters",
       npm_config_cache: "/tmp/npm-cache",
     },
@@ -59,7 +61,9 @@ test("safe child process env keeps explicit runtime values and drops unrelated s
   assert.equal(env.AWS_SECRET_ACCESS_KEY, undefined);
   assert.equal(env.OPENAI_API_KEY, undefined);
   assert.equal(env.PATH, "/usr/bin");
+  assert.equal(env.CHROME_PATH, "/opt/google/chrome");
   assert.equal(env.PG_PASSWORD, "required-postgres-password");
+  assert.equal(env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, "/opt/google/chrome");
   assert.equal(env.SESSION_SECRET, "required-session-secret-32-characters");
   assert.equal(env.SMOKE_BASE_URL, "http://127.0.0.1:5000");
   assert.equal(env.npm_config_cache, "/tmp/npm-cache");

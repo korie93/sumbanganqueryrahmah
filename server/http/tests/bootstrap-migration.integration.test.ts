@@ -155,6 +155,10 @@ const collectionSourceGovernanceDeferredForeignKeysMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0053_collection_source_governance_deferred_foreign_keys.sql"),
   "utf8",
 );
+const collectionOspReconciliationMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0054_collection_osp_reconciliation_persistence.sql"),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -541,6 +545,8 @@ test(
       await applySql(pool, collectionSourceGovernanceMigrationSql);
       await applySql(pool, collectionSourceGovernanceDeferredForeignKeysMigrationSql);
       await applySql(pool, collectionSourceGovernanceDeferredForeignKeysMigrationSql);
+      await applySql(pool, collectionOspReconciliationMigrationSql);
+      await applySql(pool, collectionOspReconciliationMigrationSql);
 
       for (const constraintName of [
         "collection_source_configs_source_import_id_fkey",
@@ -548,8 +554,180 @@ test(
         "collection_source_rows_source_import_id_fkey",
         "collection_source_rows_source_data_row_id_fkey",
         "collection_osp_targets_configured_by_fkey",
+        "collection_osp_saved_targets_created_by_fkey",
+        "collection_osp_saved_targets_updated_by_fkey",
+        "collection_osp_saved_targets_deleted_by_fkey",
+        "collection_osp_target_revisions_created_by_fkey",
+        "collection_osp_client_results_created_by_fkey",
+        "collection_osp_client_results_updated_by_fkey",
+        "collection_osp_manual_reconciliations_created_by_fkey",
+        "collection_osp_manual_reconciliations_updated_by_fkey",
+        "collection_osp_manual_reconciliations_voided_by_fkey",
+        "collection_osp_manual_reconciliation_audit_reconciliation_fkey",
+        "collection_osp_manual_recon_audit_actor_username_fkey",
       ]) {
         assert.equal(await constraintExists(pool, constraintName), true);
+      }
+
+      assert.match(
+        await constraintDefinition(pool, "chk_collection_records_card_number_last4"),
+        /\^\[0-9\]\{4\}\$/,
+      );
+      assert.match(
+        await constraintDefinition(pool, "chk_collection_source_rows_card_last4"),
+        /\^\[0-9\]\{4\}\$/,
+      );
+      assert.match(
+        await constraintDefinition(pool, "chk_collection_osp_manual_reconciliation_audit_version"),
+        /to_version\s*=\s*\(from_version\s*\+\s*1\)/i,
+      );
+      assert.match(
+        await constraintDefinition(pool, "chk_collection_osp_target_source_rows_identity"),
+        /account_number_encrypted IS NULL.*account_number_search_hash IS NULL/is,
+      );
+      assert.equal(
+        await indexExists(pool, "idx_collection_osp_target_source_rows_revision_cycle_unique"),
+        true,
+      );
+
+      await pool.query(`
+        INSERT INTO public.collection_osp_saved_targets (
+          id, target_name, normalized_name, created_by, updated_by
+        ) VALUES (
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+          'September target',
+          'september target',
+          'system',
+          'system'
+        );
+
+        INSERT INTO public.collection_osp_target_revisions (
+          id, target_id, revision_number, source_scope_hash,
+          period_from, period_to, tracking_start_date, created_by
+        ) VALUES (
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+          1,
+          repeat('a', 64),
+          DATE '2026-09-01',
+          DATE '2026-09-30',
+          DATE '2026-09-01',
+          'system'
+        );
+
+        INSERT INTO public.collection_osp_target_sources (
+          target_revision_id, source_import_id, source_name_snapshot, source_filename_snapshot
+        ) VALUES (
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+          'saved-import',
+          'Saved import',
+          'saved.csv'
+        );
+
+        INSERT INTO public.collection_osp_target_source_rows (
+          target_revision_id, source_import_id, source_data_row_id,
+          canonical_obligation_key, cycle_key, account_number_encrypted,
+          account_number_search_hash, customer_name_search_hashes,
+          aging_bucket, calling_date, calling_window_end_exclusive,
+          total_due, billing_principal_osp
+        ) VALUES (
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+          'saved-import',
+          'saved-row',
+          'obligation-1',
+          '2026-09-01:obligation-1',
+          'encrypted-account',
+          repeat('b', 64),
+          ARRAY[]::text[],
+          'D3',
+          DATE '2026-09-01',
+          DATE '2026-10-01',
+          1000.00,
+          700.00
+        );
+      `);
+
+      await assert.rejects(
+        pool.query(`
+          INSERT INTO public.collection_osp_target_source_rows (
+            target_revision_id, source_import_id, source_data_row_id,
+            canonical_obligation_key, cycle_key, account_number_encrypted,
+            card_number_last4, aging_bucket, calling_date,
+            calling_window_end_exclusive, total_due, billing_principal_osp
+          ) VALUES (
+            'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+            'saved-import',
+            'invalid-card-row',
+            'obligation-2',
+            '2026-09-01:obligation-2',
+            'encrypted-account',
+            '123',
+            'D3',
+            DATE '2026-09-01',
+            DATE '2026-10-01',
+            1000.00,
+            700.00
+          )
+        `),
+        /chk_collection_osp_target_source_rows_identity/i,
+      );
+
+      await pool.query(`
+        INSERT INTO public.collection_osp_manual_reconciliations (
+          id, target_id, target_revision_id, source_import_id, source_data_row_id,
+          canonical_obligation_key, cycle_key, account_number_encrypted,
+          account_number_search_hash, aging_bucket, calling_date,
+          calling_window_end_exclusive, total_due, billing_principal_osp,
+          manual_prior_amount, manual_as_of_date, date_source, reason_code,
+          created_by, updated_by
+        ) VALUES (
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid,
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+          'saved-import',
+          'saved-row',
+          'obligation-1',
+          '2026-09-01:obligation-1',
+          'encrypted-account',
+          repeat('b', 64),
+          'D3',
+          DATE '2026-09-01',
+          DATE '2026-10-01',
+          1000.00,
+          700.00,
+          50.00,
+          DATE '2026-09-15',
+          'MANUAL_AS_OF',
+          'HISTORICAL_PAYMENT_MISSING',
+          'system',
+          'system'
+        );
+
+        INSERT INTO public.collection_osp_manual_reconciliation_audit (
+          id, reconciliation_id, target_id, target_revision_id, operation,
+          to_version, after_state, actor_username, actor_role
+        ) VALUES (
+          'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid,
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc'::uuid,
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,
+          'CREATE',
+          1,
+          '{}'::jsonb,
+          'system',
+          'superuser'
+        );
+      `);
+
+      for (const mutation of [
+        "UPDATE public.collection_osp_manual_reconciliation_audit SET request_id = 'forbidden'",
+        "DELETE FROM public.collection_osp_manual_reconciliation_audit",
+        "TRUNCATE public.collection_osp_manual_reconciliation_audit",
+      ]) {
+        await assert.rejects(
+          pool.query(mutation),
+          /collection_osp_manual_reconciliation_audit is append-only/i,
+        );
       }
 
       for (const [table, column, expectedDeleteRule] of [

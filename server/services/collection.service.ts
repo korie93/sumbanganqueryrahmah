@@ -133,6 +133,70 @@ export class CollectionService {
     return this.recordService.upsertBillingPrincipalTargets(user, bodyRaw);
   }
 
+  listBillingPrincipalSavedTargets(user: AuthenticatedUser | undefined) {
+    return this.recordService.listBillingPrincipalSavedTargets(user);
+  }
+
+  getBillingPrincipalSavedTarget(user: AuthenticatedUser | undefined, targetId: unknown) {
+    return this.recordService.getBillingPrincipalSavedTarget(user, targetId);
+  }
+
+  createBillingPrincipalSavedTarget(user: AuthenticatedUser | undefined, body: unknown) {
+    return this.recordService.createBillingPrincipalSavedTarget(user, body);
+  }
+
+  updateBillingPrincipalSavedTarget(user: AuthenticatedUser | undefined, targetId: unknown, body: unknown) {
+    return this.recordService.updateBillingPrincipalSavedTarget(user, targetId, body);
+  }
+
+  deleteBillingPrincipalSavedTarget(user: AuthenticatedUser | undefined, targetId: unknown, version: unknown) {
+    return this.recordService.deleteBillingPrincipalSavedTarget(user, targetId, version);
+  }
+
+  getBillingPrincipalTargetOverview(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.recordService.getBillingPrincipalTargetOverview(user, targetId, revisionId, query);
+  }
+
+  listBillingPrincipalReconciliationCandidates(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.recordService.listBillingPrincipalReconciliationCandidates(user, targetId, revisionId, query);
+  }
+
+  listBillingPrincipalReconciliations(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.recordService.listBillingPrincipalReconciliations(user, targetId, revisionId, query);
+  }
+
+  createBillingPrincipalReconciliation(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, body: unknown, requestId?: unknown) {
+    return this.recordService.createBillingPrincipalReconciliation(user, targetId, revisionId, body, requestId);
+  }
+
+  updateBillingPrincipalReconciliation(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
+    return this.recordService.updateBillingPrincipalReconciliation(user, targetId, revisionId, reconciliationId, body, requestId);
+  }
+
+  voidBillingPrincipalReconciliation(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
+    return this.recordService.voidBillingPrincipalReconciliation(user, targetId, revisionId, reconciliationId, body, requestId);
+  }
+
+  listBillingPrincipalReconciliationHistory(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, reconciliationId: unknown) {
+    return this.recordService.listBillingPrincipalReconciliationHistory(user, targetId, revisionId, reconciliationId);
+  }
+
+  upsertBillingPrincipalClientResults(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, body: unknown) {
+    return this.recordService.upsertBillingPrincipalClientResults(user, targetId, revisionId, body);
+  }
+
+  getBillingPrincipalCalendar(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.recordService.getBillingPrincipalCalendar(user, targetId, revisionId, query);
+  }
+
+  getBillingPrincipalDrilldown(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.recordService.getBillingPrincipalDrilldown(user, targetId, revisionId, query);
+  }
+
+  exportBillingPrincipalTarget(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
+    return this.recordService.exportBillingPrincipalTarget(user, targetId, revisionId, query);
+  }
+
   getSummary(user: AuthenticatedUser | undefined, query: SummaryQuery) {
     return this.recordService.getSummary(user, query);
   }

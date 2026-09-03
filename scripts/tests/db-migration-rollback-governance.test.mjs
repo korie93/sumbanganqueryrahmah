@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { migrationRollbackManifest } from "../db-migration-rollback.manifest.mjs";
@@ -28,6 +29,27 @@ test("migration rollback manifest covers every reviewed Drizzle migration", () =
 
   assert.deepEqual(validation.failures, []);
   assert.equal(validation.coveredMigrations, migrationTags.length);
+});
+
+test("V7 persistence rollback preserves the append-only audit ledger", () => {
+  const entry = migrationRollbackManifest.find(
+    ({ migration }) => migration === "0054_collection_osp_reconciliation_persistence",
+  );
+
+  assert.ok(entry);
+  assert.match(entry.preconditions.join("\n"), /append-only.*audit ledger/i);
+  assert.match(entry.validationSteps.join("\n"), /rejects UPDATE, DELETE, and TRUNCATE/i);
+});
+
+test("V7 migration enforces append-only manual reconciliation audit history", () => {
+  const migration = readFileSync(
+    path.join(drizzleDir, "0054_collection_osp_reconciliation_persistence.sql"),
+    "utf8",
+  );
+
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.reject_collection_osp_manual_reconciliation_audit_mutation/i);
+  assert.match(migration, /BEFORE UPDATE OR DELETE ON public\.collection_osp_manual_reconciliation_audit/i);
+  assert.match(migration, /BEFORE TRUNCATE ON public\.collection_osp_manual_reconciliation_audit/i);
 });
 
 test("migration rollback governance rejects a missing manifest entry", () => {

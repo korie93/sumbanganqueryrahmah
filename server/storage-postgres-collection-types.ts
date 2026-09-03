@@ -222,6 +222,355 @@ export type CollectionOspTargetInput = {
   targetPercentage: string;
 };
 
+export type CollectionOspSavedTargetStatus = "ACTIVE" | "DELETED";
+export type CollectionOspManualReconciliationStatus = "ACTIVE" | "VOIDED";
+export type CollectionOspManualDateSource = "ACTUAL_PAYMENT_DATE" | "CLIENT_AS_OF" | "MANUAL_AS_OF";
+export type CollectionOspManualReasonCode =
+  | "PRIOR_PAYMENT_NOT_IN_SYSTEM"
+  | "CLIENT_CONFIRMED_PRIOR_PAYMENT"
+  | "HISTORICAL_PAYMENT_MISSING"
+  | "MIGRATED_HISTORY_GAP"
+  | "OTHER_WITH_REQUIRED_NOTE";
+
+export type CollectionOspTargetSourceSnapshot = {
+  sourceImportId: string;
+  sourceName: string;
+  sourceFilename: string;
+  sourceVersion: string;
+  sourceContentHash: string | null;
+};
+
+export type CollectionOspTargetAgingSnapshot = {
+  agingBucket: CollectionAgingBucket;
+  totalOspBaseline: CollectionAmountMyrString;
+  targetPercentage: string;
+  targetOsp: CollectionAmountMyrString;
+};
+
+export type CollectionOspSavedTarget = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: CollectionOspSavedTargetStatus;
+  version: number;
+  revisionId: string;
+  revisionNumber: number;
+  sourceScopeHash: string;
+  periodFrom: string;
+  periodTo: string;
+  trackingStartDate: string;
+  trackingEndDate: string;
+  timezone: string;
+  nicknameScope: string[];
+  agingScope: CollectionAgingBucket[];
+  calculationVersion: string;
+  sources: CollectionOspTargetSourceSnapshot[];
+  agingRows: CollectionOspTargetAgingSnapshot[];
+  createdBy: string;
+  createdAt: Date;
+  updatedBy: string;
+  updatedAt: Date;
+};
+
+export type CreateCollectionOspSavedTargetInput = {
+  name: string;
+  description?: string | null;
+  sourceImportIds: string[];
+  from: string;
+  to: string;
+  trackingStartDate: string;
+  trackingEndDate: string;
+  timezone: string;
+  nicknameScope: string[];
+  agingScope: CollectionAgingBucket[];
+  targets: CollectionOspTargetInput[];
+  actor: string;
+};
+
+export type CollectionOspClientResult = {
+  id: string;
+  targetId: string;
+  targetRevisionId: string;
+  asOfDate: string;
+  agingBucket: CollectionAgingBucket;
+  resultPercentage: string;
+  ospClosed: CollectionAmountMyrString;
+  clientReference: string | null;
+  note: string | null;
+  version: number;
+  createdBy: string;
+  createdAt: Date;
+  updatedBy: string;
+  updatedAt: Date;
+};
+
+export type CollectionOspReconciliationCandidate = {
+  sourceImportId: string;
+  sourceDataRowId: string;
+  sourceName: string;
+  sourceFilename: string;
+  accountNumberMasked: string;
+  cardNumberLast4: string | null;
+  customerName: string;
+  canonicalObligationKey: string;
+  cycleKey: string;
+  agingBucket: CollectionAgingBucket;
+  callingDate: string;
+  callingWindowEndExclusive: string;
+  totalDue: CollectionAmountMyrString;
+  billingPrincipalOsp: CollectionAmountMyrString;
+  systemCumulative: CollectionAmountMyrString;
+  hasSystemAbort: boolean;
+  activeReconciliationId: string | null;
+};
+
+export type CollectionOspManualReconciliation = {
+  id: string;
+  targetId: string;
+  targetRevisionId: string;
+  sourceImportId: string;
+  sourceDataRowId: string;
+  sourceName: string;
+  sourceFilename: string;
+  accountNumberMasked: string;
+  cardNumberLast4: string | null;
+  customerName: string;
+  canonicalObligationKey: string;
+  cycleKey: string;
+  agingBucket: CollectionAgingBucket;
+  callingDate: string;
+  callingWindowEndExclusive: string;
+  totalDue: CollectionAmountMyrString;
+  billingPrincipalOsp: CollectionAmountMyrString;
+  manualPriorAmount: CollectionAmountMyrString;
+  manualAsOfDate: string;
+  actualPaymentDate: string | null;
+  dateSource: CollectionOspManualDateSource;
+  reasonCode: CollectionOspManualReasonCode;
+  note: string | null;
+  evidenceReference: string | null;
+  status: CollectionOspManualReconciliationStatus;
+  version: number;
+  systemCumulative: CollectionAmountMyrString;
+  reconciledCumulative: CollectionAmountMyrString;
+  remainingAmount: CollectionAmountMyrString;
+  qualifiesAsClosed: boolean;
+  effectiveClosureDate: string | null;
+  contributionSource: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" | "OPEN";
+  manualSuperseded: boolean;
+  createdBy: string;
+  createdAt: Date;
+  updatedBy: string;
+  updatedAt: Date;
+  voidedBy: string | null;
+  voidedAt: Date | null;
+  voidReason: string | null;
+};
+
+export type CollectionOspReconciliationAuditEntry = {
+  id: string;
+  reconciliationId: string;
+  operation: "create" | "update" | "void" | "restore";
+  fromVersion: number | null;
+  toVersion: number;
+  beforeState: Record<string, unknown> | null;
+  afterState: Record<string, unknown> | null;
+  actorUsername: string;
+  actorRole: string;
+  createdAt: Date;
+};
+
+export type CollectionOspResultSummary = {
+  rows: CollectionBillingPrincipalAgingRow[];
+  all: Omit<CollectionBillingPrincipalAgingRow, "aging"> & { aging: "ALL" };
+};
+
+export type CollectionOspTargetOverview = {
+  target: CollectionOspSavedTarget;
+  asOfDate: string;
+  system: CollectionOspResultSummary;
+  reconciled: CollectionOspResultSummary;
+  clientResults: CollectionOspClientResult[];
+  comparison: Array<{
+    aging: CollectionAgingBucket | "ALL";
+    systemOspClosed: CollectionAmountMyrString;
+    clientOspClosed: CollectionAmountMyrString | null;
+    reconciledOspClosed: CollectionAmountMyrString;
+    systemVsClientDelta: CollectionAmountMyrString | null;
+    reconciledVsClientDelta: CollectionAmountMyrString | null;
+  }>;
+};
+
+export type CollectionOspCalendarDay = {
+  date: string;
+  systemDailyOsp: CollectionAmountMyrString;
+  manualDailyOsp: CollectionAmountMyrString;
+  reconciledDailyOsp: CollectionAmountMyrString;
+  systemCumulativeOsp: CollectionAmountMyrString;
+  manualCumulativeOsp: CollectionAmountMyrString;
+  reconciledCumulativeOsp: CollectionAmountMyrString;
+  systemDailyAccounts: number;
+  manualDailyAccounts: number;
+  reconciledDailyAccounts: number;
+};
+
+export type CollectionOspSavedTargetRevisionView = {
+  id: string;
+  revisionNumber: number;
+  from: string;
+  to: string;
+  trackingStartDate: string | null;
+  trackingEndDate: string | null;
+  sourceImportIds: string[];
+  sourceSnapshots: Array<{
+    sourceImportId: string;
+    name: string;
+    filename: string | null;
+  }>;
+  nicknameScope: string[];
+  agingScope: CollectionAgingBucket[];
+  createdAt: string;
+};
+
+export type CollectionOspSavedTargetView = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: CollectionOspSavedTargetStatus;
+  version: number;
+  activeRevision: CollectionOspSavedTargetRevisionView;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CollectionOspClientResultView = {
+  aging: CollectionAgingBucket;
+  resultPercentage: string;
+  ospClosed: string;
+  note: string | null;
+  reference: string | null;
+  effectiveDate: string | null;
+  version: number | null;
+};
+
+export type CollectionOspManualReconciliationView = {
+  id: string;
+  version: number;
+  status: CollectionOspManualReconciliationStatus;
+  sourceImportId: string;
+  sourceRecordId: string;
+  sourceName: string;
+  sourceFilename: string;
+  maskedAccountNumber: string;
+  cardNumberLast4: string | null;
+  maskedCustomerName: string;
+  aging: CollectionAgingBucket;
+  callingDate: string;
+  totalDue: string;
+  billingPrincipalOsp: string;
+  systemEligibleCumulative: string;
+  rawSystemClassification: "CP" | "ABORT_CP" | null;
+  manualPriorAmount: string;
+  asOfDate: string;
+  actualPaymentDate: string | null;
+  reconciledCumulative: string;
+  reconciledRemaining: string;
+  reconciledStatus: "RECONCILED_CLOSED" | "RECONCILED_OPEN" | "SUPERSEDED_BY_SYSTEM_ABORT";
+  reconciledClosedEffectiveDate: string | null;
+  reason: CollectionOspManualReasonCode;
+  note: string | null;
+  reference: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+};
+
+export type CollectionOspPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type CollectionOspReconciliationCandidateView = {
+  sourceImportId: string;
+  sourceRecordId: string;
+  sourceName: string;
+  sourceFilename: string;
+  maskedAccountNumber: string;
+  cardNumberLast4: string | null;
+  maskedCustomerName: string;
+  aging: CollectionAgingBucket;
+  callingDate: string;
+  totalDue: string;
+  billingPrincipalOsp: string;
+  systemEligibleCumulative: string;
+  rawSystemClassification: "CP" | "ABORT_CP" | null;
+  activeReconciliationId: string | null;
+};
+
+export type CollectionOspReconciliationHistoryView = {
+  id: string;
+  operation: "CREATE" | "UPDATE" | "VOID" | "RESTORE";
+  fromVersion: number | null;
+  toVersion: number;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  actor: string;
+  createdAt: string;
+};
+
+export type CollectionOspCalendarDayView = {
+  date: string;
+  aging: CollectionAgingBucket | "ALL";
+  totalOsp: string;
+  targetOsp: string;
+  systemOspClosedToday: string;
+  manualReconciliationOspClosedToday: string;
+  reconciledOspClosedToday: string;
+  systemCumulativeOspClosed: string;
+  manualReconciliationCumulativeOsp: string;
+  reconciledCumulativeOspClosed: string;
+  systemResultPercentage: string;
+  reconciledResultPercentage: string;
+  clientResultPercentage: string | null;
+  systemPreviousResultPercentage: string;
+  reconciledPreviousResultPercentage: string;
+  systemDailyMovementPercentagePoints: string;
+  reconciledDailyMovementPercentagePoints: string;
+  systemAchievementVsTargetPercentage: string;
+  reconciledAchievementVsTargetPercentage: string;
+  systemDailyAccounts: number;
+  manualDailyAccounts: number;
+  reconciledDailyAccounts: number;
+};
+
+export type CollectionOspDrilldownItemView = {
+  contributionSource: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION";
+  maskedAccountNumber: string;
+  cardNumberLast4: string | null;
+  maskedCustomerName: string;
+  sourceName: string;
+  sourceFilename: string;
+  callingDate: string;
+  aging: CollectionAgingBucket;
+  totalDue: string;
+  systemEligibleCumulative: string;
+  systemClosureCollectionAmount: string | null;
+  systemClosureStaffNickname: string | null;
+  manualPriorAmount: string;
+  reconciledCumulative: string;
+  billingPrincipalOsp: string;
+  effectiveClosedDate: string;
+  reason: CollectionOspManualReasonCode | null;
+  reference: string | null;
+  reconciliationCreatedBy: string | null;
+  reconciliationCreatedAt: string | null;
+  reconciliationUpdatedBy: string | null;
+  reconciliationUpdatedAt: string | null;
+};
+
 export type CollectionRecordAggregateFilters = Omit<
   CollectionRecordListFilters,
   "limit" | "offset"

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { createWriteStream, promises as fs } from "node:fs";
 import { sql } from "drizzle-orm";
+import { db } from "../db-postgres";
 import type {
   AuditLog,
   DataRow,
@@ -8,6 +9,14 @@ import type {
 } from "../../shared/schema-postgres";
 import {
   QUERY_PAGE_LIMIT,
+  type BackupCollectionOspClientResult,
+  type BackupCollectionOspManualReconciliation,
+  type BackupCollectionOspManualReconciliationAudit,
+  type BackupCollectionOspSavedTarget,
+  type BackupCollectionOspTargetAgingRow,
+  type BackupCollectionOspTargetRevision,
+  type BackupCollectionOspTargetSource,
+  type BackupCollectionOspTargetSourceRow,
   type BackupCollectionOspTarget,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
@@ -32,11 +41,18 @@ import {
   writeBackupStreamChunk,
 } from "./backups-payload-file-utils";
 import {
+  type BackupCompositeCursorRow,
   type BackupCursorRow,
+  type BackupQueryExecutor,
   safeSelectBackupRows,
   selectBackupRows,
 } from "./backups-payload-db-utils";
-import { mapBackupCollectionRecordRow } from "./backups-payload-collection-utils";
+import {
+  mapBackupCollectionOspManualReconciliation,
+  mapBackupCollectionOspManualReconciliationAudit,
+  mapBackupCollectionOspTargetSourceRow,
+  mapBackupCollectionRecordRow,
+} from "./backups-payload-collection-utils";
 import {
   appendPagedJsonArray,
   createEmptyBackupPayloadCounts,
@@ -53,7 +69,17 @@ export {
 
 export async function prepareBackupPayloadFileForCreate(
   backupEncryption?: BackupEncryptionConfig,
+  queryExecutor?: BackupQueryExecutor,
 ): Promise<PreparedBackupPayloadFile> {
+  if (!queryExecutor) {
+    return db.transaction(
+      (tx) => prepareBackupPayloadFileForCreate(backupEncryption, tx),
+      {
+        isolationLevel: "repeatable read",
+        accessMode: "read only",
+      },
+    );
+  }
   const { tempDirPath, tempFilePath } = await createBackupTempFile();
   const primaryEncryptionKeyId = backupEncryption?.primaryKeyId ?? null;
   const primaryEncryptionKey = primaryEncryptionKeyId
@@ -98,7 +124,7 @@ export async function prepareBackupPayloadFileForCreate(
           ${lastId ? sql`AND id > ${lastId}` : sql``}
         ORDER BY id ASC
         LIMIT ${QUERY_PAGE_LIMIT}
-      `),
+      `, queryExecutor),
     );
 
     await writeBackupChunk(state, ",");
@@ -113,7 +139,7 @@ export async function prepareBackupPayloadFileForCreate(
         WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
         ORDER BY id ASC
         LIMIT ${QUERY_PAGE_LIMIT}
-      `),
+      `, queryExecutor),
     );
 
     await writeBackupChunk(state, ",");
@@ -137,7 +163,7 @@ export async function prepareBackupPayloadFileForCreate(
         WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
         ORDER BY id ASC
         LIMIT ${QUERY_PAGE_LIMIT}
-      `),
+      `, queryExecutor),
     );
 
     await writeBackupChunk(state, ",");
@@ -157,7 +183,7 @@ export async function prepareBackupPayloadFileForCreate(
         WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
         ORDER BY id ASC
         LIMIT ${QUERY_PAGE_LIMIT}
-      `),
+      `, queryExecutor),
     );
 
     await writeBackupChunk(state, ",");
@@ -185,7 +211,7 @@ export async function prepareBackupPayloadFileForCreate(
             ${lastId ? sql`AND config.source_import_id > ${lastId}` : sql``}
           ORDER BY config.source_import_id ASC
           LIMIT ${QUERY_PAGE_LIMIT}
-        `),
+        `, queryExecutor),
     );
 
     await writeBackupChunk(state, ",");
@@ -214,7 +240,7 @@ export async function prepareBackupPayloadFileForCreate(
             ${lastId ? sql`AND source_row.source_data_row_id > ${lastId}` : sql``}
           ORDER BY source_row.source_data_row_id ASC
           LIMIT ${QUERY_PAGE_LIMIT}
-        `),
+        `, queryExecutor),
     );
 
     await writeBackupChunk(state, ",");
@@ -240,7 +266,270 @@ export async function prepareBackupPayloadFileForCreate(
           WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
           ORDER BY id ASC
           LIMIT ${QUERY_PAGE_LIMIT}
-        `),
+        `, queryExecutor),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspSavedTargetsCount = await appendPagedJsonArray(
+      state,
+      "collectionOspSavedTargets",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionOspSavedTarget & BackupCursorRow>(sql`
+          SELECT
+            id,
+            target_name as "targetName",
+            normalized_name as "normalizedName",
+            description,
+            status,
+            version,
+            created_by as "createdBy",
+            created_at as "createdAt",
+            updated_by as "updatedBy",
+            updated_at as "updatedAt",
+            deleted_by as "deletedBy",
+            deleted_at as "deletedAt"
+          FROM public.collection_osp_saved_targets
+          WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspTargetRevisionsCount = await appendPagedJsonArray(
+      state,
+      "collectionOspTargetRevisions",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionOspTargetRevision & BackupCursorRow>(sql`
+          SELECT
+            id,
+            target_id as "targetId",
+            revision_number as "revisionNumber",
+            source_scope_hash as "sourceScopeHash",
+            period_from as "periodFrom",
+            period_to as "periodTo",
+            tracking_start_date as "trackingStartDate",
+            tracking_end_date as "trackingEndDate",
+            timezone,
+            nickname_scope as "nicknameScope",
+            aging_scope as "agingScope",
+            calculation_version as "calculationVersion",
+            created_by as "createdBy",
+            created_at as "createdAt"
+          FROM public.collection_osp_target_revisions
+          WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspTargetSourcesCount = await appendPagedJsonArray(
+      state,
+      "collectionOspTargetSources",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionOspTargetSource & BackupCompositeCursorRow>(sql`
+          SELECT
+            jsonb_build_array(target_revision_id::text, source_import_id)::text as "backupCursor",
+            target_revision_id as "targetRevisionId",
+            source_import_id as "sourceImportId",
+            source_name_snapshot as "sourceNameSnapshot",
+            source_filename_snapshot as "sourceFilenameSnapshot",
+            source_version_snapshot as "sourceVersionSnapshot",
+            source_content_hash_snapshot as "sourceContentHashSnapshot",
+            created_at as "createdAt"
+          FROM public.collection_osp_target_sources
+          WHERE ${lastId
+            ? sql`ROW(target_revision_id, source_import_id) > ROW(
+                (${lastId}::jsonb ->> 0)::uuid,
+                ${lastId}::jsonb ->> 1
+              )`
+            : sql`TRUE`}
+          ORDER BY target_revision_id ASC, source_import_id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspTargetSourceRowsCount = await appendPagedJsonArray(
+      state,
+      "collectionOspTargetSourceRows",
+      (lastId) =>
+        safeSelectBackupRows<
+          (BackupCollectionOspTargetSourceRow & BackupCompositeCursorRow) & Record<string, unknown>
+        >(sql`
+          SELECT
+            jsonb_build_array(
+              target_revision_id::text,
+              source_import_id,
+              source_data_row_id
+            )::text as "backupCursor",
+            target_revision_id as "targetRevisionId",
+            source_import_id as "sourceImportId",
+            source_data_row_id as "sourceDataRowId",
+            canonical_obligation_key as "canonicalObligationKey",
+            cycle_key as "cycleKey",
+            account_number_encrypted as "accountNumberEncrypted",
+            account_number_search_hash as "accountNumberSearchHash",
+            card_number_last4 as "cardNumberLast4",
+            customer_name_encrypted as "customerNameEncrypted",
+            customer_name_search_hashes as "customerNameSearchHashes",
+            aging_bucket as "agingBucket",
+            calling_date as "callingDate",
+            calling_window_end_exclusive as "callingWindowEndExclusive",
+            total_due as "totalDue",
+            billing_principal_osp as "billingPrincipalOsp",
+            created_at as "createdAt"
+          FROM public.collection_osp_target_source_rows
+          WHERE ${lastId
+            ? sql`ROW(target_revision_id, source_import_id, source_data_row_id) > ROW(
+                (${lastId}::jsonb ->> 0)::uuid,
+                ${lastId}::jsonb ->> 1,
+                ${lastId}::jsonb ->> 2
+              )`
+            : sql`TRUE`}
+          ORDER BY target_revision_id ASC, source_import_id ASC, source_data_row_id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor).then((rows) => rows.map(mapBackupCollectionOspTargetSourceRow)),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspTargetAgingRowsCount = await appendPagedJsonArray(
+      state,
+      "collectionOspTargetAgingRows",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionOspTargetAgingRow & BackupCompositeCursorRow>(sql`
+          SELECT
+            jsonb_build_array(target_revision_id::text, aging_bucket)::text as "backupCursor",
+            target_revision_id as "targetRevisionId",
+            aging_bucket as "agingBucket",
+            total_osp_baseline as "totalOspBaseline",
+            target_percentage as "targetPercentage",
+            target_osp as "targetOsp",
+            created_at as "createdAt"
+          FROM public.collection_osp_target_aging_rows
+          WHERE ${lastId
+            ? sql`ROW(target_revision_id, aging_bucket) > ROW(
+                (${lastId}::jsonb ->> 0)::uuid,
+                ${lastId}::jsonb ->> 1
+              )`
+            : sql`TRUE`}
+          ORDER BY target_revision_id ASC, aging_bucket ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspClientResultsCount = await appendPagedJsonArray(
+      state,
+      "collectionOspClientResults",
+      (lastId) =>
+        safeSelectBackupRows<BackupCollectionOspClientResult & BackupCursorRow>(sql`
+          SELECT
+            id,
+            target_id as "targetId",
+            target_revision_id as "targetRevisionId",
+            as_of_date as "asOfDate",
+            aging_bucket as "agingBucket",
+            result_percentage as "resultPercentage",
+            osp_closed as "ospClosed",
+            client_reference as "clientReference",
+            note,
+            version,
+            created_by as "createdBy",
+            created_at as "createdAt",
+            updated_by as "updatedBy",
+            updated_at as "updatedAt"
+          FROM public.collection_osp_client_results
+          WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspManualReconciliationsCount = await appendPagedJsonArray(
+      state,
+      "collectionOspManualReconciliations",
+      (lastId) =>
+        safeSelectBackupRows<
+          (BackupCollectionOspManualReconciliation & BackupCursorRow) & Record<string, unknown>
+        >(sql`
+          SELECT
+            id,
+            target_id as "targetId",
+            target_revision_id as "targetRevisionId",
+            source_import_id as "sourceImportId",
+            source_data_row_id as "sourceDataRowId",
+            canonical_obligation_key as "canonicalObligationKey",
+            cycle_key as "cycleKey",
+            account_number_encrypted as "accountNumberEncrypted",
+            account_number_search_hash as "accountNumberSearchHash",
+            card_number_last4 as "cardNumberLast4",
+            customer_name_encrypted as "customerNameEncrypted",
+            aging_bucket as "agingBucket",
+            calling_date as "callingDate",
+            calling_window_end_exclusive as "callingWindowEndExclusive",
+            total_due as "totalDue",
+            billing_principal_osp as "billingPrincipalOsp",
+            manual_prior_amount as "manualPriorAmount",
+            manual_as_of_date as "manualAsOfDate",
+            actual_payment_date as "actualPaymentDate",
+            date_source as "dateSource",
+            reason_code as "reasonCode",
+            note,
+            evidence_reference as "evidenceReference",
+            status,
+            version,
+            created_by as "createdBy",
+            created_at as "createdAt",
+            updated_by as "updatedBy",
+            updated_at as "updatedAt",
+            voided_by as "voidedBy",
+            voided_at as "voidedAt",
+            void_reason as "voidReason"
+          FROM public.collection_osp_manual_reconciliations
+          WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor).then((rows) => rows.map(mapBackupCollectionOspManualReconciliation)),
+    );
+
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspManualReconciliationAuditCount = await appendPagedJsonArray(
+      state,
+      "collectionOspManualReconciliationAudit",
+      (lastId) =>
+        safeSelectBackupRows<
+          (BackupCollectionOspManualReconciliationAudit & BackupCursorRow) & Record<string, unknown>
+        >(sql`
+          SELECT
+            id,
+            reconciliation_id as "reconciliationId",
+            target_id as "targetId",
+            target_revision_id as "targetRevisionId",
+            operation,
+            from_version as "fromVersion",
+            to_version as "toVersion",
+            before_state as "beforeState",
+            after_state as "afterState",
+            actor_username as "actorUsername",
+            actor_role as "actorRole",
+            request_id as "requestId",
+            created_at as "createdAt"
+          FROM public.collection_osp_manual_reconciliation_audit
+          WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY id ASC
+          LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor).then((rows) => rows.map(mapBackupCollectionOspManualReconciliationAudit)),
     );
 
     await writeBackupChunk(state, ",");
@@ -292,7 +581,7 @@ export async function prepareBackupPayloadFileForCreate(
         WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
         ORDER BY id ASC
         LIMIT ${QUERY_PAGE_LIMIT}
-      `).then((rows) =>
+      `, queryExecutor).then((rows) =>
         rows.map((row) => mapBackupCollectionRecordRow(row)),
       ),
     );
@@ -325,7 +614,7 @@ export async function prepareBackupPayloadFileForCreate(
           WHERE ${lastId ? sql`original_record_id > ${lastId}::uuid` : sql`TRUE`}
           ORDER BY original_record_id ASC
           LIMIT ${QUERY_PAGE_LIMIT}
-        `),
+        `, queryExecutor),
     );
 
     await writeBackupChunk(state, ",");
@@ -355,7 +644,7 @@ export async function prepareBackupPayloadFileForCreate(
           WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
           ORDER BY id ASC
           LIMIT ${QUERY_PAGE_LIMIT}
-        `),
+        `, queryExecutor),
     );
 
     await writeBackupChunk(state, "}");

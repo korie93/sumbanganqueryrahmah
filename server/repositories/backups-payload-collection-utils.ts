@@ -1,12 +1,208 @@
-import type { BackupCollectionRecord } from "./backups-repository-types";
-import type { BackupCursorRow } from "./backups-payload-db-utils";
+import type {
+  BackupCollectionOspManualReconciliation,
+  BackupCollectionOspManualReconciliationAudit,
+  BackupCollectionOspTargetSourceRow,
+  BackupCollectionRecord,
+} from "./backups-repository-types";
+import type {
+  BackupCompositeCursorRow,
+  BackupCursorRow,
+} from "./backups-payload-db-utils";
 import {
   resolveCollectionCustomerNameSearchHashesValue,
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
+import {
+  protectCollectionV7AccountBackupPii,
+  protectCollectionV7CustomerBackupPii,
+} from "./backups-collection-v7-pii-utils";
 
 function hasNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+const COLLECTION_PII_ENCRYPTED_PATTERN =
+  /^[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$/;
+const COLLECTION_SEARCH_HASH_PATTERN = /^[a-f0-9]{64}$/i;
+const COLLECTION_CARD_LAST_FOUR_PATTERN = /^\d{4}$/;
+const COLLECTION_OSP_AUDIT_STATE_KEYS = new Set([
+  "sourceImportId",
+  "sourceRecordId",
+  "canonicalObligationKey",
+  "cycleKey",
+  "aging",
+  "totalDue",
+  "billingPrincipalOsp",
+  "manualPriorAmount",
+  "asOfDate",
+  "actualPaymentDate",
+  "dateSource",
+  "reason",
+  "note",
+  "reference",
+  "status",
+  "version",
+  "voidReason",
+]);
+
+export function sanitizeCollectionOspEncryptedSnapshot(value: unknown): string | null {
+  if (typeof value !== "string" || value !== value.trim() || value.length > 8192) {
+    return null;
+  }
+  return COLLECTION_PII_ENCRYPTED_PATTERN.test(value) ? value : null;
+}
+
+export function sanitizeCollectionOspSearchHash(value: unknown): string | null {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return COLLECTION_SEARCH_HASH_PATTERN.test(normalized) ? normalized.toLowerCase() : null;
+}
+
+export function sanitizeCollectionOspCardLast4(value: unknown): string | null {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return COLLECTION_CARD_LAST_FOUR_PATTERN.test(normalized) ? normalized : null;
+}
+
+export function sanitizeCollectionOspAuditState(
+  value: unknown,
+): Record<string, string | number | boolean | null> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.some(([key, entry]) => (
+    !COLLECTION_OSP_AUDIT_STATE_KEYS.has(key)
+    || (
+      entry !== null
+      && typeof entry !== "string"
+      && typeof entry !== "number"
+      && typeof entry !== "boolean"
+    )
+  ))) {
+    return null;
+  }
+  return Object.fromEntries(entries) as Record<string, string | number | boolean | null>;
+}
+
+export function mapBackupCollectionOspTargetSourceRow(
+  row: (BackupCollectionOspTargetSourceRow & BackupCompositeCursorRow) & Record<string, unknown>,
+): BackupCollectionOspTargetSourceRow & BackupCompositeCursorRow {
+  const accountPii = protectCollectionV7AccountBackupPii({
+    encrypted: row.accountNumberEncrypted,
+    searchHash: row.accountNumberSearchHash,
+  });
+  const customerPii = protectCollectionV7CustomerBackupPii({
+    encrypted: row.customerNameEncrypted,
+    searchHashes: row.customerNameSearchHashes,
+  });
+  const cardNumberLast4 = sanitizeCollectionOspCardLast4(row.cardNumberLast4);
+  if (row.cardNumberLast4 != null && row.cardNumberLast4 !== "" && !cardNumberLast4) {
+    throw new Error("Collection V7 backup card-number suffix is invalid.");
+  }
+
+  return {
+    backupCursor: String(row.backupCursor || ""),
+    targetRevisionId: String(row.targetRevisionId || ""),
+    sourceImportId: String(row.sourceImportId || ""),
+    sourceDataRowId: String(row.sourceDataRowId || ""),
+    canonicalObligationKey: String(row.canonicalObligationKey || ""),
+    cycleKey: String(row.cycleKey || ""),
+    accountNumberEncrypted: accountPii.encrypted,
+    accountNumberSearchHash: accountPii.searchHash,
+    cardNumberLast4,
+    customerNameEncrypted: customerPii.encrypted,
+    customerNameSearchHashes: customerPii.searchHashes,
+    agingBucket: String(row.agingBucket || ""),
+    callingDate: String(row.callingDate || "").slice(0, 10),
+    callingWindowEndExclusive: String(row.callingWindowEndExclusive || "").slice(0, 10),
+    totalDue: row.totalDue as BackupCollectionOspTargetSourceRow["totalDue"],
+    billingPrincipalOsp:
+      row.billingPrincipalOsp as BackupCollectionOspTargetSourceRow["billingPrincipalOsp"],
+    createdAt: row.createdAt as BackupCollectionOspTargetSourceRow["createdAt"],
+  };
+}
+
+export function mapBackupCollectionOspManualReconciliation(
+  row: (BackupCollectionOspManualReconciliation & BackupCursorRow) & Record<string, unknown>,
+): BackupCollectionOspManualReconciliation & BackupCursorRow {
+  const accountPii = protectCollectionV7AccountBackupPii({
+    encrypted: row.accountNumberEncrypted,
+    searchHash: row.accountNumberSearchHash,
+  });
+  const customerPii = protectCollectionV7CustomerBackupPii({
+    encrypted: row.customerNameEncrypted,
+  });
+  const cardNumberLast4 = sanitizeCollectionOspCardLast4(row.cardNumberLast4);
+  if (row.cardNumberLast4 != null && row.cardNumberLast4 !== "" && !cardNumberLast4) {
+    throw new Error("Collection V7 backup card-number suffix is invalid.");
+  }
+  return {
+    id: String(row.id || ""),
+    targetId: String(row.targetId || ""),
+    targetRevisionId: String(row.targetRevisionId || ""),
+    sourceImportId: String(row.sourceImportId || ""),
+    sourceDataRowId: String(row.sourceDataRowId || ""),
+    canonicalObligationKey: String(row.canonicalObligationKey || ""),
+    cycleKey: String(row.cycleKey || ""),
+    accountNumberEncrypted: accountPii.encrypted,
+    accountNumberSearchHash: accountPii.searchHash,
+    cardNumberLast4,
+    customerNameEncrypted: customerPii.encrypted,
+    customerNameSearchHashes: customerPii.searchHashes,
+    agingBucket: String(row.agingBucket || ""),
+    callingDate: String(row.callingDate || "").slice(0, 10),
+    callingWindowEndExclusive: String(row.callingWindowEndExclusive || "").slice(0, 10),
+    totalDue: row.totalDue as BackupCollectionOspManualReconciliation["totalDue"],
+    billingPrincipalOsp:
+      row.billingPrincipalOsp as BackupCollectionOspManualReconciliation["billingPrincipalOsp"],
+    manualPriorAmount:
+      row.manualPriorAmount as BackupCollectionOspManualReconciliation["manualPriorAmount"],
+    manualAsOfDate: String(row.manualAsOfDate || "").slice(0, 10),
+    actualPaymentDate:
+      row.actualPaymentDate == null ? null : String(row.actualPaymentDate).slice(0, 10),
+    dateSource: String(row.dateSource || ""),
+    reasonCode: String(row.reasonCode || ""),
+    note: row.note == null ? null : String(row.note),
+    evidenceReference: row.evidenceReference == null ? null : String(row.evidenceReference),
+    status: String(row.status || ""),
+    version: Number(row.version),
+    createdBy: String(row.createdBy || ""),
+    createdAt: row.createdAt as BackupCollectionOspManualReconciliation["createdAt"],
+    updatedBy: String(row.updatedBy || ""),
+    updatedAt: row.updatedAt as BackupCollectionOspManualReconciliation["updatedAt"],
+    voidedBy: row.voidedBy == null ? null : String(row.voidedBy),
+    ...(row.voidedAt === undefined
+      ? {}
+      : { voidedAt: row.voidedAt as string | Date | null }),
+    voidReason: row.voidReason == null ? null : String(row.voidReason),
+  };
+}
+
+export function mapBackupCollectionOspManualReconciliationAudit(
+  row: (BackupCollectionOspManualReconciliationAudit & BackupCursorRow) & Record<string, unknown>,
+): BackupCollectionOspManualReconciliationAudit & BackupCursorRow {
+  const beforeState = row.beforeState == null
+    ? null
+    : sanitizeCollectionOspAuditState(row.beforeState);
+  const afterState = sanitizeCollectionOspAuditState(row.afterState);
+  if ((row.beforeState != null && !beforeState) || !afterState) {
+    throw new Error("Collection V7 backup audit state is invalid.");
+  }
+  return {
+    id: String(row.id || ""),
+    reconciliationId: String(row.reconciliationId || ""),
+    targetId: String(row.targetId || ""),
+    targetRevisionId: String(row.targetRevisionId || ""),
+    operation: String(row.operation || ""),
+    fromVersion: row.fromVersion == null ? null : Number(row.fromVersion),
+    toVersion: Number(row.toVersion),
+    beforeState,
+    afterState,
+    actorUsername: String(row.actorUsername || ""),
+    actorRole: String(row.actorRole || ""),
+    requestId: row.requestId == null ? null : String(row.requestId),
+    createdAt: row.createdAt as BackupCollectionOspManualReconciliationAudit["createdAt"],
+  };
 }
 
 export function buildCollectionRecordBackupPiiFields(
@@ -122,8 +318,8 @@ export function mapBackupCollectionRecordRow(
         ? row.sourceFilename.trim()
         : null,
     cardNumberLast4:
-      typeof row.cardNumberLast4 === "string" && row.cardNumberLast4.trim().length <= 4
-        ? row.cardNumberLast4.trim() || null
+      typeof row.cardNumberLast4 === "string" && /^\d{4}$/.test(row.cardNumberLast4.trim())
+        ? row.cardNumberLast4.trim()
         : null,
     agingBucket:
       typeof row.agingBucket === "string" && ["D3", "D4", "D5", "D6"].includes(row.agingBucket)

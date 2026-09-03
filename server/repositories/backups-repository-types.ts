@@ -134,6 +134,149 @@ export type BackupCollectionOspTarget = {
   updatedAt: string | Date;
 };
 
+export type BackupCollectionOspSavedTarget = {
+  id: string;
+  targetName: string;
+  normalizedName: string;
+  description?: string | null;
+  status: "ACTIVE" | "DELETED" | string;
+  version: number;
+  createdBy: string;
+  createdAt: string | Date;
+  updatedBy: string;
+  updatedAt: string | Date;
+  deletedBy?: string | null;
+  deletedAt?: string | Date | null;
+};
+
+export type BackupCollectionOspTargetRevision = {
+  id: string;
+  targetId: string;
+  revisionNumber: number;
+  sourceScopeHash: string;
+  periodFrom: string;
+  periodTo: string;
+  trackingStartDate: string;
+  trackingEndDate?: string | null;
+  timezone: string;
+  nicknameScope: string[];
+  agingScope: string[];
+  calculationVersion: string;
+  createdBy: string;
+  createdAt: string | Date;
+};
+
+export type BackupCollectionOspTargetSource = {
+  targetRevisionId: string;
+  sourceImportId: string;
+  sourceNameSnapshot: string;
+  sourceFilenameSnapshot: string;
+  sourceVersionSnapshot?: string | null;
+  sourceContentHashSnapshot?: string | null;
+  createdAt: string | Date;
+};
+
+export type BackupCollectionOspTargetSourceRow = {
+  targetRevisionId: string;
+  sourceImportId: string;
+  sourceDataRowId: string;
+  canonicalObligationKey: string;
+  cycleKey: string;
+  accountNumberEncrypted?: string | null;
+  accountNumberSearchHash?: string | null;
+  cardNumberLast4?: string | null;
+  customerNameEncrypted?: string | null;
+  customerNameSearchHashes?: string[] | null;
+  agingBucket: string;
+  callingDate: string;
+  callingWindowEndExclusive: string;
+  totalDue: BackupAmountMyr;
+  billingPrincipalOsp: BackupAmountMyr;
+  createdAt: string | Date;
+};
+
+export type BackupCollectionOspTargetAgingRow = {
+  targetRevisionId: string;
+  agingBucket: string;
+  totalOspBaseline: BackupAmountMyr;
+  targetPercentage: BackupAmountMyr;
+  targetOsp: BackupAmountMyr;
+  createdAt: string | Date;
+};
+
+export type BackupCollectionOspClientResult = {
+  id: string;
+  targetId: string;
+  targetRevisionId: string;
+  asOfDate: string;
+  agingBucket: string;
+  resultPercentage: BackupAmountMyr;
+  ospClosed: BackupAmountMyr;
+  clientReference?: string | null;
+  note?: string | null;
+  version: number;
+  createdBy: string;
+  createdAt: string | Date;
+  updatedBy: string;
+  updatedAt: string | Date;
+};
+
+export type BackupCollectionOspManualReconciliation = {
+  id: string;
+  targetId: string;
+  targetRevisionId: string;
+  sourceImportId: string;
+  sourceDataRowId: string;
+  canonicalObligationKey: string;
+  cycleKey: string;
+  accountNumberEncrypted?: string | null;
+  accountNumberSearchHash?: string | null;
+  cardNumberLast4?: string | null;
+  customerNameEncrypted?: string | null;
+  // This is derived from the encrypted snapshot during export. The live
+  // reconciliation table intentionally does not persist it, but restore uses
+  // it to prove that the immutable reconciliation snapshot still matches its
+  // restored source row after PII is re-encrypted for the destination key.
+  customerNameSearchHashes?: string[] | null;
+  agingBucket: string;
+  callingDate: string;
+  callingWindowEndExclusive: string;
+  totalDue: BackupAmountMyr;
+  billingPrincipalOsp: BackupAmountMyr;
+  manualPriorAmount: BackupAmountMyr;
+  manualAsOfDate: string;
+  actualPaymentDate?: string | null;
+  dateSource: string;
+  reasonCode: string;
+  note?: string | null;
+  evidenceReference?: string | null;
+  status: string;
+  version: number;
+  createdBy: string;
+  createdAt: string | Date;
+  updatedBy: string;
+  updatedAt: string | Date;
+  voidedBy?: string | null;
+  voidedAt?: string | Date | null;
+  voidReason?: string | null;
+};
+
+export type BackupCollectionOspManualReconciliationAudit = {
+  id: string;
+  reconciliationId: string;
+  targetId: string;
+  targetRevisionId: string;
+  operation: string;
+  fromVersion?: number | null;
+  toVersion: number;
+  beforeState?: Record<string, unknown> | null;
+  afterState: Record<string, unknown>;
+  actorUsername: string;
+  actorRole: string;
+  requestId?: string | null;
+  createdAt: string | Date;
+};
+
 export type BackupCollectionReceipt = {
   id: string;
   collectionRecordId: string;
@@ -184,6 +327,14 @@ export type BackupDataPayload = {
   collectionRecords?: BackupCollectionRecord[];
   collectionRecordPurgeHistory?: BackupCollectionRecordPurgeHistory[];
   collectionRecordReceipts?: BackupCollectionReceipt[];
+  collectionOspSavedTargets?: BackupCollectionOspSavedTarget[];
+  collectionOspTargetRevisions?: BackupCollectionOspTargetRevision[];
+  collectionOspTargetSources?: BackupCollectionOspTargetSource[];
+  collectionOspTargetSourceRows?: BackupCollectionOspTargetSourceRow[];
+  collectionOspTargetAgingRows?: BackupCollectionOspTargetAgingRow[];
+  collectionOspClientResults?: BackupCollectionOspClientResult[];
+  collectionOspManualReconciliations?: BackupCollectionOspManualReconciliation[];
+  collectionOspManualReconciliationAudit?: BackupCollectionOspManualReconciliationAudit[];
 };
 
 export type BackupPayloadCounts = {
@@ -197,6 +348,14 @@ export type BackupPayloadCounts = {
   collectionRecordsCount: number;
   collectionRecordPurgeHistoryCount: number;
   collectionRecordReceiptsCount: number;
+  collectionOspSavedTargetsCount: number;
+  collectionOspTargetRevisionsCount: number;
+  collectionOspTargetSourcesCount: number;
+  collectionOspTargetSourceRowsCount: number;
+  collectionOspTargetAgingRowsCount: number;
+  collectionOspClientResultsCount: number;
+  collectionOspManualReconciliationsCount: number;
+  collectionOspManualReconciliationAuditCount: number;
 };
 
 export type PreparedBackupPayloadFile = {
@@ -243,6 +402,14 @@ export type RestoreStats = {
   collectionRecords: RestoreDatasetStats;
   collectionRecordPurgeHistory: RestoreDatasetStats;
   collectionRecordReceipts: RestoreDatasetStats;
+  collectionOspSavedTargets: RestoreDatasetStats;
+  collectionOspTargetRevisions: RestoreDatasetStats;
+  collectionOspTargetSources: RestoreDatasetStats;
+  collectionOspTargetSourceRows: RestoreDatasetStats;
+  collectionOspTargetAgingRows: RestoreDatasetStats;
+  collectionOspClientResults: RestoreDatasetStats;
+  collectionOspManualReconciliations: RestoreDatasetStats;
+  collectionOspManualReconciliationAudit: RestoreDatasetStats;
   warnings: string[];
   totalProcessed: number;
   totalInserted: number;

@@ -70,15 +70,29 @@ const MIGRATION_TAGS = Object.freeze([
   "0051_collection_calling_window_settlement",
   "0052_collection_source_governance_osp",
   "0053_collection_source_governance_deferred_foreign_keys",
+  "0054_collection_osp_reconciliation_persistence",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(
-  MIGRATION_TAGS.map((migration) => Object.freeze({
-    backupRequired: true,
-    migration,
-    preconditions: BACKUP_RESTORE_PRECONDITIONS,
-    rollbackSteps: BACKUP_RESTORE_STEPS,
-    strategy: "backup-restore",
-    validationSteps: BACKUP_RESTORE_VALIDATION_STEPS,
-  })),
+  MIGRATION_TAGS.map((migration) => {
+    const isV7PersistenceMigration = migration === "0054_collection_osp_reconciliation_persistence";
+    return Object.freeze({
+      backupRequired: true,
+      migration,
+      preconditions: isV7PersistenceMigration
+        ? Object.freeze([
+            ...BACKUP_RESTORE_PRECONDITIONS,
+            "Preserve the append-only manual-reconciliation audit ledger; do not attempt row-level rollback or disable its database triggers.",
+          ])
+        : BACKUP_RESTORE_PRECONDITIONS,
+      rollbackSteps: BACKUP_RESTORE_STEPS,
+      strategy: "backup-restore",
+      validationSteps: isV7PersistenceMigration
+        ? Object.freeze([
+            ...BACKUP_RESTORE_VALIDATION_STEPS,
+            "Verify collection_osp_manual_reconciliation_audit rejects UPDATE, DELETE, and TRUNCATE after the restored release is started.",
+          ])
+        : BACKUP_RESTORE_VALIDATION_STEPS,
+    });
+  }),
 );

@@ -80,7 +80,7 @@ function getSafeErrorMessage(error: unknown): string | undefined {
   return message.slice(0, 300);
 }
 
-function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
+export function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
   const receiptSecurityResponse = buildCollectionReceiptSecurityErrorResponse(err);
   if (receiptSecurityResponse) {
     logger.warn("Collection receipt security check failed", {

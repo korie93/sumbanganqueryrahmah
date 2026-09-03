@@ -108,6 +108,32 @@ test("direct collection smoke fixtures create and clean verified Saved sources",
   assert.match(staleFixtureSource, /cleanup failed stale-delete source import/);
 });
 
+test("Billing Principal V7 smoke exercises governed UI creation, exact snapshots, Table C audit, and cleanup", () => {
+  const flowStart = smokeSource.indexOf("const checkBillingPrincipalV7UiFlow = async");
+  const flowEnd = smokeSource.indexOf("const verifyCollectionSmokeGeneralSearch", flowStart);
+  const flowSource = smokeSource.slice(flowStart, flowEnd);
+  const phaseIndex = smokeSource.indexOf('"Billing Principal V7 UI flow"');
+
+  assert.ok(flowStart >= 0 && flowEnd > flowStart);
+  assert.ok(phaseIndex > flowStart);
+  assert.match(flowSource, /createCollectionSmokeSourceImport\(context,/);
+  assert.match(flowSource, /await applySmokeCollectionNicknameSession\(page, nickname\)/);
+  assert.match(flowSource, /await navigateForSmoke\(page, "\/collection\/billing-principal"\)/);
+  assert.match(flowSource, /Save Current Target/);
+  assert.match(flowSource, /Exact Client snapshot: 50\.00%/);
+  assert.match(flowSource, /createManualReconciliationHeading = \["Create", "Table", "C", "Reconciliation"\]\.join\(" "\)/);
+  assert.match(flowSource, /Table C Reconciliation Details/);
+  assert.match(flowSource, /Edit Table C Entry/);
+  assert.match(flowSource, /response\.request\(\)\.method\(\) === "PATCH"/);
+  assert.match(flowSource, /Table C Audit History/);
+  assert.match(flowSource, /getByText\("UPDATE", \{ exact: true \}\)/);
+  assert.match(flowSource, /Void Table C Entry/);
+  assert.match(flowSource, /tableCStatusFilterLabel = \["Filter", "Table", "C", "by status"\]\.join\(" "\)/);
+  assert.match(flowSource, /cleanup Billing Principal V7 target/);
+  assert.match(flowSource, /cleanup Billing Principal V7 source import/);
+  assert.match(flowSource, /tracker\.assertClean\("Billing Principal V7 UI flow"\)/);
+});
+
 test("backup smoke consumes only recovered GET list rate limits after the destructive flow succeeds", () => {
   const consumeCallIndex = smokeSource.indexOf("consumeExpectedRecoveredBackupListRateLimit(tracker);");
   const backupDeletedIndex = smokeSource.indexOf("backupDeleted = true;", consumeCallIndex - 1_000);
