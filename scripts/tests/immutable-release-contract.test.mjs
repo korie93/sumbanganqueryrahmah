@@ -42,6 +42,29 @@ test("release workflow gates approved artifacts behind the production environmen
   assert.doesNotMatch(workflow, /SQR_RELEASE_ENV_FILE/);
 });
 
+test("release verification configures a dedicated per-run collection PII key", () => {
+  const workflow = readText(".github/workflows/release-verification.yml");
+  const readinessStart = workflow.indexOf("- name: Run release readiness verification");
+  const packageStart = workflow.indexOf("- name: Prepare immutable release candidate", readinessStart);
+  const readinessStep = workflow.slice(readinessStart, packageStart);
+
+  assert.ok(readinessStart >= 0 && packageStart > readinessStart);
+  assert.match(
+    readinessStep,
+    /COLLECTION_PII_ENCRYPTION_KEY:\s*sqr-release-ci-collection-pii-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-ephemeral-key-48chars/,
+  );
+  assert.doesNotMatch(
+    readinessStep,
+    /COLLECTION_PII_ENCRYPTION_KEY:\s*sqr-ci-session-/,
+    "Release collection PII encryption must not reuse the session secret",
+  );
+  assert.equal(
+    (workflow.match(/COLLECTION_PII_ENCRYPTION_KEY:/g) || []).length,
+    1,
+    "The ephemeral verification key must stay scoped to the readiness step",
+  );
+});
+
 test("immutable deploy verifies integrity before install and rolls back failed promotion", () => {
   const deployScript = readText("deploy/immutable/deploy-release.sh");
   const packageScript = readText("scripts/prepare-release-package.mjs");

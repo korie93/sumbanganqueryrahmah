@@ -105,6 +105,8 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Run release readiness verification
+        env:
+          COLLECTION_PII_ENCRYPTION_KEY: sqr-release-ci-collection-pii-${{ github.run_id }}-${{ github.run_attempt }}-ephemeral-key-48chars
         run: npm run release:verify:local
 
       - name: Prepare immutable release candidate
