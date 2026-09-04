@@ -15,6 +15,7 @@ const BACKUP_JOB_POLL_INTERVAL_MS = 1_500;
 const SMOKE_NAVIGATION_TIMEOUT_MS = 30_000;
 const SMOKE_LOAD_STATE_TIMEOUT_MS = 10_000;
 const SMOKE_TOTAL_TIMEOUT_MS = Number(process.env.SMOKE_TOTAL_TIMEOUT_MS || 8 * 60_000);
+const SMOKE_PHASE_TIMEOUT_MS = Number(process.env.SMOKE_PHASE_TIMEOUT_MS || 60_000);
 const SMOKE_CLEANUP_TIMEOUT_MS = Number(process.env.SMOKE_CLEANUP_TIMEOUT_MS || 15_000);
 const SMOKE_TIMEOUT_EXIT_CODE = 124;
 let activeSmokePhase = "browser startup";
@@ -30,6 +31,7 @@ const normalizePositiveTimeout = (value, fallback) =>
   Number.isFinite(value) && value > 0 ? Math.trunc(value) : fallback;
 
 const smokeTotalTimeoutMs = normalizePositiveTimeout(SMOKE_TOTAL_TIMEOUT_MS, 8 * 60_000);
+const smokePhaseTimeoutMs = normalizePositiveTimeout(SMOKE_PHASE_TIMEOUT_MS, 60_000);
 const smokeCleanupTimeoutMs = normalizePositiveTimeout(SMOKE_CLEANUP_TIMEOUT_MS, 15_000);
 
 const withTimeout = async (operation, timeoutMs, label) => {
@@ -52,12 +54,16 @@ const withTimeout = async (operation, timeoutMs, label) => {
   }
 };
 
-const runSmokePhase = async (label, operation) => {
+const runSmokePhase = async (label, operation, timeoutMs = smokePhaseTimeoutMs) => {
   activeSmokePhase = label;
   const startedAt = Date.now();
   console.log(`[smoke-ui] start: ${label}`);
   try {
-    const result = await operation();
+    const result = await withTimeout(
+      operation,
+      normalizePositiveTimeout(timeoutMs, smokePhaseTimeoutMs),
+      `Smoke phase "${label}"`,
+    );
     console.log(`[smoke-ui] complete: ${label} (${Date.now() - startedAt}ms)`);
     return result;
   } catch (error) {
@@ -148,7 +154,9 @@ const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
     ));
   }
 
-  const cookies = await context.cookies(baseUrl).catch(() => []);
+  const cookieNames = (await context.cookies(baseUrl).catch(() => []))
+    .filter(isLiveCookie)
+    .map((cookie) => cookie.name);
   const message = error instanceof Error ? error.stack || error.message : String(error);
   const failureState = {
     baseUrl,
@@ -157,7 +165,7 @@ const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
     activePhase: activeSmokePhase,
     failedRequests: tracker.failedRequests,
     consoleMessages: tracker.consoleMessages,
-    cookies,
+    cookieNames,
   };
 
   await writeFile(
@@ -184,7 +192,7 @@ const captureStartupFailureArtifact = async (error) => {
       activePhase: activeSmokePhase,
       failedRequests: [],
       consoleMessages: [],
-      cookies: [],
+      cookieNames: [],
     }, null, 2),
     "utf8",
   );
@@ -2828,11 +2836,11 @@ const checkLogoutFlow = async (page, context, tracker) => {
 
   const cookieNames = await waitForClearedAuthCookies(context);
   if (cookieNames.has("sqr_auth") || cookieNames.has("sqr_auth_hint")) {
-    const liveCookies = await readLiveCookies(context);
+    const liveCookieNames = (await readLiveCookies(context)).map((cookie) => cookie.name);
     const authProbe = await probeAuthSession(page);
     throw new Error([
       "auth session cookie should be cleared after logout",
-      `Live cookies after logout: ${JSON.stringify(liveCookies)}`,
+      `Live cookie names after logout: ${JSON.stringify(liveCookieNames)}`,
       `GET /api/me after logout: ${JSON.stringify(authProbe)}`,
       `localStorage.activityId after logout: ${JSON.stringify(await page.evaluate(() => localStorage.getItem("activityId")))}`,
     ].join("\n"));
@@ -2989,6 +2997,7 @@ const run = async () => {
         await runSmokePhase(
           "backup restore flow",
           () => checkBackupRestoreUiFlow(page, context, tracker),
+          BACKUP_JOB_TIMEOUT_MS + smokePhaseTimeoutMs,
         );
         await runSmokePhase("logout", () => checkLogoutFlow(page, context, tracker));
       } else {

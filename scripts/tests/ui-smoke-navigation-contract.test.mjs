@@ -159,9 +159,12 @@ test("backup smoke consumes only recovered GET list rate limits after the destru
 
 test("UI smoke has bounded execution, phase diagnostics, and bounded cleanup", () => {
   assert.match(smokeSource, /const SMOKE_TOTAL_TIMEOUT_MS = Number\(process\.env\.SMOKE_TOTAL_TIMEOUT_MS/);
+  assert.match(smokeSource, /const SMOKE_PHASE_TIMEOUT_MS = Number\(process\.env\.SMOKE_PHASE_TIMEOUT_MS/);
   assert.match(smokeSource, /const SMOKE_CLEANUP_TIMEOUT_MS = Number\(process\.env\.SMOKE_CLEANUP_TIMEOUT_MS/);
   assert.match(smokeSource, /class SmokeTimeoutError extends Error/);
-  assert.match(smokeSource, /const runSmokePhase = async \(label, operation\) =>/);
+  assert.match(smokeSource, /const runSmokePhase = async \(label, operation, timeoutMs = smokePhaseTimeoutMs\) =>/);
+  assert.match(smokeSource, /`Smoke phase "\$\{label\}"`/);
+  assert.match(smokeSource, /BACKUP_JOB_TIMEOUT_MS \+ smokePhaseTimeoutMs/);
   assert.match(smokeSource, /Last active phase: \$\{activeSmokePhase\}/);
   assert.match(smokeSource, /activePhase: activeSmokePhase/);
   assert.match(
@@ -178,4 +181,11 @@ test("UI smoke has bounded execution, phase diagnostics, and bounded cleanup", (
     smokeSource,
     /process\.exitCode = error instanceof SmokeTimeoutError \? SMOKE_TIMEOUT_EXIT_CODE : 1/,
   );
+});
+
+test("UI smoke failure diagnostics never persist cookie values", () => {
+  assert.match(smokeSource, /const cookieNames = \(await context\.cookies\(baseUrl\)\.catch/);
+  assert.match(smokeSource, /Live cookie names after logout/);
+  assert.doesNotMatch(smokeSource, /const cookies = await context\.cookies\(baseUrl\)/);
+  assert.doesNotMatch(smokeSource, /Live cookies after logout/);
 });

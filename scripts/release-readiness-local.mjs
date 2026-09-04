@@ -25,6 +25,8 @@ const artifactsDir = path.resolve(
 const sbomArtifactsDir = path.join(artifactsDir, "sbom");
 const serverLogPath = path.join(artifactsDir, "server.log");
 const ADAPTIVE_RATE_WINDOW_COOLDOWN_MS = 11_000;
+const SMOKE_TIMEOUT_EXIT_CODE = 124;
+const RELEASE_SMOKE_MAX_ATTEMPTS = 2;
 
 const runCommand = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
@@ -36,11 +38,12 @@ const runCommand = (command, args, options = {}) =>
 
     child.on("error", reject);
     child.on("exit", (code) => {
-      if (code === 0 || options.allowFailure) {
-        resolve(code ?? 0);
+      const exitCode = code ?? 1;
+      if (exitCode === 0 || options.allowFailure) {
+        resolve(exitCode);
         return;
       }
-      reject(new Error(`${command} ${args.join(" ")} failed with exit code ${code}`));
+      reject(new Error(`${command} ${args.join(" ")} failed with exit code ${exitCode}`));
     });
   });
 
@@ -97,6 +100,27 @@ const runNpmCapture = (args, options = {}) =>
     npmCliPath ? [npmCliPath, ...args] : args,
     options,
   );
+
+const runUiSmokeWithTimeoutRetry = async (env) => {
+  for (let attempt = 1; attempt <= RELEASE_SMOKE_MAX_ATTEMPTS; attempt += 1) {
+    console.log(`Release readiness: starting UI smoke attempt ${attempt}/${RELEASE_SMOKE_MAX_ATTEMPTS}...`);
+    const status = await runNpm(["run", "smoke:ui"], {
+      allowFailure: true,
+      env: {
+        ...env,
+        SMOKE_ARTIFACTS_DIR: path.join(env.SMOKE_ARTIFACTS_DIR, `attempt-${attempt}`),
+      },
+    });
+    if (status === 0) {
+      return;
+    }
+    if (status !== SMOKE_TIMEOUT_EXIT_CODE || attempt === RELEASE_SMOKE_MAX_ATTEMPTS) {
+      throw new Error(`UI smoke attempt ${attempt} failed with exit code ${status}.`);
+    }
+    console.warn("Release readiness: UI smoke timed out; retrying once after cooldown.");
+    await wait(ADAPTIVE_RATE_WINDOW_COOLDOWN_MS);
+  }
+};
 
 const run = async () => {
   await mkdir(artifactsDir, { recursive: true });
@@ -278,7 +302,7 @@ const run = async () => {
     });
     console.log("Release readiness: waiting for local adaptive-rate window to reset before UI smoke...");
     await wait(ADAPTIVE_RATE_WINDOW_COOLDOWN_MS);
-    await runNpm(["run", "smoke:ui"], { env });
+    await runUiSmokeWithTimeoutRetry(env);
 
     console.log("Release readiness: capturing collection performance baseline...");
     await runNpm(["run", "perf:collection:baseline"], { env });

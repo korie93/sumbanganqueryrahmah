@@ -103,6 +103,24 @@ test("release readiness runs every backend regression suite before building", ()
   }
 });
 
+test("release readiness retries UI smoke only after a bounded timeout", () => {
+  const script = readReleaseReadinessScript();
+
+  assert.match(script, /const SMOKE_TIMEOUT_EXIT_CODE = 124/);
+  assert.match(script, /const RELEASE_SMOKE_MAX_ATTEMPTS = 2/);
+  assert.match(script, /const runUiSmokeWithTimeoutRetry = async \(env\) =>/);
+  assert.match(script, /allowFailure: true/);
+  assert.match(
+    script,
+    /SMOKE_ARTIFACTS_DIR: path\.join\(env\.SMOKE_ARTIFACTS_DIR, `attempt-\$\{attempt\}`\)/,
+  );
+  assert.match(
+    script,
+    /status !== SMOKE_TIMEOUT_EXIT_CODE \|\| attempt === RELEASE_SMOKE_MAX_ATTEMPTS/,
+  );
+  assert.match(script, /await runUiSmokeWithTimeoutRetry\(env\)/);
+});
+
 test("release readiness isolates production runtime settings from regression suites", () => {
   const script = readReleaseReadinessScript();
   const suiteNames = [
