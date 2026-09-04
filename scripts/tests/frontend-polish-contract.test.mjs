@@ -51,13 +51,21 @@ test("accessibility contrast wrapper delegates to the axe-backed contract", () =
 test("release readiness isolates UI smoke from previous local rate-limit windows", () => {
   const script = readFileSync(path.join(repoRoot, "scripts", "release-readiness-local.mjs"), "utf8");
   const a11yIndex = script.indexOf('["run", "test:e2e:a11y"]');
-  const cooldownIndex = script.indexOf("await wait(ADAPTIVE_RATE_WINDOW_COOLDOWN_MS)");
-  const smokeIndex = script.indexOf('["run", "smoke:ui"]');
+  const cooldownMessageIndex = script.indexOf(
+    'console.log("Release readiness: waiting for local adaptive-rate window to reset before UI smoke...")',
+  );
+  const cooldownIndex = script.indexOf(
+    "await wait(ADAPTIVE_RATE_WINDOW_COOLDOWN_MS)",
+    cooldownMessageIndex,
+  );
+  const smokeIndex = script.indexOf("await runUiSmokeWithTimeoutRetry(env)");
 
   assert.notEqual(a11yIndex, -1);
+  assert.notEqual(cooldownMessageIndex, -1);
   assert.notEqual(cooldownIndex, -1);
   assert.notEqual(smokeIndex, -1);
-  assert.ok(a11yIndex < cooldownIndex);
+  assert.ok(a11yIndex < cooldownMessageIndex);
+  assert.ok(cooldownMessageIndex < cooldownIndex);
   assert.ok(cooldownIndex < smokeIndex);
 });
 
