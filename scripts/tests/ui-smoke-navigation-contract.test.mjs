@@ -108,6 +108,30 @@ test("direct collection smoke fixtures create and clean verified Saved sources",
   assert.match(staleFixtureSource, /cleanup failed stale-delete source import/);
 });
 
+test("collection receipt smoke explicitly selects the superuser nickname before filling and verifies saved attribution", () => {
+  const flowStart = smokeSource.indexOf("const checkCollectionReceiptUiFlow = async");
+  const flowEnd = smokeSource.indexOf("const checkBackupRestoreUiFlow = async", flowStart);
+  const flowSource = smokeSource.slice(flowStart, flowEnd);
+
+  assert.ok(flowStart >= 0 && flowEnd > flowStart);
+  const navigateIndex = flowSource.indexOf('await navigateForSmoke(page, "/collection/save")');
+  const pickerIndex = flowSource.indexOf('page.locator("#save-collection-superuser-nickname")');
+  const emptyFormIndex = flowSource.indexOf('page.locator("#save-collection-customer-name").count() === 0');
+  const selectIndex = flowSource.indexOf('page.getByRole("button", { name: nickname, exact: true }).click()');
+  const visibleFormIndex = flowSource.indexOf('page.locator("#save-collection-customer-name").waitFor({ state: "visible", timeout: 15_000 })');
+  const fillIndex = flowSource.indexOf('getInputByLabel(page, "Customer Name").fill(customerName)');
+
+  assert.ok(navigateIndex >= 0 && pickerIndex > navigateIndex);
+  assert.ok(emptyFormIndex > pickerIndex && selectIndex > emptyFormIndex);
+  assert.ok(visibleFormIndex > selectIndex && fillIndex > visibleFormIndex);
+  assert.match(flowSource, /await nicknamePicker\.waitFor\(\{ state: "visible", timeout: 15_000 \}\)/);
+  assert.match(flowSource, /await nicknamePicker\.click\(\)/);
+  assert.match(flowSource, /\.includes\(nickname\)/);
+  assert.doesNotMatch(flowSource, /applySmokeCollectionNicknameSession|sessionStorage|page\.evaluate\(/);
+  assert.match(flowSource, /createPayload\?\.record\?\.collectionStaffNickname === nickname/);
+  assert.match(flowSource, /createPayload\?\.record\?\.createdByLogin === username/);
+});
+
 test("Collection V9 smoke verifies and revokes POOL without changing user Collection credit", () => {
   const flowStart = smokeSource.indexOf("const checkCollectionManualSettlementV9UiFlow = async");
   const flowEnd = smokeSource.indexOf("const checkCollectionReceiptUiFlow", flowStart);

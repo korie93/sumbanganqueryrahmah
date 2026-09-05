@@ -80,6 +80,29 @@ without them. No claim of a complete application-wide penetration test.
 
 ## Reproduce / continue safely
 
+### CI smoke follow-up after c0c2e684 (2026-09-05)
+
+- Reported CI failed in `checkCollectionReceiptUiFlow` waiting for Customer Name.
+  The script still injected a browser nickname marker instead of selecting the
+  new superuser picker; the form intentionally does not exist before selection.
+- Updated `scripts/ui-smoke.mjs` to select the exact active nickname in the UI,
+  verify the form appears, and assert saved nickname plus authenticated actor.
+  Added a regression contract. Application authorization and CI timeouts are unchanged.
+- Added `--ui-smoke` to the isolated QA launcher. This mode applies migrations
+  to its newly created database before running the full CI UI script, matching
+  CI preparation. An initial bootstrap-only attempt failed earlier in General
+  Search; the correctly migrated full run passed without skipping any phases.
+- Passed: full UI smoke (exit 0), including receipt, backup/restore and logout;
+  `npm run test:scripts` (331 JavaScript + 50 TypeScript tests), 17 targeted CI/smoke
+  contract tests, script syntax, secret scan and `git diff --check`.
+- Evidence: `artifacts/collection-smoke-picker-ui.log` and
+  `artifacts/collection-smoke-picker-scripts.log`. Full-run server artifacts:
+  `artifacts/collection-save-access-1788584764150_21b213/`.
+  The exact disposable database was dropped after successful completion.
+- This follow-up is verified locally only; publication and the next GitHub CI run
+  must be checked separately. Reproduce with
+  `node scripts/collection-save-access-qa-local.mjs --ui-smoke` after a local build.
+
 Workspace: `C:\Users\Administrator\Desktop\SQR\sumbanganqueryrahmah`.
 PowerShell Node PATH: `$env:Path = 'C:\Program Files\nodejs;' + $env:Path`.
 

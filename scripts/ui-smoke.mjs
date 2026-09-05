@@ -1681,9 +1681,23 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       callingDate: paymentDate,
       uniqueSuffix,
     });
-    await applySmokeCollectionNicknameSession(page, nickname);
     await navigateForSmoke(page, "/collection/save");
     await page.getByText("Simpan Collection Individual").first().waitFor();
+
+    // Superuser saves require an explicit UI selection, not a browser auth marker.
+    const nicknamePicker = page.locator("#save-collection-superuser-nickname");
+    await nicknamePicker.waitFor({ state: "visible", timeout: 15_000 });
+    assert(
+      await page.locator("#save-collection-customer-name").count() === 0,
+      "superuser save form should wait for an explicit nickname selection",
+    );
+    await nicknamePicker.click();
+    await page.getByRole("button", { name: nickname, exact: true }).click();
+    await page.locator("#save-collection-customer-name").waitFor({ state: "visible", timeout: 15_000 });
+    assert(
+      (await nicknamePicker.innerText()).includes(nickname),
+      "collection receipt smoke should show the selected superuser nickname",
+    );
 
     await getInputByLabel(page, "Customer Name").fill(customerName);
     await getInputByLabel(page, "IC Number").fill(icNumber);
@@ -1756,6 +1770,11 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     ).trim();
     assert(recordId, "collection receipt UI smoke should receive a created record id");
     assert(expectedUpdatedAt, "collection receipt UI smoke should capture the created record version");
+    assert(
+      createPayload?.record?.collectionStaffNickname === nickname
+      && createPayload?.record?.createdByLogin === username,
+      "collection receipt UI smoke should persist the selected nickname and authenticated superuser actor",
+    );
     assert(
       String(createPayload?.record?.sourceImportId || "").trim() === sourceImport.id,
       "collection receipt UI smoke should persist the backend-selected verified Saved source import",

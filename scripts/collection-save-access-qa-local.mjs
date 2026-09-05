@@ -13,6 +13,10 @@ import { startManagedServerProcess, stopManagedServerProcess } from "./lib/manag
 
 // End-to-end QA always creates its own database. No credentials are written to
 // disk. Requires an existing local build and permission to create local DBs.
+// --ui-smoke runs the complete CI browser suite in the same isolated environment.
+assert(process.argv.slice(2).every((arg) => arg === "--ui-smoke"), "Unknown Collection QA option.");
+const smokeScript = process.argv.includes("--ui-smoke")
+  ? "scripts/ui-smoke.mjs" : "scripts/collection-save-access-smoke.mjs";
 const stamp = `${Date.now()}_${randomBytes(3).toString("hex")}`;
 const database = `sqr_save_access_${stamp}`;
 assert(/^sqr_save_access_[0-9]+_[a-f0-9]{6}$/.test(database));
@@ -75,12 +79,21 @@ try {
   for (const key of Object.keys(serverEnv)) {
     if (key.startsWith("COLLECTION_SAVE_")) delete serverEnv[key];
   }
+  if (process.argv.includes("--ui-smoke")) {
+    // Match CI schema preparation, including migrated Collection search history.
+    const migrationCode = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ["scripts/db-migrate.mjs"], { env: serverEnv, stdio: "inherit", windowsHide: true });
+      child.once("error", reject);
+      child.once("exit", (exitCode) => resolve(exitCode ?? 1));
+    });
+    assert.equal(migrationCode, 0, "Disposable QA database migrations must succeed.");
+  }
   server = startManagedServerProcess(process.execPath, [path.resolve("dist-local/server/index-local.js")], { env: serverEnv, cwd: artifactsDir });
   server.stdout.pipe(log, { end: false });
   server.stderr.pipe(log, { end: false });
   await waitForServer(`${serverAddress.baseUrl}/api/health`, { serverProcess: server, timeoutMs: 120_000, logPath: path.join(artifactsDir, "server.log") });
   const code = await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["scripts/collection-save-access-smoke.mjs"], { env, stdio: "inherit", windowsHide: true });
+    const child = spawn(process.execPath, [smokeScript], { env, stdio: "inherit", windowsHide: true });
     child.once("error", reject);
     child.once("exit", (exitCode) => resolve(exitCode ?? 1));
   });
