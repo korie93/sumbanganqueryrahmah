@@ -1,7 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { readQueryObject, readRouteParam } from "../../http/validation";
-import { getRequestIdFromContext } from "../../lib/request-context";
 import { sendCollectionError } from "./collection-route-handler-factories";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
@@ -13,17 +12,6 @@ function targetId(req: AuthenticatedRequest) {
 
 function revisionId(req: AuthenticatedRequest) {
   return readRouteParam(req.params.revisionId, "Target revision ID", 80);
-}
-
-function reconciliationId(req: AuthenticatedRequest) {
-  return readRouteParam(req.params.reconciliationId, "Reconciliation ID", 80);
-}
-
-function requestId(req: AuthenticatedRequest) {
-  return getRequestIdFromContext()
-    || req.header("x-request-id")
-    || req.header("x-correlation-id")
-    || null;
 }
 
 export function registerCollectionBillingPrincipalV7Routes(context: CollectionRouteContext) {
@@ -111,92 +99,6 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
         req.body,
       ),
     ),
-  );
-
-  app.get(
-    `${revisionPrefix}/reconciliation-candidates`,
-    ...superuserReportAccess,
-    jsonRoute("Failed to list reconciliation account candidates.", (req) =>
-      collectionService.listBillingPrincipalReconciliationCandidates(
-        req.user,
-        targetId(req),
-        revisionId(req),
-        readQueryObject(req.query),
-      )),
-  );
-
-  app.get(
-    `${revisionPrefix}/reconciliations`,
-    ...reportAccess,
-    jsonRoute("Failed to list manual reconciliations.", (req) =>
-      collectionService.listBillingPrincipalReconciliations(
-        req.user,
-        targetId(req),
-        revisionId(req),
-        readQueryObject(req.query),
-      )),
-  );
-
-  app.post(
-    `${revisionPrefix}/reconciliations`,
-    ...superuserReportAccess,
-    jsonMutationRoute(
-      "Failed to create manual reconciliation.",
-      (req) => `collection:billing-principal:reconciliation:${targetId(req)}:${revisionId(req)}:create`,
-      (req) => collectionService.createBillingPrincipalReconciliation(
-        req.user,
-        targetId(req),
-        revisionId(req),
-        req.body,
-        requestId(req),
-      ),
-    ),
-  );
-
-  app.patch(
-    `${revisionPrefix}/reconciliations/:reconciliationId`,
-    ...superuserReportAccess,
-    jsonMutationRoute(
-      "Failed to update manual reconciliation.",
-      (req) => `collection:billing-principal:reconciliation:${reconciliationId(req)}`,
-      (req) => collectionService.updateBillingPrincipalReconciliation(
-        req.user,
-        targetId(req),
-        revisionId(req),
-        reconciliationId(req),
-        req.body,
-        requestId(req),
-      ),
-    ),
-  );
-
-  app.post(
-    `${revisionPrefix}/reconciliations/:reconciliationId/void`,
-    ...superuserReportAccess,
-    jsonMutationRoute(
-      "Failed to void manual reconciliation.",
-      (req) => `collection:billing-principal:reconciliation:${reconciliationId(req)}:void`,
-      (req) => collectionService.voidBillingPrincipalReconciliation(
-        req.user,
-        targetId(req),
-        revisionId(req),
-        reconciliationId(req),
-        req.body,
-        requestId(req),
-      ),
-    ),
-  );
-
-  app.get(
-    `${revisionPrefix}/reconciliations/:reconciliationId/history`,
-    ...reportAccess,
-    jsonRoute("Failed to load reconciliation history.", (req) =>
-      collectionService.listBillingPrincipalReconciliationHistory(
-        req.user,
-        targetId(req),
-        revisionId(req),
-        reconciliationId(req),
-      )),
   );
 
   app.get(

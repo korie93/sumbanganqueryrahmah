@@ -1,4 +1,4 @@
-import { badRequest } from "../../http/errors";
+import { badRequest, forbidden } from "../../http/errors";
 import { readPageLimit } from "../../http/validation";
 import { safeParseInteger } from "../../lib/safe-parse";
 import {
@@ -21,6 +21,10 @@ import {
   resolveUserOwnedCollectionRecordFilters,
 } from "./collection-record-read-shared";
 import { canViewAllStaff } from "../../../shared/user-roles";
+import {
+  COLLECTION_TEAM_ID_PATTERN,
+  loadActiveCollectionTeamDirectory,
+} from "./collection-team-scope";
 
 function readBoundedList(value: unknown, maximum: number): string[] {
   const candidates = Array.isArray(value) ? value : [value];
@@ -34,6 +38,13 @@ function readBoundedList(value: unknown, maximum: number): string[] {
 export class CollectionRecordListReadOperations extends CollectionServiceSupport {
   async listRecords(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: ListQuery) {
     const user = this.requireUser(userInput);
+    const hasLeaderIdQuery = Object.prototype.hasOwnProperty.call(query, "leaderId");
+    const hasTeamLeaderAliasQuery = Object.prototype.hasOwnProperty.call(query, "teamLeader");
+    const requestsTeamScope = normalizeCollectionText(query.scope).toLowerCase() === "team";
+    const hasExplicitTeamQuery = hasLeaderIdQuery || hasTeamLeaderAliasQuery || requestsTeamScope;
+    if (hasExplicitTeamQuery && user.role !== "manager" && user.role !== "superuser") {
+      throw forbidden("Team Leader scope is available only to managers and superusers.");
+    }
     const from = normalizeCollectionText(query.from);
     const to = normalizeCollectionText(query.to);
     const search = normalizeCollectionText(query.search);
@@ -105,14 +116,45 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
       throw badRequest("Invalid Collection sort direction.");
     }
 
+    let teamNicknameFilters: string[] | null = null;
+    let teamNicknameIdFilters: string[] | null = null;
+    let activeNicknameKeys: ReadonlySet<string> | null = null;
+    if (hasExplicitTeamQuery) {
+      if (hasTeamLeaderAliasQuery) {
+        throw badRequest("Use the stable leaderId to select a Collection team.");
+      }
+      const leaderId = normalizeCollectionText(query.leaderId).toLowerCase();
+      if (!leaderId) {
+        throw badRequest("leaderId is required for Team Leader scope.");
+      }
+      if (!COLLECTION_TEAM_ID_PATTERN.test(leaderId)) {
+        throw badRequest("Invalid Team Leader id.");
+      }
+
+      const teamDirectory = await loadActiveCollectionTeamDirectory(this.storage);
+      activeNicknameKeys = teamDirectory.activeNicknameKeys;
+      const selectedTeam = teamDirectory.teams.find((team) => team.id === leaderId);
+      teamNicknameFilters = selectedTeam ? selectedTeam.nicknames : [];
+      teamNicknameIdFilters = selectedTeam ? selectedTeam.nicknameIds : [];
+    }
+
     let nicknameFilters: string[] | undefined;
     if (canViewAllStaff(user.role)) {
       if (requestedNicknameFilters.length > 0) {
-        for (const requestedNickname of requestedNicknameFilters) {
-          const isActiveNickname = await this.storage.isCollectionStaffNicknameActive(requestedNickname);
-          if (!isActiveNickname) {
-            throw badRequest("Invalid nickname filter.");
-          }
+        if (!activeNicknameKeys) {
+          const activeNicknames = await this.storage.getCollectionStaffNicknames({ activeOnly: true });
+          activeNicknameKeys = new Set(
+            activeNicknames
+              .filter((nickname) => nickname.isActive)
+              .map((nickname) => normalizeCollectionText(nickname.nickname).toLowerCase())
+              .filter(Boolean),
+          );
+        }
+        const hasInvalidNickname = requestedNicknameFilters.some(
+          (requestedNickname) => !activeNicknameKeys?.has(requestedNickname.toLowerCase()),
+        );
+        if (hasInvalidNickname) {
+          throw badRequest("Invalid nickname filter.");
         }
         nicknameFilters = requestedNicknameFilters;
       }
@@ -150,6 +192,44 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
       }
     }
 
+    if (teamNicknameFilters !== null) {
+      if (requestedNicknameFilters.length > 0) {
+        const requestedKeys = new Set(requestedNicknameFilters.map((value) => value.toLowerCase()));
+        const allowedIndexes = teamNicknameFilters.flatMap((value, index) => (
+          requestedKeys.has(value.toLowerCase()) ? [index] : []
+        ));
+        nicknameFilters = allowedIndexes.map((index) => teamNicknameFilters?.[index] || "").filter(Boolean);
+        teamNicknameIdFilters = allowedIndexes
+          .map((index) => teamNicknameIdFilters?.[index] || "")
+          .filter(Boolean);
+      } else {
+        nicknameFilters = teamNicknameFilters;
+      }
+    }
+
+    if (teamNicknameFilters !== null && (nicknameFilters?.length ?? 0) === 0) {
+      const pagination = buildCollectionPaginationMeta({
+        page: resolvedPage,
+        pageSize: limit,
+        total: 0,
+        offset,
+        nextCursor: null,
+        hasNextPage: false,
+      });
+      return {
+        ok: true as const,
+        records: [],
+        total: 0,
+        totalAmount: 0,
+        page: resolvedPage,
+        pageSize: limit,
+        limit,
+        offset,
+        nextCursor: null,
+        pagination,
+      };
+    }
+
     const baseFilters = {
       from: from || undefined,
       to: to || undefined,
@@ -158,6 +238,7 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
       duplicateOnly,
       createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
       nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
+      staffNicknameIds: teamNicknameIdFilters ?? undefined,
       sourceImportIds: sourceImportIds.length > 0 ? sourceImportIds : undefined,
       agingBuckets: agingBucketsRaw.length > 0
         ? agingBucketsRaw as Array<"D3" | "D4" | "D5" | "D6">
@@ -202,6 +283,9 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
       ...(Array.isArray(baseFilters.nicknames) ? { nicknameCount: baseFilters.nicknames.length } : {}),
+      ...(Array.isArray(baseFilters.staffNicknameIds)
+        ? { teamMemberCount: baseFilters.staffNicknameIds.length }
+        : {}),
       searchPresent: Boolean(search),
     });
 

@@ -849,6 +849,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
                 accountNumberEncrypted: "enc.account-number",
                 sourceImportId: "import-1",
                 sourceDataRowId: "saved-row-1",
+                sourceObligationKey: `account:${"d".repeat(64)}`,
                 sourceImportName: "NPL CC P10 JULY",
                 sourceFilename: "npl-cc-p10-july.xlsx",
                 callingDate: "2026-03-01",
@@ -900,6 +901,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
                 id: "11111111-1111-4111-8111-111111111111",
                 sourceImportId: "import-1",
                 sourceDataRowId: "saved-row-1",
+                sourceObligationKey: `account:${"d".repeat(64)}`,
                 sourceImportName: "NPL CC P10 JULY",
                 sourceFilename: "npl-cc-p10-july.xlsx",
                 icNumberSearchHash: "a".repeat(64),
@@ -960,6 +962,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal(parsed.collectionRecords?.[0]?.callingDate, "2026-03-01");
         assert.equal(parsed.collectionRecords?.[0]?.callingWindowEndExclusive, "2026-04-01");
         assert.equal(parsed.collectionRecordPurgeHistory?.[0]?.accountNumberSearchHash, "c".repeat(64));
+        assert.equal(parsed.collectionRecordPurgeHistory?.[0]?.sourceObligationKey, `account:${"d".repeat(64)}`);
         assert.equal(parsed.collectionRecordPurgeHistory?.[0]?.purgedBy, "superuser");
         assert.equal("customerName" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);
         assert.equal("icNumber" in (parsed.collectionRecordPurgeHistory?.[0] || {}), false);

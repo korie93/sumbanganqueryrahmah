@@ -321,6 +321,8 @@ export function normalizeBackupCollectionRecord(
     : null;
   const sourceObligationKey = normalizeBoundedOptionalText(record.sourceObligationKey, 160);
   const settlementCycleKey = normalizeBoundedOptionalText(record.settlementCycleKey, 192);
+  const sourceImportId = normalizeBoundedOptionalText(record.sourceImportId, 512);
+  const sourceDataRowId = normalizeBoundedOptionalText(record.sourceDataRowId, 512);
   const cumulativeCollected = record.cumulativeCollected == null
     ? null
     : parseCollectionAmountMyrInput(record.cumulativeCollected, { allowZero: true });
@@ -339,6 +341,69 @@ export function normalizeBackupCollectionRecord(
     && (record.classification === "cp" || record.classification === "abort_cp")
     ? record.classification
     : null;
+  const manualStatus = record.settlementOverrideStatus === "ACTIVE"
+    || record.settlementOverrideStatus === "REVOKED"
+    ? record.settlementOverrideStatus
+    : null;
+  const poolAmount = record.poolAmount == null
+    ? null
+    : parseCollectionAmountMyrInput(record.poolAmount, { allowZero: false });
+  const manualSettlementDate = normalizeBackupDate(record.manualSettlementDate);
+  const manualReasonRaw = String(record.manualSettlementReason ?? "").trim();
+  const manualSettlementReason: RestorableCollectionRecordRow["manualSettlementReason"] =
+    manualReasonRaw === "EXTERNAL_UNASSIGNED_PAYMENT"
+    || manualReasonRaw === "CLIENT_CONFIRMED_PAYMENT"
+    || manualReasonRaw === "HISTORICAL_PAYMENT_NOT_CAPTURED"
+    || manualReasonRaw === "OTHER_WITH_REQUIRED_NOTE"
+      ? manualReasonRaw
+      : null;
+  const manualSettlementNote = normalizeBoundedOptionalText(record.manualSettlementNote, 2_000);
+  const manualSettlementReference = normalizeBoundedOptionalText(record.manualSettlementReference, 200);
+  const manualSettlementVersionRaw = Number(record.manualSettlementVersion);
+  const manualSettlementVersion = Number.isInteger(manualSettlementVersionRaw)
+    && manualSettlementVersionRaw >= 1
+    ? manualSettlementVersionRaw
+    : null;
+  const manualSettlementVerifiedBy = normalizeBoundedOptionalText(record.manualSettlementVerifiedBy, 160);
+  const manualSettlementVerifiedAt = toDate(record.manualSettlementVerifiedAt);
+  const manualSettlementUpdatedBy = normalizeBoundedOptionalText(record.manualSettlementUpdatedBy, 160);
+  const manualSettlementUpdatedAt = toDate(record.manualSettlementUpdatedAt);
+  const manualSettlementRevokedBy = normalizeBoundedOptionalText(record.manualSettlementRevokedBy, 160);
+  const manualSettlementRevokedAt = toDate(record.manualSettlementRevokedAt);
+  const manualSettlementRevokedReason = normalizeBoundedOptionalText(record.manualSettlementRevokedReason, 500);
+  const hasValidManualCore = Boolean(
+    manualStatus
+    && hasTrustedSettlementState
+    && sourceImportId
+    && sourceDataRowId
+    && sourceMatchBasis
+    && totalDue !== null
+    && totalDue > 0
+    && poolAmount !== null
+    && poolAmount > 0
+    && manualSettlementDate
+    && callingDate
+    && callingWindowEndExclusive
+    && manualSettlementDate >= callingDate
+    && manualSettlementDate < callingWindowEndExclusive
+    && manualSettlementReason
+    && (manualSettlementReason !== "OTHER_WITH_REQUIRED_NOTE" || manualSettlementNote)
+    && manualSettlementVersion
+    && manualSettlementVerifiedBy
+    && manualSettlementVerifiedAt
+    && manualSettlementUpdatedBy
+    && manualSettlementUpdatedAt
+  );
+  const hasValidManualState = hasValidManualCore && (
+    (manualStatus === "ACTIVE"
+      && !manualSettlementRevokedBy
+      && !manualSettlementRevokedAt
+      && !manualSettlementRevokedReason)
+    || (manualStatus === "REVOKED"
+      && Boolean(manualSettlementRevokedBy)
+      && Boolean(manualSettlementRevokedAt)
+      && Boolean(manualSettlementRevokedReason))
+  );
 
   return {
     id: String(record.id || crypto.randomUUID()),
@@ -348,8 +413,8 @@ export function normalizeBackupCollectionRecord(
     customerPhone,
     accountNumber,
     cardNumberLast4,
-    sourceImportId: String(record.sourceImportId || "").trim() || null,
-    sourceDataRowId: String(record.sourceDataRowId || "").trim() || null,
+    sourceImportId,
+    sourceDataRowId,
     sourceImportName: String(record.sourceImportName || "").trim() || null,
     sourceFilename: String(record.sourceFilename || "").trim() || null,
     agingBucket,
@@ -364,6 +429,20 @@ export function normalizeBackupCollectionRecord(
     classification,
     cumulativeCollected: hasTrustedSettlementState ? cumulativeCollected : null,
     remainingAmount: hasTrustedSettlementState ? remainingAmount : null,
+    settlementOverrideStatus: hasValidManualState ? manualStatus : null,
+    poolAmount: hasValidManualState ? poolAmount : null,
+    manualSettlementDate: hasValidManualState ? manualSettlementDate : null,
+    manualSettlementReason: hasValidManualState ? manualSettlementReason : null,
+    manualSettlementNote: hasValidManualState ? manualSettlementNote : null,
+    manualSettlementReference: hasValidManualState ? manualSettlementReference : null,
+    manualSettlementVersion: hasValidManualState ? manualSettlementVersion : null,
+    manualSettlementVerifiedBy: hasValidManualState ? manualSettlementVerifiedBy : null,
+    manualSettlementVerifiedAt: hasValidManualState ? manualSettlementVerifiedAt : null,
+    manualSettlementUpdatedBy: hasValidManualState ? manualSettlementUpdatedBy : null,
+    manualSettlementUpdatedAt: hasValidManualState ? manualSettlementUpdatedAt : null,
+    manualSettlementRevokedBy: hasValidManualState ? manualSettlementRevokedBy : null,
+    manualSettlementRevokedAt: hasValidManualState ? manualSettlementRevokedAt : null,
+    manualSettlementRevokedReason: hasValidManualState ? manualSettlementRevokedReason : null,
     batch: String(record.batch || "P10"),
     paymentDate,
     amount: parseCollectionAmountMyrNumber(record.amount),
@@ -443,6 +522,63 @@ export function normalizeBackupCollectionRecordPurgeHistory(
     160,
   );
   const purgedBy = normalizeBoundedOptionalText(record.purgedBy, 160);
+  const automaticClassification = record.automaticClassification === "cp"
+    || record.automaticClassification === "abort_cp"
+    ? record.automaticClassification
+    : null;
+  const manualStatus = record.settlementOverrideStatus === "ACTIVE"
+    || record.settlementOverrideStatus === "REVOKED"
+    ? record.settlementOverrideStatus
+    : null;
+  const poolAmount = record.poolAmount == null
+    ? null
+    : parseCollectionAmountMyrInput(record.poolAmount, { allowZero: false });
+  const manualSettlementDate = normalizeBackupDate(record.manualSettlementDate);
+  const manualReasonRaw = String(record.manualSettlementReason ?? "").trim();
+  const manualSettlementReason: RestorableCollectionRecordPurgeHistoryRow["manualSettlementReason"] =
+    manualReasonRaw === "EXTERNAL_UNASSIGNED_PAYMENT"
+    || manualReasonRaw === "CLIENT_CONFIRMED_PAYMENT"
+    || manualReasonRaw === "HISTORICAL_PAYMENT_NOT_CAPTURED"
+    || manualReasonRaw === "OTHER_WITH_REQUIRED_NOTE"
+      ? manualReasonRaw
+      : null;
+  const manualSettlementNote = normalizeBoundedOptionalText(record.manualSettlementNote, 2_000);
+  const manualSettlementReference = normalizeBoundedOptionalText(record.manualSettlementReference, 200);
+  const manualSettlementVersionRaw = Number(record.manualSettlementVersion);
+  const manualSettlementVersion = Number.isInteger(manualSettlementVersionRaw)
+    && manualSettlementVersionRaw >= 1
+    ? manualSettlementVersionRaw
+    : null;
+  const manualSettlementVerifiedBy = normalizeBoundedOptionalText(record.manualSettlementVerifiedBy, 160);
+  const manualSettlementVerifiedAt = toDate(record.manualSettlementVerifiedAt);
+  const manualSettlementUpdatedBy = normalizeBoundedOptionalText(record.manualSettlementUpdatedBy, 160);
+  const manualSettlementUpdatedAt = toDate(record.manualSettlementUpdatedAt);
+  const manualSettlementRevokedBy = normalizeBoundedOptionalText(record.manualSettlementRevokedBy, 160);
+  const manualSettlementRevokedAt = toDate(record.manualSettlementRevokedAt);
+  const manualSettlementRevokedReason = normalizeBoundedOptionalText(record.manualSettlementRevokedReason, 500);
+  const hasValidManualCore = Boolean(
+    manualStatus
+    && poolAmount !== null
+    && poolAmount > 0
+    && manualSettlementDate
+    && manualSettlementReason
+    && (manualSettlementReason !== "OTHER_WITH_REQUIRED_NOTE" || manualSettlementNote)
+    && manualSettlementVersion
+    && manualSettlementVerifiedBy
+    && manualSettlementVerifiedAt
+    && manualSettlementUpdatedBy
+    && manualSettlementUpdatedAt
+  );
+  const hasValidManualState = hasValidManualCore && (
+    (manualStatus === "ACTIVE"
+      && !manualSettlementRevokedBy
+      && !manualSettlementRevokedAt
+      && !manualSettlementRevokedReason)
+    || (manualStatus === "REVOKED"
+      && Boolean(manualSettlementRevokedBy)
+      && Boolean(manualSettlementRevokedAt)
+      && Boolean(manualSettlementRevokedReason))
+  );
 
   if (
     !UUID_PATTERN.test(id)
@@ -463,6 +599,7 @@ export function normalizeBackupCollectionRecordPurgeHistory(
     id,
     sourceImportId: normalizeBoundedOptionalText(record.sourceImportId),
     sourceDataRowId: normalizeBoundedOptionalText(record.sourceDataRowId),
+    sourceObligationKey: normalizeBoundedOptionalText(record.sourceObligationKey),
     sourceImportName: normalizeBoundedOptionalText(record.sourceImportName),
     sourceFilename: normalizeBoundedOptionalText(record.sourceFilename),
     icNumberSearchHash: normalizeBackupSearchHash(record.icNumberSearchHash),
@@ -470,6 +607,21 @@ export function normalizeBackupCollectionRecordPurgeHistory(
     accountNumberSearchHash: normalizeBackupSearchHash(record.accountNumberSearchHash),
     paymentDate,
     amount,
+    automaticClassification,
+    settlementOverrideStatus: hasValidManualState ? manualStatus : null,
+    poolAmount: hasValidManualState ? poolAmount : null,
+    manualSettlementDate: hasValidManualState ? manualSettlementDate : null,
+    manualSettlementReason: hasValidManualState ? manualSettlementReason : null,
+    manualSettlementNote: hasValidManualState ? manualSettlementNote : null,
+    manualSettlementReference: hasValidManualState ? manualSettlementReference : null,
+    manualSettlementVersion: hasValidManualState ? manualSettlementVersion : null,
+    manualSettlementVerifiedBy: hasValidManualState ? manualSettlementVerifiedBy : null,
+    manualSettlementVerifiedAt: hasValidManualState ? manualSettlementVerifiedAt : null,
+    manualSettlementUpdatedBy: hasValidManualState ? manualSettlementUpdatedBy : null,
+    manualSettlementUpdatedAt: hasValidManualState ? manualSettlementUpdatedAt : null,
+    manualSettlementRevokedBy: hasValidManualState ? manualSettlementRevokedBy : null,
+    manualSettlementRevokedAt: hasValidManualState ? manualSettlementRevokedAt : null,
+    manualSettlementRevokedReason: hasValidManualState ? manualSettlementRevokedReason : null,
     createdByLogin,
     collectionStaffNickname,
     originalCreatedAt,

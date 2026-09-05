@@ -8,6 +8,9 @@ import {
 const expectedRouteIds = [
   "import",
   "saved",
+  "collection-records",
+  "general-search",
+  "billing-principal",
   "activity",
   "analysis",
   "audit-logs",
@@ -24,6 +27,17 @@ test("operational UI contract matrix covers the high-risk data workspaces", () =
     new Set(operationalContractRouteSpecs.map((routeSpec) => routeSpec.path)).size,
     operationalContractRouteSpecs.length,
   );
+});
+
+test("operational UI matrix covers the V9 Collection, Search, and Billing destinations", () => {
+  const routesById = new Map(operationalContractRouteSpecs.map((routeSpec) => [routeSpec.id, routeSpec]));
+
+  assert.equal(routesById.get("collection-records")?.path, "/collection/records");
+  assert.match(routesById.get("collection-records")?.readySelector ?? "", /collection-records-page/);
+  assert.equal(routesById.get("general-search")?.path, "/general-search");
+  assert.match(routesById.get("general-search")?.readySelector ?? "", /input-search/);
+  assert.equal(routesById.get("billing-principal")?.path, "/collection/billing-principal");
+  assert.equal(routesById.get("billing-principal")?.readySelector, "#billing-principal-filters");
 });
 
 test("operational UI routes define stable readiness and bounded stress viewports", () => {

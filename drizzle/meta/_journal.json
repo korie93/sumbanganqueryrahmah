@@ -379,6 +379,55 @@
       "when": 1788393600000,
       "tag": "0054_collection_osp_reconciliation_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788480000000,
+      "tag": "0055_collection_manual_verified_settlement",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1788512400000,
+      "tag": "0056_collection_osp_v9_baseline_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1788512400001,
+      "tag": "0057_collection_purge_canonical_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1788512400002,
+      "tag": "0058_collection_team_stable_nickname_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1788512400003,
+      "tag": "0059_collection_purge_manual_settlement_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1788512400004,
+      "tag": "0060_collection_osp_v9_complete_aging_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788512400005,
+      "tag": "0061_collection_v9_history_lookup_indexes",
+      "breakpoints": true
     }
   ]
 }

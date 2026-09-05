@@ -1,6 +1,8 @@
 import type {
   CollectionDailyCalendarDay,
   CollectionDailyCalendarAuditEntry,
+  CollectionManualSettlementReason,
+  CollectionManualSettlementStatus,
   CollectionDailyTarget,
   CollectionRecord,
 } from "../storage-postgres";
@@ -72,6 +74,38 @@ type CollectionRecordDbRow = {
   cumulativeCollected?: unknown;
   remaining_amount?: unknown;
   remainingAmount?: unknown;
+  settlement_override_status?: unknown;
+  settlementOverrideStatus?: unknown;
+  pool_amount?: unknown;
+  poolAmount?: unknown;
+  manual_settlement_date?: unknown;
+  manualSettlementDate?: unknown;
+  manual_settlement_reason?: unknown;
+  manualSettlementReason?: unknown;
+  manual_settlement_note?: unknown;
+  manualSettlementNote?: unknown;
+  manual_settlement_reference?: unknown;
+  manualSettlementReference?: unknown;
+  manual_settlement_version?: unknown;
+  manualSettlementVersion?: unknown;
+  manual_settlement_verified_by?: unknown;
+  manualSettlementVerifiedBy?: unknown;
+  manual_settlement_verified_at?: unknown;
+  manualSettlementVerifiedAt?: unknown;
+  manual_settlement_updated_by?: unknown;
+  manualSettlementUpdatedBy?: unknown;
+  manual_settlement_updated_at?: unknown;
+  manualSettlementUpdatedAt?: unknown;
+  manual_settlement_revoked_by?: unknown;
+  manualSettlementRevokedBy?: unknown;
+  manual_settlement_revoked_at?: unknown;
+  manualSettlementRevokedAt?: unknown;
+  manual_settlement_revoked_reason?: unknown;
+  manualSettlementRevokedReason?: unknown;
+  cycle_system_collected_at_manual_date?: unknown;
+  cycleSystemCollectedAtManualDate?: unknown;
+  cycle_has_automatic_abort?: unknown;
+  cycleHasAutomaticAbort?: unknown;
   batch?: unknown;
   payment_date?: unknown;
   paymentDate?: unknown;
@@ -343,6 +377,132 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     || agingBucketRaw === "D6"
     ? agingBucketRaw
     : null;
+  const automaticCpStatus = hasPersistedSettlement && classification
+    ? classification
+    : "unverified";
+  const manualStatusRaw = String(
+    normalizedRow.settlement_override_status ?? normalizedRow.settlementOverrideStatus ?? "",
+  ).trim().toUpperCase();
+  const manualStatus: CollectionManualSettlementStatus | null = manualStatusRaw === "ACTIVE" || manualStatusRaw === "REVOKED"
+    ? manualStatusRaw
+    : null;
+  const poolAmountRaw = normalizedRow.pool_amount ?? normalizedRow.poolAmount;
+  const poolAmountCents = poolAmountRaw === null || poolAmountRaw === undefined
+    ? null
+    : parseCollectionAmountToCents(poolAmountRaw, { allowZero: false });
+  const manualSettlementDate = normalizeCollectionDateOnly(
+    normalizedRow.manual_settlement_date ?? normalizedRow.manualSettlementDate,
+  );
+  const manualReasonRaw = String(
+    normalizedRow.manual_settlement_reason ?? normalizedRow.manualSettlementReason ?? "",
+  ).trim();
+  const manualReason: CollectionManualSettlementReason | null = manualReasonRaw === "EXTERNAL_UNASSIGNED_PAYMENT"
+    || manualReasonRaw === "CLIENT_CONFIRMED_PAYMENT"
+    || manualReasonRaw === "HISTORICAL_PAYMENT_NOT_CAPTURED"
+    || manualReasonRaw === "OTHER_WITH_REQUIRED_NOTE"
+    ? manualReasonRaw
+    : null;
+  const manualVersion = Number(
+    normalizedRow.manual_settlement_version ?? normalizedRow.manualSettlementVersion,
+  );
+  const manualVerifiedBy = String(
+    normalizedRow.manual_settlement_verified_by ?? normalizedRow.manualSettlementVerifiedBy ?? "",
+  ).trim();
+  const manualUpdatedBy = String(
+    normalizedRow.manual_settlement_updated_by ?? normalizedRow.manualSettlementUpdatedBy ?? "",
+  ).trim();
+  const manualVerifiedAtRaw = normalizedRow.manual_settlement_verified_at
+    ?? normalizedRow.manualSettlementVerifiedAt;
+  const manualUpdatedAtRaw = normalizedRow.manual_settlement_updated_at
+    ?? normalizedRow.manualSettlementUpdatedAt;
+  const systemCollectedRaw = normalizedRow.cycle_system_collected_at_manual_date
+    ?? normalizedRow.cycleSystemCollectedAtManualDate;
+  const systemCollectedCents = systemCollectedRaw === null || systemCollectedRaw === undefined
+    ? null
+    : parseCollectionAmountToCents(systemCollectedRaw, { allowZero: true });
+  const hasAutomaticAbort = Boolean(
+    normalizedRow.cycle_has_automatic_abort ?? normalizedRow.cycleHasAutomaticAbort ?? false,
+  );
+  const hasStructurallyCompleteManualSettlement = Boolean(
+    manualStatus
+    && poolAmountCents !== null
+    && manualSettlementDate
+    && manualReason
+    && Number.isInteger(manualVersion)
+    && manualVersion >= 1
+    && manualVerifiedBy
+    && manualUpdatedBy
+    && manualVerifiedAtRaw
+    && manualUpdatedAtRaw
+    && systemCollectedCents !== null
+    && totalDueCents !== null
+  );
+  const manualValidity = manualStatus === "REVOKED"
+    ? "REVOKED" as const
+    : manualStatus === "ACTIVE" && hasAutomaticAbort
+      ? "SUPERSEDED_BY_AUTOMATIC" as const
+      : manualStatus === "ACTIVE"
+        && hasStructurallyCompleteManualSettlement
+        && poolAmountCents !== null
+        && systemCollectedCents !== null
+        && totalDueCents !== null
+        && systemCollectedCents + poolAmountCents >= totalDueCents
+        ? "EFFECTIVE" as const
+        : "REQUIRES_REVALIDATION" as const;
+  const manualSettlement = manualStatus
+    && poolAmountCents !== null
+    && manualSettlementDate
+    && manualReason
+    && Number.isInteger(manualVersion)
+    && manualVersion >= 1
+    && manualVerifiedBy
+    && manualUpdatedBy
+    && manualVerifiedAtRaw
+    && manualUpdatedAtRaw
+    ? {
+        status: manualStatus,
+        validity: manualValidity,
+        poolAmount: formatCollectionAmountFromCents(poolAmountCents),
+        settlementDate: manualSettlementDate,
+        reason: manualReason,
+        note: String(
+          normalizedRow.manual_settlement_note ?? normalizedRow.manualSettlementNote ?? "",
+        ).trim() || null,
+        reference: String(
+          normalizedRow.manual_settlement_reference ?? normalizedRow.manualSettlementReference ?? "",
+        ).trim() || null,
+        version: manualVersion,
+        verifiedBy: manualVerifiedBy,
+        verifiedAt: normalizeCollectionDate(manualVerifiedAtRaw),
+        updatedBy: manualUpdatedBy,
+        updatedAt: normalizeCollectionDate(manualUpdatedAtRaw),
+        revokedBy: String(
+          normalizedRow.manual_settlement_revoked_by ?? normalizedRow.manualSettlementRevokedBy ?? "",
+        ).trim() || null,
+        revokedAt: (normalizedRow.manual_settlement_revoked_at
+          ?? normalizedRow.manualSettlementRevokedAt)
+          ? normalizeCollectionDate(
+              normalizedRow.manual_settlement_revoked_at ?? normalizedRow.manualSettlementRevokedAt,
+            )
+          : null,
+        revokedReason: String(
+          normalizedRow.manual_settlement_revoked_reason
+          ?? normalizedRow.manualSettlementRevokedReason
+          ?? "",
+        ).trim() || null,
+        systemCollectedAtSettlement: formatCollectionAmountFromCents(systemCollectedCents ?? 0),
+        effectiveTotal: formatCollectionAmountFromCents((systemCollectedCents ?? 0) + poolAmountCents),
+      }
+    : null;
+  const isManualEffective = manualSettlement?.validity === "EFFECTIVE";
+  const effectiveCpStatus = automaticCpStatus === "abort_cp" || isManualEffective
+    ? "abort_cp" as const
+    : automaticCpStatus;
+  const effectiveSettlementSource = automaticCpStatus === "abort_cp"
+    ? "AUTOMATIC" as const
+    : isManualEffective
+      ? "MANUAL_VERIFIED" as const
+      : "NONE" as const;
 
   return {
     id: String(normalizedRow.id ?? ""),
@@ -376,7 +536,15 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
     remainingAmount: hasPersistedSettlement && remainingCents !== null
       ? formatCollectionAmountFromCents(remainingCents)
       : null,
-    cpStatus: hasPersistedSettlement && classification ? classification : "unverified",
+    cpStatus: effectiveCpStatus,
+    automaticCpStatus,
+    effectiveSettlementSource,
+    effectiveSettlementDate: effectiveSettlementSource === "AUTOMATIC"
+      ? paymentDate
+      : effectiveSettlementSource === "MANUAL_VERIFIED"
+        ? manualSettlementDate
+        : null,
+    manualSettlement,
     batch: String(normalizedRow.batch ?? "") as CollectionBatch,
     paymentDate,
     amount,

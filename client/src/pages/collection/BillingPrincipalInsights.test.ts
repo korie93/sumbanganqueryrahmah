@@ -2,10 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildBillingPrincipalDrilldownFilters,
+  clampBillingPrincipalTrackingRangeToAsOf,
   getBillingPrincipalCalendarGridDates,
   getBillingPrincipalCalendarMonthRange,
 } from "./BillingPrincipalInsights";
-import { getBillingPrincipalExactClientSnapshotWarning } from "./BillingPrincipalSavedTargetWorkspace";
+
+test("Billing Principal System calendar and exports never request dates after the selected as-of", () => {
+  assert.deepEqual(clampBillingPrincipalTrackingRangeToAsOf({
+    start: "2026-09-01",
+    end: "2026-09-30",
+    asOf: "2026-09-04",
+  }), {
+    start: "2026-09-01",
+    end: "2026-09-04",
+  });
+  assert.deepEqual(clampBillingPrincipalTrackingRangeToAsOf({
+    start: "2026-09-01",
+    end: "2026-09-30",
+    asOf: "2026-10-01",
+  }), {
+    start: "2026-09-01",
+    end: "2026-09-30",
+  });
+});
 
 test("Billing Principal calendar clips a month to the immutable target tracking range", () => {
   assert.deepEqual(getBillingPrincipalCalendarMonthRange({
@@ -27,52 +46,26 @@ test("Billing Principal month grid retains weekday alignment and a stable six-we
   assert.equal(grid.filter(Boolean).length, 30);
 });
 
-test("Billing Principal daily and cumulative drilldowns have distinct date semantics", () => {
+test("Billing Principal drilldown keeps the selected System as-of and optional exact date", () => {
   assert.deepEqual(buildBillingPrincipalDrilldownFilters({
     reportAsOf: "2026-09-30",
     selectedDate: "2026-09-20",
-    scope: "daily",
     page: 2,
     aging: "D3",
-    source: "MANUAL_RECONCILIATION",
   }), {
     asOf: "2026-09-30",
     date: "2026-09-20",
     page: 2,
     pageSize: 20,
     aging: "D3",
-    contributionSource: "MANUAL_RECONCILIATION",
   });
   assert.deepEqual(buildBillingPrincipalDrilldownFilters({
     reportAsOf: "2026-09-30",
-    selectedDate: "2026-09-20",
-    scope: "cumulative",
     page: 1,
     aging: "",
-    source: "",
   }), {
-    asOf: "2026-09-20",
+    asOf: "2026-09-30",
     page: 1,
     pageSize: 20,
   });
-});
-
-test("Billing Principal client comparisons do not carry a snapshot forward from another date", () => {
-  assert.equal(getBillingPrincipalExactClientSnapshotWarning({
-    asOf: "2026-09-20",
-    agingScope: ["D3", "D4"],
-    rows: [
-      { aging: "D3", effectiveDate: "2026-09-20" },
-      { aging: "D4", effectiveDate: "2026-09-19" },
-    ] as never,
-  }), "No exact client snapshot is saved for D4 on 2026-09-20. Client figures are not carried forward from another date.");
-
-  assert.equal(getBillingPrincipalExactClientSnapshotWarning({
-    asOf: "2026-09-20",
-    agingScope: ["D3", "D4"],
-    rows: [
-      { aging: "D3", effectiveDate: "2026-09-20" },
-      { aging: "D4", effectiveDate: "2026-09-20" },
-    ] as never,
-  }), null);
 });

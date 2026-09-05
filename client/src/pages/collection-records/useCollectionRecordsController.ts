@@ -30,6 +30,7 @@ export function useCollectionRecordsController({
   const canDeleteGlobal = canMutateCollectionRecords(role);
   const canUseNicknameFilter =
     role === "admin" || role === "manager" || role === "superuser";
+  const canUseTeamLeaderFilter = role === "manager" || role === "superuser";
   const canPurgeOldRecords = role === "superuser";
 
   const {
@@ -39,6 +40,7 @@ export function useCollectionRecordsController({
     toDate,
     searchInput,
     nicknameFilter,
+    leaderFilter,
     sourceImportFilter,
     agingFilter,
     classificationFilter,
@@ -47,6 +49,8 @@ export function useCollectionRecordsController({
     loadingNicknames,
     sourceOptions,
     loadingSources,
+    teamOptions,
+    loadingTeams,
     page,
     pageSize,
     pageOffset,
@@ -61,6 +65,7 @@ export function useCollectionRecordsController({
     setToDate,
     setSearchInput,
     setNicknameFilter,
+    setLeaderFilter,
     setSourceImportFilter,
     setAgingFilter,
     setClassificationFilter,
@@ -73,7 +78,7 @@ export function useCollectionRecordsController({
     handleNextPage,
     handlePageSizeChange,
     getAppliedFilters,
-  } = useCollectionRecordsData({ canUseNicknameFilter });
+  } = useCollectionRecordsData({ canUseNicknameFilter, canUseTeamLeaderFilter });
   const { handleViewReceipt, receiptPreview } = useCollectionReceiptPreview();
 
   const visibleRecords = records;
@@ -142,6 +147,7 @@ export function useCollectionRecordsController({
     [actions, refreshRecords],
   );
   const { editDialog, openEditDialog } = useCollectionRecordEdit({
+    canManageManualSettlement: role === "superuser",
     loadingNicknames,
     nicknameOptions,
     onRefresh: refreshAfterMutation,
@@ -224,12 +230,14 @@ export function useCollectionRecordsController({
     canEdit,
     canDeleteGlobal,
     canUseNicknameFilter,
+    canUseTeamLeaderFilter,
     canPurgeOldRecords,
     filters: {
       fromDate,
       toDate,
       searchInput,
       nicknameFilter,
+      leaderFilter,
       sourceImportFilter,
       agingFilter,
       classificationFilter,
@@ -238,11 +246,14 @@ export function useCollectionRecordsController({
       loadingNicknames,
       sourceOptions,
       loadingSources,
+      teamOptions,
+      loadingTeams,
       loadingRecords,
       onFromDateChange: setFromDate,
       onToDateChange: setToDate,
       onSearchInputChange: setSearchInput,
       onNicknameFilterChange: setNicknameFilter,
+      onLeaderFilterChange: setLeaderFilter,
       onSourceImportFilterChange: setSourceImportFilter,
       onAgingFilterChange: setAgingFilter,
       onClassificationFilterChange: setClassificationFilter,

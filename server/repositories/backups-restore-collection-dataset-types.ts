@@ -28,6 +28,25 @@ export type RestorableCollectionRecordRow = {
   classification: "cp" | "abort_cp" | null;
   cumulativeCollected: number | null;
   remainingAmount: number | null;
+  settlementOverrideStatus: "ACTIVE" | "REVOKED" | null;
+  poolAmount: number | null;
+  manualSettlementDate: string | null;
+  manualSettlementReason:
+    | "EXTERNAL_UNASSIGNED_PAYMENT"
+    | "CLIENT_CONFIRMED_PAYMENT"
+    | "HISTORICAL_PAYMENT_NOT_CAPTURED"
+    | "OTHER_WITH_REQUIRED_NOTE"
+    | null;
+  manualSettlementNote: string | null;
+  manualSettlementReference: string | null;
+  manualSettlementVersion: number | null;
+  manualSettlementVerifiedBy: string | null;
+  manualSettlementVerifiedAt: Date | null;
+  manualSettlementUpdatedBy: string | null;
+  manualSettlementUpdatedAt: Date | null;
+  manualSettlementRevokedBy: string | null;
+  manualSettlementRevokedAt: Date | null;
+  manualSettlementRevokedReason: string | null;
   batch: string;
   paymentDate: string;
   amount: number;
@@ -108,6 +127,7 @@ export type RestorableCollectionRecordPurgeHistoryRow = {
   id: string;
   sourceImportId: string | null;
   sourceDataRowId: string | null;
+  sourceObligationKey: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
   icNumberSearchHash: string | null;
@@ -115,6 +135,26 @@ export type RestorableCollectionRecordPurgeHistoryRow = {
   accountNumberSearchHash: string | null;
   paymentDate: string;
   amount: number;
+  automaticClassification: "cp" | "abort_cp" | null;
+  settlementOverrideStatus: "ACTIVE" | "REVOKED" | null;
+  poolAmount: number | null;
+  manualSettlementDate: string | null;
+  manualSettlementReason:
+    | "EXTERNAL_UNASSIGNED_PAYMENT"
+    | "CLIENT_CONFIRMED_PAYMENT"
+    | "HISTORICAL_PAYMENT_NOT_CAPTURED"
+    | "OTHER_WITH_REQUIRED_NOTE"
+    | null;
+  manualSettlementNote: string | null;
+  manualSettlementReference: string | null;
+  manualSettlementVersion: number | null;
+  manualSettlementVerifiedBy: string | null;
+  manualSettlementVerifiedAt: Date | null;
+  manualSettlementUpdatedBy: string | null;
+  manualSettlementUpdatedAt: Date | null;
+  manualSettlementRevokedBy: string | null;
+  manualSettlementRevokedAt: Date | null;
+  manualSettlementRevokedReason: string | null;
   createdByLogin: string;
   collectionStaffNickname: string;
   originalCreatedAt: Date;

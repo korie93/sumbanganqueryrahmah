@@ -3,6 +3,7 @@ export {
   buildCollectionMonthlySummaryWhereSql,
   buildCollectionRecordConditions,
   buildCollectionRecordDailyRollupWhereSql,
+  buildCollectionEffectiveClassificationSql,
   buildCollectionRecordMonthlyComparisonWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordWhereSql,

@@ -225,7 +225,7 @@ export async function ensureCollectionSourceGovernanceSchema(
         timezone text NOT NULL DEFAULT 'Asia/Kuala_Lumpur',
         nickname_scope text[] NOT NULL DEFAULT ARRAY[]::text[],
         aging_scope text[] NOT NULL DEFAULT ARRAY['D3', 'D4', 'D5', 'D6']::text[],
-        calculation_version text NOT NULL DEFAULT 'osp-reconciliation-v1',
+        calculation_version text NOT NULL DEFAULT 'osp-effective-settlement-v9',
         created_by text NOT NULL,
         created_at timestamp with time zone NOT NULL DEFAULT now(),
         CONSTRAINT collection_osp_target_revisions_target_id_fkey

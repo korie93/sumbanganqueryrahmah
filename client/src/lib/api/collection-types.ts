@@ -11,6 +11,38 @@ import type {
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 export type CollectionAgingBucket = "D3" | "D4" | "D5" | "D6";
 export type CollectionCpStatus = "cp" | "abort_cp" | "unverified";
+export type CollectionManualSettlementStatus = "ACTIVE" | "REVOKED";
+export type CollectionManualSettlementValidity =
+  | "EFFECTIVE"
+  | "REQUIRES_REVALIDATION"
+  | "SUPERSEDED_BY_AUTOMATIC"
+  | "REVOKED";
+export type CollectionEffectiveSettlementSource = "AUTOMATIC" | "MANUAL_VERIFIED" | "NONE";
+export type CollectionManualSettlementReason =
+  | "EXTERNAL_UNASSIGNED_PAYMENT"
+  | "CLIENT_CONFIRMED_PAYMENT"
+  | "HISTORICAL_PAYMENT_NOT_CAPTURED"
+  | "OTHER_WITH_REQUIRED_NOTE";
+
+export type CollectionManualSettlement = {
+  status: CollectionManualSettlementStatus;
+  validity: CollectionManualSettlementValidity;
+  poolAmount: CollectionAmountMyrString;
+  settlementDate: string;
+  reason: CollectionManualSettlementReason;
+  note: string | null;
+  reference: string | null;
+  version: number;
+  verifiedBy: string;
+  verifiedAt: string;
+  updatedBy: string;
+  updatedAt: string;
+  revokedBy: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
+  systemCollectedAtSettlement: CollectionAmountMyrString;
+  effectiveTotal: CollectionAmountMyrString;
+};
 
 export type CollectionRecordReceipt = {
   id: string;
@@ -50,6 +82,7 @@ export type CollectionRecord = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  cardNumber?: string | null;
   cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
@@ -73,6 +106,10 @@ export type CollectionRecord = {
   remainingAmount?: CollectionAmountMyrString | null;
   totalDueCovered?: boolean | null;
   cpStatus?: CollectionCpStatus;
+  automaticCpStatus?: CollectionCpStatus;
+  effectiveSettlementSource?: CollectionEffectiveSettlementSource;
+  effectiveSettlementDate?: string | null;
+  manualSettlement?: CollectionManualSettlement | null;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrString;
@@ -153,6 +190,17 @@ export type CreateCollectionPayload = {
   receipt?: CollectionReceiptPayload | null;
   receipts?: CollectionReceiptPayload[] | null;
   newReceiptMetadata?: CollectionReceiptMetadata[] | null;
+};
+
+export type CollectionTeamOption = {
+  id: string;
+  leaderNickname: string;
+  staffCount: number;
+};
+
+export type CollectionTeamOptionsResponse = {
+  ok: true;
+  teams: CollectionTeamOption[];
 };
 
 export type CollectionSourceMatchField =

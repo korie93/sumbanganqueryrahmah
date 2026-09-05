@@ -9,6 +9,7 @@ import { CollectionDailyOperations } from "./collection-daily-operations";
 import { CollectionSourceMatchOperations } from "./collection-source-match-operations";
 import { CollectionSourceGovernanceOperations } from "./collection-source-governance-operations";
 import { CollectionOspV7Operations } from "./collection-osp-v7-operations";
+import { CollectionManualSettlementOperations } from "./collection-manual-settlement-operations";
 
 export class CollectionRecordService extends CollectionServiceSupport {
   private readonly readOperations: CollectionRecordReadOperations;
@@ -17,6 +18,7 @@ export class CollectionRecordService extends CollectionServiceSupport {
   private readonly sourceMatchOperations: CollectionSourceMatchOperations;
   private readonly sourceGovernanceOperations: CollectionSourceGovernanceOperations;
   private readonly ospV7Operations: CollectionOspV7Operations;
+  private readonly manualSettlementOperations: CollectionManualSettlementOperations;
 
   constructor(storage: ConstructorParameters<typeof CollectionServiceSupport>[0]) {
     super(storage);
@@ -38,6 +40,10 @@ export class CollectionRecordService extends CollectionServiceSupport {
       this.requireUser.bind(this),
     );
     this.ospV7Operations = new CollectionOspV7Operations(
+      this.storage,
+      this.requireUser.bind(this),
+    );
+    this.manualSettlementOperations = new CollectionManualSettlementOperations(
       this.storage,
       this.requireUser.bind(this),
     );
@@ -132,30 +138,6 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
   getBillingPrincipalTargetOverview(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
     return this.ospV7Operations.overview(userInput, targetId, revisionId, query);
-  }
-
-  listBillingPrincipalReconciliationCandidates(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
-    return this.ospV7Operations.candidates(userInput, targetId, revisionId, query);
-  }
-
-  listBillingPrincipalReconciliations(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
-    return this.ospV7Operations.reconciliations(userInput, targetId, revisionId, query);
-  }
-
-  createBillingPrincipalReconciliation(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, body: unknown, requestId?: unknown) {
-    return this.ospV7Operations.createReconciliation(userInput, targetId, revisionId, body, requestId);
-  }
-
-  updateBillingPrincipalReconciliation(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
-    return this.ospV7Operations.updateReconciliation(userInput, targetId, revisionId, reconciliationId, body, requestId);
-  }
-
-  voidBillingPrincipalReconciliation(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
-    return this.ospV7Operations.voidReconciliation(userInput, targetId, revisionId, reconciliationId, body, requestId);
-  }
-
-  listBillingPrincipalReconciliationHistory(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, reconciliationId: unknown) {
-    return this.ospV7Operations.history(userInput, targetId, revisionId, reconciliationId);
   }
 
   upsertBillingPrincipalClientResults(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown, revisionId: unknown, body: unknown) {
@@ -274,5 +256,29 @@ export class CollectionRecordService extends CollectionServiceSupport {
     bodyRaw?: unknown,
   ) {
     return this.mutationOperations.deleteRecord(userInput, idRaw, bodyRaw);
+  }
+
+  async upsertManualSettlement(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    idRaw: unknown,
+    bodyRaw: unknown,
+  ) {
+    return this.manualSettlementOperations.upsert(userInput, idRaw, bodyRaw);
+  }
+
+  async revokeManualSettlement(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    idRaw: unknown,
+    bodyRaw: unknown,
+  ) {
+    return this.manualSettlementOperations.revoke(userInput, idRaw, bodyRaw);
+  }
+
+  async getManualSettlementHistory(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    idRaw: unknown,
+    limitRaw?: unknown,
+  ) {
+    return this.manualSettlementOperations.history(userInput, idRaw, limitRaw);
   }
 }

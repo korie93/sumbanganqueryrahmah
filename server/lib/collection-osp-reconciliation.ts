@@ -42,7 +42,7 @@ export type CollectionOspReconciliationAccountResult = {
   systemAbortDate: string | null;
   effectiveClosureDate: string | null;
   manualEffectiveDate: string | null;
-  contributionSource: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" | "OPEN";
+  contributionSource: "SYSTEM_ABORT_CP" | "MANUAL_VERIFIED_ABORT" | "OPEN";
   manualSuperseded: boolean;
 };
 
@@ -147,8 +147,19 @@ export function reconcileCollectionOspAccount(
   const manualCents = input.manual?.active && manualDate && manualDate <= asOfDate
     ? configuredManualCents
     : 0n;
-  const combinedEvents = [
-    ...eligibleSystemEvents,
+  // A Manual Verified settlement is a dated financial assertion. Validate it
+  // against the System position that existed on that date, just as View
+  // Collection does. A later CP payment may change today's System cumulative,
+  // but it must not retroactively make an insufficient POOL assertion valid.
+  const systemEventsAtManualDate = manualDate
+    ? eligibleSystemEvents.filter((event) => event.date <= manualDate)
+    : [];
+  const systemCumulativeAtManualDateCents = systemEventsAtManualDate.reduce(
+    (total, event) => total + event.amountCents,
+    0n,
+  );
+  const manualThresholdEvents = [
+    ...systemEventsAtManualDate,
     ...(manualCents > 0n && manualDate
       ? [{ date: manualDate, id: "manual", order: 0, amountCents: manualCents }]
       : []),
@@ -157,7 +168,7 @@ export function reconcileCollectionOspAccount(
   // Threshold is evaluated after all events on a business date. This avoids an
   // arbitrary within-day ordering changing the effective closure date.
   const totalsByDate = new Map<string, bigint>();
-  for (const event of combinedEvents) {
+  for (const event of manualThresholdEvents) {
     totalsByDate.set(event.date, (totalsByDate.get(event.date) ?? 0n) + event.amountCents);
   }
   let running = 0n;
@@ -176,7 +187,8 @@ export function reconcileCollectionOspAccount(
   // observing a cumulative amount at/above due must never manufacture a
   // Reconciled closure when neither governed path exists (for example, in
   // incomplete legacy data whose raw rows all remain CP).
-  const manualProvesClosure = manualCents > 0n && reconciledCumulativeCents >= totalDueCents;
+  const manualProvesClosure = manualCents > 0n
+    && systemCumulativeAtManualDateCents + manualCents >= totalDueCents;
   const reconciledClosed = systemClosed || manualProvesClosure;
   const reconciledClosureDate = [
     systemClosed ? systemAbortDate : null,
@@ -190,7 +202,7 @@ export function reconcileCollectionOspAccount(
   const contributionSource = systemClosed
     ? "SYSTEM_ABORT_CP" as const
     : reconciledClosed && manualCents > 0n
-      ? "MANUAL_RECONCILIATION" as const
+      ? "MANUAL_VERIFIED_ABORT" as const
       : "OPEN" as const;
 
   return {
@@ -243,7 +255,7 @@ export function aggregateCollectionOspReconciliation(
     const qualifying = Array.from(unique.values()).filter((result) => {
       if (result.aging !== aging) return false;
       if (mode === "system") return result.systemClosed;
-      if (mode === "manual") return result.contributionSource === "MANUAL_RECONCILIATION";
+      if (mode === "manual") return result.contributionSource === "MANUAL_VERIFIED_ABORT";
       return result.reconciledClosed;
     });
     const closed = qualifying.reduce(
@@ -338,7 +350,7 @@ export function buildCollectionOspReconciliationCalendar(
       && result.effectiveClosureDate !== null
       && result.effectiveClosureDate !== result.systemAbortDate;
     if (
-      (result.contributionSource === "MANUAL_RECONCILIATION" || manualEstablishedEarlierClosure)
+      (result.contributionSource === "MANUAL_VERIFIED_ABORT" || manualEstablishedEarlierClosure)
       && result.effectiveClosureDate
     ) {
       const day = getDay(result.effectiveClosureDate);

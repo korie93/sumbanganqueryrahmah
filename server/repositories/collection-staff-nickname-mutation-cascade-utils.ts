@@ -3,6 +3,7 @@ import type { CollectionStaffNicknameExecutor } from "./collection-staff-nicknam
 
 export async function cascadeCollectionNicknameRename(
   executor: CollectionStaffNicknameExecutor,
+  nicknameId: string,
   oldNickname: string,
   newNickname: string,
 ): Promise<void> {
@@ -11,12 +12,12 @@ export async function cascadeCollectionNicknameRename(
     SET
       leader_nickname = ${newNickname},
       updated_at = now()
-    WHERE lower(leader_nickname) = lower(${oldNickname})
+    WHERE leader_nickname_id = ${nicknameId}::uuid
   `);
   await executor.execute(sql`
     UPDATE public.admin_group_members
     SET member_nickname = ${newNickname}
-    WHERE lower(member_nickname) = lower(${oldNickname})
+    WHERE member_nickname_id = ${nicknameId}::uuid
   `);
   await executor.execute(sql`
     UPDATE public.collection_nickname_sessions
@@ -38,11 +39,11 @@ export async function deleteCollectionStaffNicknameRelations(
   `);
   await executor.execute(sql`
     DELETE FROM public.admin_group_members
-    WHERE lower(member_nickname) = lower(${nickname})
+    WHERE member_nickname_id = ${nicknameId}::uuid
   `);
   await executor.execute(sql`
     DELETE FROM public.admin_groups
-    WHERE lower(leader_nickname) = lower(${nickname})
+    WHERE leader_nickname_id = ${nicknameId}::uuid
   `);
   await executor.execute(sql`
     DELETE FROM public.collection_nickname_sessions

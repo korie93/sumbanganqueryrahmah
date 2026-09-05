@@ -193,7 +193,11 @@ function normalizeAgingScope(value: unknown): AgingBucket[] | null {
     return null;
   }
   const result = normalized as AgingBucket[];
-  return new Set(result).size === result.length ? result : null;
+  if (new Set(result).size !== result.length) return null;
+  // Backups created before V9 may contain a user-selected subset. The target
+  // snapshot already persists all four aging rows, so restore it into the
+  // canonical two-table scope instead of reintroducing a partial target.
+  return [...AGING_BUCKETS];
 }
 
 function normalizeNicknameScope(value: unknown): string[] | null {

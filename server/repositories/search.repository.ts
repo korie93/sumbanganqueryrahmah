@@ -29,6 +29,9 @@ import {
   type SearchCollectionStatusCandidate,
   type SearchCollectionStatusMatch,
   type SearchCollectionViewerScope,
+  type SearchCollectionHistoryPage,
+  type SearchCollectionHistoryItem,
+  type SearchCollectionHistorySourceRow,
   type SearchDataRow,
   type SearchGlobalDataRow,
   type SavedCollectionSourceCandidate,
@@ -315,7 +318,7 @@ export class SearchRepository {
               THEN 'source_and_identifier'
             ELSE 'identifier_only'
           END AS match_basis,
-          COUNT(*) OVER (PARTITION BY record.is_historical)::int AS record_count
+          COUNT(*) OVER ()::int AS record_count
         FROM collection_status_records record
         CROSS JOIN LATERAL (
           SELECT regexp_replace(COALESCE(record.customer_phone, ''), '[^0-9]+', '', 'g') AS phone_digits
@@ -451,6 +454,536 @@ export class SearchRepository {
             : "source_and_identifier",
       };
     }).filter((match) => match.rowId);
+  }
+
+  async findCollectionHistorySourceRow(params: {
+    sourceImportId: string;
+    sourceDataRowId: string;
+  }): Promise<SearchCollectionHistorySourceRow | null> {
+    const result = await dbRead.execute(sql`
+      SELECT
+        data_row.id,
+        data_row.import_id,
+        data_row.json_data AS json_data_jsonb,
+        source_row.canonical_obligation_key
+      FROM public.data_rows data_row
+      JOIN public.imports source_import
+        ON source_import.id = data_row.import_id
+        AND source_import.is_deleted = false
+      LEFT JOIN public.collection_source_rows source_row
+        ON source_row.source_import_id = data_row.import_id
+        AND source_row.source_data_row_id = data_row.id
+      WHERE data_row.import_id = ${params.sourceImportId}
+        AND data_row.id = ${params.sourceDataRowId}
+      LIMIT 1
+    `);
+    const row = result.rows?.[0] as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      id: String(row.id || ""),
+      importId: String(row.import_id || ""),
+      jsonDataJsonb: row.json_data_jsonb,
+      sourceObligationKey: typeof row.canonical_obligation_key === "string"
+        ? row.canonical_obligation_key
+        : null,
+    };
+  }
+
+  async findCollectionHistoryForRow(params: {
+    candidate: SearchCollectionStatusCandidate;
+    sourceObligationKey: string | null;
+    viewerScope: SearchCollectionViewerScope;
+    includeManualAuditDetails: boolean;
+    includeSourceDetails: boolean;
+    page: number;
+    pageSize: number;
+  }): Promise<SearchCollectionHistoryPage> {
+    const page = Math.max(1, Math.min(10_000, Math.trunc(params.page)));
+    const pageSize = Math.max(1, Math.min(50, Math.trunc(params.pageSize)));
+    const offset = (page - 1) * pageSize;
+    if (params.viewerScope.kind === "none") {
+      return {
+        items: [],
+        summary: {
+          recordCount: 0,
+          activeRecordCount: 0,
+          historicalRecordCount: 0,
+          poolContributionCount: 0,
+          collectionAmount: "0.00",
+          poolAmount: "0.00",
+          totalCoveredAmount: "0.00",
+          effectiveStatus: "unclassified",
+        },
+        page,
+        pageSize,
+        total: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: page > 1,
+      };
+    }
+
+    const buildScopeCondition = (): SQL => {
+      if (params.viewerScope.kind === "all") return sql`true`;
+      if (params.viewerScope.kind === "created_by") {
+        return sql`lower(record.created_by_login) = ${params.viewerScope.username.trim().toLowerCase()}`;
+      }
+      if (params.viewerScope.kind === "nicknames" && params.viewerScope.nicknames.length > 0) {
+        return sql`lower(record.collection_staff_nickname) IN (${sql.join(
+          params.viewerScope.nicknames.slice(0, 200).map((nickname) => sql`${nickname.trim().toLowerCase()}`),
+          sql`, `,
+        )})`;
+      }
+      return sql`false`;
+    };
+    const scopeCondition = buildScopeCondition();
+    const sourceObligationKey = String(params.sourceObligationKey || "").trim();
+    // Once the governed source index supplies a canonical obligation, an
+    // account-number fallback is too broad: one account can contain multiple
+    // cards/contracts. Use fallback identifiers only for legacy source rows
+    // that genuinely have no canonical obligation identity.
+    const allowAccountFallback = sourceObligationKey === "";
+    const accountHashCondition = allowAccountFallback && params.candidate.accountHashes.length > 0
+      ? sql`record.account_number_search_hash IN (${sql.join(
+          params.candidate.accountHashes.slice(0, 8).map((hash) => sql`${hash}`),
+          sql`, `,
+        )})`
+      : sql`false`;
+    const accountValueCondition = allowAccountFallback && params.candidate.accountValues.length > 0
+      ? sql`
+          record.account_number_search_hash IS NULL
+          AND regexp_replace(upper(COALESCE(record.account_number, '')), '\\s+', '', 'g') IN (${sql.join(
+            params.candidate.accountValues.slice(0, 8).map((value) => sql`${value}`),
+            sql`, `,
+          )})
+        `
+      : sql`false`;
+    const purgeAccountHashCondition = allowAccountFallback && params.candidate.accountHashes.length > 0
+      ? sql`record.account_number_search_hash IN (${sql.join(
+          params.candidate.accountHashes.slice(0, 8).map((hash) => sql`${hash}`),
+          sql`, `,
+        )})`
+      : sql`false`;
+    const manualReasonSelect = params.includeManualAuditDetails
+      ? sql`record.manual_settlement_reason`
+      : sql`NULL::text`;
+    const manualNoteSelect = params.includeManualAuditDetails
+      ? sql`record.manual_settlement_note`
+      : sql`NULL::text`;
+    const manualReferenceSelect = params.includeManualAuditDetails
+      ? sql`record.manual_settlement_reference`
+      : sql`NULL::text`;
+    const sourceNameSelect = params.includeSourceDetails
+      ? sql`record.source_import_name`
+      : sql`NULL::text`;
+    const sourceFilenameSelect = params.includeSourceDetails
+      ? sql`record.source_filename`
+      : sql`NULL::text`;
+
+    const result = await dbRead.execute(sql`
+      WITH matched_active_base AS (
+        SELECT record.*
+        FROM public.collection_records record
+        WHERE ${scopeCondition}
+          AND (
+            (
+              record.source_import_id = ${params.candidate.sourceImportId}
+              AND record.source_data_row_id = ${params.candidate.rowId}
+            )
+            OR (${sourceObligationKey} <> '' AND record.source_obligation_key = ${sourceObligationKey})
+            OR (${sourceObligationKey} = '' AND (
+              (${accountHashCondition})
+              OR (${accountValueCondition})
+            ))
+          )
+      ),
+      relevant_cycles AS (
+        SELECT DISTINCT settlement_cycle_key
+        FROM matched_active_base
+        WHERE settlement_cycle_key IS NOT NULL
+      ),
+      cycle_overrides AS (
+        SELECT DISTINCT ON (record.settlement_cycle_key)
+          record.settlement_cycle_key,
+          record.settlement_override_status,
+          record.pool_amount,
+          record.total_due,
+          record.manual_settlement_date,
+          record.manual_settlement_verified_by,
+          record.manual_settlement_verified_at
+        FROM public.collection_records record
+        JOIN relevant_cycles cycle
+          ON cycle.settlement_cycle_key = record.settlement_cycle_key
+        WHERE record.settlement_override_status IS NOT NULL
+        ORDER BY
+          record.settlement_cycle_key,
+          (record.settlement_override_status = 'ACTIVE') DESC,
+          record.manual_settlement_updated_at DESC NULLS LAST,
+          record.manual_settlement_verified_at DESC NULLS LAST,
+          record.id DESC
+      ),
+      cycle_collection_totals AS (
+        SELECT
+          override_row.settlement_cycle_key,
+          COALESCE(SUM(record.amount) FILTER (
+            WHERE record.source_match_basis IS NOT NULL
+              AND record.total_due IS NOT NULL
+              AND record.duplicate_receipt_flag = false
+              AND record.calling_date IS NOT NULL
+              AND record.calling_window_end_exclusive IS NOT NULL
+              AND record.payment_date >= record.calling_date
+              AND record.payment_date < record.calling_window_end_exclusive
+              AND record.payment_date <= override_row.manual_settlement_date
+          ), 0)::numeric(14,2) AS collection_amount,
+          COALESCE(BOOL_OR(record.classification = 'abort_cp'), false)
+            AS has_automatic_abort
+        FROM cycle_overrides override_row
+        LEFT JOIN public.collection_records record
+          ON record.settlement_cycle_key = override_row.settlement_cycle_key
+        GROUP BY override_row.settlement_cycle_key
+      ),
+      cycle_state AS (
+        SELECT
+          cycle.settlement_cycle_key,
+          COALESCE(total.collection_amount, 0)::numeric(14,2) AS collection_amount,
+          COALESCE(total.has_automatic_abort, false) AS has_automatic_abort,
+          override_row.settlement_override_status,
+          override_row.pool_amount,
+          override_row.manual_settlement_date,
+          (
+            override_row.settlement_override_status = 'ACTIVE'
+            AND override_row.pool_amount > 0
+            AND override_row.total_due > 0
+            AND override_row.manual_settlement_date IS NOT NULL
+            AND override_row.manual_settlement_verified_by IS NOT NULL
+            AND override_row.manual_settlement_verified_at IS NOT NULL
+            AND NOT COALESCE(total.has_automatic_abort, false)
+            AND COALESCE(total.collection_amount, 0) + override_row.pool_amount >= override_row.total_due
+          ) AS manual_is_valid
+        FROM relevant_cycles cycle
+        LEFT JOIN cycle_collection_totals total USING (settlement_cycle_key)
+        LEFT JOIN cycle_overrides override_row USING (settlement_cycle_key)
+      ),
+      active_history AS (
+        SELECT
+          record.id::text AS item_id,
+          'collection'::text AS item_kind,
+          false AS is_historical,
+          record.payment_date,
+          record.created_at,
+          record.amount,
+          CASE
+            WHEN record.classification = 'abort_cp' THEN 'automatic'
+            WHEN COALESCE(cycle.has_automatic_abort, false) THEN 'automatic'
+            WHEN cycle.manual_is_valid THEN 'manual_verified_abort'
+            WHEN cycle.settlement_override_status = 'ACTIVE' THEN 'manual_verified_abort'
+            ELSE 'automatic'
+          END::text AS classification_source,
+          record.classification AS automatic_classification,
+          CASE
+            WHEN record.classification = 'abort_cp' THEN 'abort_cp'
+            WHEN cycle.manual_is_valid THEN 'abort_cp'
+            WHEN COALESCE(cycle.has_automatic_abort, false) AND record.classification = 'cp' THEN 'cp'
+            WHEN cycle.settlement_override_status = 'ACTIVE' THEN 'requires_revalidation'
+            WHEN record.classification = 'cp' THEN 'cp'
+            ELSE 'unclassified'
+          END::text AS effective_status,
+          CASE
+            WHEN cycle.manual_is_valid THEN cycle.manual_settlement_date
+            WHEN record.classification = 'abort_cp' THEN record.payment_date
+            ELSE NULL::date
+          END AS settlement_date,
+          record.collection_staff_nickname,
+          record.created_by_login,
+          ${sourceNameSelect} AS source_import_name,
+          ${sourceFilenameSelect} AS source_filename,
+          NULL::timestamptz AS purged_at,
+          NULL::text AS purged_by,
+          NULL::text AS manual_reason,
+          NULL::text AS manual_note,
+          NULL::text AS manual_reference
+        FROM matched_active_base record
+        LEFT JOIN cycle_state cycle USING (settlement_cycle_key)
+      ),
+      pool_history AS (
+        SELECT
+          ('pool:' || record.id::text || ':' || record.manual_settlement_version::text) AS item_id,
+          'pool'::text AS item_kind,
+          false AS is_historical,
+          record.manual_settlement_date AS payment_date,
+          COALESCE(
+            record.manual_settlement_updated_at,
+            record.manual_settlement_verified_at,
+            record.created_at
+          ) AS created_at,
+          record.pool_amount AS amount,
+          'manual_verified_abort'::text AS classification_source,
+          NULL::text AS automatic_classification,
+          CASE
+            WHEN record.settlement_override_status = 'REVOKED' THEN 'revoked'
+            WHEN COALESCE(cycle.has_automatic_abort, false) THEN 'superseded_by_automatic'
+            WHEN cycle.manual_is_valid THEN 'abort_cp'
+            ELSE 'requires_revalidation'
+          END::text AS effective_status,
+          record.manual_settlement_date AS settlement_date,
+          NULL::text AS collection_staff_nickname,
+          COALESCE(record.manual_settlement_updated_by, record.manual_settlement_verified_by)
+            AS created_by_login,
+          ${sourceNameSelect} AS source_import_name,
+          ${sourceFilenameSelect} AS source_filename,
+          record.manual_settlement_revoked_at AS purged_at,
+          record.manual_settlement_revoked_by AS purged_by,
+          ${manualReasonSelect} AS manual_reason,
+          ${manualNoteSelect} AS manual_note,
+          ${manualReferenceSelect} AS manual_reference
+        FROM matched_active_base record
+        LEFT JOIN cycle_state cycle USING (settlement_cycle_key)
+        WHERE record.settlement_override_status IS NOT NULL
+          AND record.pool_amount IS NOT NULL
+          AND record.manual_settlement_date IS NOT NULL
+      ),
+      purge_history AS (
+        SELECT
+          record.original_record_id::text AS item_id,
+          'collection'::text AS item_kind,
+          true AS is_historical,
+          record.payment_date,
+          record.original_created_at AS created_at,
+          record.amount,
+          'automatic'::text AS classification_source,
+          record.automatic_classification,
+          CASE
+            WHEN record.automatic_classification = 'abort_cp' THEN 'abort_cp'
+            WHEN record.automatic_classification = 'cp' THEN 'cp'
+            ELSE 'historical'
+          END::text AS effective_status,
+          CASE
+            WHEN record.automatic_classification = 'abort_cp' THEN record.payment_date
+            ELSE NULL::date
+          END AS settlement_date,
+          record.collection_staff_nickname,
+          record.created_by_login,
+          ${sourceNameSelect} AS source_import_name,
+          ${sourceFilenameSelect} AS source_filename,
+          record.purged_at,
+          record.purged_by,
+          NULL::text AS manual_reason,
+          NULL::text AS manual_note,
+          NULL::text AS manual_reference
+        FROM public.collection_record_purge_history record
+        WHERE ${scopeCondition}
+          AND (
+            (
+              record.source_import_id = ${params.candidate.sourceImportId}
+              AND record.source_data_row_id = ${params.candidate.rowId}
+            )
+            OR (${sourceObligationKey} <> '' AND record.source_obligation_key = ${sourceObligationKey})
+            OR (${sourceObligationKey} = '' AND (${purgeAccountHashCondition}))
+          )
+      ),
+      purged_pool_history AS (
+        SELECT
+          ('pool:' || record.original_record_id::text || ':' || record.manual_settlement_version::text)
+            AS item_id,
+          'pool'::text AS item_kind,
+          true AS is_historical,
+          record.manual_settlement_date AS payment_date,
+          COALESCE(
+            record.manual_settlement_updated_at,
+            record.manual_settlement_verified_at,
+            record.original_created_at
+          ) AS created_at,
+          record.pool_amount AS amount,
+          'manual_verified_abort'::text AS classification_source,
+          NULL::text AS automatic_classification,
+          CASE
+            WHEN record.settlement_override_status = 'REVOKED' THEN 'revoked'
+            ELSE 'historical'
+          END::text AS effective_status,
+          record.manual_settlement_date AS settlement_date,
+          NULL::text AS collection_staff_nickname,
+          COALESCE(record.manual_settlement_updated_by, record.manual_settlement_verified_by)
+            AS created_by_login,
+          ${sourceNameSelect} AS source_import_name,
+          ${sourceFilenameSelect} AS source_filename,
+          record.manual_settlement_revoked_at AS purged_at,
+          record.manual_settlement_revoked_by AS purged_by,
+          ${manualReasonSelect} AS manual_reason,
+          ${manualNoteSelect} AS manual_note,
+          ${manualReferenceSelect} AS manual_reference
+        FROM public.collection_record_purge_history record
+        WHERE record.settlement_override_status IS NOT NULL
+          AND record.pool_amount IS NOT NULL
+          AND record.manual_settlement_date IS NOT NULL
+          AND ${scopeCondition}
+          AND (
+            (
+              record.source_import_id = ${params.candidate.sourceImportId}
+              AND record.source_data_row_id = ${params.candidate.rowId}
+            )
+            OR (${sourceObligationKey} <> '' AND record.source_obligation_key = ${sourceObligationKey})
+            OR (${sourceObligationKey} = '' AND (${purgeAccountHashCondition}))
+          )
+      ),
+      history_rows AS (
+        SELECT * FROM active_history
+        UNION ALL
+        SELECT * FROM pool_history
+        UNION ALL
+        SELECT * FROM purge_history
+        UNION ALL
+        SELECT * FROM purged_pool_history
+      ),
+      history_summary AS (
+        SELECT
+          COUNT(*)::int AS history_item_count,
+          COUNT(*) FILTER (WHERE item_kind = 'collection')::int AS record_count,
+          COUNT(*) FILTER (WHERE item_kind = 'collection' AND NOT is_historical)::int
+            AS active_record_count,
+          COUNT(*) FILTER (WHERE item_kind = 'collection' AND is_historical)::int
+            AS historical_record_count,
+          COUNT(*) FILTER (WHERE item_kind = 'pool')::int AS pool_contribution_count,
+          COALESCE(SUM(amount) FILTER (
+            WHERE item_kind = 'collection'
+          ), 0)::numeric(14,2) AS collection_amount,
+          COALESCE(SUM(amount) FILTER (
+            WHERE item_kind = 'pool' AND effective_status = 'abort_cp'
+          ), 0)::numeric(14,2) AS pool_amount
+        FROM history_rows
+      ),
+      paged_history AS (
+        SELECT *
+        FROM history_rows
+        ORDER BY payment_date DESC, created_at DESC, item_id DESC
+        LIMIT ${pageSize}
+        OFFSET ${offset}
+      )
+      SELECT
+        summary.history_item_count,
+        summary.record_count,
+        summary.active_record_count,
+        summary.historical_record_count,
+        summary.pool_contribution_count,
+        summary.collection_amount::text AS summary_collection_amount,
+        summary.pool_amount::text AS summary_pool_amount,
+        (summary.collection_amount + summary.pool_amount)::numeric(14,2)::text
+          AS summary_total_covered_amount,
+        COALESCE((
+          SELECT current_record.effective_status
+          FROM history_rows current_record
+          WHERE current_record.item_kind = 'collection'
+            AND NOT current_record.is_historical
+          ORDER BY
+            current_record.payment_date DESC,
+            current_record.created_at DESC,
+            current_record.item_id DESC
+          LIMIT 1
+        ), CASE WHEN summary.historical_record_count > 0 THEN 'historical' ELSE 'unclassified' END)
+          AS summary_effective_status,
+        history.item_id,
+        history.item_kind,
+        history.is_historical,
+        history.payment_date,
+        history.created_at,
+        history.amount::text,
+        history.classification_source,
+        history.automatic_classification,
+        history.effective_status,
+        history.settlement_date,
+        history.collection_staff_nickname,
+        history.created_by_login,
+        history.source_import_name,
+        history.source_filename,
+        history.purged_at,
+        history.purged_by,
+        history.manual_reason,
+        history.manual_note,
+        history.manual_reference
+      FROM history_summary summary
+      LEFT JOIN paged_history history ON true
+      ORDER BY history.payment_date DESC, history.created_at DESC, history.item_id DESC
+    `);
+
+    const rows = (result.rows || []) as Array<Record<string, unknown>>;
+    const summaryRow = rows[0] || {};
+    const total = Math.max(0, Number(summaryRow.history_item_count || 0));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const toIso = (value: unknown): string | null => value instanceof Date
+      ? value.toISOString()
+      : value == null
+        ? null
+        : String(value);
+    const items = rows.flatMap((row) => {
+      const id = String(row.item_id || "");
+      if (!id) return [];
+      const automaticClassification: "cp" | "abort_cp" | null = row.automatic_classification === "cp"
+        || row.automatic_classification === "abort_cp"
+        ? row.automatic_classification
+        : null;
+      const effectiveStatus: SearchCollectionHistoryItem["effectiveStatus"] = row.effective_status === "cp"
+        || row.effective_status === "abort_cp"
+        || row.effective_status === "requires_revalidation"
+        || row.effective_status === "superseded_by_automatic"
+        || row.effective_status === "revoked"
+        || row.effective_status === "historical"
+        ? row.effective_status
+        : "unclassified";
+      return [{
+        id,
+        kind: row.item_kind === "pool" ? "pool" as const : "collection" as const,
+        isHistorical: row.is_historical === true,
+        paymentDate: String(row.payment_date || ""),
+        createdAt: toIso(row.created_at) || "",
+        amount: String(row.amount || "0.00"),
+        classificationSource: row.classification_source === "manual_verified_abort"
+          ? "manual_verified_abort" as const
+          : "automatic" as const,
+        automaticClassification,
+        effectiveStatus,
+        settlementDate: row.settlement_date == null ? null : String(row.settlement_date),
+        staffNickname: typeof row.collection_staff_nickname === "string"
+          ? row.collection_staff_nickname
+          : null,
+        createdByLogin: typeof row.created_by_login === "string" ? row.created_by_login : null,
+        sourceImportName: typeof row.source_import_name === "string" ? row.source_import_name : null,
+        sourceFilename: typeof row.source_filename === "string" ? row.source_filename : null,
+        purgedAt: toIso(row.purged_at),
+        purgedBy: typeof row.purged_by === "string" ? row.purged_by : null,
+        ...(params.includeManualAuditDetails
+          ? {
+              reason: typeof row.manual_reason === "string" ? row.manual_reason : null,
+              note: typeof row.manual_note === "string" ? row.manual_note : null,
+              reference: typeof row.manual_reference === "string" ? row.manual_reference : null,
+            }
+          : {}),
+      }];
+    });
+    const summaryStatus = summaryRow.summary_effective_status === "cp"
+      || summaryRow.summary_effective_status === "abort_cp"
+      || summaryRow.summary_effective_status === "requires_revalidation"
+      || summaryRow.summary_effective_status === "historical"
+      ? summaryRow.summary_effective_status
+      : "unclassified";
+
+    return {
+      items,
+      summary: {
+        recordCount: Math.max(0, Number(summaryRow.record_count || 0)),
+        activeRecordCount: Math.max(0, Number(summaryRow.active_record_count || 0)),
+        historicalRecordCount: Math.max(0, Number(summaryRow.historical_record_count || 0)),
+        poolContributionCount: Math.max(0, Number(summaryRow.pool_contribution_count || 0)),
+        collectionAmount: String(summaryRow.summary_collection_amount || "0.00"),
+        poolAmount: String(summaryRow.summary_pool_amount || "0.00"),
+        totalCoveredAmount: String(summaryRow.summary_total_covered_amount || "0.00"),
+        effectiveStatus: summaryStatus,
+      },
+      page,
+      pageSize,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
   }
 
   private async getGlobalSearchTotal(search: string): Promise<number> {

@@ -65,15 +65,8 @@ function createCollectionRecordFixture(
   };
 }
 
-test("listCollectionAdminGroups builds nickname id mapping and returns normalized groups", async () => {
+test("listCollectionAdminGroups reads normalized teams through persisted nickname ids", async () => {
   const { executor, queries } = createSequenceExecutor<CollectionAdminGroupExecutor>([
-    {
-      rows: [
-        { id: "nickname-1", nickname: "Collector Alpha" },
-        { id: "nickname-2", nickname: "Collector Beta" },
-        { id: "nickname-3", nickname: "Collector Charlie" },
-      ],
-    },
     {
       rows: [
         {
@@ -83,6 +76,7 @@ test("listCollectionAdminGroups builds nickname id mapping and returns normalize
           leader_is_active: true,
           leader_role_scope: "admin",
           member_nicknames: ["Collector Charlie", "Collector Beta", "Collector Beta"],
+          member_nickname_ids: ["nickname-3", "nickname-2", "nickname-2"],
           created_by: "superuser",
           created_at: "2026-03-01T00:00:00.000Z",
           updated_at: "2026-03-02T00:00:00.000Z",
@@ -97,8 +91,12 @@ test("listCollectionAdminGroups builds nickname id mapping and returns normalize
   assert.deepEqual(groups[0]?.memberNicknames, ["Collector Beta", "Collector Charlie"]);
   assert.deepEqual(groups[0]?.memberNicknameIds, ["nickname-2", "nickname-3"]);
   assert.equal(groups[0]?.leaderNicknameId, "nickname-1");
-  assert.equal(queries.length, 2);
-  assert.match(collectSqlText(queries[1]), /FROM public\.admin_groups/i);
+  assert.equal(queries.length, 1);
+  const sqlText = collectSqlText(queries[0]);
+  assert.match(sqlText, /FROM public\.admin_groups/i);
+  assert.match(sqlText, /leader\.id = g\.leader_nickname_id/i);
+  assert.match(sqlText, /member_nickname\.id = gm\.member_nickname_id/i);
+  assert.doesNotMatch(sqlText, /lower\(leader\.nickname\) = lower\(g\.leader_nickname\)/i);
 });
 
 test("createCollectionAdminGroupInTransaction validates leader scope and inserts group members", async () => {
@@ -137,8 +135,13 @@ test("createCollectionAdminGroupInTransaction validates leader scope and inserts
 
 test("updateCollectionAdminGroupInTransaction reuses existing members when member ids are omitted", async () => {
   const { executor, queries } = createSequenceExecutor<CollectionAdminGroupExecutor>([
-    { rows: [{ id: "group-1", leader_nickname: "Collector Alpha" }] },
-    { rows: [{ member_nickname: "Collector Charlie" }, { member_nickname: "Collector Beta" }] },
+    { rows: [{ id: "group-1", leader_nickname_id: "leader-1", leader_nickname: "Collector Alpha" }] },
+    {
+      rows: [
+        { id: "member-2", nickname: "Collector Charlie", role_scope: "user", is_active: true },
+        { id: "member-1", nickname: "Collector Beta", role_scope: "user", is_active: true },
+      ],
+    },
     { rows: [] },
     { rows: [] },
     { rows: [] },
@@ -155,7 +158,8 @@ test("updateCollectionAdminGroupInTransaction reuses existing members when membe
 
   assert.equal(updatedId, "group-1");
   assert.equal(queries.length, 9);
-  assert.match(collectSqlText(queries[1]), /SELECT member_nickname/i);
+  assert.match(collectSqlText(queries[1]), /member_nickname_id/i);
+  assert.match(collectSqlText(queries[1]), /nickname\.id = member\.member_nickname_id/i);
   assert.match(collectSqlText(queries[5]), /UPDATE public\.admin_groups/i);
   assert.match(collectSqlText(queries[6]), /DELETE FROM public\.admin_group_members/i);
 });

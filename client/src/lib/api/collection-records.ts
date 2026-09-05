@@ -7,6 +7,7 @@ import {
   collectionRecordResponseSchema,
   collectionSavedSourceFilesResponseSchema,
   collectionSourceMatchesResponseSchema,
+  collectionTeamOptionsResponseSchema,
 } from "@shared/api-contracts";
 import { parseApiJson } from "./contract";
 import type {
@@ -17,6 +18,7 @@ import type {
   CreateCollectionPayload,
   UpdateCollectionPayload,
   CollectionSourceMatchesResponse,
+  CollectionTeamOptionsResponse,
 } from "./collection-types";
 import { z } from "zod";
 
@@ -24,6 +26,7 @@ type CollectionMultipartPayload = Omit<UpdateCollectionPayload, "receipt" | "rec
 type CollectionMutationRequestOptions = {
   idempotencyFingerprint?: string;
   idempotencyKey?: string;
+  signal?: AbortSignal;
 };
 
 const COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS = 2 * 60_000;
@@ -34,6 +37,19 @@ const collectionRecordMutationResponseSchema = z.object({
 });
 const collectionRecordDeleteResponseSchema = z.object({
   ok: z.literal(true),
+});
+const collectionManualSettlementHistoryResponseSchema = z.object({
+  ok: z.literal(true),
+  history: z.array(z.object({
+    id: z.string().min(1),
+    action: z.enum(["VERIFIED", "UPDATED", "REVOKED"]),
+    actor: z.string().min(1),
+    actorRole: z.string().min(1),
+    timestamp: z.string().datetime({ offset: true }),
+    requestId: z.string().nullable(),
+    oldValue: z.record(z.unknown()).nullable(),
+    newValue: z.record(z.unknown()).nullable(),
+  })).max(100),
 });
 
 function appendCollectionFormValue(formData: FormData, key: string, value: unknown) {
@@ -175,6 +191,7 @@ export async function createCollectionRecord(
 ) {
   const response = await apiRequest("POST", "/api/collection", payload, {
     headers: buildCollectionMutationHeaders(options),
+    signal: options?.signal,
     timeoutMs: payload instanceof FormData ? COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS : undefined,
   });
   return parseApiJson(
@@ -257,11 +274,13 @@ export async function getCollectionRecords(filters?: {
   limit?: number | undefined;
   offset?: number | undefined;
   cursor?: string | null | undefined;
+  leaderId?: string | undefined;
 }, options?: { signal?: AbortSignal | undefined }) {
   const params = new URLSearchParams();
   if (filters?.from) params.set("from", filters.from);
   if (filters?.to) params.set("to", filters.to);
   if (filters?.search) params.set("search", filters.search);
+  if (filters?.leaderId) params.set("leaderId", filters.leaderId);
   if (filters?.nickname) params.set("nickname", filters.nickname);
   if (Array.isArray(filters?.nicknames) && filters.nicknames.length > 0) {
     params.set(
@@ -314,6 +333,17 @@ export async function getCollectionRecords(filters?: {
     collectionRecordListResponseSchema,
     "/api/collection/list",
   ) as Promise<CollectionRecordListResponse>;
+}
+
+export async function getCollectionTeamOptions(options?: { signal?: AbortSignal | undefined }) {
+  const response = await apiRequest("GET", "/api/collection/teams", undefined, {
+    signal: options?.signal,
+  });
+  return parseApiJson(
+    response,
+    collectionTeamOptionsResponseSchema,
+    "/api/collection/teams",
+  ) as Promise<CollectionTeamOptionsResponse>;
 }
 
 export async function getCollectionPurgeSummary() {
@@ -386,6 +416,7 @@ export async function updateCollectionRecord(
 ) {
   const response = await apiRequest("PATCH", `/api/collection/${encodeURIComponent(id)}`, payload, {
     headers: buildCollectionMutationHeaders(options),
+    signal: options?.signal,
     timeoutMs: payload instanceof FormData ? COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS : undefined,
   });
   return parseApiJson(
@@ -404,10 +435,80 @@ export async function deleteCollectionRecord(
 ) {
   const response = await apiRequest("DELETE", `/api/collection/${encodeURIComponent(id)}`, payload, {
     headers: buildCollectionMutationHeaders(options),
+    signal: options?.signal,
   });
   return parseApiJson(
     response,
     collectionRecordDeleteResponseSchema,
     "/api/collection/:id",
   );
+}
+
+export type CollectionManualSettlementMutationAttempt = Required<Pick<
+  CollectionMutationRequestOptions,
+  "idempotencyFingerprint" | "idempotencyKey"
+>>;
+
+export function prepareCollectionManualSettlementMutationAttempt(
+  operation: "verify" | "revoke",
+  recordId: string,
+  payload: Record<string, unknown>,
+  previous?: CollectionManualSettlementMutationAttempt | null,
+): CollectionManualSettlementMutationAttempt {
+  const idempotencyFingerprint = JSON.stringify({
+    algorithm: "fnv1a64",
+    hash: hashFingerprintInput(JSON.stringify(sortFingerprintValue({ operation, recordId, payload }))),
+    version: 1,
+  });
+  if (previous?.idempotencyFingerprint === idempotencyFingerprint) return previous;
+  return {
+    idempotencyKey: createCollectionMutationIdempotencyKey(),
+    idempotencyFingerprint,
+  };
+}
+
+export async function upsertCollectionManualSettlement(
+  recordId: string,
+  payload: {
+    poolAmount: string;
+    settlementDate: string;
+    reason: "EXTERNAL_UNASSIGNED_PAYMENT" | "CLIENT_CONFIRMED_PAYMENT" | "HISTORICAL_PAYMENT_NOT_CAPTURED" | "OTHER_WITH_REQUIRED_NOTE";
+    note?: string | null | undefined;
+    reference?: string | null | undefined;
+    expectedVersion?: number | null | undefined;
+    confirmed: true;
+  },
+  options?: CollectionMutationRequestOptions,
+) {
+  const endpoint = `/api/collection/${encodeURIComponent(recordId)}/manual-settlement`;
+  const response = await apiRequest("PUT", endpoint, payload, {
+    headers: buildCollectionMutationHeaders(options),
+    signal: options?.signal,
+  });
+  return parseApiJson(response, collectionRecordMutationResponseSchema, "/api/collection/:id/manual-settlement");
+}
+
+export async function revokeCollectionManualSettlement(
+  recordId: string,
+  payload: { expectedVersion: number; revokeReason: string; confirmed: true },
+  options?: CollectionMutationRequestOptions,
+) {
+  const endpoint = `/api/collection/${encodeURIComponent(recordId)}/manual-settlement`;
+  const response = await apiRequest("DELETE", endpoint, payload, {
+    headers: buildCollectionMutationHeaders(options),
+    signal: options?.signal,
+  });
+  return parseApiJson(response, collectionRecordMutationResponseSchema, "/api/collection/:id/manual-settlement");
+}
+
+export async function getCollectionManualSettlementHistory(
+  recordId: string,
+  options?: { signal?: AbortSignal | undefined; limit?: number | undefined },
+) {
+  const params = new URLSearchParams();
+  if (options?.limit) params.set("limit", String(Math.min(100, Math.max(1, Math.trunc(options.limit)))));
+  const suffix = params.toString();
+  const endpoint = `/api/collection/${encodeURIComponent(recordId)}/manual-settlement/history${suffix ? `?${suffix}` : ""}`;
+  const response = await apiRequest("GET", endpoint, undefined, { signal: options?.signal });
+  return parseApiJson(response, collectionManualSettlementHistoryResponseSchema, "/api/collection/:id/manual-settlement/history");
 }

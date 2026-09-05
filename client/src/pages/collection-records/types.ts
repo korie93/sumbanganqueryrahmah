@@ -5,6 +5,7 @@ export type CollectionRecordFilters = {
   to?: string | undefined;
   search?: string | undefined;
   nickname?: string | undefined;
+  leaderId?: string | undefined;
   sourceImportIds?: string[] | undefined;
   agingBuckets?: Array<"D3" | "D4" | "D5" | "D6"> | undefined;
   classifications?: Array<"cp" | "abort_cp"> | undefined;

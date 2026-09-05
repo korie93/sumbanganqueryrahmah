@@ -251,7 +251,8 @@ export async function updateCollectionRecord(
         billing_principal_osp,
         source_match_basis,
         source_obligation_key,
-        settlement_cycle_key
+        settlement_cycle_key,
+        settlement_override_status
       FROM public.collection_records
       WHERE id = ${id}::uuid
       LIMIT 1
@@ -267,6 +268,29 @@ export async function updateCollectionRecord(
       || data.sourceDataRowId !== undefined
       || data.sourceObligationKey !== undefined
       || data.sourceMatchBasis !== undefined;
+    const mutatesSettlementIdentity = data.accountNumber !== undefined
+      || data.sourceCardNumber !== undefined
+      || data.cardNumberLast4 !== undefined
+      || data.sourceImportId !== undefined
+      || data.sourceDataRowId !== undefined
+      || data.agingBucket !== undefined
+      || data.callingDate !== undefined
+      || data.callingWindowEndExclusive !== undefined
+      || data.totalDue !== undefined
+      || data.billingPrincipalOsp !== undefined
+      || data.sourceMatchBasis !== undefined
+      || data.sourceMatchAccuracy !== undefined
+      || data.sourceObligationKey !== undefined
+      || data.settlementCycleKey !== undefined;
+    if (
+      existingRow.settlement_override_status === "ACTIVE"
+      && mutatesSettlementIdentity
+    ) {
+      // The service performs the same check for fast feedback. This in-lock
+      // guard is still required: a superuser can activate the override after
+      // the service read but before this transaction acquires the row lock.
+      throw new Error("COLLECTION_MANUAL_SETTLEMENT_ACTIVE_IDENTITY_CHANGE_BLOCKED");
+    }
     const nextSettlementCycleKey = data.settlementCycleKey !== undefined
       ? String(data.settlementCycleKey ?? "").trim() || null
       : sourceIdentityChanged
@@ -461,13 +485,17 @@ export async function deleteCollectionRecord(
         payment_date,
         created_by_login,
         collection_staff_nickname,
-        settlement_cycle_key
+        settlement_cycle_key,
+        settlement_override_status
       FROM public.collection_records
       WHERE id = ${id}::uuid
       LIMIT 1
     `);
     const existingRow = (existingSliceResult.rows?.[0] || null) as Record<string, unknown> | null;
     if (!existingRow) return false;
+    if (existingRow.settlement_override_status === "ACTIVE") {
+      throw new Error("COLLECTION_MANUAL_SETTLEMENT_ACTIVE_DELETE_BLOCKED");
+    }
     const existingSlice = mapCollectionRecordRowToDailyRollupSlice(existingRow);
     const existingSettlementCycleKey = String(existingRow?.settlement_cycle_key ?? "").trim() || null;
     await acquireCollectionSettlementCycleLocks(tx, [existingSettlementCycleKey]);

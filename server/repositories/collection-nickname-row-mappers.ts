@@ -67,7 +67,7 @@ export function mapCollectionAdminUserRow(
 
 export function mapCollectionAdminGroupRow(
   row: CollectionAdminGroupDbRow,
-  nicknameIdByLowerName: Map<string, string>,
+  nicknameIdByLowerName: Map<string, string> = new Map(),
 ): CollectionMappedAdminGroup {
   const rawMembers: unknown[] = Array.isArray(row.member_nicknames)
     ? row.member_nicknames
@@ -83,9 +83,19 @@ export function mapCollectionAdminGroupRow(
     ),
   ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
-  const memberNicknameIds = memberNicknames
-    .map((name) => nicknameIdByLowerName.get(name.toLowerCase()) || "")
-    .filter(Boolean);
+  const rawMemberIds: unknown[] = Array.isArray(row.member_nickname_ids)
+    ? row.member_nickname_ids
+    : Array.isArray(row.memberNicknameIds)
+      ? row.memberNicknameIds
+      : [];
+  const persistedMemberNicknameIds = Array.from(new Set(
+    rawMemberIds.map((value) => String(value ?? "").trim()).filter(Boolean),
+  )).sort((a, b) => a.localeCompare(b));
+  const memberNicknameIds = persistedMemberNicknameIds.length > 0
+    ? persistedMemberNicknameIds
+    : memberNicknames
+        .map((name) => nicknameIdByLowerName.get(name.toLowerCase()) || "")
+        .filter(Boolean);
 
   return {
     id: String(row.id ?? ""),

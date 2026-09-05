@@ -178,25 +178,19 @@ export default function BillingPrincipalReportPage({ role }: { role: string }) {
           )}
         </fieldset>
 
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">Aging (DC_STS)</legend>
-          <div className="flex flex-wrap gap-2">
-            {BILLING_PRINCIPAL_AGINGS.map((aging) => {
-              const checked = state.selectedAgings.includes(aging);
-              const inputId = `billing-aging-${aging}`;
-              return (
-                <label key={aging} htmlFor={inputId} className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-2 text-sm font-medium">
-                  <Checkbox
-                    id={inputId}
-                    checked={checked}
-                    onCheckedChange={() => state.toggleAging(aging)}
-                  />
-                  {aging}
-                </label>
-              );
-            })}
+        <section className="space-y-2" aria-labelledby="billing-aging-scope-heading">
+          <h3 id="billing-aging-scope-heading" className="text-sm font-medium">Aging (DC_STS)</h3>
+          <div className="flex flex-wrap gap-2" aria-label="Fixed Saved Target aging rows">
+            {BILLING_PRINCIPAL_AGINGS.map((aging) => (
+              <Badge key={aging} variant="outline" className="min-h-8 rounded-full px-3">
+                {aging}
+              </Badge>
+            ))}
           </div>
-        </fieldset>
+          <p className="text-xs text-muted-foreground">
+            Every Saved Target includes D3, D4, D5, and D6 so Table A and Table B always share one complete baseline.
+          </p>
+        </section>
       </section>
 
       {state.optionsError || state.reportError ? (
@@ -284,17 +278,17 @@ export default function BillingPrincipalReportPage({ role }: { role: string }) {
         from: state.from,
         to: state.to,
         nicknameScope: state.selectedNickname ? [state.selectedNickname] : [],
-        agingScope: state.selectedAgings,
+        agingScope: BILLING_PRINCIPAL_AGINGS,
         targets: buildBillingPrincipalSavedTargetRows(
           state.report?.rows ?? [],
-          state.selectedAgings,
+          BILLING_PRINCIPAL_AGINGS,
         ),
         ready: Boolean(
           state.report
           && !state.loadingReport
           && state.selectedSourceIds.length >= 1
           && state.selectedSourceIds.length <= 5
-          && state.selectedAgings.length > 0
+          && state.selectedAgings.length === BILLING_PRINCIPAL_AGINGS.length
           && state.from
           && state.to
           && state.from <= state.to

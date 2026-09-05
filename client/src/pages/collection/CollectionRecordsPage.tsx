@@ -155,6 +155,16 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         onRemove: () => viewModel.filters.onNicknameFilterChange("all"),
       });
     }
+    if (viewModel.filters.canUseTeamLeaderFilter && viewModel.filters.leaderFilter !== "all") {
+      const selectedTeam = viewModel.filters.teamOptions.find(
+        (team) => team.id === viewModel.filters.leaderFilter,
+      );
+      items.push({
+        id: "collection-team-leader",
+        label: `Leader: ${selectedTeam?.leaderNickname || "Selected team"}`,
+        onRemove: () => viewModel.filters.onLeaderFilterChange("all"),
+      });
+    }
     return items;
   }, [
     viewModel.filters,
@@ -172,7 +182,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="collection-records-page">
       {isMobile ? (
         <div
           className="relative overflow-hidden rounded-[1.5rem] border border-border/60 bg-background px-4 py-4 shadow-sm"

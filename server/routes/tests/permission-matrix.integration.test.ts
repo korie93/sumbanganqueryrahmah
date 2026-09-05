@@ -303,6 +303,7 @@ function createAuthAdminPermissionHarness() {
 function createCollectionAdminPermissionHarness() {
   const calls = {
     listAdmins: 0,
+    listTeamOptions: 0,
     createAdminGroup: 0,
     saveAssignments: 0,
   };
@@ -318,6 +319,10 @@ function createCollectionAdminPermissionHarness() {
         calls.listAdmins += 1;
         return [];
       },
+      listTeamOptions: async () => {
+        calls.listTeamOptions += 1;
+        return { ok: true, teams: [] };
+      },
       createAdminGroup: async () => {
         calls.createAdminGroup += 1;
         return { ok: true };
@@ -330,6 +335,11 @@ function createCollectionAdminPermissionHarness() {
     superuserReportAccess: [
       authenticateToken,
       requireRole("superuser"),
+      requireTabAccess("collection-report"),
+    ],
+    teamReportAccess: [
+      authenticateToken,
+      requireRole("manager", "superuser"),
       requireTabAccess("collection-report"),
     ],
     jsonRoute: (
@@ -530,6 +540,7 @@ function createSearchPermissionHarness() {
     global: 0,
     simple: 0,
     advanced: 0,
+    collectionHistory: 0,
   };
   const app = createJsonTestApp();
 
@@ -550,6 +561,10 @@ function createSearchPermissionHarness() {
       advancedSearch: async (_req: Request, res: Response) => {
         calls.advanced += 1;
         return res.json({ rows: [], total: 0 });
+      },
+      getCollectionHistory: async (_req: Request, res: Response) => {
+        calls.collectionHistory += 1;
+        return res.json({ items: [], total: 0 });
       },
     } as never,
     authenticateToken: createTestAuthenticateToken(),
@@ -979,7 +994,7 @@ test("auth admin routes enforce superuser-only access consistently", async () =>
   }
 });
 
-test("collection admin routes enforce superuser-only access consistently", async () => {
+test("collection administration and team routes enforce their role boundaries consistently", async () => {
   const { app, calls } = createCollectionAdminPermissionHarness();
   const { server, baseUrl } = await startTestServer(app);
 
@@ -1007,8 +1022,22 @@ test("collection admin routes enforce superuser-only access consistently", async
       },
       { anonymous: 401, user: 403, admin: 403, superuser: 200 },
     );
+    await assertRoleMatrix(
+      baseUrl,
+      { method: "GET", path: "/api/collection/teams" },
+      { anonymous: 401, user: 403, admin: 403, superuser: 200 },
+    );
+    assert.equal(
+      (await sendMatrixRequest(
+        baseUrl,
+        { method: "GET", path: "/api/collection/teams" },
+        "manager",
+      )).status,
+      200,
+    );
 
     assert.equal(calls.listAdmins, 1);
+    assert.equal(calls.listTeamOptions, 2);
     assert.equal(calls.createAdminGroup, 1);
     assert.equal(calls.saveAssignments, 1);
   } finally {
@@ -1230,6 +1259,11 @@ test("search routes require authentication but allow all authenticated roles", a
     );
     await assertRoleMatrix(
       baseUrl,
+      { method: "GET", path: "/api/search/collection-history?key=opaque" },
+      { anonymous: 401, user: 200, admin: 200, superuser: 200 },
+    );
+    await assertRoleMatrix(
+      baseUrl,
       {
         method: "POST",
         path: "/api/search/advanced",
@@ -1241,6 +1275,7 @@ test("search routes require authentication but allow all authenticated roles", a
     assert.equal(calls.columns, 3);
     assert.equal(calls.global, 3);
     assert.equal(calls.simple, 3);
+    assert.equal(calls.collectionHistory, 3);
     assert.equal(calls.advanced, 3);
   } finally {
     await stopTestServer(server);

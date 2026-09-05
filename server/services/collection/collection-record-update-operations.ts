@@ -110,6 +110,11 @@ export class CollectionRecordUpdateOperations {
       const shouldRematchSource = identityChanged
         || cardNumberSupplied
         || (paymentDateChanged && !hasTrustedSourceLink);
+      if (existing.manualSettlement?.status === "ACTIVE" && shouldRematchSource) {
+        throw conflict(
+          "Batalkan Manual Verified ABORT sebelum menukar identiti atau sumber rekod anchor.",
+        );
+      }
       const sourceMatch = shouldRematchSource
         ? await verifyEligibleSavedCollectionSource(this.storage, {
             paymentDate: nextPaymentDate,
@@ -293,6 +298,26 @@ export class CollectionRecordUpdateOperations {
       }
       const updated = await this.storage.getCollectionRecordById(id) || updatedMutation;
 
+      if (
+        existing.manualSettlement
+        && updated.manualSettlement
+        && existing.manualSettlement.validity !== updated.manualSettlement.validity
+      ) {
+        await safeCreateCollectionMutationAuditLog(this.storage, {
+          action: "COLLECTION_MANUAL_SETTLEMENT_REVALIDATED",
+          performedBy: user.username,
+          targetResource: id,
+          details: JSON.stringify({
+            event: "collection_manual_settlement_revalidated",
+            actor: user.username,
+            recordId: id,
+            oldValidity: existing.manualSettlement.validity,
+            newValidity: updated.manualSettlement.validity,
+            reason: "collection_record_updated",
+          }),
+        });
+      }
+
       if (shouldClearLegacyReceiptFallback && existing.receiptFile) {
         await removeCollectionReceiptFile(existing.receiptFile);
       }
@@ -384,6 +409,13 @@ export class CollectionRecordUpdateOperations {
       return { ok: true as const, record: updated };
     } catch (err) {
       await cleanupStoredCollectionReceipts(uploadedReceipts);
+      if (String((err as { message?: unknown })?.message ?? "").includes(
+        "COLLECTION_MANUAL_SETTLEMENT_ACTIVE_IDENTITY_CHANGE_BLOCKED",
+      )) {
+        throw conflict(
+          "Batalkan Manual Verified ABORT sebelum menukar identiti atau sumber rekod anchor.",
+        );
+      }
       throw err;
     }
   }

@@ -4,11 +4,13 @@ import { buildCollectionRecordFilterSnapshot } from "@/pages/collection-records/
 
 type UseCollectionRecordsFilterStateOptions = {
   canUseNicknameFilter: boolean;
+  canUseTeamLeaderFilter: boolean;
   pageSize: number;
 };
 
 export function useCollectionRecordsFilterState({
   canUseNicknameFilter,
+  canUseTeamLeaderFilter,
   pageSize,
 }: UseCollectionRecordsFilterStateOptions) {
   const skipInitialAutoFetchRef = useRef(true);
@@ -17,6 +19,7 @@ export function useCollectionRecordsFilterState({
   const toDateRef = useRef("");
   const searchInputRef = useRef("");
   const nicknameFilterRef = useRef("all");
+  const leaderFilterRef = useRef("all");
   const sourceImportFilterRef = useRef("all");
   const agingFilterRef = useRef("all");
   const classificationFilterRef = useRef("all");
@@ -26,6 +29,7 @@ export function useCollectionRecordsFilterState({
   const [toDate, setToDate] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [nicknameFilter, setNicknameFilter] = useState<string>("all");
+  const [leaderFilter, setLeaderFilter] = useState("all");
   const [sourceImportFilter, setSourceImportFilter] = useState("all");
   const [agingFilter, setAgingFilter] = useState("all");
   const [classificationFilter, setClassificationFilter] = useState("all");
@@ -51,6 +55,11 @@ export function useCollectionRecordsFilterState({
   const handleNicknameFilterChange = useCallback((value: string) => {
     nicknameFilterRef.current = value;
     setNicknameFilter(value);
+  }, []);
+
+  const handleLeaderFilterChange = useCallback((value: string) => {
+    leaderFilterRef.current = value;
+    setLeaderFilter(value);
   }, []);
 
   const handleSourceImportFilterChange = useCallback((value: string) => {
@@ -85,6 +94,8 @@ export function useCollectionRecordsFilterState({
         searchInput: searchValue,
         canUseNicknameFilter,
         nicknameFilter: nicknameFilterRef.current,
+        canUseTeamLeaderFilter,
+        leaderFilter: leaderFilterRef.current,
         sourceImportFilter: sourceImportFilterRef.current,
         agingFilter: agingFilterRef.current,
         classificationFilter: classificationFilterRef.current,
@@ -92,7 +103,7 @@ export function useCollectionRecordsFilterState({
         limit,
         offset,
       }),
-    [canUseNicknameFilter, pageSize],
+    [canUseNicknameFilter, canUseTeamLeaderFilter, pageSize],
   );
 
   const markSkipNextAutoFetch = useCallback(() => {
@@ -116,6 +127,7 @@ export function useCollectionRecordsFilterState({
     toDate,
     searchInput,
     nicknameFilter,
+    leaderFilter,
     sourceImportFilter,
     agingFilter,
     classificationFilter,
@@ -128,6 +140,7 @@ export function useCollectionRecordsFilterState({
     handleToDateChange,
     handleSearchInputChange,
     handleNicknameFilterChange,
+    handleLeaderFilterChange,
     handleSourceImportFilterChange,
     handleAgingFilterChange,
     handleClassificationFilterChange,

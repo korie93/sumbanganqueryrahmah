@@ -18,6 +18,7 @@ import {
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { GeneralSearchCollectionStatus } from "@/pages/general-search/GeneralSearchCollectionStatus";
+import { GeneralSearchCollectionHistory } from "@/pages/general-search/GeneralSearchCollectionHistory";
 import { GeneralSearchRelatedAccounts } from "@/pages/general-search/GeneralSearchRelatedAccounts";
 import {
   GeneralSearchCollapsibleRecordSection,
@@ -161,6 +162,8 @@ export function GeneralSearchRecordDialog({
                   />
                 </aside>
               </div>
+
+              <GeneralSearchCollectionHistory row={record} />
 
               <GeneralSearchCollapsibleRecordSection
                 defaultOpen={openAdditionalByDefault}

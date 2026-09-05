@@ -5,7 +5,6 @@ import {
   calculateTargetOspPreview,
   filterBillingPrincipalRows,
   formatOspCurrency,
-  getClientResultConsistencyWarning,
   getCurrentMonthDateRange,
 } from "./billing-principal-report-utils";
 
@@ -18,7 +17,7 @@ test("Billing Principal date range uses local date-only month boundaries", () =>
 
 test("Billing Principal target preview derives amount from baseline and target percentage", () => {
   assert.equal(calculateTargetOspPreview("1000.00", "33"), "330.00");
-  assert.equal(calculateTargetOspPreview("invalid", "33"), "0.00");
+  assert.equal(calculateTargetOspPreview("invalid", "33"), "—");
 });
 
 test("Billing Principal rows retain only selected trusted aging buckets", () => {
@@ -36,23 +35,6 @@ test("Billing Principal rows retain only selected trusted aging buckets", () => 
 
 test("Billing Principal currency formatter does not confuse invalid values with source data", () => {
   assert.match(formatOspCurrency("123456.78"), /123,456\.78/);
-  assert.equal(formatOspCurrency("not-money"), "RM0.00");
-});
-
-test("Client Result audit warning compares independently entered values using exact decimals", () => {
-  assert.equal(getClientResultConsistencyWarning({
-    totalOsp: "10000.00",
-    clientOspClosed: "7500.00",
-    clientResultPercentage: "75",
-  }), null);
-  assert.match(getClientResultConsistencyWarning({
-    totalOsp: "10000.00",
-    clientOspClosed: "7500.00",
-    clientResultPercentage: "74.9999",
-  }) || "", /expected 75\.0000%/);
-  assert.match(getClientResultConsistencyWarning({
-    totalOsp: "0.00",
-    clientOspClosed: "1.00",
-    clientResultPercentage: "1",
-  }) || "", /TT OSP is zero/i);
+  assert.equal(formatOspCurrency("0.00"), "RM0.00");
+  assert.equal(formatOspCurrency("not-money"), "—");
 });

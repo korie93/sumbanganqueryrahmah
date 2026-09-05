@@ -42,6 +42,27 @@ type UseCollectionViewAllRecordsArgs = {
   searchInput: string;
 };
 
+export function buildCollectionViewAllRequestFilters(
+  snapshot: CollectionRecordFilters,
+  page: number,
+  pageSize: number,
+): CollectionRecordFilters {
+  return {
+    from: snapshot.from,
+    to: snapshot.to,
+    search: snapshot.search,
+    nickname: snapshot.nickname,
+    leaderId: snapshot.leaderId,
+    sourceImportIds: snapshot.sourceImportIds,
+    agingBuckets: snapshot.agingBuckets,
+    classifications: snapshot.classifications,
+    sortBy: snapshot.sortBy,
+    sortDirection: snapshot.sortDirection,
+    page,
+    pageSize,
+  };
+}
+
 export function useCollectionViewAllRecords({
   buildCurrentFilters,
   searchInput,
@@ -110,19 +131,11 @@ export function useCollectionViewAllRecords({
     if (!viewAllOpen || !viewAllFiltersSnapshot) return;
 
     const requestId = ++viewAllRequestIdRef.current;
-    const requestFilters = {
-      from: viewAllFiltersSnapshot.from,
-      to: viewAllFiltersSnapshot.to,
-      search: viewAllFiltersSnapshot.search,
-      nickname: viewAllFiltersSnapshot.nickname,
-      sourceImportIds: viewAllFiltersSnapshot.sourceImportIds,
-      agingBuckets: viewAllFiltersSnapshot.agingBuckets,
-      classifications: viewAllFiltersSnapshot.classifications,
-      sortBy: viewAllFiltersSnapshot.sortBy,
-      sortDirection: viewAllFiltersSnapshot.sortDirection,
-      page: viewAllPage,
-      pageSize: viewAllPageSize,
-    };
+    const requestFilters = buildCollectionViewAllRequestFilters(
+      viewAllFiltersSnapshot,
+      viewAllPage,
+      viewAllPageSize,
+    );
     const cacheKey = buildCollectionRecordsCacheKey(requestFilters);
     const cachedEntry = viewAllCacheRef.current.get(cacheKey);
 

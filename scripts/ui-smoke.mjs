@@ -91,6 +91,42 @@ const assert = (condition, message) => {
   }
 };
 
+const verifyDownloadedArtifact = async (download, extension, expectedSignature) => {
+  const suggestedFilename = download.suggestedFilename();
+  assert(
+    suggestedFilename.toLowerCase().endsWith(extension),
+    `Expected a ${extension} download, received "${suggestedFilename}"`,
+  );
+  const stream = await download.createReadStream();
+  assert(stream, `Could not read downloaded ${extension} artifact`);
+  let byteLength = 0;
+  let signature = Buffer.alloc(0);
+  for await (const chunk of stream) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    byteLength += buffer.length;
+    if (signature.length < expectedSignature.length) {
+      signature = Buffer.concat([signature, buffer]).subarray(0, expectedSignature.length);
+    }
+  }
+  assert(byteLength > expectedSignature.length, `Downloaded ${extension} artifact is empty`);
+  assert(signature.equals(expectedSignature), `Downloaded ${extension} artifact has an invalid signature`);
+  await download.delete();
+};
+
+const downloadBillingPrincipalSmokeArtifact = async (page, format, extension, signature) => {
+  const button = page.getByRole("button", {
+    name: `Export complete Billing Principal report as ${format}`,
+  });
+  const deadline = Date.now() + 30_000;
+  while (!(await button.isEnabled())) {
+    assert(Date.now() < deadline, `${format} export button did not become enabled`);
+    await page.waitForTimeout(100);
+  }
+  const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
+  await button.click();
+  await verifyDownloadedArtifact(await downloadPromise, extension, signature);
+};
+
 const assertSmokeResponseStatus = (response, expectedStatus, operation) => {
   const actualStatus = response.status();
   assert(
@@ -673,20 +709,19 @@ const createCollectionSmokeSourceImport = async (context, values) => {
   };
 };
 
-const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
+const checkBillingPrincipalV9UiFlow = async (page, context, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const [nickname] = await ensureCollectionSmokeNicknames(context);
   const uniqueSuffix = `${Date.now()}`;
   const asOf = getLocalIsoDate();
-  const targetName = `Smoke V7 Target ${uniqueSuffix}`;
-  const createManualReconciliationHeading = ["Create", "Table", "C", "Reconciliation"].join(" ");
+  const targetName = `Smoke V9 Target ${uniqueSuffix}`;
   const sourceImport = await createCollectionSmokeSourceImport(context, {
     uniqueSuffix,
     customerName: `Smoke V7 Customer ${uniqueSuffix}`,
     icNumber: `900101${uniqueSuffix.slice(-6)}`,
     customerPhone: `012${uniqueSuffix.slice(-7)}`,
-    accountNumber: `SMOKE-V7-${uniqueSuffix}`,
-    cardNumber: `V7${uniqueSuffix.slice(-8)}`,
+    accountNumber: `SMOKE-V9-${uniqueSuffix}`,
+    cardNumber: `V9${uniqueSuffix.slice(-8)}`,
     callingDate: asOf,
     dcSts: "3",
     totalDue: "100.00",
@@ -701,28 +736,27 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
 
     const sourceButtons = page.locator('button[id^="billing-source-"]');
     await sourceButtons.first().waitFor({ timeout: 20_000 });
-    const finalReportResponse = page.waitForResponse((response) => {
-      if (response.request().method() !== "GET") return false;
-      const url = new URL(response.url());
-      return url.pathname === "/api/collection/report/billing-principal"
-        && url.searchParams.get("sourceImportIds") === sourceImport.id
-        && url.searchParams.get("agingBuckets") === "D3";
-    }, { timeout: 20_000 });
     const sourceCount = await sourceButtons.count();
+    const sourceButtonsToToggle = [];
     for (let index = 0; index < sourceCount; index += 1) {
       const button = sourceButtons.nth(index);
       const label = String(await button.getAttribute("aria-label") || "");
       const selected = await button.getAttribute("data-state") === "checked";
       const isSmokeSource = label === `Select ${sourceImport.filename}`;
-      if (selected !== isSmokeSource) await button.click();
+      if (selected !== isSmokeSource) sourceButtonsToToggle.push(button);
     }
 
-    for (const aging of ["D4", "D5", "D6"]) {
-      const button = page.locator(`#billing-aging-${aging}`);
-      if (await button.getAttribute("data-state") === "checked") await button.click();
+    if (sourceButtonsToToggle.length > 0) {
+      const finalReportResponse = page.waitForResponse((response) => {
+        if (response.request().method() !== "GET") return false;
+        const url = new URL(response.url());
+        return url.pathname === "/api/collection/report/billing-principal"
+          && url.searchParams.get("sourceImportIds") === sourceImport.id
+          && url.searchParams.get("agingBuckets") === "D3,D4,D5,D6";
+      }, { timeout: 20_000 });
+      for (const button of sourceButtonsToToggle) await button.click();
+      assertSmokeResponseStatus(await finalReportResponse, 200, "Load final Billing Principal report");
     }
-
-    assertSmokeResponseStatus(await finalReportResponse, 200, "Load final Billing Principal report");
     await page.getByRole("table", { name: "Billing Principal OSP performance by aging" }).waitFor({ timeout: 20_000 });
     const saveTargetButton = page.getByRole("button", { name: "Save Current Target" });
     await saveTargetButton.waitFor({ timeout: 20_000 });
@@ -736,91 +770,64 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
     await page.getByRole("button", { name: "Create Target" }).click();
     assertSmokeResponseStatus(await createTargetResponse, 200, "Create Billing Principal Saved Target");
     await page.getByRole("heading", { name: targetName }).waitFor({ timeout: 20_000 });
-    await page.getByText(sourceImport.name, { exact: true }).first().waitFor({ timeout: 20_000 });
-    await page.getByText(sourceImport.filename, { exact: true }).first().waitFor({ timeout: 20_000 });
+    await page.getByText("Immutable TT OSP baseline", { exact: false }).waitFor({ timeout: 20_000 });
 
-    await page.getByRole("button", { name: "Enter Client Results" }).click();
-    const clientResultDialogHeading = page.getByRole("heading", {
-      name: `Client Result · ${asOf}`,
-      exact: true,
-    });
-    await clientResultDialogHeading.waitFor({ timeout: 15_000 });
-    await page.locator("#client-result-D3").fill("50.0000");
-    await page.locator("#client-osp-D3").fill("50.00");
+    const tableA = page.getByRole("table", { name: "Table A System Billing Principal result" });
+    const tableB = page.getByRole("table", { name: "Table B Client Billing Principal result" });
+    await tableA.waitFor({ timeout: 20_000 });
+    await tableB.waitFor({ timeout: 20_000 });
+    for (const aging of ["D3", "D4", "D5", "D6"]) {
+      await page.getByLabel(`${aging} client result percentage`).waitFor({ timeout: 20_000 });
+    }
+    await page.getByLabel("D3 client result percentage").fill("50.0000");
     const clientResultResponse = page.waitForResponse((response) => (
       response.request().method() === "PUT"
       && /\/client-results$/.test(new URL(response.url()).pathname)
     ));
-    await page.getByRole("button", { name: "Save Client Results" }).click();
-    assertSmokeResponseStatus(await clientResultResponse, 200, "Save Billing Principal Client Results");
-    await clientResultDialogHeading.waitFor({ state: "hidden", timeout: 15_000 });
-    await page.getByRole("table", { name: "Client Billing Principal result" }).getByText(asOf, { exact: true }).first().waitFor({ timeout: 20_000 });
+    await page.getByRole("button", { name: "Save Client Result" }).click();
+    const savedClientResultResponse = await clientResultResponse;
+    assertSmokeResponseStatus(savedClientResultResponse, 200, "Save Billing Principal Client Results");
+    const savedClientResult = await savedClientResultResponse.json();
+    const savedD3 = savedClientResult?.clientResult?.rows?.find((row) => row?.aging === "D3");
+    assert(
+      String(savedD3?.resultPercentage || "") === "50.0000"
+      && String(savedD3?.ospClosed || "") === "50.00"
+      && String(savedClientResult?.clientResult?.all?.resultPercentage || "") === "50.0000"
+      && String(savedClientResult?.clientResult?.all?.ospClosed || "") === "50.00",
+      "Table B must persist only D3-D6 percentages and derive D3/ALL Client OSP Closed from the Saved TT OSP baseline",
+    );
+    await tableB.getByText("50.00%", { exact: true }).last().waitFor({ timeout: 20_000 });
+    await tableB.getByText("RM50.00", { exact: true }).first().waitFor({ timeout: 20_000 });
+    await page.getByRole("heading", { name: "Latest Total Result Comparison" }).waitFor({ timeout: 20_000 });
+    await page.getByText("It is independent of the Table A calendar.", { exact: false }).first().waitFor({ timeout: 20_000 });
+    await page.getByRole("heading", { name: "Table A movement and account drill-down" }).waitFor({ timeout: 20_000 });
+    await page.getByText("Calendar data is System-only.", { exact: false }).waitFor({ timeout: 20_000 });
+    assert(await page.getByRole("button", { name: "Add Table C Entry" }).count() === 0, "Billing Principal V9 must not expose Table C mutations");
+    assert(await page.getByRole("table", { name: "Table C manual reconciliation entries" }).count() === 0, "Billing Principal V9 must render exactly Table A and Table B as primary results");
 
-    await page.getByRole("tab", { name: "Calendar" }).click();
-    await page.getByLabel(/Billing Principal month calendar/).waitFor({ timeout: 20_000 });
-    await page.getByText("Exact Client snapshot: 50.00%", { exact: true }).waitFor({ timeout: 20_000 });
-    await page.getByRole("table", { name: "Billing Principal daily calendar" }).getByText(asOf, { exact: true }).first().click();
-    await page.getByText("Exact Client snapshot: 50.00%", { exact: true }).waitFor({ timeout: 15_000 });
-
-    await page.getByRole("button", { name: "Add Table C Entry" }).click();
-    await page.getByRole("heading", { name: createManualReconciliationHeading }).waitFor({ timeout: 15_000 });
-    const candidate = page.locator('button[aria-pressed]').filter({ hasText: sourceImport.filename }).first();
-    await candidate.waitFor({ timeout: 20_000 });
-    await candidate.click();
-    await page.locator("#table-c-reference").fill(`V7-SMOKE-${uniqueSuffix}`);
-    await page.locator("#table-c-note").fill("Synthetic smoke reconciliation evidence.");
-    const createEntryResponse = page.waitForResponse((response) => (
-      response.request().method() === "POST"
-      && /\/reconciliations$/.test(new URL(response.url()).pathname)
-    ));
-    await page.getByRole("button", { name: "Create Entry" }).click();
-    assertSmokeResponseStatus(await createEntryResponse, 200, "Create Billing Principal Table C entry");
-    await page.getByRole("heading", { name: createManualReconciliationHeading }).waitFor({ state: "hidden", timeout: 15_000 });
-
-    const tableC = page.getByRole("table", { name: "Table C manual reconciliation entries" });
-    await tableC.getByText(sourceImport.filename, { exact: true }).waitFor({ timeout: 20_000 });
-    const viewButton = tableC.locator('button[aria-label^="View "]').first();
-    await viewButton.click();
-    await page.getByRole("heading", { name: "Table C Reconciliation Details" }).waitFor({ timeout: 15_000 });
-    await page.getByText(sourceImport.name, { exact: true }).last().waitFor({ timeout: 15_000 });
-    await page.getByText(sourceImport.filename, { exact: true }).last().waitFor({ timeout: 15_000 });
-    await page.getByRole("button", { name: "Close" }).last().click();
-
-    const editButton = tableC.locator('button[aria-label^="Edit "]').first();
-    await editButton.click();
-    await page.getByRole("heading", { name: "Edit Table C Entry" }).waitFor({ timeout: 15_000 });
-    await page.locator("#table-c-manual-amount").fill("55.00");
-    await page.locator("#table-c-note").fill("Synthetic smoke reconciliation evidence updated.");
-    const updateEntryResponse = page.waitForResponse((response) => (
-      response.request().method() === "PATCH"
-      && /\/reconciliations\/[^/]+$/.test(new URL(response.url()).pathname)
-    ));
-    await page.getByRole("button", { name: "Save Changes" }).click();
-    assertSmokeResponseStatus(await updateEntryResponse, 200, "Update Billing Principal Table C entry");
-    await page.getByRole("heading", { name: "Edit Table C Entry" }).waitFor({ state: "hidden", timeout: 15_000 });
-
-    const historyButton = tableC.locator('button[aria-label^="View history"]').first();
-    await historyButton.click();
-    await page.getByRole("heading", { name: "Table C Audit History" }).waitFor({ timeout: 15_000 });
-    await page.getByText("CREATE", { exact: true }).waitFor({ timeout: 15_000 });
-    await page.getByText("UPDATE", { exact: true }).waitFor({ timeout: 15_000 });
-    await page.getByRole("button", { name: "Close" }).last().click();
-
-    const voidButton = tableC.locator('button[aria-label^="Void "]').first();
-    await voidButton.click();
-    await page.getByRole("heading", { name: "Void Table C Entry" }).waitFor({ timeout: 15_000 });
-    await page.getByLabel("Reason").fill("Synthetic smoke cleanup.");
-    const voidResponse = page.waitForResponse((response) => (
-      response.request().method() === "POST"
-      && /\/reconciliations\/[^/]+\/void$/.test(new URL(response.url()).pathname)
-    ));
-    await page.getByRole("button", { name: "Void Entry" }).click();
-    assertSmokeResponseStatus(await voidResponse, 200, "Void Billing Principal Table C entry");
-    await page.getByRole("heading", { name: "Void Table C Entry" }).waitFor({ state: "hidden", timeout: 15_000 });
-
-    const tableCStatusFilterLabel = ["Filter", "Table", "C", "by status"].join(" ");
-    await page.getByLabel(tableCStatusFilterLabel).selectOption("VOIDED");
-    await tableC.getByText("VOIDED", { exact: true }).waitFor({ timeout: 20_000 });
+    let visualDatasetRequestCount = 0;
+    const trackVisualDatasetRequest = (request) => {
+      const url = new URL(request.url());
+      if (
+        request.method() === "GET"
+        && /\/saved-targets\/[^/]+\/revisions\/[^/]+\/export$/.test(url.pathname)
+        && url.searchParams.get("format") === "json"
+      ) {
+        visualDatasetRequestCount += 1;
+      }
+    };
+    page.on("request", trackVisualDatasetRequest);
+    try {
+      await downloadBillingPrincipalSmokeArtifact(page, "XLSX", ".xlsx", Buffer.from("PK"));
+      await downloadBillingPrincipalSmokeArtifact(page, "PNG", ".png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+      await downloadBillingPrincipalSmokeArtifact(page, "PDF", ".pdf", Buffer.from("%PDF"));
+    } finally {
+      page.off("request", trackVisualDatasetRequest);
+    }
+    assert(
+      visualDatasetRequestCount === 1,
+      `PNG and PDF must reuse one governed visual dataset request; observed ${visualDatasetRequestCount}`,
+    );
 
     await page.getByRole("button", { name: "Delete Target" }).click();
     await page.getByRole("heading", { name: "Delete saved target?" }).waitFor({ timeout: 15_000 });
@@ -833,7 +840,7 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
     await page.getByRole("heading", { name: targetName }).waitFor({ state: "hidden", timeout: 20_000 });
     targetDeleted = true;
 
-    tracker.assertClean("Billing Principal V7 UI flow");
+    tracker.assertClean("Billing Principal V9 UI flow");
     tracker.clear();
   } finally {
     if (!targetDeleted) {
@@ -852,7 +859,7 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
           `/api/collection/report/billing-principal/saved-targets/${encodeURIComponent(target.id)}?version=${encodeURIComponent(target.version)}`,
           undefined,
           [200, 404],
-        ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V7 target", error));
+        ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V9 target", error));
       }
     }
     await apiJsonRequestWithRetry(
@@ -861,7 +868,7 @@ const checkBillingPrincipalV7UiFlow = async (page, context, tracker) => {
       `/api/imports/${encodeURIComponent(sourceImport.id)}`,
       undefined,
       [200, 404],
-    ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V7 source import", error));
+    ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V9 source import", error));
   }
 };
 
@@ -875,23 +882,57 @@ const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   await page.getByTestId("button-search").click();
   await page.getByText("Collection direkodkan", { exact: true }).first().waitFor({ timeout: 15_000 });
 
+  const historyRequests = [];
+  const trackHistoryRequest = (request) => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/search/collection-history") {
+      historyRequests.push(url.toString());
+    }
+  };
+  page.on("request", trackHistoryRequest);
   await page.getByTestId("button-view-0").click();
   const recordDialog = page.getByRole("dialog").filter({
     has: page.getByRole("heading", { name: "Record Details" }),
   }).first();
-  await recordDialog.waitFor({ timeout: 15_000 });
-  await recordDialog.getByText(values.sourceImportName, { exact: false }).waitFor({ timeout: 15_000 });
-  await recordDialog.getByText(`Disimpan oleh: ${values.nickname}`, { exact: true }).waitFor({ timeout: 15_000 });
-  await recordDialog.getByText("Akaun Collection", { exact: true }).waitFor({ timeout: 15_000 });
-  await recordDialog.getByText(values.accountNumber, { exact: true }).first().waitFor({ timeout: 15_000 });
-  await recordDialog.getByText("Jumlah terkini", { exact: true }).waitFor({ timeout: 15_000 });
-  await recordDialog.getByText(/RM\s*12\.34/).first().waitFor({ timeout: 15_000 });
-  await recordDialog
-    .getByText(formatIsoDateForSmokeButtonLabel(values.paymentDate), { exact: true })
-    .first()
-    .waitFor({ timeout: 15_000 });
-  await recordDialog.getByRole("button", { name: "Close" }).click();
-  await recordDialog.waitFor({ state: "hidden", timeout: 15_000 });
+  try {
+    await recordDialog.waitFor({ timeout: 15_000 });
+    await recordDialog.getByText(values.sourceImportName, { exact: false }).waitFor({ timeout: 15_000 });
+    await recordDialog.getByText(`Disimpan oleh: ${values.nickname}`, { exact: true }).waitFor({ timeout: 15_000 });
+    await recordDialog.getByText("Akaun Collection", { exact: true }).waitFor({ timeout: 15_000 });
+    await recordDialog.getByText(values.accountNumber, { exact: true }).first().waitFor({ timeout: 15_000 });
+    await recordDialog.getByText("Jumlah terkini", { exact: true }).waitFor({ timeout: 15_000 });
+    await recordDialog.getByText(/RM\s*12\.34/).first().waitFor({ timeout: 15_000 });
+    await recordDialog
+      .getByText(formatIsoDateForSmokeButtonLabel(values.paymentDate), { exact: true })
+      .first()
+      .waitFor({ timeout: 15_000 });
+
+    await page.waitForTimeout(200);
+    assert(historyRequests.length === 0, "General Search Collection history must remain lazy until explicitly expanded");
+    const historyResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.request().method() === "GET"
+        && url.pathname === "/api/search/collection-history"
+        && url.searchParams.get("page") === "1"
+        && url.searchParams.get("pageSize") === "10";
+    }, { timeout: 20_000 });
+    await recordDialog.getByRole("button", { name: "Lihat sejarah" }).click();
+    const historyResponse = await historyResponsePromise;
+    assertSmokeResponseStatus(historyResponse, 200, "Load complete General Search Collection history");
+    const historyPayload = await historyResponse.json();
+    assert(historyPayload?.summary?.recordCount >= 1, "General Search history should report the matching Collection count");
+    assert(Array.isArray(historyPayload?.items) && historyPayload.items.length >= 1, "General Search history should return matching entries");
+    assert(historyRequests.length === 1, "General Search history expansion should issue one bounded page request");
+    const historyPanel = recordDialog.getByTestId("general-search-collection-history");
+    await historyPanel.getByText("Sejarah collection penuh", { exact: true }).waitFor({ timeout: 15_000 });
+    await historyPanel.getByText("Collection pengguna", { exact: true }).last().waitFor({ timeout: 15_000 });
+    await historyPanel.getByText(/RM\s*12\.34/).first().waitFor({ timeout: 15_000 });
+    await historyPanel.getByRole("button", { name: "Tutup sejarah" }).click();
+    await recordDialog.getByRole("button", { name: "Close" }).click();
+    await recordDialog.waitFor({ state: "hidden", timeout: 15_000 });
+  } finally {
+    page.off("request", trackHistoryRequest);
+  }
 
   await queryInput.fill(values.noRecordAccountNumber);
   await page.getByTestId("button-search").click();
@@ -1275,8 +1316,9 @@ const cleanupCollectionReceiptSmokeRecord = async (context, {
 }) => {
   let targetRecordId = String(recordId || "").trim();
   let targetVersion = String(expectedUpdatedAt || "").trim();
+  let targetManualSettlement = null;
 
-  if (!targetRecordId && accountNumber) {
+  if (accountNumber) {
     const params = new URLSearchParams();
     params.set("search", accountNumber);
     params.set("limit", "10");
@@ -1290,19 +1332,44 @@ const cleanupCollectionReceiptSmokeRecord = async (context, {
     const records = Array.isArray(listResponse.payload?.records)
       ? listResponse.payload.records
       : [];
-    const matchedRecord = records.find(
-      (record) => String(record?.accountNumber || "").trim() === accountNumber,
-    );
+    const matchedRecord = records.find((record) => (
+      (targetRecordId && String(record?.id || "").trim() === targetRecordId)
+      || String(record?.accountNumber || "").trim() === accountNumber
+    ));
     if (matchedRecord) {
       targetRecordId = String(matchedRecord.id || "").trim();
       targetVersion = String(
         matchedRecord.updatedAt || matchedRecord.createdAt || targetVersion || "",
       ).trim();
+      targetManualSettlement = matchedRecord.manualSettlement ?? null;
     }
   }
 
   if (!targetRecordId) {
     return;
+  }
+
+  const manualSettlementVersion = Number(targetManualSettlement?.version);
+  if (
+    targetManualSettlement?.status === "ACTIVE"
+    && Number.isSafeInteger(manualSettlementVersion)
+    && manualSettlementVersion > 0
+  ) {
+    const revokeResponse = await apiJsonRequestWithRetry(
+      context,
+      "DELETE",
+      `/api/collection/${encodeURIComponent(targetRecordId)}/manual-settlement`,
+      {
+        expectedVersion: manualSettlementVersion,
+        revokeReason: "Synthetic smoke cleanup after interrupted verification.",
+        confirmed: true,
+      },
+      [200, 404],
+    );
+    const revokedRecord = revokeResponse.payload?.record;
+    targetVersion = String(
+      revokedRecord?.updatedAt || revokedRecord?.createdAt || targetVersion || "",
+    ).trim();
   }
 
   await apiJsonRequest(
@@ -1391,6 +1458,199 @@ const waitForBackupJobTerminal = async (context, jobId, timeoutMs = BACKUP_JOB_T
   throw new Error(
     `Backup background job ${normalizedJobId} did not finish within ${timeoutMs}ms. Last status: ${String(lastJob?.status || "unknown")}`,
   );
+};
+
+const checkCollectionManualSettlementV9UiFlow = async (page, context, tracker) => {
+  const [nickname] = await ensureCollectionSmokeNicknames(context);
+  const uniqueSuffix = `${Date.now()}`;
+  const paymentDate = getLocalIsoDate();
+  const customerName = `Smoke Manual POOL ${uniqueSuffix}`;
+  const icNumber = `880101${uniqueSuffix.slice(-6)}`;
+  const customerPhone = `011${uniqueSuffix.slice(-7)}`;
+  const accountNumber = `SMOKE-POOL-${uniqueSuffix}`;
+  const cardNumber = "4377044001076221";
+  let recordId = "";
+  let expectedUpdatedAt = "";
+  let sourceImport = null;
+
+  try {
+    sourceImport = await createCollectionSmokeSourceImport(context, {
+      accountNumber,
+      billingPrincipalOsp: "400.00",
+      callingDate: paymentDate,
+      cardNumber,
+      customerName,
+      customerPhone,
+      dcSts: "3",
+      icNumber,
+      totalDue: "500.00",
+      uniqueSuffix,
+    });
+    const createResponse = await apiJsonRequestWithRetry(context, "POST", "/api/collection", {
+      customerName,
+      icNumber,
+      customerPhone,
+      accountNumber,
+      sourceImportId: sourceImport.id,
+      agingBucket: "D3",
+      batch: "P10",
+      paymentDate,
+      amount: "150.00",
+      collectionStaffNickname: nickname,
+    }, [200]);
+    const createdRecord = createResponse.payload?.record;
+    recordId = String(createdRecord?.id || "").trim();
+    expectedUpdatedAt = String(createdRecord?.updatedAt || createdRecord?.createdAt || "").trim();
+    assert(recordId && expectedUpdatedAt, "manual POOL smoke should create a versioned Collection record");
+    assert(
+      createdRecord?.automaticCpStatus === "cp"
+      && createdRecord?.cpStatus === "cp"
+      && String(createdRecord?.amount || "") === "150.00"
+      && String(createdRecord?.totalDue || "") === "500.00",
+      "manual POOL smoke fixture must begin as an unsettled RM150 of RM500 user Collection",
+    );
+
+    await applySmokeCollectionNicknameSession(page, nickname);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await navigateForSmoke(page, "/collection/records");
+    await page.getByText("View Rekod Collection").first().waitFor({ timeout: 15_000 });
+    await page.locator("#collection-records-leader-desktop").waitFor({ timeout: 15_000 });
+    let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
+    await targetRow.getByText(cardNumber, { exact: true }).waitFor({ timeout: 15_000 });
+    await targetRow.getByRole("button", { name: "Edit" }).click();
+
+    let editDialog = page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: "Edit Collection Record" }),
+    }).first();
+    await editDialog.waitFor({ timeout: 15_000 });
+    const manualPanel = editDialog.locator("section[aria-labelledby='manual-settlement-heading']");
+    await manualPanel.getByText("Manual Verified ABORT", { exact: false }).waitFor({ timeout: 15_000 });
+    await manualPanel.locator("#manual-pool-amount").fill("350.00");
+    await manualPanel.locator("#manual-settlement-date").fill(paymentDate);
+    await manualPanel.locator("#manual-settlement-reference").fill(`POOL-${uniqueSuffix}`);
+    await manualPanel.locator("#manual-settlement-note").fill("Verified external payment smoke evidence.");
+    await manualPanel.getByRole("checkbox").first().click();
+    const verifyResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === "PUT"
+      && new URL(response.url()).pathname === `/api/collection/${recordId}/manual-settlement`
+    ));
+    await manualPanel.getByRole("button", { name: "Verify Manual ABORT" }).click();
+    const verifyResponse = await verifyResponsePromise;
+    assertSmokeResponseStatus(verifyResponse, 200, "Verify Manual ABORT with separate POOL evidence");
+    const verifyPayload = await verifyResponse.json();
+    const verifiedRecord = verifyPayload?.record;
+    expectedUpdatedAt = String(verifiedRecord?.updatedAt || verifiedRecord?.createdAt || expectedUpdatedAt).trim();
+    assert(
+      String(verifiedRecord?.amount || "") === "150.00"
+      && String(verifiedRecord?.cumulativeCollected || "") === "150.00"
+      && String(verifiedRecord?.manualSettlement?.poolAmount || "") === "350.00"
+      && String(verifiedRecord?.manualSettlement?.effectiveTotal || "") === "500.00"
+      && verifiedRecord?.automaticCpStatus === "cp"
+      && verifiedRecord?.cpStatus === "abort_cp",
+      "manual settlement must change effective status without crediting RM350 POOL to Collection",
+    );
+    await manualPanel.getByText("EFFECTIVE", { exact: true }).waitFor({ timeout: 15_000 });
+    assert(await editDialog.locator("#edit-collection-amount").inputValue() === "150.00", "manual POOL must leave the editable user Collection amount at RM150");
+
+    const verifyHistoryResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === "GET"
+      && new URL(response.url()).pathname === `/api/collection/${recordId}/manual-settlement/history`
+    ));
+    await manualPanel.getByRole("button", { name: "Audit history" }).click();
+    assertSmokeResponseStatus(await verifyHistoryResponsePromise, 200, "Load Manual ABORT verification audit history");
+    await manualPanel.getByText("VERIFIED", { exact: true }).waitFor({ timeout: 15_000 });
+    await editDialog.getByRole("button", { name: "Cancel" }).click();
+    await editDialog.waitFor({ state: "hidden", timeout: 15_000 });
+
+    await navigateForSmoke(page, "/general-search");
+    const queryInput = page.getByTestId("input-search");
+    await queryInput.fill(accountNumber);
+    await page.getByTestId("button-search").click();
+    await page.getByText("Collection direkodkan", { exact: true }).first().waitFor({ timeout: 15_000 });
+    await page.getByTestId("button-view-0").click();
+    const recordDialog = page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: "Record Details" }),
+    }).first();
+    await recordDialog.waitFor({ timeout: 15_000 });
+    const searchHistoryResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === "GET"
+      && new URL(response.url()).pathname === "/api/search/collection-history"
+    ));
+    await recordDialog.getByRole("button", { name: "Lihat sejarah" }).click();
+    const searchHistoryResponse = await searchHistoryResponsePromise;
+    assertSmokeResponseStatus(searchHistoryResponse, 200, "Load General Search history with separate POOL entry");
+    const searchHistory = await searchHistoryResponse.json();
+    assert(
+      String(searchHistory?.summary?.collectionAmount || "") === "150.00"
+      && String(searchHistory?.summary?.poolAmount || "") === "350.00"
+      && searchHistory?.summary?.effectiveStatus === "abort_cp"
+      && searchHistory?.items?.some((item) => item?.kind === "collection" && String(item.amount) === "150.00")
+      && searchHistory?.items?.some((item) => item?.kind === "pool" && String(item.amount) === "350.00"),
+      "General Search must expose user Collection and POOL as distinct canonical history entries",
+    );
+    const historyPanel = recordDialog.getByTestId("general-search-collection-history");
+    await historyPanel.getByText("POOL / bayaran luaran", { exact: true }).waitFor({ timeout: 15_000 });
+    await historyPanel.getByText("Collection pengguna", { exact: true }).last().waitFor({ timeout: 15_000 });
+    await recordDialog.getByRole("button", { name: "Close" }).click();
+    await recordDialog.waitFor({ state: "hidden", timeout: 15_000 });
+
+    await navigateForSmoke(page, "/collection/records");
+    targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
+    await targetRow.getByRole("button", { name: "Edit" }).click();
+    editDialog = page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: "Edit Collection Record" }),
+    }).first();
+    await editDialog.waitFor({ timeout: 15_000 });
+    const revokePanel = editDialog.locator("section[aria-labelledby='manual-settlement-heading']");
+    await revokePanel.locator("#manual-revoke-reason").fill("Synthetic smoke revocation after verification.");
+    await revokePanel.getByRole("checkbox").last().click();
+    const revokeResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === "DELETE"
+      && new URL(response.url()).pathname === `/api/collection/${recordId}/manual-settlement`
+    ));
+    await revokePanel.getByRole("button", { name: "Revoke Manual ABORT" }).click();
+    const revokeResponse = await revokeResponsePromise;
+    assertSmokeResponseStatus(revokeResponse, 200, "Revoke Manual ABORT while retaining its audit history");
+    const revokePayload = await revokeResponse.json();
+    const revokedRecord = revokePayload?.record;
+    expectedUpdatedAt = String(revokedRecord?.updatedAt || revokedRecord?.createdAt || expectedUpdatedAt).trim();
+    assert(
+      String(revokedRecord?.amount || "") === "150.00"
+      && revokedRecord?.automaticCpStatus === "cp"
+      && revokedRecord?.cpStatus === "cp"
+      && revokedRecord?.manualSettlement?.status === "REVOKED",
+      "revoking Manual ABORT must restore automatic CP without changing user Collection",
+    );
+    const revokeHistoryResponsePromise = page.waitForResponse((response) => (
+      response.request().method() === "GET"
+      && new URL(response.url()).pathname === `/api/collection/${recordId}/manual-settlement/history`
+    ));
+    await revokePanel.getByRole("button", { name: "Audit history" }).click();
+    assertSmokeResponseStatus(await revokeHistoryResponsePromise, 200, "Load retained Manual ABORT revoke history");
+    await revokePanel.locator("strong").filter({ hasText: /^REVOKED$/ }).waitFor({ timeout: 15_000 });
+    await editDialog.getByRole("button", { name: "Cancel" }).click();
+
+    consumeExpectedCollectionPurgeSummaryRateLimit(tracker);
+    consumeExpectedCollectionListRateLimit(tracker, accountNumber);
+    consumeExpectedCollectionRecordsBootstrapRateLimitNoise(tracker, accountNumber);
+    tracker.assertClean("Collection Manual Verified ABORT V9 UI flow");
+    tracker.clear();
+  } finally {
+    await cleanupCollectionReceiptSmokeRecord(context, {
+      recordId,
+      accountNumber,
+      expectedUpdatedAt,
+    }).catch((error) => recordBestEffortFailure("cleanup Manual ABORT V9 Collection record", error));
+    if (sourceImport?.id) {
+      await apiJsonRequestWithRetry(
+        context,
+        "DELETE",
+        `/api/imports/${encodeURIComponent(sourceImport.id)}`,
+        undefined,
+        [200, 404],
+      ).catch((error) => recordBestEffortFailure("cleanup Manual ABORT V9 source import", error));
+    }
+  }
 };
 
 const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
@@ -2987,8 +3247,12 @@ const run = async () => {
           () => checkCollectionRecordsStaleDeleteConflict(page, context, tracker),
         );
         await runSmokePhase(
-          "Billing Principal V7 UI flow",
-          () => checkBillingPrincipalV7UiFlow(page, context, tracker),
+          "Collection Manual Verified ABORT V9 UI flow",
+          () => checkCollectionManualSettlementV9UiFlow(page, context, tracker),
+        );
+        await runSmokePhase(
+          "Billing Principal V9 UI flow",
+          () => checkBillingPrincipalV9UiFlow(page, context, tracker),
         );
         await runSmokePhase(
           "collection receipt flow",

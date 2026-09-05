@@ -17,15 +17,36 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function waitForSignal(signal: Promise<void>, timeoutMs = 1_000) {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Timed out waiting for process timeout signal")), timeoutMs);
+    signal.then(
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 test("process timeout chain sends soft then hard kill signals", async () => {
   const child = new FakeTimeoutProcess();
   let softTimeouts = 0;
   let hardTimeouts = 0;
+  let resolveHardTimeout!: () => void;
+  const hardTimeoutReached = new Promise<void>((resolve) => {
+    resolveHardTimeout = resolve;
+  });
 
   createProcessTimeoutChain({
     hardTimeoutMs: 5,
     onHardTimeout: () => {
       hardTimeouts += 1;
+      resolveHardTimeout();
     },
     onSoftTimeout: () => {
       softTimeouts += 1;
@@ -34,7 +55,7 @@ test("process timeout chain sends soft then hard kill signals", async () => {
     softTimeoutMs: 1,
   });
 
-  await wait(20);
+  await waitForSignal(hardTimeoutReached);
 
   assert.equal(softTimeouts, 1);
   assert.equal(hardTimeouts, 1);
@@ -44,9 +65,14 @@ test("process timeout chain sends soft then hard kill signals", async () => {
 test("process timeout chain can preserve hard timeout after soft-timeout cleanup", async () => {
   const child = new FakeTimeoutProcess();
   let chain: ProcessTimeoutChain | null = null;
+  let resolveHardTimeout!: () => void;
+  const hardTimeoutReached = new Promise<void>((resolve) => {
+    resolveHardTimeout = resolve;
+  });
 
   chain = createProcessTimeoutChain({
     hardTimeoutMs: 5,
+    onHardTimeout: resolveHardTimeout,
     onSoftTimeout: () => {
       chain?.cancel({ preserveHardTimeout: true });
     },
@@ -54,7 +80,7 @@ test("process timeout chain can preserve hard timeout after soft-timeout cleanup
     softTimeoutMs: 1,
   });
 
-  await wait(20);
+  await waitForSignal(hardTimeoutReached);
 
   assert.deepEqual(child.killSignals, ["SIGTERM", "SIGKILL"]);
 });

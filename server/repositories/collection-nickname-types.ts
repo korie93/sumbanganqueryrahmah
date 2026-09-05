@@ -62,6 +62,8 @@ export type CollectionAdminGroupDbRow = {
   leaderRoleScope?: unknown;
   member_nicknames?: unknown;
   memberNicknames?: unknown;
+  member_nickname_ids?: unknown;
+  memberNicknameIds?: unknown;
   created_by?: unknown;
   createdBy?: unknown;
   created_at?: unknown;

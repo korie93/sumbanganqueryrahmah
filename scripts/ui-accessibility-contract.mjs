@@ -48,7 +48,7 @@ const authenticatedRouteSpecs = [
     contentSelector: "main#main-content",
   },
   {
-    id: "collection-records",
+    id: "collection-save",
     path: "/collection/save",
     contentSelector: "main#main-content",
   },

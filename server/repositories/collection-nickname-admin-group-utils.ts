@@ -41,27 +41,26 @@ export async function resolveCollectionNicknameRowsByIds(
 export async function validateCollectionAdminGroupComposition(params: {
   tx: CollectionRepositoryExecutor;
   groupIdToExclude?: string;
-  leaderNickname: string;
-  memberNicknames: string[];
+  leaderNicknameId: string;
+  memberNicknameIds: string[];
 }): Promise<void> {
-  const leaderLower = params.leaderNickname.toLowerCase();
+  const leaderNicknameId = String(params.leaderNicknameId || "").trim().toLowerCase();
   const uniqueMembers = Array.from(
     new Set(
-      params.memberNicknames
-        .map((value) => String(value || "").trim())
+      params.memberNicknameIds
+        .map((value) => String(value || "").trim().toLowerCase())
         .filter(Boolean),
     ),
   );
-  const memberLower = uniqueMembers.map((value) => value.toLowerCase());
 
-  if (memberLower.includes(leaderLower)) {
+  if (uniqueMembers.includes(leaderNicknameId)) {
     throw new Error("Leader nickname cannot be a member of the same group.");
   }
 
   const leaderRows = await params.tx.execute(sql`
     SELECT id
     FROM public.admin_groups
-    WHERE lower(leader_nickname) = lower(${params.leaderNickname})
+    WHERE leader_nickname_id = ${leaderNicknameId}::uuid
       ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
     LIMIT 1
   `);
@@ -69,13 +68,13 @@ export async function validateCollectionAdminGroupComposition(params: {
     throw new Error("Leader nickname already assigned.");
   }
 
-  if (!memberLower.length) return;
+  if (!uniqueMembers.length) return;
 
-  const membersSql = sql.join(memberLower.map((value) => sql`${value}`), sql`, `);
+  const membersSql = sql.join(uniqueMembers.map((value) => sql`${value}::uuid`), sql`, `);
   const memberConflict = await params.tx.execute(sql`
-    SELECT member_nickname
+    SELECT member_nickname_id
     FROM public.admin_group_members
-    WHERE lower(member_nickname) IN (${membersSql})
+    WHERE member_nickname_id IN (${membersSql})
       ${params.groupIdToExclude ? sql`AND admin_group_id <> ${params.groupIdToExclude}::uuid` : sql``}
     LIMIT 1
   `);
@@ -84,9 +83,9 @@ export async function validateCollectionAdminGroupComposition(params: {
   }
 
   const leaderConflict = await params.tx.execute(sql`
-    SELECT leader_nickname
+    SELECT leader_nickname_id
     FROM public.admin_groups
-    WHERE lower(leader_nickname) IN (${membersSql})
+    WHERE leader_nickname_id IN (${membersSql})
       ${params.groupIdToExclude ? sql`AND id <> ${params.groupIdToExclude}::uuid` : sql``}
     LIMIT 1
   `);

@@ -27,3 +27,16 @@ test("V7 heavy export guard limits concurrent work and per-user starts", async (
     (error) => error instanceof CollectionOspV7ExportGuardError && error.statusCode === 429,
   );
 });
+
+test("default export guard permits the complete CSV, XLSX, and shared visual workflow", async () => {
+  const guard = createCollectionOspV7ExportGuard();
+
+  await guard.run("manager.workflow", async () => "csv");
+  await guard.run("manager.workflow", async () => "xlsx");
+  await guard.run("manager.workflow", async () => "visual");
+
+  await assert.rejects(
+    guard.run("manager.workflow", async () => "extra"),
+    (error) => error instanceof CollectionOspV7ExportGuardError && error.statusCode === 429,
+  );
+});

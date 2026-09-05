@@ -199,6 +199,13 @@ export const auditLogs = pgTable("audit_logs", {
   actionIdx: index("idx_audit_logs_action").on(table.action),
   performedByIdx: index("idx_audit_logs_performed_by").on(table.performedBy),
   requestIdIdx: index("idx_audit_logs_request_id").on(table.requestId),
+  manualSettlementTargetOrderIdx: index("idx_audit_logs_manual_settlement_target_order")
+    .on(table.targetResource, table.timestamp.desc(), table.id.desc())
+    .where(sql`${table.action} IN (
+      'COLLECTION_MANUAL_SETTLEMENT_VERIFIED',
+      'COLLECTION_MANUAL_SETTLEMENT_UPDATED',
+      'COLLECTION_MANUAL_SETTLEMENT_REVOKED'
+    )`),
 }));
 
 export const debugAuditLogs = pgTable("debug_audit_log", {

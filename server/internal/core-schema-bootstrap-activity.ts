@@ -118,6 +118,15 @@ export async function ensureCoreAuditLogsTable(
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_by ON public.audit_logs(performed_by)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_request_id ON public.audit_logs(request_id)`);
+  await database.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_manual_settlement_target_order
+    ON public.audit_logs(target_resource, timestamp DESC, id DESC)
+    WHERE action IN (
+      'COLLECTION_MANUAL_SETTLEMENT_VERIFIED',
+      'COLLECTION_MANUAL_SETTLEMENT_UPDATED',
+      'COLLECTION_MANUAL_SETTLEMENT_REVOKED'
+    )
+  `);
 }
 
 export async function ensureCoreBannedSessionsTable(

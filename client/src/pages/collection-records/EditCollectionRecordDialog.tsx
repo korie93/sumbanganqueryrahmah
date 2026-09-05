@@ -20,13 +20,15 @@ import type {
 } from "@/lib/api";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
-import { formatCollectionMaskedCard } from "@/pages/collection-records/collection-coverage";
+import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
+import { CollectionManualSettlementPanel } from "./CollectionManualSettlementPanel";
 
 export interface EditCollectionRecordDialogProps {
   open: boolean;
   savingEdit: boolean;
   loadingNicknames: boolean;
   editingRecord: CollectionRecord | null;
+  canManageManualSettlement: boolean;
   nicknameOptions: CollectionStaffNickname[];
   batchOptions: CollectionBatch[];
   editCustomerName: string;
@@ -60,6 +62,7 @@ export interface EditCollectionRecordDialogProps {
   onToggleRemoveExistingReceipt: (receiptId: string) => void;
   onViewExistingReceipt: (receipt: CollectionRecordReceipt) => void;
   onSave: () => void;
+  onManualSettlementChanged: (record: CollectionRecord) => void | Promise<void>;
 }
 
 export function EditCollectionRecordDialog({
@@ -67,6 +70,7 @@ export function EditCollectionRecordDialog({
   savingEdit,
   loadingNicknames,
   editingRecord,
+  canManageManualSettlement,
   nicknameOptions,
   batchOptions,
   editCustomerName,
@@ -100,6 +104,7 @@ export function EditCollectionRecordDialog({
   onToggleRemoveExistingReceipt,
   onViewExistingReceipt,
   onSave,
+  onManualSettlementChanged,
 }: EditCollectionRecordDialogProps) {
   const dialogDescription =
     "Kemaskini maklumat collection, staff nickname, dan receipt yang dipautkan pada rekod ini.";
@@ -159,9 +164,9 @@ export function EditCollectionRecordDialog({
               autoComplete="off"
               disabled={savingEdit}
             />
-            {editingRecord?.cardNumberLast4 ? (
+            {editingRecord?.cardNumber ? (
               <p className="text-xs text-muted-foreground">
-                Matched Card: {formatCollectionMaskedCard(editingRecord.cardNumberLast4)}
+                Matched Card: {getCollectionCardNumberLabel(editingRecord.cardNumber)}
               </p>
             ) : null}
           </div>
@@ -257,6 +262,14 @@ export function EditCollectionRecordDialog({
               helperText="Receipt sedia ada kekal dipautkan sehingga anda tandakan buang. Receipt baru hanya akan disimpan selepas Save, dan status remove/replace dipaparkan di bawah."
             />
           </div>
+          {editingRecord ? (
+            <CollectionManualSettlementPanel
+              record={editingRecord}
+              canManage={canManageManualSettlement}
+              disabled={savingEdit}
+              onChanged={onManualSettlementChanged}
+            />
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={savingEdit}>

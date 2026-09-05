@@ -6,8 +6,15 @@ export function registerCollectionAdminRoutes(context: CollectionRouteContext) {
     app,
     collectionService,
     superuserReportAccess,
+    teamReportAccess,
     jsonRoute,
   } = context;
+
+  app.get(
+    "/api/collection/teams",
+    ...teamReportAccess,
+    jsonRoute("Failed to load Collection teams.", (req) => collectionService.listTeamOptions(req.user)),
+  );
 
   app.get(
     "/api/collection/admins",

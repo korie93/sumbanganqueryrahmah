@@ -19,7 +19,6 @@ import {
 } from "../../routes/collection.validation";
 import type {
   CollectionAgingBucket,
-  CollectionOspManualReasonCode,
   CollectionOspSavedTargetView,
   CollectionOspTargetInput,
 } from "../../storage-postgres-collection-types";
@@ -39,13 +38,6 @@ const UNSAFE_MARKUP_PATTERN = /<\/?[a-z][^>]*>|(?:javascript|data)\s*:/i;
 const MAX_MANUAL_AMOUNT_CENTS = 10_000_000_000n;
 export const MAX_COLLECTION_OSP_V7_EXPORT_DETAIL_ROWS = 10_000;
 export const MAX_COLLECTION_OSP_V7_EXPORT_ESTIMATED_BYTES = 16 * 1024 * 1024;
-const MANUAL_REASONS = new Set<CollectionOspManualReasonCode>([
-  "PRIOR_PAYMENT_NOT_IN_SYSTEM",
-  "CLIENT_CONFIRMED_PRIOR_PAYMENT",
-  "HISTORICAL_PAYMENT_MISSING",
-  "MIGRATED_HISTORY_GAP",
-  "OTHER_WITH_REQUIRED_NOTE",
-]);
 const REPORT_VIEWER_ROLES = new Set(["user", "admin", "manager", "superuser"]);
 
 function requireReportViewer(user: AuthenticatedUser): void {
@@ -56,7 +48,7 @@ function requireReportViewer(user: AuthenticatedUser): void {
 
 function requireSuperuser(user: AuthenticatedUser): void {
   if (String(user.role).toLowerCase() !== "superuser") {
-    throw forbidden("Only superuser can manage Saved Billing Principal targets and manual reconciliation.");
+    throw forbidden("Only superuser can manage Saved Billing Principal targets and Client Results.");
   }
 }
 
@@ -79,6 +71,13 @@ function currentBusinessDate(): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+function targetTrackingRange(target: CollectionOspSavedTargetView) {
+  return {
+    start: target.activeRevision.trackingStartDate ?? target.activeRevision.from,
+    end: target.activeRevision.trackingEndDate ?? target.activeRevision.to,
+  };
 }
 
 function readBoundedText(
@@ -155,15 +154,6 @@ function readPagination(query: Record<string, unknown>) {
   };
 }
 
-function readReason(value: unknown, note: string | null): CollectionOspManualReasonCode {
-  const reason = normalizeCollectionText(value).toUpperCase() as CollectionOspManualReasonCode;
-  if (!MANUAL_REASONS.has(reason)) throw badRequest("Manual reconciliation reason is invalid.");
-  if (reason === "OTHER_WITH_REQUIRED_NOTE" && !note) {
-    throw badRequest("A note is required when the reconciliation reason is Other.");
-  }
-  return reason;
-}
-
 function readTargetRows(
   value: unknown,
   agingScope: readonly CollectionAgingBucket[],
@@ -199,18 +189,20 @@ function normalizeRepositoryError(error: unknown): never {
       throw notFound(error.message, "COLLECTION_OSP_TARGET_NOT_FOUND");
     }
     if (error.reason === "VERSION_CONFLICT") {
-      throw conflict(error.message, "COLLECTION_RECONCILIATION_VERSION_CONFLICT");
+      throw conflict(
+        error.message,
+        /client result/i.test(error.message)
+          ? "COLLECTION_OSP_CLIENT_RESULT_VERSION_CONFLICT"
+          : "COLLECTION_OSP_TARGET_VERSION_CONFLICT",
+      );
     }
     if (error.reason === "BASELINE_MISMATCH") {
-      throw conflict(error.message);
-    }
-    if (error.reason === "DUPLICATE") {
-      throw conflict(error.message, "COLLECTION_RECONCILIATION_DUPLICATE");
+      throw conflict(error.message, "COLLECTION_OSP_BASELINE_MISMATCH");
     }
     if (error.reason === "DATASET_TOO_LARGE") {
       throw new HttpError(413, error.message);
     }
-    throw badRequest(error.message, "COLLECTION_RECONCILIATION_SOURCE_INVALID");
+    throw badRequest(error.message, "COLLECTION_OSP_SOURCE_INVALID");
   }
   throw error;
 }
@@ -246,65 +238,26 @@ const SYSTEM_RESULT_EXPORT_COLUMNS: readonly ExportColumn[] = [
 ];
 const CLIENT_RESULT_EXPORT_COLUMNS: readonly ExportColumn[] = [
   ["Aging", "aging"],
+  ["TT OSP", "totalOsp"],
+  ["Target Percentage", "targetPercentage"],
+  ["Target OSP", "targetOsp"],
   ["Client Result Percentage", "resultPercentage"],
   ["Client OSP Closed", "ospClosed"],
-  ["Effective Date", "effectiveDate"],
+  ["Received Date", "receivedDate"],
+  ["Last Updated", "updatedAt"],
   ["Reference", "reference"],
   ["Note", "note"],
-];
-const MANUAL_SUMMARY_EXPORT_COLUMNS: readonly ExportColumn[] = [
-  ["Aging", "aging"],
-  ["Table C OSP Closed", "ospClosed"],
-  ["Closed Account Count", "closedAccountCount"],
-];
-const MANUAL_DETAIL_EXPORT_COLUMNS: readonly ExportColumn[] = [
-  ["Status", "status"],
-  ["Masked Account", "maskedAccountNumber"],
-  ["Source Name", "sourceName"],
-  ["Source Filename", "sourceFilename"],
-  ["Card Last 4", "cardNumberLast4"],
-  ["Masked Customer", "maskedCustomerName"],
-  ["Aging", "aging"],
-  ["Calling Date", "callingDate"],
-  ["Total Due", "totalDue"],
-  ["Billing Principal OSP", "billingPrincipalOsp"],
-  ["System Eligible Cumulative", "systemEligibleCumulative"],
-  ["System Classification", "rawSystemClassification"],
-  ["Manual Prior Amount", "manualPriorAmount"],
-  ["As Of Date", "asOfDate"],
-  ["Actual Payment Date", "actualPaymentDate"],
-  ["Reconciled Cumulative", "reconciledCumulative"],
-  ["Reconciled Remaining", "reconciledRemaining"],
-  ["Reconciled Status", "reconciledStatus"],
-  ["Effective Closed Date", "reconciledClosedEffectiveDate"],
-  ["Reason", "reason"],
-  ["Reference", "reference"],
-  ["Note", "note"],
-  ["Created By", "createdBy"],
-  ["Created At", "createdAt"],
-  ["Updated By", "updatedBy"],
-  ["Updated At", "updatedAt"],
-];
-const RECONCILED_EXPORT_COLUMNS: readonly ExportColumn[] = [
-  ...SYSTEM_RESULT_EXPORT_COLUMNS,
-  ["System OSP Closed", "systemOspClosed"],
-  ["Table C OSP", "manualReconciledOsp"],
-  ["Reconciled OSP Closed", "reconciledOspClosed"],
-  ["Reconciled Result Percentage", "reconciledResultPercentage"],
 ];
 const COMPARISON_EXPORT_COLUMNS: readonly ExportColumn[] = [
-  ["Aging", "aging"],
-  ["System Result Percentage", "systemResultPercentage"],
-  ["Reconciled Result Percentage", "reconciledResultPercentage"],
-  ["Client Result Percentage", "clientResultPercentage"],
+  ["System As Of", "systemAsOf"],
+  ["System TT OSP", "systemTotalOsp"],
   ["System OSP Closed", "systemOspClosed"],
-  ["Table C OSP", "manualReconciledOsp"],
-  ["Reconciled OSP Closed", "reconciledOspClosed"],
+  ["System Latest Result Percentage", "systemResultPercentage"],
+  ["Client Last Updated", "clientLastUpdatedAt"],
+  ["Client TT OSP", "clientTotalOsp"],
   ["Client OSP Closed", "clientOspClosed"],
-  ["System vs Client Percentage Point Difference", "systemVsClientResultPercentagePointDifference"],
-  ["Reconciled vs Client Percentage Point Difference", "reconciledVsClientResultPercentagePointDifference"],
-  ["System vs Client OSP Difference", "systemVsClientOspDifference"],
-  ["Reconciled vs Client OSP Difference", "reconciledVsClientOspDifference"],
+  ["Client Latest Result Percentage", "clientResultPercentage"],
+  ["Difference Percentage Points", "differencePercentagePoints"],
 ];
 const CALENDAR_EXPORT_COLUMNS: readonly ExportColumn[] = [
   ["Date", "date"],
@@ -312,27 +265,17 @@ const CALENDAR_EXPORT_COLUMNS: readonly ExportColumn[] = [
   ["TT OSP", "totalOsp"],
   ["Target OSP", "targetOsp"],
   ["System OSP Closed Today", "systemOspClosedToday"],
-  ["Table C OSP Closed Today", "manualReconciliationOspClosedToday"],
-  ["Reconciled OSP Closed Today", "reconciledOspClosedToday"],
   ["System Cumulative OSP Closed", "systemCumulativeOspClosed"],
-  ["Table C Cumulative OSP", "manualReconciliationCumulativeOsp"],
-  ["Reconciled Cumulative OSP Closed", "reconciledCumulativeOspClosed"],
   ["System Result Percentage", "systemResultPercentage"],
-  ["Reconciled Result Percentage", "reconciledResultPercentage"],
-  ["Client Result Percentage", "clientResultPercentage"],
   ["System Previous Result Percentage", "systemPreviousResultPercentage"],
-  ["Reconciled Previous Result Percentage", "reconciledPreviousResultPercentage"],
   ["System Daily Movement Percentage Points", "systemDailyMovementPercentagePoints"],
-  ["Reconciled Daily Movement Percentage Points", "reconciledDailyMovementPercentagePoints"],
   ["System Achievement vs Target Percentage", "systemAchievementVsTargetPercentage"],
-  ["Reconciled Achievement vs Target Percentage", "reconciledAchievementVsTargetPercentage"],
   ["System Daily Accounts", "systemDailyAccounts"],
-  ["Table C Daily Accounts", "manualDailyAccounts"],
-  ["Reconciled Daily Accounts", "reconciledDailyAccounts"],
 ];
 const DRILLDOWN_EXPORT_COLUMNS: readonly ExportColumn[] = [
   ["Contribution Source", "contributionSource"],
   ["Masked Account", "maskedAccountNumber"],
+  ["Card No", "cardNumber"],
   ["Card Last 4", "cardNumberLast4"],
   ["Masked Customer", "maskedCustomerName"],
   ["Source Name", "sourceName"],
@@ -343,16 +286,16 @@ const DRILLDOWN_EXPORT_COLUMNS: readonly ExportColumn[] = [
   ["System Eligible Cumulative", "systemEligibleCumulative"],
   ["System Closure Collection Amount", "systemClosureCollectionAmount"],
   ["System Closure Staff Nickname", "systemClosureStaffNickname"],
-  ["Manual Prior Amount", "manualPriorAmount"],
-  ["Reconciled Cumulative", "reconciledCumulative"],
+  ["Pool Amount", "poolAmount"],
+  ["Effective Cumulative", "effectiveCumulative"],
   ["Billing Principal OSP", "billingPrincipalOsp"],
   ["Effective Closed Date", "effectiveClosedDate"],
   ["Reason", "reason"],
   ["Reference", "reference"],
-  ["Reconciliation Created By", "reconciliationCreatedBy"],
-  ["Reconciliation Created At", "reconciliationCreatedAt"],
-  ["Reconciliation Updated By", "reconciliationUpdatedBy"],
-  ["Reconciliation Updated At", "reconciliationUpdatedAt"],
+  ["Verified By", "verifiedBy"],
+  ["Verified At", "verifiedAt"],
+  ["Updated By", "updatedBy"],
+  ["Updated At", "updatedAt"],
 ];
 
 function safeSpreadsheetCell(value: unknown, field = ""): string | number | Date {
@@ -447,9 +390,8 @@ function estimateExportValueBytes(value: unknown, ancestors = new Set<unknown>()
 }
 
 export function assertCollectionOspV7ExportWithinLimits(dataset: Record<string, unknown>): void {
-  const reconciliations = flattenRows(dataset.reconciliations);
   const drilldown = flattenRows(dataset.drilldown);
-  const detailRows = reconciliations.length + drilldown.length;
+  const detailRows = drilldown.length;
   if (detailRows > MAX_COLLECTION_OSP_V7_EXPORT_DETAIL_ROWS) {
     throw new HttpError(
       413,
@@ -481,10 +423,8 @@ function buildExportMetadata(dataset: Record<string, unknown>): Array<Record<str
     .filter(Boolean)
     .join("; ");
   const filters = ensureLooseObject(dataset.filters) ?? {};
-  const reconciliations = flattenRows(dataset.reconciliations);
   const calendar = flattenRows(dataset.calendar);
   const drilldown = flattenRows(dataset.drilldown);
-  assertCompleteDetailRows(reconciliations, dataset.reconciliationTotal, "Table C detail");
   assertCompleteDetailRows(drilldown, dataset.drilldownTotal, "drilldown");
   return [
     { Field: "Target Name", Value: target.name ?? "" },
@@ -502,7 +442,6 @@ function buildExportMetadata(dataset: Record<string, unknown>): Array<Record<str
     { Field: "Export To", Value: filters.to ?? "" },
     { Field: "Drilldown Date Filter", Value: filters.date ?? "All dates" },
     { Field: "Aging Filter", Value: filters.aging ?? "All scoped aging buckets" },
-    { Field: "Table C Detail Rows", Value: reconciliations.length },
     { Field: "Calendar Rows", Value: calendar.length },
     { Field: "Drilldown Rows", Value: drilldown.length },
     { Field: "Dataset Completeness", Value: "Complete" },
@@ -513,13 +452,24 @@ function buildExportMetadata(dataset: Record<string, unknown>): Array<Record<str
 
 function buildExportSections(dataset: Record<string, unknown>): ExportSection[] {
   const overview = ensureLooseObject(dataset.overview) ?? {};
-  const reconciliations = flattenRows(dataset.reconciliations);
   const calendar = flattenRows(dataset.calendar);
   const drilldown = flattenRows(dataset.drilldown);
-  const comparison = flattenRows((ensureLooseObject(overview.comparison) ?? {}).rows);
-  assertCompleteDetailRows(reconciliations, dataset.reconciliationTotal, "Table C detail");
   assertCompleteDetailRows(drilldown, dataset.drilldownTotal, "drilldown");
-  if (comparison.length === 0) throw new Error("Billing Principal export is missing comparison rows.");
+  const latestComparison = ensureLooseObject(overview.latestComparison);
+  if (!latestComparison) throw new Error("Billing Principal export is missing the latest total comparison.");
+  const system = ensureLooseObject(latestComparison.system) ?? {};
+  const client = ensureLooseObject(latestComparison.client);
+  const comparison = [{
+    systemAsOf: system.asOf ?? "",
+    systemTotalOsp: system.totalOsp ?? "",
+    systemOspClosed: system.ospClosed ?? "",
+    systemResultPercentage: system.resultPercentage ?? "",
+    clientLastUpdatedAt: client?.lastUpdatedAt ?? "",
+    clientTotalOsp: client?.totalOsp ?? "",
+    clientOspClosed: client?.ospClosed ?? "",
+    clientResultPercentage: client?.resultPercentage ?? "",
+    differencePercentagePoints: latestComparison.differencePercentagePoints ?? "",
+  }];
   const filters = ensureLooseObject(dataset.filters);
   const from = normalizeCollectionText(filters?.from);
   const to = normalizeCollectionText(filters?.to);
@@ -531,12 +481,9 @@ function buildExportSections(dataset: Record<string, unknown>): ExportSection[] 
   return [
     ["TABLE A - SYSTEM RESULT", projectExportRows(flattenSummaryRows(overview.systemResult, "Table A"), SYSTEM_RESULT_EXPORT_COLUMNS)],
     ["TABLE B - CLIENT RESULT", projectExportRows(flattenSummaryRows(overview.clientResult, "Table B"), CLIENT_RESULT_EXPORT_COLUMNS)],
-    ["TABLE C - MANUAL RECONCILIATION SUMMARY", projectExportRows(flattenSummaryRows(overview.manualReconciliation, "Table C"), MANUAL_SUMMARY_EXPORT_COLUMNS)],
-    ["TABLE C - MANUAL RECONCILIATION DETAIL", projectExportRows(reconciliations, MANUAL_DETAIL_EXPORT_COLUMNS)],
-    ["TABLE D - RECONCILED RESULT", projectExportRows(flattenSummaryRows(overview.reconciledResult, "Table D"), RECONCILED_EXPORT_COLUMNS)],
-    ["SYSTEM VS CLIENT VS RECONCILED", projectExportRows(comparison, COMPARISON_EXPORT_COLUMNS)],
-    ["CALENDAR", projectExportRows(calendar, CALENDAR_EXPORT_COLUMNS)],
-    ["DRILLDOWN", projectExportRows(drilldown, DRILLDOWN_EXPORT_COLUMNS)],
+    ["LATEST TOTAL COMPARISON", projectExportRows(comparison, COMPARISON_EXPORT_COLUMNS)],
+    ["SYSTEM DAILY MOVEMENT", projectExportRows(calendar, CALENDAR_EXPORT_COLUMNS)],
+    ["SYSTEM OSP CLOSED DETAIL", projectExportRows(drilldown, DRILLDOWN_EXPORT_COLUMNS)],
   ];
 }
 
@@ -547,7 +494,7 @@ function csvEscape(value: unknown, field = ""): string {
 }
 
 function buildCsvExport(dataset: Record<string, unknown>): Buffer {
-  const output: string[] = ["SQR Billing Principal V7 Export"];
+  const output: string[] = ["SQR Billing Principal V9 Export"];
   for (const row of buildExportMetadata(dataset)) {
     output.push(`${csvEscape(row.Field)},${csvEscape(row.Value, String(row.Field))}`);
   }
@@ -580,12 +527,9 @@ async function buildXlsxExport(dataset: Record<string, unknown>): Promise<Buffer
   const sheets: Array<[string, Array<Record<string, unknown>>]> = [
     ["Table A System", sections[0]![1]],
     ["Table B Client", sections[1]![1]],
-    ["Table C Summary", sections[2]![1]],
-    ["Table C Detail", sections[3]![1]],
-    ["Table D Reconciled", sections[4]![1]],
-    ["Comparison", sections[5]![1]],
-    ["Calendar", sections[6]![1]],
-    ["Drilldown", sections[7]![1]],
+    ["Latest Comparison", sections[2]![1]],
+    ["Daily Movement", sections[3]![1]],
+    ["OSP Closed Detail", sections[4]![1]],
   ];
   for (const [name, rows] of sheets) {
     const sanitized = sanitizeRows(rows);
@@ -682,7 +626,13 @@ export class CollectionOspV7Operations {
     if (new Set(requestedAgings).size !== requestedAgings.length) {
       throw badRequest("Aging scope must contain unique D3, D4, D5, or D6 values.");
     }
-    const agingScope = AGINGS.filter((aging) => requestedAgings.includes(aging));
+    if (
+      requestedAgings.length !== AGINGS.length
+      || AGINGS.some((aging) => !requestedAgings.includes(aging))
+    ) {
+      throw badRequest("A Saved Target must include the complete D3, D4, D5, and D6 aging scope.");
+    }
+    const agingScope = [...AGINGS];
     try {
       const target = await this.storage.createCollectionOspSavedTarget({
         name,
@@ -762,173 +712,10 @@ export class CollectionOspV7Operations {
     }
   }
 
-  async candidates(userInput: AuthenticatedUser | undefined, targetRaw: unknown, revisionRaw: unknown, query: Record<string, unknown>) {
-    const user = this.requireUser(userInput);
-    requireSuperuser(user);
-    const page = readPagination(query);
-    const aging = readAging(query.aging, true);
-    try {
-      const result = await this.storage.listCollectionOspReconciliationCandidates({
-        targetId: readUuid(targetRaw, "Saved Target ID"),
-        revisionId: readUuid(revisionRaw, "Target revision ID"),
-        asOfDate: query.asOf == null ? currentBusinessDate() : readDate(query.asOf, "As-of date"),
-        search: readBoundedText(query.search ?? query.query, "Search", 120) ?? "",
-        ...(aging ? { aging } : {}),
-        ...page,
-      });
-      return { ok: true as const, ...result };
-    } catch (error) {
-      normalizeRepositoryError(error);
-    }
-  }
-
-  async reconciliations(userInput: AuthenticatedUser | undefined, targetRaw: unknown, revisionRaw: unknown, query: Record<string, unknown>) {
-    const user = this.requireUser(userInput);
-    requireReportViewer(user);
-    const targetId = readUuid(targetRaw, "Saved Target ID");
-    const revisionId = readUuid(revisionRaw, "Target revision ID");
-    await this.requireVisibleTarget(user, targetId, revisionId);
-    const page = readPagination(query);
-    const statusRaw = normalizeCollectionText(query.status).toUpperCase();
-    const aging = readAging(query.aging, true);
-    if (statusRaw && statusRaw !== "ACTIVE" && statusRaw !== "VOIDED") throw badRequest("Reconciliation status is invalid.");
-    try {
-      const result = await this.storage.listCollectionOspManualReconciliations({
-        targetId,
-        revisionId,
-        asOfDate: query.asOf == null ? currentBusinessDate() : readDate(query.asOf, "As-of date"),
-        search: readBoundedText(query.search, "Search", 120) ?? "",
-        ...(aging ? { aging } : {}),
-        ...(statusRaw ? { status: statusRaw as "ACTIVE" | "VOIDED" } : {}),
-        ...page,
-      });
-      return { ok: true as const, ...result };
-    } catch (error) {
-      normalizeRepositoryError(error);
-    }
-  }
-
-  private readManualBody(bodyRaw: unknown, requireVersion: boolean) {
-    const body = ensureLooseObject(bodyRaw) ?? {};
-    const note = readBoundedText(body.note, "Note", 2_000);
-    const asOfDate = readDate(body.asOfDate, "As-of date");
-    const actualPaymentDate = body.actualPaymentDate == null || !normalizeCollectionText(body.actualPaymentDate)
-      ? null
-      : readDate(body.actualPaymentDate, "Actual payment date");
-    if (actualPaymentDate && actualPaymentDate > asOfDate) throw badRequest("Actual payment date cannot be later than the as-of date.");
-    return {
-      body,
-      manualPriorAmount: readMoney(body.manualPriorAmount, "Manual prior amount", false),
-      asOfDate,
-      actualPaymentDate,
-      reason: readReason(body.reason, note),
-      note,
-      reference: readBoundedText(body.reference, "Evidence reference", 300),
-      ...(requireVersion ? { expectedVersion: readPositiveInteger(body.version, "Version", 2_147_483_647) } : {}),
-    };
-  }
-
-  async createReconciliation(userInput: AuthenticatedUser | undefined, targetRaw: unknown, revisionRaw: unknown, bodyRaw: unknown, requestIdRaw?: unknown) {
-    const user = this.requireUser(userInput);
-    requireSuperuser(user);
-    const values = this.readManualBody(bodyRaw, false);
-    try {
-      const reconciliation = await this.storage.createCollectionOspManualReconciliation({
-        targetId: readUuid(targetRaw, "Saved Target ID"),
-        revisionId: readUuid(revisionRaw, "Target revision ID"),
-        sourceImportId: readBoundedText(values.body.sourceImportId, "Source ID", 200, { required: true })!,
-        sourceDataRowId: readBoundedText(values.body.sourceRecordId, "Source record ID", 200, { required: true })!,
-        manualPriorAmount: values.manualPriorAmount,
-        asOfDate: values.asOfDate,
-        actualPaymentDate: values.actualPaymentDate,
-        reason: values.reason,
-        note: values.note,
-        reference: values.reference,
-        actor: user.username,
-        actorRole: "superuser",
-        requestId: readBoundedText(requestIdRaw, "Request ID", 160, { rejectMarkup: false }),
-      });
-      return { ok: true as const, reconciliation };
-    } catch (error) {
-      normalizeRepositoryError(error);
-    }
-  }
-
-  async updateReconciliation(userInput: AuthenticatedUser | undefined, targetRaw: unknown, revisionRaw: unknown, reconciliationRaw: unknown, bodyRaw: unknown, requestIdRaw?: unknown) {
-    const user = this.requireUser(userInput);
-    requireSuperuser(user);
-    const values = this.readManualBody(bodyRaw, true);
-    if (values.expectedVersion === undefined) {
-      throw badRequest("Version is required.");
-    }
-    try {
-      const reconciliation = await this.storage.updateCollectionOspManualReconciliation({
-        targetId: readUuid(targetRaw, "Saved Target ID"),
-        revisionId: readUuid(revisionRaw, "Target revision ID"),
-        reconciliationId: readUuid(reconciliationRaw, "Reconciliation ID"),
-        expectedVersion: values.expectedVersion,
-        manualPriorAmount: values.manualPriorAmount,
-        asOfDate: values.asOfDate,
-        actualPaymentDate: values.actualPaymentDate,
-        reason: values.reason,
-        note: values.note,
-        reference: values.reference,
-        actor: user.username,
-        actorRole: "superuser",
-        requestId: readBoundedText(requestIdRaw, "Request ID", 160, { rejectMarkup: false }),
-      });
-      return { ok: true as const, reconciliation };
-    } catch (error) {
-      normalizeRepositoryError(error);
-    }
-  }
-
-  async voidReconciliation(userInput: AuthenticatedUser | undefined, targetRaw: unknown, revisionRaw: unknown, reconciliationRaw: unknown, bodyRaw: unknown, requestIdRaw?: unknown) {
-    const user = this.requireUser(userInput);
-    requireSuperuser(user);
-    const body = ensureLooseObject(bodyRaw) ?? {};
-    try {
-      const reconciliation = await this.storage.voidCollectionOspManualReconciliation({
-        targetId: readUuid(targetRaw, "Saved Target ID"),
-        revisionId: readUuid(revisionRaw, "Target revision ID"),
-        reconciliationId: readUuid(reconciliationRaw, "Reconciliation ID"),
-        expectedVersion: readPositiveInteger(body.version, "Version", 2_147_483_647),
-        reason: readBoundedText(body.reason, "Void reason", 500, { required: true })!,
-        asOfDate: readDate(body.asOfDate, "As-of date"),
-        actor: user.username,
-        actorRole: "superuser",
-        requestId: readBoundedText(requestIdRaw, "Request ID", 160, { rejectMarkup: false }),
-      });
-      return { ok: true as const, reconciliation };
-    } catch (error) {
-      normalizeRepositoryError(error);
-    }
-  }
-
-  async history(userInput: AuthenticatedUser | undefined, targetRaw: unknown, revisionRaw: unknown, reconciliationRaw: unknown) {
-    const user = this.requireUser(userInput);
-    requireReportViewer(user);
-    const targetId = readUuid(targetRaw, "Saved Target ID");
-    const revisionId = readUuid(revisionRaw, "Target revision ID");
-    await this.requireVisibleTarget(user, targetId, revisionId);
-    try {
-      const history = await this.storage.listCollectionOspReconciliationHistory({
-        targetId,
-        revisionId,
-        reconciliationId: readUuid(reconciliationRaw, "Reconciliation ID"),
-        limit: 100,
-      });
-      return { ok: true as const, history };
-    } catch (error) {
-      normalizeRepositoryError(error);
-    }
-  }
-
   async upsertClientResults(userInput: AuthenticatedUser | undefined, targetRaw: unknown, revisionRaw: unknown, bodyRaw: unknown) {
     const user = this.requireUser(userInput);
     requireSuperuser(user);
     const body = ensureLooseObject(bodyRaw) ?? {};
-    const asOfDate = readDate(body.asOf, "Client Result as-of date");
     if (!Array.isArray(body.rows) || body.rows.length < 1 || body.rows.length > 4) {
       throw badRequest("Client Result must contain between one and four unique aging rows.");
     }
@@ -942,21 +729,35 @@ export class CollectionOspV7Operations {
       return {
         aging,
         resultPercentage: readPercentage(row.resultPercentage, `${aging} Client Result`),
-        ospClosed: readMoney(row.ospClosed, `${aging} Client OSP Closed`, true),
         note: readBoundedText(row.note, "Client note", 2_000),
         reference: readBoundedText(row.reference, "Client reference", 300),
         ...(row.version == null ? {} : { expectedVersion: readPositiveInteger(row.version, "Client Result version", 2_147_483_647) }),
       };
     });
     try {
-      const persisted = await this.storage.upsertCollectionOspClientResults({
-        targetId: readUuid(targetRaw, "Saved Target ID"),
-        revisionId: readUuid(revisionRaw, "Target revision ID"),
-        asOfDate,
+      const targetId = readUuid(targetRaw, "Saved Target ID");
+      const revisionId = readUuid(revisionRaw, "Target revision ID");
+      const target = await this.requireVisibleTarget(user, targetId, revisionId);
+      const clientResult = await this.storage.upsertCollectionOspClientResults({
+        targetId,
+        revisionId,
+        receivedDate: currentBusinessDate(),
         rows,
         actor: user.username,
       });
-      return { ok: true as const, rows: persisted };
+      const range = targetTrackingRange(target);
+      const today = currentBusinessDate();
+      const latestAsOf = today < range.start ? range.start : today > range.end ? range.end : today;
+      const overview = await this.storage.getCollectionOspTargetOverview({
+        targetId,
+        revisionId,
+        asOfDate: latestAsOf,
+      }) as Record<string, unknown>;
+      return {
+        ok: true as const,
+        clientResult,
+        latestComparison: overview.latestComparison,
+      };
     } catch (error) {
       normalizeRepositoryError(error);
     }
@@ -999,11 +800,7 @@ export class CollectionOspV7Operations {
     const revisionId = readUuid(revisionRaw, "Target revision ID");
     await this.requireVisibleTarget(user, targetId, revisionId);
     const page = readPagination(query);
-    const sourceRaw = normalizeCollectionText(query.contributionSource).toUpperCase();
     const aging = readAging(query.aging, true);
-    if (sourceRaw && sourceRaw !== "SYSTEM_ABORT_CP" && sourceRaw !== "MANUAL_RECONCILIATION") {
-      throw badRequest("Contribution source is invalid.");
-    }
     const asOfDate = query.asOf == null ? currentBusinessDate() : readDate(query.asOf, "As-of date");
     const date = query.date == null ? undefined : readDate(query.date, "Drilldown date");
     if (date && date > asOfDate) throw badRequest("Drilldown date cannot be later than the as-of date.");
@@ -1014,7 +811,6 @@ export class CollectionOspV7Operations {
         asOfDate,
         ...(date === undefined ? {} : { date }),
         ...(aging ? { aging } : {}),
-        ...(sourceRaw ? { contributionSource: sourceRaw as "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" } : {}),
         ...page,
       });
       return { ok: true as const, ...result };
@@ -1042,14 +838,6 @@ export class CollectionOspV7Operations {
     if (exportDate && exportDate > asOfDate) throw badRequest("Export date cannot be later than the as-of date.");
     if (to > asOfDate) throw badRequest("Export To cannot be later than the as-of date.");
     const aging = readAging(query.aging, true);
-    const contributionSourceRaw = normalizeCollectionText(query.contributionSource).toUpperCase();
-    if (
-      contributionSourceRaw
-      && contributionSourceRaw !== "SYSTEM_ABORT_CP"
-      && contributionSourceRaw !== "MANUAL_RECONCILIATION"
-    ) {
-      throw badRequest("Contribution source is invalid.");
-    }
     try {
       return await this.exportGuard.run(user.username, async () => {
         const dataset = await this.storage.getCollectionOspExportDataset({
@@ -1060,9 +848,6 @@ export class CollectionOspV7Operations {
           to,
           ...(exportDate === undefined ? {} : { date: exportDate }),
           ...(aging ? { aging } : {}),
-          ...(contributionSourceRaw
-            ? { contributionSource: contributionSourceRaw as "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" }
-            : {}),
         });
         const governedDataset = { ...dataset, generatedBy: user.username };
         assertCollectionOspV7ExportWithinLimits(governedDataset);
@@ -1078,7 +863,7 @@ export class CollectionOspV7Operations {
             : format === "json"
               ? "application/json; charset=utf-8"
               : "text/csv; charset=utf-8",
-          filename: `billing-principal-v7-${asOfDate}.${format}`,
+          filename: `billing-principal-v9-${asOfDate}.${format}`,
         };
       });
     } catch (error) {

@@ -70,8 +70,12 @@ const run = async () => {
   await mkdir(artifactsDir, { recursive: true });
 
   const stamp = Date.now();
-  const smokeUser = String(process.env.SMOKE_TEST_USERNAME || "").trim() || `superuser${stamp}`;
-  const smokePassword = String(process.env.SMOKE_TEST_PASSWORD || "").trim() || "Password123!";
+  const smokeUser = String(
+    process.env.SMOKE_TEST_USERNAME || process.env.SEED_SUPERUSER_USERNAME || "",
+  ).trim() || `superuser${stamp}`;
+  const smokePassword = String(
+    process.env.SMOKE_TEST_PASSWORD || process.env.SEED_SUPERUSER_PASSWORD || "",
+  ).trim() || "Password123!";
   const host = String(process.env.HOST || "127.0.0.1").trim() || "127.0.0.1";
   const defaultPort = String(process.env.PORT || "5000").trim() || "5000";
   const resolvedServer = await resolveManagedLoopbackBaseUrl({
@@ -99,9 +103,9 @@ const run = async () => {
     PG_USER: process.env.PG_USER || "postgres",
     PG_PASSWORD: process.env.PG_PASSWORD || "postgres",
     PG_DATABASE: process.env.PG_DATABASE || "sqr_db",
-    SEED_DEFAULT_USERS: process.env.SEED_DEFAULT_USERS || "1",
-    SEED_SUPERUSER_USERNAME: process.env.SEED_SUPERUSER_USERNAME || smokeUser,
-    SEED_SUPERUSER_PASSWORD: process.env.SEED_SUPERUSER_PASSWORD || smokePassword,
+    SEED_DEFAULT_USERS: "1",
+    SEED_SUPERUSER_USERNAME: smokeUser,
+    SEED_SUPERUSER_PASSWORD: smokePassword,
     SEED_SUPERUSER_FULL_NAME: process.env.SEED_SUPERUSER_FULL_NAME || "CI Superuser",
     SMOKE_TEST_USERNAME: smokeUser,
     SMOKE_TEST_PASSWORD: smokePassword,

@@ -67,40 +67,33 @@ export type BillingPrincipalSavedTarget = {
 
 export type BillingPrincipalClientRow = {
   aging: BillingPrincipalAging;
+  totalOsp: string;
+  targetPercentage: string;
+  targetOsp: string;
   resultPercentage: string;
   ospClosed: string;
   note: string | null;
   reference: string | null;
-  effectiveDate: string | null;
+  receivedDate: string | null;
+  updatedAt: string | null;
   version: number | null;
 };
 
-export type BillingPrincipalManualSummaryRow = {
-  aging: BillingPrincipalAging;
-  ospClosed: string;
-  closedAccountCount: number;
-};
-
-export type BillingPrincipalReconciledRow = BillingPrincipalReportRow & {
-  systemOspClosed: string;
-  manualReconciledOsp: string;
-  reconciledOspClosed: string;
-  reconciledResultPercentage: string;
-};
-
-export type BillingPrincipalComparisonRow = {
-  aging: BillingPrincipalAging | "ALL";
-  systemResultPercentage: string;
-  reconciledResultPercentage: string;
-  clientResultPercentage: string | null;
-  systemOspClosed: string;
-  manualReconciledOsp: string;
-  reconciledOspClosed: string;
-  clientOspClosed: string | null;
-  systemVsClientResultPercentagePointDifference: string | null;
-  reconciledVsClientResultPercentagePointDifference: string | null;
-  systemVsClientOspDifference: string | null;
-  reconciledVsClientOspDifference: string | null;
+export type BillingPrincipalLatestComparison = {
+  system: {
+    asOf: string;
+    totalOsp: string;
+    ospClosed: string;
+    resultPercentage: string;
+  };
+  client: {
+    lastUpdatedAt: string;
+    receivedDate: string;
+    totalOsp: string;
+    ospClosed: string;
+    resultPercentage: string;
+  } | null;
+  differencePercentagePoints: string | null;
 };
 
 export type BillingPrincipalSavedTargetOverview = {
@@ -113,62 +106,7 @@ export type BillingPrincipalSavedTargetOverview = {
     rows: BillingPrincipalClientRow[];
     all: Omit<BillingPrincipalClientRow, "aging"> & { aging: "ALL" };
   };
-  manualReconciliation: {
-    rows: BillingPrincipalManualSummaryRow[];
-    all: Omit<BillingPrincipalManualSummaryRow, "aging"> & { aging: "ALL" };
-  };
-  reconciledResult: {
-    rows: BillingPrincipalReconciledRow[];
-    all: Omit<BillingPrincipalReconciledRow, "aging"> & { aging: "ALL" };
-  };
-  comparison: { rows: BillingPrincipalComparisonRow[] };
-};
-
-export type BillingPrincipalAccountCandidate = {
-  sourceImportId: string;
-  sourceRecordId: string;
-  sourceName: string;
-  sourceFilename: string;
-  maskedAccountNumber: string;
-  cardNumberLast4: string | null;
-  maskedCustomerName: string;
-  aging: BillingPrincipalAging;
-  callingDate: string;
-  totalDue: string;
-  billingPrincipalOsp: string;
-  systemEligibleCumulative: string;
-  rawSystemClassification: "CP" | "ABORT_CP" | null;
-  activeReconciliationId: string | null;
-};
-
-export type BillingPrincipalManualReason =
-  | "PRIOR_PAYMENT_NOT_IN_SYSTEM"
-  | "CLIENT_CONFIRMED_PRIOR_PAYMENT"
-  | "HISTORICAL_PAYMENT_MISSING"
-  | "MIGRATED_HISTORY_GAP"
-  | "OTHER_WITH_REQUIRED_NOTE";
-
-export type BillingPrincipalManualReconciliation = Omit<
-  BillingPrincipalAccountCandidate,
-  "activeReconciliationId"
-> & {
-  id: string;
-  version: number;
-  status: "ACTIVE" | "VOIDED";
-  manualPriorAmount: string;
-  asOfDate: string;
-  actualPaymentDate: string | null;
-  reconciledCumulative: string;
-  reconciledRemaining: string;
-  reconciledStatus: "RECONCILED_CLOSED" | "RECONCILED_OPEN" | "SUPERSEDED_BY_SYSTEM_ABORT";
-  reconciledClosedEffectiveDate: string | null;
-  reason: BillingPrincipalManualReason;
-  note: string | null;
-  reference: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedBy: string;
-  updatedAt: string;
+  latestComparison: BillingPrincipalLatestComparison;
 };
 
 export type BillingPrincipalCalendarDay = {
@@ -177,28 +115,18 @@ export type BillingPrincipalCalendarDay = {
   totalOsp: string;
   targetOsp: string;
   systemOspClosedToday: string;
-  manualReconciliationOspClosedToday: string;
-  reconciledOspClosedToday: string;
   systemCumulativeOspClosed: string;
-  manualReconciliationCumulativeOsp: string;
-  reconciledCumulativeOspClosed: string;
   systemResultPercentage: string;
-  reconciledResultPercentage: string;
-  clientResultPercentage: string | null;
   systemPreviousResultPercentage: string;
-  reconciledPreviousResultPercentage: string;
   systemDailyMovementPercentagePoints: string;
-  reconciledDailyMovementPercentagePoints: string;
   systemAchievementVsTargetPercentage: string;
-  reconciledAchievementVsTargetPercentage: string;
   systemDailyAccounts: number;
-  manualDailyAccounts: number;
-  reconciledDailyAccounts: number;
 };
 
 export type BillingPrincipalDrilldownItem = {
-  contributionSource: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION";
+  contributionSource: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
   maskedAccountNumber: string;
+  cardNumber: string | null;
   cardNumberLast4: string | null;
   maskedCustomerName: string;
   sourceName: string;
@@ -209,16 +137,16 @@ export type BillingPrincipalDrilldownItem = {
   systemEligibleCumulative: string;
   systemClosureCollectionAmount: string | null;
   systemClosureStaffNickname: string | null;
-  manualPriorAmount: string;
-  reconciledCumulative: string;
+  poolAmount: string;
+  effectiveCumulative: string;
   billingPrincipalOsp: string;
   effectiveClosedDate: string;
-  reason: BillingPrincipalManualReason | null;
+  reason: string | null;
   reference: string | null;
-  reconciliationCreatedBy: string | null;
-  reconciliationCreatedAt: string | null;
-  reconciliationUpdatedBy: string | null;
-  reconciliationUpdatedAt: string | null;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  updatedBy: string | null;
+  updatedAt: string | null;
 };
 
 export type BillingPrincipalVisualExportDataset = {
@@ -231,11 +159,8 @@ export type BillingPrincipalVisualExportDataset = {
     to: string;
     date: string | null;
     aging: BillingPrincipalAging | null;
-    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" | null | undefined;
   };
   overview: Omit<BillingPrincipalSavedTargetOverview, "ok">;
-  reconciliations: BillingPrincipalManualReconciliation[];
-  reconciliationTotal: number;
   calendar: BillingPrincipalCalendarDay[];
   drilldown: BillingPrincipalDrilldownItem[];
   drilldownTotal: number;
@@ -246,17 +171,6 @@ export type BillingPrincipalPagination = {
   pageSize: number;
   total: number;
   totalPages: number;
-};
-
-export type BillingPrincipalReconciliationHistoryEntry = {
-  id: string;
-  operation: "CREATE" | "UPDATE" | "VOID" | "RESTORE";
-  fromVersion: number | null;
-  toVersion: number;
-  before: Record<string, unknown> | null;
-  after: Record<string, unknown> | null;
-  actor: string;
-  createdAt: string;
 };
 
 export type BillingPrincipalSavedTargetInput = {
@@ -275,21 +189,9 @@ export type BillingPrincipalSavedTargetInput = {
 export type BillingPrincipalClientResultInput = {
   aging: BillingPrincipalAging;
   resultPercentage: string;
-  ospClosed: string;
   note?: string | null | undefined;
   reference?: string | null | undefined;
   version?: number | null | undefined;
-};
-
-export type BillingPrincipalReconciliationInput = {
-  sourceImportId: string;
-  sourceRecordId: string;
-  manualPriorAmount: string;
-  asOfDate: string;
-  actualPaymentDate?: string | null | undefined;
-  reason: BillingPrincipalManualReason;
-  note?: string | null | undefined;
-  reference?: string | null | undefined;
 };
 
 const reportAgingSchema = z.enum(["D3", "D4", "D5", "D6"]);
@@ -368,91 +270,33 @@ const savedTargetSchema: z.ZodType<BillingPrincipalSavedTarget> = z.object({
 
 const clientRowSchema = z.object({
   aging: reportAgingSchema,
+  totalOsp: decimalSchema,
+  targetPercentage: decimalSchema,
+  targetOsp: decimalSchema,
   resultPercentage: decimalSchema,
   ospClosed: decimalSchema,
   note: noteSchema.nullable(),
   reference: referenceSchema.nullable(),
-  effectiveDate: isoDateSchema.nullable(),
+  receivedDate: isoDateSchema.nullable(),
+  updatedAt: dateTimeSchema.nullable(),
   version: z.number().int().nonnegative().nullable(),
 });
 
-const manualSummaryRowSchema = z.object({
-  aging: reportAgingSchema,
-  ospClosed: decimalSchema,
-  closedAccountCount: z.number().int().nonnegative(),
-});
-
-const reconciledRowSchema = reportRowSchema.extend({
-  systemOspClosed: decimalSchema,
-  manualReconciledOsp: decimalSchema,
-  reconciledOspClosed: decimalSchema,
-  reconciledResultPercentage: decimalSchema,
-});
-
-const comparisonRowSchema: z.ZodType<BillingPrincipalComparisonRow> = z.object({
-  aging: z.enum(["D3", "D4", "D5", "D6", "ALL"]),
-  systemResultPercentage: decimalSchema,
-  reconciledResultPercentage: decimalSchema,
-  clientResultPercentage: decimalSchema.nullable(),
-  systemOspClosed: decimalSchema,
-  manualReconciledOsp: decimalSchema,
-  reconciledOspClosed: decimalSchema,
-  clientOspClosed: decimalSchema.nullable(),
-  systemVsClientResultPercentagePointDifference: decimalSchema.nullable(),
-  reconciledVsClientResultPercentagePointDifference: decimalSchema.nullable(),
-  systemVsClientOspDifference: decimalSchema.nullable(),
-  reconciledVsClientOspDifference: decimalSchema.nullable(),
-});
-
-const accountCandidateSchema = z.object({
-  sourceImportId: idSchema,
-  sourceRecordId: idSchema,
-  sourceName: z.string().min(1).max(300),
-  sourceFilename: z.string().min(1).max(500),
-  maskedAccountNumber: z.string().min(1).max(64),
-  cardNumberLast4: z.string().regex(/^\d{4}$/).nullable(),
-  maskedCustomerName: z.string().min(1).max(160),
-  aging: reportAgingSchema,
-  callingDate: isoDateSchema,
-  totalDue: decimalSchema,
-  billingPrincipalOsp: decimalSchema,
-  systemEligibleCumulative: decimalSchema,
-  rawSystemClassification: z.enum(["CP", "ABORT_CP"]).nullable(),
-  activeReconciliationId: idSchema.nullable(),
-});
-
-const manualReasonSchema = z.enum([
-  "PRIOR_PAYMENT_NOT_IN_SYSTEM",
-  "CLIENT_CONFIRMED_PRIOR_PAYMENT",
-  "HISTORICAL_PAYMENT_MISSING",
-  "MIGRATED_HISTORY_GAP",
-  "OTHER_WITH_REQUIRED_NOTE",
-]);
-
-const reconciliationSchema: z.ZodType<BillingPrincipalManualReconciliation> = accountCandidateSchema.omit({
-  activeReconciliationId: true,
-}).extend({
-  id: idSchema,
-  version: z.number().int().nonnegative(),
-  status: z.enum(["ACTIVE", "VOIDED"]),
-  manualPriorAmount: decimalSchema,
-  asOfDate: isoDateSchema,
-  actualPaymentDate: isoDateSchema.nullable(),
-  reconciledCumulative: decimalSchema,
-  reconciledRemaining: decimalSchema,
-  reconciledStatus: z.enum([
-    "RECONCILED_CLOSED",
-    "RECONCILED_OPEN",
-    "SUPERSEDED_BY_SYSTEM_ABORT",
-  ]),
-  reconciledClosedEffectiveDate: isoDateSchema.nullable(),
-  reason: manualReasonSchema,
-  note: noteSchema.nullable(),
-  reference: referenceSchema.nullable(),
-  createdBy: z.string().min(1).max(160),
-  createdAt: dateTimeSchema,
-  updatedBy: z.string().min(1).max(160),
-  updatedAt: dateTimeSchema,
+const latestComparisonSchema: z.ZodType<BillingPrincipalLatestComparison> = z.object({
+  system: z.object({
+    asOf: isoDateSchema,
+    totalOsp: decimalSchema,
+    ospClosed: decimalSchema,
+    resultPercentage: decimalSchema,
+  }),
+  client: z.object({
+    lastUpdatedAt: dateTimeSchema,
+    receivedDate: isoDateSchema,
+    totalOsp: decimalSchema,
+    ospClosed: decimalSchema,
+    resultPercentage: decimalSchema,
+  }).nullable(),
+  differencePercentagePoints: decimalSchema.nullable(),
 });
 
 const paginatedFieldsSchema = z.object({
@@ -472,15 +316,7 @@ const overviewSchema = z.object({
     rows: z.array(clientRowSchema).max(4),
     all: clientRowSchema.omit({ aging: true }).extend({ aging: z.literal("ALL") }),
   }),
-  manualReconciliation: z.object({
-    rows: z.array(manualSummaryRowSchema).max(4),
-    all: manualSummaryRowSchema.omit({ aging: true }).extend({ aging: z.literal("ALL") }),
-  }),
-  reconciledResult: z.object({
-    rows: z.array(reconciledRowSchema).max(4),
-    all: reconciledRowSchema.omit({ aging: true }).extend({ aging: z.literal("ALL") }),
-  }),
-  comparison: z.object({ rows: z.array(comparisonRowSchema).max(5) }),
+  latestComparison: latestComparisonSchema,
 }) satisfies z.ZodType<BillingPrincipalSavedTargetOverview>;
 
 const calendarDaySchema: z.ZodType<BillingPrincipalCalendarDay> = z.object({
@@ -489,28 +325,18 @@ const calendarDaySchema: z.ZodType<BillingPrincipalCalendarDay> = z.object({
   totalOsp: decimalSchema,
   targetOsp: decimalSchema,
   systemOspClosedToday: decimalSchema,
-  manualReconciliationOspClosedToday: decimalSchema,
-  reconciledOspClosedToday: decimalSchema,
   systemCumulativeOspClosed: decimalSchema,
-  manualReconciliationCumulativeOsp: decimalSchema,
-  reconciledCumulativeOspClosed: decimalSchema,
   systemResultPercentage: decimalSchema,
-  reconciledResultPercentage: decimalSchema,
-  clientResultPercentage: decimalSchema.nullable(),
   systemPreviousResultPercentage: decimalSchema,
-  reconciledPreviousResultPercentage: decimalSchema,
   systemDailyMovementPercentagePoints: decimalSchema,
-  reconciledDailyMovementPercentagePoints: decimalSchema,
   systemAchievementVsTargetPercentage: decimalSchema,
-  reconciledAchievementVsTargetPercentage: decimalSchema,
   systemDailyAccounts: z.number().int().nonnegative(),
-  manualDailyAccounts: z.number().int().nonnegative(),
-  reconciledDailyAccounts: z.number().int().nonnegative(),
 });
 
 const drilldownItemSchema: z.ZodType<BillingPrincipalDrilldownItem> = z.object({
-  contributionSource: z.enum(["SYSTEM_ABORT_CP", "MANUAL_RECONCILIATION"]),
+  contributionSource: z.enum(["AUTOMATIC_ABORT_CP", "MANUAL_VERIFIED_ABORT"]),
   maskedAccountNumber: z.string().min(1).max(64),
+  cardNumber: z.string().min(1).max(80).nullable(),
   cardNumberLast4: z.string().regex(/^\d{4}$/).nullable(),
   maskedCustomerName: z.string().min(1).max(160),
   sourceName: z.string().min(1).max(300),
@@ -521,16 +347,16 @@ const drilldownItemSchema: z.ZodType<BillingPrincipalDrilldownItem> = z.object({
   systemEligibleCumulative: decimalSchema,
   systemClosureCollectionAmount: decimalSchema.nullable(),
   systemClosureStaffNickname: z.string().min(1).max(160).nullable(),
-  manualPriorAmount: decimalSchema,
-  reconciledCumulative: decimalSchema,
+  poolAmount: decimalSchema,
+  effectiveCumulative: decimalSchema,
   billingPrincipalOsp: decimalSchema,
   effectiveClosedDate: isoDateSchema,
-  reason: manualReasonSchema.nullable(),
+  reason: z.string().max(500).nullable(),
   reference: referenceSchema.nullable(),
-  reconciliationCreatedBy: z.string().min(1).max(160).nullable(),
-  reconciliationCreatedAt: dateTimeSchema.nullable(),
-  reconciliationUpdatedBy: z.string().min(1).max(160).nullable(),
-  reconciliationUpdatedAt: dateTimeSchema.nullable(),
+  verifiedBy: z.string().min(1).max(160).nullable(),
+  verifiedAt: dateTimeSchema.nullable(),
+  updatedBy: z.string().min(1).max(160).nullable(),
+  updatedAt: dateTimeSchema.nullable(),
 });
 
 const targetListResponseSchema = z.object({
@@ -543,42 +369,13 @@ const targetMutationResponseSchema = z.object({
   target: savedTargetSchema,
 });
 
-const candidateListResponseSchema = z.object({
-  ok: z.literal(true),
-  candidates: z.array(accountCandidateSchema).max(100),
-  pagination: paginatedFieldsSchema,
-});
-
-const reconciliationListResponseSchema = z.object({
-  ok: z.literal(true),
-  reconciliations: z.array(reconciliationSchema).max(100),
-  pagination: paginatedFieldsSchema,
-});
-
-const reconciliationMutationResponseSchema = z.object({
-  ok: z.literal(true),
-  reconciliation: reconciliationSchema,
-});
-
-const reconciliationHistoryEntrySchema: z.ZodType<BillingPrincipalReconciliationHistoryEntry> = z.object({
-  id: idSchema,
-  operation: z.enum(["CREATE", "UPDATE", "VOID", "RESTORE"]),
-  fromVersion: z.number().int().nonnegative().nullable(),
-  toVersion: z.number().int().positive(),
-  before: z.record(z.unknown()).nullable(),
-  after: z.record(z.unknown()).nullable(),
-  actor: z.string().min(1).max(160),
-  createdAt: dateTimeSchema,
-});
-
-const reconciliationHistoryResponseSchema = z.object({
-  ok: z.literal(true),
-  history: z.array(reconciliationHistoryEntrySchema).max(500),
-});
-
 const clientResultsMutationResponseSchema = z.object({
   ok: z.literal(true),
-  rows: z.array(clientRowSchema).max(4),
+  clientResult: z.object({
+    rows: z.array(clientRowSchema).max(4),
+    all: clientRowSchema.omit({ aging: true }).extend({ aging: z.literal("ALL") }),
+  }),
+  latestComparison: latestComparisonSchema,
 });
 
 const calendarResponseSchema = z.object({
@@ -605,22 +402,11 @@ const visualExportDatasetSchema = z.object({
     to: isoDateSchema,
     date: isoDateSchema.nullable(),
     aging: reportAgingSchema.nullable(),
-    contributionSource: z.enum(["SYSTEM_ABORT_CP", "MANUAL_RECONCILIATION"]).nullable().optional(),
   }),
   overview: overviewSchema.omit({ ok: true }),
-  reconciliations: z.array(reconciliationSchema).max(10_000),
-  reconciliationTotal: z.number().int().nonnegative().max(10_000),
   calendar: z.array(calendarDaySchema).max(366),
   drilldown: z.array(drilldownItemSchema).max(10_000),
   drilldownTotal: z.number().int().nonnegative().max(10_000),
-}).superRefine((dataset, context) => {
-  if (dataset.reconciliations.length + dataset.drilldown.length > 10_000) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["reconciliations"],
-      message: "Visual export detail rows exceed the governed 10,000-row limit.",
-    });
-  }
 }) satisfies z.ZodType<BillingPrincipalVisualExportDataset>;
 
 type RequestOptions = { signal?: AbortSignal | undefined };
@@ -848,7 +634,7 @@ export async function getBillingPrincipalSavedTargetOverview(
 export async function upsertBillingPrincipalClientResults(
   targetId: string,
   revisionId: string,
-  payload: { asOf: string; rows: BillingPrincipalClientResultInput[] },
+  payload: { rows: BillingPrincipalClientResultInput[] },
   options?: MutationRequestOptions,
 ) {
   const endpoint = `${savedTargetRevisionEndpoint(targetId, revisionId)}/client-results`;
@@ -862,140 +648,6 @@ export async function upsertBillingPrincipalClientResults(
     response,
     clientResultsMutationResponseSchema,
     `${SAVED_TARGETS_ENDPOINT}/:targetId/revisions/:revisionId/client-results`,
-  );
-}
-
-export async function listBillingPrincipalReconciliationCandidates(
-  targetId: string,
-  revisionId: string,
-  filters: {
-    asOf: string;
-    page: number;
-    pageSize: number;
-    search?: string | undefined;
-    aging?: BillingPrincipalAging | undefined;
-  },
-  options?: RequestOptions,
-) {
-  const endpoint = appendQuery(
-    `${savedTargetRevisionEndpoint(targetId, revisionId)}/reconciliation-candidates`,
-    filters,
-  );
-  const response = await apiRequest("GET", endpoint, undefined, options);
-  return parseApiJson(
-    response,
-    candidateListResponseSchema,
-    `${SAVED_TARGETS_ENDPOINT}/:targetId/revisions/:revisionId/reconciliation-candidates`,
-  );
-}
-
-export async function listBillingPrincipalReconciliations(
-  targetId: string,
-  revisionId: string,
-  filters: {
-    asOf: string;
-    page: number;
-    pageSize: number;
-    search?: string | undefined;
-    aging?: BillingPrincipalAging | undefined;
-    status?: "ACTIVE" | "VOIDED" | undefined;
-  },
-  options?: RequestOptions,
-) {
-  const endpoint = appendQuery(
-    `${savedTargetRevisionEndpoint(targetId, revisionId)}/reconciliations`,
-    filters,
-  );
-  const response = await apiRequest("GET", endpoint, undefined, options);
-  return parseApiJson(
-    response,
-    reconciliationListResponseSchema,
-    `${SAVED_TARGETS_ENDPOINT}/:targetId/revisions/:revisionId/reconciliations`,
-  );
-}
-
-export async function createBillingPrincipalReconciliation(
-  targetId: string,
-  revisionId: string,
-  payload: BillingPrincipalReconciliationInput,
-  options?: MutationRequestOptions,
-) {
-  const endpoint = `${savedTargetRevisionEndpoint(targetId, revisionId)}/reconciliations`;
-  const response = await apiRequest(
-    "POST",
-    endpoint,
-    payload,
-    billingPrincipalMutationOptions("reconciliation:create", { targetId, revisionId, payload }, options),
-  );
-  return parseApiJson(
-    response,
-    reconciliationMutationResponseSchema,
-    `${SAVED_TARGETS_ENDPOINT}/:targetId/revisions/:revisionId/reconciliations`,
-  );
-}
-
-export async function updateBillingPrincipalReconciliation(
-  targetId: string,
-  revisionId: string,
-  reconciliationId: string,
-  payload: BillingPrincipalReconciliationInput & { version: number },
-  options?: MutationRequestOptions,
-) {
-  const endpoint = `${savedTargetRevisionEndpoint(targetId, revisionId)}/reconciliations/${encodeURIComponent(reconciliationId)}`;
-  const response = await apiRequest(
-    "PATCH",
-    endpoint,
-    payload,
-    billingPrincipalMutationOptions(
-      "reconciliation:update",
-      { targetId, revisionId, reconciliationId, payload },
-      options,
-    ),
-  );
-  return parseApiJson(
-    response,
-    reconciliationMutationResponseSchema,
-    `${SAVED_TARGETS_ENDPOINT}/:targetId/revisions/:revisionId/reconciliations/:reconciliationId`,
-  );
-}
-
-export async function voidBillingPrincipalReconciliation(
-  targetId: string,
-  revisionId: string,
-  reconciliationId: string,
-  payload: { version: number; reason: string; asOfDate: string },
-  options?: MutationRequestOptions,
-) {
-  const endpoint = `${savedTargetRevisionEndpoint(targetId, revisionId)}/reconciliations/${encodeURIComponent(reconciliationId)}/void`;
-  const response = await apiRequest(
-    "POST",
-    endpoint,
-    payload,
-    billingPrincipalMutationOptions(
-      "reconciliation:void",
-      { targetId, revisionId, reconciliationId, payload },
-      options,
-    ),
-  );
-  return parseApiJson(
-    response,
-    reconciliationMutationResponseSchema,
-    `${SAVED_TARGETS_ENDPOINT}/:targetId/revisions/:revisionId/reconciliations/:reconciliationId/void`,
-  );
-}
-
-export async function getBillingPrincipalReconciliationHistory(
-  targetId: string,
-  revisionId: string,
-  reconciliationId: string,
-  options?: RequestOptions,
-) {
-  const endpoint = `${savedTargetRevisionEndpoint(targetId, revisionId)}/reconciliations/${encodeURIComponent(reconciliationId)}/history`;
-  const response = await apiRequest("GET", endpoint, undefined, options);
-  return parseApiJson(
-    response,
-    reconciliationHistoryResponseSchema,
-    `${SAVED_TARGETS_ENDPOINT}/:targetId/revisions/:revisionId/reconciliations/:reconciliationId/history`,
   );
 }
 
@@ -1031,7 +683,6 @@ export async function getBillingPrincipalDrilldown(
     page: number;
     pageSize: number;
     aging?: BillingPrincipalAging | undefined;
-    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" | undefined;
   },
   options?: RequestOptions,
 ) {
@@ -1070,7 +721,6 @@ export async function downloadBillingPrincipalExport(
     to?: string | undefined;
     date?: string | undefined;
     aging?: BillingPrincipalAging | undefined;
-    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" | undefined;
   },
   options?: RequestOptions,
 ) {
@@ -1078,7 +728,7 @@ export async function downloadBillingPrincipalExport(
     `${savedTargetRevisionEndpoint(targetId, revisionId)}/export`,
     filters,
   );
-  const response = await apiRequest("GET", endpoint, undefined, options);
+  const response = await apiRequest("GET", endpoint, undefined, { ...options, retry: false });
   const blob = await response.blob();
   return {
     blob,
@@ -1096,7 +746,6 @@ export async function getBillingPrincipalVisualExportDataset(
     to: string;
     date?: string | undefined;
     aging?: BillingPrincipalAging | undefined;
-    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION" | undefined;
   },
   options?: RequestOptions,
 ) {
@@ -1104,7 +753,7 @@ export async function getBillingPrincipalVisualExportDataset(
     `${savedTargetRevisionEndpoint(targetId, revisionId)}/export`,
     { ...filters, format: "json" },
   );
-  const response = await apiRequest("GET", endpoint, undefined, options);
+  const response = await apiRequest("GET", endpoint, undefined, { ...options, retry: false });
   return parseApiJson(
     response,
     visualExportDatasetSchema,

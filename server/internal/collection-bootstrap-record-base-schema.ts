@@ -43,6 +43,20 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         classification text,
         cumulative_collected numeric(14,2),
         remaining_amount numeric(14,2),
+        settlement_override_status text,
+        pool_amount numeric(14,2),
+        manual_settlement_date date,
+        manual_settlement_reason text,
+        manual_settlement_note text,
+        manual_settlement_reference text,
+        manual_settlement_version integer,
+        manual_settlement_verified_by text,
+        manual_settlement_verified_at timestamp with time zone,
+        manual_settlement_updated_by text,
+        manual_settlement_updated_at timestamp with time zone,
+        manual_settlement_revoked_by text,
+        manual_settlement_revoked_at timestamp with time zone,
+        manual_settlement_revoked_reason text,
         batch text NOT NULL,
         payment_date date NOT NULL,
         amount numeric(14,2) NOT NULL,
@@ -89,6 +103,20 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS classification text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS cumulative_collected numeric(14,2)`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS remaining_amount numeric(14,2)`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS settlement_override_status text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS pool_amount numeric(14,2)`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_date date`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_reason text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_note text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_reference text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_version integer`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_verified_by text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_verified_at timestamp with time zone`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_updated_by text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_updated_at timestamp with time zone`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_revoked_by text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_revoked_at timestamp with time zone`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS manual_settlement_revoked_reason text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`,
@@ -242,9 +270,42 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
       ON public.collection_records(settlement_cycle_key, payment_date, created_at, id)
     `,
     sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_obligation_history_order
+      ON public.collection_records(
+        source_obligation_key,
+        payment_date DESC,
+        created_at DESC,
+        id DESC
+      )
+      WHERE source_obligation_key IS NOT NULL
+    `,
+    sql`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_records_sole_abort_per_cycle
       ON public.collection_records(settlement_cycle_key)
       WHERE classification = 'abort_cp' AND settlement_cycle_key IS NOT NULL
+    `,
+    sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_records_sole_active_manual_settlement_per_cycle
+      ON public.collection_records(settlement_cycle_key)
+      WHERE settlement_override_status = 'ACTIVE' AND settlement_cycle_key IS NOT NULL
+    `,
+    sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_records_active_pool_evidence_unique
+      ON public.collection_records(
+        source_obligation_key,
+        manual_settlement_date,
+        pool_amount,
+        COALESCE(lower(trim(manual_settlement_reference)), '')
+      )
+      WHERE settlement_override_status = 'ACTIVE'
+        AND source_obligation_key IS NOT NULL
+        AND manual_settlement_date IS NOT NULL
+        AND pool_amount IS NOT NULL
+    `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_manual_settlement_date
+      ON public.collection_records(manual_settlement_date)
+      WHERE settlement_override_status = 'ACTIVE'
     `,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
@@ -388,6 +449,77 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
             )
           );
         END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'chk_collection_records_manual_settlement_state'
+            AND conrelid = 'public.collection_records'::regclass
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_manual_settlement_state
+          CHECK (
+            (
+              settlement_override_status IS NULL
+              AND pool_amount IS NULL
+              AND manual_settlement_date IS NULL
+              AND manual_settlement_reason IS NULL
+              AND manual_settlement_note IS NULL
+              AND manual_settlement_reference IS NULL
+              AND manual_settlement_version IS NULL
+              AND manual_settlement_verified_by IS NULL
+              AND manual_settlement_verified_at IS NULL
+              AND manual_settlement_updated_by IS NULL
+              AND manual_settlement_updated_at IS NULL
+              AND manual_settlement_revoked_by IS NULL
+              AND manual_settlement_revoked_at IS NULL
+              AND manual_settlement_revoked_reason IS NULL
+            ) OR (
+              settlement_override_status IN ('ACTIVE', 'REVOKED')
+              AND settlement_cycle_key IS NOT NULL
+              AND source_import_id IS NOT NULL
+              AND source_data_row_id IS NOT NULL
+              AND source_obligation_key IS NOT NULL
+              AND total_due > 0
+              AND pool_amount > 0
+              AND manual_settlement_date IS NOT NULL
+              AND calling_date IS NOT NULL
+              AND calling_window_end_exclusive IS NOT NULL
+              AND manual_settlement_date >= calling_date
+              AND manual_settlement_date < calling_window_end_exclusive
+              AND char_length(trim(manual_settlement_reason)) BETWEEN 1 AND 64
+              AND manual_settlement_reason IN (
+                'EXTERNAL_UNASSIGNED_PAYMENT',
+                'CLIENT_CONFIRMED_PAYMENT',
+                'HISTORICAL_PAYMENT_NOT_CAPTURED',
+                'OTHER_WITH_REQUIRED_NOTE'
+              )
+              AND (
+                manual_settlement_reason <> 'OTHER_WITH_REQUIRED_NOTE'
+                OR char_length(trim(COALESCE(manual_settlement_note, ''))) > 0
+              )
+              AND (manual_settlement_note IS NULL OR char_length(manual_settlement_note) <= 2000)
+              AND (manual_settlement_reference IS NULL OR char_length(manual_settlement_reference) <= 200)
+              AND manual_settlement_version >= 1
+              AND manual_settlement_verified_by IS NOT NULL
+              AND manual_settlement_verified_at IS NOT NULL
+              AND manual_settlement_updated_by IS NOT NULL
+              AND manual_settlement_updated_at IS NOT NULL
+              AND (
+                (
+                  settlement_override_status = 'ACTIVE'
+                  AND manual_settlement_revoked_by IS NULL
+                  AND manual_settlement_revoked_at IS NULL
+                  AND manual_settlement_revoked_reason IS NULL
+                ) OR (
+                  settlement_override_status = 'REVOKED'
+                  AND manual_settlement_revoked_by IS NOT NULL
+                  AND manual_settlement_revoked_at IS NOT NULL
+                  AND char_length(trim(manual_settlement_revoked_reason)) BETWEEN 1 AND 500
+                )
+              )
+            )
+          );
+        END IF;
       END $$;
     `,
     sql`
@@ -451,6 +583,10 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`
       COMMENT ON COLUMN public.collection_records.receipt_total_amount
       IS 'Stored in sen/cents as a bigint integer. Divide by 100 to render MYR.'
+    `,
+    sql`
+      COMMENT ON COLUMN public.collection_records.pool_amount
+      IS 'Verified external/unassigned payment in MYR; excluded from staff collection, receipts, and performance totals.'
     `,
   ]);
 

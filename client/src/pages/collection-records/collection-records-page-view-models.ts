@@ -26,6 +26,7 @@ export function buildCollectionRecordsPageViewModel(
   return {
     filters: {
       canUseNicknameFilter: controller.canUseNicknameFilter,
+      canUseTeamLeaderFilter: controller.canUseTeamLeaderFilter,
       ...controller.filters,
     },
     toolbar: controller.toolbar,

@@ -1,12 +1,11 @@
 import { formatAmountRM } from "@/pages/collection/utils";
-import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import type { CollectionRecord } from "@/lib/api";
 import {
-  formatCollectionMaskedCard,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
 } from "@/pages/collection-records/collection-coverage";
+import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { loadClientSpreadsheetRuntime } from "@/lib/spreadsheet/xlsx-runtime";
 import {
@@ -60,11 +59,13 @@ export async function exportCollectionRecordsToExcel({
     safeSpreadsheetText(record.customerName),
     safeSpreadsheetText(record.icNumber),
     safeSpreadsheetText(record.accountNumber),
-    safeSpreadsheetText(formatCollectionMaskedCard(record.cardNumberLast4)),
+    safeSpreadsheetText(getCollectionCardNumberLabel(record.cardNumber)),
     safeSpreadsheetText(record.customerPhone),
     optionalCollectionAmount(record.billingPrincipalOsp),
     optionalCollectionAmount(record.totalDue),
     parseCollectionAmountMyrNumber(record.amount),
+    optionalCollectionAmount(record.manualSettlement?.poolAmount),
+    optionalCollectionAmount(record.manualSettlement?.effectiveTotal),
     getCollectionCpStatusLabel(record),
     record.agingBucket || "",
     record.paymentDate,
@@ -85,11 +86,13 @@ export async function exportCollectionRecordsToExcel({
       "Customer Name",
       "IC Number",
       "Account Number",
-      "Card Number (masked)",
+      "Card Number",
       "Customer Phone Number",
       "Billing Principal (OSP)",
       "TOTAL DUE",
-      "Amount",
+      "User Collection Amount",
+      "POOL (External Payment Evidence)",
+      "Settlement Total at Verification",
       "CP Status",
       "Aging",
       "Payment Date",
@@ -105,7 +108,7 @@ export async function exportCollectionRecordsToExcel({
   const maxColumnLength = (columnIndex: number) =>
     Math.max(...sheetData.map((row) => String(row[columnIndex] ?? "").length), 12);
 
-  worksheet["!cols"] = Array.from({ length: 15 }).map((_, index) => ({
+  worksheet["!cols"] = Array.from({ length: 17 }).map((_, index) => ({
     wch: Math.min(38, maxColumnLength(index) + 2),
   }));
 
@@ -116,7 +119,7 @@ export async function exportCollectionRecordsToExcel({
   }
 
   for (let row = 8; row < 8 + reportRows.length; row += 1) {
-    for (const column of ["F", "G", "H"]) {
+    for (const column of ["F", "G", "H", "I", "J"]) {
       const worksheetCell = getWorksheetCell(worksheet, `${column}${row}`);
       if (worksheetCell) {
         worksheetCell.z = "\"RM\" #,##0.00";
@@ -143,7 +146,7 @@ export async function exportCollectionRecordsToPdf({
   const margin = 10;
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const rowHeight = 7;
+  const headerRowHeight = 7;
   const headers: Array<string | string[]> = [
     "Customer",
     "IC",
@@ -152,7 +155,9 @@ export async function exportCollectionRecordsToPdf({
     "Phone",
     ["Billing Principal", "(OSP)"],
     "TOTAL DUE",
-    "Amount",
+    ["User Collection", "Amount"],
+    "POOL",
+    ["Settlement Total", "at Verification"],
     "CP",
     "Aging",
     "Pay Date",
@@ -161,7 +166,7 @@ export async function exportCollectionRecordsToPdf({
     "Match",
     "Staff",
   ];
-  const colWidths = [25, 20, 20, 15, 18, 18, 18, 18, 15, 11, 18, 11, 22, 13, 22];
+  const colWidths = [22, 17, 18, 17, 16, 17, 16, 16, 16, 16, 13, 9, 14, 9, 18, 11, 18];
   let y = 12;
   let pageNo = 1;
 
@@ -181,7 +186,7 @@ export async function exportCollectionRecordsToPdf({
     y += 6;
 
     pdf.setFillColor(235, 240, 248);
-    pdf.rect(margin, y, colWidths.reduce((a, b) => a + b, 0), rowHeight, "F");
+    pdf.rect(margin, y, colWidths.reduce((a, b) => a + b, 0), headerRowHeight, "F");
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
     let x = margin;
@@ -189,7 +194,7 @@ export async function exportCollectionRecordsToPdf({
       pdf.text(header, x + 1, Array.isArray(header) ? y + 3 : y + 4.5);
       x += colWidths[index];
     });
-    y += rowHeight;
+    y += headerRowHeight;
   };
 
   const drawFooter = () => {
@@ -206,7 +211,40 @@ export async function exportCollectionRecordsToPdf({
   pdf.setFontSize(8.5);
 
   for (const record of visibleRecords) {
-    if (y + rowHeight > pageHeight - 14) {
+    const row = [
+      record.customerName || "-",
+      record.icNumber || "-",
+      record.accountNumber || "-",
+      getCollectionCardNumberLabel(record.cardNumber),
+      record.customerPhone || "-",
+      record.billingPrincipalOsp ? formatAmountRM(record.billingPrincipalOsp) : "-",
+      record.totalDue ? formatAmountRM(record.totalDue) : "-",
+      formatAmountRM(record.amount),
+      record.manualSettlement?.poolAmount
+        ? formatAmountRM(record.manualSettlement.poolAmount)
+        : "-",
+      record.manualSettlement?.effectiveTotal
+        ? formatAmountRM(record.manualSettlement.effectiveTotal)
+        : "-",
+      getCollectionCpStatusLabel(record),
+      record.agingBucket || "-",
+      formatIsoDateToDDMMYYYY(record.paymentDate),
+      hasReceiptAttachment(record) ? "Yes" : "-",
+      getCollectionRecordSourceLabel(record),
+      getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy),
+      record.collectionStaffNickname || "-",
+    ];
+    const wrappedRow = row.map((text, index) => {
+      const wrapped = pdf.splitTextToSize(String(text), Math.max(1, colWidths[index] - 3));
+      return Array.isArray(wrapped) && wrapped.length > 0 ? wrapped.map(String) : [String(text)];
+    });
+    const lineHeight = 3.2;
+    const recordRowHeight = Math.max(
+      7,
+      Math.max(...wrappedRow.map((lines) => lines.length)) * lineHeight + 2.2,
+    );
+
+    if (y + recordRowHeight > pageHeight - 14) {
       drawFooter();
       pdf.addPage();
       pageNo += 1;
@@ -216,31 +254,15 @@ export async function exportCollectionRecordsToPdf({
       pdf.setFontSize(8.5);
     }
 
-    const row = [
-      fitCollectionRecordText(record.customerName, 22),
-      fitCollectionRecordText(record.icNumber, 16),
-      fitCollectionRecordText(record.accountNumber, 18),
-      formatCollectionMaskedCard(record.cardNumberLast4),
-      fitCollectionRecordText(record.customerPhone, 15),
-      record.billingPrincipalOsp ? fitCollectionRecordText(formatAmountRM(record.billingPrincipalOsp), 11) : "-",
-      record.totalDue ? fitCollectionRecordText(formatAmountRM(record.totalDue), 11) : "-",
-      fitCollectionRecordText(formatAmountRM(record.amount), 12),
-      fitCollectionRecordText(getCollectionCpStatusLabel(record), 9),
-      record.agingBucket || "-",
-      fitCollectionRecordText(formatIsoDateToDDMMYYYY(record.paymentDate), 10),
-      hasReceiptAttachment(record) ? "Yes" : "-",
-      fitCollectionRecordText(getCollectionRecordSourceLabel(record), 12),
-      getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy),
-      fitCollectionRecordText(record.collectionStaffNickname, 13),
-    ];
-
     let x = margin;
-    row.forEach((text, index) => {
-      pdf.rect(x, y, colWidths[index], rowHeight);
-      pdf.text(text, x + 1.5, y + 4.5);
+    wrappedRow.forEach((lines, index) => {
+      pdf.rect(x, y, colWidths[index], recordRowHeight);
+      lines.forEach((line, lineIndex) => {
+        pdf.text(line, x + 1.5, y + 3.8 + lineIndex * lineHeight);
+      });
       x += colWidths[index];
     });
-    y += rowHeight;
+    y += recordRowHeight;
   }
 
   drawFooter();

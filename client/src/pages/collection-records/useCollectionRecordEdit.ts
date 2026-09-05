@@ -12,6 +12,7 @@ import { useCollectionRecordEditReceiptState } from "@/pages/collection-records/
 import { useCollectionRecordEditSaveAction } from "@/pages/collection-records/useCollectionRecordEditSaveAction";
 
 type UseCollectionRecordEditArgs = {
+  canManageManualSettlement: boolean;
   loadingNicknames: boolean;
   nicknameOptions: CollectionStaffNickname[];
   onRefresh: () => Promise<unknown>;
@@ -19,6 +20,7 @@ type UseCollectionRecordEditArgs = {
 };
 
 export function useCollectionRecordEdit({
+  canManageManualSettlement,
   loadingNicknames,
   nicknameOptions,
   onRefresh,
@@ -124,6 +126,7 @@ export function useCollectionRecordEdit({
       savingEdit: saveAction.savingEdit,
       loadingNicknames,
       editingRecord,
+      canManageManualSettlement,
       nicknameOptions,
       batchOptions: COLLECTION_BATCH_OPTIONS,
       editCustomerName,
@@ -158,9 +161,14 @@ export function useCollectionRecordEdit({
       onViewExistingReceipt: (receipt: CollectionRecordReceipt) =>
         editingRecord ? onViewReceipt(editingRecord, receipt.id) : undefined,
       onSave: () => void saveAction.handleSaveEdit(),
+      onManualSettlementChanged: async (record: CollectionRecord) => {
+        setEditingRecord(record);
+        await onRefresh();
+      },
     }),
     [
       editAccountNumber,
+      canManageManualSettlement,
       editAmount,
       editBatch,
       editCustomerName,
@@ -175,6 +183,7 @@ export function useCollectionRecordEdit({
       maxPaymentDate,
       nicknameOptions,
       onViewReceipt,
+      onRefresh,
       receiptState,
       saveAction,
     ],

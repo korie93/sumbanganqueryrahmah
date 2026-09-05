@@ -143,7 +143,12 @@ export async function updateCollectionStaffNicknameValue(
   if (shouldCascadeCollectionNicknameRename(existing.nickname, updated.nickname)) {
     const oldNickname = normalizeCollectionText(existing.nickname);
     const newNickname = normalizeCollectionText(updated.nickname);
-    await cascadeCollectionNicknameRename(executor, oldNickname, newNickname);
+    await cascadeCollectionNicknameRename(
+      executor,
+      normalizeCollectionText(updated.id),
+      oldNickname,
+      newNickname,
+    );
   }
   return updated;
 }

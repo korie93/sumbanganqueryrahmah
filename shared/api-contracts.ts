@@ -1165,12 +1165,38 @@ const collectionRecordReceiptSchema = z.object({
   deletedAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
+export const collectionManualSettlementSchema = z.object({
+  status: z.enum(["ACTIVE", "REVOKED"]),
+  validity: z.enum(["EFFECTIVE", "REQUIRES_REVALIDATION", "SUPERSEDED_BY_AUTOMATIC", "REVOKED"]),
+  poolAmount: z.string(),
+  settlementDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reason: z.enum([
+    "EXTERNAL_UNASSIGNED_PAYMENT",
+    "CLIENT_CONFIRMED_PAYMENT",
+    "HISTORICAL_PAYMENT_NOT_CAPTURED",
+    "OTHER_WITH_REQUIRED_NOTE",
+  ]),
+  note: nullableStringSchema,
+  reference: nullableStringSchema,
+  version: z.number().int().positive(),
+  verifiedBy: nonEmptyStringSchema,
+  verifiedAt: z.string().datetime({ offset: true }),
+  updatedBy: nonEmptyStringSchema,
+  updatedAt: z.string().datetime({ offset: true }),
+  revokedBy: nullableStringSchema,
+  revokedAt: z.string().datetime({ offset: true }).nullable(),
+  revokedReason: nullableStringSchema,
+  systemCollectedAtSettlement: z.string(),
+  effectiveTotal: z.string(),
+});
+
 export const collectionRecordResponseSchema = z.object({
   id: nonEmptyStringSchema,
   customerName: z.string(),
   icNumber: z.string(),
   customerPhone: z.string(),
   accountNumber: z.string(),
+  cardNumber: z.string().max(256).nullable().optional(),
   cardNumberLast4: z.string().regex(/^\d{4}$/).nullable(),
   sourceImportId: nullableStringSchema.optional(),
   sourceDataRowId: nullableStringSchema.optional(),
@@ -1194,6 +1220,10 @@ export const collectionRecordResponseSchema = z.object({
   remainingAmount: z.string().nullable().optional(),
   totalDueCovered: z.boolean().nullable().optional(),
   cpStatus: z.enum(["cp", "abort_cp", "unverified"]).optional(),
+  automaticCpStatus: z.enum(["cp", "abort_cp", "unverified"]).optional(),
+  effectiveSettlementSource: z.enum(["AUTOMATIC", "MANUAL_VERIFIED", "NONE"]).optional(),
+  effectiveSettlementDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  manualSettlement: collectionManualSettlementSchema.nullable().optional(),
   batch: z.enum(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]),
   paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   amount: z.string(),
@@ -1285,6 +1315,17 @@ export const collectionRecordListResponseSchema = z.object({
     pageSize: collectionRecordListPageLimitSchema,
     limit: collectionRecordListPageLimitSchema,
   }),
+});
+
+export const collectionTeamOptionSchema = z.object({
+  id: z.string().uuid(),
+  leaderNickname: nonEmptyStringSchema,
+  staffCount: nonNegativeIntSchema,
+});
+
+export const collectionTeamOptionsResponseSchema = z.object({
+  ok: z.literal(true),
+  teams: z.array(collectionTeamOptionSchema).max(5000),
 });
 
 const collectionNicknameTargetBenchmarkSchema = z.object({
@@ -1430,6 +1471,7 @@ export type CollectionMonthlySummaryResponseContract = z.infer<typeof collection
 export type CollectionPurgeSummaryResponseContract = z.infer<typeof collectionPurgeSummaryResponseSchema>;
 export type CollectionPurgeResponseContract = z.infer<typeof collectionPurgeResponseSchema>;
 export type CollectionRecordListResponseContract = z.infer<typeof collectionRecordListResponseSchema>;
+export type CollectionTeamOptionsResponseContract = z.infer<typeof collectionTeamOptionsResponseSchema>;
 export type CollectionNicknameSummaryResponseContract = z.infer<typeof collectionNicknameSummaryResponseSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;
 export type CollectionMonthlyTargetResponse = z.infer<typeof collectionMonthlyTargetResponseSchema>;

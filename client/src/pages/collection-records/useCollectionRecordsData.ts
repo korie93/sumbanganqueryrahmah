@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   getCollectionSourceConfigs,
+  getCollectionTeamOptions,
   type CollectionSourceConfig,
   type CollectionStaffNickname,
+  type CollectionTeamOption,
 } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { DEFAULT_COLLECTION_RECORDS_PAGE_SIZE } from "@/pages/collection-records/collection-records-data-utils";
@@ -15,14 +17,18 @@ const COLLECTION_RECORDS_AUTO_FETCH_DEBOUNCE_MS = 300;
 
 type UseCollectionRecordsDataArgs = {
   canUseNicknameFilter: boolean;
+  canUseTeamLeaderFilter: boolean;
 };
 
 export function useCollectionRecordsData({
   canUseNicknameFilter,
+  canUseTeamLeaderFilter,
 }: UseCollectionRecordsDataArgs) {
   const { toast } = useToast();
   const [sourceOptions, setSourceOptions] = useState<CollectionSourceConfig[]>([]);
   const [loadingSources, setLoadingSources] = useState(false);
+  const [teamOptions, setTeamOptions] = useState<CollectionTeamOption[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
   const {
     records,
     loadingRecords,
@@ -47,6 +53,7 @@ export function useCollectionRecordsData({
     toDate,
     searchInput,
     nicknameFilter,
+    leaderFilter,
     sourceImportFilter,
     agingFilter,
     classificationFilter,
@@ -59,6 +66,7 @@ export function useCollectionRecordsData({
     handleToDateChange,
     handleSearchInputChange,
     handleNicknameFilterChange,
+    handleLeaderFilterChange,
     handleSourceImportFilterChange,
     handleAgingFilterChange,
     handleClassificationFilterChange,
@@ -69,6 +77,7 @@ export function useCollectionRecordsData({
     consumeNextAutoFetch,
   } = useCollectionRecordsFilterState({
     canUseNicknameFilter,
+    canUseTeamLeaderFilter,
     pageSize,
   });
 
@@ -106,6 +115,46 @@ export function useCollectionRecordsData({
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!canUseTeamLeaderFilter) {
+      setTeamOptions([]);
+      setLoadingTeams(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoadingTeams(true);
+    void getCollectionTeamOptions({ signal: controller.signal })
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setTeamOptions(Array.isArray(response.teams) ? response.teams : []);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          logClientError("Failed to load Collection Team Leader filter options.", error);
+          setTeamOptions([]);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoadingTeams(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [canUseTeamLeaderFilter]);
+
+  useEffect(() => {
+    if (
+      leaderFilter !== "all"
+      && !teamOptions.some((team) => team.id === leaderFilter)
+      && !loadingTeams
+    ) {
+      handleLeaderFilterChange("all");
+    }
+  }, [handleLeaderFilterChange, leaderFilter, loadingTeams, teamOptions]);
 
   useEffect(() => {
     let isMounted = true;
@@ -176,6 +225,7 @@ export function useCollectionRecordsData({
     deferredSearchInput,
     fromDate,
     loadFirstPage,
+    leaderFilter,
     nicknameFilter,
     sourceImportFilter,
     agingFilter,
@@ -235,6 +285,7 @@ export function useCollectionRecordsData({
     handleToDateChange("");
     handleSearchInputChange("");
     handleNicknameFilterChange("all");
+    handleLeaderFilterChange("all");
     handleSourceImportFilterChange("all");
     handleAgingFilterChange("all");
     handleClassificationFilterChange("all");
@@ -243,6 +294,7 @@ export function useCollectionRecordsData({
   }, [
     handleFromDateChange,
     handleNicknameFilterChange,
+    handleLeaderFilterChange,
     handleSourceImportFilterChange,
     handleAgingFilterChange,
     handleClassificationFilterChange,
@@ -260,6 +312,7 @@ export function useCollectionRecordsData({
     toDate,
     searchInput,
     nicknameFilter,
+    leaderFilter,
     sourceImportFilter,
     agingFilter,
     classificationFilter,
@@ -268,6 +321,8 @@ export function useCollectionRecordsData({
     loadingNicknames,
     sourceOptions,
     loadingSources,
+    teamOptions,
+    loadingTeams,
     page,
     pageSize,
     pageOffset: pagination.pageOffset,
@@ -282,6 +337,7 @@ export function useCollectionRecordsData({
     setToDate: handleToDateChange,
     setSearchInput: handleSearchInputChange,
     setNicknameFilter: handleNicknameFilterChange,
+    setLeaderFilter: handleLeaderFilterChange,
     setSourceImportFilter: handleSourceImportFilterChange,
     setAgingFilter: handleAgingFilterChange,
     setClassificationFilter: handleClassificationFilterChange,

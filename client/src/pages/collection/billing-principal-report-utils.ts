@@ -67,32 +67,6 @@ export function subtractOspMoney(left: unknown, right: unknown): string | null {
   return unitsToDecimal(leftCents - rightCents, 2);
 }
 
-export function getClientResultConsistencyWarning(input: {
-  totalOsp: unknown;
-  clientOspClosed: unknown;
-  clientResultPercentage: unknown;
-}): string | null {
-  const totalCents = decimalToUnits(input.totalOsp, 2, false);
-  const clientCents = decimalToUnits(input.clientOspClosed, 2, false);
-  const submittedPercentageUnits = decimalToUnits(input.clientResultPercentage, 4, false);
-  if (totalCents === null || clientCents === null || submittedPercentageUnits === null) return null;
-
-  if (totalCents <= 0n) {
-    return clientCents === 0n && submittedPercentageUnits === 0n
-      ? null
-      : "Client RESULT % cannot be reconciled because the saved TT OSP is zero.";
-  }
-
-  const percentageScale = 1_000_000n;
-  const numerator = clientCents * percentageScale;
-  const expectedPercentageUnits = numerator >= 0n
-    ? (numerator + totalCents / 2n) / totalCents
-    : (numerator - totalCents / 2n) / totalCents;
-  if (expectedPercentageUnits === submittedPercentageUnits) return null;
-
-  return `Client RESULT % does not equal Client OSP CLOSED / saved TT OSP (expected ${unitsToDecimal(expectedPercentageUnits, 4)}%).`;
-}
-
 export function formatOspPercentagePoint(value: unknown): string {
   const units = decimalToUnits(value, 2);
   if (units === null) return "—";
@@ -118,7 +92,8 @@ export function getCurrentMonthDateRange(referenceDate = new Date()) {
 
 export function formatOspCurrency(value: unknown): string {
   const cents = decimalToUnits(value, 2);
-  if (cents === null) return "RM0.00";
+  // Missing/invalid financial evidence is not a genuine zero baseline.
+  if (cents === null) return "—";
   const fixed = unitsToDecimal(cents < 0n ? -cents : cents, 2);
   const [integer = "0", fraction = "00"] = fixed.split(".");
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -127,7 +102,7 @@ export function formatOspCurrency(value: unknown): string {
 
 export function formatOspPercentage(value: unknown): string {
   const units = decimalToUnits(value, 2);
-  return `${units === null ? "0.00" : unitsToDecimal(units, 2)}%`;
+  return units === null ? "—" : `${unitsToDecimal(units, 2)}%`;
 }
 
 export function calculateTargetOspPreview(totalOsp: unknown, targetPercentage: unknown): string {
@@ -137,7 +112,7 @@ export function calculateTargetOspPreview(totalOsp: unknown, targetPercentage: u
     4,
   );
   if (totalCents === null || percentageUnits === null || totalCents < 0n || percentageUnits < 0n) {
-    return "0.00";
+    return "—";
   }
   const divisor = 1_000_000n;
   const product = totalCents * percentageUnits;

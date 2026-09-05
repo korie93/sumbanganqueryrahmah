@@ -121,6 +121,19 @@ test("release readiness retries UI smoke only after a bounded timeout", () => {
   assert.match(script, /await runUiSmokeWithTimeoutRetry\(env\)/);
 });
 
+test("release readiness captures the Collection V9 query-plan probe", () => {
+  const script = readReleaseReadinessScript();
+  const baselineIndex = script.indexOf('["run", "perf:collection:baseline"]');
+  const v9Index = script.indexOf('["run", "perf:collection:v9"]');
+  const drillIndex = script.indexOf('["run", "dr:drill"]');
+
+  assert.notEqual(baselineIndex, -1);
+  assert.notEqual(v9Index, -1);
+  assert.notEqual(drillIndex, -1);
+  assert.ok(baselineIndex < v9Index);
+  assert.ok(v9Index < drillIndex);
+});
+
 test("release readiness isolates production runtime settings from regression suites", () => {
   const script = readReleaseReadinessScript();
   const suiteNames = [

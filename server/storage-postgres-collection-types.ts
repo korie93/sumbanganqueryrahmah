@@ -11,6 +11,38 @@ import type {
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 export type CollectionAgingBucket = "D3" | "D4" | "D5" | "D6";
 export type CollectionCpStatus = "cp" | "abort_cp" | "unverified";
+export type CollectionManualSettlementStatus = "ACTIVE" | "REVOKED";
+export type CollectionManualSettlementValidity =
+  | "EFFECTIVE"
+  | "REQUIRES_REVALIDATION"
+  | "SUPERSEDED_BY_AUTOMATIC"
+  | "REVOKED";
+export type CollectionEffectiveSettlementSource = "AUTOMATIC" | "MANUAL_VERIFIED" | "NONE";
+export type CollectionManualSettlementReason =
+  | "EXTERNAL_UNASSIGNED_PAYMENT"
+  | "CLIENT_CONFIRMED_PAYMENT"
+  | "HISTORICAL_PAYMENT_NOT_CAPTURED"
+  | "OTHER_WITH_REQUIRED_NOTE";
+
+export type CollectionManualSettlement = {
+  status: CollectionManualSettlementStatus;
+  validity: CollectionManualSettlementValidity;
+  poolAmount: CollectionAmountMyrString;
+  settlementDate: string;
+  reason: CollectionManualSettlementReason;
+  note: string | null;
+  reference: string | null;
+  version: number;
+  verifiedBy: string;
+  verifiedAt: Date;
+  updatedBy: string;
+  updatedAt: Date;
+  revokedBy: string | null;
+  revokedAt: Date | null;
+  revokedReason: string | null;
+  systemCollectedAtSettlement: CollectionAmountMyrString;
+  effectiveTotal: CollectionAmountMyrString;
+};
 export type CollectionSourceMatchBasis =
   | "ic"
   | "phone_and_account"
@@ -70,6 +102,12 @@ export type CollectionRecord = {
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
+  /**
+   * Full Card No recovered only from the record's exact governed Saved-row
+   * link after its blind index and obligation identity have been verified.
+   * It is intentionally not persisted on collection_records.
+   */
+  cardNumber?: string | null;
   cardNumberLast4?: string | null;
   sourceImportId?: string | null;
   sourceDataRowId?: string | null;
@@ -89,6 +127,10 @@ export type CollectionRecord = {
   cumulativeCollected?: CollectionAmountMyrString | null;
   remainingAmount?: CollectionAmountMyrString | null;
   cpStatus?: CollectionCpStatus;
+  automaticCpStatus?: CollectionCpStatus;
+  effectiveSettlementSource?: CollectionEffectiveSettlementSource;
+  effectiveSettlementDate?: string | null;
+  manualSettlement?: CollectionManualSettlement | null;
   batch: CollectionBatch;
   paymentDate: string;
   amount: CollectionAmountMyrString;
@@ -445,12 +487,21 @@ export type CollectionOspSavedTargetView = {
 
 export type CollectionOspClientResultView = {
   aging: CollectionAgingBucket;
+  totalOsp: string;
+  targetPercentage: string;
+  targetOsp: string;
   resultPercentage: string;
   ospClosed: string;
   note: string | null;
   reference: string | null;
-  effectiveDate: string | null;
+  receivedDate: string | null;
+  updatedAt: string | null;
   version: number | null;
+};
+
+export type CollectionOspClientResultTableView = {
+  rows: CollectionOspClientResultView[];
+  all: Omit<CollectionOspClientResultView, "aging"> & { aging: "ALL" };
 };
 
 export type CollectionOspManualReconciliationView = {
@@ -527,28 +578,18 @@ export type CollectionOspCalendarDayView = {
   totalOsp: string;
   targetOsp: string;
   systemOspClosedToday: string;
-  manualReconciliationOspClosedToday: string;
-  reconciledOspClosedToday: string;
   systemCumulativeOspClosed: string;
-  manualReconciliationCumulativeOsp: string;
-  reconciledCumulativeOspClosed: string;
   systemResultPercentage: string;
-  reconciledResultPercentage: string;
-  clientResultPercentage: string | null;
   systemPreviousResultPercentage: string;
-  reconciledPreviousResultPercentage: string;
   systemDailyMovementPercentagePoints: string;
-  reconciledDailyMovementPercentagePoints: string;
   systemAchievementVsTargetPercentage: string;
-  reconciledAchievementVsTargetPercentage: string;
   systemDailyAccounts: number;
-  manualDailyAccounts: number;
-  reconciledDailyAccounts: number;
 };
 
 export type CollectionOspDrilldownItemView = {
-  contributionSource: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION";
+  contributionSource: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
   maskedAccountNumber: string;
+  cardNumber: string | null;
   cardNumberLast4: string | null;
   maskedCustomerName: string;
   sourceName: string;
@@ -559,16 +600,16 @@ export type CollectionOspDrilldownItemView = {
   systemEligibleCumulative: string;
   systemClosureCollectionAmount: string | null;
   systemClosureStaffNickname: string | null;
-  manualPriorAmount: string;
-  reconciledCumulative: string;
+  poolAmount: string;
+  effectiveCumulative: string;
   billingPrincipalOsp: string;
   effectiveClosedDate: string;
-  reason: CollectionOspManualReasonCode | null;
+  reason: string | null;
   reference: string | null;
-  reconciliationCreatedBy: string | null;
-  reconciliationCreatedAt: string | null;
-  reconciliationUpdatedBy: string | null;
-  reconciliationUpdatedAt: string | null;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  updatedBy: string | null;
+  updatedAt: string | null;
 };
 
 export type CollectionRecordAggregateFilters = Omit<

@@ -38,6 +38,27 @@ export const operationalContractRouteSpecs = Object.freeze([
     stressViewportId: "compact",
   }),
   Object.freeze({
+    id: "collection-records",
+    path: "/collection/records",
+    contentSelector: "main#main-content",
+    readySelector: "[data-testid='collection-records-page']",
+    stressViewportId: "enlarged-text",
+  }),
+  Object.freeze({
+    id: "general-search",
+    path: "/general-search",
+    contentSelector: "main#main-content",
+    readySelector: "[data-testid='input-search']",
+    stressViewportId: "compact",
+  }),
+  Object.freeze({
+    id: "billing-principal",
+    path: "/collection/billing-principal",
+    contentSelector: "main#main-content",
+    readySelector: "#billing-principal-filters",
+    stressViewportId: "enlarged-text",
+  }),
+  Object.freeze({
     id: "activity",
     path: "/monitor?section=activity",
     contentSelector: "main#main-content",

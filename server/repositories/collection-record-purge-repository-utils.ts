@@ -41,6 +41,7 @@ export async function purgeCollectionRecordsOlderThan(
       SELECT id
       FROM public.collection_records
       WHERE payment_date < ${normalizedBeforeDate}::date
+        AND settlement_override_status IS DISTINCT FROM 'ACTIVE'
       ORDER BY id ASC
     `);
     const candidateRecordIds = extractCollectionRecordIds(
@@ -70,6 +71,7 @@ export async function purgeCollectionRecordsOlderThan(
       FROM public.collection_records
       WHERE id IN (${candidateRecordIdSql})
         AND payment_date < ${normalizedBeforeDate}::date
+        AND settlement_override_status IS DISTINCT FROM 'ACTIVE'
       ORDER BY payment_date ASC, created_at ASC, id ASC
     `);
     const settlementCycleKeys = (settlementMetadataResult.rows ?? []).map((row) =>
@@ -86,6 +88,7 @@ export async function purgeCollectionRecordsOlderThan(
       FROM public.collection_records
       WHERE id IN (${candidateRecordIdSql})
         AND payment_date < ${normalizedBeforeDate}::date
+        AND settlement_override_status IS DISTINCT FROM 'ACTIVE'
       ORDER BY payment_date ASC, created_at ASC, id ASC
       FOR UPDATE
     `);
@@ -120,6 +123,7 @@ export async function purgeCollectionRecordsOlderThan(
         original_record_id,
         source_import_id,
         source_data_row_id,
+        source_obligation_key,
         source_import_name,
         source_filename,
         ic_number_search_hash,
@@ -127,6 +131,21 @@ export async function purgeCollectionRecordsOlderThan(
         account_number_search_hash,
         payment_date,
         amount,
+        automatic_classification,
+        settlement_override_status,
+        pool_amount,
+        manual_settlement_date,
+        manual_settlement_reason,
+        manual_settlement_note,
+        manual_settlement_reference,
+        manual_settlement_version,
+        manual_settlement_verified_by,
+        manual_settlement_verified_at,
+        manual_settlement_updated_by,
+        manual_settlement_updated_at,
+        manual_settlement_revoked_by,
+        manual_settlement_revoked_at,
+        manual_settlement_revoked_reason,
         created_by_login,
         collection_staff_nickname,
         original_created_at,
@@ -138,6 +157,7 @@ export async function purgeCollectionRecordsOlderThan(
         id,
         source_import_id,
         source_data_row_id,
+        source_obligation_key,
         source_import_name,
         source_filename,
         ic_number_search_hash,
@@ -145,6 +165,21 @@ export async function purgeCollectionRecordsOlderThan(
         account_number_search_hash,
         payment_date,
         amount,
+        classification,
+        settlement_override_status,
+        pool_amount,
+        manual_settlement_date,
+        manual_settlement_reason,
+        manual_settlement_note,
+        manual_settlement_reference,
+        manual_settlement_version,
+        manual_settlement_verified_by,
+        manual_settlement_verified_at,
+        manual_settlement_updated_by,
+        manual_settlement_updated_at,
+        manual_settlement_revoked_by,
+        manual_settlement_revoked_at,
+        manual_settlement_revoked_reason,
         created_by_login,
         collection_staff_nickname,
         created_at,
@@ -156,6 +191,7 @@ export async function purgeCollectionRecordsOlderThan(
       ON CONFLICT (original_record_id) DO UPDATE SET
         source_import_id = EXCLUDED.source_import_id,
         source_data_row_id = EXCLUDED.source_data_row_id,
+        source_obligation_key = EXCLUDED.source_obligation_key,
         source_import_name = EXCLUDED.source_import_name,
         source_filename = EXCLUDED.source_filename,
         ic_number_search_hash = EXCLUDED.ic_number_search_hash,
@@ -163,6 +199,21 @@ export async function purgeCollectionRecordsOlderThan(
         account_number_search_hash = EXCLUDED.account_number_search_hash,
         payment_date = EXCLUDED.payment_date,
         amount = EXCLUDED.amount,
+        automatic_classification = EXCLUDED.automatic_classification,
+        settlement_override_status = EXCLUDED.settlement_override_status,
+        pool_amount = EXCLUDED.pool_amount,
+        manual_settlement_date = EXCLUDED.manual_settlement_date,
+        manual_settlement_reason = EXCLUDED.manual_settlement_reason,
+        manual_settlement_note = EXCLUDED.manual_settlement_note,
+        manual_settlement_reference = EXCLUDED.manual_settlement_reference,
+        manual_settlement_version = EXCLUDED.manual_settlement_version,
+        manual_settlement_verified_by = EXCLUDED.manual_settlement_verified_by,
+        manual_settlement_verified_at = EXCLUDED.manual_settlement_verified_at,
+        manual_settlement_updated_by = EXCLUDED.manual_settlement_updated_by,
+        manual_settlement_updated_at = EXCLUDED.manual_settlement_updated_at,
+        manual_settlement_revoked_by = EXCLUDED.manual_settlement_revoked_by,
+        manual_settlement_revoked_at = EXCLUDED.manual_settlement_revoked_at,
+        manual_settlement_revoked_reason = EXCLUDED.manual_settlement_revoked_reason,
         created_by_login = EXCLUDED.created_by_login,
         collection_staff_nickname = EXCLUDED.collection_staff_nickname,
         original_created_at = EXCLUDED.original_created_at,

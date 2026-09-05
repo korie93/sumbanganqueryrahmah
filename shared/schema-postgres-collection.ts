@@ -54,6 +54,23 @@ export const collectionRecords = pgTable("collection_records", {
   classification: text("classification"),
   cumulativeCollected: numeric("cumulative_collected", { precision: 14, scale: 2 }),
   remainingAmount: numeric("remaining_amount", { precision: 14, scale: 2 }),
+  // A verified external/unassigned payment is deliberately kept separate from
+  // `amount`: it may settle an obligation, but it is never staff collection,
+  // receipt value, or performance credit.
+  settlementOverrideStatus: text("settlement_override_status"),
+  poolAmount: numeric("pool_amount", { precision: 14, scale: 2 }),
+  manualSettlementDate: date("manual_settlement_date", { mode: "string" }),
+  manualSettlementReason: text("manual_settlement_reason"),
+  manualSettlementNote: text("manual_settlement_note"),
+  manualSettlementReference: text("manual_settlement_reference"),
+  manualSettlementVersion: integer("manual_settlement_version"),
+  manualSettlementVerifiedBy: text("manual_settlement_verified_by"),
+  manualSettlementVerifiedAt: utcTimestamp("manual_settlement_verified_at"),
+  manualSettlementUpdatedBy: text("manual_settlement_updated_by"),
+  manualSettlementUpdatedAt: utcTimestamp("manual_settlement_updated_at"),
+  manualSettlementRevokedBy: text("manual_settlement_revoked_by"),
+  manualSettlementRevokedAt: utcTimestamp("manual_settlement_revoked_at"),
+  manualSettlementRevokedReason: text("manual_settlement_revoked_reason"),
   batch: text("batch").notNull(),
   paymentDate: date("payment_date", { mode: "string" }).notNull(),
   // Primary payment total is stored in MYR using a fixed decimal numeric column.
@@ -91,9 +108,33 @@ export const collectionRecords = pgTable("collection_records", {
     table.createdAt,
     table.id,
   ),
+  obligationHistoryOrderIdx: index("idx_collection_records_obligation_history_order")
+    .on(
+      table.sourceObligationKey,
+      table.paymentDate.desc(),
+      table.createdAt.desc(),
+      table.id.desc(),
+    )
+    .where(sql`${table.sourceObligationKey} IS NOT NULL`),
   soleAbortPerCycleIdx: uniqueIndex("idx_collection_records_sole_abort_per_cycle")
     .on(table.settlementCycleKey)
     .where(sql`${table.classification} = 'abort_cp' AND ${table.settlementCycleKey} IS NOT NULL`),
+  soleActiveManualSettlementPerCycleIdx: uniqueIndex("idx_collection_records_sole_active_manual_settlement_per_cycle")
+    .on(table.settlementCycleKey)
+    .where(sql`${table.settlementOverrideStatus} = 'ACTIVE' AND ${table.settlementCycleKey} IS NOT NULL`),
+  activePoolEvidenceUniqueIdx: uniqueIndex("idx_collection_records_active_pool_evidence_unique")
+    .on(
+      table.sourceObligationKey,
+      table.manualSettlementDate,
+      table.poolAmount,
+      sql`COALESCE(lower(trim(${table.manualSettlementReference})), '')`,
+    )
+    .where(sql`
+      ${table.settlementOverrideStatus} = 'ACTIVE'
+      AND ${table.sourceObligationKey} IS NOT NULL
+      AND ${table.manualSettlementDate} IS NOT NULL
+      AND ${table.poolAmount} IS NOT NULL
+    `),
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
   customerNameSearchHashIdx: index("idx_collection_records_customer_name_search_hash").on(
     table.customerNameSearchHash,
@@ -195,6 +236,67 @@ export const collectionRecords = pgTable("collection_records", {
       AND ${table.sourceObligationKey} IS NOT NULL
       AND ${table.cumulativeCollected} >= 0
       AND ${table.remainingAmount} >= 0
+    )`,
+  ),
+  manualSettlementStateCheck: check(
+    "chk_collection_records_manual_settlement_state",
+    sql`(
+      ${table.settlementOverrideStatus} IS NULL
+      AND ${table.poolAmount} IS NULL
+      AND ${table.manualSettlementDate} IS NULL
+      AND ${table.manualSettlementReason} IS NULL
+      AND ${table.manualSettlementNote} IS NULL
+      AND ${table.manualSettlementReference} IS NULL
+      AND ${table.manualSettlementVersion} IS NULL
+      AND ${table.manualSettlementVerifiedBy} IS NULL
+      AND ${table.manualSettlementVerifiedAt} IS NULL
+      AND ${table.manualSettlementUpdatedBy} IS NULL
+      AND ${table.manualSettlementUpdatedAt} IS NULL
+      AND ${table.manualSettlementRevokedBy} IS NULL
+      AND ${table.manualSettlementRevokedAt} IS NULL
+      AND ${table.manualSettlementRevokedReason} IS NULL
+    ) OR (
+      ${table.settlementOverrideStatus} IN ('ACTIVE', 'REVOKED')
+      AND ${table.settlementCycleKey} IS NOT NULL
+      AND ${table.sourceImportId} IS NOT NULL
+      AND ${table.sourceDataRowId} IS NOT NULL
+      AND ${table.sourceObligationKey} IS NOT NULL
+      AND ${table.totalDue} > 0
+      AND ${table.poolAmount} > 0
+      AND ${table.manualSettlementDate} IS NOT NULL
+      AND ${table.callingDate} IS NOT NULL
+      AND ${table.callingWindowEndExclusive} IS NOT NULL
+      AND ${table.manualSettlementDate} >= ${table.callingDate}
+      AND ${table.manualSettlementDate} < ${table.callingWindowEndExclusive}
+      AND char_length(trim(${table.manualSettlementReason})) BETWEEN 1 AND 64
+      AND ${table.manualSettlementReason} IN (
+        'EXTERNAL_UNASSIGNED_PAYMENT',
+        'CLIENT_CONFIRMED_PAYMENT',
+        'HISTORICAL_PAYMENT_NOT_CAPTURED',
+        'OTHER_WITH_REQUIRED_NOTE'
+      )
+      AND (
+        ${table.manualSettlementReason} <> 'OTHER_WITH_REQUIRED_NOTE'
+        OR char_length(trim(COALESCE(${table.manualSettlementNote}, ''))) > 0
+      )
+      AND (${table.manualSettlementNote} IS NULL OR char_length(${table.manualSettlementNote}) <= 2000)
+      AND (${table.manualSettlementReference} IS NULL OR char_length(${table.manualSettlementReference}) <= 200)
+      AND ${table.manualSettlementVersion} >= 1
+      AND ${table.manualSettlementVerifiedBy} IS NOT NULL
+      AND ${table.manualSettlementVerifiedAt} IS NOT NULL
+      AND ${table.manualSettlementUpdatedBy} IS NOT NULL
+      AND ${table.manualSettlementUpdatedAt} IS NOT NULL
+      AND (
+        (${table.settlementOverrideStatus} = 'ACTIVE'
+          AND ${table.manualSettlementRevokedBy} IS NULL
+          AND ${table.manualSettlementRevokedAt} IS NULL
+          AND ${table.manualSettlementRevokedReason} IS NULL)
+        OR
+        (${table.settlementOverrideStatus} = 'REVOKED'
+          AND ${table.manualSettlementRevokedBy} IS NOT NULL
+          AND ${table.manualSettlementRevokedAt} IS NOT NULL
+          AND char_length(trim(${table.manualSettlementRevokedReason})) BETWEEN 1 AND 500)
+      )
     )`,
   ),
 }));
@@ -421,7 +523,7 @@ export const collectionOspTargetRevisions = pgTable("collection_osp_target_revis
   nicknameScope: text("nickname_scope").array().notNull().default(sql`ARRAY[]::text[]`),
   agingScope: text("aging_scope").array().notNull()
     .default(sql`ARRAY['D3', 'D4', 'D5', 'D6']::text[]`),
-  calculationVersion: text("calculation_version").notNull().default("osp-reconciliation-v1"),
+  calculationVersion: text("calculation_version").notNull().default("osp-effective-settlement-v9"),
   createdBy: text("created_by")
     .notNull()
     .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
@@ -464,14 +566,7 @@ export const collectionOspTargetRevisions = pgTable("collection_osp_target_revis
   ),
   agingScopeCheck: check(
     "chk_collection_osp_target_revisions_aging_scope",
-    sql`cardinality(${table.agingScope}) BETWEEN 1 AND 4
-      AND ${table.agingScope} <@ ARRAY['D3', 'D4', 'D5', 'D6']::text[]
-      AND cardinality(${table.agingScope}) = (
-        CASE WHEN 'D3' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
-        + CASE WHEN 'D4' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
-        + CASE WHEN 'D5' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
-        + CASE WHEN 'D6' = ANY(${table.agingScope}) THEN 1 ELSE 0 END
-      )`,
+    sql`${table.agingScope} = ARRAY['D3', 'D4', 'D5', 'D6']::text[]`,
   ),
   calculationVersionCheck: check(
     "chk_collection_osp_target_revisions_calculation_version",
@@ -890,6 +985,7 @@ export const collectionRecordPurgeHistory = pgTable("collection_record_purge_his
   originalRecordId: uuid("original_record_id").primaryKey(),
   sourceImportId: text("source_import_id"),
   sourceDataRowId: text("source_data_row_id"),
+  sourceObligationKey: text("source_obligation_key"),
   sourceImportName: text("source_import_name"),
   sourceFilename: text("source_filename"),
   icNumberSearchHash: text("ic_number_search_hash"),
@@ -897,6 +993,21 @@ export const collectionRecordPurgeHistory = pgTable("collection_record_purge_his
   accountNumberSearchHash: text("account_number_search_hash"),
   paymentDate: date("payment_date", { mode: "string" }).notNull(),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  automaticClassification: text("automatic_classification"),
+  settlementOverrideStatus: text("settlement_override_status"),
+  poolAmount: numeric("pool_amount", { precision: 14, scale: 2 }),
+  manualSettlementDate: date("manual_settlement_date", { mode: "string" }),
+  manualSettlementReason: text("manual_settlement_reason"),
+  manualSettlementNote: text("manual_settlement_note"),
+  manualSettlementReference: text("manual_settlement_reference"),
+  manualSettlementVersion: integer("manual_settlement_version"),
+  manualSettlementVerifiedBy: text("manual_settlement_verified_by"),
+  manualSettlementVerifiedAt: utcTimestamp("manual_settlement_verified_at"),
+  manualSettlementUpdatedBy: text("manual_settlement_updated_by"),
+  manualSettlementUpdatedAt: utcTimestamp("manual_settlement_updated_at"),
+  manualSettlementRevokedBy: text("manual_settlement_revoked_by"),
+  manualSettlementRevokedAt: utcTimestamp("manual_settlement_revoked_at"),
+  manualSettlementRevokedReason: text("manual_settlement_revoked_reason"),
   createdByLogin: text("created_by_login").notNull(),
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   originalCreatedAt: utcTimestamp("original_created_at").notNull(),
@@ -908,6 +1019,14 @@ export const collectionRecordPurgeHistory = pgTable("collection_record_purge_his
     .on(table.sourceImportId),
   sourceDataRowIdIdx: index("idx_collection_record_purge_history_source_data_row_id")
     .on(table.sourceDataRowId),
+  obligationOrderIdx: index("idx_collection_record_purge_history_obligation_order")
+    .on(
+      table.sourceObligationKey,
+      table.paymentDate.desc(),
+      table.originalCreatedAt.desc(),
+      table.originalRecordId.desc(),
+    )
+    .where(sql`${table.sourceObligationKey} IS NOT NULL`),
   icNumberSearchHashIdx: index("idx_collection_record_purge_history_ic_search_hash")
     .on(table.icNumberSearchHash),
   customerPhoneSearchHashIdx: index("idx_collection_record_purge_history_phone_search_hash")
@@ -1075,6 +1194,10 @@ export const collectionStaffNicknames = pgTable("collection_staff_nicknames", {
 
 export const adminGroups = pgTable("admin_groups", {
   id: uuid("id").primaryKey(),
+  leaderNicknameId: uuid("leader_nickname_id")
+    .notNull()
+    .references(() => collectionStaffNicknames.id, { onDelete: "restrict", onUpdate: "cascade" }),
+  // Retained as a compatibility/display snapshot. Team identity is the UUID.
   leaderNickname: text("leader_nickname").notNull(),
   createdBy: text("created_by").references(() => users.username, {
     onDelete: "set null",
@@ -1083,6 +1206,9 @@ export const adminGroups = pgTable("admin_groups", {
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
+  leaderNicknameIdUnique: uniqueIndex("idx_admin_groups_leader_nickname_id_unique").on(
+    table.leaderNicknameId,
+  ),
   leaderNicknameLowerUnique: uniqueIndex("idx_admin_groups_leader_nickname_unique").using(
     "btree",
     sql`lower(${table.leaderNickname})`,
@@ -1094,9 +1220,20 @@ export const adminGroupMembers = pgTable("admin_group_members", {
   adminGroupId: uuid("admin_group_id")
     .notNull()
     .references(() => adminGroups.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  memberNicknameId: uuid("member_nickname_id")
+    .notNull()
+    .references(() => collectionStaffNicknames.id, { onDelete: "restrict", onUpdate: "cascade" }),
+  // Retained as a compatibility/display snapshot. Membership identity is the UUID.
   memberNickname: text("member_nickname").notNull(),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
+  groupMemberNicknameIdUnique: uniqueIndex("idx_admin_group_members_group_member_nickname_id_unique").on(
+    table.adminGroupId,
+    table.memberNicknameId,
+  ),
+  memberNicknameIdUnique: uniqueIndex("idx_admin_group_members_member_nickname_id_unique").on(
+    table.memberNicknameId,
+  ),
   groupMemberLowerUnique: uniqueIndex("idx_admin_group_members_group_member_unique").using(
     "btree",
     table.adminGroupId,

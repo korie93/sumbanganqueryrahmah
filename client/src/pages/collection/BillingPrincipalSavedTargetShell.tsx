@@ -75,6 +75,12 @@ function CreateSavedTargetDialog({
   const [error, setError] = useState("");
   const savingRef = useRef(false);
   const attemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
+  const saveControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    saveControllerRef.current?.abort();
+    saveControllerRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -119,19 +125,29 @@ function CreateSavedTargetDialog({
       attemptRef.current,
     );
     attemptRef.current = attempt;
+    saveControllerRef.current?.abort();
+    const controller = new AbortController();
+    saveControllerRef.current = controller;
     savingRef.current = true;
     setSaving(true);
     setError("");
     try {
-      const response = await createBillingPrincipalSavedTarget(payload, attempt);
+      const response = await createBillingPrincipalSavedTarget(payload, {
+        ...attempt,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
       attemptRef.current = null;
       setOpen(false);
       onCreated(response.target);
     } catch (caught) {
-      setError(parseApiError(caught));
+      if (!controller.signal.aborted && !isAbortError(caught)) setError(parseApiError(caught));
     } finally {
-      savingRef.current = false;
-      setSaving(false);
+      if (saveControllerRef.current === controller) {
+        saveControllerRef.current = null;
+        savingRef.current = false;
+        setSaving(false);
+      }
     }
   };
 
@@ -236,6 +252,11 @@ function EditSavedTargetDialog({
   const [error, setError] = useState("");
   const savingRef = useRef(false);
   const attemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
+  const saveControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    saveControllerRef.current?.abort();
+    saveControllerRef.current = null;
+  }, []);
   useEffect(() => {
     if (!open) return;
     setName(target.name);
@@ -261,6 +282,9 @@ function EditSavedTargetDialog({
       attemptRef.current,
     );
     attemptRef.current = attempt;
+    saveControllerRef.current?.abort();
+    const controller = new AbortController();
+    saveControllerRef.current = controller;
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -268,16 +292,20 @@ function EditSavedTargetDialog({
       const response = await updateBillingPrincipalSavedTarget(
         target.id,
         payload,
-        attempt,
+        { ...attempt, signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
       attemptRef.current = null;
       setOpen(false);
       onUpdated(response.target);
     } catch (caught) {
-      setError(parseApiError(caught));
+      if (!controller.signal.aborted && !isAbortError(caught)) setError(parseApiError(caught));
     } finally {
-      savingRef.current = false;
-      setSaving(false);
+      if (saveControllerRef.current === controller) {
+        saveControllerRef.current = null;
+        savingRef.current = false;
+        setSaving(false);
+      }
     }
   };
 
@@ -352,6 +380,12 @@ export function BillingPrincipalSavedTargetShell({
   const [reloadVersion, setReloadVersion] = useState(0);
   const deletingRef = useRef(false);
   const deleteAttemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
+  const deleteControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    deleteControllerRef.current?.abort();
+    deleteControllerRef.current = null;
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -363,7 +397,9 @@ export function BillingPrincipalSavedTargetShell({
         const activeTargets = response.targets.filter((target) => target.status === "ACTIVE");
         setTargets(activeTargets);
         setSelectedTargetId((current) => (
-          activeTargets.some((target) => target.id === current) ? current : ""
+          activeTargets.some((target) => target.id === current)
+            ? current
+            : activeTargets[0]?.id ?? ""
         ));
       })
       .catch((caught) => {
@@ -390,6 +426,9 @@ export function BillingPrincipalSavedTargetShell({
       deleteAttemptRef.current,
     );
     deleteAttemptRef.current = attempt;
+    deleteControllerRef.current?.abort();
+    const controller = new AbortController();
+    deleteControllerRef.current = controller;
     deletingRef.current = true;
     setDeleting(true);
     setError("");
@@ -397,17 +436,21 @@ export function BillingPrincipalSavedTargetShell({
       await deleteBillingPrincipalSavedTarget(
         selectedTarget.id,
         selectedTarget.version,
-        attempt,
+        { ...attempt, signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
       deleteAttemptRef.current = null;
       setDeleteOpen(false);
       setSelectedTargetId("");
       setReloadVersion((value) => value + 1);
     } catch (caught) {
-      setError(parseApiError(caught));
+      if (!controller.signal.aborted && !isAbortError(caught)) setError(parseApiError(caught));
     } finally {
-      deletingRef.current = false;
-      setDeleting(false);
+      if (deleteControllerRef.current === controller) {
+        deleteControllerRef.current = null;
+        deletingRef.current = false;
+        setDeleting(false);
+      }
     }
   };
 
@@ -419,11 +462,11 @@ export function BillingPrincipalSavedTargetShell({
             <div className="flex flex-wrap items-center gap-2">
               <h2 id="billing-target-workspace-heading" className="font-semibold">Billing Principal Workspace</h2>
               <Badge variant={selectedTarget ? "default" : "outline"} className="rounded-full">
-                {selectedTarget ? `Revision ${selectedTarget.activeRevision.revisionNumber}` : "Legacy live view"}
+                {selectedTarget ? `Revision ${selectedTarget.activeRevision.revisionNumber}` : "No saved target"}
               </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Select a saved target for governed System, Client, Table C, and Reconciled reporting.
+              Select a saved target for governed System and Client reporting.
             </p>
             <Label htmlFor="billing-saved-target-select" className="mt-3 block">Saved target</Label>
             <select
@@ -433,7 +476,7 @@ export function BillingPrincipalSavedTargetShell({
               onChange={(event) => setSelectedTargetId(event.target.value)}
               disabled={loading && targets.length === 0}
             >
-              <option value="">Legacy live view (unsaved filters)</option>
+              <option value="" disabled>Select a saved target</option>
               {targets.map((target) => (
                 <option key={target.id} value={target.id}>
                   {target.name} · rev {target.activeRevision.revisionNumber}
@@ -489,8 +532,23 @@ export function BillingPrincipalSavedTargetShell({
       </section>
 
       {selectedTarget ? (
-        <BillingPrincipalSavedTargetWorkspace key={selectedTarget.id} role={role} target={selectedTarget} />
-      ) : children}
+        <BillingPrincipalSavedTargetWorkspace
+          key={`${selectedTarget.id}:${selectedTarget.activeRevision.id}`}
+          role={role}
+          target={selectedTarget}
+        />
+      ) : loading ? (
+        <div className="flex min-h-40 items-center justify-center rounded-2xl border border-border/70 bg-card text-sm text-muted-foreground" role="status">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Loading saved target…
+        </div>
+      ) : targets.length === 0 && role === "superuser" ? children : (
+        <div className="rounded-2xl border border-dashed border-border/70 bg-card p-6 text-center">
+          <p className="font-medium">No governed Saved Target is available.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A superuser must create a Saved Target before Table A and Table B can be viewed.
+          </p>
+        </div>
+      )}
 
       <AlertDialog open={deleteOpen} onOpenChange={(nextOpen) => !deleting && setDeleteOpen(nextOpen)}>
         <AlertDialogContent>

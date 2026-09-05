@@ -20,7 +20,6 @@ import type {
   CollectionBillingPrincipalReport,
   CollectionLegacyBackfillStats,
   CollectionOspTargetInput,
-  CollectionOspManualReasonCode,
   CollectionSourceConfig,
   CollectionSourceMatchResult,
   CollectionStaffNickname,
@@ -331,44 +330,6 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.getCollectionOspTargetOverview(input);
   }
 
-  async listCollectionOspReconciliationCandidates(input: Parameters<typeof this.collectionRepository.listCollectionOspReconciliationCandidates>[0]) {
-    return this.collectionRepository.listCollectionOspReconciliationCandidates(input);
-  }
-
-  async listCollectionOspManualReconciliations(input: Parameters<typeof this.collectionRepository.listCollectionOspManualReconciliations>[0]) {
-    return this.collectionRepository.listCollectionOspManualReconciliations(input);
-  }
-
-  async createCollectionOspManualReconciliation(input: {
-    targetId: string;
-    revisionId: string;
-    sourceImportId: string;
-    sourceDataRowId: string;
-    manualPriorAmount: string;
-    asOfDate: string;
-    actualPaymentDate?: string | null;
-    reason: CollectionOspManualReasonCode;
-    note?: string | null;
-    reference?: string | null;
-    actor: string;
-    actorRole: string;
-    requestId?: string | null;
-  }) {
-    return this.collectionRepository.createCollectionOspManualReconciliation(input);
-  }
-
-  async updateCollectionOspManualReconciliation(input: Parameters<typeof this.collectionRepository.updateCollectionOspManualReconciliation>[0]) {
-    return this.collectionRepository.updateCollectionOspManualReconciliation(input);
-  }
-
-  async voidCollectionOspManualReconciliation(input: Parameters<typeof this.collectionRepository.voidCollectionOspManualReconciliation>[0]) {
-    return this.collectionRepository.voidCollectionOspManualReconciliation(input);
-  }
-
-  async listCollectionOspReconciliationHistory(input: Parameters<typeof this.collectionRepository.listCollectionOspReconciliationHistory>[0]) {
-    return this.collectionRepository.listCollectionOspReconciliationHistory(input);
-  }
-
   async upsertCollectionOspClientResults(input: Parameters<typeof this.collectionRepository.upsertCollectionOspClientResults>[0]) {
     return this.collectionRepository.upsertCollectionOspClientResults(input);
   }
@@ -452,6 +413,22 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
 
   async getCollectionRecordById(id: string): Promise<CollectionRecord | undefined> {
     return this.collectionRepository.getCollectionRecordById(id);
+  }
+
+  async upsertCollectionManualSettlement(
+    input: Parameters<typeof this.collectionRepository.upsertCollectionManualSettlement>[0],
+  ) {
+    return this.collectionRepository.upsertCollectionManualSettlement(input);
+  }
+
+  async revokeCollectionManualSettlement(
+    input: Parameters<typeof this.collectionRepository.revokeCollectionManualSettlement>[0],
+  ) {
+    return this.collectionRepository.revokeCollectionManualSettlement(input);
+  }
+
+  async listCollectionManualSettlementAudit(recordId: string, limit?: number) {
+    return this.collectionRepository.listCollectionManualSettlementAudit(recordId, limit);
   }
 
   async listCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]> {

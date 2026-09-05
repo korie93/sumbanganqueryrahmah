@@ -108,11 +108,38 @@ test("direct collection smoke fixtures create and clean verified Saved sources",
   assert.match(staleFixtureSource, /cleanup failed stale-delete source import/);
 });
 
-test("Billing Principal V7 smoke exercises governed UI creation, exact snapshots, Table C audit, and cleanup", () => {
-  const flowStart = smokeSource.indexOf("const checkBillingPrincipalV7UiFlow = async");
+test("Collection V9 smoke verifies and revokes POOL without changing user Collection credit", () => {
+  const flowStart = smokeSource.indexOf("const checkCollectionManualSettlementV9UiFlow = async");
+  const flowEnd = smokeSource.indexOf("const checkCollectionReceiptUiFlow", flowStart);
+  const flowSource = smokeSource.slice(flowStart, flowEnd);
+
+  assert.ok(flowStart >= 0 && flowEnd > flowStart);
+  assert.match(flowSource, /amount: "150\.00"/);
+  assert.match(flowSource, /totalDue: "500\.00"/);
+  assert.match(flowSource, /manual-pool-amount/);
+  assert.match(flowSource, /\.fill\("350\.00"\)/);
+  assert.match(flowSource, /Verify Manual ABORT/);
+  assert.match(flowSource, /manualSettlement\?\.poolAmount/);
+  assert.match(flowSource, /manualSettlement\?\.effectiveTotal/);
+  assert.match(flowSource, /getByText\("VERIFIED", \{ exact: true \}\)/);
+  assert.match(flowSource, /locator\("strong"\)\.filter\(\{ hasText: \/\^REVOKED\$\/ \}\)/);
+  assert.match(flowSource, /getByText\(cardNumber, \{ exact: true \}\)/);
+  assert.match(flowSource, /collection-records-leader-desktop/);
+  assert.match(flowSource, /\/api\/search\/collection-history/);
+  assert.match(flowSource, /item\?\.kind === "pool"/);
+  assert.match(flowSource, /Revoke Manual ABORT/);
+  assert.match(flowSource, /manualSettlement\?\.status === "REVOKED"/);
+  assert.match(flowSource, /cleanup Manual ABORT V9 Collection record/);
+  assert.match(smokeSource, /targetManualSettlement\?\.status === "ACTIVE"/);
+  assert.match(smokeSource, /Synthetic smoke cleanup after interrupted verification/);
+  assert.match(smokeSource, /"Collection Manual Verified ABORT V9 UI flow"/);
+});
+
+test("Billing Principal V9 smoke exercises the two-table model, percentage-only client input, System calendar, and cleanup", () => {
+  const flowStart = smokeSource.indexOf("const checkBillingPrincipalV9UiFlow = async");
   const flowEnd = smokeSource.indexOf("const verifyCollectionSmokeGeneralSearch", flowStart);
   const flowSource = smokeSource.slice(flowStart, flowEnd);
-  const phaseIndex = smokeSource.indexOf('"Billing Principal V7 UI flow"');
+  const phaseIndex = smokeSource.indexOf('"Billing Principal V9 UI flow"');
 
   assert.ok(flowStart >= 0 && flowEnd > flowStart);
   assert.ok(phaseIndex > flowStart);
@@ -120,23 +147,48 @@ test("Billing Principal V7 smoke exercises governed UI creation, exact snapshots
   assert.match(flowSource, /await applySmokeCollectionNicknameSession\(page, nickname\)/);
   assert.match(flowSource, /await navigateForSmoke\(page, "\/collection\/billing-principal"\)/);
   assert.match(flowSource, /url\.searchParams\.get\("sourceImportIds"\) === sourceImport\.id/);
-  assert.match(flowSource, /url\.searchParams\.get\("agingBuckets"\) === "D3"/);
+  assert.match(flowSource, /url\.searchParams\.get\("agingBuckets"\) === "D3,D4,D5,D6"/);
+  assert.match(flowSource, /for \(const aging of \["D3", "D4", "D5", "D6"\]\)/);
   assert.match(flowSource, /assertSmokeResponseStatus\(await finalReportResponse, 200/);
   assert.match(flowSource, /Save Current Target/);
-  assert.match(flowSource, /Exact Client snapshot: 50\.00%/);
-  assert.match(flowSource, /createManualReconciliationHeading = \["Create", "Table", "C", "Reconciliation"\]\.join\(" "\)/);
-  assert.match(flowSource, /Table C Reconciliation Details/);
-  assert.match(flowSource, /Edit Table C Entry/);
-  assert.match(flowSource, /response\.request\(\)\.method\(\) === "PATCH"/);
+  assert.match(flowSource, /Table A System Billing Principal result/);
+  assert.match(flowSource, /Table B Client Billing Principal result/);
+  assert.match(flowSource, /D3 client result percentage/);
+  assert.match(flowSource, /Save Client Result/);
+  assert.match(flowSource, /savedD3\?\.resultPercentage/);
+  assert.match(flowSource, /savedD3\?\.ospClosed/);
+  assert.match(flowSource, /clientResult\?\.all\?\.resultPercentage/);
+  assert.match(flowSource, /getByText\("50\.00%"/);
+  assert.match(flowSource, /Latest Total Result Comparison/);
+  assert.match(flowSource, /Calendar data is System-only/);
   assert.match(flowSource, /assertSmokeResponseStatus\(await createTargetResponse, 200/);
   assert.doesNotMatch(flowSource, /response\.status\(\) === 200/);
-  assert.match(flowSource, /Table C Audit History/);
-  assert.match(flowSource, /getByText\("UPDATE", \{ exact: true \}\)/);
-  assert.match(flowSource, /Void Table C Entry/);
-  assert.match(flowSource, /tableCStatusFilterLabel = \["Filter", "Table", "C", "by status"\]\.join\(" "\)/);
-  assert.match(flowSource, /cleanup Billing Principal V7 target/);
-  assert.match(flowSource, /cleanup Billing Principal V7 source import/);
-  assert.match(flowSource, /tracker\.assertClean\("Billing Principal V7 UI flow"\)/);
+  assert.doesNotMatch(flowSource, /\/reconciliations/);
+  assert.match(flowSource, /Billing Principal V9 must not expose Table C mutations/);
+  assert.match(flowSource, /downloadBillingPrincipalSmokeArtifact\(page, "XLSX"/);
+  assert.match(flowSource, /downloadBillingPrincipalSmokeArtifact\(page, "PNG"/);
+  assert.match(flowSource, /downloadBillingPrincipalSmokeArtifact\(page, "PDF"/);
+  assert.match(flowSource, /visualDatasetRequestCount === 1/);
+  assert.match(flowSource, /PNG and PDF must reuse one governed visual dataset request/);
+  assert.match(flowSource, /cleanup Billing Principal V9 target/);
+  assert.match(flowSource, /cleanup Billing Principal V9 source import/);
+  assert.match(flowSource, /tracker\.assertClean\("Billing Principal V9 UI flow"\)/);
+});
+
+test("General Search smoke proves Collection history is lazy, bounded, and rendered on demand", () => {
+  const flowStart = smokeSource.indexOf("const verifyCollectionSmokeGeneralSearch = async");
+  const flowEnd = smokeSource.indexOf("const getInputByLabel", flowStart);
+  const flowSource = smokeSource.slice(flowStart, flowEnd);
+
+  assert.ok(flowStart >= 0 && flowEnd > flowStart);
+  assert.match(flowSource, /page\.on\("request", trackHistoryRequest\)/);
+  assert.match(flowSource, /historyRequests\.length === 0/);
+  assert.match(flowSource, /\/api\/search\/collection-history/);
+  assert.match(flowSource, /url\.searchParams\.get\("pageSize"\) === "10"/);
+  assert.match(flowSource, /getByRole\("button", \{ name: "Lihat sejarah" \}\)/);
+  assert.match(flowSource, /summary\?\.recordCount >= 1/);
+  assert.match(flowSource, /getByTestId\("general-search-collection-history"\)/);
+  assert.match(flowSource, /page\.off\("request", trackHistoryRequest\)/);
 });
 
 test("backup smoke consumes only recovered GET list rate limits after the destructive flow succeeds", () => {

@@ -12,6 +12,7 @@ import type {
 } from "../storage-postgres";
 import {
   buildCollectionMonthlySummaryWhereSql,
+  buildCollectionEffectiveClassificationSql,
   buildCollectionRecordMonthlyComparisonWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordDailyRollupWhereSql,
@@ -45,7 +46,7 @@ function buildCollectionRecordOrderSql(filters?: CollectionRecordListFilters) {
     case "aging":
       return sql`aging_bucket ${direction} NULLS LAST, payment_date ${direction}, created_at ${direction}, id ${direction}`;
     case "classification":
-      return sql`classification ${direction} NULLS LAST, payment_date ${direction}, created_at ${direction}, id ${direction}`;
+      return sql`${buildCollectionEffectiveClassificationSql()} ${direction} NULLS LAST, payment_date ${direction}, created_at ${direction}, id ${direction}`;
     case "paymentDate":
     default:
       return sql`payment_date ${direction}, created_at ${direction}, id ${direction}`;
@@ -94,6 +95,43 @@ export async function listCollectionRecords(
       classification,
       cumulative_collected,
       remaining_amount,
+      settlement_override_status,
+      pool_amount,
+      manual_settlement_date,
+      manual_settlement_reason,
+      manual_settlement_note,
+      manual_settlement_reference,
+      manual_settlement_version,
+      manual_settlement_verified_by,
+      manual_settlement_verified_at,
+      manual_settlement_updated_by,
+      manual_settlement_updated_at,
+      manual_settlement_revoked_by,
+      manual_settlement_revoked_at,
+      manual_settlement_revoked_reason,
+      CASE WHEN settlement_override_status IS NULL THEN NULL ELSE (
+        SELECT COALESCE(SUM(sibling.amount), 0)::numeric(14,2)
+        FROM public.collection_records sibling
+        WHERE sibling.settlement_cycle_key = record.settlement_cycle_key
+          AND sibling.source_import_id IS NOT NULL
+          AND sibling.source_data_row_id IS NOT NULL
+          AND sibling.source_obligation_key IS NOT NULL
+          AND sibling.source_match_basis IS NOT NULL
+          AND sibling.total_due IS NOT NULL
+          AND sibling.total_due > 0
+          AND sibling.calling_date IS NOT NULL
+          AND sibling.calling_window_end_exclusive IS NOT NULL
+          AND sibling.payment_date >= sibling.calling_date
+          AND sibling.payment_date < sibling.calling_window_end_exclusive
+          AND sibling.payment_date <= record.manual_settlement_date
+          AND sibling.duplicate_receipt_flag = false
+      ) END AS cycle_system_collected_at_manual_date,
+      CASE WHEN settlement_override_status IS NULL THEN false ELSE EXISTS (
+        SELECT 1
+        FROM public.collection_records automatic_abort
+        WHERE automatic_abort.settlement_cycle_key = record.settlement_cycle_key
+          AND automatic_abort.classification = 'abort_cp'
+      ) END AS cycle_has_automatic_abort,
       batch,
       payment_date,
       amount,
@@ -145,7 +183,7 @@ export async function summarizeCollectionRecords(
     SELECT
       COUNT(*)::int AS total_records,
       COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
-    FROM public.collection_records
+    FROM public.collection_records record
     ${whereSql}
   `);
 
@@ -182,7 +220,7 @@ export async function summarizeCollectionRecordsByNickname(
       collection_staff_nickname as nickname,
       COUNT(*)::int AS total_records,
       COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
-    FROM public.collection_records
+    FROM public.collection_records record
     ${whereSql}
     GROUP BY collection_staff_nickname
     ORDER BY lower(collection_staff_nickname) ASC
@@ -225,7 +263,7 @@ export async function summarizeCollectionRecordsByNicknameAndPaymentDate(
       payment_date,
       COUNT(*)::int AS total_records,
       COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
-    FROM public.collection_records
+    FROM public.collection_records record
     ${whereSql}
     GROUP BY lower(collection_staff_nickname), payment_date
     ORDER BY lower(collection_staff_nickname) ASC, payment_date ASC
@@ -351,7 +389,7 @@ export async function getCollectionMonthlyComparison(filters: {
       EXTRACT(MONTH FROM payment_date)::int AS month,
       COUNT(*)::int AS total_records,
       COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
-    FROM public.collection_records
+    FROM public.collection_records record
     ${whereSql}
     GROUP BY 1, 2
     ORDER BY 1 ASC, 2 ASC
@@ -390,6 +428,43 @@ export async function getCollectionRecordById(id: string): Promise<CollectionRec
       classification,
       cumulative_collected,
       remaining_amount,
+      settlement_override_status,
+      pool_amount,
+      manual_settlement_date,
+      manual_settlement_reason,
+      manual_settlement_note,
+      manual_settlement_reference,
+      manual_settlement_version,
+      manual_settlement_verified_by,
+      manual_settlement_verified_at,
+      manual_settlement_updated_by,
+      manual_settlement_updated_at,
+      manual_settlement_revoked_by,
+      manual_settlement_revoked_at,
+      manual_settlement_revoked_reason,
+      CASE WHEN settlement_override_status IS NULL THEN NULL ELSE (
+        SELECT COALESCE(SUM(sibling.amount), 0)::numeric(14,2)
+        FROM public.collection_records sibling
+        WHERE sibling.settlement_cycle_key = record.settlement_cycle_key
+          AND sibling.source_import_id IS NOT NULL
+          AND sibling.source_data_row_id IS NOT NULL
+          AND sibling.source_obligation_key IS NOT NULL
+          AND sibling.source_match_basis IS NOT NULL
+          AND sibling.total_due IS NOT NULL
+          AND sibling.total_due > 0
+          AND sibling.calling_date IS NOT NULL
+          AND sibling.calling_window_end_exclusive IS NOT NULL
+          AND sibling.payment_date >= sibling.calling_date
+          AND sibling.payment_date < sibling.calling_window_end_exclusive
+          AND sibling.payment_date <= record.manual_settlement_date
+          AND sibling.duplicate_receipt_flag = false
+      ) END AS cycle_system_collected_at_manual_date,
+      CASE WHEN settlement_override_status IS NULL THEN false ELSE EXISTS (
+        SELECT 1
+        FROM public.collection_records automatic_abort
+        WHERE automatic_abort.settlement_cycle_key = record.settlement_cycle_key
+          AND automatic_abort.classification = 'abort_cp'
+      ) END AS cycle_has_automatic_abort,
       batch,
       payment_date,
       amount,

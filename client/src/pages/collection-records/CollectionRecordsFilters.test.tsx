@@ -8,10 +8,12 @@ test("CollectionRecordsFilters uses the collection nickname picker and compact d
   const markup = renderToStaticMarkup(
     createElement(CollectionRecordsFilters, {
       canUseNicknameFilter: true,
+      canUseTeamLeaderFilter: true,
       fromDate: "2026-05-01",
       toDate: "2026-05-15",
       searchInput: "afiqah",
       nicknameFilter: "all",
+      leaderFilter: "all",
       sourceImportFilter: "all",
       agingFilter: "all",
       classificationFilter: "all",
@@ -37,13 +39,20 @@ test("CollectionRecordsFilters uses the collection nickname picker and compact d
         updatedAt: "2026-09-01T00:00:00.000Z",
         status: "active",
       }],
+      teamOptions: [{
+        id: "11111111-1111-4111-8111-111111111111",
+        leaderNickname: "SW.BUKHARI_924",
+        staffCount: 7,
+      }],
       loadingNicknames: false,
       loadingSources: false,
+      loadingTeams: false,
       loadingRecords: false,
       onFromDateChange: () => undefined,
       onToDateChange: () => undefined,
       onSearchInputChange: () => undefined,
       onNicknameFilterChange: () => undefined,
+      onLeaderFilterChange: () => undefined,
       onSourceImportFilterChange: () => undefined,
       onAgingFilterChange: () => undefined,
       onClassificationFilterChange: () => undefined,
@@ -55,6 +64,7 @@ test("CollectionRecordsFilters uses the collection nickname picker and compact d
 
   assert.match(markup, /id="collection-records-nickname-filter"/);
   assert.match(markup, /id="collection-records-source-desktop"/);
+  assert.match(markup, /id="collection-records-leader-desktop"/);
   assert.match(markup, /id="collection-records-aging-desktop"/);
   assert.match(markup, /id="collection-records-classification-desktop"/);
   assert.match(markup, /id="collection-records-sort-desktop"/);

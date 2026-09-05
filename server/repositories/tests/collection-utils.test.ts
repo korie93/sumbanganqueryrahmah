@@ -6,6 +6,7 @@ import {
   buildCollectionRecordMonthlyComparisonWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordConditions,
+  buildCollectionRecordWhereSql,
   canUseCollectionRecordDailyRollups,
   collectCollectionReceiptPaths,
   extractCollectionRecordIds,
@@ -59,6 +60,43 @@ test("buildCollectionRecordConditions includes each filter category once and nor
   });
 
   assert.equal(conditions.length, 5);
+});
+
+test("team nickname predicates bind SQL-injection payloads as values", () => {
+  const maliciousNickname = "SW.MEMBER') OR TRUE --";
+  const whereSql = buildCollectionRecordWhereSql({
+    nicknames: [maliciousNickname],
+  });
+  const sqlText = collectSqlText(whereSql);
+  const boundValues = collectBoundValues(whereSql);
+
+  assert.match(sqlText, /lower\(collection_staff_nickname\) IN/);
+  assert.doesNotMatch(sqlText, /OR TRUE/);
+  assert.ok(boundValues.includes(maliciousNickname.toLowerCase()));
+});
+
+test("team record predicates resolve stable member UUIDs in one set-based subquery", () => {
+  const firstId = "11111111-1111-4111-8111-111111111111";
+  const secondId = "22222222-2222-4222-8222-222222222222";
+  const whereSql = buildCollectionRecordWhereSql({
+    staffNicknameIds: [firstId, secondId, firstId],
+  });
+  const sqlText = collectSqlText(whereSql);
+  const boundValues = collectBoundValues(whereSql);
+
+  assert.match(sqlText, /EXISTS \(\s*SELECT 1\s*FROM public\.collection_staff_nicknames team_member/i);
+  assert.match(sqlText, /team_member\.id = ANY/i);
+  assert.match(sqlText, /team_member\.is_active = true/i);
+  assert.ok(boundValues.includes(firstId));
+  assert.ok(boundValues.includes(secondId));
+  assert.equal(canUseCollectionRecordDailyRollups({ staffNicknameIds: [firstId] }), false);
+});
+
+test("an invalid stable team-member identity fails closed", () => {
+  const whereSql = buildCollectionRecordWhereSql({
+    staffNicknameIds: ["not-a-uuid", "') OR TRUE --"],
+  });
+  assert.match(collectSqlText(whereSql), /WHERE false/i);
 });
 
 test("buildCollectionRecordConditions adds blind-index exact-match clauses when collection PII encryption is enabled", () => {
@@ -435,8 +473,8 @@ test("validateCollectionAdminGroupComposition rejects unsafe overlaps and extern
     () =>
       validateCollectionAdminGroupComposition({
         tx: { execute: async () => ({ rows: [] }) },
-        leaderNickname: "Collector Alpha",
-        memberNicknames: ["Collector Alpha"],
+        leaderNicknameId: "nickname-1",
+        memberNicknameIds: ["nickname-1"],
       }),
     /Leader nickname cannot be a member of the same group\./,
   );
@@ -454,8 +492,8 @@ test("validateCollectionAdminGroupComposition rejects unsafe overlaps and extern
     () =>
       validateCollectionAdminGroupComposition({
         tx: conflictExecutor,
-        leaderNickname: "Collector Alpha",
-        memberNicknames: ["Collector Beta"],
+        leaderNicknameId: "nickname-1",
+        memberNicknameIds: ["nickname-2"],
       }),
     /already assigned to another admin group/i,
   );

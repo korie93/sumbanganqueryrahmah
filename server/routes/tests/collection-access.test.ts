@@ -6,6 +6,7 @@ import type { CollectionStoragePort } from "../../services/collection/collection
 import {
   createAuthorizeCollectionRecordAccess,
   createRequireCollectionRecordAccess,
+  getAccessibleCollectionRecordOrThrow,
 } from "../collection-access";
 
 type CollectionRecordLookupResult = Awaited<
@@ -25,10 +26,12 @@ const ownerUser: AuthenticatedUser = {
 function collectionRecord(
   createdByLogin: string | null,
   collectionStaffNickname: string | null,
+  cardNumber?: string,
 ): CollectionRecordLookupResult {
   return {
     createdByLogin,
     collectionStaffNickname,
+    ...(cardNumber === undefined ? {} : { cardNumber }),
   } as unknown as CollectionRecordLookupResult;
 }
 
@@ -158,4 +161,44 @@ test("createRequireCollectionRecordAccess calls next without an error for author
   });
 
   assert.equal(nextError, undefined);
+});
+
+test("full Card No is returned unchanged only after each role's existing row authorization", async () => {
+  const fullCardNumber = "00004377044001076221";
+  const record = collectionRecord("alice", "team-a", fullCardNumber);
+  const storage = {
+    getCollectionRecordById: async () => record,
+    getCollectionNicknameSessionByActivity: async (activityId: string) => activityId === "admin-activity"
+      ? {
+          username: "admin.one",
+          userRole: "admin",
+          nickname: "admin.leader",
+        }
+      : undefined,
+    getCollectionAdminGroupVisibleNicknameValuesByLeader: async () => ["team-a"],
+  } as unknown as CollectionStoragePort;
+
+  const authorizedUsers: AuthenticatedUser[] = [
+    { role: "superuser", username: "root", activityId: "root-activity" },
+    { role: "manager", username: "manager.one", activityId: "manager-activity" },
+    { role: "admin", username: "admin.one", activityId: "admin-activity" },
+    { role: "user", username: "alice", activityId: "" },
+  ];
+  for (const user of authorizedUsers) {
+    const accessible = await getAccessibleCollectionRecordOrThrow(storage, user, "record-1");
+    assert.equal(accessible.cardNumber, fullCardNumber, user.role);
+    assert.equal(typeof accessible.cardNumber, "string", user.role);
+  }
+
+  await assert.rejects(
+    getAccessibleCollectionRecordOrThrow(
+      storage,
+      { role: "user", username: "mallory", activityId: "" },
+      "record-1",
+    ),
+    (error: unknown) => {
+      assert.equal((error as CapturedHttpError).statusCode, 403);
+      return true;
+    },
+  );
 });

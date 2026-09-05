@@ -5,7 +5,11 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { CollectionSourceConfig, CollectionStaffNickname } from "@/lib/api";
+import type {
+  CollectionSourceConfig,
+  CollectionStaffNickname,
+  CollectionTeamOption,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
 import {
@@ -18,23 +22,28 @@ import {
 
 export interface CollectionRecordsFiltersProps {
   canUseNicknameFilter: boolean;
+  canUseTeamLeaderFilter: boolean;
   fromDate: string;
   toDate: string;
   searchInput: string;
   nicknameFilter: string;
+  leaderFilter: string;
   sourceImportFilter: string;
   agingFilter: string;
   classificationFilter: string;
   sortValue: string;
   nicknameOptions: CollectionStaffNickname[];
   sourceOptions: CollectionSourceConfig[];
+  teamOptions: CollectionTeamOption[];
   loadingNicknames: boolean;
   loadingSources: boolean;
+  loadingTeams: boolean;
   loadingRecords: boolean;
   onFromDateChange: (value: string) => void;
   onToDateChange: (value: string) => void;
   onSearchInputChange: (value: string) => void;
   onNicknameFilterChange: (value: string) => void;
+  onLeaderFilterChange: (value: string) => void;
   onSourceImportFilterChange: (value: string) => void;
   onAgingFilterChange: (value: string) => void;
   onClassificationFilterChange: (value: string) => void;
@@ -46,29 +55,39 @@ export interface CollectionRecordsFiltersProps {
 type AdvancedFiltersProps = Pick<
   CollectionRecordsFiltersProps,
   | "agingFilter"
+  | "canUseTeamLeaderFilter"
   | "classificationFilter"
+  | "leaderFilter"
+  | "loadingTeams"
   | "loadingSources"
   | "onAgingFilterChange"
   | "onClassificationFilterChange"
+  | "onLeaderFilterChange"
   | "onSortValueChange"
   | "onSourceImportFilterChange"
   | "sortValue"
   | "sourceImportFilter"
   | "sourceOptions"
+  | "teamOptions"
 > & {
   mobile?: boolean;
 };
 
 function CollectionRecordsAdvancedFilters({
   sourceImportFilter,
+  canUseTeamLeaderFilter,
+  leaderFilter,
   agingFilter,
   classificationFilter,
   sortValue,
   sourceOptions,
   loadingSources,
+  teamOptions,
+  loadingTeams,
   onSourceImportFilterChange,
   onAgingFilterChange,
   onClassificationFilterChange,
+  onLeaderFilterChange,
   onSortValueChange,
   mobile = false,
 }: AdvancedFiltersProps) {
@@ -76,6 +95,28 @@ function CollectionRecordsAdvancedFilters({
 
   return (
     <>
+      {canUseTeamLeaderFilter ? (
+        <div className="min-w-0 space-y-1.5">
+          <Label htmlFor={`collection-records-leader-${mobile ? "mobile" : "desktop"}`}>Team Leader</Label>
+          <Select value={leaderFilter} onValueChange={onLeaderFilterChange} disabled={loadingTeams}>
+            <SelectTrigger
+              id={`collection-records-leader-${mobile ? "mobile" : "desktop"}`}
+              className={triggerClassName}
+            >
+              <SelectValue placeholder={loadingTeams ? "Memuatkan team..." : "Semua leader"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua leader</SelectItem>
+              {teamOptions.map((team) => (
+                <SelectItem key={team.id} value={team.id}>
+                  {team.leaderNickname} - {team.staffCount} staff
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+
       <div className="min-w-0 space-y-1.5">
         <Label htmlFor={`collection-records-source-${mobile ? "mobile" : "desktop"}`}>Saved Source / Batch</Label>
         <Select value={sourceImportFilter} onValueChange={onSourceImportFilterChange} disabled={loadingSources}>
@@ -148,23 +189,28 @@ function CollectionRecordsAdvancedFilters({
 
 export function CollectionRecordsFilters({
   canUseNicknameFilter,
+  canUseTeamLeaderFilter,
   fromDate,
   toDate,
   searchInput,
   nicknameFilter,
+  leaderFilter,
   sourceImportFilter,
   agingFilter,
   classificationFilter,
   sortValue,
   nicknameOptions,
   sourceOptions,
+  teamOptions,
   loadingNicknames,
   loadingSources,
+  loadingTeams,
   loadingRecords,
   onFromDateChange,
   onToDateChange,
   onSearchInputChange,
   onNicknameFilterChange,
+  onLeaderFilterChange,
   onSourceImportFilterChange,
   onAgingFilterChange,
   onClassificationFilterChange,
@@ -259,6 +305,11 @@ export function CollectionRecordsFilters({
 
         <CollectionRecordsAdvancedFilters
           mobile
+          canUseTeamLeaderFilter={canUseTeamLeaderFilter}
+          leaderFilter={leaderFilter}
+          teamOptions={teamOptions}
+          loadingTeams={loadingTeams}
+          onLeaderFilterChange={onLeaderFilterChange}
           sourceImportFilter={sourceImportFilter}
           agingFilter={agingFilter}
           classificationFilter={classificationFilter}
@@ -371,8 +422,13 @@ export function CollectionRecordsFilters({
         </Button>
       </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className={`grid gap-3 sm:grid-cols-2 ${canUseTeamLeaderFilter ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
         <CollectionRecordsAdvancedFilters
+          canUseTeamLeaderFilter={canUseTeamLeaderFilter}
+          leaderFilter={leaderFilter}
+          teamOptions={teamOptions}
+          loadingTeams={loadingTeams}
+          onLeaderFilterChange={onLeaderFilterChange}
           sourceImportFilter={sourceImportFilter}
           agingFilter={agingFilter}
           classificationFilter={classificationFilter}

@@ -12,6 +12,54 @@ import {
   type CollectionRecordFilters,
 } from "./collection-record-query-shared";
 
+/**
+ * Canonical classification used by Collection reads. `classification` remains
+ * the automatic result; an active POOL can make only its anchor row an
+ * effective ABORT CP. A later automatic ABORT supersedes the POOL so a logical
+ * obligation is never counted twice.
+ */
+export function buildCollectionEffectiveClassificationSql(): SQL {
+  return sql`CASE
+    WHEN record.classification = 'abort_cp' THEN 'abort_cp'
+    WHEN record.settlement_override_status = 'ACTIVE'
+      AND record.settlement_cycle_key IS NOT NULL
+      AND record.source_import_id IS NOT NULL
+      AND record.source_data_row_id IS NOT NULL
+      AND record.source_obligation_key IS NOT NULL
+      AND record.source_match_basis IS NOT NULL
+      AND record.total_due > 0
+      AND record.pool_amount > 0
+      AND record.manual_settlement_date >= record.calling_date
+      AND record.manual_settlement_date < record.calling_window_end_exclusive
+      AND record.duplicate_receipt_flag = false
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.collection_records automatic_abort
+        WHERE automatic_abort.settlement_cycle_key = record.settlement_cycle_key
+          AND automatic_abort.classification = 'abort_cp'
+      )
+      AND COALESCE((
+        SELECT SUM(sibling.amount)
+        FROM public.collection_records sibling
+        WHERE sibling.settlement_cycle_key = record.settlement_cycle_key
+          AND sibling.source_import_id IS NOT NULL
+          AND sibling.source_data_row_id IS NOT NULL
+          AND sibling.source_obligation_key IS NOT NULL
+          AND sibling.source_match_basis IS NOT NULL
+          AND sibling.total_due = record.total_due
+          AND sibling.total_due > 0
+          AND sibling.calling_date IS NOT NULL
+          AND sibling.calling_window_end_exclusive IS NOT NULL
+          AND sibling.payment_date >= sibling.calling_date
+          AND sibling.payment_date < sibling.calling_window_end_exclusive
+          AND sibling.payment_date <= record.manual_settlement_date
+          AND sibling.duplicate_receipt_flag = false
+      ), 0) + record.pool_amount >= record.total_due
+      THEN 'abort_cp'
+    ELSE record.classification
+  END`;
+}
+
 export function buildCollectionRecordConditions(filters?: CollectionRecordFilters): SQL[] {
   const conditions: SQL[] = [];
   if (filters?.from) {
@@ -75,6 +123,25 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
     conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
   }
 
+  if (Array.isArray(filters?.staffNicknameIds)) {
+    const staffNicknameIds = Array.from(new Set(
+      filters.staffNicknameIds
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)),
+    ));
+    if (staffNicknameIds.length === 0) {
+      conditions.push(sql`false`);
+    } else {
+      conditions.push(sql`EXISTS (
+        SELECT 1
+        FROM public.collection_staff_nicknames team_member
+        WHERE team_member.id = ANY(${buildTextArraySql(staffNicknameIds)}::uuid[])
+          AND team_member.is_active = true
+          AND lower(team_member.nickname) = lower(collection_staff_nickname)
+      )`);
+    }
+  }
+
   const receiptValidationStatus = String(filters?.receiptValidationStatus || "")
     .trim()
     .toLowerCase();
@@ -116,7 +183,7 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
       ))))
     : [];
   if (classifications.length > 0) {
-    conditions.push(sql`classification = ANY(${buildTextArraySql(classifications)})`);
+    conditions.push(sql`${buildCollectionEffectiveClassificationSql()} = ANY(${buildTextArraySql(classifications)})`);
   }
 
   return conditions;
@@ -132,6 +199,7 @@ export function canUseCollectionRecordDailyRollups(filters?: CollectionRecordFil
     String(filters?.search || "").trim().length === 0
     && String(filters?.receiptValidationStatus || "").trim().length === 0
     && filters?.duplicateOnly !== true
+    && !Array.isArray(filters?.staffNicknameIds)
     && (!filters?.sourceImportIds || filters.sourceImportIds.length === 0)
     && (!filters?.agingBuckets || filters.agingBuckets.length === 0)
     && (!filters?.classifications || filters.classifications.length === 0)

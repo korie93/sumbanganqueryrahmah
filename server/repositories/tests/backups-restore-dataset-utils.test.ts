@@ -105,6 +105,7 @@ test("collection purge history restore accepts only minimal validated metadata",
     id: "11111111-1111-4111-8111-111111111111",
     sourceImportId: "import-1",
     sourceDataRowId: "saved-row-1",
+    sourceObligationKey: `account:${"d".repeat(64)}`,
     sourceImportName: "NPL CC P10 JULY",
     sourceFilename: "npl-cc-p10-july.xlsx",
     icNumberSearchHash: "A".repeat(64),
@@ -112,6 +113,21 @@ test("collection purge history restore accepts only minimal validated metadata",
     accountNumberSearchHash: "c".repeat(64),
     paymentDate: "2026-03-31",
     amount: "100.00",
+    automaticClassification: "cp",
+    settlementOverrideStatus: "REVOKED",
+    poolAmount: "350.00",
+    manualSettlementDate: "2026-03-31",
+    manualSettlementReason: "EXTERNAL_UNASSIGNED_PAYMENT",
+    manualSettlementNote: "Historical bank evidence",
+    manualSettlementReference: "BANK-REF-1",
+    manualSettlementVersion: 2,
+    manualSettlementVerifiedBy: "superuser",
+    manualSettlementVerifiedAt: "2026-03-31T07:00:00.000Z",
+    manualSettlementUpdatedBy: "superuser",
+    manualSettlementUpdatedAt: "2026-04-01T07:00:00.000Z",
+    manualSettlementRevokedBy: "superuser",
+    manualSettlementRevokedAt: "2026-04-01T07:00:00.000Z",
+    manualSettlementRevokedReason: "Evidence corrected",
     createdByLogin: "system",
     collectionStaffNickname: "Collector Alpha",
     originalCreatedAt: "2026-03-31T08:00:00.000Z",
@@ -123,6 +139,11 @@ test("collection purge history restore accepts only minimal validated metadata",
 
   assert.ok(normalized);
   assert.equal(normalized.icNumberSearchHash, "a".repeat(64));
+  assert.equal(normalized.sourceObligationKey, `account:${"d".repeat(64)}`);
+  assert.equal(normalized.automaticClassification, "cp");
+  assert.equal(normalized.settlementOverrideStatus, "REVOKED");
+  assert.equal(normalized.poolAmount, 350);
+  assert.equal(normalized.manualSettlementReference, "BANK-REF-1");
   assert.equal(
     normalizeBackupCollectionRecordPurgeHistory({
       ...validHistory,
@@ -152,6 +173,14 @@ test("collection purge history restore accepts only minimal validated metadata",
 
   assert.equal(
     executedQueries.some((query) => query.includes("collection_record_purge_history")),
+    true,
+  );
+  assert.equal(
+    executedQueries.some((query) => query.includes("source_obligation_key")),
+    true,
+  );
+  assert.equal(
+    executedQueries.some((query) => query.includes("manual_settlement_revoked_reason")),
     true,
   );
   assert.equal(stats.collectionRecordPurgeHistory.processed, 1);

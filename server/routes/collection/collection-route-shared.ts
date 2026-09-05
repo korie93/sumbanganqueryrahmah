@@ -21,6 +21,7 @@ export type CollectionRouteContext = {
   storage: PostgresStorage;
   collectionService: CollectionService;
   reportAccess: RequestHandler[];
+  teamReportAccess: RequestHandler[];
   recordMutationAccess: RequestHandler[];
   sourceMatchAccess: RequestHandler[];
   superuserReportAccess: RequestHandler[];
@@ -44,6 +45,11 @@ export function createCollectionRouteContext(
   const reportAccess = [
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),
+    requireTabAccess("collection-report"),
+  ];
+  const teamReportAccess = [
+    authenticateToken,
+    requireRole("manager", "superuser"),
     requireTabAccess("collection-report"),
   ];
   const recordMutationAccess = [
@@ -76,6 +82,7 @@ export function createCollectionRouteContext(
     storage,
     collectionService,
     reportAccess,
+    teamReportAccess,
     recordMutationAccess,
     sourceMatchAccess,
     superuserReportAccess,

@@ -5,6 +5,7 @@ import { errorHandler } from "../../middleware/error-handler";
 import type { SearchRepository } from "../../repositories/search.repository";
 import type { SearchCollectionViewerScope } from "../../repositories/search-repository-types";
 import { SearchService } from "../../services/search.service";
+import { encodeSearchCollectionHistoryKey } from "../../services/search-collection-history-key";
 import { registerSearchRoutes } from "../search.routes";
 import {
   createJsonTestApp,
@@ -24,6 +25,8 @@ function createSearchRouteHarness(options?: {
   const searchRateLimiterCalls: string[] = [];
   const collectionStatusCalls: Array<Array<Record<string, unknown>>> = [];
   const collectionStatusScopes: SearchCollectionViewerScope[] = [];
+  const collectionHistorySourceCalls: Array<Record<string, unknown>> = [];
+  const collectionHistoryCalls: Array<Record<string, unknown>> = [];
   let getColumnsCallCount = 0;
 
   const searchRepository = {
@@ -74,6 +77,64 @@ function createSearchRouteHarness(options?: {
           purgedBy: null,
           matchBasis: "source_and_identifier" as const,
         }));
+    },
+    findCollectionHistorySourceRow: async (identity: Record<string, unknown>) => {
+      collectionHistorySourceCalls.push(identity);
+      return identity.sourceImportId === "import-1" && identity.sourceDataRowId === "row-1"
+        ? {
+            id: "row-1",
+            importId: "import-1",
+            jsonDataJsonb: { "Account No": "ACC-1001" },
+            sourceObligationKey: "account:opaque-source-hash",
+          }
+        : null;
+    },
+    findCollectionHistoryForRow: async (params: Record<string, unknown>) => {
+      collectionHistoryCalls.push(params);
+      const includeManualAuditDetails = params.includeManualAuditDetails === true;
+      return {
+        items: [{
+          id: "pool:record-1:1",
+          kind: "pool",
+          isHistorical: false,
+          paymentDate: "2026-08-01",
+          createdAt: "2026-08-01T09:00:00.000Z",
+          amount: "350.00",
+          classificationSource: "manual_verified_abort",
+          automaticClassification: null,
+          effectiveStatus: "abort_cp",
+          settlementDate: "2026-08-01",
+          staffNickname: null,
+          createdByLogin: "superuser.one",
+          sourceImportName: null,
+          sourceFilename: null,
+          purgedAt: null,
+          purgedBy: null,
+          ...(includeManualAuditDetails
+            ? {
+                reason: "EXTERNAL_UNASSIGNED_PAYMENT",
+                note: "Verified",
+                reference: "BANK-REF-1",
+              }
+            : {}),
+        }],
+        summary: {
+          recordCount: 2,
+          activeRecordCount: 2,
+          historicalRecordCount: 0,
+          poolContributionCount: 1,
+          collectionAmount: "150.00",
+          poolAmount: "350.00",
+          totalCoveredAmount: "500.00",
+          effectiveStatus: "abort_cp",
+        },
+        page: Number(params.page || 1),
+        pageSize: Number(params.pageSize || 10),
+        total: 3,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      };
     },
     searchSimpleDataRows: async (search: string) => {
       simpleSearchCalls.push(search);
@@ -149,6 +210,8 @@ function createSearchRouteHarness(options?: {
     searchRateLimiterCalls,
     collectionStatusCalls,
     collectionStatusScopes,
+    collectionHistorySourceCalls,
+    collectionHistoryCalls,
     getColumnsCallCount: () => getColumnsCallCount,
   };
 }
@@ -244,6 +307,9 @@ test("GET /api/search/global applies the protected limit cap and returns a priva
       hasPreviousPage: true,
     });
     assert.deepEqual(payload.columns, ["name", "ic"]);
+    const historyKey = payload.rows[0]?._collectionStatus?.historyKey;
+    assert.match(String(historyKey), /^sch1\./);
+    delete payload.rows[0]?._collectionStatus?.historyKey;
     assert.deepEqual(payload.rows, [
       {
         name: "Alice",
@@ -289,6 +355,8 @@ test("GET /api/search/global exposes source details only to an authorized admin"
     const payload = await response.json();
     assert.deepEqual(payload.columns, ["name", "ic", "Source File"]);
     assert.equal(payload.rows[0]?.["Source File"], "march.csv");
+    assert.match(String(payload.rows[0]?._collectionStatus?.historyKey), /^sch1\./);
+    delete payload.rows[0]?._collectionStatus?.historyKey;
     assert.deepEqual(payload.rows[0]?._collectionStatus, {
       state: "recorded",
       recordCount: 2,
@@ -339,6 +407,103 @@ test("GET /api/search/global grants manager all-staff collection visibility with
     assert.equal(payload.rows[0]?.["Source File"], undefined);
     assert.equal(payload.rows[0]?._collectionStatus?.sourceImportName, null);
     assert.equal(payload.rows[0]?._collectionStatus?.latestCreatedByLogin, "user.one");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/collection-history lazily resolves an opaque source key and paginates", async () => {
+  const {
+    app,
+    collectionHistoryCalls,
+    collectionHistorySourceCalls,
+    searchRateLimiterCalls,
+  } = createSearchRouteHarness({ role: "user" });
+  const { server, baseUrl } = await startTestServer(app);
+  const key = encodeSearchCollectionHistoryKey({
+    sourceImportId: "import-1",
+    sourceDataRowId: "row-1",
+  });
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/search/collection-history?key=${encodeURIComponent(key)}&page=2&pageSize=5`,
+    );
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.page, 2);
+    assert.equal(payload.pageSize, 5);
+    assert.equal(payload.summary.collectionAmount, "150.00");
+    assert.equal(payload.summary.poolAmount, "350.00");
+    assert.equal(payload.items[0]?.kind, "pool");
+    assert.equal("reason" in payload.items[0], false);
+    assert.deepEqual(collectionHistorySourceCalls, [{
+      sourceImportId: "import-1",
+      sourceDataRowId: "row-1",
+    }]);
+    assert.equal(collectionHistoryCalls.length, 1);
+    assert.equal(collectionHistoryCalls[0]?.includeManualAuditDetails, false);
+    assert.equal(collectionHistoryCalls[0]?.includeSourceDetails, false);
+    assert.deepEqual(collectionHistoryCalls[0]?.viewerScope, { kind: "all" });
+    assert.equal(searchRateLimiterCalls.includes("/api/search/collection-history"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/collection-history reveals manual audit fields only to superuser", async () => {
+  const { app, collectionHistoryCalls } = createSearchRouteHarness({ role: "superuser" });
+  const { server, baseUrl } = await startTestServer(app);
+  const key = encodeSearchCollectionHistoryKey({
+    sourceImportId: "import-1",
+    sourceDataRowId: "row-1",
+  });
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/search/collection-history?key=${encodeURIComponent(key)}`,
+    );
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.items[0]?.reason, "EXTERNAL_UNASSIGNED_PAYMENT");
+    assert.equal(payload.items[0]?.reference, "BANK-REF-1");
+    assert.equal(collectionHistoryCalls[0]?.includeManualAuditDetails, true);
+    assert.equal(collectionHistoryCalls[0]?.includeSourceDetails, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/collection-history rejects tampered keys before any source lookup", async () => {
+  const { app, collectionHistorySourceCalls } = createSearchRouteHarness({ role: "user" });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/search/collection-history?key=${encodeURIComponent("sch1.invalid.invalid.invalid")}`,
+    );
+    assert.equal(response.status, 400);
+    assert.match(String((await response.json()).message), /invalid collection history key/i);
+    assert.equal(collectionHistorySourceCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/collection-history requires an existing active source row", async () => {
+  const { app, collectionHistoryCalls } = createSearchRouteHarness({ role: "user" });
+  const { server, baseUrl } = await startTestServer(app);
+  const key = encodeSearchCollectionHistoryKey({
+    sourceImportId: "import-missing",
+    sourceDataRowId: "row-missing",
+  });
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/search/collection-history?key=${encodeURIComponent(key)}`,
+    );
+    assert.equal(response.status, 404);
+    assert.equal(collectionHistoryCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }

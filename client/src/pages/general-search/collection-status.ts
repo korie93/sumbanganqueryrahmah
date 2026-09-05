@@ -18,6 +18,7 @@ export type GeneralSearchCollectionStatus = {
   purgedAt: string | null;
   purgedBy: string | null;
   matchBasis: "source_row" | "source_and_identifier" | "identifier_only" | null;
+  historyKey: string | null;
 };
 
 function readNullableText(value: unknown, maxLength = 255): string | null {
@@ -55,6 +56,7 @@ export function getGeneralSearchCollectionStatus(
       purgedAt: null,
       purgedBy: null,
       matchBasis: null,
+      historyKey: null,
     };
   }
 
@@ -86,6 +88,7 @@ export function getGeneralSearchCollectionStatus(
       || value.matchBasis === "identifier_only"
       ? value.matchBasis
       : null,
+    historyKey: readNullableText(value.historyKey, 1_024),
   };
 }
 

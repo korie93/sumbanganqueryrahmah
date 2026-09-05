@@ -1,5 +1,11 @@
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 
+export function getCollectionCardNumberLabel(value: string | null | undefined): string {
+  if (typeof value !== "string") return "-";
+  const normalized = value.trim();
+  return normalized || "-";
+}
+
 export function fitCollectionRecordText(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, Math.max(0, maxLength - 3))}...`;

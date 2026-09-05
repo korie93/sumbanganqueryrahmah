@@ -4,7 +4,7 @@ import { db } from "../../db-postgres";
 import { purgeCollectionRecordsOlderThan } from "../collection-record-purge-repository-utils";
 import { collectBoundValues, collectSqlText } from "./sql-test-utils";
 
-test("collection purge archives minimal metadata before deleting active records", async () => {
+test("collection purge archives classification and revoked POOL evidence before deleting records", async () => {
   const originalTransaction = db.transaction;
   const queries: unknown[] = [];
   const recordId = "11111111-1111-4111-8111-111111111111";
@@ -63,6 +63,13 @@ test("collection purge archives minimal metadata before deleting active records"
     assert.match(archiveSql, /ic_number_search_hash/i);
     assert.match(archiveSql, /customer_phone_search_hash/i);
     assert.match(archiveSql, /account_number_search_hash/i);
+    assert.match(archiveSql, /source_obligation_key/i);
+    assert.match(archiveSql, /source_obligation_key = EXCLUDED\.source_obligation_key/i);
+    assert.match(archiveSql, /automatic_classification/i);
+    assert.match(archiveSql, /settlement_override_status/i);
+    assert.match(archiveSql, /pool_amount/i);
+    assert.match(archiveSql, /manual_settlement_revoked_reason/i);
+    assert.match(archiveSql, /pool_amount = EXCLUDED\.pool_amount/i);
     assert.doesNotMatch(archiveSql, /customer_name/i);
     assert.doesNotMatch(archiveSql, /_encrypted/i);
     assert.doesNotMatch(archiveSql, /receipt_file/i);

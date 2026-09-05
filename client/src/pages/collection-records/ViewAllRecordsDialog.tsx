@@ -14,8 +14,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
-import { formatCollectionMaskedCard } from "@/pages/collection-records/collection-coverage";
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
+import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
@@ -239,7 +239,7 @@ export function ViewAllRecordsDialog({
                                   </div>
                                   <div className="space-y-1">
                                     <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Card Number</dt>
-                                    <dd>{formatCollectionMaskedCard(record.cardNumberLast4)}</dd>
+                                    <dd className="break-all">{getCollectionCardNumberLabel(record.cardNumber)}</dd>
                                   </div>
                                   <div className="space-y-1">
                                     <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Customer Phone</dt>

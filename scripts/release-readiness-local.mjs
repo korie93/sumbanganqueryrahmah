@@ -126,8 +126,12 @@ const run = async () => {
   await mkdir(artifactsDir, { recursive: true });
 
   const stamp = Date.now();
-  const smokeUser = String(process.env.SMOKE_TEST_USERNAME || "").trim() || `superuser${stamp}`;
-  const smokePassword = String(process.env.SMOKE_TEST_PASSWORD || "").trim() || "Password123!";
+  const smokeUser = String(
+    process.env.SMOKE_TEST_USERNAME || process.env.SEED_SUPERUSER_USERNAME || "",
+  ).trim() || `superuser${stamp}`;
+  const smokePassword = String(
+    process.env.SMOKE_TEST_PASSWORD || process.env.SEED_SUPERUSER_PASSWORD || "",
+  ).trim() || "Password123!";
   const env = {
     ...process.env,
     NODE_ENV: process.env.NODE_ENV || "development",
@@ -141,9 +145,9 @@ const run = async () => {
     PG_USER: process.env.PG_USER || "postgres",
     PG_PASSWORD: process.env.PG_PASSWORD || "postgres",
     PG_DATABASE: process.env.PG_DATABASE || "sqr_db",
-    SEED_DEFAULT_USERS: process.env.SEED_DEFAULT_USERS || "1",
-    SEED_SUPERUSER_USERNAME: process.env.SEED_SUPERUSER_USERNAME || smokeUser,
-    SEED_SUPERUSER_PASSWORD: process.env.SEED_SUPERUSER_PASSWORD || smokePassword,
+    SEED_DEFAULT_USERS: "1",
+    SEED_SUPERUSER_USERNAME: smokeUser,
+    SEED_SUPERUSER_PASSWORD: smokePassword,
     SEED_SUPERUSER_FULL_NAME: process.env.SEED_SUPERUSER_FULL_NAME || "CI Superuser",
     SMOKE_TEST_USERNAME: smokeUser,
     SMOKE_TEST_PASSWORD: smokePassword,
@@ -306,6 +310,7 @@ const run = async () => {
 
     console.log("Release readiness: capturing collection performance baseline...");
     await runNpm(["run", "perf:collection:baseline"], { env });
+    await runNpm(["run", "perf:collection:v9"], { env });
 
     console.log("Release readiness: running backup integrity drill...");
     await runNpm(["run", "dr:drill"], { env });

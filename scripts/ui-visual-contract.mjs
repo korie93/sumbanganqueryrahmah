@@ -132,7 +132,7 @@ const authenticatedRouteSpecs = [
     readySelector: "[data-testid='card-recent-login-activity']",
   },
   {
-    id: "collection-records",
+    id: "collection-save",
     path: "/collection/save",
     contentSelector: "main#main-content",
   },

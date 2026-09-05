@@ -43,6 +43,10 @@ export class CollectionService {
     return this.adminService.listAdminGroups();
   }
 
+  listTeamOptions(user: AuthenticatedUser | undefined) {
+    return this.adminService.listTeamOptions(user);
+  }
+
   createAdminGroup(user: AuthenticatedUser | undefined, bodyRaw: unknown) {
     return this.adminService.createAdminGroup(user, bodyRaw);
   }
@@ -157,30 +161,6 @@ export class CollectionService {
     return this.recordService.getBillingPrincipalTargetOverview(user, targetId, revisionId, query);
   }
 
-  listBillingPrincipalReconciliationCandidates(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
-    return this.recordService.listBillingPrincipalReconciliationCandidates(user, targetId, revisionId, query);
-  }
-
-  listBillingPrincipalReconciliations(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, query: Record<string, unknown>) {
-    return this.recordService.listBillingPrincipalReconciliations(user, targetId, revisionId, query);
-  }
-
-  createBillingPrincipalReconciliation(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, body: unknown, requestId?: unknown) {
-    return this.recordService.createBillingPrincipalReconciliation(user, targetId, revisionId, body, requestId);
-  }
-
-  updateBillingPrincipalReconciliation(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
-    return this.recordService.updateBillingPrincipalReconciliation(user, targetId, revisionId, reconciliationId, body, requestId);
-  }
-
-  voidBillingPrincipalReconciliation(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, reconciliationId: unknown, body: unknown, requestId?: unknown) {
-    return this.recordService.voidBillingPrincipalReconciliation(user, targetId, revisionId, reconciliationId, body, requestId);
-  }
-
-  listBillingPrincipalReconciliationHistory(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, reconciliationId: unknown) {
-    return this.recordService.listBillingPrincipalReconciliationHistory(user, targetId, revisionId, reconciliationId);
-  }
-
   upsertBillingPrincipalClientResults(user: AuthenticatedUser | undefined, targetId: unknown, revisionId: unknown, body: unknown) {
     return this.recordService.upsertBillingPrincipalClientResults(user, targetId, revisionId, body);
   }
@@ -259,5 +239,17 @@ export class CollectionService {
 
   deleteRecord(user: AuthenticatedUser | undefined, idRaw: unknown, bodyRaw?: unknown) {
     return this.recordService.deleteRecord(user, idRaw, bodyRaw);
+  }
+
+  upsertManualSettlement(user: AuthenticatedUser | undefined, idRaw: unknown, bodyRaw: unknown) {
+    return this.recordService.upsertManualSettlement(user, idRaw, bodyRaw);
+  }
+
+  revokeManualSettlement(user: AuthenticatedUser | undefined, idRaw: unknown, bodyRaw: unknown) {
+    return this.recordService.revokeManualSettlement(user, idRaw, bodyRaw);
+  }
+
+  getManualSettlementHistory(user: AuthenticatedUser | undefined, idRaw: unknown, limitRaw?: unknown) {
+    return this.recordService.getManualSettlementHistory(user, idRaw, limitRaw);
   }
 }

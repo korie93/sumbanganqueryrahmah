@@ -845,3 +845,271 @@ test("SearchRepository.advancedSearchDataRows refreshes allowed columns after TT
     }).execute = originalExecute;
   }
 });
+
+test("SearchRepository resolves a history source only through the exact active import and row pair", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = dbRead.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (query: unknown) => {
+    rawQueries.push(query);
+    return {
+      rows: [{
+        id: "row-1",
+        import_id: "import-1",
+        json_data_jsonb: { "Account No": "ACC-1001" },
+        canonical_obligation_key: "account:opaque-hash",
+      }],
+    };
+  }) as typeof dbRead.execute;
+
+  try {
+    const result = await repository.findCollectionHistorySourceRow({
+      sourceImportId: "import-1",
+      sourceDataRowId: "row-1",
+    });
+
+    assert.deepEqual(result, {
+      id: "row-1",
+      importId: "import-1",
+      jsonDataJsonb: { "Account No": "ACC-1001" },
+      sourceObligationKey: "account:opaque-hash",
+    });
+    const sqlText = collectSqlText(rawQueries[0]);
+    assert.match(sqlText, /source_import\.is_deleted = false/i);
+    assert.match(sqlText, /data_row\.import_id\s*=/i);
+    assert.match(sqlText, /data_row\.id\s*=/i);
+    assert.match(sqlText, /collection_source_rows/i);
+    const values = collectBoundValues(rawQueries[0]);
+    assert.ok(values.includes("import-1"));
+    assert.ok(values.includes("row-1"));
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository returns deterministic paginated history with POOL kept separate", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = dbRead.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (query) => {
+    rawQueries.push(query);
+    return {
+      rows: [{
+        history_item_count: 3,
+        record_count: 2,
+        active_record_count: 1,
+        historical_record_count: 1,
+        pool_contribution_count: 1,
+        summary_collection_amount: "150.00",
+        summary_pool_amount: "350.00",
+        summary_total_covered_amount: "500.00",
+        summary_effective_status: "abort_cp",
+        item_id: "pool:record-1:1",
+        item_kind: "pool",
+        is_historical: false,
+        payment_date: "2026-09-03",
+        created_at: new Date("2026-09-03T03:00:00.000Z"),
+        amount: "350.00",
+        classification_source: "manual_verified_abort",
+        automatic_classification: null,
+        effective_status: "abort_cp",
+        settlement_date: "2026-09-03",
+        collection_staff_nickname: null,
+        created_by_login: "superuser.one",
+        source_import_name: null,
+        source_filename: null,
+        purged_at: null,
+        purged_by: null,
+        manual_reason: null,
+        manual_note: null,
+        manual_reference: null,
+      }],
+    };
+  }) as typeof dbRead.execute;
+
+  try {
+    const result = await repository.findCollectionHistoryForRow({
+      candidate: {
+        rowId: "row-1",
+        sourceImportId: "import-1",
+        icHash: null,
+        icValue: null,
+        phoneHash: null,
+        phoneValue: null,
+        accountHashes: ["account-search-hash"],
+        accountValues: ["ACC-1001"],
+      },
+      sourceObligationKey: "account:source-blind-index-hash",
+      viewerScope: { kind: "all" },
+      includeManualAuditDetails: false,
+      includeSourceDetails: false,
+      page: 1,
+      pageSize: 2,
+    });
+
+    assert.equal(rawQueries.length, 1);
+    const sqlText = collectSqlText(rawQueries[0]);
+    assert.match(sqlText, /record\.source_data_row_id/i);
+    assert.match(sqlText, /record\.source_obligation_key/i);
+    assert.doesNotMatch(
+      sqlText,
+      /record\.account_number_search_hash\s+IN/i,
+      "canonical obligation history must not widen to every contract on the same account",
+    );
+    assert.doesNotMatch(sqlText, /customer_name/i);
+    assert.match(sqlText, /record\.settlement_override_status = 'ACTIVE'/i);
+    assert.match(sqlText, /purged_pool_history/i);
+    assert.match(sqlText, /record\.automatic_classification/i);
+    assert.match(sqlText, /record\.manual_settlement_revoked_at/i);
+    assert.match(
+      sqlText,
+      /record\.payment_date\s*<=\s*override_row\.manual_settlement_date/i,
+      "later Collection payments must not retroactively validate an earlier POOL settlement",
+    );
+    assert.match(
+      sqlText,
+      /BOOL_OR\(record\.classification = 'abort_cp'\)/i,
+      "an automatic ABORT in the cycle must supersede an earlier manual POOL",
+    );
+    assert.match(sqlText, /AND NOT COALESCE\(total\.has_automatic_abort, false\)/i);
+    assert.match(
+      sqlText,
+      /WHEN cycle\.manual_is_valid THEN 'manual_verified_abort'/i,
+      "Collection rows whose effective ABORT comes from POOL must expose the manual status source",
+    );
+    assert.match(
+      sqlText,
+      /WHEN COALESCE\(cycle\.has_automatic_abort, false\) AND record\.classification = 'cp' THEN 'cp'/i,
+      "pre-closure CP rows retain their automatic status after the POOL is superseded",
+    );
+    assert.match(
+      sqlText,
+      /WHEN COALESCE\(cycle\.has_automatic_abort, false\) THEN 'superseded_by_automatic'/i,
+    );
+    assert.match(sqlText, /COALESCE\(total\.collection_amount, 0\) \+ override_row\.pool_amount >= override_row\.total_due/i);
+    assert.match(
+      sqlText,
+      /SUM\(amount\) FILTER \(\s*WHERE item_kind = 'collection'\s*\)/i,
+      "the summary must include active and purged collection history",
+    );
+    assert.match(sqlText, /ORDER BY payment_date DESC, created_at DESC, item_id DESC/i);
+    assert.deepEqual(result.summary, {
+      recordCount: 2,
+      activeRecordCount: 1,
+      historicalRecordCount: 1,
+      poolContributionCount: 1,
+      collectionAmount: "150.00",
+      poolAmount: "350.00",
+      totalCoveredAmount: "500.00",
+      effectiveStatus: "abort_cp",
+    });
+    assert.equal(result.total, 3);
+    assert.equal(result.totalPages, 2);
+    assert.equal(result.hasNextPage, true);
+    assert.equal(result.items[0]?.kind, "pool");
+    assert.equal(result.items[0]?.amount, "350.00");
+    assert.equal("reason" in (result.items[0] || {}), false);
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository uses account identity only as a legacy fallback without a canonical obligation", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = dbRead.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (query: unknown) => {
+    rawQueries.push(query);
+    return { rows: [] };
+  }) as unknown as typeof dbRead.execute;
+  try {
+    await repository.findCollectionHistoryForRow({
+      candidate: {
+        rowId: "legacy-row",
+        sourceImportId: "legacy-import",
+        icHash: null,
+        icValue: null,
+        phoneHash: null,
+        phoneValue: null,
+        accountHashes: ["legacy-account-hash"],
+        accountValues: ["ACC-LEGACY"],
+      },
+      sourceObligationKey: null,
+      viewerScope: { kind: "all" },
+      includeManualAuditDetails: false,
+      includeSourceDetails: false,
+      page: 1,
+      pageSize: 10,
+    });
+    const sqlText = collectSqlText(rawQueries[0]);
+    assert.match(sqlText, /record\.account_number_search_hash\s+IN/i);
+    assert.ok(collectBoundValues(rawQueries[0]).includes("legacy-account-hash"));
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository exposes manual reason and reference only when explicitly authorized", async () => {
+  const repository = new SearchRepository();
+  const originalExecute = dbRead.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async () => ({
+    rows: [{
+      history_item_count: 1,
+      record_count: 0,
+      active_record_count: 0,
+      historical_record_count: 0,
+      pool_contribution_count: 1,
+      summary_collection_amount: "0.00",
+      summary_pool_amount: "350.00",
+      summary_total_covered_amount: "350.00",
+      summary_effective_status: "unclassified",
+      item_id: "pool:record-1:1",
+      item_kind: "pool",
+      is_historical: false,
+      payment_date: "2026-09-03",
+      created_at: new Date("2026-09-03T03:00:00.000Z"),
+      amount: "350.00",
+      classification_source: "manual_verified_abort",
+      automatic_classification: null,
+      effective_status: "abort_cp",
+      settlement_date: "2026-09-03",
+      collection_staff_nickname: null,
+      created_by_login: "superuser.one",
+      source_import_name: "Saved Source",
+      source_filename: "saved.xlsx",
+      purged_at: null,
+      purged_by: null,
+      manual_reason: "EXTERNAL_UNASSIGNED_PAYMENT",
+      manual_note: "Verified against statement",
+      manual_reference: "BANK-REF-1",
+    }],
+  })) as unknown as typeof dbRead.execute;
+
+  try {
+    const result = await repository.findCollectionHistoryForRow({
+      candidate: {
+        rowId: "row-1",
+        sourceImportId: "import-1",
+        icHash: null,
+        icValue: null,
+        phoneHash: null,
+        phoneValue: null,
+        accountHashes: [],
+        accountValues: [],
+      },
+      sourceObligationKey: "account:hash",
+      viewerScope: { kind: "all" },
+      includeManualAuditDetails: true,
+      includeSourceDetails: true,
+      page: 1,
+      pageSize: 10,
+    });
+
+    assert.equal(result.items[0]?.reason, "EXTERNAL_UNASSIGNED_PAYMENT");
+    assert.equal(result.items[0]?.note, "Verified against statement");
+    assert.equal(result.items[0]?.reference, "BANK-REF-1");
+    assert.equal(result.items[0]?.sourceFilename, "saved.xlsx");
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});

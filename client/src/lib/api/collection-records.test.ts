@@ -8,7 +8,9 @@ import {
   getCollectionPurgeSummary,
   getCollectionRecords,
   purgeOldCollectionRecords,
+  revokeCollectionManualSettlement,
   updateCollectionRecord,
+  upsertCollectionManualSettlement,
 } from "./collection-records";
 
 test("buildCollectionRecordFormData appends scalar fields and repeated receipt ids", () => {
@@ -241,7 +243,7 @@ test("getCollectionRecords accepts the backend maximum page size", async () => {
   }
 });
 
-test("getCollectionRecords preserves the masked card suffix returned by the backend", async () => {
+test("getCollectionRecords preserves the full card number returned after backend authorization", async () => {
   const fullCardNumber = "5555555555554444";
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(
@@ -262,8 +264,7 @@ test("getCollectionRecords preserves the masked card suffix returned by the back
     const payload = await getCollectionRecords();
     assert.equal(payload.records[0]?.accountNumber, "");
     assert.equal(payload.records[0]?.cardNumberLast4, "2537");
-    assert.equal("cardNumber" in (payload.records[0] || {}), false);
-    assert.doesNotMatch(JSON.stringify(payload), new RegExp(fullCardNumber));
+    assert.equal(payload.records[0]?.cardNumber, fullCardNumber);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -301,12 +302,12 @@ test("getCollectionRecords rejects malformed collection record payloads", async 
 });
 
 test("collection mutation API wrappers validate create, update, and delete payloads", async () => {
-  const requests: Array<{ method: string; url: string }> = [];
+  const requests: Array<{ method: string; signal: AbortSignal | null | undefined; url: string }> = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = String(init?.method || "GET");
     const url = String(input);
-    requests.push({ method, url });
+    requests.push({ method, signal: init?.signal, url });
 
     const payload = method === "DELETE"
       ? { ok: true }
@@ -317,6 +318,7 @@ test("collection mutation API wrappers validate create, update, and delete paylo
       headers: { "content-type": "application/json" },
     });
   }) as typeof fetch;
+  const controller = new AbortController();
 
   try {
     const created = await createCollectionRecord({
@@ -330,11 +332,11 @@ test("collection mutation API wrappers validate create, update, and delete paylo
       paymentDate: "2026-03-24",
       amount: 120.5,
       collectionStaffNickname: "Collector Alpha",
-    });
+    }, { signal: controller.signal });
     const updated = await updateCollectionRecord("collection-1", {
       amount: 99.25,
-    });
-    const deleted = await deleteCollectionRecord("collection-1");
+    }, { signal: controller.signal });
+    const deleted = await deleteCollectionRecord("collection-1", undefined, { signal: controller.signal });
 
     assert.equal(created.record.id, "collection-1");
     assert.equal(created.record.cardNumberLast4, "2537");
@@ -348,6 +350,52 @@ test("collection mutation API wrappers validate create, update, and delete paylo
   assert.match(requests[0]?.url || "", /\/api\/collection$/);
   assert.match(requests[1]?.url || "", /\/api\/collection\/collection-1$/);
   assert.match(requests[2]?.url || "", /\/api\/collection\/collection-1$/);
+  assert.ok(requests.every((request) => request.signal === controller.signal));
+});
+
+test("manual settlement mutations forward cancellation and idempotency metadata", async () => {
+  const requests: RequestInit[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push(init || {});
+    return new Response(JSON.stringify({
+      ok: true,
+      record: buildCollectionRecordPayload(),
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  const controller = new AbortController();
+  const options = {
+    idempotencyFingerprint: "fingerprint-1",
+    idempotencyKey: "request-1",
+    signal: controller.signal,
+  };
+
+  try {
+    await upsertCollectionManualSettlement("collection-1", {
+      poolAmount: "350.00",
+      settlementDate: "2026-03-24",
+      reason: "EXTERNAL_UNASSIGNED_PAYMENT",
+      expectedVersion: null,
+      confirmed: true,
+    }, options);
+    await revokeCollectionManualSettlement("collection-1", {
+      expectedVersion: 1,
+      revokeReason: "Evidence withdrawn",
+      confirmed: true,
+    }, options);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    assert.equal(request.signal, controller.signal);
+    assert.equal(new Headers(request.headers).get("x-idempotency-key"), "request-1");
+    assert.equal(new Headers(request.headers).get("x-idempotency-fingerprint"), "fingerprint-1");
+  }
 });
 
 test("collection mutation API wrappers reject malformed record responses", async () => {

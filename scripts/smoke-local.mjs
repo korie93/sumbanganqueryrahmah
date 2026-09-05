@@ -90,7 +90,10 @@ const run = async () => {
     PG_USER: String(process.env.PG_USER || "").trim(),
     PG_PASSWORD: String(process.env.PG_PASSWORD || "").trim(),
     PG_DATABASE: String(process.env.PG_DATABASE || "").trim(),
-    SEED_DEFAULT_USERS: process.env.SEED_DEFAULT_USERS || "1",
+    // This command owns an isolated local smoke identity. A production-oriented
+    // .env commonly disables seeding, but inheriting that value would generate
+    // credentials that can never be used by the browser preflight.
+    SEED_DEFAULT_USERS: "1",
     SEED_SUPERUSER_USERNAME: seededSmokeUsername,
     SEED_SUPERUSER_PASSWORD: seededSmokePassword,
     SEED_SUPERUSER_FULL_NAME: process.env.SEED_SUPERUSER_FULL_NAME || "Local Smoke Superuser",

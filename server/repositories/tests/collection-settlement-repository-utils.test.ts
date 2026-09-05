@@ -1,12 +1,130 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyCollectionSettlementState,
   classifyCollectionSettlementSequence,
   recalculateCollectionSettlementCycles,
 } from "../collection-settlement-repository-utils";
+import type { CollectionRecord } from "../../storage-postgres";
 import type { CollectionRepositoryExecutor } from "../collection-nickname-utils";
 
 const TOTAL_DUE_CENTS = 100_00;
+
+const buildMappedRecord = (overrides: Partial<CollectionRecord> = {}): CollectionRecord => ({
+  id: "00000000-0000-4000-8000-000000000001",
+  customerName: "Test Customer",
+  icNumber: "",
+  customerPhone: "",
+  accountNumber: "TEST-ACCOUNT",
+  totalDue: "500.00",
+  totalDueCovered: null,
+  cumulativeCollected: null,
+  remainingAmount: null,
+  cpStatus: "unverified",
+  automaticCpStatus: "unverified",
+  effectiveSettlementSource: "NONE",
+  effectiveSettlementDate: null,
+  manualSettlement: null,
+  batch: "P10",
+  paymentDate: "2026-09-05",
+  amount: "150.00",
+  receiptFile: null,
+  receipts: [],
+  archivedReceipts: [],
+  receiptTotalAmount: "0.00",
+  receiptValidationStatus: "needs_review",
+  receiptValidationMessage: null,
+  receiptCount: 0,
+  duplicateReceiptFlag: false,
+  createdByLogin: "collector",
+  collectionStaffNickname: "Collector",
+  createdAt: new Date("2026-09-05T00:00:00.000Z"),
+  ...overrides,
+});
+
+test("freshly recalculated response exposes the new automatic settlement state", () => {
+  const applied = applyCollectionSettlementState(buildMappedRecord(), {
+    recordId: "00000000-0000-4000-8000-000000000001",
+    classification: "cp",
+    cumulativeCollected: "150.00",
+    remainingAmount: "350.00",
+  });
+
+  assert.equal(applied.automaticCpStatus, "cp");
+  assert.equal(applied.cpStatus, "cp");
+  assert.equal(applied.effectiveSettlementSource, "NONE");
+  assert.equal(applied.effectiveSettlementDate, null);
+  assert.equal(applied.totalDueCovered, false);
+});
+
+test("automatic recalculation preserves an effective manual settlement in the response", () => {
+  const applied = applyCollectionSettlementState(buildMappedRecord({
+    manualSettlement: {
+      status: "ACTIVE",
+      validity: "EFFECTIVE",
+      poolAmount: "350.00",
+      settlementDate: "2026-09-05",
+      reason: "EXTERNAL_UNASSIGNED_PAYMENT",
+      note: null,
+      reference: null,
+      version: 1,
+      verifiedBy: "superuser",
+      verifiedAt: new Date("2026-09-05T01:00:00.000Z"),
+      updatedBy: "superuser",
+      updatedAt: new Date("2026-09-05T01:00:00.000Z"),
+      revokedBy: null,
+      revokedAt: null,
+      revokedReason: null,
+      systemCollectedAtSettlement: "150.00",
+      effectiveTotal: "500.00",
+    },
+  }), {
+    recordId: "00000000-0000-4000-8000-000000000001",
+    classification: "cp",
+    cumulativeCollected: "150.00",
+    remainingAmount: "350.00",
+  });
+
+  assert.equal(applied.automaticCpStatus, "cp");
+  assert.equal(applied.cpStatus, "abort_cp");
+  assert.equal(applied.effectiveSettlementSource, "MANUAL_VERIFIED");
+  assert.equal(applied.effectiveSettlementDate, "2026-09-05");
+});
+
+test("automatic ABORT takes precedence over manual history in the response", () => {
+  const applied = applyCollectionSettlementState(buildMappedRecord({
+    manualSettlement: {
+      status: "ACTIVE",
+      validity: "SUPERSEDED_BY_AUTOMATIC",
+      poolAmount: "350.00",
+      settlementDate: "2026-09-04",
+      reason: "EXTERNAL_UNASSIGNED_PAYMENT",
+      note: null,
+      reference: null,
+      version: 1,
+      verifiedBy: "superuser",
+      verifiedAt: new Date("2026-09-04T01:00:00.000Z"),
+      updatedBy: "superuser",
+      updatedAt: new Date("2026-09-04T01:00:00.000Z"),
+      revokedBy: null,
+      revokedAt: null,
+      revokedReason: null,
+      systemCollectedAtSettlement: "150.00",
+      effectiveTotal: "500.00",
+    },
+  }), {
+    recordId: "00000000-0000-4000-8000-000000000001",
+    classification: "abort_cp",
+    cumulativeCollected: "500.00",
+    remainingAmount: "0.00",
+  });
+
+  assert.equal(applied.automaticCpStatus, "abort_cp");
+  assert.equal(applied.cpStatus, "abort_cp");
+  assert.equal(applied.effectiveSettlementSource, "AUTOMATIC");
+  assert.equal(applied.effectiveSettlementDate, "2026-09-05");
+  assert.equal(applied.totalDueCovered, true);
+});
 
 function collectSqlText(query: unknown): string {
   if (query && typeof query === "object" && "queryChunks" in query) {

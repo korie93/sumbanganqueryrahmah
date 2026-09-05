@@ -1,10 +1,18 @@
 import type { CollectionRecord } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-export function getCollectionCpStatusLabel(record: Pick<CollectionRecord, "cpStatus">) {
-  if (record.cpStatus === "abort_cp") return "Abort CP";
-  if (record.cpStatus === "cp") return "CP";
-  return "Unverified";
+export function getCollectionCpStatusLabel(
+  record: Pick<CollectionRecord, "cpStatus"> & Partial<Pick<CollectionRecord, "effectiveSettlementSource" | "manualSettlement">>,
+) {
+  const base = record.cpStatus === "abort_cp" ? "Abort CP" : record.cpStatus === "cp" ? "CP" : "Unverified";
+  const manual = record.manualSettlement;
+  if (!manual) return base;
+  if (manual.status === "REVOKED") return `${base} · Manual revoked`;
+  if (manual.validity === "EFFECTIVE" && record.effectiveSettlementSource === "MANUAL_VERIFIED") {
+    return `${base} · Manual Verified · POOL ${formatAmountRM(manual.poolAmount)}`;
+  }
+  if (manual.validity === "SUPERSEDED_BY_AUTOMATIC") return `${base} · POOL superseded`;
+  return `${base} · POOL requires revalidation`;
 }
 
 export function formatCollectionOptionalAmount(value: string | null | undefined) {

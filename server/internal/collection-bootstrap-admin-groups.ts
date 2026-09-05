@@ -6,6 +6,7 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS public.admin_groups (
       id uuid PRIMARY KEY,
+      leader_nickname_id uuid,
       leader_nickname text NOT NULL,
       created_by text,
       created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -16,12 +17,14 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS public.admin_group_members (
       id uuid PRIMARY KEY,
       admin_group_id uuid NOT NULL,
+      member_nickname_id uuid,
       member_nickname text NOT NULL,
       created_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
 
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname text`);
+  await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS leader_nickname_id uuid`);
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
@@ -29,6 +32,7 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
 
   await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
   await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
+  await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname_id uuid`);
   await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
 
   await db.execute(sql`
@@ -77,6 +81,48 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
         WHERE g.id = m.admin_group_id
       )
   `);
+
+  await db.execute(sql`
+    UPDATE public.admin_groups admin_group
+    SET leader_nickname_id = nickname.id
+    FROM public.collection_staff_nicknames nickname
+    WHERE admin_group.leader_nickname_id IS NULL
+      AND lower(nickname.nickname) = lower(admin_group.leader_nickname)
+  `);
+  await db.execute(sql`
+    UPDATE public.admin_group_members member
+    SET member_nickname_id = nickname.id
+    FROM public.collection_staff_nicknames nickname
+    WHERE member.member_nickname_id IS NULL
+      AND lower(nickname.nickname) = lower(member.member_nickname)
+  `);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM public.admin_groups WHERE leader_nickname_id IS NULL) THEN
+        RAISE EXCEPTION 'Admin group leader lacks a stable collection nickname identity.';
+      END IF;
+      IF EXISTS (SELECT 1 FROM public.admin_group_members WHERE member_nickname_id IS NULL) THEN
+        RAISE EXCEPTION 'Admin group member lacks a stable collection nickname identity.';
+      END IF;
+    END $$
+  `);
+  await db.execute(sql`
+    UPDATE public.admin_groups admin_group
+    SET leader_nickname = nickname.nickname
+    FROM public.collection_staff_nicknames nickname
+    WHERE nickname.id = admin_group.leader_nickname_id
+      AND admin_group.leader_nickname IS DISTINCT FROM nickname.nickname
+  `);
+  await db.execute(sql`
+    UPDATE public.admin_group_members member
+    SET member_nickname = nickname.nickname
+    FROM public.collection_staff_nicknames nickname
+    WHERE nickname.id = member.member_nickname_id
+      AND member.member_nickname IS DISTINCT FROM nickname.nickname
+  `);
+  await db.execute(sql`ALTER TABLE public.admin_groups ALTER COLUMN leader_nickname_id SET NOT NULL`);
+  await db.execute(sql`ALTER TABLE public.admin_group_members ALTER COLUMN member_nickname_id SET NOT NULL`);
 
   await db.execute(sql`
     DELETE FROM public.admin_group_members m
@@ -134,6 +180,18 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
     ON public.admin_group_members (admin_group_id)
   `);
   await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_groups_leader_nickname_id_unique
+    ON public.admin_groups (leader_nickname_id)
+  `);
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_group_member_nickname_id_unique
+    ON public.admin_group_members (admin_group_id, member_nickname_id)
+  `);
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_group_members_member_nickname_id_unique
+    ON public.admin_group_members (member_nickname_id)
+  `);
+  await db.execute(sql`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -160,6 +218,32 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
         REFERENCES public.admin_groups(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_admin_groups_leader_nickname_id'
+      ) THEN
+        ALTER TABLE public.admin_groups
+        ADD CONSTRAINT fk_admin_groups_leader_nickname_id
+        FOREIGN KEY (leader_nickname_id)
+        REFERENCES public.collection_staff_nicknames(id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_admin_group_members_member_nickname_id'
+      ) THEN
+        ALTER TABLE public.admin_group_members
+        ADD CONSTRAINT fk_admin_group_members_member_nickname_id
+        FOREIGN KEY (member_nickname_id)
+        REFERENCES public.collection_staff_nicknames(id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT;
       END IF;
     END $$;
   `);

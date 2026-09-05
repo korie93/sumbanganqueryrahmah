@@ -139,3 +139,61 @@ export type SearchCollectionStatusMatch = {
   purgedBy: string | null;
   matchBasis: "source_row" | "source_and_identifier" | "identifier_only";
 };
+
+export type SearchCollectionHistorySourceRow = {
+  id: string;
+  importId: string;
+  jsonDataJsonb: unknown;
+  sourceObligationKey: string | null;
+};
+
+export type SearchCollectionHistoryItem = {
+  id: string;
+  kind: "collection" | "pool";
+  isHistorical: boolean;
+  paymentDate: string;
+  createdAt: string;
+  amount: string;
+  classificationSource: "automatic" | "manual_verified_abort";
+  automaticClassification: "cp" | "abort_cp" | null;
+  effectiveStatus:
+    | "cp"
+    | "abort_cp"
+    | "requires_revalidation"
+    | "superseded_by_automatic"
+    | "revoked"
+    | "unclassified"
+    | "historical";
+  settlementDate: string | null;
+  staffNickname: string | null;
+  createdByLogin: string | null;
+  sourceImportName: string | null;
+  sourceFilename: string | null;
+  purgedAt: string | null;
+  purgedBy: string | null;
+  reason?: string | null;
+  note?: string | null;
+  reference?: string | null;
+};
+
+export type SearchCollectionHistorySummary = {
+  recordCount: number;
+  activeRecordCount: number;
+  historicalRecordCount: number;
+  poolContributionCount: number;
+  collectionAmount: string;
+  poolAmount: string;
+  totalCoveredAmount: string;
+  effectiveStatus: "cp" | "abort_cp" | "requires_revalidation" | "unclassified" | "historical";
+};
+
+export type SearchCollectionHistoryPage = {
+  items: SearchCollectionHistoryItem[];
+  summary: SearchCollectionHistorySummary;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};

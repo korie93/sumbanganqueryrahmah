@@ -237,8 +237,12 @@ export const collectionRecordReceiptRelations = relations(collectionRecordReceip
   }),
 }));
 
-export const adminGroupRelations = relations(adminGroups, ({ many }) => ({
+export const adminGroupRelations = relations(adminGroups, ({ many, one }) => ({
   members: many(adminGroupMembers),
+  leaderNickname: one(collectionStaffNicknames, {
+    fields: [adminGroups.leaderNicknameId],
+    references: [collectionStaffNicknames.id],
+  }),
 }));
 
 export const adminGroupMemberRelations = relations(adminGroupMembers, ({ one }) => ({
@@ -246,10 +250,16 @@ export const adminGroupMemberRelations = relations(adminGroupMembers, ({ one }) 
     fields: [adminGroupMembers.adminGroupId],
     references: [adminGroups.id],
   }),
+  memberNickname: one(collectionStaffNicknames, {
+    fields: [adminGroupMembers.memberNicknameId],
+    references: [collectionStaffNicknames.id],
+  }),
 }));
 
 export const collectionStaffNicknameRelations = relations(collectionStaffNicknames, ({ many }) => ({
   adminAssignments: many(adminVisibleNicknames),
+  ledAdminGroups: many(adminGroups),
+  adminGroupMemberships: many(adminGroupMembers),
 }));
 
 export const adminVisibleNicknameRelations = relations(adminVisibleNicknames, ({ one }) => ({

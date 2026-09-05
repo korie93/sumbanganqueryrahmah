@@ -24,26 +24,41 @@ import {
   formatOspCurrency,
 } from "./billing-principal-report-utils";
 
-type TargetDraft = Record<string, { baseline: string; percentage: string }>;
+export type BillingPrincipalTargetDraft = Record<string, { percentage: string }>;
 
-function buildDraft(rows: BillingPrincipalReportRow[]): TargetDraft {
+export function buildBillingPrincipalTargetDraft(
+  rows: BillingPrincipalReportRow[],
+): BillingPrincipalTargetDraft {
   return Object.fromEntries(BILLING_PRINCIPAL_AGINGS.map((aging) => {
     const row = rows.find((candidate) => candidate.aging === aging);
     return [aging, {
-      baseline: row?.totalOsp || "0.00",
       percentage: row?.targetPercentage || "0.0000",
     }];
   }));
 }
 
-function validateDraft(draft: TargetDraft): string {
+export function buildBillingPrincipalTargetMutationRows(
+  rows: BillingPrincipalReportRow[],
+  draft: BillingPrincipalTargetDraft,
+): BillingPrincipalTargetInput[] {
+  return BILLING_PRINCIPAL_AGINGS.map((aging) => {
+    const authoritativeRow = rows.find((candidate) => candidate.aging === aging);
+    return {
+      agingBucket: aging,
+      // This is an integrity assertion from the server-provided Saved Target,
+      // never a user-editable source of financial truth.
+      totalOspBaseline: authoritativeRow?.totalOsp || null,
+      targetPercentage: draft[aging]?.percentage.trim() || "0",
+    };
+  });
+}
+
+export function validateBillingPrincipalTargetDraft(
+  draft: BillingPrincipalTargetDraft,
+): string {
   for (const aging of BILLING_PRINCIPAL_AGINGS) {
     const row = draft[aging];
-    const baseline = Number(String(row?.baseline || "").replace(/,/g, ""));
     const percentage = Number(String(row?.percentage || "").replace(/%/g, ""));
-    if (!Number.isFinite(baseline) || baseline < 0) {
-      return `${aging} Total OSP must be zero or a positive amount.`;
-    }
     if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
       return `${aging} Target % must be between 0 and 100.`;
     }
@@ -67,7 +82,9 @@ export function BillingPrincipalTargetDialog({
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<TargetDraft>(() => buildDraft(rows));
+  const [draft, setDraft] = useState<BillingPrincipalTargetDraft>(
+    () => buildBillingPrincipalTargetDraft(rows),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const saveControllerRef = useRef<AbortController | null>(null);
@@ -79,33 +96,27 @@ export function BillingPrincipalTargetDialog({
 
   useEffect(() => {
     if (open) {
-      setDraft(buildDraft(rows));
+      setDraft(buildBillingPrincipalTargetDraft(rows));
       setError("");
     }
   }, [open, rows]);
 
-  const updateDraft = (aging: string, field: "baseline" | "percentage", value: string) => {
+  const updateDraft = (aging: string, value: string) => {
     setDraft((current) => ({
       ...current,
       [aging]: {
-        baseline: current[aging]?.baseline || "",
-        percentage: current[aging]?.percentage || "",
-        [field]: value,
+        percentage: value,
       },
     }));
   };
 
   const save = async () => {
-    const validationError = validateDraft(draft);
+    const validationError = validateBillingPrincipalTargetDraft(draft);
     if (validationError) {
       setError(validationError);
       return;
     }
-    const targets: BillingPrincipalTargetInput[] = BILLING_PRINCIPAL_AGINGS.map((aging) => ({
-      agingBucket: aging,
-      totalOspBaseline: draft[aging]?.baseline.trim() || null,
-      targetPercentage: draft[aging]?.percentage.trim() || "0",
-    }));
+    const targets = buildBillingPrincipalTargetMutationRows(rows, draft);
     saveControllerRef.current?.abort();
     const controller = new AbortController();
     saveControllerRef.current = controller;
@@ -146,27 +157,24 @@ export function BillingPrincipalTargetDialog({
         <DialogHeader>
           <DialogTitle>Billing Principal (OSP) Targets</DialogTitle>
           <DialogDescription>
-            Configure the baseline and percentage for this exact date and source-file scope.
-            Target OSP is calculated automatically.
+            Configure Target % for this exact date and source-file scope. TT OSP comes from
+            the immutable Saved Target snapshot and Target OSP is calculated automatically.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 sm:grid-cols-2">
           {BILLING_PRINCIPAL_AGINGS.map((aging) => {
-            const values = draft[aging] || { baseline: "", percentage: "" };
+            const values = draft[aging] || { percentage: "" };
+            const authoritativeRow = rows.find((candidate) => candidate.aging === aging);
+            const baseline = authoritativeRow?.totalOsp || "";
             return (
               <fieldset key={aging} className="min-w-0 space-y-3 rounded-xl border border-border/70 p-4">
                 <legend className="px-1 text-sm font-semibold">{aging}</legend>
                 <div className="space-y-1.5">
-                  <Label htmlFor={`osp-baseline-${aging}`}>Total OSP baseline (RM)</Label>
-                  <Input
-                    id={`osp-baseline-${aging}`}
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={values.baseline}
-                    onChange={(event) => updateDraft(aging, "baseline", event.target.value)}
-                    disabled={saving}
-                  />
+                  <p className="text-xs font-medium text-muted-foreground">TT OSP (Saved Target)</p>
+                  <p className="tabular-nums" data-testid={`osp-baseline-${aging}`}>
+                    {formatOspCurrency(baseline)}
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor={`osp-percentage-${aging}`}>Target %</Label>
@@ -175,13 +183,13 @@ export function BillingPrincipalTargetDialog({
                     inputMode="decimal"
                     autoComplete="off"
                     value={values.percentage}
-                    onChange={(event) => updateDraft(aging, "percentage", event.target.value)}
+                    onChange={(event) => updateDraft(aging, event.target.value)}
                     disabled={saving}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Target OSP: {formatOspCurrency(
-                    calculateTargetOspPreview(values.baseline, values.percentage),
+                    calculateTargetOspPreview(baseline, values.percentage),
                   )}
                 </p>
               </fieldset>

@@ -20,7 +20,7 @@ function account(overrides: Partial<CollectionOspReconciliationAccountInput> = {
     systemAbortDate: null,
     manual: {
       amount: "300.00",
-      asOfDate: "2026-09-05",
+      asOfDate: "2026-09-10",
       actualPaymentDate: null,
       active: true,
     },
@@ -36,15 +36,36 @@ test("V7 closes 700 + 300 exactly without mutating raw System state", () => {
   assert.equal(result.reconciledCumulative, "1000.00");
   assert.equal(result.remainingAmount, "0.00");
   assert.equal(result.reconciledClosed, true);
-  assert.equal(result.contributionSource, "MANUAL_RECONCILIATION");
+  assert.equal(result.contributionSource, "MANUAL_VERIFIED_ABORT");
   assert.equal(result.effectiveClosureDate, "2026-09-10");
 });
 
 test("below threshold remains open and over threshold closes", () => {
-  assert.equal(account({ manual: { amount: "299.99", asOfDate: "2026-09-05", active: true } }).reconciledClosed, false);
-  const over = account({ manual: { amount: "500.00", asOfDate: "2026-09-05", active: true } });
+  assert.equal(account({ manual: { amount: "299.99", asOfDate: "2026-09-10", active: true } }).reconciledClosed, false);
+  const over = account({ manual: { amount: "500.00", asOfDate: "2026-09-10", active: true } });
   assert.equal(over.reconciledClosed, true);
   assert.equal(over.remainingAmount, "0.00");
+});
+
+test("a later System payment cannot retroactively validate an insufficient manual settlement", () => {
+  const result = account({
+    systemPayments: [
+      { id: "system-before", date: "2026-09-05", amount: "600.00" },
+      { id: "system-after", date: "2026-09-10", amount: "100.00" },
+    ],
+    manual: {
+      amount: "300.00",
+      asOfDate: "2026-09-05",
+      actualPaymentDate: null,
+      active: true,
+    },
+  });
+
+  assert.equal(result.systemCumulative, "700.00", "current System position still includes the later CP");
+  assert.equal(result.reconciledCumulative, "1000.00", "POOL remains separately visible for audit");
+  assert.equal(result.reconciledClosed, false);
+  assert.equal(result.effectiveClosureDate, null);
+  assert.equal(result.contributionSource, "OPEN");
 });
 
 test("System ABORT takes current contribution precedence without double counting", () => {
@@ -114,8 +135,8 @@ test("same customer can retain two independent cycle/account contributions", () 
 });
 
 test("editing down and voiding the manual state removes qualification", () => {
-  assert.equal(account({ manual: { amount: "250.00", asOfDate: "2026-09-05", active: true } }).reconciledClosed, false);
-  const voided = account({ manual: { amount: "300.00", asOfDate: "2026-09-05", active: false } });
+  assert.equal(account({ manual: { amount: "250.00", asOfDate: "2026-09-10", active: true } }).reconciledClosed, false);
+  const voided = account({ manual: { amount: "300.00", asOfDate: "2026-09-10", active: false } });
   assert.equal(voided.manualPriorAmount, "0.00");
   assert.equal(voided.reconciledClosed, false);
 });

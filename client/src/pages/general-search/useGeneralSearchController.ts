@@ -60,26 +60,55 @@ export function useGeneralSearchController({
   });
 
   const addFilter = useCallback(() => {
+    setSelectedRecord(null);
     setFilters((previous) => [...previous, createEmptyFilterRow(Date.now().toString())]);
   }, []);
 
   const removeFilter = useCallback((id: string) => {
+    setSelectedRecord(null);
     setFilters((previous) =>
       previous.length > 1 ? previous.filter((filter) => filter.id !== id) : previous,
     );
   }, []);
 
   const updateFilter = useCallback((id: string, updates: Partial<FilterRow>) => {
+    setSelectedRecord(null);
     setFilters((previous) =>
       previous.map((filter) => (filter.id === id ? { ...filter, ...updates } : filter)),
     );
   }, []);
 
   const handleReset = useCallback(() => {
+    setSelectedRecord(null);
     dataState.actions.resetSearchState();
     setFilters([createEmptyFilterRow()]);
     setLogic("AND");
   }, [dataState.actions]);
+
+  const handleQueryChange = useCallback((value: string) => {
+    setSelectedRecord(null);
+    dataState.actions.handleQueryChange(value);
+  }, [dataState.actions]);
+
+  const handleSearch = useCallback(() => {
+    setSelectedRecord(null);
+    dataState.actions.handleSearch();
+  }, [dataState.actions]);
+
+  const handlePageChange = useCallback((page: number) => {
+    setSelectedRecord(null);
+    dataState.actions.handlePageChange(page);
+  }, [dataState.actions]);
+
+  const handleResultsPerPageChange = useCallback((pageSize: number) => {
+    setSelectedRecord(null);
+    dataState.actions.handleResultsPerPageChange(pageSize);
+  }, [dataState.actions]);
+
+  const handleAdvancedModeChange = useCallback((enabled: boolean) => {
+    setSelectedRecord(null);
+    setAdvancedMode(enabled);
+  }, []);
 
   return {
     canExport,
@@ -99,15 +128,15 @@ export function useGeneralSearchController({
       addFilter,
       exportToCSV: exportState.actions.exportToCSV,
       exportToPDF: exportState.actions.exportToPDF,
-      handlePageChange: dataState.actions.handlePageChange,
-      handleQueryChange: dataState.actions.handleQueryChange,
+      handlePageChange,
+      handleQueryChange,
       handleReset,
-      handleResultsPerPageChange: dataState.actions.handleResultsPerPageChange,
-      handleSearch: dataState.actions.handleSearch,
+      handleResultsPerPageChange,
+      handleSearch,
       removeFilter,
-      setAdvancedMode,
+      setAdvancedMode: handleAdvancedModeChange,
       setLogic,
-      setResultsPerPage: dataState.actions.handleResultsPerPageChange,
+      setResultsPerPage: handleResultsPerPageChange,
       setSelectedRecord,
       updateFilter,
     },

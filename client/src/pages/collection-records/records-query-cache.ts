@@ -31,6 +31,7 @@ export function buildCollectionRecordsCacheKey(filters?: CollectionRecordFilters
     to: normalizeCollectionRecordFilterValue(filters?.to),
     search: normalizeCollectionRecordFilterValue(filters?.search)?.toLowerCase() || null,
     nickname: normalizeCollectionRecordFilterValue(filters?.nickname)?.toLowerCase() || null,
+    leaderId: normalizeCollectionRecordFilterValue(filters?.leaderId)?.toLowerCase() || null,
     sourceImportIds: [...(filters?.sourceImportIds || [])].sort(),
     agingBuckets: [...(filters?.agingBuckets || [])].sort(),
     classifications: [...(filters?.classifications || [])].sort(),

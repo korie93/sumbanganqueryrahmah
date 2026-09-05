@@ -14,6 +14,7 @@ const SOURCE_ACCOUNT_HYDRATION_CHUNK_SIZE = 200;
 type LinkedCollectionSourceAccount = {
   sourceImportId: string;
   sourceDataRowId: string;
+  sourceObligationKey: string;
 };
 
 function normalizeRequiredText(value: unknown): string | null {
@@ -25,17 +26,13 @@ function buildSourceLinkKey(sourceImportId: string, sourceDataRowId: string): st
   return JSON.stringify([sourceImportId, sourceDataRowId]);
 }
 
-function collectMissingSourceAccountLinks(
+function collectLinkedSourceIdentityRows(
   records: readonly CollectionRecord[],
 ): LinkedCollectionSourceAccount[] {
   const links = new Map<string, LinkedCollectionSourceAccount>();
+  const conflictingLinks = new Set<string>();
 
   for (const record of records) {
-    if (
-      normalizeRequiredText(record.accountNumber)
-      && normalizeRequiredText(record.cardNumberLast4)
-    ) continue;
-
     const sourceImportId = normalizeRequiredText(record.sourceImportId);
     const sourceDataRowId = normalizeRequiredText(record.sourceDataRowId);
     const sourceObligationKey = normalizeRequiredText(record.sourceObligationKey);
@@ -48,30 +45,42 @@ function collectMissingSourceAccountLinks(
     }
 
     const key = buildSourceLinkKey(sourceImportId, sourceDataRowId);
-    links.set(key, { sourceImportId, sourceDataRowId });
+    const existing = links.get(key);
+    if (existing && existing.sourceObligationKey !== sourceObligationKey) {
+      links.delete(key);
+      conflictingLinks.add(key);
+      continue;
+    }
+    if (!conflictingLinks.has(key)) {
+      links.set(key, { sourceImportId, sourceDataRowId, sourceObligationKey });
+    }
   }
 
   return Array.from(links.values());
 }
 
 /**
- * Hydrates historical records from their exact linked Saved row. Account is
- * accepted only when its blind index reproduces the immutable obligation key
- * captured at save. A missing Card suffix additionally requires agreement
- * between the raw Saved Card and its governed blind index. Full Card values
- * are discarded immediately and never copied to the record.
+ * Hydrates records from their exact linked Saved row. Account is accepted only
+ * when its blind index reproduces the immutable obligation key captured at
+ * save. Full Card No is returned from that same exact Saved row after its
+ * obligation key is reproduced. When the source index still exists, its Card
+ * hash and suffix must also agree; a deliberately deleted source configuration
+ * can fall back to the immutable record-to-row link instead of losing the Card
+ * value from historical authorized views. The full value remains an in-memory
+ * string and is never copied to collection_records or written to logs.
  */
 export async function hydrateCollectionRecordSourceAccounts(
   executor: CollectionRepositoryExecutor,
   records: readonly CollectionRecord[],
 ): Promise<CollectionRecord[]> {
-  const sourceLinks = collectMissingSourceAccountLinks(records);
+  const sourceLinks = collectLinkedSourceIdentityRows(records);
   if (sourceLinks.length === 0) {
     return [...records];
   }
 
   const sourceIdentityByLink = new Map<string, {
     accountNumber: string | null;
+    cardNumber: string | null;
     cardNumberLast4: string | null;
     obligationKey: string;
   }>();
@@ -103,6 +112,12 @@ export async function hydrateCollectionRecordSourceAccounts(
     const expectedLinks = new Set(
       chunk.map((link) => buildSourceLinkKey(link.sourceImportId, link.sourceDataRowId)),
     );
+    const expectedObligationByLink = new Map(
+      chunk.map((link) => [
+        buildSourceLinkKey(link.sourceImportId, link.sourceDataRowId),
+        link.sourceObligationKey,
+      ]),
+    );
 
     for (const raw of result.rows || []) {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
@@ -113,6 +128,8 @@ export async function hydrateCollectionRecordSourceAccounts(
 
       const key = buildSourceLinkKey(sourceImportId, sourceDataRowId);
       if (!expectedLinks.has(key)) continue;
+      const expectedObligationKey = expectedObligationByLink.get(key);
+      if (!expectedObligationKey) continue;
 
       const canonicalSource = extractCanonicalSavedCollectionMasterRow(row.source_json_data);
       const sourceAccountNumber = canonicalSource.accountNumber;
@@ -134,27 +151,30 @@ export async function hydrateCollectionRecordSourceAccounts(
       const indexedCardLast4 = normalizeRequiredText(row.source_card_number_last4);
       const indexedObligationKey = normalizeRequiredText(row.source_obligation_key);
       const normalizedCardNumber = normalizeCollectionSourceIdentifier(canonicalSource.cardNumber);
-      const cardNumberLast4 = sourceCardHash
-        && indexedCardHash === sourceCardHash
+      const governedIndexIsAvailable = Boolean(
+        indexedCardHash || indexedCardLast4 || indexedObligationKey,
+      );
+      const governedIndexMatches = !governedIndexIsAvailable || (
+        indexedCardHash === sourceCardHash
         && /^\d{4}$/.test(indexedCardLast4 ?? "")
         && indexedCardLast4 === normalizedCardNumber.slice(-4)
         && indexedObligationKey === sourceObligationKey
-        ? indexedCardLast4
+      );
+      const verifiedCardNumber = sourceCardHash
+        && sourceObligationKey === expectedObligationKey
+        && governedIndexMatches
+        ? normalizedCardNumber
         : null;
       sourceIdentityByLink.set(key, {
         accountNumber: sourceAccountNumber,
-        cardNumberLast4,
+        cardNumber: verifiedCardNumber,
+        cardNumberLast4: verifiedCardNumber ? verifiedCardNumber.slice(-4) : null,
         obligationKey: sourceObligationKey,
       });
     }
   }
 
   return records.map((record) => {
-    if (
-      normalizeRequiredText(record.accountNumber)
-      && normalizeRequiredText(record.cardNumberLast4)
-    ) return record;
-
     const sourceImportId = normalizeRequiredText(record.sourceImportId);
     const sourceDataRowId = normalizeRequiredText(record.sourceDataRowId);
     const sourceObligationKey = normalizeRequiredText(record.sourceObligationKey);
@@ -170,6 +190,7 @@ export async function hydrateCollectionRecordSourceAccounts(
       accountNumber: normalizeRequiredText(record.accountNumber)
         ? record.accountNumber
         : sourceIdentity.accountNumber ?? record.accountNumber,
+      cardNumber: sourceIdentity.cardNumber,
       cardNumberLast4: normalizeRequiredText(record.cardNumberLast4)
         ? record.cardNumberLast4 ?? null
         : sourceIdentity.cardNumberLast4,

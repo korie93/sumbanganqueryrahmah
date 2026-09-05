@@ -7,6 +7,11 @@ import {
 } from "./search-collection-status-utils";
 import type { SearchCollectionViewerScope } from "../repositories/search-repository-types";
 import { enrichSavedRowLocation } from "../lib/saved-row-location-enrichment";
+import { badRequest, notFound } from "../http/errors";
+import {
+  decodeSearchCollectionHistoryKey,
+  encodeSearchCollectionHistoryKey,
+} from "./search-collection-history-key";
 
 type SearchGlobalRow = {
   id?: string | null;
@@ -31,6 +36,8 @@ type SearchRepositoryPort = Pick<
   SearchRepository,
   | "advancedSearchDataRows"
   | "findCollectionStatusesForRows"
+  | "findCollectionHistoryForRow"
+  | "findCollectionHistorySourceRow"
   | "getAllColumnNames"
   | "searchGlobalDataRows"
   | "searchSimpleDataRows"
@@ -51,7 +58,25 @@ function buildRowsWithSource(params: {
       ...(params.includeSourceDetails
         ? { "Source File": row.importFilename || row.importName || "" }
         : {}),
-      _collectionStatus: params.statuses.get(rowId) ?? {
+      _collectionStatus: (() => {
+        const status = params.statuses.get(rowId);
+        if (status) {
+          const sourceImportId = String(row.importId || "").trim();
+          return {
+            ...status,
+            ...((status.state === "recorded" || status.state === "historical")
+              && rowId
+              && sourceImportId
+              ? {
+                  historyKey: encodeSearchCollectionHistoryKey({
+                    sourceDataRowId: rowId,
+                    sourceImportId,
+                  }),
+                }
+              : {}),
+          };
+        }
+        return {
         state: "unavailable",
         recordCount: 0,
         latestPaymentDate: null,
@@ -65,7 +90,8 @@ function buildRowsWithSource(params: {
         purgedAt: null,
         purgedBy: null,
         matchBasis: null,
-      },
+        };
+      })(),
     };
   });
 }
@@ -105,6 +131,45 @@ export class SearchService {
 
   async getColumns() {
     return this.searchRepository.getAllColumnNames();
+  }
+
+  async getCollectionHistory(params: {
+    historyKey: string;
+    page: number;
+    pageSize: number;
+    includeManualAuditDetails: boolean;
+    includeSourceDetails: boolean;
+    collectionViewerScope: SearchCollectionViewerScope;
+  }) {
+    const identity = decodeSearchCollectionHistoryKey(params.historyKey);
+    if (!identity) {
+      throw badRequest("Invalid collection history key.");
+    }
+
+    const sourceRow = await this.searchRepository.findCollectionHistorySourceRow(identity);
+    if (!sourceRow) {
+      throw notFound("Collection history source was not found.");
+    }
+
+    const candidate = buildSearchCollectionStatusCandidates([sourceRow])[0] ?? {
+      rowId: sourceRow.id,
+      sourceImportId: sourceRow.importId,
+      icHash: null,
+      icValue: null,
+      phoneHash: null,
+      phoneValue: null,
+      accountHashes: [],
+      accountValues: [],
+    };
+    return this.searchRepository.findCollectionHistoryForRow({
+      candidate,
+      sourceObligationKey: sourceRow.sourceObligationKey,
+      viewerScope: params.collectionViewerScope,
+      includeManualAuditDetails: params.includeManualAuditDetails,
+      includeSourceDetails: params.includeSourceDetails,
+      page: params.page,
+      pageSize: params.pageSize,
+    });
   }
 
   async searchGlobal(params: {

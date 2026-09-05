@@ -372,6 +372,43 @@ export function mapBackupCollectionRecordRow(
       row.remainingAmount == null
         ? null
         : row.remainingAmount as NonNullable<BackupCollectionRecord["remainingAmount"]>,
+    settlementOverrideStatus:
+      row.settlementOverrideStatus === "ACTIVE" || row.settlementOverrideStatus === "REVOKED"
+        ? row.settlementOverrideStatus
+        : null,
+    poolAmount: row.poolAmount == null
+      ? null
+      : row.poolAmount as NonNullable<BackupCollectionRecord["poolAmount"]>,
+    manualSettlementDate: typeof row.manualSettlementDate === "string"
+      ? row.manualSettlementDate.slice(0, 10)
+      : null,
+    manualSettlementReason: typeof row.manualSettlementReason === "string"
+      ? row.manualSettlementReason
+      : null,
+    manualSettlementNote: typeof row.manualSettlementNote === "string"
+      ? row.manualSettlementNote
+      : null,
+    manualSettlementReference: typeof row.manualSettlementReference === "string"
+      ? row.manualSettlementReference
+      : null,
+    manualSettlementVersion: Number.isInteger(Number(row.manualSettlementVersion))
+      ? Number(row.manualSettlementVersion)
+      : null,
+    manualSettlementVerifiedBy: typeof row.manualSettlementVerifiedBy === "string"
+      ? row.manualSettlementVerifiedBy
+      : null,
+    manualSettlementVerifiedAt: row.manualSettlementVerifiedAt ?? null,
+    manualSettlementUpdatedBy: typeof row.manualSettlementUpdatedBy === "string"
+      ? row.manualSettlementUpdatedBy
+      : null,
+    manualSettlementUpdatedAt: row.manualSettlementUpdatedAt ?? null,
+    manualSettlementRevokedBy: typeof row.manualSettlementRevokedBy === "string"
+      ? row.manualSettlementRevokedBy
+      : null,
+    manualSettlementRevokedAt: row.manualSettlementRevokedAt ?? null,
+    manualSettlementRevokedReason: typeof row.manualSettlementRevokedReason === "string"
+      ? row.manualSettlementRevokedReason
+      : null,
     batch: String(row.batch || ""),
     paymentDate: String(row.paymentDate || ""),
     amount: row.amount as BackupCollectionRecord["amount"],

@@ -64,6 +64,20 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     return res.json(await searchService.searchSimple(String(req.query.q || "")));
   };
 
+  const getCollectionHistory = async (req: AuthenticatedRequest, res: Response) => {
+    const historyKey = String(req.query.key || "").trim().slice(0, 1_025);
+    const page = Math.max(1, Math.min(10_000, readInteger(req.query.page, 1)));
+    const pageSize = readPageLimit(req.query.pageSize ?? req.query.limit, 10, 50);
+    return res.json(await searchService.getCollectionHistory({
+      historyKey,
+      page,
+      pageSize,
+      includeManualAuditDetails: req.user?.role === "superuser",
+      includeSourceDetails: canSeeSourceDetails(req),
+      collectionViewerScope: resolveCollectionViewerScope(req),
+    }));
+  };
+
   const advancedSearch = async (req: AuthenticatedRequest, res: Response) => {
     const body = ensureObject(req.body) || {};
     const filters = Array.isArray(body.filters) ? body.filters : [];
@@ -92,6 +106,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     getColumns,
     searchGlobal,
     searchSimple,
+    getCollectionHistory,
     advancedSearch,
   };
 }

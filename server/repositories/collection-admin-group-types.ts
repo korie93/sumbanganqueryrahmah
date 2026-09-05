@@ -9,10 +9,12 @@ export type CollectionNicknameIdRow = {
 
 export type CollectionExistingAdminGroupRow = {
   id?: unknown;
+  leader_nickname_id?: unknown;
   leader_nickname?: unknown;
 };
 
 export type CollectionAdminGroupMemberRow = {
+  member_nickname_id?: unknown;
   member_nickname?: unknown;
 };
 

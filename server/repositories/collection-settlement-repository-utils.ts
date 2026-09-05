@@ -320,6 +320,7 @@ export function applyCollectionSettlementState(
   state: CollectionSettlementState | undefined,
 ): CollectionRecord {
   if (!state) return record;
+  const manualSettlementIsEffective = record.manualSettlement?.validity === "EFFECTIVE";
   if (
     !state.classification
     || state.cumulativeCollected === null
@@ -330,15 +331,32 @@ export function applyCollectionSettlementState(
       cumulativeCollected: null,
       remainingAmount: null,
       totalDueCovered: null,
-      cpStatus: "unverified",
+      automaticCpStatus: "unverified",
+      cpStatus: manualSettlementIsEffective ? "abort_cp" : "unverified",
+      effectiveSettlementSource: manualSettlementIsEffective ? "MANUAL_VERIFIED" : "NONE",
+      effectiveSettlementDate: manualSettlementIsEffective
+        ? record.manualSettlement?.settlementDate ?? null
+        : null,
     };
   }
   const remainingCents = parseCollectionAmountToCents(state.remainingAmount, { allowZero: true });
+  const automaticIsAbort = state.classification === "abort_cp";
   return {
     ...record,
     cumulativeCollected: state.cumulativeCollected,
     remainingAmount: state.remainingAmount,
     totalDueCovered: remainingCents === null ? null : remainingCents === 0,
-    cpStatus: state.classification,
+    automaticCpStatus: state.classification,
+    cpStatus: automaticIsAbort || manualSettlementIsEffective ? "abort_cp" : state.classification,
+    effectiveSettlementSource: automaticIsAbort
+      ? "AUTOMATIC"
+      : manualSettlementIsEffective
+        ? "MANUAL_VERIFIED"
+        : "NONE",
+    effectiveSettlementDate: automaticIsAbort
+      ? record.paymentDate
+      : manualSettlementIsEffective
+        ? record.manualSettlement?.settlementDate ?? null
+        : null,
   };
 }

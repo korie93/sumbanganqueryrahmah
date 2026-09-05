@@ -1,4 +1,4 @@
-import { badRequest, notFound } from "../../http/errors";
+import { badRequest, forbidden, notFound } from "../../http/errors";
 import {
   ensureLooseObject,
   normalizeCollectionStringList,
@@ -7,6 +7,7 @@ import {
   type CollectionNicknameAssignmentPayload,
 } from "../../routes/collection.validation";
 import { CollectionServiceSupport } from "./collection-service-support";
+import { loadActiveCollectionTeams } from "./collection-team-scope";
 
 export class CollectionAdminService extends CollectionServiceSupport {
   async listAdmins() {
@@ -17,6 +18,23 @@ export class CollectionAdminService extends CollectionServiceSupport {
   async listAdminGroups() {
     const groups = await this.storage.getCollectionAdminGroups();
     return { ok: true as const, groups };
+  }
+
+  async listTeamOptions(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0]) {
+    const user = this.requireUser(userInput);
+    if (user.role !== "manager" && user.role !== "superuser") {
+      throw forbidden("Team Leader filter is available only to managers and superusers.");
+    }
+
+    const teams = await loadActiveCollectionTeams(this.storage);
+    return {
+      ok: true as const,
+      teams: teams.map(({ id, leaderNickname, staffCount }) => ({
+        id,
+        leaderNickname,
+        staffCount,
+      })),
+    };
   }
 
   async createAdminGroup(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], bodyRaw: unknown) {

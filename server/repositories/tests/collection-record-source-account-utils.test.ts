@@ -50,8 +50,11 @@ function buildAccountObligationKey(accountNumber: string): string {
 test("hydrates a blank historical Account Number only from its exact linked Saved row", async () => {
   const accountNumber = "ACC-0001";
   const fullCardNumber = "0000123412345678";
+  const cardHash = hashCollectionSourceIdentifier(fullCardNumber, "card_number");
+  assert.ok(cardHash);
+  const sourceObligationKey = buildAccountObligationKey(accountNumber);
   const record = buildRecord({
-    sourceObligationKey: buildAccountObligationKey(accountNumber),
+    sourceObligationKey,
   });
   const { executor, queries } = createSequenceExecutor<CollectionRepositoryExecutor>([{
     rows: [{
@@ -61,15 +64,17 @@ test("hydrates a blank historical Account Number only from its exact linked Save
         "Account Number": accountNumber,
         "Card Number": fullCardNumber,
       },
+      source_card_number_hash: cardHash,
+      source_card_number_last4: "5678",
+      source_obligation_key: sourceObligationKey,
     }],
   }]);
 
   const hydrated = await hydrateCollectionRecordSourceAccounts(executor, [record]);
 
   assert.equal(hydrated[0]?.accountNumber, accountNumber);
+  assert.equal(hydrated[0]?.cardNumber, fullCardNumber);
   assert.equal(hydrated[0]?.cardNumberLast4, "5678");
-  assert.equal("cardNumber" in (hydrated[0] || {}), false);
-  assert.doesNotMatch(JSON.stringify(hydrated), new RegExp(fullCardNumber));
   assert.equal(queries.length, 1);
 
   const queryText = collectSqlText(queries[0]).replace(/\s+/g, " ");
@@ -83,15 +88,17 @@ test("hydrates a blank historical Account Number only from its exact linked Save
   assert.doesNotMatch(collectSqlLiteralText(queries[0]), new RegExp(fullCardNumber));
 });
 
-test("preserves an already stored Account Number without querying the Saved row", async () => {
+test("queries an exact Saved row even when Account Number is stored so full Card No can be verified", async () => {
   const record = buildRecord({ accountNumber: "ACC-PERSISTED" });
-  const { executor, queries } = createSequenceExecutor<CollectionRepositoryExecutor>([]);
+  const { executor, queries } = createSequenceExecutor<CollectionRepositoryExecutor>([{
+    rows: [],
+  }]);
 
   const hydrated = await hydrateCollectionRecordSourceAccounts(executor, [record]);
 
   assert.equal(hydrated[0]?.accountNumber, "ACC-PERSISTED");
   assert.equal(hydrated[0], record);
-  assert.equal(queries.length, 0);
+  assert.equal(queries.length, 1);
 });
 
 test("fails closed when the linked Saved account does not reproduce the record obligation key", async () => {
@@ -146,8 +153,32 @@ test("hydrates a missing masked Card suffix only after governed full-card hash v
 
   assert.equal(hydrated[0]?.accountNumber, accountNumber);
   assert.equal(hydrated[0]?.cardNumberLast4, "4444");
-  assert.equal("cardNumber" in (hydrated[0] || {}), false);
-  assert.doesNotMatch(JSON.stringify(hydrated), new RegExp(fullCardNumber));
+  assert.equal(hydrated[0]?.cardNumber, fullCardNumber);
+});
+
+test("hydrates the exact linked full Card after its source configuration index is deleted", async () => {
+  const accountNumber = "ACC-DELETED-CONFIG";
+  const fullCardNumber = "0000999912345678";
+  const sourceObligationKey = buildAccountObligationKey(accountNumber);
+  const record = buildRecord({ accountNumber, sourceObligationKey });
+  const { executor } = createSequenceExecutor<CollectionRepositoryExecutor>([{
+    rows: [{
+      source_import_id: "import-1",
+      source_data_row_id: "source-row-1",
+      source_json_data: {
+        "Account Number": accountNumber,
+        "Card Number": fullCardNumber,
+      },
+      source_card_number_hash: null,
+      source_card_number_last4: null,
+      source_obligation_key: null,
+    }],
+  }]);
+
+  const hydrated = await hydrateCollectionRecordSourceAccounts(executor, [record]);
+
+  assert.equal(hydrated[0]?.cardNumber, fullCardNumber);
+  assert.equal(hydrated[0]?.cardNumberLast4, "5678");
 });
 
 test("keeps a missing Card suffix empty when the governed card hash disagrees", async () => {
@@ -175,6 +206,7 @@ test("keeps a missing Card suffix empty when the governed card hash disagrees", 
 
   assert.equal(hydrated[0]?.accountNumber, accountNumber);
   assert.equal(hydrated[0]?.cardNumberLast4, null);
+  assert.equal(hydrated[0]?.cardNumber, null);
 });
 
 test("keeps a malformed governed Card suffix out of the response", async () => {
@@ -202,6 +234,7 @@ test("keeps a malformed governed Card suffix out of the response", async () => {
 
   assert.equal(hydrated[0]?.accountNumber, accountNumber);
   assert.equal(hydrated[0]?.cardNumberLast4, null);
+  assert.equal(hydrated[0]?.cardNumber, null);
 });
 
 test("hydrates a missing Card suffix for a genuinely Card-only Saved row", async () => {
@@ -228,7 +261,7 @@ test("hydrates a missing Card suffix for a genuinely Card-only Saved row", async
 
   assert.equal(hydrated[0]?.accountNumber, "");
   assert.equal(hydrated[0]?.cardNumberLast4, "5678");
-  assert.doesNotMatch(JSON.stringify(hydrated), new RegExp(fullCardNumber));
+  assert.equal(hydrated[0]?.cardNumber, fullCardNumber);
 });
 
 test("ignores rows outside the exact import and data-row link", async () => {

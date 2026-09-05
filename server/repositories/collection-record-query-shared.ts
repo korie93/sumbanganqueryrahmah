@@ -28,6 +28,7 @@ export type CollectionRecordFilters = {
   search?: string | undefined;
   createdByLogin?: string | undefined;
   nicknames?: string[] | undefined;
+  staffNicknameIds?: string[] | undefined;
   receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged" | undefined;
   duplicateOnly?: boolean | undefined;
   sourceImportIds?: string[] | undefined;

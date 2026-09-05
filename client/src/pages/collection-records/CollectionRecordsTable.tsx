@@ -8,11 +8,11 @@ import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/co
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
-  formatCollectionMaskedCard,
   formatCollectionOptionalAmount,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
 } from "@/pages/collection-records/collection-coverage";
+import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 
 const CollectionRecordsDesktopTable = lazy(() =>
   import("@/pages/collection-records/CollectionRecordsDesktopTable").then((module) => ({
@@ -85,7 +85,7 @@ export function CollectionRecordsTable({
                   <h3 className="break-words text-base font-semibold text-foreground">
                     {record.customerName}
                   </h3>
-                  <p className="text-sm font-medium text-emerald-600 dark:text-emerald-300">
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
                     {formatAmountRM(record.amount)}
                   </p>
                 </div>
@@ -105,7 +105,7 @@ export function CollectionRecordsTable({
                 </div>
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Card Number</dt>
-                  <dd>{formatCollectionMaskedCard(record.cardNumberLast4)}</dd>
+                  <dd className="break-all">{getCollectionCardNumberLabel(record.cardNumber)}</dd>
                 </div>
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Customer Phone</dt>

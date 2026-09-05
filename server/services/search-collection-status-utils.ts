@@ -35,6 +35,7 @@ export type SearchCollectionStatus = {
   purgedAt: string | null;
   purgedBy: string | null;
   matchBasis: "source_row" | "source_and_identifier" | "identifier_only" | null;
+  historyKey?: string | null;
 };
 
 function resolveHistoricalAccountNumber(

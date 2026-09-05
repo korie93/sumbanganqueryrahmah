@@ -7,11 +7,11 @@ import { getCollectionRecordSourceLabel } from "@/pages/collection-records/colle
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
-  formatCollectionMaskedCard,
   formatCollectionOptionalAmount,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
 } from "@/pages/collection-records/collection-coverage";
+import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 
 type CollectionRecordsDesktopTableProps = CollectionRecordsTableProps;
 
@@ -81,7 +81,7 @@ export function CollectionRecordsDesktopTable({
                 <TableCell className="py-2 font-medium">{record.customerName}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.icNumber}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.accountNumber || "-"}</TableCell>
-                <TableCell className="py-2 whitespace-nowrap">{formatCollectionMaskedCard(record.cardNumberLast4)}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{getCollectionCardNumberLabel(record.cardNumber)}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.customerPhone}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.batch}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-300">

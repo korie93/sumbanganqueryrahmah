@@ -32,22 +32,26 @@ export function buildNicknameIdByLowerName(rows: CollectionNicknameIdRow[]): Map
 export async function insertAdminGroupMembers(
   executor: CollectionAdminGroupExecutor,
   groupId: string,
-  leaderNickname: string,
-  memberNicknames: string[],
+  leaderNicknameId: string,
+  members: Array<{ id: string; nickname: string }>,
 ) {
-  const normalizedLeader = leaderNickname.toLowerCase();
-  for (const memberNickname of memberNicknames) {
-    if (!memberNickname || memberNickname.toLowerCase() === normalizedLeader) continue;
+  const normalizedLeaderId = normalizeCollectionText(leaderNicknameId).toLowerCase();
+  for (const member of members) {
+    const memberNicknameId = normalizeCollectionText(member.id);
+    const memberNickname = normalizeCollectionText(member.nickname);
+    if (!memberNicknameId || !memberNickname || memberNicknameId.toLowerCase() === normalizedLeaderId) continue;
     await executor.execute(sql`
       INSERT INTO public.admin_group_members (
         id,
         admin_group_id,
+        member_nickname_id,
         member_nickname,
         created_at
       )
       VALUES (
         ${randomUUID()}::uuid,
         ${groupId}::uuid,
+        ${memberNicknameId}::uuid,
         ${memberNickname},
         now()
       )

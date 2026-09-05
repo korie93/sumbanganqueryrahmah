@@ -150,6 +150,60 @@ test("collection V4 restore drops inconsistent settlement classifications", () =
   assert.equal(restored.remainingAmount, null);
 });
 
+test("collection V9 backup and restore preserve POOL separately from the collector amount", () => {
+  const manualFields = {
+    classification: "cp" as const,
+    totalDue: "500.00",
+    cumulativeCollected: "150.00",
+    remainingAmount: "350.00",
+    amount: "150.00",
+    settlementOverrideStatus: "ACTIVE" as const,
+    poolAmount: "350.00",
+    manualSettlementDate: "2026-08-30",
+    manualSettlementReason: "EXTERNAL_UNASSIGNED_PAYMENT",
+    manualSettlementNote: "Verified external payment",
+    manualSettlementReference: "POOL-350",
+    manualSettlementVersion: 1,
+    manualSettlementVerifiedBy: "superuser",
+    manualSettlementVerifiedAt: "2026-08-30T08:05:00.000Z",
+    manualSettlementUpdatedBy: "superuser",
+    manualSettlementUpdatedAt: "2026-08-30T08:05:00.000Z",
+    manualSettlementRevokedBy: null,
+    manualSettlementRevokedAt: null,
+    manualSettlementRevokedReason: null,
+  };
+  const mapped = mapBackupCollectionRecordRow(createBackupRecord(manualFields));
+  assert.equal(mapped.amount, "150.00");
+  assert.equal(mapped.poolAmount, "350.00");
+  assert.equal(mapped.settlementOverrideStatus, "ACTIVE");
+
+  const restored = normalizeBackupCollectionRecord(mapped);
+  assert.ok(restored);
+  assert.equal(restored.amount, 150);
+  assert.equal(restored.poolAmount, 350);
+  assert.equal(restored.settlementOverrideStatus, "ACTIVE");
+  assert.equal(restored.manualSettlementReference, "POOL-350");
+});
+
+test("collection V9 restore drops an incomplete manual override as one atomic state", () => {
+  const restored = normalizeBackupCollectionRecord(createBackupRecord({
+    classification: "cp",
+    settlementOverrideStatus: "ACTIVE",
+    poolAmount: "350.00",
+    manualSettlementDate: "2026-08-30",
+    manualSettlementReason: "EXTERNAL_UNASSIGNED_PAYMENT",
+    manualSettlementVersion: 1,
+    manualSettlementVerifiedBy: "superuser",
+    manualSettlementVerifiedAt: null,
+    manualSettlementUpdatedBy: "superuser",
+    manualSettlementUpdatedAt: "2026-08-30T08:05:00.000Z",
+  }));
+  assert.ok(restored);
+  assert.equal(restored.settlementOverrideStatus, null);
+  assert.equal(restored.poolAmount, null);
+  assert.equal(restored.manualSettlementReason, null);
+});
+
 test("collection source governance backup rows are validated fail-closed", () => {
   const sourceConfig = normalizeBackupCollectionSourceConfig({
     id: SOURCE_IMPORT_ID,

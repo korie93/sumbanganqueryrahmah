@@ -24,6 +24,7 @@ test("collection status parser rejects malformed payloads safely", () => {
     purgedAt: null,
     purgedBy: null,
     matchBasis: null,
+    historyKey: null,
   });
 });
 
@@ -67,6 +68,7 @@ test("collection status parser bounds count and text from the API", () => {
       sourceImportName: "NPL CC P10 JULY",
       sourceFilename: "npl-cc-p10-july.xlsx",
       matchBasis: "source_and_identifier",
+      historyKey: `sch1.${"x".repeat(1_100)}`,
     },
   };
 
@@ -75,6 +77,7 @@ test("collection status parser bounds count and text from the API", () => {
   assert.equal(status.recordCount, 1_000_000);
   assert.equal(status.latestAccountNumber, "ACC-1001-VERY-LONG");
   assert.equal(status.sourceImportName, "NPL CC P10 JULY");
+  assert.equal(status.historyKey?.length, 1_024);
   assert.equal(
     getGeneralSearchCollectionStatusAriaLabel(row),
     "Collection direkodkan, 1000000 rekod, disimpan oleh Collector Alpha, nombor akaun ACC-1001-VERY-LONG, jumlah RM 125.50, tarikh bayaran 04/08/2026, direkod pada 04/08/2026, 10:00",

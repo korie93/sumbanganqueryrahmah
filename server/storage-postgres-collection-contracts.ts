@@ -27,11 +27,7 @@ import type {
   CollectionBillingPrincipalReport,
   CollectionOspTargetInput,
   CollectionOspSavedTargetView,
-  CollectionOspManualReasonCode,
-  CollectionOspManualReconciliationView,
-  CollectionOspReconciliationCandidateView,
-  CollectionOspReconciliationHistoryView,
-  CollectionOspClientResultView,
+  CollectionOspClientResultTableView,
   CollectionOspCalendarDayView,
   CollectionOspDrilldownItemView,
   CollectionOspPagination,
@@ -109,86 +105,19 @@ export interface CollectionStorageContract {
     revisionId: string;
     asOfDate: string;
   }): Promise<unknown>;
-  listCollectionOspReconciliationCandidates(input: {
-    targetId: string;
-    revisionId: string;
-    asOfDate: string;
-    search: string;
-    aging?: "D3" | "D4" | "D5" | "D6";
-    page: number;
-    pageSize: number;
-  }): Promise<{ candidates: CollectionOspReconciliationCandidateView[]; pagination: CollectionOspPagination }>;
-  listCollectionOspManualReconciliations(input: {
-    targetId: string;
-    revisionId: string;
-    asOfDate: string;
-    search: string;
-    aging?: "D3" | "D4" | "D5" | "D6";
-    status?: "ACTIVE" | "VOIDED";
-    page: number;
-    pageSize: number;
-  }): Promise<{ reconciliations: CollectionOspManualReconciliationView[]; pagination: CollectionOspPagination }>;
-  createCollectionOspManualReconciliation(input: {
-    targetId: string;
-    revisionId: string;
-    sourceImportId: string;
-    sourceDataRowId: string;
-    manualPriorAmount: string;
-    asOfDate: string;
-    actualPaymentDate?: string | null;
-    reason: CollectionOspManualReasonCode;
-    note?: string | null;
-    reference?: string | null;
-    actor: string;
-    actorRole: string;
-    requestId?: string | null;
-  }): Promise<CollectionOspManualReconciliationView>;
-  updateCollectionOspManualReconciliation(input: {
-    targetId: string;
-    revisionId: string;
-    reconciliationId: string;
-    expectedVersion: number;
-    manualPriorAmount: string;
-    asOfDate: string;
-    actualPaymentDate?: string | null;
-    reason: CollectionOspManualReasonCode;
-    note?: string | null;
-    reference?: string | null;
-    actor: string;
-    actorRole: string;
-    requestId?: string | null;
-  }): Promise<CollectionOspManualReconciliationView>;
-  voidCollectionOspManualReconciliation(input: {
-    targetId: string;
-    revisionId: string;
-    reconciliationId: string;
-    expectedVersion: number;
-    reason: string;
-    asOfDate: string;
-    actor: string;
-    actorRole: string;
-    requestId?: string | null;
-  }): Promise<CollectionOspManualReconciliationView>;
-  listCollectionOspReconciliationHistory(input: {
-    targetId: string;
-    revisionId: string;
-    reconciliationId: string;
-    limit: number;
-  }): Promise<CollectionOspReconciliationHistoryView[]>;
   upsertCollectionOspClientResults(input: {
     targetId: string;
     revisionId: string;
-    asOfDate: string;
+    receivedDate: string;
     rows: Array<{
       aging: "D3" | "D4" | "D5" | "D6";
       resultPercentage: string;
-      ospClosed: string;
       note?: string | null;
       reference?: string | null;
       expectedVersion?: number | null;
     }>;
     actor: string;
-  }): Promise<CollectionOspClientResultView[]>;
+  }): Promise<CollectionOspClientResultTableView>;
   getCollectionOspCalendar(input: {
     targetId: string;
     revisionId: string;
@@ -208,7 +137,7 @@ export interface CollectionStorageContract {
     asOfDate: string;
     date?: string;
     aging?: "D3" | "D4" | "D5" | "D6";
-    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION";
+    contributionSource?: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
     page: number;
     pageSize: number;
   }): Promise<{ items: CollectionOspDrilldownItemView[]; pagination: CollectionOspPagination }>;
@@ -220,7 +149,7 @@ export interface CollectionStorageContract {
     to: string;
     date?: string;
     aging?: "D3" | "D4" | "D5" | "D6";
-    contributionSource?: "SYSTEM_ABORT_CP" | "MANUAL_RECONCILIATION";
+    contributionSource?: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
   }): Promise<Record<string, unknown>>;
   createCollectionRecord(
     data: CreateCollectionRecordInput,
@@ -356,6 +285,39 @@ export interface CollectionStorageContract {
   deleteCollectionStaffNickname(id: string): Promise<{ deleted: boolean; deactivated: boolean }>;
   isCollectionStaffNicknameActive(nickname: string): Promise<boolean>;
   getCollectionRecordById(id: string): Promise<CollectionRecord | undefined>;
+  upsertCollectionManualSettlement(input: {
+    recordId: string;
+    poolAmount: string;
+    settlementDate: string;
+    reason: import("./storage-postgres-collection-types").CollectionManualSettlementReason;
+    note: string | null;
+    reference: string | null;
+    expectedVersion: number | null;
+    actor: string;
+    actorRole: string;
+    requestId?: string | null;
+  }): Promise<CollectionRecord | undefined>;
+  revokeCollectionManualSettlement(input: {
+    recordId: string;
+    expectedVersion: number;
+    revokeReason: string;
+    actor: string;
+    actorRole: string;
+    requestId?: string | null;
+  }): Promise<CollectionRecord | undefined>;
+  listCollectionManualSettlementAudit(
+    recordId: string,
+    limit?: number,
+  ): Promise<Array<{
+    id: string;
+    action: "VERIFIED" | "UPDATED" | "REVOKED";
+    actor: string;
+    actorRole: string;
+    timestamp: string;
+    requestId: string | null;
+    oldValue: Record<string, unknown> | null;
+    newValue: Record<string, unknown> | null;
+  }>>;
   listCollectionRecordReceipts(recordId: string): Promise<CollectionRecordReceipt[]>;
   getCollectionRecordReceiptById(recordId: string, receiptId: string): Promise<CollectionRecordReceipt | undefined>;
   findCollectionReceiptDuplicateSummaries(

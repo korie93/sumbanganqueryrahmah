@@ -6,6 +6,8 @@ type BuildCollectionRecordFilterSnapshotArgs = {
   searchInput?: string;
   canUseNicknameFilter: boolean;
   nicknameFilter?: string;
+  canUseTeamLeaderFilter?: boolean;
+  leaderFilter?: string;
   sourceImportFilter?: string;
   agingFilter?: string;
   classificationFilter?: string;
@@ -25,6 +27,8 @@ export function buildCollectionRecordFilterSnapshot({
   searchInput,
   canUseNicknameFilter,
   nicknameFilter,
+  canUseTeamLeaderFilter = false,
+  leaderFilter,
   sourceImportFilter,
   agingFilter,
   classificationFilter,
@@ -33,6 +37,7 @@ export function buildCollectionRecordFilterSnapshot({
   offset,
 }: BuildCollectionRecordFilterSnapshotArgs): CollectionRecordFilters {
   const normalizedNickname = normalizeCollectionFilterText(nicknameFilter);
+  const normalizedLeader = normalizeCollectionFilterText(leaderFilter);
   const normalizedSourceImport = normalizeCollectionFilterText(sourceImportFilter);
   const normalizedAging = normalizeCollectionFilterText(agingFilter)?.toUpperCase();
   const normalizedClassification = normalizeCollectionFilterText(classificationFilter)?.toLowerCase();
@@ -60,6 +65,9 @@ export function buildCollectionRecordFilterSnapshot({
       && normalizedNickname !== "all"
         ? normalizedNickname
         : undefined,
+    ...(canUseTeamLeaderFilter && normalizedLeader && normalizedLeader !== "all"
+      ? { leaderId: normalizedLeader }
+      : {}),
     sourceImportIds:
       normalizedSourceImport && normalizedSourceImport !== "all"
         ? [normalizedSourceImport]

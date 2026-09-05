@@ -14,11 +14,11 @@ import { getCollectionRecordSourceLabel } from "@/pages/collection-records/colle
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { ViewAllRecordsDialogProps } from "@/pages/collection-records/ViewAllRecordsDialog";
 import {
-  formatCollectionMaskedCard,
   formatCollectionOptionalAmount,
   getCollectionCpStatusLabel,
   getCollectionMatchAccuracyLabel,
 } from "@/pages/collection-records/collection-coverage";
+import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 
 type ViewAllRecordsDesktopTableProps = Pick<
   ViewAllRecordsDialogProps,
@@ -89,7 +89,7 @@ export function ViewAllRecordsDesktopTable({
               <TableCell className="py-2 font-medium">{record.customerName}</TableCell>
               <TableCell className="py-2">{record.icNumber}</TableCell>
               <TableCell className="py-2">{record.accountNumber || "-"}</TableCell>
-              <TableCell className="py-2">{formatCollectionMaskedCard(record.cardNumberLast4)}</TableCell>
+              <TableCell className="py-2">{getCollectionCardNumberLabel(record.cardNumber)}</TableCell>
               <TableCell className="py-2">{record.customerPhone}</TableCell>
               <TableCell className="py-2">{record.batch}</TableCell>
               <TableCell className="py-2 font-semibold text-emerald-700 dark:text-emerald-300">{formatAmountRM(record.amount)}</TableCell>

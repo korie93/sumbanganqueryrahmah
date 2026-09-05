@@ -36,6 +36,11 @@ export class CollectionRecordDeleteOperations {
     const user = this.requireUser(userInput);
     const id = requireCollectionRecordId(idRaw);
     const existing = await getAccessibleCollectionRecordOrThrow(this.storage, user, id);
+    if (existing.manualSettlement?.status === "ACTIVE") {
+      throw conflict(
+        "Batalkan Manual Verified ABORT sebelum memadam rekod anchor ini.",
+      );
+    }
 
     const body = (ensureLooseObject(bodyRaw) || {}) as CollectionDeletePayload;
     const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
@@ -51,9 +56,21 @@ export class CollectionRecordDeleteOperations {
     const activeReceipts = Array.isArray(existing.receipts) ? existing.receipts : [];
     const archivedReceipts = Array.isArray(existing.archivedReceipts) ? existing.archivedReceipts : [];
     const receiptsForFileCleanup = [...activeReceipts, ...archivedReceipts];
-    const deleted = await this.storage.deleteCollectionRecord(id, {
-      expectedUpdatedAt: expectedUpdatedAt ?? undefined,
-    });
+    let deleted: boolean;
+    try {
+      deleted = await this.storage.deleteCollectionRecord(id, {
+        expectedUpdatedAt: expectedUpdatedAt ?? undefined,
+      });
+    } catch (error) {
+      if (String((error as { message?: unknown })?.message ?? "").includes(
+        "COLLECTION_MANUAL_SETTLEMENT_ACTIVE_DELETE_BLOCKED",
+      )) {
+        throw conflict(
+          "Batalkan Manual Verified ABORT sebelum memadam rekod anchor ini.",
+        );
+      }
+      throw error;
+    }
     if (!deleted) {
       if (expectedUpdatedAt) {
         const freshRecord = await this.storage.getCollectionRecordById(id);
