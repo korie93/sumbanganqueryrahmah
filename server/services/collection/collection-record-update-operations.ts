@@ -66,6 +66,11 @@ export class CollectionRecordUpdateOperations {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionUpdatePayload & MultipartCollectionPayload;
       uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
       const existing = await getAccessibleCollectionRecordOrThrow(this.storage, user, id);
+      if (user.role === "user" || user.role === "admin") {
+        await assertCollectionStaffNicknameWriteAccess(
+          this.storage, user, existing.collectionStaffNickname,
+        );
+      }
       const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
       await assertCollectionRecordVersionMatch({
         storage: this.storage,
@@ -90,8 +95,9 @@ export class CollectionRecordUpdateOperations {
       }
       Object.assign(updatePayload, updateDraft.updatePayload);
       if (updateDraft.nextCollectionStaffNickname) {
-        await assertCollectionStaffNicknameWriteAccess(this.storage, user, updateDraft.nextCollectionStaffNickname);
-        updatePayload.collectionStaffNickname = updateDraft.nextCollectionStaffNickname;
+        updatePayload.collectionStaffNickname = await assertCollectionStaffNicknameWriteAccess(
+          this.storage, user, updateDraft.nextCollectionStaffNickname,
+        );
       }
 
       // Governed matching is keyed only by strong account/card identifiers.

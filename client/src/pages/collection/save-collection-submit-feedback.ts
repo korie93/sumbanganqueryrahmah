@@ -10,9 +10,14 @@ export type SaveCollectionSubmitFailure = {
   requestId: string | null;
   receiptCount: number;
   canRetry: boolean;
+  requiresNicknameAuthentication?: boolean;
 };
 
 const MALWARE_SCAN_TIMEOUT_PATTERN = /malware scan failed|timed out|external malware scan/i;
+const NICKNAME_SESSION_CODES = new Set([
+  "COLLECTION_NICKNAME_SESSION_REQUIRED",
+  "COLLECTION_NICKNAME_SESSION_MISMATCH",
+]);
 const RECEIPT_SCAN_ADMIN_CODES = new Set([
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_CONFIG_INVALID",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND_MISSING",
@@ -50,6 +55,9 @@ export function buildSaveCollectionRequestFailure(params: {
   const message = parsedMessage || params.fallbackMessage || "Collection gagal disimpan.";
   const isReceiptScannerAdminIssue = details.code ? RECEIPT_SCAN_ADMIN_CODES.has(details.code) : false;
   const isReceiptScanTimeout = MALWARE_SCAN_TIMEOUT_PATTERN.test(message);
+  const requiresNicknameAuthentication = (details.code !== null && NICKNAME_SESSION_CODES.has(details.code))
+    || (details.status === 403 && /nickname/i.test(message));
+  const isAccessDenied = details.status === 401 || details.status === 403 || requiresNicknameAuthentication;
 
   return {
     kind: "request",
@@ -61,13 +69,20 @@ export function buildSaveCollectionRequestFailure(params: {
       : isReceiptScanTimeout
       ? "Imbasan keselamatan receipt mengambil masa terlalu lama. Rekod belum disimpan."
       : message,
-    helperText: isReceiptScannerAdminIssue
+    helperText: requiresNicknameAuthentication
+      ? "Sahkan nickname semula sebelum menyimpan. Jika nickname tidak aktif atau tidak dibenarkan, hubungi superuser."
+      : isAccessDenied
+      ? "Semak akses akaun anda atau log masuk semula. Hubungi superuser jika akses masih ditolak."
+      : isReceiptScannerAdminIssue
       ? "Hubungi admin untuk semak konfigurasi scanner receipt sebelum cuba simpan semula."
       : isReceiptScanTimeout
       ? "Klik Save Collection semula untuk cuba lagi. Jika masih gagal, cuba kecilkan saiz fail receipt atau hubungi admin."
+      : details.status === 400 || details.status === 422
+      ? "Betulkan maklumat mengikut mesej ini, kemudian cuba Save Collection semula."
       : "Semak mesej ini, pastikan sambungan stabil, kemudian cuba Save Collection semula.",
     requestId: details.requestId,
     receiptCount: normalizeReceiptCount(params.receiptCount),
-    canRetry: !isReceiptScannerAdminIssue,
+    canRetry: !isReceiptScannerAdminIssue && !isAccessDenied,
+    requiresNicknameAuthentication,
   };
 }

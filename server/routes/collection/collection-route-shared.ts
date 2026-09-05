@@ -6,6 +6,7 @@ import {
   createCollectionJsonRouteHandler,
   type CollectionJsonRouteHandler,
   type CollectionMutationScopeResolver,
+  type CollectionMutationReplayAuthorizer,
 } from "./collection-route-handler-factories";
 
 export type CollectionRouteDeps = {
@@ -32,6 +33,7 @@ export type CollectionRouteContext = {
     fallbackMessage: string,
     scopeResolver: CollectionMutationScopeResolver,
     handler: CollectionJsonRouteHandler,
+    authorizeReplay?: CollectionMutationReplayAuthorizer,
   ) => RequestHandler;
 };
 
@@ -91,12 +93,13 @@ export function createCollectionRouteContext(
     jsonRoute(fallbackMessage, handler) {
       return createCollectionJsonRouteHandler({ fallbackMessage, handler });
     },
-    jsonMutationRoute(fallbackMessage, scopeResolver, handler) {
+    jsonMutationRoute(fallbackMessage, scopeResolver, handler, authorizeReplay) {
       return createCollectionJsonMutationRouteHandler({
         fallbackMessage,
         handler,
         scopeResolver,
         storage,
+        authorizeReplay,
       });
     },
   };

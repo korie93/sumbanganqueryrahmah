@@ -30,6 +30,9 @@ import type { CollectionBatch } from "@/lib/api";
 type SaveCollectionPageProps = {
   staffNickname: string;
   onSaved?: () => void;
+  onSubmittingChange?: (submitting: boolean) => void;
+  accessSuspended?: boolean;
+  onReauthenticateNickname?: (() => void) | undefined;
 };
 
 function getInvalidFieldProps(
@@ -46,7 +49,13 @@ function getInvalidFieldProps(
   };
 }
 
-function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps) {
+function SaveCollectionPage({
+  staffNickname,
+  onSaved,
+  onSubmittingChange,
+  accessSuspended = false,
+  onReauthenticateNickname,
+}: SaveCollectionPageProps) {
   const mutationFeedback = useMutationFeedback();
   const isMobile = useIsMobile();
   const keyboardOpen = useMobileKeyboardState();
@@ -62,6 +71,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const state = useSaveCollectionPageState({
     staffNickname,
     onSaved,
+    accessSuspended,
+    onReauthenticateNickname,
+    onSubmittingChange,
     mutationFeedback,
   });
   const customerNameErrorId = `${customerNameInputId}-error`;
@@ -109,7 +121,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       key: "s",
       ctrlOrMeta: true,
       allowInEditable: true,
-      enabled: !state.submitting,
+      enabled: !state.submitting && !accessSuspended,
       handler: () => {
         void state.handleSubmit();
       },
@@ -443,6 +455,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           failure={state.submitFailure}
           disabled={state.submitting}
           onDismiss={state.clearSubmitFailure}
+          onReauthenticateNickname={onReauthenticateNickname}
           onRetry={() => {
             void state.handleSubmit();
           }}
@@ -453,6 +466,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           failure={state.submitFailure}
           visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
         />
+        <fieldset disabled={accessSuspended} className="contents">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-4">
           {customerSection}
           {paymentSection}
@@ -506,6 +520,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
                 : "Semak Medan Wajib"}
           </Button>
         </div>
+        </fieldset>
       </CardContent>
     </Card>
   );

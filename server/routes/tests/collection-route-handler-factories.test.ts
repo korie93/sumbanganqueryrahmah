@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { COLLECTION_RECEIPT_DIR, COLLECTION_RECEIPT_PUBLIC_PREFIX } from "../../lib/collection-receipt-files";
+import { forbidden } from "../../http/errors";
 import {
   createIdempotencyFingerprintValidationCacheController,
   clearIdempotencyFingerprintValidationCacheForTests,
@@ -21,6 +26,58 @@ import { logger } from "../../lib/logger";
 
 type CollectionMutationHandlerStorage =
   Parameters<typeof createCollectionJsonMutationRouteHandler>[0]["storage"];
+
+for (const scenario of ["replay", "denied-replay", "in-progress", "invalid-header", "json"] as const) {
+  test(`collection mutation ${scenario} cleans only server-parsed multipart uploads on early return`, async () => {
+    const filename = `save-replay-test-${randomUUID()}.png`;
+    const filePath = path.join(COLLECTION_RECEIPT_DIR, filename);
+    await fs.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+    await fs.writeFile(filePath, "test-owned receipt fixture");
+    let mutationCalls = 0;
+    let status = 200;
+    const handler = createCollectionJsonMutationRouteHandler({
+      fallbackMessage: "Mutation failed.",
+      scopeResolver: () => "collection:test:upload-replay",
+      storage: {
+        acquireMutationIdempotency: async () => scenario === "in-progress"
+          ? { status: "in_progress" as const }
+          : { status: "replay" as const, responseStatus: 200, responseBody: { ok: true } },
+        completeMutationIdempotency: async () => assert.fail("Replay must not be completed twice"),
+        releaseMutationIdempotency: async () => assert.fail("Replay does not own a reservation"),
+      },
+      authorizeReplay: async () => { if (scenario === "denied-replay") throw forbidden(); },
+      handler: async () => { mutationCalls += 1; return { ok: true }; },
+    });
+    const req = {
+      user: { username: "staff.user", role: "user" },
+      header: (name: string) => name === "x-idempotency-key" ? "upload-replay-key"
+        : scenario === "invalid-header" ? "invalid JSON" : undefined,
+      is: () => scenario !== "json",
+      body: { uploadedReceipts: [{
+        storagePath: `${COLLECTION_RECEIPT_PUBLIC_PREFIX}/${filename}`,
+        originalFileName: filename, fileSize: 26,
+      }] },
+    } as unknown as Parameters<typeof handler>[0];
+    const res = {
+      statusCode: 200,
+      status(code: number) { status = code; return this; },
+      json() { return this; },
+    } as unknown as Parameters<typeof handler>[1];
+    try {
+      await handler(req, res, () => assert.fail("Unexpected next"));
+      assert.equal(mutationCalls, 0);
+      assert.equal(status, scenario === "denied-replay" ? 403
+        : scenario === "in-progress" ? 409 : scenario === "invalid-header" ? 400 : 200);
+      if (scenario === "json") {
+        await fs.access(filePath); // A forged JSON path must never delete another receipt.
+      } else {
+        await assert.rejects(fs.access(filePath), { code: "ENOENT" });
+      }
+    } finally {
+      await fs.unlink(filePath).catch(() => undefined);
+    }
+  });
+}
 
 test("collection mutation handler replays cached idempotent responses without re-running the mutation", async () => {
   let mutationCalls = 0;

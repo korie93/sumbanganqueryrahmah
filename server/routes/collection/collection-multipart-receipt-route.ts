@@ -82,6 +82,12 @@ export function createCollectionReceiptMultipartRoute<
 }): RequestHandler {
   return (req, res, next) => {
     if (!req.is("multipart/form-data")) {
+      // Stored receipt paths are attached by this parser, never supplied by a
+      // JSON client. Trusting them would bypass upload checks and cleanup ownership.
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, params.attachKey)) {
+        res.status(400).json({ ok: false, message: "Stored receipt metadata cannot be supplied directly. Please upload the receipt file." });
+        return;
+      }
       next();
       return;
     }

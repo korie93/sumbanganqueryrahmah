@@ -12,6 +12,7 @@ type CollectionNicknameSingleSelectProps = {
   triggerId?: string | undefined;
   open: boolean;
   loading?: boolean;
+  disabled?: boolean;
   selectedLabel: string;
   options: string[];
   emptySelectionActive?: boolean | undefined;
@@ -31,6 +32,7 @@ export function CollectionNicknameSingleSelect({
   triggerId,
   open,
   loading = false,
+  disabled = false,
   selectedLabel,
   options,
   emptySelectionActive = false,
@@ -70,7 +72,7 @@ export function CollectionNicknameSingleSelect({
             type="button"
             variant="outline"
             className={cn("w-full justify-between", triggerClassName)}
-            disabled={loading}
+            disabled={loading || disabled}
             aria-haspopup="dialog"
             {...getAriaExpandedProps(open)}
           >
@@ -112,6 +114,7 @@ export function CollectionNicknameSingleSelect({
                 {emptySelectionLabel ? (
                   <button
                     type="button"
+                    disabled={disabled}
                     onClick={() => {
                       onSelectEmpty?.();
                       onOpenChange(false);
@@ -140,6 +143,7 @@ export function CollectionNicknameSingleSelect({
                       <button
                         key={nickname}
                         type="button"
+                        disabled={disabled}
                         onClick={() => {
                           onSelect(nickname);
                           onOpenChange(false);

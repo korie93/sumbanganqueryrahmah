@@ -4,6 +4,7 @@ import {
   getAdminVisibleNicknameValues,
   getAccessibleCollectionRecordOrThrow,
   hasNicknameValue,
+  resolveVerifiedCollectionNicknameFromSession,
 } from "../../routes/collection-access";
 import {
   isNicknameScopeAllowedForRole,
@@ -36,21 +37,60 @@ export async function assertCollectionStaffNicknameWriteAccess(
   storage: CollectionStoragePort,
   user: AuthenticatedUser,
   nickname: string,
-): Promise<void> {
+): Promise<string> {
+  if (user.role === "user") {
+    return requireCollectionStaffNicknameCreateAccess(storage, user, nickname);
+  }
   const staffNickname = await storage.getCollectionStaffNicknameByName(nickname);
   if (!staffNickname?.isActive) {
     throw badRequest("Staff nickname tidak sah atau sudah inactive.");
   }
   if (user.role === "admin") {
+    if (!(await resolveVerifiedCollectionNicknameFromSession(storage, user))) {
+      throw forbidden(
+        "Sesi nickname belum disahkan atau sudah tamat. Sila sahkan nickname semula sebelum simpan collection.",
+        "COLLECTION_NICKNAME_SESSION_REQUIRED",
+      );
+    }
     const allowedNicknames = await getAdminVisibleNicknameValues(storage, user);
     if (!hasNicknameValue(allowedNicknames, nickname)) {
       throw forbidden("Nickname tidak dibenarkan untuk akaun admin ini.");
     }
-    return;
+    return staffNickname.nickname;
   }
   if (!isNicknameScopeAllowedForRole(staffNickname.roleScope, user.role)) {
     throw forbidden("Nickname ini tidak dibenarkan untuk role semasa.");
   }
+  return staffNickname.nickname;
+}
+
+export async function requireCollectionStaffNicknameCreateAccess(
+  storage: CollectionStoragePort,
+  user: AuthenticatedUser,
+  nickname: string,
+): Promise<string> {
+  if (user.role === "superuser") {
+    const profile = await storage.getCollectionStaffNicknameByName(nickname);
+    if (!profile?.isActive) {
+      throw badRequest("Staff nickname tidak sah atau sudah inactive.");
+    }
+    return profile.nickname;
+  }
+  if (user.role !== "admin" && user.role !== "user") throw forbidden();
+  const verified = await resolveVerifiedCollectionNicknameFromSession(storage, user);
+  if (!verified) {
+    throw forbidden(
+      "Sesi nickname belum disahkan atau sudah tamat. Sila sahkan nickname semula sebelum simpan collection.",
+      "COLLECTION_NICKNAME_SESSION_REQUIRED",
+    );
+  }
+  if (!hasNicknameValue([verified.nickname], nickname)) {
+    throw forbidden(
+      "Nickname collection tidak sepadan dengan nickname yang disahkan. Sila sahkan nickname semula.",
+      "COLLECTION_NICKNAME_SESSION_MISMATCH",
+    );
+  }
+  return verified.nickname;
 }
 
 export async function assertCollectionRecordVersionMatch(params: {

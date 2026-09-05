@@ -43,6 +43,10 @@ export class CollectionService {
     return this.adminService.listAdminGroups();
   }
 
+  getNicknameSession(user: AuthenticatedUser | undefined) {
+    return this.nicknameService.getNicknameSession(user);
+  }
+
   listTeamOptions(user: AuthenticatedUser | undefined) {
     return this.adminService.listTeamOptions(user);
   }

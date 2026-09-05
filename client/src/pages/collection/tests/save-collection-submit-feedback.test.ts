@@ -59,3 +59,30 @@ test("buildSaveCollectionRequestFailure preserves non-scan API messages", () => 
   assert.equal(failure.title, "Collection gagal disimpan");
   assert.match(failure.message, /Payment Date cannot be in the future/i);
 });
+
+for (const code of ["COLLECTION_NICKNAME_SESSION_REQUIRED", "COLLECTION_NICKNAME_SESSION_MISMATCH"]) {
+  test(`nickname error ${code} requires authentication and preserves the reference and pending receipt count`, () => {
+    const failure = buildSaveCollectionRequestFailure({
+      error: new Error(`403: ${JSON.stringify({
+        ok: false, message: "Sila sahkan nickname semula.", error: { code }, requestId: "api-d885b641-8309-411",
+      })}`),
+      receiptCount: 2,
+    });
+    assert.equal(failure.requiresNicknameAuthentication, true);
+    assert.equal(failure.canRetry, false);
+    assert.equal(failure.receiptCount, 2);
+    assert.equal(failure.requestId, "api-d885b641-8309-411");
+    assert.match(failure.helperText, /Sahkan nickname semula/i);
+    assert.doesNotMatch(failure.helperText, /sambungan stabil/i);
+  });
+}
+
+for (const status of [401, 403]) {
+  test(`account error ${status} is not presented as a retryable network problem`, () => {
+    const failure = buildSaveCollectionRequestFailure({ error: new Error(`${status}: {"message":"Access denied"}`), receiptCount: 1 });
+    assert.equal(failure.canRetry, false);
+    assert.equal(failure.requiresNicknameAuthentication, false);
+    assert.match(failure.helperText, /akses akaun|log masuk/i);
+    assert.doesNotMatch(failure.helperText, /sambungan stabil/i);
+  });
+}

@@ -36,6 +36,10 @@ export class CollectionNicknameService extends CollectionServiceSupport {
     return this.authOperations.checkNicknameAuth(...args);
   }
 
+  getNicknameSession(...args: Parameters<CollectionNicknameAuthOperations["getNicknameSession"]>) {
+    return this.authOperations.getNicknameSession(...args);
+  }
+
   setupNicknamePassword(...args: Parameters<CollectionNicknameAuthOperations["setupNicknamePassword"]>) {
     return this.authOperations.setupNicknamePassword(...args);
   }

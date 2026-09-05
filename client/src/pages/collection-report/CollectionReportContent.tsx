@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { CollectionSubPage } from "@/pages/collection-report/types";
 
 const SaveCollectionPage = lazy(() => import("@/pages/collection/SaveCollectionPage"));
+const SuperuserSaveCollectionPage = lazy(() => import("@/pages/collection/SuperuserSaveCollectionPage"));
 const CollectionRecordsPage = lazy(
   () => import("@/pages/collection/CollectionRecordsPage"),
 );
@@ -29,6 +30,9 @@ const ManageCollectionNicknamesPage = lazy(
 
 type CollectionReportContentProps = {
   canAccessCollection: boolean;
+  checkingNicknameSession?: boolean;
+  nicknameReauthenticationRequired?: boolean;
+  onReauthenticateNickname?: (() => void) | undefined;
   role: string;
   staffNickname: string;
   subPage: CollectionSubPage;
@@ -56,12 +60,28 @@ function renderCollectionSection(subPage: CollectionSubPage, node: ReactNode) {
 
 export function CollectionReportContent({
   canAccessCollection,
+  checkingNicknameSession = false,
+  nicknameReauthenticationRequired = false,
+  onReauthenticateNickname,
   role,
   staffNickname,
   subPage,
   onOpenNicknameDialog,
 }: CollectionReportContentProps) {
-  if (!canAccessCollection) {
+  if (checkingNicknameSession) {
+    return (
+      <OperationalSectionCard title="Menyemak sesi nickname">
+        <p role="status" className="text-sm text-muted-foreground">
+          Sila tunggu sebentar sementara sesi nickname disahkan.
+        </p>
+      </OperationalSectionCard>
+    );
+  }
+  const preserveSaveDraft = nicknameReauthenticationRequired
+    && (role === "admin" || role === "user")
+    && subPage === "save"
+    && Boolean(staffNickname);
+  if (!canAccessCollection && !preserveSaveDraft) {
     return (
       <OperationalSectionCard
         title="Pengesahan Nickname Diperlukan"
@@ -84,7 +104,14 @@ export function CollectionReportContent({
     }
     return renderCollectionSection(
       "save",
-      <SaveCollectionPage staffNickname={staffNickname} />,
+      role === "superuser"
+        ? <SuperuserSaveCollectionPage />
+        : <SaveCollectionPage
+            key={staffNickname}
+            staffNickname={staffNickname}
+            accessSuspended={nicknameReauthenticationRequired}
+            onReauthenticateNickname={onReauthenticateNickname}
+          />,
     );
   }
   if (subPage === "records") {

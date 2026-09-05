@@ -115,6 +115,17 @@ const collectionNicknameResetPasswordResponseSchema: z.ZodType<CollectionNicknam
   nickname: collectionNicknamePasswordProfileSchema,
 });
 
+const collectionNicknameSessionResponseSchema = z.object({
+  ok: z.literal(true),
+  nickname: z.object({ id: nonEmptyStringSchema, nickname: nonEmptyStringSchema }).nullable(),
+});
+
+export async function getCollectionNicknameSession(options?: CollectionNicknameRequestOptions) {
+  const endpoint = "/api/collection/nickname-auth/session";
+  const response = await apiRequest("GET", endpoint, undefined, { ...options, retry: false });
+  return parseApiJson(response, collectionNicknameSessionResponseSchema, endpoint);
+}
+
 export async function getCollectionNicknames(
   filters?: { includeInactive?: boolean },
   options?: CollectionNicknameRequestOptions,

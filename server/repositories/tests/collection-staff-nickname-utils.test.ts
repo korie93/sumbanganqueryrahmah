@@ -6,6 +6,7 @@ import {
   isCollectionStaffNicknameActiveValue,
   listCollectionStaffNicknames,
   setCollectionNicknameSessionValue,
+  setCollectionNicknamePasswordValue,
   shouldCascadeCollectionNicknameRename,
   updateCollectionStaffNicknameValue,
   type CollectionStaffNicknameExecutor,
@@ -77,6 +78,20 @@ test("setCollectionNicknameSessionValue rejects invalid payload and upserts vali
   const sqlText = collectSqlText(queries[0]);
   assert.match(sqlText, /INSERT INTO public\.collection_nickname_sessions/i);
   assert.match(sqlText, /ON CONFLICT \(activity_id\) DO UPDATE/i);
+  assert.match(sqlText, /verified_at = EXCLUDED\.verified_at/i);
+});
+
+test("password replacement atomically revokes all sessions for the affected nickname", async () => {
+  const { executor, queries } = createSequenceExecutor<CollectionStaffNicknameExecutor>([{ rows: [] }]);
+  await setCollectionNicknamePasswordValue(executor, {
+    nicknameId: "nickname-one", passwordHash: "new-hash", mustChangePassword: true,
+  });
+  assert.equal(queries.length, 1);
+  const sqlText = collectSqlText(queries[0]);
+  assert.match(sqlText, /WITH changed_nickname AS \(\s*UPDATE public\.collection_staff_nicknames/i);
+  assert.match(sqlText, /WHERE id =/i);
+  assert.match(sqlText, /DELETE FROM public\.collection_nickname_sessions AS session/i);
+  assert.match(sqlText, /lower\(session\.nickname\) = lower\(changed_nickname\.nickname\)/i);
 });
 
 test("createCollectionStaffNicknameValue normalizes unsupported role scope to both", async () => {
@@ -149,12 +164,13 @@ test("updateCollectionStaffNicknameValue cascades nickname rename to related tab
   assert.equal(updated?.nickname, "Collector Omega");
   assert.equal(updated?.isActive, false);
   assert.equal(updated?.roleScope, "user");
-  assert.equal(queries.length, 5);
+  assert.equal(queries.length, 6);
 
   const sqlTexts = queries.map((query) => collectSqlText(query));
-  assert.match(sqlTexts[2] ?? "", /UPDATE public\.admin_groups/i);
-  assert.match(sqlTexts[3] ?? "", /UPDATE public\.admin_group_members/i);
-  assert.match(sqlTexts[4] ?? "", /UPDATE public\.collection_nickname_sessions/i);
+  assert.match(sqlTexts[2] ?? "", /DELETE FROM public\.collection_nickname_sessions/i);
+  assert.match(sqlTexts[3] ?? "", /UPDATE public\.admin_groups/i);
+  assert.match(sqlTexts[4] ?? "", /UPDATE public\.admin_group_members/i);
+  assert.match(sqlTexts[5] ?? "", /UPDATE public\.collection_nickname_sessions/i);
 });
 
 test("shouldCascadeCollectionNicknameRename detects meaningful nickname changes", () => {

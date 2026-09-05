@@ -18,6 +18,7 @@ export async function setCollectionNicknameSessionValue(
     username: string;
     userRole: string;
     nickname: string;
+    verifiedAt?: Date;
   },
 ): Promise<void> {
   const activityId = normalizeCollectionText(params.activityId);
@@ -41,7 +42,7 @@ export async function setCollectionNicknameSessionValue(
       ${username},
       ${userRole},
       ${nickname},
-      now(),
+      ${params.verifiedAt ?? new Date()},
       now()
     )
     ON CONFLICT (activity_id) DO UPDATE
@@ -49,6 +50,7 @@ export async function setCollectionNicknameSessionValue(
       username = EXCLUDED.username,
       user_role = EXCLUDED.user_role,
       nickname = EXCLUDED.nickname,
+      verified_at = EXCLUDED.verified_at,
       updated_at = now()
   `);
 }

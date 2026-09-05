@@ -33,7 +33,6 @@ export function createRuntimeWsBroadcaster({
     cleanupClient(activityId, {
       expectedWs: ws,
       closeWith: "terminate",
-      clearSession: true,
     });
   };
 
@@ -83,7 +82,6 @@ export function createRuntimeWsBroadcaster({
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         cleanupClient(activityId, {
           expectedWs: ws,
-          clearSession: true,
         });
         continue;
       }
@@ -102,7 +100,6 @@ export function createRuntimeWsBroadcaster({
         });
         cleanupClient(activityId, {
           expectedWs: ws,
-          clearSession: true,
         });
       }
     }

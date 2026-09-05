@@ -57,13 +57,19 @@ export async function setCollectionNicknamePasswordValue(
   }
 
   await executor.execute(sql`
-    UPDATE public.collection_staff_nicknames
-    SET
-      nickname_password_hash = ${passwordHash},
-      must_change_password = ${mustChangePassword},
-      password_reset_by_superuser = ${passwordResetBySuperuser},
-      password_updated_at = ${passwordUpdatedAt}
-    WHERE id = ${nicknameId}::uuid
+    WITH changed_nickname AS (
+      UPDATE public.collection_staff_nicknames
+      SET
+        nickname_password_hash = ${passwordHash},
+        must_change_password = ${mustChangePassword},
+        password_reset_by_superuser = ${passwordResetBySuperuser},
+        password_updated_at = ${passwordUpdatedAt}
+      WHERE id = ${nicknameId}::uuid
+      RETURNING nickname
+    )
+    DELETE FROM public.collection_nickname_sessions AS session
+    USING changed_nickname
+    WHERE lower(session.nickname) = lower(changed_nickname.nickname)
   `);
 }
 
@@ -140,6 +146,12 @@ export async function updateCollectionStaffNicknameValue(
   if (!row) return undefined;
 
   const updated = mapCollectionStaffNicknameRow(row);
+  if (existing.isActive !== updated.isActive || existing.roleScope !== updated.roleScope) {
+    await executor.execute(sql`
+      DELETE FROM public.collection_nickname_sessions
+      WHERE lower(nickname) = lower(${existing.nickname})
+    `);
+  }
   if (shouldCascadeCollectionNicknameRename(existing.nickname, updated.nickname)) {
     const oldNickname = normalizeCollectionText(existing.nickname);
     const newNickname = normalizeCollectionText(updated.nickname);
@@ -171,9 +183,15 @@ export async function deleteCollectionStaffNicknameValue(
   const total = Number(readFirstRow<CollectionRecordCountRow>(usage)?.total ?? 0);
   if (total > 0) {
     await executor.execute(sql`
-      UPDATE public.collection_staff_nicknames
-      SET is_active = false
-      WHERE id = ${normalizeCollectionText(id)}::uuid
+      WITH deactivated_nickname AS (
+        UPDATE public.collection_staff_nicknames
+        SET is_active = false
+        WHERE id = ${normalizeCollectionText(id)}::uuid
+        RETURNING nickname
+      )
+      DELETE FROM public.collection_nickname_sessions AS session
+      USING deactivated_nickname
+      WHERE lower(session.nickname) = lower(deactivated_nickname.nickname)
     `);
     return { deleted: false, deactivated: true };
   }

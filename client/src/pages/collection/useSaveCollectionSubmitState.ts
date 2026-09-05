@@ -37,6 +37,9 @@ type UseSaveCollectionSubmitStateOptions = {
   receiptFiles: File[];
   receiptDrafts: CollectionReceiptDraftInput[];
   onSaved?: (() => void) | undefined;
+  accessSuspended?: boolean | undefined;
+  onReauthenticateNickname?: (() => void) | undefined;
+  onSubmittingChange?: ((submitting: boolean) => void) | undefined;
   mutationFeedback: MutationFeedbackApi;
   clearPageState: () => void;
   applyFieldErrors?: ((errors: SaveCollectionFieldErrors) => void) | undefined;
@@ -47,6 +50,9 @@ export function useSaveCollectionSubmitState({
   receiptFiles,
   receiptDrafts,
   onSaved,
+  accessSuspended = false,
+  onReauthenticateNickname,
+  onSubmittingChange,
   mutationFeedback,
   clearPageState,
   applyFieldErrors,
@@ -60,6 +66,7 @@ export function useSaveCollectionSubmitState({
   const [submitPhase, setSubmitPhase] = useState<SaveCollectionSubmitPhase>("idle");
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
@@ -85,7 +92,7 @@ export function useSaveCollectionSubmitState({
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (submitting || submitInFlightRef.current) {
+    if (accessSuspended || submitting || submitInFlightRef.current) {
       return;
     }
 
@@ -110,6 +117,7 @@ export function useSaveCollectionSubmitState({
     }
 
     submitInFlightRef.current = true;
+    onSubmittingChange?.(true);
     if (mountedRef.current) {
       setLastSavedSummary(null);
       setSubmitting(true);
@@ -175,13 +183,13 @@ export function useSaveCollectionSubmitState({
         return;
       }
       setSubmitPhase("failed");
-      setSubmitFailure(
-        buildSaveCollectionRequestFailure({
-          error,
-          receiptCount: receiptFiles.length,
-          fallbackMessage: "Failed to save collection.",
-        }),
-      );
+      const failure = buildSaveCollectionRequestFailure({
+        error,
+        receiptCount: receiptFiles.length,
+        fallbackMessage: "Failed to save collection.",
+      });
+      setSubmitFailure(failure);
+      if (failure.requiresNicknameAuthentication) onReauthenticateNickname?.();
       mutationFeedback.notifyMutationError({
         title: "Failed to Save Collection",
         error,
@@ -191,14 +199,18 @@ export function useSaveCollectionSubmitState({
       submitInFlightRef.current = false;
       if (mountedRef.current) {
         setSubmitting(false);
+        onSubmittingChange?.(false);
       }
     }
   }, [
+    accessSuspended,
     clearPageState,
     clearLastSavedSummary,
     applyFieldErrors,
     mutationFeedback,
     onSaved,
+    onReauthenticateNickname,
+    onSubmittingChange,
     receiptDrafts,
     receiptFiles,
     resetSubmitMutationIntent,

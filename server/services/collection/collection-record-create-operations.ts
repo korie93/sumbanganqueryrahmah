@@ -28,7 +28,7 @@ import {
   type StoredCollectionMutationReceipt,
 } from "./collection-record-mutation-support";
 import {
-  assertCollectionStaffNicknameWriteAccess,
+  requireCollectionStaffNicknameCreateAccess,
   type RequireUserFn,
 } from "./collection-record-write-shared";
 import { isDateInsideCollectionCallingWindow } from "../../lib/collection-calling-window";
@@ -50,7 +50,9 @@ export class CollectionRecordCreateOperations {
       uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
       const fields = normalizeCollectionRecordFields(body);
       assertValidCollectionCreateFields(fields);
-      await assertCollectionStaffNicknameWriteAccess(this.storage, user, fields.collectionStaffNickname);
+      const collectionStaffNickname = await requireCollectionStaffNicknameCreateAccess(
+        this.storage, user, fields.collectionStaffNickname,
+      );
 
       const sourceMatch = await verifyEligibleSavedCollectionSource(this.storage, {
         paymentDate: fields.paymentDate,
@@ -128,7 +130,7 @@ export class CollectionRecordCreateOperations {
         amount: fields.amount,
         receiptFile: null,
         createdByLogin: user.username,
-        collectionStaffNickname: fields.collectionStaffNickname,
+        collectionStaffNickname,
       }, newReceiptInputs);
       createdRecordId = record.id;
       const finalRecord = record;

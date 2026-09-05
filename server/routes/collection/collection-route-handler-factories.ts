@@ -11,6 +11,8 @@ import {
   createIdempotencyFingerprintValidationCacheController,
 } from "./collection-idempotency-cache";
 import { buildCollectionReceiptSecurityErrorResponse } from "../collection-receipt-error-response";
+import { readUploadedReceiptRows } from "../../services/collection/collection-record-receipt-mutation-utils";
+import { cleanupStoredCollectionReceipts } from "../../services/collection/collection-record-mutation-support";
 export {
   createIdempotencyFingerprintValidationCacheController,
   isIdempotencyFingerprintValidationEntryExpired,
@@ -20,6 +22,7 @@ export {
 
 export type CollectionJsonRouteHandler = (req: AuthenticatedRequest) => Promise<unknown>;
 export type CollectionMutationScopeResolver = (req: AuthenticatedRequest) => string;
+export type CollectionMutationReplayAuthorizer = (req: AuthenticatedRequest, payload: unknown) => Promise<void>;
 
 type CollectionMutationIdempotencyStorage = Pick<
   PostgresStorage,
@@ -306,12 +309,14 @@ export function createCollectionJsonMutationRouteHandler(params: {
   handler: CollectionJsonRouteHandler;
   scopeResolver: CollectionMutationScopeResolver;
   storage: CollectionMutationIdempotencyStorage;
+  authorizeReplay?: CollectionMutationReplayAuthorizer | undefined;
 }): RequestHandler {
   const { fallbackMessage, handler, scopeResolver, storage } = params;
 
   return async (req, res) => {
     const startedAt = process.hrtime.bigint();
     let reservation: Awaited<ReturnType<typeof reserveCollectionMutationIdempotency>> | null = null;
+    let handlerStarted = false;
 
     try {
       const authenticatedReq = req as AuthenticatedRequest;
@@ -322,9 +327,13 @@ export function createCollectionJsonMutationRouteHandler(params: {
       });
 
       if (reservation.response) {
+        if (reservation.response.status < 400) {
+          await params.authorizeReplay?.(authenticatedReq, reservation.response.body);
+        }
         return res.status(reservation.response.status).json(reservation.response.body);
       }
 
+      handlerStarted = true;
       const payload = await handler(authenticatedReq);
       const serializablePayload = normalizeMutationResponseBody(payload);
 
@@ -379,6 +388,11 @@ export function createCollectionJsonMutationRouteHandler(params: {
 
       return sendCollectionError(res, err, fallbackMessage);
     } finally {
+      // The multipart parser owns these new uploads. A replay/early rejection
+      // never reaches the service that normally persists or cleans them up.
+      if (!handlerStarted && req.is("multipart/form-data")) {
+        await cleanupStoredCollectionReceipts(readUploadedReceiptRows(req.body || {}));
+      }
       const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
       logSlowCollectionRoute(req as AuthenticatedRequest, elapsedMs, Number(res.statusCode || 0));
     }

@@ -20,6 +20,7 @@ import {
   type CollectionRecordShape,
   createCollectionStorageDouble,
   createCoreCollectionStorageDouble,
+  createVerifiedCollectionStorageDouble,
 } from "./collection-route-record-doubles";
 import {
   createAdminCollectionNoVisibilityStorageDouble,
@@ -341,7 +342,7 @@ test("DELETE /api/collection/purge-old purges and audits when the superuser pass
 });
 
 test("POST /api/collection creates a collection record and writes an audit log", async () => {
-  const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble({
+  const { storage, createCalls, auditLogs } = createVerifiedCollectionStorageDouble({
     sourceMatchCallingDate: "2026-08-12",
     sourceMatchCallingWindowEnd: "2026-09-11",
     sourceMatchCallingWindowEndExclusive: "2026-09-12",
@@ -434,7 +435,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
 });
 
 test("POST /api/collection rejects a new record when no governed source row matches", async () => {
-  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const { storage, createCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -475,7 +476,7 @@ test("POST /api/collection rejects a new record when no governed source row matc
 });
 
 test("POST /api/collection supports exact Card-only matching without persisting or auditing the full card", async () => {
-  const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
   const cardNumber = "0000123412345678";
 
@@ -523,7 +524,7 @@ test("POST /api/collection supports exact Card-only matching without persisting 
 });
 
 test("POST /api/collection ignores a browser-supplied source ID and uses the governed backend match", async () => {
-  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const { storage, createCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -570,7 +571,7 @@ test("POST /api/collection ignores a browser-supplied source ID and uses the gov
 });
 
 test("POST /api/collection rejects oversized identity fields from direct API callers", async () => {
-  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const { storage, createCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -624,7 +625,7 @@ test("POST /api/collection rejects oversized identity fields from direct API cal
 });
 
 test("POST /api/collection rejects a matched Saved row without usable TOTAL DUE", async () => {
-  const { storage, createCalls } = createCoreCollectionStorageDouble({
+  const { storage, createCalls } = createVerifiedCollectionStorageDouble({
     sourceMatchTotalDue: null,
   });
   const app = createJsonTestApp();
@@ -807,7 +808,7 @@ test("POST /api/collection/source-matches rejects a Payment Date outside the exa
 });
 
 test("POST /api/collection rejects a Saved match whose Calling Date is missing", async () => {
-  const { storage, createCalls } = createCoreCollectionStorageDouble({
+  const { storage, createCalls } = createVerifiedCollectionStorageDouble({
     sourceMatchCallingDate: null,
     sourceMatchCallingWindowEnd: null,
     sourceMatchCallingWindowEndExclusive: null,
@@ -853,7 +854,7 @@ test("POST /api/collection rejects a Saved match whose Calling Date is missing",
 });
 
 test("collection create, edit, and delete recalculate cumulative Abort CP for one Saved row", async () => {
-  const { storage, createCalls } = createCoreCollectionStorageDouble({
+  const { storage, createCalls } = createVerifiedCollectionStorageDouble({
     sourceMatchTotalDue: "1000.00",
     sourceMatchCallingDate: "2026-08-12",
     sourceMatchCallingWindowEnd: "2026-09-11",
@@ -966,7 +967,7 @@ test("collection create, edit, and delete recalculate cumulative Abort CP for on
 });
 
 test("POST /api/collection stores matched receipt totals and allows save", async () => {
-  const { storage, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, createReceiptCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1026,7 +1027,7 @@ test("POST /api/collection stores matched receipt totals and allows save", async
 });
 
 test("POST /api/collection allows regular users to save when receipt total is underpaid", async () => {
-  const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, createReceiptCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1079,7 +1080,7 @@ test("POST /api/collection allows regular users to save when receipt total is un
 });
 
 test("POST /api/collection accepts receiptValidationOverrideReason without enforcing override workflow", async () => {
-  const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, createReceiptCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1133,7 +1134,7 @@ test("POST /api/collection accepts receiptValidationOverrideReason without enfor
 });
 
 test("POST /api/collection replays a successful create when the same idempotency key is retried", async () => {
-  const { storage, createCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1190,7 +1191,7 @@ test("POST /api/collection replays a successful create when the same idempotency
 });
 
 test("POST /api/collection rejects reused idempotency keys when the payload fingerprint changes", async () => {
-  const { storage, createCalls } = createCoreCollectionStorageDouble();
+  const { storage, createCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1259,7 +1260,7 @@ test("POST /api/collection rejects reused idempotency keys when the payload fing
 });
 
 test("POST /api/collection accepts multipart receipt uploads without base64 JSON payloads", async () => {
-  const { storage, createCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, createReceiptCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1323,7 +1324,7 @@ test("POST /api/collection accepts multipart receipt uploads without base64 JSON
 });
 
 test("POST /api/collection accepts multipart progressive-style JPEG receipts", async () => {
-  const { storage, createCalls, createReceiptCalls } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, createReceiptCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1379,7 +1380,7 @@ test("POST /api/collection accepts multipart progressive-style JPEG receipts", a
 });
 
 test("POST /api/collection rejects multipart PDF receipts that contain dangerous actions", async () => {
-  const { storage, createCalls, createReceiptCalls } = createCoreCollectionStorageDouble();
+  const { storage, createCalls, createReceiptCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1426,7 +1427,7 @@ test("POST /api/collection rejects multipart PDF receipts that contain dangerous
 });
 
 test("POST /api/collection rejects future payment dates", async () => {
-  const { storage } = createCoreCollectionStorageDouble();
+  const { storage } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1787,7 +1788,7 @@ test("GET /api/collection/list scopes user requests to the active staff nickname
 });
 
 test("PATCH /api/collection/:id updates a record and writes an audit log", async () => {
-  const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1838,7 +1839,7 @@ test("PATCH /api/collection/:id updates a record and writes an audit log", async
 });
 
 test("PATCH /api/collection/:id refreshes the server-owned Saved row link when identity changes", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble({
+  const { storage, updateCalls } = createVerifiedCollectionStorageDouble({
     seedRecordOverrides: {
       sourceImportId: "import-1",
       sourceDataRowId: "saved-row-old",
@@ -1888,7 +1889,7 @@ test("PATCH /api/collection/:id refreshes the server-owned Saved row link when i
 });
 
 test("PATCH /api/collection/:id accepts the full edit UI payload when identity values are unchanged", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1934,7 +1935,7 @@ test("PATCH /api/collection/:id accepts the full edit UI payload when identity v
 });
 
 test("PATCH /api/collection/:id rejects oversized identity fields from direct API callers", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -1976,7 +1977,7 @@ test("PATCH /api/collection/:id rejects oversized identity fields from direct AP
 });
 
 test("PATCH /api/collection/:id auto-links legacy identity edits to a governed Saved source", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -2010,7 +2011,7 @@ test("PATCH /api/collection/:id auto-links legacy identity edits to a governed S
 });
 
 test("PATCH /api/collection/:id rejects identity edits when existing Saved provenance is stale", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble({
+  const { storage, updateCalls } = createVerifiedCollectionStorageDouble({
     seedRecordOverrides: { sourceImportId: "import-1" },
   });
   const app = createJsonTestApp();
@@ -2044,7 +2045,7 @@ test("PATCH /api/collection/:id rejects identity edits when existing Saved prove
 });
 
 test("PATCH /api/collection/:id rejects identity edits when matched TOTAL DUE is unusable", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble({
+  const { storage, updateCalls } = createVerifiedCollectionStorageDouble({
     sourceMatchTotalDue: null,
     seedRecordOverrides: { sourceImportId: "import-1" },
   });
@@ -2079,7 +2080,7 @@ test("PATCH /api/collection/:id rejects identity edits when matched TOTAL DUE is
 });
 
 test("PATCH /api/collection/:id replays a successful update when the same idempotency key is retried", async () => {
-  const { storage, updateCalls } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -2128,7 +2129,7 @@ test("PATCH /api/collection/:id replays a successful update when the same idempo
 });
 
 test("PATCH /api/collection/:id accepts multipart receipt uploads during edit flows", async () => {
-  const { storage, updateCalls, createReceiptCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls, createReceiptCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -2185,7 +2186,7 @@ test("PATCH /api/collection/:id accepts multipart receipt uploads during edit fl
 });
 
 test("PATCH /api/collection/:id allows regular users when edited receipt totals become underpaid", async () => {
-  const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble({
+  const { storage, updateCalls, auditLogs } = createVerifiedCollectionStorageDouble({
     receiptRowsByRecordId: {
       "collection-1": [
         {
@@ -2247,7 +2248,7 @@ test("PATCH /api/collection/:id allows regular users when edited receipt totals 
 });
 
 test("PATCH /api/collection/:id rejects stale expectedUpdatedAt values with 409 conflict", async () => {
-  const { storage, updateCalls, auditLogs } = createCoreCollectionStorageDouble();
+  const { storage, updateCalls, auditLogs } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -2364,7 +2365,7 @@ test("PATCH /api/collection/:id rejects user updates when the active staff nickn
 });
 
 test("PATCH /api/collection/:id rejects future payment dates", async () => {
-  const { storage } = createCoreCollectionStorageDouble();
+  const { storage } = createVerifiedCollectionStorageDouble();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {

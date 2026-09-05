@@ -559,7 +559,7 @@ test("broadcastWsMessage logs send failures before removing the socket", () => {
   try {
     manager.broadcastWsMessage({ type: "ping" });
     assert.equal(providedMap.has("activity-send-failure"), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(warnings.length, 1);
     assert.equal(warnings[0].message, "WebSocket broadcast failed");
   } finally {
@@ -766,7 +766,7 @@ test("broadcastWsMessage gives slow clients a grace period before dropping them"
     assert.equal(slowSocket.sentMessages.length, 1);
     assert.equal(slowSocket.terminateCalls, 1);
     assert.equal(providedMap.has("activity-backpressure"), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(warnings.length, 2);
     assert.equal(
       warnings[1].message,
@@ -1431,7 +1431,7 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
     await flushAsyncWork();
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
@@ -1534,7 +1534,7 @@ test("runtime manager clears lifecycle registry even when listener cleanup throw
     await flushAsyncWork();
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(
       debugLogs.includes("WebSocket lifecycle handler detach failed during cleanup"),
       true,
@@ -1584,7 +1584,7 @@ test("runtime manager does not retain socket state across rapid reconnect cycles
       await flushAsyncWork();
     }
 
-    assert.equal(clearSessionCalls, activityCount);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.deepEqual(manager.getLifecycleSnapshot(), {
       cleanupCallbacks: 0,
       connectedClients: 0,
@@ -1626,7 +1626,7 @@ test("runtime manager removes registered sockets cleanly on error", async () => 
     await flushAsyncWork();
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
@@ -1655,6 +1655,7 @@ test("runtime manager logs nickname cleanup failures without retaining WebSocket
       },
     },
     secret: TEST_SECRET,
+    maxMessageBytes: 4,
     connectedClients: providedMap,
   });
 
@@ -1664,7 +1665,7 @@ test("runtime manager logs nickname cleanup failures without retaining WebSocket
 
     assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
 
-    socket.close();
+    socket.emit("message", Buffer.from("12345"));
     await flushAsyncWork();
 
     assert.equal(providedMap.has(activityId), false);
@@ -1676,7 +1677,7 @@ test("runtime manager logs nickname cleanup failures without retaining WebSocket
     assert.deepEqual(errorLogs[0].payload, {
       activityId,
       operation: "clearCollectionNicknameSessionByActivity",
-      reason: "socket-close",
+      reason: "message-too-big",
       error: {
         name: "Error",
       },
@@ -2352,7 +2353,7 @@ test("runtime manager tolerates repeated terminal lifecycle signals without dupl
     await flushAsyncWork();
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
@@ -2396,7 +2397,7 @@ test("runtime manager clears tracked client state when the WebSocket server clos
   await flushAsyncWork();
 
   assert.equal(providedMap.size, 0);
-  assert.equal(clearSessionCalls, 1);
+  assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
   assert.equal(socket.closeCalls, 1);
   assert.equal(socket.listenerCount("close"), 0);
   assert.equal(socket.listenerCount("error"), 0);
@@ -2518,7 +2519,7 @@ test("runtime manager heartbeat terminates stale sockets and clears tracked stat
 
     assert.equal(socket.terminateCalls, 1);
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
@@ -2569,7 +2570,7 @@ test("runtime manager heartbeat removes sockets when ping fails", async (t) => {
     assert.equal(socket.pingCalls, 1);
     assert.equal(socket.terminateCalls, 1);
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(clearSessionCalls, 0, "Transport cleanup must preserve nickname verification.");
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);

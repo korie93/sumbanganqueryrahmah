@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   checkCollectionNicknameAuth,
+  getCollectionNicknameSession,
   loginCollectionNickname,
   setupCollectionNicknamePassword,
 } from "@/lib/api";
@@ -13,8 +14,6 @@ import type { NicknameDialogStep } from "@/pages/collection-report/types";
 import {
   clearCollectionNicknameSessionStorage,
   getStoredCollectionNickname,
-  getStoredCollectionNicknameAuthRaw,
-  isValidNicknameAuthSession,
   persistCollectionNicknameSessionStorage,
 } from "@/pages/collection-report/utils";
 import {
@@ -37,15 +36,15 @@ export function useCollectionNicknameAccess({
 }: UseCollectionNicknameAccessOptions) {
   const { toast } = useToast();
   const [staffNickname, setStaffNickname] = useState(() => {
-    if (typeof window === "undefined") return "";
+    if (typeof window === "undefined" || bypassesNicknameAccess) return "";
     return getStoredCollectionNickname();
   });
-  const [nicknameSessionVerified, setNicknameSessionVerified] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const nickname = getStoredCollectionNickname();
-    const authRaw = getStoredCollectionNicknameAuthRaw();
-    return isValidNicknameAuthSession(authRaw, currentUsername, role, nickname);
-  });
+  // Browser storage is only a nickname hint. Access belongs to the live server session.
+  const [nicknameSessionVerified, setNicknameSessionVerified] = useState(false);
+  const [nicknameReauthenticationRequired, setNicknameReauthenticationRequired] = useState(false);
+  const [checkingNicknameSession, setCheckingNicknameSession] = useState(
+    !bypassesNicknameAccess && requiresNicknamePassword,
+  );
   const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false);
   const [dialogStep, setDialogStep] = useState<NicknameDialogStep>("nickname");
   const [nicknameInput, setNicknameInput] = useState(staffNickname);
@@ -79,6 +78,7 @@ export function useCollectionNicknameAccess({
     clearCollectionNicknameSessionStorage();
     setStaffNickname("");
     setNicknameSessionVerified(false);
+    setNicknameReauthenticationRequired(false);
     setVerifiedNicknamePassword("");
     setSetupMode("first-time");
     setShowLoginPassword(false);
@@ -98,6 +98,7 @@ export function useCollectionNicknameAccess({
 
     setStaffNickname(normalized);
     setNicknameSessionVerified(true);
+    setNicknameReauthenticationRequired(false);
     setNicknameDialogOpen(false);
     setVerifiedNicknamePassword("");
     setSetupMode("first-time");
@@ -106,14 +107,56 @@ export function useCollectionNicknameAccess({
     setShowSetupConfirmPassword(false);
   }, [currentUsername, role]);
 
+  const requestNicknameReauthentication = useCallback(() => {
+    if (bypassesNicknameAccess || !requiresNicknamePassword) return;
+    clearCollectionNicknameSessionStorage();
+    // Keep the nickname and mounted save form while its password is rechecked.
+    setNicknameSessionVerified(false);
+    setNicknameReauthenticationRequired(true);
+    resetDialogFields(staffNickname);
+    setNicknameDialogOpen(true);
+  }, [bypassesNicknameAccess, requiresNicknamePassword, resetDialogFields, staffNickname]);
+
   useEffect(() => {
     if (bypassesNicknameAccess || !requiresNicknamePassword) return;
+    const controller = new AbortController();
+    setCheckingNicknameSession(true);
+    setNicknameSessionVerified(false);
+
+    void getCollectionNicknameSession({ signal: controller.signal })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        if (response.nickname) {
+          applyNicknameSession(response.nickname.nickname);
+        } else {
+          clearCollectionNicknameSessionStorage();
+        }
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        clearCollectionNicknameSessionStorage();
+        toast({
+          title: "Pengesahan Nickname Diperlukan",
+          description: parseApiError(error),
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCheckingNicknameSession(false);
+      });
+
+    return () => controller.abort();
+  }, [applyNicknameSession, bypassesNicknameAccess, currentUsername, requiresNicknamePassword, role, toast]);
+
+  useEffect(() => {
+    if (bypassesNicknameAccess || !requiresNicknamePassword || checkingNicknameSession) return;
     if (!nicknameSessionVerified) {
       resetDialogFields(staffNickname);
       setNicknameDialogOpen(true);
     }
   }, [
     bypassesNicknameAccess,
+    checkingNicknameSession,
     nicknameSessionVerified,
     requiresNicknamePassword,
     resetDialogFields,
@@ -290,6 +333,7 @@ export function useCollectionNicknameAccess({
   return {
     applyNicknameSession,
     canAccessCollection,
+    checkingNicknameSession,
     clearNicknameSession,
     confirmNicknamePassword,
     dialogStep,
@@ -299,7 +343,9 @@ export function useCollectionNicknameAccess({
     nicknameDialogOpen,
     nicknameInput,
     nicknamePassword,
+    nicknameReauthenticationRequired,
     nicknameSessionVerified,
+    requestNicknameReauthentication,
     resolvedNickname,
     setConfirmNicknamePassword,
     setDialogStep,

@@ -33,6 +33,7 @@ export async function setCollectionNicknameSessionRepository(params: {
   username: string;
   userRole: string;
   nickname: string;
+  verifiedAt?: Date;
 }): Promise<void> {
   return setCollectionNicknameSessionValue(db, params);
 }

@@ -109,8 +109,9 @@ export default function CollectionReport() {
       : "Collection workspace for entry, records, summaries, and comparisons."
     : "Collection workspace for entry, records, summaries, and comparisons.";
   const shouldRenderNicknameDialog =
-    nicknameAccess.nicknameDialogOpen
-    || (!bypassesNicknameAccess && !nicknameAccess.canAccessCollection);
+    !nicknameAccess.checkingNicknameSession
+    && (nicknameAccess.nicknameDialogOpen
+      || (!bypassesNicknameAccess && !nicknameAccess.canAccessCollection));
 
   return (
     <OperationalPage width="wide">
@@ -143,6 +144,9 @@ export default function CollectionReport() {
         <div className="min-w-0 flex-1">
           <CollectionReportContent
             canAccessCollection={nicknameAccess.canAccessCollection}
+            checkingNicknameSession={nicknameAccess.checkingNicknameSession}
+            nicknameReauthenticationRequired={nicknameAccess.nicknameReauthenticationRequired}
+            onReauthenticateNickname={nicknameAccess.requestNicknameReauthentication}
             role={role}
             staffNickname={nicknameAccess.staffNickname}
             subPage={navigation.subPage}

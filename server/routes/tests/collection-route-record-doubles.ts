@@ -649,6 +649,14 @@ export function createCoreCollectionStorageDouble(options?: {
     },
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nickname === activeNickname.nickname ? activeNickname : null,
+    getCollectionNicknameAuthProfileByName: async (nickname: string) =>
+      nickname === activeNickname.nickname ? {
+        ...activeNickname,
+        nicknamePasswordHash: "verified-test-profile-hash",
+        mustChangePassword: false,
+        passwordResetBySuperuser: false,
+        passwordUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      } : undefined,
     createCollectionRecord: async (
       data: Record<string, unknown>,
       receipts: CreateCollectionRecordReceiptInput[] = [],
@@ -1073,4 +1081,12 @@ export function createCoreCollectionStorageDouble(options?: {
     deleteCalls,
     deleteReceiptCalls,
   };
+}
+
+// Write scenarios start after successful nickname authentication; read tests can
+// continue exercising their explicit no-session/legacy ownership behavior.
+export function createVerifiedCollectionStorageDouble(
+  options?: Parameters<typeof createCoreCollectionStorageDouble>[0],
+) {
+  return createCoreCollectionStorageDouble({ sessionNickname: "Collector Alpha", ...options });
 }

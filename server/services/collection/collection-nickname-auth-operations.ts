@@ -12,8 +12,18 @@ import {
   type CollectionNicknameAuthPayload,
 } from "../../routes/collection.validation";
 import { CollectionServiceSupport } from "./collection-service-support";
+import { resolveVerifiedCollectionNicknameFromSession } from "../../routes/collection-access";
 
 export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
+  async getNicknameSession(userInput: AuthenticatedUser | undefined) {
+    const user = this.requireUser(userInput);
+    const profile = await resolveVerifiedCollectionNicknameFromSession(this.storage, user);
+    return {
+      ok: true as const,
+      nickname: profile ? { id: profile.id, nickname: profile.nickname } : null,
+    };
+  }
+
   async checkNicknameAuth(
     userInput: AuthenticatedUser | undefined,
     bodyRaw: unknown,
@@ -81,12 +91,13 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
     }
 
     const passwordHash = await hashPassword(newPassword);
+    const passwordUpdatedAt = new Date();
     await this.storage.setCollectionNicknamePassword({
       nicknameId: profile.id,
       passwordHash,
       mustChangePassword: false,
       passwordResetBySuperuser: false,
-      passwordUpdatedAt: new Date(),
+      passwordUpdatedAt,
     });
 
     await this.storage.createAuditLog({
@@ -102,6 +113,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
         username: user.username,
         userRole: user.role,
         nickname: profile.nickname,
+        verifiedAt: passwordUpdatedAt,
       });
     }
 
@@ -121,6 +133,9 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
     bodyRaw: unknown,
   ) {
     const user = this.requireUser(userInput);
+    // Capture before reading the password so a concurrent reset cannot grant a
+    // fresh-looking session after verification against the previous password.
+    const verifiedAt = new Date();
     const body = (ensureLooseObject(bodyRaw) || {}) as CollectionNicknameAuthPayload;
     const profile = await this.requireNicknameAccess(user, body.nickname);
 
@@ -159,6 +174,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
         username: user.username,
         userRole: user.role,
         nickname: profile.nickname,
+        verifiedAt,
       });
     }
 

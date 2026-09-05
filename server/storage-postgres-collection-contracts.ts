@@ -220,6 +220,7 @@ export interface CollectionStorageContract {
     username: string;
     userRole: string;
     nickname: string;
+    verifiedAt?: Date;
   }): Promise<void>;
   getCollectionNicknameSessionByActivity(activityId: string): Promise<CollectionNicknameSession | undefined>;
   clearCollectionNicknameSessionByActivity(activityId: string): Promise<void>;

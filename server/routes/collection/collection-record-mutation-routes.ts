@@ -2,6 +2,14 @@ import { createCollectionMultipartRoute } from "./collection-multipart-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
 import { createAuthorizeCollectionRecordAccess } from "../collection-access";
 import { readRouteParam } from "../../http/validation";
+import { forbidden } from "../../http/errors";
+import { ensureLooseObject, normalizeCollectionText } from "../collection.validation";
+import {
+  assertCollectionStaffNicknameWriteAccess,
+  getAccessibleCollectionRecordOrThrow,
+  requireCollectionStaffNicknameCreateAccess,
+} from "../../services/collection/collection-record-write-shared";
+import type { CollectionMutationReplayAuthorizer } from "./collection-route-handler-factories";
 
 export function registerCollectionRecordMutationRoutes(context: CollectionRouteContext) {
   const {
@@ -17,6 +25,23 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
   const updateCollectionMultipartRoute = createCollectionMultipartRoute({
     authorizeRequest: createAuthorizeCollectionRecordAccess({ storage }),
   });
+  const authorizeRecordReplay: CollectionMutationReplayAuthorizer = async (req, payload) => {
+    if (!req.user) throw forbidden();
+    const cachedRecord = ensureLooseObject(ensureLooseObject(payload)?.record);
+    const id = normalizeCollectionText(cachedRecord?.id);
+    if (!id) throw forbidden();
+    const existing = await getAccessibleCollectionRecordOrThrow(storage, req.user, id);
+    await assertCollectionStaffNicknameWriteAccess(storage, req.user, existing.collectionStaffNickname);
+    await assertCollectionStaffNicknameWriteAccess(
+      storage, req.user, normalizeCollectionText(cachedRecord?.collectionStaffNickname),
+    );
+    const nickname = normalizeCollectionText(ensureLooseObject(req.body)?.collectionStaffNickname);
+    if (req.method === "POST") {
+      await requireCollectionStaffNicknameCreateAccess(storage, req.user, nickname);
+    } else if (nickname) {
+      await assertCollectionStaffNicknameWriteAccess(storage, req.user, nickname);
+    }
+  };
 
   app.post(
     "/api/collection",
@@ -26,6 +51,7 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
       "Failed to create collection record.",
       () => "collection-record:create",
       (req) => collectionService.createRecord(req.user, req.body),
+      authorizeRecordReplay,
     ),
   );
 
@@ -39,6 +65,7 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
       const recordId = readRouteParam(req.params.id, "collection record id");
       return collectionService.updateRecord(req.user, recordId, req.body);
     },
+    authorizeRecordReplay,
   );
 
   app.patch(

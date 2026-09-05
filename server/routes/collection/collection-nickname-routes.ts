@@ -24,6 +24,12 @@ export function registerCollectionNicknameRoutes(context: CollectionRouteContext
     jsonRoute("Failed to validate nickname.", (req) => collectionService.checkNicknameAuth(req.user, req.body)),
   );
 
+  app.get(
+    "/api/collection/nickname-auth/session",
+    ...recordMutationAccess,
+    jsonRoute("Failed to validate nickname session.", (req) => collectionService.getNicknameSession(req.user)),
+  );
+
   app.post(
     "/api/collection/nickname-auth/setup-password",
     ...recordMutationAccess,

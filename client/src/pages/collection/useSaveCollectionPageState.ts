@@ -15,12 +15,18 @@ type MutationFeedbackApi = {
 type UseSaveCollectionPageStateOptions = {
   staffNickname: string;
   onSaved?: (() => void) | undefined;
+  accessSuspended?: boolean | undefined;
+  onReauthenticateNickname?: (() => void) | undefined;
+  onSubmittingChange?: ((submitting: boolean) => void) | undefined;
   mutationFeedback: MutationFeedbackApi;
 };
 
 export function useSaveCollectionPageState({
   staffNickname,
   onSaved,
+  accessSuspended,
+  onReauthenticateNickname,
+  onSubmittingChange,
   mutationFeedback,
 }: UseSaveCollectionPageStateOptions) {
   const formState = useSaveCollectionFormState({ staffNickname });
@@ -57,6 +63,9 @@ export function useSaveCollectionPageState({
     receiptFiles: receiptState.receiptFiles,
     receiptDrafts: receiptState.receiptDrafts,
     onSaved,
+    accessSuspended,
+    onReauthenticateNickname,
+    onSubmittingChange,
     mutationFeedback,
     clearPageState,
     applyFieldErrors: formState.applyFieldErrors,

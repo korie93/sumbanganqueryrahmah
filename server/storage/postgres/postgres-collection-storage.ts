@@ -119,6 +119,7 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     username: string;
     userRole: string;
     nickname: string;
+    verifiedAt?: Date;
   }): Promise<void> {
     return this.collectionRepository.setCollectionNicknameSession(params);
   }

@@ -7,6 +7,7 @@ type SaveCollectionSubmitAlertProps = {
   disabled?: boolean;
   onRetry: () => void;
   onDismiss: () => void;
+  onReauthenticateNickname?: (() => void) | undefined;
 };
 
 export function SaveCollectionSubmitAlert({
@@ -14,6 +15,7 @@ export function SaveCollectionSubmitAlert({
   disabled = false,
   onRetry,
   onDismiss,
+  onReauthenticateNickname,
 }: SaveCollectionSubmitAlertProps) {
   if (!failure) {
     return null;
@@ -55,6 +57,13 @@ export function SaveCollectionSubmitAlert({
           <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
+      {failure.requiresNicknameAuthentication && onReauthenticateNickname ? (
+        <div className="mt-3 flex flex-wrap gap-2 pl-8">
+          <Button type="button" size="sm" onClick={onReauthenticateNickname} disabled={disabled}>
+            Sahkan Nickname Semula
+          </Button>
+        </div>
+      ) : null}
       {failure.canRetry ? (
         <div className="mt-3 flex flex-wrap gap-2 pl-8">
           <Button type="button" size="sm" onClick={onRetry} disabled={disabled}>

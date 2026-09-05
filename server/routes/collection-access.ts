@@ -73,6 +73,38 @@ export async function resolveCurrentCollectionNicknameFromSession(
   return nickname || null;
 }
 
+/** Resolve a password-verified nickname against the current account activity and profile. */
+export async function resolveVerifiedCollectionNicknameFromSession(
+  storage: CollectionStoragePort,
+  user: CollectionAccessUser,
+): Promise<CollectionNicknameAuthProfile | null> {
+  if (!isCollectionAccessUserSnapshotUsable(user)) return null;
+  const activityId = normalizeCollectionText(user.activityId);
+  if (!activityId) return null;
+  const session = await storage.getCollectionNicknameSessionByActivity(activityId);
+  if (!session
+    || normalizeCollectionText(session.activityId) !== activityId
+    || normalizeCollectionText(session.username).toLowerCase() !== normalizeCollectionText(user.username).toLowerCase()
+    || session.userRole !== user.role) return null;
+
+  const nickname = normalizeCollectionText(session.nickname);
+  if (!nickname) return null;
+  const profile = await storage.getCollectionNicknameAuthProfileByName(nickname);
+  if (!profile?.isActive
+    || !isNicknameScopeAllowedForRole(profile.roleScope, user.role)
+    || !normalizeCollectionText(profile.nicknamePasswordHash)
+    || profile.mustChangePassword
+    || profile.passwordResetBySuperuser) return null;
+
+  const verifiedAt = new Date(session.verifiedAt).getTime();
+  if (!Number.isFinite(verifiedAt)) return null;
+  if (profile.passwordUpdatedAt !== null) {
+    const passwordUpdatedAt = new Date(profile.passwordUpdatedAt).getTime();
+    if (!Number.isFinite(passwordUpdatedAt) || verifiedAt < passwordUpdatedAt) return null;
+  }
+  return profile;
+}
+
 export async function getAdminGroupNicknameValues(
   storage: CollectionStoragePort,
   user: CollectionAccessUser,

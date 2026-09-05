@@ -60,7 +60,6 @@ export function startRuntimeWsHeartbeat({
         closedTrackedSockets += 1;
         cleanupClient(activityId, {
           expectedWs: ws,
-          clearSession: true,
           reason: "heartbeat-closed-socket",
         });
         continue;
@@ -95,7 +94,6 @@ export function startRuntimeWsHeartbeat({
         cleanupClient(activityId, {
           expectedWs: ws,
           closeWith: "terminate",
-          clearSession: true,
           reason: "heartbeat-timeout",
         });
         continue;
@@ -109,7 +107,6 @@ export function startRuntimeWsHeartbeat({
         cleanupClient(activityId, {
           expectedWs: ws,
           closeWith: "terminate",
-          clearSession: true,
           reason: "heartbeat-ping-failed",
         });
         logger.warn("WebSocket heartbeat ping failed; client removed", {

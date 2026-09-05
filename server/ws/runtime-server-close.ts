@@ -32,7 +32,6 @@ export function closeRuntimeWebSocketServerState(options: {
     cleanupClient(entry.activityId, {
       expectedWs: entry.ws,
       closeWith: "close",
-      clearSession: true,
       reason: "server-close",
     });
   }
@@ -40,7 +39,6 @@ export function closeRuntimeWebSocketServerState(options: {
     cleanupClient(activityId, {
       expectedWs: ws,
       closeWith: "close",
-      clearSession: true,
       reason: "server-close",
     });
   }

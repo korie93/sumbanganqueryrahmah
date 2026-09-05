@@ -439,8 +439,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
     const handleSocketClose = () => {
       const closedActivityId = activityId;
+      // A transport disconnect (including page reload) is not an account logout.
+      // Nickname verification remains bound to the authenticated activity; logout,
+      // moderation and credential changes revoke it independently.
       cleanupSocket({
-        clearSession: socketEntry !== null,
         reason: "socket-close",
       });
       if (closedActivityId) {
@@ -451,7 +453,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     const handleSocketError = (error: unknown) => {
       const erroredActivityId = activityId;
       cleanupSocket({
-        clearSession: socketEntry !== null,
         reason: "socket-error",
       });
       if (erroredActivityId) {
