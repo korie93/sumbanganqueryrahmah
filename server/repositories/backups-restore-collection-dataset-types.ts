@@ -164,6 +164,7 @@ export type RestorableCollectionRecordPurgeHistoryRow = {
 };
 
 export type RestorableCollectionOspSavedTargetRow = {
+  assignedAdminUserId: string | null;
   id: string;
   targetName: string;
   normalizedName: string;
@@ -206,6 +207,9 @@ export type RestorableCollectionOspTargetSourceRow = {
 };
 
 export type RestorableCollectionOspTargetSourceSnapshotRow = {
+  cardNumberEncrypted: string | null;
+  identificationNumberEncrypted: string | null;
+  phoneEncrypted: string | null;
   targetRevisionId: string;
   sourceImportId: string;
   sourceDataRowId: string;

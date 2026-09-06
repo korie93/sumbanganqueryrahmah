@@ -459,6 +459,8 @@ export type CollectionOspCalendarDay = {
 export type CollectionOspSavedTargetRevisionView = {
   id: string;
   revisionNumber: number;
+  /** False/absent for legacy caller-selected periods; never infer from today's source configuration. */
+  sourceValidityVerified?: boolean;
   from: string;
   to: string;
   trackingStartDate: string | null;
@@ -476,6 +478,8 @@ export type CollectionOspSavedTargetRevisionView = {
 
 export type CollectionOspSavedTargetView = {
   id: string;
+  assignedAdminUserId: string | null;
+  assignedAdmin: { id: string; username: string; fullName: string | null } | null;
   name: string;
   description: string | null;
   status: CollectionOspSavedTargetStatus;
@@ -485,6 +489,31 @@ export type CollectionOspSavedTargetView = {
   updatedAt: string;
 };
 
+/** Only construct from the authenticated session, never request JSON. */
+export type CollectionOspViewer = { userId: string; role: string };
+
+export type CollectionOspTargetOptionsInput = {
+  viewer: CollectionOspViewer;
+  sourceSearch: string;
+  adminSearch: string;
+  sourcePage: number;
+  adminPage: number;
+  pageSize: number;
+};
+export type CollectionOspTargetOptions = {
+  admins: Array<{ id: string; username: string; fullName: string | null }>;
+  sources: Array<{ id: string; name: string; filename: string; validFrom: string; validTo: string; recordCount: number; status: "active" }>;
+  adminsHasMore: boolean;
+  sourcesHasMore: boolean;
+  pageSize: number;
+};
+export type CollectionOspSourcePreview = {
+  from: string;
+  to: string;
+  sourceImportIds: string[];
+  rows: Array<{ aging: CollectionAgingBucket; totalOsp: string; accountCount: number }>;
+};
+
 export type CollectionOspClientResultView = {
   aging: CollectionAgingBucket;
   totalOsp: string;
@@ -492,6 +521,7 @@ export type CollectionOspClientResultView = {
   targetOsp: string;
   resultPercentage: string;
   ospClosed: string;
+  balanceOsp: string;
   note: string | null;
   reference: string | null;
   receivedDate: string | null;
@@ -577,6 +607,7 @@ export type CollectionOspCalendarDayView = {
   aging: CollectionAgingBucket | "ALL";
   totalOsp: string;
   targetOsp: string;
+  balanceOsp: string;
   systemOspClosedToday: string;
   systemCumulativeOspClosed: string;
   systemResultPercentage: string;
@@ -588,6 +619,12 @@ export type CollectionOspCalendarDayView = {
 
 export type CollectionOspDrilldownItemView = {
   contributionSource: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
+  accountNumber: string | null;
+  customerName: string | null;
+  identificationNumber: string | null;
+  phone: string | null;
+  paymentDate: string;
+  classification: "ABORT_CP" | "MANUAL_VERIFIED_ABORT";
   maskedAccountNumber: string;
   cardNumber: string | null;
   cardNumberLast4: string | null;

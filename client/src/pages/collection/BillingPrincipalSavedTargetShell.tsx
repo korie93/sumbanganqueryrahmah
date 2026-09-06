@@ -1,578 +1,153 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AlertCircle, BookmarkPlus, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { formatOperationalDateTime, parseDateValue } from "@/lib/date-format";
 import {
-  createBillingPrincipalSavedTarget,
-  deleteBillingPrincipalSavedTarget,
-  listBillingPrincipalSavedTargets,
-  prepareBillingPrincipalMutationAttempt,
-  updateBillingPrincipalSavedTarget,
-  type BillingPrincipalAging,
-  type BillingPrincipalSavedTarget,
-  type BillingPrincipalMutationAttempt,
-  type BillingPrincipalTargetInput,
+  deleteBillingPrincipalSavedTarget, getBillingPrincipalSavedTarget, listBillingPrincipalSavedTargets,
+  prepareBillingPrincipalMutationAttempt, type BillingPrincipalSavedTarget, type BillingPrincipalMutationAttempt,
 } from "@/lib/api/collection-billing-principal";
-import { parseApiError } from "@/pages/collection/utils";
-import { BillingPrincipalSavedTargetWorkspace } from "./BillingPrincipalSavedTargetWorkspace";
+import { parseApiError } from "./utils";
+import { BillingPrincipalSavedTargetDialog } from "./BillingPrincipalSavedTargetDialog";
+import { BillingPrincipalSavedTargetWorkspace, billingPrincipalWorkspaceLockMessage, type BillingPrincipalWorkspaceInteraction } from "./BillingPrincipalSavedTargetWorkspace";
 
-export type BillingPrincipalSavedTargetDefaults = {
-  sourceImportIds: string[];
-  from: string;
-  to: string;
-  nicknameScope: string[];
-  agingScope: BillingPrincipalAging[];
-  targets: BillingPrincipalTargetInput[];
-  ready: boolean;
-};
-
-function isAbortError(error: unknown) {
-  return error instanceof Error && error.name === "AbortError";
+export function BillingPrincipalSavedTargetUpdatedAt({ value }: { value: string }) {
+  const parsed = parseDateValue(value);
+  return <p className="text-xs text-muted-foreground">Last updated: {parsed
+    ? <time className="tabular-nums" dateTime={parsed.toISOString()}>{formatOperationalDateTime(parsed)} MYT (UTC+08:00)</time>
+    : "Unavailable"}</p>;
 }
 
-function nullableText(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
-function CreateSavedTargetDialog({
-  defaults,
-  disabled,
-  onCreated,
-}: {
-  defaults: BillingPrincipalSavedTargetDefaults;
-  disabled: boolean;
-  onCreated: (target: BillingPrincipalSavedTarget) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [trackingStartDate, setTrackingStartDate] = useState(defaults.from);
-  const [trackingEndDate, setTrackingEndDate] = useState(defaults.to);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const savingRef = useRef(false);
-  const attemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
-  const saveControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => () => {
-    saveControllerRef.current?.abort();
-    saveControllerRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    setName("");
-    setDescription("");
-    setTrackingStartDate(defaults.from);
-    setTrackingEndDate(defaults.to);
-    setError("");
-  }, [defaults.from, defaults.to, open]);
-
-  const save = async () => {
-    if (savingRef.current) return;
-    const normalizedName = name.trim();
-    if (!normalizedName) {
-      setError("Target name is required.");
-      return;
-    }
-    if (!trackingStartDate || trackingStartDate < defaults.from || trackingStartDate > defaults.to) {
-      setError("Tracking start must be inside the target period.");
-      return;
-    }
-    if (trackingEndDate && (trackingEndDate < trackingStartDate || trackingEndDate > defaults.to)) {
-      setError("Tracking end must be on or after tracking start and inside the target period.");
-      return;
-    }
-
-    const payload = {
-      name: normalizedName,
-      description: nullableText(description),
-      sourceImportIds: defaults.sourceImportIds,
-      from: defaults.from,
-      to: defaults.to,
-      trackingStartDate,
-      trackingEndDate: trackingEndDate || null,
-      nicknameScope: defaults.nicknameScope,
-      agingScope: defaults.agingScope,
-      targets: defaults.targets,
-    };
-    const attempt = prepareBillingPrincipalMutationAttempt(
-      "saved-target:create",
-      payload,
-      attemptRef.current,
-    );
-    attemptRef.current = attempt;
-    saveControllerRef.current?.abort();
-    const controller = new AbortController();
-    saveControllerRef.current = controller;
-    savingRef.current = true;
-    setSaving(true);
-    setError("");
-    try {
-      const response = await createBillingPrincipalSavedTarget(payload, {
-        ...attempt,
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-      attemptRef.current = null;
-      setOpen(false);
-      onCreated(response.target);
-    } catch (caught) {
-      if (!controller.signal.aborted && !isAbortError(caught)) setError(parseApiError(caught));
-    } finally {
-      if (saveControllerRef.current === controller) {
-        saveControllerRef.current = null;
-        savingRef.current = false;
-        setSaving(false);
-      }
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !saving && setOpen(nextOpen)}>
-      <DialogTrigger asChild>
-        <Button type="button" disabled={disabled}>
-          <BookmarkPlus className="mr-2 h-4 w-4" aria-hidden="true" />
-          Save Current Target
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Create Saved Target</DialogTitle>
-          <DialogDescription>
-            Freeze the current source, date, nickname, aging, baseline, and target settings as an immutable revision.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="billing-saved-target-name">Target name</Label>
-            <Input
-              id="billing-saved-target-name"
-              value={name}
-              maxLength={120}
-              autoComplete="off"
-              onChange={(event) => setName(event.target.value)}
-              disabled={saving}
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="billing-saved-target-description">Description (optional)</Label>
-            <Textarea
-              id="billing-saved-target-description"
-              value={description}
-              maxLength={1000}
-              onChange={(event) => setDescription(event.target.value)}
-              disabled={saving}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="billing-tracking-start">Tracking start</Label>
-            <Input
-              id="billing-tracking-start"
-              type="date"
-              value={trackingStartDate}
-              min={defaults.from}
-              max={trackingEndDate || defaults.to}
-              onChange={(event) => setTrackingStartDate(event.target.value)}
-              disabled={saving}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="billing-tracking-end">Tracking end (optional)</Label>
-            <Input
-              id="billing-tracking-end"
-              type="date"
-              value={trackingEndDate}
-              min={trackingStartDate || defaults.from}
-              max={defaults.to}
-              onChange={(event) => setTrackingEndDate(event.target.value)}
-              disabled={saving}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
-          {defaults.sourceImportIds.length} source{defaults.sourceImportIds.length === 1 ? "" : "s"} · {defaults.from} to {defaults.to} · {defaults.agingScope.join(", ")}
-        </div>
-        {error ? (
-          <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={() => void save()} disabled={saving}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-            {saving ? "Creating..." : "Create Target"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EditSavedTargetDialog({
-  target,
-  onUpdated,
-}: {
-  target: BillingPrincipalSavedTarget;
-  onUpdated: (target: BillingPrincipalSavedTarget) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState(target.name);
-  const [description, setDescription] = useState(target.description || "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const savingRef = useRef(false);
-  const attemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
-  const saveControllerRef = useRef<AbortController | null>(null);
-  useEffect(() => () => {
-    saveControllerRef.current?.abort();
-    saveControllerRef.current = null;
-  }, []);
-  useEffect(() => {
-    if (!open) return;
-    setName(target.name);
-    setDescription(target.description || "");
-    setError("");
-  }, [open, target.description, target.name]);
-
-  const save = async () => {
-    if (savingRef.current) return;
-    const normalizedName = name.trim();
-    if (!normalizedName) {
-      setError("Target name is required.");
-      return;
-    }
-    const payload = {
-      name: normalizedName,
-      description: nullableText(description),
-      version: target.version,
-    };
-    const attempt = prepareBillingPrincipalMutationAttempt(
-      "saved-target:update",
-      { targetId: target.id, payload },
-      attemptRef.current,
-    );
-    attemptRef.current = attempt;
-    saveControllerRef.current?.abort();
-    const controller = new AbortController();
-    saveControllerRef.current = controller;
-    savingRef.current = true;
-    setSaving(true);
-    setError("");
-    try {
-      const response = await updateBillingPrincipalSavedTarget(
-        target.id,
-        payload,
-        { ...attempt, signal: controller.signal },
-      );
-      if (controller.signal.aborted) return;
-      attemptRef.current = null;
-      setOpen(false);
-      onUpdated(response.target);
-    } catch (caught) {
-      if (!controller.signal.aborted && !isAbortError(caught)) setError(parseApiError(caught));
-    } finally {
-      if (saveControllerRef.current === controller) {
-        saveControllerRef.current = null;
-        savingRef.current = false;
-        setSaving(false);
-      }
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !saving && setOpen(nextOpen)}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline">
-          <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> Edit Target
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Edit Saved Target</DialogTitle>
-          <DialogDescription>
-            Update display metadata only. The source, period, baseline, and target revision remain immutable.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="billing-edit-target-name">Target name</Label>
-            <Input
-              id="billing-edit-target-name"
-              value={name}
-              maxLength={120}
-              autoComplete="off"
-              onChange={(event) => setName(event.target.value)}
-              disabled={saving}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="billing-edit-target-description">Description (optional)</Label>
-            <Textarea
-              id="billing-edit-target-description"
-              value={description}
-              maxLength={1000}
-              onChange={(event) => setDescription(event.target.value)}
-              disabled={saving}
-            />
-          </div>
-          <p className="rounded-xl border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
-            Revision {target.activeRevision.revisionNumber} remains unchanged.
-          </p>
-        </div>
-        {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-          <Button type="button" onClick={() => void save()} disabled={saving}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-            {saving ? "Saving..." : "Save Metadata"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function BillingPrincipalSavedTargetShell({
-  role,
-  defaults,
-  children,
-}: {
-  role: string;
-  defaults: BillingPrincipalSavedTargetDefaults;
-  children: ReactNode;
-}) {
+export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
   const [targets, setTargets] = useState<BillingPrincipalSavedTarget[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [interaction, setInteraction] = useState<(BillingPrincipalWorkspaceInteraction & { workspaceKey: string }) | null>(null);
   const [error, setError] = useState("");
   const [reloadVersion, setReloadVersion] = useState(0);
-  const deletingRef = useRef(false);
   const deleteAttemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
   const deleteControllerRef = useRef<AbortController | null>(null);
+  const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? null;
+  const workspaceKey = selectedTarget ? `${selectedTarget.id}:${selectedTarget.activeRevision.id}:${selectedTarget.version}` : "";
+  const interactionMessage = interaction?.workspaceKey === workspaceKey ? billingPrincipalWorkspaceLockMessage(interaction) : "";
+  const workspaceLocked = Boolean(interactionMessage);
+  const controlsLocked = loading || deleting || configOpen || workspaceLocked;
+  const handleInteractionChange = useCallback((state: BillingPrincipalWorkspaceInteraction) => {
+    setInteraction({ ...state, workspaceKey });
+  }, [workspaceKey]);
 
-  useEffect(() => () => {
-    deleteControllerRef.current?.abort();
-    deleteControllerRef.current = null;
-  }, []);
-
+  useEffect(() => () => deleteControllerRef.current?.abort(), []);
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setError("");
-    listBillingPrincipalSavedTargets({ signal: controller.signal })
+    setLoading(true); setTargets([]); setHasMore(false); setError("");
+    void listBillingPrincipalSavedTargets({ page, pageSize: 50, signal: controller.signal })
       .then((response) => {
         if (controller.signal.aborted) return;
-        const activeTargets = response.targets.filter((target) => target.status === "ACTIVE");
-        setTargets(activeTargets);
-        setSelectedTargetId((current) => (
-          activeTargets.some((target) => target.id === current)
-            ? current
-            : activeTargets[0]?.id ?? ""
-        ));
+        setTargets(response.targets); setHasMore(response.hasMore);
+        setSelectedTargetId((current) => response.targets.some((target) => target.id === current) ? current : response.targets[0]?.id ?? "");
       })
-      .catch((caught) => {
-        if (!controller.signal.aborted && !isAbortError(caught)) {
-          setError(parseApiError(caught));
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+      .catch((caught: unknown) => { if (!controller.signal.aborted) { setSelectedTargetId(""); setError(parseApiError(caught)); } })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [reloadVersion, role]);
+  }, [page, reloadVersion, role]);
 
-  const selectedTarget = useMemo(
-    () => targets.find((target) => target.id === selectedTargetId) || null,
-    [selectedTargetId, targets],
-  );
+  useEffect(() => {
+    if (!selectedTarget) return;
+    let controller: AbortController | null = null;
+    const revalidate = () => {
+      if (document.visibilityState !== "visible") return;
+      controller?.abort();
+      const request = new AbortController(); controller = request;
+      void getBillingPrincipalSavedTarget(selectedTarget.id, { signal: request.signal })
+        .then(({ target }) => {
+          if (request.signal.aborted) return;
+          // Keep a live private draft or operation mounted. Access errors below
+          // still clear immediately; successful metadata updates can wait.
+          if (!workspaceLocked && !configOpen && !deleting && target.version !== selectedTarget.version) {
+            setTargets((current) => current.map((item) => item.id === target.id ? target : item));
+          }
+        })
+        .catch((caught: unknown) => {
+          if (request.signal.aborted) return;
+          // Unmount private/PII state whenever live access cannot be established.
+          setTargets([]); setSelectedTargetId(""); setError(parseApiError(caught));
+        });
+    };
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", revalidate);
+    // Apply deferred shared changes only after fresh authorization, once idle.
+    if (!workspaceLocked && !configOpen && !deleting) revalidate();
+    return () => { controller?.abort(); window.removeEventListener("focus", revalidate); document.removeEventListener("visibilitychange", revalidate); };
+  }, [configOpen, deleting, selectedTarget, workspaceLocked]);
 
   const deleteTarget = async () => {
-    if (!selectedTarget || deletingRef.current) return;
-    const attempt = prepareBillingPrincipalMutationAttempt(
-      "saved-target:delete",
-      { targetId: selectedTarget.id, version: selectedTarget.version },
-      deleteAttemptRef.current,
-    );
+    if (!selectedTarget || deleteControllerRef.current || workspaceLocked || configOpen) return;
+    const attempt = prepareBillingPrincipalMutationAttempt("saved-target:delete", { targetId: selectedTarget.id, version: selectedTarget.version }, deleteAttemptRef.current);
     deleteAttemptRef.current = attempt;
-    deleteControllerRef.current?.abort();
-    const controller = new AbortController();
-    deleteControllerRef.current = controller;
-    deletingRef.current = true;
-    setDeleting(true);
-    setError("");
+    const controller = new AbortController(); deleteControllerRef.current = controller;
+    setDeleting(true); setError("");
     try {
-      await deleteBillingPrincipalSavedTarget(
-        selectedTarget.id,
-        selectedTarget.version,
-        { ...attempt, signal: controller.signal },
-      );
+      await deleteBillingPrincipalSavedTarget(selectedTarget.id, selectedTarget.version, { ...attempt, signal: controller.signal });
       if (controller.signal.aborted) return;
-      deleteAttemptRef.current = null;
-      setDeleteOpen(false);
-      setSelectedTargetId("");
-      setReloadVersion((value) => value + 1);
+      deleteAttemptRef.current = null; setDeleteOpen(false); setSelectedTargetId("");
+      setPage(1); setReloadVersion((value) => value + 1);
     } catch (caught) {
-      if (!controller.signal.aborted && !isAbortError(caught)) setError(parseApiError(caught));
+      if (!controller.signal.aborted) setError(parseApiError(caught));
     } finally {
-      if (deleteControllerRef.current === controller) {
-        deleteControllerRef.current = null;
-        deletingRef.current = false;
-        setDeleting(false);
-      }
+      if (!controller.signal.aborted) { deleteControllerRef.current = null; setDeleting(false); }
     }
   };
 
-  return (
-    <div className="space-y-5">
-      <section aria-labelledby="billing-target-workspace-heading" className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id="billing-target-workspace-heading" className="font-semibold">Billing Principal Workspace</h2>
-              <Badge variant={selectedTarget ? "default" : "outline"} className="rounded-full">
-                {selectedTarget ? `Revision ${selectedTarget.activeRevision.revisionNumber}` : "No saved target"}
-              </Badge>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Select a saved target for governed System and Client reporting.
-            </p>
-            <Label htmlFor="billing-saved-target-select" className="mt-3 block">Saved target</Label>
-            <select
-              id="billing-saved-target-select"
-              className="mt-1.5 min-h-11 w-full max-w-xl rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-9"
-              value={selectedTargetId}
-              onChange={(event) => setSelectedTargetId(event.target.value)}
-              disabled={loading && targets.length === 0}
-            >
-              <option value="" disabled>Select a saved target</option>
-              {targets.map((target) => (
-                <option key={target.id} value={target.id}>
-                  {target.name} · rev {target.activeRevision.revisionNumber}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setReloadVersion((value) => value + 1)}
-              disabled={loading}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
-              Reload Targets
-            </Button>
-            {role === "superuser" ? (
-              <CreateSavedTargetDialog
-                defaults={defaults}
-                disabled={!defaults.ready}
-                onCreated={(target) => {
-                  setTargets((current) => [target, ...current.filter((item) => item.id !== target.id)]);
-                  setSelectedTargetId(target.id);
-                  setReloadVersion((value) => value + 1);
-                }}
-              />
-            ) : null}
-            {role === "superuser" && selectedTarget ? (
-              <>
-                <EditSavedTargetDialog
-                  target={selectedTarget}
-                  onUpdated={(target) => {
-                    setTargets((current) => current.map((item) => item.id === target.id ? target : item));
-                  }}
-                />
-                <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)} disabled={deleting}>
-                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Delete Target
-                </Button>
-              </>
-            ) : null}
-          </div>
+  return <div className="min-w-0 space-y-5">
+    <section aria-labelledby="billing-target-workspace-heading" className="rounded-xl border bg-card p-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0 flex-1">
+          <h2 id="billing-target-workspace-heading" className="font-semibold">Billing Principal (OSP)</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Shared system targets and your private client results.</p>
+          <Label htmlFor="billing-saved-target-select" className="mt-3 block">Saved target</Label>
+          <select id="billing-saved-target-select" className="mt-1.5 min-h-10 w-full max-w-2xl rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={selectedTargetId} onChange={(event) => { if (!controlsLocked) setSelectedTargetId(event.target.value); }} disabled={controlsLocked} aria-describedby={workspaceLocked ? "billing-workspace-lock-guidance" : undefined}>
+            <option value="" disabled>Select a saved target</option>
+            {targets.map((target) => <option key={target.id} value={target.id}>{target.name} — {target.assignedAdmin?.username ?? "Unassigned (legacy)"}</option>)}
+          </select>
+          {page > 1 || hasMore ? <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <Button type="button" size="sm" variant="ghost" disabled={controlsLocked || page === 1} onClick={() => { if (!controlsLocked) setPage((value) => value - 1); }}>Previous targets</Button>
+            <span>Page {page}</span><Button type="button" size="sm" variant="ghost" disabled={controlsLocked || !hasMore} onClick={() => { if (!controlsLocked) setPage((value) => value + 1); }}>Next targets</Button>
+          </div> : null}
         </div>
-
-        {error ? (
-          <div role="alert" className="mt-4 flex gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
-        ) : null}
-      </section>
-
-      {selectedTarget ? (
-        <BillingPrincipalSavedTargetWorkspace
-          key={`${selectedTarget.id}:${selectedTarget.activeRevision.id}`}
-          role={role}
-          target={selectedTarget}
-        />
-      ) : loading ? (
-        <div className="flex min-h-40 items-center justify-center rounded-2xl border border-border/70 bg-card text-sm text-muted-foreground" role="status">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Loading saved target…
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => { if (!controlsLocked) setReloadVersion((value) => value + 1); }} disabled={controlsLocked}><RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />Reload Targets</Button>
+          {role === "superuser" ? <BillingPrincipalSavedTargetDialog disabled={controlsLocked} onOpenChange={setConfigOpen} onSaved={(target) => { setSelectedTargetId(target.id); setPage(1); setReloadVersion((value) => value + 1); }} /> : null}
+          {role === "superuser" && selectedTarget && !deleting ? <>
+            <BillingPrincipalSavedTargetDialog key={selectedTarget.id + ":" + selectedTarget.version} target={selectedTarget} disabled={controlsLocked} onOpenChange={setConfigOpen} onSaved={(target) => setTargets((current) => current.map((item) => item.id === target.id ? target : item))} />
+            <Button type="button" variant="outline" disabled={controlsLocked} onClick={() => { if (!controlsLocked) setDeleteOpen(true); }}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Delete Target</Button>
+          </> : null}
         </div>
-      ) : targets.length === 0 && role === "superuser" ? children : (
-        <div className="rounded-2xl border border-dashed border-border/70 bg-card p-6 text-center">
-          <p className="font-medium">No governed Saved Target is available.</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A superuser must create a Saved Target before Table A and Table B can be viewed.
-          </p>
-        </div>
-      )}
-
-      <AlertDialog open={deleteOpen} onOpenChange={(nextOpen) => !deleting && setDeleteOpen(nextOpen)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete saved target?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {selectedTarget?.name || "This target"} will be soft-deleted. Its immutable revisions and audit records remain retained.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleting}
-              onClick={(event) => {
-                event.preventDefault();
-                void deleteTarget();
-              }}
-            >
-              {deleting ? "Deleting..." : "Delete Target"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
+      </div>
+      {interactionMessage ? <p id="billing-workspace-lock-guidance" role="status" className="mt-4 rounded-md border border-primary/20 bg-primary/5 p-3 text-sm">{interactionMessage}</p> : null}
+      {selectedTarget ? <div className="mt-4 space-y-2 border-t pt-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{selectedTarget.assignedAdmin ? "Admin: " + selectedTarget.assignedAdmin.username : "Legacy — no assigned admin"}</Badge><span className="tabular-nums text-muted-foreground">{selectedTarget.activeRevision.from} — {selectedTarget.activeRevision.to}</span></div>
+        <p className="break-words text-muted-foreground">{selectedTarget.activeRevision.sourceSnapshots.map((source) => source.name + " · " + (source.filename || "Saved source")).join("; ")}</p>
+        <BillingPrincipalSavedTargetUpdatedAt value={selectedTarget.updatedAt} />
+        {!selectedTarget.activeRevision.sourceValidityVerified ? <p className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">Legacy saved period: configured source validity was not recorded by this version. Historical dates and balances are retained. A superuser can create a new target from Configure Collection Source for a verified period.</p> : null}
+        {selectedTarget.description ? <p className="whitespace-pre-wrap break-words text-muted-foreground">{selectedTarget.description}</p> : null}
+      </div> : null}
+      {error ? <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
+    </section>
+    {loading ? <div role="status" className="flex min-h-40 items-center justify-center gap-2 rounded-xl border bg-card text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading saved targets…</div>
+      : selectedTarget ? <BillingPrincipalSavedTargetWorkspace key={workspaceKey} role={role} target={selectedTarget} onInteractionChange={handleInteractionChange} />
+        : <div className="rounded-xl border border-dashed bg-card p-6 text-center"><p className="font-medium">No saved target is available.</p><p className="mt-1 text-sm text-muted-foreground">{role === "superuser" ? "Create a target using an admin account and configured Saved source." : "A superuser can create or assign a target for this account."}</p></div>}
+    <AlertDialog open={deleteOpen} onOpenChange={(value) => { if (!deleting) setDeleteOpen(value); }}>
+      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete saved target?</AlertDialogTitle><AlertDialogDescription>{selectedTarget?.name ?? "This target"} will be deactivated. Source files, Collection records, private results and audit history are retained.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleting || workspaceLocked || configOpen} onClick={(event) => { event.preventDefault(); void deleteTarget(); }}>{deleting ? "Deleting…" : "Delete Target"}</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </div>;
 }

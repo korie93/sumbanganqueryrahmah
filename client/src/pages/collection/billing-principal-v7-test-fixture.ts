@@ -7,6 +7,7 @@ const systemRow = {
   targetOsp: "5000.00",
   resultPercentage: "80.0000",
   ospClosed: "8000.00",
+  balanceOsp: "-3000.00",
   closedAccountCount: 1,
 };
 
@@ -30,6 +31,8 @@ export function createBillingPrincipalVisualExportFixture(): BillingPrincipalVis
     description: "Target export fixture",
     status: "ACTIVE" as const,
     version: 1,
+    assignedAdminUserId: "admin-internal-id",
+    assignedAdmin: { id: "admin-internal-id", username: "admin", fullName: "Assigned Admin" },
     activeRevision: revision,
     createdAt: "2026-09-01T00:00:00.000Z",
     updatedAt: "2026-09-01T00:00:00.000Z",
@@ -41,6 +44,7 @@ export function createBillingPrincipalVisualExportFixture(): BillingPrincipalVis
     targetOsp: "5000.00",
     resultPercentage: "75.0000",
     ospClosed: "7500.00",
+    balanceOsp: "-2500.00",
     note: "Client checkpoint",
     reference: "CLIENT-REF-1",
     receivedDate: "2026-09-20",
@@ -51,6 +55,7 @@ export function createBillingPrincipalVisualExportFixture(): BillingPrincipalVis
     ok: true,
     generatedAt: "2026-09-20T03:00:00.000Z",
     generatedBy: "superuser",
+    generatedByUserId: "superuser-owner-id",
     filters: { asOf: "2026-09-20", from: "2026-09-01", to: "2026-09-20", date: "2026-09-10", aging: "D3" },
     overview: {
       target,
@@ -67,6 +72,7 @@ export function createBillingPrincipalVisualExportFixture(): BillingPrincipalVis
     calendar: [{
       date: "2026-09-10", aging: "ALL", totalOsp: "10000.00", targetOsp: "5000.00",
       systemOspClosedToday: "8000.00", systemCumulativeOspClosed: "8000.00",
+      balanceOsp: "-3000.00",
       systemResultPercentage: "80.0000", systemPreviousResultPercentage: "0.0000",
       systemDailyMovementPercentagePoints: "80.0000", systemAchievementVsTargetPercentage: "160.0000",
       systemDailyAccounts: 1,
@@ -77,6 +83,9 @@ export function createBillingPrincipalVisualExportFixture(): BillingPrincipalVis
       cardNumber: "4111111111119876",
       cardNumberLast4: "9876",
       maskedCustomerName: "A•••• B••••",
+      accountNumber: "0000004321", customerName: "Example Customer",
+      identificationNumber: "900101-10-1234", phone: "012-3456789",
+      paymentDate: "2026-09-10", classification: "MANUAL_VERIFIED_ABORT",
       sourceName: "Saved masterlisting",
       sourceFilename: "masterlisting.xlsb",
       callingDate: "2026-09-01",

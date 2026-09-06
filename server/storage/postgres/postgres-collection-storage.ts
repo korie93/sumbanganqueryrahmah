@@ -307,12 +307,20 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.upsertCollectionOspTargets(input);
   }
 
-  async listCollectionOspSavedTargets(options?: { includeDeleted?: boolean }) {
+  async listCollectionOspSavedTargets(options?: Parameters<typeof this.collectionRepository.listCollectionOspSavedTargets>[0]) {
     return this.collectionRepository.listCollectionOspSavedTargets(options);
   }
 
-  async getCollectionOspSavedTarget(targetId: string, revisionId?: string) {
-    return this.collectionRepository.getCollectionOspSavedTarget(targetId, revisionId);
+  async getCollectionOspTargetOptions(input: Parameters<typeof this.collectionRepository.getCollectionOspTargetOptions>[0]) {
+    return this.collectionRepository.getCollectionOspTargetOptions(input);
+  }
+
+  async previewCollectionOspSourceScope(input: Parameters<typeof this.collectionRepository.previewCollectionOspSourceScope>[0]) {
+    return this.collectionRepository.previewCollectionOspSourceScope(input);
+  }
+
+  async getCollectionOspSavedTarget(targetId: string, revisionId?: string, viewer?: Parameters<typeof this.collectionRepository.getCollectionOspSavedTarget>[2]) {
+    return this.collectionRepository.getCollectionOspSavedTarget(targetId, revisionId, viewer);
   }
 
   async createCollectionOspSavedTarget(input: Parameters<typeof this.collectionRepository.createCollectionOspSavedTarget>[0]) {

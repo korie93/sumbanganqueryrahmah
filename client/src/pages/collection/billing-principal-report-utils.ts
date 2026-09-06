@@ -55,9 +55,9 @@ export function isValidOspMoneyInput(value: unknown, options?: { allowZero?: boo
 }
 
 export function isValidOspPercentageInput(value: unknown): boolean {
-  if (!hasAtMostScale(value, 4)) return false;
-  const units = decimalToUnits(value, 4, false);
-  return units !== null && units >= 0n && units <= 1_000_000n;
+  // Match the backend's unsigned decimal grammar before any display-number parsing.
+  // Commas and signs must not become valid percentages through normalization.
+  return /^(?:100(?:\.0{1,4})?|\d{1,2}(?:\.\d{1,4})?)$/.test(String(value ?? "").trim());
 }
 
 export function subtractOspMoney(left: unknown, right: unknown): string | null {
@@ -117,6 +117,26 @@ export function calculateTargetOspPreview(totalOsp: unknown, targetPercentage: u
   const divisor = 1_000_000n;
   const product = totalCents * percentageUnits;
   return unitsToDecimal((product + divisor / 2n) / divisor, 2);
+}
+
+export function calculateOspClientPreview(input: ReadonlyArray<{
+  aging: BillingPrincipalAging; totalOsp: string; targetPercentage: string; resultPercentage: string;
+}>) {
+  if (input.some((row) => !isValidOspMoneyInput(row.totalOsp, { allowZero: true })
+    || !isValidOspPercentageInput(row.targetPercentage) || !isValidOspPercentageInput(row.resultPercentage))) return null;
+  const rows = input.map((row) => {
+    const targetOsp = calculateTargetOspPreview(row.totalOsp, row.targetPercentage);
+    const ospClosed = calculateTargetOspPreview(row.totalOsp, row.resultPercentage);
+    return { ...row, targetOsp, ospClosed, balanceOsp: subtractOspMoney(targetOsp, ospClosed)! };
+  });
+  const sum = (field: "totalOsp" | "targetOsp" | "ospClosed") => rows.reduce((total, row) => total + decimalToUnits(row[field], 2)!, 0n);
+  const total = sum("totalOsp");
+  const target = sum("targetOsp");
+  const closed = sum("ospClosed");
+  const percentage = (amount: bigint) => total === 0n ? "0.0000" : unitsToDecimal((amount * 1_000_000n + total / 2n) / total, 4);
+  return { rows, all: { aging: "ALL" as const, totalOsp: unitsToDecimal(total, 2), targetOsp: unitsToDecimal(target, 2),
+    ospClosed: unitsToDecimal(closed, 2), balanceOsp: unitsToDecimal(target - closed, 2),
+    targetPercentage: percentage(target), resultPercentage: percentage(closed) } };
 }
 
 export function filterBillingPrincipalRows(

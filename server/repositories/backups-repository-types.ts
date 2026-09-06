@@ -34,8 +34,12 @@ export type RestoreDatasetStats = {
 };
 
 export type BackupUserRecord = {
+  id?: string;
   username: string;
   role: string;
+  status?: string;
+  mustChangePassword?: boolean;
+  passwordResetBySuperuser?: boolean;
   isBanned: boolean | null;
   passwordHash?: string;
   twoFactorEnabled?: boolean;
@@ -149,6 +153,7 @@ export type BackupCollectionOspTarget = {
 };
 
 export type BackupCollectionOspSavedTarget = {
+  assignedAdminUserId?: string | null;
   id: string;
   targetName: string;
   normalizedName: string;
@@ -191,6 +196,9 @@ export type BackupCollectionOspTargetSource = {
 };
 
 export type BackupCollectionOspTargetSourceRow = {
+  cardNumberEncrypted?: string | null;
+  identificationNumberEncrypted?: string | null;
+  phoneEncrypted?: string | null;
   targetRevisionId: string;
   sourceImportId: string;
   sourceDataRowId: string;
@@ -234,6 +242,10 @@ export type BackupCollectionOspClientResult = {
   updatedBy: string;
   updatedAt: string | Date;
 };
+
+// Private financial values and their stable owner/revision binding stay encrypted
+// even when a superuser downloads the outer backup as JSON.
+export type BackupCollectionOspPrivateClientResult = { id: string; payloadEncrypted: string };
 
 export type BackupCollectionOspManualReconciliation = {
   id: string;
@@ -363,6 +375,7 @@ export type BackupDataPayload = {
   collectionOspTargetSourceRows?: BackupCollectionOspTargetSourceRow[];
   collectionOspTargetAgingRows?: BackupCollectionOspTargetAgingRow[];
   collectionOspClientResults?: BackupCollectionOspClientResult[];
+  collectionOspPrivateClientResults?: BackupCollectionOspPrivateClientResult[];
   collectionOspManualReconciliations?: BackupCollectionOspManualReconciliation[];
   collectionOspManualReconciliationAudit?: BackupCollectionOspManualReconciliationAudit[];
 };
@@ -384,6 +397,7 @@ export type BackupPayloadCounts = {
   collectionOspTargetSourceRowsCount: number;
   collectionOspTargetAgingRowsCount: number;
   collectionOspClientResultsCount: number;
+  collectionOspPrivateClientResultsCount: number;
   collectionOspManualReconciliationsCount: number;
   collectionOspManualReconciliationAuditCount: number;
 };
@@ -438,6 +452,7 @@ export type RestoreStats = {
   collectionOspTargetSourceRows: RestoreDatasetStats;
   collectionOspTargetAgingRows: RestoreDatasetStats;
   collectionOspClientResults: RestoreDatasetStats;
+  collectionOspPrivateClientResults: RestoreDatasetStats;
   collectionOspManualReconciliations: RestoreDatasetStats;
   collectionOspManualReconciliationAudit: RestoreDatasetStats;
   warnings: string[];

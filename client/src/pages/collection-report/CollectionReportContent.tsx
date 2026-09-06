@@ -68,6 +68,12 @@ export function CollectionReportContent({
   subPage,
   onOpenNicknameDialog,
 }: CollectionReportContentProps) {
+  // Billing is account-assigned; this bypass does not grant nickname-scoped Collection access.
+  if (subPage === "billing-principal") {
+    return ["admin", "manager", "superuser"].includes(role)
+      ? renderCollectionSection("billing-principal", <BillingPrincipalReportPage role={role} />)
+      : <p role="alert">Billing OSP is available to authorized staff accounts only.</p>;
+  }
   if (checkingNicknameSession) {
     return (
       <OperationalSectionCard title="Menyemak sesi nickname">
@@ -131,12 +137,6 @@ export function CollectionReportContent({
   }
   if (subPage === "daily") {
     return renderCollectionSection("daily", <CollectionDailyPage role={role} />);
-  }
-  if (subPage === "billing-principal") {
-    return renderCollectionSection(
-      "billing-principal",
-      <BillingPrincipalReportPage role={role} />,
-    );
   }
   if (subPage === "nickname-summary") {
     return renderCollectionSection(

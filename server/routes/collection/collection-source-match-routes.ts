@@ -72,14 +72,14 @@ export function registerCollectionSourceMatchRoutes(context: CollectionRouteCont
 
   app.get(
     "/api/collection/report/billing-principal",
-    ...reportAccess,
+    ...superuserReportAccess,
     jsonRoute("Failed to load Billing Principal report.", (req) =>
       collectionService.getBillingPrincipalReport(req.user, readQueryObject(req.query))),
   );
 
   app.get(
     "/api/collection/report/billing-principal/targets",
-    ...reportAccess,
+    ...superuserReportAccess,
     jsonRoute("Failed to load Billing Principal targets.", (req) =>
       collectionService.getBillingPrincipalTargets(req.user, readQueryObject(req.query))),
   );

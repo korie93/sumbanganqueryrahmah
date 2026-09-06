@@ -3,11 +3,45 @@ import test from "node:test";
 import {
   aggregateCollectionOspReconciliation,
   buildCollectionOspReconciliationCalendar,
+  calculateCollectionOspBalance,
+  calculateCollectionOspPercentageAmount,
   formatCollectionOspPercentage,
   parseCollectionOspMoneyCents,
+  normalizeCollectionOspTargetPercentage,
   reconcileCollectionOspAccount,
   type CollectionOspReconciliationAccountInput,
 } from "./collection-osp-reconciliation";
+
+test("V3 Balance OSP uses target minus closed, including signed and zero results", () => {
+  const target = calculateCollectionOspPercentageAmount("1000000.00", "30");
+  const clientClosed = calculateCollectionOspPercentageAmount("1000000.00", "25");
+  assert.equal(target, "300000.00");
+  assert.equal(calculateCollectionOspBalance(target, "250000.00"), "50000.00");
+  assert.equal(calculateCollectionOspBalance(target, clientClosed), "50000.00");
+  assert.equal(calculateCollectionOspBalance(target, "350000.00"), "-50000.00");
+  assert.equal(calculateCollectionOspBalance("0.00", "0.00"), "0.00");
+  assert.equal(calculateCollectionOspBalance("600000.00", "370000.00"), "230000.00");
+  assert.equal(calculateCollectionOspPercentageAmount("0.01", "50"), "0.01");
+  assert.equal(calculateCollectionOspBalance("99999999999999.99", "99999999999999.98"), "0.01");
+  assert.equal(normalizeCollectionOspTargetPercentage("09.1"), "9.1000");
+  for (const invalid of ["101", "-1", "1.23456", "1e1", "NaN", "Infinity", "1,000"]) {
+    assert.throws(() => calculateCollectionOspPercentageAmount("1000000.00", invalid));
+  }
+});
+
+test("V3 each private reference derives independent target, closed and balance values", () => {
+  for (const [targetPercent, resultPercent, expectedTarget, expectedClosed, expectedBalance] of [
+    ["25", "20", "250000.00", "200000.00", "50000.00"],
+    ["35", "28", "350000.00", "280000.00", "70000.00"],
+    ["40", "30", "400000.00", "300000.00", "100000.00"],
+  ]) {
+    const target = calculateCollectionOspPercentageAmount("1000000.00", targetPercent!);
+    const closed = calculateCollectionOspPercentageAmount("1000000.00", resultPercent!);
+    assert.equal(target, expectedTarget);
+    assert.equal(closed, expectedClosed);
+    assert.equal(calculateCollectionOspBalance(target, closed), expectedBalance);
+  }
+});
 
 function account(overrides: Partial<CollectionOspReconciliationAccountInput> = {}) {
   return reconcileCollectionOspAccount({

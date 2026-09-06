@@ -57,6 +57,31 @@ test("V7 PII status treats malformed empty snapshots as unreadable", () => {
   assert.deepEqual(result.unreadableFields, ["accountNumber", "customerName"]);
 });
 
+test("OSP V3 retirement inspects card, identification and phone rather than skipping new ciphertext", () => {
+  assert.deepEqual(inspectCollectionV7PiiRow({
+    account_number_encrypted: null, customer_name_encrypted: null,
+    card_number_encrypted: "", identification_number_encrypted: "broken", phone_encrypted: " ",
+  }).unreadableFields, ["cardNumber", "identificationNumber", "phone"]);
+  const current = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+  try {
+    process.env.COLLECTION_PII_ENCRYPTION_KEY = "osp-v3-old-detail-key-for-tests";
+    const card = encryptCollectionPiiFieldValue("4111111111111001");
+    const ic = encryptCollectionPiiFieldValue("900101-10-1234");
+    const phone = encryptCollectionPiiFieldValue("012-3456789");
+    process.env.COLLECTION_PII_ENCRYPTION_KEY = "osp-v3-new-detail-key-for-tests";
+    process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = "osp-v3-old-detail-key-for-tests";
+    assert.deepEqual(inspectCollectionV7PiiRow({ account_number_encrypted: null, customer_name_encrypted: null,
+      card_number_encrypted: card, identification_number_encrypted: ic, phone_encrypted: phone,
+    }), { decryptableFields: ["cardNumber", "identificationNumber", "phone"], rewriteFields: ["cardNumber", "identificationNumber", "phone"], unreadableFields: [] });
+  } finally {
+    if (current === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = current;
+    if (previous === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = previous;
+  }
+});
+
 test("V7 PII key-retirement verification rejects partial scans", () => {
   assert.throws(
     () => assertV7PiiRetirementScanComplete({ maxRows: 1, requireZeroUnreadable: true }),

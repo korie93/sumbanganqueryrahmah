@@ -72,6 +72,8 @@ export type CollectionStoragePort = Pick<
   | "upsertCollectionDailyTarget"
   | "upsertCollectionOspTargets"
   | "listCollectionOspSavedTargets"
+  | "getCollectionOspTargetOptions"
+  | "previewCollectionOspSourceScope"
   | "getCollectionOspSavedTarget"
   | "createCollectionOspSavedTarget"
   | "updateCollectionOspSavedTarget"

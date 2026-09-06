@@ -116,8 +116,16 @@ export class CollectionRecordService extends CollectionServiceSupport {
     return this.sourceGovernanceOperations.upsertBillingPrincipalTargets(userInput, bodyRaw);
   }
 
-  listBillingPrincipalSavedTargets(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0]) {
-    return this.ospV7Operations.listTargets(userInput);
+  listBillingPrincipalSavedTargets(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: Record<string, unknown> = {}) {
+    return this.ospV7Operations.listTargets(userInput, query);
+  }
+
+  getBillingPrincipalTargetOptions(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: Record<string, unknown>) {
+    return this.ospV7Operations.targetOptions(userInput, query);
+  }
+
+  previewBillingPrincipalTargetSource(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], body: unknown) {
+    return this.ospV7Operations.previewSource(userInput, body);
   }
 
   getBillingPrincipalSavedTarget(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], targetId: unknown) {

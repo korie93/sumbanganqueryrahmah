@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
+import { unzipSync, strFromU8 } from "fflate";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { HttpError } from "../../http/errors";
 import { CollectionOspV7RepositoryError } from "../../repositories/collection-osp-v7-repository-utils";
@@ -25,12 +26,14 @@ function completeTargetRows(d3Baseline: string) {
 }
 
 function user(role: string): AuthenticatedUser {
-  return { username: `${role}.test`, role, activityId: `${role}-activity` };
+  return { userId: `${role}-id`, username: `${role}.test`, role, activityId: `${role}-activity` };
 }
 
 function visibleTarget() {
   return {
     id: TARGET_ID,
+    assignedAdminUserId: "admin-id",
+    assignedAdmin: { id: "admin-id", username: "admin.test", fullName: null },
     name: "September",
     description: null,
     status: "ACTIVE" as const,
@@ -61,6 +64,7 @@ function clientResult() {
     targetOsp: "5000.00",
     resultPercentage: "75.0000",
     ospClosed: "7500.00",
+    balanceOsp: "-2500.00",
     note: null,
     reference: null,
     receivedDate: "2026-09-04",
@@ -75,12 +79,13 @@ function completeExportDataset() {
     aging: "D3", totalOsp: "10000.00", targetPercentage: "50.0000",
     targetOsp: "5000.00", ospClosed: "8000.00", resultPercentage: "80.0000",
     closedAccountCount: 1,
+    balanceOsp: "-3000.00",
   };
   const clientRow = {
     aging: "D3", totalOsp: "10000.00", targetPercentage: "50.0000",
     targetOsp: "5000.00", ospClosed: "7500.00", resultPercentage: "75.0000",
     receivedDate: "2026-09-10", updatedAt: "2026-09-10T08:00:00.000Z",
-    reference: "CLIENT-REF", note: "Client result",
+    reference: "CLIENT-REF", note: "=UNSAFE()", balanceOsp: "-2500.00",
   };
   return {
     generatedAt: "2026-09-10T09:00:00.000Z",
@@ -103,6 +108,7 @@ function completeExportDataset() {
       systemResultPercentage: "80.0000", systemPreviousResultPercentage: "0.0000",
       systemDailyMovementPercentagePoints: "80.0000", systemAchievementVsTargetPercentage: "160.0000",
       systemDailyAccounts: 1,
+      balanceOsp: "-3000.00",
     }],
     drilldown: [{
       contributionSource: "MANUAL_VERIFIED_ABORT", maskedAccountNumber: "ending-1234",
@@ -149,7 +155,7 @@ test("V9 Billing mutations deny non-superuser before storage is called", async (
   });
   await assert.rejects(service.createTarget(user("admin"), {}), (error) => assertHttpError(error, 403));
   await assert.rejects(
-    service.upsertClientResults(user("manager"), TARGET_ID, REVISION_ID, { rows: [] }),
+    service.upsertClientResults(user("user"), TARGET_ID, REVISION_ID, { rows: [] }),
     (error) => assertHttpError(error, 403),
   );
   assert.equal(called, false);
@@ -182,6 +188,7 @@ test("V9 target creation validates exact money before storage", async () => {
   await assert.rejects(
     service.createTarget(user("superuser"), {
       name: "September",
+      assignedAdminUserId: "admin-id",
       sourceImportIds: ["source-a"],
       from: "2026-09-01",
       to: "2026-09-30",
@@ -205,6 +212,7 @@ test("V9 Saved Target rejects a partial aging scope before storage", async () =>
   await assert.rejects(
     service.createTarget(user("superuser"), {
       name: "Partial September",
+      assignedAdminUserId: "admin-id",
       sourceImportIds: ["source-a"],
       from: "2026-09-01",
       to: "2026-09-30",
@@ -229,6 +237,7 @@ test("V9 missing or stale Saved TT OSP remains a controlled rebuild conflict", a
   await assert.rejects(
     service.createTarget(user("superuser"), {
       name: "September",
+      assignedAdminUserId: "admin-id",
       sourceImportIds: ["source-a"],
       from: "2026-09-01",
       to: "2026-09-30",
@@ -259,14 +268,13 @@ test("V9 Client save accepts percentages only and returns server-derived Table B
   const response = await service.upsertClientResults(user("superuser"), TARGET_ID, REVISION_ID, {
     rows: [{
       aging: "D3",
+      targetPercentage: "50.0000",
       resultPercentage: "75.0000",
-      ospClosed: "999999.99",
-      totalOsp: "1.00",
-      targetOsp: "1.00",
     }],
   });
   assert.deepEqual(received?.rows, [{
     aging: "D3",
+    targetPercentage: "50.0000",
     resultPercentage: "75.0000",
     note: null,
     reference: null,
@@ -274,6 +282,41 @@ test("V9 Client save accepts percentages only and returns server-derived Table B
   assert.equal(response.clientResult.rows[0]?.ospClosed, "7500.00");
   assert.equal(response.clientResult.rows[0]?.totalOsp, "10000.00");
   assert.deepEqual(response.latestComparison, comparison);
+});
+
+test("V3 private saves derive stable owner from session and reject ownership/derived-field forgery", async () => {
+  const received: Array<Parameters<CollectionStoragePort["upsertCollectionOspClientResults"]>[0]> = [];
+  const service = operations({
+    getCollectionOspSavedTarget: async (_target, _revision, viewer) => {
+      assert.ok(viewer?.userId);
+      return visibleTarget();
+    },
+    upsertCollectionOspClientResults: async (input) => { received.push(input); return clientResult(); },
+    getCollectionOspTargetOverview: async () => ({ latestComparison: {} }) as never,
+  });
+  const row = { aging: "D3", targetPercentage: "40", resultPercentage: "30" };
+  for (const role of ["superuser", "manager", "admin"]) {
+    await service.upsertClientResults(user(role), TARGET_ID, REVISION_ID, { rows: [row] });
+    assert.deepEqual(received[received.length - 1]?.viewer, { userId: `${role}-id`, role });
+    assert.equal(received[received.length - 1]?.rows[0]?.targetPercentage, "40.0000");
+  }
+  const count = received.length;
+  for (const forged of [
+    { rows: [row], ownerUserId: "admin-id" },
+    { rows: [row], owner_user_id: "admin-id" },
+    { rows: [{ ...row, ownerUserId: "admin-id" }] },
+    { rows: [{ ...row, ospClosed: "999999.99" }] },
+    { rows: [{ ...row, totalOsp: "1.00" }] },
+    { rows: [{ ...row, targetOsp: "1.00" }] },
+    { rows: [{ ...row, targetPercentage: "100.0001" }] },
+    { rows: [{ ...row, note: "<script>alert(1)</script>" }] },
+  ]) {
+    await assert.rejects(service.upsertClientResults(user("manager"), TARGET_ID, REVISION_ID, forged), (error) => assertHttpError(error, 400));
+  }
+  await assert.rejects(service.upsertClientResults({ username: "manager.test", role: "manager", activityId: "test-activity" }, TARGET_ID, REVISION_ID, { rows: [row] }), (error) => assertHttpError(error, 403));
+  await assert.rejects(service.upsertClientResults(user("user"), TARGET_ID, REVISION_ID, { rows: [row] }), (error) => assertHttpError(error, 403));
+  await assert.rejects(service.upsertClientResults({ ...user("admin"), userId: "another-admin" }, TARGET_ID, REVISION_ID, { rows: [row] }), (error) => assertHttpError(error, 404));
+  assert.equal(received.length, count);
 });
 
 test("V9 oversized drilldown scopes retain a controlled 413 response", async () => {
@@ -298,22 +341,25 @@ test("V9 export forwards only two-table filters and ignores removed Table C inpu
       return {
         generatedAt: "2026-09-10T00:00:00.000Z",
         filters: { asOf: "2026-09-10", from: "2026-09-01", to: "2026-09-10", date: null, aging: null },
-        overview: {},
+        overview: { target: visibleTarget() },
         calendar: [],
         drilldown: [],
         drilldownTotal: 0,
       } as never;
     },
   });
-  await service.exportReport(user("manager"), TARGET_ID, REVISION_ID, {
+  const exported = await service.exportReport(user("manager"), TARGET_ID, REVISION_ID, {
     format: "json",
     asOf: "2026-09-10",
     from: "2026-09-01",
     to: "2026-09-10",
     contributionSource: "MANUAL_RECONCILIATION",
     reconciliations: true,
+    generatedByUserId: "forged-owner",
   });
+  assert.equal(JSON.parse(exported!.buffer.toString("utf8")).generatedByUserId, "manager-id");
   assert.deepEqual(received, {
+    viewer: { userId: "manager-id", role: "manager" },
     targetId: TARGET_ID,
     revisionId: REVISION_ID,
     asOfDate: "2026-09-10",
@@ -322,7 +368,18 @@ test("V9 export forwards only two-table filters and ignores removed Table C inpu
   });
 });
 
-test("V9 Excel export contains governed Table A/B sheets, real cells, full authorized Card No, and formula protection", async () => {
+test("target read exposes only its authenticated viewer ID for owner-bound download authorization", async () => {
+  const service = operations({ getCollectionOspSavedTarget: async () => visibleTarget() });
+  for (const role of ["superuser", "manager", "admin"]) {
+    const response = await service.getTarget(user(role), TARGET_ID);
+    assert.equal(response.viewerUserId, role + "-id");
+    assert.equal(response.target.id, TARGET_ID);
+  }
+  await assert.rejects(service.getTarget({ ...user("manager"), userId: undefined }, TARGET_ID),
+    (error) => assertHttpError(error, 403));
+});
+
+test("V3 Excel export has A/B numeric balances, private owner metadata, no account section and formula protection", async () => {
   const service = operations({
     getCollectionOspSavedTarget: async () => visibleTarget(),
     getCollectionOspExportDataset: async () => completeExportDataset() as never,
@@ -334,19 +391,63 @@ test("V9 Excel export contains governed Table A/B sheets, real cells, full autho
   assert.ok(result.buffer.subarray(0, 2).equals(Buffer.from("PK")));
   const workbook = XLSX.read(result.buffer, { type: "buffer", cellDates: true });
   assert.deepEqual(workbook.SheetNames, [
-    "Summary", "Table A System", "Table B Client", "Latest Comparison", "Daily Movement", "OSP Closed Detail",
+    "Summary", "Table A System", "Table B Client", "Latest Comparison", "Daily Movement",
   ]);
   assert.equal(workbook.SheetNames.some((name) => /table c|reconcil/i.test(name)), false);
   const systemRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["Table A System"]!);
   const clientHeaders = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["Table B Client"]!, { header: 1 })[0] ?? [];
-  const detailRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["OSP Closed Detail"]!);
+  const clientRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["Table B Client"]!);
+  const metadata = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets.Summary!);
   const calendarRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["Daily Movement"]!);
   assert.equal(systemRows[0]?.["TT OSP"], 10000);
   assert.equal(systemRows[0]?.["Result Percentage"], 80);
   assert.equal(clientHeaders.includes("Pool Amount"), false);
-  assert.equal(detailRows[0]?.["Card No"], "4111111111119876");
-  assert.equal(detailRows[0]?.["Source Name"], "'=UNSAFE()");
+  assert.deepEqual(clientHeaders, ["Aging", "TT OSP", "Target Percentage", "Target OSP", "Client Result Percentage", "Client OSP Closed", "Balance OSP"]);
+  assert.deepEqual(XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["Table A System"]!, { header: 1 })[0],
+    ["Aging", "TT OSP", "Target Percentage", "Target OSP", "Result Percentage", "OSP Closed", "Closed Account Count", "Balance OSP"]);
+  assert.equal(systemRows[0]?.["Balance OSP"], -3000);
+  assert.equal(clientRows[0]?.["Balance OSP"], -2500);
+  assert.equal(clientRows[0]?.Note, undefined);
+  assert.equal(metadata.find((row) => row.Field === "Assigned Admin")?.Value, "admin.test");
+  assert.equal(metadata.find((row) => row.Field === "Private Client Owner")?.Value, "manager.test");
+  assert.doesNotMatch(JSON.stringify(workbook), /4111111111119876|ending-1234|POOL-REF/);
   assert.ok(calendarRows[0]?.Date instanceof Date);
+});
+
+test("Excel stores exact large signed decimals as numeric XML cells with a declared application precision limit", async () => {
+  const dataset = completeExportDataset();
+  dataset.overview.systemResult.rows[0]!.totalOsp = "99999999999999.99";
+  dataset.overview.systemResult.rows[0]!.balanceOsp = "-99999999999999.99";
+  dataset.overview.target.name = "=HYPERLINK(unsafe)";
+  const service = operations({ getCollectionOspSavedTarget: async () => dataset.overview.target,
+    getCollectionOspExportDataset: async () => dataset as never });
+  const result = await service.exportReport(user("manager"), TARGET_ID, REVISION_ID, { format: "xlsx", asOf: "2026-09-10", from: "2026-09-10", to: "2026-09-10" });
+  const files = unzipSync(result.buffer);
+  const system = strFromU8(files["xl/worksheets/sheet2.xml"]!);
+  assert.match(system, /<c r="B2"[^>]*><v>99999999999999\.99<\/v><\/c>/);
+  assert.match(system, /<c r="H2"[^>]*><v>-99999999999999\.99<\/v><\/c>/);
+  assert.doesNotMatch(system, /<c r="(?:B2|H2)"[^>]*t="(?:s|str)"/);
+  const summary = XLSX.utils.sheet_to_json<Record<string, unknown>>(XLSX.read(result.buffer, { type: "buffer" }).Sheets.Summary!);
+  assert.equal(summary.find((row) => row.Field === "Target Name")?.Value, "'=HYPERLINK(unsafe)");
+  assert.match(String(summary.find((row) => row.Field === "Spreadsheet Precision")?.Value), /15 significant digits/);
+});
+
+test("all report export formats reauthorize assignment and version after expensive generation", async () => {
+  for (const format of ["csv", "xlsx", "json"]) {
+    for (const failure of ["reassignment", "version", "disabled"]) {
+      let generated = false;
+      const service = operations({
+        getCollectionOspSavedTarget: async () => !generated ? visibleTarget()
+          : failure === "disabled" ? undefined : { ...visibleTarget(),
+            ...(failure === "version" ? { version: 2 } : { assignedAdminUserId: "another-admin" }) },
+        getCollectionOspExportDataset: async () => { generated = true; return completeExportDataset() as never; },
+      });
+      await assert.rejects(service.exportReport(user("admin"), TARGET_ID, REVISION_ID,
+        { format, asOf: "2026-09-10", from: "2026-09-10", to: "2026-09-10" }),
+      (error) => assertHttpError(error, failure === "version" ? 409 : 404));
+      assert.equal(generated, true, "rejection happens after data generation, not merely at initial permission checking");
+    }
+  }
 });
 
 test("V9 export fails closed on detail rows and estimated serialized bytes", () => {

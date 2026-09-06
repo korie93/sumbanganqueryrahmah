@@ -42,7 +42,7 @@ function createHarness() {
     createBillingPrincipalSavedTarget: async (user: AuthenticatedUser | undefined, body: unknown) => record("createTarget", user, body),
     getBillingPrincipalSavedTarget: async (user: AuthenticatedUser | undefined, targetId: string) => {
       if (targetId === "foreign-target") throw notFound("Saved Target was not found.", "COLLECTION_OSP_TARGET_NOT_FOUND");
-      return record("getTarget", user, targetId);
+      return { ...record("getTarget", user, targetId), target: { activeRevision: { id: REVISION_ID } } };
     },
     updateBillingPrincipalSavedTarget: async (...args: unknown[]) => record("updateTarget", ...args),
     deleteBillingPrincipalSavedTarget: async (...args: unknown[]) => record("deleteTarget", ...args),
@@ -58,6 +58,7 @@ function createHarness() {
       record("export", ...args);
       return {
         buffer: Buffer.from("v9-two-table-export"),
+        generatedByUserId: (args[0] as AuthenticatedUser).userId,
         contentType: "application/json; charset=utf-8",
         filename: "billing-principal-v9.json",
       };
@@ -88,17 +89,18 @@ function createHarness() {
     adminSummaryAccess: [],
     app,
     collectionService,
-    jsonMutationRoute: (fallbackMessage, scopeResolver, handler) => createCollectionJsonMutationRouteHandler({
+    jsonMutationRoute: (fallbackMessage, scopeResolver, handler, authorizeReplay) => createCollectionJsonMutationRouteHandler({
       fallbackMessage,
       handler,
       scopeResolver,
       storage,
+      authorizeReplay,
     }),
     jsonRoute: (fallbackMessage, handler) => createCollectionJsonRouteHandler({ fallbackMessage, handler }),
     recordMutationAccess: [],
     reportAccess,
     sourceMatchAccess: [],
-    staffSummaryAccess: [],
+    staffSummaryAccess: [authenticateToken, requireRole("admin", "manager", "superuser"), requireTabAccess("collection-report")],
     storage,
     superuserReportAccess,
     teamReportAccess: [],
@@ -111,6 +113,7 @@ function authHeaders(role: string, extra: Record<string, string> = {}) {
     "content-type": "application/json",
     "x-test-role": role,
     "x-test-username": `${role}.user`,
+    "x-test-userid": `${role}-id`,
     ...extra,
   };
 }
@@ -135,6 +138,7 @@ test("V9 Billing read routes expose only Saved Target, Table A/B, Calendar, dril
         assert.equal(await response.text(), "v9-two-table-export");
         assert.match(String(response.headers.get("content-disposition")), /billing-principal-v9\.json/i);
         assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.equal(response.headers.get("x-billing-export-owner-id"), "manager-id");
         assert.equal(response.headers.get("x-content-type-options"), "nosniff");
       } else {
         assert.equal((await response.json() as { endpoint: string }).endpoint, name);
@@ -154,7 +158,7 @@ test("V9 Billing read routes expose only Saved Target, Table A/B, Calendar, dril
   }
 });
 
-test("V9 Billing mutations are superuser-only and idempotency-scoped", async () => {
+test("V3 shared mutations are superuser-only and private results are staff-editable and owner-scoped", async () => {
   const { app, calls, idempotencyScopes } = createHarness();
   const { server, baseUrl } = await startTestServer(app);
   const revisionPrefix = `${PREFIX}/${TARGET_ID}/revisions/${REVISION_ID}`;
@@ -164,7 +168,16 @@ test("V9 Billing mutations are superuser-only and idempotency-scoped", async () 
       headers: authHeaders("manager"),
       body: JSON.stringify({ rows: [] }),
     });
-    assert.equal(manager.status, 403);
+    assert.equal(manager.status, 200);
+    assert.equal((await manager.json() as { endpoint: string }).endpoint, "clientResults");
+    for (const role of ["admin", "manager", "user"]) {
+      const denied = await fetch(`${baseUrl}${PREFIX}`, {
+        method: "POST", headers: authHeaders(role), body: JSON.stringify({ name: "Forbidden shared mutation" }),
+      });
+      assert.equal(denied.status, 403);
+    }
+    calls.length = 0;
+    idempotencyScopes.length = 0;
 
     const mutations = [
       ["createTarget", "POST", PREFIX, { name: "September" }],
@@ -186,11 +199,42 @@ test("V9 Billing mutations are superuser-only and idempotency-scoped", async () 
       "collection:billing-principal:saved-target:create",
       `collection:billing-principal:saved-target:${TARGET_ID}`,
       `collection:billing-principal:saved-target:${TARGET_ID}`,
-      `collection:billing-principal:client-result:${TARGET_ID}:${REVISION_ID}`,
+      `collection:billing-principal:private-client-result:superuser-id:${TARGET_ID}:${REVISION_ID}`,
     ]);
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("V3 private cached replay rechecks current target access and ordinary users cannot reach saved Billing", async () => {
+  const { app, calls, idempotencyScopes } = createHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const suffix of ["", `/${TARGET_ID}`, `/${TARGET_ID}/revisions/${REVISION_ID}/overview`, `/${TARGET_ID}/revisions/${REVISION_ID}/calendar`, `/${TARGET_ID}/revisions/${REVISION_ID}/drilldown`, `/${TARGET_ID}/revisions/${REVISION_ID}/export`]) {
+      const response = await fetch(`${baseUrl}${PREFIX}${suffix}`, { headers: authHeaders("user") });
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+    const unauthenticated = await fetch(`${baseUrl}${PREFIX}`);
+    assert.equal(unauthenticated.status, 401);
+    const ordinarySave = await fetch(`${baseUrl}${PREFIX}/${TARGET_ID}/revisions/${REVISION_ID}/client-results`, {
+      method: "PUT", headers: authHeaders("user"), body: JSON.stringify({ rows: [] }),
+    });
+    assert.equal(ordinarySave.status, 403);
+    assert.equal(calls.length, 0);
+    const replay = await fetch(`${baseUrl}${PREFIX}/${TARGET_ID}/revisions/${REVISION_ID}/client-results`, {
+      method: "PUT", headers: authHeaders("manager", { "x-idempotency-key": "v9-replay" }), body: JSON.stringify({ rows: [] }),
+    });
+    assert.equal(replay.status, 200);
+    assert.equal((await replay.json() as { endpoint: string }).endpoint, "replayed");
+    assert.deepEqual(calls.map((call) => call.name), ["getTarget"]);
+    assert.equal(idempotencyScopes[0], `collection:billing-principal:private-client-result:manager-id:${TARGET_ID}:${REVISION_ID}`);
+    const revoked = await fetch(`${baseUrl}${PREFIX}/foreign-target/revisions/${REVISION_ID}/client-results`, {
+      method: "PUT", headers: authHeaders("admin", { "x-idempotency-key": "v9-replay" }), body: JSON.stringify({ rows: [] }),
+    });
+    assert.equal(revoked.status, 404, "cached private response cannot bypass reassignment/revocation");
+    assert.equal((await revoked.text()).includes("replayed"), false);
+  } finally { await stopTestServer(server); }
 });
 
 test("V9 Billing preserves controlled target IDOR and Client concurrency responses", async () => {

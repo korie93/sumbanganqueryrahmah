@@ -32,6 +32,7 @@ import {
   type BackupEncryptionConfig,
 } from "./backups-encryption";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
+import { protectCollectionOspPrivateClientBackup, type PrivateClientBackupRow } from "./backups-collection-osp-private-utils";
 import {
   closeBackupWriter,
   createBackupTempFile,
@@ -150,6 +151,9 @@ export async function prepareBackupPayloadFileForCreate(
           id,
           username,
           role,
+          status,
+          must_change_password as "mustChangePassword",
+          password_reset_by_superuser as "passwordResetBySuperuser",
           is_banned as "isBanned",
           password_hash as "passwordHash",
           two_factor_enabled as "twoFactorEnabled",
@@ -279,6 +283,7 @@ export async function prepareBackupPayloadFileForCreate(
           SELECT
             id,
             target_name as "targetName",
+            assigned_admin_user_id as "assignedAdminUserId",
             normalized_name as "normalizedName",
             description,
             status,
@@ -374,6 +379,9 @@ export async function prepareBackupPayloadFileForCreate(
             canonical_obligation_key as "canonicalObligationKey",
             cycle_key as "cycleKey",
             account_number_encrypted as "accountNumberEncrypted",
+            card_number_encrypted as "cardNumberEncrypted",
+            identification_number_encrypted as "identificationNumberEncrypted",
+            phone_encrypted as "phoneEncrypted",
             account_number_search_hash as "accountNumberSearchHash",
             card_number_last4 as "cardNumberLast4",
             customer_name_encrypted as "customerNameEncrypted",
@@ -453,6 +461,20 @@ export async function prepareBackupPayloadFileForCreate(
         `, queryExecutor),
     );
 
+    await writeBackupChunk(state, ",");
+
+    counts.collectionOspPrivateClientResultsCount = await appendPagedJsonArray(
+      state, "collectionOspPrivateClientResults", (lastId) =>
+        safeSelectBackupRows<PrivateClientBackupRow & BackupCursorRow>(sql`
+          SELECT id, target_id AS "targetId", target_revision_id AS "targetRevisionId", owner_user_id AS "ownerUserId",
+            aging_bucket AS "agingBucket", target_percentage::text AS "targetPercentage", result_percentage::text AS "resultPercentage",
+            osp_closed::text AS "ospClosed", as_of_date::text AS "asOfDate", client_reference AS "clientReference", note, version,
+            created_by AS "createdBy", created_at AS "createdAt", updated_by AS "updatedBy", updated_at AS "updatedAt"
+          FROM public.collection_osp_private_client_results
+          WHERE ${lastId ? sql`id > ${lastId}::uuid` : sql`TRUE`}
+          ORDER BY id ASC LIMIT ${QUERY_PAGE_LIMIT}
+        `, queryExecutor).then((rows) => rows.map(protectCollectionOspPrivateClientBackup)),
+    );
     await writeBackupChunk(state, ",");
 
     counts.collectionOspManualReconciliationsCount = await appendPagedJsonArray(

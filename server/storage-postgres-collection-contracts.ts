@@ -72,15 +72,19 @@ export interface CollectionStorageContract {
     targets: CollectionOspTargetInput[];
     configuredBy: string;
   }): Promise<CollectionOspTargetInput[]>;
-  listCollectionOspSavedTargets(options?: { includeDeleted?: boolean }): Promise<CollectionOspSavedTargetView[]>;
-  getCollectionOspSavedTarget(targetId: string, revisionId?: string): Promise<CollectionOspSavedTargetView | undefined>;
+  getCollectionOspTargetOptions(input: import("./storage-postgres-collection-types").CollectionOspTargetOptionsInput): Promise<import("./storage-postgres-collection-types").CollectionOspTargetOptions>;
+  previewCollectionOspSourceScope(input: { viewer: import("./storage-postgres-collection-types").CollectionOspViewer; sourceImportIds: string[] }): Promise<import("./storage-postgres-collection-types").CollectionOspSourcePreview>;
+  listCollectionOspSavedTargets(options?: { includeDeleted?: boolean; viewer?: import("./storage-postgres-collection-types").CollectionOspViewer; limit?: number; offset?: number }): Promise<CollectionOspSavedTargetView[]>;
+  getCollectionOspSavedTarget(targetId: string, revisionId?: string, viewer?: import("./storage-postgres-collection-types").CollectionOspViewer): Promise<CollectionOspSavedTargetView | undefined>;
   createCollectionOspSavedTarget(input: {
     name: string;
+    assignedAdminUserId: string;
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     description?: string | null;
     sourceImportIds: string[];
-    from: string;
-    to: string;
-    trackingStartDate: string;
+    from?: string;
+    to?: string;
+    trackingStartDate?: string;
     trackingEndDate?: string | null;
     timezone: string;
     nicknameScope: string[];
@@ -90,6 +94,9 @@ export interface CollectionStorageContract {
   }): Promise<CollectionOspSavedTargetView>;
   updateCollectionOspSavedTarget(input: {
     targetId: string;
+    assignedAdminUserId?: string;
+    targets?: CollectionOspTargetInput[];
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     name?: string;
     description?: string | null;
     expectedVersion?: number;
@@ -97,20 +104,24 @@ export interface CollectionStorageContract {
   }): Promise<CollectionOspSavedTargetView>;
   deleteCollectionOspSavedTarget(input: {
     targetId: string;
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     expectedVersion?: number;
     actor: string;
   }): Promise<CollectionOspSavedTargetView>;
   getCollectionOspTargetOverview(input: {
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     targetId: string;
     revisionId: string;
     asOfDate: string;
   }): Promise<unknown>;
   upsertCollectionOspClientResults(input: {
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     targetId: string;
     revisionId: string;
     receivedDate: string;
     rows: Array<{
       aging: "D3" | "D4" | "D5" | "D6";
+      targetPercentage: string;
       resultPercentage: string;
       note?: string | null;
       reference?: string | null;
@@ -119,6 +130,7 @@ export interface CollectionStorageContract {
     actor: string;
   }): Promise<CollectionOspClientResultTableView>;
   getCollectionOspCalendar(input: {
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     targetId: string;
     revisionId: string;
     from: string;
@@ -132,6 +144,7 @@ export interface CollectionStorageContract {
     days: CollectionOspCalendarDayView[];
   }>;
   getCollectionOspDrilldown(input: {
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     targetId: string;
     revisionId: string;
     asOfDate: string;
@@ -140,8 +153,9 @@ export interface CollectionStorageContract {
     contributionSource?: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
     page: number;
     pageSize: number;
-  }): Promise<{ items: CollectionOspDrilldownItemView[]; pagination: CollectionOspPagination }>;
+  }): Promise<{ items: CollectionOspDrilldownItemView[]; pagination: CollectionOspPagination; summary: { accountCount: number; ospClosed: string } }>;
   getCollectionOspExportDataset(input: {
+    viewer?: import("./storage-postgres-collection-types").CollectionOspViewer;
     targetId: string;
     revisionId: string;
     asOfDate: string;

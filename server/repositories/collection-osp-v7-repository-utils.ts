@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { CollectionOspV7RepositoryError } from "./collection-osp-repository-error";
+export { CollectionOspV7RepositoryError } from "./collection-osp-repository-error";
+import {
+  assertCollectionOspEligibleAdmin, assertCollectionOspSourceAssignment,
+  assertCollectionOspSuperuserActor, loadCollectionOspConfiguredSourceScope,
+  assertCollectionOspBaselinePrecision,
+} from "./collection-osp-source-scope-repository-utils";
 import {
   decryptCollectionPiiValueSafe,
   encryptCollectionPiiFieldValue,
@@ -9,7 +16,9 @@ import {
   hasCollectionPiiEncryptionConfigured,
 } from "../lib/collection-pii-encryption";
 import {
-  aggregateCollectionOspReconciliation,
+  calculateCollectionOspBalance,
+  calculateCollectionOspPercentageAmount as calculateTargetOsp,
+  normalizeCollectionOspTargetPercentage as parseTargetPercentage,
   formatCollectionOspMoneyCents,
   formatCollectionOspPercentage,
   parseCollectionOspMoneyCents,
@@ -19,7 +28,7 @@ import {
 } from "../lib/collection-osp-reconciliation";
 import {
   extractCanonicalSavedCollectionMasterRow,
-  extractSavedCollectionIdentity,
+  extractSavedCollectionDisplayDetails,
 } from "../lib/saved-collection-link-utils";
 import type {
   CollectionAgingBucket,
@@ -30,10 +39,12 @@ import type {
   CollectionOspPagination,
   CollectionOspSavedTargetView,
   CollectionOspTargetInput,
+  CollectionOspViewer,
 } from "../storage-postgres-collection-types";
 import type { CollectionRepositoryExecutor } from "./collection-nickname-types";
 import { buildTextArraySql } from "./sql-array-utils";
 import { buildCollectionSourceScopeHash } from "./collection-source-repository-utils";
+import { buildCollectionOspAgingAggregateQuery, buildCollectionOspDailyAggregateQuery, buildCollectionOspEffectiveAccountCtes } from "./collection-osp-effective-query";
 import {
   hashCollectionSourceIdentifier,
   normalizeCollectionSourceIdentifier,
@@ -45,9 +56,6 @@ const MAX_TARGET_SOURCE_ROWS = 100_000;
 const MAX_TARGET_PAYMENT_ROWS = 250_000;
 const MAX_TARGET_PAYMENTS_PER_SOURCE_ROW = 20;
 const MAX_EXPORT_DETAIL_ROWS = 10_000;
-// An export can contain both one reconciliation and one drilldown row per source row.
-const MAX_EXPORT_SOURCE_ROWS = Math.floor(MAX_EXPORT_DETAIL_ROWS / 2);
-const MAX_DRILLDOWN_SOURCE_ROWS = 10_000;
 
 export function resolveCollectionOspDatasetLimits(maxSourceRows = MAX_TARGET_SOURCE_ROWS): {
   maxSourceRows: number;
@@ -60,24 +68,6 @@ export function resolveCollectionOspDatasetLimits(maxSourceRows = MAX_TARGET_SOU
       maxSourceRows * MAX_TARGET_PAYMENTS_PER_SOURCE_ROW,
     ),
   };
-}
-
-export class CollectionOspV7RepositoryError extends Error {
-  constructor(
-    readonly reason:
-      | "NOT_FOUND"
-      | "DELETED"
-      | "VERSION_CONFLICT"
-      | "DUPLICATE"
-      | "INVALID_SOURCE"
-      | "BASELINE_MISMATCH"
-      | "PII_UNAVAILABLE"
-      | "DATASET_TOO_LARGE",
-    message: string,
-  ) {
-    super(message);
-    this.name = "CollectionOspV7RepositoryError";
-  }
 }
 
 type QueryExecutor = CollectionRepositoryExecutor;
@@ -126,27 +116,13 @@ function maskCustomerName(value: unknown): string {
   return words.map((word) => `${word.slice(0, 1)}${"•".repeat(Math.min(5, Math.max(1, word.length - 1)))}`).join(" ");
 }
 
-function parseTargetPercentage(value: string): string {
-  const raw = String(value).trim();
-  if (!/^(?:100(?:\.0{1,4})?|\d{1,2}(?:\.\d{1,4})?)$/.test(raw)) {
-    throw new Error("Target percentage is invalid.");
-  }
-  return Number(raw).toFixed(4);
-}
-
-function calculateTargetOsp(baseline: string, percentage: string): string {
-  const baselineCents = parseCollectionOspMoneyCents(baseline);
-  const percentageUnits = BigInt(parseTargetPercentage(percentage).replace(".", ""));
-  const targetCents = ((baselineCents * percentageUnits) + 500_000n) / 1_000_000n;
-  return formatCollectionOspMoneyCents(targetCents);
-}
-
 export function resolveCollectionOspAuthoritativeBaseline(input: {
   aging: CollectionAgingBucket;
   derivedBaselineCents: bigint;
   submittedBaseline?: string | null;
 }): string {
   const authoritativeBaseline = formatCollectionOspMoneyCents(input.derivedBaselineCents);
+  assertCollectionOspBaselinePrecision(authoritativeBaseline);
   if (
     input.submittedBaseline !== undefined
     && input.submittedBaseline !== null
@@ -171,8 +147,8 @@ function pagination(page: number, pageSize: number, total: number): CollectionOs
 
 function targetTrackingRange(target: CollectionOspSavedTargetView) {
   return {
-    start: target.activeRevision.trackingStartDate ?? target.activeRevision.from,
-    end: target.activeRevision.trackingEndDate ?? target.activeRevision.to,
+    start: target.activeRevision.from,
+    end: target.activeRevision.to,
   };
 }
 
@@ -202,20 +178,53 @@ function latestTargetAsOf(target: CollectionOspSavedTargetView): string {
   return today > range.end ? range.end : today;
 }
 
+function targetViewerPredicate(viewer: CollectionOspViewer | undefined) {
+  // Missing scope is never an administrative wildcard on an exported read.
+  if (!viewer?.userId || !["admin", "manager", "superuser"].includes(viewer.role)) return sql`FALSE`;
+  return sql`(
+    (${viewer.role} IN ('superuser', 'manager') OR target.assigned_admin_user_id = ${viewer.userId})
+    AND EXISTS (
+      SELECT 1 FROM public.users viewer_account
+      WHERE viewer_account.id = ${viewer.userId} AND viewer_account.role = ${viewer.role}
+        AND viewer_account.status = 'active' AND COALESCE(viewer_account.is_banned, false) = false
+    )
+  )`;
+}
+
+async function assertViewerStillAuthorized(target: CollectionOspSavedTargetView, viewer: CollectionOspViewer | undefined) {
+  const current = rowsOf(await db.execute(sql`
+    SELECT target.version FROM public.collection_osp_saved_targets target
+    WHERE target.id = ${target.id}::uuid AND target.status = 'ACTIVE'
+      AND ${targetViewerPredicate(viewer)}
+  `))[0];
+  if (!current) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target was not found.");
+  if (toNumber(current.version) !== target.version) {
+    throw new CollectionOspV7RepositoryError("VERSION_CONFLICT", "Saved Target changed while loading. Reload the report.");
+  }
+}
+
 async function loadTargetViews(
   executor: QueryExecutor,
-  filters: { targetId?: string; revisionId?: string; includeDeleted?: boolean } = {},
+  filters: { targetId?: string; revisionId?: string; includeDeleted?: boolean; viewer?: CollectionOspViewer; enforceViewer?: boolean; limit?: number; offset?: number } = {},
 ): Promise<CollectionOspSavedTargetView[]> {
   const targetResult = await executor.execute(sql`
-    WITH latest_revision AS (
-      SELECT DISTINCT ON (revision.target_id)
-        revision.*
-      FROM public.collection_osp_target_revisions revision
-      ${filters.revisionId ? sql`WHERE revision.id = ${filters.revisionId}::uuid` : sql``}
-      ORDER BY revision.target_id, revision.revision_number DESC
+    WITH authorized_targets AS MATERIALIZED (
+      SELECT target.* FROM public.collection_osp_saved_targets target
+      WHERE ${filters.targetId ? sql`target.id = ${filters.targetId}::uuid` : sql`TRUE`}
+        AND (${filters.includeDeleted === true} OR target.status = 'ACTIVE')
+        AND ${filters.enforceViewer ? targetViewerPredicate(filters.viewer) : sql`TRUE`}
+        AND EXISTS (SELECT 1 FROM public.collection_osp_target_revisions available
+          WHERE available.target_id = target.id
+            ${filters.revisionId ? sql`AND available.id = ${filters.revisionId}::uuid` : sql``})
+      ORDER BY target.updated_at DESC, target.id ASC
+      LIMIT ${filters.targetId ? 1 : Math.max(1, Math.min(100, Math.trunc(filters.limit ?? 100)))}
+      OFFSET ${filters.targetId ? 0 : Math.max(0, Math.trunc(filters.offset ?? 0))}
     )
     SELECT
       target.id,
+      target.assigned_admin_user_id,
+      assigned_admin.username AS assigned_admin_username,
+      assigned_admin.full_name AS assigned_admin_full_name,
       target.target_name,
       target.description,
       target.status,
@@ -230,11 +239,16 @@ async function loadTargetViews(
       revision.tracking_end_date,
       revision.nickname_scope,
       revision.aging_scope,
+      revision.calculation_version,
       revision.created_at AS revision_created_at
-    FROM public.collection_osp_saved_targets target
-    JOIN latest_revision revision ON revision.target_id = target.id
-    WHERE ${filters.targetId ? sql`target.id = ${filters.targetId}::uuid` : sql`TRUE`}
-      AND (${filters.includeDeleted === true} OR target.status = 'ACTIVE')
+    FROM authorized_targets target
+    JOIN LATERAL (
+      SELECT revision.* FROM public.collection_osp_target_revisions revision
+      WHERE revision.target_id = target.id
+        ${filters.revisionId ? sql`AND revision.id = ${filters.revisionId}::uuid` : sql``}
+      ORDER BY revision.revision_number DESC LIMIT 1
+    ) revision ON true
+    LEFT JOIN public.users assigned_admin ON assigned_admin.id = target.assigned_admin_user_id
     ORDER BY target.updated_at DESC, target.id ASC
   `);
   const targetRows = rowsOf(targetResult);
@@ -244,7 +258,7 @@ async function loadTargetViews(
   const sourceResult = await executor.execute(sql`
     SELECT target_revision_id, source_import_id, source_name_snapshot, source_filename_snapshot
     FROM public.collection_osp_target_sources
-    WHERE target_revision_id::text = ANY(${revisionIdsSql})
+    WHERE target_revision_id = ANY(${revisionIdsSql}::uuid[])
     ORDER BY target_revision_id, source_import_id
   `);
   const sourcesByRevision = new Map<string, Array<{ sourceImportId: string; name: string; filename: string | null }>>();
@@ -263,6 +277,11 @@ async function loadTargetViews(
     const sourceSnapshots = sourcesByRevision.get(revisionId) ?? [];
     return {
       id: String(row.id),
+      assignedAdminUserId: row.assigned_admin_user_id == null ? null : String(row.assigned_admin_user_id),
+      assignedAdmin: row.assigned_admin_user_id == null ? null : {
+        id: String(row.assigned_admin_user_id), username: String(row.assigned_admin_username),
+        fullName: row.assigned_admin_full_name == null ? null : String(row.assigned_admin_full_name),
+      },
       name: String(row.target_name),
       description: row.description == null ? null : String(row.description),
       status: row.status === "DELETED" ? "DELETED" : "ACTIVE",
@@ -270,6 +289,7 @@ async function loadTargetViews(
       activeRevision: {
         id: revisionId,
         revisionNumber: Math.max(1, toNumber(row.revision_number)),
+        sourceValidityVerified: row.calculation_version === "osp-effective-private-v3-canonical-source",
         from: dateOnly(row.period_from),
         to: dateOnly(row.period_to),
         trackingStartDate: row.tracking_start_date == null ? null : dateOnly(row.tracking_start_date),
@@ -288,30 +308,47 @@ async function loadTargetViews(
 
 export async function listCollectionOspSavedTargetsRepository(options?: {
   includeDeleted?: boolean;
+  viewer?: CollectionOspViewer;
+  limit?: number;
+  offset?: number;
 }): Promise<CollectionOspSavedTargetView[]> {
-  return loadTargetViews(db, options?.includeDeleted === undefined
-    ? {}
-    : { includeDeleted: options.includeDeleted });
+  const targets = await loadTargetViews(db, { ...options, enforceViewer: true });
+  if (targets.length === 0) return [];
+  // The source-label query above can overlap a reassignment; filter the final
+  // bounded result against current access in one query, not one query per row.
+  const current = new Map(rowsOf(await db.execute(sql`
+    SELECT target.id, target.version FROM public.collection_osp_saved_targets target
+    WHERE target.id = ANY(${buildTextArraySql(targets.map((target) => target.id))}::uuid[])
+      AND target.status = 'ACTIVE' AND ${targetViewerPredicate(options?.viewer)}
+  `)).map((row) => [String(row.id), toNumber(row.version)]));
+  return targets.filter((target) => current.get(target.id) === target.version);
 }
 
 export async function getCollectionOspSavedTargetRepository(
   targetId: string,
   revisionId?: string,
+  viewer?: CollectionOspViewer,
 ): Promise<CollectionOspSavedTargetView | undefined> {
-  return (await loadTargetViews(db, {
+  const target = (await loadTargetViews(db, {
     targetId,
     ...(revisionId === undefined ? {} : { revisionId }),
-    includeDeleted: true,
+    includeDeleted: false,
+    ...(viewer ? { viewer } : {}),
+    enforceViewer: true,
   }))[0];
+  if (target) await assertViewerStillAuthorized(target, viewer);
+  return target;
 }
 
 export async function createCollectionOspSavedTargetRepository(input: {
   name: string;
+  assignedAdminUserId: string;
+  viewer?: CollectionOspViewer;
   description?: string | null;
   sourceImportIds: string[];
-  from: string;
-  to: string;
-  trackingStartDate: string;
+  from?: string;
+  to?: string;
+  trackingStartDate?: string;
   trackingEndDate?: string | null;
   timezone: string;
   nicknameScope: string[];
@@ -340,32 +377,16 @@ export async function createCollectionOspSavedTargetRepository(input: {
   const sourceScopeHash = buildCollectionSourceScopeHash(sourceIds);
   try {
     await db.transaction(async (tx) => {
+    await assertCollectionOspSuperuserActor(tx, input.viewer, input.actor);
+    await assertCollectionOspEligibleAdmin(tx, input.assignedAdminUserId);
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`collection-osp-target-name:${normalizeName(input.name)}`}, 0))`);
-    const sourcesResult = await tx.execute(sql`
-      SELECT
-        config.source_import_id,
-        imp.name,
-        imp.filename,
-        imp.content_hash_sha256,
-        imp.created_at,
-        config.indexed_row_count
-      FROM public.collection_source_configs config
-      JOIN public.imports imp ON imp.id = config.source_import_id
-      WHERE config.source_import_id = ANY(${buildTextArraySql(sourceIds)})
-        AND config.enabled = true
-        AND config.compatibility_status = 'compatible'
-        AND imp.is_deleted = false
-      ORDER BY config.source_import_id
-      FOR SHARE OF config, imp
-    `);
-    const sourceRows = rowsOf(sourcesResult);
-    if (sourceRows.length !== sourceIds.length) {
-      throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "One or more Saved sources are unavailable or incompatible.");
+    const { sources: sourceRows, from, to } = await loadCollectionOspConfiguredSourceScope(tx, sourceIds);
+    if ((input.from !== undefined && input.from !== from) || (input.to !== undefined && input.to !== to)
+      || (input.trackingStartDate !== undefined && input.trackingStartDate !== from)
+      || (input.trackingEndDate != null && input.trackingEndDate !== to)) {
+      throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "Target and calendar dates must match the configured source validity. Reload the source preview.");
     }
-    const expectedRows = sourceRows.reduce((sum, row) => sum + toNumber(row.indexed_row_count), 0);
-    if (expectedRows > MAX_TARGET_SOURCE_ROWS) {
-      throw new CollectionOspV7RepositoryError("INVALID_SOURCE", `Saved Target source scope exceeds ${MAX_TARGET_SOURCE_ROWS.toLocaleString()} rows.`);
-    }
+    await assertCollectionOspSourceAssignment(tx, { sourceImportIds: sourceIds, from, to, assignedAdminUserId: input.assignedAdminUserId });
     const conflictingSnapshotResult = await tx.execute(sql`
       SELECT
         (source_row.calling_date::text || ':' || source_row.canonical_obligation_key) AS cycle_key
@@ -386,10 +407,10 @@ export async function createCollectionOspSavedTargetRepository(input: {
 
     await tx.execute(sql`
       INSERT INTO public.collection_osp_saved_targets (
-        id, target_name, normalized_name, description, status, version,
+        id, assigned_admin_user_id, target_name, normalized_name, description, status, version,
         created_by, created_at, updated_by, updated_at
       ) VALUES (
-        ${targetId}::uuid, ${input.name}, ${normalizeName(input.name)}, ${input.description ?? null},
+        ${targetId}::uuid, ${input.assignedAdminUserId}, ${input.name}, ${normalizeName(input.name)}, ${input.description ?? null},
         'ACTIVE', 1, ${input.actor}, now(), ${input.actor}, now()
       )
     `);
@@ -400,10 +421,10 @@ export async function createCollectionOspSavedTargetRepository(input: {
         calculation_version, created_by, created_at
       ) VALUES (
         ${revisionId}::uuid, ${targetId}::uuid, 1, ${sourceScopeHash},
-        ${input.from}::date, ${input.to}::date, ${input.trackingStartDate}::date,
-        ${input.trackingEndDate ?? null}::date, ${input.timezone},
+        ${from}::date, ${to}::date, ${from}::date,
+        ${to}::date, ${input.timezone},
         ${buildTextArraySql(input.nicknameScope)}, ${buildTextArraySql(input.agingScope)},
-        'osp-effective-settlement-v9', ${input.actor}, now()
+        'osp-effective-private-v3-canonical-source', ${input.actor}, now()
       )
     `);
     for (const source of sourceRows) {
@@ -430,6 +451,7 @@ export async function createCollectionOspSavedTargetRepository(input: {
             source_row.source_import_id,
             source_row.source_data_row_id,
             source_row.account_number_hash,
+            source_row.card_number_hash,
             source_row.card_number_last4,
             source_row.canonical_obligation_key,
             source_row.canonical_obligation_key AS snapshot_cursor,
@@ -465,12 +487,24 @@ export async function createCollectionOspSavedTargetRepository(input: {
       const inserts = [];
       for (const row of page) {
         const master = extractCanonicalSavedCollectionMasterRow(row.json_data);
-        const identity = extractSavedCollectionIdentity(row.json_data);
-        const account = master.accountNumber ?? identity.accountNumbers[0] ?? null;
+        const display = extractSavedCollectionDisplayDetails(row.json_data);
+        const account = master.accountNumber;
+        const accountHash = hashCollectionSourceIdentifier(master.accountNumber, "account_number");
+        const cardHash = hashCollectionSourceIdentifier(master.cardNumber, "card_number");
+        const canonicalKey = accountHash ? `account:${accountHash}` : cardHash ? `card:${cardHash}` : null;
+        if (canonicalKey !== String(row.canonical_obligation_key)
+          || (row.card_number_hash != null && cardHash !== String(row.card_number_hash))) {
+          throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "Saved source identity has changed. Reconfigure the source before creating a target.");
+        }
         const accountEncrypted = encryptCollectionPiiFieldValue(account);
-        const customerName = identity.customerName || null;
+        const customerName = display.customerName;
         const customerEncrypted = encryptCollectionPiiFieldValue(customerName);
-        if ((account && !accountEncrypted) || (customerName && !customerEncrypted)) {
+        const cardEncrypted = encryptCollectionPiiFieldValue(master.cardNumber);
+        const identificationEncrypted = encryptCollectionPiiFieldValue(display.identificationNumber);
+        const phoneEncrypted = encryptCollectionPiiFieldValue(display.phone);
+        if ((account && !accountEncrypted) || (customerName && !customerEncrypted)
+          || (master.cardNumber && !cardEncrypted) || (display.identificationNumber && !identificationEncrypted)
+          || (display.phone && !phoneEncrypted)) {
           throw new CollectionOspV7RepositoryError("PII_UNAVAILABLE", "Saved Target PII snapshot encryption failed.");
         }
         const aging = String(row.aging_bucket) as CollectionAgingBucket;
@@ -485,6 +519,7 @@ export async function createCollectionOspSavedTargetRepository(input: {
           ${accountEncrypted},
           ${account ? hashCollectionPiiSearchValue("accountNumber", account) : null},
           ${row.card_number_last4 == null ? null : String(row.card_number_last4)},
+          ${cardEncrypted}, ${identificationEncrypted}, ${phoneEncrypted},
           ${customerEncrypted},
           ${buildTextArraySql(hashCollectionCustomerNameSearchTerms(customerName) ?? [])},
           ${aging},
@@ -500,7 +535,8 @@ export async function createCollectionOspSavedTargetRepository(input: {
           INSERT INTO public.collection_osp_target_source_rows (
             target_revision_id, source_import_id, source_data_row_id,
             canonical_obligation_key, cycle_key, account_number_encrypted,
-            account_number_search_hash, card_number_last4, customer_name_encrypted,
+            account_number_search_hash, card_number_last4,
+            card_number_encrypted, identification_number_encrypted, phone_encrypted, customer_name_encrypted,
             customer_name_search_hashes, aging_bucket, calling_date,
             calling_window_end_exclusive, total_due, billing_principal_osp, created_at
           ) VALUES ${sql.join(inserts, sql`, `)}
@@ -544,6 +580,12 @@ export async function createCollectionOspSavedTargetRepository(input: {
         )
       `);
     }
+    await tx.execute(sql`INSERT INTO public.audit_logs
+      (id, action, performed_by, target_resource, details, timestamp)
+      VALUES (${randomUUID()}, 'COLLECTION_OSP_TARGET_CREATED', ${input.actor}, ${targetId},
+        ${JSON.stringify({ revisionId, name: input.name, oldAssignedAdminUserId: null,
+          assignedAdminUserId: input.assignedAdminUserId, sourceImportIds: sourceIds, from, to,
+          targets: input.targets.map((row) => ({ aging: row.agingBucket, targetPercentage: row.targetPercentage })) })}, now())`);
     });
   } catch (error) {
     if (getErrorField(error, "code") === "23505") {
@@ -558,6 +600,9 @@ export async function createCollectionOspSavedTargetRepository(input: {
 
 export async function updateCollectionOspSavedTargetRepository(input: {
   targetId: string;
+  assignedAdminUserId?: string;
+  targets?: CollectionOspTargetInput[];
+  viewer?: CollectionOspViewer;
   name?: string;
   description?: string | null;
   expectedVersion?: number;
@@ -565,6 +610,7 @@ export async function updateCollectionOspSavedTargetRepository(input: {
 }): Promise<CollectionOspSavedTargetView> {
   try {
     return await db.transaction(async (tx) => {
+      await assertCollectionOspSuperuserActor(tx, input.viewer, input.actor);
       const existingResult = await tx.execute(sql`
       SELECT version, status FROM public.collection_osp_saved_targets
       WHERE id = ${input.targetId}::uuid
@@ -573,8 +619,35 @@ export async function updateCollectionOspSavedTargetRepository(input: {
       const existing = rowsOf(existingResult)[0];
       if (!existing) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target was not found.");
       if (existing.status !== "ACTIVE") throw new CollectionOspV7RepositoryError("DELETED", "Saved Target has been deleted.");
-      if (input.expectedVersion !== undefined && toNumber(existing.version) !== input.expectedVersion) {
+      if (input.expectedVersion === undefined || toNumber(existing.version) !== input.expectedVersion) {
         throw new CollectionOspV7RepositoryError("VERSION_CONFLICT", "Saved Target changed in another session.");
+      }
+      const before = (await loadTargetViews(tx, { targetId: input.targetId }))[0];
+      if (!before) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target was not found.");
+      const previousAgingRows = await loadTargetAgingRows(tx, before.activeRevision.id);
+      if (input.assignedAdminUserId !== undefined) {
+        await assertCollectionOspEligibleAdmin(tx, input.assignedAdminUserId);
+        await assertCollectionOspSourceAssignment(tx, { targetId: input.targetId,
+          assignedAdminUserId: input.assignedAdminUserId, sourceImportIds: before.activeRevision.sourceImportIds,
+          from: before.activeRevision.from, to: before.activeRevision.to });
+      }
+      if (input.targets !== undefined) {
+        if (input.targets.length !== AGINGS.length || new Set(input.targets.map((row) => row.agingBucket)).size !== AGINGS.length
+          || AGINGS.some((aging) => !input.targets!.some((row) => row.agingBucket === aging))) {
+          throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "Shared target percentages must contain D3, D4, D5 and D6 exactly once.");
+        }
+        const evidence = await loadTargetBaselineEvidence(tx, before.activeRevision.id);
+        assertCollectionOspTargetBaselineIntegrity({ agingScope: before.activeRevision.agingScope,
+          agingRows: previousAgingRows, sourceRows: evidence.sourceRows, hasSavedSourceScope: evidence.hasSavedSourceScope });
+        for (const submitted of input.targets) {
+          const config = previousAgingRows.find((row) => row.aging === submitted.agingBucket)!;
+          const baseline = resolveCollectionOspAuthoritativeBaseline({ aging: submitted.agingBucket,
+            derivedBaselineCents: parseCollectionOspMoneyCents(config.totalOsp), submittedBaseline: submitted.totalOspBaseline });
+          const percentage = parseTargetPercentage(submitted.targetPercentage);
+          await tx.execute(sql`UPDATE public.collection_osp_target_aging_rows
+            SET target_percentage = ${percentage}::numeric(7,4), target_osp = ${calculateTargetOsp(baseline, percentage)}::numeric(16,2)
+            WHERE target_revision_id = ${before.activeRevision.id}::uuid AND aging_bucket = ${submitted.agingBucket}`);
+        }
       }
       const updateResult = await tx.execute(sql`
       UPDATE public.collection_osp_saved_targets
@@ -582,6 +655,7 @@ export async function updateCollectionOspSavedTargetRepository(input: {
         target_name = COALESCE(${input.name ?? null}, target_name),
         normalized_name = COALESCE(${input.name ? normalizeName(input.name) : null}, normalized_name),
         description = CASE WHEN ${input.description !== undefined} THEN ${input.description ?? null} ELSE description END,
+        assigned_admin_user_id = COALESCE(${input.assignedAdminUserId ?? null}, assigned_admin_user_id),
         version = version + 1,
         updated_by = ${input.actor},
         updated_at = now()
@@ -591,6 +665,13 @@ export async function updateCollectionOspSavedTargetRepository(input: {
       if (!rowsOf(updateResult)[0]) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target was not found.");
       const target = (await loadTargetViews(tx, { targetId: input.targetId, includeDeleted: true }))[0];
       if (!target) throw new Error("Updated Saved Target could not be reloaded.");
+      await tx.execute(sql`INSERT INTO public.audit_logs
+        (id, action, performed_by, target_resource, details, timestamp)
+        VALUES (${randomUUID()}, 'COLLECTION_OSP_TARGET_UPDATED', ${input.actor}, ${input.targetId},
+          ${JSON.stringify({ revisionId: before.activeRevision.id, fromVersion: before.version, toVersion: target.version,
+            sourceImportIds: before.activeRevision.sourceImportIds, from: before.activeRevision.from, to: before.activeRevision.to,
+            before: { name: before.name, assignedAdminUserId: before.assignedAdminUserId, targets: previousAgingRows },
+            after: { name: target.name, assignedAdminUserId: target.assignedAdminUserId, targets: input.targets ?? previousAgingRows } })}, now())`);
       return target;
     });
   } catch (error) {
@@ -605,8 +686,11 @@ export async function deleteCollectionOspSavedTargetRepository(input: {
   targetId: string;
   expectedVersion?: number;
   actor: string;
+  viewer?: CollectionOspViewer;
 }): Promise<CollectionOspSavedTargetView> {
   return db.transaction(async (tx) => {
+    await assertCollectionOspSuperuserActor(tx, input.viewer, input.actor);
+    if (input.expectedVersion === undefined) throw new CollectionOspV7RepositoryError("VERSION_CONFLICT", "Reload the Saved Target before deleting it.");
     const result = await tx.execute(sql`
       UPDATE public.collection_osp_saved_targets
       SET status = 'DELETED', version = version + 1,
@@ -624,6 +708,10 @@ export async function deleteCollectionOspSavedTargetRepository(input: {
     }
     const target = (await loadTargetViews(tx, { targetId: input.targetId, includeDeleted: true }))[0];
     if (!target) throw new Error("Deleted Saved Target could not be reloaded.");
+    await tx.execute(sql`INSERT INTO public.audit_logs
+      (id, action, performed_by, target_resource, details, timestamp)
+      VALUES (${randomUUID()}, 'COLLECTION_OSP_TARGET_DELETED', ${input.actor}, ${input.targetId},
+        ${JSON.stringify({ revisionId: target.activeRevision.id, fromVersion: input.expectedVersion, toVersion: target.version })}, now())`);
     return target;
   });
 }
@@ -642,10 +730,6 @@ type TargetSourceSnapshotRow = {
   sourceFilename: string;
   canonicalObligationKey: string;
   cycleKey: string;
-  accountNumberEncrypted: string | null;
-  cardNumberLast4: string | null;
-  cardNumber: string | null;
-  customerNameEncrypted: string | null;
   aging: CollectionAgingBucket;
   callingDate: string;
   callingWindowEndExclusive: string;
@@ -684,6 +768,40 @@ type TargetCalculationDataset = {
   poolByCycle: Map<string, PoolCalculationRow>;
   results: CollectionOspReconciliationAccountResult[];
 };
+
+type TargetReportDataset = {
+  target: CollectionOspSavedTargetView;
+  agingRows: TargetAgingConfiguration[];
+  aggregates: Array<{ aging: CollectionAgingBucket; ospClosed: string; closedAccountCount: number }>;
+};
+
+/** Public report reads return four grouped financial rows, never all accounts. */
+async function loadTargetReportDataset(targetId: string, revisionId: string, asOfDate: string, viewer?: CollectionOspViewer, fullCalendarState = false): Promise<TargetReportDataset> {
+  const target = await getCollectionOspSavedTargetRepository(targetId, revisionId, viewer);
+  if (!target || target.status !== "ACTIVE" || target.activeRevision.id !== revisionId) {
+    throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target revision was not found.");
+  }
+  assertTargetDate(target, asOfDate, "As-of date");
+  const bounded = rowsOf(await db.execute(sql`SELECT COUNT(*)::integer AS count
+    FROM (SELECT 1 FROM public.collection_osp_target_source_rows
+      WHERE target_revision_id = ${revisionId}::uuid LIMIT ${MAX_TARGET_SOURCE_ROWS + 1}) source_limit`))[0];
+  if (toNumber(bounded?.count) > MAX_TARGET_SOURCE_ROWS) throw new CollectionOspV7RepositoryError("DATASET_TOO_LARGE", "Saved Target exceeds the 100,000-account scope.");
+  const rows = rowsOf(await db.execute(buildCollectionOspAgingAggregateQuery({
+    targetId, revisionId, asOfDate: fullCalendarState ? target.activeRevision.to : asOfDate,
+    viewerPredicate: targetViewerPredicate(viewer), expectedTargetVersion: target.version,
+  })));
+  if (rows.length !== target.activeRevision.agingScope.length) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target changed or is unavailable.");
+  const agingRows = rows.map((row) => ({ aging: String(row.aging_bucket) as CollectionAgingBucket,
+    totalOsp: String(row.total_osp_baseline), targetPercentage: String(row.target_percentage), targetOsp: String(row.target_osp) }));
+  assertCollectionOspTargetBaselineIntegrity({ agingScope: target.activeRevision.agingScope, agingRows,
+    sourceRows: rows.map((row) => ({ aging: String(row.aging_bucket) as CollectionAgingBucket, billingPrincipalOsp: String(row.snapshot_total_osp) })),
+    hasSavedSourceScope: rows.every((row) => row.has_saved_source_scope === true) });
+  if (rows.reduce((sum, row) => sum + toNumber(row.payment_count), 0) > MAX_TARGET_PAYMENT_ROWS) {
+    throw new CollectionOspV7RepositoryError("DATASET_TOO_LARGE", "Saved Target exceeds the 250,000-payment scope.");
+  }
+  return { target, agingRows, aggregates: rows.map((row) => ({ aging: String(row.aging_bucket) as CollectionAgingBucket,
+    ospClosed: formatCollectionOspMoneyCents(parseCollectionOspMoneyCents(row.reconciled_osp_closed)), closedAccountCount: toNumber(row.reconciled_account_count) })) };
+}
 
 function baselineIntegrityError(message: string): never {
   throw new CollectionOspV7RepositoryError(
@@ -862,298 +980,11 @@ async function loadTargetBaselineEvidence(
   };
 }
 
-async function loadTargetSourceSnapshots(
-  executor: QueryExecutor,
-  revisionId: string,
-  agingScope: CollectionAgingBucket[],
-): Promise<TargetSourceSnapshotRow[]> {
-  const result = await executor.execute(sql`
-    SELECT
-      target_row.source_import_id,
-      target_row.source_data_row_id,
-      source.source_name_snapshot,
-      source.source_filename_snapshot,
-      target_row.canonical_obligation_key,
-      target_row.cycle_key,
-      target_row.account_number_encrypted,
-      target_row.card_number_last4,
-      target_row.customer_name_encrypted,
-      source_data.json_data AS source_json_data,
-      source_index.card_number_hash AS source_card_number_hash,
-      source_index.canonical_obligation_key AS indexed_obligation_key,
-      target_row.aging_bucket,
-      target_row.calling_date,
-      target_row.calling_window_end_exclusive,
-      target_row.total_due::text,
-      target_row.billing_principal_osp::text
-    FROM public.collection_osp_target_source_rows target_row
-    JOIN public.collection_osp_target_sources source
-      ON source.target_revision_id = target_row.target_revision_id
-      AND source.source_import_id = target_row.source_import_id
-    LEFT JOIN public.data_rows source_data
-      ON source_data.import_id = target_row.source_import_id
-      AND source_data.id = target_row.source_data_row_id
-    LEFT JOIN public.collection_source_rows source_index
-      ON source_index.source_import_id = target_row.source_import_id
-      AND source_index.source_data_row_id = target_row.source_data_row_id
-    WHERE target_row.target_revision_id = ${revisionId}::uuid
-      AND target_row.aging_bucket = ANY(${buildTextArraySql(agingScope)})
-    ORDER BY target_row.cycle_key
-  `);
-  return rowsOf(result).map((row) => {
-    const canonical = extractCanonicalSavedCollectionMasterRow(row.source_json_data);
-    const normalizedAccount = normalizeCollectionSourceIdentifier(canonical.accountNumber);
-    const normalizedCard = normalizeCollectionSourceIdentifier(canonical.cardNumber);
-    const accountHash = hashCollectionSourceIdentifier(normalizedAccount, "account_number");
-    const cardHash = hashCollectionSourceIdentifier(normalizedCard, "card_number");
-    const sourceObligationKey = accountHash
-      ? `account:${accountHash}`
-      : cardHash
-        ? `card:${cardHash}`
-        : null;
-    const indexedCardHash = normalizeText(row.source_card_number_hash);
-    const indexedObligationKey = normalizeText(row.indexed_obligation_key);
-    const governedIndexIsAvailable = Boolean(indexedCardHash || indexedObligationKey);
-    const governedIndexMatches = !governedIndexIsAvailable || (
-      cardHash === indexedCardHash
-      && indexedObligationKey === normalizeText(row.canonical_obligation_key)
-    );
-    const trustedCard = cardHash
-      && sourceObligationKey === normalizeText(row.canonical_obligation_key)
-      && governedIndexMatches
-      && normalizedCard.slice(-4) === normalizeText(row.card_number_last4)
-      ? normalizedCard
-      : null;
-    return ({
-    sourceImportId: String(row.source_import_id),
-    sourceDataRowId: String(row.source_data_row_id),
-    sourceName: String(row.source_name_snapshot),
-    sourceFilename: String(row.source_filename_snapshot),
-    canonicalObligationKey: String(row.canonical_obligation_key),
-    cycleKey: String(row.cycle_key),
-    accountNumberEncrypted: row.account_number_encrypted == null ? null : String(row.account_number_encrypted),
-    cardNumberLast4: row.card_number_last4 == null ? null : String(row.card_number_last4),
-    cardNumber: trustedCard,
-    customerNameEncrypted: row.customer_name_encrypted == null ? null : String(row.customer_name_encrypted),
-    aging: String(row.aging_bucket) as CollectionAgingBucket,
-    callingDate: dateOnly(row.calling_date),
-    callingWindowEndExclusive: dateOnly(row.calling_window_end_exclusive),
-    totalDue: String(row.total_due),
-    billingPrincipalOsp: String(row.billing_principal_osp),
-    });
-  });
-}
-
-async function loadTargetSystemPayments(
-  executor: QueryExecutor,
-  target: CollectionOspSavedTargetView,
-  revisionId: string,
-  asOfDate: string,
-  maxRows: number,
-  operationLabel: string,
-): Promise<{
-  paymentsByCycle: Map<string, TargetSystemPaymentEvent[]>;
-  abortDateByCycle: Map<string, string>;
-}> {
-  const nicknameScope = target.activeRevision.nicknameScope.map((value) => value.toLowerCase());
-  const result = await executor.execute(sql`
-    SELECT
-      record.settlement_cycle_key,
-      record.id,
-      record.payment_date,
-      record.amount::text,
-      record.classification,
-      record.collection_staff_nickname,
-      record.created_at
-    FROM public.collection_records record
-    JOIN public.collection_osp_target_source_rows target_row
-      ON target_row.target_revision_id = ${revisionId}::uuid
-      AND target_row.cycle_key = record.settlement_cycle_key
-    JOIN public.collection_osp_target_sources target_source
-      ON target_source.target_revision_id = target_row.target_revision_id
-      AND target_source.source_import_id = record.source_import_id
-    WHERE record.payment_date <= ${asOfDate}::date
-      AND record.payment_date >= ${target.activeRevision.from}::date
-      AND record.payment_date <= ${target.activeRevision.to}::date
-      AND record.payment_date >= target_row.calling_date
-      AND record.payment_date < target_row.calling_window_end_exclusive
-      AND record.duplicate_receipt_flag = false
-      AND record.source_import_id IS NOT NULL
-      AND record.source_data_row_id IS NOT NULL
-      AND record.source_obligation_key = target_row.canonical_obligation_key
-      AND record.total_due = target_row.total_due
-      AND record.billing_principal_osp = target_row.billing_principal_osp
-      ${nicknameScope.length > 0
-        ? sql`AND lower(record.collection_staff_nickname) = ANY(${buildTextArraySql(nicknameScope)})`
-        : sql``}
-    ORDER BY record.settlement_cycle_key, record.payment_date, record.created_at, record.id
-    LIMIT ${maxRows + 1}
-  `);
-  const paymentRows = rowsOf(result);
-  if (paymentRows.length > maxRows) {
-    throw new CollectionOspV7RepositoryError(
-      "DATASET_TOO_LARGE",
-      `${operationLabel} exceeds the ${maxRows.toLocaleString("en-MY")} payment-row limit. Narrow the Saved Target scope and try again.`,
-    );
-  }
-  const paymentsByCycle = new Map<string, TargetSystemPaymentEvent[]>();
-  const abortDateByCycle = new Map<string, string>();
-  for (const row of paymentRows) {
-    const cycleKey = String(row.settlement_cycle_key);
-    const payment: TargetSystemPaymentEvent = {
-      id: String(row.id),
-      date: dateOnly(row.payment_date),
-      amount: String(row.amount),
-      classification: row.classification === "abort_cp" ? "abort_cp" : "cp",
-      collectionStaffNickname: String(row.collection_staff_nickname),
-      createdAt: isoDateTime(row.created_at),
-    };
-    const values = paymentsByCycle.get(cycleKey) ?? [];
-    values.push(payment);
-    paymentsByCycle.set(cycleKey, values);
-    if (row.classification === "abort_cp" && !abortDateByCycle.has(cycleKey)) {
-      abortDateByCycle.set(cycleKey, payment.date);
-    }
-  }
-  return { paymentsByCycle, abortDateByCycle };
-}
-
-async function loadTargetPoolRows(
-  executor: QueryExecutor,
-  revisionId: string,
-): Promise<PoolCalculationRow[]> {
-  const result = await executor.execute(sql`
-    SELECT DISTINCT ON (record.settlement_cycle_key)
-      record.id,
-      record.settlement_cycle_key AS cycle_key,
-      record.pool_amount::text,
-      record.manual_settlement_date,
-      record.manual_settlement_reason,
-      record.manual_settlement_note,
-      record.manual_settlement_reference,
-      record.manual_settlement_version,
-      record.manual_settlement_verified_by,
-      record.manual_settlement_verified_at,
-      record.manual_settlement_updated_by,
-      record.manual_settlement_updated_at
-    FROM public.collection_records record
-    JOIN public.collection_osp_target_source_rows target_row
-      ON target_row.target_revision_id = ${revisionId}::uuid
-      AND target_row.cycle_key = record.settlement_cycle_key
-    JOIN public.collection_osp_target_sources target_source
-      ON target_source.target_revision_id = target_row.target_revision_id
-      AND target_source.source_import_id = record.source_import_id
-    WHERE record.settlement_override_status = 'ACTIVE'
-      AND record.pool_amount > 0
-      AND record.manual_settlement_date >= target_row.calling_date
-      AND record.manual_settlement_date < target_row.calling_window_end_exclusive
-      AND record.duplicate_receipt_flag = false
-      AND record.source_import_id IS NOT NULL
-      AND record.source_data_row_id IS NOT NULL
-      AND record.source_obligation_key = target_row.canonical_obligation_key
-      AND record.total_due = target_row.total_due
-      AND record.billing_principal_osp = target_row.billing_principal_osp
-    ORDER BY record.settlement_cycle_key,
-      record.manual_settlement_updated_at DESC NULLS LAST,
-      record.manual_settlement_verified_at DESC NULLS LAST,
-      record.id DESC
-  `);
-  return rowsOf(result).map((row) => ({
-    id: String(row.id),
-    status: "ACTIVE" as const,
-    version: Math.max(1, toNumber(row.manual_settlement_version)),
-    cycleKey: String(row.cycle_key),
-    amount: String(row.pool_amount),
-    settlementDate: dateOnly(row.manual_settlement_date),
-    reason: row.manual_settlement_reason == null ? null : String(row.manual_settlement_reason),
-    note: row.manual_settlement_note == null ? null : String(row.manual_settlement_note),
-    reference: row.manual_settlement_reference == null ? null : String(row.manual_settlement_reference),
-    verifiedBy: row.manual_settlement_verified_by == null ? null : String(row.manual_settlement_verified_by),
-    verifiedAt: row.manual_settlement_verified_at == null ? null : isoDateTime(row.manual_settlement_verified_at),
-    updatedBy: row.manual_settlement_updated_by == null
-      ? String(row.manual_settlement_verified_by ?? "")
-      : String(row.manual_settlement_updated_by),
-    updatedAt: row.manual_settlement_updated_at == null ? null : isoDateTime(row.manual_settlement_updated_at),
-  }));
-}
-
-async function loadTargetCalculationDataset(
-  targetId: string,
-  revisionId: string,
-  asOfDate: string,
-  options?: { maxSourceRows?: number; operationLabel?: string },
-): Promise<TargetCalculationDataset> {
-  const target = await getCollectionOspSavedTargetRepository(targetId, revisionId);
-  if (!target || target.status !== "ACTIVE" || target.activeRevision.id !== revisionId) {
-    throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target revision was not found.");
-  }
-  assertTargetDate(target, asOfDate, "As-of date");
-  const operationLabel = options?.operationLabel ?? "This operation";
-  const limits = resolveCollectionOspDatasetLimits(options?.maxSourceRows);
-  const maxSourceRows = limits.maxSourceRows;
-  const sourceLimitResult = await db.execute(sql`
-    SELECT 1
-    FROM public.collection_osp_target_source_rows
-    WHERE target_revision_id = ${revisionId}::uuid
-    LIMIT ${maxSourceRows + 1}
-  `);
-  if (rowsOf(sourceLimitResult).length > maxSourceRows) {
-    throw new CollectionOspV7RepositoryError(
-      "DATASET_TOO_LARGE",
-      `${operationLabel} exceeds the ${maxSourceRows.toLocaleString("en-MY")} source-row limit. Narrow the Saved Target scope and try again.`,
-    );
-  }
-  const [agingRows, snapshots, system, poolRows] = await Promise.all([
-    loadTargetAgingRows(db, revisionId),
-    loadTargetSourceSnapshots(db, revisionId, target.activeRevision.agingScope),
-    loadTargetSystemPayments(db, target, revisionId, asOfDate, limits.maxPaymentRows, operationLabel),
-    loadTargetPoolRows(db, revisionId),
-  ]);
-  assertCollectionOspTargetBaselineIntegrity({
-    agingScope: target.activeRevision.agingScope,
-    agingRows,
-    sourceRows: snapshots,
-    hasSavedSourceScope: target.activeRevision.sourceImportIds.length > 0,
-  });
-  const poolByCycle = new Map(poolRows.map((row) => [row.cycleKey, row]));
-  const results = snapshots.map((snapshot) => {
-    const pool = poolByCycle.get(snapshot.cycleKey);
-    return scopeAccountResultToTarget(reconcileCollectionOspAccount({
-      targetRevisionId: revisionId,
-      cycleKey: snapshot.cycleKey,
-      aging: snapshot.aging,
-      totalDue: snapshot.totalDue,
-      billingPrincipalOsp: snapshot.billingPrincipalOsp,
-      systemPayments: system.paymentsByCycle.get(snapshot.cycleKey) ?? [],
-      systemAbortDate: system.abortDateByCycle.get(snapshot.cycleKey) ?? null,
-      manual: pool ? {
-        amount: pool.amount,
-        asOfDate: pool.settlementDate,
-        actualPaymentDate: pool.settlementDate,
-        active: true,
-      } : null,
-      asOfDate,
-    }), target);
-  });
-  return {
-    target,
-    agingRows,
-    snapshots,
-    paymentsByCycle: system.paymentsByCycle,
-    abortDateByCycle: system.abortDateByCycle,
-    poolByCycle,
-    results,
-  };
-}
 
 function resultRows(
-  dataset: TargetCalculationDataset,
-  mode: "system" | "reconciled",
+  dataset: TargetReportDataset,
 ) {
-  const baseline = Object.fromEntries(dataset.agingRows
-    .filter((row) => dataset.target.activeRevision.agingScope.includes(row.aging))
-    .map((row) => [row.aging, row.totalOsp]));
-  const aggregate = aggregateCollectionOspReconciliation(dataset.results, baseline, mode);
+  const aggregate = dataset.aggregates;
   const configByAging = new Map(dataset.agingRows.map((row) => [row.aging, row]));
   const scopedAgings = AGINGS.filter((aging) => dataset.target.activeRevision.agingScope.includes(aging));
   const rows = scopedAgings.map((aging) => {
@@ -1164,12 +995,14 @@ function resultRows(
       totalOsp: config.totalOsp,
       targetPercentage: config.targetPercentage,
       targetOsp: config.targetOsp,
-      resultPercentage: value.resultPercentage,
+      resultPercentage: formatCollectionOspPercentage(parseCollectionOspMoneyCents(value.ospClosed), parseCollectionOspMoneyCents(config.totalOsp)),
       ospClosed: value.ospClosed,
+      balanceOsp: calculateCollectionOspBalance(config.targetOsp, value.ospClosed),
       closedAccountCount: value.closedAccountCount,
     };
   });
-  const allAggregate = aggregate.find((row) => row.aging === "ALL")!;
+  const allClosed = aggregate.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.ospClosed), 0n);
+  const allClosedCount = aggregate.reduce((sum, row) => sum + row.closedAccountCount, 0);
   const allTotalOsp = dataset.agingRows
     .filter((row) => scopedAgings.includes(row.aging))
     .reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.totalOsp), 0n);
@@ -1181,9 +1014,10 @@ function resultRows(
     totalOsp: formatCollectionOspMoneyCents(allTotalOsp),
     targetPercentage: formatCollectionOspPercentage(allTargetOsp, allTotalOsp),
     targetOsp: formatCollectionOspMoneyCents(allTargetOsp),
-    resultPercentage: allAggregate.resultPercentage,
-    ospClosed: allAggregate.ospClosed,
-    closedAccountCount: allAggregate.closedAccountCount,
+    resultPercentage: formatCollectionOspPercentage(allClosed, allTotalOsp),
+    ospClosed: formatCollectionOspMoneyCents(allClosed),
+    balanceOsp: formatCollectionOspMoneyCents(allTargetOsp - allClosed),
+    closedAccountCount: allClosedCount,
   };
   return { rows, all };
 }
@@ -1207,29 +1041,21 @@ async function loadClientResultView(
   revisionId: string,
   target: CollectionOspSavedTargetView,
   agingRows: readonly TargetAgingConfiguration[],
+  viewer?: CollectionOspViewer,
 ): Promise<{
   rows: CollectionOspClientResultView[];
   all: Omit<CollectionOspClientResultView, "aging"> & { aging: "ALL" };
 }> {
   const scopedAgings = AGINGS.filter((aging) => target.activeRevision.agingScope.includes(aging));
   const result = await executor.execute(sql`
-    WITH latest_complete_snapshot AS (
-      SELECT as_of_date, MAX(updated_at) AS snapshot_updated_at
-      FROM public.collection_osp_client_results
-      WHERE target_revision_id = ${revisionId}::uuid
-        AND aging_bucket = ANY(${buildTextArraySql(scopedAgings)})
-      GROUP BY as_of_date
-      HAVING COUNT(DISTINCT aging_bucket) = ${scopedAgings.length}
-      ORDER BY snapshot_updated_at DESC, as_of_date DESC
-      LIMIT 1
-    )
-    SELECT client.aging_bucket, client.result_percentage::text,
+    SELECT client.aging_bucket, client.target_percentage::text, client.result_percentage::text,
       client.note, client.client_reference, client.as_of_date,
       client.version, client.updated_at
-    FROM public.collection_osp_client_results client
-    JOIN latest_complete_snapshot latest
-      ON latest.as_of_date = client.as_of_date
+    FROM public.collection_osp_private_client_results client
+    JOIN public.collection_osp_saved_targets target ON target.id = client.target_id
     WHERE client.target_revision_id = ${revisionId}::uuid
+      AND client.owner_user_id = ${viewer?.userId ?? null}
+      AND target.status = 'ACTIVE' AND ${targetViewerPredicate(viewer)}
       AND client.aging_bucket = ANY(${buildTextArraySql(scopedAgings)})
     ORDER BY client.aging_bucket, client.updated_at DESC, client.id DESC
   `);
@@ -1239,13 +1065,16 @@ async function loadClientResultView(
     const row = byAging.get(aging);
     const config = requireTargetAgingConfiguration(configByAging, aging);
     const resultPercentage = row ? String(row.result_percentage) : "0.0000";
+    const targetPercentage = row ? String(row.target_percentage) : config.targetPercentage;
+    const targetOsp = calculateTargetOsp(config.totalOsp, targetPercentage);
     return {
       aging,
       totalOsp: config.totalOsp,
-      targetPercentage: config.targetPercentage,
-      targetOsp: config.targetOsp,
+      targetPercentage,
+      targetOsp,
       resultPercentage,
       ospClosed: row ? calculateTargetOsp(config.totalOsp, resultPercentage) : "0.00",
+      balanceOsp: calculateCollectionOspBalance(targetOsp, row ? calculateTargetOsp(config.totalOsp, resultPercentage) : "0.00"),
       note: row?.note == null ? null : String(row.note),
       reference: row?.client_reference == null ? null : String(row.client_reference),
       receivedDate: row?.as_of_date == null ? null : dateOnly(row.as_of_date),
@@ -1283,7 +1112,8 @@ export function deriveCollectionOspClientAllView(input: {
   );
   const totalTargetOsp = input.scopedAgings.reduce(
     (sum, aging) => sum + parseCollectionOspMoneyCents(
-      requireTargetAgingConfiguration(input.configByAging, aging).targetOsp,
+      input.rows.find((row) => row.aging === aging)?.targetOsp
+        ?? requireTargetAgingConfiguration(input.configByAging, aging).targetOsp,
     ),
     0n,
   );
@@ -1298,6 +1128,7 @@ export function deriveCollectionOspClientAllView(input: {
       ? formatCollectionOspPercentage(totalClientOsp, totalBaseline)
       : "0.0000",
     ospClosed: completeSnapshot ? formatCollectionOspMoneyCents(totalClientOsp) : "0.00",
+    balanceOsp: formatCollectionOspMoneyCents(totalTargetOsp - (completeSnapshot ? totalClientOsp : 0n)),
     note: null,
     reference: null,
     receivedDate: completeSnapshot ? receivedDates[receivedDates.length - 1] ?? null : null,
@@ -1310,31 +1141,36 @@ export async function getCollectionOspTargetOverviewRepository(input: {
   targetId: string;
   revisionId: string;
   asOfDate: string;
+  viewer?: CollectionOspViewer;
 }) {
-  const dataset = await loadTargetCalculationDataset(input.targetId, input.revisionId, input.asOfDate);
-  return buildCollectionOspTargetOverviewFromDataset(dataset, input.revisionId, input.asOfDate);
+  const dataset = await loadTargetReportDataset(input.targetId, input.revisionId, input.asOfDate, input.viewer);
+  const result = await buildCollectionOspTargetOverviewFromDataset(dataset, input.revisionId, input.asOfDate, input.viewer);
+  await assertViewerStillAuthorized(dataset.target, input.viewer);
+  return result;
 }
 
 async function buildCollectionOspTargetOverviewFromDataset(
-  dataset: TargetCalculationDataset,
+  dataset: TargetReportDataset,
   revisionId: string,
   asOfDate: string,
+  viewer?: CollectionOspViewer,
 ) {
   // "System Result" is the canonical effective Collection settlement state:
   // native ABORT CP or a currently-valid Manual Verified ABORT/POOL. The
   // legacy Billing Table C rows are deliberately not loaded and contribute 0.
-  const systemResult = resultRows(dataset, "reconciled");
+  const systemResult = resultRows(dataset);
   const clientResult = await loadClientResultView(
     db,
     revisionId,
     dataset.target,
     dataset.agingRows,
+    viewer,
   );
   const latestAsOf = latestTargetAsOf(dataset.target);
   const latestDataset = latestAsOf === asOfDate
     ? dataset
-    : await loadTargetCalculationDataset(dataset.target.id, revisionId, latestAsOf);
-  const latestSystem = resultRows(latestDataset, "reconciled").all;
+    : await loadTargetReportDataset(dataset.target.id, revisionId, latestAsOf, viewer);
+  const latestSystem = resultRows(latestDataset).all;
   const hasClient = clientResult.all.receivedDate !== null;
   const latestComparison = {
     system: {
@@ -1400,7 +1236,7 @@ export async function listCollectionOspReconciliationCandidatesRepository(input:
   page: number;
   pageSize: number;
 }) {
-  const target = await getCollectionOspSavedTargetRepository(input.targetId, input.revisionId);
+  const target = (await loadTargetViews(db, { targetId: input.targetId, revisionId: input.revisionId }))[0];
   assertActiveTargetRevision(target, input.targetId, input.revisionId);
   assertTargetDate(target, input.asOfDate, "As-of date");
   if (input.aging && !target.activeRevision.agingScope.includes(input.aging)) {
@@ -1637,7 +1473,7 @@ export async function listCollectionOspManualReconciliationsRepository(input: {
   calculationDataset?: TargetCalculationDataset;
 }) {
   const target = input.calculationDataset?.target
-    ?? await getCollectionOspSavedTargetRepository(input.targetId, input.revisionId);
+    ?? (await loadTargetViews(db, { targetId: input.targetId, revisionId: input.revisionId }))[0];
   assertActiveTargetRevision(target, input.targetId, input.revisionId);
   assertTargetDate(target, input.asOfDate, "As-of date");
   if (input.aging && !target.activeRevision.agingScope.includes(input.aging)) {
@@ -1780,7 +1616,7 @@ async function getReconciliationView(
   reconciliationId: string,
   asOfDate: string,
 ) {
-  const target = await getCollectionOspSavedTargetRepository(targetId, revisionId);
+  const target = (await loadTargetViews(db, { targetId, revisionId }))[0];
   assertActiveTargetRevision(target, targetId, revisionId);
   assertTargetDate(target, asOfDate, "As-of date");
   const row = await getReconciliationDbRow(db, targetId, revisionId, reconciliationId);
@@ -2050,20 +1886,38 @@ export async function upsertCollectionOspClientResultsRepository(input: {
   receivedDate: string;
   rows: Array<{
     aging: CollectionAgingBucket;
+    targetPercentage: string;
     resultPercentage: string;
     note?: string | null;
     reference?: string | null;
     expectedVersion?: number | null;
   }>;
   actor: string;
+  viewer?: CollectionOspViewer;
 }): Promise<CollectionOspClientResultTableView> {
   const baseline = await db.transaction(async (tx) => {
+    // Keep the authenticated account eligible throughout the transaction.
+    // Use the same account-before-target lock order as shared mutations.
+    const actor = rowsOf(await tx.execute(sql`SELECT id FROM public.users
+      WHERE id = ${input.viewer?.userId ?? null} AND username = ${input.actor}
+        AND role = ${input.viewer?.role ?? null} AND role IN ('superuser', 'manager', 'admin')
+        AND status = 'active' AND COALESCE(is_banned, false) = false FOR SHARE`))[0];
+    if (!actor) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target was not found.");
+    const locked = rowsOf(await tx.execute(sql`
+      SELECT target.id FROM public.collection_osp_saved_targets target
+      WHERE target.id = ${input.targetId}::uuid AND target.status = 'ACTIVE'
+        AND ${targetViewerPredicate(input.viewer)}
+        AND EXISTS (SELECT 1 FROM public.users actor_account
+          WHERE actor_account.id = ${input.viewer?.userId ?? null} AND actor_account.username = ${input.actor})
+      FOR UPDATE OF target
+    `))[0];
+    if (!locked) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target was not found.");
     const target = (await loadTargetViews(tx, { targetId: input.targetId, revisionId: input.revisionId }))[0];
     assertActiveTargetRevision(target, input.targetId, input.revisionId);
     const submittedAgings = Array.from(new Set(input.rows.map((row) => row.aging))).sort();
     const scopedAgings = [...target.activeRevision.agingScope].sort();
     if (
-      submittedAgings.length !== scopedAgings.length
+      input.rows.length !== scopedAgings.length || submittedAgings.length !== scopedAgings.length
       || submittedAgings.some((aging, index) => aging !== scopedAgings[index])
     ) {
       throw new CollectionOspV7RepositoryError(
@@ -2080,12 +1934,14 @@ export async function upsertCollectionOspClientResultsRepository(input: {
       hasSavedSourceScope: baselineEvidence.hasSavedSourceScope,
     });
     const agingConfigs = new Map(agingRows.map((row) => [row.aging, row]));
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`collection-osp-client:${input.revisionId}`}, 0))`);
     for (const row of input.rows) {
+      const targetPercentage = parseTargetPercentage(row.targetPercentage);
+      const resultPercentage = parseTargetPercentage(row.resultPercentage);
       const existingResult = await tx.execute(sql`
         SELECT id, version, as_of_date
-        FROM public.collection_osp_client_results
+        FROM public.collection_osp_private_client_results
         WHERE target_revision_id = ${input.revisionId}::uuid
+          AND owner_user_id = ${input.viewer!.userId}
           AND aging_bucket = ${row.aging}
         ORDER BY updated_at DESC, as_of_date DESC, id DESC
         LIMIT 1
@@ -2093,17 +1949,17 @@ export async function upsertCollectionOspClientResultsRepository(input: {
       `);
       const existing = rowsOf(existingResult)[0];
       if (
-        existing
+        (!existing && row.expectedVersion != null) || (existing
         && (
           row.expectedVersion === undefined
           || row.expectedVersion === null
           || toNumber(existing.version) !== row.expectedVersion
-        )
+        ))
       ) {
         throw new CollectionOspV7RepositoryError("VERSION_CONFLICT", "Client Result changed in another session.");
       }
       const agingConfig = requireTargetAgingConfiguration(agingConfigs, row.aging);
-      const derivedOspClosed = calculateTargetOsp(agingConfig.totalOsp, row.resultPercentage);
+      const derivedOspClosed = calculateTargetOsp(agingConfig.totalOsp, resultPercentage);
       if (
         parseCollectionOspMoneyCents(agingConfig.totalOsp) === 0n
         && percentageUnits(row.resultPercentage) > 0n
@@ -2113,39 +1969,50 @@ export async function upsertCollectionOspClientResultsRepository(input: {
           `${row.aging} has no Saved TT OSP baseline, so its Client Result must remain 0%.`,
         );
       }
-      if (existing && dateOnly(existing.as_of_date) === input.receivedDate) {
+      if (existing) {
         await tx.execute(sql`
-          UPDATE public.collection_osp_client_results
-          SET result_percentage = ${row.resultPercentage}::numeric(9,4),
+          UPDATE public.collection_osp_private_client_results
+          SET target_percentage = ${targetPercentage}::numeric(7,4),
+            result_percentage = ${resultPercentage}::numeric(9,4),
+            as_of_date = ${input.receivedDate}::date,
             osp_closed = ${derivedOspClosed}::numeric(16,2),
             client_reference = ${row.reference ?? null}, note = ${row.note ?? null},
             version = version + 1, updated_by = ${input.actor}, updated_at = now()
           WHERE id = ${String(existing.id)}::uuid
+            AND owner_user_id = ${input.viewer!.userId}
         `);
       } else {
         await tx.execute(sql`
-          INSERT INTO public.collection_osp_client_results (
-            id, target_id, target_revision_id, as_of_date, aging_bucket,
+          INSERT INTO public.collection_osp_private_client_results (
+            id, target_id, target_revision_id, owner_user_id, as_of_date, aging_bucket, target_percentage,
             result_percentage, osp_closed, client_reference, note, version,
             created_by, created_at, updated_by, updated_at
           ) VALUES (
             ${randomUUID()}::uuid, ${input.targetId}::uuid, ${input.revisionId}::uuid,
-            ${input.receivedDate}::date, ${row.aging},
-            ${row.resultPercentage}::numeric(9,4), ${derivedOspClosed}::numeric(16,2),
-            ${row.reference ?? null}, ${row.note ?? null}, ${existing ? toNumber(existing.version) + 1 : 1},
+            ${input.viewer!.userId}, ${input.receivedDate}::date, ${row.aging}, ${targetPercentage}::numeric(7,4),
+            ${resultPercentage}::numeric(9,4), ${derivedOspClosed}::numeric(16,2),
+            ${row.reference ?? null}, ${row.note ?? null}, 1,
             ${input.actor}, now(), ${input.actor}, now()
           )
         `);
       }
     }
+    // Do not copy private percentage/evidence contents into the globally readable audit log.
+    await tx.execute(sql`INSERT INTO public.audit_logs
+      (id, action, performed_by, target_resource, details, timestamp)
+      VALUES (${randomUUID()}, 'COLLECTION_OSP_PRIVATE_CLIENT_SAVED', ${input.actor}, ${input.targetId},
+        ${JSON.stringify({ revisionId: input.revisionId, ownerUserId: input.viewer!.userId, agingCount: input.rows.length })}, now())`);
     return { target, agingRows };
   });
-  return loadClientResultView(
+  const result = await loadClientResultView(
     db,
     input.revisionId,
     baseline.target,
     baseline.agingRows,
+    input.viewer,
   );
+  await assertViewerStillAuthorized(baseline.target, input.viewer);
+  return result;
 }
 
 function enumerateDates(from: string, to: string): string[] {
@@ -2165,21 +2032,22 @@ export async function getCollectionOspCalendarRepository(input: {
   to: string;
   asOfDate: string;
   aging?: CollectionAgingBucket;
+  viewer?: CollectionOspViewer;
 }) {
-  const dataset = await loadTargetCalculationDataset(input.targetId, input.revisionId, input.asOfDate, {
-    maxSourceRows: MAX_DRILLDOWN_SOURCE_ROWS,
-    operationLabel: "Calendar",
-  });
-  return buildCollectionOspCalendarFromDataset(dataset, input);
+  const dataset = await loadTargetReportDataset(input.targetId, input.revisionId, input.to, input.viewer);
+  const result = await buildCollectionOspCalendarFromDataset(dataset, input);
+  await assertViewerStillAuthorized(dataset.target, input.viewer);
+  return result;
 }
 
 async function buildCollectionOspCalendarFromDataset(
-  dataset: TargetCalculationDataset,
+  dataset: TargetReportDataset,
   input: {
     revisionId: string;
     from: string;
     to: string;
     aging?: CollectionAgingBucket;
+    viewer?: CollectionOspViewer;
   },
 ) {
   const range = targetTrackingRange(dataset.target);
@@ -2202,6 +2070,11 @@ async function buildCollectionOspCalendarFromDataset(
     .filter((row) => selectedAgings.includes(row.aging))
     .reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.targetOsp), 0n);
   const calendarAging: CollectionAgingBucket | "ALL" = input.aging ?? "ALL";
+  const movements = rowsOf(await db.execute(buildCollectionOspDailyAggregateQuery({
+    targetId: dataset.target.id, revisionId: input.revisionId, asOfDate: input.to,
+    viewerPredicate: targetViewerPredicate(input.viewer), expectedTargetVersion: dataset.target.version,
+    ...(input.aging ? { aging: input.aging } : {}),
+  }))).map((row) => ({ date: dateOnly(row.date), ospClosed: String(row.osp_closed), accountCount: toNumber(row.account_count) }));
   return {
     from: input.from,
     to: input.to,
@@ -2212,9 +2085,7 @@ async function buildCollectionOspCalendarFromDataset(
       ...(input.aging ? { aging: input.aging } : {}),
       totalBaseline,
       targetOsp,
-      results: input.aging
-        ? dataset.results.filter((result) => result.aging === input.aging)
-        : dataset.results,
+      results: [], movements,
     }),
   };
 }
@@ -2226,6 +2097,7 @@ export function buildCollectionOspCalendarDays(input: {
   totalBaseline: bigint;
   targetOsp: bigint;
   results: readonly CollectionOspReconciliationAccountResult[];
+  movements?: readonly { date: string; ospClosed: string; accountCount: number }[];
 }) {
   const systemEvents = new Map<string, bigint>();
   const systemCounts = new Map<string, number>();
@@ -2238,6 +2110,10 @@ export function buildCollectionOspCalendarDays(input: {
     if (result.reconciledClosed && result.effectiveClosureDate) {
       add(systemEvents, systemCounts, result.effectiveClosureDate, osp);
     }
+  }
+  for (const movement of input.movements ?? []) {
+    systemEvents.set(movement.date, parseCollectionOspMoneyCents(movement.ospClosed));
+    systemCounts.set(movement.date, movement.accountCount);
   }
   const dates = enumerateDates(input.from, input.to);
   let systemCumulative = Array.from(systemEvents.entries())
@@ -2255,9 +2131,10 @@ export function buildCollectionOspCalendarDays(input: {
       targetOsp: formatCollectionOspMoneyCents(input.targetOsp),
       systemOspClosedToday: formatCollectionOspMoneyCents(systemToday),
       systemCumulativeOspClosed: formatCollectionOspMoneyCents(systemCumulative),
+      balanceOsp: formatCollectionOspMoneyCents(input.targetOsp - systemCumulative),
       systemResultPercentage: formatCollectionOspPercentage(systemCumulative, input.totalBaseline),
       systemPreviousResultPercentage: previousSystemResult,
-      systemDailyMovementPercentagePoints: formatCollectionOspPercentage(systemToday, input.totalBaseline),
+      systemDailyMovementPercentagePoints: signedPercentageDifference(formatCollectionOspPercentage(systemCumulative, input.totalBaseline), previousSystemResult),
       systemAchievementVsTargetPercentage: formatCollectionOspPercentage(systemCumulative, input.targetOsp),
       systemDailyAccounts: systemCounts.get(date) ?? 0,
     };
@@ -2274,12 +2151,16 @@ export async function getCollectionOspDrilldownRepository(input: {
   contributionSource?: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
   page: number;
   pageSize: number;
+  viewer?: CollectionOspViewer;
 }) {
-  const dataset = await loadTargetCalculationDataset(input.targetId, input.revisionId, input.asOfDate, {
-    maxSourceRows: MAX_DRILLDOWN_SOURCE_ROWS,
-    operationLabel: "Drilldown",
-  });
-  return buildCollectionOspDrilldownFromDataset(dataset, input);
+  // Exact-day detail is a slice of the full-period calendar's current effective
+  // state, not a second historical as-of report. Later valid manual evidence
+  // can establish an earlier day; truncating here would make that day empty.
+  const dataset = await loadTargetReportDataset(input.targetId, input.revisionId, input.asOfDate, input.viewer, Boolean(input.date));
+  const result = await buildCollectionOspDrilldownFromDataset(dataset, input.date
+    ? { ...input, asOfDate: dataset.target.activeRevision.to } : input);
+  await assertViewerStillAuthorized(dataset.target, input.viewer);
+  return result;
 }
 
 export function resolveCollectionOspDrilldownContribution(
@@ -2327,79 +2208,154 @@ export function resolveCollectionOspDrilldownContribution(
   };
 }
 
-function buildCollectionOspDrilldownFromDataset(
-  dataset: TargetCalculationDataset,
+async function buildCollectionOspDrilldownFromDataset(
+  dataset: TargetReportDataset,
   input: {
+    asOfDate: string;
     date?: string;
     aging?: CollectionAgingBucket;
     contributionSource?: "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
     page: number;
     pageSize: number;
+    viewer?: CollectionOspViewer;
   },
 ) {
   if (input.date) assertTargetDate(dataset.target, input.date, "Drilldown date");
   if (input.aging && !dataset.target.activeRevision.agingScope.includes(input.aging)) {
     throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "Aging is outside this Saved Target revision.");
   }
-  const snapshotByCycle = new Map(dataset.snapshots.map((snapshot) => [snapshot.cycleKey, snapshot]));
-  const items = dataset.results.flatMap((result) => {
-    const snapshot = snapshotByCycle.get(result.cycleKey);
-    if (!snapshot) return [];
-    const pool = dataset.poolByCycle.get(result.cycleKey);
-    const hasActiveManual = Boolean(pool);
-    const contribution = resolveCollectionOspDrilldownContribution(
-      result,
-      hasActiveManual,
-      Boolean(input.date),
-      input.contributionSource,
-    );
-    if (!contribution) return [];
-    const { source, effectiveDate } = contribution;
-    if (input.aging && result.aging !== input.aging) return [];
-    if (input.date && effectiveDate !== input.date) return [];
-    const account = decryptCollectionPiiValueSafe(snapshot.accountNumberEncrypted);
-    const customer = decryptCollectionPiiValueSafe(snapshot.customerNameEncrypted);
-    const systemAbortEvent = dataset.paymentsByCycle.get(result.cycleKey)?.find((payment) => (
-      payment.classification === "abort_cp"
-      && payment.date === result.systemAbortDate
-    ));
-    return [{
-      contributionSource: source,
-      maskedAccountNumber: maskAccountNumber(account),
-      cardNumber: snapshot.cardNumber,
-      cardNumberLast4: snapshot.cardNumberLast4,
-      maskedCustomerName: maskCustomerName(customer),
-      sourceName: snapshot.sourceName,
-      sourceFilename: snapshot.sourceFilename,
-      callingDate: snapshot.callingDate,
-      aging: result.aging,
-      totalDue: result.totalDue,
-      systemEligibleCumulative: result.systemCumulative,
-      systemClosureCollectionAmount: source === "AUTOMATIC_ABORT_CP"
-        ? systemAbortEvent?.amount ?? null
-        : null,
-      systemClosureStaffNickname: source === "AUTOMATIC_ABORT_CP"
-        ? systemAbortEvent?.collectionStaffNickname ?? null
-        : null,
-      poolAmount: pool?.amount ?? "0.00",
-      effectiveCumulative: result.reconciledCumulative,
-      billingPrincipalOsp: result.billingPrincipalOsp,
-      effectiveClosedDate: effectiveDate,
-      reason: pool?.reason ?? null,
-      reference: pool?.reference ?? null,
-      verifiedBy: pool?.verifiedBy ?? null,
-      verifiedAt: pool?.verifiedAt ?? null,
-      updatedBy: pool?.updatedBy || null,
-      updatedAt: pool?.updatedAt ?? null,
-    }];
-  }).sort((left, right) => left.effectiveClosedDate.localeCompare(right.effectiveClosedDate)
-    || left.maskedAccountNumber.localeCompare(right.maskedAccountNumber));
-  const total = items.length;
-  const offset = (input.page - 1) * input.pageSize;
-  return {
-    items: items.slice(offset, offset + input.pageSize),
-    pagination: pagination(input.page, input.pageSize, total),
+  if (!Number.isInteger(input.page) || input.page < 1 || !Number.isInteger(input.pageSize)
+    || input.pageSize < 1 || input.pageSize > MAX_EXPORT_DETAIL_ROWS) {
+    throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "Detail pagination is invalid.");
+  }
+  const exactDay = Boolean(input.date);
+  const manualEarlier = sql`(account.manual_amount > 0 AND account.effective_closure_date IS NOT NULL
+    AND account.effective_closure_date IS DISTINCT FROM account.system_abort_date)`;
+  const source = input.contributionSource === "AUTOMATIC_ABORT_CP" ? sql`'AUTOMATIC_ABORT_CP'::text`
+    : input.contributionSource === "MANUAL_VERIFIED_ABORT" ? sql`'MANUAL_VERIFIED_ABORT'::text`
+      : sql`CASE WHEN account.contribution_source = 'MANUAL_VERIFIED_ABORT' OR (${exactDay} AND ${manualEarlier})
+        THEN 'MANUAL_VERIFIED_ABORT' ELSE 'AUTOMATIC_ABORT_CP' END`;
+  const effectiveDate = input.contributionSource === "AUTOMATIC_ABORT_CP" ? sql`account.system_abort_date`
+    : input.contributionSource === "MANUAL_VERIFIED_ABORT" ? sql`account.effective_closure_date`
+      : sql`CASE WHEN account.contribution_source = 'MANUAL_VERIFIED_ABORT' OR (${exactDay} AND ${manualEarlier})
+        THEN account.effective_closure_date ELSE COALESCE(account.system_abort_date, account.effective_closure_date) END`;
+  const eligible = input.contributionSource === "AUTOMATIC_ABORT_CP" ? sql`account.system_closed`
+    : input.contributionSource === "MANUAL_VERIFIED_ABORT" ? sql`(account.contribution_source = 'MANUAL_VERIFIED_ABORT' OR (${exactDay} AND ${manualEarlier}))`
+      : sql`account.reconciled_closed`;
+  const pageResult = await db.execute(sql`
+    WITH ${buildCollectionOspEffectiveAccountCtes({
+      targetId: dataset.target.id, revisionId: dataset.target.activeRevision.id, asOfDate: input.asOfDate,
+      viewerPredicate: targetViewerPredicate(input.viewer), expectedTargetVersion: dataset.target.version,
+    })}, contributions AS (
+      SELECT account.*, ${source} AS detail_source, ${effectiveDate} AS effective_date
+      FROM osp_effective_accounts account WHERE ${eligible}
+        ${input.aging ? sql`AND account.aging_bucket = ${input.aging}` : sql``}
+    ), filtered AS MATERIALIZED (
+      SELECT * FROM contributions WHERE effective_date IS NOT NULL
+        ${input.date ? sql`AND effective_date = ${input.date}::date` : sql``}
+    ), summary AS (
+      SELECT COUNT(*)::integer AS summary_count,
+        COALESCE(SUM(billing_principal_osp), 0)::text AS summary_osp FROM filtered
+    ), authorized_page AS MATERIALIZED (
+      SELECT * FROM filtered
+      ORDER BY effective_date, aging_bucket, cycle_key
+      LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}
+    ), closing_payments AS (
+      SELECT DISTINCT ON (page.cycle_key) page.cycle_key,
+        payment.amount AS closing_amount, payment.collection_staff_nickname AS closing_nickname,
+        payment.payment_date AS closing_payment_date
+      FROM authorized_page page JOIN osp_system_payments payment ON payment.cycle_key = page.cycle_key
+      WHERE (page.detail_source = 'AUTOMATIC_ABORT_CP' AND payment.classification = 'abort_cp'
+        AND payment.payment_date = page.system_abort_date)
+        OR (page.detail_source = 'MANUAL_VERIFIED_ABORT' AND payment.id = page.manual_record_id)
+      ORDER BY page.cycle_key, payment.payment_date, payment.created_at, payment.id
+    )
+    SELECT summary.*, page.*, snapshot.account_number_encrypted, snapshot.customer_name_encrypted,
+      snapshot.card_number_encrypted, snapshot.identification_number_encrypted, snapshot.phone_encrypted,
+      snapshot.card_number_last4, source.source_name_snapshot, source.source_filename_snapshot,
+      source_data.json_data AS source_json_data,
+      source_index.card_number_hash AS source_card_number_hash,
+      source_index.canonical_obligation_key AS indexed_obligation_key,
+      closing.closing_amount::text, closing.closing_nickname, closing.closing_payment_date,
+      manual.pool_amount::text AS stored_pool_amount, manual.manual_settlement_reason,
+      manual.manual_settlement_reference, manual.manual_settlement_verified_by,
+      manual.manual_settlement_verified_at, manual.manual_settlement_updated_by,
+      manual.manual_settlement_updated_at
+    FROM summary LEFT JOIN authorized_page page ON true
+    LEFT JOIN public.collection_osp_target_source_rows snapshot
+      ON snapshot.target_revision_id = page.target_revision_id AND snapshot.cycle_key = page.cycle_key
+    LEFT JOIN public.collection_osp_target_sources source
+      ON source.target_revision_id = page.target_revision_id AND source.source_import_id = page.source_import_id
+    LEFT JOIN public.data_rows source_data
+      ON source_data.import_id = page.source_import_id AND source_data.id = page.source_data_row_id
+    LEFT JOIN public.collection_source_rows source_index
+      ON source_index.source_import_id = page.source_import_id AND source_index.source_data_row_id = page.source_data_row_id
+    LEFT JOIN closing_payments closing ON closing.cycle_key = page.cycle_key
+    LEFT JOIN public.collection_records manual ON manual.id = page.manual_record_id
+    ORDER BY page.effective_date, page.aging_bucket, page.cycle_key
+  `);
+  const detailRows = rowsOf(pageResult);
+  const summary = { accountCount: toNumber(detailRows[0]?.summary_count),
+    ospClosed: formatCollectionOspMoneyCents(parseCollectionOspMoneyCents(detailRows[0]?.summary_osp ?? "0")) };
+  const pageInfo = pagination(input.page, input.pageSize, summary.accountCount);
+  const decrypt = (value: unknown): string | null => {
+    if (value == null) return null;
+    const plaintext = decryptCollectionPiiValueSafe(String(value));
+    if (!plaintext) throw new CollectionOspV7RepositoryError("PII_UNAVAILABLE", "Saved account details could not be decrypted. Contact the administrator.");
+    return plaintext;
   };
+  const items = detailRows.filter((row) => row.cycle_key != null).map((row) => {
+    const source = String(row.detail_source) as "AUTOMATIC_ABORT_CP" | "MANUAL_VERIFIED_ABORT";
+    const effectiveDate = dateOnly(row.effective_date);
+    const money = (value: unknown) => formatCollectionOspMoneyCents(parseCollectionOspMoneyCents(value ?? "0"));
+    const account = decrypt(row.account_number_encrypted);
+    const customer = decrypt(row.customer_name_encrypted);
+    const canonical = extractCanonicalSavedCollectionMasterRow(row.source_json_data);
+    const normalizedAccount = normalizeCollectionSourceIdentifier(canonical.accountNumber);
+    const normalizedCard = normalizeCollectionSourceIdentifier(canonical.cardNumber);
+    const accountHash = hashCollectionSourceIdentifier(normalizedAccount, "account_number");
+    const cardHash = hashCollectionSourceIdentifier(normalizedCard, "card_number");
+    const sourceKey = accountHash ? `account:${accountHash}` : cardHash ? `card:${cardHash}` : null;
+    const trustedSourceIdentity = sourceKey === String(row.canonical_obligation_key)
+      && (row.indexed_obligation_key == null || String(row.indexed_obligation_key) === sourceKey);
+    const trustedCard = trustedSourceIdentity && cardHash
+      && (row.source_card_number_hash == null || String(row.source_card_number_hash) === cardHash)
+      && normalizedCard.slice(-4) === normalizeText(row.card_number_last4) ? normalizedCard : null;
+    const legacyDetails = trustedSourceIdentity ? extractSavedCollectionDisplayDetails(row.source_json_data) : null;
+    const frozenCard = decrypt(row.card_number_encrypted);
+    if ((frozenCard && frozenCard.slice(-4) !== normalizeText(row.card_number_last4))
+      || (account && String(row.canonical_obligation_key).startsWith("account:")
+        && `account:${hashCollectionSourceIdentifier(account, "account_number")}` !== String(row.canonical_obligation_key))) {
+      throw new CollectionOspV7RepositoryError("PII_UNAVAILABLE", "Saved account identity is inconsistent with its source snapshot.");
+    }
+    return {
+      contributionSource: source,
+      accountNumber: account,
+      customerName: customer,
+      identificationNumber: decrypt(row.identification_number_encrypted) ?? legacyDetails?.identificationNumber ?? null,
+      phone: decrypt(row.phone_encrypted) ?? legacyDetails?.phone ?? null,
+      cardNumber: frozenCard ?? trustedCard,
+      cardNumberLast4: row.card_number_last4 == null ? null : String(row.card_number_last4),
+      maskedAccountNumber: maskAccountNumber(account),
+      maskedCustomerName: maskCustomerName(customer),
+      sourceName: String(row.source_name_snapshot), sourceFilename: String(row.source_filename_snapshot),
+      callingDate: dateOnly(row.calling_date), aging: String(row.aging_bucket) as CollectionAgingBucket,
+      totalDue: money(row.total_due), systemEligibleCumulative: money(row.system_cumulative),
+      systemClosureCollectionAmount: row.closing_amount == null ? null : money(row.closing_amount),
+      systemClosureStaffNickname: row.closing_nickname == null ? null : String(row.closing_nickname),
+      paymentDate: row.closing_payment_date == null ? effectiveDate : dateOnly(row.closing_payment_date),
+      classification: source === "AUTOMATIC_ABORT_CP" ? "ABORT_CP" as const : "MANUAL_VERIFIED_ABORT" as const,
+      poolAmount: money(row.stored_pool_amount), effectiveCumulative: money(row.reconciled_cumulative),
+      billingPrincipalOsp: money(row.billing_principal_osp), effectiveClosedDate: effectiveDate,
+      reason: row.manual_settlement_reason == null ? null : String(row.manual_settlement_reason),
+      reference: row.manual_settlement_reference == null ? null : String(row.manual_settlement_reference),
+      verifiedBy: row.manual_settlement_verified_by == null ? null : String(row.manual_settlement_verified_by),
+      verifiedAt: row.manual_settlement_verified_at == null ? null : isoDateTime(row.manual_settlement_verified_at),
+      updatedBy: row.manual_settlement_updated_by == null ? null : String(row.manual_settlement_updated_by),
+      updatedAt: row.manual_settlement_updated_at == null ? null : isoDateTime(row.manual_settlement_updated_at),
+    };
+  });
+  return { items, pagination: pageInfo, summary };
 }
 
 export async function getCollectionOspExportDatasetRepository(input: {
@@ -2410,37 +2366,21 @@ export async function getCollectionOspExportDatasetRepository(input: {
   to: string;
   date?: string;
   aging?: CollectionAgingBucket;
+  viewer?: CollectionOspViewer;
 }) {
-  const calculationDataset = await loadTargetCalculationDataset(
-    input.targetId,
-    input.revisionId,
-    input.asOfDate,
-    {
-      maxSourceRows: MAX_EXPORT_SOURCE_ROWS,
-      operationLabel: "Export",
-    },
-  );
-  const [overview, calendar, drilldown] = await Promise.all([
+  const calculationDataset = await loadTargetReportDataset(input.targetId, input.revisionId, input.asOfDate, input.viewer);
+  const calendarDataset = input.to === input.asOfDate ? calculationDataset
+    : await loadTargetReportDataset(input.targetId, input.revisionId, input.to, input.viewer);
+  const [overview, calendar] = await Promise.all([
     buildCollectionOspTargetOverviewFromDataset(
       calculationDataset,
       input.revisionId,
       input.asOfDate,
+      input.viewer,
     ),
-    buildCollectionOspCalendarFromDataset(calculationDataset, input),
-    Promise.resolve(buildCollectionOspDrilldownFromDataset(calculationDataset, {
-      ...input,
-      page: 1,
-      pageSize: MAX_EXPORT_DETAIL_ROWS,
-    })),
+    buildCollectionOspCalendarFromDataset(calendarDataset, input),
   ]);
-  if (
-    drilldown.pagination.total !== drilldown.items.length
-  ) {
-    throw new CollectionOspV7RepositoryError(
-      "INVALID_SOURCE",
-      `The export contains more than ${MAX_EXPORT_DETAIL_ROWS.toLocaleString("en-MY")} detail rows. Narrow the export date or aging filters and try again.`,
-    );
-  }
+  await assertViewerStillAuthorized(calculationDataset.target, input.viewer);
   return {
     generatedAt: new Date().toISOString(),
     filters: {
@@ -2452,7 +2392,8 @@ export async function getCollectionOspExportDatasetRepository(input: {
     },
     overview,
     calendar: calendar.days,
-    drilldown: drilldown.items,
-    drilldownTotal: drilldown.pagination.total,
+    // Report exports contain A/B and calendar only; authorized PII is exact-day modal data.
+    drilldown: [],
+    drilldownTotal: 0,
   };
 }

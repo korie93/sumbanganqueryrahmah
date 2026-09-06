@@ -116,7 +116,7 @@ export async function restoreCollectionSourceRowsFromBackup(
         ${row.totalOsb}::numeric,
         ${row.agingBucket},
         ${row.callingDate}::date,
-        ${row.createdAt}
+        ${row.createdAt}::timestamptz
       )`),
       sql`, `,
     );
@@ -226,8 +226,8 @@ export async function restoreCollectionOspTargetsFromBackup(
         ${row.totalOspBaseline}::numeric,
         ${row.targetPercentage}::numeric,
         ${row.configuredBy},
-        ${row.createdAt},
-        ${row.updatedAt}
+        ${row.createdAt}::timestamptz,
+        ${row.updatedAt}::timestamptz
       )`),
       sql`, `,
     );

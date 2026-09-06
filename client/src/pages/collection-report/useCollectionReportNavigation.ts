@@ -19,12 +19,14 @@ import {
 } from "@/pages/collection-report/utils";
 
 type UseCollectionReportNavigationArgs = {
+  canAccessBilling: boolean;
   canAccessNicknameSummary: boolean;
   isReadOnlyManager: boolean;
   isSuperuser: boolean;
 };
 
 export function useCollectionReportNavigation({
+  canAccessBilling,
   canAccessNicknameSummary,
   isReadOnlyManager,
   isSuperuser,
@@ -69,12 +71,12 @@ export function useCollectionReportNavigation({
         icon: CalendarDays,
         description: "Jejaki prestasi harian dan kalendar collection.",
       },
-      {
+      ...(canAccessBilling ? [{
         key: "billing-principal",
         label: "Billing Principal (OSP)",
         icon: CircleDollarSign,
-        description: "Ukur OSP yang ditutup oleh peristiwa Abort CP sahaja.",
-      },
+        description: "Semak target sistem dan keputusan client peribadi.",
+      } satisfies CollectionSidebarItem] : []),
     ];
     if (canAccessNicknameSummary) {
       items.push({
@@ -93,7 +95,7 @@ export function useCollectionReportNavigation({
       });
     }
     return items;
-  }, [canAccessNicknameSummary, isReadOnlyManager, isSuperuser]);
+  }, [canAccessBilling, canAccessNicknameSummary, isReadOnlyManager, isSuperuser]);
 
   const activeSidebarItem = useMemo(
     () => sidebarItems.find((item) => item.key === subPage) || sidebarItems[0],
@@ -102,6 +104,10 @@ export function useCollectionReportNavigation({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (subPage === "billing-principal" && !canAccessBilling) {
+      setSubPage(isReadOnlyManager ? "records" : "save");
+      return;
+    }
     if (subPage === "save" && isReadOnlyManager) {
       setSubPage("records");
       return;
@@ -119,7 +125,7 @@ export function useCollectionReportNavigation({
     if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
       window.history.replaceState({}, "", targetPath);
     }
-  }, [canAccessNicknameSummary, isReadOnlyManager, isSuperuser, subPage]);
+  }, [canAccessBilling, canAccessNicknameSummary, isReadOnlyManager, isSuperuser, subPage]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);
@@ -138,6 +144,7 @@ export function useCollectionReportNavigation({
   }, [isReadOnlyManager]);
 
   const handleSelectSubPage = useCallback((nextSubPage: CollectionSubPage) => {
+    if (nextSubPage === "billing-principal" && !canAccessBilling) return;
     if (isReadOnlyManager && nextSubPage === "save") {
       return;
     }
@@ -145,7 +152,7 @@ export function useCollectionReportNavigation({
       setSubPage(nextSubPage);
     });
     setMobileSidebarOpen(false);
-  }, [isReadOnlyManager]);
+  }, [canAccessBilling, isReadOnlyManager]);
 
   return {
     subPage,

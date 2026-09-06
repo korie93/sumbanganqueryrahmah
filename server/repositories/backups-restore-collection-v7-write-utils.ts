@@ -59,21 +59,24 @@ export async function restoreCollectionOspSavedTargetsFromBackup(
       stats.collectionOspSavedTargets.processed += 1;
       const result = await tx.execute(sql`
         INSERT INTO public.collection_osp_saved_targets (
-          id, target_name, normalized_name, description, status, version,
+          id, target_name, normalized_name, description, status, version, assigned_admin_user_id,
           created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
         )
         SELECT
           ${row.id}::uuid, ${row.targetName}, ${row.normalizedName}, ${row.description},
-          ${row.status}, ${row.version}, created_actor.username, ${row.createdAt},
+          ${row.status}, ${row.version}, ${row.assignedAdminUserId}::text, created_actor.username, ${row.createdAt},
           updated_actor.username, ${row.updatedAt}, deleted_actor.username, ${row.deletedAt}
-        JOIN public.users created_actor
-          ON lower(created_actor.username) = lower(${row.createdBy})
+        FROM public.users created_actor
         JOIN public.users updated_actor
           ON lower(updated_actor.username) = lower(${row.updatedBy})
         LEFT JOIN public.users deleted_actor
-          ON ${row.deletedBy} IS NOT NULL
+          ON ${row.deletedBy}::text IS NOT NULL
          AND lower(deleted_actor.username) = lower(${row.deletedBy})
-        WHERE ${row.status} = 'ACTIVE' OR deleted_actor.username IS NOT NULL
+        WHERE lower(created_actor.username) = lower(${row.createdBy})
+          AND (${row.status} = 'ACTIVE' OR deleted_actor.username IS NOT NULL)
+          AND (${row.assignedAdminUserId}::text IS NULL OR EXISTS (
+            SELECT 1 FROM public.users assigned_admin WHERE assigned_admin.id = ${row.assignedAdminUserId}::text
+          ))
         ON CONFLICT DO NOTHING
         RETURNING id
       `);
@@ -172,15 +175,17 @@ export async function restoreCollectionOspTargetSourceRowsFromBackup(
       ${row.targetRevisionId}::uuid, ${row.sourceImportId}, ${row.sourceDataRowId},
       ${row.canonicalObligationKey}, ${row.cycleKey}, ${row.accountNumberEncrypted},
       ${row.accountNumberSearchHash}, ${row.cardNumberLast4}, ${row.customerNameEncrypted},
-      ${row.customerNameSearchHashes === null ? null : buildTextArraySql(row.customerNameSearchHashes)},
+      ${row.cardNumberEncrypted}, ${row.identificationNumberEncrypted}, ${row.phoneEncrypted},
+      ${row.customerNameSearchHashes === null ? null : buildTextArraySql(row.customerNameSearchHashes)}::text[],
       ${row.agingBucket}, ${row.callingDate}::date, ${row.callingWindowEndExclusive}::date,
-      ${row.totalDue}::numeric(16,2), ${row.billingPrincipalOsp}::numeric(16,2), ${row.createdAt}
+      ${row.totalDue}::numeric(16,2), ${row.billingPrincipalOsp}::numeric(16,2), ${row.createdAt}::timestamptz
     )`), sql`, `);
     const result = await tx.execute(sql`
       INSERT INTO public.collection_osp_target_source_rows (
         target_revision_id, source_import_id, source_data_row_id,
         canonical_obligation_key, cycle_key, account_number_encrypted,
         account_number_search_hash, card_number_last4, customer_name_encrypted,
+        card_number_encrypted, identification_number_encrypted, phone_encrypted,
         customer_name_search_hashes, aging_bucket, calling_date,
         calling_window_end_exclusive, total_due, billing_principal_osp, created_at
       )
@@ -189,6 +194,7 @@ export async function restoreCollectionOspTargetSourceRowsFromBackup(
         target_revision_id, source_import_id, source_data_row_id,
         canonical_obligation_key, cycle_key, account_number_encrypted,
         account_number_search_hash, card_number_last4, customer_name_encrypted,
+        card_number_encrypted, identification_number_encrypted, phone_encrypted,
         customer_name_search_hashes, aging_bucket, calling_date,
         calling_window_end_exclusive, total_due, billing_principal_osp, created_at
       )
@@ -356,7 +362,7 @@ export async function restoreCollectionOspManualReconciliationsFromBackup(
         JOIN public.users updated_actor
           ON lower(updated_actor.username) = lower(${row.updatedBy})
         LEFT JOIN public.users voided_actor
-          ON ${row.voidedBy} IS NOT NULL
+          ON ${row.voidedBy}::text IS NOT NULL
          AND lower(voided_actor.username) = lower(${row.voidedBy})
         WHERE revision.id = ${row.targetRevisionId}::uuid
           AND revision.target_id = ${row.targetId}::uuid

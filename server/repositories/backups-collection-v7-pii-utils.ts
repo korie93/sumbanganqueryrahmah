@@ -99,6 +99,13 @@ export function protectCollectionV7AccountBackupPii(params: {
   return { encrypted: resolved.encrypted, searchHash };
 }
 
+export function protectCollectionOspDetailBackupPii(params: {
+  field: "accountNumber" | "icNumber" | "customerPhone";
+  encrypted: unknown;
+}): string | null {
+  return resolveAndReencryptPiiField(params)?.encrypted ?? null;
+}
+
 export function protectCollectionV7CustomerBackupPii(params: {
   encrypted: unknown;
   searchHashes?: unknown;

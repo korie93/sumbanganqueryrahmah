@@ -1,7 +1,7 @@
-// The report UI exposes CSV, XLSX and one governed visual dataset shared by
-// PNG/PDF. Allow that complete workflow in one window while retaining the
+// CSV and XLSX remain available; PNG and PDF each require fresh authorization
+// and a separate private dataset. Allow all four formats while retaining the
 // single-flight guard and the global authenticated API limiter.
-const MAX_EXPORTS_PER_USER_PER_WINDOW = 3;
+const MAX_EXPORTS_PER_USER_PER_WINDOW = 4;
 const EXPORT_RATE_WINDOW_MS = 60_000;
 const MAX_TRACKED_USERS = 1_000;
 

@@ -428,6 +428,13 @@
       "when": 1788512400005,
       "tag": "0061_collection_v9_history_lookup_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1788595200000,
+      "tag": "0062_collection_osp_private_client_ownership",
+      "breakpoints": true
     }
   ]
 }

@@ -10,13 +10,16 @@ import {
   shouldRewriteCollectionPiiShadowValue,
 } from "../server/lib/collection-pii-encryption";
 
-const V7_PII_FIELDS = ["accountNumber", "customerName"] as const;
+const V7_PII_FIELDS = ["accountNumber", "customerName", "cardNumber", "identificationNumber", "phone"] as const;
 const V7_PII_DATASETS = ["targetSourceRows", "manualReconciliations"] as const;
 
 type V7PiiField = (typeof V7_PII_FIELDS)[number];
 type V7PiiDataset = (typeof V7_PII_DATASETS)[number];
 
 type V7PiiRow = {
+  card_number_encrypted?: string | null;
+  identification_number_encrypted?: string | null;
+  phone_encrypted?: string | null;
   account_number_encrypted: string | null;
   account_number_search_hash?: string | null;
   customer_name_encrypted: string | null;
@@ -101,7 +104,7 @@ export function parseCliOptions(argv: string[]): CliOptions {
 }
 
 function createFieldCounts(): V7PiiFieldCounts {
-  return { accountNumber: 0, customerName: 0 };
+  return { accountNumber: 0, customerName: 0, cardNumber: 0, identificationNumber: 0, phone: 0 };
 }
 
 function createDatasetCounts(): V7PiiDatasetCounts {
@@ -128,6 +131,9 @@ export function inspectCollectionV7PiiRow(
   const values: Record<V7PiiField, string | null> = {
     accountNumber: row.account_number_encrypted,
     customerName: row.customer_name_encrypted,
+    cardNumber: row.card_number_encrypted ?? null,
+    identificationNumber: row.identification_number_encrypted ?? null,
+    phone: row.phone_encrypted ?? null,
   };
 
   for (const field of V7_PII_FIELDS) {
@@ -150,7 +156,7 @@ export function inspectCollectionV7PiiRow(
           encrypted: value,
           hash: row.account_number_search_hash,
         })
-        : row.customer_name_search_hashes !== undefined
+        : field === "customerName" && row.customer_name_search_hashes !== undefined
           && shouldRewriteCollectionPiiSearchHashesValue({
             plaintext: null,
             encrypted: value,
@@ -247,7 +253,8 @@ export async function collectCollectionV7PiiStatusSummary(params: {
       `
         SELECT target_revision_id, source_import_id, source_data_row_id,
           account_number_encrypted, account_number_search_hash,
-          customer_name_encrypted, customer_name_search_hashes
+          customer_name_encrypted, customer_name_search_hashes,
+          card_number_encrypted, identification_number_encrypted, phone_encrypted
         FROM public.collection_osp_target_source_rows
         WHERE (
           $1::uuid IS NULL
@@ -321,6 +328,12 @@ function formatSummary(summary: CollectionV7PiiStatusSummary): string {
     `encryptedCustomerName=${summary.encryptedFieldCounts.customerName}`,
     `unreadableAccountNumber=${summary.unreadableEncryptedFieldCounts.accountNumber}`,
     `unreadableCustomerName=${summary.unreadableEncryptedFieldCounts.customerName}`,
+    `encryptedCardNumber=${summary.encryptedFieldCounts.cardNumber}`,
+    `encryptedIdentificationNumber=${summary.encryptedFieldCounts.identificationNumber}`,
+    `encryptedPhone=${summary.encryptedFieldCounts.phone}`,
+    `unreadableCardNumber=${summary.unreadableEncryptedFieldCounts.cardNumber}`,
+    `unreadableIdentificationNumber=${summary.unreadableEncryptedFieldCounts.identificationNumber}`,
+    `unreadablePhone=${summary.unreadableEncryptedFieldCounts.phone}`,
   ].join(" ");
 }
 

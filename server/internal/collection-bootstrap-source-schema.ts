@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { ensureCollectionOspPrivateForeignKeys, ensureCollectionOspPrivateSchema } from "./collection-bootstrap-osp-private-schema";
 import {
   executeBootstrapStatements,
   type BootstrapSqlExecutor,
@@ -699,6 +700,7 @@ export async function ensureCollectionSourceGovernanceSchema(
     `,
   ]);
 
+  await ensureCollectionOspPrivateSchema(database);
   await ensureCollectionSourceGovernanceForeignKeys(database);
 }
 
@@ -708,6 +710,7 @@ export async function ensureCollectionSourceGovernanceSchema(
 export async function ensureCollectionSourceGovernanceForeignKeys(
   database: BootstrapSqlExecutor,
 ): Promise<void> {
+  await ensureCollectionOspPrivateForeignKeys(database);
   await database.execute(sql`
     DO $$
     BEGIN

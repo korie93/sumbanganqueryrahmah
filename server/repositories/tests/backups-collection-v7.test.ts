@@ -3,14 +3,16 @@ import test from "node:test";
 
 import {
   encryptCollectionPiiFieldValue,
+  decryptCollectionPiiValueSafe,
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
 } from "../../lib/collection-pii-encryption";
 import {
   mapBackupCollectionOspManualReconciliation,
   mapBackupCollectionOspManualReconciliationAudit,
+  mapBackupCollectionOspTargetSourceRow,
 } from "../backups-payload-collection-utils";
-import { normalizeBackupCollectionOspManualReconciliation } from "../backups-restore-collection-v7-normalize-utils";
+import { normalizeBackupCollectionOspManualReconciliation, normalizeBackupCollectionOspTargetSourceRow } from "../backups-restore-collection-v7-normalize-utils";
 
 async function withCollectionPiiKey<T>(fn: () => T | Promise<T>): Promise<T> {
   const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY;
@@ -25,6 +27,41 @@ async function withCollectionPiiKey<T>(fn: () => T | Promise<T>): Promise<T> {
     }
   }
 }
+
+test("OSP V3 backup/restore re-encrypts full detail and rejects unreadable source ciphertext", async () => {
+  await withCollectionPiiKey(() => {
+    const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+    try {
+      const record = {
+        backupCursor: "source-cursor", targetRevisionId: "33333333-3333-4333-8333-333333333333",
+        sourceImportId: "source-1", sourceDataRowId: "row-1", canonicalObligationKey: "account:test",
+        cycleKey: "2026-08-12:account:test", accountNumberEncrypted: encryptCollectionPiiFieldValue("000000000001"),
+        accountNumberSearchHash: hashCollectionPiiSearchValue("accountNumber", "000000000001"),
+        customerNameEncrypted: encryptCollectionPiiFieldValue("Example Customer"),
+        customerNameSearchHashes: hashCollectionCustomerNameSearchTerms("Example Customer"),
+        cardNumberLast4: "1001", cardNumberEncrypted: encryptCollectionPiiFieldValue("4111111111111001"),
+        identificationNumberEncrypted: encryptCollectionPiiFieldValue("900101-10-1234"), phoneEncrypted: encryptCollectionPiiFieldValue("012-3456789"),
+        agingBucket: "D3", callingDate: "2026-08-12", callingWindowEndExclusive: "2026-09-12",
+        totalDue: "500.00", billingPrincipalOsp: "1000.00", createdAt: new Date("2026-08-12T00:00:00Z"),
+      };
+      process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = "collection-v7-backup-test-key";
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = "osp-v3-destination-backup-key-test";
+      const backup = mapBackupCollectionOspTargetSourceRow(record);
+      assert.doesNotMatch(JSON.stringify(backup), /000000000001|4111111111111001|900101-10-1234|012-3456789|Example Customer/);
+      const restored = normalizeBackupCollectionOspTargetSourceRow(backup);
+      assert.ok(restored);
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+      assert.equal(decryptCollectionPiiValueSafe(restored.cardNumberEncrypted), "4111111111111001");
+      assert.equal(decryptCollectionPiiValueSafe(restored.identificationNumberEncrypted), "900101-10-1234");
+      assert.equal(decryptCollectionPiiValueSafe(restored.phoneEncrypted), "012-3456789");
+      assert.throws(() => normalizeBackupCollectionOspTargetSourceRow({ ...backup, phoneEncrypted: "broken" }));
+      assert.throws(() => mapBackupCollectionOspTargetSourceRow({ ...backup, cardNumberEncrypted: "broken" }));
+    } finally {
+      if (previous === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+      else process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = previous;
+    }
+  });
+});
 
 test("V7 manual-reconciliation backups retain a derived customer hash for restore source matching", async () => {
   await withCollectionPiiKey(() => {

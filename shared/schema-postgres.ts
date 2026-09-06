@@ -81,6 +81,7 @@ export { mutationIdempotencyKeys } from "./schema-postgres-core";
 export {
   collectionRecords,
   collectionOspClientResults,
+  collectionOspPrivateClientResults,
   collectionOspManualReconciliationAudit,
   collectionOspManualReconciliations,
   collectionOspSavedTargets,

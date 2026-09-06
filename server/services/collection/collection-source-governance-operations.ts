@@ -267,6 +267,9 @@ export class CollectionSourceGovernanceOperations {
     queryRaw: Record<string, unknown>,
   ) {
     const user = this.requireUser(userInput);
+    // Legacy unassigned-source reports are a superuser configuration tool.
+    // Staff reporting must use the saved-target assignment boundary instead.
+    requireSuperuser(user);
     const request = await this.normalizeReportRequest(user, queryRaw);
     const report = await this.storage.getCollectionBillingPrincipalReport(request);
     return {

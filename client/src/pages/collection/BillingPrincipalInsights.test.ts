@@ -2,28 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildBillingPrincipalDrilldownFilters,
-  clampBillingPrincipalTrackingRangeToAsOf,
   getBillingPrincipalCalendarGridDates,
   getBillingPrincipalCalendarMonthRange,
+  assertBillingPrincipalExportAuthorization,
+  assertBillingPrincipalExportOwner,
+  BillingPrincipalExportIdentityError,
 } from "./BillingPrincipalInsights";
 
-test("Billing Principal System calendar and exports never request dates after the selected as-of", () => {
-  assert.deepEqual(clampBillingPrincipalTrackingRangeToAsOf({
-    start: "2026-09-01",
-    end: "2026-09-30",
-    asOf: "2026-09-04",
-  }), {
-    start: "2026-09-01",
-    end: "2026-09-04",
-  });
-  assert.deepEqual(clampBillingPrincipalTrackingRangeToAsOf({
-    start: "2026-09-01",
-    end: "2026-09-30",
-    asOf: "2026-10-01",
-  }), {
-    start: "2026-09-01",
-    end: "2026-09-30",
-  });
+test("final export authorization binds the unchanged target to the original stable owner", () => {
+  const latest = { viewerUserId: "owner-a", target: { version: 7 } };
+  assert.doesNotThrow(() => assertBillingPrincipalExportAuthorization("owner-a", 7, latest));
+  assert.throws(() => assertBillingPrincipalExportAuthorization("owner-a", 7,
+    { ...latest, viewerUserId: "owner-b" }), BillingPrincipalExportIdentityError);
+  assert.throws(() => assertBillingPrincipalExportAuthorization("owner-a", 6, latest), /Target changed/);
+  assert.throws(() => assertBillingPrincipalExportOwner("", "owner-a"), BillingPrincipalExportIdentityError);
+  assert.throws(() => assertBillingPrincipalExportOwner("owner-a", ""), BillingPrincipalExportIdentityError);
+  assert.throws(() => assertBillingPrincipalExportOwner("owner-a", "owner-b"), BillingPrincipalExportIdentityError);
+});
+
+test("Billing Principal full configured validity spans both months independently of TABLE A", () => {
+  const range = { start: "2026-08-12", end: "2026-09-11" };
+  assert.deepEqual(getBillingPrincipalCalendarMonthRange({ ...range, month: "2026-08" }), { from: "2026-08-12", to: "2026-08-31" });
+  assert.deepEqual(getBillingPrincipalCalendarMonthRange({ ...range, month: "2026-09" }), { from: "2026-09-01", to: "2026-09-11" });
+  assert.equal(getBillingPrincipalCalendarMonthRange({ ...range, month: "2026-13" }), null);
 });
 
 test("Billing Principal calendar clips a month to the immutable target tracking range", () => {
@@ -46,26 +47,28 @@ test("Billing Principal month grid retains weekday alignment and a stable six-we
   assert.equal(grid.filter(Boolean).length, 30);
 });
 
-test("Billing Principal drilldown keeps the selected System as-of and optional exact date", () => {
+test("Billing Principal drilldown uses exact clicked day and ten-account pages", () => {
   assert.deepEqual(buildBillingPrincipalDrilldownFilters({
-    reportAsOf: "2026-09-30",
     selectedDate: "2026-09-20",
+    periodEnd: "2026-09-30",
     page: 2,
     aging: "D3",
   }), {
     asOf: "2026-09-30",
     date: "2026-09-20",
     page: 2,
-    pageSize: 20,
+    pageSize: 10,
     aging: "D3",
   });
   assert.deepEqual(buildBillingPrincipalDrilldownFilters({
-    reportAsOf: "2026-09-30",
+    selectedDate: "2026-09-30",
+    periodEnd: "2026-09-30",
     page: 1,
-    aging: "",
+    aging: "ALL",
   }), {
     asOf: "2026-09-30",
+    date: "2026-09-30",
     page: 1,
-    pageSize: 20,
+    pageSize: 10,
   });
 });

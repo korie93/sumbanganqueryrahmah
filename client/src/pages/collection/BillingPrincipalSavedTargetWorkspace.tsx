@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Loader2, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,13 +20,13 @@ import {
   type BillingPrincipalAging,
   type BillingPrincipalClientRow,
   type BillingPrincipalMutationAttempt,
-  type BillingPrincipalReportRow,
   type BillingPrincipalSavedTarget,
   type BillingPrincipalSavedTargetOverview,
 } from "@/lib/api/collection-billing-principal";
-import { parseApiError } from "@/pages/collection/utils";
+import { parseApiError, parseCollectionApiErrorDetails } from "@/pages/collection/utils";
 import {
   BILLING_PRINCIPAL_AGINGS,
+  calculateOspClientPreview,
   formatOspCurrency,
   formatOspPercentage,
   formatOspPercentagePoint,
@@ -46,8 +46,8 @@ function todayIsoDate() {
 
 function trackingRange(target: BillingPrincipalSavedTarget) {
   return {
-    start: target.activeRevision.trackingStartDate || target.activeRevision.from,
-    end: target.activeRevision.trackingEndDate || target.activeRevision.to,
+    start: target.activeRevision.from,
+    end: target.activeRevision.to,
   };
 }
 
@@ -63,11 +63,9 @@ function initialAsOf(target: BillingPrincipalSavedTarget) {
 function ResultTable({
   rows,
   all,
-  onOpenDrilldown,
 }: {
-  rows: BillingPrincipalReportRow[];
-  all: Omit<BillingPrincipalReportRow, "aging"> & { aging: "ALL" };
-  onOpenDrilldown: (aging: BillingPrincipalAging | "ALL") => void;
+  rows: BillingPrincipalSavedTargetOverview["systemResult"]["rows"];
+  all: BillingPrincipalSavedTargetOverview["systemResult"]["all"];
 }) {
   const rendered = [...rows, all];
   return (
@@ -77,11 +75,12 @@ function ResultTable({
           <TableRow className="bg-muted/30">
             <TableHead>Aging</TableHead>
             <TableHead className="text-right">TT OSP</TableHead>
-            <TableHead className="text-right">Target %</TableHead>
-            <TableHead className="text-right">Target OSP</TableHead>
+            <TableHead className="bg-primary/5 text-right">Target %</TableHead>
+            <TableHead className="bg-primary/5 text-right">Target OSP</TableHead>
             <TableHead className="text-right">Result %</TableHead>
-            <TableHead className="text-right">OSP closed</TableHead>
+            <TableHead className="bg-status-online/10 text-right">OSP closed</TableHead>
             <TableHead className="text-right">Accounts</TableHead>
+            <TableHead className="bg-status-away/10 text-right">Balance OSP</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -92,17 +91,9 @@ function ResultTable({
               <TableCell className="text-right tabular-nums">{formatOspPercentage(row.targetPercentage)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(row.targetOsp)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspPercentage(row.resultPercentage)}</TableCell>
-              <TableCell className="text-right">
-                <button
-                  type="button"
-                  className="font-semibold tabular-nums text-primary underline decoration-primary/40 underline-offset-4"
-                  onClick={() => onOpenDrilldown(row.aging)}
-                  aria-label={`Open ${row.aging} OSP closed account detail, ${formatOspCurrency(row.ospClosed)}`}
-                >
-                  {formatOspCurrency(row.ospClosed)}
-                </button>
-              </TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspCurrency(row.ospClosed)}</TableCell>
               <TableCell className="text-right tabular-nums">{row.closedAccountCount.toLocaleString("en-MY")}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspCurrency(row.balanceOsp)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -111,33 +102,69 @@ function ResultTable({
   );
 }
 
-type ClientDraftRow = { resultPercentage: string };
+type ClientDraftRow = { targetPercentage: string; resultPercentage: string };
 type ClientDraft = Record<BillingPrincipalAging, ClientDraftRow>;
+
+export type BillingPrincipalWorkspaceInteraction = {
+  dirty: boolean;
+  saving: boolean;
+  exporting: boolean;
+};
+
+export function billingPrincipalWorkspaceLockMessage(state: BillingPrincipalWorkspaceInteraction): string {
+  if (state.saving) return "Saving your private Client Result. Wait before switching or changing targets.";
+  if (state.exporting) return "Exporting your report. Wait before switching or changing targets.";
+  if (state.dirty) return "Save or discard your private Client Result changes before switching, reloading, or changing targets.";
+  return "";
+}
+
+export function protectBillingPrivateDraftOnUnload(target: EventTarget): () => void {
+  const beforeUnload = (event: Event) => {
+    event.preventDefault();
+    // Browsers show their own standard warning; never put private draft data in it.
+    (event as BeforeUnloadEvent).returnValue = "";
+  };
+  target.addEventListener("beforeunload", beforeUnload);
+  return () => target.removeEventListener("beforeunload", beforeUnload);
+}
 
 function draftFromRows(rows: readonly BillingPrincipalClientRow[]): ClientDraft {
   return Object.fromEntries(BILLING_PRINCIPAL_AGINGS.map((aging) => {
     const row = rows.find((candidate) => candidate.aging === aging);
     return [aging, {
+      targetPercentage: row?.targetPercentage ?? "0.0000",
       resultPercentage: row?.resultPercentage ?? "0.0000",
     }];
   })) as ClientDraft;
 }
 
-function ClientResultTable({
+export function BillingPrincipalClientResultTable({
   target,
   overview,
   editable,
   saving,
+  exporting,
   onSave,
+  onDirtyChange,
 }: {
   target: BillingPrincipalSavedTarget;
   overview: BillingPrincipalSavedTargetOverview;
   editable: boolean;
   saving: boolean;
+  exporting: boolean;
   onSave: (draft: ClientDraft) => Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [draft, setDraft] = useState<ClientDraft>(() => draftFromRows(overview.clientResult.rows));
   const [error, setError] = useState("");
+  const busy = saving || exporting;
+  const dirty = target.activeRevision.agingScope.some((aging) => {
+    const persisted = overview.clientResult.rows.find((row) => row.aging === aging);
+    return draft[aging].targetPercentage !== (persisted?.targetPercentage ?? "0.0000")
+      || draft[aging].resultPercentage !== (persisted?.resultPercentage ?? "0.0000");
+  });
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  const preview = calculateOspClientPreview(overview.clientResult.rows.map((row) => ({ ...row, ...draft[row.aging] })));
 
   useEffect(() => {
     setDraft(draftFromRows(overview.clientResult.rows));
@@ -149,10 +176,19 @@ function ClientResultTable({
   };
 
   const save = async () => {
+    if (busy) return;
     for (const aging of target.activeRevision.agingScope) {
+      if (!isValidOspPercentageInput(draft[aging].targetPercentage)) {
+        setError(`${aging} Target % must be between 0 and 100 with at most four decimal places.`);
+        return;
+      }
       if (!isValidOspPercentageInput(draft[aging].resultPercentage)) {
         setError(`${aging} Result % must be between 0 and 100 with at most four decimal places.`);
         return;
+      }
+      const baseline = overview.clientResult.rows.find((row) => row.aging === aging)?.totalOsp;
+      if (baseline && /^0+(?:\.0+)?$/.test(baseline) && !/^0+(?:\.0+)?$/.test(draft[aging].resultPercentage.trim())) {
+        setError(`${aging} has no TT OSP; its Result % must be zero.`); return;
       }
     }
     setError("");
@@ -161,6 +197,7 @@ function ClientResultTable({
 
   const rows = target.activeRevision.agingScope.map((aging) => ({
     persisted: overview.clientResult.rows.find((candidate) => candidate.aging === aging),
+    calculated: preview?.rows.find((candidate) => candidate.aging === aging),
     aging,
   }));
 
@@ -169,21 +206,25 @@ function ClientResultTable({
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Badge className="rounded-full">B</Badge>
+            <Badge variant="outline" className="rounded-full border-chart-2/30 bg-chart-2/10">B</Badge>
             <h3 id="billing-table-b-heading" className="font-semibold">Client Result</h3>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Only D3–D6 Client Result % is editable. TT OSP, target values, Client OSP Closed and ALL are canonical derived values.
+            Your private Target % and Result % only. Amounts and weighted ALL are derived from the saved TT OSP.
           </p>
+          <Badge variant="outline" className="mt-2">{dirty ? "Unsaved changes — preview" : overview.clientResult.all.receivedDate ? "Saved to your account" : "Unsaved — defaults from TABLE A"}</Badge>
           <p className="mt-1 text-xs text-muted-foreground">
             Latest client submission: {overview.clientResult.all.receivedDate ?? "Not submitted"}. It is independent of the Table A calendar.
           </p>
         </div>
         {editable ? (
-          <Button type="button" size="sm" onClick={() => void save()} disabled={saving}>
+          <div className="flex flex-wrap gap-2">
+          {dirty ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setDraft(draftFromRows(overview.clientResult.rows)); setError(""); }}>Discard changes</Button> : null}
+          <Button type="button" size="sm" onClick={() => void save()} disabled={busy || (!dirty && Boolean(overview.clientResult.all.receivedDate))}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="mr-2 h-4 w-4" aria-hidden="true" />}
             {saving ? "Saving…" : "Save Client Result"}
           </Button>
+          </div>
         ) : null}
       </div>
       {error ? <p role="alert" className="mx-4 mb-4 text-sm text-destructive">{error}</p> : null}
@@ -193,43 +234,47 @@ function ClientResultTable({
             <TableRow className="bg-muted/30">
               <TableHead>Aging</TableHead>
               <TableHead className="text-right">TT OSP</TableHead>
-              <TableHead className="text-right">Target %</TableHead>
-              <TableHead className="text-right">Target OSP</TableHead>
-              <TableHead className="w-36 text-right">Client Result %</TableHead>
-              <TableHead className="text-right">Client OSP Closed</TableHead>
+              <TableHead className="bg-primary/5 text-right">Target %</TableHead>
+              <TableHead className="bg-primary/5 text-right">Target OSP</TableHead>
+              <TableHead className="w-36 bg-chart-2/10 text-right">Client Result %</TableHead>
+              <TableHead className="bg-status-online/10 text-right">Client OSP Closed</TableHead>
+              <TableHead className="bg-status-away/10 text-right">Balance OSP</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map(({ aging, persisted }) => (
+            {rows.map(({ aging, persisted, calculated }) => (
               <TableRow key={aging}>
                 <TableCell className="font-semibold">{aging}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatOspCurrency(persisted?.totalOsp)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatOspCurrency(persisted?.targetOsp)}</TableCell>
+                <TableCell>{editable ? <Input aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto w-28 text-right tabular-nums" /> : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.targetOsp)}</TableCell>
                 <TableCell>
                   {editable ? (
                     <Input
                       aria-label={`${aging} client result percentage`}
                       inputMode="decimal"
+                      maxLength={8}
                       value={draft[aging].resultPercentage}
                       onChange={(event) => update(aging, "resultPercentage", event.target.value)}
-                      disabled={saving}
+                      disabled={busy}
                       className="text-right tabular-nums"
                     />
                   ) : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.resultPercentage)}</span>}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{persisted?.receivedDate ? formatOspCurrency(persisted.ospClosed) : "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.ospClosed)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.balanceOsp)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
           <TableFooter>
             <TableRow>
               <TableCell>ALL</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(overview.clientResult.all.totalOsp)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspPercentage(overview.clientResult.all.targetPercentage)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(overview.clientResult.all.targetOsp)}</TableCell>
-              <TableCell className="text-right tabular-nums">{overview.clientResult.all.receivedDate ? formatOspPercentage(overview.clientResult.all.resultPercentage) : "—"}</TableCell>
-              <TableCell className="text-right tabular-nums">{overview.clientResult.all.receivedDate ? formatOspCurrency(overview.clientResult.all.ospClosed) : "—"}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.totalOsp)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspPercentage(preview?.all.targetPercentage)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.targetOsp)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspPercentage(preview?.all.resultPercentage)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.ospClosed)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.balanceOsp)}</TableCell>
             </TableRow>
           </TableFooter>
         </Table>
@@ -241,9 +286,11 @@ function ClientResultTable({
 export function BillingPrincipalSavedTargetWorkspace({
   role,
   target,
+  onInteractionChange,
 }: {
   role: string;
   target: BillingPrincipalSavedTarget;
+  onInteractionChange?: (state: BillingPrincipalWorkspaceInteraction) => void;
 }) {
   const range = useMemo(() => trackingRange(target), [target]);
   const [asOf, setAsOf] = useState(() => initialAsOf(target));
@@ -252,12 +299,32 @@ export function BillingPrincipalSavedTargetWorkspace({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const [drilldownAging, setDrilldownAging] = useState<BillingPrincipalAging | "ALL" | null>(null);
+  const [clientDirty, setClientDirty] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const saveAttemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
   const saveAbortControllerRef = useRef<AbortController | null>(null);
   const saveRequestIdRef = useRef(0);
   const savingRef = useRef(false);
   const isMountedRef = useRef(true);
+
+  const handleAccessLost = useCallback(() => {
+    saveRequestIdRef.current += 1;
+    saveAbortControllerRef.current?.abort();
+    saveAbortControllerRef.current = null;
+    savingRef.current = false;
+    saveAttemptRef.current = null;
+    setOverview(null); setClientDirty(false); setExportBusy(false); setSaving(false);
+    setError("Saved Target access could not be confirmed. Reload targets before continuing.");
+  }, []);
+
+  useEffect(() => {
+    onInteractionChange?.({ dirty: clientDirty, saving, exporting: exportBusy });
+  }, [clientDirty, exportBusy, onInteractionChange, saving]);
+
+  useEffect(() => {
+    if (!clientDirty) return;
+    return protectBillingPrivateDraftOnUnload(window);
+  }, [clientDirty]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -290,12 +357,13 @@ export function BillingPrincipalSavedTargetWorkspace({
   }, [asOf, refreshVersion, target.activeRevision.id, target.id]);
 
   const saveClient = async (draft: ClientDraft) => {
-    if (!overview || savingRef.current) return;
+    if (!overview || savingRef.current || exportBusy) return;
     const payload = {
       rows: target.activeRevision.agingScope.map((aging) => {
         const current = overview.clientResult.rows.find((row) => row.aging === aging);
         return {
           aging,
+          targetPercentage: draft[aging].targetPercentage.trim(),
           resultPercentage: draft[aging].resultPercentage.trim(),
           ...(current?.note == null ? {} : { note: current.note }),
           ...(current?.reference == null ? {} : { reference: current.reference }),
@@ -333,6 +401,7 @@ export function BillingPrincipalSavedTargetWorkspace({
     } catch (caught) {
       if (!controller.signal.aborted && !isAbortError(caught) && isMountedRef.current && requestId === saveRequestIdRef.current) {
         setError(parseApiError(caught));
+        if ([401, 403, 404].includes(parseCollectionApiErrorDetails(caught).status ?? 0)) handleAccessLost();
       }
     } finally {
       if (saveAbortControllerRef.current === controller) saveAbortControllerRef.current = null;
@@ -360,9 +429,9 @@ export function BillingPrincipalSavedTargetWorkspace({
           <div className="flex flex-wrap items-end gap-2">
             <div className="space-y-1">
               <Label htmlFor="billing-system-as-of">System as of</Label>
-              <Input id="billing-system-as-of" type="date" min={range.start} max={range.end} value={asOf} onChange={(event) => setAsOf(event.target.value)} />
+              <Input id="billing-system-as-of" type="date" min={range.start} max={range.end} value={asOf} disabled={saving || clientDirty || exportBusy} onChange={(event) => { if (event.target.value) setAsOf(event.target.value); }} />
             </div>
-            <Button type="button" variant="outline" onClick={() => setRefreshVersion((value) => value + 1)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => setRefreshVersion((value) => value + 1)} disabled={loading || saving || clientDirty || exportBusy}>
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" /> Refresh
             </Button>
           </div>
@@ -391,9 +460,9 @@ export function BillingPrincipalSavedTargetWorkspace({
               <div className="flex items-center gap-2"><Badge className="rounded-full">A</Badge><h3 id="billing-table-a-heading" className="font-semibold">System Result</h3></div>
               <p className="mt-1 text-sm text-muted-foreground">Effective automatic ABORT CP plus valid Manual Verified ABORT, with each logical account counted once.</p>
             </div>
-            <ResultTable rows={overview.systemResult.rows} all={overview.systemResult.all} onOpenDrilldown={setDrilldownAging} />
+            <ResultTable rows={overview.systemResult.rows} all={overview.systemResult.all} />
           </section>
-          <ClientResultTable target={target} overview={overview} editable={role === "superuser"} saving={saving} onSave={saveClient} />
+          <BillingPrincipalClientResultTable target={target} overview={overview} editable={["superuser", "manager", "admin"].includes(role)} saving={saving} exporting={exportBusy} onSave={saveClient} onDirtyChange={setClientDirty} />
           <section aria-labelledby="billing-latest-comparison" className="rounded-2xl border border-border/70 bg-card p-4">
             <h3 id="billing-latest-comparison" className="font-semibold">Latest Total Result Comparison</h3>
             <p className="mt-1 text-sm text-muted-foreground">This comparison is deliberately independent of the historical System date selector.</p>
@@ -403,7 +472,7 @@ export function BillingPrincipalSavedTargetWorkspace({
               <div className="min-w-0 rounded-xl border p-3"><p className="text-xs text-muted-foreground">Difference (percentage points)</p><p className="mt-1 font-semibold tabular-nums">{comparison?.differencePercentagePoints == null ? "—" : formatOspPercentagePoint(comparison.differencePercentagePoints)}</p></div>
             </div>
           </section>
-          <BillingPrincipalInsights target={target} overview={overview} requestedAging={drilldownAging} onRequestHandled={() => setDrilldownAging(null)} />
+          <BillingPrincipalInsights target={target} overview={overview} disabled={saving || clientDirty} onAccessLost={handleAccessLost} onExportBusy={setExportBusy} />
         </>
       ) : null}
     </div>

@@ -87,8 +87,11 @@ import {
   updateCollectionOspSavedTargetRepository,
   upsertCollectionOspClientResultsRepository,
 } from "./collection-osp-v7-repository-utils";
+import { listCollectionOspTargetOptionsRepository, previewCollectionOspSourceScopeRepository } from "./collection-osp-source-scope-repository-utils";
 
 export class CollectionRepository {
+  readonly getCollectionOspTargetOptions = listCollectionOspTargetOptionsRepository;
+  readonly previewCollectionOspSourceScope = previewCollectionOspSourceScopeRepository;
   readonly backfillLegacyCollectionRecordsForSource = backfillLegacyCollectionRecordsForSource;
   readonly clearCollectionNicknameSessionByActivity = clearCollectionNicknameSessionByActivityRepository;
   readonly configureCollectionSource = configureCollectionSource;

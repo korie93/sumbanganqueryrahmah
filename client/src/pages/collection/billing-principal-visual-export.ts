@@ -3,7 +3,7 @@ import { formatOspCurrency, formatOspPercentage, formatOspPercentagePoint } from
 
 export type BillingPrincipalVisualExportKind = "png" | "pdf";
 export type BillingPrincipalVisualExportSection = { title: string; headers: string[]; rows: string[][] };
-type VisualExportInput = { dataset: BillingPrincipalVisualExportDataset; signal?: AbortSignal };
+type VisualExportInput = { dataset: BillingPrincipalVisualExportDataset; signal?: AbortSignal; beforeDownload: () => Promise<void> };
 
 const WIDTH = 2400;
 const MIN_HEIGHT = 1100;
@@ -12,13 +12,9 @@ const MIN_ROW_HEIGHT = 42;
 const CELL_LINE_HEIGHT = 19;
 const CELL_VERTICAL_PADDING = 12;
 const ROWS_PER_PAGE = 12;
-// Canvas/PDF exports are intentionally bounded; Excel remains the lossless path
-// for very large account-level datasets.
+// At most 366 daily rows plus shared/private summaries. Render one canvas at a
+// time, and yield between pages so cancellation can be delivered by the UI.
 const MAX_PAGES = 120;
-
-function optional(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "—" : String(value);
-}
 
 function withAll<T extends { aging: string }, U extends { aging: string }>(rows: readonly T[], all: U): Array<T | U> {
   return [...rows, all];
@@ -39,6 +35,7 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
     formatOspPercentage(row.resultPercentage),
     formatOspCurrency(row.ospClosed),
     String(row.closedAccountCount),
+    formatOspCurrency(row.balanceOsp),
   ]);
   const clientRows = withAll(overview.clientResult.rows, overview.clientResult.all).map((row) => [
     row.aging,
@@ -47,9 +44,7 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
     formatOspCurrency(row.targetOsp),
     row.receivedDate ? formatOspPercentage(row.resultPercentage) : "—",
     row.receivedDate ? formatOspCurrency(row.ospClosed) : "—",
-    optional(row.receivedDate),
-    optional(row.reference),
-    optional(row.note),
+    row.receivedDate ? formatOspCurrency(row.balanceOsp) : "—",
   ]);
   const comparison = overview.latestComparison;
   const comparisonRows = [
@@ -65,51 +60,28 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
     formatOspCurrency(day.systemOspClosedToday),
     formatOspCurrency(day.systemCumulativeOspClosed),
     formatOspPercentage(day.systemResultPercentage),
+    formatOspPercentage(day.systemPreviousResultPercentage),
     formatOspPercentagePoint(day.systemDailyMovementPercentagePoints),
     formatOspPercentage(day.systemAchievementVsTargetPercentage),
     String(day.systemDailyAccounts),
-  ]);
-  const drilldownRows = dataset.drilldown.map((row) => [
-    row.maskedAccountNumber,
-    row.cardNumber ?? "—",
-    row.maskedCustomerName,
-    row.aging,
-    row.contributionSource === "MANUAL_VERIFIED_ABORT" ? "Manual verified" : "Automatic",
-    formatOspCurrency(row.totalDue),
-    formatOspCurrency(row.systemEligibleCumulative),
-    formatOspCurrency(row.poolAmount),
-    formatOspCurrency(row.effectiveCumulative),
-    formatOspCurrency(row.billingPrincipalOsp),
-    row.effectiveClosedDate,
-  ]);
-  const evidenceRows = dataset.drilldown.map((row) => [
-    row.maskedAccountNumber,
-    row.sourceName,
-    row.sourceFilename,
-    row.callingDate,
-    optional(row.systemClosureCollectionAmount),
-    optional(row.systemClosureStaffNickname),
-    optional(row.reason?.replace(/_/g, " ")),
-    optional(row.reference),
-    optional(row.verifiedBy),
-    optional(row.verifiedAt),
-    optional(row.updatedBy),
-    optional(row.updatedAt),
+    formatOspCurrency(day.balanceOsp),
   ]);
   return [
     { title: "Metadata", headers: ["Field", "Value"], rows: [
       ["Target", overview.target.name], ["Revision", String(revision.revisionNumber)], ["System as of", overview.asOf],
-      ["Target period", `${revision.from} to ${revision.to}`], ["Tracking period", `${revision.trackingStartDate || revision.from} to ${revision.trackingEndDate || revision.to}`],
-      ["Aging", revision.agingScope.join(", ")], ["Nickname scope", revision.nicknameScope.join(", ") || "All"],
+      [revision.sourceValidityVerified ? "Source validity" : "Legacy period (source validity unverified)", `${revision.from} to ${revision.to}`],
+      ["Assigned admin", overview.target.assignedAdmin ? `${overview.target.assignedAdmin.username} — ${overview.target.assignedAdmin.fullName ?? ""}` : "Legacy — unassigned"],
+      ["Private client owner", dataset.generatedBy],
+      ["Private client state", overview.clientResult.all.receivedDate ? "Saved to your account" : "Unsaved — defaults from TABLE A"],
+      ["Aging", revision.agingScope.join(", ")],
+      ["Balance formula", "Target OSP minus closed OSP; negative values retained"],
       ["Sources", revision.sourceSnapshots.map((source) => source.filename ? `${source.name} (${source.filename})` : source.name).join("; ")],
       ["Generated", `${dataset.generatedAt} by ${dataset.generatedBy}`],
     ] },
-    { title: "Table A - System Result", headers: ["Aging", "TT OSP", "Target %", "Target OSP", "Result %", "OSP Closed", "Accounts"], rows: systemRows },
-    { title: "Table B - Client Result", headers: ["Aging", "TT OSP", "Target %", "Target OSP", "Client Result %", "Client OSP Closed", "Received", "Reference", "Note"], rows: clientRows },
+    { title: "Table A - System Result", headers: ["Aging", "TT OSP", "Target %", "Target OSP", "Result %", "OSP Closed", "Accounts", "Balance OSP"], rows: systemRows },
+    { title: "Table B - Client Result", headers: ["Aging", "TT OSP", "Private Target %", "Target OSP", "Client Result %", "Client OSP Closed", "Balance OSP"], rows: clientRows },
     { title: "Latest Total Result Comparison", headers: ["Dataset", "Date", "TT OSP", "OSP Closed", "Result / Difference"], rows: comparisonRows },
-    { title: "Table A - Daily Movement", headers: ["Date", "Aging", "TT OSP", "Target OSP", "Today", "Cumulative", "Result %", "Move pp", "Achievement", "Accounts"], rows: nonEmpty(["Date", "Aging", "TT OSP", "Target OSP", "Today", "Cumulative", "Result %", "Move pp", "Achievement", "Accounts"], calendarRows) },
-    { title: "Table A - OSP Closed Drilldown", headers: ["Account", "Card", "Customer", "Aging", "Classification", "Total Due", "System", "POOL", "Effective", "Billing OSP", "Closed Date"], rows: nonEmpty(["Account", "Card", "Customer", "Aging", "Classification", "Total Due", "System", "POOL", "Effective", "Billing OSP", "Closed Date"], drilldownRows) },
-    { title: "Table A - Drilldown Evidence", headers: ["Account", "Source", "Filename", "Calling", "Closure Amount", "Staff", "Reason", "Reference", "Verified By", "Verified At", "Updated By", "Updated At"], rows: nonEmpty(["Account", "Source", "Filename", "Calling", "Closure Amount", "Staff", "Reason", "Reference", "Verified By", "Verified At", "Updated By", "Updated At"], evidenceRows) },
+    { title: "Table A - Daily Movement", headers: ["Date", "Aging", "TT OSP", "Target OSP", "New closed", "Cumulative", "Result %", "Previous %", "Move pp", "Achievement", "Accounts", "Balance OSP"], rows: nonEmpty(["Date", "Aging", "TT OSP", "Target OSP", "New closed", "Cumulative", "Result %", "Previous %", "Move pp", "Achievement", "Accounts", "Balance OSP"], calendarRows) },
   ];
 }
 
@@ -117,7 +89,7 @@ function abortIfRequested(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException("The export was cancelled.", "AbortError");
 }
 
-function pageChunks(dataset: BillingPrincipalVisualExportDataset) {
+export function buildBillingPrincipalVisualPages(dataset: BillingPrincipalVisualExportDataset) {
   const pages = buildBillingPrincipalVisualExportSections(dataset).flatMap((section) => {
     const chunks: BillingPrincipalVisualExportSection[] = [];
     for (let index = 0; index < section.rows.length || index === 0; index += ROWS_PER_PAGE) {
@@ -127,6 +99,18 @@ function pageChunks(dataset: BillingPrincipalVisualExportDataset) {
   });
   if (pages.length > MAX_PAGES) throw new Error("Visual export is too large. Narrow the date or aging scope, or use Excel.");
   return pages;
+}
+
+export function isBillingPrincipalVisualNumericColumn(section: BillingPrincipalVisualExportSection, column: number): boolean {
+  if (section.title.startsWith("Table A - Daily Movement")) return column >= 2;
+  if (section.title.startsWith("Table A - System") || section.title.startsWith("Table B - Client")) return column >= 1;
+  return section.title === "Latest Total Result Comparison" && column >= 2;
+}
+
+export async function yieldBillingPrincipalExport(signal?: AbortSignal): Promise<void> {
+  abortIfRequested(signal);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  abortIfRequested(signal);
 }
 
 export function wrapBillingPrincipalVisualText(
@@ -195,14 +179,17 @@ function renderPage(dataset: BillingPrincipalVisualExportDataset, section: Billi
       const x = MARGIN + column * columnWidth;
       if (column) { context.beginPath(); context.moveTo(x, y); context.lineTo(x, y + row.height); context.stroke(); }
       context.fillStyle = "#0f172a"; context.font = row.bold ? "700 14px Arial" : "14px Arial";
+      const numeric = isBillingPrincipalVisualNumericColumn(section, column);
+      context.textAlign = numeric ? "right" : "left";
       lines.forEach((line, lineIndex) => context.fillText(
         line,
-        x + 7,
+        numeric ? x + columnWidth - 7 : x + 7,
         y + 8 + CELL_LINE_HEIGHT * (lineIndex + 1) - 4,
       ));
     });
     y += row.height;
   });
+  context.textAlign = "left";
   context.fillStyle = "#64748b"; context.font = "13px Arial"; context.fillText(`Generated ${dataset.generatedAt}`, MARGIN, height - 24);
   context.textAlign = "right"; context.fillText(`Page ${page} of ${pages}`, WIDTH - MARGIN, height - 24);
   return canvas;
@@ -219,19 +206,27 @@ function download(blob: Blob, name: string) {
 
 export async function exportBillingPrincipalVisualReport(kind: BillingPrincipalVisualExportKind, input: VisualExportInput) {
   abortIfRequested(input.signal);
-  const pages = pageChunks(input.dataset);
+  const pages = buildBillingPrincipalVisualPages(input.dataset);
   const base = `billing-principal-${input.dataset.overview.asOf}`;
   if (kind === "png") {
     for (let index = 0; index < pages.length; index += 1) {
-      abortIfRequested(input.signal); const canvas = renderPage(input.dataset, pages[index]!, index + 1, pages.length);
-      try { download(await canvasBlob(canvas), `${base}-part-${String(index + 1).padStart(3, "0")}.png`); } finally { canvas.width = 1; canvas.height = 1; }
+      await yieldBillingPrincipalExport(input.signal);
+      const canvas = renderPage(input.dataset, pages[index]!, index + 1, pages.length);
+      try {
+        const blob = await canvasBlob(canvas);
+        abortIfRequested(input.signal);
+        await input.beforeDownload();
+        abortIfRequested(input.signal);
+        download(blob, `${base}-part-${String(index + 1).padStart(3, "0")}.png`);
+      } finally { canvas.width = 1; canvas.height = 1; }
     }
     return;
   }
   const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
   for (let index = 0; index < pages.length; index += 1) {
-    abortIfRequested(input.signal); if (index) pdf.addPage("a4", "landscape");
+    await yieldBillingPrincipalExport(input.signal);
+    if (index) pdf.addPage("a4", "landscape");
     const canvas = renderPage(input.dataset, pages[index]!, index + 1, pages.length);
     try {
       const availableWidth = pdf.internal.pageSize.getWidth() - 6;
@@ -242,5 +237,10 @@ export async function exportBillingPrincipalVisualReport(kind: BillingPrincipalV
       pdf.addImage(canvas, "PNG", 3, 3, imageWidth, imageHeight, undefined, "FAST");
     } finally { canvas.width = 1; canvas.height = 1; }
   }
-  abortIfRequested(input.signal); pdf.save(`${base}.pdf`);
+  abortIfRequested(input.signal);
+  const blob = pdf.output("blob");
+  abortIfRequested(input.signal);
+  await input.beforeDownload();
+  abortIfRequested(input.signal);
+  download(blob, `${base}.pdf`);
 }

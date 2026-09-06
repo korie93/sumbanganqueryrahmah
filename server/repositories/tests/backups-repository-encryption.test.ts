@@ -680,6 +680,7 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
           "collectionOspTargetSourceRows",
           "collectionOspTargetAgingRows",
           "collectionOspClientResults",
+          "collectionOspPrivateClientResults",
           "collectionOspManualReconciliations",
           "collectionOspManualReconciliationAudit",
           "collectionRecords",

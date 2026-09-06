@@ -26,6 +26,7 @@ import { toDate } from "./backups-restore-shared-utils";
 import {
   protectCollectionV7AccountBackupPii,
   protectCollectionV7CustomerBackupPii,
+  protectCollectionOspDetailBackupPii,
 } from "./backups-collection-v7-pii-utils";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -296,6 +297,7 @@ export function normalizeBackupCollectionOspSavedTarget(
   record: BackupCollectionOspSavedTarget,
 ): RestorableCollectionOspSavedTargetRow | null {
   const id = normalizeUuid(record.id);
+  const assignedAdminUserId = normalizeOptionalText(record.assignedAdminUserId, 200);
   const targetName = normalizeRequiredText(record.targetName, 120, { preserveWhitespace: true });
   const normalizedName = normalizeRequiredText(record.normalizedName, 120, {
     preserveWhitespace: true,
@@ -314,6 +316,7 @@ export function normalizeBackupCollectionOspSavedTarget(
 
   if (
     !id
+    || !isValidOptionalValue(record.assignedAdminUserId, assignedAdminUserId)
     || !targetName
     || targetName !== targetName.trim()
     || !normalizedName
@@ -335,6 +338,7 @@ export function normalizeBackupCollectionOspSavedTarget(
 
   return {
     id,
+    assignedAdminUserId,
     targetName,
     normalizedName,
     description,
@@ -499,6 +503,9 @@ export function normalizeBackupCollectionOspTargetSourceRow(
 
   return {
     targetRevisionId,
+    cardNumberEncrypted: protectCollectionOspDetailBackupPii({ field: "accountNumber", encrypted: record.cardNumberEncrypted }),
+    identificationNumberEncrypted: protectCollectionOspDetailBackupPii({ field: "icNumber", encrypted: record.identificationNumberEncrypted }),
+    phoneEncrypted: protectCollectionOspDetailBackupPii({ field: "customerPhone", encrypted: record.phoneEncrypted }),
     sourceImportId,
     sourceDataRowId,
     canonicalObligationKey,

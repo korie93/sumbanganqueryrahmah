@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { sql } from "drizzle-orm";
+import { ACCOUNT_STATUSES, type AccountStatus } from "../auth/account-lifecycle";
 import type {
   AuditLog,
   DataRow,
@@ -21,6 +22,32 @@ type BackupImportRecord = Import & {
   createdAt?: unknown;
   createdBy?: unknown;
 };
+
+function readStableBackupUserId(value: unknown): string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 200 || value !== value.trim()
+    || Array.from(value).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+    throw new Error("Backup contains an invalid stable account ID; ownership cannot be restored safely.");
+  }
+  return value;
+}
+
+function readBackupAccountStatus(value: unknown): AccountStatus {
+  // Legacy archives predate lifecycle status. New archives always include it;
+  // malformed or null values must not silently reactivate an account.
+  if (value === undefined) return "active";
+  if (typeof value !== "string" || !ACCOUNT_STATUSES.includes(value as AccountStatus)) {
+    throw new Error("Backup contains an invalid account status; account access cannot be restored safely.");
+  }
+  return value as AccountStatus;
+}
+
+function readBackupPasswordRestriction(value: unknown): boolean {
+  if (value === undefined) return false;
+  if (typeof value !== "boolean") {
+    throw new Error("Backup contains an invalid password restriction; account access cannot be restored safely.");
+  }
+  return value;
+}
 
 export async function restoreImportsFromBackup(
   tx: BackupRestoreExecutor,
@@ -96,10 +123,13 @@ export async function restoreUsersFromBackup(
     const rows = chunk
       .filter((user) => Boolean(user.passwordHash))
       .map((user) => ({
-        id: crypto.randomUUID(),
+        id: user.id == null ? crypto.randomUUID() : readStableBackupUserId(user.id),
         username: String(user.username || "").trim().toLowerCase(),
         passwordHash: user.passwordHash!,
         role: user.role || "user",
+        status: readBackupAccountStatus(user.status),
+        mustChangePassword: readBackupPasswordRestriction(user.mustChangePassword),
+        passwordResetBySuperuser: readBackupPasswordRestriction(user.passwordResetBySuperuser),
         createdAt: now,
         updatedAt: now,
         passwordChangedAt: now,

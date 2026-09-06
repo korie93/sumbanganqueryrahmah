@@ -5,6 +5,7 @@ import {
   deleteBillingPrincipalSavedTarget,
   downloadBillingPrincipalExport,
   getBillingPrincipalVisualExportDataset,
+  getBillingPrincipalSavedTarget,
   listBillingPrincipalSavedTargets,
   upsertBillingPrincipalClientResults,
 } from "@/lib/api/collection-billing-principal";
@@ -12,6 +13,7 @@ import { createBillingPrincipalVisualExportFixture } from "./billing-principal-v
 
 const savedTarget = {
   id: "target-a", name: "September governed target", description: null, status: "ACTIVE", version: 1,
+  assignedAdminUserId: "admin-a", assignedAdmin: { id: "admin-a", username: "admin", fullName: null },
   activeRevision: {
     id: "revision-a", revisionNumber: 1, from: "2026-09-01", to: "2026-09-30",
     trackingStartDate: "2026-09-01", trackingEndDate: "2026-09-30", sourceImportIds: ["source-a"],
@@ -21,18 +23,47 @@ const savedTarget = {
   createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
 } as const;
 
+test("target read requires a server-authenticated stable viewer ID rather than deriving it from assignment", async () => {
+  const originalFetch = globalThis.fetch;
+  let viewer: string | undefined = "manager-owner";
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, target: savedTarget,
+    ...(viewer ? { viewerUserId: viewer } : {}) }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    const response = await getBillingPrincipalSavedTarget("target-a");
+    assert.equal(response.viewerUserId, "manager-owner");
+    assert.notEqual(response.viewerUserId, response.target.assignedAdminUserId);
+    viewer = undefined;
+    await assert.rejects(getBillingPrincipalSavedTarget("target-a"));
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("visual export refuses legacy data without a stable authenticated owner", async () => {
+  const originalFetch = globalThis.fetch;
+  const fixture = createBillingPrincipalVisualExportFixture();
+  let owner: string | undefined = fixture.generatedByUserId;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ...fixture, generatedByUserId: owner }),
+    { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    const filters = { asOf: "2026-09-20", from: "2026-09-01", to: "2026-09-20" };
+    assert.equal((await getBillingPrincipalVisualExportDataset("target-a", "revision-a", filters)).generatedByUserId, owner);
+    owner = undefined;
+    await assert.rejects(getBillingPrincipalVisualExportDataset("target-a", "revision-a", filters));
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("Billing Principal Saved Target wrappers use the governed nested route", async () => {
   const calls: Array<{ url: string; method: string; body: string }> = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(input), method: String(init?.method || "GET"), body: typeof init?.body === "string" ? init.body : "" });
-    const payload = String(init?.method || "GET") === "GET" ? { ok: true, targets: [savedTarget] } : { ok: true, target: savedTarget };
+    const payload = String(init?.method || "GET") === "GET" ? { ok: true, targets: [savedTarget], page: 1, pageSize: 50, hasMore: false } : { ok: true, target: savedTarget };
     return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   try {
     assert.equal((await listBillingPrincipalSavedTargets()).targets[0]?.activeRevision.id, "revision-a");
     await createBillingPrincipalSavedTarget({
       name: "September governed target", sourceImportIds: ["source-a"], from: "2026-09-01", to: "2026-09-30",
+      assignedAdminUserId: "admin-a",
       trackingStartDate: "2026-09-01", trackingEndDate: "2026-09-30", nicknameScope: [], agingScope: ["D3"],
       targets: [{ agingBucket: "D3", totalOspBaseline: "1000.00", targetPercentage: "50.0000" }],
     });
@@ -53,7 +84,7 @@ test("Table B submits only D3-D6 percentages and evidence; OSP is server-derived
   }) as typeof fetch;
   try {
     const response = await upsertBillingPrincipalClientResults("target-a", "revision-a", {
-      rows: [{ aging: "D3", resultPercentage: "75.0000", note: "Client checkpoint", reference: "CLIENT-REF-1", version: 1 }],
+      rows: [{ aging: "D3", targetPercentage: "50.0000", resultPercentage: "75.0000", note: "Client checkpoint", reference: "CLIENT-REF-1", version: 1 }],
     });
     assert.equal(response.clientResult.rows[0]?.ospClosed, "7500.00");
   } finally { globalThis.fetch = originalFetch; }
@@ -68,14 +99,23 @@ test("Billing Principal export preserves attachment metadata", async () => {
   let requestedUrl = "";
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     requestedUrl = String(input);
-    return new Response("aging,result\nD3,50.00", { status: 200, headers: { "content-type": "text/csv", "content-disposition": "attachment; filename=\"billing-principal.csv\"" } });
+    return new Response("aging,result\nD3,50.00", { status: 200, headers: { "content-type": "text/csv", "content-disposition": "attachment; filename=\"billing-principal.csv\"", "X-Billing-Export-Owner-Id": "export-owner" } });
   }) as typeof fetch;
   try {
     const result = await downloadBillingPrincipalExport("target-a", "revision-a", { asOf: "2026-09-15", format: "csv" });
     assert.equal(result.fileName, "billing-principal.csv");
+    assert.equal(result.generatedByUserId, "export-owner");
     assert.equal(await result.blob.text(), "aging,result\nD3,50.00");
   } finally { globalThis.fetch = originalFetch; }
   assert.match(requestedUrl, /\/export\?asOf=2026-09-15&format=csv$/);
+});
+
+test("binary export without a server-bound owner fails closed", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("PKsynthetic", { status: 200 })) as typeof fetch;
+  try {
+    await assert.rejects(downloadBillingPrincipalExport("target-a", "revision-a", { asOf: "2026-09-15", format: "xlsx" }));
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("visual export accepts the V9 two-table dataset and full authorized card", async () => {

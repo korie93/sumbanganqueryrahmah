@@ -451,6 +451,10 @@ export const collectionOspTargets = pgTable("collection_osp_targets", {
  */
 export const collectionOspSavedTargets = pgTable("collection_osp_saved_targets", {
   id: uuid("id").primaryKey(),
+  // NULL is intentionally retained for legacy, unassigned targets. Authorization
+  // uses this stable account ID, never a username, nickname or display label.
+  assignedAdminUserId: text("assigned_admin_user_id")
+    .references(() => users.id, { onDelete: "restrict", onUpdate: "cascade" }),
   targetName: text("target_name").notNull(),
   normalizedName: text("normalized_name").notNull(),
   description: text("description"),
@@ -473,6 +477,9 @@ export const collectionOspSavedTargets = pgTable("collection_osp_saved_targets",
     .where(sql`${table.status} = 'ACTIVE'`),
   updatedAtIdx: index("idx_collection_osp_saved_targets_updated_at").on(table.updatedAt.desc()),
   creatorIdx: index("idx_collection_osp_saved_targets_created_by").on(table.createdBy),
+  assignedAdminIdx: index("idx_collection_osp_saved_targets_assigned_admin_active")
+    .on(table.assignedAdminUserId, table.updatedAt.desc(), table.id)
+    .where(sql`${table.status} = 'ACTIVE'`),
   targetNameCheck: check(
     "chk_collection_osp_saved_targets_name",
     sql`char_length(${table.targetName}) BETWEEN 1 AND 120
@@ -627,6 +634,9 @@ export const collectionOspTargetSourceRows = pgTable("collection_osp_target_sour
   accountNumberEncrypted: text("account_number_encrypted"),
   accountNumberSearchHash: text("account_number_search_hash"),
   cardNumberLast4: text("card_number_last4"),
+  cardNumberEncrypted: text("card_number_encrypted"),
+  identificationNumberEncrypted: text("identification_number_encrypted"),
+  phoneEncrypted: text("phone_encrypted"),
   customerNameEncrypted: text("customer_name_encrypted"),
   customerNameSearchHashes: text("customer_name_search_hashes").array(),
   agingBucket: text("aging_bucket").notNull(),
@@ -677,6 +687,12 @@ export const collectionOspTargetSourceRows = pgTable("collection_osp_target_sour
         cardinality(${table.customerNameSearchHashes}) BETWEEN 0 AND 128
         AND array_position(${table.customerNameSearchHashes}, NULL) IS NULL
       )`,
+  ),
+  detailEncryptionCheck: check(
+    "chk_collection_osp_target_source_rows_detail_encryption",
+    sql`(${table.cardNumberEncrypted} IS NULL OR char_length(${table.cardNumberEncrypted}) > 0)
+      AND (${table.identificationNumberEncrypted} IS NULL OR char_length(${table.identificationNumberEncrypted}) > 0)
+      AND (${table.phoneEncrypted} IS NULL OR char_length(${table.phoneEncrypted}) > 0)`,
   ),
   trustedSnapshotCheck: check(
     "chk_collection_osp_target_source_rows_snapshot",
@@ -762,6 +778,53 @@ export const collectionOspClientResults = pgTable("collection_osp_client_results
       AND (${table.note} IS NULL OR char_length(${table.note}) <= 2000)`,
   ),
   versionCheck: check("chk_collection_osp_client_results_version", sql`${table.version} >= 1`),
+}));
+
+/**
+ * Viewer-private TABLE B. The legacy shared client table above is retained for
+ * audit only: it never recorded a private target percentage or reliable owner
+ * for a complete save, so migration must not fabricate private historical data.
+ * A source/baseline revision stays stable when shared A percentages change.
+ */
+export const collectionOspPrivateClientResults = pgTable("collection_osp_private_client_results", {
+  id: uuid("id").primaryKey(),
+  targetId: uuid("target_id").notNull(),
+  targetRevisionId: uuid("target_revision_id").notNull(),
+  ownerUserId: text("owner_user_id").notNull()
+    .references(() => users.id, { onDelete: "restrict", onUpdate: "cascade" }),
+  agingBucket: text("aging_bucket").notNull(),
+  targetPercentage: numeric("target_percentage", { precision: 7, scale: 4 }).notNull(),
+  resultPercentage: numeric("result_percentage", { precision: 9, scale: 4 }).notNull(),
+  ospClosed: numeric("osp_closed", { precision: 16, scale: 2 }).notNull(),
+  asOfDate: date("as_of_date", { mode: "string" }).notNull(),
+  clientReference: text("client_reference"),
+  note: text("note"),
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by").notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+  updatedBy: text("updated_by").notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  targetRevisionForeignKey: foreignKey({
+    name: "collection_osp_private_client_results_target_revision_fkey",
+    columns: [table.targetId, table.targetRevisionId],
+    foreignColumns: [collectionOspTargetRevisions.targetId, collectionOspTargetRevisions.id],
+  }).onDelete("restrict").onUpdate("cascade"),
+  ownerAgingUnique: uniqueIndex("idx_collection_osp_private_client_results_owner_aging_unique")
+    .on(table.targetRevisionId, table.ownerUserId, table.agingBucket),
+  ownerTargetIdx: index("idx_collection_osp_private_client_results_owner_target")
+    .on(table.ownerUserId, table.targetId),
+  agingCheck: check("chk_collection_osp_private_client_results_aging",
+    sql`${table.agingBucket} IN ('D3', 'D4', 'D5', 'D6')`),
+  percentageCheck: check("chk_collection_osp_private_client_results_percentage",
+    sql`${table.targetPercentage} BETWEEN 0 AND 100 AND ${table.resultPercentage} BETWEEN 0 AND 100`),
+  amountCheck: check("chk_collection_osp_private_client_results_amount", sql`${table.ospClosed} >= 0`),
+  textCheck: check("chk_collection_osp_private_client_results_text",
+    sql`(${table.clientReference} IS NULL OR char_length(${table.clientReference}) <= 300)
+      AND (${table.note} IS NULL OR char_length(${table.note}) <= 2000)`),
+  versionCheck: check("chk_collection_osp_private_client_results_version", sql`${table.version} >= 1`),
 }));
 
 export const collectionOspManualReconciliations = pgTable("collection_osp_manual_reconciliations", {

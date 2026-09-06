@@ -1,5 +1,6 @@
 import { runtimeConfig } from "../config/runtime";
 import { db } from "../db-postgres";
+import { restoreCollectionOspPrivateClientResultsFromBackup } from "./backups-collection-osp-private-utils";
 import { BackupPayloadTooLargeError } from "../lib/backup-payload-limit";
 import type { BackupDataPayload, RestoreStats } from "./backups-repository-types";
 import {
@@ -46,6 +47,7 @@ const BACKUP_PAYLOAD_DATASET_KEYS = [
   "collectionOspTargetSourceRows",
   "collectionOspTargetAgingRows",
   "collectionOspClientResults",
+  "collectionOspPrivateClientResults",
   "collectionOspManualReconciliations",
   "collectionOspManualReconciliationAudit",
   "collectionRecords",
@@ -177,6 +179,7 @@ export async function restoreFromBackup(
     await restoreCollectionOspTargetSourceRowsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionOspTargetAgingRowsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionOspClientResultsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionOspPrivateClientResultsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionOspManualReconciliationsFromBackup(restoreTx, backupDataReader, stats);
     await restoreCollectionOspManualReconciliationAuditFromBackup(
       restoreTx,

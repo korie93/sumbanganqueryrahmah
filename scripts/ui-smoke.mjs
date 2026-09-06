@@ -115,7 +115,7 @@ const verifyDownloadedArtifact = async (download, extension, expectedSignature) 
 
 const downloadBillingPrincipalSmokeArtifact = async (page, format, extension, signature) => {
   const button = page.getByRole("button", {
-    name: `Export complete Billing Principal report as ${format}`,
+    name: `Export Billing Principal report as ${format}`,
   });
   const deadline = Date.now() + 30_000;
   while (!(await button.isEnabled())) {
@@ -124,7 +124,9 @@ const downloadBillingPrincipalSmokeArtifact = async (page, format, extension, si
   }
   const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
   await button.click();
-  await verifyDownloadedArtifact(await downloadPromise, extension, signature);
+  const downloaded = await downloadPromise;
+  console.log(`[smoke-ui] Billing ${format} download transport: ${new URL(downloaded.url()).protocol}`);
+  await verifyDownloadedArtifact(downloaded, extension, signature);
 };
 
 const assertSmokeResponseStatus = (response, expectedStatus, operation) => {
@@ -696,8 +698,8 @@ const createCollectionSmokeSourceImport = async (context, values) => {
     "PUT",
     `/api/collection/source-configs/${encodeURIComponent(sourceImportId)}`,
     {
-      validFrom: "2000-01-01",
-      validTo: "2099-12-31",
+      validFrom: values.validFrom ?? "2000-01-01",
+      validTo: values.validTo ?? "2099-12-31",
       enabled: true,
     },
     [200],
@@ -711,167 +713,147 @@ const createCollectionSmokeSourceImport = async (context, values) => {
 
 const checkBillingPrincipalV9UiFlow = async (page, context, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  const [nickname] = await ensureCollectionSmokeNicknames(context);
-  const uniqueSuffix = `${Date.now()}`;
+  const uniqueSuffix = String(Date.now());
   const asOf = getLocalIsoDate();
-  const targetName = `Smoke V9 Target ${uniqueSuffix}`;
+  const shiftedDate = (offset) => {
+    const seed = new Date(asOf + "T12:00:00");
+    seed.setDate(seed.getDate() + offset);
+    return [seed.getFullYear(), String(seed.getMonth() + 1).padStart(2, "0"), String(seed.getDate()).padStart(2, "0")].join("-");
+  };
+  const from = shiftedDate(-1);
+  const to = shiftedDate(1);
+  let targetName = "Smoke V3 Target " + uniqueSuffix;
   const sourceImport = await createCollectionSmokeSourceImport(context, {
-    uniqueSuffix,
-    customerName: `Smoke V7 Customer ${uniqueSuffix}`,
-    icNumber: `900101${uniqueSuffix.slice(-6)}`,
-    customerPhone: `012${uniqueSuffix.slice(-7)}`,
-    accountNumber: `SMOKE-V9-${uniqueSuffix}`,
-    cardNumber: `V9${uniqueSuffix.slice(-8)}`,
-    callingDate: asOf,
-    dcSts: "3",
-    totalDue: "100.00",
-    billingPrincipalOsp: "100.00",
+    uniqueSuffix, customerName: "Smoke V3 Customer " + uniqueSuffix,
+    icNumber: "900101" + uniqueSuffix.slice(-6), customerPhone: "012" + uniqueSuffix.slice(-7),
+    accountNumber: "000" + uniqueSuffix, cardNumber: "001" + uniqueSuffix,
+    callingDate: asOf, dcSts: "3", totalDue: "100.00", billingPrincipalOsp: "100.00",
+    validFrom: from, validTo: to,
   });
   let targetDeleted = false;
-
+  let savedTarget;
   try {
-    await applySmokeCollectionNicknameSession(page, nickname);
+    const options = await apiJsonRequestWithRetry(context, "GET",
+      "/api/collection/report/billing-principal/saved-targets/options", undefined, [200]);
+    const admin = options.payload?.admins?.find((item) => item.username === process.env.SEED_ADMIN_USERNAME)
+      ?? options.payload?.admins?.[0];
+    assert(admin?.id, "Billing V3 smoke requires an eligible seeded admin account.");
     await navigateForSmoke(page, "/collection/billing-principal");
-    await page.getByRole("heading", { name: "Billing Principal Workspace" }).waitFor({ timeout: 20_000 });
-
-    const sourceButtons = page.locator('button[id^="billing-source-"]');
-    await sourceButtons.first().waitFor({ timeout: 20_000 });
-    const sourceCount = await sourceButtons.count();
-    const sourceButtonsToToggle = [];
-    for (let index = 0; index < sourceCount; index += 1) {
-      const button = sourceButtons.nth(index);
-      const label = String(await button.getAttribute("aria-label") || "");
-      const selected = await button.getAttribute("data-state") === "checked";
-      const isSmokeSource = label === `Select ${sourceImport.filename}`;
-      if (selected !== isSmokeSource) sourceButtonsToToggle.push(button);
-    }
-
-    if (sourceButtonsToToggle.length > 0) {
-      const finalReportResponse = page.waitForResponse((response) => {
-        if (response.request().method() !== "GET") return false;
-        const url = new URL(response.url());
-        return url.pathname === "/api/collection/report/billing-principal"
-          && url.searchParams.get("sourceImportIds") === sourceImport.id
-          && url.searchParams.get("agingBuckets") === "D3,D4,D5,D6";
-      }, { timeout: 20_000 });
-      for (const button of sourceButtonsToToggle) await button.click();
-      assertSmokeResponseStatus(await finalReportResponse, 200, "Load final Billing Principal report");
-    }
-    await page.getByRole("table", { name: "Billing Principal OSP performance by aging" }).waitFor({ timeout: 20_000 });
-    const saveTargetButton = page.getByRole("button", { name: "Save Current Target" });
-    await saveTargetButton.waitFor({ timeout: 20_000 });
-    await saveTargetButton.click({ timeout: 20_000 });
-    await page.getByRole("heading", { name: "Create Saved Target" }).waitFor({ timeout: 15_000 });
-    await page.getByLabel("Target name").fill(targetName);
-    const createTargetResponse = page.waitForResponse((response) => (
-      response.request().method() === "POST"
-      && new URL(response.url()).pathname === "/api/collection/report/billing-principal/saved-targets"
-    ));
-    await page.getByRole("button", { name: "Create Target" }).click();
-    assertSmokeResponseStatus(await createTargetResponse, 200, "Create Billing Principal Saved Target");
-    await page.getByRole("heading", { name: targetName }).waitFor({ timeout: 20_000 });
-    await page.getByText("Immutable TT OSP baseline", { exact: false }).waitFor({ timeout: 20_000 });
-
+    await page.getByRole("heading", { name: "Billing Principal (OSP)", exact: true }).waitFor({ timeout: 20_000 });
+    await page.getByRole("button", { name: "Create Target", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("heading", { name: "Create Billing OSP target" }).waitFor();
+    await dialog.getByLabel("Search admin accounts").fill(admin.username);
+    await dialog.locator("#osp-assigned-admin").selectOption(admin.id);
+    await dialog.getByLabel("Search configured sources").fill(sourceImport.filename);
+    await dialog.locator("#osp-configured-source").selectOption(sourceImport.id);
+    await dialog.getByRole("table", { name: "Shared target baseline preview" }).waitFor();
+    assert(await dialog.locator('input[type="date"]').count() === 0, "Configured source validity must be read-only.");
+    await dialog.getByText(from + " — " + to, { exact: true }).waitFor();
+    await dialog.getByLabel("D3 shared target percentage").fill("30");
+    await dialog.getByLabel("4. Target name", { exact: true }).fill(targetName);
+    const createResponse = page.waitForResponse((response) => response.request().method() === "POST"
+      && new URL(response.url()).pathname === "/api/collection/report/billing-principal/saved-targets");
+    await dialog.getByRole("button", { name: "Save Target", exact: true }).click();
+    const created = await createResponse;
+    assertSmokeResponseStatus(created, 200, "Create Billing OSP V3 target");
+    savedTarget = (await created.json()).target;
+    assert(savedTarget.assignedAdminUserId === admin.id, "Creation must persist the selected stable admin ID.");
+    assert(savedTarget.activeRevision.from === from && savedTarget.activeRevision.to === to,
+      "Target validity must match configured source dates, including tomorrow.");
+    await page.getByRole("heading", { name: targetName, exact: true }).waitFor();
     const tableA = page.getByRole("table", { name: "Table A System Billing Principal result" });
     const tableB = page.getByRole("table", { name: "Table B Client Billing Principal result" });
-    await tableA.waitFor({ timeout: 20_000 });
-    await tableB.waitFor({ timeout: 20_000 });
-    for (const aging of ["D3", "D4", "D5", "D6"]) {
-      await page.getByLabel(`${aging} client result percentage`).waitFor({ timeout: 20_000 });
-    }
-    await page.getByLabel("D3 client result percentage").fill("50.0000");
-    const clientResultResponse = page.waitForResponse((response) => (
-      response.request().method() === "PUT"
-      && /\/client-results$/.test(new URL(response.url()).pathname)
-    ));
-    await page.getByRole("button", { name: "Save Client Result" }).click();
-    const savedClientResultResponse = await clientResultResponse;
-    assertSmokeResponseStatus(savedClientResultResponse, 200, "Save Billing Principal Client Results");
-    const savedClientResult = await savedClientResultResponse.json();
-    const savedD3 = savedClientResult?.clientResult?.rows?.find((row) => row?.aging === "D3");
-    assert(
-      String(savedD3?.resultPercentage || "") === "50.0000"
-      && String(savedD3?.ospClosed || "") === "50.00"
-      && String(savedClientResult?.clientResult?.all?.resultPercentage || "") === "50.0000"
-      && String(savedClientResult?.clientResult?.all?.ospClosed || "") === "50.00",
-      "Table B must persist only D3-D6 percentages and derive D3/ALL Client OSP Closed from the Saved TT OSP baseline",
-    );
-    await tableB.getByText("50.00%", { exact: true }).last().waitFor({ timeout: 20_000 });
-    await tableB.getByText("RM50.00", { exact: true }).first().waitFor({ timeout: 20_000 });
-    await page.getByRole("heading", { name: "Latest Total Result Comparison" }).waitFor({ timeout: 20_000 });
-    await page.getByText("It is independent of the Table A calendar.", { exact: false }).first().waitFor({ timeout: 20_000 });
-    await page.getByRole("heading", { name: "Table A movement and account drill-down" }).waitFor({ timeout: 20_000 });
-    await page.getByText("Calendar data is System-only.", { exact: false }).waitFor({ timeout: 20_000 });
-    assert(await page.getByRole("button", { name: "Add Table C Entry" }).count() === 0, "Billing Principal V9 must not expose Table C mutations");
-    assert(await page.getByRole("table", { name: "Table C manual reconciliation entries" }).count() === 0, "Billing Principal V9 must render exactly Table A and Table B as primary results");
-
+    await tableA.waitFor(); await tableB.waitFor();
+    assert(await tableA.getByRole("columnheader").count() === 8, "Table A must have eight columns.");
+    assert(await tableB.getByRole("columnheader").count() === 7, "Private Table B must have seven columns, without Accounts.");
+    await page.getByText("Unsaved — defaults from TABLE A", { exact: true }).waitFor();
+    await page.getByLabel("D3 private target percentage").fill("25");
+    await page.getByLabel("D3 client result percentage").fill("20");
+    const clientResponse = page.waitForResponse((response) => response.request().method() === "PUT"
+      && /\/client-results$/.test(new URL(response.url()).pathname));
+    await page.getByRole("button", { name: "Save Client Result", exact: true }).click();
+    const saved = await clientResponse;
+    assertSmokeResponseStatus(saved, 200, "Save owner-private Billing OSP percentages");
+    const client = (await saved.json()).clientResult;
+    const d3 = client.rows.find((row) => row.aging === "D3");
+    assert(d3.targetPercentage === "25.0000" && d3.resultPercentage === "20.0000"
+      && d3.targetOsp === "25.00" && d3.ospClosed === "20.00" && d3.balanceOsp === "5.00"
+      && client.all.balanceOsp === "5.00", "Private target/result amounts and weighted ALL must use the saved TT baseline.");
+    await page.getByText("Saved to your account", { exact: true }).waitFor();
+    await navigateForSmoke(page, "/collection/billing-principal");
+    await page.getByLabel("D3 private target percentage").waitFor();
+    assert(await page.getByLabel("D3 private target percentage").inputValue() === "25.0000",
+      "Private target percentages must survive a full page reload.");
+    assert(await page.getByLabel("D3 client result percentage").inputValue() === "20.0000",
+      "Private result percentages must survive a full page reload.");
+    await page.getByRole("button", { name: "Edit Target", exact: true }).click();
+    await dialog.getByRole("heading", { name: "Edit shared target" }).waitFor();
+    await dialog.getByLabel("D3 shared target percentage").fill("32");
+    targetName += " edited";
+    await dialog.getByLabel("4. Target name", { exact: true }).fill(targetName);
+    const editResponse = page.waitForResponse((response) => response.request().method() === "PATCH"
+      && /\/saved-targets\/[^/]+$/.test(new URL(response.url()).pathname));
+    await dialog.getByRole("button", { name: "Save Target", exact: true }).click();
+    const edited = await editResponse;
+    assertSmokeResponseStatus(edited, 200, "Edit shared target without changing the private owner result");
+    const changedTarget = (await edited.json()).target;
+    assert(changedTarget.activeRevision.id === savedTarget.activeRevision.id, "Shared edits must retain the frozen baseline revision.");
+    savedTarget = changedTarget;
+    await page.getByRole("heading", { name: targetName, exact: true }).waitFor();
+    await page.getByLabel("D3 private target percentage").waitFor();
+    assert(await page.getByLabel("D3 private target percentage").inputValue() === "25.0000", "A 30→32 must not overwrite private B 25%.");
+    await page.getByRole("heading", { name: "System calendar", exact: true }).waitFor();
+    await page.getByRole("button", { name: new RegExp("^" + asOf + ", 0 accounts") }).click();
+    await dialog.getByRole("heading", { name: "Accounts closed · " + asOf, exact: true }).waitFor();
+    await dialog.getByText("No ALL accounts closed on this date.", { exact: true }).waitFor();
+    await dialog.getByRole("tab", { name: "D6", exact: true }).click();
+    await dialog.getByText("No D6 accounts closed on this date.", { exact: true }).waitFor();
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    assert(await page.getByRole("heading", { name: "OSP Closed Accounts", exact: true }).count() === 0,
+      "There must be no standalone cumulative account section.");
+    assert(await page.getByRole("button", { name: "Add Table C Entry" }).count() === 0, "No Table C mutation may be exposed.");
     let visualDatasetRequestCount = 0;
-    const trackVisualDatasetRequest = (request) => {
+    const trackVisual = (request) => {
       const url = new URL(request.url());
-      if (
-        request.method() === "GET"
-        && /\/saved-targets\/[^/]+\/revisions\/[^/]+\/export$/.test(url.pathname)
-        && url.searchParams.get("format") === "json"
-      ) {
-        visualDatasetRequestCount += 1;
+      if (/\/saved-targets\/[^/]+\/revisions\/[^/]+\/export$/.test(url.pathname)) {
+        console.log(`[smoke-ui] Billing export request: ${request.method()} ${url.searchParams.get("format")} ${request.resourceType()}`);
       }
+      if (request.method() === "GET" && /\/saved-targets\/[^/]+\/revisions\/[^/]+\/export$/.test(url.pathname)
+        && url.searchParams.get("format") === "json") visualDatasetRequestCount += 1;
     };
-    page.on("request", trackVisualDatasetRequest);
+    page.on("request", trackVisual);
     try {
       await downloadBillingPrincipalSmokeArtifact(page, "XLSX", ".xlsx", Buffer.from("PK"));
       await downloadBillingPrincipalSmokeArtifact(page, "PNG", ".png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
       await downloadBillingPrincipalSmokeArtifact(page, "PDF", ".pdf", Buffer.from("%PDF"));
-    } finally {
-      page.off("request", trackVisualDatasetRequest);
-    }
-    assert(
-      visualDatasetRequestCount === 1,
-      `PNG and PDF must reuse one governed visual dataset request; observed ${visualDatasetRequestCount}`,
-    );
-
-    await page.getByRole("button", { name: "Delete Target" }).click();
-    await page.getByRole("heading", { name: "Delete saved target?" }).waitFor({ timeout: 15_000 });
-    const deleteTargetResponse = page.waitForResponse((response) => (
-      response.request().method() === "DELETE"
-      && /\/saved-targets\/[^/]+$/.test(new URL(response.url()).pathname)
-    ));
-    await page.getByRole("button", { name: "Delete Target" }).last().click();
-    assertSmokeResponseStatus(await deleteTargetResponse, 200, "Delete Billing Principal Saved Target");
-    await page.getByRole("heading", { name: targetName }).waitFor({ state: "hidden", timeout: 20_000 });
+    } finally { page.off("request", trackVisual); }
+    assert(visualDatasetRequestCount === 2, "PNG and PDF must each fetch fresh authorized private data; observed " + visualDatasetRequestCount);
+    await page.getByRole("button", { name: "Delete Target", exact: true }).click();
+    const deleteDialog = page.getByRole("alertdialog");
+    await deleteDialog.getByRole("heading", { name: "Delete saved target?" }).waitFor();
+    const deleteResponse = page.waitForResponse((response) => response.request().method() === "DELETE"
+      && /\/saved-targets\/[^/]+$/.test(new URL(response.url()).pathname));
+    await deleteDialog.getByRole("button", { name: "Delete Target", exact: true }).click();
+    assertSmokeResponseStatus(await deleteResponse, 200, "Deactivate Billing OSP V3 target");
+    await page.getByRole("heading", { name: targetName, exact: true }).waitFor({ state: "hidden" });
     targetDeleted = true;
-
-    tracker.assertClean("Billing Principal V9 UI flow");
+    tracker.assertClean("Billing Principal V3 UI flow");
     tracker.clear();
   } finally {
-    if (!targetDeleted) {
-      const targetsResponse = await apiJsonRequestWithRetry(
-        context,
-        "GET",
-        "/api/collection/report/billing-principal/saved-targets",
-        undefined,
-        [200],
-      ).catch(() => null);
-      const target = targetsResponse?.payload?.targets?.find((item) => item?.name === targetName);
-      if (target?.id && target?.version) {
-        await apiJsonRequestWithRetry(
-          context,
-          "DELETE",
-          `/api/collection/report/billing-principal/saved-targets/${encodeURIComponent(target.id)}?version=${encodeURIComponent(target.version)}`,
-          undefined,
-          [200, 404],
-        ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V9 target", error));
-      }
+    if (!targetDeleted && savedTarget?.id) {
+      const response = await apiJsonRequestWithRetry(context, "GET",
+        "/api/collection/report/billing-principal/saved-targets/" + encodeURIComponent(savedTarget.id), undefined, [200, 404]).catch(() => null);
+      const target = response?.payload?.target;
+      if (target?.id && target?.version) await apiJsonRequestWithRetry(context, "DELETE",
+        "/api/collection/report/billing-principal/saved-targets/" + encodeURIComponent(target.id) + "?version=" + target.version,
+        undefined, [200, 404]).catch((error) => recordBestEffortFailure("cleanup Billing V3 target", error));
     }
-    await apiJsonRequestWithRetry(
-      context,
-      "DELETE",
-      `/api/imports/${encodeURIComponent(sourceImport.id)}`,
-      undefined,
-      [200, 404],
-    ).catch((error) => recordBestEffortFailure("cleanup Billing Principal V9 source import", error));
+    await apiJsonRequestWithRetry(context, "DELETE", "/api/imports/" + encodeURIComponent(sourceImport.id), undefined, [200, 404])
+      .catch((error) => recordBestEffortFailure("cleanup Billing V3 source", error));
   }
 };
-
 const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await navigateForSmoke(page, "/general-search");

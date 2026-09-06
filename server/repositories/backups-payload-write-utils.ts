@@ -89,6 +89,7 @@ export function createEmptyBackupPayloadCounts(): BackupPayloadCounts {
     collectionOspTargetSourceRowsCount: 0,
     collectionOspTargetAgingRowsCount: 0,
     collectionOspClientResultsCount: 0,
+    collectionOspPrivateClientResultsCount: 0,
     collectionOspManualReconciliationsCount: 0,
     collectionOspManualReconciliationAuditCount: 0,
   };

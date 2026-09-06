@@ -141,8 +141,16 @@ export class CollectionService {
     return this.recordService.upsertBillingPrincipalTargets(user, bodyRaw);
   }
 
-  listBillingPrincipalSavedTargets(user: AuthenticatedUser | undefined) {
-    return this.recordService.listBillingPrincipalSavedTargets(user);
+  listBillingPrincipalSavedTargets(user: AuthenticatedUser | undefined, query: Record<string, unknown> = {}) {
+    return this.recordService.listBillingPrincipalSavedTargets(user, query);
+  }
+
+  getBillingPrincipalTargetOptions(user: AuthenticatedUser | undefined, query: Record<string, unknown>) {
+    return this.recordService.getBillingPrincipalTargetOptions(user, query);
+  }
+
+  previewBillingPrincipalTargetSource(user: AuthenticatedUser | undefined, body: unknown) {
+    return this.recordService.previewBillingPrincipalTargetSource(user, body);
   }
 
   getBillingPrincipalSavedTarget(user: AuthenticatedUser | undefined, targetId: unknown) {

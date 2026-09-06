@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { readQueryObject, readRouteParam } from "../../http/validation";
+import { notFound } from "../../http/errors";
 import { sendCollectionError } from "./collection-route-handler-factories";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
@@ -20,15 +21,25 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
     collectionService,
     jsonMutationRoute,
     jsonRoute,
-    reportAccess,
+    staffSummaryAccess,
     superuserReportAccess,
   } = context;
 
+  app.use(PREFIX, (_request, response, next) => {
+    response.setHeader("Cache-Control", "no-store");
+    next();
+  });
+
+  app.get(`${PREFIX}/options`, ...superuserReportAccess,
+    jsonRoute("Failed to load target options.", (req) => collectionService.getBillingPrincipalTargetOptions(req.user, readQueryObject(req.query))));
+  app.post(`${PREFIX}/preview`, ...superuserReportAccess,
+    jsonRoute("Failed to preview configured Billing source.", (req) => collectionService.previewBillingPrincipalTargetSource(req.user, req.body)));
+
   app.get(
     PREFIX,
-    ...reportAccess,
+    ...staffSummaryAccess,
     jsonRoute("Failed to list Saved Billing Principal targets.", (req) =>
-      collectionService.listBillingPrincipalSavedTargets(req.user)),
+      collectionService.listBillingPrincipalSavedTargets(req.user, readQueryObject(req.query))),
   );
 
   app.post(
@@ -43,7 +54,7 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
 
   app.get(
     `${PREFIX}/:targetId`,
-    ...reportAccess,
+    ...staffSummaryAccess,
     jsonRoute("Failed to load Saved Billing Principal target.", (req) =>
       collectionService.getBillingPrincipalSavedTarget(req.user, targetId(req))),
   );
@@ -76,7 +87,7 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
 
   app.get(
     `${revisionPrefix}/overview`,
-    ...reportAccess,
+    ...staffSummaryAccess,
     jsonRoute("Failed to load Saved Billing Principal overview.", (req) =>
       collectionService.getBillingPrincipalTargetOverview(
         req.user,
@@ -88,22 +99,26 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
 
   app.put(
     `${revisionPrefix}/client-results`,
-    ...superuserReportAccess,
+    ...staffSummaryAccess,
     jsonMutationRoute(
       "Failed to save Client Result.",
-      (req) => `collection:billing-principal:client-result:${targetId(req)}:${revisionId(req)}`,
+      (req) => `collection:billing-principal:private-client-result:${req.user?.userId ?? "missing-owner"}:${targetId(req)}:${revisionId(req)}`,
       (req) => collectionService.upsertBillingPrincipalClientResults(
         req.user,
         targetId(req),
         revisionId(req),
         req.body,
       ),
+      async (req) => {
+        const { target } = await collectionService.getBillingPrincipalSavedTarget(req.user, targetId(req));
+        if (target.activeRevision.id !== revisionId(req)) throw notFound("Saved Target revision was not found.");
+      },
     ),
   );
 
   app.get(
     `${revisionPrefix}/calendar`,
-    ...reportAccess,
+    ...staffSummaryAccess,
     jsonRoute("Failed to load Billing Principal calendar.", (req) =>
       collectionService.getBillingPrincipalCalendar(
         req.user,
@@ -115,7 +130,7 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
 
   app.get(
     `${revisionPrefix}/drilldown`,
-    ...reportAccess,
+    ...staffSummaryAccess,
     jsonRoute("Failed to load Billing Principal drilldown.", (req) =>
       collectionService.getBillingPrincipalDrilldown(
         req.user,
@@ -127,7 +142,7 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
 
   app.get(
     `${revisionPrefix}/export`,
-    ...reportAccess,
+    ...staffSummaryAccess,
     async (request, response: Response) => {
       const req = request as AuthenticatedRequest;
       try {
@@ -138,6 +153,7 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
           readQueryObject(req.query),
         );
         response.setHeader("Cache-Control", "no-store");
+        response.setHeader("X-Billing-Export-Owner-Id", exported.generatedByUserId);
         response.setHeader("Content-Type", exported.contentType);
         response.setHeader("Content-Disposition", `attachment; filename="${exported.filename}"`);
         response.setHeader("X-Content-Type-Options", "nosniff");

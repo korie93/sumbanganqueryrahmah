@@ -166,9 +166,13 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Stable named Billing Principal target identities use soft deletion while immutable child revisions preserve reporting history.",
     ),
+    collection_osp_private_client_results: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Stable authenticated account ownership isolates private Billing TABLE B target/result percentages. Legacy shared results remain separate audit-only history, without fabricated ownership or private target backfill.",
+    ),
     collection_osp_target_aging_rows: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
-      "Immutable per-aging target baselines and percentages retain the exact denominator used by each saved-target revision.",
+      "Immutable per-aging Billing OSP baselines retain the exact denominator; versioned and audited shared target-percentage edits do not overwrite viewer-private percentages.",
     ),
     collection_osp_target_revisions: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],

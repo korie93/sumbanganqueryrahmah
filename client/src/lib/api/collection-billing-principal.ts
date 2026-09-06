@@ -39,6 +39,7 @@ export type BillingPrincipalTargetInput = {
 export type BillingPrincipalSavedTargetRevision = {
   id: string;
   revisionNumber: number;
+  sourceValidityVerified?: boolean | undefined;
   from: string;
   to: string;
   trackingStartDate: string | null;
@@ -60,6 +61,8 @@ export type BillingPrincipalSavedTarget = {
   description: string | null;
   status: "ACTIVE" | "DELETED";
   version: number;
+  assignedAdminUserId: string | null;
+  assignedAdmin: { id: string; username: string; fullName: string | null } | null;
   activeRevision: BillingPrincipalSavedTargetRevision;
   createdAt: string;
   updatedAt: string;
@@ -72,6 +75,7 @@ export type BillingPrincipalClientRow = {
   targetOsp: string;
   resultPercentage: string;
   ospClosed: string;
+  balanceOsp: string;
   note: string | null;
   reference: string | null;
   receivedDate: string | null;
@@ -101,7 +105,10 @@ export type BillingPrincipalSavedTargetOverview = {
   target: BillingPrincipalSavedTarget;
   revision: BillingPrincipalSavedTargetRevision;
   asOf: string;
-  systemResult: BillingPrincipalReportResponse["report"];
+  systemResult: {
+    rows: Array<BillingPrincipalReportRow & { balanceOsp: string }>;
+    all: Omit<BillingPrincipalReportRow, "aging"> & { aging: "ALL"; balanceOsp: string };
+  };
   clientResult: {
     rows: BillingPrincipalClientRow[];
     all: Omit<BillingPrincipalClientRow, "aging"> & { aging: "ALL" };
@@ -115,6 +122,7 @@ export type BillingPrincipalCalendarDay = {
   totalOsp: string;
   targetOsp: string;
   systemOspClosedToday: string;
+  balanceOsp: string;
   systemCumulativeOspClosed: string;
   systemResultPercentage: string;
   systemPreviousResultPercentage: string;
@@ -129,6 +137,12 @@ export type BillingPrincipalDrilldownItem = {
   cardNumber: string | null;
   cardNumberLast4: string | null;
   maskedCustomerName: string;
+  accountNumber: string | null;
+  customerName: string | null;
+  identificationNumber: string | null;
+  phone: string | null;
+  paymentDate: string;
+  classification: "ABORT_CP" | "MANUAL_VERIFIED_ABORT";
   sourceName: string;
   sourceFilename: string;
   callingDate: string;
@@ -153,6 +167,7 @@ export type BillingPrincipalVisualExportDataset = {
   ok: true;
   generatedAt: string;
   generatedBy: string;
+  generatedByUserId: string;
   filters: {
     asOf: string;
     from: string;
@@ -175,10 +190,11 @@ export type BillingPrincipalPagination = {
 
 export type BillingPrincipalSavedTargetInput = {
   name: string;
+  assignedAdminUserId: string;
   description?: string | null | undefined;
   sourceImportIds: string[];
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
   trackingStartDate?: string | null | undefined;
   trackingEndDate?: string | null | undefined;
   nicknameScope: string[];
@@ -188,6 +204,7 @@ export type BillingPrincipalSavedTargetInput = {
 
 export type BillingPrincipalClientResultInput = {
   aging: BillingPrincipalAging;
+  targetPercentage: string;
   resultPercentage: string;
   note?: string | null | undefined;
   reference?: string | null | undefined;
@@ -242,6 +259,7 @@ const decimalSchema = z.string().regex(/^-?\d+(?:\.\d+)?$/).max(40);
 const savedTargetRevisionSchema: z.ZodType<BillingPrincipalSavedTargetRevision> = z.object({
   id: idSchema,
   revisionNumber: z.number().int().positive(),
+  sourceValidityVerified: z.boolean().optional(),
   from: isoDateSchema,
   to: isoDateSchema,
   trackingStartDate: isoDateSchema.nullable(),
@@ -249,8 +267,8 @@ const savedTargetRevisionSchema: z.ZodType<BillingPrincipalSavedTargetRevision> 
   sourceImportIds: z.array(idSchema).max(5),
   sourceSnapshots: z.array(z.object({
     sourceImportId: idSchema,
-    name: z.string().min(1).max(255),
-    filename: z.string().min(1).max(255).nullable(),
+    name: z.string().min(1).max(300),
+    filename: z.string().min(1).max(500).nullable(),
   })).max(5),
   nicknameScope: z.array(z.string().min(1).max(120)).max(100),
   agingScope: z.array(reportAgingSchema).max(4),
@@ -263,6 +281,12 @@ const savedTargetSchema: z.ZodType<BillingPrincipalSavedTarget> = z.object({
   description: descriptionSchema.nullable(),
   status: z.enum(["ACTIVE", "DELETED"]),
   version: z.number().int().positive(),
+  assignedAdminUserId: z.string().min(1).max(200).nullable(),
+  assignedAdmin: z.object({
+    id: z.string().min(1).max(200),
+    username: z.string().min(1).max(160),
+    fullName: z.string().max(300).nullable(),
+  }).nullable(),
   activeRevision: savedTargetRevisionSchema,
   createdAt: dateTimeSchema,
   updatedAt: dateTimeSchema,
@@ -275,6 +299,7 @@ const clientRowSchema = z.object({
   targetOsp: decimalSchema,
   resultPercentage: decimalSchema,
   ospClosed: decimalSchema,
+  balanceOsp: decimalSchema,
   note: noteSchema.nullable(),
   reference: referenceSchema.nullable(),
   receivedDate: isoDateSchema.nullable(),
@@ -311,7 +336,10 @@ const overviewSchema = z.object({
   target: savedTargetSchema,
   revision: savedTargetRevisionSchema,
   asOf: isoDateSchema,
-  systemResult: billingPrincipalReportResponseSchema.shape.report,
+  systemResult: z.object({
+    rows: z.array(reportRowSchema.extend({ balanceOsp: decimalSchema })).max(4),
+    all: reportRowSchema.omit({ aging: true }).extend({ aging: z.literal("ALL"), balanceOsp: decimalSchema }),
+  }),
   clientResult: z.object({
     rows: z.array(clientRowSchema).max(4),
     all: clientRowSchema.omit({ aging: true }).extend({ aging: z.literal("ALL") }),
@@ -325,6 +353,7 @@ const calendarDaySchema: z.ZodType<BillingPrincipalCalendarDay> = z.object({
   totalOsp: decimalSchema,
   targetOsp: decimalSchema,
   systemOspClosedToday: decimalSchema,
+  balanceOsp: decimalSchema,
   systemCumulativeOspClosed: decimalSchema,
   systemResultPercentage: decimalSchema,
   systemPreviousResultPercentage: decimalSchema,
@@ -339,6 +368,12 @@ const drilldownItemSchema: z.ZodType<BillingPrincipalDrilldownItem> = z.object({
   cardNumber: z.string().min(1).max(80).nullable(),
   cardNumberLast4: z.string().regex(/^\d{4}$/).nullable(),
   maskedCustomerName: z.string().min(1).max(160),
+  accountNumber: z.string().max(200).nullable(),
+  customerName: z.string().max(300).nullable(),
+  identificationNumber: z.string().max(200).nullable(),
+  phone: z.string().max(200).nullable(),
+  paymentDate: isoDateSchema,
+  classification: z.enum(["ABORT_CP", "MANUAL_VERIFIED_ABORT"]),
   sourceName: z.string().min(1).max(300),
   sourceFilename: z.string().min(1).max(500),
   callingDate: isoDateSchema,
@@ -361,12 +396,19 @@ const drilldownItemSchema: z.ZodType<BillingPrincipalDrilldownItem> = z.object({
 
 const targetListResponseSchema = z.object({
   ok: z.literal(true),
-  targets: z.array(savedTargetSchema).max(500),
+  targets: z.array(savedTargetSchema).max(50),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive().max(50),
+  hasMore: z.boolean(),
 });
 
 const targetMutationResponseSchema = z.object({
   ok: z.literal(true),
   target: savedTargetSchema,
+});
+
+const targetReadResponseSchema = targetMutationResponseSchema.extend({
+  viewerUserId: z.string().min(1).max(200),
 });
 
 const clientResultsMutationResponseSchema = z.object({
@@ -390,12 +432,14 @@ const drilldownResponseSchema = z.object({
   ok: z.literal(true),
   items: z.array(drilldownItemSchema).max(100),
   pagination: paginatedFieldsSchema,
+  summary: z.object({ accountCount: z.number().int().nonnegative(), ospClosed: decimalSchema }),
 });
 
 const visualExportDatasetSchema = z.object({
   ok: z.literal(true),
   generatedAt: dateTimeSchema,
   generatedBy: z.string().min(1).max(160),
+  generatedByUserId: z.string().min(1).max(200),
   filters: z.object({
     asOf: isoDateSchema,
     from: isoDateSchema,
@@ -476,6 +520,38 @@ function billingPrincipalMutationOptions(
 
 const SAVED_TARGETS_ENDPOINT = "/api/collection/report/billing-principal/saved-targets";
 
+const targetOptionsSchema = z.object({
+  ok: z.literal(true),
+  admins: z.array(z.object({ id: z.string().min(1).max(200), username: z.string().max(160), fullName: z.string().max(300).nullable() })).max(100),
+  sources: z.array(z.object({
+    id: z.string().min(1).max(200), name: z.string().max(300), filename: z.string().max(500),
+    validFrom: isoDateSchema, validTo: isoDateSchema, recordCount: z.number().int().nonnegative(), status: z.literal("active"),
+  })).max(100),
+  adminsHasMore: z.boolean(), sourcesHasMore: z.boolean(), pageSize: z.number().int().positive().max(100),
+});
+const sourcePreviewSchema = z.object({
+  ok: z.literal(true), from: isoDateSchema, to: isoDateSchema,
+  sourceImportIds: z.array(z.string().min(1).max(200)).min(1).max(5),
+  rows: z.array(z.object({ aging: reportAgingSchema, totalOsp: decimalSchema, accountCount: z.number().int().nonnegative() })).length(4),
+});
+export type BillingPrincipalTargetOptions = z.infer<typeof targetOptionsSchema>;
+export type BillingPrincipalSourcePreview = z.infer<typeof sourcePreviewSchema>;
+
+export async function getBillingPrincipalTargetOptions(
+  filters: { adminSearch?: string; sourceSearch?: string; adminPage?: number; sourcePage?: number; pageSize?: number },
+  options?: RequestOptions,
+) {
+  const endpoint = appendQuery(`${SAVED_TARGETS_ENDPOINT}/options`, filters);
+  const response = await apiRequest("GET", endpoint, undefined, options);
+  return parseApiJson(response, targetOptionsSchema, `${SAVED_TARGETS_ENDPOINT}/options`);
+}
+
+export async function previewBillingPrincipalSource(sourceImportIds: string[], options?: RequestOptions) {
+  const endpoint = `${SAVED_TARGETS_ENDPOINT}/preview`;
+  const response = await apiRequest("POST", endpoint, { sourceImportIds }, options);
+  return parseApiJson(response, sourcePreviewSchema, endpoint);
+}
+
 function savedTargetEndpoint(targetId: string) {
   return `${SAVED_TARGETS_ENDPOINT}/${encodeURIComponent(targetId)}`;
 }
@@ -552,8 +628,9 @@ export async function updateBillingPrincipalTargets(payload: {
   );
 }
 
-export async function listBillingPrincipalSavedTargets(options?: RequestOptions) {
-  const response = await apiRequest("GET", SAVED_TARGETS_ENDPOINT, undefined, options);
+export async function listBillingPrincipalSavedTargets(options?: RequestOptions & { page?: number; pageSize?: number }) {
+  const endpoint = appendQuery(SAVED_TARGETS_ENDPOINT, { page: options?.page, pageSize: options?.pageSize });
+  const response = await apiRequest("GET", endpoint, undefined, options);
   return parseApiJson(response, targetListResponseSchema, SAVED_TARGETS_ENDPOINT);
 }
 
@@ -576,7 +653,7 @@ export async function getBillingPrincipalSavedTarget(
 ) {
   const endpoint = savedTargetEndpoint(targetId);
   const response = await apiRequest("GET", endpoint, undefined, options);
-  return parseApiJson(response, targetMutationResponseSchema, endpoint);
+  return parseApiJson(response, targetReadResponseSchema, endpoint);
 }
 
 export async function updateBillingPrincipalSavedTarget(
@@ -584,6 +661,8 @@ export async function updateBillingPrincipalSavedTarget(
   payload: {
     name?: string | undefined;
     description?: string | null | undefined;
+    assignedAdminUserId?: string | undefined;
+    targets?: BillingPrincipalTargetInput[] | undefined;
     version: number;
   },
   options?: MutationRequestOptions,
@@ -732,6 +811,7 @@ export async function downloadBillingPrincipalExport(
   const blob = await response.blob();
   return {
     blob,
+    generatedByUserId: z.string().min(1).max(200).parse(response.headers.get("X-Billing-Export-Owner-Id")),
     fileName: parseDownloadFilename(response.headers.get("Content-Disposition")),
     mimeType: String(response.headers.get("Content-Type") || blob.type || "application/octet-stream"),
   };

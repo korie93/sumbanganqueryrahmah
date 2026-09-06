@@ -84,6 +84,7 @@ test("buildBackupMetadata includes payload size and temp encryption flags", () =
         collectionOspTargetSourceRowsCount: 0,
         collectionOspTargetAgingRowsCount: 0,
         collectionOspClientResultsCount: 0,
+        collectionOspPrivateClientResultsCount: 0,
         collectionOspManualReconciliationsCount: 0,
         collectionOspManualReconciliationAuditCount: 0,
         collectionRecordsCount: 5,

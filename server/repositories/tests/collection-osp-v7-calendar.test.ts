@@ -42,11 +42,13 @@ test("V9 Table A calendar exposes one System-only effective movement series", ()
   assert.equal(days.length, 3);
   assert.deepEqual(days[0], {
     date: "2026-09-09", aging: "D3", totalOsp: "10000.00", targetOsp: "5000.00",
+    balanceOsp: "5000.00",
     systemOspClosedToday: "0.00", systemCumulativeOspClosed: "0.00", systemResultPercentage: "0.0000",
     systemPreviousResultPercentage: "0.0000", systemDailyMovementPercentagePoints: "0.0000",
     systemAchievementVsTargetPercentage: "0.0000", systemDailyAccounts: 0,
   });
   assert.equal(days[1]?.systemOspClosedToday, "8000.00");
+  assert.equal(days[1]?.balanceOsp, "-3000.00");
   assert.equal(days[1]?.systemResultPercentage, "80.0000");
   assert.equal(days[1]?.systemAchievementVsTargetPercentage, "160.0000");
   assert.equal(days[2]?.systemOspClosedToday, "2000.00");
@@ -69,8 +71,8 @@ test("V9 Client ALL is weighted from a complete latest D3-D6 submission", () => 
   ]);
   const complete = deriveCollectionOspClientAllView({
     rows: [
-      { aging: "D3", totalOsp: "1000.00", targetPercentage: "50.0000", targetOsp: "500.00", resultPercentage: "40.0000", ospClosed: "400.00", note: null, reference: null, receivedDate: "2026-09-10", updatedAt: "2026-09-10T01:00:00.000Z", version: 1 },
-      { aging: "D4", totalOsp: "3000.00", targetPercentage: "50.0000", targetOsp: "1500.00", resultPercentage: "20.0000", ospClosed: "600.00", note: null, reference: null, receivedDate: "2026-09-10", updatedAt: "2026-09-10T01:00:00.000Z", version: 1 },
+      { aging: "D3", totalOsp: "1000.00", targetPercentage: "50.0000", targetOsp: "500.00", resultPercentage: "40.0000", ospClosed: "400.00", balanceOsp: "100.00", note: null, reference: null, receivedDate: "2026-09-10", updatedAt: "2026-09-10T01:00:00.000Z", version: 1 },
+      { aging: "D4", totalOsp: "3000.00", targetPercentage: "50.0000", targetOsp: "1500.00", resultPercentage: "20.0000", ospClosed: "600.00", balanceOsp: "900.00", note: null, reference: null, receivedDate: "2026-09-10", updatedAt: "2026-09-10T01:00:00.000Z", version: 1 },
     ],
     scopedAgings: ["D3", "D4"], configByAging: config,
   });
@@ -79,7 +81,7 @@ test("V9 Client ALL is weighted from a complete latest D3-D6 submission", () => 
   assert.equal(complete.resultPercentage, "25.0000");
   assert.equal(complete.receivedDate, "2026-09-10");
 
-  const incomplete = deriveCollectionOspClientAllView({ rows: [{ aging: "D3", totalOsp: "1000.00", targetPercentage: "50.0000", targetOsp: "500.00", resultPercentage: "40.0000", ospClosed: "400.00", note: null, reference: null, receivedDate: "2026-09-10", updatedAt: "2026-09-10T01:00:00.000Z", version: 1 }], scopedAgings: ["D3", "D4"], configByAging: config });
+  const incomplete = deriveCollectionOspClientAllView({ rows: [{ aging: "D3", totalOsp: "1000.00", targetPercentage: "50.0000", targetOsp: "500.00", resultPercentage: "40.0000", ospClosed: "400.00", balanceOsp: "100.00", note: null, reference: null, receivedDate: "2026-09-10", updatedAt: "2026-09-10T01:00:00.000Z", version: 1 }], scopedAgings: ["D3", "D4"], configByAging: config });
   assert.equal(incomplete.ospClosed, "0.00");
   assert.equal(incomplete.receivedDate, null);
 });
@@ -98,6 +100,32 @@ test("V9 Saved Target baseline is reconstructed exactly from Billing Principal O
       { aging: "D3", billingPrincipalOsp: "300000.00" },
     ],
   }));
+});
+
+test("V3 Client ALL weights private targets, not the shared A configuration", () => {
+  const config = new Map([
+    ["D3" as const, { aging: "D3" as const, totalOsp: "1000000.00", targetPercentage: "30.0000", targetOsp: "300000.00" }],
+    ["D4" as const, { aging: "D4" as const, totalOsp: "500000.00", targetPercentage: "32.0000", targetOsp: "160000.00" }],
+    ["D5" as const, { aging: "D5" as const, totalOsp: "200000.00", targetPercentage: "50.0000", targetOsp: "100000.00" }],
+    ["D6" as const, { aging: "D6" as const, totalOsp: "100000.00", targetPercentage: "40.0000", targetOsp: "40000.00" }],
+  ]);
+  const rows = [...config.values()].map((row, index) => ({
+    ...row, resultPercentage: ["20.0000", "20.0000", "25.0000", "20.0000"][index]!,
+    ospClosed: ["200000.00", "100000.00", "50000.00", "20000.00"][index]!,
+    balanceOsp: ["100000.00", "60000.00", "50000.00", "20000.00"][index]!,
+    note: null, reference: null, receivedDate: "2026-09-05", updatedAt: "2026-09-05T01:00:00.000Z", version: 1,
+  }));
+  const all = deriveCollectionOspClientAllView({ rows, scopedAgings: ["D3", "D4", "D5", "D6"], configByAging: config });
+  assert.equal(all.targetOsp, "600000.00");
+  assert.equal(all.ospClosed, "370000.00");
+  assert.equal(all.balanceOsp, "230000.00");
+  assert.equal(all.targetPercentage, "33.3333");
+  assert.equal(all.resultPercentage, "20.5556");
+  // Changing shared A defaults cannot rewrite a saved private reference.
+  config.set("D3", { ...config.get("D3")!, targetPercentage: "32.0000", targetOsp: "320000.00" });
+  const after = deriveCollectionOspClientAllView({ rows, scopedAgings: ["D3", "D4", "D5", "D6"], configByAging: config });
+  assert.equal(after.targetOsp, "600000.00");
+  assert.equal(after.balanceOsp, "230000.00");
 });
 
 test("V9 distinguishes a genuine zero TT OSP from missing or stale baseline data", () => {

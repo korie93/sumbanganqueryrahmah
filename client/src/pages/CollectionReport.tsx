@@ -48,6 +48,7 @@ export default function CollectionReport() {
     role,
   });
   const navigation = useCollectionReportNavigation({
+    canAccessBilling: ["admin", "manager", "superuser"].includes(role),
     canAccessNicknameSummary,
     isReadOnlyManager,
     isSuperuser,
@@ -109,7 +110,8 @@ export default function CollectionReport() {
       : "Collection workspace for entry, records, summaries, and comparisons."
     : "Collection workspace for entry, records, summaries, and comparisons.";
   const shouldRenderNicknameDialog =
-    !nicknameAccess.checkingNicknameSession
+    navigation.subPage !== "billing-principal"
+    && !nicknameAccess.checkingNicknameSession
     && (nicknameAccess.nicknameDialogOpen
       || (!bypassesNicknameAccess && !nicknameAccess.canAccessCollection));
 

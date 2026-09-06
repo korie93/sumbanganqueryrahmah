@@ -78,6 +78,29 @@ export function formatCollectionOspMoneyCents(cents: bigint): string {
   return `${negative ? "-" : ""}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
 }
 
+export function normalizeCollectionOspTargetPercentage(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!/^(?:100(?:\.0{1,4})?|\d{1,2}(?:\.\d{1,4})?)$/.test(raw)) {
+    throw new Error("Target percentage is invalid.");
+  }
+  const [whole, fraction = ""] = raw.split(".");
+  return `${BigInt(whole!)}.${fraction.padEnd(4, "0")}`;
+}
+
+/** Exact NUMERIC-compatible half-up rounding to sen. No binary-float money. */
+export function calculateCollectionOspPercentageAmount(baseline: string, percentage: string): string {
+  const baselineCents = parseCollectionOspMoneyCents(baseline);
+  const units = BigInt(normalizeCollectionOspTargetPercentage(percentage).replace(".", ""));
+  return formatCollectionOspMoneyCents((baselineCents * units + 500_000n) / 1_000_000n);
+}
+
+/** TABLE A and private TABLE B use their respective TARGET, never TT OSP. */
+export function calculateCollectionOspBalance(targetOsp: string, ospClosed: string): string {
+  return formatCollectionOspMoneyCents(
+    parseCollectionOspMoneyCents(targetOsp) - parseCollectionOspMoneyCents(ospClosed),
+  );
+}
+
 export function formatCollectionOspPercentage(numeratorCents: bigint, denominatorCents: bigint): string {
   if (denominatorCents <= 0n || numeratorCents <= 0n) return "0.0000";
   // Percentage with four decimal places: ratio * 100 * 10,000.

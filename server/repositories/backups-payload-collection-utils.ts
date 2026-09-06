@@ -15,6 +15,7 @@ import {
 import {
   protectCollectionV7AccountBackupPii,
   protectCollectionV7CustomerBackupPii,
+  protectCollectionOspDetailBackupPii,
 } from "./backups-collection-v7-pii-utils";
 
 function hasNonEmptyString(value: unknown): value is string {
@@ -103,6 +104,9 @@ export function mapBackupCollectionOspTargetSourceRow(
   return {
     backupCursor: String(row.backupCursor || ""),
     targetRevisionId: String(row.targetRevisionId || ""),
+    cardNumberEncrypted: protectCollectionOspDetailBackupPii({ field: "accountNumber", encrypted: row.cardNumberEncrypted }),
+    identificationNumberEncrypted: protectCollectionOspDetailBackupPii({ field: "icNumber", encrypted: row.identificationNumberEncrypted }),
+    phoneEncrypted: protectCollectionOspDetailBackupPii({ field: "customerPhone", encrypted: row.phoneEncrypted }),
     sourceImportId: String(row.sourceImportId || ""),
     sourceDataRowId: String(row.sourceDataRowId || ""),
     canonicalObligationKey: String(row.canonicalObligationKey || ""),

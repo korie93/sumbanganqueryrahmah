@@ -532,6 +532,24 @@ function buildSavedCollectionSourceMatches(
   return ranked;
 }
 
+/** Display-only fields retain source formatting; matching still uses the
+ * normalized identity function above. Never return the source's arbitrary JSON. */
+export function extractSavedCollectionDisplayDetails(value: unknown) {
+  const details: { customerName: string | null; identificationNumber: string | null; phone: string | null } = {
+    customerName: null, identificationNumber: null, phone: null,
+  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return details;
+  for (const [header, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, MAX_ROW_FIELDS)) {
+    const scalar = readBoundedScalar(rawValue);
+    if (!scalar) continue;
+    const kind = resolveSpreadsheetIdentifierKind(header);
+    if (kind === "malaysianIc" && details.identificationNumber === null) details.identificationNumber = scalar;
+    else if (kind === "phone" && details.phone === null) details.phone = scalar;
+    else if (details.customerName === null && NAME_HEADERS.has(normalizeHeader(header))) details.customerName = scalar;
+  }
+  return details;
+}
+
 type RankedSavedCollectionSourceMatch = ReturnType<typeof buildSavedCollectionSourceMatches>[number];
 
 function compareSavedCollectionSourceMatches(

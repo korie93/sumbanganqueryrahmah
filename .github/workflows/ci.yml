@@ -162,6 +162,9 @@ jobs:
       SEED_SUPERUSER_USERNAME: superuser${{ github.run_id }}${{ github.run_attempt }}
       SEED_SUPERUSER_PASSWORD: sqr-ci-superuser-${{ github.run_id }}-${{ github.run_attempt }}-password-32chars
       SEED_SUPERUSER_FULL_NAME: CI Superuser
+      SEED_ADMIN_USERNAME: admin${{ github.run_id }}${{ github.run_attempt }}
+      SEED_ADMIN_PASSWORD: sqr-ci-admin-${{ github.run_id }}-${{ github.run_attempt }}-password-32chars
+      SEED_ADMIN_FULL_NAME: CI Assigned Admin
       SMOKE_TEST_USERNAME: superuser${{ github.run_id }}${{ github.run_attempt }}
       SMOKE_TEST_PASSWORD: sqr-ci-superuser-${{ github.run_id }}-${{ github.run_attempt }}-password-32chars
       SMOKE_BASE_URL: http://127.0.0.1:5000
@@ -221,6 +224,9 @@ jobs:
 
       - name: Run DB bootstrap integration tests
         run: npm run test:db-integration
+
+      - name: Verify Billing OSP private ownership, backup and 100k SQL bounds
+        run: node --expose-gc --import tsx --test --test-concurrency=1 server/repositories/tests/collection-osp-v7-postgres.integration.test.ts server/repositories/tests/collection-osp-effective-query.postgres.test.ts server/repositories/tests/backups-osp-v3-postgres.integration.test.ts server/repositories/tests/collection-osp-v3-performance.postgres.test.ts
 
       - name: Resolve system Chrome
         run: |
