@@ -5,6 +5,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { HttpError } from "../../http/errors";
 import { CollectionOspV7RepositoryError } from "../../repositories/collection-osp-v7-repository-utils";
+import { resolveCollectionOspReportingWindow } from "../../lib/collection-osp-reporting-window";
 import {
   CollectionOspV7Operations,
   assertCollectionOspV7ExportWithinLimits,
@@ -467,4 +468,117 @@ test("V9 export fails closed on detail rows and estimated serialized bytes", () 
     }),
     (error) => assertHttpError(error, 413),
   );
+});
+
+function liveValidityTarget(from = "2026-08-12", to = "2026-09-10") {
+  const target = visibleTarget();
+  return { ...target, activeRevision: { ...target.activeRevision,
+    reportingWindow: resolveCollectionOspReportingWindow(target.activeRevision,
+      [{ sourceImportId: "source-a", validFrom: from, validTo: to }]),
+  } };
+}
+
+test("report API rejects out-of-live-source dates before aggregate storage access", async () => {
+  let aggregateCalls = 0;
+  const unexpected = async (): Promise<never> => { aggregateCalls++; throw new Error("must not aggregate an invalid range"); };
+  const service = operations({ getCollectionOspSavedTarget: async () => liveValidityTarget(),
+    getCollectionOspTargetOverview: unexpected, getCollectionOspCalendar: unexpected,
+    getCollectionOspDrilldown: unexpected, getCollectionOspExportDataset: unexpected });
+  for (const date of ["2026-08-11", "2026-09-11", "2026-09-30", "2026-02-29", "2026-08-27T00:00:00Z"]) {
+    for (const method of ["overview", "calendar", "drilldown"] as const) {
+      await assert.rejects(service[method](user("admin"), TARGET_ID, REVISION_ID, { asOf: date }),
+        (error) => assertHttpError(error, 400));
+    }
+    await assert.rejects(service.drilldown(user("admin"), TARGET_ID, REVISION_ID, { asOf: "2026-08-27", date }),
+      (error) => assertHttpError(error, 400));
+    for (const key of ["from", "to", "asOf", "date"]) {
+      await assert.rejects(service.exportReport(user("admin"), TARGET_ID, REVISION_ID, { format: "json", asOf: "2026-08-27", [key]: date }),
+        (error) => assertHttpError(error, 400));
+    }
+  }
+  assert.equal(aggregateCalls, 0);
+});
+
+test("report API accepts both live bounds and calendar/drilldown retain full validity for historical As Of", async () => {
+  const overviewDates: string[] = [];
+  const calendars: Array<{ from: string; to: string; asOfDate: string }> = [];
+  const details: Array<{ date?: string; asOfDate: string }> = [];
+  const service = operations({ getCollectionOspSavedTarget: async () => liveValidityTarget(),
+    getCollectionOspTargetOverview: async (input) => { overviewDates.push(input.asOfDate); return {} as never; },
+    getCollectionOspCalendar: async (input) => { calendars.push(input); return {} as never; },
+    getCollectionOspDrilldown: async (input) => { details.push(input); return {} as never; },
+  });
+  for (const asOf of ["2026-08-12", "2026-08-26", "2026-08-27", "2026-09-01", "2026-09-06", "2026-09-10"])
+    await service.overview(user("admin"), TARGET_ID, REVISION_ID, { asOf });
+  assert.deepEqual(overviewDates, ["2026-08-12", "2026-08-26", "2026-08-27", "2026-09-01", "2026-09-06", "2026-09-10"]);
+  await service.calendar(user("admin"), TARGET_ID, REVISION_ID, { asOf: "2026-08-26" });
+  assert.deepEqual([calendars[0]?.from, calendars[0]?.to, calendars[0]?.asOfDate], ["2026-08-12", "2026-09-10", "2026-09-10"]);
+  await service.drilldown(user("admin"), TARGET_ID, REVISION_ID, { date: "2026-08-27", asOf: "2026-08-26" });
+  assert.equal(details[0]?.date, "2026-08-27");
+  assert.equal(details[0]?.asOfDate, "2026-09-10", "daily movement detail is independent of historical Table A cutoff");
+});
+
+test("all export formats reject same-target-version validity changes after generation", async () => {
+  for (const format of ["csv", "xlsx", "json"]) {
+    const original = liveValidityTarget();
+    const changed = liveValidityTarget("2026-08-15", "2026-09-05");
+    assert.equal(original.version, changed.version);
+    let generated = false;
+    const service = operations({
+      getCollectionOspSavedTarget: async () => generated ? changed : original,
+      getCollectionOspExportDataset: async () => {
+        generated = true;
+        const dataset = completeExportDataset();
+        return { ...dataset, overview: { ...dataset.overview, target: original, revision: original.activeRevision } } as never;
+      },
+    });
+    await assert.rejects(service.exportReport(user("admin"), TARGET_ID, REVISION_ID, { format, asOf: "2026-09-06" }),
+      (error) => assertHttpError(error, 409));
+    assert.equal(generated, true);
+  }
+});
+
+test("Excel metadata exports live validity separately from unchanged snapshot provenance", async () => {
+  const target = liveValidityTarget();
+  const dataset = completeExportDataset();
+  const service = operations({ getCollectionOspSavedTarget: async () => target,
+    getCollectionOspExportDataset: async () => ({ ...dataset, overview: { ...dataset.overview, target, revision: target.activeRevision } }) as never });
+  const result = await service.exportReport(user("admin"), TARGET_ID, REVISION_ID, { format: "xlsx", asOf: "2026-09-06" });
+  const workbook = XLSX.read(result.buffer, { type: "buffer" });
+  const metadata = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets.Summary!);
+  const field = (name: string) => metadata.find((row) => row.Field === name)?.Value;
+  assert.equal(field("Period From"), "2026-08-12");
+  assert.equal(field("Period To"), "2026-09-10");
+  assert.equal(field("Snapshot Period From"), "2026-09-01");
+  assert.equal(field("Snapshot Period To"), "2026-09-30");
+  assert.equal(field("Period provenance"), "Verified Configure Collection Source validity");
+});
+
+test("private save comparison reloads source validity changed during the committed private write", async () => {
+  let saved = false;
+  let asOf = "";
+  const service = operations({
+    getCollectionOspSavedTarget: async () => saved ? liveValidityTarget("2026-08-15", "2026-08-27") : liveValidityTarget(),
+    upsertCollectionOspClientResults: async () => { saved = true; return clientResult(); },
+    getCollectionOspTargetOverview: async (input) => { asOf = input.asOfDate; return { latestComparison: {} } as never; },
+  });
+  const response = await service.upsertClientResults(user("admin"), TARGET_ID, REVISION_ID, {
+    rows: [{ aging: "D3", targetPercentage: "50", resultPercentage: "75" }],
+  });
+  assert.equal(saved, true);
+  assert.equal(response.clientResult.rows[0]?.ospClosed, "7500.00");
+  assert.ok(asOf >= "2026-08-15" && asOf <= "2026-08-27", "comparison uses new bounds, not the stale pre-save target");
+});
+
+test("oversized configured Billing periods remain explicit controlled errors, never truncated calendars", async () => {
+  let queried = false;
+  const service = operations({ getCollectionOspSavedTarget: async () => liveValidityTarget("2025-01-01", "2026-09-10"),
+    getCollectionOspCalendar: async () => { queried = true; return {} as never; },
+    getCollectionOspExportDataset: async () => { queried = true; return {} as never; },
+  });
+  await assert.rejects(service.calendar(user("admin"), TARGET_ID, REVISION_ID, {}),
+    (error) => assertHttpError(error, 400));
+  await assert.rejects(service.exportReport(user("admin"), TARGET_ID, REVISION_ID, { format: "json", asOf: "2026-09-06" }),
+    (error) => assertHttpError(error, 400));
+  assert.equal(queried, false);
 });

@@ -12,6 +12,7 @@ import { parseApiError, parseCollectionApiErrorDetails } from "./utils";
 import { BILLING_PRINCIPAL_AGINGS, formatOspCurrency, formatOspPercentage, formatOspPercentagePoint } from "./billing-principal-report-utils";
 import { exportBillingPrincipalVisualReport, type BillingPrincipalVisualExportKind } from "./billing-principal-visual-export";
 import { BillingPrincipalDayDialog } from "./BillingPrincipalDayDialog";
+import { clampBillingPrincipalMonth, getBillingPrincipalReportingWindow, isBillingPrincipalDate, isBillingPrincipalDateInRange } from "@/lib/billing-principal-date-domain";
 export { buildBillingPrincipalDrilldownFilters } from "./BillingPrincipalDayDialog";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -30,22 +31,28 @@ export function assertBillingPrincipalExportOwner(expectedOwnerId: string, actua
 
 export function assertBillingPrincipalExportAuthorization(
   expectedOwnerId: string, expectedVersion: number,
-  latest: { viewerUserId: string; target: { version: number } },
+  latest: { viewerUserId: string; target: { version: number; activeRevision?: BillingPrincipalSavedTarget["activeRevision"] } },
+  expectedReportingVersion?: string,
 ): void {
   assertBillingPrincipalExportOwner(expectedOwnerId, latest.viewerUserId);
   if (latest.target.version !== expectedVersion) throw new Error("Target changed while rendering. Reload and export again.");
+  if (expectedReportingVersion !== undefined && (!latest.target.activeRevision
+    || getBillingPrincipalReportingWindow(latest.target.activeRevision).version !== expectedReportingVersion)) {
+    throw new Error("Collection Source validity changed while rendering. Refresh and export again.");
+  }
 }
-function dateAtNoon(value: string) { return new Date(value + "T12:00:00"); }
+function dateAtNoon(value: string) { return new Date(value + "T12:00:00Z"); }
 function isoDate(value: Date) {
-  return [value.getFullYear(), String(value.getMonth() + 1).padStart(2, "0"), String(value.getDate()).padStart(2, "0")].join("-");
+  return value.toISOString().slice(0, 10);
 }
-function isValidMonth(value: string) { return /^\d{4}-(?:0[1-9]|1[0-2])$/.test(value); }
+function isValidMonth(value: string) { return isBillingPrincipalDate(value + "-01"); }
 
 export function getBillingPrincipalCalendarMonthRange(input: { month: string; start: string; end: string }) {
   if (!isValidMonth(input.month)) return null;
   const first = input.month + "-01";
   const seed = dateAtNoon(first);
-  const last = isoDate(new Date(seed.getFullYear(), seed.getMonth() + 1, 0, 12));
+  seed.setUTCMonth(seed.getUTCMonth() + 1, 0);
+  const last = isoDate(seed);
   const from = first < input.start ? input.start : first;
   const to = last > input.end ? input.end : last;
   return from <= to ? { from, to } : null;
@@ -54,8 +61,10 @@ export function getBillingPrincipalCalendarMonthRange(input: { month: string; st
 export function getBillingPrincipalCalendarGridDates(month: string): Array<string | null> {
   if (!isValidMonth(month)) return Array.from({ length: 42 }, () => null);
   const first = dateAtNoon(month + "-01");
-  const days = new Date(first.getFullYear(), first.getMonth() + 1, 0, 12).getDate();
-  const values: Array<string | null> = Array.from({ length: first.getDay() }, () => null);
+  const last = dateAtNoon(month + "-01");
+  last.setUTCMonth(last.getUTCMonth() + 1, 0);
+  const days = last.getUTCDate();
+  const values: Array<string | null> = Array.from({ length: first.getUTCDay() }, () => null);
   for (let day = 1; day <= days; day += 1) values.push(month + "-" + String(day).padStart(2, "0"));
   while (values.length < 42) values.push(null);
   return values.slice(0, 42);
@@ -88,12 +97,14 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
   target: BillingPrincipalSavedTarget; overview: BillingPrincipalSavedTargetOverview; disabled?: boolean;
   onAccessLost: () => void; onExportBusy: (busy: boolean) => void;
 }) {
-  const start = target.activeRevision.from;
-  const end = target.activeRevision.to;
+  const range = useMemo(() => getBillingPrincipalReportingWindow(target.activeRevision), [target.activeRevision]);
+  const start = range.from;
+  const end = range.to;
   // Capture the mounted workspace owner. A later cookie/session replacement
   // must never authorize this owner's already fetched private export.
   const [ownerUserId] = useState(() => getStoredAuthenticatedUser()?.id ?? "");
-  const [month, setMonth] = useState(start.slice(0, 7));
+  const [selectedMonth, setMonth] = useState(start.slice(0, 7));
+  const month = clampBillingPrincipalMonth(selectedMonth, range);
   const [aging, setAging] = useState<BillingPrincipalAging | "ALL">("ALL");
   const [calendar, setCalendar] = useState<BillingPrincipalCalendarDay[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(true);
@@ -104,6 +115,10 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
   const [retry, setRetry] = useState(0);
   const exportRef = useRef<AbortController | null>(null);
   useEffect(() => () => exportRef.current?.abort(), []);
+  useEffect(() => {
+    setMonth((current) => clampBillingPrincipalMonth(current, range));
+    setSelectedDate(null);
+  }, [range]);
   const handleAccessError = useCallback((caught: unknown) => {
     if ([401, 403, 404].includes(parseCollectionApiErrorDetails(caught).status ?? 0)) onAccessLost();
   }, [onAccessLost]);
@@ -117,13 +132,14 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
       .catch((caught: unknown) => { if (!controller.signal.aborted) { setCalendarError(parseApiError(caught)); handleAccessError(caught); } })
       .finally(() => { if (!controller.signal.aborted) setCalendarLoading(false); });
     return () => controller.abort();
-  }, [aging, start, end, target.id, target.activeRevision.id, retry, handleAccessError]);
+  }, [aging, start, end, range.version, target.id, target.activeRevision.id, retry, handleAccessError]);
 
   const byDate = useMemo(() => new Map(calendar.map((day) => [day.date, day])), [calendar]);
   const grid = useMemo(() => getBillingPrincipalCalendarGridDates(month), [month]);
   const shiftMonth = (delta: number) => {
     const seed = dateAtNoon(month + "-01");
-    const candidate = isoDate(new Date(seed.getFullYear(), seed.getMonth() + delta, 1, 12)).slice(0, 7);
+    seed.setUTCMonth(seed.getUTCMonth() + delta);
+    const candidate = isoDate(seed).slice(0, 7);
     if (candidate >= start.slice(0, 7) && candidate <= end.slice(0, 7)) setMonth(candidate);
   };
   const runExport = async (format: ExportFormat) => {
@@ -137,7 +153,7 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
         const result = await downloadBillingPrincipalExport(target.id, target.activeRevision.id, { ...filters, format }, { signal: controller.signal });
         assertBillingPrincipalExportOwner(ownerUserId, result.generatedByUserId);
         const latest = await getBillingPrincipalSavedTarget(target.id, { signal: controller.signal });
-        assertBillingPrincipalExportAuthorization(ownerUserId, overview.target.version, latest);
+        assertBillingPrincipalExportAuthorization(ownerUserId, overview.target.version, latest, getBillingPrincipalReportingWindow(overview.revision).version);
         if (!controller.signal.aborted) triggerDownload(result.blob, result.fileName || "billing-principal.xlsx");
       } else {
         // Always request fresh owner-scoped data; never cache private/PII export datasets.
@@ -145,7 +161,7 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
         assertBillingPrincipalExportOwner(ownerUserId, dataset.generatedByUserId);
         if (!controller.signal.aborted) await exportBillingPrincipalVisualReport(format, { dataset, signal: controller.signal, beforeDownload: async () => {
           const latest = await getBillingPrincipalSavedTarget(target.id, { signal: controller.signal });
-          assertBillingPrincipalExportAuthorization(dataset.generatedByUserId, dataset.overview.target.version, latest);
+          assertBillingPrincipalExportAuthorization(dataset.generatedByUserId, dataset.overview.target.version, latest, getBillingPrincipalReportingWindow(dataset.overview.revision).version);
         } });
       }
     } catch (caught) {
@@ -161,7 +177,7 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
 
   return <section aria-labelledby="billing-system-analysis-heading" className="min-w-0 space-y-4 rounded-xl border bg-card p-4">
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-      <div><h3 id="billing-system-analysis-heading" className="font-semibold">System calendar</h3><p className="mt-1 text-sm text-muted-foreground">{target.activeRevision.sourceValidityVerified ? "Full source validity" : "Legacy saved period (source validity unverified)"}: {start} — {end}. Click a day for its closed accounts. Balance = shared target OSP − cumulative closed.</p></div>
+      <div><h3 id="billing-system-analysis-heading" className="font-semibold">System calendar</h3><p className="mt-1 text-sm text-muted-foreground">{range.sourceValidityVerified ? "Full current source validity" : "Reporting period (includes legacy source fallback)"}: {start} — {end}. Click a day for its closed accounts. Balance = shared target OSP − cumulative closed.</p></div>
       <div className="flex flex-wrap gap-2">{(["xlsx", "png", "pdf"] as const).map((format) => <Button key={format} type="button" size="sm" variant="outline" disabled={disabled || exporting !== null} aria-label={"Export Billing Principal report as " + format.toUpperCase()} onClick={() => void runExport(format)}>{exporting === format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}{format.toUpperCase()}</Button>)}
         {exporting ? <Button type="button" size="sm" variant="ghost" onClick={() => exportRef.current?.abort()}>Cancel export</Button> : null}
       </div>
@@ -180,11 +196,11 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
       <div className="min-w-[70rem]">
         <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground">{WEEKDAYS.map((day) => <div key={day} className="py-1">{day}</div>)}</div>
         <div className="grid grid-cols-7 gap-1">{grid.map((date, index) => {
-          const day = date ? byDate.get(date) : undefined;
+          const day = date && isBillingPrincipalDateInRange(date, range) ? byDate.get(date) : undefined;
           return day ? <CalendarCell key={date} day={day} onSelect={() => setSelectedDate(day.date)} /> : <div key={date ?? "blank-" + index} className="min-h-44 rounded-md border border-dashed border-border/40" aria-hidden="true" />;
         })}</div>
       </div>
     </div> : null}
-    {selectedDate ? <BillingPrincipalDayDialog key={target.id + ":" + selectedDate} target={target} date={selectedDate} onClose={() => setSelectedDate(null)} onAccessLost={onAccessLost} /> : null}
+    {selectedDate && isBillingPrincipalDateInRange(selectedDate, range) ? <BillingPrincipalDayDialog key={target.id + ":" + range.version + ":" + selectedDate} target={target} date={selectedDate} onClose={() => setSelectedDate(null)} onAccessLost={onAccessLost} /> : null}
   </section>;
 }

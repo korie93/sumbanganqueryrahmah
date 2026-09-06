@@ -37,6 +37,25 @@ test("target read requires a server-authenticated stable viewer ID rather than d
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test("target read retains authoritative source validity and rejects impossible or inverted DATE bounds", async () => {
+  const originalFetch = globalThis.fetch;
+  const window = { from: "2026-08-12", to: "2026-09-10", version: "current-sources-v2", sourceValidityVerified: true,
+    sources: [{ sourceImportId: "source-a", validFrom: "2026-08-12", validTo: "2026-09-10", configured: true }] };
+  const target = { ...savedTarget, activeRevision: { ...savedTarget.activeRevision, reportingWindow: window } };
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, viewerUserId: "admin-a", target }),
+    { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    assert.deepEqual((await getBillingPrincipalSavedTarget("target-a")).target.activeRevision.reportingWindow, window);
+    window.from = "2026-02-30";
+    await assert.rejects(getBillingPrincipalSavedTarget("target-a"));
+    window.from = "2026-09-11";
+    await assert.rejects(getBillingPrincipalSavedTarget("target-a"));
+    window.from = "2026-08-12";
+    window.sources[0]!.validFrom = "2026-09-11";
+    await assert.rejects(getBillingPrincipalSavedTarget("target-a"));
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("visual export refuses legacy data without a stable authenticated owner", async () => {
   const originalFetch = globalThis.fetch;
   const fixture = createBillingPrincipalVisualExportFixture();
@@ -108,6 +127,23 @@ test("Billing Principal export preserves attachment metadata", async () => {
     assert.equal(await result.blob.text(), "aging,result\nD3,50.00");
   } finally { globalThis.fetch = originalFetch; }
   assert.match(requestedUrl, /\/export\?asOf=2026-09-15&format=csv$/);
+});
+
+test("private save sends an actor freshness header without treating it as submitted owner data", async () => {
+  const originalFetch = globalThis.fetch;
+  const fixture = createBillingPrincipalVisualExportFixture();
+  let headers = new Headers();
+  let body: Record<string, unknown> = {};
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    headers = new Headers(init?.headers);
+    body = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({ ok: true, clientResult: fixture.overview.clientResult, latestComparison: fixture.overview.latestComparison }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    await upsertBillingPrincipalClientResults("target-a", "revision-a", { rows: [] }, { expectedViewerUserId: "owner-a" });
+    assert.equal(headers.get("X-Billing-Viewer-Id"), "owner-a");
+    assert.deepEqual(Object.keys(body), ["rows"]);
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("binary export without a server-bound owner fails closed", async () => {

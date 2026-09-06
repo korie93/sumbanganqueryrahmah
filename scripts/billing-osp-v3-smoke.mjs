@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
+import { runBillingOspRetrospectiveQa, verifyBillingOspRetrospectiveRestart } from "./lib/billing-osp-retrospective-qa.mjs";
 
 // Writes synthetic fixtures only to the disposable local QA environment.
 const database = process.env.COLLECTION_SAVE_ACCESS_QA_DATABASE || "";
@@ -68,10 +69,16 @@ async function login(label) {
   return actor;
 }
 
-async function openReport(actor) {
+async function openReport(actor, targetId) {
   currentPage = actor.page;
   await actor.page.goto(baseUrl + "/collection/billing-principal", { waitUntil: "domcontentloaded" });
   await actor.page.getByRole("table", { name: "Table B Client Billing Principal result" }).waitFor();
+  if (targetId && await actor.page.locator("#billing-saved-target-select").inputValue() !== targetId) {
+    const changed = actor.page.waitForResponse((response) => new URL(response.url()).pathname.includes(`/saved-targets/${targetId}/revisions/`) && new URL(response.url()).pathname.endsWith("/overview"));
+    await actor.page.locator("#billing-saved-target-select").selectOption(targetId);
+    assert.equal((await changed).status(), 200);
+    await actor.page.getByRole("table", { name: "Table B Client Billing Principal result" }).waitFor();
+  }
   assert.equal(await actor.page.locator("#collection-nickname-input").count(), 0, "Billing must use assigned account access, not require a nickname login.");
 }
 
@@ -278,7 +285,9 @@ async function verifyExportOwnerSwitch(superuser, manager, targetId) {
     try {
       await page.getByRole("button", { name: `Export Billing Principal report as ${format}` }).click();
       await page.getByRole("table", { name: "Table B Client Billing Principal result" }).waitFor({ state: "hidden" });
-      await page.getByText("Saved Target access could not be confirmed. Reload targets before continuing.", { exact: true }).waitFor();
+      // Both live metadata and the final export check fence the owner. Either
+      // may clear the private workspace first; retain all no-download checks.
+      await page.getByRole("alert").filter({ hasText: /^(?:Saved Target access could not be confirmed|Authenticated account changed)\. Reload targets before continuing\.$/ }).waitFor();
       await Promise.all(pendingChecks);
       assert.equal(intercepted, true);
       assert.equal(finalViewerId, manager.user.id, "Final target authorization observes the new stable owner.");
@@ -345,7 +354,7 @@ try {
     const { targetId, revisionPath } = JSON.parse(await readFile(path.join(artifactDir, "osp-v3-restart-fixture.json"), "utf8"));
     for (const [label, targetPct, resultPct] of [["superuser", "25.0000", "20.0000"], ["manager", "35.0000", "28.0000"], ["otherAdmin", "32.0000", "0.0000"]]) {
       const actor = await login(label);
-      await openReport(actor);
+      await openReport(actor, targetId);
       const response = await api(actor, "GET", revisionPath + "/overview?asOf=2026-08-12");
       assert.equal(response.target.id, targetId);
       assert.equal(response.clientResult.rows[0].targetPercentage, targetPct);
@@ -357,6 +366,8 @@ try {
     const formerAdmin = await login("admin");
     await api(formerAdmin, "GET", revisionPath + "/overview", undefined, 404);
     checked("actual server restart and fresh logins preserve private owners, shared percentages, assignment and old-admin revocation");
+    phase = "retrospective payment after actual server restart";
+    await verifyBillingOspRetrospectiveRestart({ api, manager: actors.find((actor) => actor.label === "manager"), openReport, artifactDir, checked });
     phase = "repeated full workspace resource cycles";
     await verifyWorkspaceResourceCycles(actors.find((actor) => actor.label === "superuser"), actors.find((actor) => actor.label === "manager"), targetId);
     phase = "long metadata and maximum exact signed money layouts";
@@ -501,6 +512,8 @@ try {
   await user.page.goto(baseUrl + "/collection/billing-principal", { waitUntil: "domcontentloaded" });
   assert.equal(await user.page.getByRole("table", { name: "Table B Client Billing Principal result" }).count(), 0);
   checked("reassignment revokes old-admin open private UI and denies reads; new admin gets UNSAVED defaults, never prior owner values; ordinary user forbidden");
+  phase = "exact retrospective Payment Date and live source validity lifecycle";
+  await runBillingOspRetrospectiveQa({ api, superuser, manager, admin, otherAdmin, user, openReport, savePrivate, artifactDir, checked });
   await writeFile(path.join(artifactDir, "osp-v3-restart-fixture.json"), JSON.stringify({ targetId: target.id, revisionPath }));
   }
   assert.deepEqual(pageErrors, []);

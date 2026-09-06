@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiRequest } from "../api-client";
 import { createClientRandomId } from "../secure-id";
 import { parseApiJson } from "./contract";
+import { isBillingPrincipalDate } from "../billing-principal-date-domain";
 
 export type BillingPrincipalAging = "D3" | "D4" | "D5" | "D6";
 
@@ -40,6 +41,13 @@ export type BillingPrincipalSavedTargetRevision = {
   id: string;
   revisionNumber: number;
   sourceValidityVerified?: boolean | undefined;
+  reportingWindow?: {
+    from: string;
+    to: string;
+    version: string;
+    sourceValidityVerified: boolean;
+    sources: Array<{ sourceImportId: string; validFrom: string; validTo: string; configured: boolean }>;
+  } | undefined;
   from: string;
   to: string;
   trackingStartDate: string | null;
@@ -252,7 +260,7 @@ const idSchema = z.string().min(1).max(128);
 const descriptionSchema = z.string().max(1_000);
 const noteSchema = z.string().max(2_000);
 const referenceSchema = z.string().max(300);
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const isoDateSchema = z.string().refine(isBillingPrincipalDate, "Expected a valid YYYY-MM-DD business date");
 const dateTimeSchema = z.string().min(1).max(64);
 const decimalSchema = z.string().regex(/^-?\d+(?:\.\d+)?$/).max(40);
 
@@ -260,6 +268,14 @@ const savedTargetRevisionSchema: z.ZodType<BillingPrincipalSavedTargetRevision> 
   id: idSchema,
   revisionNumber: z.number().int().positive(),
   sourceValidityVerified: z.boolean().optional(),
+  reportingWindow: z.object({
+    from: isoDateSchema,
+    to: isoDateSchema,
+    version: z.string().min(1).max(1_000),
+    sourceValidityVerified: z.boolean(),
+    sources: z.array(z.object({ sourceImportId: idSchema, validFrom: isoDateSchema, validTo: isoDateSchema, configured: z.boolean() })
+      .refine((source) => source.validFrom <= source.validTo, "Invalid source validity range")).min(1).max(5),
+  }).refine((range) => range.from <= range.to, "Invalid reporting range").optional(),
   from: isoDateSchema,
   to: isoDateSchema,
   trackingStartDate: isoDateSchema.nullable(),
@@ -714,14 +730,17 @@ export async function upsertBillingPrincipalClientResults(
   targetId: string,
   revisionId: string,
   payload: { rows: BillingPrincipalClientResultInput[] },
-  options?: MutationRequestOptions,
+  options?: MutationRequestOptions & { expectedViewerUserId?: string },
 ) {
   const endpoint = `${savedTargetRevisionEndpoint(targetId, revisionId)}/client-results`;
+  const mutationOptions = billingPrincipalMutationOptions("client-results:upsert", { targetId, revisionId, payload }, options);
   const response = await apiRequest(
     "PUT",
     endpoint,
     payload,
-    billingPrincipalMutationOptions("client-results:upsert", { targetId, revisionId, payload }, options),
+    { ...mutationOptions, headers: { ...mutationOptions.headers,
+      ...(options?.expectedViewerUserId ? { "X-Billing-Viewer-Id": options.expectedViewerUserId } : {}),
+    } },
   );
   return parseApiJson(
     response,

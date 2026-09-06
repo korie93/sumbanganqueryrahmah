@@ -5,11 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { formatOperationalDateTime, parseDateValue } from "@/lib/date-format";
+import { billingPrincipalTargetMetadataChanged, getBillingPrincipalReportingWindow } from "@/lib/billing-principal-date-domain";
+import { COLLECTION_SOURCE_CONFIG_CHANGED_EVENT } from "@/lib/api/collection-source-configs";
+import { getStoredAuthenticatedUser } from "@/lib/auth-session";
+import { assertBillingPrincipalWorkspaceOwner } from "@/lib/billing-principal-owner";
 import {
   deleteBillingPrincipalSavedTarget, getBillingPrincipalSavedTarget, listBillingPrincipalSavedTargets,
   prepareBillingPrincipalMutationAttempt, type BillingPrincipalSavedTarget, type BillingPrincipalMutationAttempt,
 } from "@/lib/api/collection-billing-principal";
-import { parseApiError } from "./utils";
+import { COLLECTION_DATA_CHANGED_EVENT, parseApiError } from "./utils";
 import { BillingPrincipalSavedTargetDialog } from "./BillingPrincipalSavedTargetDialog";
 import { BillingPrincipalSavedTargetWorkspace, billingPrincipalWorkspaceLockMessage, type BillingPrincipalWorkspaceInteraction } from "./BillingPrincipalSavedTargetWorkspace";
 
@@ -21,6 +25,7 @@ export function BillingPrincipalSavedTargetUpdatedAt({ value }: { value: string 
 }
 
 export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
+  const [ownerUserId] = useState(() => getStoredAuthenticatedUser()?.id ?? "");
   const [targets, setTargets] = useState<BillingPrincipalSavedTarget[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState("");
   const [page, setPage] = useState(1);
@@ -32,9 +37,12 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
   const [interaction, setInteraction] = useState<(BillingPrincipalWorkspaceInteraction & { workspaceKey: string }) | null>(null);
   const [error, setError] = useState("");
   const [reloadVersion, setReloadVersion] = useState(0);
+  const [dataVersion, setDataVersion] = useState(0);
+  const refreshTargetRef = useRef<(() => void) | null>(null);
   const deleteAttemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
   const deleteControllerRef = useRef<AbortController | null>(null);
   const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? null;
+  const reportingWindow = selectedTarget ? getBillingPrincipalReportingWindow(selectedTarget.activeRevision) : null;
   const workspaceKey = selectedTarget ? `${selectedTarget.id}:${selectedTarget.activeRevision.id}:${selectedTarget.version}` : "";
   const interactionMessage = interaction?.workspaceKey === workspaceKey ? billingPrincipalWorkspaceLockMessage(interaction) : "";
   const workspaceLocked = Boolean(interactionMessage);
@@ -66,12 +74,16 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
       controller?.abort();
       const request = new AbortController(); controller = request;
       void getBillingPrincipalSavedTarget(selectedTarget.id, { signal: request.signal })
-        .then(({ target }) => {
+        .then(({ target, viewerUserId }) => {
           if (request.signal.aborted) return;
+          assertBillingPrincipalWorkspaceOwner(ownerUserId, viewerUserId);
           // Keep a live private draft or operation mounted. Access errors below
           // still clear immediately; successful metadata updates can wait.
-          if (!workspaceLocked && !configOpen && !deleting && target.version !== selectedTarget.version) {
-            setTargets((current) => current.map((item) => item.id === target.id ? target : item));
+          if (!workspaceLocked && !configOpen && !deleting) {
+            if (billingPrincipalTargetMetadataChanged(selectedTarget, target)) {
+              setTargets((current) => current.map((item) => item.id === target.id ? target : item));
+            }
+            setDataVersion((value) => value + 1);
           }
         })
         .catch((caught: unknown) => {
@@ -81,11 +93,20 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
         });
     };
     window.addEventListener("focus", revalidate);
+    window.addEventListener(COLLECTION_SOURCE_CONFIG_CHANGED_EVENT, revalidate);
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, revalidate);
     document.addEventListener("visibilitychange", revalidate);
+    refreshTargetRef.current = revalidate;
     // Apply deferred shared changes only after fresh authorization, once idle.
     if (!workspaceLocked && !configOpen && !deleting) revalidate();
-    return () => { controller?.abort(); window.removeEventListener("focus", revalidate); document.removeEventListener("visibilitychange", revalidate); };
-  }, [configOpen, deleting, selectedTarget, workspaceLocked]);
+    return () => {
+      controller?.abort(); refreshTargetRef.current = null;
+      window.removeEventListener("focus", revalidate);
+      window.removeEventListener(COLLECTION_SOURCE_CONFIG_CHANGED_EVENT, revalidate);
+      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, revalidate);
+      document.removeEventListener("visibilitychange", revalidate);
+    };
+  }, [configOpen, deleting, ownerUserId, selectedTarget, workspaceLocked]);
 
   const deleteTarget = async () => {
     if (!selectedTarget || deleteControllerRef.current || workspaceLocked || configOpen) return;
@@ -133,16 +154,16 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
       </div>
       {interactionMessage ? <p id="billing-workspace-lock-guidance" role="status" className="mt-4 rounded-md border border-primary/20 bg-primary/5 p-3 text-sm">{interactionMessage}</p> : null}
       {selectedTarget ? <div className="mt-4 space-y-2 border-t pt-3 text-sm">
-        <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{selectedTarget.assignedAdmin ? "Admin: " + selectedTarget.assignedAdmin.username : "Legacy — no assigned admin"}</Badge><span className="tabular-nums text-muted-foreground">{selectedTarget.activeRevision.from} — {selectedTarget.activeRevision.to}</span></div>
+        <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{selectedTarget.assignedAdmin ? "Admin: " + selectedTarget.assignedAdmin.username : "Legacy — no assigned admin"}</Badge><span className="tabular-nums text-muted-foreground">{reportingWindow?.from} — {reportingWindow?.to}</span></div>
         <p className="break-words text-muted-foreground">{selectedTarget.activeRevision.sourceSnapshots.map((source) => source.name + " · " + (source.filename || "Saved source")).join("; ")}</p>
         <BillingPrincipalSavedTargetUpdatedAt value={selectedTarget.updatedAt} />
-        {!selectedTarget.activeRevision.sourceValidityVerified ? <p className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">Legacy saved period: configured source validity was not recorded by this version. Historical dates and balances are retained. A superuser can create a new target from Configure Collection Source for a verified period.</p> : null}
+        {!reportingWindow?.sourceValidityVerified ? <p className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">Source validity is unavailable for one or more sources. Those sources use the legacy saved period; configured sources use their current validity. Historical records and the saved TT OSP baseline are retained.</p> : null}
         {selectedTarget.description ? <p className="whitespace-pre-wrap break-words text-muted-foreground">{selectedTarget.description}</p> : null}
       </div> : null}
       {error ? <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
     </section>
     {loading ? <div role="status" className="flex min-h-40 items-center justify-center gap-2 rounded-xl border bg-card text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading saved targets…</div>
-      : selectedTarget ? <BillingPrincipalSavedTargetWorkspace key={workspaceKey} role={role} target={selectedTarget} onInteractionChange={handleInteractionChange} />
+      : selectedTarget ? <BillingPrincipalSavedTargetWorkspace key={workspaceKey} role={role} target={selectedTarget} dataVersion={dataVersion} onRefresh={() => refreshTargetRef.current?.()} onInteractionChange={handleInteractionChange} />
         : <div className="rounded-xl border border-dashed bg-card p-6 text-center"><p className="font-medium">No saved target is available.</p><p className="mt-1 text-sm text-muted-foreground">{role === "superuser" ? "Create a target using an admin account and configured Saved source." : "A superuser can create or assign a target for this account."}</p></div>}
     <AlertDialog open={deleteOpen} onOpenChange={(value) => { if (!deleting) setDeleteOpen(value); }}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete saved target?</AlertDialogTitle><AlertDialogDescription>{selectedTarget?.name ?? "This target"} will be deactivated. Source files, Collection records, private results and audit history are retained.</AlertDialogDescription></AlertDialogHeader>

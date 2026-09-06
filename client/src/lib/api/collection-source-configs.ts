@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
+import { isBillingPrincipalDate } from "../billing-principal-date-domain";
+
+export const COLLECTION_SOURCE_CONFIG_CHANGED_EVENT = "collection:source-config-changed";
+
+function notifyCollectionSourceConfigChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(COLLECTION_SOURCE_CONFIG_CHANGED_EVENT));
+}
 
 const collectionSourceConfigStatusSchema = z.enum([
   "active",
@@ -15,8 +22,8 @@ const collectionSourceConfigSchema = z.object({
   sourceImportName: z.string().max(500),
   sourceFilename: z.string().max(500),
   rowCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  validTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  validFrom: z.string().refine(isBillingPrincipalDate),
+  validTo: z.string().refine(isBillingPrincipalDate),
   cycleKey: z.string().min(1).max(100),
   enabled: z.boolean(),
   compatibilityStatus: z.enum(["compatible", "incompatible"]),
@@ -73,11 +80,13 @@ export async function saveCollectionSourceConfig(
     input,
     options,
   );
-  return parseApiJson(
+  const result = await parseApiJson(
     response,
     collectionSourceConfigMutationResponseSchema,
     `${sourceConfigsEndpoint}/:id`,
   );
+  notifyCollectionSourceConfigChanged();
+  return result;
 }
 
 export async function deleteCollectionSourceConfig(
@@ -90,9 +99,11 @@ export async function deleteCollectionSourceConfig(
     undefined,
     options,
   );
-  return parseApiJson(
+  const result = await parseApiJson(
     response,
     collectionSourceConfigDeleteResponseSchema,
     `${sourceConfigsEndpoint}/:id`,
   );
+  notifyCollectionSourceConfigChanged();
+  return result;
 }

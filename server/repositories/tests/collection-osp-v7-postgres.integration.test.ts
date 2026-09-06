@@ -13,7 +13,9 @@ import { ensureCoreDataRowsTable, ensureCoreImportsTable } from "../../internal/
 import { ensureCoreAuditLogsTable } from "../../internal/core-schema-bootstrap-activity";
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
 import { upsertCollectionManualSettlement, revokeCollectionManualSettlement } from "../collection-manual-settlement-repository-utils";
-import { deleteCollectionRecord } from "../collection-record-mutation-repository-utils";
+import { deleteCollectionRecord, updateCollectionRecord } from "../collection-record-mutation-repository-utils";
+import { createCollectionRecord } from "../collection-record-create-repository-utils";
+import { refreshCollectionRecordDailyRollupSlices } from "../collection-record-rollup-utils";
 import { purgeCollectionRecordsOlderThan } from "../collection-record-purge-repository-utils";
 import { recalculateCollectionSettlementCycles } from "../collection-settlement-repository-utils";
 import {
@@ -25,6 +27,8 @@ import {
   getCollectionOspTargetOverviewRepository as readOverview,
   getCollectionOspSavedTargetRepository,
   listCollectionOspSavedTargetsRepository,
+  listCollectionOspReconciliationCandidatesRepository,
+  listCollectionOspManualReconciliationsRepository,
   getCollectionOspExportDatasetRepository,
   listCollectionOspReconciliationHistoryRepository,
   upsertCollectionOspClientResultsRepository as savePrivateClient,
@@ -39,6 +43,7 @@ import { createRestoreStats } from "../backups-restore-stats-utils";
 import { restoreUsersFromBackup } from "../backups-restore-core-datasets-utils";
 import type { BackupRestoreExecutor } from "../backups-restore-shared-utils";
 import { dropDrainedOspFixtureDatabase } from "./postgres-fixture-cleanup";
+import { collectSqlText } from "./sql-test-utils";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const migrationFiles = [
@@ -152,6 +157,500 @@ async function prepareSchema(pool: pg.Pool) {
   await pool.query("INSERT INTO public.users (id, username, password_hash, role, status) VALUES ('osp-repo-tester', 'osp-repo-tester', 'not-a-login-secret', 'superuser', 'active')");
   await pool.query("INSERT INTO public.users (id, username, password_hash, role, status) VALUES ('osp-repo-admin', 'osp-repo-admin', 'not-a-login-secret', 'admin', 'active')");
 }
+
+async function prepareRetroactiveSource(pool: pg.Pool, validity = { from: "2026-08-12", to: "2026-09-10" }, index = 27) {
+  const sourceId = `retroactive-source-${index}`;
+  const rowId = `retroactive-row-${index}`;
+  const account = String(index).padStart(12, "0");
+  const card = `411111111111${String(index).padStart(4, "0")}`;
+  const accountHash = hashCollectionSourceIdentifier(account, "account_number");
+  const cardHash = hashCollectionSourceIdentifier(card, "card_number");
+  const obligation = `account:${accountHash}`;
+  await pool.query("INSERT INTO public.imports (id, name, filename, is_deleted, created_by) VALUES ($1, 'Retroactive source', 'retroactive.xlsx', false, 'system')", [sourceId]);
+  await pool.query(`INSERT INTO public.collection_source_configs
+    (source_import_id, valid_from, valid_to, cycle_key, enabled, compatibility_status, compatibility_issues, indexed_row_count, configured_by)
+    VALUES ($1, $2::date, $3::date, 'RETROACTIVE', true, 'compatible', ARRAY[]::text[], 1, 'system')`, [sourceId, validity.from, validity.to]);
+  await pool.query("INSERT INTO public.data_rows (id, import_id, json_data) VALUES ($1, $2, $3::jsonb)", [rowId, sourceId, JSON.stringify({
+    "Customer Name": "Retroactive Customer A", "Account Number": account, "Card Number": card,
+    "TOTAL DUE": "500.00", "Billing Principal (OSP)": "8000.00", DC_STS: "D3", "Calling Date": "2026-08-12",
+  })]);
+  await pool.query(`INSERT INTO public.collection_source_rows
+    (source_import_id, source_data_row_id, account_number_hash, card_number_hash, card_number_last4, canonical_obligation_key,
+      total_due, billing_principal_osp, aging_bucket, calling_date)
+    VALUES ($1, $2, $3, $4, $6, $5, 500, 8000, 'D3', '2026-08-12')`, [sourceId, rowId, accountHash, cardHash, obligation, card.slice(-4)]);
+  return {
+    sourceId, rowId, account, card, obligation, cycleKey: `2026-08-12:${obligation}`,
+    createTarget: (sourceImportIds = [sourceId]) => createCollectionOspSavedTargetRepository({ name: "Retroactive source target", description: null,
+      assignedAdminUserId: "osp-repo-admin", viewer: repositoryViewer, sourceImportIds,
+      timezone: "Asia/Kuala_Lumpur", nicknameScope: [], agingScope: [...completeAgingScope], actor: "osp-repo-tester",
+      targets: completeAgingScope.map((agingBucket) => ({ agingBucket, totalOspBaseline: null, targetPercentage: "50" })),
+    }),
+    savePayment: (date = "2026-08-27", amount = 500) => createCollectionRecord({
+      customerName: "Retroactive Customer A", accountNumber: account, sourceCardNumber: card, cardNumberLast4: card.slice(-4),
+      icNumber: "900101101027", customerPhone: "0123456027", sourceImportId: sourceId, sourceDataRowId: rowId,
+      sourceImportName: "Retroactive source", sourceFilename: "retroactive.xlsx", agingBucket: "D3", callingDate: "2026-08-12",
+      callingWindowEndExclusive: "2026-09-12", totalDue: 500, billingPrincipalOsp: 8000,
+      sourceMatchBasis: "account_and_card", sourceMatchAccuracy: 100, sourceObligationKey: obligation,
+      settlementCycleKey: `2026-08-12:${obligation}`, batch: "P10", paymentDate: date, amount,
+      createdByLogin: "osp-repo-tester", collectionStaffNickname: "SW.ABU_324",
+    }),
+  };
+}
+
+test("retroactive OSP stale snapshot uses changed source validity for a late-reported August payment", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      const source = await prepareRetroactiveSource(pool, { from: "2026-09-01", to: "2026-09-30" });
+      await withRepositoryDatabase(pool, async () => {
+        const target = await source.createTarget();
+        const baselineBefore = (await pool.query("SELECT * FROM public.collection_osp_target_aging_rows WHERE target_revision_id = $1::uuid ORDER BY aging_bucket", [target.activeRevision.id])).rows;
+        const snapshotsBefore = (await pool.query("SELECT * FROM public.collection_osp_target_source_rows WHERE target_revision_id = $1::uuid ORDER BY cycle_key", [target.activeRevision.id])).rows;
+        await pool.query("UPDATE public.collection_source_configs SET valid_from = '2026-08-12', valid_to = '2026-09-10' WHERE source_import_id = $1", [source.sourceId]);
+        const payment = await source.savePayment();
+        await pool.query("UPDATE public.collection_records SET created_at = '2026-09-06T08:00:00+08:00'::timestamptz WHERE id = $1", [payment.id]);
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: { userId: "osp-repo-admin", role: "admin" } };
+        const overview = await readOverview({ ...scope, asOfDate: "2026-09-06" });
+        assert.equal(overview.systemResult.all.ospClosed, "8000.00", "live Aug 12–Sep 10 source validity must not omit an August payment because the immutable revision starts September 1");
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-27" })).systemResult.all.ospClosed, "8000.00");
+        const calendar = await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-09-06" });
+        assert.equal(calendar.days.find((day) => day.date === "2026-08-27")?.systemOspClosedToday, "8000.00");
+        assert.equal(calendar.days.length, 30);
+        const reloaded = (await getCollectionOspSavedTargetRepository(target.id, undefined, scope.viewer))!;
+        assert.equal(reloaded.activeRevision.from, "2026-09-01", "snapshot period remains immutable audit history");
+        assert.equal(reloaded.activeRevision.to, "2026-09-30");
+        assert.deepEqual(reloaded.activeRevision.reportingWindow?.sources, [{ sourceImportId: source.sourceId, validFrom: "2026-08-12", validTo: "2026-09-10", configured: true }]);
+        assert.equal(reloaded.activeRevision.reportingWindow?.from, "2026-08-12");
+        assert.equal(reloaded.activeRevision.reportingWindow?.to, "2026-09-10");
+        assert.equal(reloaded.activeRevision.reportingWindow?.sourceValidityVerified, true);
+        assert.notEqual(reloaded.activeRevision.reportingWindow?.version, target.activeRevision.reportingWindow?.version);
+        const recordsBefore = (await pool.query("SELECT * FROM public.collection_records ORDER BY id")).rows;
+        for (const validity of [
+          { from: "2026-08-15", to: "2026-09-05", included: true },
+          { from: "2026-08-28", to: "2026-09-05", included: false },
+          { from: "2026-08-12", to: "2026-09-10", included: true },
+        ]) {
+          await pool.query("UPDATE public.collection_source_configs SET valid_from = $2::date, valid_to = $3::date WHERE source_import_id = $1", [source.sourceId, validity.from, validity.to]);
+          const current = (await getCollectionOspSavedTargetRepository(target.id, undefined, scope.viewer))!;
+          assert.equal(current.activeRevision.reportingWindow?.from, validity.from);
+          assert.equal(current.activeRevision.reportingWindow?.to, validity.to);
+          const system = await readOverview({ ...scope, asOfDate: validity.to });
+          assert.equal(system.systemResult.all.ospClosed, validity.included ? "8000.00" : "0.00");
+          assert.equal(system.systemResult.all.balanceOsp, validity.included ? "-4000.00" : "4000.00");
+          await assert.rejects(readOverview({ ...scope, asOfDate: "2026-08-11" }), /within|validity|range/i);
+          await assert.rejects(readCalendar({ ...scope, from: "2026-08-11", to: validity.to, asOfDate: validity.to }), /within|validity|range/i);
+          await assert.rejects(readDrilldown({ ...scope, date: "2026-09-11", asOfDate: validity.to, page: 1, pageSize: 20 }), /within|validity|range/i);
+        }
+        assert.deepEqual((await pool.query("SELECT * FROM public.collection_records ORDER BY id")).rows, recordsBefore, "live validity reads do not rewrite legitimate payment or audit facts");
+        assert.deepEqual((await pool.query("SELECT * FROM public.collection_osp_target_aging_rows WHERE target_revision_id = $1::uuid ORDER BY aging_bucket", [target.activeRevision.id])).rows, baselineBefore);
+        assert.deepEqual((await pool.query("SELECT * FROM public.collection_osp_target_source_rows WHERE target_revision_id = $1::uuid ORDER BY cycle_key", [target.activeRevision.id])).rows, snapshotsBefore);
+        await pool.query("UPDATE public.collection_source_configs SET enabled = false WHERE source_import_id = $1", [source.sourceId]);
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-27" })).systemResult.all.ospClosed, "8000.00", "disabling future matching does not erase historical reporting");
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
+test("retroactive OSP fresh target follows payment date, inclusive bounds, old/new rollups, CP and unique ABORT closure", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      await pool.query("SET timezone = 'Asia/Kuala_Lumpur'");
+      const source = await prepareRetroactiveSource(pool);
+      await withRepositoryDatabase(pool, async () => {
+        const target = await source.createTarget();
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: { userId: "osp-repo-admin", role: "admin" } };
+        const payment = await source.savePayment();
+        for (const createdAt of ["2026-09-06T00:01:00+08:00", "2026-08-27T23:59:00+08:00", "2026-09-06T23:59:00+08:00"]) {
+          await pool.query("UPDATE public.collection_records SET created_at = $2::timestamptz WHERE id = $1", [payment.id, createdAt]);
+          const persisted = (await pool.query("SELECT payment_date::text, (created_at AT TIME ZONE 'Asia/Kuala_Lumpur')::date::text AS entered FROM public.collection_records WHERE id = $1", [payment.id])).rows[0];
+          assert.equal(persisted.payment_date, "2026-08-27");
+          assert.equal(persisted.entered, createdAt.slice(0, 10));
+          for (const asOfDate of ["2026-08-26", "2026-08-27", "2026-09-01", "2026-09-06", "2026-09-10"]) {
+            const result = await readOverview({ ...scope, asOfDate });
+            assert.equal(result.systemResult.all.ospClosed, asOfDate < "2026-08-27" ? "0.00" : "8000.00", `${asOfDate} is retrospective, independent of ${createdAt}`);
+          }
+        }
+        const calendar = await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-08-27" });
+        assert.equal(calendar.days.length, 30);
+        assert.equal(calendar.days[0]?.date, "2026-08-12");
+        assert.equal(calendar.days[calendar.days.length - 1]?.date, "2026-09-10");
+        assert.equal(calendar.days.find((day) => day.date === "2026-08-26")?.systemOspClosedToday, "0.00");
+        assert.equal(calendar.days.find((day) => day.date === "2026-08-27")?.systemDailyAccounts, 1);
+        assert.equal(calendar.days.find((day) => day.date === "2026-09-06")?.systemDailyAccounts, 0);
+        const details = await readDrilldown({ ...scope, asOfDate: "2026-08-27", date: "2026-08-27", page: 1, pageSize: 20 });
+        assert.deepEqual(details.summary, { accountCount: 1, ospClosed: "8000.00" });
+        assert.equal(details.items[0]?.paymentDate, "2026-08-27");
+        assert.equal(details.items[0]?.systemClosureStaffNickname, "SW.ABU_324");
+        const exported = await getCollectionOspExportDatasetRepository({ ...scope, asOfDate: "2026-08-27", from: "2026-08-12", to: "2026-09-10" });
+        assert.equal(exported.calendar.find((day) => day.date === "2026-08-27")?.systemOspClosedToday, "8000.00");
+        assert.deepEqual((await pool.query("SELECT payment_date::text, total_records, total_amount::text FROM public.collection_record_daily_rollups ORDER BY payment_date")).rows,
+          [{ payment_date: "2026-08-27", total_records: 1, total_amount: "500.00" }]);
+        for (const invalidDate of ["2026-08-11", "2026-09-11"]) {
+          await assert.rejects(readOverview({ ...scope, asOfDate: invalidDate }), /within|validity|range/i);
+          await assert.rejects(source.savePayment(invalidDate), /no longer authorized/);
+        }
+        for (const date of ["2026-08-28", "2026-08-12", "2026-09-10", "2026-09-06", "2026-08-27"]) {
+          const updated = await updateCollectionRecord(payment.id, { paymentDate: date });
+          assert.equal(updated?.paymentDate, date);
+          const days = await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-09-10" });
+          assert.deepEqual(days.days.filter((day) => day.systemDailyAccounts > 0).map((day) => day.date), [date]);
+          assert.deepEqual((await pool.query("SELECT payment_date::text, total_records, total_amount::text FROM public.collection_record_daily_rollups ORDER BY payment_date")).rows,
+            [{ payment_date: date, total_records: 1, total_amount: "500.00" }]);
+          assert.deepEqual((await pool.query("SELECT year, month, total_records, total_amount::text FROM public.collection_record_monthly_rollups ORDER BY year, month")).rows,
+            [{ year: 2026, month: Number(date.slice(5, 7)), total_records: 1, total_amount: "500.00" }]);
+        }
+        await updateCollectionRecord(payment.id, { amount: 150 });
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-27" })).systemResult.all.ospClosed, "0.00", "a dated CP alone cannot become OSP Closed");
+        const remainder = await source.savePayment("2026-08-27", 350);
+        const retry = await source.savePayment("2026-08-28", 20);
+        for (let attempt = 0; attempt < 2; attempt++) {
+          await db.transaction(async (tx) => {
+            await recalculateCollectionSettlementCycles(tx, [source.cycleKey]);
+            await refreshCollectionRecordDailyRollupSlices(tx, ["2026-08-27", "2026-08-28"].map((paymentDate) => ({ paymentDate, createdByLogin: "osp-repo-tester", collectionStaffNickname: "SW.ABU_324" })));
+          });
+          assert.deepEqual((await readDrilldown({ ...scope, asOfDate: "2026-09-10", page: 1, pageSize: 20 })).summary, { accountCount: 1, ospClosed: "8000.00" });
+        }
+        await deleteCollectionRecord(retry.id);
+        await deleteCollectionRecord(remainder.id);
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-10" })).systemResult.all.ospClosed, "0.00");
+        await deleteCollectionRecord(payment.id);
+        assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM public.collection_record_daily_rollups")).rows[0].count, 0);
+        assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM public.collection_record_monthly_rollups")).rows[0].count, 0);
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-10" })).systemResult.all.totalOsp, "8000.00", "zero-activity accounts retain their immutable baseline");
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
+test("retroactive OSP canonical account/source edits recompute both cycles and old/new historical collector slices", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      const sourceA = await prepareRetroactiveSource(pool);
+      const sourceB = await prepareRetroactiveSource(pool, undefined, 28);
+      await withRepositoryDatabase(pool, async () => {
+        const target = await sourceA.createTarget([sourceA.sourceId, sourceB.sourceId]);
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: { userId: "osp-repo-admin", role: "admin" } };
+        const moving = await sourceA.savePayment("2026-08-27", 500);
+        const oldRemainder = await sourceA.savePayment("2026-08-28", 300);
+        const newPredecessor = await sourceB.savePayment("2026-08-26", 200);
+        const before = await readDrilldown({ ...scope, asOfDate: "2026-09-10", page: 1, pageSize: 20 });
+        assert.deepEqual(before.summary, { accountCount: 1, ospClosed: "8000.00" });
+        assert.equal(before.items[0]?.accountNumber, sourceA.account);
+
+        const move = (source: typeof sourceA, paymentDate: string, collectionStaffNickname: string) => updateCollectionRecord(moving.id, {
+          accountNumber: source.account, sourceCardNumber: source.card, cardNumberLast4: source.card.slice(-4),
+          sourceImportId: source.sourceId, sourceDataRowId: source.rowId, sourceImportName: "Retroactive source", sourceFilename: "retroactive.xlsx",
+          agingBucket: "D3", callingDate: "2026-08-12", callingWindowEndExclusive: "2026-09-12",
+          totalDue: 500, billingPrincipalOsp: 8000, sourceMatchBasis: "account_and_card", sourceMatchAccuracy: 100,
+          sourceObligationKey: source.obligation, settlementCycleKey: source.cycleKey, paymentDate, collectionStaffNickname,
+        });
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const updated = await move(sourceB, "2026-09-06", "SW.OTHER_325");
+          assert.equal(updated?.accountNumber, sourceB.account);
+          assert.equal(updated?.sourceImportId, sourceB.sourceId);
+          assert.equal(updated?.settlementCycleKey, sourceB.cycleKey);
+          assert.equal(updated?.cpStatus, "abort_cp");
+          const persisted = (await pool.query(`SELECT id, settlement_cycle_key, classification,
+            cumulative_collected::text, remaining_amount::text FROM public.collection_records ORDER BY id`)).rows;
+          assert.deepEqual(persisted.find((row) => row.id === oldRemainder.id), {
+            id: oldRemainder.id, settlement_cycle_key: sourceA.cycleKey, classification: "cp", cumulative_collected: "300.00", remaining_amount: "200.00",
+          }, "the old cycle loses the moved payment rather than retaining its previous ABORT total");
+          assert.deepEqual(persisted.find((row) => row.id === newPredecessor.id), {
+            id: newPredecessor.id, settlement_cycle_key: sourceB.cycleKey, classification: "cp", cumulative_collected: "200.00", remaining_amount: "300.00",
+          });
+          assert.deepEqual(persisted.find((row) => row.id === moving.id), {
+            id: moving.id, settlement_cycle_key: sourceB.cycleKey, classification: "abort_cp", cumulative_collected: "700.00", remaining_amount: "0.00",
+          });
+          assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-05" })).systemResult.all.ospClosed, "0.00");
+          const details = await readDrilldown({ ...scope, date: "2026-09-06", asOfDate: "2026-09-10", page: 1, pageSize: 20 });
+          assert.deepEqual(details.summary, { accountCount: 1, ospClosed: "8000.00" });
+          assert.equal(details.items[0]?.accountNumber, sourceB.account);
+          assert.equal(details.items[0]?.systemClosureStaffNickname, "SW.OTHER_325");
+          assert.deepEqual((await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-09-10" })).days
+            .filter((day) => day.systemDailyAccounts > 0).map((day) => day.date), ["2026-09-06"]);
+          assert.deepEqual((await pool.query(`SELECT payment_date::text, collection_staff_nickname, total_records, total_amount::text
+            FROM public.collection_record_daily_rollups ORDER BY payment_date, collection_staff_nickname`)).rows, [
+            { payment_date: "2026-08-26", collection_staff_nickname: "SW.ABU_324", total_records: 1, total_amount: "200.00" },
+            { payment_date: "2026-08-28", collection_staff_nickname: "SW.ABU_324", total_records: 1, total_amount: "300.00" },
+            { payment_date: "2026-09-06", collection_staff_nickname: "SW.OTHER_325", total_records: 1, total_amount: "500.00" },
+          ]);
+          assert.deepEqual((await pool.query(`SELECT year, month, collection_staff_nickname, total_records, total_amount::text
+            FROM public.collection_record_monthly_rollups ORDER BY year, month, collection_staff_nickname`)).rows, [
+            { year: 2026, month: 8, collection_staff_nickname: "SW.ABU_324", total_records: 2, total_amount: "500.00" },
+            { year: 2026, month: 9, collection_staff_nickname: "SW.OTHER_325", total_records: 1, total_amount: "500.00" },
+          ], "retrying the canonical identity edit does not duplicate either month or collector");
+        }
+
+        await move(sourceA, "2026-08-27", "SW.ABU_324");
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-27" })).systemResult.all.ospClosed, "8000.00");
+        const reverted = await readDrilldown({ ...scope, date: "2026-08-27", asOfDate: "2026-09-10", page: 1, pageSize: 20 });
+        assert.equal(reverted.items[0]?.accountNumber, sourceA.account);
+        assert.deepEqual((await pool.query(`SELECT settlement_cycle_key, count(*)::int AS count
+          FROM public.collection_records WHERE classification = 'abort_cp' GROUP BY settlement_cycle_key`)).rows,
+        [{ settlement_cycle_key: sourceA.cycleKey, count: 1 }]);
+        assert.deepEqual((await pool.query(`SELECT year, month, collection_staff_nickname, total_records, total_amount::text
+          FROM public.collection_record_monthly_rollups ORDER BY year, month`)).rows,
+        [{ year: 2026, month: 8, collection_staff_nickname: "SW.ABU_324", total_records: 3, total_amount: "1000.00" }]);
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
+test("retroactive OSP preserves a normal September 6 payment entered on September 6", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      const source = await prepareRetroactiveSource(pool);
+      await withRepositoryDatabase(pool, async () => {
+        const target = await source.createTarget();
+        const payment = await source.savePayment("2026-09-06");
+        await pool.query("UPDATE public.collection_records SET created_at = '2026-09-06T12:30:00+08:00'::timestamptz WHERE id = $1", [payment.id]);
+        assert.deepEqual((await pool.query(`SELECT payment_date::text, (created_at AT TIME ZONE 'Asia/Kuala_Lumpur')::date::text AS entered,
+          classification FROM public.collection_records WHERE id = $1`, [payment.id])).rows,
+        [{ payment_date: "2026-09-06", entered: "2026-09-06", classification: "abort_cp" }]);
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: { userId: "osp-repo-admin", role: "admin" } };
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-05" })).systemResult.all.ospClosed, "0.00");
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-06" })).systemResult.all.ospClosed, "8000.00");
+        assert.deepEqual((await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-09-10" })).days
+          .filter((day) => day.systemDailyAccounts > 0).map((day) => day.date), ["2026-09-06"]);
+        assert.deepEqual((await pool.query("SELECT payment_date::text, total_records, total_amount::text FROM public.collection_record_daily_rollups")).rows,
+          [{ payment_date: "2026-09-06", total_records: 1, total_amount: "500.00" }]);
+        assert.deepEqual((await pool.query("SELECT year, month, total_records, total_amount::text FROM public.collection_record_monthly_rollups")).rows,
+          [{ year: 2026, month: 9, total_records: 1, total_amount: "500.00" }]);
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
+test("retroactive OSP diverging selected source intervals use their own inclusive bounds and a shared outer calendar", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      const sourceA = await prepareRetroactiveSource(pool);
+      const sourceB = await prepareRetroactiveSource(pool, undefined, 28);
+      await withRepositoryDatabase(pool, async () => {
+        const target = await sourceA.createTarget([sourceA.sourceId, sourceB.sourceId]);
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: { userId: "osp-repo-admin", role: "admin" } };
+        const paymentA = await sourceA.savePayment("2026-08-27");
+        const paymentB = await sourceB.savePayment("2026-08-15");
+        await createCollectionOspManualReconciliationRepository({
+          targetId: target.id, revisionId: target.activeRevision.id, sourceImportId: sourceB.sourceId, sourceDataRowId: "retroactive-row-28",
+          manualPriorAmount: "1.00", asOfDate: "2026-08-15", actualPaymentDate: "2026-08-15", reason: "HISTORICAL_PAYMENT_MISSING",
+          note: "Legacy audit-only evidence", reference: "RETRO-LEGACY-SOURCE", actor: "system", actorRole: "superuser", requestId: "retro-legacy",
+        });
+        const before = await readOverview({ ...scope, asOfDate: "2026-09-10" });
+        assert.equal(before.systemResult.all.ospClosed, "16000.00");
+        await pool.query("UPDATE public.collection_source_configs SET valid_from = '2026-08-20', valid_to = '2026-09-20' WHERE source_import_id = $1", [sourceB.sourceId]);
+        const reloaded = (await getCollectionOspSavedTargetRepository(target.id, undefined, scope.viewer))!;
+        assert.equal(reloaded.activeRevision.reportingWindow?.from, "2026-08-12");
+        assert.equal(reloaded.activeRevision.reportingWindow?.to, "2026-09-20");
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-20" })).systemResult.all.ospClosed, "8000.00", "A's earlier validity cannot make B's Aug 15 payment valid");
+        const legacyScope = { targetId: target.id, revisionId: target.activeRevision.id, asOfDate: "2026-09-20", search: "", page: 1, pageSize: 20 };
+        const candidates = await listCollectionOspReconciliationCandidatesRepository(legacyScope);
+        assert.equal(candidates.candidates.find((row) => row.sourceImportId === sourceB.sourceId)?.systemEligibleCumulative, "0.00", "legacy candidate reads retain the same per-source payment boundary");
+        const legacy = await listCollectionOspManualReconciliationsRepository(legacyScope);
+        assert.equal(legacy.reconciliations.find((row) => row.sourceImportId === sourceB.sourceId)?.systemEligibleCumulative, "0.00", "legacy audit-view calculations cannot borrow the broader selected source validity");
+        let calendar = await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-20", asOfDate: "2026-09-20" });
+        assert.equal(calendar.days.length, 40);
+        assert.equal(calendar.days.find((day) => day.date === "2026-08-15")?.systemDailyAccounts, 0);
+        await updateCollectionRecord(paymentB.id, { paymentDate: "2026-08-20" });
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-20" })).systemResult.all.ospClosed, "8000.00", "B's valid-from boundary is inclusive");
+        await updateCollectionRecord(paymentB.id, { paymentDate: "2026-09-11" });
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-11" })).systemResult.all.ospClosed, "16000.00");
+        // Save A on a temporarily widened source, then contract it again. Existing
+        // legitimate records stay intact but B cannot lend A its September range.
+        await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-20' WHERE source_import_id = $1", [sourceA.sourceId]);
+        await updateCollectionRecord(paymentA.id, { paymentDate: "2026-09-11" });
+        await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-10' WHERE source_import_id = $1", [sourceA.sourceId]);
+        const final = await readOverview({ ...scope, asOfDate: "2026-09-20" });
+        assert.equal(final.systemResult.all.ospClosed, "8000.00", "B's wider validity cannot make A's Sep 11 payment valid");
+        assert.equal(final.systemResult.all.totalOsp, "16000.00");
+        assert.equal(final.systemResult.all.balanceOsp, "0.00");
+        calendar = await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-20", asOfDate: "2026-09-20" });
+        const detail = await readDrilldown({ ...scope, asOfDate: "2026-09-20", date: "2026-09-11", page: 1, pageSize: 20 });
+        assert.deepEqual(detail.summary, { accountCount: 1, ospClosed: "8000.00" });
+        assert.equal(calendar.days.find((day) => day.date === "2026-09-11")?.systemDailyAccounts, detail.summary.accountCount);
+        assert.equal(detail.items[0]?.accountNumber, "000000000028");
+        assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM public.collection_records")).rows[0].count, 2);
+        await assert.rejects(readOverview({ ...scope, asOfDate: "2026-09-21" }), /within|validity|range/i);
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
+test("retroactive OSP manual POOL is dated evidence, preserves privacy and authorization, and survives connection restart", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      for (const [userId, role] of [["retro-manager", "manager"], ["retro-unassigned", "admin"], ["retro-collector", "user"]]) {
+        await pool.query("INSERT INTO public.users (id, username, password_hash, role, status) VALUES ($1, $1, 'not-a-login-secret', $2, 'active')", [userId, role]);
+      }
+      const source = await prepareRetroactiveSource(pool);
+      const saved = await withRepositoryDatabase(pool, async () => {
+        const target = await source.createTarget();
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: { userId: "osp-repo-admin", role: "admin" } };
+        const payment = await source.savePayment("2026-08-27", 150);
+        const verified = await upsertCollectionManualSettlement({
+          recordId: payment.id, poolAmount: "350.00", settlementDate: "2026-08-27", reason: "EXTERNAL_UNASSIGNED_PAYMENT",
+          note: "Retrospective customer confirmation", reference: "RETRO-POOL-350", expectedVersion: null,
+          actor: "osp-repo-tester", actorRole: "superuser", requestId: "retroactive-pool",
+        });
+        assert.equal(verified?.manualSettlement?.poolAmount, "350.00");
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-26" })).systemResult.all.ospClosed, "0.00");
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-27" })).systemResult.all.ospClosed, "8000.00");
+        const manual = await readDrilldown({ ...scope, date: "2026-08-27", asOfDate: "2026-09-10", contributionSource: "MANUAL_VERIFIED_ABORT", page: 1, pageSize: 20 });
+        assert.deepEqual(manual.summary, { accountCount: 1, ospClosed: "8000.00" });
+        await savePrivateClient({ ...scope, actor: "osp-repo-admin", receivedDate: "2026-08-27", rows: completeClientRows("20", { note: "Only the assigned admin can see this note", reference: "RETRO-PRIVATE" }) });
+        for (const viewer of [repositoryViewer, { userId: "retro-manager", role: "manager" }]) {
+          const report = await readOverview({ ...scope, viewer, asOfDate: "2026-09-10" });
+          assert.equal(report.systemResult.all.ospClosed, "8000.00");
+          assert.doesNotMatch(JSON.stringify(report.clientResult), /RETRO-PRIVATE|Only the assigned admin/);
+          assert.equal(report.clientResult.all.ospClosed, "0.00");
+        }
+        for (const viewer of [{ userId: "retro-unassigned", role: "admin" }, { userId: "retro-collector", role: "user" }]) {
+          await assert.rejects(readOverview({ ...scope, viewer, asOfDate: "2026-08-27" }), /not found/i);
+          await assert.rejects(readCalendar({ ...scope, viewer, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-08-27" }), /not found/i);
+          await assert.rejects(readDrilldown({ ...scope, viewer, date: "2026-08-27", asOfDate: "2026-08-27", page: 1, pageSize: 20 }), /not found/i);
+          await assert.rejects(getCollectionOspExportDatasetRepository({ ...scope, viewer, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-08-27" }), /not found/i);
+        }
+        await pool.query("UPDATE public.collection_source_configs SET valid_from = '2026-08-28' WHERE source_import_id = $1", [source.sourceId]);
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-10" })).systemResult.all.ospClosed, "0.00", "manual settlement outside its own source domain must not contribute");
+        await pool.query("UPDATE public.collection_source_configs SET valid_from = '2026-08-12' WHERE source_import_id = $1", [source.sourceId]);
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-10" })).systemResult.all.ospClosed, "8000.00");
+        const automatic = await source.savePayment("2026-08-28", 350);
+        const calendar = await readCalendar({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-09-10" });
+        assert.deepEqual(calendar.days.filter((day) => day.systemDailyAccounts > 0).map((day) => [day.date, day.systemDailyAccounts]), [["2026-08-27", 1]], "manual and later automatic facts are a union, never two account closures");
+        await revokeCollectionManualSettlement({ recordId: payment.id, expectedVersion: 1, revokeReason: "Canonical automatic payment confirmed", actor: "osp-repo-tester", actorRole: "superuser", requestId: "retroactive-revoke" });
+        assert.equal((await readDrilldown({ ...scope, date: "2026-08-28", asOfDate: "2026-09-10", page: 1, pageSize: 20 })).summary.accountCount, 1);
+        return { scope, automaticId: automatic.id, result: await readOverview({ ...scope, asOfDate: "2026-09-10" }) };
+      });
+      // Reopen an independent connection pool against the exact temporary DB;
+      // no in-memory cache or transaction state can carry the earlier result.
+      const databaseName = String((await pool.query("SELECT current_database() AS name")).rows[0].name);
+      assert.match(databaseName, /^sqr_osp_v9_\d+_[a-f0-9]{10}$/);
+      const restartedPool = new pg.Pool({ ...pgBaseConfig, database: databaseName, max: 2 });
+      try {
+        await withRepositoryDatabase(restartedPool, async () => {
+          const reopened = await readOverview({ ...saved.scope, asOfDate: "2026-09-10" });
+          assert.deepEqual(reopened.systemResult, saved.result.systemResult);
+          assert.deepEqual(reopened.clientResult, saved.result.clientResult);
+          assert.equal((await restartedPool.query("SELECT payment_date::text FROM public.collection_records WHERE id = $1", [saved.automaticId])).rows[0].payment_date, "2026-08-28");
+        });
+      } finally { await restartedPool.end(); }
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
+test("retroactive OSP fails closed on an in-flight source validity edit and marks missing configuration as legacy", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      const source = await prepareRetroactiveSource(pool);
+      await withRepositoryDatabase(pool, async () => {
+        const target = await source.createTarget();
+        await source.savePayment();
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: { userId: "osp-repo-admin", role: "admin" } };
+        for (const read of [
+          () => readOverview({ ...scope, asOfDate: "2026-09-10" }),
+          () => getCollectionOspExportDatasetRepository({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-09-10" }),
+        ]) {
+          await pool.query("UPDATE public.collection_source_configs SET valid_from = '2026-08-12' WHERE source_import_id = $1", [source.sourceId]);
+          const originalExecute = db.execute;
+          let mutated = false;
+          (db as MutableDb).execute = (async (...args: Parameters<typeof db.execute>) => {
+            const result = await originalExecute.apply(db, args);
+            if (!mutated && collectSqlText(args[0]).includes("osp_aging_closures")) {
+              mutated = true;
+              await pool.query("UPDATE public.collection_source_configs SET valid_from = '2026-08-28' WHERE source_import_id = $1", [source.sourceId]);
+            }
+            return result;
+          }) as typeof db.execute;
+          try {
+            await assert.rejects(read(), /validity changed while loading/i);
+            assert.equal(mutated, true, "overview/export must reject a source mutation after a real aggregate statement reads its snapshot");
+          } finally { (db as MutableDb).execute = originalExecute; }
+        }
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-09-10" })).systemResult.all.ospClosed, "0.00");
+        assert.equal((await getCollectionOspSavedTargetRepository(target.id, undefined, scope.viewer))?.version, target.version, "source date changes do not masquerade as shared target edits");
+        await pool.query("DELETE FROM public.collection_source_configs WHERE source_import_id = $1", [source.sourceId]);
+        const legacy = (await getCollectionOspSavedTargetRepository(target.id, undefined, scope.viewer))!;
+        assert.equal(legacy.activeRevision.reportingWindow?.sourceValidityVerified, false);
+        assert.deepEqual(legacy.activeRevision.reportingWindow?.sources, [{ sourceImportId: source.sourceId, validFrom: "2026-08-12", validTo: "2026-09-10", configured: false }]);
+        assert.equal((await readOverview({ ...scope, asOfDate: "2026-08-27" })).systemResult.all.ospClosed, "8000.00", "explicit unverified fallback retains legitimate frozen historical scope");
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
+test("retroactive OSP live source validity changes cannot create a competing assigned-admin claim", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      await pool.query("INSERT INTO public.users (id, username, password_hash, role, status) VALUES ('retro-other-admin', 'retro-other-admin', 'not-a-login-secret', 'admin', 'active')");
+      const source = await prepareRetroactiveSource(pool, { from: "2026-09-01", to: "2026-09-30" });
+      await withRepositoryDatabase(pool, async () => {
+        const target = await source.createTarget();
+        await pool.query("UPDATE public.collection_source_configs SET valid_from = '2026-08-12', valid_to = '2026-09-10' WHERE source_import_id = $1", [source.sourceId]);
+        const request = {
+          name: "Competing retroactive target", description: null, viewer: repositoryViewer, sourceImportIds: [source.sourceId],
+          timezone: "Asia/Kuala_Lumpur", nicknameScope: [], agingScope: [...completeAgingScope], actor: "osp-repo-tester",
+          targets: completeAgingScope.map((agingBucket) => ({ agingBucket, totalOspBaseline: null, targetPercentage: "50" })),
+        };
+        await assert.rejects(createCollectionOspSavedTargetRepository({ ...request, assignedAdminUserId: "retro-other-admin" }), /already assigned to another admin/i);
+        assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM public.collection_osp_saved_targets")).rows[0].count, 1, "rejected claim rolls back target creation");
+        const sameAdmin = await createCollectionOspSavedTargetRepository({ ...request, assignedAdminUserId: "osp-repo-admin" });
+        assert.notEqual(sameAdmin.id, target.id, "same admin may keep distinct named targets for the same governed source");
+        await assert.rejects(updateCollectionOspSavedTargetRepository({
+          targetId: sameAdmin.id, expectedVersion: sameAdmin.version, assignedAdminUserId: "retro-other-admin",
+          viewer: repositoryViewer, actor: "osp-repo-tester",
+        }), /already assigned to another admin/i);
+        assert.equal((await getCollectionOspSavedTargetRepository(sameAdmin.id, undefined, repositoryViewer))?.assignedAdminUserId, "osp-repo-admin");
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
 
 test("Billing OSP V3 additive schema preserves legacy history and constrains private stable ownership", { skip: skipReason || false, timeout: 60_000 }, async () => {
   await withTempDatabase(async (pool) => {

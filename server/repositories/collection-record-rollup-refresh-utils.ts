@@ -10,7 +10,33 @@ import type {
   CollectionRepositoryExecutor,
 } from "./collection-record-rollup-types";
 
+/** Call only inside a transaction, so locks cover the aggregate AND its upsert. */
+export async function lockCollectionRecordRollupSlices(
+  executor: CollectionRepositoryExecutor,
+  slices: Array<CollectionRecordDailyRollupSlice | null | undefined>,
+): Promise<void> {
+  await executor.execute(sql`SELECT pg_advisory_xact_lock_shared(hashtextextended('collection-rollup-rebuild', 0))`);
+  // A daily refresh also writes a monthly total. Lock the coarser collector/month
+  // key before either aggregate; taking only daily locks loses concurrent days.
+  // Take ALL old/new keys in deterministic order before any rollup writes.
+  const keys = [...new Set(dedupeCollectionRecordDailyRollupSlices(slices).map((slice) =>
+    JSON.stringify(["collection-rollup-month", slice.paymentDate?.slice(0, 7), slice.createdByLogin, slice.collectionStaffNickname]),
+  ))].sort();
+  for (const key of keys) {
+    await executor.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+  }
+}
+
 export async function refreshCollectionRecordDailyRollupSlice(
+  executor: CollectionRepositoryExecutor,
+  slice: CollectionRecordDailyRollupSlice | null | undefined,
+): Promise<void> {
+  if (!normalizeCollectionRecordDailyRollupSlice(slice)) return;
+  await lockCollectionRecordRollupSlices(executor, [slice]);
+  await refreshLockedCollectionRecordDailyRollupSlice(executor, slice);
+}
+
+async function refreshLockedCollectionRecordDailyRollupSlice(
   executor: CollectionRepositoryExecutor,
   slice: CollectionRecordDailyRollupSlice | null | undefined,
 ): Promise<void> {
@@ -37,7 +63,7 @@ export async function refreshCollectionRecordDailyRollupSlice(
         AND created_by_login = ${normalized.createdByLogin}
         AND collection_staff_nickname = ${normalized.collectionStaffNickname}
     `);
-    await refreshCollectionRecordMonthlyRollupSlice(executor, normalized);
+    await refreshLockedCollectionRecordMonthlyRollupSlice(executor, normalized);
     return;
   }
 
@@ -64,7 +90,7 @@ export async function refreshCollectionRecordDailyRollupSlice(
       total_amount = EXCLUDED.total_amount,
       updated_at = now()
   `);
-  await refreshCollectionRecordMonthlyRollupSlice(executor, normalized);
+  await refreshLockedCollectionRecordMonthlyRollupSlice(executor, normalized);
 }
 
 export async function refreshCollectionRecordDailyRollupSlices(
@@ -72,14 +98,17 @@ export async function refreshCollectionRecordDailyRollupSlices(
   slices: Array<CollectionRecordDailyRollupSlice | null | undefined>,
 ): Promise<void> {
   const normalizedSlices = dedupeCollectionRecordDailyRollupSlices(slices);
+  if (normalizedSlices.length === 0) return;
+  await lockCollectionRecordRollupSlices(executor, normalizedSlices);
   for (const slice of normalizedSlices) {
-    await refreshCollectionRecordDailyRollupSlice(executor, slice);
+    await refreshLockedCollectionRecordDailyRollupSlice(executor, slice);
   }
 }
 
 export async function rebuildCollectionRecordDailyRollups(
   executor: CollectionRepositoryExecutor,
 ): Promise<void> {
+  await executor.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('collection-rollup-rebuild', 0))`);
   await executor.execute(sql`
     DELETE FROM public.collection_record_daily_rollups rollup
     WHERE NOT EXISTS (
@@ -118,6 +147,15 @@ export async function rebuildCollectionRecordDailyRollups(
 }
 
 export async function refreshCollectionRecordMonthlyRollupSlice(
+  executor: CollectionRepositoryExecutor,
+  slice: CollectionRecordDailyRollupSlice | null | undefined,
+): Promise<void> {
+  if (!normalizeCollectionRecordDailyRollupSlice(slice)) return;
+  await lockCollectionRecordRollupSlices(executor, [slice]);
+  await refreshLockedCollectionRecordMonthlyRollupSlice(executor, slice);
+}
+
+async function refreshLockedCollectionRecordMonthlyRollupSlice(
   executor: CollectionRepositoryExecutor,
   slice: CollectionRecordDailyRollupSlice | null | undefined,
 ): Promise<void> {

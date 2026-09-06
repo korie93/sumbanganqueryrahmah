@@ -17,8 +17,11 @@ import { decodeBackupDataFromStorage, type BackupEncryptionConfig } from "../bac
 import { prepareBackupPayloadFileForCreate, readPreparedBackupPayloadForStorage } from "../backups-payload-utils";
 import type { BackupDataPayload } from "../backups-repository-types";
 import { restoreFromBackup } from "../backups-restore-utils";
+import { createCollectionRecord } from "../collection-record-create-repository-utils";
 import {
   createCollectionOspSavedTargetRepository,
+  getCollectionOspCalendarRepository,
+  getCollectionOspDrilldownRepository,
   getCollectionOspTargetOverviewRepository,
   upsertCollectionOspClientResultsRepository,
 } from "../collection-osp-v7-repository-utils";
@@ -140,6 +143,22 @@ async function seedBackupSource(pool: pg.Pool) {
     timezone: "Asia/Kuala_Lumpur", nicknameScope: [], agingScope: [...AGINGS], actor: "osp-backup-superuser",
     targets: AGINGS.map((agingBucket) => ({ agingBucket, targetPercentage: "30.0000", totalOspBaseline: null })),
   });
+  // The source's live reporting range may differ from the immutable target
+  // period in a real backup; both must survive with their distinct meanings.
+  await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-10' WHERE source_import_id = 'osp-backup-source'");
+  for (const [index, amount] of [150, 350].entries()) {
+    const payment = await createCollectionRecord({
+      customerName: "Backup Example Customer", accountNumber: "0001234567890123", sourceCardNumber: "4111111111119876",
+      cardNumberLast4: "9876", icNumber: "900101-10-1234", customerPhone: "012-3456789",
+      sourceImportId: "osp-backup-source", sourceDataRowId: "osp-backup-row", sourceImportName: "OSP backup source", sourceFilename: "osp-backup.xlsx",
+      agingBucket: "D3", callingDate: "2026-08-12", callingWindowEndExclusive: "2026-09-12", totalDue: 500, billingPrincipalOsp: 1000,
+      sourceMatchBasis: "account_and_card", sourceMatchAccuracy: 100, sourceObligationKey: `account:${accountHash}`,
+      settlementCycleKey: `2026-08-12:account:${accountHash}`, batch: "P10", paymentDate: "2026-08-27", amount,
+      createdByLogin: "osp-backup-superuser", collectionStaffNickname: "SW.ABU_324",
+    });
+    await pool.query("UPDATE public.collection_records SET created_at = $2::timestamptz WHERE id = $1",
+      [payment.id, `2026-09-06T10:0${index}:00+08:00`]);
+  }
   for (const [userId, actor, role, targetPercentage, resultPercentage] of [
     [ADMIN_ID, "osp-backup-admin", "admin", "40", "25"],
     [MANAGER_ID, "osp-backup-manager", "manager", "35", "15"],
@@ -174,6 +193,7 @@ test("OSP V3 encrypted backup file restores assigned targets, stable owners, pri
         const config: BackupEncryptionConfig = { requireEncryption: true, primaryKeyId: "osp_test", keysById: new Map([["osp_test", randomBytes(32)]]) };
         const prepared = await prepareBackupPayloadFileForCreate(config);
         try {
+          assert.equal(prepared.counts.collectionRecordsCount, 2);
           assert.equal(prepared.counts.collectionOspPrivateClientResultsCount, 8);
           assert.equal(prepared.counts.collectionOspTargetSourceRowsCount, 1);
           const fileBytes = readFileSync(prepared.tempFilePath);
@@ -183,6 +203,8 @@ test("OSP V3 encrypted backup file restores assigned targets, stable owners, pri
           assert.match(stored, /^enc:v3:osp_test\./);
           const plainPayload = decodeBackupDataFromStorage(stored, config);
           const payload = JSON.parse(plainPayload) as BackupDataPayload;
+          assert.equal(payload.collectionRecords?.length, 2);
+          assert.deepEqual(payload.collectionRecords?.map((row) => row.paymentDate), ["2026-08-27", "2026-08-27"]);
           assert.equal(payload.collectionOspPrivateClientResults?.length, 8);
           assert.doesNotMatch(JSON.stringify(payload.collectionOspPrivateClientResults), /ownerUserId|targetPercentage|resultPercentage|Private client evidence/);
           assert.equal(payload.collectionOspSavedTargets?.[0]?.assignedAdminUserId, ADMIN_ID);
@@ -200,6 +222,41 @@ test("OSP V3 encrypted backup file restores assigned targets, stable owners, pri
           assert.equal(restored.stats.collectionOspPrivateClientResults.inserted, 8);
           assert.equal(restored.stats.collectionOspClientResults.inserted, 1);
           assert.equal(restored.stats.collectionOspTargets.inserted, 1, "Legacy OSP audit data remains restorable.");
+          assert.equal(restored.stats.collectionRecords.inserted, 2);
+          const assertRestoredRetroactivePayments = async () => {
+            assert.deepEqual((await destination.query(`SELECT payment_date::text,
+              (created_at AT TIME ZONE 'Asia/Kuala_Lumpur')::date::text AS entered,
+              amount::text, classification, cumulative_collected::text, remaining_amount::text,
+              source_import_id, source_data_row_id, collection_staff_nickname
+              FROM public.collection_records ORDER BY created_at, id`)).rows, [
+              { payment_date: "2026-08-27", entered: "2026-09-06", amount: "150.00", classification: "cp", cumulative_collected: "150.00", remaining_amount: "350.00",
+                source_import_id: "osp-backup-source", source_data_row_id: "osp-backup-row", collection_staff_nickname: "SW.ABU_324" },
+              { payment_date: "2026-08-27", entered: "2026-09-06", amount: "350.00", classification: "abort_cp", cumulative_collected: "500.00", remaining_amount: "0.00",
+                source_import_id: "osp-backup-source", source_data_row_id: "osp-backup-row", collection_staff_nickname: "SW.ABU_324" },
+            ], "full restore keeps the Payment Date and entry audit distinct, with exactly one legitimate ABORT");
+            assert.deepEqual((await destination.query(`SELECT payment_date::text, created_by_login, collection_staff_nickname, total_records, total_amount::text
+              FROM public.collection_record_daily_rollups ORDER BY payment_date`)).rows,
+            [{ payment_date: "2026-08-27", created_by_login: "osp-backup-superuser", collection_staff_nickname: "SW.ABU_324", total_records: 2, total_amount: "500.00" }]);
+            assert.deepEqual((await destination.query(`SELECT year, month, created_by_login, collection_staff_nickname, total_records, total_amount::text
+              FROM public.collection_record_monthly_rollups ORDER BY year, month`)).rows,
+            [{ year: 2026, month: 8, created_by_login: "osp-backup-superuser", collection_staff_nickname: "SW.ABU_324", total_records: 2, total_amount: "500.00" }]);
+            const scope = { targetId: snapshot.target.id, revisionId: snapshot.target.activeRevision.id, viewer: { userId: ADMIN_ID, role: "admin" } };
+            for (const asOfDate of ["2026-08-26", "2026-08-27", "2026-09-01", "2026-09-06", "2026-09-10"]) {
+              const overview = await getCollectionOspTargetOverviewRepository({ ...scope, asOfDate });
+              assert.equal(overview.systemResult.all.ospClosed, asOfDate < "2026-08-27" ? "0.00" : "1000.00");
+              assert.equal(overview.target.activeRevision.reportingWindow?.to, "2026-09-10");
+              assert.equal(overview.target.activeRevision.to, "2026-09-11");
+            }
+            const calendar = await getCollectionOspCalendarRepository({ ...scope, from: "2026-08-12", to: "2026-09-10", asOfDate: "2026-09-06" });
+            assert.equal(calendar.days.length, 30);
+            assert.deepEqual(calendar.days.filter((day) => day.systemDailyAccounts > 0).map((day) => ({ date: day.date, count: day.systemDailyAccounts, osp: day.systemOspClosedToday })),
+              [{ date: "2026-08-27", count: 1, osp: "1000.00" }]);
+            const details = await getCollectionOspDrilldownRepository({ ...scope, asOfDate: "2026-09-06", date: "2026-08-27", page: 1, pageSize: 20 });
+            assert.deepEqual(details.summary, { accountCount: 1, ospClosed: "1000.00" });
+            assert.equal(details.items[0]?.paymentDate, "2026-08-27");
+            assert.equal(details.items[0]?.systemClosureStaffNickname, "SW.ABU_324");
+          };
+          await assertRestoredRetroactivePayments();
           const accounts = await destination.query("SELECT id, username FROM public.users WHERE username LIKE 'osp-backup-%' ORDER BY username");
           assert.deepEqual(accounts.rows, [
             { id: ADMIN_ID, username: "osp-backup-admin" },
@@ -249,6 +306,9 @@ test("OSP V3 encrypted backup file restores assigned targets, stable owners, pri
               note: "New evidence after restore", reference: "New reference" })),
           });
           const repeated = await restoreFromBackup(backupPayloadChunks(snapshot.plainPayload));
+          assert.equal(repeated.stats.collectionRecords.inserted, 0);
+          assert.equal(repeated.stats.collectionRecords.skipped, 2);
+          await assertRestoredRetroactivePayments();
           assert.equal(repeated.stats.collectionOspPrivateClientResults.inserted, 0);
           assert.equal(repeated.stats.collectionOspPrivateClientResults.skipped, 8);
           const afterRepeated = await getCollectionOspTargetOverviewRepository({ targetId: snapshot.target.id,
@@ -268,7 +328,7 @@ test("OSP V3 encrypted backup file restores assigned targets, stable owners, pri
         await withRepositoryDatabase(failedDestination, async () => {
           await assert.rejects(restoreFromBackup(JSON.stringify(missingOwnerPayload)), /original account\/revision\/baseline/);
         });
-        for (const table of ["imports", "data_rows", "collection_osp_saved_targets", "collection_osp_private_client_results"]) {
+        for (const table of ["imports", "data_rows", "collection_records", "collection_record_daily_rollups", "collection_record_monthly_rollups", "collection_osp_saved_targets", "collection_osp_private_client_results"]) {
           assert.equal((await failedDestination.query(`SELECT count(*)::int AS count FROM public.${table}`)).rows[0]?.count, 0, `${table} must roll back completely.`);
         }
         assert.equal((await failedDestination.query("SELECT count(*)::int AS count FROM public.users WHERE username LIKE 'osp-backup-%'")).rows[0]?.count, 0);

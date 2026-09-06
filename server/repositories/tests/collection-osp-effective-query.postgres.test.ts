@@ -220,6 +220,10 @@ async function prepareFixture(pool: pg.Pool) {
     VALUES ('effective-admin', 'effective-admin', 'not-a-login-secret', 'admin', 'active')`);
   for (const sourceId of sourceIds) {
     await pool.query("INSERT INTO public.imports (id, name, filename, is_deleted, created_by) VALUES ($1, $1, 'synthetic.xlsx', false, 'system')", [sourceId]);
+    await pool.query(`INSERT INTO public.collection_source_configs
+      (source_import_id, valid_from, valid_to, cycle_key, enabled, compatibility_status, compatibility_issues, indexed_row_count, configured_by)
+      VALUES ($1, $2::date, $3::date, 'EFFECTIVE-DIFFERENTIAL', true, 'compatible', ARRAY[]::text[], $4, 'system')`,
+    [sourceId, period.from, period.to, cases.length]);
   }
   const targetId = randomUUID();
   const revisionId = randomUUID();
@@ -302,6 +306,9 @@ function referenceResult(account: FixtureAccount, revisionId: string, asOfDate: 
     && (!nicknameScope.length || nicknameScope.includes((payment.nickname ?? "allowed").toLowerCase())));
   const manual = account.payments.find((payment) => eligibleIdentity(account, payment)
     && payment.manual && !payment.manual.revoked && payment.manual.date >= account.callingDate
+    // Current source validity governs the manual business date too. Evidence
+    // outside it contributes neither OSP nor a reconciled amount/remaining value.
+    && payment.manual.date >= period.from && payment.manual.date <= period.to
     && payment.manual.date < account.windowEnd)?.manual;
   const result = reconcileCollectionOspAccount({
     targetRevisionId: revisionId, cycleKey: account.cycleKey, aging: account.aging,

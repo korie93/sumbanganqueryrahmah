@@ -24,12 +24,20 @@ test("collection purge archives classification and revoked POOL evidence before 
               amount: "125.50",
               receipt_file: "receipts/legacy.jpg",
               settlement_cycle_key: "cycle-dummy-1",
+              payment_date: "2026-01-27",
+              created_by_login: "staff.login",
+              collection_staff_nickname: "SW.ABU_324",
             }],
           };
         }
         if (/SELECT\s+storage_path\s+FROM public\.collection_record_receipts/si.test(text)) {
           return { rows: [{ storage_path: "receipts/current.jpg" }] };
         }
+        if (/COUNT\(\*\)::int AS total_records/si.test(text)) {
+          // The purged day still contains an ACTIVE manual anchor.
+          return { rows: [{ total_records: 1, total_amount: "50.00" }] };
+        }
+        if (/SUM\(total_records\)/si.test(text)) return { rows: [{ total_records: 1, total_amount: "50.00" }] };
         return { rows: [] };
       },
     };
@@ -55,6 +63,16 @@ test("collection purge archives classification and revoked POOL evidence before 
     assert.ok(archiveIndex >= 0);
     assert.ok(deleteIndex > archiveIndex);
     assert.ok(queryTexts.some((text) => /ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING/i.test(text)));
+    assert.ok(queryTexts.some((text) => /SELECT[\s\S]*payment_date,[\s\S]*created_by_login,[\s\S]*collection_staff_nickname[\s\S]*FOR UPDATE/i.test(text)));
+    assert.equal(queryTexts.some((text) => /DELETE FROM public\.collection_record_daily_rollups[\s\S]*payment_date\s*</i.test(text)), false);
+    assert.equal(queryTexts.some((text) => /DELETE FROM public\.collection_record_daily_rollup_refresh_queue/i.test(text)), false);
+    const dailyRefresh = queries.find((query) => /INSERT INTO public\.collection_record_daily_rollups/i.test(collectSqlText(query)));
+    assert.ok(dailyRefresh, "Purge refreshes retained manual anchor totals instead of discarding them");
+    const dailyValues = collectBoundValues(dailyRefresh);
+    assert.ok(dailyValues.includes("2026-01-27"));
+    assert.ok(dailyValues.includes("SW.ABU_324"));
+    assert.ok(dailyValues.includes(50));
+    assert.ok(queryTexts.findIndex((text) => /pg_advisory_xact_lock_shared/i.test(text)) > deleteIndex);
 
     const archiveSql = queryTexts[archiveIndex] || "";
     const archiveValues = collectBoundValues(queries[archiveIndex]);

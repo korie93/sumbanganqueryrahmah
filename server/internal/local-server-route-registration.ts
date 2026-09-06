@@ -191,7 +191,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     drainCollectionRollupQueue: () => collectionRollupOperationsService.drainQueueNow(),
     retryCollectionRollupFailures: () => collectionRollupOperationsService.retryFailedSlices(),
     autoHealCollectionRollupQueue: () => collectionRollupOperationsService.autoHealRunningSlices(),
-    rebuildCollectionRollups: () => collectionRollupOperationsService.rebuildAllRollups(),
+    rebuildCollectionRollups: (input?: unknown) => collectionRollupOperationsService.rebuildAllRollups(input),
     listMonitorAlertHistory: (routeOptions) =>
       monitorAlertHistoryRepository.listRecentPage(routeOptions),
     deleteMonitorAlertHistoryOlderThan: (cutoffDate) =>

@@ -129,6 +129,8 @@ test("allowed origins receive an exact Access-Control-Allow-Origin header", asyn
     assert.equal(response.headers.get("access-control-allow-origin"), "https://app.example.com");
     assert.equal(response.headers.get("access-control-allow-credentials"), "true");
     assert.equal(response.headers.get("access-control-max-age"), "600");
+    assert.ok(response.headers.get("access-control-allow-headers")?.split(",").map((header) => header.trim().toLowerCase()).includes("x-billing-viewer-id"),
+      "allowed browser origins can send the private-save viewer precondition");
     assert.equal((await response.json()).ok, true);
   } finally {
     await stopTestServer(server);

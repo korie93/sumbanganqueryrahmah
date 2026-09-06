@@ -50,7 +50,7 @@ export class CollectionRollupRefreshQueueService {
       completeSlice: (slice) => completeCollectionRecordDailyRollupRefreshSlice(slice),
       failSlice: (params) => failCollectionRecordDailyRollupRefreshSlice(params),
       markRunningSlicesQueued: () => markRunningCollectionRecordDailyRollupRefreshSlicesQueued(),
-      refreshSlice: (slice) => refreshCollectionRecordDailyRollupSlice(db, slice),
+      refreshSlice: (slice) => db.transaction((tx) => refreshCollectionRecordDailyRollupSlice(tx, slice)),
     };
     this.idlePollMs = Math.max(250, deps.idlePollMs ?? DEFAULT_IDLE_POLL_MS);
     this.retryDelayMs = Math.max(1_000, deps.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS);

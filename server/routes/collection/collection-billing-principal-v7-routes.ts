@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { readQueryObject, readRouteParam } from "../../http/validation";
-import { notFound } from "../../http/errors";
+import { forbidden, notFound } from "../../http/errors";
 import { sendCollectionError } from "./collection-route-handler-factories";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
@@ -100,6 +100,15 @@ export function registerCollectionBillingPrincipalV7Routes(context: CollectionRo
   app.put(
     `${revisionPrefix}/client-results`,
     ...staffSummaryAccess,
+    (req: AuthenticatedRequest, res: Response, next) => {
+      // A precondition, never an owner selector: reject a browser draft whose
+      // account changed between metadata validation and this authenticated PUT.
+      const expectedViewer = req.header("x-billing-viewer-id");
+      if (expectedViewer !== undefined && expectedViewer !== req.user?.userId) {
+        return sendCollectionError(res, forbidden("Your account changed. Reload Billing Principal before saving private Client Result."), "Failed to save Client Result.");
+      }
+      return next();
+    },
     jsonMutationRoute(
       "Failed to save Client Result.",
       (req) => `collection:billing-principal:private-client-result:${req.user?.userId ?? "missing-owner"}:${targetId(req)}:${revisionId(req)}`,

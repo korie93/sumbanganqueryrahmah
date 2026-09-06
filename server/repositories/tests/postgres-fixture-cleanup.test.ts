@@ -18,7 +18,7 @@ function fakeMaintenance(counts: unknown[]) {
 }
 
 test("OSP fixture cleanup drops an immediately drained generated database without terminating clients", async () => {
-  for (const prefix of ["sqr_osp_v9", "sqr_osp_perf", "sqr_osp_effective", "sqr_osp_backup_v3"]) {
+  for (const prefix of ["sqr_osp_v9", "sqr_osp_perf", "sqr_osp_effective", "sqr_osp_backup_v3", "sqr_osp_rollup"]) {
     const name = `${prefix}_1788660000000_012345abcd`;
     const maintenance = fakeMaintenance([0]);
     await dropDrainedOspFixtureDatabase(maintenance, name, async () => assert.fail("No delay is needed."));

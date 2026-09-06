@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import {
   getBillingPrincipalSavedTargetOverview,
+  getBillingPrincipalSavedTarget,
   prepareBillingPrincipalMutationAttempt,
   upsertBillingPrincipalClientResults,
   type BillingPrincipalAging,
@@ -33,31 +34,12 @@ import {
   isValidOspPercentageInput,
 } from "./billing-principal-report-utils";
 import { BillingPrincipalInsights } from "./BillingPrincipalInsights";
+import { clampBillingPrincipalDate, defaultBillingPrincipalAsOf, getBillingPrincipalReportingWindow, isBillingPrincipalDateInRange } from "@/lib/billing-principal-date-domain";
+import { getStoredAuthenticatedUser } from "@/lib/auth-session";
+import { assertBillingPrincipalWorkspaceOwner, BillingPrincipalOwnerChangedError } from "@/lib/billing-principal-owner";
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
-}
-
-function todayIsoDate() {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-function trackingRange(target: BillingPrincipalSavedTarget) {
-  return {
-    start: target.activeRevision.from,
-    end: target.activeRevision.to,
-  };
-}
-
-function initialAsOf(target: BillingPrincipalSavedTarget) {
-  const range = trackingRange(target);
-  return todayIsoDate() < range.start
-    ? range.start
-    : todayIsoDate() > range.end
-      ? range.end
-      : todayIsoDate();
 }
 
 function ResultTable({
@@ -287,13 +269,19 @@ export function BillingPrincipalSavedTargetWorkspace({
   role,
   target,
   onInteractionChange,
+  dataVersion = 0,
+  onRefresh,
 }: {
   role: string;
   target: BillingPrincipalSavedTarget;
   onInteractionChange?: (state: BillingPrincipalWorkspaceInteraction) => void;
+  dataVersion?: number;
+  onRefresh?: () => void;
 }) {
-  const range = useMemo(() => trackingRange(target), [target]);
-  const [asOf, setAsOf] = useState(() => initialAsOf(target));
+  const [ownerUserId] = useState(() => getStoredAuthenticatedUser()?.id ?? "");
+  const range = useMemo(() => getBillingPrincipalReportingWindow(target.activeRevision), [target.activeRevision]);
+  const [selectedAsOf, setAsOf] = useState(() => defaultBillingPrincipalAsOf(range));
+  const asOf = clampBillingPrincipalDate(selectedAsOf, range);
   const [overview, setOverview] = useState<BillingPrincipalSavedTargetOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -306,6 +294,8 @@ export function BillingPrincipalSavedTargetWorkspace({
   const saveRequestIdRef = useRef(0);
   const savingRef = useRef(false);
   const isMountedRef = useRef(true);
+
+  useEffect(() => { setAsOf((current) => clampBillingPrincipalDate(current, range)); }, [range]);
 
   const handleAccessLost = useCallback(() => {
     saveRequestIdRef.current += 1;
@@ -354,7 +344,7 @@ export function BillingPrincipalSavedTargetWorkspace({
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [asOf, refreshVersion, target.activeRevision.id, target.id]);
+  }, [asOf, dataVersion, range.version, refreshVersion, target.activeRevision.id, target.id]);
 
   const saveClient = async (draft: ClientDraft) => {
     if (!overview || savingRef.current || exportBusy) return;
@@ -385,11 +375,15 @@ export function BillingPrincipalSavedTargetWorkspace({
     setSaving(true);
     setError("");
     try {
+      assertBillingPrincipalWorkspaceOwner(ownerUserId, getStoredAuthenticatedUser()?.id ?? "");
+      const latest = await getBillingPrincipalSavedTarget(target.id, { signal: controller.signal });
+      if (controller.signal.aborted || !isMountedRef.current || requestId !== saveRequestIdRef.current) return;
+      assertBillingPrincipalWorkspaceOwner(ownerUserId, latest.viewerUserId);
       const response = await upsertBillingPrincipalClientResults(
         target.id,
         target.activeRevision.id,
         payload,
-        { ...attempt, signal: controller.signal },
+        { ...attempt, signal: controller.signal, expectedViewerUserId: ownerUserId },
       );
       if (controller.signal.aborted || !isMountedRef.current || requestId !== saveRequestIdRef.current) return;
       saveAttemptRef.current = null;
@@ -401,7 +395,7 @@ export function BillingPrincipalSavedTargetWorkspace({
     } catch (caught) {
       if (!controller.signal.aborted && !isAbortError(caught) && isMountedRef.current && requestId === saveRequestIdRef.current) {
         setError(parseApiError(caught));
-        if ([401, 403, 404].includes(parseCollectionApiErrorDetails(caught).status ?? 0)) handleAccessLost();
+        if (caught instanceof BillingPrincipalOwnerChangedError || [401, 403, 404].includes(parseCollectionApiErrorDetails(caught).status ?? 0)) handleAccessLost();
       }
     } finally {
       if (saveAbortControllerRef.current === controller) saveAbortControllerRef.current = null;
@@ -429,9 +423,9 @@ export function BillingPrincipalSavedTargetWorkspace({
           <div className="flex flex-wrap items-end gap-2">
             <div className="space-y-1">
               <Label htmlFor="billing-system-as-of">System as of</Label>
-              <Input id="billing-system-as-of" type="date" min={range.start} max={range.end} value={asOf} disabled={saving || clientDirty || exportBusy} onChange={(event) => { if (event.target.value) setAsOf(event.target.value); }} />
+              <Input id="billing-system-as-of" type="date" min={range.from} max={range.to} value={asOf} disabled={saving || clientDirty || exportBusy} onChange={(event) => { if (isBillingPrincipalDateInRange(event.target.value, range)) setAsOf(event.target.value); }} />
             </div>
-            <Button type="button" variant="outline" onClick={() => setRefreshVersion((value) => value + 1)} disabled={loading || saving || clientDirty || exportBusy}>
+            <Button type="button" variant="outline" onClick={() => { if (onRefresh) onRefresh(); else setRefreshVersion((value) => value + 1); }} disabled={loading || saving || clientDirty || exportBusy}>
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" /> Refresh
             </Button>
           </div>

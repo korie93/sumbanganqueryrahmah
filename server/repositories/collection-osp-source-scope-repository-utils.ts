@@ -158,11 +158,13 @@ export async function assertCollectionOspSourceAssignment(executor: CollectionRe
     SELECT 1 FROM public.collection_osp_saved_targets target
     JOIN public.collection_osp_target_revisions revision ON revision.target_id = target.id
     JOIN public.collection_osp_target_sources source ON source.target_revision_id = revision.id
+    LEFT JOIN public.collection_source_configs config ON config.source_import_id = source.source_import_id
     WHERE target.status = 'ACTIVE' AND target.assigned_admin_user_id IS NOT NULL
       AND target.assigned_admin_user_id <> ${input.assignedAdminUserId}
       AND (${input.targetId ?? null}::uuid IS NULL OR target.id <> ${input.targetId ?? null}::uuid)
       AND source.source_import_id = ANY(${buildTextArraySql([...input.sourceImportIds])})
-      AND revision.period_from = ${input.from}::date AND revision.period_to = ${input.to}::date
+      AND COALESCE(config.valid_from, revision.period_from) <= ${input.to}::date
+      AND COALESCE(config.valid_to, revision.period_to) >= ${input.from}::date
       AND NOT EXISTS (SELECT 1 FROM public.collection_osp_target_revisions newer
         WHERE newer.target_id = target.id AND newer.revision_number > revision.revision_number)
     LIMIT 1

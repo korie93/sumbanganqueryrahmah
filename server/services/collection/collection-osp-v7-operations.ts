@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from "../../auth/guards";
 import { HttpError, badRequest, conflict, forbidden, notFound } from "../../http/errors";
+import { collectionOspBusinessToday, collectionOspReportingRange, defaultCollectionOspAsOf } from "../../lib/collection-osp-reporting-window";
 import {
   formatCollectionOspMoneyCents,
   parseCollectionOspMoneyCents,
@@ -66,25 +67,22 @@ function readDate(value: unknown, label: string): string {
 }
 
 function currentBusinessDate(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kuala_Lumpur",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  return collectionOspBusinessToday();
 }
 
 function targetTrackingRange(target: CollectionOspSavedTargetView) {
-  return {
-    start: target.activeRevision.from,
-    end: target.activeRevision.to,
-  };
+  return collectionOspReportingRange(target.activeRevision);
 }
 
 function defaultTargetAsOf(target: CollectionOspSavedTargetView): string {
-  const { start, end } = targetTrackingRange(target);
-  const today = currentBusinessDate();
-  return today < start ? start : today > end ? end : today;
+  return defaultCollectionOspAsOf(target.activeRevision);
+}
+
+function assertReportingDate(target: CollectionOspSavedTargetView, date: string, label: string) {
+  const range = targetTrackingRange(target);
+  if (!isValidCollectionDate(date) || date < range.start || date > range.end) {
+    throw badRequest(`${label} must be within Collection Source validity (${range.start} to ${range.end}).`);
+  }
 }
 
 function readBoundedText(
@@ -394,6 +392,7 @@ function buildExportMetadata(dataset: Record<string, unknown>): Array<Record<str
   const revision = ensureLooseObject(overview.revision)
     ?? ensureLooseObject(target.activeRevision)
     ?? {};
+  const reportingWindow = ensureLooseObject(revision.reportingWindow);
   const sources = flattenRows(revision.sourceSnapshots);
   const sourceLabels = sources
     .map((source) => {
@@ -416,9 +415,11 @@ function buildExportMetadata(dataset: Record<string, unknown>): Array<Record<str
     { Field: "Description", Value: target.description ?? "" },
     { Field: "Revision", Value: revision.revisionNumber ?? "" },
     { Field: "As Of", Value: overview.asOf ?? "" },
-    { Field: "Period From", Value: revision.from ?? "" },
-    { Field: "Period To", Value: revision.to ?? "" },
-    { Field: "Period provenance", Value: revision.sourceValidityVerified === true ? "Verified Configure Collection Source validity" : "Legacy saved period; configured source validity unverified" },
+    { Field: "Period From", Value: reportingWindow?.from ?? revision.from ?? "" },
+    { Field: "Period To", Value: reportingWindow?.to ?? revision.to ?? "" },
+    { Field: "Period provenance", Value: (reportingWindow?.sourceValidityVerified ?? revision.sourceValidityVerified) === true ? "Verified Configure Collection Source validity" : "Legacy saved period; configured source validity unverified" },
+    { Field: "Snapshot Period From", Value: revision.from ?? "" },
+    { Field: "Snapshot Period To", Value: revision.to ?? "" },
     { Field: "Source Snapshots", Value: sourceLabels },
     { Field: "Aging Scope", Value: exportTextList(revision.agingScope).join(", ") },
     { Field: "Export From", Value: filters.from ?? "" },
@@ -718,12 +719,14 @@ export class CollectionOspV7Operations {
     const targetId = readUuid(targetRaw, "Saved Target ID");
     const revisionId = readUuid(revisionRaw, "Target revision ID");
     const target = await this.requireVisibleTarget(user, targetId, revisionId);
+    const asOfDate = query.asOf == null ? defaultTargetAsOf(target) : readDate(query.asOf, "As-of date");
+    assertReportingDate(target, asOfDate, "As-of date");
     try {
       const overview = await this.storage.getCollectionOspTargetOverview({
         viewer: viewerScope(user),
         targetId,
         revisionId,
-        asOfDate: query.asOf == null ? defaultTargetAsOf(target) : readDate(query.asOf, "As-of date"),
+        asOfDate,
       });
       return { ok: true as const, ...(overview as Record<string, unknown>) };
     } catch (error) {
@@ -763,7 +766,7 @@ export class CollectionOspV7Operations {
     try {
       const targetId = readUuid(targetRaw, "Saved Target ID");
       const revisionId = readUuid(revisionRaw, "Target revision ID");
-      const target = await this.requireVisibleTarget(user, targetId, revisionId);
+      await this.requireVisibleTarget(user, targetId, revisionId);
       const clientResult = await this.storage.upsertCollectionOspClientResults({
         viewer: viewerScope(user),
         targetId,
@@ -772,9 +775,10 @@ export class CollectionOspV7Operations {
         rows,
         actor: user.username,
       });
-      const range = targetTrackingRange(target);
-      const today = currentBusinessDate();
-      const latestAsOf = today < range.start ? range.start : today > range.end ? range.end : today;
+      // A source edit does not alter private percentages. Re-read its validity
+      // after the save before calculating the accompanying shared comparison.
+      const currentTarget = await this.requireVisibleTarget(user, targetId, revisionId);
+      const latestAsOf = defaultTargetAsOf(currentTarget);
       const overview = await this.storage.getCollectionOspTargetOverview({
         viewer: viewerScope(user),
         targetId,
@@ -797,8 +801,11 @@ export class CollectionOspV7Operations {
     const targetId = readUuid(targetRaw, "Saved Target ID");
     const revisionId = readUuid(revisionRaw, "Target revision ID");
     const target = await this.requireVisibleTarget(user, targetId, revisionId);
-    const from = readDate(target.activeRevision.from, "Configured source Valid From");
-    const to = readDate(target.activeRevision.to, "Configured source Valid Until");
+    const from = readDate(targetTrackingRange(target).start, "Configured source Valid From");
+    const to = readDate(targetTrackingRange(target).end, "Configured source Valid Until");
+    for (const [key, label] of [["from", "Calendar From"], ["to", "Calendar To"], ["asOf", "As-of date"]] as const) {
+      if (query[key] != null) assertReportingDate(target, readDate(query[key], label), label);
+    }
     if (from > to || countDays(from, to) > 366) throw badRequest("Calendar range must be between 1 and 366 days.");
     // Calendar always covers source validity, independently of historical Table A.
     const asOfDate = to;
@@ -832,7 +839,9 @@ export class CollectionOspV7Operations {
     const aging = readAging(query.aging, true);
     const date = query.date == null ? undefined : readDate(query.date, "Drilldown date");
     const requestedAsOf = query.asOf == null ? defaultTargetAsOf(target) : readDate(query.asOf, "As-of date");
-    const asOfDate = date ? target.activeRevision.to : requestedAsOf;
+    assertReportingDate(target, requestedAsOf, "As-of date");
+    if (date) assertReportingDate(target, date, "Drilldown date");
+    const asOfDate = date ? targetTrackingRange(target).end : requestedAsOf;
     try {
       const result = await this.storage.getCollectionOspDrilldown({
         viewer: viewerScope(user),
@@ -860,10 +869,14 @@ export class CollectionOspV7Operations {
       throw badRequest("Export format must be CSV, Excel XLSX, or governed visual JSON.");
     }
     const asOfDate = query.asOf == null ? defaultTargetAsOf(target) : readDate(query.asOf, "As-of date");
-    const from = query.from == null ? target.activeRevision.from : readDate(query.from, "Export From");
-    const to = query.to == null ? target.activeRevision.to : readDate(query.to, "Export To");
+    const from = query.from == null ? targetTrackingRange(target).start : readDate(query.from, "Export From");
+    const to = query.to == null ? targetTrackingRange(target).end : readDate(query.to, "Export To");
+    assertReportingDate(target, asOfDate, "As-of date");
+    assertReportingDate(target, from, "Export From");
+    assertReportingDate(target, to, "Export To");
     if (from > to || countDays(from, to) > 366) throw badRequest("Export date range must be between 1 and 366 days.");
     const exportDate = query.date == null ? undefined : readDate(query.date, "Export date");
+    if (exportDate) assertReportingDate(target, exportDate, "Export date");
     if (exportDate && exportDate > asOfDate) throw badRequest("Export date cannot be later than the as-of date.");
     const aging = readAging(query.aging, true);
     try {
@@ -890,6 +903,10 @@ export class CollectionOspV7Operations {
         const exportedTarget = ensureLooseObject(ensureLooseObject(dataset.overview)?.target);
         if (currentTarget.version !== exportedTarget?.version) {
           throw conflict("Saved Target changed while exporting. Reload and export again.");
+        }
+        const exportedWindow = ensureLooseObject(ensureLooseObject(exportedTarget.activeRevision)?.reportingWindow);
+        if (currentTarget.activeRevision.reportingWindow?.version !== exportedWindow?.version) {
+          throw conflict("Collection Source validity changed while exporting. Reload and export again.");
         }
         return {
           buffer,

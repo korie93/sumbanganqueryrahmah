@@ -23,9 +23,9 @@ export type CollectionOspEffectiveQueryScope = {
  */
 export function buildCollectionOspEffectiveAccountCtes(input: CollectionOspEffectiveQueryScope): SQL {
   return sql`
-    osp_scope AS MATERIALIZED (
+    osp_revision_scope AS MATERIALIZED (
       SELECT revision.id AS revision_id, target.id AS target_id,
-        revision.period_from, revision.period_to, revision.aging_scope,
+        revision.period_from AS snapshot_from, revision.period_to AS snapshot_to, revision.aging_scope,
         ARRAY(SELECT lower(nickname) FROM unnest(revision.nickname_scope) nickname) AS nickname_scope,
         ${input.asOfDate}::date AS as_of_date
       FROM public.collection_osp_saved_targets target
@@ -33,6 +33,24 @@ export function buildCollectionOspEffectiveAccountCtes(input: CollectionOspEffec
       WHERE target.id = ${input.targetId}::uuid AND revision.id = ${input.revisionId}::uuid
         AND target.status = 'ACTIVE' AND ${input.viewerPredicate}
         ${input.expectedTargetVersion === undefined ? sql`` : sql`AND target.version = ${input.expectedTargetVersion}`}
+    ), osp_source_windows AS MATERIALIZED (
+      -- Saved row/baseline evidence remains immutable. Only the reporting
+      -- dates follow current Collection Source configuration. Disabled sources
+      -- retain history; genuinely missing legacy config uses labelled fallback.
+      SELECT source.target_revision_id, source.source_import_id,
+        COALESCE(config.valid_from, revision.snapshot_from) AS valid_from,
+        COALESCE(config.valid_to, revision.snapshot_to) AS valid_to
+      FROM osp_revision_scope revision
+      JOIN public.collection_osp_target_sources source ON source.target_revision_id = revision.revision_id
+      LEFT JOIN public.collection_source_configs config ON config.source_import_id = source.source_import_id
+    ), osp_scope AS MATERIALIZED (
+      SELECT revision.revision_id, revision.target_id, revision.aging_scope,
+        revision.nickname_scope, revision.as_of_date,
+        COALESCE(bounds.valid_from, revision.snapshot_from) AS period_from,
+        COALESCE(bounds.valid_to, revision.snapshot_to) AS period_to
+      FROM osp_revision_scope revision
+      CROSS JOIN LATERAL (SELECT MIN(source_window.valid_from) AS valid_from, MAX(source_window.valid_to) AS valid_to
+        FROM osp_source_windows source_window WHERE source_window.target_revision_id = revision.revision_id) bounds
     ), osp_accounts AS MATERIALIZED (
       SELECT snapshot.target_revision_id, snapshot.source_import_id, snapshot.source_data_row_id,
         snapshot.cycle_key, snapshot.canonical_obligation_key, snapshot.aging_bucket,
@@ -50,10 +68,11 @@ export function buildCollectionOspEffectiveAccountCtes(input: CollectionOspEffec
       FROM osp_accounts account
       CROSS JOIN osp_scope scope
       JOIN public.collection_records record ON record.settlement_cycle_key = account.cycle_key
-      JOIN public.collection_osp_target_sources source
+      JOIN osp_source_windows source
         ON source.target_revision_id = account.target_revision_id
         AND source.source_import_id = record.source_import_id
       WHERE record.payment_date BETWEEN scope.period_from AND scope.period_to
+        AND record.payment_date BETWEEN source.valid_from AND source.valid_to
         AND record.payment_date <= scope.as_of_date
         AND record.payment_date >= account.calling_date
         AND record.payment_date < account.calling_window_end_exclusive
@@ -82,10 +101,11 @@ export function buildCollectionOspEffectiveAccountCtes(input: CollectionOspEffec
         record.pool_amount, record.manual_settlement_date
       FROM osp_accounts account
       JOIN public.collection_records record ON record.settlement_cycle_key = account.cycle_key
-      JOIN public.collection_osp_target_sources source
+      JOIN osp_source_windows source
         ON source.target_revision_id = account.target_revision_id
         AND source.source_import_id = record.source_import_id
       WHERE record.settlement_override_status = 'ACTIVE' AND record.pool_amount > 0
+        AND record.manual_settlement_date BETWEEN source.valid_from AND source.valid_to
         AND record.manual_settlement_date >= account.calling_date
         AND record.manual_settlement_date < account.calling_window_end_exclusive
         AND record.duplicate_receipt_flag = false

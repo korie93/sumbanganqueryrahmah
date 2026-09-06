@@ -7,7 +7,8 @@ import {
   sumCollectionRowAmounts,
 } from "./collection-record-query-utils";
 import {
-  rebuildCollectionRecordMonthlyRollups,
+  mapCollectionRecordRowToDailyRollupSlice,
+  refreshCollectionRecordDailyRollupSlices,
 } from "./collection-record-rollup-utils";
 import {
   acquireCollectionRecordMutationLock,
@@ -84,7 +85,10 @@ export async function purgeCollectionRecordsOlderThan(
         id,
         amount,
         receipt_file,
-        settlement_cycle_key
+        settlement_cycle_key,
+        payment_date,
+        created_by_login,
+        collection_staff_nickname
       FROM public.collection_records
       WHERE id IN (${candidateRecordIdSql})
         AND payment_date < ${normalizedBeforeDate}::date
@@ -233,15 +237,13 @@ export async function purgeCollectionRecordsOlderThan(
     `);
     await recalculateCollectionSettlementCycles(tx, settlementCycleKeys);
 
-    await tx.execute(sql`
-      DELETE FROM public.collection_record_daily_rollups
-      WHERE payment_date < ${normalizedBeforeDate}::date
-    `);
-    await rebuildCollectionRecordMonthlyRollups(tx);
-    await tx.execute(sql`
-      DELETE FROM public.collection_record_daily_rollup_refresh_queue
-      WHERE payment_date < ${normalizedBeforeDate}::date
-    `);
+    // Active manual anchors and concurrent historical entries are intentionally
+    // retained. Recompute only actual deleted slices rather than erasing every
+    // pre-cutoff aggregate (including retained records and other collectors).
+    await refreshCollectionRecordDailyRollupSlices(tx, oldRecordRows.map((row) =>
+      mapCollectionRecordRowToDailyRollupSlice(row as Record<string, unknown>),
+    ));
+    // Pending generations remain safe to replay, even when their day is now empty.
 
     const receiptPaths = collectCollectionReceiptPaths(
       oldRecordRows,

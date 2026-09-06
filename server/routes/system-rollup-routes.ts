@@ -1,6 +1,7 @@
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
 import type { SystemRouteContext } from "./system-route-context";
+import { parseBoundedCollectionRollupRepair } from "../repositories/collection-record-rollup-repair-utils";
 
 export function registerSystemRollupRoutes(context: SystemRouteContext) {
   const {
@@ -81,12 +82,21 @@ export function registerSystemRollupRoutes(context: SystemRouteContext) {
     requireRole("superuser"),
     requireMonitorAccess,
     asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const body = req.body as unknown;
+      const bounded = body !== undefined && body !== null && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)
+        ? parseBoundedCollectionRollupRepair(body) : undefined;
       await createAuditLog({
         action: "COLLECTION_ROLLUP_REBUILD_REQUESTED",
         performedBy: req.user?.username || "system",
-        details: "Superuser requested a full collection report rollup rebuild.",
+        details: bounded ? JSON.stringify(bounded) : "Superuser requested a full collection report rollup rebuild.",
       });
-      res.json(await rebuildCollectionRollups());
+      const result = await rebuildCollectionRollups(bounded);
+      if (bounded) await createAuditLog({
+        action: "COLLECTION_ROLLUP_BOUNDED_REPAIR_COMPLETED",
+        performedBy: req.user?.username || "system",
+        details: JSON.stringify(result),
+      });
+      res.json(result);
     }),
   );
 }

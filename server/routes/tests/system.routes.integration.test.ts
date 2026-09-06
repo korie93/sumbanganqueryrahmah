@@ -1081,6 +1081,41 @@ test("rollup refresh control routes remain superuser-only and return snapshots",
   }
 });
 
+test("bounded rollup repair requires superuser, validates scope, defaults to dry-run, and audits before/after", async () => {
+  const calls: unknown[] = [];
+  const audit: Array<{ action: string; details?: string | null | undefined }> = [];
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
+    rebuildCollectionRollups: async (input) => {
+      calls.push(input);
+      return { ok: true, action: "bounded-repair", before: { daily_records: 0 }, after: { daily_records: 0 } };
+    },
+    createAuditLog: async (data) => { audit.push(data); return createAuditLogRow(data); },
+  }));
+  const { server, baseUrl } = await startTestServer(app);
+  const body = { mode: "bounded", from: "2026-08-12", to: "2026-09-10", createdByLogin: "admin", collectionStaffNickname: "SW.ABU_324" };
+  const send = (value: unknown, role = "superuser") => fetch(`${baseUrl}/internal/rollup-refresh/rebuild`, {
+    method: "POST", headers: { "content-type": "application/json", "x-test-role": role, "x-test-userid": "repair-user", "x-test-username": "repair.user" },
+    body: JSON.stringify(value),
+  });
+  try {
+    for (const role of ["user", "admin", "manager"]) assert.equal((await send(body, role)).status, 403);
+    assert.equal(calls.length, 0);
+    for (const invalid of [{ ...body, from: "2026-02-30" }, { ...body, createdByLogin: "" }, { ...body, dryRun: "false" }, { ...body, unexpected: true }]) {
+      assert.equal((await send(invalid)).status, 400);
+    }
+    assert.equal(calls.length, 0);
+    assert.equal(audit.length, 0);
+    assert.equal((await send(body)).status, 200);
+    assert.deepEqual(calls[0], { ...body, dryRun: true, maxSlices: 100 });
+    assert.deepEqual(audit.map((entry) => entry.action), ["COLLECTION_ROLLUP_REBUILD_REQUESTED", "COLLECTION_ROLLUP_BOUNDED_REPAIR_COMPLETED"]);
+    assert.match(audit[0]?.details ?? "", /"dryRun":true/);
+    assert.match(audit[1]?.details ?? "", /"before":.*"after":/);
+    assert.equal((await send({ ...body, dryRun: false, maxSlices: 20 })).status, 200);
+    assert.deepEqual(calls[1], { ...body, dryRun: false, maxSlices: 20 });
+  } finally { await stopTestServer(server); }
+});
+
 test("POST /api/internal/chaos/inject is the only registered chaos injection route", async () => {
   let chaosCalls = 0;
   const auditActions: string[] = [];

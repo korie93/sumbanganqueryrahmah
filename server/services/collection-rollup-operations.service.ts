@@ -1,12 +1,12 @@
 import { db } from "../db-postgres";
 import {
-  clearCollectionRecordDailyRollupRefreshQueue,
   getCollectionRecordDailyRollupRefreshQueueSnapshot,
   markRunningCollectionRecordDailyRollupRefreshSlicesQueued,
   rebuildCollectionRecordDailyRollups,
   requeueCollectionRecordDailyRollupRefreshFailures,
 } from "../repositories/collection-record-repository-utils";
 import type { CollectionRollupRefreshQueueService } from "./collection-rollup-refresh-queue.service";
+import { parseBoundedCollectionRollupRepair, repairBoundedCollectionRecordRollups } from "../repositories/collection-record-rollup-repair-utils";
 
 type CollectionRollupOperationsDeps = {
   ensureReady?: () => Promise<void>;
@@ -65,14 +65,19 @@ export class CollectionRollupOperationsService {
     };
   }
 
-  async rebuildAllRollups() {
+  async rebuildAllRollups(input?: unknown) {
     await this.ensureReady();
-    await rebuildCollectionRecordDailyRollups(db);
-    await clearCollectionRecordDailyRollupRefreshQueue();
+    if (input !== undefined && input !== null && (typeof input !== "object" || Array.isArray(input) || Object.keys(input).length > 0)) {
+      const bounded = parseBoundedCollectionRollupRepair(input);
+      return db.transaction((tx) => repairBoundedCollectionRecordRollups(tx, bounded));
+    }
+    await db.transaction(async (tx) => {
+      await rebuildCollectionRecordDailyRollups(tx);
+    });
     return {
       ok: true as const,
       action: "rebuild",
-      message: "Rebuilt collection report rollups and cleared the refresh queue.",
+      message: "Rebuilt collection report rollups; concurrent queued refresh requests are preserved.",
       snapshot: await getCollectionRecordDailyRollupRefreshQueueSnapshot(),
     };
   }

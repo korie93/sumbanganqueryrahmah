@@ -4,7 +4,7 @@ type FixtureMaintenanceDatabase = {
   query: (statement: string, parameters?: string[]) => Promise<{ rows: Array<{ count?: unknown }> }>;
 };
 
-const GENERATED_FIXTURE_DATABASE = /^sqr_osp_(?:v9|perf|effective|backup_v3)_\d+_[a-f0-9]{10}$/;
+const GENERATED_FIXTURE_DATABASE = /^sqr_osp_(?:v9|perf|effective|backup_v3|rollup)_\d+_[a-f0-9]{10}$/;
 const DRAIN_ATTEMPTS = 10;
 const DRAIN_DELAY_MS = 50;
 

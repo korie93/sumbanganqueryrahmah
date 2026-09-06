@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
 import { CollectionOspV7RepositoryError } from "./collection-osp-repository-error";
+import { collectionOspReportingRange, defaultCollectionOspAsOf, isCollectionOspBusinessDate, resolveCollectionOspReportingWindow } from "../lib/collection-osp-reporting-window";
 export { CollectionOspV7RepositoryError } from "./collection-osp-repository-error";
 import {
   assertCollectionOspEligibleAdmin, assertCollectionOspSourceAssignment,
@@ -146,10 +147,7 @@ function pagination(page: number, pageSize: number, total: number): CollectionOs
 }
 
 function targetTrackingRange(target: CollectionOspSavedTargetView) {
-  return {
-    start: target.activeRevision.from,
-    end: target.activeRevision.to,
-  };
+  return collectionOspReportingRange(target.activeRevision);
 }
 
 function assertTargetDate(
@@ -158,24 +156,35 @@ function assertTargetDate(
   label: string,
 ): void {
   const range = targetTrackingRange(target);
-  if (value < range.start || value > range.end) {
+  if (!isCollectionOspBusinessDate(value) || value < range.start || value > range.end) {
     throw new CollectionOspV7RepositoryError(
       "INVALID_SOURCE",
-      `${label} must be within the Saved Target tracking period (${range.start} to ${range.end}).`,
+      `${label} must be within the Collection Source reporting period (${range.start} to ${range.end}).`,
     );
   }
 }
 
 function latestTargetAsOf(target: CollectionOspSavedTargetView): string {
-  const range = targetTrackingRange(target);
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kuala_Lumpur",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-  if (today < range.start) return range.start;
-  return today > range.end ? range.end : today;
+  return defaultCollectionOspAsOf(target.activeRevision);
+}
+
+function reportingSourcesSql(revisionId: SQL) {
+  return sql`(SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'sourceImportId', source.source_import_id, 'validFrom', config.valid_from::text,
+      'validTo', config.valid_to::text) ORDER BY source.source_import_id), '[]'::jsonb)
+    FROM public.collection_osp_target_sources source
+    LEFT JOIN public.collection_source_configs config ON config.source_import_id = source.source_import_id
+    WHERE source.target_revision_id = ${revisionId})`;
+}
+
+function assertReportingWindowStillCurrent(target: CollectionOspSavedTargetView, current: UnknownRow) {
+  if (!target.activeRevision.reportingWindow) return;
+  const sources = current.reporting_sources;
+  if (!Array.isArray(sources)) throw new CollectionOspV7RepositoryError("VERSION_CONFLICT", "Source validity could not be revalidated. Reload the report.");
+  const window = resolveCollectionOspReportingWindow(target.activeRevision, sources);
+  if (window.version !== target.activeRevision.reportingWindow.version) {
+    throw new CollectionOspV7RepositoryError("VERSION_CONFLICT", "Collection Source validity changed while loading. Reload the report.");
+  }
 }
 
 function targetViewerPredicate(viewer: CollectionOspViewer | undefined) {
@@ -191,9 +200,10 @@ function targetViewerPredicate(viewer: CollectionOspViewer | undefined) {
   )`;
 }
 
-async function assertViewerStillAuthorized(target: CollectionOspSavedTargetView, viewer: CollectionOspViewer | undefined) {
+async function assertViewerStillAuthorized(target: CollectionOspSavedTargetView, viewer: CollectionOspViewer | undefined, verifyReportingWindow = true) {
   const current = rowsOf(await db.execute(sql`
-    SELECT target.version FROM public.collection_osp_saved_targets target
+    SELECT target.version, ${reportingSourcesSql(sql`${target.activeRevision.id}::uuid`)} AS reporting_sources
+    FROM public.collection_osp_saved_targets target
     WHERE target.id = ${target.id}::uuid AND target.status = 'ACTIVE'
       AND ${targetViewerPredicate(viewer)}
   `))[0];
@@ -201,6 +211,7 @@ async function assertViewerStillAuthorized(target: CollectionOspSavedTargetView,
   if (toNumber(current.version) !== target.version) {
     throw new CollectionOspV7RepositoryError("VERSION_CONFLICT", "Saved Target changed while loading. Reload the report.");
   }
+  if (verifyReportingWindow) assertReportingWindowStillCurrent(target, current);
 }
 
 async function loadTargetViews(
@@ -256,12 +267,15 @@ async function loadTargetViews(
   const revisionIds = targetRows.map((row) => String(row.revision_id));
   const revisionIdsSql = buildTextArraySql(revisionIds);
   const sourceResult = await executor.execute(sql`
-    SELECT target_revision_id, source_import_id, source_name_snapshot, source_filename_snapshot
-    FROM public.collection_osp_target_sources
-    WHERE target_revision_id = ANY(${revisionIdsSql}::uuid[])
-    ORDER BY target_revision_id, source_import_id
+    SELECT source.target_revision_id, source.source_import_id, source.source_name_snapshot, source.source_filename_snapshot,
+      config.valid_from::text AS current_valid_from, config.valid_to::text AS current_valid_to
+    FROM public.collection_osp_target_sources source
+    LEFT JOIN public.collection_source_configs config ON config.source_import_id = source.source_import_id
+    WHERE source.target_revision_id = ANY(${revisionIdsSql}::uuid[])
+    ORDER BY source.target_revision_id, source.source_import_id
   `);
   const sourcesByRevision = new Map<string, Array<{ sourceImportId: string; name: string; filename: string | null }>>();
+  const boundsByRevision = new Map<string, Array<{ sourceImportId: string; validFrom: string | null; validTo: string | null }>>();
   for (const row of rowsOf(sourceResult)) {
     const revisionId = String(row.target_revision_id);
     const values = sourcesByRevision.get(revisionId) ?? [];
@@ -271,6 +285,9 @@ async function loadTargetViews(
       filename: row.source_filename_snapshot == null ? null : String(row.source_filename_snapshot),
     });
     sourcesByRevision.set(revisionId, values);
+    const bounds = boundsByRevision.get(revisionId) ?? [];
+    bounds.push({ sourceImportId: String(row.source_import_id), validFrom: row.current_valid_from == null ? null : dateOnly(row.current_valid_from), validTo: row.current_valid_to == null ? null : dateOnly(row.current_valid_to) });
+    boundsByRevision.set(revisionId, bounds);
   }
   return targetRows.map((row): CollectionOspSavedTargetView => {
     const revisionId = String(row.revision_id);
@@ -290,6 +307,9 @@ async function loadTargetViews(
         id: revisionId,
         revisionNumber: Math.max(1, toNumber(row.revision_number)),
         sourceValidityVerified: row.calculation_version === "osp-effective-private-v3-canonical-source",
+        ...(sourceSnapshots.length ? { reportingWindow: resolveCollectionOspReportingWindow(
+          { from: dateOnly(row.period_from), to: dateOnly(row.period_to) }, boundsByRevision.get(revisionId) ?? [],
+        ) } : {}),
         from: dateOnly(row.period_from),
         to: dateOnly(row.period_to),
         trackingStartDate: row.tracking_start_date == null ? null : dateOnly(row.tracking_start_date),
@@ -317,11 +337,19 @@ export async function listCollectionOspSavedTargetsRepository(options?: {
   // The source-label query above can overlap a reassignment; filter the final
   // bounded result against current access in one query, not one query per row.
   const current = new Map(rowsOf(await db.execute(sql`
-    SELECT target.id, target.version FROM public.collection_osp_saved_targets target
+    SELECT target.id, target.version,
+      ${reportingSourcesSql(sql`(SELECT revision.id FROM public.collection_osp_target_revisions revision
+        WHERE revision.target_id = target.id ORDER BY revision.revision_number DESC LIMIT 1)`)} AS reporting_sources
+    FROM public.collection_osp_saved_targets target
     WHERE target.id = ANY(${buildTextArraySql(targets.map((target) => target.id))}::uuid[])
       AND target.status = 'ACTIVE' AND ${targetViewerPredicate(options?.viewer)}
-  `)).map((row) => [String(row.id), toNumber(row.version)]));
-  return targets.filter((target) => current.get(target.id) === target.version);
+  `)).map((row) => [String(row.id), row]));
+  return targets.filter((target) => {
+    const row = current.get(target.id);
+    if (!row || toNumber(row.version) !== target.version) return false;
+    try { assertReportingWindowStillCurrent(target, row); return true; }
+    catch (error) { if (error instanceof CollectionOspV7RepositoryError && error.reason === "VERSION_CONFLICT") return false; throw error; }
+  });
 }
 
 export async function getCollectionOspSavedTargetRepository(
@@ -629,7 +657,7 @@ export async function updateCollectionOspSavedTargetRepository(input: {
         await assertCollectionOspEligibleAdmin(tx, input.assignedAdminUserId);
         await assertCollectionOspSourceAssignment(tx, { targetId: input.targetId,
           assignedAdminUserId: input.assignedAdminUserId, sourceImportIds: before.activeRevision.sourceImportIds,
-          from: before.activeRevision.from, to: before.activeRevision.to });
+          from: targetTrackingRange(before).start, to: targetTrackingRange(before).end });
       }
       if (input.targets !== undefined) {
         if (input.targets.length !== AGINGS.length || new Set(input.targets.map((row) => row.agingBucket)).size !== AGINGS.length
@@ -787,7 +815,7 @@ async function loadTargetReportDataset(targetId: string, revisionId: string, asO
       WHERE target_revision_id = ${revisionId}::uuid LIMIT ${MAX_TARGET_SOURCE_ROWS + 1}) source_limit`))[0];
   if (toNumber(bounded?.count) > MAX_TARGET_SOURCE_ROWS) throw new CollectionOspV7RepositoryError("DATASET_TOO_LARGE", "Saved Target exceeds the 100,000-account scope.");
   const rows = rowsOf(await db.execute(buildCollectionOspAgingAggregateQuery({
-    targetId, revisionId, asOfDate: fullCalendarState ? target.activeRevision.to : asOfDate,
+    targetId, revisionId, asOfDate: fullCalendarState ? targetTrackingRange(target).end : asOfDate,
     viewerPredicate: targetViewerPredicate(viewer), expectedTargetVersion: target.version,
   })));
   if (rows.length !== target.activeRevision.agingScope.length) throw new CollectionOspV7RepositoryError("NOT_FOUND", "Saved Target changed or is unavailable.");
@@ -1261,9 +1289,13 @@ export async function listCollectionOspReconciliationCandidatesRepository(input:
       JOIN public.collection_osp_target_sources target_source
         ON target_source.target_revision_id = scoped_row.target_revision_id
         AND target_source.source_import_id = record.source_import_id
+      LEFT JOIN public.collection_source_configs source_config
+        ON source_config.source_import_id = target_source.source_import_id
       WHERE record.payment_date <= ${input.asOfDate}::date
-        AND record.payment_date >= ${target.activeRevision.from}::date
-        AND record.payment_date <= ${target.activeRevision.to}::date
+        AND record.payment_date BETWEEN COALESCE(source_config.valid_from, ${target.activeRevision.from}::date)
+          AND COALESCE(source_config.valid_to, ${target.activeRevision.to}::date)
+        AND record.payment_date >= ${targetTrackingRange(target).start}::date
+        AND record.payment_date <= ${targetTrackingRange(target).end}::date
         AND record.payment_date >= scoped_row.calling_date
         AND record.payment_date < scoped_row.calling_window_end_exclusive
         AND record.duplicate_receipt_flag = false
@@ -1362,10 +1394,14 @@ async function loadReconciliationViewsFromRows(
     JOIN public.collection_osp_target_sources target_source
       ON target_source.target_revision_id = target_row.target_revision_id
       AND target_source.source_import_id = record.source_import_id
+    LEFT JOIN public.collection_source_configs source_config
+      ON source_config.source_import_id = target_source.source_import_id
     WHERE record.settlement_cycle_key = ANY(${buildTextArraySql(cycleKeys)})
       AND record.payment_date <= ${asOfDate}::date
-      AND record.payment_date >= ${target.activeRevision.from}::date
-      AND record.payment_date <= ${target.activeRevision.to}::date
+      AND record.payment_date BETWEEN COALESCE(source_config.valid_from, ${target.activeRevision.from}::date)
+        AND COALESCE(source_config.valid_to, ${target.activeRevision.to}::date)
+      AND record.payment_date >= ${targetTrackingRange(target).start}::date
+      AND record.payment_date <= ${targetTrackingRange(target).end}::date
       AND record.duplicate_receipt_flag = false
       AND record.source_import_id IS NOT NULL
       AND record.source_data_row_id IS NOT NULL
@@ -2011,7 +2047,10 @@ export async function upsertCollectionOspClientResultsRepository(input: {
     baseline.agingRows,
     input.viewer,
   );
-  await assertViewerStillAuthorized(baseline.target, input.viewer);
+  // This response contains only the actor's private values derived from the
+  // immutable baseline. Source-date edits cannot invalidate a committed private
+  // save; shared target/account authorization must still be rechecked.
+  await assertViewerStillAuthorized(baseline.target, input.viewer, false);
   return result;
 }
 
@@ -2158,7 +2197,7 @@ export async function getCollectionOspDrilldownRepository(input: {
   // can establish an earlier day; truncating here would make that day empty.
   const dataset = await loadTargetReportDataset(input.targetId, input.revisionId, input.asOfDate, input.viewer, Boolean(input.date));
   const result = await buildCollectionOspDrilldownFromDataset(dataset, input.date
-    ? { ...input, asOfDate: dataset.target.activeRevision.to } : input);
+    ? { ...input, asOfDate: targetTrackingRange(dataset.target).end } : input);
   await assertViewerStillAuthorized(dataset.target, input.viewer);
   return result;
 }

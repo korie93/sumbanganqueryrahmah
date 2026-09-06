@@ -12,7 +12,11 @@ import type {
   CollectionRollupFreshnessSnapshot,
   CollectionRollupFreshnessStatus,
   NormalizedCollectionRecordDailyRollupSlice,
+  CollectionRepositoryExecutor,
 } from "./collection-record-rollup-types";
+
+type ClaimedRollupSlice = NormalizedCollectionRecordDailyRollupSlice & { refreshClaimToken: string };
+type RollupSliceWithClaim = CollectionRecordDailyRollupSlice & { refreshClaimToken?: string };
 
 export function mapCollectionRecordDailyRollupRefreshQueueSnapshotRow(
   row: Record<string, unknown> | null | undefined,
@@ -175,8 +179,9 @@ export async function clearCollectionRecordDailyRollupRefreshQueue(): Promise<vo
 
 export async function claimNextCollectionRecordDailyRollupRefreshSlice(
   now: Date = new Date(),
-): Promise<NormalizedCollectionRecordDailyRollupSlice | null> {
-  const result = await db.execute(sql`
+  executor: CollectionRepositoryExecutor = db,
+): Promise<ClaimedRollupSlice | null> {
+  const result = await executor.execute(sql`
     WITH next_slice AS (
       SELECT payment_date, created_by_login, collection_staff_nickname
       FROM public.collection_record_daily_rollup_refresh_queue
@@ -189,7 +194,7 @@ export async function claimNextCollectionRecordDailyRollupRefreshSlice(
     UPDATE public.collection_record_daily_rollup_refresh_queue queue
     SET
       status = 'running',
-      updated_at = now(),
+      updated_at = clock_timestamp(),
       attempt_count = COALESCE(queue.attempt_count, 0) + 1,
       last_error = null
     FROM next_slice
@@ -199,37 +204,42 @@ export async function claimNextCollectionRecordDailyRollupRefreshSlice(
     RETURNING
       queue.payment_date,
       queue.created_by_login,
-      queue.collection_staff_nickname
+      queue.collection_staff_nickname,
+      EXTRACT(EPOCH FROM queue.updated_at)::text || ':' || queue.attempt_count::text AS refresh_claim_token
   `);
 
-  return mapCollectionRecordRowToDailyRollupSlice(
+  const slice = mapCollectionRecordRowToDailyRollupSlice(
     (result.rows?.[0] || null) as Record<string, unknown> | null,
   );
+  return slice ? { ...slice, refreshClaimToken: String(result.rows![0].refresh_claim_token) } : null;
 }
 
 export async function completeCollectionRecordDailyRollupRefreshSlice(
-  slice: CollectionRecordDailyRollupSlice | null | undefined,
+  slice: RollupSliceWithClaim | null | undefined,
+  executor: CollectionRepositoryExecutor = db,
 ): Promise<void> {
   const normalized = normalizeCollectionRecordDailyRollupSlice(slice);
-  if (!normalized) return;
+  if (!normalized || !slice?.refreshClaimToken) return;
 
-  await db.execute(sql`
+  await executor.execute(sql`
     DELETE FROM public.collection_record_daily_rollup_refresh_queue
     WHERE payment_date = ${normalized.paymentDate}::date
       AND created_by_login = ${normalized.createdByLogin}
       AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+      AND status = 'running'
+      AND EXTRACT(EPOCH FROM updated_at)::text || ':' || attempt_count::text = ${slice.refreshClaimToken}
   `);
 }
 
 export async function failCollectionRecordDailyRollupRefreshSlice(params: {
-  slice: CollectionRecordDailyRollupSlice | null | undefined;
+  slice: RollupSliceWithClaim | null | undefined;
   errorMessage: string;
   nextAttemptAt: Date;
-}): Promise<void> {
+}, executor: CollectionRepositoryExecutor = db): Promise<void> {
   const normalized = normalizeCollectionRecordDailyRollupSlice(params.slice);
-  if (!normalized) return;
+  if (!normalized || !params.slice?.refreshClaimToken) return;
 
-  await db.execute(sql`
+  await executor.execute(sql`
     UPDATE public.collection_record_daily_rollup_refresh_queue
     SET
       status = 'queued',
@@ -239,5 +249,7 @@ export async function failCollectionRecordDailyRollupRefreshSlice(params: {
     WHERE payment_date = ${normalized.paymentDate}::date
       AND created_by_login = ${normalized.createdByLogin}
       AND collection_staff_nickname = ${normalized.collectionStaffNickname}
+      AND status = 'running'
+      AND EXTRACT(EPOCH FROM updated_at)::text || ':' || attempt_count::text = ${params.slice.refreshClaimToken}
   `);
 }

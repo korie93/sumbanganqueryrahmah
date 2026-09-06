@@ -1,5 +1,6 @@
 import type { BillingPrincipalVisualExportDataset } from "@/lib/api/collection-billing-principal";
 import { formatOspCurrency, formatOspPercentage, formatOspPercentagePoint } from "./billing-principal-report-utils";
+import { getBillingPrincipalReportingWindow } from "@/lib/billing-principal-date-domain";
 
 export type BillingPrincipalVisualExportKind = "png" | "pdf";
 export type BillingPrincipalVisualExportSection = { title: string; headers: string[]; rows: string[][] };
@@ -27,6 +28,7 @@ function nonEmpty(headers: string[], rows: string[][]) {
 export function buildBillingPrincipalVisualExportSections(dataset: BillingPrincipalVisualExportDataset): BillingPrincipalVisualExportSection[] {
   const { overview } = dataset;
   const revision = overview.revision;
+  const reportingWindow = getBillingPrincipalReportingWindow(revision);
   const systemRows = withAll(overview.systemResult.rows, overview.systemResult.all).map((row) => [
     row.aging,
     formatOspCurrency(row.totalOsp),
@@ -69,7 +71,7 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
   return [
     { title: "Metadata", headers: ["Field", "Value"], rows: [
       ["Target", overview.target.name], ["Revision", String(revision.revisionNumber)], ["System as of", overview.asOf],
-      [revision.sourceValidityVerified ? "Source validity" : "Legacy period (source validity unverified)", `${revision.from} to ${revision.to}`],
+      [reportingWindow.sourceValidityVerified ? "Source validity" : "Reporting period (includes legacy source fallback)", `${reportingWindow.from} to ${reportingWindow.to}`],
       ["Assigned admin", overview.target.assignedAdmin ? `${overview.target.assignedAdmin.username} — ${overview.target.assignedAdmin.fullName ?? ""}` : "Legacy — unassigned"],
       ["Private client owner", dataset.generatedBy],
       ["Private client state", overview.clientResult.all.receivedDate ? "Saved to your account" : "Unsaved — defaults from TABLE A"],

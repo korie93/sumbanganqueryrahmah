@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
+import { getBillingPrincipalReportingWindow } from "@/lib/billing-principal-date-domain";
 import {
   createBillingPrincipalSavedTarget, getBillingPrincipalSavedTargetOverview, getBillingPrincipalTargetOptions,
   prepareBillingPrincipalMutationAttempt, previewBillingPrincipalSource, updateBillingPrincipalSavedTarget,
@@ -99,11 +100,12 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
     setPreviewError("");
     setPreviewLoading(Boolean(target || source));
     if (target) {
-      void getBillingPrincipalSavedTargetOverview(target.id, target.activeRevision.id, { asOf: target.activeRevision.from }, { signal: controller.signal })
+      void getBillingPrincipalSavedTargetOverview(target.id, target.activeRevision.id, { asOf: getBillingPrincipalReportingWindow(target.activeRevision).from }, { signal: controller.signal })
         .then((result) => {
           if (controller.signal.aborted) return;
           if (result.target.version !== target.version) throw new Error("Target changed. Close this dialog and reload targets before editing.");
-          setPreview({ ok: true, from: result.revision.from, to: result.revision.to, sourceImportIds: result.revision.sourceImportIds,
+          const reportingWindow = getBillingPrincipalReportingWindow(result.revision);
+          setPreview({ ok: true, from: reportingWindow.from, to: reportingWindow.to, sourceImportIds: result.revision.sourceImportIds,
             rows: result.systemResult.rows.map((row) => ({ aging: row.aging, totalOsp: row.totalOsp, accountCount: 0 })) });
           setPercentages(Object.fromEntries(result.systemResult.rows.map((row) => [row.aging, row.targetPercentage])) as Record<BillingPrincipalAging, string>);
         })
@@ -180,7 +182,7 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
       </div>
       {previewLoading ? <p role="status" className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading authoritative Billing OSP baseline…</p> : null}
       {preview ? <section aria-label="Source validity and shared targets" className="min-w-0 space-y-3">
-        <p className="rounded-md border bg-muted/20 p-3 text-sm">{!target || target.activeRevision.sourceValidityVerified ? "Source validity" : "Legacy period (source validity unverified)"}: <strong className="tabular-nums">{preview.from} — {preview.to}</strong><span className="mt-1 block text-xs text-muted-foreground">Read-only. Calendar includes every day in this saved period.</span></p>
+        <p className="rounded-md border bg-muted/20 p-3 text-sm">{!target || getBillingPrincipalReportingWindow(target.activeRevision).sourceValidityVerified ? "Current source validity" : "Reporting period (includes legacy source fallback)"}: <strong className="tabular-nums">{preview.from} — {preview.to}</strong><span className="mt-1 block text-xs text-muted-foreground">Read-only. Calendar follows the current Saved Collection Source validity.</span></p>
         <h3 className="text-sm font-medium">3. Shared TABLE A targets</h3>
         <div className="overflow-x-auto rounded-md border">
           <Table className="min-w-[490px]" aria-label="Shared target baseline preview">

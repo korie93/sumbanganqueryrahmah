@@ -6,6 +6,31 @@ import {
   normalizeCollectionRecordDailyRollupSlice,
   resolveCollectionRollupFreshnessStatus,
 } from "../collection-record-rollup-utils";
+import { refreshCollectionRecordDailyRollupSlices } from "../collection-record-rollup-refresh-utils";
+import type { CollectionRepositoryExecutor } from "../collection-record-rollup-types";
+import { collectBoundValues, collectSqlText } from "./sql-test-utils";
+
+test("rollup edits acquire every old/new month lock in deterministic order before aggregation", async () => {
+  const statements: Array<{ text: string; values: unknown[] }> = [];
+  const executor = {
+    execute: async (query: unknown) => {
+      statements.push({ text: collectSqlText(query), values: collectBoundValues(query) });
+      return { rows: [{ total_records: 0, total_amount: "0.00" }] };
+    },
+  } as CollectionRepositoryExecutor;
+  const oldSlice = { paymentDate: "2026-09-01", createdByLogin: "admin", collectionStaffNickname: "staff" };
+  const newSlice = { ...oldSlice, paymentDate: "2026-08-27" };
+  await refreshCollectionRecordDailyRollupSlices(executor, [oldSlice, newSlice, oldSlice]);
+  const firstAggregate = statements.findIndex((statement) => /COUNT\(\*\)/.test(statement.text));
+  const acquired = statements.slice(0, firstAggregate).flatMap((statement) => statement.values)
+    .filter((value): value is string => typeof value === "string" && value.startsWith('["collection-rollup-month"'));
+  assert.deepEqual(acquired.slice(0, 2), [
+    '["collection-rollup-month","2026-08","admin","staff"]',
+    '["collection-rollup-month","2026-09","admin","staff"]',
+  ]);
+  assert.match(statements[0].text, /pg_advisory_xact_lock_shared/);
+  assert.ok(firstAggregate > 2);
+});
 
 test("normalizeCollectionRecordDailyRollupSlice trims values and rejects incomplete slices", () => {
   assert.deepEqual(

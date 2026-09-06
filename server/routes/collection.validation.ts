@@ -152,7 +152,7 @@ export function isNicknameScopeAllowedForRole(scope: "admin" | "user" | "both", 
 }
 
 export function isValidCollectionDate(value: string): boolean {
-  if (!COLLECTION_DATE_REGEX.test(value)) return false;
+  if (!COLLECTION_DATE_REGEX.test(value) || value.startsWith("0000-")) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime())
     && parsed.toISOString().slice(0, 10) === value;
@@ -167,7 +167,9 @@ export function isValidCollectionMonthKey(value: string): boolean {
 }
 
 export function getCollectionTodayDateString(referenceDate = new Date()): string {
-  return `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}-${String(referenceDate.getDate()).padStart(2, "0")}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kuala_Lumpur", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(referenceDate);
 }
 
 export function isFutureCollectionDate(value: string, referenceDate = new Date()): boolean {

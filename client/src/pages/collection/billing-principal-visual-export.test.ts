@@ -49,6 +49,17 @@ test("visual export retains a complete 366-day calendar within its page bound", 
   assert.equal(pages.length, 35);
 });
 
+test("visual export describes current source validity instead of immutable revision dates", () => {
+  const dataset = createBillingPrincipalVisualExportFixture();
+  dataset.overview.revision.reportingWindow = { from: "2026-08-12", to: "2026-09-10", version: "live-v2", sourceValidityVerified: true,
+    sources: [{ sourceImportId: "source-a", validFrom: "2026-08-12", validTo: "2026-09-10", configured: true }] };
+  const sections = buildBillingPrincipalVisualExportSections(dataset);
+  assert.deepEqual(sections[0]?.rows.find(([field]) => field === "Source validity"), ["Source validity", "2026-08-12 to 2026-09-10"]);
+  assert.equal(sections[1]?.headers.length, 8);
+  assert.equal(sections[2]?.headers.length, 7);
+  assert.match(JSON.stringify(sections), /Target OSP minus closed OSP/);
+});
+
 test("visual rendering yields to UI cancellation between pages", async () => {
   const controller = new AbortController();
   const pending = yieldBillingPrincipalExport(controller.signal);

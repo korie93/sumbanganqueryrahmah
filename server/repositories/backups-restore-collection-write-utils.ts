@@ -513,7 +513,8 @@ export async function syncRestoredCollectionReceiptCache(
   `);
 }
 
-export async function finalizeRestoredCollectionRollups(tx: BackupRestoreExecutor) {
+export async function finalizeRestoredCollectionRollups(tx: Pick<BackupRestoreExecutor, "execute">) {
   await rebuildCollectionRecordDailyRollups(tx);
-  await tx.execute(sql`DELETE FROM public.collection_record_daily_rollup_refresh_queue`);
+  // A concurrent worker/mutation can enqueue a newer generation during restore.
+  // Replaying an already rebuilt slice is harmless; clearing the queue loses it.
 }

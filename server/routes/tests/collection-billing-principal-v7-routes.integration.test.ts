@@ -259,3 +259,29 @@ test("V9 Billing preserves controlled target IDOR and Client concurrency respons
     await stopTestServer(server);
   }
 });
+
+test("private save viewer precondition rejects account replacement before mutation and idempotent replay", async () => {
+  const { app, calls, idempotencyScopes } = createHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const endpoint = `${baseUrl}${PREFIX}/${TARGET_ID}/revisions/${REVISION_ID}/client-results`;
+    for (const expectedOwner of ["superuser-id", "", "another-admin-id"]) {
+      for (const replay of [false, true]) {
+        const response = await fetch(endpoint, { method: "PUT",
+          headers: authHeaders("manager", { "x-billing-viewer-id": expectedOwner,
+            ...(replay ? { "x-idempotency-key": "v9-replay" } : {}) }),
+          body: JSON.stringify({ rows: [] }),
+        });
+        assert.equal(response.status, 403);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+      }
+    }
+    assert.equal(calls.length, 0, "mismatch cannot reach private services or return another cached response");
+    assert.equal(idempotencyScopes.length, 0);
+    const matching = await fetch(endpoint, { method: "PUT", headers: authHeaders("manager", { "x-billing-viewer-id": "manager-id" }),
+      body: JSON.stringify({ rows: [] }) });
+    assert.equal(matching.status, 200);
+    assert.equal(calls[0]?.name, "clientResults");
+    assert.equal((calls[0]?.args[0] as AuthenticatedUser).userId, "manager-id", "actual owner remains server-authenticated actor");
+  } finally { await stopTestServer(server); }
+});

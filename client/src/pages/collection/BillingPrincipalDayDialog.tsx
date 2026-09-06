@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getBillingPrincipalDrilldown, type BillingPrincipalAging, type BillingPrincipalDrilldownItem, type BillingPrincipalSavedTarget } from "@/lib/api/collection-billing-principal";
 import { parseApiError, parseCollectionApiErrorDetails } from "./utils";
 import { BILLING_PRINCIPAL_AGINGS, formatOspCurrency } from "./billing-principal-report-utils";
+import { getBillingPrincipalReportingWindow, isBillingPrincipalDateInRange } from "@/lib/billing-principal-date-domain";
 
 export function buildBillingPrincipalDrilldownFilters(input: { selectedDate: string; periodEnd: string; page: number; aging: BillingPrincipalAging | "ALL" }) {
   return { asOf: input.periodEnd, date: input.selectedDate, page: input.page, pageSize: 10,
@@ -46,10 +47,15 @@ export function BillingPrincipalDayDialog({ target, date, onClose, onAccessLost 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const range = useMemo(() => getBillingPrincipalReportingWindow(target.activeRevision), [target.activeRevision]);
   useEffect(() => {
     const controller = new AbortController();
     setResponse(null); setLoading(true); setError("");
-    void getBillingPrincipalDrilldown(target.id, target.activeRevision.id, buildBillingPrincipalDrilldownFilters({ selectedDate: date, periodEnd: target.activeRevision.to, page, aging }), { signal: controller.signal })
+    if (!isBillingPrincipalDateInRange(date, range)) {
+      setLoading(false); setError("This day is outside the current Collection Source validity. Close the dialog and refresh.");
+      return () => controller.abort();
+    }
+    void getBillingPrincipalDrilldown(target.id, target.activeRevision.id, buildBillingPrincipalDrilldownFilters({ selectedDate: date, periodEnd: range.to, page, aging }), { signal: controller.signal })
       .then((result) => { if (!controller.signal.aborted) setResponse(result); })
       .catch((caught: unknown) => {
         if (controller.signal.aborted) return;
@@ -58,7 +64,7 @@ export function BillingPrincipalDayDialog({ target, date, onClose, onAccessLost 
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [aging, date, page, retry, target.id, target.activeRevision.id, target.activeRevision.to, onAccessLost]);
+  }, [aging, date, page, retry, target.id, target.activeRevision.id, range, onAccessLost]);
   const changePage = (value: number) => { setResponse(null); setPage(value); };
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
     <DialogContent className="max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-6xl">

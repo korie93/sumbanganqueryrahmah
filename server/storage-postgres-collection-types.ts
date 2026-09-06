@@ -456,11 +456,22 @@ export type CollectionOspCalendarDay = {
   reconciledDailyAccounts: number;
 };
 
+export type CollectionOspReportingWindow = {
+  from: string;
+  to: string;
+  /** Opaque fingerprint of all current per-source date bounds and provenance. */
+  version: string;
+  sourceValidityVerified: boolean;
+  sources: Array<{ sourceImportId: string; validFrom: string; validTo: string; configured: boolean }>;
+};
+
 export type CollectionOspSavedTargetRevisionView = {
   id: string;
   revisionNumber: number;
   /** False/absent for legacy caller-selected periods; never infer from today's source configuration. */
   sourceValidityVerified?: boolean;
+  /** Live reporting domain; revision dates below remain immutable audit history. */
+  reportingWindow?: CollectionOspReportingWindow;
   from: string;
   to: string;
   trackingStartDate: string | null;
