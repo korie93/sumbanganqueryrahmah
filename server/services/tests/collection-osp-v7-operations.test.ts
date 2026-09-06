@@ -202,6 +202,81 @@ test("V9 target creation validates exact money before storage", async () => {
   assert.equal(called, false);
 });
 
+test("multi-configured target creation preserves every source and canonicalizes existing duplicate input convention", async () => {
+  const received: Array<Parameters<CollectionStoragePort["createCollectionOspSavedTarget"]>[0]> = [];
+  const service = operations({
+    createCollectionOspSavedTarget: async (input) => {
+      received.push(input);
+      return {
+        ...visibleTarget(),
+        activeRevision: { ...visibleTarget().activeRevision, sourceImportIds: input.sourceImportIds },
+      };
+    },
+  });
+  for (const [submitted, expected] of [
+    [["source-a"], ["source-a"]],
+    [["source-a", "source-b", "source-c"], ["source-a", "source-b", "source-c"]],
+    [["source-a", "source-a", "source-b"], ["source-a", "source-b"]],
+  ]) {
+    const result = await service.createTarget(user("superuser"), {
+      name: "Configured source selection",
+      assignedAdminUserId: "admin-id",
+      sourceImportIds: submitted,
+      targets: completeTargetRows("1000.00"),
+    });
+    const lastReceived = received[received.length - 1];
+    assert.deepEqual(lastReceived?.sourceImportIds, expected);
+    assert.deepEqual(result.target.activeRevision.sourceImportIds, expected);
+    assert.deepEqual(lastReceived?.viewer, { userId: "superuser-id", role: "superuser" });
+    assert.equal(lastReceived?.assignedAdminUserId, "admin-id");
+  }
+});
+
+test("multi-configured target source bounds and every non-superuser role fail before create storage", async () => {
+  let called = false;
+  const service = operations({
+    createCollectionOspSavedTarget: async () => {
+      called = true;
+      throw new Error("must not be called");
+    },
+  });
+  const payload = {
+    name: "Configured source selection", assignedAdminUserId: "admin-id",
+    sourceImportIds: ["source-a", "source-b", "source-c"], targets: completeTargetRows("1000.00"),
+  };
+  for (const role of ["admin", "manager", "user"]) {
+    await assert.rejects(service.createTarget(user(role), payload), (error) => assertHttpError(error, 403));
+  }
+  for (const sourceImportIds of [[], [" "], ["x".repeat(201)], ["a", "b", "c", "d", "e", "f"]]) {
+    await assert.rejects(service.createTarget(user("superuser"), { ...payload, sourceImportIds }),
+      (error) => assertHttpError(error, 400));
+  }
+  assert.equal(called, false);
+});
+
+test("multi-configured source failure stays atomic at the service boundary and source edit remains immutable", async () => {
+  const submitted = ["source-a", "source-b", "missing-source"];
+  let calls = 0;
+  const service = operations({
+    createCollectionOspSavedTarget: async (input) => {
+      calls += 1;
+      assert.deepEqual(input.sourceImportIds, submitted, "never retry with a filtered valid subset");
+      throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "One or more Saved sources are unavailable or incompatible.");
+    },
+    updateCollectionOspSavedTarget: async () => {
+      throw new Error("immutable source edit must not reach storage");
+    },
+  });
+  await assert.rejects(service.createTarget(user("superuser"), {
+    name: "Invalid multi-source selection", assignedAdminUserId: "admin-id",
+    sourceImportIds: submitted, targets: completeTargetRows("1000.00"),
+  }), (error) => assertHttpError(error, 400));
+  assert.equal(calls, 1);
+  await assert.rejects(service.updateTarget(user("superuser"), TARGET_ID, {
+    version: 1, sourceImportIds: ["source-b", "source-c"],
+  }), (error) => assertHttpError(error, 400));
+});
+
 test("V9 Saved Target rejects a partial aging scope before storage", async () => {
   let called = false;
   const service = operations({

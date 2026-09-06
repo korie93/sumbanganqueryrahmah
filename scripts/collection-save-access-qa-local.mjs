@@ -15,9 +15,11 @@ import { startManagedServerProcess, stopManagedServerProcess } from "./lib/manag
 // End-to-end QA always creates its own database. No credentials are written to
 // disk. Requires an existing local build and permission to create local DBs.
 // --ui-smoke runs the complete CI browser suite in the same isolated environment.
+// --osp-multi-source runs only the real Create Target multi-source regression.
 // --visual-contract / --a11y-contract run the actual CI layout/accessibility gates.
-assert(process.argv.slice(2).length <= 1 && process.argv.slice(2).every((arg) => ["--ui-smoke", "--osp-v3", "--visual-contract", "--a11y-contract"].includes(arg)), "Unknown Collection QA option.");
-const ospQa = process.argv.includes("--osp-v3");
+assert(process.argv.slice(2).length <= 1 && process.argv.slice(2).every((arg) => ["--ui-smoke", "--osp-v3", "--osp-multi-source", "--visual-contract", "--a11y-contract"].includes(arg)), "Unknown Collection QA option.");
+const multiSourceQa = process.argv.includes("--osp-multi-source");
+const ospQa = process.argv.includes("--osp-v3") || multiSourceQa;
 const visualQa = process.argv.includes("--visual-contract");
 const a11yQa = process.argv.includes("--a11y-contract");
 const smokeScript = ospQa ? "scripts/billing-osp-v3-smoke.mjs" : process.argv.includes("--ui-smoke")
@@ -64,6 +66,7 @@ const env = { ...process.env,
   COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: JSON.stringify(["-e", "process.exit(0)", "{file}"]),
   COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
   SMOKE_BASE_URL: serverAddress.baseUrl, SMOKE_ARTIFACTS_DIR: artifactsDir,
+  COLLECTION_OSP_MULTI_SOURCE_ONLY: multiSourceQa ? "1" : "0",
   VISUAL_BASE_URL: serverAddress.baseUrl, VISUAL_ARTIFACTS_DIR: path.join(artifactsDir, "visual-layout"),
   A11Y_BASE_URL: serverAddress.baseUrl,
 };
@@ -123,7 +126,7 @@ try {
     child.once("exit", (exitCode) => resolve(exitCode ?? 1));
   });
   let code = await runSmoke();
-  if (ospQa && code === 0) {
+  if (ospQa && !multiSourceQa && code === 0) {
     await stopManagedServerProcess(server);
     server = startManagedServerProcess(process.execPath, [path.resolve("dist-local/server/index-local.js")], { env: serverEnv, cwd: artifactsDir });
     server.stdout.pipe(log, { end: false }); server.stderr.pipe(log, { end: false });

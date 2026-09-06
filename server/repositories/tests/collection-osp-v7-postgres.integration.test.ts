@@ -197,6 +197,165 @@ async function prepareRetroactiveSource(pool: pg.Pool, validity = { from: "2026-
   };
 }
 
+test("Billing OSP multi-configured Saved sources persist, reload and reject invalid sets atomically", { skip: skipReason || false, timeout: 60_000 }, async (t) => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "multi-source-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      const sources: Array<Awaited<ReturnType<typeof prepareRetroactiveSource>>> = [];
+      for (const index of [301, 302, 303]) sources.push(await prepareRetroactiveSource(pool, undefined, index));
+      const sourceIds = sources.map((source) => source.sourceId);
+      const labels = ["NPL CC P10 SEP26 - AKALI", "NPL CC P10 SEP26 - batch 2", "NPL CC P25 AUG26 - AKALI RESOURCES"];
+      for (let index = 0; index < sources.length; index++) {
+        await pool.query("UPDATE public.imports SET name = $2 WHERE id = $1", [sourceIds[index], labels[index]]);
+      }
+      await pool.query("UPDATE public.users SET username = 'SW.BUKHARI_924' WHERE id = 'osp-repo-admin'");
+      for (const [id, role] of [["multi-other-admin", "admin"], ["multi-manager", "manager"], ["multi-user", "user"]]) {
+        await pool.query("INSERT INTO public.users (id, username, password_hash, role, status) VALUES ($1, $1, 'not-a-login-secret', $2, 'active')", [id, role]);
+      }
+      const counts = async () => (await pool.query(`SELECT
+        (SELECT count(*)::int FROM public.collection_osp_saved_targets) AS targets,
+        (SELECT count(*)::int FROM public.collection_osp_target_revisions) AS revisions,
+        (SELECT count(*)::int FROM public.collection_osp_target_sources) AS sources,
+        (SELECT count(*)::int FROM public.collection_osp_target_source_rows) AS snapshots,
+        (SELECT count(*)::int FROM public.collection_osp_target_aging_rows) AS agings,
+        (SELECT count(*)::int FROM public.audit_logs WHERE action = 'COLLECTION_OSP_TARGET_CREATED') AS audits`)).rows[0];
+      const queries: Array<{ sql: string; params: unknown[] }> = [];
+      await withRepositoryDatabase(pool, async () => {
+        const create = (name: string, selectedIds = sourceIds, overrides: Partial<Parameters<typeof createCollectionOspSavedTargetRepository>[0]> = {}) =>
+          createCollectionOspSavedTargetRepository({
+            name, sourceImportIds: selectedIds, assignedAdminUserId: "osp-repo-admin", viewer: repositoryViewer,
+            timezone: "Asia/Kuala_Lumpur", nicknameScope: [], agingScope: [...completeAgingScope], actor: "osp-repo-tester",
+            targets: completeAgingScope.map((agingBucket) => ({ agingBucket, totalOspBaseline: null, targetPercentage: "50" })),
+            ...overrides,
+          });
+        const existingSingle = await create("Existing historical single-source target", [sourceIds[0]!]);
+        await pool.query("UPDATE public.collection_osp_target_revisions SET calculation_version = 'osp-reconciliation-v1' WHERE id = $1::uuid", [existingSingle.activeRevision.id]);
+        let multiTarget: Awaited<ReturnType<typeof create>>;
+
+        await t.test("A+B+C persist and all target read paths retain all three configured sources", async () => {
+          const preview = await previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: [...sourceIds].reverse() });
+          assert.deepEqual(preview.sourceImportIds, sourceIds);
+          assert.equal(preview.rows.find((row) => row.aging === "D3")?.totalOsp, "24000.00");
+          queries.length = 0;
+          multiTarget = await create("Three configured Saved sources", [...sourceIds].reverse());
+          assert.equal(queries.filter((query) => /FROM public\.collection_source_configs config/.test(query.sql)
+            && /FOR SHARE OF config, imp/.test(query.sql)).length, 1, "eligibility validation loads all selected source configs in one batch");
+          assert.deepEqual(multiTarget.activeRevision.sourceImportIds, sourceIds);
+          assert.deepEqual(multiTarget.activeRevision.sourceSnapshots.map((source) => source.name), labels);
+          const associations = await pool.query("SELECT source_import_id FROM public.collection_osp_target_sources WHERE target_revision_id = $1::uuid ORDER BY source_import_id", [multiTarget.activeRevision.id]);
+          assert.deepEqual(associations.rows.map((row) => row.source_import_id), sourceIds);
+          for (const viewer of [repositoryViewer, { userId: "osp-repo-admin", role: "admin" }, { userId: "multi-manager", role: "manager" }]) {
+            const reloaded = await getCollectionOspSavedTargetRepository(multiTarget.id, undefined, viewer);
+            assert.deepEqual(reloaded?.activeRevision.sourceImportIds, sourceIds);
+            assert.deepEqual(reloaded?.activeRevision.reportingWindow?.sources.map((source) => source.sourceImportId), sourceIds);
+            const listed = await listCollectionOspSavedTargetsRepository({ viewer });
+            assert.deepEqual(listed.find((target) => target.id === multiTarget.id)?.activeRevision.sourceImportIds, sourceIds);
+            assert.deepEqual(listed.find((target) => target.id === existingSingle.id)?.activeRevision.sourceImportIds, [sourceIds[0]]);
+          }
+          const historical = await getCollectionOspSavedTargetRepository(existingSingle.id, undefined, repositoryViewer);
+          assert.equal(historical?.activeRevision.sourceValidityVerified, false, "legacy revision still loads without recreating or migrating its single association");
+          assert.deepEqual(historical?.activeRevision.sourceImportIds, [sourceIds[0]]);
+        });
+
+        await t.test("direct Billing resolver counts one unique account from each source without changing formulas", async () => {
+          for (const source of sources) await source.savePayment("2026-08-27", 500);
+          const scope = { targetId: multiTarget.id, revisionId: multiTarget.activeRevision.id, viewer: repositoryViewer, asOfDate: "2026-09-10" };
+          const overview = await readOverview(scope);
+          assert.equal(overview.systemResult.all.totalOsp, "24000.00");
+          assert.equal(overview.systemResult.all.targetOsp, "12000.00");
+          assert.equal(overview.systemResult.all.ospClosed, "24000.00");
+          assert.equal(overview.systemResult.all.closedAccountCount, 3);
+          assert.equal(overview.systemResult.all.balanceOsp, "-12000.00");
+          const details = await readDrilldown({ ...scope, page: 1, pageSize: 10 });
+          assert.equal(details.pagination.total, 3);
+          assert.deepEqual(details.items.map((row) => row.accountNumber).sort(), sources.map((source) => source.account).sort());
+          assert.deepEqual(details.items.map((row) => row.sourceName).sort(), [...labels].sort());
+          const singleOverview = await readOverview({ ...scope, targetId: existingSingle.id, revisionId: existingSingle.activeRevision.id });
+          assert.equal(singleOverview.systemResult.all.totalOsp, "8000.00");
+          assert.equal(singleOverview.systemResult.all.ospClosed, "8000.00");
+        });
+
+        await t.test("duplicate normalization retains one association and the database primary key prevents duplicates", async () => {
+          const duplicate = await create("Deduplicated source target", [sourceIds[0]!, sourceIds[0]!, sourceIds[1]!]);
+          assert.deepEqual(duplicate.activeRevision.sourceImportIds, sourceIds.slice(0, 2));
+          const before = await counts();
+          await assert.rejects(pool.query(`INSERT INTO public.collection_osp_target_sources
+            SELECT * FROM public.collection_osp_target_sources WHERE target_revision_id = $1::uuid AND source_import_id = $2`,
+          [duplicate.activeRevision.id, sourceIds[0]]), { code: "23505" });
+          assert.deepEqual(await counts(), before);
+        });
+
+        await t.test("one missing, disabled, incompatible, deleted or changed-validity source rejects the complete set", async () => {
+          const assertRejected = async (selectedIds: string[], expected: RegExp) => {
+            const before = await counts();
+            await assert.rejects(create("Invalid complete source set", selectedIds), expected);
+            assert.deepEqual(await counts(), before, "no partial target, revision, source, snapshot, aging or audit remains");
+          };
+          await assertRejected([sourceIds[0]!, sourceIds[1]!, "missing-source"], /unavailable or incompatible/);
+          await pool.query("UPDATE public.collection_source_configs SET enabled = false WHERE source_import_id = $1", [sourceIds[2]]);
+          await assertRejected(sourceIds, /unavailable or incompatible/);
+          await pool.query("UPDATE public.collection_source_configs SET compatibility_status = 'incompatible' WHERE source_import_id = $1", [sourceIds[2]]);
+          await assertRejected(sourceIds, /unavailable or incompatible/);
+          await pool.query("UPDATE public.collection_source_configs SET enabled = true, compatibility_status = 'compatible' WHERE source_import_id = $1", [sourceIds[2]]);
+          await pool.query("UPDATE public.imports SET is_deleted = true WHERE id = $1", [sourceIds[2]]);
+          await assertRejected(sourceIds, /unavailable or incompatible/);
+          await pool.query("UPDATE public.imports SET is_deleted = false WHERE id = $1", [sourceIds[2]]);
+          await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-11' WHERE source_import_id = $1", [sourceIds[2]]);
+          await assertRejected(sourceIds, /same configured validity/);
+          await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-10' WHERE source_import_id = $1", [sourceIds[2]]);
+        });
+
+        await t.test("a database failure on association three rolls back associations one and two and their target", async () => {
+          await pool.query(`CREATE FUNCTION public.multi_source_reject_third_fixture() RETURNS trigger LANGUAGE plpgsql AS $function$
+            BEGIN
+              IF NEW.source_import_id = 'retroactive-source-303' THEN
+                RAISE EXCEPTION 'forced third association failure after % associations',
+                  (SELECT count(*) FROM public.collection_osp_target_sources WHERE target_revision_id = NEW.target_revision_id);
+              END IF;
+              RETURN NEW;
+            END;
+            $function$;
+            CREATE TRIGGER multi_source_reject_third_fixture BEFORE INSERT ON public.collection_osp_target_sources
+              FOR EACH ROW EXECUTE FUNCTION public.multi_source_reject_third_fixture()`);
+          const before = await counts();
+          try {
+            await assert.rejects(create("Third association rollback target"), (error: unknown) => {
+              const nestedCause = (error as { cause?: unknown } | null)?.cause;
+              const cause = nestedCause instanceof Error ? nestedCause : error;
+              assert.match(String(cause), /forced third association failure after 2 associations/);
+              return true;
+            });
+            assert.deepEqual(await counts(), before);
+          } finally {
+            await pool.query("DROP TRIGGER multi_source_reject_third_fixture ON public.collection_osp_target_sources; DROP FUNCTION public.multi_source_reject_third_fixture()");
+          }
+        });
+
+        await t.test("source assignment eligibility and active superuser authority apply to the whole source set", async () => {
+          const before = await counts();
+          await assert.rejects(create("Other leader source claim", sourceIds, { assignedAdminUserId: "multi-other-admin" }), /already assigned to another admin/);
+          for (const [userId, role] of [["osp-repo-admin", "admin"], ["multi-manager", "manager"], ["multi-user", "user"]]) {
+            await assert.rejects(create("Unauthorized multi-source target", sourceIds, { viewer: { userId: userId!, role: role! }, actor: userId! }), /unavailable for this account/);
+          }
+          for (const assignedAdminUserId of ["multi-manager", "multi-user", "missing-admin"]) {
+            await assert.rejects(create("Invalid leader", sourceIds, { assignedAdminUserId }), /eligible admin/);
+          }
+          await pool.query("UPDATE public.users SET is_banned = true WHERE id = 'osp-repo-admin'");
+          await assert.rejects(create("Banned leader", sourceIds), /eligible admin/);
+          await pool.query("UPDATE public.users SET is_banned = false WHERE id = 'osp-repo-admin'");
+          assert.deepEqual(await counts(), before);
+          assert.equal(await getCollectionOspSavedTargetRepository(multiTarget.id, undefined, { userId: "multi-other-admin", role: "admin" }), undefined);
+        });
+      }, queries);
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
 test("retroactive OSP stale snapshot uses changed source validity for a late-reported August payment", { skip: skipReason || false, timeout: 60_000 }, async () => {
   const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
   process.env.COLLECTION_PII_ENCRYPTION_KEY = "retroactive-osp-isolated-fixture-encryption-key";

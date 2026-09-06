@@ -7,6 +7,7 @@ import {
   getBillingPrincipalVisualExportDataset,
   getBillingPrincipalSavedTarget,
   listBillingPrincipalSavedTargets,
+  previewBillingPrincipalSource,
   upsertBillingPrincipalClientResults,
 } from "@/lib/api/collection-billing-principal";
 import { createBillingPrincipalVisualExportFixture } from "./billing-principal-v7-test-fixture";
@@ -22,6 +23,38 @@ const savedTarget = {
   },
   createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
 } as const;
+
+test("multi-source preview/create payloads and create/get/list responses preserve every selected source", async () => {
+  const ids = ["source-a", "source-b", "source-c"];
+  const target = { ...savedTarget, activeRevision: { ...savedTarget.activeRevision, sourceImportIds: ids,
+    sourceSnapshots: ids.map((sourceImportId) => ({ sourceImportId, name: sourceImportId, filename: `${sourceImportId}.xlsx` })) } };
+  const calls: Array<{ url: string; body: Record<string, unknown> | null }> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, body: typeof init?.body === "string" ? JSON.parse(init.body) : null });
+    const payload = url.endsWith("/preview")
+      ? { ok: true, from: "2026-09-01", to: "2026-09-30", sourceImportIds: ids,
+        rows: ["D3", "D4", "D5", "D6"].map((aging) => ({ aging, totalOsp: "100.00", accountCount: 1 })) }
+      : url.endsWith("/target-a") ? { ok: true, viewerUserId: "superuser-a", target }
+        : init?.method === "POST" ? { ok: true, target }
+          : { ok: true, targets: [target], page: 1, pageSize: 50, hasMore: false };
+    return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    assert.deepEqual((await previewBillingPrincipalSource(ids)).sourceImportIds, ids);
+    const created = await createBillingPrincipalSavedTarget({ name: target.name, assignedAdminUserId: "admin-a",
+      sourceImportIds: ids, from: "2026-09-01", to: "2026-09-30", nicknameScope: [], agingScope: ["D3", "D4", "D5", "D6"],
+      targets: (["D3", "D4", "D5", "D6"] as const).map((agingBucket) => ({ agingBucket, totalOspBaseline: "100.00", targetPercentage: "25" })) });
+    for (const result of [created.target, (await getBillingPrincipalSavedTarget("target-a")).target,
+      (await listBillingPrincipalSavedTargets()).targets[0]!]) {
+      assert.deepEqual(result.activeRevision.sourceImportIds, ids);
+      assert.deepEqual(result.activeRevision.sourceSnapshots.map((source) => source.sourceImportId), ids);
+    }
+    assert.deepEqual(calls[0]?.body?.sourceImportIds, ids);
+    assert.deepEqual(calls[1]?.body?.sourceImportIds, ids);
+  } finally { globalThis.fetch = originalFetch; }
+});
 
 test("target read requires a server-authenticated stable viewer ID rather than deriving it from assignment", async () => {
   const originalFetch = globalThis.fetch;

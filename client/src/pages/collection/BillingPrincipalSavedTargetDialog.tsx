@@ -21,6 +21,19 @@ const selectClass = "min-h-10 w-full min-w-0 rounded-md border border-input bg-b
 type AdminOption = BillingPrincipalTargetOptions["admins"][number];
 type SourceOption = BillingPrincipalTargetOptions["sources"][number];
 
+export function addBillingPrincipalSelectedSource(selected: SourceOption[], source: SourceOption): SourceOption[] {
+  if (selected.length >= 5 || selected.some((item) => item.id === source.id)) return selected;
+  return [...selected, source];
+}
+
+export function billingPrincipalPreviewMatchesSources(preview: BillingPrincipalSourcePreview | null, sources: SourceOption[]) {
+  return Boolean(preview && sources.length > 0 && sources.length <= 5
+    && new Set(sources.map((source) => source.id)).size === sources.length
+    && new Set(preview.sourceImportIds).size === sources.length
+    && preview.sourceImportIds.length === sources.length
+    && sources.every((source) => preview.sourceImportIds.includes(source.id)));
+}
+
 export function validateBillingPrincipalTargetFields(name: string, percentages: Record<BillingPrincipalAging, string>) {
   const normalizedName = name.trim();
   const invalidControl = Array.from(normalizedName).some((character) => {
@@ -60,7 +73,7 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
   const [name, setName] = useState(target?.name ?? "");
   const [description, setDescription] = useState(target?.description ?? "");
   const [admin, setAdmin] = useState<AdminOption | null>(target?.assignedAdmin ?? null);
-  const [source, setSource] = useState<SourceOption | null>(null);
+  const [selectedSources, setSelectedSources] = useState<SourceOption[]>([]);
   const [adminSearch, setAdminSearch] = useState("");
   const [sourceSearch, setSourceSearch] = useState("");
   const [adminPage, setAdminPage] = useState(1);
@@ -78,6 +91,8 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
   const saveRef = useRef<AbortController | null>(null);
   const attemptRef = useRef<BillingPrincipalMutationAttempt | null>(null);
   const validation = validateBillingPrincipalTargetFields(name, percentages);
+  const sourcePreviewReady = Boolean(target) || billingPrincipalPreviewMatchesSources(preview, selectedSources);
+  const createAdminId = target ? null : admin?.id;
 
   useEffect(() => () => saveRef.current?.abort(), []);
   useEffect(() => {
@@ -92,13 +107,13 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
         .finally(() => { if (!controller.signal.aborted) setOptionsLoading(false); });
     }, 250);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [adminSearch, sourceSearch, adminPage, sourcePage, retry]);
+  }, [adminSearch, sourceSearch, adminPage, sourcePage, createAdminId, retry]);
 
   useEffect(() => {
     const controller = new AbortController();
     setPreview(null);
     setPreviewError("");
-    setPreviewLoading(Boolean(target || source));
+    setPreviewLoading(Boolean(target || selectedSources.length));
     if (target) {
       void getBillingPrincipalSavedTargetOverview(target.id, target.activeRevision.id, { asOf: getBillingPrincipalReportingWindow(target.activeRevision).from }, { signal: controller.signal })
         .then((result) => {
@@ -111,17 +126,26 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
         })
         .catch((caught: unknown) => { if (!controller.signal.aborted) setPreviewError(parseApiError(caught)); })
         .finally(() => { if (!controller.signal.aborted) setPreviewLoading(false); });
-    } else if (source) {
-      void previewBillingPrincipalSource([source.id], { signal: controller.signal })
+    } else if (createAdminId && selectedSources.length > 0) {
+      void previewBillingPrincipalSource(selectedSources.map((source) => source.id), { signal: controller.signal })
         .then((result) => { if (!controller.signal.aborted) setPreview(result); })
         .catch((caught: unknown) => { if (!controller.signal.aborted) setPreviewError(parseApiError(caught)); })
         .finally(() => { if (!controller.signal.aborted) setPreviewLoading(false); });
     }
     return () => controller.abort();
-  }, [source, target, retry]);
+  }, [selectedSources, createAdminId, target, retry]);
+
+  const changeSources = (sources: SourceOption[]) => {
+    setSelectedSources(sources);
+    // Invalidate synchronously: an earlier preview must never be submitted for a new selection.
+    setPreview(null);
+    setPreviewError("");
+    setPreviewLoading(sources.length > 0);
+    setError("");
+  };
 
   const save = async () => {
-    if (saveRef.current || !preview || !admin) return;
+    if (saveRef.current || !preview || !admin || !sourcePreviewReady || previewLoading || optionsLoading || optionsError || previewError) return;
     if (!validation.valid) {
       setError("Check the highlighted target fields before saving."); return;
     }
@@ -154,14 +178,21 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
     }
   };
   const admins = admin && !options?.admins.some((item) => item.id === admin.id) ? [admin, ...(options?.admins ?? [])] : options?.admins ?? [];
-  const sources = source && !options?.sources.some((item) => item.id === source.id) ? [source, ...(options?.sources ?? [])] : options?.sources ?? [];
+  const sources = (options?.sources ?? []).filter((item) => !selectedSources.some((selected) => selected.id === item.id));
 
   return <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="min-w-0 space-y-5">
     <fieldset disabled={saving} className="min-w-0 space-y-5">
       <div className="space-y-2">
         <Label htmlFor="osp-assigned-admin">1. Assigned admin account</Label>
         <Input aria-label="Search admin accounts" value={adminSearch} maxLength={120} placeholder="Search username or name" onChange={(event) => { setAdminSearch(event.target.value); setAdminPage(1); }} />
-        <select id="osp-assigned-admin" required value={admin?.id ?? ""} className={selectClass} disabled={optionsLoading} onChange={(event) => setAdmin(admins.find((item) => item.id === event.target.value) ?? null)}>
+        <select id="osp-assigned-admin" required value={admin?.id ?? ""} className={selectClass} disabled={optionsLoading} onChange={(event) => {
+          setAdmin(admins.find((item) => item.id === event.target.value) ?? null);
+          if (!target) {
+            changeSources([]);
+            setSourceSearch("");
+            setSourcePage(1);
+          }
+        }}>
           <option value="">{optionsLoading ? "Loading accounts…" : "Select an admin account"}</option>
           {admins.map((item) => <option key={item.id} value={item.id}>{item.username}{item.fullName ? ` — ${item.fullName}` : ""}</option>)}
         </select>
@@ -172,10 +203,20 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
         <Label htmlFor="osp-configured-source">2. Configured Saved source</Label>
         {target ? <p id="osp-configured-source" className="break-words rounded-md border bg-muted/20 p-3 text-sm">{target.activeRevision.sourceSnapshots.map((item) => `${item.name} (${item.filename || "Saved source"})`).join("; ")}<span className="mt-1 block text-xs text-muted-foreground">Frozen source — create a new target to use a different file or period.</span></p> : <>
           <Input aria-label="Search configured sources" value={sourceSearch} maxLength={120} placeholder="Search source name or filename" onChange={(event) => { setSourceSearch(event.target.value); setSourcePage(1); }} />
-          <select id="osp-configured-source" required className={selectClass} value={source?.id ?? ""} disabled={optionsLoading || !admin} onChange={(event) => setSource(sources.find((item) => item.id === event.target.value) ?? null)}>
-            <option value="">{optionsLoading ? "Loading sources…" : "Select a configured source"}</option>
+          <select id="osp-configured-source" aria-describedby="osp-configured-source-help" className={selectClass} value="" disabled={optionsLoading || !admin || selectedSources.length >= 5} onChange={(event) => {
+            const source = sources.find((item) => item.id === event.target.value);
+            if (source) changeSources(addBillingPrincipalSelectedSource(selectedSources, source));
+          }}>
+            <option value="">{optionsLoading ? "Loading sources…" : "Add a configured source"}</option>
             {sources.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.filename} · {item.validFrom} to {item.validTo}</option>)}
           </select>
+          <p id="osp-configured-source-help" className="text-xs text-muted-foreground">Select up to 5 sources, one at a time. All must have the same configured validity. {selectedSources.length}/5 selected.</p>
+          {selectedSources.length > 0 ? <ul aria-label="Selected configured sources" className="space-y-2">
+            {selectedSources.map((item) => <li key={item.id} className="flex min-w-0 items-start gap-2 rounded-md border bg-muted/20 p-3 text-sm">
+              <div className="min-w-0 flex-1 break-words"><span className="font-medium">{item.name}</span><span className="block text-xs text-muted-foreground">{item.filename} · {item.validFrom} to {item.validTo}</span></div>
+              <Button type="button" size="sm" variant="ghost" className="shrink-0" aria-label={`Remove source ${item.name}`} onClick={() => changeSources(selectedSources.filter((selected) => selected.id !== item.id))}>Remove</Button>
+            </li>)}
+          </ul> : null}
           <OptionPager page={sourcePage} hasMore={options?.sourcesHasMore ?? false} disabled={optionsLoading} onPage={setSourcePage} label="source" />
           {!optionsLoading && options?.sources.length === 0 ? <p className="text-sm text-muted-foreground">No matching configured source. Configure Collection Source first, or change the search.</p> : null}
         </>}
@@ -203,7 +244,7 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
     </fieldset>
     {optionsError || previewError ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>{optionsError || previewError}</p><Button type="button" variant="outline" disabled={saving} onClick={() => setRetry((value) => value + 1)}>Retry loading</Button></div> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <DialogFooter><Button type="button" variant="outline" disabled={saving} onClick={onCancel}>Cancel</Button><Button type="submit" disabled={saving || !preview || !admin || optionsLoading || Boolean(optionsError) || !validation.valid}>{saving ? "Saving…" : "Save Target"}</Button></DialogFooter>
+    <DialogFooter><Button type="button" variant="outline" disabled={saving} onClick={onCancel}>Cancel</Button><Button type="submit" disabled={saving || !preview || !admin || optionsLoading || Boolean(optionsError) || previewLoading || Boolean(previewError) || !sourcePreviewReady || !validation.valid}>{saving ? "Saving…" : "Save Target"}</Button></DialogFooter>
   </form>;
 }
 

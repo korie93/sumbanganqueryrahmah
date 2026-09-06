@@ -4,6 +4,7 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 import { runBillingOspRetrospectiveQa, verifyBillingOspRetrospectiveRestart } from "./lib/billing-osp-retrospective-qa.mjs";
+import { runBillingOspMultiSourceQa } from "./lib/billing-osp-multi-source-qa.mjs";
 
 // Writes synthetic fixtures only to the disposable local QA environment.
 const database = process.env.COLLECTION_SAVE_ACCESS_QA_DATABASE || "";
@@ -14,6 +15,7 @@ assert(["127.0.0.1", "localhost", "[::1]"].includes(new URL(baseUrl).hostname));
 const artifactDir = path.resolve(process.env.SMOKE_ARTIFACTS_DIR);
 const prefix = "/api/collection/report/billing-principal/saved-targets";
 const restartCheck = process.env.COLLECTION_OSP_RESTART_CHECK === "1";
+const multiSourceOnly = process.env.COLLECTION_OSP_MULTI_SOURCE_ONLY === "1";
 const credentials = {
   superuser: [process.env.SMOKE_TEST_USERNAME, process.env.SMOKE_TEST_PASSWORD],
   admin: [process.env.COLLECTION_SAVE_ADMIN_USERNAME, process.env.COLLECTION_SAVE_ADMIN_PASSWORD],
@@ -381,6 +383,11 @@ try {
   const admin = await login("admin");
   const manager = await login("manager");
   const otherAdmin = await login("otherAdmin");
+  phase = "Create Target multiple configured Saved sources";
+  currentPage = superuser.page;
+  await runBillingOspMultiSourceQa({ api, superuser, admin, otherAdmin, artifactDir, checked });
+  if (!multiSourceOnly) {
+  phase = "real staff sessions and synthetic closed accounts";
   const stamp = String(Date.now());
   const nickname = (await api(superuser, "POST", "/api/collection/nicknames", { nickname: "OSP QA " + stamp, roleScope: "both" })).nickname.nickname;
   const data = Array.from({ length: 12 }, (_, i) => ({
@@ -515,6 +522,7 @@ try {
   phase = "exact retrospective Payment Date and live source validity lifecycle";
   await runBillingOspRetrospectiveQa({ api, superuser, manager, admin, otherAdmin, user, openReport, savePrivate, artifactDir, checked });
   await writeFile(path.join(artifactDir, "osp-v3-restart-fixture.json"), JSON.stringify({ targetId: target.id, revisionPath }));
+  }
   }
   assert.deepEqual(pageErrors, []);
 } catch (error) {
