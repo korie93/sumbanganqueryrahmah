@@ -8,7 +8,15 @@ import {
   protectBillingPrivateDraftOnUnload,
 } from "./BillingPrincipalSavedTargetWorkspace";
 import { BillingPrincipalSavedTargetDialog } from "./BillingPrincipalSavedTargetDialog";
+import { BillingPrincipalSavedTargetShell } from "./BillingPrincipalSavedTargetShell";
 import { createBillingPrincipalVisualExportFixture } from "./billing-principal-v7-test-fixture";
+
+test("Billing page exposes its real root while initial target loading is not ready", () => {
+  const markup = renderToStaticMarkup(createElement(BillingPrincipalSavedTargetShell, { role: "superuser" }));
+  assert.match(markup, /data-testid="billing-principal-page" data-state="loading"/);
+  assert.match(markup, /Loading saved targets/);
+  assert.doesNotMatch(markup, /data-state="(?:empty|populated)"/);
+});
 
 test("private draft, save and export each prevent destructive workspace transitions with distinct guidance", () => {
   assert.equal(billingPrincipalWorkspaceLockMessage({ dirty: false, saving: false, exporting: false }), "");

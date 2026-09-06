@@ -105,7 +105,7 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
     }
   };
 
-  return <div className="min-w-0 space-y-5">
+  return <div className="min-w-0 space-y-5" data-testid="billing-principal-page" data-state={loading ? "loading" : error ? "error" : selectedTarget ? "populated" : "empty"}>
     <section aria-labelledby="billing-target-workspace-heading" className="rounded-xl border bg-card p-4">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0 flex-1">

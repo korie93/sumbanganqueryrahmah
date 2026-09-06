@@ -29,7 +29,7 @@ test("operational UI contract matrix covers the high-risk data workspaces", () =
   );
 });
 
-test("operational UI matrix covers the V9 Collection, Search, and Billing destinations", () => {
+test("operational UI matrix covers current Collection, Search, and Billing destinations", () => {
   const routesById = new Map(operationalContractRouteSpecs.map((routeSpec) => [routeSpec.id, routeSpec]));
 
   assert.equal(routesById.get("collection-records")?.path, "/collection/records");
@@ -37,7 +37,21 @@ test("operational UI matrix covers the V9 Collection, Search, and Billing destin
   assert.equal(routesById.get("general-search")?.path, "/general-search");
   assert.match(routesById.get("general-search")?.readySelector ?? "", /input-search/);
   assert.equal(routesById.get("billing-principal")?.path, "/collection/billing-principal");
-  assert.equal(routesById.get("billing-principal")?.readySelector, "#billing-principal-filters");
+  assert.match(routesById.get("billing-principal")?.readySelector ?? "", /billing-principal-page/);
+  assert.doesNotMatch(routesById.get("billing-principal")?.readySelector ?? "", /billing-principal-filters/);
+});
+
+test("Billing V3 readiness accepts successful empty or fully populated page roots", () => {
+  const billingRouteSpec = operationalContractRouteSpecs.find(
+    (routeSpec) => routeSpec.id === "billing-principal",
+  );
+
+  assert.ok(billingRouteSpec);
+  assert.equal(billingRouteSpec.readySelector, [
+    "[data-testid='billing-principal-page'][data-state='empty']",
+    "[data-testid='billing-principal-page'][data-state='populated']:has([aria-label='Scrollable system calendar']):not(:has([role='alert']))",
+  ].join(", "));
+  assert.doesNotMatch(billingRouteSpec.readySelector, /data-state='(?:loading|error)'/);
 });
 
 test("operational UI routes define stable readiness and bounded stress viewports", () => {

@@ -55,7 +55,13 @@ export const operationalContractRouteSpecs = Object.freeze([
     id: "billing-principal",
     path: "/collection/billing-principal",
     contentSelector: "main#main-content",
-    readySelector: "#billing-principal-filters",
+    // V3 replaces the old filters with saved targets. Wait for a successful
+    // empty list or the loaded workspace/calendar, then measure the page root:
+    // its tables and calendar intentionally scroll inside that bounded surface.
+    readySelector: [
+      "[data-testid='billing-principal-page'][data-state='empty']",
+      "[data-testid='billing-principal-page'][data-state='populated']:has([aria-label='Scrollable system calendar']):not(:has([role='alert']))",
+    ].join(", "),
     stressViewportId: "enlarged-text",
   }),
   Object.freeze({
