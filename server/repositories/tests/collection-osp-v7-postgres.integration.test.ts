@@ -38,6 +38,7 @@ import { createBackupPayloadChunkReader } from "../backups-payload-reader-utils"
 import { createRestoreStats } from "../backups-restore-stats-utils";
 import { restoreUsersFromBackup } from "../backups-restore-core-datasets-utils";
 import type { BackupRestoreExecutor } from "../backups-restore-shared-utils";
+import { dropDrainedOspFixtureDatabase } from "./postgres-fixture-cleanup";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const migrationFiles = [
@@ -104,14 +105,18 @@ async function withTempDatabase(run: (pool: pg.Pool) => Promise<void>) {
   const admin = new pg.Pool({ ...pgBaseConfig, database: maintenanceDatabase, max: 1 });
   const databaseName = `sqr_osp_v9_${Date.now()}_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
   const quoted = pg.escapeIdentifier(databaseName);
+  let created = false;
   try {
     await admin.query(`CREATE DATABASE ${quoted}`);
+    created = true;
     const pool = new pg.Pool({ ...pgBaseConfig, database: databaseName, max: 4 });
-    try { await run(pool); } finally { await pool.end().catch(() => undefined); }
+    try { await run(pool); } finally { await pool.end(); }
   } finally {
-    await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() AND backend_type = 'client backend' AND usename = current_user", [databaseName]).catch(() => undefined);
-    await admin.query(`DROP DATABASE IF EXISTS ${quoted}`).catch(() => undefined);
-    await admin.end().catch(() => undefined);
+    try {
+      if (created) await dropDrainedOspFixtureDatabase(admin, databaseName);
+    } finally {
+      await admin.end();
+    }
   }
 }
 

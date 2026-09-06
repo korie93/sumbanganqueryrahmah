@@ -14,6 +14,7 @@ import { ensureCollectionRecordsTables } from "../../internal/collection-bootstr
 import { ensureCoreDataRowsTable, ensureCoreImportsTable } from "../../internal/core-schema-bootstrap-imports";
 import { ensureCoreAuditLogsTable } from "../../internal/core-schema-bootstrap-activity";
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
+import { dropDrainedOspFixtureDatabase } from "./postgres-fixture-cleanup";
 import {
   getCollectionOspCalendarRepository,
   getCollectionOspDrilldownRepository,
@@ -74,11 +75,11 @@ async function withIsolatedDatabase(run: (pool: pg.Pool) => Promise<void>) {
     const pool = new pg.Pool({ ...connection, database: databaseName, max: 4 });
     try { await run(pool); } finally { await pool.end(); }
   } finally {
-    if (created) {
-      await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() AND backend_type = 'client backend' AND usename = current_user", [databaseName]);
-      await admin.query(`DROP DATABASE ${quoted}`);
+    try {
+      if (created) await dropDrainedOspFixtureDatabase(admin, databaseName);
+    } finally {
+      await admin.end();
     }
-    await admin.end();
   }
 }
 

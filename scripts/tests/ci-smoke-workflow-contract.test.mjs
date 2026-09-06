@@ -10,6 +10,20 @@ function extractSection(source, startMarker, endMarker) {
   return source.slice(startIndex, endIndex);
 }
 
+test("CI and release verification both seed the assigned admin required by Billing V3 smoke", () => {
+  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+  const release = readFileSync(".github/workflows/release-verification.yml", "utf8");
+  for (const env of [
+    extractSection(ci, "  smoke-ui:", "\n    steps:"),
+    extractSection(release, "\nenv:", "\non:"),
+  ]) {
+    assert.match(env, /SEED_DEFAULT_USERS:\s*1/);
+    assert.match(env, /SEED_ADMIN_USERNAME:\s*admin\$\{\{ github\.run_id \}\}\$\{\{ github\.run_attempt \}\}/);
+    assert.match(env, /SEED_ADMIN_PASSWORD:\s*sqr-ci-admin-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-password-32chars/);
+    assert.match(env, /SEED_ADMIN_FULL_NAME:\s*CI Assigned Admin/);
+  }
+});
+
 test("smoke-ui workflow configures a deterministic receipt scanner shim for readiness", () => {
   const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
   const smokeJob = extractSection(workflow, "  smoke-ui:", "\n    steps:");

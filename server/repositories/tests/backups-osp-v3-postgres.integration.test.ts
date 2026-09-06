@@ -23,6 +23,7 @@ import {
   upsertCollectionOspClientResultsRepository,
 } from "../collection-osp-v7-repository-utils";
 import { buildCollectionSourceScopeHash, hashCollectionSourceIdentifier } from "../collection-source-repository-utils";
+import { dropDrainedOspFixtureDatabase } from "./postgres-fixture-cleanup";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const migrations = [
@@ -65,11 +66,11 @@ async function withTempDatabase(run: (pool: pg.Pool) => Promise<void>): Promise<
     const pool = new pg.Pool({ ...pgBaseConfig, database: name, max: 4 });
     try { await run(pool); } finally { await pool.end(); }
   } finally {
-    if (created) {
-      await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() AND backend_type = 'client backend' AND usename = current_user", [name]);
-      await admin.query(`DROP DATABASE ${quoted}`);
+    try {
+      if (created) await dropDrainedOspFixtureDatabase(admin, name);
+    } finally {
+      await admin.end();
     }
-    await admin.end();
   }
 }
 
