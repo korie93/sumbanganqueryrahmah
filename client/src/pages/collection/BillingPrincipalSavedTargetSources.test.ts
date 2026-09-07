@@ -52,4 +52,15 @@ test("create form clears selections on account change and fences stale/loading p
   assert.match(source, /const createAdminId = target \? null : admin\?\.id/);
   assert.match(source, /\[selectedSources, createAdminId, target, retry\]/);
   assert.match(source, /Frozen source — create a new target/);
+  assert.match(source, /Different validity periods are supported/);
+  assert.match(source, /Each source keeps its own validity for payment reporting/);
+  assert.doesNotMatch(source, /must have the same configured validity/);
+});
+
+test("mixed-validity selections retain both periods and accept their authoritative combined preview", () => {
+  const first = { ...sources[0]!, validFrom: "2026-08-12", validTo: "2026-09-10" };
+  const second = { ...sources[1]!, validFrom: "2026-09-01", validTo: "2026-09-30" };
+  const selected = addBillingPrincipalSelectedSource([first], second);
+  assert.deepEqual(selected, [first, second]);
+  assert.equal(billingPrincipalPreviewMatchesSources({ ...preview(selected.map((source) => source.id)), from: "2026-08-12", to: "2026-09-30" }, selected), true);
 });

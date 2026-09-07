@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 const prefix = "/api/collection/report/billing-principal/saved-targets";
-const validity = { validFrom: "2026-09-01", validTo: "2026-09-30", enabled: true };
+const sourceValidities = [
+  { validFrom: "2026-09-01", validTo: "2026-09-30", enabled: true },
+  { validFrom: "2026-08-12", validTo: "2026-09-10", enabled: true },
+  { validFrom: "2026-09-15", validTo: "2026-10-05", enabled: true },
+];
+const validity = { validFrom: "2026-08-12", validTo: "2026-10-05" };
 const exampleNames = [
   "NPL CC P10 SEP26 - AKALI",
   "NPL CC P10 SEP26 - batch 2",
@@ -33,11 +38,11 @@ export async function runBillingOspMultiSourceQa({ api, superuser, admin, otherA
           "IC Number": `000303${String(index).padStart(6, "0")}`,
           "Customer Phone Number": `012347${String(index).padStart(4, "0")}`,
           "TOTAL DUE": "500.00", "Billing Principal (OSP)": `${(index + 1) * 100}.00`,
-          DC_STS: "3", "Calling Date": validity.validFrom,
+          DC_STS: "3", "Calling Date": sourceValidities[index].validFrom,
         }],
       });
-      sources.push({ id: source.id, name, filename });
-      await api(superuser, "PUT", "/api/collection/source-configs/" + source.id, validity);
+      sources.push({ id: source.id, name, filename, ...sourceValidities[index] });
+      await api(superuser, "PUT", "/api/collection/source-configs/" + source.id, sourceValidities[index]);
     }
     await page.goto(baseUrl + "/collection/billing-principal", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Create Target", exact: true }).click();
@@ -60,6 +65,9 @@ export async function runBillingOspMultiSourceQa({ api, superuser, admin, otherA
       assert.equal(response.status(), 200, "Authoritative multi-source preview succeeds.");
       const preview = await response.json();
       assert.deepEqual(sortedIds(preview.sourceImportIds), sortedIds(expected));
+      const selected = sources.filter((source) => expected.includes(source.id));
+      assert.equal(preview.from, selected.map((source) => source.validFrom).sort()[0]);
+      assert.equal(preview.to, selected.map((source) => source.validTo).sort().reverse()[0]);
       await dialog.getByRole("table", { name: "Shared target baseline preview" }).waitFor();
       return preview;
     };
@@ -72,7 +80,11 @@ export async function runBillingOspMultiSourceQa({ api, superuser, admin, otherA
       return preview;
     };
     await selectSource(sources[0], [sources[0].id]);
-    await selectSource(sources[1], sources.slice(0, 2).map((source) => source.id));
+    await dialog.getByLabel("D3 shared target percentage").fill("25");
+    const twoSourcePreview = await selectSource(sources[1], sources.slice(0, 2).map((source) => source.id));
+    assert.equal(twoSourcePreview.rows.find((row) => row.aging === "D3").totalOsp, "300.00");
+    assert.equal(await dialog.getByLabel("D3 shared target percentage").inputValue(), "25", "Adding File B retains the percentage already entered for File A.");
+    await dialog.getByRole("table", { name: "Shared target baseline preview" }).getByText("RM75.00", { exact: true }).waitFor();
     await dialog.locator("#osp-assigned-admin").selectOption(otherAdmin.user.id);
     await selectedList.waitFor({ state: "hidden" });
     assert(await save.isDisabled(), "Changing assigned account invalidates the old source preview.");
@@ -103,7 +115,7 @@ export async function runBillingOspMultiSourceQa({ api, superuser, admin, otherA
       await page.setViewportSize(originalViewport);
       await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), originalDark);
     }
-    checked("Create Target selects all three example configured files across real searches, blocks duplicates/empty selection, removes/re-adds one and clears stale sources on assigned-account change");
+    checked("Create Target keeps TABLE A available while adding different-validity files; previews each selected union, blocks duplicates/empty selection, removes/re-adds one and clears stale sources on account change");
 
     const pendingCreate = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === prefix);
     await save.click();
@@ -116,6 +128,15 @@ export async function runBillingOspMultiSourceQa({ api, superuser, admin, otherA
       assert.deepEqual(sortedIds(value.activeRevision.sourceSnapshots.map((source) => source.sourceImportId)), sortedIds(allIds));
       assert.equal(new Set(value.activeRevision.sourceImportIds).size, 3);
       assert.equal(value.assignedAdminUserId, admin.user.id);
+      assert.equal(value.activeRevision.from, validity.validFrom);
+      assert.equal(value.activeRevision.to, validity.validTo);
+      assert.equal(value.activeRevision.reportingWindow.from, validity.validFrom);
+      assert.equal(value.activeRevision.reportingWindow.to, validity.validTo);
+      for (const source of sources) {
+        const window = value.activeRevision.reportingWindow.sources.find((item) => item.sourceImportId === source.id);
+        assert.equal(window.validFrom, source.validFrom);
+        assert.equal(window.validTo, source.validTo);
+      }
     };
     assertSources(target);
     await page.getByRole("heading", { name: target.name, exact: true }).waitFor();
@@ -142,7 +163,7 @@ export async function runBillingOspMultiSourceQa({ api, superuser, admin, otherA
     assert.equal(await dialog.getByLabel("D3 shared target percentage").inputValue(), "37", "Changing assignment in the existing edit form must not overwrite an unsaved percentage draft.");
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.screenshot({ path: path.join(artifactDir, "osp-multi-source-reloaded.png"), fullPage: true });
-    checked("Real three-source creation sends/persists all IDs; detail/list/reload and frozen Edit Target retain all associations; assigned-admin baseline resolves RM600 and unchanged 30% target RM180");
+    checked("Real mixed-validity three-source creation persists all IDs and individual dates under Aug12-Oct5 combined bounds; detail/list/reload/edit retain all sources; assigned-admin baseline RM600 and unchanged 30% target RM180");
     checked("Selected source names/removal controls fit dark narrow layout; existing Edit Target preserves an unsaved percentage when assignment changes");
   } catch (error) {
     failed = true;

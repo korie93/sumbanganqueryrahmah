@@ -197,6 +197,108 @@ async function prepareRetroactiveSource(pool: pg.Pool, validity = { from: "2026-
   };
 }
 
+test("Billing OSP mixed-validity sources preview, create and report only each source's own valid payments", { skip: skipReason || false, timeout: 60_000 }, async () => {
+  const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "mixed-validity-osp-isolated-fixture-encryption-key";
+  try {
+    await withTempDatabase(async (pool) => {
+      await prepareSchema(pool);
+      const ranges = [{ from: "2026-08-12", to: "2026-08-20" }, { from: "2026-08-18", to: "2026-08-31" }, { from: "2026-09-02", to: "2026-09-10" }];
+      const sources = await Promise.all(ranges.map((range, index) => prepareRetroactiveSource(pool, range, index + 401)));
+      const ids = sources.map((source) => source.sourceId);
+      await withRepositoryDatabase(pool, async () => {
+        const singlePreview = await previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: [ids[0]!] });
+        assert.equal(singlePreview.from, ranges[0]!.from);
+        assert.equal(singlePreview.to, ranges[0]!.to);
+        const twoPreview = await previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: ids.slice(0, 2) });
+        assert.equal(twoPreview.from, "2026-08-12");
+        assert.equal(twoPreview.to, "2026-08-31");
+        assert.equal(twoPreview.rows[0]?.totalOsp, "16000.00");
+        const preview = await previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: [...ids].reverse() });
+        assert.equal(preview.from, "2026-08-12");
+        assert.equal(preview.to, "2026-09-10");
+        assert.equal(preview.rows[0]?.totalOsp, "24000.00");
+        const target = await createCollectionOspSavedTargetRepository({
+          name: "Mixed overlap and disjoint validity", assignedAdminUserId: "osp-repo-admin", viewer: repositoryViewer,
+          sourceImportIds: ids, from: preview.from, to: preview.to, timezone: "Asia/Kuala_Lumpur", nicknameScope: [],
+          agingScope: [...completeAgingScope], actor: "osp-repo-tester",
+          targets: preview.rows.map((row) => ({ agingBucket: row.aging, totalOspBaseline: row.totalOsp, targetPercentage: "50" })),
+        });
+        for (const saved of [target, (await getCollectionOspSavedTargetRepository(target.id, undefined, repositoryViewer))!,
+          (await listCollectionOspSavedTargetsRepository({ viewer: repositoryViewer })).find((item) => item.id === target.id)!]) {
+          assert.deepEqual(saved.activeRevision.sourceImportIds, ids);
+          assert.equal(saved.activeRevision.from, preview.from);
+          assert.equal(saved.activeRevision.to, preview.to);
+          assert.equal(saved.activeRevision.reportingWindow?.from, preview.from);
+          assert.equal(saved.activeRevision.reportingWindow?.to, preview.to);
+          assert.deepEqual(saved.activeRevision.reportingWindow?.sources.map((source) => ({ from: source.validFrom, to: source.validTo })), ranges);
+        }
+        assert.equal((await pool.query("SELECT count(*)::int AS count FROM public.collection_osp_target_sources WHERE target_revision_id = $1::uuid", [target.activeRevision.id])).rows[0].count, 3);
+        // Collection still refuses new out-of-source payments. Simulate historical
+        // evidence saved before a config window was narrowed, using this isolated DB.
+        for (const [index, date] of ["2026-08-21", "2026-08-17", "2026-09-01"].entries()) {
+          await assert.rejects(sources[index]!.savePayment(date), /no longer authorized/);
+          await pool.query("UPDATE public.collection_source_configs SET valid_from = $2::date, valid_to = $3::date WHERE source_import_id = $1", [ids[index], preview.from, preview.to]);
+          await sources[index]!.savePayment(date);
+          await pool.query("UPDATE public.collection_source_configs SET valid_from = $2::date, valid_to = $3::date WHERE source_import_id = $1", [ids[index], ranges[index]!.from, ranges[index]!.to]);
+        }
+        const scope = { targetId: target.id, revisionId: target.activeRevision.id, viewer: repositoryViewer, asOfDate: preview.to };
+        const before = await readOverview(scope);
+        assert.equal(before.systemResult.all.totalOsp, "24000.00");
+        assert.equal(before.systemResult.all.targetOsp, "12000.00");
+        assert.equal(before.systemResult.all.ospClosed, "0.00");
+        assert.equal(before.systemResult.all.closedAccountCount, 0);
+        const historicalRecords = (await pool.query("SELECT id FROM public.collection_records WHERE source_import_id = ANY($1::text[])", [ids])).rows;
+        for (const record of historicalRecords) await deleteCollectionRecord(String(record.id));
+        await sources[0]!.savePayment("2026-08-20");
+        await sources[1]!.savePayment("2026-08-18");
+        await sources[2]!.savePayment("2026-09-02");
+        const after = await readOverview(scope);
+        assert.equal(after.systemResult.all.ospClosed, "24000.00");
+        assert.equal(after.systemResult.all.closedAccountCount, 3);
+        const details = await readDrilldown({ ...scope, page: 1, pageSize: 10 });
+        assert.equal(details.pagination.total, 3);
+        const calendar = await readCalendar({ ...scope, from: preview.from, to: preview.to });
+        assert.equal(calendar.days.length, 30);
+        for (const day of ["2026-08-18", "2026-08-20", "2026-09-02"]) {
+          assert.equal(calendar.days.find((item) => item.date === day)?.systemOspClosedToday, "8000.00");
+        }
+        for (const day of ["2026-08-17", "2026-08-21", "2026-09-01"]) {
+          assert.equal(calendar.days.find((item) => item.date === day)?.systemOspClosedToday, "0.00");
+        }
+        const earlier = await readOverview({ ...scope, asOfDate: "2026-08-19" });
+        assert.equal(earlier.systemResult.all.ospClosed, "8000.00");
+        // Different configured windows must not change the existing canonical
+        // account deduplication when two files contain the same trusted cycle.
+        const duplicate = await prepareRetroactiveSource(pool, { from: "2026-08-25", to: "2026-09-05" }, 404);
+        await pool.query("UPDATE public.data_rows SET json_data = (SELECT json_data FROM public.data_rows WHERE id = $2) WHERE id = $1", [duplicate.rowId, sources[0]!.rowId]);
+        await pool.query(`UPDATE public.collection_source_rows duplicate SET
+          account_number_hash = original.account_number_hash, card_number_hash = original.card_number_hash,
+          card_number_last4 = original.card_number_last4, canonical_obligation_key = original.canonical_obligation_key
+          FROM public.collection_source_rows original
+          WHERE duplicate.source_import_id = $1 AND original.source_import_id = $2`, [duplicate.sourceId, ids[0]]);
+        const withDuplicateIds = [...ids, duplicate.sourceId];
+        const duplicatePreview = await previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: withDuplicateIds });
+        assert.equal(duplicatePreview.rows[0]?.totalOsp, "24000.00");
+        assert.equal(duplicatePreview.rows[0]?.accountCount, 3);
+        const deduplicated = await sources[0]!.createTarget(withDuplicateIds);
+        assert.deepEqual(deduplicated.activeRevision.sourceImportIds, withDuplicateIds);
+        const deduplicatedOverview = await readOverview({ ...scope, targetId: deduplicated.id, revisionId: deduplicated.activeRevision.id });
+        assert.equal(deduplicatedOverview.systemResult.all.totalOsp, duplicatePreview.rows[0]?.totalOsp);
+        assert.equal(deduplicatedOverview.systemResult.all.closedAccountCount, 3);
+        await pool.query("UPDATE public.collection_source_configs SET valid_from = '2025-09-09', valid_to = '2025-09-12' WHERE source_import_id = $1", [ids[0]]);
+        const countBefore = (await pool.query("SELECT count(*)::int AS count FROM public.collection_osp_saved_targets")).rows[0].count;
+        await assert.rejects(previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: ids }), /combined configured validity.*366 days/);
+        await assert.rejects(sources[0]!.createTarget(ids), /combined configured validity.*366 days/);
+        assert.equal((await pool.query("SELECT count(*)::int AS count FROM public.collection_osp_saved_targets")).rows[0].count, countBefore);
+      });
+    });
+  } finally {
+    if (previousPiiKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    else process.env.COLLECTION_PII_ENCRYPTION_KEY = previousPiiKey;
+  }
+});
+
 test("Billing OSP multi-configured Saved sources persist, reload and reject invalid sets atomically", { skip: skipReason || false, timeout: 60_000 }, async (t) => {
   const previousPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
   process.env.COLLECTION_PII_ENCRYPTION_KEY = "multi-source-osp-isolated-fixture-encryption-key";
@@ -287,7 +389,7 @@ test("Billing OSP multi-configured Saved sources persist, reload and reject inva
           assert.deepEqual(await counts(), before);
         });
 
-        await t.test("one missing, disabled, incompatible, deleted or changed-validity source rejects the complete set", async () => {
+        await t.test("one missing, disabled, incompatible, deleted or overlong-validity source rejects the complete set", async () => {
           const assertRejected = async (selectedIds: string[], expected: RegExp) => {
             const before = await counts();
             await assert.rejects(create("Invalid complete source set", selectedIds), expected);
@@ -302,8 +404,8 @@ test("Billing OSP multi-configured Saved sources persist, reload and reject inva
           await pool.query("UPDATE public.imports SET is_deleted = true WHERE id = $1", [sourceIds[2]]);
           await assertRejected(sourceIds, /unavailable or incompatible/);
           await pool.query("UPDATE public.imports SET is_deleted = false WHERE id = $1", [sourceIds[2]]);
-          await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-11' WHERE source_import_id = $1", [sourceIds[2]]);
-          await assertRejected(sourceIds, /same configured validity/);
+          await pool.query("UPDATE public.collection_source_configs SET valid_to = '2027-09-11' WHERE source_import_id = $1", [sourceIds[2]]);
+          await assertRejected(sourceIds, /combined configured validity.*366 days/);
           await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-10' WHERE source_import_id = $1", [sourceIds[2]]);
         });
 
@@ -1086,9 +1188,9 @@ test("Billing OSP V3 repository isolates assigned targets and private percentage
         assert.equal(claims.filter((result) => result.status === "fulfilled").length, 1);
         assert.equal(claims.filter((result) => result.status === "rejected").length, 1);
         await pool.query("UPDATE public.collection_source_configs SET enabled = true WHERE source_import_id = 'private-source'");
-        await pool.query("UPDATE public.collection_source_configs SET valid_to = '2026-09-12' WHERE source_import_id = 'race-source'");
-        await assert.rejects(previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: ["private-source", "race-source"] }), /same configured validity/);
-        await assert.rejects(createProbe({ sourceImportIds: ["private-source", "race-source"], name: "Mixed validity" }), /same configured validity/);
+        await pool.query("UPDATE public.collection_source_configs SET valid_to = '2027-09-12' WHERE source_import_id = 'race-source'");
+        await assert.rejects(previewCollectionOspSourceScopeRepository({ viewer: repositoryViewer, sourceImportIds: ["private-source", "race-source"] }), /combined configured validity.*366 days/);
+        await assert.rejects(createProbe({ sourceImportIds: ["private-source", "race-source"], name: "Overlong mixed validity" }), /combined configured validity.*366 days/);
         await assert.rejects(previewCollectionOspSourceScopeRepository({ viewer: manager, sourceImportIds: ["private-source"] }), /not found/);
       });
     });

@@ -2,6 +2,8 @@
 
 Status: **COMPLETE**. Updated 2026-09-07. Implemented and locally verified; not committed, pushed or deployed. Treat repository state as authoritative.
 
+Historical checkpoint: this task was subsequently committed/pushed as `07bcc6b0`. The user's new mixed-validity request supersedes the same-validity restriction below; continue from `CODEX_CONTINUATION_HANDOFF_BILLING_OSP_MIXED_VALIDITY.md` for that follow-up. The earlier verification evidence below remains a pre-commit snapshot.
+
 ## 1. Permanent goal
 
 **GOAL: Fix only Billing Principal (OSP) Create Target so that after a superuser selects a Leader, Configured Saved Source supports selecting, validating, persisting, reading, and reloading multiple eligible configured Saved files for that target, while preserving existing single-source targets, authorization, leader/source eligibility, all Billing OSP calculations, all Collection behavior, and all unrelated system behavior. Continue autonomously until this exact feature is complete, tested, build-verified, and ready to continue/deploy.**

@@ -210,7 +210,7 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
             <option value="">{optionsLoading ? "Loading sources…" : "Add a configured source"}</option>
             {sources.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.filename} · {item.validFrom} to {item.validTo}</option>)}
           </select>
-          <p id="osp-configured-source-help" className="text-xs text-muted-foreground">Select up to 5 sources, one at a time. All must have the same configured validity. {selectedSources.length}/5 selected.</p>
+          <p id="osp-configured-source-help" className="text-xs text-muted-foreground">Select up to 5 sources, one at a time. Different validity periods are supported; the combined period must be within 366 days. {selectedSources.length}/5 selected.</p>
           {selectedSources.length > 0 ? <ul aria-label="Selected configured sources" className="space-y-2">
             {selectedSources.map((item) => <li key={item.id} className="flex min-w-0 items-start gap-2 rounded-md border bg-muted/20 p-3 text-sm">
               <div className="min-w-0 flex-1 break-words"><span className="font-medium">{item.name}</span><span className="block text-xs text-muted-foreground">{item.filename} · {item.validFrom} to {item.validTo}</span></div>
@@ -223,7 +223,7 @@ function TargetForm({ target, onSaved, onCancel, onBusy }: {
       </div>
       {previewLoading ? <p role="status" className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading authoritative Billing OSP baseline…</p> : null}
       {preview ? <section aria-label="Source validity and shared targets" className="min-w-0 space-y-3">
-        <p className="rounded-md border bg-muted/20 p-3 text-sm">{!target || getBillingPrincipalReportingWindow(target.activeRevision).sourceValidityVerified ? "Current source validity" : "Reporting period (includes legacy source fallback)"}: <strong className="tabular-nums">{preview.from} — {preview.to}</strong><span className="mt-1 block text-xs text-muted-foreground">Read-only. Calendar follows the current Saved Collection Source validity.</span></p>
+        <p className="rounded-md border bg-muted/20 p-3 text-sm">{!target || getBillingPrincipalReportingWindow(target.activeRevision).sourceValidityVerified ? "Current source validity" : "Reporting period (includes legacy source fallback)"}: <strong className="tabular-nums">{preview.from} — {preview.to}</strong><span className="mt-1 block text-xs text-muted-foreground">Read-only. The combined period runs from the earliest source start to the latest source end. Each source keeps its own validity for payment reporting.</span></p>
         <h3 className="text-sm font-medium">3. Shared TABLE A targets</h3>
         <div className="overflow-x-auto rounded-md border">
           <Table className="min-w-[490px]" aria-label="Shared target baseline preview">

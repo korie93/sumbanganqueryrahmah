@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 import { COLLECTION_OSP_AGINGS, parseCollectionOspMoneyCents } from "../lib/collection-osp-reconciliation";
+import { isCollectionOspBusinessDate } from "../lib/collection-osp-reporting-window";
 import type { CollectionOspSourcePreview, CollectionOspTargetOptions, CollectionOspTargetOptionsInput, CollectionOspViewer } from "../storage-postgres-collection-types";
 import type { CollectionRepositoryExecutor } from "./collection-nickname-types";
 import { CollectionOspV7RepositoryError } from "./collection-osp-repository-error";
@@ -77,12 +78,16 @@ export async function loadCollectionOspConfiguredSourceScope(executor: Collectio
     ORDER BY config.source_import_id FOR SHARE OF config, imp
   `));
   if (sources.length !== sourceIds.length) throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "One or more Saved sources are unavailable or incompatible.");
-  const from = dateOnly(sources[0]!.valid_from);
-  const to = dateOnly(sources[0]!.valid_to);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to
-    || (Date.parse(to) - Date.parse(from)) / 86_400_000 >= 366
-    || sources.some((source) => dateOnly(source.valid_from) !== from || dateOnly(source.valid_to) !== to)) {
-    throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "Selected sources must have the same configured validity, within 366 days.");
+  const windows = sources.map((source) => ({ from: dateOnly(source.valid_from), to: dateOnly(source.valid_to) }));
+  if (windows.some((window) => !isCollectionOspBusinessDate(window.from) || !isCollectionOspBusinessDate(window.to) || window.from > window.to)) {
+    throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "Each selected Saved source must have valid, ordered configured dates.");
+  }
+  // Match the existing live reporting-window union. Different source periods
+  // are eligible; downstream payments still respect their own source dates.
+  const from = windows.reduce((date, window) => window.from < date ? window.from : date, windows[0]!.from);
+  const to = windows.reduce((date, window) => window.to > date ? window.to : date, windows[0]!.to);
+  if ((Date.parse(to) - Date.parse(from)) / 86_400_000 >= 366) {
+    throw new CollectionOspV7RepositoryError("INVALID_SOURCE", "The combined configured validity of selected Saved sources must be within 366 days.");
   }
   if (sources.reduce((sum, source) => sum + Number(source.indexed_row_count), 0) > MAX_COLLECTION_OSP_SOURCE_ROWS) {
     throw new CollectionOspV7RepositoryError("DATASET_TOO_LARGE", "Saved Target source scope exceeds 100,000 rows.");
