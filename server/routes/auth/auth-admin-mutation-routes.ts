@@ -8,6 +8,7 @@ import {
   readManagedUserStatusBody,
 } from "./auth-request-parsers";
 import { readRouteParam } from "../../http/validation";
+import { logger } from "../../lib/logger";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
@@ -70,11 +71,21 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     adminDestructiveActionRateLimiter,
     jsonRoute(async (req) => {
       const userId = readRouteParam(req.params.id, "user id");
+      // IDs are TEXT (legacy IDs remain valid), but control characters such as
+      // an encoded NUL must not reach PostgreSQL's text parameter decoder.
+      if (Array.from(userId).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+        throw new AuthAccountError(400, ERROR_CODES.INVALID_IDENTIFIER, "Invalid user id.");
+      }
       const result = await authAccountService.deleteManagedUser(req.user, userId);
-      closeActivitySockets(
-        result.closedSessionIds,
-        "Account deleted by superuser.",
-      );
+      for (const activityId of result.closedSessionIds) {
+        try {
+          closeActivitySockets([activityId], "Account deleted by superuser.");
+        } catch {
+          // Revocation is already committed in PostgreSQL. A socket disconnect
+          // race must not turn a completed deletion into a misleading HTTP 500.
+          logger.warn("Failed to notify a deleted account session", { activityId, operation: "deleteManagedUser" });
+        }
+      }
 
       return {
         ok: true,

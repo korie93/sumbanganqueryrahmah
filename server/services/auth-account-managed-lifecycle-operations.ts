@@ -12,6 +12,7 @@ import {
   hashPassword,
 } from "../auth/passwords";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { ManagedUserDeletionConflictError } from "../repositories/auth-repository-types";
 import type { PaginatedListMeta } from "./auth-account-pagination-utils";
 import { listManagedUsersPageOrAll } from "./auth-account-managed-list-utils";
 import { AuthAccountError } from "./auth-account-types";
@@ -58,26 +59,29 @@ export class AuthAccountManagedLifecycleOperations {
       );
     }
 
-    const closedSessionIds = await this.deps.invalidateUserSessions(
-      target.username,
-      "ACCOUNT_DELETED",
-    );
-    const deleted = await this.deps.storage.deleteManagedUserAccount(target.id);
-
-    if (!deleted) {
-      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
-    }
-
-    await this.deps.storage.createAuditLog({
+    const result = await this.deps.storage.deleteManagedUserAccount(target.id, {
       action: "ACCOUNT_DELETED",
       performedBy: actor.username,
       targetUser: target.id,
       details: buildAccountDeletedAuditDetails({ target }),
+    }).catch((error: unknown) => {
+      if (error instanceof ManagedUserDeletionConflictError) {
+        throw new AuthAccountError(
+          409,
+          ERROR_CODES.ACCOUNT_UNAVAILABLE,
+          "This account cannot be deleted because linked records must be preserved. Disable the account instead to prevent access while keeping its history.",
+        );
+      }
+      throw error;
     });
+
+    if (!result.deleted) {
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
+    }
 
     return {
       user: target,
-      closedSessionIds,
+      closedSessionIds: result.closedSessionIds,
     };
   }
 

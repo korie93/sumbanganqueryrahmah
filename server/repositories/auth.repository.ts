@@ -1,4 +1,5 @@
 import type {
+  InsertAuditLog,
   InsertUser,
   User,
 } from "../../shared/schema-postgres";
@@ -108,8 +109,8 @@ export class AuthRepository {
     return listManagedUsersPage(params);
   }
 
-  async deleteManagedUserAccount(userId: string): Promise<boolean> {
-    return deleteManagedUserAccount(userId);
+  async deleteManagedUserAccount(userId: string, audit: InsertAuditLog) {
+    return deleteManagedUserAccount(userId, audit);
   }
 
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {

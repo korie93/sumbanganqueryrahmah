@@ -1,27 +1,76 @@
+import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { getRequestIdFromContext } from "../lib/request-context";
+import { ManagedUserDeletionConflictError, type ManagedUserDeletionResult } from "./auth-repository-types";
 import {
   accountActivationTokens,
+  auditLogs,
   passwordResetRequests,
   userActivity,
   users,
+  type InsertAuditLog,
 } from "../../shared/schema-postgres";
 
-export async function deleteManagedUserAccount(userId: string): Promise<boolean> {
+function isForeignKeyViolation(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current = error;
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const candidate = current as { code?: unknown; cause?: unknown };
+    if (candidate.code === "23503") return true;
+    current = candidate.cause;
+  }
+  return false;
+}
+
+export async function deleteManagedUserAccount(
+  userId: string,
+  audit: InsertAuditLog,
+): Promise<ManagedUserDeletionResult> {
   const normalizedId = String(userId || "").trim();
   if (!normalizedId) {
-    return false;
+    return { deleted: false, closedSessionIds: [] };
   }
 
-  await db.delete(accountActivationTokens).where(eq(accountActivationTokens.userId, normalizedId));
-  await db.delete(passwordResetRequests).where(eq(passwordResetRequests.userId, normalizedId));
+  return db.transaction(async (tx) => {
+    // Serialize concurrent deletes/role changes and block new FK-backed sessions
+    // while capturing the sessions whose sockets can be closed AFTER commit.
+    const [target] = await tx.select({ id: users.id }).from(users)
+      .where(and(eq(users.id, normalizedId), inArray(users.role, ["admin", "manager", "user"])))
+      .for("update");
+    if (!target) return { deleted: false, closedSessionIds: [] };
 
-  const deleted = await db
-    .delete(users)
-    .where(and(eq(users.id, normalizedId), inArray(users.role, ["admin", "manager", "user"])))
-    .returning({ id: users.id });
+    const sessions = await tx.select({ id: userActivity.id }).from(userActivity)
+      .where(and(eq(userActivity.userId, target.id), eq(userActivity.isActive, true)));
 
-  return deleted.length > 0;
+    await tx.delete(accountActivationTokens).where(eq(accountActivationTokens.userId, target.id));
+    await tx.delete(passwordResetRequests).where(eq(passwordResetRequests.userId, target.id));
+
+    try {
+      // Preserve the existing CASCADE/SET NULL/RESTRICT decisions. In particular,
+      // Collection and private Billing history must NEVER be deleted or reassigned.
+      const deleted = await tx.delete(users).where(eq(users.id, target.id)).returning({ id: users.id });
+      if (deleted.length !== 1) throw new Error("Account deletion did not complete.");
+    } catch (error) {
+      if (isForeignKeyViolation(error)) throw new ManagedUserDeletionConflictError(error);
+      throw error;
+    }
+
+    // Keep the same audit snapshots/request correlation as AuditRepository, but
+    // commit the audit and account deletion together (audit failure rolls back).
+    await tx.insert(auditLogs).values({
+      id: randomUUID(),
+      action: audit.action,
+      performedBy: audit.performedBy,
+      requestId: audit.requestId || getRequestIdFromContext() || null,
+      targetUser: target.id,
+      targetResource: audit.targetResource ?? null,
+      details: audit.details ?? null,
+      timestamp: new Date(),
+    });
+    return { deleted: true, closedSessionIds: sessions.map((session) => session.id) };
+  });
 }
 
 export async function updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {

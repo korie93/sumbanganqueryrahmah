@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ManagedUserDeletionConflictError } from "../../repositories/auth-repository-types";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { AuthAccountManagedLifecycleOperations } from "../auth-account-managed-lifecycle-operations";
 import { AuthAccountManagedRecoveryOperations } from "../auth-account-managed-recovery-operations";
@@ -205,7 +206,7 @@ function createManagedStorage(
         passwordChangedAt: params.passwordChangedAt ?? null,
       }),
     createPasswordResetRequest: async (params) => buildPasswordResetRequest(params),
-    deleteManagedUserAccount: async () => true,
+    deleteManagedUserAccount: async () => ({ deleted: true, closedSessionIds: [] }),
     getAccounts: async () => [],
     getManagedUsers: async () => [],
     invalidateUnusedPasswordResetTokens: async () => undefined,
@@ -615,16 +616,23 @@ test("AuthAccountManagedLifecycleOperations.updateManagedUserStatus clears visit
   assert.deepEqual(auditActions, ["ACCOUNT_UNBANNED"]);
 });
 
-test("AuthAccountManagedLifecycleOperations.deleteManagedUser invalidates sessions before deleting account", async () => {
+test("AuthAccountManagedLifecycleOperations.deleteManagedUser delegates deletion, sessions and audit atomically", async () => {
   const actor = buildSuperuserAuth();
   const actorAccount = buildSuperuser();
   const target = buildManagedTarget();
   const events: string[] = [];
   const operations = new AuthAccountManagedLifecycleOperations({
     storage: createManagedStorage({
-      deleteManagedUserAccount: async () => {
+      deleteManagedUserAccount: async (id, audit) => {
+        assert.equal(id, target.id);
+        assert.equal(audit.action, "ACCOUNT_DELETED");
+        assert.equal(audit.performedBy, actorAccount.username);
+        assert.equal(audit.targetUser, target.id);
+        assert.deepEqual(JSON.parse(audit.details!), { metadata: {
+          deleted_role: target.role, deleted_status: target.status, was_banned: Boolean(target.isBanned),
+        } });
         events.push("delete-account");
-        return true;
+        return { deleted: true, closedSessionIds: ["activity-delete-1"] };
       },
       createAuditLog: async (entry) => {
         events.push(String(entry.action || ""));
@@ -651,9 +659,46 @@ test("AuthAccountManagedLifecycleOperations.deleteManagedUser invalidates sessio
 
   assert.equal(result.user.id, target.id);
   assert.deepEqual(result.closedSessionIds, ["activity-delete-1"]);
-  assert.deepEqual(events, [
-    `invalidate:${target.username}:ACCOUNT_DELETED`,
-    "delete-account",
-    "ACCOUNT_DELETED",
-  ]);
+  assert.deepEqual(events, ["delete-account"]);
+});
+
+test("deleteManagedUser preserves failure semantics without separate session or audit writes", async () => {
+  const databaseFailure = new Error("unexpected audit/storage failure");
+  for (const scenario of ["dependency", "missing", "unexpected", "self", "unauthorized"] as const) {
+    let deletionCalls = 0;
+    const operations = new AuthAccountManagedLifecycleOperations({
+      storage: createManagedStorage({
+        deleteManagedUserAccount: async () => {
+          deletionCalls += 1;
+          if (scenario === "dependency") throw new ManagedUserDeletionConflictError(new Error("internal SQL details"));
+          if (scenario === "unexpected") throw databaseFailure;
+          return { deleted: false, closedSessionIds: [] };
+        },
+        createAuditLog: async () => { assert.fail("Audit must belong to deletion transaction."); },
+      }),
+      ensureUniqueIdentity: async () => undefined,
+      invalidateUserSessions: async () => { assert.fail("Must not invalidate before commit."); },
+      requireManageableTarget: async () => scenario === "self" ? buildSuperuser() : buildManagedTarget(),
+      requireManagedEmail: (email) => email || "",
+      requireSuperuser: async () => {
+        if (scenario === "unauthorized") throw new AuthAccountError(403, "PERMISSION_DENIED", "Superuser required.");
+        return buildSuperuser();
+      },
+      sendActivationEmail: async () => { throw new Error("not used"); },
+      sendPasswordResetEmail: async () => buildDelivery(),
+      validateEmail: () => undefined,
+      validateUsername: () => undefined,
+    });
+    await assert.rejects(() => operations.deleteManagedUser(buildSuperuserAuth(), "user-1"), (error: unknown) => {
+      if (scenario === "unexpected") { assert.equal(error, databaseFailure); return true; }
+      assert(error instanceof AuthAccountError);
+      assert.equal(error.statusCode, scenario === "dependency" ? 409 : scenario === "missing" ? 404 : 403);
+      if (scenario === "dependency") {
+        assert.match(error.message, /linked records.*Disable the account/);
+        assert.doesNotMatch(error.message, /SQL|constraint|23503/);
+      }
+      return true;
+    });
+    assert.equal(deletionCalls, scenario === "self" || scenario === "unauthorized" ? 0 : 1);
+  }
 });

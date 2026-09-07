@@ -1,5 +1,6 @@
 import type {
   AccountActivationToken,
+  InsertAuditLog,
   InsertUser,
   PasswordResetRequest,
   User,
@@ -130,8 +131,8 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     return this.authRepository.listManagedUsersPage(params);
   }
 
-  async deleteManagedUserAccount(userId: string): Promise<boolean> {
-    return this.authRepository.deleteManagedUserAccount(userId);
+  async deleteManagedUserAccount(userId: string, audit: InsertAuditLog) {
+    return this.authRepository.deleteManagedUserAccount(userId, audit);
   }
 
   async updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void> {

@@ -1,5 +1,6 @@
 import type {
   AccountActivationToken,
+  InsertAuditLog,
   InsertUser,
   PasswordResetRequest,
   User,
@@ -11,6 +12,7 @@ import type {
   PendingPasswordResetRequestRecord,
 } from "./repositories/auth.repository";
 import type { ManageableUserRole } from "../shared/user-roles";
+import type { ManagedUserDeletionResult } from "./repositories/auth-repository-types";
 
 export type ManagedUserAccount = ManagedUserRecord;
 export type PendingPasswordResetRequestSummary = PendingPasswordResetRequestRecord;
@@ -107,7 +109,7 @@ export interface AuthStorageContract {
     total: number;
     totalPages: number;
   }>;
-  deleteManagedUserAccount(userId: string): Promise<boolean>;
+  deleteManagedUserAccount(userId: string, audit: InsertAuditLog): Promise<ManagedUserDeletionResult>;
   updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void>;
   updateUserBan(username: string, isBanned: boolean): Promise<User | undefined>;
   touchLastLogin(userId: string, timestamp?: Date): Promise<void>;

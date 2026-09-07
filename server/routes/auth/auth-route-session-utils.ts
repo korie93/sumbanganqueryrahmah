@@ -92,21 +92,28 @@ export function closeAuthActivitySockets({
 }: CloseAuthActivitySocketsInput) {
   for (const activityId of activityIds) {
     const socket = connectedClients.get(activityId);
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: messageType, reason }));
-      socket.close();
-    }
-    connectedClients.delete(activityId);
-    void Promise.resolve()
-      .then(() => storage.clearCollectionNicknameSessionByActivity(activityId))
-      .catch((error) => {
-        logger.warn("Failed to clear nickname session after auth session cleanup", {
-          activityId,
-          operation: "clearCollectionNicknameSessionByActivity",
-          reason,
-          error: serializeNicknameSessionCleanupError(error),
+    try {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify({ type: messageType, reason }));
+        } finally {
+          socket.close();
+        }
+      }
+    } finally {
+      // A transport race must not retain a revoked client in the live registry.
+      connectedClients.delete(activityId);
+      void Promise.resolve()
+        .then(() => storage.clearCollectionNicknameSessionByActivity(activityId))
+        .catch((error) => {
+          logger.warn("Failed to clear nickname session after auth session cleanup", {
+            activityId,
+            operation: "clearCollectionNicknameSessionByActivity",
+            reason,
+            error: serializeNicknameSessionCleanupError(error),
+          });
         });
-      });
+    }
   }
 }
 
