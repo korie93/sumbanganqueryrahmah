@@ -215,17 +215,17 @@ export function buildCollectionOspAgingAggregateQuery(input: CollectionOspEffect
   `;
 }
 
-/** Up to 366 populated days; callers render missing days without loading accounts. */
+/** Up to 366 × 4 day/aging rows; callers render missing days without loading accounts. */
 export function buildCollectionOspDailyAggregateQuery(
   input: CollectionOspEffectiveQueryScope & { aging?: CollectionAgingBucket },
 ): SQL {
   return sql`
     WITH ${buildCollectionOspEffectiveAccountCtes(input)}
-    SELECT effective_closure_date::text AS date,
+    SELECT effective_closure_date::text AS date, aging_bucket,
       SUM(billing_principal_osp)::text AS osp_closed, COUNT(*)::integer AS account_count
     FROM osp_effective_accounts
     WHERE reconciled_closed
       ${input.aging ? sql`AND aging_bucket = ${input.aging}` : sql``}
-    GROUP BY effective_closure_date ORDER BY effective_closure_date
+    GROUP BY effective_closure_date, aging_bucket ORDER BY effective_closure_date, aging_bucket
   `;
 }

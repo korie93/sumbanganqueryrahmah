@@ -5,6 +5,7 @@ import {
   deleteBillingPrincipalSavedTarget,
   downloadBillingPrincipalExport,
   getBillingPrincipalVisualExportDataset,
+  getBillingPrincipalCalendar,
   getBillingPrincipalSavedTarget,
   listBillingPrincipalSavedTargets,
   previewBillingPrincipalSource,
@@ -209,5 +210,22 @@ test("visual export rejects drilldown payloads above its bounded schema cap", as
   globalThis.fetch = (async () => new Response(JSON.stringify({ ...fixture, drilldown: Array.from({ length: 10_001 }, () => fixture.drilldown[0]), drilldownTotal: 10_001 }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
   try {
     await assert.rejects(getBillingPrincipalVisualExportDataset("target-a", "revision-a", { asOf: "2026-09-20", from: "2026-09-01", to: "2026-09-20" }));
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("calendar contract carries all daily aging values and fails closed on missing or duplicate buckets", async () => {
+  const originalFetch = globalThis.fetch;
+  const fixture = createBillingPrincipalVisualExportFixture();
+  let day: unknown = fixture.calendar[0];
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, from: "2026-09-10", to: "2026-09-10", aging: "ALL", days: [day] }),
+    { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    const result = await getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" });
+    assert.equal(result.days[0]?.dailyMovement.all.resultPercentage, "160.0000");
+    assert.equal(result.days[0]?.systemResultPercentage, "80.0000");
+    day = { ...fixture.calendar[0], dailyMovement: undefined };
+    await assert.rejects(getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" }));
+    day = { ...fixture.calendar[0], dailyMovement: { ...fixture.calendar[0]!.dailyMovement, rows: Array(4).fill(fixture.calendar[0]!.dailyMovement.rows[0]) } };
+    await assert.rejects(getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" }));
   } finally { globalThis.fetch = originalFetch; }
 });

@@ -68,6 +68,10 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
     String(day.systemDailyAccounts),
     formatOspCurrency(day.balanceOsp),
   ]);
+  const dailyHeaders = ["Date", ...["D3", "D4", "D5", "D6", "TOTAL"].flatMap((aging) => [`${aging}\nDaily result %`, `${aging}\nOSP closed`])];
+  const dailyRows = dataset.calendar.map((day) => [day.date,
+    ...[...day.dailyMovement.rows, day.dailyMovement.all].flatMap((row) => [formatOspPercentage(row.resultPercentage), formatOspCurrency(row.ospClosed)]),
+  ]);
   return [
     { title: "Metadata", headers: ["Field", "Value"], rows: [
       ["Target", overview.target.name], ["Revision", String(revision.revisionNumber)], ["System as of", overview.asOf],
@@ -77,6 +81,8 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
       ["Private client state", overview.clientResult.all.receivedDate ? "Saved to your account" : "Unsaved — defaults from TABLE A"],
       ["Aging", revision.agingScope.join(", ")],
       ["Balance formula", "Target OSP minus closed OSP; negative values retained"],
+      ["Daily result formula", "Daily closed / shared Target OSP × 100. TOTAL = combined daily closed / combined targets; never an average. Zero target = 0.00%."],
+      ["Daily business date", "Canonical effective closure/payment date. Full source validity, independent of historical System As Of."],
       ["Sources", revision.sourceSnapshots.map((source) => source.filename ? `${source.name} (${source.filename})` : source.name).join("; ")],
       ["Generated", `${dataset.generatedAt} by ${dataset.generatedBy}`],
     ] },
@@ -84,6 +90,7 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
     { title: "Table B - Client Result", headers: ["Aging", "TT OSP", "Private Target %", "Target OSP", "Client Result %", "Client OSP Closed", "Balance OSP"], rows: clientRows },
     { title: "Latest Total Result Comparison", headers: ["Dataset", "Date", "TT OSP", "OSP Closed", "Result / Difference"], rows: comparisonRows },
     { title: "Table A - Daily Movement", headers: ["Date", "Aging", "TT OSP", "Target OSP", "New closed", "Cumulative", "Result %", "Previous %", "Move pp", "Achievement", "Accounts", "Balance OSP"], rows: nonEmpty(["Date", "Aging", "TT OSP", "Target OSP", "New closed", "Cumulative", "Result %", "Previous %", "Move pp", "Achievement", "Accounts", "Balance OSP"], calendarRows) },
+    { title: "System Calendar - Daily Aging Movement", headers: dailyHeaders, rows: nonEmpty(dailyHeaders, dailyRows) },
   ];
 }
 
@@ -104,6 +111,7 @@ export function buildBillingPrincipalVisualPages(dataset: BillingPrincipalVisual
 }
 
 export function isBillingPrincipalVisualNumericColumn(section: BillingPrincipalVisualExportSection, column: number): boolean {
+  if (section.title.startsWith("System Calendar - Daily Aging Movement")) return column >= 1;
   if (section.title.startsWith("Table A - Daily Movement")) return column >= 2;
   if (section.title.startsWith("Table A - System") || section.title.startsWith("Table B - Client")) return column >= 1;
   return section.title === "Latest Total Result Comparison" && column >= 2;
@@ -144,21 +152,24 @@ function renderPage(dataset: BillingPrincipalVisualExportDataset, section: Billi
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
   if (!context) throw new Error("This browser cannot create the report image.");
-  const tableTop = 140;
+  const dailyMovement = section.title.startsWith("System Calendar - Daily Aging Movement");
+  const fontSize = dailyMovement ? 24 : 14;
+  const lineHeight = dailyMovement ? 30 : CELL_LINE_HEIGHT;
   const tableWidth = WIDTH - MARGIN * 2;
+  context.font = "18px Arial";
+  const subtitle = wrapBillingPrincipalVisualText(`${dataset.overview.target.name} · System as of ${dataset.overview.asOf} · revision ${dataset.overview.revision.revisionNumber}`, tableWidth, (text) => context.measureText(text).width);
+  const tableTop = 130 + subtitle.length * 24;
   const columnWidth = tableWidth / Math.max(1, section.headers.length);
   const prepareRow = (cells: string[], bold = false) => {
-    context.font = bold ? "700 14px Arial" : "14px Arial";
-    const wrappedCells = cells.map((cell) => wrapBillingPrincipalVisualText(
-      String(cell),
-      columnWidth - 14,
-      (text) => context.measureText(text).width,
-    ));
+    const wrappedCells = cells.map((cell, column) => {
+      context.font = `${bold || (dailyMovement && column >= 9) ? "700 " : ""}${fontSize}px Arial`;
+      return wrapBillingPrincipalVisualText(String(cell), columnWidth - 14, (text) => context.measureText(text).width);
+    });
     const lineCount = Math.max(1, ...wrappedCells.map((lines) => lines.length));
     return {
       bold,
       cells: wrappedCells,
-      height: Math.max(MIN_ROW_HEIGHT, lineCount * CELL_LINE_HEIGHT + CELL_VERTICAL_PADDING),
+      height: Math.max(MIN_ROW_HEIGHT, lineCount * lineHeight + CELL_VERTICAL_PADDING),
     };
   };
   const preparedRows = [
@@ -170,9 +181,10 @@ function renderPage(dataset: BillingPrincipalVisualExportDataset, section: Billi
   canvas.width = WIDTH * scale;
   canvas.height = height * scale;
   context.scale(scale, scale); context.fillStyle = "#ffffff"; context.fillRect(0, 0, WIDTH, height);
-  context.fillStyle = "#0f172a"; context.font = "700 28px Arial"; context.fillText("SQR Billing Principal", MARGIN, 45);
+  context.fillStyle = "#0f172a"; context.font = "700 28px Arial"; context.fillText("SQR Billing Principal (OSP)", MARGIN, 45);
   context.font = "700 18px Arial"; context.fillText(section.title, MARGIN, 82);
-  context.font = "14px Arial"; context.fillStyle = "#475569"; context.fillText(`${dataset.overview.target.name} · System as of ${dataset.overview.asOf} · revision ${dataset.overview.revision.revisionNumber}`, MARGIN, 112);
+  context.font = "18px Arial"; context.fillStyle = "#475569";
+  subtitle.forEach((line, index) => context.fillText(line, MARGIN, 112 + index * 24));
   let y = tableTop;
   preparedRows.forEach((row, rowIndex) => {
     context.fillStyle = row.bold ? "#e2e8f0" : rowIndex % 2 ? "#ffffff" : "#f8fafc"; context.fillRect(MARGIN, y, tableWidth, row.height);
@@ -180,13 +192,14 @@ function renderPage(dataset: BillingPrincipalVisualExportDataset, section: Billi
     row.cells.forEach((lines, column) => {
       const x = MARGIN + column * columnWidth;
       if (column) { context.beginPath(); context.moveTo(x, y); context.lineTo(x, y + row.height); context.stroke(); }
-      context.fillStyle = "#0f172a"; context.font = row.bold ? "700 14px Arial" : "14px Arial";
+      context.fillStyle = "#0f172a";
+      context.font = `${row.bold || (dailyMovement && column >= 9) ? "700 " : ""}${fontSize}px Arial`;
       const numeric = isBillingPrincipalVisualNumericColumn(section, column);
       context.textAlign = numeric ? "right" : "left";
       lines.forEach((line, lineIndex) => context.fillText(
         line,
         numeric ? x + columnWidth - 7 : x + 7,
-        y + 8 + CELL_LINE_HEIGHT * (lineIndex + 1) - 4,
+        y + 8 + lineHeight * (lineIndex + 1) - 4,
       ));
     });
     y += row.height;

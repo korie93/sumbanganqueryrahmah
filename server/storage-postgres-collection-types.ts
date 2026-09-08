@@ -613,7 +613,13 @@ export type CollectionOspReconciliationHistoryView = {
   createdAt: string;
 };
 
+export type CollectionOspDailyMovementView = {
+  rows: Array<{ aging: CollectionAgingBucket; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number }>;
+  all: { aging: "ALL"; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number };
+};
+
 export type CollectionOspCalendarDayView = {
+  dailyMovement: CollectionOspDailyMovementView;
   date: string;
   aging: CollectionAgingBucket | "ALL";
   totalOsp: string;

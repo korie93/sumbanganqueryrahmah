@@ -124,7 +124,13 @@ export type BillingPrincipalSavedTargetOverview = {
   latestComparison: BillingPrincipalLatestComparison;
 };
 
+export type BillingPrincipalDailyMovement = {
+  rows: Array<{ aging: BillingPrincipalAging; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number }>;
+  all: { aging: "ALL"; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number };
+};
+
 export type BillingPrincipalCalendarDay = {
+  dailyMovement: BillingPrincipalDailyMovement;
   date: string;
   aging: BillingPrincipalAging | "ALL";
   totalOsp: string;
@@ -363,7 +369,16 @@ const overviewSchema = z.object({
   latestComparison: latestComparisonSchema,
 }) satisfies z.ZodType<BillingPrincipalSavedTargetOverview>;
 
+const dailyMovementRowSchema = z.object({
+  aging: z.enum(["D3", "D4", "D5", "D6"]), targetOsp: decimalSchema, ospClosed: decimalSchema,
+  resultPercentage: decimalSchema, closedAccountCount: z.number().int().nonnegative(),
+});
 const calendarDaySchema: z.ZodType<BillingPrincipalCalendarDay> = z.object({
+  dailyMovement: z.object({
+    rows: z.array(dailyMovementRowSchema).length(4).refine((rows) =>
+      rows.every((row, index) => row.aging === ["D3", "D4", "D5", "D6"][index]), "Daily movement requires ordered D3–D6 rows"),
+    all: dailyMovementRowSchema.omit({ aging: true }).extend({ aging: z.literal("ALL") }),
+  }),
   date: isoDateSchema,
   aging: z.enum(["D3", "D4", "D5", "D6", "ALL"]),
   totalOsp: decimalSchema,

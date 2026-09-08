@@ -49,7 +49,7 @@ test("Billing V3 readiness accepts successful empty or fully populated page root
   assert.ok(billingRouteSpec);
   assert.equal(billingRouteSpec.readySelector, [
     "[data-testid='billing-principal-page'][data-state='empty']",
-    "[data-testid='billing-principal-page'][data-state='populated']:has([aria-label='Scrollable system calendar']):not(:has([role='alert']))",
+    "[data-testid='billing-principal-page'][data-state='populated']:has([aria-label='System calendar daily movement']):not(:has([role='alert']))",
   ].join(", "));
   assert.doesNotMatch(billingRouteSpec.readySelector, /data-state='(?:loading|error)'/);
 });

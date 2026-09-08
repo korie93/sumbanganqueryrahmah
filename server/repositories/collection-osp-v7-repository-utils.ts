@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { buildCollectionOspDailyMovements } from "../lib/collection-osp-daily-movement";
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
 import { CollectionOspV7RepositoryError } from "./collection-osp-repository-error";
@@ -2112,8 +2113,11 @@ async function buildCollectionOspCalendarFromDataset(
   const movements = rowsOf(await db.execute(buildCollectionOspDailyAggregateQuery({
     targetId: dataset.target.id, revisionId: input.revisionId, asOfDate: input.to,
     viewerPredicate: targetViewerPredicate(input.viewer), expectedTargetVersion: dataset.target.version,
-    ...(input.aging ? { aging: input.aging } : {}),
-  }))).map((row) => ({ date: dateOnly(row.date), ospClosed: String(row.osp_closed), accountCount: toNumber(row.account_count) }));
+  }))).map((row) => ({ date: dateOnly(row.date), aging: String(row.aging_bucket) as CollectionAgingBucket,
+    ospClosed: String(row.osp_closed), accountCount: toNumber(row.account_count) }));
+  const dailyMovements = buildCollectionOspDailyMovements({
+    dates: enumerateDates(input.from, input.to), targets: dataset.agingRows, movements,
+  });
   return {
     from: input.from,
     to: input.to,
@@ -2124,8 +2128,8 @@ async function buildCollectionOspCalendarFromDataset(
       ...(input.aging ? { aging: input.aging } : {}),
       totalBaseline,
       targetOsp,
-      results: [], movements,
-    }),
+      results: [], movements: movements.filter((row) => !input.aging || row.aging === input.aging),
+    }).map((day) => ({ ...day, dailyMovement: dailyMovements.get(day.date)! })),
   };
 }
 
@@ -2151,8 +2155,8 @@ export function buildCollectionOspCalendarDays(input: {
     }
   }
   for (const movement of input.movements ?? []) {
-    systemEvents.set(movement.date, parseCollectionOspMoneyCents(movement.ospClosed));
-    systemCounts.set(movement.date, movement.accountCount);
+    systemEvents.set(movement.date, (systemEvents.get(movement.date) ?? 0n) + parseCollectionOspMoneyCents(movement.ospClosed));
+    systemCounts.set(movement.date, (systemCounts.get(movement.date) ?? 0) + movement.accountCount);
   }
   const dates = enumerateDates(input.from, input.to);
   let systemCumulative = Array.from(systemEvents.entries())

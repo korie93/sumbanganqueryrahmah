@@ -9,7 +9,12 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { db } from "../../db-postgres";
-import { getCollectionOspCalendarRepository, getCollectionOspDrilldownRepository } from "../collection-osp-v7-repository-utils";
+import {
+  getCollectionOspCalendarRepository,
+  getCollectionOspDrilldownRepository,
+  getCollectionOspExportDatasetRepository,
+  getCollectionOspTargetOverviewRepository,
+} from "../collection-osp-v7-repository-utils";
 import { ensureCollectionRecordsTables } from "../../internal/collection-bootstrap-records";
 import { ensureCoreDataRowsTable, ensureCoreImportsTable } from "../../internal/core-schema-bootstrap-imports";
 import { ensureCoreAuditLogsTable } from "../../internal/core-schema-bootstrap-activity";
@@ -18,6 +23,7 @@ import { dropDrainedOspFixtureDatabase } from "./postgres-fixture-cleanup";
 import {
   aggregateCollectionOspReconciliation,
   formatCollectionOspMoneyCents,
+  formatCollectionOspPercentage,
   parseCollectionOspMoneyCents,
   reconcileCollectionOspAccount,
   type CollectionOspReconciliationAccountResult,
@@ -111,6 +117,7 @@ const cases: AccountSpec[] = [
   { name: "automatic-one-account-many-payments", payments: [
     { date: "2026-08-13", amount: "100.00" },
     { date: "2026-08-18", amount: "400.00", classification: "abort_cp" },
+    { date: "2026-08-22", amount: "500.00", sourceImportId: "effective-other-selected" },
     { date: "2026-08-25", amount: "50.00" },
   ] },
   { name: "cp-threshold-is-not-a-factual-abort", payments: [
@@ -388,14 +395,19 @@ test("set-based effective OSP matches dated BigInt reconciliation across governe
           const grouped = new Map<string, { osp: bigint; count: number }>();
           for (const result of expected) {
             if (!result.reconciledClosed || !result.effectiveClosureDate || (aging && result.aging !== aging)) continue;
-            const current = grouped.get(result.effectiveClosureDate) ?? { osp: 0n, count: 0 };
+            const key = `${result.effectiveClosureDate}:${result.aging}`;
+            const current = grouped.get(key) ?? { osp: 0n, count: 0 };
             current.osp += parseCollectionOspMoneyCents(result.billingPrincipalOsp);
             current.count += 1;
-            grouped.set(result.effectiveClosureDate, current);
+            grouped.set(key, current);
           }
-          assert.deepEqual(dailyRows.map((row) => ({ date: row.date, osp: money(row.osp_closed), count: row.account_count })),
+          assert.deepEqual(dailyRows.map((row) => ({ key: `${row.date}:${row.aging_bucket}`, osp: money(row.osp_closed), count: row.account_count })),
             [...grouped].sort(([left], [right]) => left.localeCompare(right))
-              .map(([date, value]) => ({ date, osp: formatCollectionOspMoneyCents(value.osp), count: value.count })));
+              .map(([key, value]) => ({ key, osp: formatCollectionOspMoneyCents(value.osp), count: value.count })));
+          const dailySum = dailyRows.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.osp_closed), 0n);
+          const cumulativeSum = agingRows.filter((row) => !aging || row.aging_bucket === aging)
+            .reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.reconciled_osp_closed), 0n);
+          assert.equal(dailySum, cumulativeSum, "day/aging movements reconcile exactly to canonical cumulative OSP");
         }
       }
     }
@@ -416,7 +428,101 @@ test("exact-day drilldown reconciles full-period calendar when later manual veri
       assert.ok(day.systemDailyAccounts > 0, "future-dated manual verification confirms the earlier CP threshold in this fixture");
       const details = await getCollectionOspDrilldownRepository({ ...scope, asOfDate: "2026-08-13", date: "2026-08-13", page: 1, pageSize: 10 });
       assert.deepEqual(details.summary, { accountCount: day.systemDailyAccounts, ospClosed: day.systemOspClosedToday });
+      assert.equal(day.dailyMovement.all.ospClosed, day.systemOspClosedToday);
+      assert.equal(day.dailyMovement.all.closedAccountCount, details.summary.accountCount);
+      assert.equal(day.dailyMovement.rows.length, 4);
+      assert.equal(day.dailyMovement.rows.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.ospClosed), 0n), parseCollectionOspMoneyCents(day.dailyMovement.all.ospClosed));
       assert.ok(details.items.every((item) => item.effectiveClosedDate === "2026-08-13"));
+    } finally { mutable.execute = original; }
+  });
+});
+
+test("calendar and export retain all daily agings under D3 filtering and reconcile canonical period-end System Result", { skip, timeout: 60_000 }, async () => {
+  await withIsolatedDatabase(async (pool) => {
+    const { accounts, targetId, revisionId } = await prepareFixture(pool);
+    await pool.query("UPDATE public.collection_records SET created_at = '2026-09-08T12:00:00Z', updated_at = '2026-09-09T12:00:00Z'");
+    const database = drizzle(pool);
+    const mutable = db as unknown as { execute: typeof db.execute };
+    const original = mutable.execute;
+    mutable.execute = database.execute.bind(database) as typeof db.execute;
+    try {
+      const scope = { targetId, revisionId, viewer: { userId: "effective-admin", role: "admin" } };
+      const input = { ...scope, from: period.from, to: period.to, asOfDate: period.to };
+      const calendar = await getCollectionOspCalendarRepository(input);
+      const d3Calendar = await getCollectionOspCalendarRepository({ ...input, aging: "D3" });
+      const overview = await getCollectionOspTargetOverviewRepository(input);
+      const exported = await getCollectionOspExportDatasetRepository({ ...input, aging: "D3" });
+      const expected = accounts.map((account) => referenceResult(account, revisionId, period.to, []));
+      const baseline = Object.fromEntries(agings.map((aging) => [aging, formatCollectionOspMoneyCents(accounts
+        .filter((account) => account.aging === aging)
+        .reduce((sum, account) => sum + parseCollectionOspMoneyCents(account.osp), 0n))]));
+      const cumulative = aggregateCollectionOspReconciliation(expected, baseline, "reconciled");
+
+      assert.deepEqual(overview.revision.sourceImportIds.slice().sort(), selectedSources.slice().sort(), "Both configured Saved Sources participate.");
+      assert.equal(calendar.days.length, 31);
+      assert.equal(calendar.days[0]?.date, period.from);
+      assert.equal(calendar.days.slice(-1)[0]?.date, period.to);
+      assert.deepEqual(d3Calendar.days.map((day) => day.dailyMovement), calendar.days.map((day) => day.dailyMovement),
+        "The legacy cumulative aging selector must not remove D4/D5/D6 from daily movement.");
+      assert.deepEqual(exported.calendar, d3Calendar.days, "Export uses the exact canonical calendar values for every valid day.");
+      assert.deepEqual(exported.overview.systemResult, overview.systemResult);
+
+      for (const day of calendar.days) {
+        assert.deepEqual(day.dailyMovement.rows.map((row) => row.aging), agings);
+        const qualifying = expected.filter((account) => account.reconciledClosed && account.effectiveClosureDate === day.date);
+        for (const row of day.dailyMovement.rows) {
+          const agingAccounts = qualifying.filter((account) => account.aging === row.aging);
+          const closed = agingAccounts.reduce((sum, account) => sum + parseCollectionOspMoneyCents(account.billingPrincipalOsp), 0n);
+          assert.equal(row.ospClosed, formatCollectionOspMoneyCents(closed), `${day.date} ${row.aging} canonical contribution`);
+          assert.equal(row.closedAccountCount, agingAccounts.length);
+          assert.equal(row.targetOsp, overview.systemResult.rows.find((item) => item.aging === row.aging)?.targetOsp);
+          assert.equal(row.resultPercentage, formatCollectionOspPercentage(closed, parseCollectionOspMoneyCents(row.targetOsp)));
+        }
+        const totalClosed = day.dailyMovement.rows.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.ospClosed), 0n);
+        const totalTarget = day.dailyMovement.rows.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.targetOsp), 0n);
+        assert.equal(day.dailyMovement.all.ospClosed, formatCollectionOspMoneyCents(totalClosed));
+        assert.equal(day.dailyMovement.all.targetOsp, formatCollectionOspMoneyCents(totalTarget));
+        assert.equal(day.dailyMovement.all.resultPercentage, formatCollectionOspPercentage(totalClosed, totalTarget));
+        assert.equal(day.dailyMovement.all.closedAccountCount, qualifying.length);
+        assert.equal(day.systemOspClosedToday, day.dailyMovement.all.ospClosed);
+        const filteredDay = d3Calendar.days.find((item) => item.date === day.date)!;
+        assert.equal(filteredDay.systemOspClosedToday, day.dailyMovement.rows[0]!.ospClosed);
+        assert.equal(filteredDay.systemDailyAccounts, day.dailyMovement.rows[0]!.closedAccountCount);
+      }
+
+      for (const row of [...overview.systemResult.rows, overview.systemResult.all]) {
+        const oracle = cumulative.find((item) => item.aging === row.aging)!;
+        assert.equal(row.ospClosed, oracle.ospClosed);
+        assert.equal(row.closedAccountCount, oracle.closedAccountCount);
+        assert.equal(row.resultPercentage, oracle.resultPercentage, "Cumulative Table A retains its TT OSP denominator.");
+        const sum = calendar.days.reduce((total, day) => total + parseCollectionOspMoneyCents(
+          row.aging === "ALL" ? day.dailyMovement.all.ospClosed : day.dailyMovement.rows.find((item) => item.aging === row.aging)!.ospClosed,
+        ), 0n);
+        assert.equal(formatCollectionOspMoneyCents(sum), row.ospClosed, `${row.aging} daily movement reconciles to period-end Table A`);
+      }
+      assert.equal(calendar.days.slice(-1)[0]?.systemCumulativeOspClosed, overview.systemResult.all.ospClosed);
+      assert.equal(d3Calendar.days.slice(-1)[0]?.systemCumulativeOspClosed, overview.systemResult.rows[0]!.ospClosed);
+      assert.equal(d3Calendar.days.slice(-1)[0]?.systemResultPercentage, overview.systemResult.rows[0]!.resultPercentage);
+      assert.equal(d3Calendar.days.slice(-1)[0]?.balanceOsp, overview.systemResult.rows[0]!.balanceOsp);
+      assert.notEqual(d3Calendar.days.slice(-1)[0]?.systemCumulativeOspClosed, calendar.days.slice(-1)[0]?.systemCumulativeOspClosed);
+      for (const date of ["2026-09-08", "2026-09-09"]) {
+        assert.equal(calendar.days.find((day) => day.date === date)?.dailyMovement.all.ospClosed, "0.00",
+          "Insertion and update dates must not receive backdated payment movement.");
+      }
+      const details = await getCollectionOspDrilldownRepository({ ...scope, asOfDate: period.to, date: "2026-08-18", page: 1, pageSize: 100 });
+      const multiplePayments = accounts.find((account) => account.name === "automatic-one-account-many-payments")!;
+      assert.equal(details.items.filter((item) => item.billingPrincipalOsp === multiplePayments.osp).length, 1,
+        "One logical account closes once despite later payments in another selected source.");
+      const otherSelected = accounts.find((account) => account.name === "other-selected-import-same-logical-account-is-valid")!;
+      assert.ok(details.items.some((item) => item.billingPrincipalOsp === otherSelected.osp));
+      for (const name of ["cp-threshold-is-not-a-factual-abort", "duplicate-receipt-does-not-contribute", "unselected-import-is-not-source-evidence"]) {
+        const excluded = accounts.find((account) => account.name === name)!;
+        assert.equal(details.items.some((item) => item.billingPrincipalOsp === excluded.osp), false, name);
+      }
+      for (const read of [getCollectionOspCalendarRepository, getCollectionOspExportDatasetRepository]) {
+        await assert.rejects(read({ ...input, viewer: { userId: "unassigned-admin", role: "admin" } }),
+          (error: unknown) => error instanceof Error && "reason" in error && error.reason === "NOT_FOUND");
+      }
     } finally { mutable.execute = original; }
   });
 });

@@ -57,10 +57,10 @@ export const operationalContractRouteSpecs = Object.freeze([
     contentSelector: "main#main-content",
     // V3 replaces the old filters with saved targets. Wait for a successful
     // empty list or the loaded workspace/calendar, then measure the page root:
-    // its tables and calendar intentionally scroll inside that bounded surface.
+    // its tables scroll locally while the daily calendar adapts to that surface.
     readySelector: [
       "[data-testid='billing-principal-page'][data-state='empty']",
-      "[data-testid='billing-principal-page'][data-state='populated']:has([aria-label='Scrollable system calendar']):not(:has([role='alert']))",
+      "[data-testid='billing-principal-page'][data-state='populated']:has([aria-label='System calendar daily movement']):not(:has([role='alert']))",
     ].join(", "),
     stressViewportId: "enlarged-text",
   }),

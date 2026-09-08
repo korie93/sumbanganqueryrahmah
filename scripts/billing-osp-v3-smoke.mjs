@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 import { runBillingOspRetrospectiveQa, verifyBillingOspRetrospectiveRestart } from "./lib/billing-osp-retrospective-qa.mjs";
 import { runBillingOspMultiSourceQa } from "./lib/billing-osp-multi-source-qa.mjs";
+import { runBillingOspDailyRenderQa } from "./lib/billing-osp-daily-render-qa.mjs";
 
 // Writes synthetic fixtures only to the disposable local QA environment.
 const database = process.env.COLLECTION_SAVE_ACCESS_QA_DATABASE || "";
@@ -125,8 +126,14 @@ async function verifyPrivateExports(actor, targetPercent, resultPercent) {
           assert.equal(rows[0]["Target Percentage"], Number(targetPercent));
           assert.equal(rows[0]["Client Result Percentage"], Number(resultPercent));
           assert.equal(workbook.SheetNames.some((name) => /account|table c/i.test(name)), false);
+          const dailyRows = XLSX.utils.sheet_to_json(workbook.Sheets["Daily Aging Movement"]);
+          assert.equal(dailyRows.length, 31);
+          assert.equal(Object.keys(dailyRows[0]).length, 11);
+          assert.equal(dailyRows.reduce((sum, row) => sum + row["TOTAL Daily OSP Closed"], 0), 12000);
+          assert(dailyRows.every((row) => ["D3", "D4", "D5", "D6"].reduce((sum, aging) => sum + row[`${aging} Daily OSP Closed`], 0) === row["TOTAL Daily OSP Closed"]));
         } else if (format === "PNG") assert(bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])));
         else assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
+        if (actor.label === "admin") await writeFile(path.join(artifactDir, "daily-" + download.suggestedFilename()), bytes);
         await download.delete();
       })().catch((error) => { errors.push(error); }));
     };
@@ -143,6 +150,9 @@ async function verifyPrivateExports(actor, targetPercent, resultPercent) {
         assert.equal(dataset.overview.clientResult.rows[0].targetPercentage, targetPercent);
         assert.equal(dataset.overview.clientResult.rows[0].resultPercentage, resultPercent);
         assert.deepEqual(dataset.drilldown, []);
+        assert.equal(dataset.calendar.length, 31);
+        assert(dataset.calendar.every((day) => day.dailyMovement.rows.length === 4
+          && day.dailyMovement.all.ospClosed === day.systemOspClosedToday));
       }
       const deadline = Date.now() + 60_000;
       while (!downloads.length || !(await button.isEnabled())) {
@@ -440,6 +450,22 @@ try {
   assert.equal(calendar.days.length, 31); assert.equal(calendar.days[0].date, "2026-08-12"); assert.equal(calendar.days.at(-1).date, "2026-09-11");
   const closed = calendar.days.find((day) => day.date === "2026-08-20");
   assert.equal(closed.systemDailyAccounts, 12); assert.equal(closed.systemOspClosedToday, "12000.00");
+  assert.deepEqual(closed.dailyMovement.rows.map((row) => row.ospClosed), ["11000.00", "1000.00", "0.00", "0.00"]);
+  assert.equal(closed.dailyMovement.all.ospClosed, "12000.00");
+  assert.equal(closed.dailyMovement.all.resultPercentage, "312.5000");
+  assert.equal(closed.systemResultPercentage, "100.0000", "existing cumulative denominator stays TT OSP");
+  assert.equal(calendar.days[0].dailyMovement.all.resultPercentage, "0.0000");
+  const calendarRegion = admin.page.getByRole("region", { name: "System calendar daily movement", exact: true });
+  await calendarRegion.waitFor();
+  let calendarFetches = 0;
+  const countCalendarFetch = (req) => { if (new URL(req.url()).pathname.endsWith("/calendar")) calendarFetches += 1; };
+  admin.page.on("request", countCalendarFetch);
+  await admin.page.getByRole("button", { name: "Next month", exact: true }).click();
+  await admin.page.getByTestId("billing-calendar-day-2026-09-01").waitFor();
+  await admin.page.getByRole("button", { name: "Previous month", exact: true }).click();
+  await admin.page.getByTestId("billing-calendar-day-2026-08-20").waitFor();
+  admin.page.off("request", countCalendarFetch);
+  assert.equal(calendarFetches, 0, "month navigation does not refetch daily data");
   currentPage = admin.page;
   await admin.page.getByRole("button", { name: /^2026-08-20, 12 accounts/ }).click();
   const dialog = admin.page.getByRole("dialog");
@@ -456,12 +482,26 @@ try {
     return result;
   });
   assert(stickyHeader.scrollTop > 0 && stickyHeader.offset <= 2, `The account header remains visible inside its own vertical/horizontal scroll region: ${JSON.stringify(stickyHeader)}`);
+  const verifyPagePii = async (pageAccounts) => {
+    // Canonical SQL ordering is by snapshot identity, not fixture insertion
+    // order. Check every displayed account on both pages without assuming row0
+    // happens to be among the first ten identities in each generated fixture.
+    for (const account of pageAccounts) {
+      const record = data.find((item) => item["Account No"] === account);
+      assert(record, "Every displayed account belongs to the synthetic source");
+      const row = detailTable.locator("tbody tr").filter({ has: admin.page.getByText(account, { exact: true }) });
+      for (const field of ["Customer Name", "Account No", "Card No", "IC Number", "Customer Phone Number"]) {
+        await row.getByText(record[field], { exact: true }).waitFor();
+      }
+    }
+  };
   const pageOneAccounts = await detailTable.locator("tbody tr td:nth-child(2)").allTextContents();
-  for (const cell of [data[0]["Customer Name"], data[0]["Account No"], data[0]["Card No"], data[0]["IC Number"], data[0]["Customer Phone Number"]]) await dialog.getByText(cell, { exact: true }).waitFor();
+  await verifyPagePii(pageOneAccounts);
   await dialog.getByRole("button", { name: "Next accounts", exact: true }).click();
   await dialog.getByText("Page 2 of 2 · 10 per page", { exact: true }).waitFor();
   assert.equal(await detailTable.locator("tbody tr").count(), 2);
   const pageTwoAccounts = await detailTable.locator("tbody tr td:nth-child(2)").allTextContents();
+  await verifyPagePii(pageTwoAccounts);
   assert.equal(new Set([...pageOneAccounts, ...pageTwoAccounts]).size, 12);
   await dialog.getByRole("tab", { name: "D3", exact: true }).click();
   await dialog.getByText("11 accounts", { exact: true }).waitFor();
@@ -491,6 +531,24 @@ try {
   await admin.page.setViewportSize({ width: 390, height: 844 });
   assert(await admin.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   await admin.page.screenshot({ path: path.join(artifactDir, "osp-narrow.png"), fullPage: true });
+  for (const theme of ["light", "dark"]) {
+    await admin.page.evaluate((value) => document.documentElement.classList.toggle("dark", value === "dark"), theme);
+    for (const width of [360, 390, 430, 1440]) {
+      await admin.page.setViewportSize({ width, height: 960 });
+      const activeDay = admin.page.getByTestId("billing-calendar-day-2026-08-20");
+      await activeDay.scrollIntoViewIfNeeded();
+      assert(await admin.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "Daily calendar must fit the viewport");
+      const overflow = await calendarRegion.evaluate((region) => [...region.querySelectorAll("button, button span")]
+        .filter((element) => element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1)
+        .map((element) => element.textContent));
+      assert.deepEqual(overflow, [], `Daily calendar text must not clip at ${width}px`);
+      for (const text of ["D3", "D4", "D5", "D6", "TOTAL", "312.50%", "RM12,000.00"]) assert((await activeDay.innerText()).includes(text));
+      await admin.page.screenshot({ path: path.join(artifactDir, `daily-calendar-${theme}-${width}.png`) });
+    }
+  }
+  checked("daily D3–D6 and weighted TOTAL reconcile with API; desktop/mobile360–430px text fits in light/dark, month changes require no extra request");
+  phase = "daily calendar and report render stress";
+  await runBillingOspDailyRenderQa({ actor: admin, targetId: target.id, revisionPath, date: closed.date, openReport, artifactDir, checked });
   await admin.page.setViewportSize({ width: 1440, height: 1000 });
   const cdp = await admin.context.newCDPSession(admin.page);
   await cdp.send("HeapProfiler.collectGarbage");

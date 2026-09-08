@@ -109,6 +109,12 @@ function completeExportDataset() {
       systemResultPercentage: "80.0000", systemPreviousResultPercentage: "0.0000",
       systemDailyMovementPercentagePoints: "80.0000", systemAchievementVsTargetPercentage: "160.0000",
       systemDailyAccounts: 1,
+      dailyMovement: {
+        rows: (["D3", "D4", "D5", "D6"] as const).map((aging) => ({ aging,
+          targetOsp: aging === "D3" ? "5000.00" : "0.00", ospClosed: aging === "D3" ? "8000.00" : "0.00",
+          resultPercentage: aging === "D3" ? "160.0000" : "0.0000", closedAccountCount: aging === "D3" ? 1 : 0 })),
+        all: { aging: "ALL", targetOsp: "5000.00", ospClosed: "8000.00", resultPercentage: "160.0000", closedAccountCount: 1 },
+      },
       balanceOsp: "-3000.00",
     }],
     drilldown: [{
@@ -467,7 +473,7 @@ test("V3 Excel export has A/B numeric balances, private owner metadata, no accou
   assert.ok(result.buffer.subarray(0, 2).equals(Buffer.from("PK")));
   const workbook = XLSX.read(result.buffer, { type: "buffer", cellDates: true });
   assert.deepEqual(workbook.SheetNames, [
-    "Summary", "Table A System", "Table B Client", "Latest Comparison", "Daily Movement",
+    "Summary", "Table A System", "Table B Client", "Latest Comparison", "Daily Movement", "Daily Aging Movement",
   ]);
   assert.equal(workbook.SheetNames.some((name) => /table c|reconcil/i.test(name)), false);
   const systemRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["Table A System"]!);
@@ -488,6 +494,17 @@ test("V3 Excel export has A/B numeric balances, private owner metadata, no accou
   assert.equal(metadata.find((row) => row.Field === "Private Client Owner")?.Value, "manager.test");
   assert.doesNotMatch(JSON.stringify(workbook), /4111111111119876|ending-1234|POOL-REF/);
   assert.ok(calendarRows[0]?.Date instanceof Date);
+  const dailySheet = workbook.Sheets["Daily Aging Movement"]!;
+  const dailyRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(dailySheet);
+  assert.equal(dailyRows[0]?.["D3 Daily Result Percentage"], 160);
+  assert.equal(dailyRows[0]?.["D3 Daily OSP Closed"], 8000);
+  assert.equal(dailyRows[0]?.["D4 Daily OSP Closed"], 0);
+  assert.equal(dailyRows[0]?.["TOTAL Daily Result Percentage"], 160);
+  assert.equal(dailyRows[0]?.["TOTAL Daily OSP Closed"], 8000);
+  assert.equal(Object.keys(dailyRows[0]!).length, 11);
+  assert.equal((dailySheet.B2 as { t: string }).t, "n");
+  assert.equal((dailySheet.K2 as { t: string }).t, "n");
+  assert.doesNotMatch(JSON.stringify(dailyRows), /Private|Client/);
 });
 
 test("Excel stores exact large signed decimals as numeric XML cells with a declared application precision limit", async () => {
@@ -506,6 +523,103 @@ test("Excel stores exact large signed decimals as numeric XML cells with a decla
   const summary = XLSX.utils.sheet_to_json<Record<string, unknown>>(XLSX.read(result.buffer, { type: "buffer" }).Sheets.Summary!);
   assert.equal(summary.find((row) => row.Field === "Target Name")?.Value, "'=HYPERLINK(unsafe)");
   assert.match(String(summary.find((row) => row.Field === "Spreadsheet Precision")?.Value), /15 significant digits/);
+});
+
+test("CSV and Excel retain all canonical daily aging values and the weighted TOTAL with numeric display formats", async () => {
+  const dataset = completeExportDataset();
+  const day = dataset.calendar[0]!;
+  day.dailyMovement = {
+    rows: COMPLETE_AGING_SCOPE.map((aging, index) => ({
+      aging, targetOsp: ["30000.00", "15000.00", "10000.00", "5000.00"][index]!,
+      ospClosed: ["300.00", "300.00", "300.00", "200.00"][index]!,
+      resultPercentage: ["1.0000", "2.0000", "3.0000", "4.0000"][index]!, closedAccountCount: index + 1,
+    })),
+    all: { aging: "ALL", targetOsp: "60000.00", ospClosed: "1100.00", resultPercentage: "1.8333", closedAccountCount: 10 },
+  };
+  Object.assign(day, { totalOsp: "120000.00", targetOsp: "60000.00", systemOspClosedToday: "1100.00",
+    systemCumulativeOspClosed: "1100.00", systemResultPercentage: "0.9167", systemPreviousResultPercentage: "0.0000",
+    systemDailyMovementPercentagePoints: "0.9167", systemAchievementVsTargetPercentage: "1.8333",
+    systemDailyAccounts: 10, balanceOsp: "58900.00" });
+  const service = operations({ getCollectionOspSavedTarget: async () => dataset.overview.target,
+    getCollectionOspExportDataset: async () => dataset as never });
+  const query = { asOf: "2026-09-10", from: "2026-09-10", to: "2026-09-10" };
+  const expectedHeaders = ["Date", "D3 Daily Result Percentage", "D3 Daily OSP Closed",
+    "D4 Daily Result Percentage", "D4 Daily OSP Closed", "D5 Daily Result Percentage", "D5 Daily OSP Closed",
+    "D6 Daily Result Percentage", "D6 Daily OSP Closed", "TOTAL Daily Result Percentage", "TOTAL Daily OSP Closed"];
+  const expectedValues = ["2026-09-10", "1.0000", "300.00", "2.0000", "300.00", "3.0000", "300.00",
+    "4.0000", "200.00", "1.8333", "1100.00"];
+  const csv = await service.exportReport(user("manager"), TARGET_ID, REVISION_ID, { ...query, format: "csv" });
+  const lines = csv.buffer.toString("utf8").split("\r\n");
+  const dailyIndex = lines.indexOf("SYSTEM DAILY AGING MOVEMENT");
+  assert.ok(dailyIndex >= 0);
+  assert.deepEqual(lines[dailyIndex + 1]?.split(","), expectedHeaders);
+  assert.deepEqual(lines[dailyIndex + 2]?.split(","), expectedValues);
+  assert.doesNotMatch(lines[dailyIndex + 2]!, /7500|CLIENT-REF|POOL-REF/);
+
+  const excel = await service.exportReport(user("manager"), TARGET_ID, REVISION_ID, { ...query, format: "xlsx" });
+  const parseOptions: XLSX.ParsingOptions & { cellStyles: boolean } = { type: "buffer", cellDates: true, cellNF: true, cellStyles: true };
+  const workbook = XLSX.read(excel.buffer, parseOptions);
+  const sheet = workbook.Sheets["Daily Aging Movement"]!;
+  assert.deepEqual(XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 })[0], expectedHeaders);
+  assert.equal(((sheet.A2 as XLSX.CellObject).v as Date).toISOString().slice(0, 10), day.date);
+  for (let column = 1; column < expectedValues.length; column += 1) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: 1, c: column })] as XLSX.CellObject;
+    assert.equal(cell.t, "n", expectedHeaders[column]);
+    assert.equal(cell.v, Number(expectedValues[column]), expectedHeaders[column]);
+    assert.equal(cell.z, column % 2 ? '0.00"%"' : '"RM"#,##0.00', expectedHeaders[column]);
+  }
+  assert.equal((sheet.B2 as XLSX.CellObject).w, "1.00%");
+  assert.equal((sheet.J2 as XLSX.CellObject).w, "1.83%", "TOTAL displays the canonical weighted value, not the 2.50% arithmetic mean");
+  assert.equal((sheet.K2 as XLSX.CellObject).w, "RM1,100.00");
+  assert.equal(sheet["!cols"]?.length, 11);
+  assert.ok(sheet["!cols"]?.slice(1).every((column) => (column.wch ?? 0) >= 30));
+  assert.equal((sheet["!autofilter"] as { ref: string } | undefined)?.ref, "A1:K2");
+});
+
+test("daily CSV text and Excel numeric XML preserve exact large money and percentage decimals", async () => {
+  const dataset = completeExportDataset();
+  const movement = dataset.calendar[0]!.dailyMovement;
+  Object.assign(movement.rows[0]!, { targetOsp: "100.00", ospClosed: "90071992547409.91",
+    resultPercentage: "90071992547409.9100" });
+  Object.assign(movement.rows[1]!, { ospClosed: "0.01", closedAccountCount: 1 });
+  Object.assign(movement.all, { targetOsp: "100.00", ospClosed: "90071992547409.92",
+    resultPercentage: "90071992547409.9200", closedAccountCount: 2 });
+  const service = operations({ getCollectionOspSavedTarget: async () => dataset.overview.target,
+    getCollectionOspExportDataset: async () => dataset as never });
+  const query = { asOf: "2026-09-10", from: "2026-09-10", to: "2026-09-10" };
+  const csv = await service.exportReport(user("manager"), TARGET_ID, REVISION_ID, { ...query, format: "csv" });
+  const lines = csv.buffer.toString("utf8").split("\r\n");
+  const dailyIndex = lines.indexOf("SYSTEM DAILY AGING MOVEMENT");
+  assert.ok(dailyIndex >= 0);
+  assert.equal(lines[dailyIndex + 2], "2026-09-10,90071992547409.9100,90071992547409.91,0.0000,0.01,0.0000,0.00,0.0000,0.00,90071992547409.9200,90071992547409.92");
+
+  const excel = await service.exportReport(user("manager"), TARGET_ID, REVISION_ID, { ...query, format: "xlsx" });
+  const files = unzipSync(excel.buffer);
+  const daily = strFromU8(files["xl/worksheets/sheet6.xml"]!);
+  assert.match(daily, /<c r="B2"[^>]*><v>90071992547409\.9100<\/v><\/c>/);
+  assert.match(daily, /<c r="C2"[^>]*><v>90071992547409\.91<\/v><\/c>/);
+  assert.match(daily, /<c r="E2"[^>]*><v>0\.01<\/v><\/c>/);
+  assert.match(daily, /<c r="J2"[^>]*><v>90071992547409\.9200<\/v><\/c>/);
+  assert.match(daily, /<c r="K2"[^>]*><v>90071992547409\.92<\/v><\/c>/);
+  assert.doesNotMatch(daily, /<c r="(?:B2|C2|E2|J2|K2)"[^>]*t="(?:s|str)"/);
+});
+
+test("CSV and Excel reject missing or repeated daily aging buckets before producing a partial report", async () => {
+  for (const format of ["csv", "xlsx"]) {
+    for (const invalid of ["missing movement", "missing bucket", "repeated bucket", "missing total"]) {
+      const dataset = completeExportDataset();
+      const day = dataset.calendar[0]!;
+      if (invalid === "missing movement") Reflect.deleteProperty(day, "dailyMovement");
+      else if (invalid === "missing bucket") day.dailyMovement.rows.pop();
+      else if (invalid === "repeated bucket") day.dailyMovement.rows[1] = { ...day.dailyMovement.rows[0]! };
+      else Reflect.deleteProperty(day.dailyMovement, "all");
+      const service = operations({ getCollectionOspSavedTarget: async () => dataset.overview.target,
+        getCollectionOspExportDataset: async () => dataset as never });
+      await assert.rejects(service.exportReport(user("manager"), TARGET_ID, REVISION_ID,
+        { format, asOf: "2026-09-10", from: "2026-09-10", to: "2026-09-10" }),
+      /missing complete daily aging movement/, `${format}: ${invalid}`);
+    }
+  }
 });
 
 test("all report export formats reauthorize assignment and version after expensive generation", async () => {

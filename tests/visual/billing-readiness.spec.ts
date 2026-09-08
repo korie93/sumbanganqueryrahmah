@@ -7,7 +7,7 @@ const billingRoute = operationalContractRouteSpecs.find(
 if (!billingRoute) throw new Error("Billing Principal must remain in the operational UI matrix.");
 const readySelector: string = billingRoute.readySelector;
 
-const calendar = '<div role="region" aria-label="Scrollable system calendar">Calendar days</div>';
+const calendar = '<div role="region" aria-label="System calendar daily movement">Calendar days</div>';
 const table = '<table aria-label="Table A System Billing Principal result"><tbody><tr><td>100.00</td></tr></tbody></table>';
 
 // Exercise the shared CSS selector in Chromium without a server, login, or snapshots.
@@ -36,19 +36,19 @@ test("Billing readiness accepts the successful empty page root", async ({ page }
   await expect(page.locator(readySelector)).toHaveAttribute("data-testid", "billing-principal-page");
 });
 
-test("Billing readiness measures the loaded page root, not its wide scrollable calendar", async ({ page }) => {
+test("Billing readiness measures the loaded page root with its responsive daily calendar", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.setContent(`
     <style>
       * { box-sizing: border-box; }
       body { margin: 0; padding: 16px; }
       [data-testid="billing-principal-page"] { width: 100%; min-width: 0; }
-      [aria-label="Scrollable system calendar"] { overflow-x: auto; }
-      .calendar-grid { width: 1100px; }
+      [aria-label="System calendar daily movement"] { min-width: 0; }
+      .calendar-grid { width: 100%; }
     </style>
     <main><div data-testid="billing-principal-page" data-state="populated">
       <h2>Billing Principal (OSP)</h2>${table}
-      <div role="region" aria-label="Scrollable system calendar"><div class="calendar-grid">Calendar days</div></div>
+      <div role="region" aria-label="System calendar daily movement"><div class="calendar-grid">Calendar days</div></div>
     </div></main>
   `);
 
@@ -60,10 +60,10 @@ test("Billing readiness measures the loaded page root, not its wide scrollable c
     clientWidth: element.clientWidth,
     scrollWidth: element.scrollWidth,
   }));
-  const calendarSize = await page.getByRole("region", { name: "Scrollable system calendar" }).evaluate((element) => ({
+  const calendarSize = await page.getByRole("region", { name: "System calendar daily movement" }).evaluate((element) => ({
     clientWidth: element.clientWidth,
     scrollWidth: element.scrollWidth,
   }));
   expect(rootSize.scrollWidth).toBeLessThanOrEqual(rootSize.clientWidth + 1);
-  expect(calendarSize.scrollWidth).toBeGreaterThan(calendarSize.clientWidth);
+  expect(calendarSize.scrollWidth).toBeLessThanOrEqual(calendarSize.clientWidth + 1);
 });

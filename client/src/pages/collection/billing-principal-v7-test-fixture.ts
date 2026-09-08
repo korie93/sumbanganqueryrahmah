@@ -76,6 +76,12 @@ export function createBillingPrincipalVisualExportFixture(): BillingPrincipalVis
       systemResultPercentage: "80.0000", systemPreviousResultPercentage: "0.0000",
       systemDailyMovementPercentagePoints: "80.0000", systemAchievementVsTargetPercentage: "160.0000",
       systemDailyAccounts: 1,
+      dailyMovement: {
+        rows: (["D3", "D4", "D5", "D6"] as const).map((aging) => ({ aging,
+          targetOsp: aging === "D3" ? "5000.00" : "0.00", ospClosed: aging === "D3" ? "8000.00" : "0.00",
+          resultPercentage: aging === "D3" ? "160.0000" : "0.0000", closedAccountCount: aging === "D3" ? 1 : 0 })),
+        all: { aging: "ALL", targetOsp: "5000.00", ospClosed: "8000.00", resultPercentage: "160.0000", closedAccountCount: 1 },
+      },
     }],
     drilldown: [{
       contributionSource: "MANUAL_VERIFIED_ABORT",
