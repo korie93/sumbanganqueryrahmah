@@ -2441,6 +2441,8 @@ const apiJsonRequest = async (context, method, apiPath, body, expectedStatuses =
     headers,
     data: body,
     failOnStatusCode: false,
+    // Playwright retries only ECONNRESET here, not HTTP errors. Never replay writes.
+    maxRetries: ["GET", "HEAD"].includes(uppercaseMethod) ? 2 : 0,
   });
 
   const status = response.status();

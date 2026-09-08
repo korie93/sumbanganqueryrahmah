@@ -63,6 +63,12 @@ If the change touches authenticated navigation, run smoke with:
 - `SMOKE_TEST_USERNAME`
 - `SMOKE_TEST_PASSWORD`
 
+The UI smoke API helper allows at most two Playwright transport retries for
+`ECONNRESET` on `GET`/`HEAD` only. Writes are never replayed after a connection
+reset. HTTP errors still reach the existing status assertions/429 policy, and
+persistent connection failures still fail the gate. The socket-reset regression
+tests run with `npm run test:scripts` without PostgreSQL or a browser install.
+
 ## Safe Refactor Style
 
 - keep endpoints stable
