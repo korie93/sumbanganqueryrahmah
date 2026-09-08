@@ -5,6 +5,7 @@ Target home for browser-safe shared contracts:
 - API payload schemas
 - error-code constants
 - password policy constants
+- pure role/feature access helpers (`shared/role-feature-access.ts`)
 - collection amount/status helpers
 - web-vitals payload schemas
 - Trusted Types policy names

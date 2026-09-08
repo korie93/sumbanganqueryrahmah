@@ -27,6 +27,7 @@ const COMMON_SHARED_MODULES = new Set([
   "json-schema",
   "pagination-contracts",
   "password-policy",
+  "role-feature-access",
   "trusted-types",
   "user-roles",
   "web-vitals",
