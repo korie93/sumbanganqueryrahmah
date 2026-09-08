@@ -5,14 +5,6 @@ export type ManagedUserDeletionResult = {
   closedSessionIds: string[];
 };
 
-// An expected business dependency, not a generic database/server failure.
-export class ManagedUserDeletionConflictError extends Error {
-  constructor(readonly cause: unknown) {
-    super("The account is referenced by records that must be preserved.");
-    this.name = "ManagedUserDeletionConflictError";
-  }
-}
-
 export type ManagedUserRecord = {
   id: string;
   username: string;

@@ -26,7 +26,7 @@ export async function getBannedUsers(): Promise<BannedUserWithInfo[]> {
       ORDER BY ua.logout_time DESC NULLS LAST
       LIMIT 1
     ) ban ON true
-    WHERE u.is_banned = true
+    WHERE u.is_banned = true AND u.status <> 'deleted'
     ORDER BY u.username ASC
   `);
 

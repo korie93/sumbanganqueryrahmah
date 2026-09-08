@@ -286,13 +286,8 @@ test("tab visibility guard caches role visibility and allows explicit cache clea
 
 test("tab visibility cache keeps the original TTL instead of extending it on cache hits", async (t) => {
   let visibilityLookupCount = 0;
-  const nowValues = [
-    1_000_000,
-    1_000_000 + 4 * 60 * 1000,
-    1_000_000 + 5 * 60 * 1000 + 1,
-  ];
-
-  t.mock.method(Date, "now", () => nowValues.shift() ?? 1_000_000 + 5 * 60 * 1000 + 1);
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
 
   const guards = createAuthGuards({
     storage: {
@@ -314,7 +309,9 @@ test("tab visibility cache keeps the original TTL instead of extending it on cac
   const response = createMockResponse();
 
   await handler(request as never, response as never, () => undefined);
+  now += 4 * 60 * 1000;
   await handler(request as never, response as never, () => undefined);
+  now += 60 * 1000 + 1;
   await handler(request as never, response as never, () => undefined);
   guards.stopTabVisibilityCacheSweep();
 

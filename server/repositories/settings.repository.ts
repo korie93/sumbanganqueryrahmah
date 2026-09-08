@@ -1,5 +1,7 @@
 import { db } from "../db-postgres";
+import { updateRolePermissions } from "./settings-role-permission-mutations";
 import { sql } from "drizzle-orm";
+import { canAccessRoleFeature } from "../../shared/role-feature-access";
 import {
   type MaintenanceState,
   type SettingsOption,
@@ -35,6 +37,7 @@ import {
 } from "./settings-repository-value-utils";
 
 export class SettingsRepository {
+  updateRolePermissions = updateRolePermissions;
   private async getSettingsValueMap(keys: string[]): Promise<Map<string, string>> {
     if (keys.length === 0) {
       return new Map();
@@ -188,6 +191,9 @@ export class SettingsRepository {
       visibility.monitor = visibility.monitor === true && canViewSystemPerformance;
     }
 
+    for (const tab of tabs) {
+      visibility[tab.pageId] = canAccessRoleFeature(roleKey, tab.pageId, visibility);
+    }
     return visibility;
   }
 
@@ -198,6 +204,10 @@ export class SettingsRepository {
     confirmCritical?: boolean;
     updatedBy: string;
   }): Promise<SettingsUpdateResult> {
+    if (params.settingKey.startsWith("tab_")) {
+      const result = await this.updateRolePermissions({ ...params, updates: [{ key: params.settingKey, value: params.value }] });
+      return { ...result, ...(result.settings?.[0] ? { setting: result.settings[0] } : {}) };
+    }
     const settingRes = await db.execute(sql`
       SELECT
         s.id,

@@ -24,7 +24,7 @@ function isManagedUserStatusWithDirectMatch(value: string): value is
 
 export function buildManagedUsersWhereSql(params: ManagedUserListPageParams = {}): SQL {
   const filters = normalizeManagedUserListFilters(params);
-  const whereClauses: SQL[] = [sql`role IN ('admin', 'manager', 'user')`];
+  const whereClauses: SQL[] = [sql`role IN ('admin', 'manager', 'user')`, sql`status <> 'deleted'`];
 
   if (filters.search) {
     const searchPattern = buildLikePattern(filters.search, "contains");
@@ -63,6 +63,7 @@ export function buildPendingPasswordResetWhereSql(
   const whereClauses: SQL[] = [
     sql`r.approved_by IS NULL`,
     sql`r.used_at IS NULL`,
+    sql`u.status <> 'deleted'`,
   ];
 
   if (filters.search) {

@@ -206,7 +206,7 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
   app.get(
     "/api/activity/page",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res) => {
       const query = readQueryObject(req.query);
@@ -263,7 +263,7 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
   app.get(
     "/api/activity/all",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res) => {
       return res.json({
@@ -292,7 +292,7 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
   app.get(
     "/api/activity/filter",
     authenticateToken,
-    requireRole("user", "admin", "superuser"),
+    requireRole("user", "admin", "manager", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res) => {
       return res.json({

@@ -15,13 +15,7 @@ import {
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
-import {
-  canViewActivitySection,
-  canViewAnalysisSection,
-  canViewAuditSection,
-  canViewDashboardSection,
-  canViewMonitorSection,
-} from "@/app/monitorAccess";
+import { canAccessRoleFeature } from "@shared/role-feature-access";
 import { parseMonitorSectionFromQuery } from "@/app/routing";
 import type { MonitorSection, TabVisibility } from "@/app/types";
 
@@ -29,7 +23,6 @@ export type NavigationEntry = {
   id: string;
   label: string;
   icon: LucideIcon;
-  roles: string[];
   title?: string;
   description?: string;
 };
@@ -46,7 +39,6 @@ export const HOME_NAV_ITEM: NavigationEntry = {
   id: "home",
   label: "Home",
   icon: Home,
-  roles: ["user", "admin", "manager", "superuser"],
 };
 
 const NAV_ENTRIES: Record<string, NavigationEntry> = {
@@ -55,7 +47,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "import",
     label: "Import",
     icon: Upload,
-    roles: ["user", "admin", "manager", "superuser"],
     title: "Import Data",
     description: "Import data from Excel/CSV",
   },
@@ -63,7 +54,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "saved",
     label: "Saved",
     icon: BookMarked,
-    roles: ["user", "admin", "superuser"],
     title: "Saved Imports",
     description: "View all saved data",
   },
@@ -71,7 +61,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "viewer",
     label: "Viewer",
     icon: Eye,
-    roles: ["user", "admin", "superuser"],
     title: "Data Viewer",
     description: "Detailed data display",
   },
@@ -79,7 +68,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "general-search",
     label: "Search",
     icon: Search,
-    roles: ["user", "admin", "manager", "superuser"],
     title: "General Search",
     description: "General data search",
   },
@@ -87,7 +75,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "collection-report",
     label: "Collection",
     icon: FileText,
-    roles: ["user", "admin", "manager", "superuser"],
     title: "Collection Report",
     description: "Save and review collection records",
   },
@@ -95,7 +82,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
-    roles: ["user", "admin", "manager", "superuser"],
     title: "Dashboard",
     description: "Analytics and system overview",
   },
@@ -103,7 +89,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "activity",
     label: "Activity",
     icon: Activity,
-    roles: ["user", "admin", "superuser"],
     title: "Activity Monitor",
     description: "Monitor user activity",
   },
@@ -111,7 +96,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "monitor",
     label: "System Monitor",
     icon: Server,
-    roles: ["user", "admin", "superuser"],
     title: "System Monitor",
     description: "Performance and service health",
   },
@@ -119,7 +103,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "analysis",
     label: "Analysis",
     icon: BarChart3,
-    roles: ["user", "admin", "manager", "superuser"],
     title: "Analysis",
     description: "Data analysis and reports",
   },
@@ -127,7 +110,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "audit-logs",
     label: "Audit Log",
     icon: ClipboardList,
-    roles: ["user", "admin", "superuser"],
     title: "Audit Log",
     description: "View system activity logs",
   },
@@ -135,7 +117,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "settings",
     label: "Settings",
     icon: SlidersHorizontal,
-    roles: ["user", "admin", "superuser"],
     title: "System Settings",
     description: "Preferences, controls, and account tools",
   },
@@ -143,7 +124,6 @@ const NAV_ENTRIES: Record<string, NavigationEntry> = {
     id: "backup",
     label: "Backup & Restore",
     icon: Database,
-    roles: ["user", "admin", "superuser"],
     title: "Backup & Restore",
     description: "Backup and restore system data",
   },
@@ -186,31 +166,8 @@ function canShowEntry(
   featureLockdown = false,
 ) {
   const item = getEntry(itemId);
-  if (!item || !item.roles.includes(userRole)) return false;
-  if (featureLockdown) return itemId === "general-search";
-  if (userRole === "superuser") return true;
-
-  switch (itemId) {
-    case "dashboard":
-      return canViewDashboardSection(userRole, tabVisibility);
-    case "activity":
-      return canViewActivitySection(userRole, tabVisibility);
-    case "monitor":
-      return canViewMonitorSection(userRole, tabVisibility, true);
-    case "analysis":
-      return canViewAnalysisSection(userRole, tabVisibility);
-    case "audit-logs":
-      return canViewAuditSection(userRole, tabVisibility);
-    case "backup":
-      return tabVisibility ? tabVisibility.backup !== false : true;
-    case "settings":
-      if (userRole === "user") {
-        return canShowEntry("backup", userRole, tabVisibility, featureLockdown);
-      }
-      return tabVisibility ? tabVisibility.settings !== false : true;
-    default:
-      return tabVisibility ? tabVisibility[itemId] !== false : true;
-  }
+  if (!item || (featureLockdown && itemId !== "general-search")) return false;
+  return canAccessRoleFeature(userRole, itemId, tabVisibility);
 }
 
 function mapVisibleEntries(

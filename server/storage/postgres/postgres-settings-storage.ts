@@ -5,8 +5,13 @@ import type {
 } from "../../config/system-settings";
 import type { ActivityRetentionPolicy } from "../../repositories/activity.repository";
 import { PostgresAiStorage } from "./postgres-ai-storage";
+import type { RolePermissionUpdateInput } from "../../repositories/settings-role-permission-mutations";
 
 export class PostgresSettingsStorage extends PostgresAiStorage {
+  async updateRolePermissions(input: RolePermissionUpdateInput) {
+    await this.ensureSettingsTables();
+    return this.settingsRepository.updateRolePermissions(input);
+  }
   async getSettingsForRole(role: string): Promise<SystemSettingCategory[]> {
     await this.ensureSettingsTables();
     return this.settingsRepository.getSettingsForRole(role);

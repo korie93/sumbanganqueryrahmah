@@ -37,6 +37,14 @@ export async function updateSetting(payload: {
   return parseApiJson(response, settingsUpdateResponseSchema, "/api/settings");
 }
 
+export async function updateRolePermissions(payload: {
+  updates: Array<{ key: string; value: boolean }>;
+  confirmCritical?: boolean;
+}) {
+  const response = await apiRequest("PATCH", "/api/settings/role-permissions", payload);
+  return parseApiJson(response, settingsUpdateResponseSchema, "/api/settings/role-permissions");
+}
+
 export async function getMaintenanceStatus(options?: SettingsRequestOptions) {
   const response = await fetch("/api/maintenance-status", {
     credentials: "include",

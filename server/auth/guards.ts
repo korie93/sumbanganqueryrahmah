@@ -3,6 +3,7 @@ import type { Span } from "@opentelemetry/api";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { User, UserActivity } from "../../shared/schema-postgres";
 import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
+import { canAccessRoleFeature } from "../../shared/role-feature-access";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 import { readInt } from "../config/runtime-config-read-utils";
@@ -916,7 +917,8 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     };
   };
 
-  const requireTabAccess = (tabId: string): RequestHandler => {
+  // Shared read endpoints may belong to more than one configurable page.
+  const requireTabAccess = (tabId: string, ...alternativeTabIds: string[]): RequestHandler => {
     return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
       try {
         const role = req.user?.role;
@@ -941,8 +943,8 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         }
 
         const tabs = await tabVisibility.getRoleTabVisibilityCached(role);
-        const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
-        const enabled = hasExplicit ? tabs[tabId] !== false : false;
+        const enabled = [tabId, ...alternativeTabIds].some((feature) =>
+          canAccessRoleFeature(role, feature, tabs));
 
         if (!enabled) {
           await recordAuthorizationDeniedAudit({
@@ -1029,8 +1031,8 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     requireRole,
     requireTabAccess,
     requireMonitorAccess,
-    clearTabVisibilityCache() {
-      tabVisibility.clear();
+    clearTabVisibilityCache(role?: string) {
+      tabVisibility.clear(role);
     },
     getTabVisibilityCacheStats: tabVisibility.getStats,
     clearActivityUpdateCache() {

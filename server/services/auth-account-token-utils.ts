@@ -207,7 +207,7 @@ export function assertUsableActivationTokenRecord(
     );
   }
 
-  if (!isManageableUserRole(normalizedRecord.role)) {
+  if (!isManageableUserRole(normalizedRecord.role) || normalizedRecord.status === "deleted") {
     throw new AuthAccountError(
       409,
       ERROR_CODES.ACCOUNT_UNAVAILABLE,
@@ -239,7 +239,7 @@ export function assertUsablePasswordResetTokenRecord(
     throw new AuthAccountError(410, ERROR_CODES.TOKEN_EXPIRED, "Password reset link has expired.");
   }
 
-  if (!isManageableUserRole(normalizedRecord.role)) {
+  if (!isManageableUserRole(normalizedRecord.role) || normalizedRecord.status === "deleted") {
     throw new AuthAccountError(
       409,
       ERROR_CODES.ACCOUNT_UNAVAILABLE,

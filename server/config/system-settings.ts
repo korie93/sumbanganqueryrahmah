@@ -74,7 +74,7 @@ export const ROLE_TAB_SETTINGS: Record<ConfigurableRole, RoleTabSetting[]> = {
     { pageId: "analysis", suffix: "analysis", label: "Manager Tab: Analysis", description: "Allow manager to open Analysis tab.", defaultEnabled: true },
     { pageId: "dashboard", suffix: "dashboard", label: "Manager Tab: Dashboard", description: "Allow manager to open the read-only login dashboard.", defaultEnabled: true },
     { pageId: "monitor", suffix: "monitor", label: "Manager Tab: System Monitor", description: "Keep System Monitor unavailable to manager.", defaultEnabled: false },
-    { pageId: "activity", suffix: "activity", label: "Manager Tab: Activity", description: "Keep the destructive Activity module unavailable to manager.", defaultEnabled: false },
+    { pageId: "activity", suffix: "activity", label: "Manager Tab: Activity", description: "Allow manager read-only Activity access. Session moderation and exact network details remain protected.", defaultEnabled: false },
     { pageId: "audit-logs", suffix: "audit_logs", label: "Manager Tab: Audit", description: "Keep Audit logs unavailable to manager.", defaultEnabled: false },
     { pageId: "backup", suffix: "backup", label: "Manager Tab: Backup", description: "Keep Backup and Restore unavailable to manager.", defaultEnabled: false },
     { pageId: "settings", suffix: "settings", label: "Manager Tab: Settings", description: "Keep Settings unavailable to manager.", defaultEnabled: false },

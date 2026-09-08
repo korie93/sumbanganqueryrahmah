@@ -69,7 +69,7 @@ export function createAuthAccountServicePolicies(storage: AuthAccountPolicyStora
     }
 
     const target = await storage.getUser(normalizedId);
-    if (!target) {
+    if (!target || target.status === "deleted") {
       throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     }
 

@@ -13,7 +13,7 @@ export async function normalizeUsersBootstrapRows(
         ELSE 'user'
       END,
       status = CASE
-        WHEN lower(trim(COALESCE(status, ''))) IN ('pending_activation', 'active', 'suspended', 'disabled')
+        WHEN lower(trim(COALESCE(status, ''))) IN ('pending_activation', 'active', 'suspended', 'disabled', 'deleted')
           THEN lower(trim(COALESCE(status, '')))
         WHEN password_hash ~ '^\\$2[aby]\\$'
           THEN 'active'

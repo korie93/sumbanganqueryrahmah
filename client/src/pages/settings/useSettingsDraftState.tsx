@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { updateSetting } from "@/lib/api";
+import { updateRolePermissions, updateSetting } from "@/lib/api";
 import { buildMaintenanceSettingsSummary } from "@/pages/settings/maintenance-settings-summary";
 import { SettingCard } from "@/pages/settings/SettingCard";
 import {
@@ -118,17 +118,23 @@ export function useSettingsDraftState({
       setSaving(true);
       try {
         const keys = Array.from(dirtyKeys);
-        for (const key of keys) {
+        const roleKeys = keys.filter((key) => key.startsWith("tab_"));
+        const saveGroups = [roleKeys, ...keys.filter((key) => !key.startsWith("tab_")).map((key) => [key])].filter((group) => group.length);
+        for (const group of saveGroups) {
+          const key = group[0];
           const payloadValue = Object.prototype.hasOwnProperty.call(draftValues, key)
             ? draftValues[key]
             : settingMap.get(key)?.value ?? null;
 
           try {
-            await updateSetting({
-              key,
-              value: payloadValue ?? null,
-              confirmCritical,
-            });
+            if (key.startsWith("tab_")) {
+              await updateRolePermissions({
+                updates: group.map((roleKey) => ({ key: roleKey, value: String(draftValues[roleKey] ?? settingMap.get(roleKey)?.value).toLowerCase() === "true" })),
+                confirmCritical,
+              });
+            } else {
+              await updateSetting({ key, value: payloadValue ?? null, confirmCritical });
+            }
           } catch (error: unknown) {
             const parsed = normalizeSettingsErrorPayload(error);
             if (parsed.requiresConfirmation && !confirmCritical) {

@@ -7,6 +7,7 @@ import {
   isAdminMaintenanceEditableKey,
   parseSettingType,
 } from "./settings-repository-value-utils";
+import { getRoleFeatureRestriction, parseRoleFeatureSettingKey } from "../../shared/role-feature-access";
 
 type SettingRow = Record<string, unknown>;
 
@@ -37,13 +38,15 @@ export function buildSystemSettingItem(input: {
   options?: SettingsOption[];
 }): SystemSettingItem {
   const { row, canEdit, options: settingOptions = [] } = input;
+  const roleFeature = parseRoleFeatureSettingKey(String(row.key));
+  const restriction = roleFeature ? getRoleFeatureRestriction(roleFeature.role, roleFeature.feature) : null;
 
   return {
     key: String(row.key),
     label: String(row.label),
-    description: row.description ? String(row.description) : null,
+    description: restriction ?? (row.description ? String(row.description) : null),
     type: parseSettingType(row.type),
-    value: String(row.value ?? ""),
+    value: restriction ? "false" : String(row.value ?? ""),
     defaultValue:
       row.default_value === null || row.default_value === undefined
         ? null
@@ -52,7 +55,7 @@ export function buildSystemSettingItem(input: {
     updatedAt: row.updated_at ? new Date(row.updated_at as string | number | Date) : null,
     permission: {
       canView: row.can_view === true || row.can_view === undefined,
-      canEdit,
+      canEdit: canEdit && !restriction,
     },
     options: settingOptions,
   };

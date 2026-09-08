@@ -1,4 +1,5 @@
 import { createAuthGuards } from "../auth/guards";
+import { subscribeRolePermissionInvalidation } from "../auth/role-permission-shared-invalidation";
 import { ImportsRepository } from "../repositories/imports.repository";
 import { SearchRepository } from "../repositories/search.repository";
 import { AuditRepository } from "../repositories/audit.repository";
@@ -44,6 +45,11 @@ export function createLocalServerComposition(
   });
   const importAnalysisService = new ImportAnalysisService(importsRepository);
   const runtimeWsSharedBus = createConfiguredRuntimeWsSharedBus();
+  const authGuards = createAuthGuards({ storage, secret });
+  // Subscribe before browser broadcasts so another worker cannot serve the old
+  // cached authorization immediately after notifying its connected browsers.
+  const unsubscribePermissions = subscribeRolePermissionInvalidation(runtimeWsSharedBus, authGuards.clearTabVisibilityCache);
+  wss.once("close", unsubscribePermissions);
   const websocketManager = createRuntimeWebSocketManager({
     wss,
     storage,
@@ -54,7 +60,6 @@ export function createLocalServerComposition(
     ...(acceptWebSocketConnections ? { acceptConnections: acceptWebSocketConnections } : {}),
     ...(isWebSocketShutdownInProgress ? { isShuttingDown: isWebSocketShutdownInProgress } : {}),
   });
-  const authGuards = createAuthGuards({ storage, secret });
   const categoryStatsService = new CategoryStatsService(storage);
   const aiSearchService = new AiSearchService({
     storage,

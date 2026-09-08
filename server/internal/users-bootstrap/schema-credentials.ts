@@ -47,6 +47,7 @@ export async function hardenLegacyUserCredentials(
   const credentialRows = await database.execute(sql`
     SELECT id, password_hash, status
     FROM public.users
+    WHERE status IS DISTINCT FROM 'deleted'
   `);
 
   for (const row of credentialRows.rows as UserCredentialRow[]) {

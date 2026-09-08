@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ManagedUserDeletionConflictError } from "../../repositories/auth-repository-types";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { AuthAccountManagedLifecycleOperations } from "../auth-account-managed-lifecycle-operations";
 import { AuthAccountManagedRecoveryOperations } from "../auth-account-managed-recovery-operations";
@@ -664,13 +663,12 @@ test("AuthAccountManagedLifecycleOperations.deleteManagedUser delegates deletion
 
 test("deleteManagedUser preserves failure semantics without separate session or audit writes", async () => {
   const databaseFailure = new Error("unexpected audit/storage failure");
-  for (const scenario of ["dependency", "missing", "unexpected", "self", "unauthorized"] as const) {
+  for (const scenario of ["missing", "unexpected", "self", "unauthorized"] as const) {
     let deletionCalls = 0;
     const operations = new AuthAccountManagedLifecycleOperations({
       storage: createManagedStorage({
         deleteManagedUserAccount: async () => {
           deletionCalls += 1;
-          if (scenario === "dependency") throw new ManagedUserDeletionConflictError(new Error("internal SQL details"));
           if (scenario === "unexpected") throw databaseFailure;
           return { deleted: false, closedSessionIds: [] };
         },
@@ -692,13 +690,36 @@ test("deleteManagedUser preserves failure semantics without separate session or 
     await assert.rejects(() => operations.deleteManagedUser(buildSuperuserAuth(), "user-1"), (error: unknown) => {
       if (scenario === "unexpected") { assert.equal(error, databaseFailure); return true; }
       assert(error instanceof AuthAccountError);
-      assert.equal(error.statusCode, scenario === "dependency" ? 409 : scenario === "missing" ? 404 : 403);
-      if (scenario === "dependency") {
-        assert.match(error.message, /linked records.*Disable the account/);
-        assert.doesNotMatch(error.message, /SQL|constraint|23503/);
-      }
+      assert.equal(error.statusCode, scenario === "missing" ? 404 : 403);
       return true;
     });
     assert.equal(deletionCalls, scenario === "self" || scenario === "unauthorized" ? 0 : 1);
+  }
+});
+
+test("account mutations racing a completed Delete do not rewrite history or emit success audit", async () => {
+  const operations = new AuthAccountManagedLifecycleOperations({
+    storage: createManagedStorage({
+      updateUserAccount: async () => undefined,
+      updateActivitiesUsername: async () => { assert.fail("Do not rename deleted actor history."); },
+      clearBannedSessionsForUsername: async () => { assert.fail("Do not clear deleted actor history."); },
+      createAuditLog: async () => { assert.fail("No successful mutation audit when the account disappeared."); },
+    }),
+    requireSuperuser: async () => buildSuperuser(),
+    requireManageableTarget: async () => buildManagedTarget(),
+    ensureUniqueIdentity: async () => undefined,
+    validateEmail: () => undefined,
+    validateUsername: () => undefined,
+    requireManagedEmail: (email) => email || "",
+    invalidateUserSessions: async () => { assert.fail("Deletion already owns session revocation."); },
+    sendActivationEmail: async () => { throw new Error("unused"); },
+    sendPasswordResetEmail: async () => buildDelivery(),
+  });
+  for (const mutate of [
+    () => operations.updateManagedUser(buildSuperuserAuth(), "user-1", { username: "renamed.user" }),
+    () => operations.updateManagedUserRole(buildSuperuserAuth(), "user-1", "manager"),
+    () => operations.updateManagedUserStatus(buildSuperuserAuth(), "user-1", { status: "active", isBanned: false }),
+  ]) {
+    await assert.rejects(mutate, (error: unknown) => error instanceof AuthAccountError && error.statusCode === 404);
   }
 });

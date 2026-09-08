@@ -19,14 +19,14 @@ test("manager can open dashboard and analysis without gaining monitor or audit a
   };
 
   assert.equal(canViewDashboardSection("manager", tabs), true);
-  assert.equal(canViewActivitySection("manager", tabs), false);
+  assert.equal(canViewActivitySection("manager", tabs), true);
   assert.equal(canViewMonitorSection("manager", tabs, true), false);
   assert.equal(canViewAuditSection("manager", tabs), false);
   assert.equal(getDefaultMonitorSection("manager", tabs, true), "dashboard");
 });
 
 test("manager page guard denies every module outside the approved allowlist", () => {
-  const tabs = { dashboard: true, analysis: true };
+  const tabs = { home: true, import: true, "general-search": true, "collection-report": true, dashboard: true, analysis: true };
   const allowedPages = [
     "home",
     "import",

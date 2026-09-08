@@ -53,6 +53,8 @@ export function normalizeAccountStatus(
   if (normalized === "active") return "active";
   if (normalized === "suspended") return "suspended";
   if (normalized === "disabled") return "disabled";
+  // Internal terminal state; never add it to externally writable AccountStatus.
+  if (normalized === "deleted") return "disabled";
   if (normalized === "pending_activation") return "pending_activation";
   return fallback;
 }

@@ -84,6 +84,7 @@ export async function listCollectionAdminVisibleNicknames(
     INNER JOIN public.users u
       ON u.id = avn.admin_user_id
      AND u.role = 'admin'
+     AND u.status <> 'deleted'
     ${whereSql}
     ORDER BY n.is_active DESC, lower(n.nickname) ASC
     LIMIT 1000
@@ -142,6 +143,7 @@ export async function replaceCollectionAdminAssignedNicknameIds(
     FROM public.users
     WHERE id = ${adminUserId}
       AND role = 'admin'
+      AND status <> 'deleted'
     LIMIT 1
   `);
   if (!adminCheck.rows?.[0]) {

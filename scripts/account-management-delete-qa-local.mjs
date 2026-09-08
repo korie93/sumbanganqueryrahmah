@@ -44,6 +44,7 @@ const address = await resolveManagedLoopbackBaseUrl({
 const password = () => `Qa!${randomBytes(18).toString("hex")}`;
 const fixtures = Object.fromEntries(["eligible", "history"].map((name) => [name, {
   id: randomUUID(), username: `qa.delete.${name}.${stamp}`, password: password(),
+  role: name === "history" ? "manager" : "user",
   activationId: randomUUID(), resetId: randomUUID(),
 }]));
 const historyId = randomUUID();
@@ -147,8 +148,8 @@ async function prepareFixtures() {
   for (const fixture of Object.values(fixtures)) {
     await fixturePool.query(`INSERT INTO public.users
       (id, username, full_name, role, password_hash, status, is_banned, must_change_password, activated_at)
-      VALUES ($1, $2, $3, 'user', $4, 'active', false, false, now())`,
-    [fixture.id, fixture.username, "Account deletion QA fixture", await bcrypt.hash(fixture.password, 12)]);
+      VALUES ($1, $2, $3, $5, $4, 'active', false, false, now())`,
+    [fixture.id, fixture.username, "Account deletion QA fixture", await bcrypt.hash(fixture.password, 12), fixture.role]);
     await fixturePool.query(`INSERT INTO public.account_activation_tokens
       (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '1 day')`,
     [fixture.activationId, fixture.id, randomBytes(32).toString("hex")]);
@@ -162,13 +163,110 @@ async function prepareFixtures() {
   [historyId, fixtures.history.username]);
 }
 
+async function verifyRolePermissions(superuser, manager, ordinary) {
+  phase = "Role & Permission end-to-end ON/OFF";
+  const page = superuser.page;
+  const managerPage = manager.page;
+  const originalUserTabs = (await api(ordinary.context, "GET", "/api/settings/tab-visibility")).tabs;
+  const originalManagerTabs = (await api(manager.context, "GET", "/api/settings/tab-visibility")).tabs;
+  const settings = await api(superuser.context, "GET", "/api/settings");
+  const category = settings.categories.find((item) => item.name === "Roles & Permissions");
+  assert(category, "Role & Permission category must exist.");
+  await page.goto(`${address.baseUrl}/settings?section=${encodeURIComponent(category.id)}`, { waitUntil: "domcontentloaded" });
+  const activityControl = page.locator("#setting-card-control-tab_manager_activity_enabled");
+  const searchControl = page.locator("#setting-card-control-tab_manager_general_search_enabled");
+  await activityControl.waitFor({ state: "visible" });
+
+  async function savePermissions(activity, search) {
+    let changed = false;
+    for (const [control, enabled] of [[activityControl, activity], [searchControl, search]]) {
+      if ((await control.getAttribute("aria-checked")) !== String(enabled)) {
+        await control.click();
+        changed = true;
+      }
+    }
+    assert(changed, "Each browser save must exercise a real permission transition.");
+    await page.getByRole("button", { name: "Save Changes", exact: true }).click();
+    const confirm = page.getByRole("button", { name: "Yes, Save", exact: true });
+    // Critical role controls use the established confirmation dialog.
+    if (await confirm.isVisible()) await confirm.click();
+    await page.getByText("No unsaved changes", { exact: true }).waitFor();
+    const tabs = (await api(manager.context, "GET", "/api/settings/tab-visibility")).tabs;
+    assert.equal(tabs.activity, activity);
+    assert.equal(tabs["general-search"], search);
+    const unchanged = { ...tabs, activity: originalManagerTabs.activity, "general-search": originalManagerTabs["general-search"] };
+    assert.deepEqual(unchanged, originalManagerTabs, "Other manager features must remain unchanged.");
+    assert.deepEqual((await api(ordinary.context, "GET", "/api/settings/tab-visibility")).tabs, originalUserTabs,
+      "Changing manager settings must not affect another role.");
+  }
+
+  await savePermissions(true, true);
+  // This existing page is not reloaded: the live notification must update it.
+  await managerPage.getByTestId("nav-group-insights").click();
+  const activityMenu = managerPage.getByRole("menuitem", { name: /^Activity\b/ });
+  await activityMenu.waitFor({ state: "visible" });
+  await activityMenu.click();
+  currentPage = managerPage;
+  await managerPage.getByRole("heading", { name: "Activity Monitor", exact: true }).waitFor({ state: "visible" });
+  assert.equal(new URL(managerPage.url()).searchParams.get("section"), "activity");
+  const activityData = await api(manager.context, "GET", "/api/activity/page?page=1&pageSize=10");
+  assert(activityData.activities.length > 0, "Activity acceptance requires real login records.");
+  for (const activity of activityData.activities) {
+    assert(!activity.ipAddress || activity.ipAddress.includes("x") || activity.ipAddress.includes("/64"), "Manager must not receive exact network addresses.");
+  }
+  await api(manager.context, "GET", `/api/activity/${activityData.activities[0].id}/investigation`, 403);
+  assert.equal(await managerPage.locator('[data-testid^="button-investigate-"]').count(), 0);
+  await api(manager.context, "GET", "/api/search?q=permission-fixture-absent");
+  await api(manager.context, "GET", "/api/admin/users", 403);
+  await api(manager.context, "GET", "/api/settings", 403);
+  await managerPage.screenshot({ path: path.join(artifactsDir, "manager-activity-enabled.png"), fullPage: true });
+  checked("manager Activity ON persists and appears live in menu/page/API without granting Settings or account administration");
+
+  await savePermissions(false, false);
+  await managerPage.getByRole("heading", { name: "Activity Monitor", exact: true }).waitFor({ state: "hidden" });
+  await managerPage.getByTestId("nav-general-search").waitFor({ state: "hidden" });
+  await managerPage.getByTestId("nav-group-insights").click();
+  assert.equal(await managerPage.getByRole("menuitem", { name: /^Activity\b/ }).count(), 0);
+  await managerPage.keyboard.press("Escape");
+  await api(manager.context, "GET", "/api/activity/page?page=1&pageSize=10", 403);
+  await api(manager.context, "GET", "/api/search?q=permission-fixture-absent", 403);
+  for (const route of ["/monitor?section=activity", "/general-search"]) {
+    phase = `Role & Permission disabled direct URL: ${route}`;
+    await managerPage.goto(`${address.baseUrl}${route}`, { waitUntil: "domcontentloaded" });
+    if (route.startsWith("/monitor")) {
+      await managerPage.getByRole("heading", { name: "403 Forbidden", exact: true }).waitFor();
+    } else {
+      // Ordinary disabled pages retain the shell's established safe-home fallback.
+      await managerPage.getByText("Operational modules", { exact: true }).waitFor();
+      assert.equal(await managerPage.getByTestId("nav-general-search").count(), 0);
+    }
+  }
+  await managerPage.screenshot({ path: path.join(artifactsDir, "manager-disabled-direct-route.png"), fullPage: true });
+  checked("Activity and Search OFF remove live access, deny both direct URLs/APIs, and preserve other role/feature settings");
+
+  const fresh = await login(fixtures.history.username, fixtures.history.password, "manager");
+  // The product intentionally permits one browser session; fresh login revokes
+  // the previous cookie, so subsequent assertions must use the new session.
+  manager.context = fresh.context;
+  const freshTabs = (await api(fresh.context, "GET", "/api/settings/tab-visibility")).tabs;
+  assert.equal(freshTabs.activity, false);
+  assert.equal(freshTabs["general-search"], false);
+  await api(fresh.context, "GET", "/api/activity/page?page=1&pageSize=10", 403);
+  await savePermissions(true, true);
+  await fresh.page.goto(`${address.baseUrl}/monitor?section=activity`, { waitUntil: "domcontentloaded" });
+  await fresh.page.getByRole("heading", { name: "Activity Monitor", exact: true }).waitFor({ state: "visible" });
+  await api(fresh.context, "GET", "/api/activity/page?page=1&pageSize=10");
+  await fresh.page.close();
+  await managerPage.close();
+  checked("fresh manager login sees persisted OFF and repeated ON restores authorized Activity access");
+}
+
 async function verifyBrowserDelete() {
   browser = await chromium.launch(resolvePlaywrightLaunchOptions());
   phase = "fixture sessions";
   const eligible = await login(fixtures.eligible.username, fixtures.eligible.password, "user");
   await eligible.page.close();
-  const history = await login(fixtures.history.username, fixtures.history.password, "user");
-  await history.page.close();
+  const history = await login(fixtures.history.username, fixtures.history.password, "manager");
   const superuser = await login(env.SEED_SUPERUSER_USERNAME, env.SEED_SUPERUSER_PASSWORD, "superuser");
   const page = superuser.page;
   currentPage = page;
@@ -179,6 +277,9 @@ async function verifyBrowserDelete() {
   await api(history.context, "GET", "/api/me");
   await api(eligible.context, "DELETE", `/api/admin/users/${fixtures.history.id}`, 403);
   checked("ordinary user remains denied by the real delete endpoint");
+
+  await verifyRolePermissions(superuser, history, eligible);
+  currentPage = page;
 
   phase = "Account Management success refresh";
   await page.goto(`${address.baseUrl}/settings?section=account-management`, { waitUntil: "domcontentloaded" });
@@ -208,46 +309,57 @@ async function verifyBrowserDelete() {
   await page.getByText("Account Deleted", { exact: true }).first().waitFor();
   await page.screenshot({ path: path.join(artifactsDir, "eligible-deleted-refreshed.png"), fullPage: true });
   checked("real confirmation DELETE returns 200, dialog closes, success toast appears, row and pending reset refresh away");
-  assert.equal((await fixturePool.query("SELECT id FROM users WHERE id = $1", [fixtures.eligible.id])).rowCount, 0);
-  for (const table of ["account_activation_tokens", "password_reset_requests", "user_activity"]) {
+  assert.equal((await fixturePool.query("SELECT status FROM users WHERE id = $1", [fixtures.eligible.id])).rows[0].status, "deleted");
+  for (const table of ["account_activation_tokens", "password_reset_requests"]) {
     assert.equal((await fixturePool.query(`SELECT 1 FROM ${table} WHERE user_id = $1`, [fixtures.eligible.id])).rowCount, 0);
   }
+  assert.equal((await fixturePool.query("SELECT 1 FROM user_activity WHERE user_id = $1 AND is_active = true", [fixtures.eligible.id])).rowCount, 0);
   assert.equal((await fixturePool.query(
     "SELECT id FROM audit_logs WHERE action = 'ACCOUNT_DELETED' AND target_user = $1 AND performed_by = $2",
     [fixtures.eligible.id, env.SEED_SUPERUSER_USERNAME],
   )).rowCount, 1);
   await api(eligible.context, "GET", "/api/me", 401);
-  checked("successful deletion removes only target auth data, retains the deletion audit, and invalidates existing cookies");
+  checked("successful deletion removes auth proofs, retains historical identity/activity/audit, and invalidates existing cookies");
 
-  phase = "Account Management historical conflict";
+  phase = "Account Management history-linked manager deletion";
   const blocked = await selectAccount(page, fixtures.history);
   const blockedResponsePromise = responseAt(page, "DELETE", `/api/admin/users/${fixtures.history.id}`);
   await blocked.dialog.getByRole("button", { name: "Delete User", exact: true }).click();
   const blockedResponse = await blockedResponsePromise;
-  assert.equal(blockedResponse.status(), 409, "Historical dependency must return a controlled conflict, not HTTP 500.");
-  const conflict = await blockedResponse.json();
-  assert(conflict.message && !/constraint|foreign key|23503|DELETE FROM|stack/i.test(conflict.message),
-    "The client must receive a safe, meaningful conflict message without database internals.");
-  // Settings uses the API error code as its toast title when one is present.
-  await page.getByText(conflict.error.code, { exact: true }).first().waitFor();
-  await page.getByText(conflict.message, { exact: false }).first().waitFor();
-  await blocked.row.waitFor({ state: "visible" });
-  await page.screenshot({ path: path.join(artifactsDir, "history-conflict-preserved.png"), fullPage: true });
-  assert.equal((await fixturePool.query("SELECT id FROM users WHERE id = $1", [fixtures.history.id])).rowCount, 1);
+  assert.equal(blockedResponse.status(), 200, "History-linked manager deletion must succeed without 409/500.");
+  assert.equal((await blockedResponse.json()).deleted, true);
+  await blocked.row.waitFor({ state: "hidden" });
+  await blocked.dialog.waitFor({ state: "hidden" });
+  await page.getByText("Account Deleted", { exact: true }).first().waitFor();
+  await page.screenshot({ path: path.join(artifactsDir, "history-linked-manager-deleted.png"), fullPage: true });
+  assert.equal((await fixturePool.query("SELECT status FROM users WHERE id = $1", [fixtures.history.id])).rows[0].status, "deleted");
   assert.equal((await fixturePool.query("SELECT id FROM collection_records WHERE id = $1", [historyId])).rowCount, 1);
   for (const table of ["account_activation_tokens", "password_reset_requests"]) {
-    assert.equal((await fixturePool.query(`SELECT 1 FROM ${table} WHERE user_id = $1`, [fixtures.history.id])).rowCount, 1);
+    assert.equal((await fixturePool.query(`SELECT 1 FROM ${table} WHERE user_id = $1`, [fixtures.history.id])).rowCount, 0);
   }
   assert.equal((await fixturePool.query(
     "SELECT id FROM audit_logs WHERE action = 'ACCOUNT_DELETED' AND target_user = $1", [fixtures.history.id],
-  )).rowCount, 0);
-  await api(history.context, "GET", "/api/me");
-  checked("409 renders the safe API message, keeps the row/history/tokens/session, and does not create a success audit");
+  )).rowCount, 1);
+  assert.equal((await fixturePool.query("SELECT created_by_login FROM collection_records WHERE id = $1", [historyId])).rows[0].created_by_login, fixtures.history.username);
+  await api(history.context, "GET", "/api/me", 401);
+  checked("history-linked manager is deleted successfully with original Collection attribution and audit preserved");
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Managed Account", exact: true }).click();
-  await page.getByRole("row").filter({ hasText: fixtures.history.username }).waitFor({ state: "visible" });
+  await page.getByRole("row").filter({ hasText: env.SEED_ADMIN_USERNAME }).waitFor({ state: "visible" });
+  assert.equal(await page.getByRole("row").filter({ hasText: fixtures.history.username }).count(), 0);
   assert.equal(await page.getByRole("row").filter({ hasText: fixtures.eligible.username }).count(), 0);
   checked("full page reload also keeps the deleted user absent");
+  phase = "deleted manager fresh login rejection";
+  const deletedContext = await browser.newContext();
+  contexts.push(deletedContext);
+  const deletedPage = await deletedContext.newPage();
+  await deletedPage.goto(`${address.baseUrl}/login`, { waitUntil: "domcontentloaded" });
+  await deletedPage.getByTestId("input-username").fill(fixtures.history.username);
+  await deletedPage.getByTestId("input-password").fill(fixtures.history.password);
+  const rejectedLogin = responseAt(deletedPage, "POST", "/api/auth/login");
+  await deletedPage.getByTestId("button-login").click();
+  assert.equal((await rejectedLogin).status(), 401, "Deleted account credentials cannot establish a new session.");
+  checked("deleted manager cannot log in again with its former password");
   assert.deepEqual(pageErrors, [], "No unhandled browser runtime errors are allowed.");
 }
 

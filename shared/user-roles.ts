@@ -9,6 +9,7 @@ export const MANAGER_ALLOWED_MODULES = [
   "general-search",
   "collection-report",
   "dashboard",
+  "activity",
   "analysis",
   "import",
 ] as const;

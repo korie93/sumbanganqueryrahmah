@@ -67,7 +67,7 @@ export class AuthAccountPasswordResetOperations {
       : await this.deps.storage.getUserByUsername(normalized)
         || await this.deps.storage.getUserByEmail(normalized);
 
-    if (!user || user.role === "superuser") {
+    if (!user || user.role === "superuser" || user.status === "deleted") {
       return { accepted: true };
     }
 
@@ -149,7 +149,7 @@ export class AuthAccountPasswordResetOperations {
     });
 
     const target = await this.deps.storage.getUser(record.userId);
-    if (!target) {
+    if (!target || target.status === "deleted") {
       throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     }
 

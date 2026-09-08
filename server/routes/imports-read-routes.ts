@@ -11,19 +11,22 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
     searchRateLimiter,
   } = context;
 
-  app.get("/api/data-rows", authenticateToken, asyncHandler(importsController.listDataRows));
+  // Shared read resources are available to an enabled consuming feature; upload
+  // and other mutations keep their separate existing Import action guards.
+  const requireImportRead = requireTabAccess("import", "saved", "viewer");
+  app.get("/api/data-rows", authenticateToken, requireImportRead, asyncHandler(importsController.listDataRows));
   app.get(
     "/api/imports",
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),
-    requireTabAccess("import"),
+    requireTabAccess("import", "saved", "viewer", "analysis"),
     asyncHandler(importsController.listImports),
   );
   app.post(
     "/api/imports/comparison",
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),
-    requireTabAccess("import"),
+    requireTabAccess("import", "saved"),
     searchRateLimiter,
     asyncHandler(importsController.compareImports),
   );
@@ -31,14 +34,14 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
     "/api/imports/:id/summary",
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),
-    requireTabAccess("import"),
+    requireImportRead,
     asyncHandler(importsController.getImportSummary),
   );
   app.get(
     "/api/imports/:id",
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),
-    requireTabAccess("import"),
+    requireImportRead,
     asyncHandler(importsController.getImport),
   );
   app.get(
@@ -52,7 +55,7 @@ export function registerImportsReadRoutes(context: ImportsRouteContext) {
     "/api/imports/:id/data",
     authenticateToken,
     requireRole("user", "admin", "manager", "superuser"),
-    requireTabAccess("import"),
+    requireImportRead,
     searchRateLimiter,
     asyncHandler(importsController.getImportDataPage),
   );

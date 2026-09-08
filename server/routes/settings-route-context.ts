@@ -9,7 +9,7 @@ export type SettingsRouteDeps = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
-  clearTabVisibilityCache: () => void;
+  clearTabVisibilityCache: (role?: string) => void;
   invalidateRuntimeSettingsCache: () => void;
   invalidateMaintenanceCache: () => void;
   getMaintenanceStateCached: (force?: boolean) => Promise<MaintenanceState>;

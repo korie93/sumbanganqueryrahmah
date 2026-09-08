@@ -82,6 +82,7 @@ export async function ensureSystemActorBootstrapUser(
       activated_at = NULL,
       last_login_at = NULL
     WHERE lower(username) = ${SYSTEM_ACTOR_USERNAME}
+      AND status <> 'deleted'
   `);
   await database.execute(sql`
     UPDATE public.users

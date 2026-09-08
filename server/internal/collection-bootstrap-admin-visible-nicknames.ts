@@ -43,6 +43,7 @@ export async function ensureCollectionAdminVisibleNicknamesTable(): Promise<void
       FROM public.users u
       WHERE u.id = avn.admin_user_id
         AND u.role = 'admin'
+        AND u.status <> 'deleted'
     )
   `);
   await db.execute(sql`
@@ -111,6 +112,7 @@ export async function ensureCollectionAdminVisibleNicknamesTable(): Promise<void
     SELECT id
     FROM public.users
     WHERE role = 'admin'
+      AND status <> 'deleted'
     ORDER BY username ASC
     LIMIT 5000
   `);

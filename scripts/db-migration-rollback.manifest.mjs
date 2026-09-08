@@ -79,11 +79,33 @@ const MIGRATION_TAGS = Object.freeze([
   "0060_collection_osp_v9_complete_aging_scope",
   "0061_collection_v9_history_lookup_indexes",
   "0062_collection_osp_private_client_ownership",
+  "0063_account_terminal_deletion",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(
   MIGRATION_TAGS.map((migration) => {
     const isV7PersistenceMigration = migration === "0054_collection_osp_reconciliation_persistence";
+    if (migration === "0063_account_terminal_deletion") {
+      return Object.freeze({
+        backupRequired: true,
+        migration,
+        strategy: "backup-restore",
+        preconditions: Object.freeze([
+          ...BACKUP_RESTORE_PRECONDITIONS,
+          "Stop all old workers before deployment; old bootstrap code does not understand terminal deleted accounts.",
+          "If accounts were deleted after the backup, preserve their identity/revocation ledger and require a reviewed forward fix; do not restore their former login access.",
+        ]),
+        rollbackSteps: Object.freeze([
+          "Prefer a forward fix that retains terminal account guards and historical actor IDs.",
+          "If no account deletions occurred after the verified backup, use the maintenance-mode pre-migration database/artifact restore procedure.",
+          "Otherwise restore only to an isolated database for review; retain/reapply deleted identities and revoke their sessions before any traffic is enabled.",
+        ]),
+        validationSteps: Object.freeze([
+          ...BACKUP_RESTORE_VALIDATION_STEPS,
+          "Verify deleted account credentials/cookies remain rejected and history attribution/private ownership have not changed.",
+        ]),
+      });
+    }
     return Object.freeze({
       backupRequired: true,
       migration,

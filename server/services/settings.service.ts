@@ -4,6 +4,8 @@ import type {
   SystemSettingItem,
 } from "../config/system-settings";
 import type { PostgresStorage } from "../storage-postgres";
+import { parseRoleFeatureSettingKey } from "../../shared/role-feature-access";
+import type { RolePermissionUpdateInput } from "../repositories/settings-role-permission-mutations";
 
 type AppConfig = Awaited<ReturnType<PostgresStorage["getAppConfig"]>>;
 type SettingsUpdateRecord = {
@@ -20,10 +22,11 @@ type SettingsStorage = Pick<
   | "getRoleTabVisibility"
   | "getSettingsForRole"
   | "updateSystemSetting"
+  | "updateRolePermissions"
 >;
 
 type SettingsServiceDeps = {
-  clearTabVisibilityCache: () => void;
+  clearTabVisibilityCache: (role?: string) => void;
   invalidateRuntimeSettingsCache: () => void;
   invalidateMaintenanceCache: () => void;
   getMaintenanceStateCached: (force?: boolean) => Promise<MaintenanceState>;
@@ -57,6 +60,10 @@ export class SettingsService {
   }
 
   async updateSetting(input: UpdateSettingInput): Promise<SettingsUpdateRecord> {
+    if (input.key.startsWith("tab_")) {
+      const result = await this.updateRolePermissions({ ...input, updates: [{ key: input.key, value: (input.value ?? null) as string | number | boolean | null }] });
+      return { ...result, ...(result.settings?.[0] ? { setting: result.settings[0] } : {}) };
+    }
     const value = (input.value ?? null) as string | number | boolean | null;
     const result = await this.storage.updateSystemSetting({
       role: input.role,
@@ -100,6 +107,17 @@ export class SettingsService {
       updatedBy: input.updatedBy,
     });
 
+    return result;
+  }
+
+  async updateRolePermissions(input: RolePermissionUpdateInput) {
+    const result = await this.storage.updateRolePermissions(input);
+    if (result.status !== "updated") return result;
+    const roles = new Set(result.settings?.map((setting) => parseRoleFeatureSettingKey(setting.key)!.role));
+    for (const role of roles) this.deps.clearTabVisibilityCache(role);
+    for (const setting of result.settings ?? []) {
+      this.deps.broadcastWsMessage({ type: "settings_updated", key: setting.key, updatedBy: input.updatedBy });
+    }
     return result;
   }
 }

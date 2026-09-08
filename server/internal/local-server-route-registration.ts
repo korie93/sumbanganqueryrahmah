@@ -278,6 +278,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       isDbProtected: getDbProtection,
     }),
     authenticateToken,
+    requireTabAccess,
     searchRateLimiter,
   });
 

@@ -48,7 +48,7 @@ test("getVisibleNavigationGroups keeps the settings group visible for superusers
 });
 
 test("manager navigation exposes only the approved operational modules", () => {
-  const items = getVisibleNavItems("manager", null, false);
+  const items = getVisibleNavItems("manager", { home: true, import: true, "general-search": true, "collection-report": true, dashboard: true, analysis: true }, false);
 
   assert.deepEqual(
     items.map((item) => item.id),

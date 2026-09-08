@@ -1,4 +1,4 @@
-import { sql, inArray } from "drizzle-orm";
+import { sql, inArray, and } from "drizzle-orm";
 import { db } from "../db-postgres";
 import {
   users,
@@ -49,7 +49,7 @@ export async function getUsersByRoles(roles: string[]): Promise<Array<{
         isBanned: users.isBanned,
       })
       .from(users)
-      .where(inArray(users.role, roles))
+      .where(and(inArray(users.role, roles), sql`${users.status} <> 'deleted'`))
       .orderBy(users.role, users.username)
       .limit(QUERY_PAGE_LIMIT)
       .offset(offset),
@@ -208,6 +208,7 @@ export async function getAccounts(): Promise<Array<{
       })
       .from(users)
       .orderBy(users.role, users.username)
+      .where(sql`${users.status} <> 'deleted'`)
       .limit(QUERY_PAGE_LIMIT)
       .offset(offset),
     QUERY_PAGE_LIMIT,

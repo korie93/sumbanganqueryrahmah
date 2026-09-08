@@ -199,6 +199,7 @@ function createSearchRouteHarness(options?: {
       searchRateLimiterCalls.push(req.path);
       next();
     },
+    requireTabAccess: () => (_req, _res, next) => next(),
   });
   app.use(errorHandler);
 

@@ -4,6 +4,7 @@ import { ensureUsersBootstrapIntegrity } from "./schema-integrity";
 import { normalizeUsersBootstrapRows } from "./schema-normalization";
 import { ensureSystemActorBootstrapUser } from "./schema-system-actor";
 import { ensureUsersBootstrapTablesAndColumns } from "./schema-tables";
+import { ensureDeletedAccountGuards } from "./schema-deleted-account";
 import type { BootstrapSqlExecutor } from "./schema-types";
 
 export async function ensureUsersBootstrapSchema(
@@ -14,6 +15,7 @@ export async function ensureUsersBootstrapSchema(
   await normalizeUsersBootstrapRows(database);
   await ensureSystemActorBootstrapUser(database);
   await ensureUsersBootstrapIntegrity(database);
+  await ensureDeletedAccountGuards(database);
 }
 
 export type { BootstrapSqlExecutor } from "./schema-types";

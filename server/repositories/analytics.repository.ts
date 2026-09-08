@@ -169,12 +169,12 @@ export class AnalyticsRepository {
       loginFailures24h,
       backupActions24h,
     ] = await Promise.all([
-      dbRead.select({ value: count() }).from(users),
+      dbRead.select({ value: count() }).from(users).where(sql`${users.status} <> 'deleted'`),
       dbRead.select({ value: count() }).from(userActivity).where(eq(userActivity.isActive, true)),
       dbRead.select({ value: count() }).from(userActivity).where(gte(userActivity.loginTime, today)),
       dbRead.select({ value: count() }).from(dataRows),
       dbRead.select({ value: count() }).from(imports).where(eq(imports.isDeleted, false)),
-      dbRead.select({ value: count() }).from(users).where(eq(users.isBanned, true)),
+      dbRead.select({ value: count() }).from(users).where(sql`${users.isBanned} = true AND ${users.status} <> 'deleted'`),
       dbRead.select({ value: count() }).from(auditLogs).where(sql`
         action = ${COLLECTION_RECORD_VERSION_CONFLICT_ACTION}
         AND timestamp >= NOW() - INTERVAL '24 hours'
@@ -462,6 +462,7 @@ export class AnalyticsRepository {
     const result = await dbRead.execute(sql`
       SELECT role, COUNT(*)::int AS count
       FROM public.users
+      WHERE status <> 'deleted'
       GROUP BY role
       ORDER BY role ASC
     `);

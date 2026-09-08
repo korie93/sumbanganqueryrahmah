@@ -40,6 +40,7 @@ export function useAppShellMonitorAccess({
 }: UseAppShellMonitorAccessArgs) {
   useEffect(() => {
     if (!user || currentPage !== "monitor") return;
+    if (user.role !== "superuser" && !tabVisibilityLoaded) return;
     if (featureLockdown) return;
     if (isPageEnabled(user.role, "monitor", tabVisibility, tabVisibilityLoaded)) return;
 
@@ -49,6 +50,7 @@ export function useAppShellMonitorAccess({
 
   useEffect(() => {
     if (!user || currentPage !== "monitor") return;
+    if (user.role !== "superuser" && !tabVisibilityLoaded) return;
 
     const hasExplicitMonitorSectionQuery = typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).has("section")
@@ -73,6 +75,11 @@ export function useAppShellMonitorAccess({
       || (monitorSection === "audit" && monitorVisibility.audit);
 
     if (!requestedAllowed) {
+      if (hasExplicitMonitorSectionQuery) {
+        setCurrentPage("forbidden");
+        replaceHistory("/403");
+        return;
+      }
       setMonitorSection(getDefaultMonitorSection(user.role, tabVisibility, tabVisibilityLoaded));
     }
   }, [
@@ -88,6 +95,7 @@ export function useAppShellMonitorAccess({
 
   useEffect(() => {
     if (!user) return;
+    if (user.role !== "superuser" && !tabVisibilityLoaded) return;
     if (isPageEnabled(user.role, currentPage, tabVisibility, tabVisibilityLoaded)) return;
 
     if (featureLockdown) {

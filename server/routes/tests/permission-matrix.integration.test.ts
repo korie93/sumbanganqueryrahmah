@@ -568,6 +568,7 @@ function createSearchPermissionHarness() {
       },
     } as never,
     authenticateToken: createTestAuthenticateToken(),
+    requireTabAccess: createTestRequireTabAccess(),
     searchRateLimiter: (_req, _res, next) => next(),
   });
 
@@ -1465,7 +1466,7 @@ test("manager role is read-only and limited to its approved backend modules", as
         { method: "GET", path: "/api/activity/all" },
         "manager",
       )).status,
-      403,
+      200,
     );
 
     assert.equal(

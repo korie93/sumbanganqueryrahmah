@@ -109,7 +109,7 @@ export class AuthAccountAuthenticationOperations {
     const password = String(input.password ?? "");
     const user = await this.deps.storage.getUserByUsername(username);
 
-    if (!user) {
+    if (!user || user.status === "deleted") {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_FAILED",
         performedBy: username || "unknown",

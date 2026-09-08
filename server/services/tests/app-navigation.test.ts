@@ -19,14 +19,15 @@ test("primary navigation keeps backup out of the top-level action row", () => {
   assert.deepEqual(primaryItems.map((item) => item.id), ["general-search", "collection-report"]);
 });
 
-test("settings group exposes backup when it is enabled and hides it when disabled", () => {
+test("settings group cannot grant protected Backup to admin using a tab flag", () => {
   const enabledGroups = getVisibleNavigationGroups("admin", {
     backup: true,
     settings: true,
   }, false);
   const enabledSettingsGroup = enabledGroups.find((group) => group.id === "settings-menu");
   assert.ok(enabledSettingsGroup);
-  assert.deepEqual(enabledSettingsGroup.items.map((item) => item.id), ["settings", "backup"]);
+  assert.deepEqual(enabledSettingsGroup.items.map((item) => item.id), ["settings"]);
+  assert.deepEqual(getVisibleNavigationGroups("superuser", null, false).find((group) => group.id === "settings-menu")?.items.map((item) => item.id), ["settings", "backup"]);
 
   const disabledGroups = getVisibleNavigationGroups("user", {
     backup: false,

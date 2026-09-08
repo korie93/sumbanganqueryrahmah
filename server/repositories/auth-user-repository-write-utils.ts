@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type {
   InsertUser,
   User,
@@ -55,21 +55,23 @@ export async function createManagedAuthUserAccount(
 export async function updateAuthUserCredentials(
   params: UpdateUserCredentialsParams,
 ): Promise<User | undefined> {
-  await db
+  const updated = await db
     .update(users)
     .set(buildUserCredentialsUpdateRecord(params))
-    .where(eq(users.id, params.userId));
-  return getAuthUser(params.userId);
+    .where(and(eq(users.id, params.userId), sql`${users.status} <> 'deleted'`))
+    .returning();
+  return updated[0];
 }
 
 export async function updateAuthUserAccount(
   params: UpdateUserAccountParams,
 ): Promise<User | undefined> {
-  await db
+  const updated = await db
     .update(users)
     .set(buildUserAccountUpdateRecord(params))
-    .where(eq(users.id, params.userId));
-  return getAuthUser(params.userId);
+    .where(and(eq(users.id, params.userId), sql`${users.status} <> 'deleted'`))
+    .returning();
+  return updated[0];
 }
 
 export async function recordAuthFailedLoginAttempt(
@@ -89,7 +91,7 @@ export async function recordAuthFailedLoginAttempt(
         lockedAt: users.lockedAt,
       })
       .from(users)
-      .where(eq(users.id, params.userId))
+      .where(and(eq(users.id, params.userId), sql`${users.status} <> 'deleted'`))
       .for("update");
 
     const current = currentRows[0];

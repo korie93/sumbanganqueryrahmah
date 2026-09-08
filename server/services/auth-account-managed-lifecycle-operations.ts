@@ -12,7 +12,6 @@ import {
   hashPassword,
 } from "../auth/passwords";
 import { ERROR_CODES } from "../../shared/error-codes";
-import { ManagedUserDeletionConflictError } from "../repositories/auth-repository-types";
 import type { PaginatedListMeta } from "./auth-account-pagination-utils";
 import { listManagedUsersPageOrAll } from "./auth-account-managed-list-utils";
 import { AuthAccountError } from "./auth-account-types";
@@ -51,6 +50,10 @@ export class AuthAccountManagedLifecycleOperations {
     const actor = await this.deps.requireSuperuser(authUser);
     const target = await this.deps.requireManageableTarget(targetUserId);
 
+    // Bootstrap maintains this immutable, non-login actor for historical records.
+    if (target.id === "system-user" || target.username === "system") {
+      throw new AuthAccountError(403, ERROR_CODES.PERMISSION_DENIED, "The built-in system actor cannot be deleted.");
+    }
     if (actor.id === target.id) {
       throw new AuthAccountError(
         403,
@@ -64,15 +67,6 @@ export class AuthAccountManagedLifecycleOperations {
       performedBy: actor.username,
       targetUser: target.id,
       details: buildAccountDeletedAuditDetails({ target }),
-    }).catch((error: unknown) => {
-      if (error instanceof ManagedUserDeletionConflictError) {
-        throw new AuthAccountError(
-          409,
-          ERROR_CODES.ACCOUNT_UNAVAILABLE,
-          "This account cannot be deleted because linked records must be preserved. Disable the account instead to prevent access while keeping its history.",
-        );
-      }
-      throw error;
     });
 
     if (!result.deleted) {
@@ -173,6 +167,7 @@ export class AuthAccountManagedLifecycleOperations {
       email: nextEmail,
       fullName: nextFullName,
     });
+    if (!updatedUser) throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
 
     if (nextUsername && nextUsername !== target.username) {
       await this.deps.storage.updateActivitiesUsername(target.username, nextUsername);
@@ -189,7 +184,7 @@ export class AuthAccountManagedLifecycleOperations {
       }),
     });
 
-    return updatedUser ?? target;
+    return updatedUser;
   }
 
   async updateManagedUserRole(
@@ -209,6 +204,7 @@ export class AuthAccountManagedLifecycleOperations {
       userId: target.id,
       role: nextRole,
     });
+    if (!updatedUser) throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     const closedSessionIds = await this.deps.invalidateUserSessions(
       target.username,
       "ROLE_CHANGED",
@@ -237,6 +233,9 @@ export class AuthAccountManagedLifecycleOperations {
   ) {
     const actor = await this.deps.requireSuperuser(authUser);
     const target = await this.deps.requireManageableTarget(targetUserId);
+    if (String(input.status || "").trim().toLowerCase() === "deleted") {
+      throw new AuthAccountError(400, ERROR_CODES.ACCOUNT_UNAVAILABLE, "Use the Delete account action to delete an account.");
+    }
     const nextStatus =
       input.status !== undefined
         ? normalizeAccountStatus(input.status, normalizeAccountStatus(target.status, "active"))
@@ -259,6 +258,7 @@ export class AuthAccountManagedLifecycleOperations {
       status: nextStatus,
       isBanned: nextIsBanned,
     });
+    if (!updatedUser) throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
 
     const shouldInvalidateSessions =
       (nextStatus !== undefined && nextStatus !== "active")

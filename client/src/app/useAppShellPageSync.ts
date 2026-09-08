@@ -20,6 +20,7 @@ export function useAppShellPageSync({
 }: UseAppShellPageSyncArgs) {
   useEffect(() => {
     if (!user || user.mustChangePassword || currentPage !== "change-password") return;
+    if (user.role !== "superuser" && !tabVisibilityLoaded) return;
 
     const nextPage = getDefaultPageForRole(user.role, tabVisibility, tabVisibilityLoaded);
     setCurrentPage(nextPage);
@@ -28,6 +29,7 @@ export function useAppShellPageSync({
 
   useEffect(() => {
     if (!user) return;
+    if (user.role !== "superuser" && !tabVisibilityLoaded) return;
     const pathname = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "/";
     if (
       pathname !== "/forgot-password"

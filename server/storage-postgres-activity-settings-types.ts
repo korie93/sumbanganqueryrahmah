@@ -107,6 +107,7 @@ export interface ActivitySettingsStorageContract {
   getSettingsForRole(role: string): Promise<SystemSettingCategory[]>;
   getBooleanSystemSetting(key: string, fallback?: boolean): Promise<boolean>;
   getRoleTabVisibility(role: string): Promise<Record<string, boolean>>;
+  updateRolePermissions(input: import("./repositories/settings-role-permission-mutations").RolePermissionUpdateInput): Promise<import("./repositories/settings-role-permission-mutations").RolePermissionUpdateResult>;
   updateSystemSetting(params: {
     role: string;
     settingKey: string;

@@ -35,6 +35,7 @@ export async function getCollectionAdminUsersRepository(): Promise<CollectionAdm
       updated_at
     FROM public.users
     WHERE role = 'admin'
+      AND status <> 'deleted'
     ORDER BY lower(username) ASC
     LIMIT 1000
   `);
@@ -58,6 +59,7 @@ export async function getCollectionAdminUserByIdRepository(
     FROM public.users
     WHERE id = ${normalized}
       AND role = 'admin'
+      AND status <> 'deleted'
     LIMIT 1
   `);
   const row = result.rows?.[0];

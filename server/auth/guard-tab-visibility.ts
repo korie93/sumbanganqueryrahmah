@@ -33,6 +33,8 @@ export function createRoleTabVisibilityCache(options: {
     },
   });
   let stopped = false;
+  let generation = 0;
+  const roleGenerations = new Map<string, number>();
 
   function getStats(): TabVisibilityCacheStats {
     tabVisibilityCache.purgeStale();
@@ -64,8 +66,15 @@ export function createRoleTabVisibilityCache(options: {
   }
 
   return {
-    clear() {
-      tabVisibilityCache.clear();
+    clear(role?: string) {
+      if (role) {
+        roleGenerations.set(role, (roleGenerations.get(role) ?? 0) + 1);
+        tabVisibilityCache.delete(role);
+      } else {
+        generation += 1;
+        roleGenerations.clear();
+        tabVisibilityCache.clear();
+      }
       publishMetrics();
     },
     getStats,
@@ -86,9 +95,16 @@ export function createRoleTabVisibilityCache(options: {
         publishMetrics();
       }
 
-      const tabs = await storage.getRoleTabVisibility(role);
-      setRoleTabVisibilityCache(role, tabs, now);
-      return tabs;
+      // A read begun before a settings save must not repopulate the cache with
+      // the old permission after the save has invalidated it.
+      for (;;) {
+        const readGeneration = generation;
+        const readRoleGeneration = roleGenerations.get(role) ?? 0;
+        const tabs = await storage.getRoleTabVisibility(role);
+        if (readGeneration !== generation || readRoleGeneration !== (roleGenerations.get(role) ?? 0)) continue;
+        setRoleTabVisibilityCache(role, tabs, Date.now());
+        return tabs;
+      }
     },
     stop() {
       if (stopped) {

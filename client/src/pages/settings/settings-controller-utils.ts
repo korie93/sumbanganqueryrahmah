@@ -1,5 +1,6 @@
 import type { TabVisibility } from "@/app/types";
 import type { SettingCategory } from "@/pages/settings/types";
+import { canAccessRoleFeature } from "@shared/role-feature-access";
 
 export const ACCOUNT_MANAGEMENT_CATEGORY_ID = "account-management";
 export const BACKUP_SETTINGS_CATEGORY_ID = "backup-restore";
@@ -8,10 +9,7 @@ export function canAccessBackupCategory(
   role: string | undefined,
   tabVisibility: TabVisibility | undefined,
 ) {
-  if (!role) return false;
-  if (role === "superuser") return true;
-  if (!tabVisibility) return true;
-  return tabVisibility.backup !== false;
+  return canAccessRoleFeature(role, "backup", tabVisibility);
 }
 
 export function buildSettingsSidebarCategories({

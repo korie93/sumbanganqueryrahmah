@@ -31,10 +31,11 @@ function readStableBackupUserId(value: unknown): string {
   return value;
 }
 
-function readBackupAccountStatus(value: unknown): AccountStatus {
+function readBackupAccountStatus(value: unknown): AccountStatus | "deleted" {
   // Legacy archives predate lifecycle status. New archives always include it;
   // malformed or null values must not silently reactivate an account.
   if (value === undefined) return "active";
+  if (value === "deleted") return "deleted";
   if (typeof value !== "string" || !ACCOUNT_STATUSES.includes(value as AccountStatus)) {
     throw new Error("Backup contains an invalid account status; account access cannot be restored safely.");
   }
@@ -125,7 +126,7 @@ export async function restoreUsersFromBackup(
       .map((user) => ({
         id: user.id == null ? crypto.randomUUID() : readStableBackupUserId(user.id),
         username: String(user.username || "").trim().toLowerCase(),
-        passwordHash: user.passwordHash!,
+        passwordHash: user.status === "deleted" ? "!deleted-account!" : user.passwordHash!,
         role: user.role || "user",
         status: readBackupAccountStatus(user.status),
         mustChangePassword: readBackupPasswordRestriction(user.mustChangePassword),
@@ -133,9 +134,9 @@ export async function restoreUsersFromBackup(
         createdAt: now,
         updatedAt: now,
         passwordChangedAt: now,
-        isBanned: user.isBanned ?? false,
-        twoFactorEnabled: user.twoFactorEnabled === true,
-        twoFactorSecretEncrypted: user.twoFactorSecretEncrypted ?? null,
+        isBanned: user.status === "deleted" || (user.isBanned ?? false),
+        twoFactorEnabled: user.status !== "deleted" && user.twoFactorEnabled === true,
+        twoFactorSecretEncrypted: user.status === "deleted" ? null : user.twoFactorSecretEncrypted ?? null,
         twoFactorConfiguredAt: toDate(user.twoFactorConfiguredAt) ?? null,
         failedLoginAttempts: Math.max(0, Number(user.failedLoginAttempts || 0)),
         lockedAt: toDate(user.lockedAt) ?? null,

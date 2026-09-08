@@ -14,7 +14,7 @@ export type ImportsRouteDeps = {
   mutationIdempotencyStorage: ImportMutationIdempotencyStorage;
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
-  requireTabAccess: (tabId: string) => RequestHandler;
+  requireTabAccess: (tabId: string, ...alternativeTabIds: string[]) => RequestHandler;
   searchRateLimiter: RequestHandler;
   importsUploadRateLimiter?: RequestHandler | undefined;
   multipartMaxFileSizeBytes?: number | undefined;
@@ -26,7 +26,7 @@ export type ImportsRouteContext = {
   importsController: ImportsController;
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
-  requireTabAccess: (tabId: string) => RequestHandler;
+  requireTabAccess: (tabId: string, ...alternativeTabIds: string[]) => RequestHandler;
   searchRateLimiter: RequestHandler;
   importsUploadRateLimiter: RequestHandler;
   importsIdempotencyMiddleware: RequestHandler;

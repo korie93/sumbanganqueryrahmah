@@ -22,6 +22,7 @@ export const users = pgTable("users", {
   fullName: text("full_name"),
   email: text("email"),
   role: text("role").notNull().default("user"),
+  // 'deleted' is internal terminal actor retention, enforced by migration 0063.
   status: text("status").notNull().default("active"),
   mustChangePassword: boolean("must_change_password").default(false).notNull(),
   passwordResetBySuperuser: boolean("password_reset_by_superuser").default(false).notNull(),

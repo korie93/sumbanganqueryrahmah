@@ -9,6 +9,10 @@ const settingsPatchBodySchema = z.object({
   value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
   confirmCritical: z.boolean().optional(),
 });
+const rolePermissionsPatchBodySchema = z.object({
+  updates: z.array(z.object({ key: z.string().trim().min(1).max(100), value: z.boolean() }).strict()).min(1).max(50),
+  confirmCritical: z.boolean().optional(),
+}).strict();
 
 function buildSettingsSuccessPayload<T extends Record<string, unknown>>(payload: T) {
   return {
@@ -36,6 +40,21 @@ export function registerSettingsMutationRoutes(context: SettingsRouteContext) {
     requireTabAccess,
     settingsService,
   } = context;
+
+  app.patch("/api/settings/role-permissions", authenticateToken, requireRole("superuser"), requireTabAccess("settings"),
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const body = parseRequestBody(rolePermissionsPatchBodySchema, req.body);
+      const result = await settingsService.updateRolePermissions({
+        role: req.user!.role, updatedBy: req.user!.username,
+        updates: body.updates, confirmCritical: body.confirmCritical === true,
+      });
+      const codes: Record<string, number> = { not_found: 404, forbidden: 403, requires_confirmation: 409, invalid: 400 };
+      const code = codes[result.status];
+      if (code) return res.status(code).json(buildSettingsErrorPayload(result.message,
+        result.status === "requires_confirmation" ? { requiresConfirmation: true } : undefined));
+      return res.json(buildSettingsSuccessPayload({ success: true, status: result.status, message: result.message, setting: null }));
+    }),
+  );
 
   app.patch(
     "/api/settings",

@@ -33,6 +33,7 @@ export function registerSettingsReadRoutes(context: SettingsRouteContext) {
     authenticateToken,
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
       const role = req.user?.role || "user";
+      res.setHeader("Cache-Control", "no-store");
       return res.json({
         role,
         tabs: await settingsService.getTabVisibility(role),

@@ -14,21 +14,18 @@ const homeItem: NavigationEntry = {
   id: "home",
   label: "Home",
   icon: Home,
-  roles: ["user"],
 }
 
 const searchItem: NavigationEntry = {
   id: "general-search",
   label: "Search",
   icon: Search,
-  roles: ["user"],
 }
 
 const savedItem: NavigationEntry = {
   id: "saved",
   label: "Saved",
   icon: BookMarked,
-  roles: ["user"],
 }
 
 test("resolveNavbarShowHomeButton detects when home is in the visible mobile nav", () => {

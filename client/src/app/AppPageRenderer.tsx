@@ -13,6 +13,7 @@ import {
   ViewerPage,
 } from "@/app/lazy-pages";
 import { isPageEnabled } from "@/app/monitorAccess";
+import { PageSpinner } from "@/app/PageSpinner";
 import type {
   AppRuntimeConfig,
   MonitorSection,
@@ -45,34 +46,19 @@ function AppPageRendererImpl({
   tabVisibility,
   tabVisibilityLoaded,
   monitorVisibility,
-  featureLockdown,
   systemName,
   onNavigate,
   onMonitorSectionChange,
 }: AppPageRendererProps) {
+  if (user.role !== "superuser" && !tabVisibilityLoaded) return <PageSpinner />;
   const pageEnabled = isPageEnabled(user.role, currentPage, tabVisibility, tabVisibilityLoaded);
 
   if (!pageEnabled) {
-    if (featureLockdown) {
-      return (
-        <GeneralSearchPage
-          userRole={user.role}
-          searchResultLimit={runtimeConfig.searchResultLimit}
-        />
-      );
-    }
-    if (currentPage === "monitor" || user.role === "manager") {
-      return <ForbiddenPage />;
-    }
-    return user.role === "user" ? (
-      <GeneralSearchPage
-        userRole={user.role}
-        searchResultLimit={runtimeConfig.searchResultLimit}
-      />
-    ) : (
-      <HomePage onNavigate={onNavigate} userRole={user.role} tabVisibility={tabVisibility} />
-    );
+    return <ForbiddenPage />;
   }
+
+  if (["monitor", "activity", "analysis", "audit", "audit-logs", "dashboard"].includes(currentPage)
+    && !monitorVisibility[monitorSection]) return <ForbiddenPage />;
 
   switch (currentPage) {
     case "home":
@@ -142,17 +128,7 @@ function AppPageRendererImpl({
     case "forbidden":
       return <ForbiddenPage />;
     default:
-      if (user.role === "manager") {
-        return <ForbiddenPage />;
-      }
-      return user.role === "user" ? (
-        <GeneralSearchPage
-          userRole={user.role}
-          searchResultLimit={runtimeConfig.searchResultLimit}
-        />
-      ) : (
-        <HomePage onNavigate={onNavigate} userRole={user.role} tabVisibility={tabVisibility} />
-      );
+      return <ForbiddenPage />;
   }
 }
 

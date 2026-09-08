@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { CoreSchemaSqlExecutor } from "./core-schema-bootstrap-utils";
+import { ensureDeletedAccountGuards } from "./users-bootstrap/schema-deleted-account";
 
 export async function ensureCoreUserActivityTable(
   database: CoreSchemaSqlExecutor,
@@ -85,6 +86,7 @@ export async function ensureCoreUserActivityTable(
     )
     WHERE is_active IS FALSE
   `);
+  await ensureDeletedAccountGuards(database);
 }
 
 export async function ensureCoreAuditLogsTable(

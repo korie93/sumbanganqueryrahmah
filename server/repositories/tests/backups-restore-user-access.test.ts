@@ -50,6 +50,19 @@ test("user backup restore only applies access defaults to absent legacy fields",
   assert.equal(inserted[0]?.passwordResetBySuperuser, false);
 });
 
+test("deleted account backups preserve identity and cannot restore login credentials or two-factor access", async () => {
+  const inserted: Record<string, unknown>[] = [];
+  await restoreUserRows([backupUser({ status: "deleted", isBanned: false, twoFactorEnabled: true,
+    twoFactorSecretEncrypted: "old-backup-secret" })], inserted);
+  assert.equal(inserted[0]?.id, "backup-owner:stable-text-id");
+  assert.equal(inserted[0]?.username, "backup-owner");
+  assert.equal(inserted[0]?.status, "deleted");
+  assert.equal(inserted[0]?.passwordHash, "!deleted-account!");
+  assert.equal(inserted[0]?.isBanned, true);
+  assert.equal(inserted[0]?.twoFactorEnabled, false);
+  assert.equal(inserted[0]?.twoFactorSecretEncrypted, null);
+});
+
 test("user backup restore rejects malformed access status and restriction fields before writing", async () => {
   for (const status of [null, "", "ACTIVE", "disabled ", "unknown", 1, {}]) {
     const inserted: Record<string, unknown>[] = [];

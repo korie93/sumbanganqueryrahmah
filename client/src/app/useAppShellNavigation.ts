@@ -16,6 +16,7 @@ import {
   replaceHistory,
 } from "@/app/routing";
 import type { MonitorSection, TabVisibility, User } from "@/app/types";
+import { canAccessRoleFeature } from "@shared/role-feature-access";
 
 type UseAppShellNavigationArgs = {
   featureLockdown: boolean;
@@ -46,6 +47,7 @@ export function useAppShellNavigation({
   }, [setSelectedImportId]);
 
   const handleNavigate = useCallback((page: string, importId?: string) => {
+    if (user?.role !== "superuser" && !tabVisibilityLoaded) return;
     const storage = getBrowserLocalStorage();
     if (page === "backup") {
       if (!isPageEnabled(user?.role, "backup", tabVisibility, tabVisibilityLoaded)) {
@@ -98,6 +100,12 @@ export function useAppShellNavigation({
     }
 
     if (monitorSectionTarget) {
+      if (monitorSectionTarget !== "monitor"
+        && !canAccessRoleFeature(user?.role, monitorSectionTarget, tabVisibility)) {
+        setCurrentPage("forbidden");
+        replaceHistory("/403");
+        return;
+      }
       let nextSection = monitorSectionTarget;
       if (nextSection === "monitor" && !monitorVisibilityMonitor) {
         nextSection = getDefaultMonitorSection(user?.role, tabVisibility, tabVisibilityLoaded);
@@ -136,9 +144,14 @@ export function useAppShellNavigation({
   ]);
 
   const handleMonitorSectionChange = useCallback((section: MonitorSection) => {
+    if (!canAccessRoleFeature(user?.role, section, tabVisibility)) {
+      setCurrentPage("forbidden");
+      replaceHistory("/403");
+      return;
+    }
     setMonitorSection((previous) => (previous === section ? previous : section));
     replaceHistory(buildPathForPage("monitor", section));
-  }, [setMonitorSection]);
+  }, [setCurrentPage, setMonitorSection, tabVisibility, user?.role]);
 
   return {
     handleMonitorSectionChange,

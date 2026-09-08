@@ -20,6 +20,12 @@ import { signSessionJwtWithSecret } from "../../auth/session-jwt";
 import { runWithRequestContext } from "../../lib/request-context";
 import { errorHandler } from "../../middleware/error-handler";
 import { AuthRepository } from "../auth.repository";
+import { updateAuthUserAccount, updateAuthUserCredentials } from "../auth-user-repository-write-utils";
+import { restoreUsersFromBackup } from "../backups-restore-core-datasets-utils";
+import { createRestoreStats } from "../backups-restore-stats-utils";
+import { getBannedUsers } from "../activity-repository-ban-operations";
+import { AnalyticsRepository } from "../analytics.repository";
+import type { BackupPayloadChunkReader, BackupRestoreExecutor } from "../backups-restore-shared-utils";
 import { AuditRepository } from "../audit.repository";
 import { deactivateUserActivities, getActiveActivitiesByUsername, getActivityById, updateActivity } from "../activity-repository-session-operations";
 import { registerAuthRoutes } from "../../routes/auth.routes";
@@ -182,10 +188,10 @@ async function captureState(pool: pg.Pool) {
   return state;
 }
 
-test("PostgreSQL delete: Collection creator conflict is HTTP 409 and rolls back tokens, sessions and history", { skip: skipReason }, async () => {
+test("PostgreSQL delete: history-linked account succeeds without 409 and preserves Collection evidence", { skip: skipReason }, async () => {
   await withFixture(async (pool) => {
     const actor = await seedUser(pool, "superuser");
-    const target = await seedUser(pool);
+    const target = await seedUser(pool, "manager");
     await seedAuth(pool, target);
     await pool.query("INSERT INTO collection_records (id, batch, payment_date, amount, created_by_login, collection_staff_nickname, staff_username) VALUES ($1, 'fixture', '2026-09-07', 100, $2, 'Fixture Nickname', 'Fixture Nickname')", [randomUUID(), target.username]);
     await withHttp(actor, async ({ request, errors, tokenFor }) => {
@@ -193,18 +199,19 @@ test("PostgreSQL delete: Collection creator conflict is HTTP 409 and rolls back 
       assert.equal((await request("/fixture/authenticated")).status, 200);
       const before = await captureState(pool);
       const response = await request(`/api/admin/users/${target.id}`, { method: "DELETE" });
-      assert.equal(response.status, 409);
+      assert.equal(response.status, 200);
       const payload = await response.json();
-      assert.equal(payload.error.code, "ACCOUNT_UNAVAILABLE");
+      assert.equal(payload.deleted, true);
       assert.doesNotMatch(JSON.stringify(payload), /23503|fk_collection|DELETE FROM|stack/i);
       assert.equal(errors.length, 0);
-      assert.deepEqual(await captureState(pool), before);
-      assert.equal((await request("/fixture/authenticated", { headers: { Authorization: `Bearer ${tokenFor(target)}` } })).status, 200);
+      assert.deepEqual((await captureState(pool)).collection_records, before.collection_records);
+      assert.equal((await pool.query("SELECT status FROM users WHERE id = $1", [target.id])).rows[0].status, "deleted");
+      assert.equal((await request("/fixture/authenticated", { headers: { Authorization: `Bearer ${tokenFor(target)}` } })).status, 401);
     });
   });
 });
 
-test("PostgreSQL delete: eligible accounts cascade only auth/visibility data, preserve history, audit once and reject old JWTs", { skip: skipReason }, async (t) => {
+test("PostgreSQL delete: eligible accounts remove auth proofs, preserve history, audit once and reject old JWTs", { skip: skipReason }, async (t) => {
   await withFixture(async (pool) => {
     const actor = await seedUser(pool, "superuser");
     const unrelated = await seedUser(pool);
@@ -257,15 +264,16 @@ test("PostgreSQL delete: eligible accounts cascade only auth/visibility data, pr
           assert.equal(closed, 1);
           assert.equal(sockets.size, 0, "Transport failures must not retain revoked clients.");
           assert.match(logoutMessage, /Account deleted by superuser/);
-          assert.equal((await pool.query("SELECT count(*)::int AS n FROM users WHERE id = $1", [target.id])).rows[0].n, 0);
-          for (const table of ["account_activation_tokens", "password_reset_requests", "user_activity"]) {
+          assert.equal((await pool.query("SELECT status FROM users WHERE id = $1", [target.id])).rows[0].status, "deleted");
+          for (const table of ["account_activation_tokens", "password_reset_requests"]) {
             assert.equal((await pool.query(`SELECT count(*)::int AS n FROM ${pg.escapeIdentifier(table)} WHERE user_id = $1`, [target.id])).rows[0].n, 0, table);
           }
-          assert.equal((await pool.query("SELECT count(*)::int AS n FROM banned_sessions WHERE username = $1", [target.username])).rows[0].n, 0);
+          assert.equal((await pool.query("SELECT count(*)::int AS n FROM banned_sessions WHERE username = $1", [target.username])).rows[0].n, 1);
+          assert.equal((await pool.query("SELECT count(*)::int AS n FROM user_activity WHERE user_id = $1 AND is_active = true", [target.id])).rows[0].n, 0);
           assert.equal((await pool.query("SELECT count(*)::int AS n FROM admin_visible_nicknames WHERE admin_user_id = $1", [target.id])).rows[0].n, 0);
           if (role === "admin") {
-            assert.equal((await pool.query("SELECT created_by FROM collection_staff_nicknames WHERE id = $1", [nicknameId])).rows[0].created_by, null);
-            assert.equal((await pool.query("SELECT created_by FROM admin_groups WHERE id = $1", [groupId])).rows[0].created_by, null);
+            assert.equal((await pool.query("SELECT created_by FROM collection_staff_nicknames WHERE id = $1", [nicknameId])).rows[0].created_by, target.username);
+            assert.equal((await pool.query("SELECT created_by FROM admin_groups WHERE id = $1", [groupId])).rows[0].created_by, target.username);
             assert.equal((await pool.query("SELECT member_nickname_id FROM admin_group_members WHERE admin_group_id = $1", [groupId])).rows[0].member_nickname_id, memberId);
             assert.equal((await pool.query("SELECT 1 FROM collection_nickname_sessions WHERE activity_id = $1", [extraActivityId])).rowCount, 0);
           }
@@ -289,7 +297,7 @@ test("PostgreSQL delete: eligible accounts cascade only auth/visibility data, pr
   });
 });
 
-test("PostgreSQL delete: source configuration and Billing ownership remain restrictive, untouched HTTP 409 conflicts", { skip: skipReason }, async (t) => {
+test("PostgreSQL delete: source configuration and private Billing ownership remain intact while deletion succeeds", { skip: skipReason }, async (t) => {
   await withFixture(async (pool) => {
     const actor = await seedUser(pool, "superuser");
     for (const relationship of ["source-configurator", "billing-creator", "billing-assigned-admin", "private-table-b-owner"]) {
@@ -313,10 +321,13 @@ test("PostgreSQL delete: source configuration and Billing ownership remain restr
           assert.equal((await request("/fixture/authenticated")).status, 200);
           const before = await captureState(pool);
           const response = await request(`/api/admin/users/${target.id}`, { method: "DELETE" });
-          assert.equal(response.status, 409);
-          assert.equal((await response.json()).error.code, "ACCOUNT_UNAVAILABLE");
+          assert.equal(response.status, 200);
+          assert.equal((await response.json()).deleted, true);
           assert.equal(errors.length, 0);
-          assert.deepEqual(await captureState(pool), before);
+          const after = await captureState(pool);
+          for (const table of ["collection_source_configs", "collection_osp_saved_targets", "collection_osp_target_revisions", "collection_osp_private_client_results"]) {
+            assert.deepEqual(after[table], before[table], table);
+          }
         });
       });
     }
@@ -351,8 +362,8 @@ test("PostgreSQL delete: canceled deletion rolls back earlier auth cleanup and n
     const actor = await seedUser(pool, "superuser");
     const target = await seedUser(pool);
     await seedAuth(pool, target);
-    await pool.query("CREATE FUNCTION fixture_cancel_user_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$");
-    await pool.query("CREATE TRIGGER fixture_cancel_user_delete BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION fixture_cancel_user_delete()");
+    await pool.query("CREATE FUNCTION fixture_cancel_user_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status = 'deleted' THEN RETURN NULL; END IF; RETURN NEW; END $$");
+    await pool.query("CREATE TRIGGER fixture_cancel_user_delete BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION fixture_cancel_user_delete()");
     await withHttp(actor, async ({ request }) => {
       assert.equal((await request("/fixture/authenticated")).status, 200);
       const before = await captureState(pool);
@@ -373,11 +384,10 @@ test("PostgreSQL delete: role protection and system history retained; unknown an
       assert.equal((await request(`/api/admin/users/${actor.id}`, { method: "DELETE" })).status, 403);
       const anotherSuperuser = await seedUser(pool, "superuser");
       assert.equal((await request(`/api/admin/users/${anotherSuperuser.id}`, { method: "DELETE" })).status, 403);
-      // The built-in actor is role=user, not protected by a fabricated role rule.
-      // Its real historical ownership constraint is the existing protection.
+      // Bootstrap's immutable system actor remains protected, not an ordinary login.
       const system = (await pool.query("SELECT id, username FROM users WHERE username = 'system'")).rows[0];
       await pool.query("INSERT INTO collection_records (id, batch, payment_date, amount, created_by_login, collection_staff_nickname, staff_username) VALUES ($1, 'fixture-system', '2026-09-07', 100, $2, 'System History', 'System History')", [randomUUID(), system.username]);
-      assert.equal((await request(`/api/admin/users/${system.id}`, { method: "DELETE" })).status, 409);
+      assert.equal((await request(`/api/admin/users/${system.id}`, { method: "DELETE" })).status, 403);
       assert.equal((await request(`/api/admin/users/${randomUUID()}`, { method: "DELETE" })).status, 404);
       // User IDs are TEXT, including legitimate legacy IDs: malformed-but-printable unknown IDs remain 404.
       assert.equal((await request("/api/admin/users/not-a-uuid", { method: "DELETE" })).status, 404);
@@ -417,9 +427,71 @@ test("PostgreSQL delete: concurrent requests commit exactly once and legacy TEXT
         request(`/api/admin/users/${legacyId}`, { method: "DELETE" }),
       ]);
       assert.deepEqual(responses.map((response) => response.status).sort(), [200, 404]);
-      assert.equal((await pool.query("SELECT 1 FROM users WHERE id = $1", [legacyId])).rowCount, 0);
+      assert.equal((await pool.query("SELECT status FROM users WHERE id = $1", [legacyId])).rows[0].status, "deleted");
       assert.equal((await pool.query("SELECT 1 FROM audit_logs WHERE action = 'ACCOUNT_DELETED' AND target_user = $1", [legacyId])).rowCount, 1);
       assert.equal((await pool.query("SELECT 1 FROM account_activation_tokens WHERE user_id = $1", [legacyId])).rowCount, 0);
     });
+  });
+});
+
+test("PostgreSQL delete: terminal identity cannot be revived by mutation, bootstrap, restore or fresh auth state", { skip: skipReason }, async () => {
+  await withFixture(async (pool) => {
+    const actor = await seedUser(pool, "superuser");
+    const target = await seedUser(pool, "manager");
+    await seedAuth(pool, target);
+    await withHttp(actor, async ({ request }) => {
+      const patch = (suffix: string, body: unknown) => request(`/api/admin/users/${target.id}${suffix}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      assert.equal((await patch("/status", { status: "deleted" })).status, 400, "Deletion must use its atomic audited action.");
+      assert.equal((await request(`/api/admin/users/${target.id}`, { method: "DELETE" })).status, 200);
+      for (const [suffix, body] of [["/status", { status: "active" }], ["/role", { role: "admin" }], ["", { fullName: "Revive attempt" }]] as const) {
+        assert.equal((await patch(suffix, body)).status, 404);
+      }
+      const createResponse = await request("/api/admin/users", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: target.username, role: "user", email: "new-owner@example.invalid" }),
+      });
+      assert.equal(createResponse.status, 409, "Historical username reuse must follow existing identity-conflict validation.");
+      assert.equal((await createResponse.json()).error.code, "USERNAME_TAKEN");
+    });
+    assert.equal(await updateAuthUserAccount({ userId: target.id, status: "active" }), undefined);
+    assert.equal(await updateAuthUserCredentials({ userId: target.id, newPasswordHash: "replacement-password" }), undefined);
+    assert.ok(!(await getBannedUsers()).some((account) => account.id === target.id));
+    assert.ok(!(await new AnalyticsRepository().getRoleDistribution()).some((entry) => entry.role === "manager"));
+    for (const [field, value] of [["status", "active"], ["username", "new-owner"], ["id", randomUUID()], ["role", "superuser"]]) {
+      await assert.rejects(pool.query(`UPDATE users SET ${pg.escapeIdentifier(field)} = $1 WHERE id = $2`, [value, target.id]), { code: "23514" });
+    }
+    for (const table of ["account_activation_tokens", "password_reset_requests"]) {
+      await assert.rejects(pool.query(`INSERT INTO ${pg.escapeIdentifier(table)} (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '1 day')`,
+        [randomUUID(), target.id, randomUUID()]), { code: "23514" });
+    }
+    await assert.rejects(pool.query("UPDATE user_activity SET is_active = true WHERE id = $1", [target.activityId]), { code: "23514" });
+    await assert.rejects(pool.query("INSERT INTO user_activity (id, user_id, username, role, is_active) VALUES ($1, $2, $3, $4, true)",
+      [randomUUID(), target.id, target.username, target.role]), { code: "23514" });
+    const beforeRestart = (await pool.query("SELECT * FROM users WHERE id = $1", [target.id])).rows[0];
+    await ensureUsersBootstrapSchema(drizzle(pool));
+    await ensureCoreUserActivityTable(drizzle(pool));
+    assert.deepEqual((await pool.query("SELECT * FROM users WHERE id = $1", [target.id])).rows[0], beforeRestart);
+    const restoredId = randomUUID();
+    const reader: BackupPayloadChunkReader = {
+      async *iterateArrayChunks<T>() {
+        yield [
+          { id: target.id, username: target.username, passwordHash: "old-valid-backup-password", status: "active", role: target.role },
+          { id: restoredId, username: `restored_${restoredId.slice(0, 8)}`, passwordHash: "old-valid-backup-password", status: "deleted", role: "user", twoFactorEnabled: true, twoFactorSecretEncrypted: "old-secret" },
+        ] as T[];
+      },
+    };
+    const stats = createRestoreStats();
+    await restoreUsersFromBackup(drizzle(pool) as unknown as BackupRestoreExecutor, reader, stats);
+    assert.equal(stats.users.inserted, 1);
+    assert.equal(stats.users.skipped, 1);
+    assert.deepEqual((await pool.query("SELECT * FROM users WHERE id = $1", [target.id])).rows[0], beforeRestart);
+    const restored = (await pool.query("SELECT * FROM users WHERE id = $1", [restoredId])).rows[0];
+    assert.equal(restored.status, "deleted");
+    assert.equal(restored.password_hash, "!deleted-account!");
+    assert.equal(restored.is_banned, true);
+    assert.equal(restored.two_factor_enabled, false);
+    assert.equal(restored.two_factor_secret_encrypted, null);
   });
 });
