@@ -18,13 +18,24 @@ import { createJsonTestApp, createTestAuthenticateToken, startTestServer, stopTe
 import type { PostgresStorage } from "../../storage-postgres";
 
 const config = { host: process.env.PG_HOST || "127.0.0.1", port: Number(process.env.PG_PORT || 5432), user: process.env.PG_USER || "postgres", password: process.env.PG_PASSWORD || "postgres" };
+const maintenanceDatabase = process.env.PG_MAINTENANCE_DATABASE || "postgres";
+const postgresRequired = process.env.ROLE_PERMISSIONS_POSTGRES_REQUIRED === "1";
 assert(["127.0.0.1", "localhost", "::1"].includes(config.host), "Role permission fixtures must use local PostgreSQL.");
 
-test("real PostgreSQL role permissions: atomic ON/OFF, rollback, cache, repeated saves, restart and API boundaries", async () => {
-  const maintenance = new pg.Pool({ ...config, database: "postgres", max: 1 });
+test("real PostgreSQL role permissions: atomic ON/OFF, rollback, cache, repeated saves, restart and API boundaries", async (t) => {
+  const maintenance = new pg.Pool({ ...config, database: maintenanceDatabase, max: 1, connectionTimeoutMillis: 1_500 });
   const name = `sqr_role_permissions_${Date.now()}_${randomUUID().slice(0, 8)}`;
   let created = false;
   try {
+    // The general repository sweep also runs without PostgreSQL. The dedicated
+    // CI/release database gates require this fixture and must fail, never skip.
+    try {
+      await maintenance.query("SELECT 1");
+    } catch (error) {
+      if (postgresRequired) throw error;
+      t.skip("Local PostgreSQL unavailable for isolated role permission integration.");
+      return;
+    }
     await maintenance.query(`CREATE DATABASE ${pg.escapeIdentifier(name)}`);
     created = true;
     const pool = new pg.Pool({ ...config, database: name, max: 4 });

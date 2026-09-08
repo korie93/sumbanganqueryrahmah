@@ -225,6 +225,11 @@ jobs:
       - name: Run DB bootstrap integration tests
         run: npm run test:db-integration
 
+      - name: Verify role permissions with PostgreSQL
+        env:
+          ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1"
+        run: node --import tsx --test server/repositories/tests/role-permissions-postgres.integration.test.ts
+
       - name: Verify Billing OSP private ownership, backup and 100k SQL bounds
         run: node --expose-gc --import tsx --test --test-concurrency=1 server/repositories/tests/collection-osp-v7-postgres.integration.test.ts server/repositories/tests/collection-osp-effective-query.postgres.test.ts server/repositories/tests/backups-osp-v3-postgres.integration.test.ts server/repositories/tests/collection-osp-v3-performance.postgres.test.ts
 

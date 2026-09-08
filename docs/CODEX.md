@@ -37,6 +37,19 @@ If the change touches PostgreSQL migrations, bootstrap behavior, schema governan
 
 - `npm run test:db-integration`
 
+The ordinary repository sweep can run without PostgreSQL and reports unavailable
+isolated database fixtures as skipped. CI runs the role-permission fixture again
+after PostgreSQL startup/migrations with `ROLE_PERMISSIONS_POSTGRES_REQUIRED=1`;
+Release Verification also sets this flag. In required mode, an unavailable
+database is a failure, not a skip. To verify this fixture locally, set the flag
+in your shell and run:
+
+- `node --import tsx --test server/repositories/tests/role-permissions-postgres.integration.test.ts`
+
+Use local PostgreSQL only. The fixture creates and cleans its own generated
+database, using `PG_MAINTENANCE_DATABASE` (default `postgres`) for provisioning;
+it does not use the application database as its test target.
+
 For dependency, security, deployment, or release promotion changes, prefer the full local release gate:
 
 - `npm run release:verify:local`

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { buildRegressionTestEnv } from "../lib/release-readiness-env.mjs";
 
 const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 const RELEASE_WORKFLOW_PATH = ".github/workflows/release-verification.yml";
@@ -80,6 +81,26 @@ test("CI build job runs every backend regression suite", () => {
     assert.notEqual(stepIndex, -1, `${stepName} must be present in CI`);
     assert.ok(stepIndex < buildIndex, `${stepName} must run before the build`);
   }
+});
+
+test("role permission PostgreSQL regression is required in live database gates, not the database-free build sweep", () => {
+  const ciWorkflow = readText(CI_WORKFLOW_PATH);
+  const releaseWorkflow = readText(RELEASE_WORKFLOW_PATH);
+  const smokeJobIndex = ciWorkflow.indexOf("  smoke-ui:");
+  assert.notEqual(smokeJobIndex, -1);
+  const buildAndCoverageJobs = ciWorkflow.slice(0, smokeJobIndex);
+  const smokeJob = ciWorkflow.slice(smokeJobIndex);
+  const roleStepIndex = smokeJob.indexOf("name: Verify role permissions with PostgreSQL");
+  const bootstrapIndex = smokeJob.indexOf("name: Start CI PostgreSQL");
+  const migrationIndex = smokeJob.indexOf("name: Apply database migrations");
+
+  assert.doesNotMatch(buildAndCoverageJobs, /ROLE_PERMISSIONS_POSTGRES_REQUIRED/);
+  assert.ok(bootstrapIndex >= 0 && migrationIndex > bootstrapIndex);
+  assert.ok(roleStepIndex > migrationIndex, "The role permission fixture must run after PostgreSQL starts and migrates.");
+  assert.match(smokeJob, /name: Verify role permissions with PostgreSQL\s+env:\s+ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1"\s+run: node --import tsx --test server\/repositories\/tests\/role-permissions-postgres\.integration\.test\.ts/);
+  assert.match(releaseWorkflow, /name: Run release readiness verification\s+env:\s+ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1"/);
+  assert.equal(buildRegressionTestEnv({ ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1" }).ROLE_PERMISSIONS_POSTGRES_REQUIRED, "1",
+    "Release regression child processes must retain the required database flag.");
 });
 
 test("CI auth suite runs before HTTP and route coverage", () => {
