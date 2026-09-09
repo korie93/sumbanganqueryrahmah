@@ -1,5 +1,7 @@
 # Billing Principal (OSP): daily System Calendar movement
 
+> Historical implementation report. Its Target OSP-based daily formula and acceptance values are superseded by the TT OSP correction tracked in [the TT OSP handoff](../CODEX_CONTINUATION_HANDOFF_BILLING_OSP_TT_OSP_DAILY_MOVEMENT_FORMULA.md). The current daily denominator is TT OSP; Target OSP remains the basis for target achievement and Balance OSP.
+
 Verification date: 2026-09-09. Scope: the approved daily calendar and existing exports specification. Source baseline: `main` at `fd98d068abe71dcca83ccaa709804411cbb07150`; feature changes are uncommitted. Implementation and local verification are complete.
 
 ## 1. Architecture / root design

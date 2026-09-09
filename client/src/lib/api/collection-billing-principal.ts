@@ -125,8 +125,8 @@ export type BillingPrincipalSavedTargetOverview = {
 };
 
 export type BillingPrincipalDailyMovement = {
-  rows: Array<{ aging: BillingPrincipalAging; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number }>;
-  all: { aging: "ALL"; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number };
+  rows: Array<{ aging: BillingPrincipalAging; totalOsp: string; ospRequiredForOnePercent: string; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number }>;
+  all: { aging: "ALL"; totalOsp: string; ospRequiredForOnePercent: string; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number };
 };
 
 export type BillingPrincipalCalendarDay = {
@@ -370,7 +370,8 @@ const overviewSchema = z.object({
 }) satisfies z.ZodType<BillingPrincipalSavedTargetOverview>;
 
 const dailyMovementRowSchema = z.object({
-  aging: z.enum(["D3", "D4", "D5", "D6"]), targetOsp: decimalSchema, ospClosed: decimalSchema,
+  aging: z.enum(["D3", "D4", "D5", "D6"]), totalOsp: decimalSchema, ospRequiredForOnePercent: decimalSchema,
+  targetOsp: decimalSchema, ospClosed: decimalSchema,
   resultPercentage: decimalSchema, closedAccountCount: z.number().int().nonnegative(),
 });
 const calendarDaySchema: z.ZodType<BillingPrincipalCalendarDay> = z.object({

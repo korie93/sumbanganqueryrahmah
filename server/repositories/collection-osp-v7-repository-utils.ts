@@ -2177,7 +2177,7 @@ export function buildCollectionOspCalendarDays(input: {
       balanceOsp: formatCollectionOspMoneyCents(input.targetOsp - systemCumulative),
       systemResultPercentage: formatCollectionOspPercentage(systemCumulative, input.totalBaseline),
       systemPreviousResultPercentage: previousSystemResult,
-      systemDailyMovementPercentagePoints: signedPercentageDifference(formatCollectionOspPercentage(systemCumulative, input.totalBaseline), previousSystemResult),
+      systemDailyMovementPercentagePoints: formatCollectionOspPercentage(systemToday, input.totalBaseline),
       systemAchievementVsTargetPercentage: formatCollectionOspPercentage(systemCumulative, input.targetOsp),
       systemDailyAccounts: systemCounts.get(date) ?? 0,
     };

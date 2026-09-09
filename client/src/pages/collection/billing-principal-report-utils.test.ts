@@ -6,9 +6,18 @@ import {
   calculateOspClientPreview,
   filterBillingPrincipalRows,
   formatOspCurrency,
+  formatOspDailyMovement,
   getCurrentMonthDateRange,
   isValidOspPercentageInput,
 } from "./billing-principal-report-utils";
+
+test("daily percentage-point movement adds a sign and rounds canonical values only for display", () => {
+  for (const [value, expected] of [["0.0000", "+0.00%"], ["0.5000", "+0.50%"], ["1.0000", "+1.00%"],
+    ["2.0000", "+2.00%"], ["5.0000", "+5.00%"], ["10.0000", "+10.00%"], ["0.0050", "+0.01%"],
+    ["-1.2350", "-1.24%"], ["invalid", "—"], ["Infinity", "—"], ["NaN", "—"]]) {
+    assert.equal(formatOspDailyMovement(value), expected);
+  }
+});
 
 test("Private client percentage inputs accept unsigned decimals within backend precision and range", () => {
   for (const value of ["0", "00", "01", "0.0001", "25.1250", "99.9999", "100", "100.0000", " 25.1250 ", 0, 100]) {

@@ -1,5 +1,7 @@
 # Billing Principal (OSP) daily System Calendar movement - completion handoff
 
+> Historical handoff: its Target OSP daily formula is superseded by [the TT OSP correction](CODEX_CONTINUATION_HANDOFF_BILLING_OSP_TT_OSP_DAILY_MOVEMENT_FORMULA.md). Follow the newer handoff for current formula, verification and continuation state; do not restore the old daily denominator.
+
 Status: **COMPLETE**, verified 2026-09-09. No feature work remains. This document preserves the implementation and verification state for a future account/session. No commit, push or deployment has been authorized/performed for this feature.
 
 Specification: `C:/Users/Administrator/Downloads/CODEX_GPT_6_ASTRA_ULTRA_BILLING_OSP_DAILY_SYSTEM_CALENDAR_MOVEMENT_EXPORT.md`, read in full and explicitly approved by the user.

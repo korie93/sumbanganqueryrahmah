@@ -427,7 +427,8 @@ function buildExportMetadata(dataset: Record<string, unknown>): Array<Record<str
     { Field: "Aging Filter", Value: filters.aging ?? "All scoped aging buckets" },
     { Field: "Calendar Rows", Value: calendar.length },
     { Field: "Balance Formula", Value: "Target OSP minus closed OSP; negative balances are retained" },
-    { Field: "Daily Result Formula", Value: "Daily OSP Closed / shared Target OSP x 100. TOTAL uses sum(closed) / sum(targets), not an average. Zero target returns 0%." },
+    { Field: "Daily Movement Formula", Value: "Daily System OSP Closed / authoritative TT OSP x 100, in percentage points. TOTAL uses sum(closed) / sum(TT OSP), not an average. Zero TT OSP returns 0%. Target OSP is not the daily movement denominator." },
+    { Field: "Daily TT OSP Basis", Value: "The Daily TT OSP Basis section contains the fixed authoritative TT OSP for every aging in this target revision, shared by all exported dates. OSP for 1 Percentage Point is TT OSP / 100, retained to four decimals without intermediate rounding." },
     { Field: "Daily Movement Date", Value: "Canonical effective closure/payment date, including governed manual settlement; not record creation date. Calendar covers full configured validity independently of System As Of." },
     { Field: "Spreadsheet Precision", Value: "Financial cells are numeric OOXML decimal values. Excel calculations use up to 15 significant digits; use CSV for exact large-amount text interchange." },
     { Field: "Dataset Completeness", Value: "Complete" },
@@ -464,26 +465,53 @@ function buildExportSections(dataset: Record<string, unknown>): ExportSection[] 
       `Billing Principal export is missing calendar rows (${calendar.length.toLocaleString("en-MY")} of ${countDays(from, to).toLocaleString("en-MY")}).`,
     );
   }
+  const dailySections = buildDailyAgingExportSections(calendar);
   return [
     ["TABLE A - SYSTEM RESULT", projectExportRows(flattenSummaryRows(overview.systemResult, "Table A"), SYSTEM_RESULT_EXPORT_COLUMNS)],
     ["TABLE B - CLIENT RESULT", projectExportRows(flattenSummaryRows(overview.clientResult, "Table B"), CLIENT_RESULT_EXPORT_COLUMNS)],
     ["LATEST TOTAL COMPARISON", projectExportRows(comparison, COMPARISON_EXPORT_COLUMNS)],
     ["SYSTEM DAILY MOVEMENT", projectExportRows(calendar, CALENDAR_EXPORT_COLUMNS)],
-    ["SYSTEM DAILY AGING MOVEMENT", calendar.map((day) => {
-      const movement = ensureLooseObject(day.dailyMovement);
-      const agingRows = flattenRows(movement?.rows);
-      const all = ensureLooseObject(movement?.all);
-      if (agingRows.length !== 4 || agingRows.some((row, index) => row.aging !== ["D3", "D4", "D5", "D6"][index]) || all?.aging !== "ALL") {
-        throw new Error("Billing Principal export is missing complete daily aging movement.");
+    ...dailySections,
+  ];
+}
+
+function buildDailyAgingExportSections(calendar: Array<Record<string, unknown>>): ExportSection[] {
+  let basis: Array<Record<string, unknown>> | undefined;
+  const dailyRows = calendar.map((day) => {
+    const movement = ensureLooseObject(day.dailyMovement);
+    const agingRows = flattenRows(movement?.rows);
+    const all = ensureLooseObject(movement?.all);
+    if (agingRows.length !== 4 || agingRows.some((row, index) => row.aging !== ["D3", "D4", "D5", "D6"][index]) || all?.aging !== "ALL") {
+      throw new Error("Billing Principal export is missing complete daily aging movement.");
+    }
+    const dayBasis = [...agingRows, all].map((aging) => {
+      if (typeof aging.totalOsp !== "string" || !/^\d+\.\d{2}$/.test(aging.totalOsp)
+        || typeof aging.ospRequiredForOnePercent !== "string" || !/^\d+\.\d{4}$/.test(aging.ospRequiredForOnePercent)) {
+        throw new Error("Billing Principal export is missing a valid daily TT OSP basis.");
       }
-      const row: Record<string, unknown> = { Date: day.date };
-      for (const aging of [...agingRows, all]) {
-        const label = aging.aging === "ALL" ? "TOTAL" : String(aging.aging);
-        row[`${label} Daily Result Percentage`] = aging.resultPercentage;
-        row[`${label} Daily OSP Closed`] = aging.ospClosed;
-      }
-      return row;
-    })],
+      return {
+        Aging: aging.aging === "ALL" ? "TOTAL" : aging.aging,
+        "TT OSP": aging.totalOsp,
+        "OSP for 1 Percentage Point": aging.ospRequiredForOnePercent,
+      };
+    });
+    const fixedBasis = basis;
+    if (fixedBasis && dayBasis.some((aging, index) => aging["TT OSP"] !== fixedBasis[index]?.["TT OSP"]
+      || aging["OSP for 1 Percentage Point"] !== fixedBasis[index]?.["OSP for 1 Percentage Point"])) {
+      throw new Error("Billing Principal export has inconsistent daily TT OSP bases. Reload and export again.");
+    }
+    basis ??= dayBasis;
+    const row: Record<string, unknown> = { Date: day.date };
+    for (const aging of [...agingRows, all]) {
+      const label = aging.aging === "ALL" ? "TOTAL" : String(aging.aging);
+      row[`${label} Daily Movement Percentage`] = aging.resultPercentage;
+      row[`${label} Daily OSP Closed`] = aging.ospClosed;
+    }
+    return row;
+  });
+  return [
+    ["SYSTEM DAILY AGING MOVEMENT", dailyRows],
+    ["SYSTEM DAILY TT OSP BASIS", basis ?? []],
   ];
 }
 
@@ -532,6 +560,7 @@ async function buildXlsxExport(dataset: Record<string, unknown>): Promise<Buffer
     ["Latest Comparison", sections[2]![1]],
     ["Daily Movement", sections[3]![1]],
     ["Daily Aging Movement", sections[4]![1]],
+    ["Daily TT OSP Basis", sections[5]![1]],
   ];
   for (const [name, rows] of sheets) {
     const sanitized = sanitizeRows(rows);
@@ -544,12 +573,19 @@ async function buildXlsxExport(dataset: Record<string, unknown>): Promise<Buffer
         // value through a binary JS Number. Spreadsheet applications still have
         // their own documented calculation precision (declared in Summary).
         const dailyFormat = /Percentage/.test(field) ? '0.00"%"' : '"RM"#,##0.00';
-        sheet[XLSX.utils.encode_cell({ r: index + 1, c: column })] = { t: "n", v: raw, z: name === "Daily Aging Movement" ? dailyFormat : /Count|Accounts/.test(field) ? "0" : "#,##0.00##;[Red]-#,##0.00##" };
+        const basisFormat = field === "OSP for 1 Percentage Point" ? '"RM"#,##0.0000' : '"RM"#,##0.00';
+        sheet[XLSX.utils.encode_cell({ r: index + 1, c: column })] = { t: "n", v: raw,
+          z: name === "Daily Aging Movement" ? dailyFormat : name === "Daily TT OSP Basis" ? basisFormat
+            : /Count|Accounts/.test(field) ? "0" : "#,##0.00##;[Red]-#,##0.00##" };
       }
     }));
     if (name === "Daily Aging Movement") {
       sheet["!cols"] = headers.map((field) => ({ wch: field === "Date" ? 14 : 31 }));
       sheet["!autofilter"] = { ref: sheet["!ref"] ?? "A1:K1" };
+    }
+    if (name === "Daily TT OSP Basis") {
+      sheet["!cols"] = [{ wch: 14 }, { wch: 28 }, { wch: 34 }];
+      sheet["!autofilter"] = { ref: sheet["!ref"] ?? "A1:C1" };
     }
     XLSX.utils.book_append_sheet(workbook, sheet, name);
   }

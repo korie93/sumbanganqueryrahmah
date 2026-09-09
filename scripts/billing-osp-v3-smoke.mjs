@@ -131,6 +131,16 @@ async function verifyPrivateExports(actor, targetPercent, resultPercent) {
           assert.equal(Object.keys(dailyRows[0]).length, 11);
           assert.equal(dailyRows.reduce((sum, row) => sum + row["TOTAL Daily OSP Closed"], 0), 12000);
           assert(dailyRows.every((row) => ["D3", "D4", "D5", "D6"].reduce((sum, aging) => sum + row[`${aging} Daily OSP Closed`], 0) === row["TOTAL Daily OSP Closed"]));
+          const basis = XLSX.utils.sheet_to_json(workbook.Sheets["Daily TT OSP Basis"]);
+          assert.equal(basis.length, 5);
+          assert.equal(basis[4]["TT OSP"], 12000);
+          assert.equal(basis[4]["OSP for 1 Percentage Point"], 120);
+          for (const row of dailyRows) {
+            for (const [index, aging] of ["D3", "D4", "D5", "D6", "TOTAL"].entries()) {
+              const expected = basis[index]["TT OSP"] > 0 ? row[`${aging} Daily OSP Closed`] / basis[index]["TT OSP"] * 100 : 0;
+              assert.equal(row[`${aging} Daily Movement Percentage`], Number(expected.toFixed(4)));
+            }
+          }
         } else if (format === "PNG") assert(bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])));
         else assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
         if (actor.label === "admin") await writeFile(path.join(artifactDir, "daily-" + download.suggestedFilename()), bytes);
@@ -153,15 +163,27 @@ async function verifyPrivateExports(actor, targetPercent, resultPercent) {
         assert.equal(dataset.calendar.length, 31);
         assert(dataset.calendar.every((day) => day.dailyMovement.rows.length === 4
           && day.dailyMovement.all.ospClosed === day.systemOspClosedToday));
+        for (const day of dataset.calendar) {
+          for (const [index, row] of [...day.dailyMovement.rows, day.dailyMovement.all].entries()) {
+            const tableA = index === 4 ? dataset.overview.systemResult.all : dataset.overview.systemResult.rows[index];
+            assert.equal(row.totalOsp, tableA.totalOsp, "Daily report uses the same TT OSP as Table A");
+            assert.equal(row.ospRequiredForOnePercent, (Number(row.totalOsp) / 100).toFixed(4));
+            const expected = Number(row.totalOsp) > 0 ? Number(row.ospClosed) / Number(row.totalOsp) * 100 : 0;
+            assert.equal(row.resultPercentage, expected.toFixed(4));
+          }
+        }
       }
       const deadline = Date.now() + 60_000;
-      while (!downloads.length || !(await button.isEnabled())) {
+      // The 31-day fixture produces two metadata pages, the three summary
+      // pages, three cumulative pages, one basis page and three daily pages.
+      const expectedDownloads = format === "PNG" ? 12 : 1;
+      while (downloads.length < expectedDownloads || !(await button.isEnabled())) {
         assert(Date.now() < deadline, `${actor.label} ${format} rendering did not complete.`);
         await wait(25);
       }
       await Promise.all(downloads);
       assert.deepEqual(errors.map((error) => error.message), []);
-      assert.equal(format === "PNG" || downloads.length === 1, true);
+      assert.equal(downloads.length, expectedDownloads, "Every rendered report page must download");
     } finally { page.off("download", consume); }
   }
 }
@@ -452,7 +474,12 @@ try {
   assert.equal(closed.systemDailyAccounts, 12); assert.equal(closed.systemOspClosedToday, "12000.00");
   assert.deepEqual(closed.dailyMovement.rows.map((row) => row.ospClosed), ["11000.00", "1000.00", "0.00", "0.00"]);
   assert.equal(closed.dailyMovement.all.ospClosed, "12000.00");
-  assert.equal(closed.dailyMovement.all.resultPercentage, "312.5000");
+  assert.equal(closed.dailyMovement.all.totalOsp, "12000.00");
+  assert.equal(closed.dailyMovement.all.targetOsp, "3840.00", "shared Target OSP is preserved after its 32% edit");
+  assert.equal(closed.dailyMovement.all.ospRequiredForOnePercent, "120.0000");
+  assert.equal(closed.dailyMovement.all.resultPercentage, "100.0000", "daily movement uses TT OSP, not Target OSP");
+  assert.equal(closed.systemDailyMovementPercentagePoints, "100.0000");
+  assert.equal(closed.systemAchievementVsTargetPercentage, "312.5000", "target achievement retains its separate denominator");
   assert.equal(closed.systemResultPercentage, "100.0000", "existing cumulative denominator stays TT OSP");
   assert.equal(calendar.days[0].dailyMovement.all.resultPercentage, "0.0000");
   const calendarRegion = admin.page.getByRole("region", { name: "System calendar daily movement", exact: true });
@@ -542,7 +569,7 @@ try {
         .filter((element) => element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1)
         .map((element) => element.textContent));
       assert.deepEqual(overflow, [], `Daily calendar text must not clip at ${width}px`);
-      for (const text of ["D3", "D4", "D5", "D6", "TOTAL", "312.50%", "RM12,000.00"]) assert((await activeDay.innerText()).includes(text));
+      for (const text of ["D3", "D4", "D5", "D6", "TOTAL", "+100.00%", "RM12,000.00"]) assert((await activeDay.innerText()).includes(text));
       await admin.page.screenshot({ path: path.join(artifactDir, `daily-calendar-${theme}-${width}.png`) });
     }
   }

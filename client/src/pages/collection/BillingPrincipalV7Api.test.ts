@@ -221,11 +221,21 @@ test("calendar contract carries all daily aging values and fails closed on missi
     { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
   try {
     const result = await getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" });
-    assert.equal(result.days[0]?.dailyMovement.all.resultPercentage, "160.0000");
+    assert.equal(result.days[0]?.dailyMovement.all.resultPercentage, "80.0000");
+    assert.equal(result.days[0]?.dailyMovement.all.totalOsp, "10000.00");
+    assert.equal(result.days[0]?.dailyMovement.all.ospRequiredForOnePercent, "100.0000");
+    assert.equal(result.days[0]?.systemAchievementVsTargetPercentage, "160.0000");
     assert.equal(result.days[0]?.systemResultPercentage, "80.0000");
     day = { ...fixture.calendar[0], dailyMovement: undefined };
     await assert.rejects(getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" }));
     day = { ...fixture.calendar[0], dailyMovement: { ...fixture.calendar[0]!.dailyMovement, rows: Array(4).fill(fixture.calendar[0]!.dailyMovement.rows[0]) } };
     await assert.rejects(getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" }));
+    for (const field of ["totalOsp", "ospRequiredForOnePercent"] as const) {
+      day = { ...fixture.calendar[0], dailyMovement: { ...fixture.calendar[0]!.dailyMovement,
+        rows: fixture.calendar[0]!.dailyMovement.rows.map((row, index) => index === 0 ? { ...row, [field]: undefined } : row) } };
+      await assert.rejects(getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" }));
+      day = { ...fixture.calendar[0], dailyMovement: { ...fixture.calendar[0]!.dailyMovement, all: { ...fixture.calendar[0]!.dailyMovement.all, [field]: undefined } } };
+      await assert.rejects(getBillingPrincipalCalendar("target-a", "revision-a", { from: "2026-09-10", to: "2026-09-10" }));
+    }
   } finally { globalThis.fetch = originalFetch; }
 });

@@ -56,6 +56,23 @@ test("V9 Table A calendar exposes one System-only effective movement series", ()
   assert.equal(days[2]?.systemDailyMovementPercentagePoints, "20.0000");
 });
 
+test("calendar daily percentage points use unrounded TT OSP ratio rather than subtracting rounded cumulative results", () => {
+  const days = buildCollectionOspCalendarDays({
+    from: "2026-08-27", to: "2026-08-29", aging: "D3", totalBaseline: 3n, targetOsp: 1n,
+    results: [], movements: [
+      { date: "2026-08-27", ospClosed: "0.01", accountCount: 1 },
+      { date: "2026-08-28", ospClosed: "0.01", accountCount: 1 },
+    ],
+  });
+  assert.deepEqual(days.map((day) => day.systemDailyMovementPercentagePoints), ["33.3333", "33.3333", "0.0000"]);
+  assert.equal(days[1]?.systemPreviousResultPercentage, "33.3333");
+  assert.equal(days[1]?.systemResultPercentage, "66.6667");
+  assert.notEqual(days[1]?.systemDailyMovementPercentagePoints, "33.3334", "Rounded cumulative subtraction introduces a false daily increment.");
+  assert.equal(days[1]?.targetOsp, "0.01");
+  assert.equal(days[1]?.balanceOsp, "-0.01");
+  assert.equal(days[1]?.systemAchievementVsTargetPercentage, "200.0000");
+});
+
 test("V9 drilldown labels effective manual POOL and automatic closure without a reconciliation surface", () => {
   const superseded = result({ systemClosed: true, systemAbortDate: "2026-09-20", effectiveClosureDate: "2026-09-10", contributionSource: "SYSTEM_ABORT_CP", manualSuperseded: true });
   assert.deepEqual(resolveCollectionOspDrilldownContribution(superseded, true, true, undefined), { source: "MANUAL_VERIFIED_ABORT", effectiveDate: "2026-09-10" });

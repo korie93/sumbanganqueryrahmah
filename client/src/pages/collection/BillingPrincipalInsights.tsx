@@ -9,7 +9,7 @@ import {
   type BillingPrincipalAging, type BillingPrincipalCalendarDay, type BillingPrincipalSavedTarget, type BillingPrincipalSavedTargetOverview,
 } from "@/lib/api/collection-billing-principal";
 import { parseApiError, parseCollectionApiErrorDetails } from "./utils";
-import { BILLING_PRINCIPAL_AGINGS } from "./billing-principal-report-utils";
+import { BILLING_PRINCIPAL_AGINGS, formatOspCurrency } from "./billing-principal-report-utils";
 import { BillingPrincipalCalendarDayCard } from "./BillingPrincipalCalendarDayCard";
 import { exportBillingPrincipalVisualReport, type BillingPrincipalVisualExportKind } from "./billing-principal-visual-export";
 import { BillingPrincipalDayDialog } from "./BillingPrincipalDayDialog";
@@ -168,7 +168,17 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
       </div>
     </div>
     <p className="text-xs text-muted-foreground">Exports contain saved shared values and only your saved private results. Save or discard private changes before exporting.</p>
-    <p className="text-sm text-muted-foreground">Daily result = OSP closed that day ÷ shared Target OSP. TOTAL uses combined closed ÷ combined targets, not an average. Cumulative Result remains based on TT OSP; balance = Target OSP − cumulative closed.</p>
+    <p className="text-sm text-muted-foreground">Daily movement = System OSP closed that day ÷ TT OSP × 100, shown as percentage-point movement. TOTAL (ALL) uses combined daily closed ÷ combined TT OSP, not an average. Zero TT OSP shows +0.00%. Balance remains Target OSP − cumulative closed.</p>
+    {!calendarLoading && !calendarError && calendar[0] ? <details className="rounded-md border px-3 py-2 text-sm">
+      <summary className="cursor-pointer font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">TT OSP basis and OSP for +1%</summary>
+      <table className="mt-2 w-full table-fixed text-xs sm:text-sm" aria-label="Daily movement TT OSP basis">
+        <thead><tr className="text-muted-foreground"><th className="w-12 py-2 text-left font-medium">Aging</th><th className="py-2 pl-2 text-right font-medium">TT OSP</th><th className="py-2 pl-2 text-right font-medium">OSP for +1%</th></tr></thead>
+        <tbody>{[...calendar[0].dailyMovement.rows, calendar[0].dailyMovement.all].map((row) => <tr key={row.aging} className={row.aging === "ALL" ? "border-t font-semibold" : undefined}>
+          <td className="py-2">{row.aging === "ALL" ? "TOTAL" : row.aging}</td><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.totalOsp)}</td><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.ospRequiredForOnePercent)}</td>
+        </tr>)}</tbody>
+      </table>
+      <p className="mt-2 text-xs text-muted-foreground">Fixed Saved Target revision basis. OSP for +1% is TT OSP ÷ 100; displayed amounts are rounded only for readability.</p>
+    </details> : null}
     {exportError ? <p role="alert" className="text-sm text-destructive">{exportError}</p> : null}
     <div className="flex flex-wrap items-end gap-2">
       <Button type="button" variant="outline" size="icon" aria-label="Previous month" disabled={month <= start.slice(0, 7)} onClick={() => shiftMonth(-1)}><ChevronLeft className="h-4 w-4" aria-hidden="true" /></Button>

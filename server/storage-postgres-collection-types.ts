@@ -613,9 +613,20 @@ export type CollectionOspReconciliationHistoryView = {
   createdAt: string;
 };
 
+type CollectionOspDailyMovementMetrics = {
+  /** Immutable revision TT OSP baseline; daily result uses this denominator. */
+  totalOsp: string;
+  targetOsp: string;
+  /** Exact TT OSP / 100 in RM with four decimals; never a calculation denominator. */
+  ospRequiredForOnePercent: string;
+  ospClosed: string;
+  resultPercentage: string;
+  closedAccountCount: number;
+};
+
 export type CollectionOspDailyMovementView = {
-  rows: Array<{ aging: CollectionAgingBucket; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number }>;
-  all: { aging: "ALL"; targetOsp: string; ospClosed: string; resultPercentage: string; closedAccountCount: number };
+  rows: Array<CollectionOspDailyMovementMetrics & { aging: CollectionAgingBucket }>;
+  all: CollectionOspDailyMovementMetrics & { aging: "ALL" };
 };
 
 export type CollectionOspCalendarDayView = {

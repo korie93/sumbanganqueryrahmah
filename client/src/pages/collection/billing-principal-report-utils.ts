@@ -105,6 +105,13 @@ export function formatOspPercentage(value: unknown): string {
   return units === null ? "—" : `${unitsToDecimal(units, 2)}%`;
 }
 
+// Daily movement is an additive percentage-point contribution, not growth from yesterday.
+// The API owns its TT OSP calculation; this helper only formats the canonical value.
+export function formatOspDailyMovement(value: unknown): string {
+  const units = decimalToUnits(value, 2);
+  return units === null ? "—" : `${units >= 0n ? "+" : ""}${unitsToDecimal(units, 2)}%`;
+}
+
 export function calculateTargetOspPreview(totalOsp: unknown, targetPercentage: unknown): string {
   const totalCents = decimalToUnits(totalOsp, 2);
   const percentageUnits = decimalToUnits(

@@ -15,11 +15,14 @@ const decimal = (units, scale = 2) => {
 const percent = (closed, target) => decimal(target ? (closed * 1_000_000n + target / 2n) / target : 0n, 4);
 const cents = (value) => BigInt(value.replace(".", ""));
 const moneyText = (value) => `RM${value.replace(/\B(?=(\d{3})+\.)/g, ",")}`;
-const percentText = (value) => `${decimal((cents(value) + 50n) / 100n)}%`;
+const percentText = (value) => `+${decimal((cents(value) + 50n) / 100n)}%`;
 
-function buildStressFixture(date) {
-  const amounts = [9_999_999_999_999_999n, 8_888_888_888_888_888n, 7_777_777_777_777_777n, 6_666_666_666_666_666n];
-  const baselines = amounts.map((amount) => amount * 2n);
+function buildStressFixture(date, acceptance = false) {
+  // Acceptance values are test-only sen; production never imports this module.
+  const amounts = acceptance ? [1_908_183n, 1_219_741n, 1_392_703n, 1_234_657n]
+    : [9_999_999_999_999_999n, 8_888_888_888_888_888n, 7_777_777_777_777_777n, 6_666_666_666_666_666n];
+  const baselines = acceptance ? [190_818_336n, 121_974_060n, 139_270_335n, 123_465_725n]
+    : amounts.map((amount) => amount * 2n);
   const targets = baselines.map((amount, index) => (amount * BigInt(30 + index * 10) + 50n) / 100n);
   const sum = (values) => values.reduce((total, value) => total + value, 0n);
   const totalOsp = sum(baselines);
@@ -27,10 +30,12 @@ function buildStressFixture(date) {
   const closedOsp = sum(amounts);
   const movement = (active) => ({
     rows: agings.map((aging, index) => ({ aging, targetOsp: decimal(targets[index]),
-      ospClosed: decimal(active ? amounts[index] : 0n), resultPercentage: percent(active ? amounts[index] : 0n, targets[index]),
+      totalOsp: decimal(baselines[index]), ospRequiredForOnePercent: decimal(baselines[index], 4),
+      ospClosed: decimal(active ? amounts[index] : 0n), resultPercentage: percent(active ? amounts[index] : 0n, baselines[index]),
       closedAccountCount: active ? 1 : 0 })),
-    all: { aging: "ALL", targetOsp: decimal(targetOsp), ospClosed: decimal(active ? closedOsp : 0n),
-      resultPercentage: percent(active ? closedOsp : 0n, targetOsp), closedAccountCount: active ? 4 : 0 },
+    all: { aging: "ALL", targetOsp: decimal(targetOsp), totalOsp: decimal(totalOsp),
+      ospRequiredForOnePercent: decimal(totalOsp, 4), ospClosed: decimal(active ? closedOsp : 0n),
+      resultPercentage: percent(active ? closedOsp : 0n, totalOsp), closedAccountCount: active ? 4 : 0 },
   });
   const revision = (value) => ({ ...value, sourceSnapshots: value.sourceSnapshots.map((source) => ({ ...source, name: sourceName, filename: sourceFilename })) });
   const target = (value) => value.id ? { ...value, name: targetName, activeRevision: revision(value.activeRevision) } : value;
@@ -74,7 +79,7 @@ export async function runBillingOspDailyRenderQa({ actor, targetId, revisionPath
   const page = actor.page;
   const origin = new URL(page.url()).origin;
   assert(["127.0.0.1", "localhost", "[::1]"].includes(new URL(origin).hostname));
-  const fixture = buildStressFixture(date);
+  let fixture = buildStressFixture(date, true);
   const paths = new Set([prefix, `${prefix}/${targetId}`, `${revisionPath}/overview`, `${revisionPath}/calendar`, `${revisionPath}/export`]);
   const matches = (url) => url.origin === origin && paths.has(url.pathname);
   const errors = [];
@@ -124,6 +129,32 @@ export async function runBillingOspDailyRenderQa({ actor, targetId, revisionPath
     const activeDay = page.getByTestId(`billing-calendar-day-${date}`);
     const metadata = page.getByTestId("billing-principal-page").locator(":scope > section").first();
     await activeDay.waitFor();
+    await page.locator("summary").filter({ hasText: "TT OSP basis and OSP for +1%" }).click();
+    const basisTable = page.getByRole("table", { name: "Daily movement TT OSP basis", exact: true });
+    const acceptanceBasis = await basisTable.innerText();
+    for (const value of ["RM1,908,183.36", "RM19,081.83", "RM5,755,284.56", "RM57,552.85"]) {
+      assert(acceptanceBasis.includes(value), `Canonical TT OSP basis renders ${value}`);
+    }
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((value) => document.documentElement.classList.toggle("dark", value === "dark"), theme);
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 960 });
+        const content = await activeDay.innerText();
+        assert.equal((content.match(/\+1\.00%/g) || []).length, 5, "Acceptance fixture shows +1.00% for D3-D6 and weighted ALL");
+        assert(content.includes("RM19,081.83"), "D3 TT OSP fixture produces the expected closed amount");
+        const filename = `daily-tt-acceptance-${theme}-${width}.png`;
+        await activeDay.screenshot({ path: path.join(artifactDir, filename) });
+        artifacts.push(filename);
+        const basisFilename = `daily-tt-basis-${theme}-${width}.png`;
+        await basisTable.screenshot({ path: path.join(artifactDir, basisFilename) });
+        artifacts.push(basisFilename);
+      }
+    }
+    checked("TT OSP acceptance: D3 RM19,081.83 and all five +1.00% movements render on desktop/mobile in both themes");
+    fixture = buildStressFixture(date);
+    await openReport(actor, targetId);
+    await activeDay.waitFor();
+    await page.locator("summary").filter({ hasText: "TT OSP basis and OSP for +1%" }).click();
     // Execute the installed auditor through the automation runtime, not a DOM
     // script sink: production Trusted Types/CSP protections stay enabled.
     await page.evaluate(await readFile(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8"));
@@ -135,6 +166,8 @@ export async function runBillingOspDailyRenderQa({ actor, targetId, revisionPath
         const overflow = await region.evaluate((element) => [...element.querySelectorAll("button, button span")]
           .filter((item) => item.clientWidth > 0 && item.scrollWidth > item.clientWidth + 1).map((item) => item.textContent));
         assert.deepEqual(overflow, [], `Stress daily text fits at ${theme}/${width}px`);
+        assert.deepEqual(await basisTable.locator("th, td").evaluateAll((elements) => elements
+          .filter((item) => item.clientWidth > 0 && item.scrollWidth > item.clientWidth + 1).map((item) => item.textContent)), [], "TT OSP basis cells do not clip");
         assert.deepEqual(await metadata.locator("p").evaluateAll((elements) => elements
           .filter((item) => item.clientWidth > 0 && item.scrollWidth > item.clientWidth + 1).map((item) => item.textContent)), [], "Long source metadata does not clip");
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Stress metadata and calendar fit at ${width}px`);
@@ -142,7 +175,7 @@ export async function runBillingOspDailyRenderQa({ actor, targetId, revisionPath
         for (const row of [...fixture.active.rows, fixture.active.all]) {
           for (const value of [row.aging === "ALL" ? "TOTAL" : row.aging, moneyText(row.ospClosed), percentText(row.resultPercentage)]) assert(content.includes(value), value);
         }
-        for (const [label, element] of [["metadata", metadata], ["active-day", activeDay]]) {
+        for (const [label, element] of [["metadata", metadata], ["active-day", activeDay], ["tt-basis", basisTable]]) {
           const filename = `daily-stress-${label}-${theme}-${width}.png`;
           await element.screenshot({ path: path.join(artifactDir, filename) });
           artifacts.push(filename);
@@ -225,12 +258,13 @@ export async function runBillingOspDailyRenderQa({ actor, targetId, revisionPath
         await button.click();
         assert.equal((await responsePromise).status(), 200, `${format} stress export remains authorized`);
         const deadline = Date.now() + 60_000;
-        while (!downloads.length || !(await button.isEnabled())) {
+        const expectedDownloads = format === "PNG" ? 12 : 1;
+        while (downloads.length < expectedDownloads || !(await button.isEnabled())) {
           assert(Date.now() < deadline, `${format} stress export completed within its time bound`);
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
         await Promise.all(downloads);
-        assert(downloads.length <= 16 && (format !== "PDF" || downloads.length === 1));
+        assert.equal(downloads.length, expectedDownloads, "All stress report pages download completely");
       } finally { page.off("download", consume); }
     }
     const evidence = await page.evaluate(() => window.__ospDailyRenderQa.evidence);

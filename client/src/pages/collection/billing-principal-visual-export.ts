@@ -1,5 +1,5 @@
 import type { BillingPrincipalVisualExportDataset } from "@/lib/api/collection-billing-principal";
-import { formatOspCurrency, formatOspPercentage, formatOspPercentagePoint } from "./billing-principal-report-utils";
+import { formatOspCurrency, formatOspDailyMovement, formatOspPercentage, formatOspPercentagePoint } from "./billing-principal-report-utils";
 import { getBillingPrincipalReportingWindow } from "@/lib/billing-principal-date-domain";
 
 export type BillingPrincipalVisualExportKind = "png" | "pdf";
@@ -68,9 +68,14 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
     String(day.systemDailyAccounts),
     formatOspCurrency(day.balanceOsp),
   ]);
-  const dailyHeaders = ["Date", ...["D3", "D4", "D5", "D6", "TOTAL"].flatMap((aging) => [`${aging}\nDaily result %`, `${aging}\nOSP closed`])];
+  const dailyBasis = dataset.calendar[0]?.dailyMovement;
+  const dailyBasisHeaders = ["Aging", "TT OSP", "OSP for +1%"];
+  const dailyBasisRows = dailyBasis ? [...dailyBasis.rows, dailyBasis.all].map((row) => [
+    row.aging === "ALL" ? "TOTAL (ALL)" : row.aging, formatOspCurrency(row.totalOsp), formatOspCurrency(row.ospRequiredForOnePercent),
+  ]) : [];
+  const dailyHeaders = ["Date", ...["D3", "D4", "D5", "D6", "TOTAL"].flatMap((aging) => [`${aging}\nDaily movement %`, `${aging}\nOSP closed`])];
   const dailyRows = dataset.calendar.map((day) => [day.date,
-    ...[...day.dailyMovement.rows, day.dailyMovement.all].flatMap((row) => [formatOspPercentage(row.resultPercentage), formatOspCurrency(row.ospClosed)]),
+    ...[...day.dailyMovement.rows, day.dailyMovement.all].flatMap((row) => [formatOspDailyMovement(row.resultPercentage), formatOspCurrency(row.ospClosed)]),
   ]);
   return [
     { title: "Metadata", headers: ["Field", "Value"], rows: [
@@ -81,7 +86,8 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
       ["Private client state", overview.clientResult.all.receivedDate ? "Saved to your account" : "Unsaved — defaults from TABLE A"],
       ["Aging", revision.agingScope.join(", ")],
       ["Balance formula", "Target OSP minus closed OSP; negative values retained"],
-      ["Daily result formula", "Daily closed / shared Target OSP × 100. TOTAL = combined daily closed / combined targets; never an average. Zero target = 0.00%."],
+      ["Daily movement formula", "Daily System closed / TT OSP × 100, in percentage points. TOTAL (ALL) = combined daily closed / combined TT OSP; never an average. Zero TT OSP = +0.00%."],
+      ["Daily movement basis", "Fixed Saved Target revision TT OSP. OSP for +1% = TT OSP / 100; explanatory currency display is rounded, never used as the calculation denominator."],
       ["Daily business date", "Canonical effective closure/payment date. Full source validity, independent of historical System As Of."],
       ["Sources", revision.sourceSnapshots.map((source) => source.filename ? `${source.name} (${source.filename})` : source.name).join("; ")],
       ["Generated", `${dataset.generatedAt} by ${dataset.generatedBy}`],
@@ -90,6 +96,7 @@ export function buildBillingPrincipalVisualExportSections(dataset: BillingPrinci
     { title: "Table B - Client Result", headers: ["Aging", "TT OSP", "Private Target %", "Target OSP", "Client Result %", "Client OSP Closed", "Balance OSP"], rows: clientRows },
     { title: "Latest Total Result Comparison", headers: ["Dataset", "Date", "TT OSP", "OSP Closed", "Result / Difference"], rows: comparisonRows },
     { title: "Table A - Daily Movement", headers: ["Date", "Aging", "TT OSP", "Target OSP", "New closed", "Cumulative", "Result %", "Previous %", "Move pp", "Achievement", "Accounts", "Balance OSP"], rows: nonEmpty(["Date", "Aging", "TT OSP", "Target OSP", "New closed", "Cumulative", "Result %", "Previous %", "Move pp", "Achievement", "Accounts", "Balance OSP"], calendarRows) },
+    { title: "System Calendar - TT OSP Basis", headers: dailyBasisHeaders, rows: nonEmpty(dailyBasisHeaders, dailyBasisRows) },
     { title: "System Calendar - Daily Aging Movement", headers: dailyHeaders, rows: nonEmpty(dailyHeaders, dailyRows) },
   ];
 }
@@ -111,15 +118,16 @@ export function buildBillingPrincipalVisualPages(dataset: BillingPrincipalVisual
 }
 
 export function isBillingPrincipalVisualNumericColumn(section: BillingPrincipalVisualExportSection, column: number): boolean {
+  if (section.title.startsWith("System Calendar - TT OSP Basis")) return column >= 1;
   if (section.title.startsWith("System Calendar - Daily Aging Movement")) return column >= 1;
   if (section.title.startsWith("Table A - Daily Movement")) return column >= 2;
   if (section.title.startsWith("Table A - System") || section.title.startsWith("Table B - Client")) return column >= 1;
   return section.title === "Latest Total Result Comparison" && column >= 2;
 }
 
-export async function yieldBillingPrincipalExport(signal?: AbortSignal): Promise<void> {
+export async function yieldBillingPrincipalExport(signal?: AbortSignal, minimumDelayMs = 0): Promise<void> {
   abortIfRequested(signal);
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => setTimeout(resolve, minimumDelayMs));
   abortIfRequested(signal);
 }
 
@@ -153,8 +161,9 @@ function renderPage(dataset: BillingPrincipalVisualExportDataset, section: Billi
   const context = canvas.getContext("2d");
   if (!context) throw new Error("This browser cannot create the report image.");
   const dailyMovement = section.title.startsWith("System Calendar - Daily Aging Movement");
-  const fontSize = dailyMovement ? 24 : 14;
-  const lineHeight = dailyMovement ? 30 : CELL_LINE_HEIGHT;
+  const dailyBasis = section.title.startsWith("System Calendar - TT OSP Basis");
+  const fontSize = dailyMovement || dailyBasis ? 24 : 14;
+  const lineHeight = dailyMovement || dailyBasis ? 30 : CELL_LINE_HEIGHT;
   const tableWidth = WIDTH - MARGIN * 2;
   context.font = "18px Arial";
   const subtitle = wrapBillingPrincipalVisualText(`${dataset.overview.target.name} · System as of ${dataset.overview.asOf} · revision ${dataset.overview.revision.revisionNumber}`, tableWidth, (text) => context.measureText(text).width);
@@ -174,7 +183,7 @@ function renderPage(dataset: BillingPrincipalVisualExportDataset, section: Billi
   };
   const preparedRows = [
     prepareRow(section.headers, true),
-    ...section.rows.map((row) => prepareRow(row)),
+    ...section.rows.map((row) => prepareRow(row, dailyBasis && row[0] === "TOTAL (ALL)")),
   ];
   const tableHeight = preparedRows.reduce((total, row) => total + row.height, 0);
   const height = Math.max(MIN_HEIGHT, tableTop + tableHeight + 70);
@@ -225,7 +234,10 @@ export async function exportBillingPrincipalVisualReport(kind: BillingPrincipalV
   const base = `billing-principal-${input.dataset.overview.asOf}`;
   if (kind === "png") {
     for (let index = 0; index < pages.length; index += 1) {
-      await yieldBillingPrincipalExport(input.signal);
+      // Pace separate PNG files below the browser's burst-download limit;
+      // otherwise a fast multi-page report can silently lose its final pages.
+      // Keep cancellation and the fresh owner check after this wait.
+      await yieldBillingPrincipalExport(input.signal, 150);
       const canvas = renderPage(input.dataset, pages[index]!, index + 1, pages.length);
       try {
         const blob = await canvasBlob(canvas);

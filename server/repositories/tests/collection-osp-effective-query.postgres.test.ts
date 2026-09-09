@@ -476,17 +476,27 @@ test("calendar and export retain all daily agings under D3 filtering and reconci
           assert.equal(row.ospClosed, formatCollectionOspMoneyCents(closed), `${day.date} ${row.aging} canonical contribution`);
           assert.equal(row.closedAccountCount, agingAccounts.length);
           assert.equal(row.targetOsp, overview.systemResult.rows.find((item) => item.aging === row.aging)?.targetOsp);
-          assert.equal(row.resultPercentage, formatCollectionOspPercentage(closed, parseCollectionOspMoneyCents(row.targetOsp)));
+          assert.equal(row.totalOsp, overview.systemResult.rows.find((item) => item.aging === row.aging)?.totalOsp,
+            "Daily movement shares the exact immutable TT OSP basis used by cumulative Table A.");
+          const baselineCents = parseCollectionOspMoneyCents(row.totalOsp);
+          assert.equal(row.resultPercentage, formatCollectionOspPercentage(closed, baselineCents));
+          assert.equal(BigInt(row.ospRequiredForOnePercent.replace(".", "")), baselineCents);
         }
         const totalClosed = day.dailyMovement.rows.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.ospClosed), 0n);
         const totalTarget = day.dailyMovement.rows.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.targetOsp), 0n);
+        const totalBaseline = day.dailyMovement.rows.reduce((sum, row) => sum + parseCollectionOspMoneyCents(row.totalOsp), 0n);
         assert.equal(day.dailyMovement.all.ospClosed, formatCollectionOspMoneyCents(totalClosed));
         assert.equal(day.dailyMovement.all.targetOsp, formatCollectionOspMoneyCents(totalTarget));
-        assert.equal(day.dailyMovement.all.resultPercentage, formatCollectionOspPercentage(totalClosed, totalTarget));
+        assert.equal(day.dailyMovement.all.totalOsp, formatCollectionOspMoneyCents(totalBaseline));
+        assert.equal(day.dailyMovement.all.totalOsp, overview.systemResult.all.totalOsp);
+        assert.equal(BigInt(day.dailyMovement.all.ospRequiredForOnePercent.replace(".", "")), totalBaseline);
+        assert.equal(day.dailyMovement.all.resultPercentage, formatCollectionOspPercentage(totalClosed, totalBaseline));
         assert.equal(day.dailyMovement.all.closedAccountCount, qualifying.length);
         assert.equal(day.systemOspClosedToday, day.dailyMovement.all.ospClosed);
+        assert.equal(day.systemDailyMovementPercentagePoints, day.dailyMovement.all.resultPercentage);
         const filteredDay = d3Calendar.days.find((item) => item.date === day.date)!;
         assert.equal(filteredDay.systemOspClosedToday, day.dailyMovement.rows[0]!.ospClosed);
+        assert.equal(filteredDay.systemDailyMovementPercentagePoints, day.dailyMovement.rows[0]!.resultPercentage);
         assert.equal(filteredDay.systemDailyAccounts, day.dailyMovement.rows[0]!.closedAccountCount);
       }
 
@@ -499,6 +509,8 @@ test("calendar and export retain all daily agings under D3 filtering and reconci
           row.aging === "ALL" ? day.dailyMovement.all.ospClosed : day.dailyMovement.rows.find((item) => item.aging === row.aging)!.ospClosed,
         ), 0n);
         assert.equal(formatCollectionOspMoneyCents(sum), row.ospClosed, `${row.aging} daily movement reconciles to period-end Table A`);
+        assert.equal(formatCollectionOspPercentage(sum, parseCollectionOspMoneyCents(row.totalOsp)), row.resultPercentage,
+          `${row.aging} unrounded daily percentage-point contributions reconcile with cumulative System Result`);
       }
       assert.equal(calendar.days.slice(-1)[0]?.systemCumulativeOspClosed, overview.systemResult.all.ospClosed);
       assert.equal(d3Calendar.days.slice(-1)[0]?.systemCumulativeOspClosed, overview.systemResult.rows[0]!.ospClosed);
