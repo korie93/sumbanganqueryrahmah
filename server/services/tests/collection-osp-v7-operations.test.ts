@@ -14,6 +14,7 @@ import {
   MAX_COLLECTION_OSP_V7_EXPORT_DETAIL_ROWS,
 } from "../collection/collection-osp-v7-operations";
 import type { CollectionStoragePort } from "../collection/collection-service-support";
+import { CollectionOspV7ExportGuardError } from "../collection/collection-osp-v7-export-guard";
 
 const TARGET_ID = "11111111-1111-4111-8111-111111111111";
 const REVISION_ID = "22222222-2222-4222-8222-222222222222";
@@ -881,4 +882,25 @@ test("oversized configured Billing periods remain explicit controlled errors, ne
   await assert.rejects(service.exportReport(user("admin"), TARGET_ID, REVISION_ID, { format: "json", asOf: "2026-09-06" }),
     (error) => assertHttpError(error, 400));
   assert.equal(queried, false);
+});
+
+test("export rejection preserves the existing HTTP error body and carries only header quota metadata", async () => {
+  const rateLimit = { limit: 4, retryAfterMs: 39_999, resetAfterMs: 39_999 };
+  const service = new CollectionOspV7Operations(
+    { getCollectionOspSavedTarget: async () => visibleTarget() } as unknown as CollectionStoragePort,
+    (authenticatedUser) => authenticatedUser!,
+    {
+      run: async () => { throw new CollectionOspV7ExportGuardError("Export quota reached.", rateLimit); },
+      snapshot: () => ({ inFlight: 0, trackedUsers: 1 }),
+    },
+  );
+  await assert.rejects(service.exportReport(user("manager"), TARGET_ID, REVISION_ID,
+    { format: "json", asOf: "2026-09-06" }), (error) => {
+    assert.ok(error instanceof HttpError);
+    assert.equal(error.statusCode, 429);
+    assert.equal(error.message, "Export quota reached.");
+    assert.equal(error.code, undefined);
+    assert.deepEqual(error.details, { rateLimit });
+    return true;
+  });
 });

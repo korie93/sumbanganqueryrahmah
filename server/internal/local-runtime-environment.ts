@@ -192,6 +192,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
       getControlState,
       getDbProtection,
       userLimitsPerMinute: runtimeConfig.rateLimiting.userLimitsPerMinute,
+      authenticatedIpLimitPerMinute: runtimeConfig.rateLimiting.authenticatedIpRequestsPerMinute,
     });
   server.once("close", stopAdaptiveRateStateSweep);
   server.once("close", stopAdaptiveRateLimitCooldownSweep);

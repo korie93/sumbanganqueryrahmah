@@ -23,6 +23,7 @@ test("local HTTP pipeline keeps security middleware in reviewed order", () => {
     "app.use(createGlobalRequestTimeoutMiddleware({",
     "app.use(\"/api\", (_req, res, next) => {",
     "app.use(createCsrfProtectionMiddleware());",
+    "app.use(createRateLimitIdentityMiddleware());",
     "app.use(adaptiveRateLimit);",
     "app.use(systemProtectionMiddleware);",
     "app.use(maintenanceGuard);",

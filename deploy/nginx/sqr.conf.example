@@ -6,10 +6,27 @@ map $http_upgrade $connection_upgrade {
     "" close;
 }
 
-limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=30r/m;
-limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/m;
+# Edge limits are aggregate flood guards, NOT per-user quotas. Nginx cannot
+# authenticate a cookie/JWT; never use a client-supplied user header as a key.
+# Deployment-tunable example: 100 staff x 10 dashboard calls = 1000-call burst;
+# 200r/s + burst 2000 provides headroom. App user quotas and Redis remain strict.
+# Size these literals for measured concurrency; env values are not interpolated.
+limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=200r/s;
+# Allow simultaneous staff login; the app enforces 5/account/15m + 500/network/15m.
+limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/s;
+# Keep expensive import admission strict and separate from normal API traffic.
+limit_req_zone $binary_remote_addr zone=sqr_import_per_ip:10m rate=30r/m;
 limit_req_zone $binary_remote_addr zone=sqr_telemetry_per_ip:10m rate=60r/m;
 limit_conn_zone $binary_remote_addr zone=sqr_conn_per_ip:10m;
+
+# No query strings, cookies, Authorization headers or request bodies in this log.
+# Empty upstream_status means Nginx rejected before the app. App request IDs allow
+# matching an upstream rejection to the app's structured limiter diagnostics.
+log_format sqr_rate_attribution escape=json
+    '{"requestId":"$request_id","appRequestId":"$upstream_http_x_request_id",'
+    '"method":"$request_method","path":"$uri","status":$status,'
+    '"upstreamStatus":"$upstream_status","edgeRate":"$limit_req_status",'
+    '"edgeConnection":"$limit_conn_status"}';
 
 server {
     listen 80;
@@ -33,6 +50,7 @@ server {
     ssl_session_tickets off;
 
     server_tokens off;
+    access_log /var/log/nginx/sqr-rate-attribution.log sqr_rate_attribution;
 
     # Browser security headers are owned by the Express/Helmet app layer.
     # Do not duplicate HSTS/X-Frame-Options/X-Content-Type-Options/
@@ -65,8 +83,8 @@ server {
     # The app still accepts the legacy /api/login path for older clients and
     # rollback compatibility. Keep both login paths on the stricter auth edge throttle.
     location = /api/login {
-        limit_req zone=sqr_auth_per_ip burst=5 nodelay;
-        limit_conn sqr_conn_per_ip 10;
+        limit_req zone=sqr_auth_per_ip burst=100 nodelay;
+        limit_conn sqr_conn_per_ip 200;
 
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
@@ -83,8 +101,8 @@ server {
     }
 
     location = /api/auth/login {
-        limit_req zone=sqr_auth_per_ip burst=5 nodelay;
-        limit_conn sqr_conn_per_ip 10;
+        limit_req zone=sqr_auth_per_ip burst=100 nodelay;
+        limit_conn sqr_conn_per_ip 200;
 
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
@@ -104,7 +122,7 @@ server {
     # proxy window slightly longer so Express can return a correlated 504
     # instead of Nginx returning an opaque 502/504 page.
     location = /api/imports {
-        limit_req zone=sqr_api_per_ip burst=20 nodelay;
+        limit_req zone=sqr_import_per_ip burst=20 nodelay;
         limit_conn sqr_conn_per_ip 20;
 
         proxy_pass http://127.0.0.1:5000;
@@ -121,8 +139,8 @@ server {
     }
 
     location /api/ {
-        limit_req zone=sqr_api_per_ip burst=20 nodelay;
-        limit_conn sqr_conn_per_ip 20;
+        limit_req zone=sqr_api_per_ip burst=2000 nodelay;
+        limit_conn sqr_conn_per_ip 1000;
 
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;

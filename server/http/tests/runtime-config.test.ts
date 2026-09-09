@@ -1499,6 +1499,8 @@ test("runtime config accepts explicit per-user rate-limit tuning", async () => {
       SQR_RATE_LIMIT_USER_READS_PER_MINUTE: "600",
       SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE: "120",
       SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE: "12",
+      SQR_RATE_LIMIT_AUTHENTICATED_IP_REQUESTS_PER_MINUTE: "180000",
+      SQR_RATE_LIMIT_LOGIN_IP_ATTEMPTS_PER_15_MINUTES: "800",
       SEED_DEFAULT_USERS: "0",
       LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
       MAIL_DEV_OUTBOX_ENABLED: "0",
@@ -1510,6 +1512,8 @@ test("runtime config accepts explicit per-user rate-limit tuning", async () => {
         uploads: 12,
         writes: 120,
       });
+      assert.equal(runtimeModule.runtimeConfig.rateLimiting.authenticatedIpRequestsPerMinute, 180_000);
+      assert.equal(runtimeModule.runtimeConfig.rateLimiting.loginIpAttemptsPer15Minutes, 800);
     },
   );
 });

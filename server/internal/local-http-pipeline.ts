@@ -1,4 +1,5 @@
 import type { Express, RequestHandler } from "express";
+import { createRateLimitIdentityMiddleware } from "../auth/request-session-identity";
 import { runtimeConfig } from "../config/runtime";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
@@ -41,7 +42,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   // 2. CORS and private upload subtree blocking
   // 3. API response sanitizer before observability/error paths
   // 4. request identity, proxy warning, timeout, and API no-store cache headers
-  // 5. CSRF before adaptive/system/maintenance guards
+  // 5. CSRF, then signed quota identity (not authorization), before protection
   registerLocalHttpSecurityHeaders(app);
   registerLocalHttpCompression(app);
   registerLocalHttpBodyParsers(app, {
@@ -83,6 +84,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   });
 
   app.use(createCsrfProtectionMiddleware());
+  app.use(createRateLimitIdentityMiddleware());
   app.use(adaptiveRateLimit);
   app.use(systemProtectionMiddleware);
   app.use(maintenanceGuard);

@@ -627,6 +627,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     encryptionKeyId: readOptionalString("BACKUP_ENCRYPTION_KEY_ID"),
   },
   rateLimiting: {
+    authenticatedIpRequestsPerMinute: readInt("SQR_RATE_LIMIT_AUTHENTICATED_IP_REQUESTS_PER_MINUTE", 120_000, { min: 600, max: 6_000_000 }),
+    loginIpAttemptsPer15Minutes: readInt("SQR_RATE_LIMIT_LOGIN_IP_ATTEMPTS_PER_15_MINUTES", 500, { min: 100, max: 100_000 }),
     store: sharedRateLimitStore,
     userLimitsPerMinute: {
       reads: readInt("SQR_RATE_LIMIT_USER_READS_PER_MINUTE", 500, { min: 1, max: 100_000 }),

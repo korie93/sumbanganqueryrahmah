@@ -147,14 +147,23 @@ function resolveApiRetryDelayMs(
 ) {
   const retryAfterMs = normalizeRetryAfterMs(response?.headers.get("retry-after") || null);
   const exponentialDelayMs = retryOptions.baseDelayMs * (2 ** retryIndex);
-  const boundedDelayMs = Math.min(retryOptions.maxDelayMs, retryAfterMs ?? exponentialDelayMs);
+  // Retry-After is a minimum, not a hint that may be shortened by our cap or
+  // jitter. A longer server cooldown is left to the caller instead of keeping
+  // an automatic retry alive outside its configured wait budget.
+  if (retryAfterMs !== null && retryAfterMs > retryOptions.maxDelayMs) {
+    return null;
+  }
+  const boundedDelayMs = Math.min(
+    retryOptions.maxDelayMs,
+    Math.max(retryAfterMs ?? 0, exponentialDelayMs),
+  );
   if (!retryOptions.jitterRatio || boundedDelayMs <= 0) {
     return boundedDelayMs;
   }
 
   const jitterRangeMs = boundedDelayMs * retryOptions.jitterRatio;
-  const jitterMs = (Math.random() * 2 - 1) * jitterRangeMs;
-  return Math.max(0, Math.round(boundedDelayMs + jitterMs));
+  const jitterMs = (retryAfterMs === null ? Math.random() * 2 - 1 : Math.random()) * jitterRangeMs;
+  return Math.min(retryOptions.maxDelayMs, Math.max(0, Math.round(boundedDelayMs + jitterMs)));
 }
 
 function waitForApiRetryDelay(delayMs: number, signal?: AbortSignal | undefined) {
@@ -333,9 +342,11 @@ export async function fetchApiWithRetry(
 
       if (!response.ok && isRetryableApiStatus(response.status) && retryCount < maxRetries) {
         const delayMs = resolveApiRetryDelayMs(retryCount, retryOptions, response);
-        retryCount += 1;
-        await waitForApiRetryDelay(delayMs, signal);
-        continue;
+        if (delayMs !== null) {
+          retryCount += 1;
+          await waitForApiRetryDelay(delayMs, signal);
+          continue;
+        }
       }
 
       if (response.ok) {
@@ -357,7 +368,7 @@ export async function fetchApiWithRetry(
         throw error;
       }
 
-      const delayMs = resolveApiRetryDelayMs(retryCount, retryOptions);
+      const delayMs = resolveApiRetryDelayMs(retryCount, retryOptions) ?? 0;
       retryCount += 1;
       await waitForApiRetryDelay(delayMs, signal);
     }

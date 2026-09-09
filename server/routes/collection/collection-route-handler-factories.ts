@@ -93,6 +93,19 @@ export function sendCollectionError(res: Response, err: unknown, fallbackMessage
   }
 
   if (err instanceof HttpError) {
+    const rateLimit = getErrorRecord(getErrorRecord(err.details)?.rateLimit);
+    if (err.statusCode === 429 && rateLimit
+      && typeof rateLimit.limit === "number" && Number.isFinite(rateLimit.limit) && rateLimit.limit > 0
+      && typeof rateLimit.retryAfterMs === "number" && Number.isFinite(rateLimit.retryAfterMs) && rateLimit.retryAfterMs > 0) {
+      res.setHeader("RateLimit-Limit", String(Math.floor(rateLimit.limit)));
+      res.setHeader("RateLimit-Remaining", "0");
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil(rateLimit.retryAfterMs / 1000))));
+      if (typeof rateLimit.resetAfterMs === "number" && Number.isFinite(rateLimit.resetAfterMs) && rateLimit.resetAfterMs > 0) {
+        res.setHeader("RateLimit-Reset", String(Math.max(1, Math.ceil(rateLimit.resetAfterMs / 1000))));
+      } else {
+        res.removeHeader("RateLimit-Reset");
+      }
+    }
     const message = err.expose ? err.message : fallbackMessage;
     return res.status(err.statusCode).json({
       ok: false,

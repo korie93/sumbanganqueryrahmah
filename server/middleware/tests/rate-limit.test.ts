@@ -3,11 +3,17 @@ import test from "node:test";
 import express from "express";
 import type { Request } from "express";
 import { ERROR_CODES } from "../../../shared/error-codes";
+import { runtimeConfig } from "../../config/runtime";
+import { createCsrfProtectionMiddleware } from "../../http/csrf";
+import { createApiProtectionMiddleware } from "../../internal/apiProtection";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
+import { RedisRateLimitStore, RedisRateLimitStoreUnavailableError } from "../redis-rate-limit-store";
 import {
   buildAuthRouteRateLimitSubject,
+  buildLoginAccountRateLimitKey,
+  buildLoginNetworkRateLimitKey,
   buildRequestRateLimitFingerprint,
   clearAdaptiveRateLimitCooldownsForTests,
   createImportsUploadRateLimiter,
@@ -114,6 +120,49 @@ test("buildAuthRouteRateLimitSubject ignores malformed request bodies safely", (
   });
 
   assert.equal(buildAuthRouteRateLimitSubject(malformed, "auth-login"), null);
+});
+
+test("login account keys use the canonical username without IP or client-hint bypasses", () => {
+  const first = createRequest({ "user-agent": "Browser A" }, "203.0.113.10", {
+    username: " ADMIN.User ", identifier: "decoy-a", email: "decoy-a@example.test",
+  });
+  const rotated = createRequest({ "user-agent": "Browser B" }, "198.51.100.20", {
+    username: "admin.user", identifier: "decoy-b", email: "decoy-b@example.test",
+  });
+  assert.equal(buildLoginAccountRateLimitKey(first), buildLoginAccountRateLimitKey(rotated));
+  assert.equal(
+    buildLoginAccountRateLimitKey(first),
+    buildLoginAccountRateLimitKey(createRequest({}, "198.51.100.20", { username: "ＡＤＭＩＮ.User" })),
+  );
+  assert.notEqual(
+    buildLoginAccountRateLimitKey(first),
+    buildLoginAccountRateLimitKey(createRequest({}, "203.0.113.10", { username: "another.user" })),
+  );
+  assert.match(buildLoginAccountRateLimitKey(first), /^auth-login\|acct:[a-f0-9]{24}$/);
+  assert.equal(buildLoginAccountRateLimitKey(first).includes("admin.user"), false);
+});
+
+test("login network keys ignore spoofed headers and normalize IPv4 and IPv6 networks", () => {
+  const first = createRequest({ "user-agent": "Browser A" }, "203.0.113.10");
+  const rotated = createRequest({
+    "user-agent": "Browser B", "accept-language": "different", "x-forwarded-for": "198.51.100.20",
+  }, "::ffff:203.0.113.10");
+  assert.equal(buildLoginNetworkRateLimitKey(first), buildLoginNetworkRateLimitKey(rotated));
+  assert.equal(
+    buildLoginNetworkRateLimitKey(createRequest({}, "2001:db8:1234:5600::1")),
+    buildLoginNetworkRateLimitKey(createRequest({}, "2001:db8:1234:56ff::2")),
+  );
+  assert.notEqual(
+    buildLoginNetworkRateLimitKey(first),
+    buildLoginNetworkRateLimitKey(createRequest({}, "198.51.100.20")),
+  );
+});
+
+test("malformed login subjects share a bounded network fallback, not arbitrary decoy accounts", () => {
+  const malformed = createRequest({}, "203.0.113.10", { username: 42, identifier: "decoy-a" });
+  const missing = createRequest({}, "203.0.113.10", { identifier: "decoy-b" });
+  assert.equal(buildLoginAccountRateLimitKey(malformed), buildLoginAccountRateLimitKey(missing));
+  assert.match(buildLoginAccountRateLimitKey(malformed), /^auth-login\|invalid:auth-login-ip\|ip:/);
 });
 
 test("createImportsUploadRateLimiter throttles repeated upload attempts from the same network", async () => {
@@ -292,27 +341,123 @@ test("auth adaptive cooldown records violations without hot-path full pruning", 
   }
 });
 
-test("auth login IP limiter throttles after five attempts even when identifiers rotate", async () => {
+test("auth login allows 100 legitimate staff accounts on one NAT with identical browser hints", async () => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();
 
   const app = express();
   app.use(express.json());
   const limiters = createAuthRouteRateLimiters();
-  app.post("/login", limiters.loginIp, (_req, res) => {
+  app.post("/login", limiters.loginIp, limiters.login, (_req, res) => {
     res.status(204).end();
   });
 
   const { baseUrl, server } = await startTestServer(app);
 
   try {
-    for (let index = 0; index < 5; index += 1) {
-      const response = await fetch(`${baseUrl}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: `rotating-user-${index}` }),
+    const responses = await Promise.all(Array.from({ length: 100 }, (_, index) => fetch(`${baseUrl}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "User-Agent": "Office Browser", "Accept-Language": "en-US" },
+      body: JSON.stringify({ username: `staff-${index}` }),
+    })));
+    assert.deepEqual(responses.map((response) => response.status), Array(100).fill(204));
+    assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 0);
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});
+
+test("combined CSRF, adaptive protection, and canonical/legacy login guards allow 100 shared-NAT staff", async (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  t.mock.method(logger, "info", () => undefined);
+  t.mock.method(logger, "warn", () => undefined);
+  const app = express();
+  app.set("trust proxy", "loopback");
+  app.use(express.json());
+  app.use(createCsrfProtectionMiddleware());
+  const protection = createApiProtectionMiddleware({
+    getDbProtection: () => false,
+    getControlState: () => ({
+      mode: "PROTECTION", healthScore: 50, dbProtection: false, rejectHeavyRoutes: true,
+      throttleFactor: 0.2, workerCount: 1, maxWorkers: 1, queueLength: 0, preAllocateMB: 0,
+      updatedAt: Date.now(), workers: [], circuits: { aiOpenWorkers: 0, dbOpenWorkers: 0, exportOpenWorkers: 0 },
+      predictor: {
+        requestRateMA: 0, latencyMA: 0, cpuMA: 0, requestRateTrend: 0, latencyTrend: 0,
+        cpuTrend: 0, sustainedUpward: false, lastUpdatedAt: null,
+      },
+    }),
+  });
+  app.use(protection.adaptiveRateLimit);
+  app.use(protection.systemProtectionMiddleware);
+  const limiters = createAuthRouteRateLimiters();
+  for (const path of ["/api/login", "/api/auth/login"]) {
+    app.post(path, limiters.loginIp, limiters.login, (_req, res) => res.status(204).end());
+  }
+  const { baseUrl, server } = await startTestServer(app);
+  const csrfToken = "a".repeat(64);
+  const loginHeaders = {
+    "Content-Type": "application/json", "User-Agent": "Office Browser", "Accept-Language": "en-US",
+    "X-Forwarded-For": "203.0.113.20", Cookie: `sqr_auth=stale-session; sqr_csrf=${csrfToken}`,
+    "X-CSRF-Token": csrfToken,
+  };
+  try {
+    const denied = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: loginHeaders.Cookie },
+      body: JSON.stringify({ username: "denied.csrf" }),
+    });
+    assert.equal(denied.status, 403);
+    const responses = await Promise.all(Array.from({ length: 100 }, (_, index) => fetch(
+      `${baseUrl}${index % 2 ? "/api/login" : "/api/auth/login"}`,
+      { method: "POST", headers: loginHeaders, body: JSON.stringify({ username: `combined-staff-${index}` }) },
+    )));
+    assert.ok(responses.every((response) => response.status === 204));
+    for (let index = 0; index < 6; index += 1) {
+      const response = await fetch(`${baseUrl}${index % 2 ? "/api/login" : "/api/auth/login"}`, {
+        method: "POST", headers: loginHeaders, body: JSON.stringify({ username: "combined-abuser" }),
       });
-      assert.equal(response.status, 204);
+      assert.equal(response.status, index < 5 ? 204 : 429);
+    }
+    const healthy = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST", headers: loginHeaders, body: JSON.stringify({ username: "healthy-after-abuse" }),
+    });
+    assert.equal(healthy.status, 204);
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});
+
+test("auth login network flood guard blocks its configured capacity despite rotating accounts and browser hints", async (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  const warningLogs: Array<Record<string, unknown> | undefined> = [];
+  t.mock.method(logger, "warn", (_message: string, payload?: Record<string, unknown>) => warningLogs.push(payload));
+  const app = express();
+  app.use(express.json());
+  const limiters = createAuthRouteRateLimiters();
+  app.post("/login", limiters.loginIp, limiters.login, (_req, res) => res.status(204).end());
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    const networkMax = runtimeConfig.rateLimiting.loginIpAttemptsPer15Minutes;
+    for (let offset = 0; offset < networkMax; offset += 100) {
+      const responses = await Promise.all(Array.from({ length: Math.min(100, networkMax - offset) }, (_, index) => {
+        const subject = offset + index;
+        return fetch(`${baseUrl}/login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json", "User-Agent": `Rotated Browser ${subject}`,
+            "Accept-Language": `rotated-${subject}`, "X-Forwarded-For": `198.51.100.${subject % 250 + 1}`,
+          },
+          body: JSON.stringify({ username: `flood-${subject}` }),
+        });
+      }));
+      assert.ok(responses.every((response) => response.status === 204));
     }
 
     const throttled = await fetch(`${baseUrl}/login`, {
@@ -322,8 +467,117 @@ test("auth login IP limiter throttles after five attempts even when identifiers 
     });
 
     assert.equal(throttled.status, 429);
-    assert.equal(throttled.headers.get("ratelimit-limit"), "5");
+    assert.equal(throttled.headers.get("ratelimit-limit"), String(networkMax));
+    assert.match(throttled.headers.get("retry-after") ?? "", /^[1-9]\d*$/);
+    assert.equal((await throttled.json()).error.code, ERROR_CODES.AUTH_RATE_LIMITED);
     assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 1);
+    const violation = warningLogs.find((entry) => entry?.limiter === "login-ip-aggregate-limit");
+    assert.equal(violation?.subjectType, "ip");
+    assert.equal(violation?.count, networkMax + 1);
+    assert.equal(violation?.limit, networkMax);
+    assert.match(String(violation?.subjectHash), /^[a-f0-9]{24}$/);
+    assert.equal(JSON.stringify(violation).includes("fresh-identifier"), false);
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});
+
+test("auth login account brute force remains strict across IP rotation without locking other staff", async (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  const warningLogs: Array<Record<string, unknown> | undefined> = [];
+  t.mock.method(logger, "warn", (_message: string, payload?: Record<string, unknown>) => warningLogs.push(payload));
+  const app = express();
+  // Test requests come through a loopback proxy, matching the production trust boundary.
+  app.set("trust proxy", "loopback");
+  app.use(express.json());
+  const limiters = createAuthRouteRateLimiters();
+  app.post("/login", limiters.loginIp, limiters.login, (_req, res) => res.status(401).end());
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 6; index += 1) {
+      const response = await fetch(`${baseUrl}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json", "User-Agent": `Rotated Browser ${index}`,
+          "X-Forwarded-For": `198.51.100.${index + 1}`,
+        },
+        body: JSON.stringify({
+          username: index === 5 ? "ＴＡＲＧＥＴ.User" : index % 2 ? " TARGET.User " : "target.user",
+          identifier: `decoy-${index}`,
+        }),
+      });
+      assert.equal(response.status, index < 5 ? 401 : 429);
+      if (index === 5) {
+        assert.equal(response.headers.get("ratelimit-limit"), "5");
+        assert.match(response.headers.get("retry-after") ?? "", /^[1-9]\d*$/);
+      }
+    }
+    const otherStaff = await fetch(`${baseUrl}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.6" },
+      body: JSON.stringify({ username: "unrelated.staff" }),
+    });
+    assert.equal(otherStaff.status, 401);
+    const cooldown = await fetch(`${baseUrl}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.200" },
+      body: JSON.stringify({ username: "target.user" }),
+    });
+    assert.equal(cooldown.status, 429);
+    assert.equal(warningLogs.filter((entry) => entry?.limiter === "login-account-limit").length, 2);
+    assert.equal(JSON.stringify(warningLogs).includes("target.user"), false);
+    assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 1);
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});
+
+test("configured Redis outages fail closed for login and expensive routes with safe retry guidance", async (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  const originalProvider = runtimeConfig.rateLimiting.store.provider;
+  runtimeConfig.rateLimiting.store.provider = "redis";
+  t.after(() => { runtimeConfig.rateLimiting.store.provider = originalProvider; });
+  t.mock.method(RedisRateLimitStore.prototype, "increment", async () => {
+    throw new RedisRateLimitStoreUnavailableError();
+  });
+  const app = express();
+  app.use(express.json());
+  const limiters = createAuthRouteRateLimiters();
+  let successfulHandlers = 0;
+  app.post("/login", limiters.loginIp, limiters.login, (_req, res) => {
+    successfulHandlers += 1;
+    res.status(204).end();
+  });
+  app.post("/upload", createImportsUploadRateLimiter(), (_req, res) => {
+    successfulHandlers += 1;
+    res.status(204).end();
+  });
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (const path of ["/login", "/upload"]) {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "protected.user" }),
+      });
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get("retry-after"), "5");
+      const payload = await response.json();
+      assert.equal(payload.ok, false);
+      assert.equal(payload.error.code, ERROR_CODES.SERVICE_UNAVAILABLE);
+      assert.equal(payload.retryAfterMs, 5_000);
+      assert.equal(JSON.stringify(payload).includes("protected.user"), false);
+    }
+    assert.equal(successfulHandlers, 0);
+    assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 0);
   } finally {
     stopAdaptiveRateLimitCooldownSweep();
     clearAdaptiveRateLimitCooldownsForTests();
@@ -620,6 +874,51 @@ test("auth two-factor management limiter caps sensitive setup bursts at five per
       "Too many two-factor security updates. Please wait before trying again.",
     );
     assert.equal(typeof payload.retryAfterMs, "number");
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});
+
+test("password recovery, authenticated security, and admin action limits retain their strict caps", async (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  t.mock.method(logger, "warn", () => undefined);
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    (req as Request & { user: { username: string } }).user = { username: "admin.security" };
+    next();
+  });
+  const limiters = createAuthRouteRateLimiters();
+  const cases = [
+    { name: "publicRecovery", max: 20, code: ERROR_CODES.AUTH_RECOVERY_RATE_LIMITED },
+    { name: "authenticatedAuth", max: 12, code: ERROR_CODES.AUTH_MUTATION_RATE_LIMITED },
+    { name: "adminAction", max: 30, code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED },
+    { name: "adminDestructiveAction", max: 10, code: ERROR_CODES.ADMIN_ACTION_RATE_LIMITED },
+  ] as const;
+  for (const scenario of cases) {
+    app.post(`/${scenario.name}`, limiters[scenario.name], (_req, res) => res.status(204).end());
+  }
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (const scenario of cases) {
+      for (let index = 0; index <= scenario.max; index += 1) {
+        const response = await fetch(`${baseUrl}/${scenario.name}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "admin.security" }),
+        });
+        assert.equal(response.status, index < scenario.max ? 204 : 429, scenario.name);
+        if (index === scenario.max) {
+          assert.equal(response.headers.get("ratelimit-limit"), String(scenario.max));
+          assert.match(response.headers.get("retry-after") ?? "", /^[1-9]\d*$/);
+          assert.equal((await response.json()).error.code, scenario.code);
+        }
+      }
+    }
   } finally {
     stopAdaptiveRateLimitCooldownSweep();
     clearAdaptiveRateLimitCooldownsForTests();

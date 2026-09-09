@@ -1,13 +1,15 @@
 import crypto from "node:crypto";
 import type { Request, RequestHandler, Response } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { LRUCache } from "lru-cache";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { normalizeCredentialUsername } from "../auth/username-normalization";
 import { runtimeConfig } from "../config/runtime";
+import { resolveRequestClientIp } from "../http/client-ip";
 import { createBackgroundSweepJob, type BackgroundSweepJob } from "../internal/background-sweep-job";
 import { internalMetrics } from "../internal/metrics";
 import { logger } from "../lib/logger";
-import { createSharedRateLimitStore } from "./redis-rate-limit-store";
+import { createSharedRateLimitStore, RedisRateLimitStoreUnavailableError } from "./redis-rate-limit-store";
 
 type RateLimitPayload = {
   ok: false;
@@ -36,6 +38,8 @@ type JsonRateLimiterOptions = {
   message: string;
   adaptiveCooldown?: boolean | undefined;
   keyGenerator?: ((req: Request) => string) | undefined;
+  limiterName?: string;
+  subjectType?: "ip" | "account";
 };
 
 type StandardRateLimitHeaderOptions = {
@@ -275,6 +279,15 @@ export function normalizeAuthRateLimitIdentifier(value: unknown): string | null 
   return normalizeKeyPart(value);
 }
 
+function hashAuthRateLimitSubject(identifier: string, scope: string): string {
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${scope}:${identifier}`)
+    .digest("hex")
+    .slice(0, AUTH_RATE_LIMIT_HASH_LENGTH);
+  return `acct:${digest}`;
+}
+
 export function buildAuthRouteRateLimitSubject(req: Request, scope: string): string | null {
   const body =
     req.body && typeof req.body === "object"
@@ -291,13 +304,27 @@ export function buildAuthRouteRateLimitSubject(req: Request, scope: string): str
     return null;
   }
 
-  const digest = crypto
-    .createHash("sha256")
-    .update(`${scope}:${normalizedIdentifier}`)
-    .digest("hex")
-    .slice(0, AUTH_RATE_LIMIT_HASH_LENGTH);
+  return hashAuthRateLimitSubject(normalizedIdentifier, scope);
+}
 
-  return `acct:${digest}`;
+export function buildLoginNetworkRateLimitKey(req: Request): string {
+  // Express resolves req.ip using the configured, narrow trusted-proxy boundary.
+  // Client hints must not create fresh network flood buckets, including on IPv6.
+  return `auth-login-ip|ip:${ipKeyGenerator(resolveRequestClientIp(req) ?? "unknown")}`;
+}
+
+export function buildLoginAccountRateLimitKey(req: Request): string {
+  const body = req.body && typeof req.body === "object"
+    ? req.body as Record<string, unknown>
+    : null;
+  // Login consumes username only. An ignored identifier/email field must not
+  // allow an attacker to rotate the subject while attacking the same account.
+  const username = typeof body?.username === "string"
+    ? normalizeCredentialUsername(body.username).slice(0, 160)
+    : null;
+  return username
+    ? `auth-login|${hashAuthRateLimitSubject(username, "auth-login")}`
+    : `auth-login|invalid:${buildLoginNetworkRateLimitKey(req)}`;
 }
 
 export function buildRequestRateLimitFingerprint(req: Request): string[] {
@@ -655,6 +682,15 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
     config: runtimeConfig.rateLimiting.store,
     prefix: `sqr:rate-limit:${options.code}`,
   });
+  const diagnostics = (req: Request) => options.limiterName ? {
+    limiter: options.limiterName,
+    subjectType: options.subjectType,
+    subjectHash: crypto.createHash("sha256")
+      .update(resolveJsonRateLimiterKey(req, options))
+      .digest("hex")
+      .slice(0, AUTH_RATE_LIMIT_HASH_LENGTH),
+    limit: options.max,
+  } : {};
 
   const limiter = rateLimit({
     windowMs: options.windowMs,
@@ -668,7 +704,9 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
       const cooldownBucket = options.adaptiveCooldown
         ? recordAdaptiveRateLimitViolation(resolveJsonRateLimiterKey(req, options), optionsUsed.windowMs, nowMs)
         : null;
-      const rateLimitInfo = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
+      const rateLimitInfo = (req as Request & {
+        rateLimit?: { resetTime?: Date; used?: number };
+      }).rateLimit;
       const resetTimeMs = rateLimitInfo?.resetTime instanceof Date
         ? rateLimitInfo.resetTime.getTime()
         : null;
@@ -681,7 +719,9 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
       );
 
       logger.warn("Rate limit exceeded", {
+        ...diagnostics(req),
         code: options.code,
+        count: rateLimitInfo?.used,
         method: req.method,
         path: req.path,
         retryAfterMs,
@@ -699,9 +739,26 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
       });
     },
   });
+  const invokeLimiter: RequestHandler = (req, res, next) => limiter(req, res, (error?: unknown) => {
+    if (!(error instanceof RedisRateLimitStoreUnavailableError)) {
+      next(error);
+      return;
+    }
+    // Configured shared quotas must not silently become independent worker
+    // quotas during an outage, especially for login's strict account guard.
+    res.setHeader("Retry-After", "5");
+    res.status(503).json({
+      ok: false,
+      error: {
+        code: ERROR_CODES.SERVICE_UNAVAILABLE,
+        message: "Rate-limit protection is temporarily unavailable. Please try again shortly.",
+      },
+      retryAfterMs: 5_000,
+    });
+  });
 
   if (!options.adaptiveCooldown) {
-    return limiter;
+    return invokeLimiter;
   }
 
   return (req, res, next) => {
@@ -709,12 +766,13 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
     const key = resolveJsonRateLimiterKey(req, options);
     const cooldownBucket = getAdaptiveRateLimitCooldown(key, nowMs);
     if (!cooldownBucket) {
-      limiter(req, res, next);
+      invokeLimiter(req, res, next);
       return;
     }
 
     const retryAfterMs = Math.max(0, cooldownBucket.expiresAt - nowMs);
     logger.warn("Rate limit adaptive cooldown active", {
+      ...diagnostics(req),
       code: options.code,
       method: req.method,
       path: req.path,
@@ -758,11 +816,13 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
   return {
     loginIp: createJsonRateLimiter({
       windowMs: 15 * 60 * 1000,
-      max: 5,
+      max: runtimeConfig.rateLimiting.loginIpAttemptsPer15Minutes,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts from this network. Please try again shortly.",
       adaptiveCooldown: true,
-      keyGenerator: (req) => buildRateLimitKey(req, "auth-login-ip"),
+      keyGenerator: buildLoginNetworkRateLimitKey,
+      limiterName: "login-ip-aggregate-limit",
+      subjectType: "ip",
     }),
     login: createJsonRateLimiter({
       windowMs: 15 * 60 * 1000,
@@ -770,11 +830,9 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts. Please try again shortly.",
       adaptiveCooldown: true,
-      keyGenerator: (req) => buildRateLimitKey(
-        req,
-        "auth-login",
-        buildAuthRouteRateLimitSubject(req, "auth-login"),
-      ),
+      keyGenerator: buildLoginAccountRateLimitKey,
+      limiterName: "login-account-limit",
+      subjectType: "account",
     }),
     twoFactorLogin: createJsonRateLimiter({
       windowMs: 15 * 60 * 1000,

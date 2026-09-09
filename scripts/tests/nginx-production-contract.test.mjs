@@ -104,10 +104,26 @@ function extractLocationBlock(text, location) {
 function assertLoginLocationUsesAuthThrottle(text, location) {
   const block = extractLocationBlock(text, location);
 
-  assert.match(block, /limit_req zone=sqr_auth_per_ip burst=5 nodelay;/);
-  assert.match(block, /limit_conn sqr_conn_per_ip 10;/);
+  assert.match(block, /limit_req zone=sqr_auth_per_ip burst=100 nodelay;/);
+  assert.match(block, /limit_conn sqr_conn_per_ip 200;/);
   assert.match(block, /proxy_pass http:\/\/127\.0\.0\.1:5000;/);
 }
+
+test("Nginx normal API and login edge guards accommodate shared-NAT bursts without relaxing import admission", () => {
+  const text = readText(nginxConfigPath);
+  assert.match(text, /zone=sqr_api_per_ip:10m rate=200r\/s;/);
+  assert.match(text, /zone=sqr_auth_per_ip:10m rate=10r\/s;/);
+  assert.match(extractLocationBlock(text, "/api/"), /burst=2000 nodelay/);
+  assert.match(extractLocationBlock(text, "/api/"), /limit_conn sqr_conn_per_ip 1000;/);
+  assert.match(extractLocationBlock(text, "= /api/imports"), /limit_req zone=sqr_import_per_ip burst=20 nodelay;/);
+  assert.match(text, /zone=sqr_import_per_ip:10m rate=30r\/m;/);
+  assert.match(text, /upstreamStatus.*\$upstream_status/);
+  assert.match(text, /edgeRate.*\$limit_req_status/);
+  assert.match(text, /edgeConnection.*\$limit_conn_status/);
+  const logFormat = text.slice(text.indexOf("log_format sqr_rate_attribution"), text.indexOf("server {"));
+  assert.doesNotMatch(logFormat, /\$(?:args|query_string|request_body|http_authorization|http_cookie|request_uri)\b/);
+  assert.doesNotMatch(activeLines(text).join("\n"), /X-Forwarde-(?:For|Proto)/i);
+});
 
 test("production Nginx import body limit stays aligned with Express import limit", () => {
   const nginxText = readText(nginxConfigPath);

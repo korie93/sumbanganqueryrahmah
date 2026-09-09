@@ -284,6 +284,17 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
         const queueError = error as { code?: unknown; message?: unknown; status?: unknown };
         const status = Number.isFinite(queueError.status) ? Number(queueError.status) : 429;
         const snapshot = getAiGateSnapshot(role);
+        if (status === 429) {
+          // Admission is concurrency-based, not a fixed window. Recommend the
+          // configured queue wait without inventing an exact slot reset time.
+          res.setHeader("Retry-After", String(Math.max(1, Math.ceil(queueWaitMs / 1000))));
+          res.setHeader("RateLimit-Limit", String(Math.min(globalLimit, roleLimits[role])));
+          res.setHeader("RateLimit-Remaining", String(Math.max(0, Math.min(
+            globalLimit - inflightGlobal,
+            roleLimits[role] - inflightByRole[role],
+          ))));
+          res.removeHeader("RateLimit-Reset");
+        }
         res.status(status).json({
           message: queueError.message || "AI queue is currently busy. Please retry shortly.",
           gate: {

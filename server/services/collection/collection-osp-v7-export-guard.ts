@@ -7,11 +7,13 @@ const MAX_TRACKED_USERS = 1_000;
 
 export class CollectionOspV7ExportGuardError extends Error {
   readonly statusCode: 429;
+  readonly rateLimit: { limit: number; retryAfterMs: number; resetAfterMs?: number };
 
-  constructor(message: string) {
+  constructor(message: string, rateLimit: { limit: number; retryAfterMs: number; resetAfterMs?: number }) {
     super(message);
     this.name = "CollectionOspV7ExportGuardError";
     this.statusCode = 429;
+    this.rateLimit = rateLimit;
   }
 }
 
@@ -54,19 +56,29 @@ export function createCollectionOspV7ExportGuard(options: {
       const currentTime = now();
       prune(currentTime);
       if (!recentStartsByUser.has(username) && recentStartsByUser.size >= maxTrackedUsers) {
+        // A tracked slot becomes available when all its retained starts expire.
+        const retryAfterMs = Math.max(1, Math.min(...Array.from(
+          recentStartsByUser.values(),
+          (starts) => Math.max(...starts) + windowMs - currentTime,
+        )));
         throw new CollectionOspV7ExportGuardError(
           "Billing Principal export capacity is temporarily unavailable. Please try again shortly.",
+          { limit: maxTrackedUsers, retryAfterMs, resetAfterMs: retryAfterMs },
         );
       }
       const starts = recentStartsByUser.get(username) ?? [];
       if (starts.length >= maxPerUserPerWindow) {
+        const retryAfterMs = Math.max(1, Math.min(...starts) + windowMs - currentTime);
         throw new CollectionOspV7ExportGuardError(
           "Too many Billing Principal exports were requested. Please wait a minute and try again.",
+          { limit: maxPerUserPerWindow, retryAfterMs, resetAfterMs: retryAfterMs },
         );
       }
       if (inFlight >= maxConcurrent) {
         throw new CollectionOspV7ExportGuardError(
           "A Billing Principal export is already running. Please try again shortly.",
+          // One-second retry guidance is not a prediction of export completion.
+          { limit: maxConcurrent, retryAfterMs: 1_000 },
         );
       }
 

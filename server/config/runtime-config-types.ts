@@ -182,6 +182,8 @@ export type RuntimeConfig = {
     encryptionKeyId: string | null;
   };
   rateLimiting: {
+    authenticatedIpRequestsPerMinute: number;
+    loginIpAttemptsPer15Minutes: number;
     store: {
       distributedStoreConfigured: boolean;
       provider: "memory" | "redis";

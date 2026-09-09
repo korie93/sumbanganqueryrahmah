@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Request, RequestHandler } from "express";
+import { ipKeyGenerator } from "express-rate-limit";
+import { getRateLimitIdentity } from "../auth/request-session-identity";
 import { BROWSER_TELEMETRY_PATHS as BROWSER_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
 import type { WorkerControlState } from "./runtime-monitor-manager";
 import { logger as defaultLogger } from "../lib/logger";
@@ -7,6 +9,7 @@ import { createBackgroundSweepJob } from "./background-sweep-job";
 
 type ApiProtectionOptions = {
   adaptiveRateStore?: AdaptiveRateStateStore | null;
+  authenticatedIpLimitPerMinute?: number;
   getControlState: () => WorkerControlState;
   getDbProtection: () => boolean;
   userLimitsPerMinute?: Partial<AdaptiveRateUserLimitsPerMinute>;
@@ -35,6 +38,8 @@ type AdaptiveRateBucketTarget = {
   dynamicLimit: number;
   subjectHash?: string;
   subjectType: "ip" | "user";
+  limiter: "user-rate-limit" | "anonymous-ip-limit" | "aggregate-ip-flood-guard";
+  scope: string;
 };
 
 type AdaptiveRateUserLimitsPerMinute = {
@@ -181,6 +186,12 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   stopAdaptiveRateStateSweep: () => void;
 } {
   const adaptiveRateStore = options.adaptiveRateStore ?? null;
+  // A network-wide flood ceiling, not a multiplier on the small anonymous quota.
+  // Keep it stable in degraded/protection modes: heavy-route gates still protect
+  // resources without shrinking an entire office back to a single-user budget.
+  const authenticatedIpWindowLimit = Math.max(1, Math.ceil(
+    (options.authenticatedIpLimitPerMinute ?? 120_000) * ADAPTIVE_RATE_WINDOW_MS / ADAPTIVE_RATE_MINUTE_MS,
+  ));
   const userLimitsPerMinute: AdaptiveRateUserLimitsPerMinute = {
     reads: Math.max(1, Math.trunc(options.userLimitsPerMinute?.reads ?? DEFAULT_USER_LIMITS_PER_MINUTE.reads)),
     uploads: Math.max(1, Math.trunc(options.userLimitsPerMinute?.uploads ?? DEFAULT_USER_LIMITS_PER_MINUTE.uploads)),
@@ -316,17 +327,18 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 
   function resolveRateLimitClientIp(req: Request): string {
     const ip = String(req.ip || req.socket.remoteAddress || "unknown").trim();
-    return ip || "unknown";
+    return ipKeyGenerator(ip || "unknown");
   }
 
   function resolveRateLimitUserId(req: Request): string | null {
+    const verifiedUserId = getRateLimitIdentity(req);
     const user = (req as Request & { user?: AuthenticatedRequestUser | null }).user;
-    const rawUserId = user?.userId ?? user?.id;
+    const rawUserId = verifiedUserId ?? user?.userId ?? user?.id;
     const userId = String(rawUserId ?? "").trim();
     if (!userId) {
       return null;
     }
-    return encodeURIComponent(userId).slice(0, 128);
+    return createHash("sha256").update(userId).digest("hex");
   }
 
   function hashRateLimitSubject(subject: string): string {
@@ -337,23 +349,23 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     return Math.max(1, Math.ceil((limitPerMinute * ADAPTIVE_RATE_WINDOW_MS) / ADAPTIVE_RATE_MINUTE_MS));
   }
 
-  function resolvePerUserLimit(req: Request): number {
+  function resolveRequestClass(req: Request): keyof AdaptiveRateUserLimitsPerMinute {
     const method = String(req.method || "GET").toUpperCase();
     const path = req.path || "/";
 
-    if (
+    if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && (
       path.startsWith("/api/imports")
       || path.includes("/receipt")
       || path.includes("/receipts")
-    ) {
-      return perMinuteLimitToWindowLimit(userLimitsPerMinute.uploads);
+    )) {
+      return "uploads";
     }
 
     if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
-      return perMinuteLimitToWindowLimit(userLimitsPerMinute.reads);
+      return "reads";
     }
 
-    return perMinuteLimitToWindowLimit(userLimitsPerMinute.writes);
+    return "writes";
   }
 
   function resolveAdaptiveRateBuckets(req: Request): AdaptiveRateBucketTarget[] {
@@ -400,18 +412,29 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     const throttle = clamp(controlState.throttleFactor || 1, 0.2, 1.2);
     const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
 
-    const buckets: AdaptiveRateBucketTarget[] = [
-      { bucketKey: `ip:${ip}:${bucketScope}`, dynamicLimit, subjectType: "ip" },
-    ];
     if (userId) {
-      buckets.push({
-        bucketKey: `user:${userId}:${bucketScope}`,
-        dynamicLimit: resolvePerUserLimit(req),
-        subjectHash: hashRateLimitSubject(userId),
+      const requestClass = resolveRequestClass(req);
+      const userLimit = perMinuteLimitToWindowLimit(userLimitsPerMinute[requestClass]);
+      return [{
+        bucketKey: `user-v2:${userId}:${bucketScope}:${requestClass}`,
+        dynamicLimit: isHeavyRoute(path) ? Math.min(userLimit, dynamicLimit) : userLimit,
+        subjectHash: userId.slice(0, 16),
         subjectType: "user",
-      });
+        limiter: "user-rate-limit",
+        scope: `${bucketScope}:${requestClass}`,
+      }, {
+        bucketKey: `authenticated-ip-v2:${ip}`,
+        dynamicLimit: authenticatedIpWindowLimit,
+        subjectHash: hashRateLimitSubject(ip),
+        subjectType: "ip",
+        limiter: "aggregate-ip-flood-guard",
+        scope: "authenticated-api",
+      }];
     }
-    return buckets;
+    return [{
+      bucketKey: `ip:${ip}:${bucketScope}`, dynamicLimit, subjectType: "ip",
+      subjectHash: hashRateLimitSubject(ip), limiter: "anonymous-ip-limit", scope: bucketScope,
+    }];
   }
 
   const adaptiveRateLimit: RequestHandler = (req, res, next) => {
@@ -421,6 +444,10 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
         const controlState = options.getControlState();
         if (!isRuntimeProtectedRoute(req)) return next();
         if (isSessionControlRoute(req)) return next();
+        // Both exact login aliases have mandatory account + aggregate-network
+        // route limiters. A small pre-auth API bucket would veto legitimate NAT
+        // logins before those authoritative, Redis-backed guards can run.
+        if (req.method === "POST" && (req.path === "/api/login" || req.path === "/api/auth/login")) return next();
 
         const now = Date.now();
         const bucketTargets = resolveAdaptiveRateBuckets(req);
@@ -448,13 +475,18 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
               limit: dynamicLimit,
               retryAfterMs,
             });
-            if (target.subjectType === "user") {
-              defaultLogger.warn("Adaptive per-user rate limit exceeded", {
+            if (nextBucket.count === dynamicLimit + 1) {
+              defaultLogger.warn("Adaptive rate limit exceeded", {
                 count: nextBucket.count,
                 limit: dynamicLimit,
                 method: req.method,
                 path: req.path,
-                userHash: target.subjectHash,
+                subjectHash: target.subjectHash,
+                subjectType: target.subjectType,
+                limiter: target.limiter,
+                scope: target.scope,
+                mode: controlState.mode,
+                throttleFactor: controlState.throttleFactor,
               });
             }
             return res.status(429).json({
@@ -462,6 +494,9 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
               limit: dynamicLimit,
               retryAfterMs,
               mode: controlState.mode,
+              code: "RATE_LIMITED",
+              limiter: target.limiter,
+              scope: target.scope,
             });
           }
         }

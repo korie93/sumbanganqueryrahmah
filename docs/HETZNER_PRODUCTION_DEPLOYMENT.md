@@ -413,6 +413,14 @@ Contoh `systemd` itu sudah termasuk hardening asas yang selamat untuk VPS tungga
 
 ## 11. Nginx Reverse Proxy
 
+Untuk persekitaran shared-NAT, had di bawah ialah perlindungan banjir rangkaian,
+bukan kuota seorang pengguna. Selaraskan dengan beban pejabat sebenar dan kuota
+Redis aplikasi. [Laporan 429/NAT](SQR_429_NAT_AWARE_RATE_LIMIT_REPORT.md) menerangkan
+deployment, rollback dan cara mengenal pasti sumber penolakan. Contoh penuh
+`deploy/nginx/sqr.conf.example` turut menyediakan log attribution tanpa query,
+cookies atau Authorization. Semak konfigurasi **aktif** menggunakan `nginx -T`
+secara setempat; jangan kongsi konfigurasi atau log yang mengandungi secrets.
+
 Cipta fail:
 
 ```bash
@@ -427,8 +435,11 @@ map $http_upgrade $connection_upgrade {
     "" close;
 }
 
-limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=30r/m;
-limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/m;
+# Aggregate edge flood guards, not per-user quotas. Tune for measured NAT load.
+# Example headroom: 100 staff x 10 startup calls = 1000-request burst.
+limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=200r/s;
+limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=sqr_import_per_ip:10m rate=30r/m;
 limit_req_zone $binary_remote_addr zone=sqr_telemetry_per_ip:10m rate=60r/m;
 limit_conn_zone $binary_remote_addr zone=sqr_conn_per_ip:10m;
 
@@ -479,8 +490,8 @@ server {
     # The app still accepts the legacy /api/login path for older clients and
     # rollback compatibility. Keep both login paths on the stricter auth edge throttle.
     location = /api/login {
-        limit_req zone=sqr_auth_per_ip burst=5 nodelay;
-        limit_conn sqr_conn_per_ip 10;
+        limit_req zone=sqr_auth_per_ip burst=100 nodelay;
+        limit_conn sqr_conn_per_ip 200;
 
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
@@ -495,8 +506,8 @@ server {
     }
 
     location = /api/auth/login {
-        limit_req zone=sqr_auth_per_ip burst=5 nodelay;
-        limit_conn sqr_conn_per_ip 10;
+        limit_req zone=sqr_auth_per_ip burst=100 nodelay;
+        limit_conn sqr_conn_per_ip 200;
 
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
@@ -514,7 +525,7 @@ server {
     # location must appear before the general /api/ block so Express can return
     # a structured, correlated timeout instead of an opaque Nginx 502 page.
     location = /api/imports {
-        limit_req zone=sqr_api_per_ip burst=20 nodelay;
+        limit_req zone=sqr_import_per_ip burst=20 nodelay;
         limit_conn sqr_conn_per_ip 20;
 
         proxy_pass http://127.0.0.1:5000;
@@ -530,8 +541,8 @@ server {
     }
 
     location /api/ {
-        limit_req zone=sqr_api_per_ip burst=20 nodelay;
-        limit_conn sqr_conn_per_ip 20;
+        limit_req zone=sqr_api_per_ip burst=2000 nodelay;
+        limit_conn sqr_conn_per_ip 1000;
 
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;

@@ -51,3 +51,22 @@ test("applyTrustedProxies trusts forwarded addresses only from configured proxie
     await stopTestServer(server);
   }
 });
+
+test("a narrow local nginx trust boundary ignores attacker-prepended forwarded IPs and raw real-IP headers", async () => {
+  const app = express();
+  applyTrustedProxies(app, ["127.0.0.1/32"]);
+  app.get("/ip", (req, res) => res.json({ ip: req.ip, ips: req.ips }));
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/ip`, {
+      headers: {
+        "x-forwarded-for": "192.0.2.99, 203.0.113.20",
+        "x-real-ip": "192.0.2.88",
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ip: "203.0.113.20", ips: ["203.0.113.20"] });
+  } finally {
+    await stopTestServer(server);
+  }
+});

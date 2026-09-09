@@ -216,3 +216,97 @@ test("RedisAdaptiveRateStateStore retries Redis after a failed adaptive connecti
   assert.equal(factoryCalls, 2);
   assert.equal(evalCalls, 1);
 });
+
+test("RedisAdaptiveRateStateStore shares NAT aggregate keys across workers while isolating user and scope keys", async () => {
+  const entries = new Map<string, { count: number; resetAt: number; expiresAt: number }>();
+  const scripts = new Set<string>();
+  let connectCalls = 0;
+  let now = 1_000;
+  const createRedisClient = () => ({
+    async connect() { connectCalls += 1; },
+    async eval(script: string, options: { keys: string[]; arguments: string[] }) {
+      // A deterministic shared Redis boundary model: production uses one Lua
+      // EVAL for the whole read/update/expiry operation, never client-side GET.
+      scripts.add(script);
+      const requestNow = Number(options.arguments[0]);
+      const windowMs = Number(options.arguments[1]);
+      const staleGraceMs = Number(options.arguments[2]);
+      const previous = entries.get(options.keys[0]);
+      const active = previous && previous.resetAt > requestNow;
+      const next = {
+        count: active ? previous.count + 1 : 1,
+        resetAt: active ? previous.resetAt : requestNow + windowMs,
+        expiresAt: (active ? previous.resetAt : requestNow + windowMs) + staleGraceMs,
+      };
+      entries.set(options.keys[0], next);
+      return [next.count, requestNow, next.resetAt];
+    },
+    async quit() {},
+  });
+  const stores = Array.from({ length: 4 }, () => new RedisAdaptiveRateStateStore({
+    config: { distributedStoreConfigured: true, provider: "redis", redisUrl: "redis://localhost:6379/0" },
+    createRedisClient,
+    prefix: "sqr:test:shared-nat",
+  }));
+  const increment = (worker: number, bucketKey: string) => stores[worker].increment({
+    bucketKey, now, windowMs: 10_000, staleGraceMs: 10_000,
+  });
+
+  try {
+    const results = await Promise.all(Array.from({ length: 100 }, async (_value, user) => {
+      const worker = user % stores.length;
+      const userResult = await increment(worker, `user:staff-${user}:api:read`);
+      const aggregateResult = await increment(worker, "aggregate-ip:203.0.113.10:api:read");
+      return { userResult, aggregateResult };
+    }));
+    assert.equal(connectCalls, 4);
+    assert.ok(results.every(({ userResult }) => userResult?.count === 1));
+    assert.deepEqual(
+      results.map(({ aggregateResult }) => aggregateResult?.count).sort((a, b) => Number(a) - Number(b)),
+      Array.from({ length: 100 }, (_value, index) => index + 1),
+    );
+    assert.equal(entries.size, 101);
+    assert.ok([...entries.keys()].every((key) => /^sqr:test:shared-nat:[a-f0-9]{64}$/.test(key)));
+    assert.equal((await increment(3, "user:staff-0:api:read"))?.count, 2);
+    assert.equal((await increment(1, "user:staff-0:api:write"))?.count, 1);
+    assert.equal((await increment(2, "ip:203.0.113.10:api:read"))?.count, 1);
+    assert.equal(entries.size, 103);
+
+    now = 10_999;
+    assert.equal((await increment(2, "user:staff-0:api:read"))?.resetAt, 11_000);
+    assert.ok([...entries.values()].every((entry) => entry.expiresAt === 21_000));
+    now = 11_000;
+    assert.deepEqual(await increment(3, "user:staff-0:api:read"), {
+      count: 1, lastSeenAt: 11_000, resetAt: 21_000,
+    });
+    assert.equal(entries.size, 103, "Resetting a window must reuse the stable hashed key.");
+    assert.equal(scripts.size, 1);
+    const [script] = scripts;
+    assert.match(script, /resetAt <= now/);
+    assert.match(script, /resetAt \+ staleGraceMs - now/);
+    assert.match(script, /redis\.call\("SET", KEYS\[1\], nextBucket, "PX", ttlMs\)/);
+  } finally {
+    await Promise.all(stores.map((store) => store.close()));
+  }
+});
+
+test("RedisAdaptiveRateStateStore rejects invalid Redis results without returning a local quota", async () => {
+  let warnings = 0;
+  const store = new RedisAdaptiveRateStateStore({
+    config: { distributedStoreConfigured: true, provider: "redis", redisUrl: "redis://localhost:6379/0" },
+    createRedisClient: () => ({
+      async connect() {},
+      async eval() { return null; },
+      async quit() {},
+    }),
+    logger: { warn() { warnings += 1; } },
+  });
+  try {
+    assert.equal(await store.increment({
+      bucketKey: "user:staff-1:api:read", now: 1_000, windowMs: 10_000, staleGraceMs: 10_000,
+    }), null);
+    assert.equal(warnings, 1);
+  } finally {
+    await store.close();
+  }
+});

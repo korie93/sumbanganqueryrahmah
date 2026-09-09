@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
@@ -398,7 +399,7 @@ test("adaptive API protection can use a persistent state store", async () => {
   }
 });
 
-test("adaptive API protection increments per-IP and per-user buckets for authenticated requests", async () => {
+test("adaptive API protection increments the user quota before the separate aggregate NAT guard", async () => {
   const increments: string[] = [];
   const store: AdaptiveRateStateStore = {
     async increment(options) {
@@ -422,8 +423,9 @@ test("adaptive API protection increments per-IP and per-user buckets for authent
 
     assert.equal(response.status, 200);
     assert.equal(increments.length, 2);
-    assert.equal(increments.some((bucketKey) => bucketKey.startsWith("ip:") && bucketKey.endsWith(":api")), true);
-    assert.ok(increments.includes("user:user-1:api"));
+    assert.equal(increments[0], `user-v2:${createHash("sha256").update("user-1").digest("hex")}:api:reads`);
+    assert.ok(increments[1].startsWith("authenticated-ip-v2:"));
+    assert.equal(increments.some((key) => key.startsWith("ip:")), false);
   } finally {
     await stopTestServer(server);
   }
@@ -433,7 +435,7 @@ test("adaptive API protection throttles an authenticated user bucket even when t
   const store: AdaptiveRateStateStore = {
     async increment(options) {
       return {
-        count: options.bucketKey.startsWith("user:user-1:api") ? 85 : 1,
+        count: options.bucketKey.startsWith(`user-v2:${createHash("sha256").update("user-1").digest("hex")}:api`) ? 85 : 1,
         lastSeenAt: options.now,
         resetAt: options.now + options.windowMs,
       };
@@ -463,7 +465,7 @@ test("adaptive API protection keeps different authenticated user buckets indepen
   const store: AdaptiveRateStateStore = {
     async increment(options) {
       return {
-        count: options.bucketKey.startsWith("user:user-1:api") ? 85 : 1,
+        count: options.bucketKey.startsWith(`user-v2:${createHash("sha256").update("user-1").digest("hex")}:api`) ? 85 : 1,
         lastSeenAt: options.now,
         resetAt: options.now + options.windowMs,
       };
@@ -486,8 +488,8 @@ test("adaptive API protection keeps different authenticated user buckets indepen
       },
     });
     assert.equal(independentUser.status, 200);
-    assert.equal(independentUser.headers.get("ratelimit-limit"), "8");
-    assert.equal(independentUser.headers.get("x-ratelimit-limit"), "8");
+    assert.equal(independentUser.headers.get("ratelimit-limit"), "84");
+    assert.equal(independentUser.headers.get("x-ratelimit-limit"), "84");
   } finally {
     await stopTestServer(server);
   }

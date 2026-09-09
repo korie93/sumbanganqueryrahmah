@@ -12,6 +12,16 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 127.0.0.1:6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -73,6 +83,16 @@ jobs:
 
       - name: Run http tests
         run: npm run test:http
+
+      - name: Verify NAT-aware login and expensive-route protection
+        run: node --import tsx --test server/middleware/tests/rate-limit.test.ts server/internal/tests/aiConcurrencyGate.test.ts server/config/tests/runtime-env-schema.test.ts
+
+      - name: Verify live Redis rate-limit concurrency
+        timeout-minutes: 3
+        env:
+          SQR_RATE_LIMIT_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+          SQR_RATE_LIMIT_TEST_REDIS_REQUIRED: "1"
+        run: node --import tsx --test server/http/tests/rate-limit-live-redis.integration.test.ts
 
       - name: Run services tests
         run: npm run test:services

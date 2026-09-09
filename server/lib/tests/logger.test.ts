@@ -103,6 +103,37 @@ test("sanitizeForLogAllowList still auto-redacts sensitive keys and freeform val
   });
 });
 
+test("rate-limit diagnostic allowlist retains safe attribution without exposing account identity", () => {
+  const sanitized = sanitizeForLogAllowList({
+    limiter: "login-account-limit",
+    subjectType: "account",
+    subjectHash: "abcdefabcdefabcdefabcdef",
+    scope: "auth-login",
+    count: 6,
+    limit: 5,
+    mode: "PROTECTION",
+    throttleFactor: 0.2,
+    username: "admin.private",
+    userId: "private-user-id",
+    authorization: "Bearer private-token",
+    password: "private-password",
+  }) as Record<string, unknown>;
+  assert.deepEqual(sanitized, {
+    limiter: "login-account-limit",
+    subjectType: "account",
+    subjectHash: "abcdefabcdefabcdefabcdef",
+    scope: "auth-login",
+    count: 6,
+    limit: 5,
+    mode: "PROTECTION",
+    throttleFactor: 0.2,
+    username: "[REDACTED]",
+    userId: "[REDACTED]",
+    authorization: "[REDACTED]",
+    password: "[REDACTED]",
+  });
+});
+
 test("sanitizeForLog redacts phone numbers and valid credit cards inside freeform strings", () => {
   const sanitized = sanitizeForLog({
     details: "Contact ops@example.com or 012-3111222 and retry card 4111 1111 1111 1111 immediately.",

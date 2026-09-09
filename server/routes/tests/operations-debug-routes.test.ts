@@ -244,6 +244,10 @@ test("registerOperationsDebugRoutes rate limits repeated debug endpoint probes",
       },
     });
     assert.equal(limited.status, 429);
+    assert.equal(limited.headers.get("ratelimit-limit"), String(OPERATIONS_DEBUG_RATE_LIMIT_MAX));
+    assert.equal(limited.headers.get("ratelimit-remaining"), "0");
+    assert.match(limited.headers.get("retry-after") ?? "", /^[1-9]\d*$/);
+    assert.equal(limited.headers.get("retry-after"), limited.headers.get("ratelimit-reset"));
     assert.deepEqual(await limited.json(), {
       ok: false,
       message: "Too many debug requests",

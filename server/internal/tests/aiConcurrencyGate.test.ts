@@ -23,6 +23,11 @@ class MockResponse extends EventEmitter {
     this.headers.set(name.toLowerCase(), value);
     return this;
   }
+
+  removeHeader(name: string) {
+    this.headers.delete(name.toLowerCase());
+    return this;
+  }
 }
 
 function createRequest(role = "user"): AuthenticatedRequest {
@@ -107,6 +112,10 @@ test("AI concurrency gate rejects immediately when queue limit is zero", async (
   await firstRequest;
 
   assert.equal(secondResponse.statusCode, 429);
+  assert.equal(secondResponse.headers.get("retry-after"), "1");
+  assert.equal(secondResponse.headers.get("ratelimit-limit"), "1");
+  assert.equal(secondResponse.headers.get("ratelimit-remaining"), "0");
+  assert.equal(secondResponse.headers.has("ratelimit-reset"), false);
   assert.deepEqual(secondResponse.body, {
     message: "AI queue is full. Please retry in a few seconds.",
     gate: {
@@ -265,6 +274,10 @@ test("AI concurrency gate times out queued work once and never runs it after cap
   );
   assert.equal(handlerCalls, 1);
   assert.equal(secondResponse.statusCode, 429);
+  assert.equal(secondResponse.headers.get("retry-after"), "1");
+  assert.equal(secondResponse.headers.get("ratelimit-limit"), "1");
+  assert.equal(secondResponse.headers.get("ratelimit-remaining"), "0");
+  assert.equal(secondResponse.headers.has("ratelimit-reset"), false);
   assert.deepEqual(secondResponse.body, {
     message: "AI queue wait timed out. Please retry.",
     gate: {

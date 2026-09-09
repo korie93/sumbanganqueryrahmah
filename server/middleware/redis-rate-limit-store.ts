@@ -76,6 +76,13 @@ type FallbackRateLimitEntry = {
   totalHits: number;
 };
 
+export class RedisRateLimitStoreUnavailableError extends Error {
+  constructor() {
+    super("Shared rate-limit state is temporarily unavailable.");
+    this.name = "RedisRateLimitStoreUnavailableError";
+  }
+}
+
 class BoundedMemoryRateLimitStore implements Store {
   readonly localKeys = true;
   private readonly cache = new LRUCache<string, FallbackRateLimitEntry>({
@@ -96,6 +103,10 @@ class BoundedMemoryRateLimitStore implements Store {
   }
 
   async get(key: string): Promise<ClientRateLimitInfo | undefined> {
+    return this.readEntry(key);
+  }
+
+  private readEntry(key: string): ClientRateLimitInfo | undefined {
     const entry = this.cache.get(key);
     if (!entry) {
       return undefined;
@@ -113,7 +124,9 @@ class BoundedMemoryRateLimitStore implements Store {
   }
 
   async increment(key: string): Promise<ClientRateLimitInfo> {
-    const existing = await this.get(key);
+    // Keep the memory-provider read/update synchronous, even when callers
+    // increment the same key concurrently.
+    const existing = this.readEntry(key);
     const nowMs = this.now();
     const resetTime = existing?.resetTime instanceof Date
       ? existing.resetTime
@@ -126,7 +139,7 @@ class BoundedMemoryRateLimitStore implements Store {
   }
 
   async decrement(key: string): Promise<void> {
-    const existing = await this.get(key);
+    const existing = this.readEntry(key);
     if (!existing) {
       return;
     }
@@ -388,6 +401,11 @@ export class RedisRateLimitStore implements Store {
   }
 
   private recordFallbackUsage() {
+    // A configured shared store must never silently become worker-local:
+    // doing so would multiply login/account quotas across production workers.
+    if (this.config.provider === "redis") {
+      throw new RedisRateLimitStoreUnavailableError();
+    }
     internalMetrics.increment("redisRateLimitFallbackMemoryStoreUsesTotal");
   }
 
@@ -399,7 +417,7 @@ export class RedisRateLimitStore implements Store {
     const parsed = RedisIncrementEvalResultSchema.safeParse(result);
     if (!parsed.success) {
       internalMetrics.increment("redisRateLimitEvalTypeErrorsTotal");
-      this.logger.warn("Redis rate-limit eval returned an invalid response; falling back to process-local memory", {
+      this.logger.warn("Redis rate-limit eval returned an invalid response; protected requests will fail closed", {
         event: "redis_rate_limit_eval_type_error",
         issues: parsed.error.issues.length,
       });
@@ -514,7 +532,7 @@ export class RedisRateLimitStore implements Store {
 
     this.warningEmitted = true;
     this.lastWarningAt = now;
-    this.logger.warn("Redis rate-limit store unavailable; falling back to process-local memory", {
+    this.logger.warn("Redis rate-limit store unavailable; protected requests will fail closed", {
       provider: this.config.provider,
       error: error instanceof Error ? error.message : "Unknown Redis failure",
     });

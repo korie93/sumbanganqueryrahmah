@@ -12,12 +12,9 @@ import {
   resolveSessionJwtId,
   shouldRefreshSessionJwt,
   signSessionJwtWithSecret,
-  verifySessionJwt,
 } from "./session-jwt";
-import {
-  parseAuthenticatedSessionJwtPayload,
-  type AuthenticatedSessionJwtPayload,
-} from "./session-jwt-payload";
+import type { AuthenticatedSessionJwtPayload } from "./session-jwt-payload";
+import { readRequestSessionToken, verifyRequestSessionIdentity } from "./request-session-identity";
 import { isSessionJwtRevoked, revokeSessionJwt } from "./session-revocation-store";
 import {
   canUserBypassForcedPasswordChange,
@@ -26,10 +23,8 @@ import {
 import { canAccessDuringForcedPasswordChange } from "./guard-forced-password-change";
 import { getInvalidatedSessionMessage } from "./guard-session-messages";
 import {
-  AUTH_SESSION_COOKIE_NAME,
   AUTH_SESSION_REFRESH_HEADER_NAME,
   clearAuthSessionCookie,
-  readCookieValueFromHeader,
   refreshAuthSessionCookie,
 } from "./session-cookie";
 import { normalizeSessionExpiry } from "./session-lifetime";
@@ -89,13 +84,6 @@ type CreateAuthGuardsOptions = {
   secret?: string;
   activityUpdateThrottleMs?: number;
   sessionRefreshRevocationRetry?: Partial<SessionRefreshRevocationRetryConfig>;
-};
-
-type AuthSessionTokenSource = "bearer" | "cookie";
-
-type AuthSessionTokenReadResult = {
-  source: AuthSessionTokenSource | null;
-  token: string | null;
 };
 
 type RefreshedSessionToken = {
@@ -653,30 +641,6 @@ function clearSessionRefreshDeduplication(): void {
   }
 }
 
-function firstHeaderValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) {
-    return String(value[0] || "");
-  }
-  return String(value || "");
-}
-
-function readAuthSessionToken(req: Request): AuthSessionTokenReadResult {
-  const rawAuthorization = firstHeaderValue(req.headers.authorization).trim();
-  if (rawAuthorization.toLowerCase().startsWith("bearer ")) {
-    const bearerToken = rawAuthorization.slice(7).trim();
-    if (bearerToken) {
-      return { source: "bearer", token: bearerToken };
-    }
-  }
-
-  const cookieToken = readCookieValueFromHeader(req.headers.cookie, AUTH_SESSION_COOKIE_NAME);
-  if (cookieToken) {
-    return { source: "cookie", token: cookieToken };
-  }
-
-  return { source: null, token: null };
-}
-
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
@@ -694,7 +658,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     res: Response,
     next: NextFunction,
   ) => {
-    const { source: tokenSource, token } = readAuthSessionToken(req);
+    const { source: tokenSource, token } = readRequestSessionToken(req);
 
     if (!token) {
       clearAuthSessionCookie(res);
@@ -704,7 +668,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
 
     try {
-      const decoded = parseAuthenticatedSessionJwtPayload(verifySessionJwt<unknown>(token, secret));
+      const decoded = verifyRequestSessionIdentity(req, token, secret);
       const sessionExpiry = normalizeSessionExpiry(
         typeof decoded.exp === "number" ? decoded.exp * 1000 : null,
       );

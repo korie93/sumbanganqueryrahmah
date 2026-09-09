@@ -291,6 +291,24 @@ test("apiRequest aborts the retry chain when the caller signal aborts during bac
   }
 });
 
+test("apiRequest never automatically replays Collection saves or login requests after 429", async (t) => {
+  resetApiRetryStateForTests();
+  t.after(resetApiRetryStateForTests);
+  const requests: string[] = [];
+  t.mock.method(globalThis, "fetch", async (url: string | URL | Request) => {
+    requests.push(String(url));
+    return new Response(JSON.stringify({ message: "Rate limit exceeded" }), {
+      status: 429,
+      headers: { "Content-Type": "application/json", "Retry-After": "10" },
+    });
+  });
+
+  for (const url of ["/api/collection", "/api/auth/login", "/api/activity/heartbeat"]) {
+    await assert.rejects(() => apiRequest("POST", url, {}), /429/);
+  }
+  assert.deepEqual(requests, ["/api/collection", "/api/auth/login", "/api/activity/heartbeat"]);
+});
+
 test("apiRequest retry circuit opens after repeated transient failures", async () => {
   const originalFetch = globalThis.fetch;
   resetApiRetryStateForTests();

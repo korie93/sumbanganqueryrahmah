@@ -425,6 +425,21 @@ test("runtime env schema validates per-user rate-limit tuning", () => {
   );
 });
 
+test("runtime env schema validates bounded NAT aggregate settings", () => {
+  validateRuntimeEnvironmentSchema({
+    SQR_RATE_LIMIT_AUTHENTICATED_IP_REQUESTS_PER_MINUTE: "120000",
+    SQR_RATE_LIMIT_LOGIN_IP_ATTEMPTS_PER_15_MINUTES: "500",
+  });
+  for (const [key, values] of [
+    ["SQR_RATE_LIMIT_AUTHENTICATED_IP_REQUESTS_PER_MINUTE", ["0", "599", "6000001", "abc"]],
+    ["SQR_RATE_LIMIT_LOGIN_IP_ATTEMPTS_PER_15_MINUTES", ["0", "99", "100001", "abc"]],
+  ] as const) {
+    for (const value of values) {
+      assert.throws(() => validateRuntimeEnvironmentSchema({ [key]: value }), new RegExp(key));
+    }
+  }
+});
+
 test("runtime env schema validates staged WebSocket shared bus configuration keys", () => {
   assert.doesNotThrow(() => {
       validateRuntimeEnvironmentSchema({

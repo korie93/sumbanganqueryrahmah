@@ -982,7 +982,7 @@ export class CollectionOspV7Operations {
       });
     } catch (error) {
       if (error instanceof CollectionOspV7ExportGuardError) {
-        throw new HttpError(error.statusCode, error.message);
+        throw new HttpError(error.statusCode, error.message, { details: { rateLimit: error.rateLimit } });
       }
       normalizeRepositoryError(error);
     }

@@ -7,6 +7,7 @@ import {
   createSharedRateLimitStore,
   REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS,
   RedisRateLimitStore,
+  RedisRateLimitStoreUnavailableError,
 } from "../../middleware/redis-rate-limit-store";
 import type { SharedRateLimitStoreConfig } from "../../middleware/rate-limit-runtime";
 
@@ -159,7 +160,7 @@ test("RedisRateLimitStore shares counters across store instances", async () => {
   assert.equal(await firstStore.get("client-1"), undefined);
 });
 
-test("RedisRateLimitStore falls back to memory when Redis cannot connect", async () => {
+test("RedisRateLimitStore fails closed without worker-local quotas when Redis cannot connect", async () => {
   const warnings: unknown[] = [];
   const metricBefore = getInternalMetricsSnapshot().counters.redisRateLimitFallbackMemoryStoreUsesTotal;
   let now = 1_000;
@@ -186,17 +187,20 @@ test("RedisRateLimitStore falls back to memory when Redis cannot connect", async
   });
   initStore(store);
 
-  assert.equal((await store.increment("client-1")).totalHits, 1);
-  assert.equal((await store.increment("client-1")).totalHits, 2);
-  assert.equal((await store.get("client-1"))?.totalHits, 2);
+  await assert.rejects(() => store.increment("client-1"), RedisRateLimitStoreUnavailableError);
+  await assert.rejects(() => store.increment("client-1"), RedisRateLimitStoreUnavailableError);
+  await assert.rejects(() => store.get("client-1"), RedisRateLimitStoreUnavailableError);
+  await assert.rejects(() => store.decrement("client-1"), RedisRateLimitStoreUnavailableError);
+  await assert.rejects(() => store.resetKey("client-1"), RedisRateLimitStoreUnavailableError);
+  assert.equal(store.getFallbackStoreSizeForTests(), 0);
   assert.equal(
     getInternalMetricsSnapshot().counters.redisRateLimitFallbackMemoryStoreUsesTotal,
-    metricBefore + 3,
+    metricBefore,
   );
   assert.equal(warnings.length, 1);
 
   now += 5_000;
-  assert.equal((await store.increment("client-1")).totalHits, 3);
+  await assert.rejects(() => store.increment("client-1"), RedisRateLimitStoreUnavailableError);
   assert.equal(warnings.length, 2);
 });
 
@@ -270,7 +274,7 @@ test("RedisRateLimitStore retries Redis after a failed connection instead of per
   });
   initStore(store);
 
-  assert.equal((await store.increment("client-1")).totalHits, 1);
+  await assert.rejects(() => store.increment("client-1"), RedisRateLimitStoreUnavailableError);
   assert.equal(factoryCalls, 1);
 
   assert.equal((await store.increment("client-1")).totalHits, 1);
@@ -309,17 +313,20 @@ test("RedisRateLimitStore shutdown waits for pending connect and blocks new Redi
   });
   initStore(store);
 
-  const incrementPromise = store.increment("client-1");
+  const rejectedIncrement = assert.rejects(
+    () => store.increment("client-1"),
+    RedisRateLimitStoreUnavailableError,
+  );
   await new Promise((resolve) => setImmediate(resolve));
   const shutdownPromise = store.shutdown();
   resolveConnect();
 
-  assert.equal((await incrementPromise).totalHits, 1);
+  await rejectedIncrement;
   await shutdownPromise;
 
   assert.equal(factoryCalls, 1);
   assert.equal(createdClients[0]?.quitCalls, 1);
-  assert.equal((await store.increment("client-2")).totalHits, 1);
+  await assert.rejects(() => store.increment("client-2"), RedisRateLimitStoreUnavailableError);
   assert.equal(factoryCalls, 1);
 });
 
@@ -351,7 +358,7 @@ test("RedisRateLimitStore closes a failed command client before retrying", async
   });
   initStore(store);
 
-  assert.equal((await store.increment("client-1")).totalHits, 1);
+  await assert.rejects(() => store.increment("client-1"), RedisRateLimitStoreUnavailableError);
   assert.equal(createdClients[0]?.quitCalls, 1);
 
   assert.equal((await store.increment("client-1")).totalHits, 1);
@@ -437,7 +444,7 @@ test("RedisRateLimitStore records eval type errors when Lua returns null", async
   });
   initStore(store);
 
-  assert.equal((await store.increment("client-1")).totalHits, 1);
+  await assert.rejects(() => store.increment("client-1"), RedisRateLimitStoreUnavailableError);
   assert.equal(
     getInternalMetricsSnapshot().counters.redisRateLimitEvalTypeErrorsTotal,
     metricBefore + 1,
@@ -468,7 +475,7 @@ test("RedisRateLimitStore rejects string values from eval instead of coercing th
   });
   initStore(store);
 
-  assert.equal((await store.increment("client-1")).totalHits, 1);
+  await assert.rejects(() => store.increment("client-1"), RedisRateLimitStoreUnavailableError);
   assert.equal(
     getInternalMetricsSnapshot().counters.redisRateLimitEvalTypeErrorsTotal,
     metricBefore + 1,
@@ -508,4 +515,102 @@ test("createSharedRateLimitStore only builds Redis stores for redis configuratio
       prefix: "sqr:test:redis",
     }) instanceof RedisRateLimitStore,
   );
+});
+
+test("RedisRateLimitStore concurrent workers share account counters but isolate account and network subjects", async () => {
+  const entries = new Map<string, FakeRedisEntry>();
+  const stores = Array.from({ length: 4 }, () => new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => new FakeRedisClient(entries),
+    prefix: "sqr:test:login-nat",
+  }));
+  stores.forEach(initStore);
+  try {
+    const hits = await Promise.all(Array.from({ length: 100 }, (_value, index) =>
+      stores[index % stores.length].increment("account:staff-one")));
+    assert.deepEqual(
+      hits.map((hit) => hit.totalHits).sort((a, b) => a - b),
+      Array.from({ length: 100 }, (_value, index) => index + 1),
+    );
+    assert.equal((await stores[0].increment("account:staff-two")).totalHits, 1);
+    assert.equal((await stores[1].increment("network:staff-one")).totalHits, 1);
+    assert.equal((await stores[2].get("account:staff-one"))?.totalHits, 100);
+    assert.equal(entries.size, 3);
+    assert.ok([...entries.keys()].every((key) => /^sqr:test:login-nat:[a-f0-9]{64}$/.test(key)));
+    assert.ok(stores.every((store) => store.getFallbackStoreSizeForTests() === 0));
+  } finally {
+    await Promise.all(stores.map((store) => store.shutdown()));
+  }
+});
+
+test("RedisRateLimitStore fixed windows retain expiry and reuse keys after reset", async (t) => {
+  let now = 1_000;
+  t.mock.method(Date, "now", () => now);
+  const entries = new Map<string, FakeRedisEntry>();
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => new FakeRedisClient(entries),
+    prefix: "sqr:test:fixed-window",
+  });
+  initStore(store);
+  try {
+    const first = await store.increment("account:staff-one");
+    assert.equal(first.resetTime?.getTime(), 61_000);
+    now = 60_999;
+    const second = await store.increment("account:staff-one");
+    assert.equal(second.totalHits, 2);
+    assert.equal(second.resetTime?.getTime(), 61_000);
+    now = 61_000;
+    assert.equal(await store.get("account:staff-one"), undefined);
+    const nextWindow = await store.increment("account:staff-one");
+    assert.equal(nextWindow.totalHits, 1);
+    assert.equal(nextWindow.resetTime?.getTime(), 121_000);
+    assert.equal(entries.size, 1);
+  } finally {
+    await store.shutdown();
+  }
+});
+
+test("RedisRateLimitStore Redis failure rejects concurrent workers instead of granting independent account allowances", async () => {
+  const metricBefore = getInternalMetricsSnapshot().counters.redisRateLimitFallbackMemoryStoreUsesTotal;
+  const stores = Array.from({ length: 4 }, () => new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => ({
+      async connect() {},
+      async eval() { throw new Error("Redis connection interrupted"); },
+      async get() { return null; },
+      async pTTL() { return -2; },
+      async decr() { return 0; },
+      async del() { return 0; },
+      async quit() {},
+    }),
+    logger: { warn() {} },
+    prefix: "sqr:test:fail-closed-workers",
+  }));
+  stores.forEach(initStore);
+  try {
+    const results = await Promise.allSettled(Array.from({ length: 100 }, (_value, index) =>
+      stores[index % stores.length].increment("account:staff-one")));
+    assert.ok(results.every((result) =>
+      result.status === "rejected" && result.reason instanceof RedisRateLimitStoreUnavailableError));
+    assert.ok(stores.every((store) => store.getFallbackStoreSizeForTests() === 0));
+    assert.equal(getInternalMetricsSnapshot().counters.redisRateLimitFallbackMemoryStoreUsesTotal, metricBefore);
+  } finally {
+    await Promise.all(stores.map((store) => store.shutdown()));
+  }
+});
+
+test("RedisRateLimitStore explicit memory provider counts concurrent same-key increments atomically", async () => {
+  const store = new RedisRateLimitStore({
+    config: { distributedStoreConfigured: false, provider: "memory", redisUrl: null },
+    prefix: "sqr:test:explicit-memory",
+  });
+  initStore(store);
+  try {
+    const hits = await Promise.all(Array.from({ length: 100 }, () => store.increment("account:staff-one")));
+    assert.deepEqual(hits.map((hit) => hit.totalHits), Array.from({ length: 100 }, (_value, index) => index + 1));
+    assert.equal((await store.get("account:staff-one"))?.totalHits, 100);
+  } finally {
+    await store.shutdown();
+  }
 });
