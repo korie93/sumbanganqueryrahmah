@@ -23,6 +23,15 @@ Release policy:
 - New external tarball sources are blocked unless they are vendored and covered by an integrity verification script.
 - Major dependency upgrades should be dependency-only pull requests with rollback notes.
 
+## 2026-09-09 CI Security Patch
+
+[CI run 34291870873](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34291870873) stopped at the dependency audit before application tests ran. The fix updates only two resolved packages:
+
+- `nodemailer`: exact runtime pin `9.0.1` to `9.1.1`, retaining the compatible 9.x line. This includes the address-parser fixes in 9.1.0 and the legacy content-resolution access-control fix in [9.1.1](https://github.com/nodemailer/nodemailer/releases/tag/v9.1.1).
+- `js-yaml`: existing override floor `^4.3.1` to `^4.3.2`, locked to `4.3.2`. This closes the empty-merge-source work-limit bypass described in [GHSA-2883-xcg3-v3hh](https://github.com/advisories/GHSA-2883-xcg3-v3hh), without moving ESLint's parser to a new major version.
+
+The audit threshold, exact-pin policy, and lifecycle-script allowlist are unchanged. `scripts/tests/dependency-security-regressions.test.mjs` checks offline mail serialization, transporter file/URL restrictions in the legacy message API, and bounded YAML merge-work accounting. It runs with `npm run test:scripts`; `npm run audit:dependencies` checks the installed dependency graph against current advisories.
+
 ## compression@1.8.1
 
 `compression@1.8.1` remains in use because the Express middleware API is stable and current `npm audit` does not report a vulnerability for this package in this project. The risk being controlled here is CPU or memory pressure from broad compression behavior, not request decompression.

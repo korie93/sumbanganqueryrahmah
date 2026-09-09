@@ -185,7 +185,7 @@
     "lru-cache": "11.5.1",
     "lucide-react": "^0.453.0",
     "malaysia-postcodes": "3.0.0",
-    "nodemailer": "9.0.1",
+    "nodemailer": "9.1.1",
     "pg": "8.20.0",
     "pino": "10.3.1",
     "react": "^18.3.1",
@@ -252,7 +252,7 @@
     "rollup": "^4.59.0",
     "esbuild": "^0.28.1",
     "ip-address": "^10.4.0",
-    "js-yaml": "^4.3.1",
+    "js-yaml": "^4.3.2",
     "minimatch": "10.2.5"
   },
   "allowScripts": {
