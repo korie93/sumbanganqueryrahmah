@@ -25,6 +25,7 @@ const artifactsDir = path.resolve(
 const sbomArtifactsDir = path.join(artifactsDir, "sbom");
 const serverLogPath = path.join(artifactsDir, "server.log");
 const ADAPTIVE_RATE_WINDOW_COOLDOWN_MS = 11_000;
+const AUTH_LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000;
 const SMOKE_TIMEOUT_EXIT_CODE = 124;
 const RELEASE_SMOKE_MAX_ATTEMPTS = 2;
 
@@ -112,7 +113,7 @@ const runUiSmokeWithTimeoutRetry = async (env) => {
       },
     });
     if (status === 0) {
-      return;
+      return attempt;
     }
     if (status !== SMOKE_TIMEOUT_EXIT_CODE || attempt === RELEASE_SMOKE_MAX_ATTEMPTS) {
       throw new Error(`UI smoke attempt ${attempt} failed with exit code ${status}.`);
@@ -291,6 +292,9 @@ const run = async () => {
     });
     console.log("Release readiness: running smoke preflight + visual/a11y contracts + UI smoke...");
     await runNpm(["run", "smoke:preflight"], { env });
+    // Anchor after the first login completes, conservatively covering its full
+    // account window even when preflight/bootstrap takes longer on a slow runner.
+    const loginWindowReadyAt = Date.now() + AUTH_LOGIN_RATE_WINDOW_MS + 1_000;
     await runNpm(["run", "test:e2e:visual"], {
       env: {
         ...env,
@@ -306,20 +310,28 @@ const run = async () => {
     });
     console.log("Release readiness: waiting for local adaptive-rate window to reset before UI smoke...");
     await wait(ADAPTIVE_RATE_WINDOW_COOLDOWN_MS);
-    await runUiSmokeWithTimeoutRetry(env);
+    const smokeAttempts = await runUiSmokeWithTimeoutRetry(env);
 
     console.log("Release readiness: capturing collection performance baseline...");
     await runNpm(["run", "perf:collection:baseline"], { env });
     await runNpm(["run", "perf:collection:v9"], { env });
 
-    console.log("Release readiness: running backup integrity drill...");
-    await runNpm(["run", "dr:drill"], { env });
+    // Normal flow uses four UI/preflight logins plus one operational login.
+    // A timeout retry can consume the fifth; wait for that account window before
+    // the drill instead of weakening limits or triggering an adaptive cooldown.
+    if (smokeAttempts > 1) {
+      const loginCooldownMs = Math.max(0, loginWindowReadyAt - Date.now());
+      if (loginCooldownMs > 0) {
+        console.log(`Release readiness: waiting ${Math.ceil(loginCooldownMs / 1000)}s for the login account window after the smoke retry...`);
+        await wait(loginCooldownMs);
+      }
+    }
 
-    console.log("Release readiness: capturing stale-conflict and 429 monitor snapshot...");
-    await runNpm(["run", "monitor:stale-conflicts"], {
+    console.log("Release readiness: running backup integrity drill and authenticated monitor snapshot...");
+    await runNpm(["run", "dr:drill"], {
       env: {
         ...env,
-        MONITOR_OUTPUT_FILE: path.join(artifactsDir, "monitor-stale-conflicts.json"),
+        DRILL_MONITOR_OUTPUT_FILE: path.join(artifactsDir, "monitor-stale-conflicts.json"),
       },
     });
   } finally {

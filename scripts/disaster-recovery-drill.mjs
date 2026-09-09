@@ -1,12 +1,14 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 import process from "node:process";
+import { captureStaleConflictSnapshot } from "./lib/stale-conflict-monitor.mjs";
 
 const baseUrl = String(process.env.DRILL_BASE_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000").trim();
 const username = String(process.env.DRILL_SUPERUSER_USERNAME || process.env.SMOKE_TEST_USERNAME || "").trim();
 const password = String(process.env.DRILL_SUPERUSER_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
 const runRestore = String(process.env.DRILL_RUN_RESTORE || "").trim() === "1";
 const keepBackup = String(process.env.DRILL_KEEP_BACKUP || "").trim() === "1";
+const monitorOutputFile = String(process.env.DRILL_MONITOR_OUTPUT_FILE || "").trim();
 const requestTimeoutMs = Math.max(2000, Number.parseInt(String(process.env.DRILL_TIMEOUT_MS || "15000"), 10) || 15000);
 
 function assert(condition, message) {
@@ -198,6 +200,16 @@ async function run() {
       console.log("Restore drill completed successfully.");
     } else {
       console.log("Restore step skipped. Set DRILL_RUN_RESTORE=1 to include restore verification.");
+    }
+
+    if (monitorOutputFile) {
+      console.log("Capturing stale-conflict and 429 monitor snapshot using the drill session...");
+      const snapshot = await captureStaleConflictSnapshot({
+        request,
+        baseUrl,
+        outputFile: monitorOutputFile,
+      });
+      console.log(JSON.stringify(snapshot, null, 2));
     }
   } finally {
     if (createdBackupId && !keepBackup) {

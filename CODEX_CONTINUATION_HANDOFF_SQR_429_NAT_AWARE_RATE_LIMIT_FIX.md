@@ -1,6 +1,6 @@
 # SQR 429 NAT-aware fix — continuation handoff
 
-Status: awaiting live Redis CI verification; local implementation and available quality gates complete. Supplied active Nginx evidence now identifies the edge 429 producer covering `/api/me`; no deployment or per-event historical attribution is claimed. The user authorized commit/push on 2026-09-09; production deployment/reload remains unauthorized. Full 22-part report: [SQR 429 report](docs/SQR_429_NAT_AWARE_RATE_LIMIT_REPORT.md). Deployment-specific instructions: [active Nginx rollout](docs/SQR_429_ACTIVE_NGINX_ROLLOUT.md).
+Status: NAT patch `7707120f` is published and its main CI, including live Redis, passed. Release Verification then exposed an orchestration-only sixth-login failure; the follow-up is described in section 17 and awaits hosted reverification. The user authorized commit/push of this follow-up on 2026-09-10. Workflow dispatch and production deployment/reload remain outside that authorization. Full 22-part report: [SQR 429 report](docs/SQR_429_NAT_AWARE_RATE_LIMIT_REPORT.md). Deployment-specific instructions: [active Nginx rollout](docs/SQR_429_ACTIVE_NGINX_ROLLOUT.md).
 
 ## 1. Permanent goal
 
@@ -14,7 +14,7 @@ Server checkout is clean `main` at `252d8d9d3bacf3bb4ef6ac839856d0122fa6c85a`. P
 
 ## 3. Repository state
 
-Branch `main`, implementation baseline `252d8d9d3bacf3bb4ef6ac839856d0122fa6c85a`, initially clean and synced to origin. All 46 patch files belong to this task; no pre-existing unrelated changes. Commit/push of this patch is now authorized. Run `git status`, `git log -1` and inspect the matching CI run for authoritative publication/verification state; do not infer deployment from a Git push.
+Branch `main`, implementation baseline `252d8d9d3bacf3bb4ef6ac839856d0122fa6c85a`. The original 46-file NAT patch was committed/pushed as `7707120fd6ebc6c5a94a6d6112bd09efbb88ce51`; working tree was clean before the nine-file release follow-up in section 17. Run `git status`, `git log -1` and inspect the matching CI run for authoritative publication/verification state; do not infer deployment from a Git push.
 
 ## 4. Root causes
 
@@ -54,7 +54,7 @@ User buckets use SHA-256 stable IDs, fixed scope + reads/writes/uploads. Read qu
 
 ## 9. Redis
 
-Healthy production stores preserve atomic Lua increments, stable hashed namespaced keys and expiry. Configured Redis failures now produce safe503 + Retry-After5 instead of granting memory quotas. Deterministic shared-backend tests verify four-worker counts, isolation, expiry and failure recovery. No live Redis daemon/CLI/Docker/WSL is installed locally (WSL executable reports subsystem not installed). Do not report live Redis testing as passed. No Redis flush or production mutation performed.
+Healthy production stores preserve atomic Lua increments, stable hashed namespaced keys and expiry. Configured Redis failures now produce safe503 + Retry-After5 instead of granting memory quotas. Deterministic shared-backend tests verify four-worker counts, isolation, expiry and failure recovery. No live Redis daemon/CLI/Docker/WSL is installed locally, but the mandatory live Redis concurrency step passed in [CI run 34369781799](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34369781799/job/102527724116) on the exact published NAT SHA. This external blocker is resolved. No Redis flush or production mutation performed.
 
 ## 10. Frontend
 
@@ -87,13 +87,13 @@ Current build PASS: `sqr-1.0.0-252d8d9d3bac-20260909T130954Z` dirtysource; produ
 
 1. Read this handoff/report, inspect actual git state. Do not repeat completed suites unless code changes.
 2. Active Nginx and source/runtime evidence are already reviewed; the edge producer covering `/api/me` is identified. Follow `docs/SQR_429_ACTIVE_NGINX_ROLLOUT.md` for the exact three active files and preserved controls. No further producer-identification blocker remains; optional correlated logs can attribute individual historical events.
-3. Run the isolated liveRedis test against a real **test** instance: `SQR_RATE_LIMIT_TEST_REDIS_URL=redis://127.0.0.1:6379/0 SQR_RATE_LIMIT_TEST_REDIS_REQUIRED=1 node --import tsx --test server/http/tests/rate-limit-live-redis.integration.test.ts` (POSIX syntax; set env normally on PowerShell). Never use production Redis. CI supplies this on push; the user has now authorized commit/push. Verify the result for the exact pushed SHA, not a prior run.
+3. Live Redis passed for `7707120f`; do not keep treating it as unexecuted. Section 17's follow-up is locally verified and commit/push is authorized. Inspect the new CI run, then a scheduled or separately authorized Release Verification for that exact new SHA. Never use production Redis for integration tests.
 4. Validate reviewed active Nginx changes with `nginx -t` in its actual environment before any separately authorized reload/deploy. No local liveNginx available, only contracts passed.
 5. Resolve any evidence-backed remaining defect in scope, rerun affected gates, update report/handoff/goal. Do not declare COMPLETE until required live Redis verification passes. Clearly distinguish local implementation verification from operator-side deployment and production validation.
 
 ## 14. Do not repeat
 
-Do not redo initial root-cause audit or baseline reproductions. Do not reset/discard work, deploy/reload production, log `.env` or credentials, install global OS tooling without need, load-test production, disable Redis/security, or change Billing formulas/Collection/RBAC. Commit/push of the current patch is authorized; no force push. Use apply_patch; node PATH `C:\Program Files\nodejs`; heavy suites sequential on this low-memory Windows host.
+Do not redo initial root-cause audit or baseline reproductions. Do not reset/discard work, deploy/reload production, log `.env` or credentials, install global OS tooling without need, load-test production, disable Redis/security, or change Billing formulas/Collection/RBAC. Commit/push of the section 17 follow-up is now authorized, without workflow dispatch or production action. No force push. Use apply_patch; node PATH `C:\Program Files\nodejs`; heavy suites sequential on this low-memory Windows host.
 
 ## 15. Scope lock
 
@@ -106,9 +106,26 @@ Rate-limit identity/quota behavior, 429 response handling, directly proven retry
 - [x] No duplicate auth side effects, spoofing/security regressions,20/50/100 real HTTP middleware tests.
 - [x] Redis shared contract/failure handling, strict2FA/recovery/admin and frontend retry tests.
 - [x] Config validation and Nginx example contracts.
-- [ ] Live Redis verification / required CI test where available.
+- [x] Live Redis verification / required CI test passed for `7707120f`.
 - [x] All available relevant regressions and final typecheck/lint/build complete.
 - [x] Final22-part report and diff/secret audit, with explicit external blockers.
 - [x] Active edge 429 producer covering `/api/me` identified from actual deployment evidence; historical per-request attribution remains unproven without correlated logs.
+- [ ] Release orchestration follow-up published and Release Verification rerun successfully.
 
 Do not mark COMPLETE while unchecked requirements remain.
+
+## 17. Release Verification follow-up (2026-09-10 local time)
+
+[Run 34371975746](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34371975746/job/102535195576) failed on `7707120f` at the final `monitor:stale-conflicts` login: HTTP 429 `AUTH_RATE_LIMITED`, retryAfterMs 900000. All earlier gates, UI smoke, SQL performance probes and backup drill passed. Local evidence: ignored `artifacts/release-34371975746-job.log`, lines 6584 onward.
+
+The same account logged in six times within roughly three minutes: preflight, visual, accessibility, UI smoke, backup drill, monitor. The strict five/account/15-minute guard intentionally counts successful attempts too. Main CI lacks the final drill/monitor pair and passed, including live Redis and CodeQL. Do not relax account/IP quotas, change fingerprints, reset counters or suppress monitor failures.
+
+Local fix extracts snapshot collection into `scripts/lib/stale-conflict-monitor.mjs`. Standalone monitor retains login/loop/logout. Optional `DRILL_MONITOR_OUTPUT_FILE` makes the drill call the same snapshot helper with its existing in-memory authenticated request before backup cleanup/logout; failures still fail the gate. Release passes the mandatory artifact path to the drill and no longer starts a sixth login process. Normal flow uses five logins. If UI smoke needed its one timeout retry, readiness waits out the remaining account window (anchored conservatively after preflight) before the drill. No token sharing through files, arguments or environment. Snapshot now precedes deletion of the temporary drill backup, so that deletion is not included in its counters. The release snapshot deliberately targets the same app/account as the drill; separate MONITOR overrides remain for standalone use.
+
+Regression coverage: CLI fixture with a five-login cap, authenticated cookies and CSRF; required snapshot failure preserves nonzero exit plus cleanup/logout; optional feature off; standalone monitor behavior; unavailable-role diagnostics; release wiring and retry-window contracts. Completed checks:
+
+- `npm run test:scripts`: 409 passed (358 JavaScript + 51 TypeScript), 0 failed/skipped; `artifacts/release-34371975746-scripts-regression.log`.
+- `node --import tsx --test server/middleware/tests/rate-limit.test.ts`: 30 passed, 0 failed/skipped; `artifacts/release-34371975746-account-limit-regression.log`.
+- Syntax checks for all four changed/new runtime scripts, repository hygiene, secret scan, changed-file secret guard and `git diff --check`: passed. Independent read-only implementation review found no blocking issues.
+
+This follow-up has nine changed/new files and no backend/frontend runtime changes. Do not rerun the entire prior NAT implementation suites unless code changes. Commit/push is authorized; use Git and matching workflow results to confirm its publication state. Hosted Release Verification still needs a scheduled or separately authorized run on the exact new SHA; it has not yet verified this follow-up. No production action performed.

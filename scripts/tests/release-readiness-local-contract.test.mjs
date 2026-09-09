@@ -134,6 +134,33 @@ test("release readiness captures the Collection V9 query-plan probe", () => {
   assert.ok(v9Index < drillIndex);
 });
 
+test("release readiness requires the monitor snapshot inside the drill's existing session", () => {
+  const script = readReleaseReadinessScript();
+  const drillScript = readFileSync(path.join(repoRoot, "scripts", "disaster-recovery-drill.mjs"), "utf8");
+
+  assert.match(script, /await runNpm\(\["run", "dr:drill"\], \{\s*env: \{\s*\.\.\.env,\s*DRILL_MONITOR_OUTPUT_FILE: path\.join\(artifactsDir, "monitor-stale-conflicts\.json"\)/);
+  assert.doesNotMatch(script, /runNpm\(\["run", "monitor:stale-conflicts"\]/);
+  assert.match(drillScript, /await captureStaleConflictSnapshot\(\{\s*request,\s*baseUrl,\s*outputFile: monitorOutputFile/);
+  assert.ok(drillScript.indexOf("await captureStaleConflictSnapshot") < drillScript.indexOf("} finally {"));
+  assert.ok(drillScript.indexOf("} finally {") < drillScript.indexOf('await request("/api/activity/logout"'));
+});
+
+test("release readiness respects the account login window if UI smoke needs its timeout retry", () => {
+  const script = readReleaseReadinessScript();
+  const limiter = readFileSync(path.join(repoRoot, "server", "middleware", "rate-limit.ts"), "utf8");
+
+  assert.match(limiter, /login: createJsonRateLimiter\(\{\s*windowMs: 15 \* 60 \* 1000,\s*max: 5,/);
+  assert.match(script, /const AUTH_LOGIN_RATE_WINDOW_MS = 15 \* 60 \* 1000/);
+  assert.match(script, /if \(status === 0\) \{\s*return attempt;/);
+  assert.match(script, /const smokeAttempts = await runUiSmokeWithTimeoutRetry\(env\)/);
+  assert.match(script, /const loginWindowReadyAt = Date\.now\(\) \+ AUTH_LOGIN_RATE_WINDOW_MS \+ 1_000/);
+  assert.match(script, /if \(smokeAttempts > 1\) \{\s*const loginCooldownMs = Math\.max\(0, loginWindowReadyAt - Date\.now\(\)\);\s*if \(loginCooldownMs > 0\)/);
+  assert.match(script, /await wait\(loginCooldownMs\)/);
+  assert.ok(script.indexOf('["run", "smoke:preflight"]') < script.indexOf("const loginWindowReadyAt"));
+  assert.ok(script.indexOf("const loginWindowReadyAt") < script.indexOf('["run", "test:e2e:visual"]'));
+  assert.ok(script.indexOf("await wait(loginCooldownMs)") < script.indexOf('["run", "dr:drill"]'));
+});
+
 test("release readiness isolates production runtime settings from regression suites", () => {
   const script = readReleaseReadinessScript();
   const suiteNames = [

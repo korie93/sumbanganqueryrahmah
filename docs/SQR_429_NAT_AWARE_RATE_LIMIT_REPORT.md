@@ -1,6 +1,6 @@
 # SQR 429 NAT-aware rate limiting — engineering and deployment report
 
-Local implementation and available quality gates completed on baseline `252d8d9d`. The user authorized commit/push on 2026-09-09 so live Redis CI can run; production deployment/reload remains unauthorized and unperformed. External verification remains pending as detailed in section 22. See [continuation handoff](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md) for resumption steps.
+Local implementation completed on baseline `252d8d9d` and was published as `7707120f`. Main CI, including mandatory live Redis verification, passed. A subsequent Release Verification failure revealed six scripted logins sharing the strict five-attempt account window; an orchestration-only local follow-up is pending publication/reverification (section 22). Production deployment/reload remains unauthorized and unperformed. See [continuation handoff](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md) for resumption steps.
 
 ## 1. Root cause
 
@@ -138,4 +138,6 @@ Final diff reviewed by root with independent auth/Redis/frontend/login audits. N
 
 ## 22. Final verdict
 
-PENDING LIVE CI — Live shared-store verification still requires an isolated Redis instance or the authorized CI run. The active Nginx 429 producer covering `/api/me` is now identified, and deployment-specific edits are documented. Local implementation/checks are complete; active Nginx validation and post-deployment verification have not been performed. Commit/push is now authorized; no production deployment/reload is authorized.
+PENDING RELEASE REVERIFICATION — The [main CI run for `7707120f`](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34369781799) passed, including its mandatory live Redis concurrency step. The active Nginx 429 producer covering `/api/me` is identified and deployment-specific edits are documented. [Release Verification 34371975746](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34371975746) subsequently failed only when its final monitor process attempted the sixth login for the same account within the strict five/15-minute window.
+
+The follow-up shares the backup drill's existing authenticated in-memory HTTP client with the monitor snapshot, retaining both checks and finally cleanup/logout. Standalone monitoring is unchanged; no token files, quota changes, counter resets or skipped failures are introduced. A timeout-retried UI smoke respects the remaining account window before the drill. See handoff section 17 for tests and next steps. The user authorized commit/push of this follow-up on 2026-09-10; confirm publication using Git. Hosted Release Verification still needs a scheduled or separately authorized run on the exact new SHA. No workflow dispatch or production deployment/reload is authorized.

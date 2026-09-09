@@ -80,6 +80,6 @@ If validation fails, restore only reviewed backups and validate again; do not re
 
 ## Remaining verification
 
-Live Redis integration must still pass against an isolated test instance or mandatory CI Redis service, never production Redis. Active Nginx syntax/reload and post-deployment behavior remain operator-side verification, not locally proven results.
+The mandatory live Redis integration passed for NAT patch `7707120f` in [CI run 34369781799](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34369781799). A release-script login-budget follow-up still awaits publication and hosted Release Verification; see the continuation handoff. Never use production Redis for integration testing. Active Nginx syntax/reload and post-deployment behavior remain operator-side verification, not locally proven results.
 
 Local checks after this evidence review: all 13 Nginx/live-Redis-CI contract tests passed (0 skipped), the changed-file secret guard passed, and `git diff --check` passed. These static contracts do not substitute for live Redis integration or `nginx -t` on the actual installation.
