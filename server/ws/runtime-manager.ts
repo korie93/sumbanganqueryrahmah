@@ -1,4 +1,5 @@
 import type { RawData, WebSocket } from "ws";
+import { createHash } from "node:crypto";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { isSessionJwtRevoked as checkSessionJwtRevocation } from "../auth/session-revocation-store";
 import { logger } from "../lib/logger";
@@ -20,6 +21,7 @@ import {
   MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS_PER_IP,
+  DEFAULT_RUNTIME_WS_MAX_UPGRADE_ATTEMPTS_PER_IP,
   DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
   DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES,
   DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS,
@@ -139,7 +141,14 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       : new Map<string, WebSocket>()
   );
   const heartbeatIntervalMs = normalizeRuntimeWsHeartbeatIntervalMs(options.heartbeatIntervalMs);
-  const upgradeRateLimiter = options.upgradeRateLimiter ?? createRuntimeWsUpgradeRateLimiter();
+  const upgradeRateLimiter = options.upgradeRateLimiter ?? createRuntimeWsUpgradeRateLimiter({
+    maxAttempts: DEFAULT_RUNTIME_WS_MAX_UPGRADE_ATTEMPTS_PER_IP,
+    now,
+  });
+  const anonymousUpgradeRateLimiter = createRuntimeWsUpgradeRateLimiter({ now });
+  const activityUpgradeRateLimiter = createRuntimeWsUpgradeRateLimiter({ now });
+  const userUpgradeRateLimiter = createRuntimeWsUpgradeRateLimiter({ now });
+  const pendingConnectionCountByActivity = new Map<string, number>();
   const messageRateLimiterFactory =
     options.messageRateLimiterFactory ?? (() => createRuntimeWsMessageRateLimiter());
   const maxConnections = normalizePositiveInteger(options.maxConnections, DEFAULT_RUNTIME_WS_MAX_CONNECTIONS);
@@ -236,6 +245,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     unsubscribeSharedBus?.();
     void sharedBus?.close();
     upgradeRateLimiter.clear();
+    anonymousUpgradeRateLimiter.clear();
+    activityUpgradeRateLimiter.clear();
+    userUpgradeRateLimiter.clear();
+    pendingConnectionCountByActivity.clear();
     activeConnectionCountByIp.clear();
     withSharedClosePublishSuppressed(() => {
       closeRuntimeWebSocketServerState({
@@ -351,6 +364,20 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     let payloadWindowBytes = 0;
     const messageRateLimiter = messageRateLimiterFactory();
     let activeIpConnectionReleased = false;
+    let pendingActivityKey: string | null = null;
+
+    const releasePendingActivityConnection = () => {
+      if (!pendingActivityKey) {
+        return;
+      }
+      const remaining = (pendingConnectionCountByActivity.get(pendingActivityKey) ?? 1) - 1;
+      if (remaining <= 0) {
+        pendingConnectionCountByActivity.delete(pendingActivityKey);
+      } else {
+        pendingConnectionCountByActivity.set(pendingActivityKey, remaining);
+      }
+      pendingActivityKey = null;
+    };
 
     const releaseActiveIpConnection = () => {
       if (activeIpConnectionReleased) {
@@ -427,6 +454,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       } finally {
         lifecycleRegistry.deregisterSocket(ws);
         releaseActiveIpConnection();
+        releasePendingActivityConnection();
         socketEntry = null;
         payloadWindowBytes = 0;
         payloadWindowStartedAt = now();
@@ -570,18 +598,27 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     ws.once("error", handleSocketError);
     lifecycleRegistry.trackSocket(ws, cleanupSocket);
 
+    const rejectUnauthenticatedConnection = (code?: number, reason?: string) => {
+      // Failed authentication has its own strict IP bucket. Checking it only
+      // after authentication fails keeps a bad cookie from blocking NAT peers.
+      const allowed = anonymousUpgradeRateLimiter.consume(upgradeRateLimitKey);
+      cleanupSocket();
+      closeSocketIfNeeded(
+        allowed ? code : RUNTIME_WS_CLOSE_TRY_AGAIN_LATER,
+        allowed ? reason : "rate limited",
+      );
+    };
+
     const url = parseRuntimeWebSocketHandshakeUrl(req);
     if (!url) {
-      cleanupSocket();
-      closeSocketIfNeeded(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "malformed handshake URL");
+      rejectUnauthenticatedConnection(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "malformed handshake URL");
       return;
     }
     if (url.searchParams.has("token")) {
       logger.warn("WebSocket rejected query-string session token", {
         origin: req.headers.origin || null,
       });
-      cleanupSocket();
-      closeSocketIfNeeded();
+      rejectUnauthenticatedConnection();
       return;
     }
 
@@ -594,27 +631,41 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         host: req.headers.host || null,
         trustForwardedHeaders,
       });
-      cleanupSocket();
-      closeSocketIfNeeded();
+      rejectUnauthenticatedConnection();
       return;
     }
 
     const token = readAuthSessionTokenFromHeaders(req.headers);
 
     if (!token) {
-      cleanupSocket();
-      closeSocketIfNeeded();
+      rejectUnauthenticatedConnection();
       return;
     }
 
     try {
       const sessionClaims = extractWsSessionClaims(token, secret);
       if (!sessionClaims) {
-        cleanupSocket();
-        closeSocketIfNeeded();
+        rejectUnauthenticatedConnection();
         return;
       }
       activityId = sessionClaims.activityId;
+
+      // Only verified claims may select a session bucket. Neither a supplied
+      // user header nor an unverified JWT can allocate authentication work.
+      const activityRateLimitKey = createHash("sha256").update(activityId).digest("hex");
+      if (!activityUpgradeRateLimiter.consume(activityRateLimitKey)) {
+        cleanupSocket();
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "session rate limited");
+        return;
+      }
+      const pendingActivityCount = pendingConnectionCountByActivity.get(activityRateLimitKey) ?? 0;
+      if (pendingActivityCount >= MAX_RUNTIME_WS_CONNECTIONS_PER_USER) {
+        cleanupSocket();
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "session connection limit reached");
+        return;
+      }
+      pendingActivityKey = activityRateLimitKey;
+      pendingConnectionCountByActivity.set(activityRateLimitKey, pendingActivityCount + 1);
 
       let sessionRevoked: boolean;
       try {
@@ -659,9 +710,21 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       const userKey = getActivityUserKey(activity);
+      if (!userKey) {
+        rejectUnauthenticatedConnection(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "session invalid");
+        return;
+      }
+      // User identity comes from the active database session, after the
+      // revocation check, so different sessions cannot multiply a user's quota.
+      const userRateLimitKey = createHash("sha256").update(userKey).digest("hex");
+      if (!userUpgradeRateLimiter.consume(userRateLimitKey)) {
+        cleanupSocket();
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "user rate limited");
+        return;
+      }
+      releasePendingActivityConnection();
       if (
-        userKey
-        && countTrackedUserConnections(socketEntriesByActivity, userKey, activityId)
+        countTrackedUserConnections(socketEntriesByActivity, userKey, activityId)
           >= MAX_RUNTIME_WS_CONNECTIONS_PER_USER
       ) {
         logger.warn("WebSocket rejected because the user connection limit was reached", {

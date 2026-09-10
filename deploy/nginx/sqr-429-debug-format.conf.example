@@ -1,0 +1,33 @@
+# HTTP-context replacement for the existing sqr-429-debug-format.conf only.
+# Back up the active file outside conf.d/sites-enabled, validate with nginx -t,
+# and retain the existing conditional access_log during office verification.
+# Request paths are recorded without query strings, bodies or auth headers.
+map $status $sqr_log_429 {
+    default 0;
+    429 1;
+}
+
+# Record the successful-traffic denominator only for API and runtime sockets.
+map $uri $sqr_log_nat_traffic {
+    default 0;
+    ~^/api/ 1;
+    /ws 1;
+    /telemetry/web-vitals 1;
+}
+
+log_format sqr_429_debug
+    '$remote_addr [$time_local] '
+    '"$request_method $uri $server_protocol" '
+    'status=$status '
+    'upstream_status=$upstream_status '
+    'request_time=$request_time '
+    'upstream_response_time=$upstream_response_time '
+    'upstream_addr=$upstream_addr '
+    'edge_rate=$limit_req_status '
+    'edge_connection=$limit_conn_status '
+    'request_id=$request_id';
+
+# Keep this directive in the existing SQR HTTPS server, not this HTTP include:
+# access_log /var/log/nginx/sqr-429-debug.log sqr_429_debug if=$sqr_log_429;
+# access_log /var/log/nginx/sqr-nat-access.log sqr_429_debug if=$sqr_log_nat_traffic;
+# Include the additional log in the existing rotation policy and restrict access.

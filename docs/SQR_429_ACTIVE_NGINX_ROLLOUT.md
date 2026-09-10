@@ -1,85 +1,170 @@
 # SQR shared-NAT: active Nginx findings and targeted rollout
 
-Prepared from the user's `nginx-active-sanitized.txt` and source/runtime output received on 2026-09-09. Commit/push of the application patch is now authorized for CI verification. Production instructions below remain operator-only: no reload or deployment has been authorized or performed.
+Current checkpoint: 2026-09-10. Production access and target verification are complete. Privacy-conscious diagnostics were reloaded at approximately 12:48 UTC; the five admission changes below were backed up and applied at 13:29:31 UTC (21:29:31 Malaysia time), then syntax-validated and reloaded successfully. Search and WebSocket application corrections still require a new verified release, and real office acceptance is outstanding. [Handoff section 19](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md#19-authenticated-production-work-authoritative-current-state) holds the live execution record.
 
-## Confirmed findings
+## Verified production baseline
 
-The active HTTPS SQR virtual host includes `/etc/nginx/snippets/sqr-api-throttle.conf`. Its `location /api/` handles `/api/me`, settings, analytics, heartbeat, collection and Billing OSP routes, except more-specific login/import/telemetry locations.
+SSH succeeds as `deploy` on the confirmed host with strict pinned host-key verification. The source checkout is clean `main` at `6cbada4599dd0665e9b47634bbfd9195555af46c`; local/public readiness pass and the version endpoint matches that SHA. [Release Verification 34413870959](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34413870959) passed for this release.
 
-| Active policy | Current shared-IP value | Definition |
+| Runtime item | Inspected value |
+| --- | --- |
+| Current release | `/home/deploy/apps/sqr-runtime/releases/sqr-1.0.0-6cbada4599dd-20260909T225140Z` |
+| Previous release | `/home/deploy/apps/sqr-runtime/releases/sqr-1.0.0-252d8d9d3bac-20260909T051334Z` |
+| PM2 | `sqr` online; script `current/dist-local/server/cluster-local.js`, cwd `current`; one Node process in fork mode |
+| Host | 2 vCPU; 3910 MiB RAM, about 2002 MiB available |
+| Quiet-time process use | Node RSS about 239 MB; CPU about 1.5% |
+| Nginx | 2 workers, 768 connections each; service LimitNOFILE 524288 |
+| Application controls | Loopback listener `127.0.0.1:5000`; `TRUSTED_PROXIES=127.0.0.1/32`; one worker; PostgreSQL pool 10; Redis rate-limit store |
+
+These are quiet-time observations, not demonstrated load capacity. Preserve existing Node/private CA environment settings; never print credentials or use production Redis for integration tests.
+
+The HTTPS site's `/api/` location comes from `/etc/nginx/snippets/sqr-api-throttle.conf`. It covers me/settings/analytics/heartbeat/Collection/Billing and Search except more-specific locations. `sites-enabled/sqr-system` resolves to `/etc/nginx/sites-available/sqr-system`.
+
+The inspected pre-admission-change API limit is 30/minute, burst 100 and connection cap 80; both login aliases have 10/minute, burst 5 and cap 10. They explicitly reject with 429. Burst does not raise sustained refill, so the office shares only 0.5 API requests/second before authentication. [Nginx request limiting](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html).
+
+Count-only inspection found 1,334 debug 429 entries between 16:18:00 and 18:59:11 +0800 on 2026-09-10. All had `upstream_status=-` and one hashed source; the error log contained 1,334 `sqr_api_per_ip` rejections. Endpoints included six analytics routes, visibility, maintenance, heartbeat, app-config, Collection and Search. This attributes the inspected events to the edge API bucket. It does not provide the successful-traffic denominator or prove every historical 429 had that cause. Keep the source IP private; no office allowlist is needed.
+
+## Diagnostics already deployed
+
+The 12:48 UTC deployment backed up these two files under `/etc/nginx/backups/sqr-nat-diagnostics-20260910T124820Z`:
+
+- `/etc/nginx/conf.d/sqr-429-debug-format.conf` as `sqr-429-debug-format.conf`.
+- `/etc/nginx/sites-available/sqr-system` as `sqr-system`.
+
+The diagnostic format records method + URI without query strings, upstream status/timings and limiter outcomes. The existing conditional 429 log remains enabled. A `sqr_log_nat_traffic` map and site-scoped `/var/log/nginx/sqr-nat-access.log` now supply ordinary API, `/ws` and legacy telemetry attribution. This corrects the earlier conditional-only site's missing successful-traffic denominator. Do not log cookies, Authorization, bodies or query strings.
+
+Validation passed after each edit and reload; public readiness passed. The new log is 0640 `www-data:adm` and the existing Nginx rotation covers it daily with 14 compressed rotations. An earlier 12:47:51 UTC attempt restored its baseline after a conservative empty-log assertion; its separate backup is `sqr-nat-diagnostics-20260910T124751Z`. No invalid configuration was reloaded or log contents removed.
+
+At this checkpoint the new log contains health-probe traffic only. No active 30-person office interval or production latency/capacity acceptance has been observed.
+
+## Deployed admission changes: five active files
+
+The initial API ceiling is 100 requests/second, burst 300, connections 240. It is a monitored aggregate flood guard, not evidence that this 2-vCPU host and 10-connection database pool can sustain 100 expensive requests/second. The earlier 200/second, burst 2000, cap 1000 proposal and generic example are not this installation's rollout values.
+
+Source-derived polling gives approximately 14 Dashboard calls/minute/user: 30 active Dashboard users average 7 requests/second. Maintenance adds about 2/second for that group and heartbeat about 0.5/second, before navigation, reads and writes. Thirty users making ten startup calls produce 300 requests; spreading that over ten seconds averages 30/second. These estimates justify leaving bounded room above ordinary modeled traffic. They are not measurements of current office behavior. `nodelay` may admit burst traffic immediately, so monitor latency, CPU/RAM, connections and database pressure. [Nginx burst semantics](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html).
+
+| Control | Inspected baseline | Selected initial policy |
 | --- | --- | --- |
-| API request rate | 30/minute | `/etc/nginx/conf.d/sqr-telemetry-rate-limit.conf` |
-| API excess burst / connection cap | 100 / 80 | `/etc/nginx/snippets/sqr-api-throttle.conf` |
-| Both login aliases | 10/minute, burst 5, connections 10 | zone in conf.d; locations in `/etc/nginx/sites-enabled/sqr-system` |
+| API | 30/minute; burst 100; connections 80 | 100/second; burst 300; connections 240 |
+| Both login aliases | 10/minute; burst 5; connections 10 | 5/second; burst 100; connections 40 in a separate auth zone |
+| WebSocket | 30 upgrades/minute; burst 20; connections 20 | 10 upgrades/second; burst 100; connections 200 in the existing WS zone |
+| Web-vitals telemetry | 60/minute; burst 20; connections 10 | 5/second; burst 100; connections 20 in a separate telemetry zone |
+| Imports | 10/minute; burst 5; connections 3 | Unchanged; body 100M and timeout 360s retained |
 
-General API and login locations explicitly set `limit_req_status 429` and `limit_conn_status 429`. Nginx is therefore a confirmed active 429-producing layer before `/api/me`, despite the app's exemption for that exact GET route. Burst 100 does not increase the sustained 30/minute refill rate. All staff behind one IP share these network quotas. [Nginx request limiting](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html), [connection limiting](https://nginx.org/en/docs/http/ngx_http_limit_conn_module.html).
+Nginx connection counts are keyed by their configured zone: API/login/telemetry previously reused `sqr_conn_per_ip`, so the smaller auth/telemetry caps could reject while other API requests were active. Dedicated auth and telemetry connection zones separate those counts. Each concurrent HTTP/2 request counts separately for connection limiting. [Nginx connection limiting](https://nginx.org/en/docs/http/ngx_http_limit_conn_module.html).
 
-In the supplied server snapshot, source checkout is clean on `main` at `252d8d9d3bacf3bb4ef6ac839856d0122fa6c85a`. PM2 is online under `sqr-runtime/current`; that symlink resolves to release `sqr-1.0.0-252d8d9d3bac-20260909T051334Z`. This supports the baseline release identity but is not binary checksum attestation. Package-lock dependency versions do not identify an application build. The NAT fix is not deployed; publishing it to Git does not replace this runtime release.
+The reviewed deployment changed only these five active files, preserving 429 directives, upstreams, timeouts, Certbot settings, private upload protection and all unrelated locations:
 
-Relevant active forwarded header names are correctly spelled; upstream is 127.0.0.1:5000. Preserve `TRUSTED_PROXIES=127.0.0.1/32`. No correlated upstream/access logs were included: the active producer/path mapping is proven, but the proportion of historical 429s from each layer is unknown.
+1. `/etc/nginx/conf.d/sqr-telemetry-rate-limit.conf`: existing request zones now use API `sqr_api_per_ip` 100r/s, auth `sqr_auth_per_ip` 5r/s, WS `sqr_ws_upgrade_per_ip` 10r/s and telemetry `sqr_telemetry_per_ip` 5r/s. Keys and existing sizes are preserved. New connection zones `sqr_auth_conn_per_ip:10m` and `sqr_telemetry_conn_per_ip:10m` each use `$binary_remote_addr`; the API, import and WS zones remain.
+2. `/etc/nginx/snippets/sqr-api-throttle.conf`: API burst 300 with `nodelay`, `limit_conn sqr_conn_per_ip 240`.
+3. `/etc/nginx/sites-available/sqr-system`: both exact locations `/api/login` and `/api/auth/login` use auth burst 100 with `nodelay` and `limit_conn sqr_auth_conn_per_ip 40`. The diagnostic access-log line remains.
+4. `/etc/nginx/snippets/sqr-ws-throttle.conf`: WS burst 100 with `nodelay`, `limit_conn sqr_ws_conn_per_ip 200`, and `proxy_set_header X-Forwarded-For $remote_addr;`. This single-edge installation overwrites client-supplied XFF because the WS consumer currently selects its first address. The application listener remains loopback-only and proxy trust narrow.
+5. `/etc/nginx/snippets/sqr-web-vitals-telemetry.conf`: telemetry burst 100 with `nodelay`, `limit_conn sqr_telemetry_conn_per_ip 20`; both existing endpoint locations and body/proxy controls remain.
 
-## Three targeted edits after release approval
+The exact admission backup is `/etc/nginx/backups/sqr-nat-edge-20260910T132931Z`, containing `zones.conf`, `api.conf`, `site.conf`, `ws.conf` and `telemetry.conf`. A dry-run diff was reviewed. Initial validation, validation after each of the five edits and final `nginx -t` all passed; reload and service-active checks passed. Local/public readiness passed afterward, Redis answered PONG, and unauthenticated `/api/me` remained401. This changes edge admission only; the live application remains `6cbada45`.
 
-First deploy the matching tested application fix through the normal immutable-release process, after mandatory live Redis CI passes. Pulling source alone does not replace PM2's current release. Nginx-only tuning leaves the old adaptive/login application bottlenecks intact.
+Do not install `deploy/nginx/sqr.conf.example` over this split-file deployment. Its thresholds and import restrictions differ, and wholesale replacement risks duplicate definitions or loss of installation-specific settings. Neither Nginx worker counts nor connection/file-descriptor limits are changed by this patch.
 
-Back up the three affected files and any resolved symlink targets. Resolve the virtual-host target with `readlink -f /etc/nginx/sites-enabled/sqr-system`; edit that existing target. If values changed since the supplied snapshot, review the new diff first.
+## Application corrections accompanying the edge rollout
 
-### 1. Existing zone definitions
+Production `6cbada45` already includes the principal authenticated adaptive/login quota correction and Retry-After fix. It does not yet include these local follow-ups:
 
-In `/etc/nginx/conf.d/sqr-telemetry-rate-limit.conf`, replace only existing API/auth zone lines:
+- Search/import-read/source-match rate limiting uses a hash of the server-authenticated user ID instead of one IP bucket; the limit remains 10 requests/10 seconds. Anonymous fallback remains normalized IP, and the configured Redis store still fails closed.
+- The WebSocket manager's aggregate defaults become 200 connections/IP and 600 upgrade attempts/IP/minute. Strict buckets remain 30/minute for anonymous failures, signed activity and authenticated database user; per-user active connections remain 5 and the process-wide cap remains 1000. Signed-activity checks and bounded pending reservations precede asynchronous authentication; user identity is selected only after active-session and revocation checks. Live upgrade buckets are not evicted to make room for rotating attacker keys.
+- These WebSocket quotas remain local process state. The verified production topology has one worker; this change does not introduce a new Redis-backed WS quota store or prove multi-worker aggregate enforcement. Revisit WS coordination before increasing worker count.
+- Telemetry intentionally retains application sampling/drop guards: web-vitals 60/IP/minute for browser-provenance traffic (stricter anonymous handling remains), client errors 20/IP/minute. Excess samples may receive empty 204 responses. Higher edge admission removes a small shared transport bucket; it does not promise 100% telemetry capture.
 
-```nginx
-limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=200r/s;
-limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/s;
-```
+Deploy Search and WS only through a new exact-SHA approved immutable artifact after CI, required isolated live Redis and Release Verification pass. A source pull or local dirty build does not promote PM2's release. Do not redeploy `6cbada45` merely to change Nginx.
 
-Update the old 30/min comment to describe an aggregate flood guard. Do not append duplicate zones or change their keys/sizes.
+## Exact five-file admission backup and rollback
 
-### 2. Existing API snippet
+Run on the verified host in Bash. Before editing, confirm all five files are regular files and the enabled site resolves to the known target. The directory is outside wildcard-loaded includes; `mkdir` fails on timestamp collision so an old backup cannot be overwritten. Record the generated directory literally and retain it for rollback.
 
-In `/etc/nginx/snippets/sqr-api-throttle.conf`, change only these admission values:
+~~~bash
+set -euo pipefail
+sudo nginx -t
+test "$(readlink -f /etc/nginx/sites-enabled/sqr-system)" = /etc/nginx/sites-available/sqr-system
+for SQR_NGINX_TARGET in \
+    /etc/nginx/conf.d/sqr-telemetry-rate-limit.conf \
+    /etc/nginx/snippets/sqr-api-throttle.conf \
+    /etc/nginx/sites-available/sqr-system \
+    /etc/nginx/snippets/sqr-ws-throttle.conf \
+    /etc/nginx/snippets/sqr-web-vitals-telemetry.conf
+do
+    sudo test -f "$SQR_NGINX_TARGET"
+    sudo test ! -L "$SQR_NGINX_TARGET"
+done
+SQR_NGINX_BACKUP_DIR="/etc/nginx/backups/sqr-nat-edge-$(date -u +%Y%m%dT%H%M%SZ)"
+sudo mkdir -p -- /etc/nginx/backups
+sudo mkdir -m 700 -- "$SQR_NGINX_BACKUP_DIR"
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/conf.d/sqr-telemetry-rate-limit.conf "$SQR_NGINX_BACKUP_DIR/zones.conf"
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/snippets/sqr-api-throttle.conf "$SQR_NGINX_BACKUP_DIR/api.conf"
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/sites-available/sqr-system "$SQR_NGINX_BACKUP_DIR/site.conf"
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/snippets/sqr-ws-throttle.conf "$SQR_NGINX_BACKUP_DIR/ws.conf"
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/snippets/sqr-web-vitals-telemetry.conf "$SQR_NGINX_BACKUP_DIR/telemetry.conf"
+printf 'Admission backup: %s\n' "$SQR_NGINX_BACKUP_DIR"
+~~~
 
-```nginx
-limit_req zone=sqr_api_per_ip burst=2000 nodelay;
-limit_conn sqr_conn_per_ip 1000;
-```
+Stop before editing if any check/copy fails. Review the exact diff, run `sudo nginx -t` after each file edit, then run it again immediately before `sudo systemctl reload nginx`. Never reload invalid configuration. New zone declarations must exist before locations reference them.
 
-Keep 429 status directives, proxy headers/upstream and timeouts unchanged. These tunable ceilings give headroom for the 100-user/10-startup-call verification model; they are not proof this server sustains arbitrary 200 expensive requests/second. User quotas and DB/AI/import/export protections remain authoritative.
+For rollback, use the recorded exact admission directory, verify its contents and metadata, and confirm no later changes would be overwritten. Do not regenerate its timestamp. Restore only these five targets; this preserves the already-deployed diagnostics captured in `site.conf`.
 
-### 3. Both existing exact login locations
+~~~bash
+set -euo pipefail
+SQR_NGINX_BACKUP_DIR=/etc/nginx/backups/sqr-nat-edge-20260910T132931Z
+[[ "$SQR_NGINX_BACKUP_DIR" =~ ^/etc/nginx/backups/sqr-nat-edge-[0-9]{8}T[0-9]{6}Z$ ]] || exit 1
+test "$(readlink -f /etc/nginx/sites-enabled/sqr-system)" = /etc/nginx/sites-available/sqr-system
+for SQR_NGINX_BACKUP_FILE in zones.conf api.conf site.conf ws.conf telemetry.conf
+do
+    sudo test -f "$SQR_NGINX_BACKUP_DIR/$SQR_NGINX_BACKUP_FILE"
+    sudo test ! -L "$SQR_NGINX_BACKUP_DIR/$SQR_NGINX_BACKUP_FILE"
+done
+sudo cp --preserve=mode,ownership,timestamps -- "$SQR_NGINX_BACKUP_DIR/zones.conf" /etc/nginx/conf.d/sqr-telemetry-rate-limit.conf
+sudo cp --preserve=mode,ownership,timestamps -- "$SQR_NGINX_BACKUP_DIR/api.conf" /etc/nginx/snippets/sqr-api-throttle.conf
+sudo cp --preserve=mode,ownership,timestamps -- "$SQR_NGINX_BACKUP_DIR/site.conf" /etc/nginx/sites-available/sqr-system
+sudo cp --preserve=mode,ownership,timestamps -- "$SQR_NGINX_BACKUP_DIR/ws.conf" /etc/nginx/snippets/sqr-ws-throttle.conf
+sudo cp --preserve=mode,ownership,timestamps -- "$SQR_NGINX_BACKUP_DIR/telemetry.conf" /etc/nginx/snippets/sqr-web-vitals-telemetry.conf
+if sudo nginx -t; then
+    sudo systemctl reload nginx
+else
+    printf 'STOP: restored configuration did not validate; do not reload.\n' >&2
+    exit 1
+fi
+~~~
 
-In the resolved SQR virtual-host file, change these values inside **both** `location = /api/login` and `location = /api/auth/login`:
+Restoring these old admission values reinstates the small shared-IP limits and old WS forwarding. Expect renewed NAT failures; retain attribution logs. Do not flush Redis or modify database data.
 
-```nginx
-limit_req zone=sqr_auth_per_ip burst=100 nodelay;
-limit_conn sqr_conn_per_ip 200;
-```
+### Separate diagnostics rollback
 
-Keep paths, 429 directives and proxy settings unchanged. The updated app still enforces 5/account/15 minutes and 500/network/15 minutes by default.
+The diagnostics backup predates admission changes and includes the site file. Only use this separate rollback when those exact pre-diagnostics targets are intended; first unwind or reconcile any later site edits. Applying it alone after the admission rollout would also revert the site's auth changes.
 
-## Preserve deployment-specific protections
+~~~bash
+set -euo pipefail
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-diagnostics-20260910T124820Z/sqr-429-debug-format.conf /etc/nginx/conf.d/sqr-429-debug-format.conf
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-diagnostics-20260910T124820Z/sqr-system /etc/nginx/sites-available/sqr-system
+if sudo nginx -t; then
+    sudo systemctl reload nginx
+else
+    printf 'STOP: diagnostics rollback did not validate; do not reload.\n' >&2
+    exit 1
+fi
+~~~
 
-Do **not** replace this installation wholesale with `deploy/nginx/sqr.conf.example`. That fresh-install example differs from the active split-file layout: duplicate zones/locations break validation, and replacement can remove Certbot settings or relax existing import restrictions.
+### Application rollback
 
-Keep these active values unchanged:
+Before any application promotion record the actual `current` and `previous` symlink targets. The baseline paths above are inspected evidence, but must be refreshed if another release intervenes. Use the immutable rollback script only when the inspected previous release is the intended target:
 
-- Imports 10/minute, burst 5, separate connection cap 3, body 100M and 360s timeout.
-- WebSocket upgrades 30/minute, burst 20, separate active connection cap 20. These can independently produce upgrade 429, but no such incident was supplied; not changed by this API fix.
-- Telemetry 60/minute, burst 20, connection cap 10; preserve exact endpoint controls.
-- Certbot certificates/SSL includes, redirects, other virtual hosts, Redis, trusted proxies and private upload protection.
+~~~bash
+SQR_RELEASE_ROOT=/home/deploy/apps/sqr-runtime bash /home/deploy/apps/sqr-runtime/current/deploy/immutable/rollback-release.sh
+curl -fsS http://127.0.0.1:5000/api/health/version
+~~~
 
-API/login admission ceilings do not change worker/socket capacity. Monitor pressure during controlled rollout; do not change worker limits or load-test production as part of this patch.
+Preserve existing Node/private CA settings and run normal local/public readiness and provenance checks. The rollback script verifies SHA/readiness and does not reverse database migrations. This Search/WS correction requires no migration or dependency change.
 
-## Validation, attribution and rollback
+## Acceptance and remaining gates
 
-After reviewing the diff, the operator must run `sudo nginx -t`. Reload only if validation passes and deployment is authorized: `sudo systemctl reload nginx`. Neither command has been executed by the agent.
+Record the admission backup directory, file diff/checksums, reload time, approved app SHA, actual current/previous release paths, filtered PM2 status and local/public health after each change. Begin with a small group, then observe a defined 30-person office interval using each person's own account. Verify Dashboard, Search, heartbeat, Collection/Billing and simultaneous WebSockets, including ordinary reconnects.
 
-Verify the newly resolved runtime release, then normal reads/login/heartbeat and one collection save from a small group before wider rollout. Monitor app and edge counters separately. The fresh-install example provides a privacy-conscious `sqr_rate_attribution` log format: if adopting it, put its declaration once in http context and the access-log directive only in the existing SQR HTTPS server. Never log cookies, Authorization, bodies or query strings. Upstream status, limiter outcomes and request IDs distinguish future edge 429 from upstream 429. Existing default access logs may not have upstream status.
+Capture total requests and 429 counts by endpoint and edge/upstream origin, Nginx limiter zones, application limiter diagnostics, upstream latency and host/database pressure. Count telemetry transport acceptance separately from intentionally dropped samples. Test abuse limits in isolated tests/staging; do not flood production, brute-force real accounts or manufacture production collections. Zero sampled errors with no office traffic is not acceptance evidence.
 
-If validation fails, restore only reviewed backups and validate again; do not reload invalid config. For an authorized rollback, restore the matched previous app release and these three Nginx files using normal deployment procedures. This reinstates small NAT limits, so renewed 429 pressure is expected. Never flush production Redis or modify database data for rollback.
-
-## Remaining verification
-
-The mandatory live Redis integration passed for NAT patch `7707120f` in [CI run 34369781799](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34369781799). A release-script login-budget follow-up still awaits publication and hosted Release Verification; see the continuation handoff. Never use production Redis for integration testing. Active Nginx syntax/reload and post-deployment behavior remain operator-side verification, not locally proven results.
-
-Local checks after this evidence review: all 13 Nginx/live-Redis-CI contract tests passed (0 skipped), the changed-file secret guard passed, and `git diff --check` passed. These static contracts do not substitute for live Redis integration or `nginx -t` on the actual installation.
+The original live Redis gate passed in CI for `7707120f`, and `6cbada45` passed CI/CodeQL/Release Verification. The extended30-user Redis case and new Search/WS release require their own exact-SHA hosted verification. Local follow-up checks passed: Search/routes100, HTTP NAT36, WS106, scripts410, typecheck, full lint, build and bundle budgets. Counts overlap. No30-person production acceptance or Search/WS application deployment is claimed at this checkpoint.

@@ -1,10 +1,12 @@
 # SQR 429 NAT-aware fix — continuation handoff
 
-Status: NAT patch `7707120f` is published and its main CI, including live Redis, passed. Release Verification then exposed an orchestration-only sixth-login failure; the follow-up is described in section 17 and awaits hosted reverification. The user authorized commit/push of this follow-up on 2026-09-10. Workflow dispatch and production deployment/reload remain outside that authorization. Full 22-part report: [SQR 429 report](docs/SQR_429_NAT_AWARE_RATE_LIMIT_REPORT.md). Deployment-specific instructions: [active Nginx rollout](docs/SQR_429_ACTIVE_NGINX_ROLLOUT.md).
+Latest status (2026-09-10): authenticated SSH/sudo access is working and active production `6cbada45` is confirmed healthy. Privacy-safe Nginx diagnostics were reloaded at 12:48 UTC; bounded API/auth/WS/telemetry edge changes were backed up, validated and reloaded at 13:29:31 UTC. Additional Search and WebSocket app fixes passed local checks and await publication/approved deployment. Section 19 supersedes earlier access-blocker notes; real office acceptance remains outstanding. Full report: [SQR 429 report](docs/SQR_429_NAT_AWARE_RATE_LIMIT_REPORT.md). Deployment instructions: [active Nginx rollout](docs/SQR_429_ACTIVE_NGINX_ROLLOUT.md).
 
 ## 1. Permanent goal
 
 Fix frequent production 429 through verified per-user authenticated quotas, NAT-safe aggregate flood protection, strict anonymous/account/2FA/recovery/admin limits and shared Redis state. Audit every 429 producer, prove middleware ordering, test 20/50/100 shared-IP users, preserve all business/security rules, complete quality gates and deployment/rollback report. Uploaded source: `C:\Users\Administrator\Downloads\CODEX_GPT_6_ASTRA_ULTRA_SQR_429_NAT_AWARE_RATE_LIMIT_PRODUCTION_FIX.md` (user explicitly authorized implementation).
+
+Expanded source approved on 2026-09-10: `C:\Users\Administrator\Downloads\CODEX_GPT_6_ASTRA_ULTRA_SQR_429_NGINX_SQR_API_PER_IP_CONFIRMED_ROOT_CAUSE_FIX.md`. The goal now explicitly includes 30 users, actual Nginx backups/validation/reload, exact verified production SHA, resource-aware edge sizing, rollback and real shared-NAT office evidence. Do not mark complete on local tests or Git push alone.
 
 ## 2. Production symptom
 
@@ -93,7 +95,7 @@ Current build PASS: `sqr-1.0.0-252d8d9d3bac-20260909T130954Z` dirtysource; produ
 
 ## 14. Do not repeat
 
-Do not redo initial root-cause audit or baseline reproductions. Do not reset/discard work, deploy/reload production, log `.env` or credentials, install global OS tooling without need, load-test production, disable Redis/security, or change Billing formulas/Collection/RBAC. Commit/push of the section 17 follow-up is now authorized, without workflow dispatch or production action. No force push. Use apply_patch; node PATH `C:\Program Files\nodejs`; heavy suites sequential on this low-memory Windows host.
+Do not redo initial root-cause audit or baseline reproductions. Do not reset/discard work, log `.env` or credentials, install global OS tooling without need, flood production, disable Redis/security, or change Billing formulas/Collection/RBAC. The expanded production scope is authorized, but require verified access/target, safe backups, successful gates and resource-aware settings before remote changes. Do not bypass SSH host-key verification or GitHub production approval. No force push. Use apply_patch; node PATH `C:\Program Files\nodejs`; heavy suites sequential on this low-memory Windows host.
 
 ## 15. Scope lock
 
@@ -110,7 +112,10 @@ Rate-limit identity/quota behavior, 429 response handling, directly proven retry
 - [x] All available relevant regressions and final typecheck/lint/build complete.
 - [x] Final22-part report and diff/secret audit, with explicit external blockers.
 - [x] Active edge 429 producer covering `/api/me` identified from actual deployment evidence; historical per-request attribution remains unproven without correlated logs.
-- [ ] Release orchestration follow-up published and Release Verification rerun successfully.
+- [x] Release orchestration follow-up `6cbada45` published; Release Verification 34413870959 succeeded.
+- [ ] Additional authenticated Search correction published, verified and deployed.
+- [ ] Active Nginx correction backed up, syntax-validated and reloaded on the confirmed server.
+- [ ] Real 30-person shared-NAT workflows, including WebSocket behavior, verified with edge/upstream logs and resource observations.
 
 Do not mark COMPLETE while unchecked requirements remain.
 
@@ -129,3 +134,96 @@ Regression coverage: CLI fixture with a five-login cap, authenticated cookies an
 - Syntax checks for all four changed/new runtime scripts, repository hygiene, secret scan, changed-file secret guard and `git diff --check`: passed. Independent read-only implementation review found no blocking issues.
 
 This follow-up has nine changed/new files and no backend/frontend runtime changes. Do not rerun the entire prior NAT implementation suites unless code changes. Commit/push is authorized; use Git and matching workflow results to confirm its publication state. Hosted Release Verification still needs a scheduled or separately authorized run on the exact new SHA; it has not yet verified this follow-up. No production action performed.
+
+## 18. Confirmed Nginx production follow-up (current)
+
+- User-supplied access-log excerpts show `status=429 upstream_status=-` without an upstream address/time. Error-log excerpts identify `excess: 100.xxx by zone "sqr_api_per_ip"`, matching the active 30/minute, burst 100 bucket. This identifies the sampled rejection mechanism; it does not measure all successful traffic or server capacity. Keep the office IP in the original private attachment, not a hardcoded allowlist.
+- Local branch/starting HEAD: `main`, `6cbada4599dd0665e9b47634bbfd9195555af46c`, initially clean. [CI 34412882822](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34412882822), CodeQL and [Release Verification 34413870959](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34413870959) passed. The production-approval job passed and artifact `production-release-6cbada4599dd0665e9b47634bbfd9195555af46c` (id 10128508855) exists.
+- Read-only production `/api/health/version` on 2026-09-10 returned status ok, SHA `6cbada4599dd0665e9b47634bbfd9195555af46c`, release ID `sqr-1.0.0-6cbada4599dd-20260909T225140Z`, builtAt `2026-09-09T22:51:40.131Z`. The agent did not deploy it. Present PM2 paths/status and Redis/DB health are not independently inspected. Do not redeploy the identical app merely for an Nginx change.
+- New Search regression: route-level `searchRateLimiter` still used one IP bucket after authentication. Thirty users each making one search produced 10 successes and 20 `SEARCH_RATE_LIMITED` 429s before correction. The minimal fix uses SHA-256 of server-assigned `req.user.userId`; fallback is normalized IP. Cap remains 10/10 seconds, shared store/fail-closed behavior unchanged. All search/import-read/source-match consumers were traced after full auth and authorization. This fix is not in the production `6cbada45` release yet.
+- Changes: three NAT test files now include 20/30/50/100; Search key and four regressions in `server/middleware/rate-limit.ts` and its test; new `deploy/nginx/sqr-429-debug-format.conf.example`; Nginx diagnostic contract test; updated runbook/report/handoff. Existing business/DB/frontend rules and heavy import limits are untouched.
+- New focused results: 36 adaptive/real-HTTP pipeline tests passed, including 300 requests from 30 users (fixture storage/stub endpoint handlers, not production load testing). Middleware tests: 34 passed including Search red/green, abuse isolation, anonymous spoof resistance, IPv6, login/2FA/recovery/admin and Redis failures. Nginx/live-CI contracts: 14 passed. Newly extended 30-user live Redis case has not run locally; earlier matrices passed real CI Redis.
+- Final local gates passed: 100 middleware/Search/import-read/permission-matrix tests (`artifacts/nginx-confirmed-route-regressions.log`), 410 script tests (359 JS + 51 TS; `artifacts/nginx-confirmed-scripts-regressions.log`), typecheck, full client/server lint, build and bundle budgets (`artifacts/nginx-confirmed-{typecheck,lint,build,bundle-budgets}.log`). Test counts overlap the focused suites above; do not sum them as unique tests. Build `sqr-1.0.0-6cbada4599dd-20260910T090545Z` has dirty local source and zero production source maps: it is verification output, not an approved immutable deployment artifact. All command sessions completed; no heavy-suite rerun is needed unless relevant code changes.
+- The active diagnostic format's `$request` includes query strings. The new example retains `sqr_429_debug`, its conditional 429 logging, upstream fields and adds limiter outcomes while logging method + `$uri` + protocol instead. Back up and replace the existing HTTP include, not append duplicate declarations. No production logging was changed.
+- Capacity caveats: candidate API 200/s, burst 2000/conn 1000 are model ceilings, not proven server capacity. Thirty users x ten startup calls = 300; over ten seconds this is 30/s. Validate ordinary rates, bursts, p95 latency, CPU/RAM, worker/fd/socket limits first. Snapshot `worker_connections 768` and PM2 heap 600 MB do not prove sufficient capacity. WS cap 20/IP cannot support 30 simultaneous single-tab sockets. API/login/telemetry also share one connection zone. These require live inspection and bounded settings; no WS/telemetry values changed yet.
+- Access blocker: Windows OpenSSH exists, but `C:\Users\Administrator\.ssh` contains no configured credentials/config, no system SSH host configuration was found, and `ssh-add -l` reports no agent. No SSH session, remote write, Nginx test/reload or production load test was attempted. User was asked for host/alias, port, username and a secure access method or operator-assisted terminal execution; never request pasted passwords/private keys.
+- Next: publish/build a verified release for the Search correction; establish exact SSH target/key/host fingerprint or operator-assisted execution. Inspect current/previous runtime paths, filtered PM2 fields, active Nginx configuration and resource/traffic evidence. Follow the active-install guide for collision-safe out-of-include backups, reviewed edits, per-file `nginx -t`, final reload and explicit rollback (validation failures exit nonzero). Deploy only an approved exact-SHA immutable artifact when needed; do not bypass public/local health or provenance checks. Observe real office use and distinguish edge from upstream 429 before claiming completion.
+
+No production file has been changed by this session. There are no post-change office counts to report yet. Production backup paths and exact old/current runtime targets must be recorded on the actual server before changing them; do not invent them from a release name.
+
+Continuation access recheck (2026-09-10): the same missing-access blocker persisted across three goal turns. The user SSH directory/config and system SSH config remain absent, and `ssh-add -l` still reports no agent. No new host/port/user or operator-terminal response was supplied. The ten task-owned modified/new files remain uncommitted; no remote action was attempted. The goal is blocked, not complete. Resume from this section once secure production access or operator-assisted execution is available; do not repeat the completed local suites without relevant code changes.
+
+Target-discovery update (historical; see confirmed access status below): the user subsequently supplied the production IP, account `deploy`, hostname `vultr` and SSH port 22. A fresh DNS lookup confirms `sqr-system.com` resolves to the supplied IP; public version remains `6cbada4599dd0665e9b47634bbfd9195555af46c`. The SSH service is reachable. Windows OpenSSH 9.5 keyscan failed its KEX negotiation; the already-installed Git OpenSSH keyscan succeeded without authentication. It observed an ED25519 fingerprint `SHA256:jfa6vi4Q2cuIh+HAopt4hsHQ4ieBrlcDduYy1N/Z4kc`. At this stage it was only an untrusted network observation. The private-key path supplied belongs to Termux and is not a local Windows key. No password/passphrase was sent to the server, written into files or copied into this handoff. Credentials disclosed in the conversation should be rotated securely; do not reproduce them or change them without coordinating access recovery with the user.
+
+Confirmed access status (latest): the user supplied trusted server-terminal output for `/etc/ssh/ssh_host_ed25519_key.pub`, matching `SHA256:jfa6vi4Q2cuIh+HAopt4hsHQ4ieBrlcDduYy1N/Z4kc`. Root compared a fresh scanned public key against that fingerprint and pinned it in `C:\Users\Administrator\.ssh\known_hosts_sqr`, outside the repository. A single strict-host-checked SSH attempt for `deploy` was rejected with `Permission denied (publickey)` before any password prompt or remote command. Do not enable password authentication or ask for the Termux private key.
+
+A temporary ED25519 client key was generated at `C:\Users\Administrator\.ssh\sqr_nat_codex_20260910_ed25519` (public sibling `.pub`); private-file ACL inheritance was removed and the resulting ACL was verified to allow only the current Windows identity, SYSTEM and Administrators. The private key stays on this machine, outside Git; do not print, commit or copy it into chat. Public fingerprint: `SHA256:Wl/5WuggEA51UT6iWbiE7gyqEjo1Jllq997EYKEyvtU`. The user is being asked to append this public authorization line to `/home/deploy/.ssh/authorized_keys`, preserving existing keys:
+
+```text
+restrict,pty,expiry-time="20260912000000Z" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPy6TetcqNgU04Zukf5pbZCuugSbfVw4g+J59te1LvO8 sqr-nat-codex-temp-20260910
+```
+
+This allows the required shell/PTY but disables agent/port/X11 forwarding and user rc; authorization expires on 2026-09-12 at 00:00 UTC (08:00 Malaysia), per OpenSSH authorized-key options. Do not assume installation from intent: wait for the user's confirmation, then use Git OpenSSH with the explicit private identity, `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, `HostKeyAlgorithms=ssh-ed25519` and `UserKnownHostsFile=C:/Users/Administrator/.ssh/known_hosts_sqr`. No authenticated session, production file change, Nginx test/reload or deployment has happened yet. Remove only this temporary authorization line and local key after the task/access need ends, preserving the user's existing keys.
+
+Independent fresh release preflight confirms local HEAD and remote main remain `6cbada45`, with CI, CodeQL and Release Verification successful; all ten follow-up files remain uncommitted. The existing approved artifact predates the Search fix. After publication, check both exact-SHA CI (including required live Redis with 30 users) and a workflow-dispatched Release Verification; scheduled verification does not publish deployment artifacts, and Release Verification alone does not prove the live Redis CI gate. Use only the successful production-approved `production-release-<new-SHA>` artifact and its SHA-512 sidecar, with expected-SHA and public-health deployment gates. No workflow changes are needed.
+
+Public-key access recheck: one noninteractive login probe with the explicit temporary identity, strict pinned host verification and remote command `id -un` returned `Permission denied (publickey)`. No remote command ran. A subsequent local-only `ssh -G` check confirmed the intended account/host/port, identity path, `IdentitiesOnly=yes`, batch mode and pinned known-hosts path; the private key still exists. No user installation confirmation/error output has arrived. This access blocker has persisted across three goal turns, so the goal is blocked pending key installation or operator-assisted access. Do not repeatedly probe SSH or infer installation from an automatic goal continuation. No production changes have occurred.
+
+## 19. Authenticated production work (authoritative current state)
+
+The user confirmed two identical temporary public-key lines in authorized_keys. SSH then succeeded as `deploy` on `vultr`; host verification remains strict with the verified ED25519 pin. Sudo was authenticated interactively with echo disabled at the password prompt; no credential was saved to repository, scripts or handoff. No SSH/password policy was weakened. Temporary-key duplicates will be removed only when access is no longer needed. SSH session 54438 later disappeared; its handle was confirmed missing, not merely timed out. Replacement session 21143 is a live sudo-capable shell at this checkpoint; revalidate before using it. Send individual newline-terminated commands rather than assuming pasted multi-command input all ran.
+
+Live preflight evidence:
+
+- Production source checkout is clean `main` at `6cbada4599dd0665e9b47634bbfd9195555af46c`.
+- Current runtime: `/home/deploy/apps/sqr-runtime/releases/sqr-1.0.0-6cbada4599dd-20260909T225140Z`; previous: `/home/deploy/apps/sqr-runtime/releases/sqr-1.0.0-252d8d9d3bac-20260909T051334Z`.
+- PM2 `sqr` online, PID 66801, script `/home/deploy/apps/sqr-runtime/current/dist-local/server/cluster-local.js`, cwd `/home/deploy/apps/sqr-runtime/current`, fork mode, one Node process; observed RSS about 239 MB, CPU 1.4–1.8%, historical restart count 72 (not evidence of a current restart loop).
+- 2 vCPU, 3910 MiB RAM, about 2002 MiB available, 80 MiB swap used, load 0.07/0.05/0.00. Nginx 2 workers with 768 connections each, service LimitNOFILE 524288. These quiet-time observations are not load-capacity proof.
+- Node listens only on `127.0.0.1:5000`. Selected nonsecret runtime fields confirm `TRUSTED_PROXIES=127.0.0.1/32`, `SQR_MAX_WORKERS=1`, `PG_MAX_CONNECTIONS=10`, `SQR_RATE_LIMIT_STORE=redis`. Existing Node CA path is `/home/deploy/apps/sumbanganqueryrahmah/.runtime/redis-ca.crt`; preserve it. Local/public readiness return `{status:ok,ready:true}`; version matches current SHA. Redis credentials were not printed and no integration tests use production Redis.
+- `nginx -T` confirms old API/auth/WS/telemetry quotas and exact includes, plus `sites-enabled/sqr-system` resolving to `sites-available/sqr-system`. All baseline `nginx -t` calls passed.
+- Count-only parsing found 1334 debug 429 entries, all `upstream_status=-`, all one hashed source, from 16:18:00 through 18:59:11 +0800. Error log has 1334 `sqr_api_per_ip` rejections. Endpoints include six analytics routes, tab visibility, maintenance, heartbeat, app-config, Collection and Search. The HTTPS site's conditional-only access_log overrides inherited access logging, so existing ordinary access.log is not a complete SQR successful-traffic denominator.
+
+Production changes performed (diagnostics only):
+
+1. Backed up `/etc/nginx/conf.d/sqr-429-debug-format.conf` and `/etc/nginx/sites-available/sqr-system` under `/etc/nginx/backups/sqr-nat-diagnostics-20260910T124820Z`.
+2. Replaced the diagnostic format with the repo example (method + URI without query strings, upstream and limiter attribution). Added `sqr_log_nat_traffic` map for API, `/ws` and legacy telemetry, and a site-scoped `/var/log/nginx/sqr-nat-access.log` using that format. Existing 429 log remains enabled.
+3. Validated after each file edit and reloaded successfully, then public readiness passed. API/login/WS/telemetry admission values remain unchanged. Log file permission is 0640 www-data:adm; existing `/etc/logrotate.d/nginx` covers `*.log`, daily, 14 rotations with compression.
+4. The initial attempt at 12:47:51 UTC safely restored both files and reloaded the baseline after its assertion detected the empty log that `nginx -t` itself created. Corrected the one-off script to preserve log contents rather than assert absence. That earlier backup also remains under `sqr-nat-diagnostics-20260910T124751Z`. No invalid configuration was reloaded and no log contents were removed.
+5. Final debug-file SHA256 `375db68a9968508737dc7454809026aa8418981432b6141e75367fa85f34ed37`; site SHA256 `1728f3536f8fb1431fa853bf0054afe79377f3516f93f9d2698e1979c0d5788a`.
+
+Exact diagnostics rollback (only if these remain the intended targets; later admission changes require their own backups):
+
+```bash
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-diagnostics-20260910T124820Z/sqr-429-debug-format.conf /etc/nginx/conf.d/sqr-429-debug-format.conf
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-diagnostics-20260910T124820Z/sqr-system /etc/nginx/sites-available/sqr-system
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+The one-off deployment helper and source example are staged under `/home/deploy/sqr-nat-preflight-20260910/`; local helper `artifacts/sqr-nat-diagnostics-stage.py` is ignored. Do not blindly rerun it (it deliberately requires the old site marker). No application deployment/commit/push has occurred yet. The example/contract changed; 13 Nginx tests passed afterward.
+
+New required WebSocket fix: production wiring leaves app defaults at 20 connections/IP and 30 upgrades/IP/minute, independently blocking 30 staff even if Nginx changes. Agent `ws_nat_fix` owns focused `server/ws` implementation/tests: aggregate cap200, aggregate600 upgrades/IP/minute, strict anonymous30/IP, signed-activity30/minute before async auth, DB-user30/minute after active/revocation checks, per-user5 unchanged and bounded pending activity reservations. Root must review and verify before publication. Existing WS forwarding accepts first XFF; live Nginx appends client input, so the single-edge WS snippet must overwrite XFF with `$remote_addr` while retaining loopback-only origin and narrow trusted proxy.
+
+Next: finish WS review/tests; choose resource-aware edge bounds using code-derived baseline plus live observations; back up each additional exact active file, validate after every change, reload only valid config. Publish/verify/deploy a new approved Search+WS SHA with both CI/live Redis and Release Verification gates. Current new access log has only a health probe, so no office or latency/capacity success is claimed. User was asked to arrange real 30-person office use and a verification window. Preserve full acceptance scope; do not mark complete until actual shared-NAT behavior and remaining abuse controls are proven.
+
+### Edge rollout and final local gates (latest checkpoint)
+
+The five admission files were changed at **2026-09-10 13:29:31 UTC / 21:29:31 Malaysia** after an exact-string, count-checked dry-run diff. Backup: `/etc/nginx/backups/sqr-nat-edge-20260910T132931Z` (zones.conf, api.conf, site.conf, ws.conf, telemetry.conf). Every edit passed `nginx -t`, final validation/reload/is-active passed, and public/local readiness stayed healthy. Application version is still `6cbada45`, not the uncommitted Search/WS patch. Active values: API100/s burst300 cap240; auth5/s burst100 cap40 in separate auth connection zone; WS10/s burst100 cap200 with XFF overwritten to `$remote_addr`; telemetry5/s burst100 cap20 in separate telemetry connection zone. Imports10/min burst5 cap3, certs, proxy timeouts, Redis/auth/business controls are unchanged. `sqr-nat-edge-stage.py` is an ignored, exact-state one-off helper under local artifacts and remote preflight folder; do not blindly rerun it.
+
+The ceilings are a monitored starting policy, not measured capacity. Code-derived 30-user Dashboard load is about7/s, plus maintenance up to2/s and activity heartbeat around0.5/s. The100/s API ceiling accommodates a model of100users x10startup calls over10seconds; burst300 is3seconds of excess refill, not a guaranteed1000simultaneousburst. Connection counts are defense ceilings, not performance guarantees. Global sockets, otherIPs, keepalives, slow queries and worker imbalance still matter. At21:30MY the added access log contained only health/version probes (200, upstream5–6ms), noofficeusage. Serverload0.03/0.02/0.00, RAMavailable1992MiB. User's30staffacceptancewindowstillunprovided.
+
+Final local verification: typecheck, fullclient/serverlint, all106WS tests, build and bundlebudgets passed. Build `sqr-1.0.0-6cbada4599dd-20260910T132936Z` is dirtysourceverificationonly, zero source maps. Logs `artifacts/nat-live-followup-{typecheck,lint,ws,build}.log`. The missing-user negative test fixture needed an explicit `unknown` assertion for TypeScript; no runtimebehavior changed. Nginx/liveRedisCI contracts14passed after diagnosticsupdate. EarlierSearch/routes100 andscripts410passed. Tests overlap; do notsumunique. Remainingapplicationgates: commit/push exactSHA, newCI/liveRedis, dispatchedReleaseVerification and approvedartifactdeployment. No need repeatheavycompletedchecks absentchanges.
+
+Edge rollback restores only the five matched admission backups, preserving the earlier diagnostics improvement:
+
+```bash
+set -euo pipefail
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-edge-20260910T132931Z/zones.conf /etc/nginx/conf.d/sqr-telemetry-rate-limit.conf
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-edge-20260910T132931Z/api.conf /etc/nginx/snippets/sqr-api-throttle.conf
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-edge-20260910T132931Z/site.conf /etc/nginx/sites-available/sqr-system
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-edge-20260910T132931Z/ws.conf /etc/nginx/snippets/sqr-ws-throttle.conf
+sudo cp --preserve=mode,ownership,timestamps -- /etc/nginx/backups/sqr-nat-edge-20260910T132931Z/telemetry.conf /etc/nginx/snippets/sqr-web-vitals-telemetry.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+SSH shell21143 and typecheck47277 were later confirmed missing; no restart was inferred merelyfromtimeout. Latest liveSSH shell76414 remains available atthischeckpoint; combinedtypecheck/lint/WS/buildsession89871 completedexit0. Revalidatehandleswhenresuming. Do not poll obsoletehandles. No secretsstored inGit/scripts; temporarykeyremovalremainsrequiredaftertaskaccessends.

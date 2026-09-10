@@ -15,6 +15,7 @@ import {
   buildLoginAccountRateLimitKey,
   buildLoginNetworkRateLimitKey,
   buildRequestRateLimitFingerprint,
+  buildSearchRateLimitKey,
   clearAdaptiveRateLimitCooldownsForTests,
   createImportsUploadRateLimiter,
   createAuthRouteRateLimiters,
@@ -26,6 +27,7 @@ import {
   performAdaptiveRateLimitCachePressureEvictionForTests,
   pruneAdaptiveRateLimitCooldowns,
   recordAdaptiveRateLimitViolationForTests,
+  searchRateLimiter,
   startAdaptiveRateLimitCooldownSweep,
   stopAdaptiveRateLimitCooldownSweep,
 } from "../rate-limit";
@@ -202,6 +204,120 @@ test("createImportsUploadRateLimiter throttles repeated upload attempts from the
       message: "Too many import upload attempts from this network. Please wait before trying again.",
     });
     assert.equal(payload.ok, false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("search limiter allows 30 authenticated office users sharing one trusted-proxy IP", async () => {
+  const app = express();
+  app.set("trust proxy", "loopback");
+  for (let index = 0; index < 30; index += 1) {
+    app.get(`/search/${index}`, (req, _res, next) => {
+      // Server-side auth fixture: never take a quota identity from request hints.
+      (req as Request & { user: { userId: string } }).user = { userId: `search-office-${index}` };
+      next();
+    }, searchRateLimiter, (_req, res) => res.status(204).end());
+  }
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    const statuses = await Promise.all(Array.from({ length: 30 }, async (_unused, index) => {
+      const response = await fetch(`${baseUrl}/search/${index}`, {
+        headers: { "X-Forwarded-For": "203.0.113.42" },
+      });
+      await response.arrayBuffer();
+      return response.status;
+    }));
+    assert.deepEqual(statuses, Array.from({ length: 30 }, () => 204));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("search keys hash only the authenticated user and normalize the anonymous IP fallback", () => {
+  const first = createRequest({}, "203.0.113.43");
+  const rotated = createRequest({ "user-agent": "Different browser" }, "198.51.100.43");
+  for (const req of [first, rotated]) {
+    (req as Request & { user: { userId: string } }).user = { userId: "search-private-user" };
+  }
+  assert.equal(buildSearchRateLimitKey(first), buildSearchRateLimitKey(rotated));
+  assert.match(buildSearchRateLimitKey(first), /^search:user-v1:[a-f0-9]{64}$/);
+  assert.equal(buildSearchRateLimitKey(first).includes("search-private-user"), false);
+
+  const anonymous = createRequest({}, "203.0.113.43");
+  const spoofed = createRequest({
+    "x-user-id": "search-private-user", "x-forwarded-for": "198.51.100.43",
+    authorization: "Bearer client-controlled-token",
+  }, "::ffff:203.0.113.43", { userId: "search-private-user", user: { userId: "search-private-user" } });
+  (spoofed as Request & { user: { userId: string } }).user = { userId: " " };
+  spoofed.query = { userId: "search-private-user" };
+  assert.equal(buildSearchRateLimitKey(anonymous), buildSearchRateLimitKey(spoofed));
+  assert.notEqual(buildSearchRateLimitKey(first), buildSearchRateLimitKey(anonymous));
+  assert.equal(
+    buildSearchRateLimitKey(createRequest({}, "2001:db8:1234:5600::1")),
+    buildSearchRateLimitKey(createRequest({}, "2001:db8:1234:56ff::2")),
+  );
+});
+
+test("search abuse stays capped at 10 per user across IP and route changes without blocking a colleague", async () => {
+  const app = express();
+  app.set("trust proxy", "loopback");
+  for (const [path, userId] of [
+    ["/search", "search-abusive-user"],
+    ["/source-match", "search-abusive-user"],
+    ["/colleague", "search-healthy-colleague"],
+  ]) {
+    app.get(path, (req, _res, next) => {
+      (req as Request & { user: { userId: string } }).user = { userId };
+      next();
+    }, searchRateLimiter, (_req, res) => res.status(204).end());
+  }
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index <= 10; index += 1) {
+      const response = await fetch(`${baseUrl}${index % 2 ? "/source-match" : "/search"}`, {
+        headers: { "X-Forwarded-For": `198.51.100.${index + 50}`, "User-Agent": `Browser ${index}` },
+      });
+      assert.equal(response.status, index < 10 ? 204 : 429);
+      if (index === 10) {
+        assert.equal(response.headers.get("ratelimit-limit"), "10");
+        assert.equal(response.headers.get("ratelimit-remaining"), "0");
+        assert.match(response.headers.get("retry-after") ?? "", /^[1-9]\d*$/);
+        assert.equal((await response.json()).error.code, ERROR_CODES.SEARCH_RATE_LIMITED);
+      }
+    }
+    const colleague = await fetch(`${baseUrl}/colleague`, {
+      headers: { "X-Forwarded-For": "198.51.100.60" },
+    });
+    assert.equal(colleague.status, 204);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("anonymous search fallback stays IP limited despite spoofed identity and forwarding headers", async () => {
+  const app = express();
+  // A direct client cannot move its quota using an untrusted forwarding header.
+  app.set("trust proxy", false);
+  app.use(express.json());
+  app.post("/search", searchRateLimiter, (_req, res) => res.status(204).end());
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index <= 10; index += 1) {
+      const response = await fetch(`${baseUrl}/search?userId=spoof-${index}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json", "X-Forwarded-For": `198.51.100.${index + 80}`,
+          "X-User-Id": `spoof-${index}`, authorization: `Bearer unverified-${index}`,
+        },
+        body: JSON.stringify({ userId: `spoof-${index}`, user: { userId: `spoof-${index}` } }),
+      });
+      assert.equal(response.status, index < 10 ? 204 : 429);
+      if (index === 10) assert.equal(response.headers.get("ratelimit-limit"), "10");
+    }
   } finally {
     await stopTestServer(server);
   }

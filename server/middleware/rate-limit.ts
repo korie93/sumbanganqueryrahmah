@@ -50,6 +50,7 @@ type StandardRateLimitHeaderOptions = {
 
 type AuthenticatedLikeRequest = Request & {
   user?: {
+    userId?: string | null;
     username?: string | null;
   };
 };
@@ -791,11 +792,23 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
   };
 }
 
+export function buildSearchRateLimitKey(req: Request): string {
+  // Every search/import-read/source-match consumer runs full authentication
+  // before this limiter. Only trust that server-assigned identity, never a
+  // body, query, header or unverified token supplied by the client.
+  const userId = (req as AuthenticatedLikeRequest).user?.userId;
+  if (typeof userId === "string" && userId.trim()) {
+    return `search:user-v1:${crypto.createHash("sha256").update(userId).digest("hex")}`;
+  }
+  return `search:ip-v1:${ipKeyGenerator(resolveRequestClientIp(req) ?? "unknown")}`;
+}
+
 export const searchRateLimiter = createJsonRateLimiter({
   windowMs: 10 * 1000,
   max: 10,
   code: ERROR_CODES.SEARCH_RATE_LIMITED,
   message: "Too many search requests. Please slow down.",
+  keyGenerator: buildSearchRateLimitKey,
 });
 
 export function createImportsUploadRateLimiter(

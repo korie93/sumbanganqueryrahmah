@@ -6,7 +6,10 @@ import type { RuntimeWsMessageRateLimiter } from "./message-rate-limit";
 import type { RuntimeWsSharedBus } from "./runtime-shared-bus";
 
 export const MAX_RUNTIME_WS_CONNECTIONS_PER_USER = 5;
-export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS_PER_IP = 20;
+// Capacity for 100 people sharing a public IP with two browser tabs each.
+export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS_PER_IP = 100 * 2;
+// Allow three connection/reconnection attempts per tab each minute.
+export const DEFAULT_RUNTIME_WS_MAX_UPGRADE_ATTEMPTS_PER_IP = DEFAULT_RUNTIME_WS_MAX_CONNECTIONS_PER_IP * 3;
 export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS = 1_000;
 export const DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES = 64 * 1024;
 export const DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES = 512 * 1024;

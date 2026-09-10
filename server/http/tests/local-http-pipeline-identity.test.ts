@@ -155,9 +155,9 @@ test("signed quota identity never bypasses live revocation, session validity, ac
   }
 });
 
-test("20, 50 and 100 signed users on one trusted-proxy NAT traverse actual protection and auth across observed endpoints", async (t) => {
+test("20, 30, 50 and 100 signed users on one trusted-proxy NAT traverse actual protection and auth across observed endpoints", async (t) => {
   t.mock.method(logger, "info", () => undefined);
-  for (const userCount of [20, 50, 100]) {
+  for (const userCount of [20, 30, 50, 100]) {
     await t.test(`${userCount} users`, async () => {
       const { calls, guards } = createSessionFixture(userCount);
       const controlState: WorkerControlState = {

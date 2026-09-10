@@ -95,7 +95,7 @@ test("live Redis Lua preserves NAT quotas, atomicity, TTL and fail-closed state 
   const redisKey = (namespace: "adaptive" | "login-account", key: string) =>
     `${prefix}:${namespace}:${createHash("sha256").update(key).digest("hex")}`;
   try {
-    for (const userCount of [20, 50, 100]) {
+    for (const userCount of [20, 30, 50, 100]) {
       await t.test(`${userCount} distinct users share one NAT across four independent worker stores`, async () => {
         const results = await Promise.all(Array.from({ length: userCount }, async (_unused, user) => {
           const handler = protection[user % 4].adaptiveRateLimit;

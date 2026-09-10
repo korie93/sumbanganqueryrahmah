@@ -44,7 +44,7 @@ const officeRoutes = [
   ["GET", "/api/collection/report/billing-principal/target/calendar"],
 ] as const;
 
-for (const users of [20, 50, 100]) {
+for (const users of [20, 30, 50, 100]) {
   for (const mode of ["NORMAL", "DEGRADED", "PROTECTION"] as const) {
     test(`${users} authenticated users sharing one NAT retain normal endpoint access in ${mode}`, async (t) => {
       t.mock.method(Date, "now", () => 1_000_000);

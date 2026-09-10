@@ -140,6 +140,24 @@ test("production Nginx import body limit stays aligned with Express import limit
   assert.match(nginxText, /structured validation\s+# errors instead of a generic HTML Nginx 413 response/i);
 });
 
+test("active-install 429 diagnostics preserve edge attribution without logging query strings or credentials", () => {
+  const text = readText(path.join(repoRoot, "deploy", "nginx", "sqr-429-debug-format.conf.example"));
+  const directives = activeLines(text).join("\n");
+  assert.match(directives, /map \$status \$sqr_log_429 \{\s*default 0;\s*429 1;/);
+  assert.match(directives, /map \$uri \$sqr_log_nat_traffic \{/);
+  assert.match(directives, /~\^\/api\/ 1;/);
+  assert.match(directives, /\/ws 1;/);
+  assert.match(directives, /log_format sqr_429_debug/);
+  assert.match(directives, /\$request_method \$uri \$server_protocol/);
+  for (const field of ["upstream_status", "upstream_response_time", "upstream_addr", "limit_req_status", "limit_conn_status", "request_id"]) {
+    assert.ok(directives.includes(`$${field}`), `Missing diagnostic field ${field}`);
+  }
+  assert.doesNotMatch(directives, /\$(?:request|request_uri|args|query_string|request_body|http_authorization|http_cookie)\b/);
+  assert.doesNotMatch(directives, /^access_log\b/m);
+  assert.match(text, /access_log \/var\/log\/nginx\/sqr-429-debug\.log sqr_429_debug if=\$sqr_log_429;/);
+  assert.match(text, /access_log \/var\/log\/nginx\/sqr-nat-access\.log sqr_429_debug if=\$sqr_log_nat_traffic;/);
+});
+
 test("production Nginx gives imports enough time to return an application-owned response", () => {
   const nginxText = readText(nginxConfigPath);
   const importBlock = extractLocationBlock(nginxText, "= /api/imports");

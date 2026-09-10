@@ -21,7 +21,6 @@ const UNKNOWN_CLIENT_KEY = "unknown";
 type RateLimitBucket = {
   count: number;
   resetAt: number;
-  lastSeenAt: number;
 };
 
 function normalizePositiveInteger(value: number | undefined, fallback: number): number {
@@ -35,28 +34,11 @@ function normalizePositiveInteger(value: number | undefined, fallback: number): 
 function pruneExpiredBuckets(
   buckets: Map<string, RateLimitBucket>,
   now: number,
-  maxKeys: number,
 ) {
   for (const [key, bucket] of buckets) {
     if (bucket.resetAt <= now) {
       buckets.delete(key);
     }
-  }
-
-  while (buckets.size > maxKeys) {
-    let oldestKey: string | null = null;
-    let oldestSeenAt = Number.POSITIVE_INFINITY;
-    for (const [key, bucket] of buckets) {
-      if (bucket.lastSeenAt < oldestSeenAt) {
-        oldestSeenAt = bucket.lastSeenAt;
-        oldestKey = key;
-      }
-    }
-
-    if (!oldestKey) {
-      return;
-    }
-    buckets.delete(oldestKey);
   }
 }
 
@@ -73,20 +55,22 @@ export function createRuntimeWsUpgradeRateLimiter(
     consume(rawKey: string) {
       const timestamp = now();
       const key = rawKey.trim() || UNKNOWN_CLIENT_KEY;
-      pruneExpiredBuckets(buckets, timestamp, maxKeys);
+      pruneExpiredBuckets(buckets, timestamp);
 
       const existing = buckets.get(key);
       if (!existing || existing.resetAt <= timestamp) {
+        // Do not evict live quotas: cycling keys must not reset a full bucket.
+        if (buckets.size >= maxKeys) {
+          return false;
+        }
         buckets.set(key, {
           count: 1,
           resetAt: timestamp + windowMs,
-          lastSeenAt: timestamp,
         });
         return true;
       }
 
       existing.count += 1;
-      existing.lastSeenAt = timestamp;
       return existing.count <= maxAttempts;
     },
     clear() {
