@@ -1,6 +1,6 @@
 # SQR shared-NAT: active Nginx findings and targeted rollout
 
-Current checkpoint: 2026-09-10. Production access and target verification are complete. Privacy-conscious diagnostics were reloaded at approximately 12:48 UTC; the five admission changes below were backed up and applied at 13:29:31 UTC (21:29:31 Malaysia time), then syntax-validated and reloaded successfully. Search and WebSocket application corrections still require a new verified release, and real office acceptance is outstanding. [Handoff section 19](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md#19-authenticated-production-work-authoritative-current-state) holds the live execution record.
+Current checkpoint: 2026-09-10 15:02 UTC. Privacy-conscious diagnostics were reloaded at approximately 12:48 UTC; the five admission changes below were backed up and applied at 13:29:31 UTC (21:29:31 Malaysia time). Search/WebSocket commit `62cbe7aa20390ddd87ece97c41b1424b8c9154a4` is now deployed from its production-approved immutable artifact. Local/public readiness, exact SHA, Redis PONG and post-restart checks passed. Actual 30-person office acceptance remains outstanding. [Continuation handoff](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md) sections 20–21 hold the latest release evidence; the baseline below is historical.
 
 ## Verified production baseline
 
@@ -61,20 +61,20 @@ The reviewed deployment changed only these five active files, preserving 429 dir
 4. `/etc/nginx/snippets/sqr-ws-throttle.conf`: WS burst 100 with `nodelay`, `limit_conn sqr_ws_conn_per_ip 200`, and `proxy_set_header X-Forwarded-For $remote_addr;`. This single-edge installation overwrites client-supplied XFF because the WS consumer currently selects its first address. The application listener remains loopback-only and proxy trust narrow.
 5. `/etc/nginx/snippets/sqr-web-vitals-telemetry.conf`: telemetry burst 100 with `nodelay`, `limit_conn sqr_telemetry_conn_per_ip 20`; both existing endpoint locations and body/proxy controls remain.
 
-The exact admission backup is `/etc/nginx/backups/sqr-nat-edge-20260910T132931Z`, containing `zones.conf`, `api.conf`, `site.conf`, `ws.conf` and `telemetry.conf`. A dry-run diff was reviewed. Initial validation, validation after each of the five edits and final `nginx -t` all passed; reload and service-active checks passed. Local/public readiness passed afterward, Redis answered PONG, and unauthenticated `/api/me` remained401. This changes edge admission only; the live application remains `6cbada45`.
+The exact admission backup is `/etc/nginx/backups/sqr-nat-edge-20260910T132931Z`, containing `zones.conf`, `api.conf`, `site.conf`, `ws.conf` and `telemetry.conf`. A dry-run diff was reviewed. Initial validation, validation after each of the five edits and final `nginx -t` all passed; reload and service-active checks passed. Local/public readiness passed afterward, Redis answered PONG, and unauthenticated `/api/me` remained401. This initially changed edge admission only; the subsequent application promotion is recorded below.
 
 Do not install `deploy/nginx/sqr.conf.example` over this split-file deployment. Its thresholds and import restrictions differ, and wholesale replacement risks duplicate definitions or loss of installation-specific settings. Neither Nginx worker counts nor connection/file-descriptor limits are changed by this patch.
 
 ## Application corrections accompanying the edge rollout
 
-Production `6cbada45` already includes the principal authenticated adaptive/login quota correction and Retry-After fix. It does not yet include these local follow-ups:
+The prior production `6cbada45` includes the principal authenticated adaptive/login quota correction and Retry-After fix. Newly deployed `62cbe7aa` adds these follow-ups:
 
 - Search/import-read/source-match rate limiting uses a hash of the server-authenticated user ID instead of one IP bucket; the limit remains 10 requests/10 seconds. Anonymous fallback remains normalized IP, and the configured Redis store still fails closed.
 - The WebSocket manager's aggregate defaults become 200 connections/IP and 600 upgrade attempts/IP/minute. Strict buckets remain 30/minute for anonymous failures, signed activity and authenticated database user; per-user active connections remain 5 and the process-wide cap remains 1000. Signed-activity checks and bounded pending reservations precede asynchronous authentication; user identity is selected only after active-session and revocation checks. Live upgrade buckets are not evicted to make room for rotating attacker keys.
 - These WebSocket quotas remain local process state. The verified production topology has one worker; this change does not introduce a new Redis-backed WS quota store or prove multi-worker aggregate enforcement. Revisit WS coordination before increasing worker count.
 - Telemetry intentionally retains application sampling/drop guards: web-vitals 60/IP/minute for browser-provenance traffic (stricter anonymous handling remains), client errors 20/IP/minute. Excess samples may receive empty 204 responses. Higher edge admission removes a small shared transport bucket; it does not promise 100% telemetry capture.
 
-Deploy Search and WS only through a new exact-SHA approved immutable artifact after CI, required isolated live Redis and Release Verification pass. A source pull or local dirty build does not promote PM2's release. Do not redeploy `6cbada45` merely to change Nginx.
+Search and WS were deployed through the exact-SHA approved immutable artifact after CI, required isolated live Redis, Release Verification and production approval passed. Current: `/home/deploy/apps/sqr-runtime/releases/sqr-1.0.0-62cbe7aa2039-20260910T144152Z`; previous: `/home/deploy/apps/sqr-runtime/releases/sqr-1.0.0-6cbada4599dd-20260909T225140Z`. The original checkout remains at `6cbada45`; a source pull is not required to activate this immutable release.
 
 ## Exact five-file admission backup and rollback
 
@@ -155,8 +155,13 @@ fi
 Before any application promotion record the actual `current` and `previous` symlink targets. The baseline paths above are inspected evidence, but must be refreshed if another release intervenes. Use the immutable rollback script only when the inspected previous release is the intended target:
 
 ~~~bash
-SQR_RELEASE_ROOT=/home/deploy/apps/sqr-runtime bash /home/deploy/apps/sqr-runtime/current/deploy/immutable/rollback-release.sh
-curl -fsS http://127.0.0.1:5000/api/health/version
+NODE_EXTRA_CA_CERTS=/home/deploy/apps/sumbanganqueryrahmah/.runtime/redis-ca.crt \
+SQR_RELEASE_ROOT=/home/deploy/apps/sqr-runtime \
+bash /home/deploy/apps/sqr-runtime/current/deploy/immutable/rollback-release.sh
+curl --max-time 10 -fsS http://127.0.0.1:5000/api/health/ready
+curl --max-time 10 -fsS http://127.0.0.1:5000/api/health/version
+SQR_EXPECTED_RELEASE_SHA=6cbada4599dd0665e9b47634bbfd9195555af46c \
+bash /home/deploy/apps/sqr-runtime/current/scripts/post-deploy-health-check.sh https://sqr-system.com
 ~~~
 
 Preserve existing Node/private CA settings and run normal local/public readiness and provenance checks. The rollback script verifies SHA/readiness and does not reverse database migrations. This Search/WS correction requires no migration or dependency change.
@@ -167,4 +172,8 @@ Record the admission backup directory, file diff/checksums, reload time, approve
 
 Capture total requests and 429 counts by endpoint and edge/upstream origin, Nginx limiter zones, application limiter diagnostics, upstream latency and host/database pressure. Count telemetry transport acceptance separately from intentionally dropped samples. Test abuse limits in isolated tests/staging; do not flood production, brute-force real accounts or manufacture production collections. Zero sampled errors with no office traffic is not acceptance evidence.
 
-The original live Redis gate passed in CI for `7707120f`, and `6cbada45` passed CI/CodeQL/Release Verification. The extended30-user Redis case and new Search/WS release require their own exact-SHA hosted verification. Local follow-up checks passed: Search/routes100, HTTP NAT36, WS106, scripts410, typecheck, full lint, build and bundle budgets. Counts overlap. No30-person production acceptance or Search/WS application deployment is claimed at this checkpoint.
+The extended 30-user Redis case passed in [CI 34483780833](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34483780833) on `62cbe7aa`; CodeQL also passed. [Dispatched Release Verification 34483782447](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34483782447) and production approval passed on attempt 2 after one evidence-backed retry of a pending Search request under CI database pressure. No test or limiter was weakened. Local follow-up checks passed: Search/routes100, HTTP NAT36 (20/30/50/100), WS106, scripts410, typecheck, full lint, build and bundle budgets. Counts overlap.
+
+Deployment exited 0 at about 14:59 UTC. Archive and internal inventory checksums passed, `sourceDirty=false`, existing uploads were preserved (copied0/preserved1342), migration checks passed and PM2 was saved. Independent local/public readiness and SHA checks passed; Redis PONG and readiness remained healthy after its 60-second monitor interval. At 15:02 UTC PM2 had no unstable restarts; Nginx syntax/service checks passed and the origin remained loopback-only. The attribution log had 10 agent probes (8 HTTP200,2 expected401), all edge controls PASSED; the 429/error logs had no entries newer than 18:59 Malaysia before rollout. This quiet probe sample is not office acceptance.
+
+Disk is 99% used with about 1.70 GB available after installation. No old releases or user files were removed. Plan operator-approved storage maintenance or expansion before further deployments. Arrange the real 30-staff interval and collect the evidence above before declaring the NAT goal complete. Preserve the temporary scoped SSH authorization until verification is finished or revoke it with the user; it expires 2026-09-12 00:00 UTC and must not become permanent access.
