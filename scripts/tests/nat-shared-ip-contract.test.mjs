@@ -67,3 +67,11 @@ test("startup diagnosis extracts only safe error fields and redacts configured s
   assert.doesNotMatch(result, /hidden|secret@|known-ephemeral|do-not-copy/);
   assert.deepEqual(startupDiagnosticMessages('{"level":"info","msg":"private information"}'), []);
 });
+
+test("build-only release override is removed before strict application runtime validation", () => {
+  const ci = readFileSync(new URL("../nat-shared-ip-ci.mjs", import.meta.url), "utf8");
+  assert.match(ci, /SQR_RELEASE_SHA: APPLICATION_SHA/);
+  const removal = ci.indexOf("delete env.SQR_RELEASE_SHA;");
+  assert.ok(removal > ci.indexOf("summary.applicationManifest = manifest"));
+  assert.ok(removal < ci.indexOf("applicationProcess = launch("));
+});

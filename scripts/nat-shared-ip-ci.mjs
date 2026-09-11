@@ -123,6 +123,9 @@ try {
   const manifest = JSON.parse(await readFile(path.join(application, "dist-local", "release-manifest.json"), "utf8"));
   assert.equal(manifest.commitSha, APPLICATION_SHA); assert.equal(manifest.sourceDirty, false);
   summary.applicationManifest = manifest;
+  // This is a build-manifest input, not an application runtime configuration.
+  // The pinned app intentionally rejects unrecognized SQR_* runtime keys.
+  delete env.SQR_RELEASE_SHA;
   await command("npm", ["run", "db:migrate"], { cwd: application, name: "migrations", privateLog: true });
   await command("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1", "-keyout", path.join(runtime, "server.key"), "-out", path.join(runtime, "server.crt")], { name: "certificate", privateLog: true });
   const configuration = nginxConfiguration();
