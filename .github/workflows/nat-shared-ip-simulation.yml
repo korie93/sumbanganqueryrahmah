@@ -1,0 +1,84 @@
+name: NAT Shared-IP Simulation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nat-shared-ip-simulation
+  cancel-in-progress: false
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: nat-ci-${{ github.run_id }}-${{ github.run_attempt }}-ephemeral-postgres-48chars
+          POSTGRES_DB: sqr_nat_simulation
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sqr_nat_simulation"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 127.0.0.1:6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NAT_SIMULATION_ISOLATED: "1"
+      # Application is pinned to the deployed revision; this workflow tests it,
+      # and never deploys the harness or mutates production services/data.
+      NAT_SIMULATION_EXPECTED_SHA: 62cbe7aa20390ddd87ece97c41b1424b8c9154a4
+      PG_HOST: 127.0.0.1
+      PG_PORT: "5432"
+      PG_USER: postgres
+      PG_PASSWORD: nat-ci-${{ github.run_id }}-${{ github.run_attempt }}-ephemeral-postgres-48chars
+      PG_DATABASE: sqr_nat_simulation
+    steps:
+      - name: Checkout test harness
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Checkout exact deployed application
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: 62cbe7aa20390ddd87ece97c41b1424b8c9154a4
+          path: app-under-test
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install test harness dependencies
+        run: npm ci
+      - name: Install application dependencies
+        working-directory: app-under-test
+        run: npm ci
+      - name: Verify simulation contracts
+        run: node --test scripts/tests/nat-shared-ip-contract.test.mjs
+      - name: Install isolated Nginx and browser dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
+          npx playwright install-deps chromium
+      - name: Run thirty distinct accounts through real Nginx
+        run: node scripts/nat-shared-ip-ci.mjs
+      - name: Upload sanitized simulation evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: nat-shared-ip-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/nat-shared-ip/public/
+          if-no-files-found: error
+          retention-days: 14
