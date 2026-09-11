@@ -6,8 +6,19 @@ import path from "node:path";
 export const NAT_BASE_URL = "https://127.0.0.1:5443";
 export const NAT_USERS = 30;
 export const NAT_ROUNDS = 3;
-export const NAT_MAX_REQUESTS = 12_000;
+// Includes uncached static assets: request routing disables Chromium's cache,
+// and 130 bounded full-page navigations can exceed 12k asset/API requests.
+export const NAT_MAX_REQUESTS = 30_000;
 export const NAT_TIMEOUT_MS = 15 * 60_000;
+
+const DEFAULT_DENIED_DASHBOARD_ROUTES = new Set([
+  "/api/analytics/summary", "/api/analytics/login-trends", "/api/analytics/top-users",
+  "/api/analytics/recent-login-activity", "/api/analytics/peak-hours", "/api/analytics/role-distribution",
+]);
+
+export function isDefaultDashboardDenial(role, route, status) {
+  return status === 403 && ["user", "admin"].includes(role) && DEFAULT_DENIED_DASHBOARD_ROUTES.has(route);
+}
 
 // This fixture harness has no production mode or dotenv fallback.
 export function readNatBrowserConfig(env = process.env, cwd = process.cwd()) {

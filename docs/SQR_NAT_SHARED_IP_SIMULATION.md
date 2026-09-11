@@ -53,6 +53,14 @@ no unexpected 429/5xx and resource evidence. Deliberate initial `/api/me` 401 pr
 are distinguished from failures. WebSocket connection lifetime is excluded from
 HTTP response latency.
 
+Known pinned-UI limitation: after login, user/admin clients also request six
+Dashboard analytics routes despite their disabled tab. The fixture asserts those
+unchanged default permissions. Only exact `Tab 'dashboard' is disabled for role`
+403 responses on those six routes are verified and counted separately; manager
+Dashboard 403s, other business 4xx, all 429s and all 5xx still fail. This known
+extra UI traffic remains in the observed load and report, not hidden or fixed by
+granting broader permissions. A NAT pass does not claim this UI behavior is fixed.
+
 Limits of this evidence: a fresh small database, GitHub runner hardware, a fresh
 build of the deployed source rather than the identical promoted binary, loopback
 development mode with HTTPS browser cookies but non-TLS CI database/Redis, and a

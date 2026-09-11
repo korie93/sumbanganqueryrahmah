@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { APPLICATION_SHA, assertCiIsolation, nginxConfiguration, summarizeEdgeLog, startupDiagnosticMessages } from "../lib/nat-simulation-contract.mjs";
+import { isDefaultDashboardDenial } from "../lib/nat-browser-contract.mjs";
 
 function isolatedEnv() {
   return { CI: "true", GITHUB_ACTIONS: "true", NAT_SIMULATION_ISOLATED: "1", PG_HOST: "127.0.0.1", PG_PORT: "5432", PG_USER: "postgres", PG_DATABASE: "sqr_nat_simulation", PG_PASSWORD: "ephemeral-postgres-password-at-least-32", NAT_SIMULATION_EXPECTED_SHA: APPLICATION_SHA, GITHUB_WORKSPACE: path.resolve("."), RUNNER_TEMP: path.resolve("artifacts"), RUNNER_ENVIRONMENT: "github-hosted" };
@@ -74,4 +75,12 @@ test("build-only release override is removed before strict application runtime v
   const removal = ci.indexOf("delete env.SQR_RELEASE_SHA;");
   assert.ok(removal > ci.indexOf("summary.applicationManifest = manifest"));
   assert.ok(removal < ci.indexOf("applicationProcess = launch("));
+});
+
+test("only existing user/admin Dashboard denials are classified separately, never NAT or business failures", () => {
+  assert.equal(isDefaultDashboardDenial("user", "/api/analytics/summary", 403), true);
+  assert.equal(isDefaultDashboardDenial("admin", "/api/analytics/top-users", 403), true);
+  for (const [role, route, status] of [["manager", "/api/analytics/summary", 403], ["user", "/api/collection", 403], ["user", "/api/analytics/summary", 429], ["admin", "/api/analytics/summary", 503]]) {
+    assert.equal(isDefaultDashboardDenial(role, route, status), false);
+  }
 });

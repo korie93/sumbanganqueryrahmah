@@ -3,7 +3,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   NAT_BASE_URL, NAT_USERS, NAT_ROUNDS, NAT_MAX_REQUESTS, NAT_TIMEOUT_MS,
-  readNatBrowserConfig, natRouteLabel, summarizeNatRequests,
+  readNatBrowserConfig, natRouteLabel, summarizeNatRequests, isDefaultDashboardDenial,
 } from "./lib/nat-browser-contract.mjs";
 
 // Run from the pinned application checkout. The workflow owns and destroys the
@@ -28,6 +28,8 @@ async function run({ artifactsDir, fixture, expectedSha, password }) {
   const authCookies = new Set();
   const csrfCookies = new Set();
   const activityIds = new Set();
+  const permissionChecks = new Set();
+  let verifiedDefaultDashboardDenials = 0;
   const abortController = new AbortController();
   const startedAt = Date.now();
   const receiptBuffer = Buffer.from(
@@ -77,7 +79,8 @@ async function run({ artifactsDir, fixture, expectedSha, password }) {
     const initialUnauthenticatedProbe = !actor.authenticated && status === 401 && route === "/api/me";
     if (status === 429) violation("unexpected-429", actor, route, status);
     else if (status >= 500) violation("unexpected-5xx", actor, route, status);
-    else if (status >= 400 && !initialUnauthenticatedProbe) violation("unexpected-http-error", actor, route, status);
+    else if (status >= 400 && !initialUnauthenticatedProbe
+      && !isDefaultDashboardDenial(actor.account.role, route, status)) violation("unexpected-http-error", actor, route, status);
   }
 
   async function request(actor, method, apiPath, body) {
@@ -226,6 +229,17 @@ async function run({ artifactsDir, fixture, expectedSha, password }) {
     page.on("response", (response) => {
       const start = requestStarts.get(response.request());
       record(actor, response.request().method(), response.url(), response.status(), start ? Date.now() - start : null);
+      const route = natRouteLabel(response.url());
+      if (isDefaultDashboardDenial(actor.account.role, route, response.status())) {
+        // Pinned UI currently requests these hidden Dashboard routes after login.
+        // Preserve and prove the backend denial; do not silently allow all 403s.
+        const verification = response.json().then((payload) => {
+          if (payload.message === `Tab 'dashboard' is disabled for role '${actor.account.role}'`) verifiedDefaultDashboardDenials++;
+          else violation("unexpected-dashboard-denial-reason", actor, route, 403);
+        }).catch(() => violation("unverified-dashboard-denial", actor, route, 403));
+        permissionChecks.add(verification);
+        void verification.finally(() => permissionChecks.delete(verification));
+      }
     });
     page.on("requestfinished", () => { concurrentRequests = Math.max(0, concurrentRequests - 1); });
     page.on("requestfailed", (value) => {
@@ -440,6 +454,7 @@ async function run({ artifactsDir, fixture, expectedSha, password }) {
       await assertAllSocketsOpen();
     });
     await runPhase("coverage and error acceptance", async () => {
+      await Promise.all([...permissionChecks]);
       check(actors.length === NAT_USERS && actors.every((actor) => actor.completed.login
         && actor.completed.search && actor.completed.collection && actor.completed.reconnect
         && actor.completed.mixedRounds === NAT_ROUNDS && actor.completed.heartbeatRounds === NAT_ROUNDS),
@@ -469,6 +484,8 @@ async function run({ artifactsDir, fixture, expectedSha, password }) {
       limits: { participants: NAT_USERS, mixedRounds: NAT_ROUNDS, maxRequests: NAT_MAX_REQUESTS, timeoutMs: NAT_TIMEOUT_MS, loginStartIntervalMs: 2_100, workflowConcurrency: 5, mixedConcurrency: 10 },
       participants: actors.map((actor) => ({ participant: actor.number, role: actor.account.role, ...actor.completed, ...(actor.failedStep ? { failedStep: actor.failedStep } : {}) })),
       sessions: { distinctAuthCookies: authCookies.size, distinctCsrfCookies: csrfCookies.size, distinctActivitySessions: activityIds.size },
+      verifiedDefaultDashboardDenials,
+      knownUiLimitation: "Pinned UI requests disabled Dashboard analytics after login for user/admin. Exact backend tab-disabled 403 responses are counted separately, not treated as NAT failures or permission grants. All other 4xx remain failures (except initial /api/me 401).",
       webSockets: { simultaneousParticipants: simultaneousWebSockets, reconnectParticipants, holdAfterReconnectMs: 35_000 },
       startedRequests, observedResponses: requests.length, peakConcurrentRequests, navigationAborts: networkAborts, pageErrorCount,
       latencyMeasure: "Elapsed browser request start to response headers (WebSocket handshake response for UPGRADE).",

@@ -251,6 +251,10 @@ async function main() {
     const settings = (await client.query("SELECT key, value FROM public.system_settings WHERE key = ANY($1::text[])", [requiredSettings])).rows;
     assert.equal(settings.length, requiredSettings.length, "Start the application once to seed its normal settings before running this fixture.");
     assert(settings.every((setting) => setting.value === "true"), "The normal role Search/Collection settings must already be enabled.");
+    const dashboardSettings = (await client.query("SELECT key, value FROM public.system_settings WHERE key = ANY($1::text[])", [["tab_user_dashboard_enabled", "tab_admin_dashboard_enabled", "tab_manager_dashboard_enabled"]])).rows;
+    assert.deepEqual(Object.fromEntries(dashboardSettings.map((setting) => [setting.key, setting.value])), {
+      tab_user_dashboard_enabled: "false", tab_admin_dashboard_enabled: "false", tab_manager_dashboard_enabled: "true",
+    }, "Retain default Dashboard permissions; the browser counts verified denials separately.");
     const paymentDate = new Date().toISOString().slice(0, 10);
     const sourceImportId = `nat-synthetic-${randomUUID()}`;
     const fixture = {
