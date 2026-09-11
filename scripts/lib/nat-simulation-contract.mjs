@@ -50,6 +50,27 @@ export function summarizeEdgeLog(raw) {
   };
 }
 
+export function startupDiagnosticMessages(raw, secrets = []) {
+  const messages = [];
+  for (const line of raw.split(/\r?\n/)) {
+    let message;
+    try {
+      const row = JSON.parse(line);
+      if (!["error", "fatal", 50, 60].includes(row.level)) continue;
+      message = [row.msg, row.error?.name, row.error?.code, row.error?.message].filter((value) => typeof value === "string").join(" | ");
+    } catch {
+      if (/^(?:Error|TypeError|AssertionError|nginx: \[emerg\]):?/.test(line)) message = line;
+    }
+    if (!message) continue;
+    for (const value of secrets) if (value) message = message.replaceAll(value, "[redacted]");
+    message = message.replace(/(?:https?|rediss?|postgres(?:ql)?):\/\/\S+/gi, "[redacted-url]")
+      .replace(/\b(?:password|token|secret|authorization|cookie)\s*[=:]\s*\S+/gi, "[redacted-credential]")
+      .replace(/[A-Za-z0-9_+/=-]{40,}/g, "[redacted-value]").slice(0, 600);
+    messages.push(message);
+  }
+  return messages.slice(-15);
+}
+
 // These are the verified active production admission values from 2026-09-10,
 // not the larger capacity examples in deploy/nginx/sqr.conf.example.
 export function nginxConfiguration() {
@@ -76,6 +97,11 @@ events { worker_connections 2048; }
 http {
   include /etc/nginx/mime.types;
   default_type application/octet-stream;
+  client_body_temp_path client-body;
+  proxy_temp_path proxy-temp;
+  fastcgi_temp_path fastcgi-temp;
+  uwsgi_temp_path uwsgi-temp;
+  scgi_temp_path scgi-temp;
   map $http_upgrade $connection_upgrade { default upgrade; "" close; }
   limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=100r/s;
   limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=5r/s;

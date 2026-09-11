@@ -6,7 +6,7 @@ import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from "n
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
-import { APPLICATION_SHA, BASE_URL, assertCiIsolation, nginxConfiguration, summarizeEdgeLog } from "./lib/nat-simulation-contract.mjs";
+import { APPLICATION_SHA, BASE_URL, assertCiIsolation, nginxConfiguration, summarizeEdgeLog, startupDiagnosticMessages } from "./lib/nat-simulation-contract.mjs";
 
 // Deliberately no dotenv. This runner is not a configurable production load tool.
 assertCiIsolation(process.env);
@@ -74,7 +74,7 @@ function launch(command, args, { cwd = workspace, name, timeoutMs = 0, privateLo
     });
   });
   // Background processes are observed through exitCode/readiness and stopped in finally.
-  return { child, completed };
+  return { child, completed, name };
 }
 async function command(commandName, args, options = {}) {
   const result = await launch(commandName, args, { timeoutMs: 600_000, ...options }).completed;
@@ -88,7 +88,11 @@ async function stop(child) {
 }
 async function waitReady(url, processHandle) {
   for (let n = 0; n < 90; n++) {
-    assert.ok(children.has(processHandle.child), "Service exited before readiness; private diagnostic log retained in runner");
+    if (!children.has(processHandle.child)) {
+      const logPath = path.join(output, "private", `${processHandle.name}.log`);
+      const messages = startupDiagnosticMessages(await readFile(logPath, "utf8"), Object.entries(env).filter(([key]) => /PASSWORD|SECRET|KEY/.test(key)).map(([, value]) => value));
+      throw new Error(`${processHandle.name} exited before readiness (${processHandle.child.exitCode}): ${messages.join("; ") || "No safe startup error message available"}`);
+    }
     try {
       const body = execFileSync("curl", ["--silent", "--fail", "--max-time", "3", "--cacert", path.join(runtime, "server.crt"), url], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
       const health = JSON.parse(body);

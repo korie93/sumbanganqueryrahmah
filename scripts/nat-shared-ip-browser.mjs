@@ -267,7 +267,7 @@ async function run({ artifactsDir, fixture, expectedSha, password }) {
     check(auth?.value && auth.httpOnly && auth.secure && csrf?.value, "independent-secure-session-and-csrf-cookies-required");
     authCookies.add(auth.value);
     csrfCookies.add(csrf.value);
-    const activityId = await actor.page.evaluate(() => localStorage.getItem("activityId"));
+    const activityId = await actor.page.evaluate(() => sessionStorage.getItem("activityId"));
     check(typeof activityId === "string" && activityId.length > 0, "real-login-activity-session-required");
     activityIds.add(activityId);
     actor.completed.login = true;

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { APPLICATION_SHA, assertCiIsolation, nginxConfiguration, summarizeEdgeLog } from "../lib/nat-simulation-contract.mjs";
+import { APPLICATION_SHA, assertCiIsolation, nginxConfiguration, summarizeEdgeLog, startupDiagnosticMessages } from "../lib/nat-simulation-contract.mjs";
 
 function isolatedEnv() {
   return { CI: "true", GITHUB_ACTIONS: "true", NAT_SIMULATION_ISOLATED: "1", PG_HOST: "127.0.0.1", PG_PORT: "5432", PG_USER: "postgres", PG_DATABASE: "sqr_nat_simulation", PG_PASSWORD: "ephemeral-postgres-password-at-least-32", NAT_SIMULATION_EXPECTED_SHA: APPLICATION_SHA, GITHUB_WORKSPACE: path.resolve("."), RUNNER_TEMP: path.resolve("artifacts"), RUNNER_ENVIRONMENT: "github-hosted" };
@@ -51,4 +51,19 @@ test("manual workflow pins application and never publishes private fixtures or d
   assert.match(workflow, new RegExp(`ref: ${APPLICATION_SHA}`));
   assert.match(workflow, /artifacts\/nat-shared-ip\/public\//);
   assert.doesNotMatch(workflow, /environment: production|secrets\.|\/private\/|release:package|deploy-release/);
+});
+
+test("browser reads the application's current session storage and uses system Chromium", () => {
+  const browser = readFileSync(new URL("../nat-shared-ip-browser.mjs", import.meta.url), "utf8");
+  assert.match(browser, /sessionStorage\.getItem\("activityId"\)/);
+  assert.doesNotMatch(browser, /localStorage\.getItem\("activityId"\)/);
+  assert.match(browser, /executablePath: process\.env\.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH/);
+});
+
+test("startup diagnosis extracts only safe error fields and redacts configured secrets", () => {
+  const raw = JSON.stringify({ level: "error", msg: "startup failed", headers: { cookie: "do-not-copy" }, error: { code: "ECONNREFUSED", message: "password=hidden postgres://secret@remote/db known-ephemeral-value" } });
+  const result = startupDiagnosticMessages(raw, ["known-ephemeral-value"]).join(" ");
+  assert.match(result, /ECONNREFUSED/);
+  assert.doesNotMatch(result, /hidden|secret@|known-ephemeral|do-not-copy/);
+  assert.deepEqual(startupDiagnosticMessages('{"level":"info","msg":"private information"}'), []);
 });
