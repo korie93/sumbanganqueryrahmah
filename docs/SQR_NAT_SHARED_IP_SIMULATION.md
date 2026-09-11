@@ -77,3 +77,26 @@ node --test scripts/tests/nat-shared-ip-contract.test.mjs
 
 Do not claim a simulation pass until the manually dispatched job and its actual
 coverage/attribution artifacts have both been inspected.
+
+## Import-list edge correction discovered by the simulation
+
+The unchanged active import location failed the fourth run: nineteen accounts
+logged in, but the ninth `GET /api/imports` received an edge 429. Its `10r/m`,
+burst 5, connection cap 3 budget was being applied to file-list reads as well as
+uploads. The failure remains recorded; login pacing is not reduced to hide it.
+
+The candidate configuration now applies the normal API aggregate guard to
+`/api/imports`, while a method-derived key applies the original strict import
+rate/burst/connection limits to every method except GET/HEAD. No client identity
+header is trusted. Nginx supports multiple additive limit directives and excludes
+empty keys from each zone's accounting: [request limits](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html#limit_req_zone),
+[connection limits](https://nginx.org/en/docs/http/ngx_http_limit_conn_module.html#limit_conn_zone).
+
+After normal browser traffic ends, seven unauthenticated empty POST probes must
+all be denied, including at least one Nginx write-burst rejection. They create no
+imports and are reported separately from normal-traffic 429 counts. New write-zone
+names avoid changing an existing live shared-memory zone's key at reload.
+
+This candidate is not a statement that production has already changed: require
+successful isolated evidence, exact active-config backups/validation/reload and
+post-change verification before recording production parity.

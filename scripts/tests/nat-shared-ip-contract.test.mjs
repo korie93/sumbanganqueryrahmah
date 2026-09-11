@@ -28,6 +28,10 @@ test("Nginx uses actual shared source IP and separate deployed admission zones",
   assert.match(config, /location = \/api\/auth\/login/);
   assert.match(config, /location = \/api\/telemetry\/web-vitals/);
   assert.match(config, /proxy_read_timeout 360s/);
+  assert.match(config, /map \$request_method \$sqr_import_write_key \{ GET ""; HEAD ""; default \$binary_remote_addr; \}/);
+  assert.match(config, /limit_req_zone \$sqr_import_write_key zone=sqr_import_write_per_ip:10m rate=10r\/m/);
+  assert.match(config, /sqr_import_write_per_ip burst=5 nodelay/);
+  assert.match(config, /sqr_import_write_conn_per_ip 3/);
   assert.match(config, /X-Forwarded-For \$remote_addr/);
   assert.doesNotMatch(config, /\$proxy_add_x_forwarded_for|\$http_authorization|\$http_cookie|\$request_uri/);
 });

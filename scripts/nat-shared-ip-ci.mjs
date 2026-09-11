@@ -117,6 +117,7 @@ let samplingPromise = Promise.resolve();
 let observer;
 let applicationProcess;
 let nginxProcess;
+let normalTrafficLog;
 try {
   console.log("[nat-ci] Building the exact deployed source in the isolated checkout");
   await command("npm", ["run", "build"], { cwd: application, name: "build" });
@@ -159,6 +160,28 @@ try {
   await sample();
   assert.ok(children.has(applicationProcess.child) && children.has(nginxProcess.child), "Application/Nginx exited during simulation");
   await waitReady(`${BASE_URL}/api/health/ready`, nginxProcess);
+  // Browser contexts are already closed. Keep all their WS access-log entries
+  // in the normal-workload evidence, then evaluate abuse separately.
+  await delay(300);
+  normalTrafficLog = await readFile(path.join(runtime, "nginx-access.jsonl"), "utf8");
+  const normalLines = normalTrafficLog.trim().split(/\r?\n/).length;
+  console.log("[nat-ci] Verifying unchanged strict upload admission after normal traffic");
+  for (let attempt = 0; attempt < 7; attempt++) {
+    // No auth/cookies/CSRF and no file: the app must reject these synthetic
+    // requests. No import can be created. The seventh also hits Nginx burst 5.
+    execFileSync("curl", ["--silent", "--max-time", "5", "--cacert", path.join(runtime, "server.crt"), "--output", "/dev/null", "--request", "POST", "--header", "Content-Type: application/json", "--data", "{}", `${BASE_URL}/api/imports`], { stdio: "ignore" });
+  }
+  await delay(100);
+  const probeRows = (await readFile(path.join(runtime, "nginx-access.jsonl"), "utf8")).trim().split(/\r?\n/).slice(normalLines).map((line) => JSON.parse(line));
+  assert.equal(probeRows.length, 7, "Seven bounded upload rejection probes must be observed");
+  assert.ok(probeRows.every((row) => row.method === "POST" && row.path === "/api/imports" && row.status >= 400 && row.status < 500), "Unauthenticated empty upload probes must never succeed");
+  summary.importUploadAbuseProbe = {
+    requests: probeRows.length,
+    edgeRejected: probeRows.filter((row) => row.status === 429 && ["", "-"].includes(row.upstreamStatus) && row.edgeRate === "REJECTED").length,
+    upstreamRejected: probeRows.filter((row) => !["", "-"].includes(row.upstreamStatus)).length,
+    note: "Intentional unauthenticated empty POST probes, excluded from normal-traffic 429 counts; no files or auth credentials supplied.",
+  };
+  assert.ok(summary.importUploadAbuseProbe.edgeRejected > 0, "Strict upload burst protection must remain active");
   summary.functionalRunPassed = true;
 } catch (error) {
   // Do not publish raw app logs, response bodies or exception objects containing credentials.
@@ -172,7 +195,7 @@ try {
   for (const child of [...children]) await stop(child);
   await delay(300); // Flush final WebSocket access-log entries after browser shutdown.
   if (existsSync(path.join(runtime, "nginx-access.jsonl"))) {
-    summary.edge = summarizeEdgeLog(await readFile(path.join(runtime, "nginx-access.jsonl"), "utf8"));
+    summary.edge = summarizeEdgeLog(normalTrafficLog ?? await readFile(path.join(runtime, "nginx-access.jsonl"), "utf8"));
   }
   summary.success = summary.functionalRunPassed === true && summary.edge?.allSourcesLoopback === true
     && summary.edge.edge429 === 0 && summary.edge.upstream429 === 0 && summary.edge.serverErrors === 0

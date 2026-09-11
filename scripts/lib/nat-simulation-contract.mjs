@@ -103,12 +103,16 @@ http {
   uwsgi_temp_path uwsgi-temp;
   scgi_temp_path scgi-temp;
   map $http_upgrade $connection_upgrade { default upgrade; "" close; }
+  # Only actual uploads/mutations consume the strict import budget.
+  # Empty keys are not accounted; GET/HEAD still use the general API flood guard.
+  map $request_method $sqr_import_write_key { GET ""; HEAD ""; default $binary_remote_addr; }
   limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=100r/s;
   limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=5r/s;
   limit_req_zone $binary_remote_addr zone=sqr_ws_per_ip:10m rate=10r/s;
   limit_req_zone $binary_remote_addr zone=sqr_telemetry_per_ip:10m rate=5r/s;
-  limit_req_zone $binary_remote_addr zone=sqr_import_per_ip:10m rate=10r/m;
-  ${["api", "auth", "ws", "telemetry", "import"].map((zone) => `limit_conn_zone $binary_remote_addr zone=sqr_${zone}_conn:10m;`).join("\n  ")}
+  limit_req_zone $sqr_import_write_key zone=sqr_import_write_per_ip:10m rate=10r/m;
+  limit_conn_zone $sqr_import_write_key zone=sqr_import_write_conn_per_ip:10m;
+  ${["api", "auth", "ws", "telemetry"].map((zone) => `limit_conn_zone $binary_remote_addr zone=sqr_${zone}_conn:10m;`).join("\n  ")}
   log_format nat escape=json '{"source":"$remote_addr","method":"$request_method","path":"$uri","status":$status,"upstreamStatus":"$upstream_status","edgeRate":"$limit_req_status","edgeConnection":"$limit_conn_status","seconds":$request_time}';
   access_log nginx-access.jsonl nat;
   server {
@@ -130,7 +134,14 @@ http {
     ${location("= /api/telemetry/client-errors", "telemetry", 100, 20, "", 30)}
     ${location("= /api/telemetry/web-vitals", "telemetry", 100, 20, "", 30)}
     ${location("= /telemetry/web-vitals", "telemetry", 100, 20, "", 30)}
-    ${location("= /api/imports", "import", 5, 3, "proxy_request_buffering off;", 360)}
+    location = /api/imports {
+      limit_req zone=sqr_api_per_ip burst=300 nodelay;
+      limit_conn sqr_api_conn 240;
+      limit_req zone=sqr_import_write_per_ip burst=5 nodelay;
+      limit_conn sqr_import_write_conn_per_ip 3;
+      ${proxy(360)}
+      proxy_request_buffering off;
+    }
     ${location("/api/", "api", 300, 240)}
     location / { ${proxy()} }
   }
