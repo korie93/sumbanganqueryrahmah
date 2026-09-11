@@ -118,6 +118,12 @@ async function run({ artifactsDir, fixture, expectedSha, password }) {
 
   async function navigate(actor, route, selector) {
     assertRunning();
+    // Finish body verification before a full document navigation discards CDP
+    // response buffers. Otherwise a real, expected Dashboard403 becomes an
+    // unreadable-body harness failure during rapid Search -> Collection moves.
+    await actor.page.waitForLoadState("networkidle", { timeout: 20_000 });
+    await Promise.all([...permissionChecks]);
+    check(!failed, "response-verification-before-navigation");
     await actor.page.goto(NAT_BASE_URL + route, { waitUntil: "domcontentloaded" });
     await actor.page.locator(selector).first().waitFor({ state: "visible" });
   }

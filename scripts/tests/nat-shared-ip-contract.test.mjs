@@ -63,6 +63,7 @@ test("browser reads the application's current session storage and uses system Ch
   assert.match(browser, /sessionStorage\.getItem\("activityId"\)/);
   assert.doesNotMatch(browser, /localStorage\.getItem\("activityId"\)/);
   assert.match(browser, /executablePath: process\.env\.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH/);
+  assert.match(browser, /waitForLoadState\("networkidle", \{ timeout: 20_000 \}\)/);
 });
 
 test("startup diagnosis extracts only safe error fields and redacts configured secrets", () => {
