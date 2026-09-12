@@ -166,7 +166,24 @@ bash /home/deploy/apps/sqr-runtime/current/scripts/post-deploy-health-check.sh h
 
 Preserve existing Node/private CA settings and run normal local/public readiness and provenance checks. The rollback script verifies SHA/readiness and does not reverse database migrations. This Search/WS correction requires no migration or dependency change.
 
-## Acceptance and remaining gates
+## Latest continuation: import-read gate still pending
+
+The user approved isolated thirty-account acceptance instead of assembling
+thirty physical staff. The fullstack test passed, with 27,609 normal requests,
+zero edge/upstream 429, thirty separate sessions/WebSockets/reconnects and
+role-aware business flows. It also exposed an additional import-list bottleneck
+in the preserved strict `/api/imports` location. Its method-aware correction is
+tested but **not applied to production**. See the exact
+[remaining rollout and access boundary](SQR_NGINX_IMPORT_READ_ROLLOUT.md) and
+[simulation evidence](SQR_NAT_SHARED_IP_SIMULATION.md).
+
+The old temporary SSH authorization expired at 00:00 UTC on 12 September 2026;
+fresh user-approved access or operator execution is required. The old SSH PTY
+was closed without performing this change. Disk cleanup, separately authorized
+and verified in handoff section22, reclaimed about10.95GB and reduced usage to87%;
+the earlier99% snapshot below is historical. No further cleanup is requested.
+
+## Acceptance and remaining gates (historical deployment checkpoint)
 
 Record the admission backup directory, file diff/checksums, reload time, approved app SHA, actual current/previous release paths, filtered PM2 status and local/public health after each change. Begin with a small group, then observe a defined 30-person office interval using each person's own account. Verify Dashboard, Search, heartbeat, Collection/Billing and simultaneous WebSockets, including ordinary reconnects.
 

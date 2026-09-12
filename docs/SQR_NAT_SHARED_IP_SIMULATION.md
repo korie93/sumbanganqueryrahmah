@@ -5,6 +5,12 @@ instead of arranging thirty physical office staff. This supplements the real
 production observation in the continuation handoff; it does not certify office
 Wi-Fi, production hardware capacity or every production workload.
 
+Latest verified result: [run 34659171201](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34659171201)
+passed at harness `477772e925def4a6c219c10cc1864c62ce3b0693`, testing application
+`62cbe7aa20390ddd87ece97c41b1424b8c9154a4`. The import-method correction below is
+validated in isolation but **not deployed to production**. See the
+[remaining rollout](SQR_NGINX_IMPORT_READ_ROLLOUT.md).
+
 Run **NAT Shared-IP Simulation** manually from GitHub Actions. There is no
 production URL input, deployment step, production secret or local dotenv fallback.
 The application checkout is pinned to deployed source
@@ -100,3 +106,39 @@ names avoid changing an existing live shared-memory zone's key at reload.
 This candidate is not a statement that production has already changed: require
 successful isolated evidence, exact active-config backups/validation/reload and
 post-change verification before recording production parity.
+
+## Verified result, 11 September 2026 23:46–23:51 UTC
+
+The downloaded artifact `10286831518` matched GitHub's SHA256:
+`76386610269a9eadf999e0a502a9101ee3a8d1b647daa74c6215b79afd6ee187`.
+Both browser and fullstack summaries report success; their coverage was inspected.
+
+- Thirty distinct auth cookies, CSRF tokens and activity sessions; thirty logins.
+- All role-aware workflow counts in the table above passed. Every participant
+  completed three mixed-read/heartbeat rounds.
+- Thirty simultaneous native WebSockets; all thirty reconnected and remained
+  open for another 35 seconds.
+- 27,609 normal Nginx requests from one actual loopback source: zero edge 429,
+  zero upstream 429 and zero HTTP 5xx. All fifty `GET /api/imports` calls returned
+  200 (route p95 75 ms).
+- Seven separate, unauthenticated empty POST upload probes: six upstream
+  denials and one edge burst rejection. No synthetic import was created by them.
+- Sixty-three resource samples: one application process throughout, peak RSS
+  498,504 KiB, maximum sampled PostgreSQL connections 13 (includes auxiliary
+  connections/observer, not a claim that the pool limit is 13), maximum one
+  active non-observer query and zero sampled lock waits. `ps` CPU percentages
+  are lifetime averages, not instantaneous production-capacity measurements.
+- Zero uncaught page errors. The report retains 480 verified default Dashboard
+  denials and 121 navigation aborts; this is not a claim of zero non-200 traffic.
+
+The same PNG is reused across synthetic receipts, so duplicate warnings and
+settlement eligibility remain enforced. This verifies receipt saves/readback,
+not Billing settlement calculations or malware detection. Managers' own target
+IDs are checked through API rounds; UI automatically selects its first available
+target. Neither limitation invalidates the shared-IP result, and neither should
+be described as broader business validation.
+
+[CI 34659165201](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34659165201)
+and [CodeQL 34659165193](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34659165193)
+also passed the same harness SHA. Do not rerun completed simulations merely
+because production access is unavailable; complete the remaining guarded rollout.

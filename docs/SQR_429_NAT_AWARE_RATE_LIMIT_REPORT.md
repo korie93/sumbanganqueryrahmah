@@ -1,5 +1,17 @@
 # SQR 429 NAT-aware rate limiting — engineering and deployment report
 
+Latest checkpoint (12 September 2026): the user explicitly approved replacing the
+thirty-physical-staff acceptance with an isolated thirty-account fullstack test.
+That [test and its CI/CodeQL passed](SQR_NAT_SHARED_IP_SIMULATION.md). It discovered
+a further false-positive edge limit on normal `GET /api/imports`; the method-aware
+fix is verified in isolation but not yet applied to production. Temporary SSH
+authorization expired before apply. The overall goal remains incomplete pending
+[the guarded two-file rollout and post-checks](SQR_NGINX_IMPORT_READ_ROLLOUT.md).
+The historical status below does not supersede this checkpoint. Original deployed
+application/proxy changes and real daytime traffic evidence remain valid as
+documented in the continuation handoff; synthetic evidence is not production
+hardware-capacity proof.
+
 Current status (2026-09-10 15:02 UTC): production Nginx diagnostics/admission changes and Search/WebSocket application commit `62cbe7aa20390ddd87ece97c41b1424b8c9154a4` are deployed. CI including live Redis, CodeQL, dispatched Release Verification and production approval passed. Approved-archive checksums, local/public readiness and exact SHA, Redis PONG and post-restart checks passed. Real 30-person office acceptance remains outstanding; quiet probe success is not capacity proof. [Continuation handoff sections 20–21](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md) contain the authoritative release/rollback evidence. Sections 1–21 below retain original implementation history unless explicitly updated; old snapshot limits and test counts are not current deployment assertions.
 
 ## 1. Root cause
