@@ -1,16 +1,29 @@
 # SQR 429 NAT-aware rate limiting — engineering and deployment report
 
-Latest checkpoint (12 September 2026): the user explicitly approved replacing the
-thirty-physical-staff acceptance with an isolated thirty-account fullstack test.
-That [test and its CI/CodeQL passed](SQR_NAT_SHARED_IP_SIMULATION.md). It discovered
-a further false-positive edge limit on normal `GET /api/imports`; the method-aware
-fix is verified in isolation but not yet applied to production. Temporary SSH
-authorization expired before apply. The overall goal remains incomplete pending
-[the guarded two-file rollout and post-checks](SQR_NGINX_IMPORT_READ_ROLLOUT.md).
-The historical status below does not supersede this checkpoint. Original deployed
-application/proxy changes and real daytime traffic evidence remain valid as
-documented in the continuation handoff; synthetic evidence is not production
-hardware-capacity proof.
+Final checkpoint (12September2026): the approved scope is implemented and verified.
+The user-approved [thirty-account fullstack simulation](SQR_NAT_SHARED_IP_SIMULATION.md)
+passed; the final [method-aware import gate](SQR_NGINX_IMPORT_READ_ROLLOUT.md) was
+applied at10:32:59UTC after recovering a separately authorized
+[PostgreSQL hostname outage](SQR_POST_REBOOT_HOSTNAME_RECOVERY.md) at10:31:28UTC.
+Deployed application remains clean62cbe7aa. Local/public readiness, fullSHA,
+strict PostgreSQLTLS/SELECT1, RedisTLS/PONG and stable PM2 passed through10:36UTC.
+Temporary access was removed. No production financial test writes or upload
+deletion occurred in this final change.
+
+Evidence scopes remain distinct: modeled20/30/50/100 quota/HTTP/WS tests and
+required liveRedisCI passed; isolated30-account fullstack passed27,609normal
+requests with0edge429/upstream429/5xx; real11September formerly affected office
+network had2,365requests with0edge429/upstream429/5xx. Today's post-change sample
+is only10operator probes, not a new office capacity test. The simulation replaces
+gathering30physicalstaff by explicit user agreement, not all production workload
+or hardware-capacity testing. Strict individual/flood limits may still return429
+for genuine quota exhaustion. Existing Dashboard403 and navigation-abort
+limitations are documented, not hidden or relabeled as success.
+
+All numbered sections and the10September status below are historical engineering
+records unless expressly updated. Old present-tense claims about pending Redis,
+unapplied Nginx, old import limits or physical-staff acceptance are superseded by
+this final checkpoint and [handoff section28](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md#28-completed-production-recovery-import-rollout-and-final-audit).
 
 Current status (2026-09-10 15:02 UTC): production Nginx diagnostics/admission changes and Search/WebSocket application commit `62cbe7aa20390ddd87ece97c41b1424b8c9154a4` are deployed. CI including live Redis, CodeQL, dispatched Release Verification and production approval passed. Approved-archive checksums, local/public readiness and exact SHA, Redis PONG and post-restart checks passed. Real 30-person office acceptance remains outstanding; quiet probe success is not capacity proof. [Continuation handoff sections 20–21](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md) contain the authoritative release/rollback evidence. Sections 1–21 below retain original implementation history unless explicitly updated; old snapshot limits and test counts are not current deployment assertions.
 

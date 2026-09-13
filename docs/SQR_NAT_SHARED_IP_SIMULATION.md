@@ -8,8 +8,8 @@ Wi-Fi, production hardware capacity or every production workload.
 Latest verified result: [run 34659171201](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34659171201)
 passed at harness `477772e925def4a6c219c10cc1864c62ce3b0693`, testing application
 `62cbe7aa20390ddd87ece97c41b1424b8c9154a4`. The import-method correction below is
-validated in isolation but **not deployed to production**. See the
-[remaining rollout](SQR_NGINX_IMPORT_READ_ROLLOUT.md).
+validated in isolation and **deployed to production on12September10:32:59UTC**.
+See the [completed rollout and post-checks](SQR_NGINX_IMPORT_READ_ROLLOUT.md).
 
 Run **NAT Shared-IP Simulation** manually from GitHub Actions. There is no
 production URL input, deployment step, production secret or local dotenv fallback.

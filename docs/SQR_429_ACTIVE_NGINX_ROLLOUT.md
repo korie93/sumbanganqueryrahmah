@@ -1,6 +1,8 @@
 # SQR shared-NAT: active Nginx findings and targeted rollout
 
-Current checkpoint: 2026-09-10 15:02 UTC. Privacy-conscious diagnostics were reloaded at approximately 12:48 UTC; the five admission changes below were backed up and applied at 13:29:31 UTC (21:29:31 Malaysia time). Search/WebSocket commit `62cbe7aa20390ddd87ece97c41b1424b8c9154a4` is now deployed from its production-approved immutable artifact. Local/public readiness, exact SHA, Redis PONG and post-restart checks passed. Actual 30-person office acceptance remains outstanding. [Continuation handoff](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md) sections 20–21 hold the latest release evidence; the baseline below is historical.
+Latest checkpoint: 12September2026, final import-read Nginx gate deployed and independently verified. Application remains the approved clean62cbe7aa release. User-approved30-account isolated acceptance and real11September office observations are complete within their documented scope. The separate post-reboot hostname outage was recovered with explicit approval before Nginx apply; final readiness/TLS/Redis/SHA checks passed and temporary access was revoked. See [final import rollout](SQR_NGINX_IMPORT_READ_ROLLOUT.md), [hostname recovery](SQR_POST_REBOOT_HOSTNAME_RECOVERY.md) and [handoff section28](../CODEX_CONTINUATION_HANDOFF_SQR_429_NAT_AWARE_RATE_LIMIT_FIX.md#28-completed-production-recovery-import-rollout-and-final-audit).
+
+Everything below is the historical10September rollout record, not a current-state assertion. Later corrections above supersede old outstanding-acceptance statements and import limits.
 
 ## Verified production baseline
 

@@ -1,11 +1,26 @@
-# Remaining production change: import list versus upload admission
+# Production rollout: import list versus upload admission
 
-Status, 12 September 2026: isolated fullstack verification passed, but this
-two-file production change has **not** been applied. The previous API/login/WS
-corrections and application `62cbe7aa` were deployed successfully. Temporary SSH
-authorization expired at 00:00 UTC / 08:00 Malaysia; fresh user-authorized access
-or an operator-run change is required. Do not bypass that expiry using an old
-session, another login method or a modified helper deadline.
+Status, 12 September 2026: **applied and verified** at10:32:59UTC.
+Both original files were backed up under
+`/etc/nginx/backups/sqr-import-read-20260912T103259Z`; syntax checks after each
+edit, reload, active service and independent new-worker checks passed. Nginx
+master972 remained; new workers7349/7350 started at18:32:59Malaysia.
+
+The separate pre-existing502 was first recovered with explicit user approval at
+10:31:28UTC by correcting only the PostgreSQL hostname's loopback mapping and its
+cloud-init template. TLS, database settings and application SHA stayed unchanged.
+See [hostname recovery and rollback](SQR_POST_REBOOT_HOSTNAME_RECOVERY.md).
+Through10:36:28UTC, local/public readiness and full deployedSHA passed, PostgreSQL
+verifiedTLS/SELECT1 and Redis verifiedTLS/PONG passed, PM2PID7092 remained stable
+at240restarts. The post-Nginx sample contains10operator probes:8HTTP200 and2
+expected unauthenticated401, with0edge429/upstream429/5xx. This is a quiet
+post-change check, not new office-load evidence. The separately verified30-account
+simulation and real11September office observations retain their documented scope.
+
+Current SHA256 values: zones `3a00d469ef2b06fa99d26290a2dc7028dc450fabaa7e27297a8ee2a1c437fbe3`;
+site `40b8bae9b3a3a68be2a01d96a627bd3a44d61936971df30f3ef40a053d32c1b9`.
+The installation procedure below records the reviewed transformation; **do not
+reapply it** to the already-corrected files.
 
 ## Evidence and target
 
@@ -81,27 +96,25 @@ then ordinary real traffic and edge/upstream attribution. Do not run abuse or
 synthetic financial mutations on production. Record the actual backup directory,
 reload time, differences and post-change evidence in the handoff.
 
-## Rollback and preflight already performed
+## Actual backup and rollback
 
-At 23:45 UTC, the ignored one-off helper at
-`/home/deploy/sqr-nat-preflight-20260910/sqr-nginx-import-read-gate.cjs` passed a
-read-only preflight. Local/server helper SHA256:
-`bc2b291379397cdd29d3a8f6d30e0acbebd3b250fe57e7409c93ed858f7df3e3`.
-Reviewed plan SHA256:
+After the explicit eight-hour access renewal, the ignored helper at
+`/home/deploy/sqr-nat-preflight-20260910/sqr-nginx-import-read-gate.cjs` had only its
+deadline changed to2026-09-12T17:29:13Z. Reviewed local/server helper SHA256:
+`e15c4dd1d5a77bf9e7b523b46d490994e1ca5a1adafa8a2ad27a52a35e796a21`.
+Fresh healthy-baseline preflight and apply used plan SHA256:
 `7fc1a41405deabc8f6c3043ecaca6bc9b1201b54c5e25f0962bdea29d45c97dd`.
-It intentionally refuses a new apply after the expired authorization deadline;
-do not run or change it until fresh access is explicitly approved and reviewed.
-
-No new import-read backup directory exists because apply never ran. Following a
-future apply, rollback must use that run's exact recorded backup directory:
+Rollback requires separately authorized access and the exact actual backup
+directory `/etc/nginx/backups/sqr-import-read-20260912T103259Z`:
 restore `site.conf` to the site first, then `zones.conf` to the zone file, preserving
 metadata; refuse unknown intervening hashes. Run `sudo nginx -t`, reload only on
 success, and independently verify health/SHA/service. Restoring the old import
 location restores the known list-read bottleneck, so rollback is a recovery
 option, not the finished fix.
 
-The old scoped key had two identical authorized entries with comment
-`sqr-nat-codex-temp-20260910`. Once access is coordinated, remove only those exact
-task entries and corresponding local task key pair, preserving all other keys.
-The previous root SSH session was closed with `sudo -k` and `exit` after expiry;
-it was not used to apply the configuration.
+The helper's rollback form is `sudo node /home/deploy/sqr-nat-preflight-20260910/sqr-nginx-import-read-gate.cjs --rollback /etc/nginx/backups/sqr-import-read-20260912T103259Z`.
+It verifies the unchanged reviewed application, known original/candidate hashes
+and backups before restoring; inspect it before use. Audit JSON is root-private
+inside that backup directory. Both scoped SSH entries were removed at10:36:34UTC,
+the privileged session closed, a new key login was rejected, and the local task
+key pair was deleted. The other authorized key was preserved.
