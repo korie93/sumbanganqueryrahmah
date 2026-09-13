@@ -7,7 +7,10 @@ import { PublicAuthButton } from "@/components/PublicAuthControls";
 import type { ActivationTokenValidationPayload } from "@/lib/api/auth";
 import { formatPublicAuthExpiry } from "@/pages/public-auth-runtime-utils";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
-import { getPasswordCreationSubmitHint } from "@/pages/password-creation-feedback";
+import {
+  getPasswordCreationSubmitHint,
+  getPasswordCreationValidationStates,
+} from "@/pages/password-creation-feedback";
 
 export type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 
@@ -33,6 +36,7 @@ type ActivationPasswordFormProps = {
   error: string;
   loading: boolean;
   newPassword: string;
+  newPasswordInteracted?: boolean;
   newPasswordError: string;
   newPasswordInputRef: Ref<HTMLInputElement>;
   newPasswordInvalidProps: InputAccessibilityProps;
@@ -99,6 +103,7 @@ export function ActivationPasswordForm({
   error,
   loading,
   newPassword,
+  newPasswordInteracted = false,
   newPasswordError,
   newPasswordInputRef,
   newPasswordInvalidProps,
@@ -111,6 +116,13 @@ export function ActivationPasswordForm({
   onNewPasswordBlur,
   onNewPasswordChange,
 }: ActivationPasswordFormProps) {
+  const validationStates = getPasswordCreationValidationStates({
+    newPassword,
+    confirmPassword,
+    newPasswordInteracted,
+    newPasswordError,
+    confirmPasswordError,
+  });
   return (
     <form
       className="password-creation-form"
@@ -145,6 +157,7 @@ export function ActivationPasswordForm({
           variant="public-auth"
           visibilityLabel="kata laluan baharu"
           value={newPassword}
+          data-validation-state={validationStates.newPassword}
           onChange={(event) => {
             onNewPasswordChange(event.target.value);
             onClearNewPasswordError();
@@ -157,12 +170,14 @@ export function ActivationPasswordForm({
           required
           disabled={loading}
           {...newPasswordInvalidProps}
+          {...getAriaInvalidProps(validationStates.newPassword === "error")}
         />
       </div>
       <PasswordStrengthMeter
         id="activate-password-strength"
         password={newPassword}
         variant="checklist"
+        interacted={newPasswordInteracted}
       />
       {newPasswordError ? (
         <p id="activate-password-new-error" className="public-auth-field-error" role="alert">
@@ -179,6 +194,7 @@ export function ActivationPasswordForm({
           variant="public-auth"
           visibilityLabel="pengesahan kata laluan baharu"
           value={confirmPassword}
+          data-validation-state={validationStates.confirmPassword}
           onChange={(event) => {
             onConfirmPasswordChange(event.target.value);
             onClearConfirmPasswordError();
@@ -190,7 +206,7 @@ export function ActivationPasswordForm({
           required
           disabled={loading}
           {...confirmPasswordInvalidProps}
-          {...getAriaInvalidProps(Boolean(confirmPasswordError || (confirmPassword && newPassword !== confirmPassword)))}
+          {...getAriaInvalidProps(validationStates.confirmPassword === "error")}
           aria-describedby="activate-password-confirm-error"
         />
       </div>

@@ -21,6 +21,7 @@ import {
 import {
   getPasswordCreationFieldErrors,
   getPasswordCreationSubmitHint,
+  getPasswordCreationValidationStates,
 } from "@/pages/password-creation-feedback";
 import {
   formatPublicAuthExpiry,
@@ -41,6 +42,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
   const [reset, setReset] = useState<PasswordResetTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ResetPhase>(token ? "validating" : "invalid");
   const [newPassword, setNewPassword] = useState("");
+  const [newPasswordInteracted, setNewPasswordInteracted] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [newPasswordError, setNewPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
@@ -123,6 +125,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
   const handleResetPassword = async () => {
     if (!reset || loading || phase !== "ready" || resetAbortControllerRef.current) return;
 
+    setNewPasswordInteracted(true);
     setError("");
     setNewPasswordError("");
     setConfirmPasswordError("");
@@ -184,6 +187,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
   };
 
   const validateNewPasswordOnBlur = () => {
+    setNewPasswordInteracted(true);
     const fieldErrors = validatePasswordFields({
       newPassword,
       confirmPassword,
@@ -195,6 +199,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
   };
 
   const validateConfirmPasswordOnBlur = () => {
+    if (!confirmPassword) return;
     const fieldErrors = validatePasswordFields({
       newPassword,
       confirmPassword,
@@ -202,16 +207,23 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
     setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
   };
 
+  const validationStates = getPasswordCreationValidationStates({
+    newPassword,
+    confirmPassword,
+    newPasswordInteracted,
+    newPasswordError,
+    confirmPasswordError,
+  });
   const newPasswordDescribedBy = [
     "reset-password-strength",
     newPasswordError ? "reset-password-new-error" : null,
   ].filter(Boolean).join(" ");
   const newPasswordInvalidProps = {
     "aria-describedby": newPasswordDescribedBy,
-    ...(newPasswordError ? { "aria-invalid": "true" as const } : {}),
+    ...getAriaInvalidProps(validationStates.newPassword === "error"),
   };
   const confirmPasswordInvalidProps = {
-    ...getAriaInvalidProps(Boolean(confirmPasswordError || (confirmPassword && newPassword !== confirmPassword))),
+    ...getAriaInvalidProps(validationStates.confirmPassword === "error"),
     "aria-describedby": "reset-password-confirm-error",
   };
 
@@ -287,7 +299,9 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
               variant="public-auth"
               visibilityLabel="kata laluan baharu"
               value={newPassword}
+              data-validation-state={validationStates.newPassword}
               onChange={(event) => {
+                setNewPasswordInteracted(true);
                 setNewPassword(event.target.value);
                 setNewPasswordError("");
                 setConfirmPasswordError("");
@@ -305,6 +319,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             id="reset-password-strength"
             password={newPassword}
             variant="checklist"
+            interacted={newPasswordInteracted}
           />
           {newPasswordError ? (
             <p id="reset-password-new-error" className="public-auth-field-error" role="alert">
@@ -321,6 +336,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
               variant="public-auth"
               visibilityLabel="pengesahan kata laluan baharu"
               value={confirmPassword}
+              data-validation-state={validationStates.confirmPassword}
               onChange={(event) => {
                 setConfirmPassword(event.target.value);
                 setConfirmPasswordError("");

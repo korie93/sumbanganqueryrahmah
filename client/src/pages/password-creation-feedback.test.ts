@@ -4,9 +4,51 @@ import { assessCredentialPassword } from "@shared/password-policy";
 import {
   getPasswordCreationFieldErrors,
   getPasswordCreationSubmitHint,
+  getPasswordCreationValidationStates,
 } from "./password-creation-feedback";
 
 const validPassword = "TestPassword123!";
+
+test("creation field states start neutral and remain evaluated after an interacted password is cleared", () => {
+  assert.deepEqual(getPasswordCreationValidationStates({ newPassword: "", confirmPassword: "" }), {
+    newPassword: "neutral", confirmPassword: "neutral",
+  });
+  assert.deepEqual(getPasswordCreationValidationStates({ newPassword: "", confirmPassword: "", newPasswordInteracted: true }), {
+    newPassword: "error", confirmPassword: "neutral",
+  });
+});
+
+test("new password field state uses the complete authoritative policy after interaction", () => {
+  for (const newPassword of [
+    "abcdefghijklmno", "Abcdefghijklmn1", "Abcdefghijklmn1!", "Aa1!", "UPPERCASE12345!",
+    "NoDigitsPresent!", `${"a".repeat(252)}A1!a`, `${"a".repeat(253)}A1!a`, "  Abcdefghij1!  ",
+  ]) {
+    const states = getPasswordCreationValidationStates({ newPassword, confirmPassword: "", newPasswordInteracted: true });
+    assert.equal(states.newPassword, assessCredentialPassword(newPassword, "ms").valid ? "success" : "error");
+    assert.equal(states.confirmPassword, "neutral");
+  }
+});
+
+test("confirmation field state is exact, independent of policy, and recomputes when the original changes", () => {
+  const state = (newPassword: string, confirmPassword: string) => getPasswordCreationValidationStates({
+    newPassword, confirmPassword, newPasswordInteracted: true,
+  });
+  assert.deepEqual(state("short", "short"), { newPassword: "error", confirmPassword: "success" });
+  assert.deepEqual(state(validPassword, validPassword), { newPassword: "success", confirmPassword: "success" });
+  assert.deepEqual(state(`${validPassword}changed`, validPassword), { newPassword: "success", confirmPassword: "error" });
+  assert.equal(state(` ${validPassword}`, validPassword).confirmPassword, "error");
+  assert.equal(state(validPassword, "").confirmPassword, "neutral");
+});
+
+test("explicit field rejection takes precedence over successful or untouched visual states", () => {
+  assert.deepEqual(getPasswordCreationValidationStates({
+    newPassword: validPassword, confirmPassword: validPassword, newPasswordInteracted: true,
+    newPasswordError: "Known policy rejection", confirmPasswordError: "Known confirmation rejection",
+  }), { newPassword: "error", confirmPassword: "error" });
+  assert.deepEqual(getPasswordCreationValidationStates({
+    newPassword: "", confirmPassword: "", newPasswordError: "Required", confirmPasswordError: "Required",
+  }), { newPassword: "error", confirmPassword: "error" });
+});
 
 test("creation feedback maps every supported policy rejection to shared safe Malay copy", () => {
   for (const check of assessCredentialPassword("", "ms").checks) {

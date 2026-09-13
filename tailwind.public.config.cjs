@@ -5,6 +5,14 @@ module.exports = {
     "./client/index.html",
     "./client/src/App.tsx",
     "./client/src/components/BrandLogo.tsx",
+    // Public routes do not load the authenticated stylesheet. Shared auth
+    // components need their own bounded coverage here, not just their pages.
+    "./client/src/components/PublicAuthLayout.tsx",
+    "./client/src/components/PublicAuthControls.tsx",
+    "./client/src/components/PasswordInput.tsx",
+    "./client/src/components/PasswordRequirementsChecklist.tsx",
+    "./client/src/components/PasswordStrengthMeter.tsx",
+    "./client/src/components/PasswordConfirmationFeedback.tsx",
     "./client/src/pages/Landing*.tsx",
     "./client/src/pages/Login.tsx",
     "./client/src/pages/LoginParts.tsx",

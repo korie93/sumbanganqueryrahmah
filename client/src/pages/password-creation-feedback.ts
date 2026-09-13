@@ -5,6 +5,36 @@ import {
   type PublicAuthFieldErrors,
 } from "@/pages/public-auth-form-utils";
 
+type PasswordFieldValidationState = "neutral" | "success" | "error";
+
+/** Visual state follows authoritative policy; confirmation only compares the two fields. */
+export function getPasswordCreationValidationStates({
+  newPassword,
+  confirmPassword,
+  newPasswordInteracted = false,
+  newPasswordError = "",
+  confirmPasswordError = "",
+}: {
+  newPassword: string;
+  confirmPassword: string;
+  newPasswordInteracted?: boolean;
+  newPasswordError?: string;
+  confirmPasswordError?: string;
+}): { newPassword: PasswordFieldValidationState; confirmPassword: PasswordFieldValidationState } {
+  return {
+    newPassword: newPasswordError
+      ? "error"
+      : !newPasswordInteracted
+        ? "neutral"
+        : assessCredentialPassword(newPassword, "ms").valid ? "success" : "error",
+    confirmPassword: confirmPasswordError
+      ? "error"
+      : !confirmPassword
+        ? "neutral"
+        : newPassword === confirmPassword ? "success" : "error",
+  };
+}
+
 /** Known server codes use the shared policy copy, never raw server text. */
 export function getPasswordCreationFieldErrors(error: unknown): PublicAuthFieldErrors {
   const code = getAuthErrorCode(error);

@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleAlert } from "lucide-react";
+import { CheckCircle2, CircleX } from "lucide-react";
 
 type PasswordConfirmationFeedbackProps = {
   id: string;
@@ -34,13 +34,14 @@ export function PasswordConfirmationFeedback({
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className={`flex min-h-10 items-start gap-2 text-sm leading-5 ${matches ? "text-green-700 dark:text-green-200" : "text-destructive"}`}
+        data-state={matches ? "success" : enhancedMessage ? "error" : "neutral"}
+        className={`flex min-h-10 items-start gap-2 text-sm leading-5 ${matches ? "text-green-700 dark:text-green-200" : enhancedMessage ? "text-red-700 dark:text-red-200" : "text-muted-foreground"}`}
       >
         {enhancedMessage ? (
           <>
             {matches
               ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" focusable="false" />
-              : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" focusable="false" />}
+              : <CircleX className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" focusable="false" />}
             <span>{enhancedMessage}</span>
           </>
         ) : null}

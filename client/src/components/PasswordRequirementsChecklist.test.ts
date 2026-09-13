@@ -47,15 +47,81 @@ test("enhanced confirmation is initially quiet and uses icons/text for live matc
   );
   const empty = render("", "");
   assert.match(empty, /min-h-10/);
+  assert.match(empty, /data-state="neutral"/);
   assert.doesNotMatch(empty, /<svg|tidak sepadan|sepadan/);
   const matched = render("first", "first");
   assert.match(matched, /Pengesahan kata laluan sepadan/);
   assert.match(matched, /<svg/);
   assert.match(matched, /aria-live="polite"/);
+  assert.match(matched, /data-state="success"/);
+  assert.match(matched, /text-green-700/);
   const changed = render("second", "first");
   assert.match(changed, /Pengesahan kata laluan tidak sepadan/);
   assert.doesNotMatch(changed, /first|second/);
+  assert.match(changed, /data-state="error"/);
+  assert.match(changed, /text-red-700/);
   const rejected = render("first", "first", "Pengesahan ditolak. Sila semak semula.");
   assert.match(rejected, /Pengesahan ditolak/);
   assert.doesNotMatch(rejected, /Pengesahan kata laluan sepadan/);
+});
+
+test("untouched rules are neutral, but clearing an evaluated password keeps missing rules red", () => {
+  for (const interacted of [false, true]) {
+    const markup = renderToStaticMarkup(createElement(PasswordStrengthMeter, {
+      id: "requirements", variant: "checklist", password: "", interacted,
+    }));
+    const rows = [...markup.matchAll(/<li\b[^>]*>[\s\S]*?<\/li>/g)].map(([row]) => row);
+    assert.equal(rows.length, 5);
+    for (const row of rows) {
+      assert.ok(row.includes(`data-state="${interacted ? "error" : "neutral"}"`));
+      assert.ok(row.includes(interacted ? "text-red-700" : "text-muted-foreground"));
+      assert.ok(row.includes(interacted ? "lucide-circle-x" : "lucide-circle"));
+      assert.ok(row.includes(interacted ? "Belum dipenuhi:" : "Belum dinilai:"));
+    }
+    assert.match(markup, /0\/5 dipenuhi/);
+    assert.match(markup, /data-password-strength-level="none"/);
+    assert.equal((markup.match(/data-filled="true"/g) ?? []).length, 0);
+  }
+});
+
+test("each V2 example independently colors met rules green and missing rules red", () => {
+  const cases = [
+    { password: "abcdefghijklmno", met: ["length", "lowercase"] },
+    { password: "Abcdefghijklmn1", met: ["length", "lowercase", "uppercase", "number"] },
+    { password: "Abcdefghijklmn1!", met: ["length", "lowercase", "uppercase", "number", "symbol"] },
+  ];
+  for (const { password, met } of cases) {
+    const markup = renderToStaticMarkup(createElement(PasswordStrengthMeter, {
+      id: "requirements", variant: "checklist", password, interacted: true,
+    }));
+    assert.ok(markup.includes(`${met.length}/5 dipenuhi`));
+    for (const [row] of markup.matchAll(/<li\b[^>]*>[\s\S]*?<\/li>/g)) {
+      const id = /data-password-requirement="([^"]+)"/.exec(row)?.[1] ?? "";
+      const success = met.includes(id);
+      assert.ok(row.includes(`data-state="${success ? "success" : "error"}"`));
+      assert.ok(row.includes(success ? "text-green-700" : "text-red-700"));
+      assert.ok(row.includes(success ? "lucide-circle-check" : "lucide-circle-x"));
+    }
+    assert.equal(markup.includes("Kata laluan sah"), met.length === 5);
+  }
+});
+
+test("five visible meter segments and semantic color transition with the existing heuristic", () => {
+  const cases = [
+    { password: "a", level: 0, label: "Sangat Lemah", color: "bg-red-700" },
+    { password: "PalmRiver", level: 2, label: "Sederhana", color: "bg-amber-700" },
+    { password: "PalmRiverMountain7", level: 3, label: "Kuat", color: "bg-green-600" },
+    { password: "PalmRiver7!Aa", level: 4, label: "Sangat Kuat", color: "bg-green-800" },
+  ];
+  for (const { password, level, label, color } of cases) {
+    const markup = renderToStaticMarkup(createElement(PasswordStrengthMeter, {
+      id: "requirements", variant: "checklist", password,
+    }));
+    assert.ok(markup.includes(`data-password-strength-level="${level}"`));
+    assert.ok(markup.includes(label));
+    assert.equal((markup.match(/data-password-strength-segment=/g) ?? []).length, 5);
+    assert.equal((markup.match(/data-filled="true"/g) ?? []).length, level + 1);
+    assert.ok(markup.includes(color));
+    assert.match(markup, /h-1\.5 rounded-full/);
+  }
 });

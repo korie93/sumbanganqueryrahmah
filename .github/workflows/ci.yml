@@ -277,6 +277,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify actual built public password pages
+        timeout-minutes: 5
+        run: npm run test:auth:public-build
+
       - name: Start built server
         run: |
           : > server.log
@@ -410,6 +414,7 @@ jobs:
           path: |
             server.log
             artifacts/auth-feedback-browser
+            artifacts/password-public-build-browser
             artifacts/smoke-ui
             artifacts/visual-layout
             artifacts/playwright-report

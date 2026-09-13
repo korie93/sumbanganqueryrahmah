@@ -20,6 +20,12 @@ const stylesheetHook = registerHooks({
 const { ActivationPasswordForm } = await import("../pages/ActivateAccountParts");
 stylesheetHook.deregister();
 
+function getActivationInputMarkup(markup: string, field: "new" | "confirm") {
+  const input = markup.match(new RegExp(`<input[^>]*id="activate-account-${field}-password"[^>]*>`))?.[0];
+  assert.ok(input, `Activation ${field} password input must exist.`);
+  return input;
+}
+
 test("matching is live, exact, and independent from password validity", () => {
   assert.equal(getPasswordConfirmationFeedback("", ""), null);
   assert.equal(getPasswordConfirmationFeedback("valid", ""), null);
@@ -73,13 +79,42 @@ test("activation form shows policy validity independently from a live mismatch",
   const markup = renderToStaticMarkup(createElement(ActivationPasswordForm, {
     activation: { username: "operator", email: null, fullName: null, role: "user", expiresAt: "2026-09-12T12:00:00Z" },
     confirmPassword: "previous-input", confirmPasswordError: "", confirmPasswordInvalidProps: {}, error: "", loading: false,
-    newPassword: "Tr0ub4dor&3-Long", newPasswordError: "", newPasswordInputRef: null, newPasswordInvalidProps: {},
+    newPassword: "Tr0ub4dor&3-Long", newPasswordInteracted: true, newPasswordError: "", newPasswordInputRef: null, newPasswordInvalidProps: {},
     onActivate() {}, onClearConfirmPasswordError() {}, onClearFormError() {}, onClearNewPasswordError() {},
     onConfirmPasswordBlur() {}, onConfirmPasswordChange() {}, onNewPasswordBlur() {}, onNewPasswordChange() {},
   }));
   assert.match(markup, /Kata laluan sah/);
   assert.match(markup, /Pengesahan kata laluan tidak sepadan/);
   assert.match(markup, /aria-invalid="true" aria-describedby="activate-password-confirm-error"/);
+  assert.match(getActivationInputMarkup(markup, "new"), /data-validation-state="success"/);
+  assert.match(getActivationInputMarkup(markup, "confirm"), /data-validation-state="error"/);
+});
+
+test("activation form keeps untouched fields neutral and marks policy and matching states separately", () => {
+  const baseProps = {
+    activation: { username: "operator", email: null, fullName: null, role: "user", expiresAt: "2026-09-12T12:00:00Z" },
+    confirmPassword: "", confirmPasswordError: "", confirmPasswordInvalidProps: {}, error: "", loading: false,
+    newPassword: "", newPasswordError: "", newPasswordInputRef: null, newPasswordInvalidProps: {},
+    onActivate() {}, onClearConfirmPasswordError() {}, onClearFormError() {}, onClearNewPasswordError() {},
+    onConfirmPasswordBlur() {}, onConfirmPasswordChange() {}, onNewPasswordBlur() {}, onNewPasswordChange() {},
+  };
+  const initial = renderToStaticMarkup(createElement(ActivationPasswordForm, baseProps));
+  assert.match(getActivationInputMarkup(initial, "new"), /data-validation-state="neutral"/);
+  assert.match(getActivationInputMarkup(initial, "confirm"), /data-validation-state="neutral"/);
+  assert.doesNotMatch(initial, /aria-invalid="true"/);
+
+  const invalidButMatching = renderToStaticMarkup(createElement(ActivationPasswordForm, {
+    ...baseProps, newPassword: "short", confirmPassword: "short", newPasswordInteracted: true,
+  }));
+  assert.match(getActivationInputMarkup(invalidButMatching, "new"), /data-validation-state="error"/);
+  assert.match(getActivationInputMarkup(invalidButMatching, "new"), /aria-invalid="true"/);
+  assert.match(getActivationInputMarkup(invalidButMatching, "confirm"), /data-validation-state="success"/);
+
+  const cleared = renderToStaticMarkup(createElement(ActivationPasswordForm, {
+    ...baseProps, newPasswordInteracted: true,
+  }));
+  assert.match(getActivationInputMarkup(cleared, "new"), /data-validation-state="error"/);
+  assert.match(getActivationInputMarkup(cleared, "confirm"), /data-validation-state="neutral"/);
 });
 
 test("2FA setup renders exact algorithm requirements without a remote QR or secret transmission", () => {

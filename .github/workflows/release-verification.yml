@@ -150,6 +150,7 @@ jobs:
           if-no-files-found: warn
           path: |
             artifacts/auth-feedback-browser
+            artifacts/password-public-build-browser
             artifacts/release-verification
             artifacts/sbom
             var/perf

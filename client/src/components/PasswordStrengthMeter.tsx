@@ -7,6 +7,7 @@ type PasswordStrengthMeterProps = {
   id?: string;
   password: string;
   variant?: "default" | "checklist";
+  interacted?: boolean;
 };
 
 const SEGMENT_ACTIVE_CLASSES = [
@@ -33,9 +34,10 @@ export function PasswordStrengthMeter({
   id = "password-strength",
   password,
   variant = "default",
+  interacted = false,
 }: PasswordStrengthMeterProps) {
   if (variant === "checklist") {
-    return <PasswordRequirementsChecklist id={id} password={password} className={className} />;
+    return <PasswordRequirementsChecklist id={id} password={password} className={className} interacted={interacted} />;
   }
   const evaluation = evaluatePasswordStrength(password);
   const issues = getCredentialPasswordValidationIssues(password, "ms");

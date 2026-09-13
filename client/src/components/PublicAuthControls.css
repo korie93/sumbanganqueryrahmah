@@ -91,6 +91,26 @@
   color: hsl(var(--destructive));
 }
 
+.password-creation-form .public-auth-input[data-validation-state="success"] {
+  border-color: #15803d;
+}
+
+.password-creation-form .public-auth-input[data-validation-state="error"] {
+  border-color: #b91c1c;
+}
+
+.dark .password-creation-form .public-auth-input[data-validation-state="success"] {
+  /* The shared dark form rule reads this token with !important. Override its
+     value only on these validated fields, preserving all other dark inputs. */
+  --dm-input-border: #bbf7d0;
+  border-color: #bbf7d0;
+}
+
+.dark .password-creation-form .public-auth-input[data-validation-state="error"] {
+  --dm-input-border: #fecaca;
+  border-color: #fecaca;
+}
+
 .public-auth-layout.password-creation-layout .public-auth-layout__card {
   padding: var(--spacing-5) var(--spacing-4);
   border-radius: 1.5rem;

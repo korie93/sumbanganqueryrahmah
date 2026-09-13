@@ -13,7 +13,6 @@ import { useSettingsMyAccountCredentialState } from "../../client/src/pages/sett
 import "../../client/src/styles/tokens/index.css";
 import "../../client/src/public-shell.css";
 import "../../client/src/styles/theme/index.css";
-import "../../client/src/index.css";
 
 function CollectionPasswordHarness() {
   const [password, setPassword] = useState("");
@@ -72,15 +71,25 @@ function TwoFactorSetupHarness() {
 const parameters = new URLSearchParams(location.search);
 const view = parameters.get("view");
 document.documentElement.classList.toggle("dark", parameters.get("theme") === "dark");
-const root = createRoot(document.getElementById("root"));
-root.render(view === "activation"
-  ? <ActivateAccount onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />
-  : view === "collection"
-    ? <CollectionPasswordHarness />
-    : view === "setup" || view === "settings"
-      ? <TwoFactorSetupHarness />
-    : view === "change"
-      ? <ChangePassword username="ui.fixture" forced />
-    : view === "login"
-      ? <Login onLoginSuccess={() => { document.body.dataset.authenticated = "true"; }} />
-      : <ResetPassword onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />);
+
+async function renderHarness() {
+  // Match main.tsx: public password/login pages receive only the public CSS.
+  // Loading index.css globally hides missing public Tailwind content coverage.
+  if (view === "collection" || view === "setup" || view === "settings") {
+    await import("../../client/src/index.css");
+  }
+  const root = createRoot(document.getElementById("root"));
+  root.render(view === "activation"
+    ? <ActivateAccount onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />
+    : view === "collection"
+      ? <CollectionPasswordHarness />
+      : view === "setup" || view === "settings"
+        ? <TwoFactorSetupHarness />
+      : view === "change"
+        ? <ChangePassword username="ui.fixture" forced />
+      : view === "login"
+        ? <Login onLoginSuccess={() => { document.body.dataset.authenticated = "true"; }} />
+        : <ResetPassword onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />);
+}
+
+void renderHarness();

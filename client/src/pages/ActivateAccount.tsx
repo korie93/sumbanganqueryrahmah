@@ -38,6 +38,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
   const [activation, setActivation] = useState<ActivationTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ActivationPhase>(token ? "validating" : "invalid");
   const [newPassword, setNewPassword] = useState("");
+  const [newPasswordInteracted, setNewPasswordInteracted] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [newPasswordError, setNewPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
@@ -156,6 +157,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
   const handleActivate = async () => {
     if (!activation || loading || phase !== "ready" || activationAbortControllerRef.current) return;
 
+    setNewPasswordInteracted(true);
     setError("");
     setNewPasswordError("");
     setConfirmPasswordError("");
@@ -215,6 +217,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
   };
 
   const validateNewPasswordOnBlur = () => {
+    setNewPasswordInteracted(true);
     const fieldErrors = validatePasswordFields({
       newPassword,
       confirmPassword,
@@ -226,6 +229,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
   };
 
   const validateConfirmPasswordOnBlur = () => {
+    if (!confirmPassword) return;
     const fieldErrors = validatePasswordFields({
       newPassword,
       confirmPassword,
@@ -279,6 +283,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
           error={error}
           loading={loading}
           newPassword={newPassword}
+          newPasswordInteracted={newPasswordInteracted}
           newPasswordError={newPasswordError}
           newPasswordInputRef={newPasswordInputRef}
           newPasswordInvalidProps={newPasswordInvalidProps}
@@ -288,7 +293,10 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
           onClearNewPasswordError={() => setNewPasswordError("")}
           onConfirmPasswordChange={setConfirmPassword}
           onConfirmPasswordBlur={validateConfirmPasswordOnBlur}
-          onNewPasswordChange={setNewPassword}
+          onNewPasswordChange={(value) => {
+            setNewPasswordInteracted(true);
+            setNewPassword(value);
+          }}
           onNewPasswordBlur={validateNewPasswordOnBlur}
         />
       ) : null}
