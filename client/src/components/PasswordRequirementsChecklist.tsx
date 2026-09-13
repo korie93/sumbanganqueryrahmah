@@ -43,7 +43,7 @@ export function PasswordRequirementsChecklist({ id, password, className = "" }: 
         ))}
       </ul>
       <div className="mt-3 border-t border-border pt-3">
-        <div className="grid grid-cols-[minmax(0,1fr)_6rem] items-baseline gap-2">
+        <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_6rem] items-baseline gap-2">
           <span className="text-sm font-medium">Kekuatan kata laluan</span>
           <span className="text-right text-sm font-medium" data-password-strength-label>
             {password ? strength.malayLabel : "Belum dinilai"}

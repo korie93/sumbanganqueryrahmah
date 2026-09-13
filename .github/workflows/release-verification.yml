@@ -149,6 +149,7 @@ jobs:
           name: release-verification-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           path: |
+            artifacts/auth-feedback-browser
             artifacts/release-verification
             artifacts/sbom
             var/perf

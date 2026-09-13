@@ -157,7 +157,9 @@ async function checkLiveRequirements(view, password, meter, submit) {
     assert.deepEqual(await requirements.evaluateAll((elements) => elements.map((element) => element.dataset.satisfied === "true")), expected, "Every requirement changes live, including the exact 14/256 boundaries.");
     assert.equal((await meter.innerText()).includes("Kata laluan sah"), expected.every(Boolean), "Strength must never override a failed mandatory requirement.");
     assert.equal(await requirements.locator("svg").count(), 5, "Requirement states use icons as well as text/color.");
-    assert.ok(Math.abs((await meter.boundingBox()).height - initialHeight) <= 1, "Checklist and meter reserve stable space as rules change.");
+    const height = (await meter.boundingBox()).height;
+    assert.ok(Math.abs(height - initialHeight) <= 1,
+      `${view} ${page.viewportSize().width}px: checklist height changed from ${initialHeight}px to ${height}px at ${candidate.length} characters. Checklist and meter reserve stable space as rules change.`);
   }
   await password.fill("PalmRiver7!Aa");
   await visibleText(meter, "Sangat Kuat");
@@ -169,6 +171,23 @@ async function checkLiveRequirements(view, password, meter, submit) {
   assert.ok((await submit.getAttribute("aria-describedby"))?.split(/\s+/).includes(await help.getAttribute("id")), "CTA is associated with its readiness explanation.");
   assert.deepEqual(counts, before, "Live checklist evaluation must not make requests.");
   await password.fill("");
+}
+
+async function checkWrappedStrengthLayout(view) {
+  await page.setViewportSize({ width: 360, height: 960 });
+  await go(view);
+  // Different OS fallback fonts can wrap a strength label in the 6rem column.
+  // Exercise that condition on every runner, not only where it occurs by default.
+  await page.addStyleTag({ content: "[data-password-strength-label] { font-family: monospace; letter-spacing: 0.08em; }" });
+  const prefix = view === "reset" ? "reset-password" : "activate-account";
+  const meterId = view === "reset" ? "reset-password-strength" : "activate-password-strength";
+  const submit = page.getByRole("button", { name: view === "reset" ? "Tetapkan Kata Laluan Baharu" : "Cipta Kata Laluan", exact: true });
+  const meter = page.locator(`#${meterId}`);
+  const label = meter.locator("[data-password-strength-label]");
+  assert.ok(await label.evaluate((element) => element.getBoundingClientRect().height > parseFloat(getComputedStyle(element).lineHeight)),
+    "Regression fixture must exercise a strength label that wraps to two lines.");
+  await checkLiveRequirements(view, page.locator(`#${prefix}-new-password`), meter, submit);
+  console.log(`[auth-feedback-browser] PASS ${view}: stable checklist with wrapping fallback-font strength labels at 360px`);
 }
 
 async function checkPasswordFeedback(view, prefix, confirmationPrefix, meterId, confirmationId) {
@@ -448,6 +467,8 @@ try {
     unexpectedRequests.push(url.pathname);
     return fulfill({ error: { code: "NOT_FOUND", message: "Unexpected mocked API" } }, 404);
   });
+
+  for (const view of ["reset", "activation"]) await checkWrappedStrengthLayout(view);
 
   for (const width of [320, 360, 390, 430, 768, 1280]) {
     await page.setViewportSize({ width, height: 960 });

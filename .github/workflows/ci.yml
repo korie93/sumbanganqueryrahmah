@@ -409,6 +409,7 @@ jobs:
           if-no-files-found: warn
           path: |
             server.log
+            artifacts/auth-feedback-browser
             artifacts/smoke-ui
             artifacts/visual-layout
             artifacts/playwright-report

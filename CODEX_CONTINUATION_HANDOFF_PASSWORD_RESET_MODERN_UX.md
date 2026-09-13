@@ -67,4 +67,14 @@ Commit and push were subsequently requested by the user. Deployment still requir
 
 No secrets or production credentials belong in this report. Existing deployment checkpoints are ignored artifacts and historical only.
 
+## CI follow-up: checklist height stability (2026-09-13)
+
+After publication as `ba32b662`, CI run `34765692441`, job `103746820531`, failed in "Verify password and authenticator browser feedback", before the built server and main UI smoke started. Build-and-test and coverage jobs succeeded. The failed assertion was "Checklist and meter reserve stable space as rules change" on the reset flow at 360 px, after both 320 px flows passed.
+
+The strength-label column can wrap differently with fallback-font metrics. A deterministic browser regression using a wider monospace label reproduced the failure against the original component: total checklist height changed from 342 px to 322 px. Reserving two text lines with the existing `min-h-10` token fixes this without clipping text, increasing timeouts or loosening the 1 px layout assertion. The new regression checks reset and activation; assertion diagnostics now include viewport, heights and synthetic input length, never password content.
+
+CI and release verification now retain `artifacts/auth-feedback-browser` in their existing always-upload steps. A workflow regression covers both paths and prevents hidden-file capture from being broadened. The secondary monitor connection failure in the failed run occurred because the server had not started; its unrelated behavior was left unchanged.
+
+Follow-up verification passed: complete isolated auth browser suite (all six widths and both themes, including accessibility), 17 focused component/form/backend-parity tests, all 419 script tests (368 JavaScript + 51 TypeScript), typecheck, lint, build, bundle budgets, secret scan, repository hygiene and diff whitespace check. Updated 360 px light/dark screenshots were manually inspected. At this verification checkpoint, Linux CI had not been rerun with the follow-up patch; local reproduction/verification used Windows Chromium. The user subsequently requested commit and push of this follow-up. Deployment remains outside the request; no production changes were made.
+
 COMPLETE

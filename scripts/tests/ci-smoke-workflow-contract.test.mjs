@@ -10,6 +10,27 @@ function extractSection(source, startMarker, endMarker) {
   return source.slice(startIndex, endIndex);
 }
 
+test("CI and release verification retain isolated auth browser diagnostics even before the app starts", () => {
+  for (const [workflowPath, uploadStep, endMarker] of [
+    [".github/workflows/ci.yml", "Upload smoke artifacts", null],
+    [".github/workflows/release-verification.yml", "Upload release verification artifacts", "\n  approve-production-release:"],
+  ]) {
+    const workflow = readFileSync(workflowPath, "utf8");
+    const startMarker = `      - name: ${uploadStep}`;
+    const startIndex = workflow.indexOf(startMarker);
+    assert.notEqual(startIndex, -1, `${workflowPath} must upload test diagnostics`);
+    const upload = endMarker
+      ? extractSection(workflow, startMarker, endMarker)
+      : workflow.slice(startIndex);
+    assert.match(upload, /if:\s*always\(\)/, "An earlier auth browser failure must not skip artifact upload");
+    assert.match(upload, /uses:\s*actions\/upload-artifact@/);
+    assert.match(upload, /^\s+artifacts\/auth-feedback-browser\s*$/m,
+      "Retain the isolated browser screenshots rather than only later app smoke artifacts");
+    assert.doesNotMatch(upload, /include-hidden-files:\s*true/,
+      "Diagnostics must not broaden artifact capture to hidden environment files");
+  }
+});
+
 test("CI and release verification both seed the assigned admin required by Billing V3 smoke", () => {
   const ci = readFileSync(".github/workflows/ci.yml", "utf8");
   const release = readFileSync(".github/workflows/release-verification.yml", "utf8");
