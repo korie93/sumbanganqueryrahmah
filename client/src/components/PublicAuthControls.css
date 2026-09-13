@@ -59,6 +59,20 @@
   color: var(--public-auth-input-placeholder);
 }
 
+.public-auth-input.public-auth-password-input {
+  padding-inline-end: 7rem;
+}
+
+.public-auth-password-toggle {
+  border-start-end-radius: 0.95rem;
+  border-end-end-radius: 0.95rem;
+  color: var(--public-auth-input-text);
+}
+
+.public-auth-password-toggle:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--public-auth-input-focus);
+}
+
 .public-auth-input:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
@@ -79,6 +93,10 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .public-auth-password-toggle:not(:disabled):hover {
+    background: var(--public-auth-ghost-hover-bg);
+  }
+
   .public-auth-button-primary:hover {
     background: var(--public-auth-primary-bg-hover);
   }

@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { KeyRound, LogOut } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
-import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
+import { PasswordInput } from "@/components/PasswordInput";
+import { PublicAuthButton } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { changeMyPassword } from "@/lib/api/auth";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
@@ -115,6 +116,10 @@ export default function ChangePasswordPage({
         return;
       }
 
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
       if (response?.forceLogout) {
         broadcastForcedLogout("Password changed. Please login again.");
         setSuccessMessage("Kata laluan berjaya dikemas kini. Sila log masuk semula.");
@@ -219,44 +224,56 @@ export default function ChangePasswordPage({
         seperti yang dimasukkan.
       </div>
 
-      <PublicAuthInput
-        id="change-password-current-password"
-        name="currentPassword"
-        type="password"
-        value={currentPassword}
-        onChange={(event) => {
-          setCurrentPassword(event.target.value);
-          setCurrentPasswordError("");
-          setError("");
-        }}
-        onBlur={validateCurrentPasswordOnBlur}
-        placeholder="Kata laluan semasa"
-        autoComplete="current-password"
-        disabled={loading}
-        {...currentPasswordInvalidProps}
-      />
+      <div className="space-y-2">
+        <label htmlFor="change-password-current-password" className="public-auth-field-label">
+          Kata laluan semasa
+        </label>
+        <PasswordInput
+          id="change-password-current-password"
+          name="currentPassword"
+          variant="public-auth"
+          visibilityLabel="kata laluan semasa"
+          value={currentPassword}
+          onChange={(event) => {
+            setCurrentPassword(event.target.value);
+            setCurrentPasswordError("");
+            setError("");
+          }}
+          onBlur={validateCurrentPasswordOnBlur}
+          placeholder="Kata laluan semasa"
+          autoComplete="current-password"
+          disabled={loading}
+          {...currentPasswordInvalidProps}
+        />
+      </div>
       {currentPasswordError ? (
         <p id="change-password-current-error" className="text-sm text-amber-100" role="alert">
           {currentPasswordError}
         </p>
       ) : null}
-      <PublicAuthInput
-        id="change-password-new-password"
-        name="newPassword"
-        type="password"
-        value={newPassword}
-        onChange={(event) => {
-          setNewPassword(event.target.value);
-          setNewPasswordError("");
-          setConfirmPasswordError("");
-          setError("");
-        }}
-        onBlur={validateNewPasswordOnBlur}
-        placeholder="Kata laluan baharu"
-        autoComplete="new-password"
-        disabled={loading}
-        {...newPasswordInvalidProps}
-      />
+      <div className="space-y-2">
+        <label htmlFor="change-password-new-password" className="public-auth-field-label">
+          Kata laluan baharu
+        </label>
+        <PasswordInput
+          id="change-password-new-password"
+          name="newPassword"
+          variant="public-auth"
+          visibilityLabel="kata laluan baharu"
+          value={newPassword}
+          onChange={(event) => {
+            setNewPassword(event.target.value);
+            setNewPasswordError("");
+            setConfirmPasswordError("");
+            setError("");
+          }}
+          onBlur={validateNewPasswordOnBlur}
+          placeholder="Kata laluan baharu"
+          autoComplete="new-password"
+          disabled={loading}
+          {...newPasswordInvalidProps}
+        />
+      </div>
       <PasswordStrengthMeter
         id="change-password-strength"
         password={newPassword}
@@ -266,22 +283,28 @@ export default function ChangePasswordPage({
           {newPasswordError}
         </p>
       ) : null}
-      <PublicAuthInput
-        id="change-password-confirm-password"
-        name="confirmPassword"
-        type="password"
-        value={confirmPassword}
-        onChange={(event) => {
-          setConfirmPassword(event.target.value);
-          setConfirmPasswordError("");
-          setError("");
-        }}
-        onBlur={validateConfirmPasswordOnBlur}
-        placeholder="Sahkan kata laluan baharu"
-        autoComplete="new-password"
-        disabled={loading}
-        {...confirmPasswordInvalidProps}
-      />
+      <div className="space-y-2">
+        <label htmlFor="change-password-confirm-password" className="public-auth-field-label">
+          Sahkan kata laluan baharu
+        </label>
+        <PasswordInput
+          id="change-password-confirm-password"
+          name="confirmPassword"
+          variant="public-auth"
+          visibilityLabel="pengesahan kata laluan baharu"
+          value={confirmPassword}
+          onChange={(event) => {
+            setConfirmPassword(event.target.value);
+            setConfirmPasswordError("");
+            setError("");
+          }}
+          onBlur={validateConfirmPasswordOnBlur}
+          placeholder="Masukkan semula kata laluan baharu"
+          autoComplete="new-password"
+          disabled={loading}
+          {...confirmPasswordInvalidProps}
+        />
+      </div>
       <PasswordConfirmationFeedback
         id="change-password-confirm-error"
         password={newPassword}

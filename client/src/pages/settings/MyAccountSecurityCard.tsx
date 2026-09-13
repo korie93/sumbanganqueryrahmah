@@ -1,5 +1,6 @@
 import { KeyRound } from "lucide-react";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
+import { PasswordInput } from "@/components/PasswordInput";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -233,10 +234,10 @@ export function MyAccountSecurityCard({
                   <label htmlFor="my-account-current-password" className="text-sm font-medium">
                     Kata laluan semasa
                   </label>
-                  <Input
+                  <PasswordInput
                     id="my-account-current-password"
                     name="currentPassword"
-                    type="password"
+                    visibilityLabel="kata laluan semasa"
                     value={currentPasswordInput}
                     onChange={(event) => onCurrentPasswordInputChange(event.target.value)}
                     onBlur={onCurrentPasswordBlur}
@@ -254,10 +255,10 @@ export function MyAccountSecurityCard({
                   <label htmlFor="my-account-new-password" className="text-sm font-medium">
                     Kata laluan baharu
                   </label>
-                  <Input
+                  <PasswordInput
                     id="my-account-new-password"
                     name="newPassword"
-                    type="password"
+                    visibilityLabel="kata laluan baharu"
                     value={newPasswordInput}
                     onChange={(event) => onNewPasswordInputChange(event.target.value)}
                     onBlur={onNewPasswordBlur}
@@ -274,17 +275,18 @@ export function MyAccountSecurityCard({
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="my-account-confirm-password" className="text-sm font-medium">
-                    Sahkan kata laluan
+                    Sahkan kata laluan baharu
                   </label>
-                  <Input
+                  <PasswordInput
                     id="my-account-confirm-password"
                     name="confirmPassword"
-                    type="password"
+                    visibilityLabel="pengesahan kata laluan baharu"
                     value={confirmPasswordInput}
                     onChange={(event) => onConfirmPasswordInputChange(event.target.value)}
                     onBlur={onConfirmPasswordBlur}
                     disabled={securityBusy}
                     autoComplete="new-password"
+                    placeholder="Masukkan semula kata laluan baharu"
                     {...confirmPasswordValidationProps}
                     aria-describedby={confirmPasswordErrorId}
                   />
@@ -331,10 +333,10 @@ export function MyAccountSecurityCard({
                     <label htmlFor="my-account-two-factor-password" className="text-sm font-medium">
                       Kata laluan semasa
                     </label>
-                    <Input
+                    <PasswordInput
                       id="my-account-two-factor-password"
                       name="twoFactorCurrentPassword"
-                      type="password"
+                      visibilityLabel="kata laluan semasa untuk 2FA"
                       value={twoFactorPasswordInput}
                       onChange={(event) => onTwoFactorPasswordInputChange(event.target.value)}
                       onBlur={onTwoFactorPasswordBlur}

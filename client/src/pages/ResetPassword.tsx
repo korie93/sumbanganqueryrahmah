@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
-import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
+import { PasswordInput } from "@/components/PasswordInput";
+import { PublicAuthButton } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import {
   resetPasswordWithToken,
@@ -268,10 +269,11 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             <label htmlFor="reset-password-new-password" className="public-auth-field-label">
               Kata laluan baharu
             </label>
-            <PublicAuthInput
+            <PasswordInput
               id="reset-password-new-password"
               name="newPassword"
-              type="password"
+              variant="public-auth"
+              visibilityLabel="kata laluan baharu"
               value={newPassword}
               onChange={(event) => {
                 setNewPassword(event.target.value);
@@ -300,10 +302,11 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             <label htmlFor="reset-password-confirm-password" className="public-auth-field-label">
               Sahkan kata laluan baharu
             </label>
-            <PublicAuthInput
+            <PasswordInput
               id="reset-password-confirm-password"
               name="confirmPassword"
-              type="password"
+              variant="public-auth"
+              visibilityLabel="pengesahan kata laluan baharu"
               value={confirmPassword}
               onChange={(event) => {
                 setConfirmPassword(event.target.value);
@@ -312,7 +315,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
               }}
               onBlur={validateConfirmPasswordOnBlur}
               onKeyDown={onPasswordKeyDown}
-              placeholder="Masukkan semula kata laluan"
+              placeholder="Masukkan semula kata laluan baharu"
               autoComplete="new-password"
               disabled={loading}
               {...confirmPasswordInvalidProps}

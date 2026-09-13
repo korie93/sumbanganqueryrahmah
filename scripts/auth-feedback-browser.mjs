@@ -16,9 +16,10 @@ const metadata = {
   expiresAt: "2099-01-01T00:00:00.000Z",
 };
 const validPassword = "BrowserFixture1!";
+const currentPassword = "BrowserCurrent1!";
 const pageErrors = [];
 const unexpectedRequests = [];
-const counts = { activate: 0, reset: 0, login: 0, verify: 0, setup: 0, enable: 0 };
+const counts = { activate: 0, reset: 0, change: 0, credentials: 0, login: 0, verify: 0, setup: 0, enable: 0 };
 const fixtureUser = {
   id: "fixture-id", username: "ui.fixture", fullName: null, email: null, role: "admin", status: "active",
   mustChangePassword: false, passwordResetBySuperuser: false, isBanned: false,
@@ -28,6 +29,7 @@ const fixtureUser = {
 let errorCode = null;
 let loginError = "TWO_FACTOR_INVALID_CODE";
 let setupError = "TWO_FACTOR_INVALID_CODE";
+let passwordResponseGate = null;
 let browser;
 let page;
 let origin;
@@ -61,6 +63,59 @@ async function go(view, token = "fixture-link") {
   await page.goto(`${origin}/?view=${view}&token=${token}`, { waitUntil: "networkidle" });
 }
 
+async function checkPasswordVisibility(fieldIds) {
+  const before = { ...counts };
+  const values = await Promise.all(fieldIds.map((id) => page.locator(`#${id}`).inputValue()));
+  for (const id of fieldIds) {
+    const input = page.locator(`#${id}`);
+    const toggle = page.locator(`button[aria-controls="${id}"]`);
+    assert.equal(await input.getAttribute("type"), "password", `${id} starts masked.`);
+    assert.equal(await toggle.count(), 1, `${id} has its own visibility control.`);
+    assert.equal(await toggle.getAttribute("type"), "button", "Visibility must never submit the form.");
+    assert.equal(await toggle.getAttribute("aria-pressed"), "false");
+    const hiddenLabel = await toggle.getAttribute("aria-label");
+    assert.match(hiddenLabel, /^Lihat .+/, "Toggle needs a field-specific accessible label.");
+    await toggle.click();
+    assert.equal(await input.getAttribute("type"), "text");
+    assert.equal(await toggle.getAttribute("aria-pressed"), "true");
+    assert.equal(await toggle.getAttribute("aria-label"), hiddenLabel.replace(/^Lihat /, "Sembunyikan "));
+    for (const otherId of fieldIds.filter((candidate) => candidate !== id)) {
+      assert.equal(await page.locator(`#${otherId}`).getAttribute("type"), "password", "Revealing one password must not reveal another.");
+    }
+    await toggle.focus();
+    await toggle.press("Enter");
+    assert.equal(await input.getAttribute("type"), "password", "Enter can hide the password without submitting.");
+    await toggle.press("Space");
+    assert.equal(await input.getAttribute("type"), "text", "Space can reveal the password without submitting.");
+    await toggle.click();
+    assert.equal(await input.getAttribute("type"), "password");
+    assert.equal(await toggle.getAttribute("aria-pressed"), "false");
+    assert.equal(await toggle.getAttribute("aria-label"), hiddenLabel);
+    assert.deepEqual(await Promise.all(fieldIds.map((fieldId) => page.locator(`#${fieldId}`).inputValue())), values, "Toggling must preserve every typed password.");
+  }
+  assert.deepEqual(counts, before, "Click/Enter/Space on visibility controls must not call any mutation API.");
+}
+
+async function submitPasswordAndCheckPending(submit, fieldIds) {
+  let releaseResponse;
+  passwordResponseGate = new Promise((resolve) => { releaseResponse = resolve; });
+  try {
+    await page.locator(`button[aria-controls="${fieldIds[0]}"]`).click();
+    assert.equal(await page.locator(`#${fieldIds[0]}`).getAttribute("type"), "text");
+    await submit.click();
+    await page.waitForFunction((ids) => ids.every((id) => {
+      const input = document.getElementById(id);
+      return input?.disabled && input.type === "password";
+    }), fieldIds);
+    for (const id of fieldIds) {
+      assert.equal(await page.locator(`button[aria-controls="${id}"]`).isDisabled(), true, "Pending password requests disable visibility controls and remask values.");
+    }
+  } finally {
+    releaseResponse();
+    passwordResponseGate = null;
+  }
+}
+
 async function checkPasswordFeedback(view, prefix, confirmationPrefix, meterId, confirmationId) {
   errorCode = null;
   await go(view);
@@ -68,6 +123,15 @@ async function checkPasswordFeedback(view, prefix, confirmationPrefix, meterId, 
   const confirmation = page.locator(`#${confirmationPrefix}`);
   const meter = page.locator(`#${meterId}`);
   const feedback = page.locator(`#${confirmationId}`);
+  const submit = view === "collection" ? null : page.getByRole("button", { name: view === "activation" ? "Cipta Kata Laluan" : "Tetapkan Kata Laluan Baharu", exact: true });
+  const before = { ...counts };
+  if (submit) {
+    await password.fill(validPassword);
+    assert.equal(await confirmation.inputValue(), "", "Confirmation must not be populated from the new password.");
+    await submit.click();
+    await visibleText(feedback, "Sila sahkan kata laluan baharu.");
+    assert.deepEqual(counts, before, "Blank confirmation must block submission.");
+  }
   await password.fill("Ab12345!");
   await confirmation.fill("Ab12345!");
   await visibleText(meter, "sekurang-kurangnya 14 aksara");
@@ -76,28 +140,70 @@ async function checkPasswordFeedback(view, prefix, confirmationPrefix, meterId, 
   await password.fill("");
   await visibleText(feedback, "Pengesahan kata laluan tidak sepadan.");
   await password.fill("Ab12345!");
-  if (view !== "collection") {
-    const before = counts.activate + counts.reset;
-    await page.getByRole("button", { name: view === "activation" ? "Cipta Kata Laluan" : "Tetapkan Kata Laluan Baharu", exact: true }).click();
-    assert.equal(counts.activate + counts.reset, before, "Invalid manual password must not submit.");
+  if (submit) {
+    await submit.click();
+    assert.deepEqual(counts, before, "Invalid manual password must not submit.");
   }
   await password.fill(validPassword);
   await visibleText(meter, "Kata laluan sah");
   await visibleText(feedback, "Pengesahan kata laluan tidak sepadan.");
   assert.equal(await confirmation.getAttribute("aria-invalid"), "true");
-  await password.press("Tab");
-  if (view !== "collection") assert.equal(await confirmation.evaluate((element) => document.activeElement === element), true);
+  if (submit) {
+    await submit.click();
+    assert.deepEqual(counts, before, "Mismatched confirmation must block submission.");
+    await password.focus();
+    await password.press("Tab");
+    assert.equal(await page.locator(`button[aria-controls="${prefix}"]`).evaluate((element) => document.activeElement === element), true);
+    await page.keyboard.press("Tab");
+    assert.equal(await confirmation.evaluate((element) => document.activeElement === element), true);
+  }
   await confirmation.fill(validPassword);
   await visibleText(feedback, "Pengesahan kata laluan sepadan.");
   assert.equal(await confirmation.getAttribute("aria-invalid"), null);
   assert.equal(await password.getAttribute("type"), "password");
   assert.equal((await feedback.innerText()).includes(validPassword), false);
-  if (view !== "collection") {
-    await page.getByRole("button", { name: view === "activation" ? "Cipta Kata Laluan" : "Tetapkan Kata Laluan Baharu", exact: true }).click();
+  if (submit) {
+    await checkPasswordVisibility([prefix, confirmationPrefix]);
+    await submitPasswordAndCheckPending(submit, [prefix, confirmationPrefix]);
     await visibleText(page.locator("[role=status]"), view === "activation" ? "Kata laluan berjaya dicipta" : "Tetapan semula kata laluan berjaya");
     assert.equal(await password.count(), 0, "Successful form must clear/remove password inputs.");
+    assert.equal(counts[view === "activation" ? "activate" : "reset"], before[view === "activation" ? "activate" : "reset"] + 1);
   }
   console.log(`[auth-feedback-browser] PASS ${view}: live validity, independent confirmation${view !== "collection" ? ", guarded submission and success" : ""}`);
+}
+
+async function checkCredentialPasswordFlow(view) {
+  await go(view);
+  const prefix = view === "change" ? "change-password" : "my-account";
+  const ids = [`${prefix}-current-password`, `${prefix}-new-password`, `${prefix}-confirm-password`];
+  const [current, password, confirmation] = ids.map((id) => page.locator(`#${id}`));
+  const feedback = page.locator(`#${prefix}-confirm${view === "change" ? "" : "-password"}-error`);
+  const submit = page.getByRole("button", { name: view === "change" ? "Kemas Kini Kata Laluan" : "Tukar kata laluan", exact: true });
+  const before = { ...counts };
+  await current.fill(currentPassword);
+  await password.fill(validPassword);
+  assert.equal(await confirmation.inputValue(), "", "New password requires independent confirmation.");
+  await submit.click();
+  await feedback.waitFor({ state: "visible" });
+  assert.equal(await confirmation.getAttribute("aria-invalid"), "true");
+  assert.deepEqual(counts, before, "Blank confirmation must not reach the password mutation API.");
+  await confirmation.fill("DifferentFixture1!");
+  await visibleText(feedback, "Pengesahan kata laluan tidak sepadan.");
+  await submit.click();
+  assert.deepEqual(counts, before, "Mismatched confirmation must not reach the password mutation API.");
+  await confirmation.fill(validPassword);
+  await visibleText(feedback, "Pengesahan kata laluan sepadan.");
+  assert.equal(await confirmation.getAttribute("aria-invalid"), null);
+  await checkPasswordVisibility(ids);
+  await submitPasswordAndCheckPending(submit, ids);
+  await visibleText(page.locator("[role=status]"), view === "change" ? "Kata laluan berjaya dikemas kini" : "Password changed successfully");
+  const countKey = view === "change" ? "change" : "credentials";
+  assert.equal(counts[countKey], before[countKey] + 1, "Matching confirmation submits exactly once.");
+  for (const input of [current, password, confirmation]) {
+    assert.equal(await input.inputValue(), "", "Successful password change clears sensitive input values.");
+    assert.equal(await input.getAttribute("type"), "password");
+  }
+  console.log(`[auth-feedback-browser] PASS ${view}: independent visibility, keyboard toggles, mandatory matching confirmation, guarded API and cleared success`);
 }
 
 try {
@@ -126,7 +232,17 @@ try {
       assert.equal(body.confirmPassword, validPassword);
       assert.equal(body.token, "fixture-link");
       counts[url.pathname.endsWith("/activate-account") ? "activate" : "reset"]++;
+      if (passwordResponseGate) await passwordResponseGate;
       return fulfill({ ok: true, user: null });
+    }
+    if (url.pathname === "/api/auth/change-password" || url.pathname === "/api/me/credentials") {
+      assert.equal(route.request().method(), url.pathname === "/api/auth/change-password" ? "POST" : "PATCH");
+      const body = route.request().postDataJSON();
+      assert.equal(body.currentPassword, currentPassword);
+      assert.equal(body.newPassword, validPassword);
+      counts[url.pathname === "/api/auth/change-password" ? "change" : "credentials"]++;
+      if (passwordResponseGate) await passwordResponseGate;
+      return fulfill({ ok: true, user: fixtureUser, forceLogout: false });
     }
     if (url.pathname === "/api/auth/login") {
       counts.login++;
@@ -154,8 +270,14 @@ try {
     return fulfill({ error: { code: "NOT_FOUND", message: "Unexpected mocked API" } }, 404);
   });
 
-  await checkPasswordFeedback("reset", "reset-password-new-password", "reset-password-confirm-password", "reset-password-strength", "reset-password-confirm-error");
-  await checkPasswordFeedback("activation", "activate-account-new-password", "activate-account-confirm-password", "activate-password-strength", "activate-password-confirm-error");
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 960 });
+    await checkPasswordFeedback("reset", "reset-password-new-password", "reset-password-confirm-password", "reset-password-strength", "reset-password-confirm-error");
+    await checkPasswordFeedback("activation", "activate-account-new-password", "activate-account-confirm-password", "activate-password-strength", "activate-password-confirm-error");
+    await checkCredentialPasswordFlow("change");
+    await checkCredentialPasswordFlow("settings");
+    console.log(`[auth-feedback-browser] PASS all password visibility/confirmation workflows at ${width}px`);
+  }
   await checkPasswordFeedback("collection", "collection-nickname-setup-password", "collection-nickname-setup-confirm-password", "collection-nickname-password-policy", "collection-nickname-password-confirmation");
 
   for (const [view, code, expected] of [
@@ -227,7 +349,7 @@ try {
   await mkdir(artifacts, { recursive: true });
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 960 });
-    for (const view of ["reset", "activation", "collection", "login", "setup"]) {
+    for (const view of ["reset", "activation", "change", "settings", "collection", "login", "setup"]) {
       errorCode = null;
       await go(view);
       await page.locator("input").first().waitFor({ state: "visible" });

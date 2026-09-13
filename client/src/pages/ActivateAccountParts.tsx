@@ -2,7 +2,8 @@ import type { AriaAttributes, KeyboardEvent, Ref } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
-import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
+import { PasswordInput } from "@/components/PasswordInput";
+import { PublicAuthButton } from "@/components/PublicAuthControls";
 import type { ActivationTokenValidationPayload } from "@/lib/api/auth";
 import { formatPublicAuthExpiry } from "@/pages/public-auth-runtime-utils";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
@@ -131,11 +132,12 @@ export function ActivationPasswordForm({
         <label htmlFor="activate-account-new-password" className="public-auth-field-label">
           Kata laluan baharu
         </label>
-        <PublicAuthInput
+        <PasswordInput
           ref={newPasswordInputRef}
           id="activate-account-new-password"
           name="newPassword"
-          type="password"
+          variant="public-auth"
+          visibilityLabel="kata laluan baharu"
           value={newPassword}
           onChange={(event) => {
             onNewPasswordChange(event.target.value);
@@ -164,10 +166,11 @@ export function ActivationPasswordForm({
         <label htmlFor="activate-account-confirm-password" className="public-auth-field-label">
           Sahkan kata laluan baharu
         </label>
-        <PublicAuthInput
+        <PasswordInput
           id="activate-account-confirm-password"
           name="confirmPassword"
-          type="password"
+          variant="public-auth"
+          visibilityLabel="pengesahan kata laluan baharu"
           value={confirmPassword}
           onChange={(event) => {
             onConfirmPasswordChange(event.target.value);
@@ -176,7 +179,7 @@ export function ActivationPasswordForm({
           }}
           onBlur={onConfirmPasswordBlur}
           onKeyDown={onPasswordKeyDown}
-          placeholder="Masukkan semula kata laluan"
+          placeholder="Masukkan semula kata laluan baharu"
           autoComplete="new-password"
           disabled={loading}
           {...confirmPasswordInvalidProps}
