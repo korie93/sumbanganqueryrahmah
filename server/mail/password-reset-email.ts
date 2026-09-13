@@ -1,4 +1,5 @@
 import { escapeEmailHtmlContent, escapeEmailUrl, normalizeEmailUrl } from "./email-html-utils";
+import { getCredentialPasswordPolicyMessage } from "../../shared/password-policy";
 
 type BuildPasswordResetEmailInput = {
   expiresAt: Date;
@@ -18,6 +19,8 @@ export function buildPasswordResetEmail(input: BuildPasswordResetEmailInput) {
   const intro = `A password reset has been approved for your ${systemName} account.`;
   const usernameLine = `Username: ${input.username}`;
   const expiryLine = `This reset link expires on ${expiresAtText}.`;
+  const policyLine = getCredentialPasswordPolicyMessage();
+  const linkHelp = "Enter the same new password in both fields. This link works once; use the newest reset email. If it expires, ask the administrator for a new link. Never share this link or your password.";
   const resetUrl = normalizeEmailUrl(input.resetUrl);
   const resetUrlText = resetUrl ?? "Reset link unavailable. Contact the system administrator.";
   const safeExpiryLine = escapeEmailHtmlContent(expiryLine);
@@ -34,6 +37,8 @@ export function buildPasswordResetEmail(input: BuildPasswordResetEmailInput) {
     resetUrlText,
     "",
     expiryLine,
+    policyLine,
+    linkHelp,
     "",
     "If you did not request this reset, contact the system administrator immediately.",
   ].join("\n");
@@ -54,6 +59,8 @@ export function buildPasswordResetEmail(input: BuildPasswordResetEmailInput) {
       <p>If the button does not work, copy and paste this link into your browser:</p>
       <p><a href="${safeResetUrl}">${safeResetUrl}</a></p>
       <p>${safeExpiryLine}</p>
+      <p>${escapeEmailHtmlContent(policyLine)}</p>
+      <p>${escapeEmailHtmlContent(linkHelp)}</p>
       <p>If you did not request this reset, contact the system administrator immediately.</p>
     </div>
   `.trim();

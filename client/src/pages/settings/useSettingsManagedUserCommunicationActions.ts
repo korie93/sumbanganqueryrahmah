@@ -140,7 +140,7 @@ export function useSettingsManagedUserCommunicationActions({
       if (isDevOutboxActivation(activation)) {
         toast(buildMutationSuccessToast({
           title: "Activation Reissued",
-          description: `Activation email for ${user.username} was captured in the local development outbox.`,
+          description: `Activation email for ${user.username} was captured in the local development outbox. Use the latest email; older activation links have been replaced.`,
         }));
         openManagedSecretDialog({
           title: "Local Activation Email Preview",
@@ -150,7 +150,7 @@ export function useSettingsManagedUserCommunicationActions({
       } else if (activation?.sent) {
         toast(buildMutationSuccessToast({
           title: "Activation Reissued",
-          description: `Activation email resent to ${recipientEmail || user.username}.`,
+          description: `Activation email resent to ${recipientEmail || user.username}. Use the latest email; older activation links have been replaced.`,
         }));
       } else {
         openManagedSecretDialog({

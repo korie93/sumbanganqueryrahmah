@@ -15,14 +15,15 @@ import type {
   AuthenticatedSessionSnapshot,
 } from "../../repositories/activity.repository";
 import { PostgresImportsSearchStorage } from "./postgres-imports-search-storage";
+import type { TwoFactorSessionExpectation } from "../../auth/two-factor";
 
 export class PostgresActivityStorage extends PostgresImportsSearchStorage {
   async getAuthenticatedSessionSnapshot(activityId: string): Promise<AuthenticatedSessionSnapshot | undefined> {
     return this.activityRepository.getAuthenticatedSessionSnapshot(activityId);
   }
 
-  async createActivity(data: InsertUserActivity): Promise<UserActivity> {
-    return this.activityRepository.createActivity(data);
+  async createActivity(data: InsertUserActivity, expectedTwoFactor?: TwoFactorSessionExpectation): Promise<UserActivity> {
+    return this.activityRepository.createActivity(data, expectedTwoFactor);
   }
 
   async touchActivity(activityId: string): Promise<void> {

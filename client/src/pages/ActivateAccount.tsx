@@ -6,7 +6,7 @@ import {
   type ActivationTokenValidationPayload,
   validateActivationToken,
 } from "@/lib/api/auth";
-import { getApiErrorMessage } from "@/lib/api-errors";
+import { getAuthErrorMessage } from "@/lib/auth-flow-feedback";
 import { persistAuthNotice } from "@/lib/auth-session";
 import { shouldAutoFocusPublicAuthField } from "@/lib/interaction-media";
 import {
@@ -135,7 +135,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
         }
         setActivation(null);
         setPhase("invalid");
-        setError(getApiErrorMessage(validationError, "Pautan aktivasi tidak sah atau telah tamat tempoh."));
+        setError(getAuthErrorMessage(validationError, "Pautan aktivasi tidak sah atau telah tamat tempoh.", "activation"));
       } finally {
         if (validationAbortControllerRef.current === controller) {
           validationAbortControllerRef.current = null;
@@ -196,7 +196,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       ) {
         return;
       }
-      setError(getApiErrorMessage(activationError, "Aktivasi akaun gagal."));
+      setError(getAuthErrorMessage(activationError, "Aktivasi akaun gagal.", "activation"));
     } finally {
       if (activationAbortControllerRef.current === controller) {
         activationAbortControllerRef.current = null;

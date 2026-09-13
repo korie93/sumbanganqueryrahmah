@@ -1,9 +1,11 @@
 import type { AriaAttributes, KeyboardEvent, Ref } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import type { ActivationTokenValidationPayload } from "@/lib/api/auth";
 import { formatPublicAuthExpiry } from "@/pages/public-auth-runtime-utils";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 
 export type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 
@@ -138,6 +140,7 @@ export function ActivationPasswordForm({
           onChange={(event) => {
             onNewPasswordChange(event.target.value);
             onClearNewPasswordError();
+            onClearConfirmPasswordError();
             onClearFormError();
           }}
           onBlur={onNewPasswordBlur}
@@ -177,13 +180,16 @@ export function ActivationPasswordForm({
           autoComplete="new-password"
           disabled={loading}
           {...confirmPasswordInvalidProps}
+          {...getAriaInvalidProps(Boolean(confirmPassword ? newPassword !== confirmPassword : confirmPasswordError))}
+          aria-describedby="activate-password-confirm-error"
         />
       </div>
-      {confirmPasswordError ? (
-        <p id="activate-password-confirm-error" className="public-auth-field-error" role="alert">
-          {confirmPasswordError}
-        </p>
-      ) : null}
+      <PasswordConfirmationFeedback
+        id="activate-password-confirm-error"
+        password={newPassword}
+        confirmation={confirmPassword}
+        requiredError={confirmPasswordError}
+      />
       {error ? (
         <div className="public-auth-status-card public-auth-status-card--error" role="alert">
           {error}

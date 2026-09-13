@@ -107,49 +107,23 @@ export class AuthAccountActivationOperations {
       throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
     }
 
-    const consumed = await this.deps.storage.consumeActivationTokenById({
+    const passwordHash = await hashPassword(newPassword);
+    const completed = await this.deps.storage.completeAccountRecovery({
+      kind: "activation",
+      userId: record.userId,
       tokenId: record.tokenId,
-      now,
+      tokenHash: lookup!.tokenHash,
+      passwordHash,
     });
-    if (!consumed) {
+    if (!completed) {
       const latest = lookup
         ? await this.deps.storage.getActivationTokenRecordByHash(lookup.tokenHash)
         : undefined;
-      assertUsableActivationTokenRecord(latest, now);
-      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
+      assertUsableActivationTokenRecord(latest, new Date());
+      throw new AuthAccountError(409, ERROR_CODES.CONFLICT, "Account activation changed. Open the latest activation link again.");
     }
 
-    const target = await this.deps.storage.getUser(record.userId);
-    if (!target) {
-      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
-    }
-    if (
-      target.isBanned
-      || normalizeAccountStatus(target.status, "pending_activation") !== "pending_activation"
-    ) {
-      throw new AuthAccountError(
-        409,
-        ERROR_CODES.ACCOUNT_UNAVAILABLE,
-        "Account activation is no longer available.",
-      );
-    }
-
-    const passwordHash = await hashPassword(newPassword);
-    const updatedUser = await this.deps.storage.updateUserAccount({
-      userId: target.id,
-      passwordHash,
-      passwordChangedAt: now,
-      activatedAt: now,
-      status: "active",
-      mustChangePassword: false,
-      passwordResetBySuperuser: false,
-      failedLoginAttempts: 0,
-      lockedAt: null,
-      lockedReason: null,
-      lockedBySystem: false,
-    });
-
-    await this.deps.storage.invalidateUnusedActivationTokens(target.id);
+    const target = completed.user;
     await this.deps.storage.createAuditLog({
       action: "ACCOUNT_ACTIVATION_COMPLETED",
       performedBy: target.username,
@@ -157,6 +131,6 @@ export class AuthAccountActivationOperations {
       details: "Account activation completed.",
     });
 
-    return updatedUser ?? target;
+    return target;
   }
 }

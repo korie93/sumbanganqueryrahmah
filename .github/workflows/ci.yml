@@ -245,6 +245,10 @@ jobs:
       - name: Run DB bootstrap integration tests
         run: npm run test:db-integration
 
+      - name: Verify isolated authentication transactions
+        timeout-minutes: 5
+        run: SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" npm run test:auth:postgres
+
       - name: Verify role permissions with PostgreSQL
         env:
           ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1"
@@ -265,6 +269,10 @@ jobs:
 
       - name: Install Playwright Chromium dependencies
         run: npx playwright install-deps chromium
+
+      - name: Verify password and authenticator browser feedback
+        timeout-minutes: 5
+        run: npm run test:auth:browser
 
       - name: Build
         run: npm run build

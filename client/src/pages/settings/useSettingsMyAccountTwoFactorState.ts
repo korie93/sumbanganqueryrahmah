@@ -18,6 +18,7 @@ import {
 } from "@/pages/settings/settings-my-account-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 import { buildSettingsMutationErrorToast } from "@/pages/settings/utils";
+import { getAuthErrorCode, getAuthErrorMessage } from "@/lib/auth-flow-feedback";
 
 type UseSettingsMyAccountTwoFactorStateArgs = UseSettingsMyAccountArgs & {
   currentUser: CurrentUser | null;
@@ -115,7 +116,9 @@ export function useSettingsMyAccountTwoFactorState({
         description: "Add the secret key to your authenticator app, then verify the 6-digit code.",
       }));
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "2FA Setup Failed"));
+      if (!isMountedRef.current) return;
+      const feedback = buildSettingsMutationErrorToast(error, "2FA Setup Failed");
+      toast({ ...feedback, description: getAuthErrorMessage(error, feedback.description) });
     } finally {
       if (isMountedRef.current) {
         setTwoFactorLoading(false);
@@ -151,7 +154,12 @@ export function useSettingsMyAccountTwoFactorState({
         description: "Authenticator-based sign-in is now active for this account.",
       }));
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "2FA Enable Failed"));
+      if (!isMountedRef.current) return;
+      if (getAuthErrorCode(error) === "TWO_FACTOR_SETUP_EXPIRED") clearTwoFactorSetupState();
+      const feedback = buildSettingsMutationErrorToast(error, "2FA Enable Failed");
+      const message = getAuthErrorMessage(error, feedback.description);
+      setTwoFactorCodeError(message);
+      toast({ ...feedback, description: message });
     } finally {
       if (isMountedRef.current) {
         setTwoFactorLoading(false);
@@ -194,7 +202,9 @@ export function useSettingsMyAccountTwoFactorState({
         description: "Authenticator-based sign-in has been turned off for this account.",
       }));
     } catch (error: unknown) {
-      toast(buildSettingsMutationErrorToast(error, "2FA Disable Failed"));
+      if (!isMountedRef.current) return;
+      const feedback = buildSettingsMutationErrorToast(error, "2FA Disable Failed");
+      toast({ ...feedback, description: getAuthErrorMessage(error, feedback.description) });
     } finally {
       if (isMountedRef.current) {
         setTwoFactorLoading(false);

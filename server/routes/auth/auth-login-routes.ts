@@ -8,6 +8,7 @@ import { HttpError } from "../../http/errors";
 import { logger } from "../../lib/logger";
 import { buildClientDeviceProfile } from "../../lib/browser";
 import { resolveRequestClientIp } from "../../http/client-ip";
+import { buildTwoFactorCredentialState } from "../../auth/two-factor";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 const LEGACY_LOGIN_ROUTE = "/api/login";
@@ -47,6 +48,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
       let challengeToken: string;
       try {
         challengeToken = signTwoFactorChallengeToken({
+          credentialState: buildTwoFactorCredentialState(loginResult.user),
           userId: loginResult.user.id,
           username: loginResult.user.username,
           role: loginResult.user.role,
@@ -135,6 +137,11 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
       const body = readTwoFactorChallengeBody(req.body);
       const challenge = verifyTwoFactorChallengeToken(body.challengeToken);
       const result = await authAccountService.verifyTwoFactorLogin({
+        challenge: {
+          id: challenge.challengeId,
+          credentialState: challenge.credentialState,
+          expiresAtMs: challenge.expiresAtMs,
+        },
         userId: challenge.userId,
         code: body.code,
         fingerprint: challenge.fingerprint,

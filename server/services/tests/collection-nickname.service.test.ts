@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import bcrypt from "bcrypt";
 import type { AuthenticatedUser } from "../../auth/guards";
-import { COLLECTION_NICKNAME_TEMP_PASSWORD } from "../../routes/collection.validation";
+import { getCredentialPasswordValidationError, isTemporaryPasswordPolicyCompliant } from "../../../shared/password-policy";
+import { conflict, HttpError } from "../../http/errors";
 import { CollectionNicknameService } from "../collection/collection-nickname.service";
 
 type CollectionNicknameStorage = ConstructorParameters<typeof CollectionNicknameService>[0];
@@ -34,7 +35,7 @@ function buildCollectionNicknameAuditLog(
   };
 }
 
-function createNicknameHarness() {
+function createNicknameHarness(options: { beforePasswordWrite?: () => void } = {}) {
   const profile = {
     id: "nickname-1",
     nickname: "Collector Alpha",
@@ -68,6 +69,10 @@ function createNicknameHarness() {
     getCollectionNicknameAuthProfileByName: async (nickname: string) =>
       nickname.toLowerCase() === profile.nickname.toLowerCase() ? profile : undefined,
     setCollectionNicknamePassword: async (params: CollectionNicknamePasswordInput) => {
+      options.beforePasswordWrite?.();
+      if (params.expectedPasswordHash !== undefined && params.expectedPasswordHash !== profile.nicknamePasswordHash) {
+        throw conflict("Password nickname telah berubah.", "CONFLICT");
+      }
       passwordUpdates.push({
         nicknameId: params.nicknameId,
         passwordHash: params.passwordHash,
@@ -114,7 +119,7 @@ function buildUser(overrides?: Partial<AuthenticatedUser>): AuthenticatedUser {
   };
 }
 
-test("CollectionNicknameService.resetNicknamePassword returns the configured temporary password and hashes it", async () => {
+test("CollectionNicknameService.resetNicknamePassword returns a unique temporary password and only stores its hash", async () => {
   const { service, profile, auditLogs, passwordUpdates } = createNicknameHarness();
 
   const result = await service.resetNicknamePassword(
@@ -123,27 +128,32 @@ test("CollectionNicknameService.resetNicknamePassword returns the configured tem
   );
 
   assert.equal(result.ok, true);
-  assert.equal(result.temporaryPassword, COLLECTION_NICKNAME_TEMP_PASSWORD);
+  assert.equal(isTemporaryPasswordPolicyCompliant(result.temporaryPassword), true);
   assert.equal(passwordUpdates.length, 1);
   assert.equal(passwordUpdates[0]?.nicknameId, profile.id);
   assert.equal(passwordUpdates[0]?.mustChangePassword, true);
   assert.equal(passwordUpdates[0]?.passwordResetBySuperuser, true);
-  assert.equal(await bcrypt.compare(COLLECTION_NICKNAME_TEMP_PASSWORD, profile.nicknamePasswordHash || ""), true);
+  assert.equal(await bcrypt.compare(result.temporaryPassword, profile.nicknamePasswordHash || ""), true);
+  assert.notEqual(profile.nicknamePasswordHash, result.temporaryPassword);
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0]?.action, "COLLECTION_NICKNAME_PASSWORD_RESET");
+  assert.equal(JSON.stringify(auditLogs).includes(result.temporaryPassword), false);
+  const next = await service.resetNicknamePassword(buildUser({ role: "superuser" }), profile.id);
+  assert.notEqual(next.temporaryPassword, result.temporaryPassword);
+  assert.equal(await bcrypt.compare(result.temporaryPassword, profile.nicknamePasswordHash || ""), false);
 });
 
 test("CollectionNicknameService.loginNickname accepts the reset temporary password and requires a forced password change", async () => {
   const { service, profile, sessionWrites } = createNicknameHarness();
 
-  await service.resetNicknamePassword(
+  const reset = await service.resetNicknamePassword(
     buildUser({ username: "superuser", role: "superuser", activityId: "activity-super-1" }),
     profile.id,
   );
 
   const result = await service.loginNickname(buildUser(), {
     nickname: profile.nickname,
-    password: COLLECTION_NICKNAME_TEMP_PASSWORD,
+    password: reset.temporaryPassword,
   });
 
   assert.equal(result.ok, true);
@@ -152,4 +162,96 @@ test("CollectionNicknameService.loginNickname accepts the reset temporary passwo
   assert.equal(result.nickname.passwordResetBySuperuser, true);
   assert.equal(result.nickname.requiresForcedPasswordChange, true);
   assert.equal(sessionWrites.length, 0);
+});
+
+test("Collection nickname setup reports the shared policy rule and does not mutate invalid inputs", async () => {
+  const { service, profile, passwordUpdates, sessionWrites } = createNicknameHarness();
+  for (const password of ["Short1!Aa", "1234567890123!", "lowercasepass1!", "UPPERCASEPASS1!", "NoNumbersHere!", "NoSymbolsHere12", `Aa1!${"x".repeat(256)}`]) {
+    const expected = getCredentialPasswordValidationError(password, "ms");
+    assert.ok(expected);
+    await assert.rejects(
+      service.setupNicknamePassword(buildUser(), {
+        nickname: profile.nickname,
+        newPassword: password,
+        confirmPassword: password,
+      }),
+      (error: unknown) => error instanceof HttpError
+        && error.statusCode === 400
+        && error.code === expected.code
+        && error.message === expected.message,
+    );
+  }
+  await assert.rejects(
+    service.setupNicknamePassword(buildUser(), {
+      nickname: profile.nickname,
+      newPassword: "StrongPass123!",
+      confirmPassword: "DifferentPass123!",
+    }),
+    (error: unknown) => error instanceof HttpError && error.code === "PASSWORD_CONFIRMATION_MISMATCH",
+  );
+  assert.equal(passwordUpdates.length, 0);
+  assert.equal(sessionWrites.length, 0);
+});
+
+test("Collection nickname reset credentials cannot grant a session until securely changed", async () => {
+  const { service, profile, sessionWrites } = createNicknameHarness();
+  const reset = await service.resetNicknamePassword(buildUser({ role: "superuser" }), profile.id);
+  await assert.rejects(
+    service.setupNicknamePassword(buildUser(), {
+      nickname: profile.nickname,
+      currentPassword: "wrong-password",
+      newPassword: "StrongPass123!",
+      confirmPassword: "StrongPass123!",
+    }),
+    (error: unknown) => error instanceof HttpError && error.statusCode === 401,
+  );
+  assert.equal(sessionWrites.length, 0);
+  const result = await service.setupNicknamePassword(buildUser(), {
+    nickname: profile.nickname,
+    currentPassword: reset.temporaryPassword,
+    newPassword: "StrongPass123!",
+    confirmPassword: "StrongPass123!",
+  });
+  assert.equal(result.nickname.mustChangePassword, false);
+  assert.equal(result.nickname.passwordResetBySuperuser, false);
+  assert.equal(sessionWrites.length, 1);
+  assert.equal(await bcrypt.compare("StrongPass123!", profile.nicknamePasswordHash || ""), true);
+  await assert.rejects(
+    service.loginNickname(buildUser(), { nickname: profile.nickname, password: reset.temporaryPassword }),
+    (error: unknown) => error instanceof HttpError && error.statusCode === 401,
+  );
+});
+
+test("Collection nickname reset is superuser-only even when the service is invoked directly", async () => {
+  const { service, profile, passwordUpdates } = createNicknameHarness();
+  for (const role of ["user", "admin", "manager"]) {
+    await assert.rejects(
+      service.resetNicknamePassword(buildUser({ role }), profile.id),
+      (error: unknown) => error instanceof HttpError && error.statusCode === 403,
+    );
+  }
+  assert.equal(passwordUpdates.length, 0);
+});
+
+test("Collection nickname setup cannot overwrite a reset that occurs during password verification", async () => {
+  let race = false;
+  const h = createNicknameHarness({
+    beforePasswordWrite: () => {
+      if (race) h.profile.nicknamePasswordHash = "newer-reset-password-hash";
+    },
+  });
+  const reset = await h.service.resetNicknamePassword(buildUser({ role: "superuser" }), h.profile.id);
+  race = true;
+  await assert.rejects(
+    h.service.setupNicknamePassword(buildUser(), {
+      nickname: h.profile.nickname,
+      currentPassword: reset.temporaryPassword,
+      newPassword: "StrongPass123!",
+      confirmPassword: "StrongPass123!",
+    }),
+    (error: unknown) => error instanceof HttpError && error.statusCode === 409,
+  );
+  assert.equal(h.profile.nicknamePasswordHash, "newer-reset-password-hash");
+  assert.equal(h.passwordUpdates.length, 1);
+  assert.equal(h.sessionWrites.length, 0);
 });

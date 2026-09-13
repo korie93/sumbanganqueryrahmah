@@ -4,6 +4,7 @@ import type { SharedRateLimitStoreConfig } from "../middleware/rate-limit-runtim
 import { REDIS_UNAVAILABLE_WARNING_REPEAT_MS } from "../middleware/redis-rate-limit-store";
 import {
   buildTwoFactorReplayKey,
+  TWO_FACTOR_CHALLENGE_REPLAY_TTL_MS,
   type ConsumeTwoFactorReplayCodeParams,
   type TwoFactorReplayStore,
 } from "./two-factor-replay-cache";
@@ -121,7 +122,7 @@ export class RedisTwoFactorReplayStore implements TwoFactorReplayStore {
     try {
       const result = await client.set(this.buildRedisKey(replayKey), "1", {
         NX: true,
-        PX: this.ttlMs,
+        PX: params.purpose === "challenge" ? TWO_FACTOR_CHALLENGE_REPLAY_TTL_MS : this.ttlMs,
       });
 
       if (isRedisSetNxSuccess(result)) {

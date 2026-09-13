@@ -4,6 +4,7 @@ import { WebSocket } from "ws";
 import { signSessionJwt } from "../../auth/session-jwt";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import { AuthAccountError } from "../../services/auth-account.service";
+import { logger } from "../../lib/logger";
 import {
   closeAuthActivitySockets,
   parseAuthBrowserName,
@@ -14,6 +15,7 @@ import {
 
 test("auth route session utils round-trip two-factor challenge tokens and normalize browser headers", () => {
   const token = signAuthTwoFactorChallengeToken({
+    credentialState: "a".repeat(64),
     userId: "user-1",
     username: "alpha.user",
     role: "admin",
@@ -36,6 +38,9 @@ test("auth route session utils round-trip two-factor challenge tokens and normal
   assert.equal(challenge.pcName, "OPS-01");
   assert.equal(challenge.ipAddress, "127.0.0.1");
   assert.equal(challenge.platform, "Windows 10/11");
+  assert.equal(challenge.credentialState, "a".repeat(64));
+  assert.match(challenge.challengeId, /^[a-f0-9-]{36}$/i);
+  assert.ok(challenge.expiresAtMs > Date.now());
   assert.equal(
     parseAuthBrowserName(
       undefined,
@@ -45,6 +50,27 @@ test("auth route session utils round-trip two-factor challenge tokens and normal
     ),
     "Chrome 120",
   );
+});
+
+test("expired and malformed 2FA JWTs produce actionable errors rather than internal failures", (t) => {
+  let now = Date.parse("2026-09-12T00:00:00Z");
+  t.mock.method(Date, "now", () => now);
+  const token = signAuthTwoFactorChallengeToken({
+    userId: "user-1", username: "admin", role: "admin", browserName: "Test",
+    credentialState: "b".repeat(64),
+  });
+  now += 5 * 60 * 1_000;
+  assert.throws(() => verifyAuthTwoFactorChallengeToken(token), (error: unknown) => {
+    assert.ok(error instanceof AuthAccountError);
+    assert.equal(error.code, ERROR_CODES.TWO_FACTOR_CHALLENGE_EXPIRED);
+    assert.match(error.message, /sign in again/i);
+    return true;
+  });
+  assert.throws(() => verifyAuthTwoFactorChallengeToken("malformed"), (error: unknown) => {
+    assert.ok(error instanceof AuthAccountError);
+    assert.equal(error.code, ERROR_CODES.TWO_FACTOR_CHALLENGE_INVALID);
+    return true;
+  });
 });
 
 test("auth route session utils expose the JWT-backed session expiry timestamp", () => {
@@ -137,4 +163,58 @@ test("auth route session utils reject invalid two-factor challenge tokens and cl
     "missing-activity",
   ]);
   assert.equal(connectedClients.size, 0);
+});
+
+test("revoked socket cleanup survives send, close and terminate failures without skipping later sessions", async (t) => {
+  const warnings: unknown[][] = [];
+  t.mock.method(logger, "warn", (...args: unknown[]) => { warnings.push(args); });
+  const events: string[] = [];
+  const clearedActivityIds: string[] = [];
+  const ids = ["throwing-send", "throwing-close", "healthy", "missing"];
+  const connectedClients = new Map<string, WebSocket>();
+  for (const id of ids.slice(0, 3)) {
+    connectedClients.set(id, {
+      readyState: WebSocket.OPEN,
+      send() {
+        events.push(`${id}:send`);
+        if (id === "throwing-send") throw new Error("PRIVATE_TRANSPORT_PAYLOAD");
+      },
+      close() {
+        events.push(`${id}:close`);
+        if (id === "throwing-close") throw new Error("PRIVATE_CLOSE_PAYLOAD");
+      },
+      terminate() {
+        events.push(`${id}:terminate`);
+        if (id === "throwing-close") throw new Error("PRIVATE_TERMINATE_PAYLOAD");
+      },
+    } as unknown as WebSocket);
+  }
+
+  assert.doesNotThrow(() => closeAuthActivitySockets({
+    activityIds: ids,
+    reason: "PRIVATE_LOGOUT_REASON",
+    connectedClients,
+    storage: {
+      clearCollectionNicknameSessionByActivity: async (activityId: string) => {
+        clearedActivityIds.push(activityId);
+        if (activityId === "throwing-send") throw new Error("PRIVATE_STORAGE_ERROR");
+      },
+    },
+  }));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(connectedClients.size, 0);
+  assert.deepEqual(clearedActivityIds, ids);
+  assert.deepEqual(events, [
+    "throwing-send:send", "throwing-send:close", "throwing-send:terminate",
+    "throwing-close:send", "throwing-close:close", "throwing-close:terminate",
+    "healthy:send", "healthy:close",
+  ]);
+  assert.equal(warnings.length, 3);
+  assert.doesNotMatch(JSON.stringify(warnings), /PRIVATE_/);
+  for (const warning of warnings.slice(0, 2)) {
+    assert.deepEqual(warning, ["Auth socket transport failed during revoked session cleanup", {
+      operation: "closeAuthActivitySockets",
+    }]);
+  }
 });

@@ -110,7 +110,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     environmentRuntimeConfig.app.bodyLimits.imports,
     DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
   );
-  const authRouteRateLimiters = createAuthRouteRateLimiters();
+  const authRouteRateLimiters = createAuthRouteRateLimiters(storage);
   const backupOperationsService = new BackupOperationsService(
     storage,
     backupsRepository,

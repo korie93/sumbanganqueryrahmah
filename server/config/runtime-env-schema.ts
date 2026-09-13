@@ -358,6 +358,8 @@ const runtimeEnvironmentShape = {
     "COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES",
     255,
   ),
+  // Deprecated and ignored. Accept existing deployment environments without
+  // retaining a shared reset credential; each reset now generates its own.
   COLLECTION_NICKNAME_TEMP_PASSWORD: optionalEnvString(
     "COLLECTION_NICKNAME_TEMP_PASSWORD",
     SECRET_STRING_MAX_LENGTH,

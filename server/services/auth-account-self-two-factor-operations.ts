@@ -2,6 +2,7 @@ import {
   buildTwoFactorOtpAuthUrl,
   decryptTwoFactorSecretPayload,
   encryptTwoFactorSecret,
+  encryptTwoFactorSetupSecret,
   generateTwoFactorSecret,
   verifyTwoFactorCode,
 } from "../auth/two-factor";
@@ -59,12 +60,16 @@ export class AuthAccountSelfTwoFactorOperations {
 
   async startTwoFactorSetup(actor: AuthAccountUser, input: StartTwoFactorSetupInput) {
     this.requireTwoFactorEligibleRole(actor);
+    if (actor.twoFactorEnabled) {
+      throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_ALREADY_ENABLED,
+        "Two-factor authentication is already enabled. Disable it with your password and authenticator code before starting again.");
+    }
     await this.requireCurrentPassword(actor, input.currentPassword);
 
     const secret = generateTwoFactorSecret();
     let encryptedSecret = "";
     try {
-      encryptedSecret = encryptTwoFactorSecret(secret);
+      encryptedSecret = encryptTwoFactorSetupSecret(secret);
     } catch {
       throw new AuthAccountError(
         503,
@@ -77,7 +82,10 @@ export class AuthAccountSelfTwoFactorOperations {
       twoFactorEnabled: false,
       twoFactorSecretEncrypted: encryptedSecret,
       twoFactorConfiguredAt: null,
+      expectedTwoFactorState: this.expectedState(actor),
     });
+    this.requireUpdatedUser(updatedUser);
+    const pending = decryptTwoFactorSecretPayload(encryptedSecret);
 
     await this.deps.storage.createAuditLog({
       action: "TWO_FACTOR_SETUP_INITIATED",
@@ -91,7 +99,7 @@ export class AuthAccountSelfTwoFactorOperations {
     });
 
     return {
-      user: updatedUser ?? actor,
+      user: updatedUser,
       setup: {
         accountName: actor.username,
         issuer: "SQR",
@@ -99,14 +107,23 @@ export class AuthAccountSelfTwoFactorOperations {
           issuer: "SQR",
           username: actor.username,
           secret,
+          algorithm: pending.algorithm,
         }),
         secret,
+        algorithm: pending.algorithm.toUpperCase(),
+        digits: 6,
+        period: 30,
+        expiresAt: new Date(pending.setupExpiresAtMs!).toISOString(),
       },
     };
   }
 
   async confirmTwoFactorSetup(actor: AuthAccountUser, input: ConfirmTwoFactorSetupInput) {
     this.requireTwoFactorEligibleRole(actor);
+    if (actor.twoFactorEnabled) {
+      throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_ALREADY_ENABLED,
+        "Two-factor authentication is already enabled.");
+    }
 
     const encryptedSecret = String(actor.twoFactorSecretEncrypted || "").trim();
     if (!encryptedSecret) {
@@ -128,20 +145,30 @@ export class AuthAccountSelfTwoFactorOperations {
       );
     }
 
+    if (!secretPayload.setupExpiresAtMs || secretPayload.setupExpiresAtMs <= Date.now()) {
+      throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_SETUP_EXPIRED,
+        "Authenticator setup expired. Start setup again and replace the old entry in your authenticator app.");
+    }
+
     if (!verifyTwoFactorCode(secretPayload.secret, input.code, 1, secretPayload.algorithm)) {
-      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE,
+        "Incorrect verification code. Use the current code and check your authenticator settings and device time.");
     }
 
     if (!(await consumeTwoFactorReplayCode({ code: input.code, purpose: "setup", subjectId: actor.id }))) {
-      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_CODE_REPLAYED,
+        "This verification code has already been used. Wait for the next code and try again.");
     }
 
     const now = new Date();
     const updatedUser = await this.deps.storage.updateUserAccount({
       userId: actor.id,
       twoFactorEnabled: true,
+      twoFactorSecretEncrypted: encryptTwoFactorSecret(secretPayload.secret, secretPayload.algorithm),
       twoFactorConfiguredAt: now,
+      expectedTwoFactorState: this.expectedState(actor),
     });
+    this.requireUpdatedUser(updatedUser);
 
     await this.deps.storage.createAuditLog({
       action: "TWO_FACTOR_ENABLED",
@@ -155,7 +182,7 @@ export class AuthAccountSelfTwoFactorOperations {
       }),
     });
 
-    return updatedUser ?? actor;
+    return updatedUser;
   }
 
   async disableTwoFactor(actor: AuthAccountUser, input: DisableTwoFactorInput) {
@@ -183,11 +210,13 @@ export class AuthAccountSelfTwoFactorOperations {
     }
 
     if (!verifyTwoFactorCode(secretPayload.secret, input.code, 1, secretPayload.algorithm)) {
-      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE,
+        "Incorrect verification code. Use the current code and check your device time.");
     }
 
     if (!(await consumeTwoFactorReplayCode({ code: input.code, purpose: "disable", subjectId: actor.id }))) {
-      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_CODE_REPLAYED,
+        "This verification code has already been used. Wait for the next code and try again.");
     }
 
     const updatedUser = await this.deps.storage.updateUserAccount({
@@ -195,7 +224,9 @@ export class AuthAccountSelfTwoFactorOperations {
       twoFactorEnabled: false,
       twoFactorSecretEncrypted: null,
       twoFactorConfiguredAt: null,
+      expectedTwoFactorState: this.expectedState(actor),
     });
+    this.requireUpdatedUser(updatedUser);
 
     await this.deps.storage.createAuditLog({
       action: "TWO_FACTOR_DISABLED",
@@ -208,6 +239,21 @@ export class AuthAccountSelfTwoFactorOperations {
       }),
     });
 
-    return updatedUser ?? actor;
+    return updatedUser;
+  }
+
+  private expectedState(actor: AuthAccountUser) {
+    return {
+      enabled: actor.twoFactorEnabled === true,
+      encryptedSecret: actor.twoFactorSecretEncrypted ?? null,
+      passwordHash: actor.passwordHash,
+    };
+  }
+
+  private requireUpdatedUser(user: AuthAccountUser | undefined): asserts user is AuthAccountUser {
+    if (!user) {
+      throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_SETUP_EXPIRED,
+        "Two-factor account settings changed. Reload your account and start again.");
+    }
   }
 }

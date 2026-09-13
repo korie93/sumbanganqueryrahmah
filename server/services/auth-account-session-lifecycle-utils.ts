@@ -9,6 +9,7 @@ import { ERROR_CODES } from "../../shared/error-codes";
 import { hashDeviceFingerprint } from "../auth/device-fingerprint";
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 import { buildLoginFailureAuditDetails } from "../lib/login-audit";
+import type { TwoFactorSessionExpectation } from "../auth/two-factor";
 
 export async function getSuperuserSessionIdleWindowMs(
   storage: Pick<AuthAccountAuthenticationStorage, "getAppConfig">,
@@ -91,6 +92,7 @@ export async function replaceExistingSessionsForLogin(
 }
 
 export async function createAuthenticatedSession(params: {
+  expectedTwoFactor?: TwoFactorSessionExpectation;
   details: string;
   input: AuthenticatedSessionInput;
   storage: Pick<
@@ -179,7 +181,7 @@ export async function createAuthenticatedSession(params: {
     platform,
     fingerprint: hashDeviceFingerprint(params.input.fingerprint),
     ipAddress: params.input.ipAddress ?? null,
-  });
+  }, params.expectedTwoFactor);
 
   await params.storage.touchLastLogin(params.user.id, new Date());
   await params.storage.createAuditLog({

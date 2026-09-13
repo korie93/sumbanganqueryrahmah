@@ -1,6 +1,10 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
-import { auditLogs, collectionNicknameSessions, userActivity } from "../../shared/schema-postgres";
+import { auditLogs, collectionNicknameSessions, userActivity, users } from "../../shared/schema-postgres";
+import { buildTwoFactorCredentialState, type TwoFactorSessionExpectation } from "../auth/two-factor";
+import { getAccountAccessBlockReason } from "../auth/account-lifecycle";
+import { AuthAccountError } from "../services/auth-account-types";
+import { ERROR_CODES } from "../../shared/error-codes";
 import { ACTIVITY_IDLE_STATUS_THRESHOLD_MINUTES } from "../activity/activity-session-policy";
 import { db } from "../db-postgres";
 import {
@@ -46,8 +50,28 @@ async function loadActivityPages(whereCondition?: SQL): Promise<UserActivity[]> 
   return activities;
 }
 
-export async function createActivity(data: InsertUserActivity): Promise<UserActivity> {
-  const result = await db
+export async function createActivity(
+  data: InsertUserActivity,
+  expectedTwoFactor?: TwoFactorSessionExpectation,
+  database: typeof db = db,
+): Promise<UserActivity> {
+  if (expectedTwoFactor) {
+    // Serialize final 2FA admission with password resets and authenticator
+    // changes. A reread before INSERT would still leave a TOCTOU gap.
+    return database.transaction(async (tx) => {
+      const [user] = await tx.select().from(users).where(eq(users.id, data.userId)).for("update");
+      if (!user || getAccountAccessBlockReason(user) || !user.twoFactorEnabled
+        || user.username !== data.username || user.role !== data.role
+        || expectedTwoFactor.expiresAtMs <= Date.now()
+        || expectedTwoFactor.credentialState !== buildTwoFactorCredentialState(user)) {
+        throw new AuthAccountError(401, ERROR_CODES.TWO_FACTOR_CHALLENGE_EXPIRED,
+          "2FA session expired or account credentials changed. Please sign in again.");
+      }
+      const [activity] = await tx.insert(userActivity).values(buildCreateActivityValues(data)).returning();
+      return activity;
+    });
+  }
+  const result = await database
     .insert(userActivity)
     .values(buildCreateActivityValues(data))
     .returning();

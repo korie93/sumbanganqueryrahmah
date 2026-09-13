@@ -777,8 +777,8 @@ test("POST /api/auth/change-password rejects oversized new passwords before upda
     assert.equal(response.status, 400);
     const payload = await response.json();
     assert.equal(payload.ok, false);
-    assert.equal(payload.error.code, "INVALID_PASSWORD");
-    assert.match(payload.error.message, /between 14 and 256 characters/i);
+    assert.equal(payload.error.code, "PASSWORD_TOO_LONG");
+    assert.match(payload.error.message, /must not exceed 256 characters/i);
     assert.equal(accountUpdates.length, 0);
   } finally {
     await stopTestServer(server);
@@ -1945,12 +1945,19 @@ test("POST /api/auth/activate-account activates a pending account, hashes the pa
     assert.deepEqual(invalidateCalls, [user.id]);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "ACCOUNT_ACTIVATION_COMPLETED");
+    const replay = await fetch(`${baseUrl}/api/auth/activate-account`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: rawToken, newPassword: "StrongPass123!", confirmPassword: "StrongPass123!" }),
+    });
+    assert.equal(replay.status, 409);
+    assert.equal((await replay.json()).error.code, "ACCOUNT_ALREADY_ACTIVATED");
+    assert.equal(updateCalls.length, 1);
   } finally {
     await stopTestServer(server);
   }
 });
 
-test("POST /api/auth/activate-account rejects a token that has already been used", async () => {
+test("POST /api/auth/activate-account identifies a superseded token while the account remains pending", async () => {
   const { storage, rawToken } = createActivationStorageDouble({
     activationRecord: {
       usedAt: new Date(),
@@ -1982,7 +1989,7 @@ test("POST /api/auth/activate-account rejects a token that has already been used
     assert.equal(response.status, 410);
     const payload = await response.json();
     assert.equal(payload.ok, false);
-    assert.equal(payload.error.code, "TOKEN_USED");
+    assert.equal(payload.error.code, "ACTIVATION_TOKEN_SUPERSEDED");
   } finally {
     await stopTestServer(server);
   }
@@ -2067,14 +2074,20 @@ test("POST /api/auth/reset-password-with-token updates credentials, invalidates 
     invalidateCalls,
     updateCalls,
     deactivatedSessions,
+    clearedNicknameSessionIds,
   } = createPasswordResetStorageDouble();
   const app = createJsonTestApp();
+  const closedSockets: string[] = [];
+  const socketMessages: string[] = [];
+  const connectedClients = new Map<string, WebSocket>(["activity-1", "activity-2"].map((id) => [
+    id, createConnectedClient((payload) => socketMessages.push(payload), () => closedSockets.push(id)),
+  ]));
 
   registerAuthRoutes(app, {
     storage,
     authenticateToken: (_req, _res, next) => next(),
     requireRole: () => (_req, _res, next) => next(),
-    connectedClients: new Map(),
+    connectedClients,
   });
 
   const { server, baseUrl } = await startTestServer(app);
@@ -2108,6 +2121,18 @@ test("POST /api/auth/reset-password-with-token updates credentials, invalidates 
     }]);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "PASSWORD_RESET_COMPLETED");
+    assert.deepEqual(closedSockets.sort(), ["activity-1", "activity-2"]);
+    assert.deepEqual(clearedNicknameSessionIds.sort(), ["activity-1", "activity-2"]);
+    assert.equal(connectedClients.size, 0);
+    assert.equal(socketMessages.length, 2);
+    assert.equal("closedSessionIds" in payload, false, "Session IDs remain internal to socket cleanup.");
+    const replay = await fetch(`${baseUrl}/api/auth/reset-password-with-token`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: rawToken, newPassword: "ResetStrong123!", confirmPassword: "ResetStrong123!" }),
+    });
+    assert.equal(replay.status, 410);
+    assert.equal((await replay.json()).error.code, "TOKEN_USED");
+    assert.equal(updateCalls.length, 1);
   } finally {
     await stopTestServer(server);
   }

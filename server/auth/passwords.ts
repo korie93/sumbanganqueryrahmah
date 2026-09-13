@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
 import { runtimeConfig } from "../config/runtime";
+import { TEMPORARY_PASSWORD_LENGTH } from "../../shared/password-policy";
 import {
   CREDENTIAL_BCRYPT_COST,
   CREDENTIAL_PASSWORD_MAX_LENGTH,
@@ -140,11 +141,10 @@ export function getOpaqueTokenHashCandidates(raw: string): string[] {
   return Array.from(hashes);
 }
 
-export function generateTemporaryPassword(length = 18): string {
-  const safeLength = Math.max(16, length);
+export function generateTemporaryPassword(): string {
   const characters: string[] = [];
 
-  while (characters.length < safeLength - 4) {
+  while (characters.length < TEMPORARY_PASSWORD_LENGTH - 4) {
     characters.push(pickRandomCharacter());
   }
 

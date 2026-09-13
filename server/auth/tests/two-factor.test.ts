@@ -8,6 +8,7 @@ import {
   decryptTwoFactorSecret,
   decryptTwoFactorSecretPayload,
   encryptTwoFactorSecret,
+  encryptTwoFactorSetupSecret,
   generateCurrentTwoFactorCode,
   generateTwoFactorSecret,
   normalizeTwoFactorCode,
@@ -78,6 +79,33 @@ test("encryptTwoFactorSecret requires a dedicated two-factor encryption key", ()
       () => encryptTwoFactorSecret("JBSWY3DPEHPK3PXP"),
       /TWO_FACTOR_ENCRYPTION_KEY is required/i,
     );
+  });
+});
+
+test("independent RFC 6238 vectors agree for SHA1 and SHA256 without algorithm fallback", (t) => {
+  t.mock.method(Date, "now", () => 59_000);
+  // RFC6238 appendix B: 8-digit vectors reduced to the application's six digits.
+  const sha1Secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  const sha256Secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA";
+  assert.equal(generateCurrentTwoFactorCode(sha1Secret, "sha1"), "287082");
+  assert.equal(generateCurrentTwoFactorCode(sha256Secret, "sha256"), "119246");
+  assert.equal(verifyTwoFactorCode(sha256Secret, "119246", 0, "sha256"), true);
+  assert.equal(verifyTwoFactorCode(sha256Secret, "119246", 0, "sha1"), false);
+});
+
+test("pending setup expiry and algorithm metadata are authenticated and encrypted", () => {
+  withTwoFactorEncryptionEnv({ current: "test-two-factor-encryption-key", previous: null }, () => {
+    const secret = "JBSWY3DPEHPK3PXP";
+    const encrypted = encryptTwoFactorSetupSecret(secret, "sha256", 2_000_000);
+    assert.deepEqual(decryptTwoFactorSecretPayload(encrypted), {
+      secret, algorithm: "sha256", setupExpiresAtMs: 2_000_000,
+    });
+    assert.ok(!encrypted.includes(secret));
+    const parts = encrypted.split(".");
+    const ciphertext = Buffer.from(parts[2], "base64url");
+    ciphertext[0] ^= 1;
+    parts[2] = ciphertext.toString("base64url");
+    assert.throws(() => decryptTwoFactorSecretPayload(parts.join(".")), /Invalid 2FA/);
   });
 });
 
@@ -167,6 +195,17 @@ test("verifyTwoFactorCode accepts the current valid TOTP code", (t) => {
   const code = generateCurrentTwoFactorCode(secret);
 
   assert.equal(verifyTwoFactorCode(secret, code), true);
+});
+
+test("TOTP accepts only the existing one-step clock skew and rejects expired codes", (t) => {
+  let now = Date.parse("2026-09-12T00:00:00Z");
+  t.mock.method(Date, "now", () => now);
+  const secret = "JBSWY3DPEHPK3PXP";
+  const first = generateCurrentTwoFactorCode(secret, "sha256");
+  now += 30_000;
+  assert.equal(verifyTwoFactorCode(secret, first, 1, "sha256"), true);
+  now += 30_000;
+  assert.equal(verifyTwoFactorCode(secret, first, 1, "sha256"), false);
 });
 
 test("verifyTwoFactorCode rejects invalid, short, and non-digit-only TOTP codes", (t) => {

@@ -1,8 +1,11 @@
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 
 export interface CollectionNicknamePasswordFieldProps {
+  describedBy?: string;
+  invalid?: boolean;
   autoComplete?: string;
   disabled: boolean;
   inputId?: string;
@@ -16,6 +19,8 @@ export interface CollectionNicknamePasswordFieldProps {
 }
 
 export function CollectionNicknamePasswordField({
+  describedBy,
+  invalid,
   autoComplete,
   disabled,
   inputId,
@@ -39,6 +44,8 @@ export function CollectionNicknamePasswordField({
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           autoComplete={autoComplete}
+          aria-describedby={describedBy}
+          {...getAriaInvalidProps(invalid)}
           className="pr-10"
           disabled={disabled}
         />

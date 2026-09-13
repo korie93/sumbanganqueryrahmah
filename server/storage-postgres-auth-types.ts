@@ -13,6 +13,7 @@ import type {
 } from "./repositories/auth.repository";
 import type { ManageableUserRole } from "../shared/user-roles";
 import type { ManagedUserDeletionResult } from "./repositories/auth-repository-types";
+import type { CompleteAccountRecoveryParams, PrepareDeliveredPasswordResetParams } from "./repositories/auth-recovery-repository-utils";
 
 export type ManagedUserAccount = ManagedUserRecord;
 export type PendingPasswordResetRequestSummary = PendingPasswordResetRequestRecord;
@@ -20,6 +21,8 @@ export type AccountActivationTokenSummary = ActivationTokenRecord;
 export type PasswordResetTokenSummary = PasswordResetTokenRecord;
 
 export interface AuthStorageContract {
+  prepareDeliveredPasswordReset(params: PrepareDeliveredPasswordResetParams): Promise<{ user: User; closedSessionIds: string[] } | undefined>;
+  completeAccountRecovery(params: CompleteAccountRecoveryParams): Promise<{ user: User; lockCleared: boolean; closedSessionIds: string[] } | undefined>;
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -47,6 +50,7 @@ export interface AuthStorageContract {
   }): Promise<User | undefined>;
   updateUserAccount(params: {
     userId: string;
+    expectedPasswordHash?: string;
     username?: string;
     fullName?: string | null;
     email?: string | null;
@@ -62,6 +66,7 @@ export interface AuthStorageContract {
     twoFactorEnabled?: boolean;
     twoFactorSecretEncrypted?: string | null;
     twoFactorConfiguredAt?: Date | null;
+    expectedTwoFactorState?: { enabled: boolean; encryptedSecret: string | null; passwordHash: string };
     failedLoginAttempts?: number;
     lockedAt?: Date | null;
     lockedReason?: string | null;

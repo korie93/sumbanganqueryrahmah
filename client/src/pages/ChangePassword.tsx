@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { KeyRound, LogOut } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { changeMyPassword } from "@/lib/api/auth";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
   broadcastForcedLogout,
@@ -194,12 +196,10 @@ export default function ChangePasswordPage({
     "aria-describedby": newPasswordDescribedBy,
     ...(newPasswordError ? { "aria-invalid": "true" as const } : {}),
   };
-  const confirmPasswordInvalidProps = confirmPasswordError
-    ? {
-      "aria-invalid": "true" as const,
-      "aria-describedby": "change-password-confirm-error",
-    }
-    : {};
+  const confirmPasswordInvalidProps = {
+    ...getAriaInvalidProps(Boolean(confirmPassword ? newPassword !== confirmPassword : confirmPasswordError)),
+    "aria-describedby": "change-password-confirm-error",
+  };
 
   return (
     <PublicAuthLayout
@@ -248,6 +248,7 @@ export default function ChangePasswordPage({
         onChange={(event) => {
           setNewPassword(event.target.value);
           setNewPasswordError("");
+          setConfirmPasswordError("");
           setError("");
         }}
         onBlur={validateNewPasswordOnBlur}
@@ -281,11 +282,12 @@ export default function ChangePasswordPage({
         disabled={loading}
         {...confirmPasswordInvalidProps}
       />
-      {confirmPasswordError ? (
-        <p id="change-password-confirm-error" className="text-sm text-amber-100" role="alert">
-          {confirmPasswordError}
-        </p>
-      ) : null}
+      <PasswordConfirmationFeedback
+        id="change-password-confirm-error"
+        password={newPassword}
+        confirmation={confirmPassword}
+        requiredError={confirmPasswordError}
+      />
 
       {error ? (
         <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">

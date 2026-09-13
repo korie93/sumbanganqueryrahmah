@@ -94,6 +94,38 @@ test("password replacement atomically revokes all sessions for the affected nick
   assert.match(sqlText, /lower\(session\.nickname\) = lower\(changed_nickname\.nickname\)/i);
 });
 
+test("nickname password setup compares the verified hash atomically with replacement and revocation", async () => {
+  for (const expectedPasswordHash of [null, "previous-bcrypt-hash"]) {
+    const { executor, queries } = createSequenceExecutor<CollectionStaffNicknameExecutor>([
+      { rows: [{ password_changed: true }] },
+    ]);
+    await setCollectionNicknamePasswordValue(executor, {
+      nicknameId: "nickname-one", passwordHash: "new-bcrypt-hash", expectedPasswordHash,
+    });
+    assert.equal(queries.length, 1);
+    const query = collectSqlText(queries[0]);
+    assert.match(query, /AND nickname_password_hash IS NOT DISTINCT FROM/i);
+    assert.match(query, /revoked_sessions AS \(\s*DELETE FROM public\.collection_nickname_sessions/i);
+    assert.match(query, /SELECT EXISTS \(SELECT 1 FROM changed_nickname\) AS password_changed/i);
+    assert.ok(collectBoundValues(queries[0]).includes(expectedPasswordHash));
+  }
+});
+
+test("nickname password setup rejects a stale verified hash without retrying or bypassing its guard", async () => {
+  const { executor, queries } = createSequenceExecutor<CollectionStaffNicknameExecutor>([
+    { rows: [{ password_changed: false }] },
+  ]);
+  await assert.rejects(
+    setCollectionNicknamePasswordValue(executor, {
+      nicknameId: "nickname-one", passwordHash: "new-bcrypt-hash", expectedPasswordHash: "stale-bcrypt-hash",
+    }),
+    (error: unknown) => error instanceof Error
+      && "statusCode" in error && error.statusCode === 409
+      && !error.message.includes("stale-bcrypt-hash"),
+  );
+  assert.equal(queries.length, 1);
+});
+
 test("createCollectionStaffNicknameValue normalizes unsupported role scope to both", async () => {
   const { executor, queries } = createSequenceExecutor<CollectionStaffNicknameExecutor>([
     {

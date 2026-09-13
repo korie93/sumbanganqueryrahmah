@@ -76,6 +76,7 @@ export class AuthAccountSelfCredentialOperations {
     const nextPasswordHash = await hashPassword(newPassword);
     const updatedUser = await this.deps.storage.updateUserAccount({
       userId: actor.id,
+      expectedPasswordHash: actor.passwordHash,
       passwordHash: nextPasswordHash,
       passwordChangedAt: new Date(),
       mustChangePassword: false,
@@ -85,6 +86,14 @@ export class AuthAccountSelfCredentialOperations {
       lockedReason: null,
       lockedBySystem: false,
     });
+
+    if (!updatedUser) {
+      throw new AuthAccountError(
+        409,
+        ERROR_CODES.CONFLICT,
+        "Account credentials changed while saving. Sign in again with your current password before retrying.",
+      );
+    }
 
     const closedSessionIds = await this.invalidateUserSessions(actor.username, "PASSWORD_CHANGED");
 
@@ -100,7 +109,7 @@ export class AuthAccountSelfCredentialOperations {
     });
 
     return {
-      user: updatedUser ?? actor,
+      user: updatedUser,
       closedSessionIds,
     };
   }

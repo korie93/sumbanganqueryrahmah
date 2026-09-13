@@ -1,4 +1,5 @@
 import { evaluatePasswordStrength } from "@/lib/password-strength";
+import { getCredentialPasswordValidationIssues } from "@shared/password-policy";
 
 type PasswordStrengthMeterProps = {
   className?: string;
@@ -31,6 +32,8 @@ export function PasswordStrengthMeter({
   password,
 }: PasswordStrengthMeterProps) {
   const evaluation = evaluatePasswordStrength(password);
+  const issues = getCredentialPasswordValidationIssues(password, "ms");
+  const policyValid = issues.length === 0;
   const filledSegments = password.length > 0 ? evaluation.level + 1 : 0;
   const activeSegmentClass = SEGMENT_ACTIVE_CLASSES[evaluation.level];
   const labelClass = LABEL_CLASSES[evaluation.level];
@@ -40,7 +43,7 @@ export function PasswordStrengthMeter({
       id={id}
       role="status"
       aria-live="polite"
-      aria-label={evaluation.ariaLabel}
+      aria-label={`${evaluation.ariaLabel}. ${policyValid ? "Kata laluan sah." : "Syarat kata laluan belum dipenuhi."}`}
       className={`rounded-lg border border-slate-200/80 bg-white/70 p-3 text-xs text-slate-600 shadow-sm dark:border-border/70 dark:bg-card dark:text-muted-foreground ${className}`}
     >
       <div className="flex items-center justify-between gap-3">
@@ -63,15 +66,15 @@ export function PasswordStrengthMeter({
           />
         ))}
       </div>
-      {evaluation.feedback.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-500 dark:text-muted-foreground">
-          {evaluation.feedback.slice(0, 3).map((item) => (
-            <li key={item}>{item}</li>
+      {issues.length > 0 ? (
+        <ul className="mt-2 space-y-1 text-slate-600 dark:text-muted-foreground">
+          {issues.map((issue) => (
+            <li key={issue.code}>{issue.message}</li>
           ))}
         </ul>
       ) : (
         <p className="mt-2 text-green-700 dark:text-green-200">
-          Memenuhi polisi asas kata laluan.
+          Kata laluan sah. Semua syarat kata laluan dipenuhi.
         </p>
       )}
     </div>

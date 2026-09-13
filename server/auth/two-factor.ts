@@ -15,6 +15,7 @@ import {
   internalMetrics,
   type InternalMetricsRecorder,
 } from "../internal/metrics";
+import { safeJsonParse } from "../lib/safe-json";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const BASE32_SAFE_PATTERN = /^[A-Z2-7]+=*$/;
@@ -26,7 +27,28 @@ export type TotpAlgorithm = "sha1" | "sha256";
 export type DecryptedTwoFactorSecretPayload = {
   algorithm: TotpAlgorithm;
   secret: string;
+  setupExpiresAtMs?: number;
 };
+
+export const TWO_FACTOR_SETUP_TTL_MS = 10 * 60 * 1_000;
+
+export type TwoFactorSessionExpectation = {
+  credentialState: string;
+  expiresAtMs: number;
+};
+
+export function buildTwoFactorCredentialState(user: {
+  passwordHash: string;
+  twoFactorSecretEncrypted?: string | null;
+  role: string;
+  username: string;
+}) {
+  // Do not place either the password hash or encrypted authenticator secret in
+  // the readable JWT. This digest invalidates challenges after either changes.
+  return createHash("sha256").update(JSON.stringify([
+    user.username, user.role, user.passwordHash, user.twoFactorSecretEncrypted ?? null,
+  ])).digest("hex");
+}
 
 function base32Encode(buffer: Buffer) {
   let bits = 0;
@@ -231,6 +253,38 @@ export function encryptTwoFactorSecret(
 }
 
 export function decryptTwoFactorSecretPayload(payload: string): DecryptedTwoFactorSecretPayload {
+  // Pending enrollment metadata is authenticated inside the ciphertext, not
+  // alongside it. Existing confirmed v2 and legacy enrollments remain readable.
+  if (payload.startsWith("v3.")) {
+    const [, ivRaw, ciphertextRaw, tagRaw, ...extra] = payload.split(".");
+    if (!ivRaw || !ciphertextRaw || !tagRaw || extra.length) {
+      throw new Error("Invalid 2FA secret payload.");
+    }
+    for (const cipherKey of getTwoFactorDecryptionCipherKeys()) {
+      try {
+        const decipher = createDecipheriv("aes-256-gcm", cipherKey, Buffer.from(ivRaw, "base64url"));
+        decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
+        const parsed = safeJsonParse<Record<string, unknown>>(Buffer.concat([
+          decipher.update(Buffer.from(ciphertextRaw, "base64url")), decipher.final(),
+        ]).toString("utf8"), "two_factor_setup_payload", { logFailures: false });
+        if (!parsed.success || !parsed.data || typeof parsed.data !== "object" || Array.isArray(parsed.data)) {
+          throw new Error("Invalid 2FA secret payload.");
+        }
+        const value = parsed.data;
+        if (
+          value.purpose !== "two_factor_setup"
+          || (value.algorithm !== "sha1" && value.algorithm !== "sha256")
+          || typeof value.secret !== "string"
+          || typeof value.setupExpiresAtMs !== "number" || !Number.isSafeInteger(value.setupExpiresAtMs)
+        ) throw new Error("Invalid 2FA secret payload.");
+        normalizeStrictBase32(value.secret);
+        return { algorithm: value.algorithm, secret: value.secret, setupExpiresAtMs: value.setupExpiresAtMs };
+      } catch {
+        continue;
+      }
+    }
+    throw new Error("Invalid 2FA secret payload.");
+  }
   const {
     algorithm,
     ciphertextRaw,
@@ -263,6 +317,23 @@ export function decryptTwoFactorSecretPayload(payload: string): DecryptedTwoFact
   }
 
   throw new Error("Invalid 2FA secret payload.");
+}
+
+export function encryptTwoFactorSetupSecret(
+  secret: string,
+  algorithm = getTwoFactorTotpAlgorithm(),
+  expiresAtMs = Date.now() + TWO_FACTOR_SETUP_TTL_MS,
+) {
+  normalizeStrictBase32(secret);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", getTwoFactorEncryptionCipherKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify({
+    purpose: "two_factor_setup",
+    algorithm: resolveTotpAlgorithm(algorithm),
+    secret,
+    setupExpiresAtMs: expiresAtMs,
+  }), "utf8"), cipher.final()]);
+  return `v3.${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}`;
 }
 
 export function decryptTwoFactorSecret(payload: string) {

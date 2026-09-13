@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { passwordResetRequests } from "../../shared/schema-postgres";
+import { passwordResetRequests, users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import type { PasswordResetTokenRecord } from "./auth-repository-types";
 import {
@@ -16,9 +16,20 @@ import {
 
 export async function createPasswordResetRequest(
   params: CreatePasswordResetRequestParams,
+  database: typeof db = db,
 ) {
   const record = buildPasswordResetRequestInsertRecord(params);
-  await db.insert(passwordResetRequests).values(record);
+  await database.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, params.userId)).for("update");
+    // A request without a token is only a request for approval, not a resend.
+    if (record.tokenHash) {
+      await tx.update(passwordResetRequests).set({ usedAt: new Date() }).where(and(
+        eq(passwordResetRequests.userId, params.userId), isNull(passwordResetRequests.usedAt),
+        sql`${passwordResetRequests.tokenHash} IS NOT NULL`,
+      ));
+    }
+    await tx.insert(passwordResetRequests).values(record);
+  });
   return record;
 }
 

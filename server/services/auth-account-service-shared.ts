@@ -12,6 +12,11 @@ export type LoginInput = {
 };
 
 export type TwoFactorLoginInput = {
+  challenge?: {
+    id: string;
+    credentialState: string;
+    expiresAtMs: number;
+  };
   userId: string;
   code: string;
   fingerprint?: string | null | undefined;
@@ -37,6 +42,8 @@ export type ResetPasswordWithTokenInput = {
 
 export type AuthAccountStorage = Pick<
   PostgresStorage,
+  | "completeAccountRecovery"
+  | "prepareDeliveredPasswordReset"
   | "consumeActivationTokenById"
   | "consumePasswordResetRequestById"
   | "createActivationToken"

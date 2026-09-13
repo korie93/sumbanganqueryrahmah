@@ -25,6 +25,14 @@ export type UpdateUserCredentialsParams = {
 
 export type UpdateUserAccountParams = {
   userId: string;
+  /** Internal CAS guard: the password proof must still match at write time. */
+  expectedPasswordHash?: string;
+  /** Internal compare-and-set guard for authenticator lifecycle transitions. */
+  expectedTwoFactorState?: {
+    enabled: boolean;
+    encryptedSecret: string | null;
+    passwordHash: string;
+  };
   username?: string | undefined;
   fullName?: string | null | undefined;
   email?: string | null | undefined;

@@ -2,6 +2,7 @@ import type { PostgresStorage } from "../storage-postgres";
 
 export type AuthAccountRecoveryStorage = Pick<
   PostgresStorage,
+  | "completeAccountRecovery"
   | "consumeActivationTokenById"
   | "consumePasswordResetRequestById"
   | "createActivationToken"

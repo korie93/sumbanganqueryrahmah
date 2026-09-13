@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "../../http/errors";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import { AuthAccountError } from "../../services/auth-account.service";
+import { logger } from "../../lib/logger";
 import {
   buildAuthRouteErrorPayload,
   buildOkPayload,
@@ -31,6 +32,25 @@ async function assertNoUnhandledRejectionDuring(action: () => Promise<void>) {
 
   assert.deepEqual(unhandledRejections, []);
 }
+
+test("expected recovery/2FA failures log only stable non-sensitive metadata", async (t) => {
+  const logs: unknown[] = [];
+  t.mock.method(logger, "info", (message: string, metadata: unknown) => { logs.push({ message, metadata }); });
+  const app = createJsonTestApp();
+  app.post("/fixture/recovery", createAuthJsonRoute(async () => {
+    throw new AuthAccountError(410, ERROR_CODES.TOKEN_EXPIRED, "Safe restart message.");
+  }));
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/fixture/recovery?token=fixture-sensitive-link`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "fixture-sensitive-token", code: "918273", newPassword: "FixtureSensitivePassword!23" }),
+    });
+    assert.equal(response.status, 410);
+    assert.deepEqual(logs, [{ message: "Authentication flow rejected", metadata: { code: "TOKEN_EXPIRED", statusCode: 410 } }]);
+    assert.doesNotMatch(JSON.stringify(logs), /fixture-sensitive|918273|FixtureSensitivePassword|Safe restart/);
+  } finally { await stopTestServer(server); }
+});
 
 test("auth route response utils build stable success and error payloads", () => {
   assert.deepEqual(buildOkPayload({ user: { id: "user-1" } }), {

@@ -1,10 +1,12 @@
 import { escapeEmailHtmlContent, escapeEmailUrl, normalizeEmailUrl } from "./email-html-utils";
+import { getCredentialPasswordPolicyMessage } from "../../shared/password-policy";
 
 type BuildAccountActivationEmailInput = {
   activationUrl: string;
   expiresAt: Date;
   systemName?: string | null;
   username: string;
+  resent?: boolean | undefined;
 };
 
 function formatExpiry(expiresAt: Date): string {
@@ -15,9 +17,13 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
   const systemName = String(input.systemName || "SQR System").trim() || "SQR System";
   const expiresAtText = formatExpiry(input.expiresAt);
   const subject = `Activate Your ${systemName} Account`;
-  const intro = `A new account has been created for you in ${systemName}.`;
+  const intro = input.resent
+    ? `A new activation link has been requested for your ${systemName} account. Earlier activation links no longer work.`
+    : `A new account has been created for you in ${systemName}.`;
   const usernameLine = `Username: ${input.username}`;
   const expiryLine = `This activation link expires on ${expiresAtText}.`;
+  const policyLine = getCredentialPasswordPolicyMessage();
+  const linkHelp = "Enter the same new password in both fields. This link works once; use the newest activation email. If it expires, ask the administrator to resend activation. If your account is already activated, sign in. Never share this link or your password.";
   const activationUrl = normalizeEmailUrl(input.activationUrl);
   const activationUrlText = activationUrl ?? "Activation link unavailable. Contact the system administrator.";
   const safeActivationUrl = escapeEmailUrl(input.activationUrl);
@@ -34,6 +40,8 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
     activationUrlText,
     "",
     expiryLine,
+    policyLine,
+    linkHelp,
     "",
     "If you did not expect this account, please contact the system administrator.",
   ].join("\n");
@@ -54,6 +62,8 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
       <p>If the button does not work, copy and paste this link into your browser:</p>
       <p><a href="${safeActivationUrl}">${safeActivationUrl}</a></p>
       <p>${safeExpiryLine}</p>
+      <p>${escapeEmailHtmlContent(policyLine)}</p>
+      <p>${escapeEmailHtmlContent(linkHelp)}</p>
       <p>If you did not expect this account, please contact the system administrator.</p>
     </div>
   `.trim();

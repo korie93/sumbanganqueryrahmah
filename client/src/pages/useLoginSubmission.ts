@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/auth";
 import { setBannedSessionFlag, setStoredFingerprint } from "@/lib/auth-session";
 import { logClientError } from "@/lib/client-logger";
+import { getAuthErrorCode, getAuthErrorMessage } from "@/lib/auth-flow-feedback";
 import { generateFingerprint } from "@/lib/fingerprint";
 import { normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 import {
@@ -32,6 +33,7 @@ type UseLoginSubmissionParams = {
   clearCaptchaChallenge: () => void;
   clearLockedAccountMessage: () => void;
   clearLockedAccountState: () => void;
+  clearTwoFactorChallenge: () => void;
   completeAuthenticatedSession: (
     response: LoginSuccessResponse,
     options?: { clearTwoFactor?: boolean | undefined; fingerprint?: string | null | undefined },
@@ -70,6 +72,7 @@ export function useLoginSubmission({
   clearCaptchaChallenge,
   clearLockedAccountMessage,
   clearLockedAccountState,
+  clearTwoFactorChallenge,
   completeAuthenticatedSession,
   lockedFlow,
   onBanned,
@@ -260,20 +263,24 @@ export function useLoginSubmission({
         return;
       }
 
-      logClientError("Two-factor verification failed:", err);
+      // Do not log the challenge response or code. Server request IDs retain diagnostics.
       if (isLockedAccountError(err)) {
         applyLockedAccountError(err, username, LOCKED_ACCOUNT_FALLBACK_MESSAGE);
         setError("");
         return;
       }
 
-      setError(readErrorMessage(err, "Pengesahan dua faktor gagal. Sila cuba lagi."));
+      if (getAuthErrorCode(err) === "TWO_FACTOR_CHALLENGE_EXPIRED") {
+        clearTwoFactorChallenge();
+      }
+      setError(getAuthErrorMessage(err, "Pengesahan dua faktor gagal. Sila cuba lagi."));
     } finally {
       finalizeRequest(requestId, controller);
     }
   }, [
     applyLockedAccountError,
     beginRequest,
+    clearTwoFactorChallenge,
     completeAuthenticatedSession,
     finalizeRequest,
     isRequestInFlight,

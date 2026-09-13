@@ -8,7 +8,6 @@ export function buildRuntimeConfigWarnings(params: {
   publicAppUrl: string | null;
   configuredSessionSecret: string | null;
   configuredAuditHmacKey?: string | null | undefined;
-  configuredCollectionNicknameTempPassword: string | null;
   configuredCollectionPiiEncryptionKey: string | null;
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
@@ -28,7 +27,6 @@ export function buildRuntimeConfigWarnings(params: {
     publicAppUrl,
     configuredSessionSecret,
     configuredAuditHmacKey,
-    configuredCollectionNicknameTempPassword,
     configuredCollectionPiiEncryptionKey,
     configuredPgPassword,
     configuredAuthCookieSecure,
@@ -74,15 +72,6 @@ export function buildRuntimeConfigWarnings(params: {
       code: "SQR_AUDIT_HMAC_KEY_FALLBACK_LOCAL",
       envNames: ["SQR_AUDIT_HMAC_KEY", "SESSION_SECRET"],
       message: "SQR_AUDIT_HMAC_KEY is not set, so local audit log HMACs will reuse SESSION_SECRET. Configure a distinct key outside local development.",
-      severity: "warning",
-    });
-  }
-
-  if (isStrictLocalDevelopment && !configuredCollectionNicknameTempPassword) {
-    warnings.push({
-      code: "COLLECTION_TEMP_PASSWORD_EPHEMERAL_LOCAL",
-      envNames: ["COLLECTION_NICKNAME_TEMP_PASSWORD"],
-      message: "COLLECTION_NICKNAME_TEMP_PASSWORD is not set, so a temporary value will be generated on each boot.",
       severity: "warning",
     });
   }

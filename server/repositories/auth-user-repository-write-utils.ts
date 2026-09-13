@@ -65,11 +65,20 @@ export async function updateAuthUserCredentials(
 
 export async function updateAuthUserAccount(
   params: UpdateUserAccountParams,
+  database: typeof db = db,
 ): Promise<User | undefined> {
-  const updated = await db
+  const expected = params.expectedTwoFactorState;
+  const updated = await database
     .update(users)
     .set(buildUserAccountUpdateRecord(params))
-    .where(and(eq(users.id, params.userId), sql`${users.status} <> 'deleted'`))
+    .where(and(
+      eq(users.id, params.userId),
+      sql`${users.status} <> 'deleted'`,
+      params.expectedPasswordHash !== undefined ? eq(users.passwordHash, params.expectedPasswordHash) : undefined,
+      expected ? sql`coalesce(${users.twoFactorEnabled}, false) = ${expected.enabled}` : undefined,
+      expected ? sql`${users.twoFactorSecretEncrypted} is not distinct from ${expected.encryptedSecret}` : undefined,
+      expected ? eq(users.passwordHash, expected.passwordHash) : undefined,
+    ))
     .returning();
   return updated[0];
 }

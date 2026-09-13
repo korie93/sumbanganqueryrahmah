@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import { ipKeyGenerator } from "express-rate-limit";
 import { getRateLimitIdentity } from "../auth/request-session-identity";
+import { canonicalAuthRateLimitPath, SUBJECT_GUARDED_PUBLIC_AUTH_PATHS } from "../middleware/auth-rate-limit-subjects";
 import { BROWSER_TELEMETRY_PATHS as BROWSER_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
 import type { WorkerControlState } from "./runtime-monitor-manager";
 import { logger as defaultLogger } from "../lib/logger";
@@ -444,10 +445,11 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
         const controlState = options.getControlState();
         if (!isRuntimeProtectedRoute(req)) return next();
         if (isSessionControlRoute(req)) return next();
-        // Both exact login aliases have mandatory account + aggregate-network
-        // route limiters. A small pre-auth API bucket would veto legitimate NAT
-        // logins before those authoritative, Redis-backed guards can run.
-        if (req.method === "POST" && (req.path === "/api/login" || req.path === "/api/auth/login")) return next();
+        // These exact public auth routes have mandatory account/verified-token
+        // and aggregate-network guards. The low anonymous API quota must not
+        // block office staff before those Redis-backed guards can run.
+        if (req.method === "POST" && (req.path === "/api/login" || req.path === "/api/auth/login"
+          || SUBJECT_GUARDED_PUBLIC_AUTH_PATHS.has(canonicalAuthRateLimitPath(req)))) return next();
 
         const now = Date.now();
         const bucketTargets = resolveAdaptiveRateBuckets(req);

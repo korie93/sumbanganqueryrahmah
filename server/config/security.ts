@@ -15,10 +15,6 @@ export function getAuditHmacKey(): string {
   return runtimeConfig.auth.auditHmacKey;
 }
 
-export function getCollectionNicknameTempPassword(): string {
-  return runtimeConfig.auth.collectionNicknameTempPassword;
-}
-
 export function getTwoFactorEncryptionSecret(): string | null {
   return readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 }

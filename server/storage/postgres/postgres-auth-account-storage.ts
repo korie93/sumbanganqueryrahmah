@@ -13,8 +13,17 @@ import type {
 } from "../../storage-postgres";
 import type { ManageableUserRole } from "../../../shared/user-roles";
 import { PostgresStorageCore } from "./postgres-storage-core";
+import type { CompleteAccountRecoveryParams, PrepareDeliveredPasswordResetParams } from "../../repositories/auth-recovery-repository-utils";
 
 export class PostgresAuthAccountStorage extends PostgresStorageCore {
+  async prepareDeliveredPasswordReset(params: PrepareDeliveredPasswordResetParams) {
+    return this.authRepository.prepareDeliveredPasswordReset(params);
+  }
+
+  async completeAccountRecovery(params: CompleteAccountRecoveryParams) {
+    return this.authRepository.completeAccountRecovery(params);
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     return this.authRepository.getUser(id);
   }
@@ -60,6 +69,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
 
   async updateUserAccount(params: {
     userId: string;
+    expectedPasswordHash?: string;
     username?: string | undefined;
     fullName?: string | null | undefined;
     email?: string | null | undefined;
@@ -75,6 +85,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     twoFactorEnabled?: boolean | undefined;
     twoFactorSecretEncrypted?: string | null | undefined;
     twoFactorConfiguredAt?: Date | null | undefined;
+    expectedTwoFactorState?: { enabled: boolean; encryptedSecret: string | null; passwordHash: string };
     failedLoginAttempts?: number | undefined;
     lockedAt?: Date | null | undefined;
     lockedReason?: string | null | undefined;

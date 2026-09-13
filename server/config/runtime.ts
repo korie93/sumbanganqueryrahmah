@@ -178,7 +178,6 @@ const databaseSslConfig = resolveDatabaseSslConfig(readOptionalString("DATABASE_
   caFile: readOptionalString("DATABASE_SSL_CA_FILE"),
   isProductionLike,
 });
-const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalStringFrom(["PG_PASSWORD", "PGPASSWORD"]);
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 const configuredPreviousTwoFactorEncryptionKeys = readCommaSeparatedList(
@@ -488,11 +487,6 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     sessionJwtLegacyHs256VerifyUntilMs: configuredSessionJwtLegacyHs256VerifyUntilMs,
     auditHmacKey: resolvedAuditHmacKey,
     bcryptCost: readInt("BCRYPT_COST_FACTOR", 12, { min: 12, max: 20 }),
-    collectionNicknameTempPassword: readSecretOrThrow(
-      "COLLECTION_NICKNAME_TEMP_PASSWORD",
-      isProductionLike,
-      () => buildEphemeralSecret("collection-temp").slice(0, 16),
-    ),
     twoFactorAlgorithm: resolveTwoFactorTotpAlgorithm(configuredTwoFactorTotpAlgorithm),
     twoFactorEncryptionSecret: configuredTwoFactorEncryptionKey,
     seedDefaultUsers,
@@ -685,7 +679,6 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   publicAppUrl,
   configuredSessionSecret,
   configuredAuditHmacKey,
-  configuredCollectionNicknameTempPassword,
   configuredCollectionPiiEncryptionKey,
   configuredPgPassword,
   configuredAuthCookieSecure,

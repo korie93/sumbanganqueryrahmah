@@ -11,6 +11,8 @@ import {
   findOpaqueTokenRecordByHashCandidates,
 } from "../auth-account-token-utils";
 import { hashLegacyOpaqueToken } from "../../auth/passwords";
+import { AuthAccountError } from "../auth-account-types";
+import { ERROR_CODES } from "../../../shared/error-codes";
 
 test("createActivationTokenPayload and createPasswordResetTokenPayload set the expected expiry windows", () => {
   const now = new Date("2026-03-15T10:00:00.000Z");
@@ -48,18 +50,36 @@ test("assertConfirmedStrongPassword and assertStrongPasswordInput enforce shared
   assert.doesNotThrow(() => assertConfirmedStrongPassword("StrongPass123!", "StrongPass123!"));
   assert.doesNotThrow(() => assertStrongPasswordInput("StrongPass123!"));
 
-  assert.throws(
-    () => assertConfirmedStrongPassword("weak", "weak"),
-    /Password must be between 14 and 256 characters/i,
-  );
+  const invalidPasswords = [
+    ["Ab12345!", ERROR_CODES.PASSWORD_TOO_SHORT, /at least 14 characters/i],
+    [`Aa1!${"a".repeat(253)}`, ERROR_CODES.PASSWORD_TOO_LONG, /must not exceed 256 characters/i],
+    ["1234567890123!", ERROR_CODES.PASSWORD_MISSING_LETTER, /at least one letter/i],
+    ["lowercasepass1!", ERROR_CODES.PASSWORD_MISSING_UPPERCASE, /uppercase letter/i],
+    ["UPPERCASEPASS1!", ERROR_CODES.PASSWORD_MISSING_LOWERCASE, /lowercase letter/i],
+    ["StrongPassword!", ERROR_CODES.PASSWORD_MISSING_NUMBER, /at least one number/i],
+    ["StrongPassword1", ERROR_CODES.PASSWORD_MISSING_SYMBOL, /at least one symbol/i],
+  ] as const;
+  for (const [password, code, message] of invalidPasswords) {
+    for (const validate of [
+      () => assertStrongPasswordInput(password),
+      () => assertConfirmedStrongPassword(password, password),
+    ]) {
+      assert.throws(validate, (error: unknown) => {
+        assert.ok(error instanceof AuthAccountError);
+        assert.equal(error.statusCode, 400);
+        assert.equal(error.code, code);
+        assert.match(error.message, message);
+        assert.equal(error.message.includes(password), false, "Never echo the submitted password.");
+        return true;
+      });
+    }
+  }
   assert.throws(
     () => assertConfirmedStrongPassword("StrongPass123!", "StrongPass124!"),
-    /Confirm password does not match/i,
+    { code: ERROR_CODES.PASSWORD_CONFIRMATION_MISMATCH, statusCode: 400, message: "Passwords do not match." },
   );
-  assert.throws(
-    () => assertStrongPasswordInput("weak"),
-    /Password must be between 14 and 256 characters/i,
-  );
+  const maximumPassword = `Aa1!${"a".repeat(252)}`;
+  assert.doesNotThrow(() => assertConfirmedStrongPassword(maximumPassword, maximumPassword));
 });
 
 test("assertUsableActivationTokenRecord normalizes dates and rejects unsafe activation states", () => {
@@ -94,7 +114,7 @@ test("assertUsableActivationTokenRecord normalizes dates and rejects unsafe acti
         },
         now,
       ),
-    /already been used/i,
+    { code: ERROR_CODES.ACTIVATION_TOKEN_SUPERSEDED, statusCode: 410 },
   );
   assert.throws(
     () =>
@@ -105,7 +125,7 @@ test("assertUsableActivationTokenRecord normalizes dates and rejects unsafe acti
         },
         now,
       ),
-    /expired/i,
+    { code: ERROR_CODES.TOKEN_EXPIRED, statusCode: 410 },
   );
   assert.throws(
     () =>
@@ -118,6 +138,27 @@ test("assertUsableActivationTokenRecord normalizes dates and rejects unsafe acti
       ),
     /not available for this account/i,
   );
+  assert.throws(
+    () => assertUsableActivationTokenRecord(undefined, now),
+    { code: ERROR_CODES.INVALID_TOKEN, statusCode: 400 },
+  );
+  for (const usedAt of [null, "2026-03-15T09:30:00.000Z"]) {
+    assert.throws(
+      () => assertUsableActivationTokenRecord({
+        ...usable,
+        status: "active",
+        activatedAt: "2026-03-15T09:30:00.000Z",
+        usedAt,
+      }, now),
+      { code: ERROR_CODES.ACCOUNT_ALREADY_ACTIVATED, statusCode: 409 },
+    );
+  }
+  for (const expiresAt of [now.toISOString(), "invalid timestamp"]) {
+    assert.throws(
+      () => assertUsableActivationTokenRecord({ ...usable, expiresAt }, now),
+      { code: ERROR_CODES.TOKEN_EXPIRED, statusCode: 410 },
+    );
+  }
   assert.throws(
     () =>
       assertUsableActivationTokenRecord(
@@ -174,7 +215,7 @@ test("assertUsablePasswordResetTokenRecord rejects used, expired, pending, and u
         },
         now,
       ),
-    /already been used/i,
+    { code: ERROR_CODES.TOKEN_USED, statusCode: 410 },
   );
   assert.throws(
     () =>
@@ -185,7 +226,7 @@ test("assertUsablePasswordResetTokenRecord rejects used, expired, pending, and u
         },
         now,
       ),
-    /expired/i,
+    { code: ERROR_CODES.TOKEN_EXPIRED, statusCode: 410 },
   );
   assert.throws(
     () =>

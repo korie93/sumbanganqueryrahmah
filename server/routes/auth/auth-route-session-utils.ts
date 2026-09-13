@@ -32,6 +32,7 @@ export type SignedAuthSession = {
 };
 
 type TwoFactorChallengeTokenPayload = {
+  credentialState: string;
   userId: string;
   username: string;
   role: string;
@@ -44,6 +45,8 @@ type TwoFactorChallengeTokenPayload = {
 };
 
 type TwoFactorChallengeTokenClaims = {
+  credentialState?: string;
+  jti?: string;
   purpose?: string | undefined;
   userId?: string | undefined;
   username?: string | undefined;
@@ -70,19 +73,6 @@ function firstHeaderValue(value: string | string[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function serializeNicknameSessionCleanupError(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-    };
-  }
-
-  return {
-    message: String(error),
-  };
-}
-
 export function closeAuthActivitySockets({
   activityIds,
   reason,
@@ -100,17 +90,26 @@ export function closeAuthActivitySockets({
           socket.close();
         }
       }
+    } catch {
+      // One broken transport must not stop revocation of the remaining clients.
+      // Do not log socket errors or the logout payload: either may contain data.
+      try {
+        socket?.terminate();
+      } catch {
+        // Registry and nickname cleanup below must survive termination failure.
+      }
+      logger.warn("Auth socket transport failed during revoked session cleanup", {
+        operation: "closeAuthActivitySockets",
+      });
     } finally {
       // A transport race must not retain a revoked client in the live registry.
       connectedClients.delete(activityId);
       void Promise.resolve()
         .then(() => storage.clearCollectionNicknameSessionByActivity(activityId))
-        .catch((error) => {
+        .catch(() => {
           logger.warn("Failed to clear nickname session after auth session cleanup", {
             activityId,
             operation: "clearCollectionNicknameSessionByActivity",
-            reason,
-            error: serializeNicknameSessionCleanupError(error),
           });
         });
     }
@@ -152,7 +151,16 @@ export function signAuthTwoFactorChallengeToken(payload: TwoFactorChallengeToken
 }
 
 export function verifyAuthTwoFactorChallengeToken(token: string) {
-  const decoded = verifySessionJwt<TwoFactorChallengeTokenClaims>(token);
+  let decoded: TwoFactorChallengeTokenClaims;
+  try {
+    decoded = verifySessionJwt<TwoFactorChallengeTokenClaims>(token);
+  } catch (error) {
+    const expired = error instanceof Error && error.name === "TokenExpiredError";
+    throw new AuthAccountError(401,
+      expired ? ERROR_CODES.TWO_FACTOR_CHALLENGE_EXPIRED : ERROR_CODES.TWO_FACTOR_CHALLENGE_INVALID,
+      expired ? "2FA session expired. Please sign in again."
+        : "2FA session is invalid. Please sign in again.");
+  }
 
   if (
     decoded.purpose !== "two_factor_login"
@@ -160,6 +168,9 @@ export function verifyAuthTwoFactorChallengeToken(token: string) {
     || !decoded.username
     || !decoded.role
     || !decoded.browserName
+    || !decoded.jti || !/^[0-9a-f-]{36}$/i.test(decoded.jti)
+    || !decoded.credentialState || !/^[a-f0-9]{64}$/.test(decoded.credentialState)
+    || !Number.isSafeInteger(decoded.exp)
   ) {
     throw new AuthAccountError(
       401,
@@ -170,6 +181,9 @@ export function verifyAuthTwoFactorChallengeToken(token: string) {
 
   return {
     purpose: "two_factor_login" as const,
+    challengeId: decoded.jti,
+    credentialState: decoded.credentialState,
+    expiresAtMs: decoded.exp! * 1_000,
     userId: decoded.userId,
     username: decoded.username,
     role: decoded.role,

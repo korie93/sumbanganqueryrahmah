@@ -41,7 +41,7 @@ function buildResetRecord(user: ReturnType<typeof buildResetUser>, usedAt: Date 
   };
 }
 
-test("AuthAccountPasswordResetOperations consumes reset token before mutating account state", async () => {
+test("AuthAccountPasswordResetOperations hashes before atomic completion and revokes sessions after commit", async () => {
   const token = "password-reset-token-test";
   const tokenHash = hashOpaqueToken(token);
   const user = buildResetUser();
@@ -52,25 +52,15 @@ test("AuthAccountPasswordResetOperations consumes reset token before mutating ac
       events.push("lookup");
       return hash === tokenHash ? record : undefined;
     },
-    consumePasswordResetRequestById: async (params: { requestId: string; now: Date }) => {
-      events.push("consume");
-      assert.equal(params.requestId, record.requestId);
-      assert.ok(params.now instanceof Date);
-      return true;
-    },
-    getUser: async (userId: string) => {
-      events.push("getUser");
-      assert.ok(events.includes("consume"));
-      return userId === user.id ? user : null;
-    },
-    updateUserAccount: async (params: Record<string, unknown>) => {
-      events.push("updateUser");
-      assert.ok(events.includes("consume"));
-      Object.assign(user, params);
-      return user;
-    },
-    invalidateUnusedPasswordResetTokens: async () => {
-      events.push("invalidateResetTokens");
+    completeAccountRecovery: async (params: Parameters<AuthAccountRecoveryDeps["storage"]["completeAccountRecovery"]>[0]) => {
+      events.push("complete");
+      assert.equal(params.kind, "password_reset");
+      assert.equal(params.tokenId, record.requestId);
+      assert.equal(params.tokenHash, tokenHash);
+      assert.equal(params.userId, user.id);
+      assert.equal(await verifyPassword("ResetStrong123!", params.passwordHash), true);
+      user.passwordHash = params.passwordHash;
+      return { user, lockCleared: true, closedSessionIds: ["session-1"] };
     },
     createAuditLog: async () => {
       events.push("audit");
@@ -83,7 +73,9 @@ test("AuthAccountPasswordResetOperations consumes reset token before mutating ac
     invalidateUserSessions: async (username: string, reason: string) => {
       events.push("invalidateSessions");
       invalidatedSessions.push({ username, reason });
-      return ["session-1"];
+      // A real transaction already deactivated these rows; an active-only
+      // query can no longer return the IDs needed for WebSocket cleanup.
+      return [];
     },
     requireManagedEmail: (email: string | null) => {
       if (!email) throw new Error("email required");
@@ -91,14 +83,15 @@ test("AuthAccountPasswordResetOperations consumes reset token before mutating ac
     },
   });
 
-  await operations.resetPasswordWithToken({
+  const result = await operations.resetPasswordWithToken({
     token,
     newPassword: "ResetStrong123!",
     confirmPassword: "ResetStrong123!",
   });
 
-  assert.ok(events.indexOf("consume") < events.indexOf("getUser"));
-  assert.ok(events.indexOf("consume") < events.indexOf("updateUser"));
+  assert.deepEqual(events, ["lookup", "complete", "invalidateSessions", "audit"]);
+  assert.deepEqual(result.closedSessionIds, ["session-1"]);
+  assert.equal(result.user, user);
   assert.equal(await verifyPassword("ResetStrong123!", String(user.passwordHash)), true);
   assert.deepEqual(invalidatedSessions, [
     { username: user.username, reason: "PASSWORD_RESET_COMPLETED" },
@@ -122,9 +115,9 @@ test("AuthAccountPasswordResetOperations rejects replay races before account mut
       }
       return lookupCount === 1 ? initialRecord : consumedRecord;
     },
-    consumePasswordResetRequestById: async () => {
-      events.push("consume");
-      return false;
+    completeAccountRecovery: async () => {
+      events.push("complete");
+      return undefined;
     },
     getUser: async () => {
       events.push("getUser");
@@ -163,5 +156,23 @@ test("AuthAccountPasswordResetOperations rejects replay races before account mut
     (error: unknown) => error instanceof AuthAccountError && error.code === ERROR_CODES.TOKEN_USED,
   );
 
-  assert.deepEqual(events, ["lookup", "consume", "lookup"]);
+  assert.deepEqual(events, ["lookup", "complete", "lookup"]);
+});
+
+test("failed atomic reset does not report success, audit success or revoke sessions", async () => {
+  const user = buildResetUser();
+  const events: string[] = [];
+  const operations = new AuthAccountPasswordResetOperations({
+    storage: {
+      getPasswordResetTokenRecordByHash: async () => buildResetRecord(user),
+      completeAccountRecovery: async () => { events.push("transaction"); throw new Error("fixture write failure"); },
+      createAuditLog: async () => { events.push("audit"); },
+    } as unknown as AuthAccountRecoveryDeps["storage"],
+    invalidateUserSessions: async () => { events.push("sessions"); return []; },
+    requireManagedEmail: () => "fixture@example.com",
+  });
+  await assert.rejects(operations.resetPasswordWithToken({
+    token: "fixture-reset", newPassword: "ResetStrong123!", confirmPassword: "ResetStrong123!",
+  }), /fixture write failure/);
+  assert.deepEqual(events, ["transaction"]);
 });

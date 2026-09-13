@@ -87,6 +87,8 @@
     "test:scripts": "node --test scripts/tests/*.test.mjs && tsx --test scripts/*.test.ts",
     "test:db-integration": "tsx --test server/http/tests/bootstrap-migration.integration.test.ts",
     "test:auth": "tsx --test server/auth/tests/*.test.ts",
+    "test:auth:postgres": "node scripts/test-auth-recovery-isolated.mjs",
+    "test:auth:browser": "node scripts/auth-feedback-browser.mjs",
     "test:http": "tsx --test server/http/tests/*.test.ts",
     "test:services": "tsx --test server/lib/*.test.ts server/lib/tests/*.test.ts server/services/tests/*.test.ts",
     "test:repositories": "tsx --test server/repositories/tests/*.test.ts",

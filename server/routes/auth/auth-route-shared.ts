@@ -80,6 +80,7 @@ export type AuthRouteContext = {
   buildOkPayload: <T extends Record<string, unknown>>(payload: T) => T & { ok: true };
   signSessionToken: (payload: { userId: string; username: string; role: string; activityId: string }, res?: Response | null) => SignedAuthSession;
   signTwoFactorChallengeToken: (payload: {
+    credentialState: string;
     userId: string;
     username: string;
     role: string;
@@ -91,6 +92,9 @@ export type AuthRouteContext = {
     platform?: string | undefined;
   }) => string;
   verifyTwoFactorChallengeToken: (token: string) => {
+    challengeId: string;
+    credentialState: string;
+    expiresAtMs: number;
     purpose: "two_factor_login";
     userId: string;
     username: string;
@@ -117,7 +121,7 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
       : {},
   );
   const rateLimiters: AuthRouteRateLimiters = {
-    ...createAuthRouteRateLimiters(),
+    ...createAuthRouteRateLimiters(storage),
     ...deps.rateLimiters,
   };
 

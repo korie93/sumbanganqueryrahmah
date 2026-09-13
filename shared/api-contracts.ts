@@ -587,6 +587,10 @@ export const authTwoFactorSetupResponseSchema = authUserMutationResponseSchema.e
     issuer: nonEmptyStringSchema,
     otpauthUrl: z.string().trim().startsWith("otpauth://totp/"),
     secret: nonEmptyStringSchema,
+    algorithm: z.enum(["SHA1", "SHA256"]),
+    digits: z.literal(6),
+    period: z.literal(30),
+    expiresAt: z.string().datetime({ offset: true }),
   }).strict(),
 }).strict();
 

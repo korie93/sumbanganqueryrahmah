@@ -31,6 +31,7 @@ export type AuthAccountManagedUser = NonNullable<
 
 export type AuthAccountManagedStorage = Pick<
   PostgresStorage,
+  | "prepareDeliveredPasswordReset"
   | "consumePasswordResetRequestById"
   | "createAuditLog"
   | "createManagedUserAccount"

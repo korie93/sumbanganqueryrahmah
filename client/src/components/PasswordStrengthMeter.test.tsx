@@ -70,10 +70,11 @@ test("PasswordStrengthMeter exposes an accessible live strength summary", () => 
   assert.match(markup, /id="test-password-strength"/);
   assert.match(markup, /role="status"/);
   assert.match(markup, /aria-live="polite"/);
-  assert.match(markup, /aria-label="Password strength: Strong"/);
+  assert.match(markup, /aria-label="Password strength: Strong\. Syarat kata laluan belum dipenuhi\."/);
   assert.match(markup, /Kekuatan kata laluan/);
   assert.match(markup, /Kuat/);
-  assert.match(markup, /Use 12\+ chars/);
+  assert.match(markup, /sekurang-kurangnya 14 aksara/);
+  assert.doesNotMatch(markup, /Kata laluan sah/);
   assert.match(markup, /motion-reduce:transition-none/);
 });
 

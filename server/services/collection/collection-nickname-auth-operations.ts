@@ -1,12 +1,8 @@
-import {
-  getCredentialPasswordPolicyMessage,
-  isStrongPassword,
-} from "../../auth/credentials";
-import { hashPassword, verifyPassword } from "../../auth/passwords";
+import { getCredentialPasswordValidationError } from "../../../shared/password-policy";
+import { generateTemporaryPassword, hashPassword, verifyPassword } from "../../auth/passwords";
 import type { AuthenticatedUser } from "../../auth/guards";
-import { badRequest, notFound, unauthorized } from "../../http/errors";
+import { badRequest, forbidden, notFound, unauthorized } from "../../http/errors";
 import {
-  COLLECTION_NICKNAME_TEMP_PASSWORD,
   ensureLooseObject,
   normalizeCollectionText,
   type CollectionNicknameAuthPayload,
@@ -68,10 +64,11 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
       throw badRequest("New password dan confirm password diperlukan.");
     }
     if (newPassword !== confirmPassword) {
-      throw badRequest("Password dan confirm password tidak sepadan.");
+      throw badRequest("Password dan confirm password tidak sepadan.", "PASSWORD_CONFIRMATION_MISMATCH");
     }
-    if (!isStrongPassword(newPassword)) {
-      throw badRequest(getCredentialPasswordPolicyMessage("ms"));
+    const passwordError = getCredentialPasswordValidationError(newPassword, "ms");
+    if (passwordError) {
+      throw badRequest(passwordError.message, passwordError.code);
     }
 
     const existingHash = normalizeCollectionText(profile.nicknamePasswordHash);
@@ -95,6 +92,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
     await this.storage.setCollectionNicknamePassword({
       nicknameId: profile.id,
       passwordHash,
+      expectedPasswordHash: existingHash || null,
       mustChangePassword: false,
       passwordResetBySuperuser: false,
       passwordUpdatedAt,
@@ -195,6 +193,9 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
     idRaw: unknown,
   ) {
     const user = this.requireUser(userInput);
+    if (user.role !== "superuser") {
+      throw forbidden("Only superusers may reset a nickname password.");
+    }
     const id = normalizeCollectionText(idRaw);
     if (!id) {
       throw badRequest("Nickname id is required.");
@@ -205,7 +206,8 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
       throw notFound("Nickname not found.");
     }
 
-    const passwordHash = await hashPassword(COLLECTION_NICKNAME_TEMP_PASSWORD);
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await hashPassword(temporaryPassword);
     await this.storage.setCollectionNicknamePassword({
       nicknameId: nickname.id,
       passwordHash,
@@ -223,7 +225,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
 
     return {
       ok: true as const,
-      temporaryPassword: COLLECTION_NICKNAME_TEMP_PASSWORD,
+      temporaryPassword,
       nickname: {
         id: nickname.id,
         nickname: nickname.nickname,

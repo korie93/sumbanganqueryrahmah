@@ -1,4 +1,7 @@
 import { Input } from "@/components/ui/input";
+import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { CREDENTIAL_PASSWORD_MIN_LENGTH, isCredentialPasswordPolicyCompliant } from "@shared/password-policy";
 import { Label } from "@/components/ui/label";
 import { getCollectionNicknameSetupDescription } from "@/pages/collection-report/collection-nickname-auth-feedback";
 import { CollectionNicknamePasswordField } from "@/pages/collection-report/CollectionNicknamePasswordField";
@@ -84,10 +87,13 @@ export function CollectionNicknameDialogStepFields({
           label="New Password"
           onChange={onNicknamePasswordChange}
           onToggleVisibility={onToggleSetupPassword}
-          placeholder="Minimum 8 aksara"
+          placeholder={`Minimum ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara`}
+          describedBy="collection-nickname-password-policy"
+          invalid={Boolean(nicknamePassword) && !isCredentialPasswordPolicyCompliant(nicknamePassword)}
           showPassword={showSetupPassword}
           value={nicknamePassword}
         />
+        <PasswordStrengthMeter id="collection-nickname-password-policy" password={nicknamePassword} />
         <CollectionNicknamePasswordField
           autoComplete="new-password"
           disabled={submittingNicknameAuth}
@@ -99,6 +105,13 @@ export function CollectionNicknameDialogStepFields({
           placeholder="Ulang password"
           showPassword={showSetupConfirmPassword}
           value={confirmNicknamePassword}
+          describedBy="collection-nickname-password-confirmation"
+          invalid={Boolean(confirmNicknamePassword) && nicknamePassword !== confirmNicknamePassword}
+        />
+        <PasswordConfirmationFeedback
+          id="collection-nickname-password-confirmation"
+          password={nicknamePassword}
+          confirmation={confirmNicknamePassword}
         />
       </div>
     );

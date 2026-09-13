@@ -2,6 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RedisTwoFactorReplayStore } from "../redis-two-factor-replay-store";
 
+test("two workers consume a challenge atomically once with the full JWT lifetime", async () => {
+  const entries = new Set<string>();
+  const expiries: number[] = [];
+  const buildStore = () => new RedisTwoFactorReplayStore({
+    config: { distributedStoreConfigured: true, provider: "redis", redisUrl: "redis://localhost:6379/0" },
+    createRedisClient: () => ({
+      connect: async () => undefined,
+      set: async (key, _value, options) => {
+        expiries.push(options.PX);
+        if (entries.has(key)) return null;
+        entries.add(key);
+        return "OK";
+      },
+    }),
+  });
+  const first = buildStore();
+  const second = buildStore();
+  const input = { purpose: "challenge" as const, subjectId: "account-1", code: "78b8fdb4-aa76-4b72-a916-6e89346451fa" };
+  assert.deepEqual((await Promise.all([first.consume(input), second.consume(input)])).sort(), [false, true]);
+  assert.deepEqual(expiries, [300_000, 300_000]);
+  assert.equal(await second.consume({ ...input, subjectId: "account-2" }), true);
+  await first.close();
+  await second.close();
+});
+
 test("RedisTwoFactorReplayStore consumes a TOTP code once using SET NX with a bounded TTL", async () => {
   const setCalls: Array<{ key: string; options: { NX: true; PX: number }; value: string }> = [];
   const store = new RedisTwoFactorReplayStore({

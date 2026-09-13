@@ -143,6 +143,22 @@ test("runtime config does not persist seed passwords in the global config object
   );
 });
 
+test("runtime config accepts but never retains the obsolete shared Collection reset password", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      COLLECTION_NICKNAME_TEMP_PASSWORD: "obsolete-collection-reset-password",
+    },
+    async () => {
+      const { runtimeConfig } = await importRuntimeFresh();
+      assert.equal("collectionNicknameTempPassword" in runtimeConfig.auth, false);
+      assert.equal(JSON.stringify(runtimeConfig).includes("obsolete-collection-reset-password"), false);
+    },
+  );
+});
+
 test("runtime config rejects production startup when backup encryption keys are missing", async () => {
   await withEnv(
     productionBaseOverrides,

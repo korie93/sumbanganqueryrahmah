@@ -187,6 +187,7 @@ function createManagedStorage(
 ): ManagedStorage {
   return {
     clearBannedSessionsForUsername: async () => 0,
+    prepareDeliveredPasswordReset: async (params) => ({ user: { ...seedUser, passwordHash: params.passwordHash, mustChangePassword: true, passwordResetBySuperuser: true, failedLoginAttempts: 0, lockedAt: null }, closedSessionIds: [] }),
     consumePasswordResetRequestById: async () => false,
     createAuditLog: async (entry) => buildAuditLog(entry),
     createManagedUserAccount: async (params) =>
@@ -287,11 +288,9 @@ test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword completes ap
   const auditActions: string[] = [];
   const invalidatedTokens: Array<{ userId: string; now: Date }> = [];
   const createdRequests: Array<Parameters<ManagedStorage["createPasswordResetRequest"]>[0]> = [];
-  const resolvedRequests: Array<
-    Parameters<ManagedStorage["resolvePendingPasswordResetRequestsForUser"]>[0]
-  > = [];
-  const updatedUsers: Array<Parameters<ManagedStorage["updateUserAccount"]>[0]> = [];
+  const preparations: Array<Parameters<ManagedStorage["prepareDeliveredPasswordReset"]>[0]> = [];
   const invalidatedSessions: Array<{ username: string; reason: string }> = [];
+  let activeSessionIds = ["session-1"];
 
   const operations = new AuthAccountManagedRecoveryOperations({
     storage: createManagedStorage({
@@ -302,12 +301,11 @@ test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword completes ap
         createdRequests.push(params);
         return buildPasswordResetRequest(params, { id: "reset-request-1" });
       },
-      resolvePendingPasswordResetRequestsForUser: async (params) => {
-        resolvedRequests.push(params);
-      },
-      updateUserAccount: async (params) => {
-        updatedUsers.push(params);
-        return mergeManagedUserAccount(target, params);
+      prepareDeliveredPasswordReset: async (params) => {
+        preparations.push(params);
+        const closedSessionIds = activeSessionIds;
+        activeSessionIds = [];
+        return { user: { ...target, passwordHash: params.passwordHash, mustChangePassword: true, passwordResetBySuperuser: true, failedLoginAttempts: 0, lockedAt: null }, closedSessionIds };
       },
       createAuditLog: async (entry) => {
         auditActions.push(String(entry.action || ""));
@@ -318,7 +316,8 @@ test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword completes ap
     ensureUniqueIdentity: async () => undefined,
     invalidateUserSessions: async (username: string, reason: string) => {
       invalidatedSessions.push({ username, reason });
-      return ["session-1"];
+      assert.deepEqual(activeSessionIds, [], "Transaction already revoked the active rows.");
+      return activeSessionIds;
     },
     requireManageableTarget: async () => target,
     requireManagedEmail: (email: string | null) => {
@@ -341,18 +340,21 @@ test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword completes ap
   assert.equal(result.user.id, target.id);
   assert.deepEqual(result.closedSessionIds, ["session-1"]);
   assert.equal(result.reset.sent, true);
-  assert.equal(invalidatedTokens.length, 1);
+  assert.equal(invalidatedTokens.length, 0, "Issuance owns replacement in its transaction.");
   assert.equal(createdRequests.length, 1);
-  assert.equal(resolvedRequests.length, 1);
-  assert.equal(updatedUsers.length, 1);
+  assert.equal(preparations.length, 1);
+  assert.equal(preparations[0].requestId, "reset-request-1");
+  assert.equal(preparations[0].expectedPasswordHash, target.passwordHash);
+  assert.equal(preparations[0].tokenHash, createdRequests[0].tokenHash);
+  assert.match(preparations[0].passwordHash, /^\$2[aby]\$/);
   assert.deepEqual(invalidatedSessions, [
     { username: target.username, reason: "PASSWORD_RESET_BY_SUPERUSER" },
   ]);
   assert.deepEqual(auditActions, ["PASSWORD_RESET_APPROVED"]);
-  assert.equal(updatedUsers[0].mustChangePassword, true);
-  assert.equal(updatedUsers[0].passwordResetBySuperuser, true);
-  assert.equal(updatedUsers[0].failedLoginAttempts, 0);
-  assert.equal(updatedUsers[0].lockedAt, null);
+  assert.equal(result.user.mustChangePassword, true);
+  assert.equal(result.user.passwordResetBySuperuser, true);
+  assert.equal(result.user.failedLoginAttempts, 0);
+  assert.equal(result.user.lockedAt, null);
 });
 
 test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword cancels failed delivery without mutating the account", async () => {
@@ -381,6 +383,10 @@ test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword cancels fail
       updateUserAccount: async () => {
         updatedUserCalled = true;
         return target;
+      },
+      prepareDeliveredPasswordReset: async () => {
+        updatedUserCalled = true;
+        throw new Error("Failed delivery must not prepare credentials.");
       },
     }, target),
     ensureUniqueIdentity: async () => undefined,

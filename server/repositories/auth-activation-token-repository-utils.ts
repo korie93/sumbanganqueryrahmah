@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { accountActivationTokens } from "../../shared/schema-postgres";
+import { accountActivationTokens, users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import type { ActivationTokenRecord } from "./auth-repository-types";
 import {
@@ -13,9 +13,16 @@ import {
 
 export async function createActivationToken(
   params: CreateActivationTokenParams,
+  database: typeof db = db,
 ) {
   const record = buildActivationTokenInsertRecord(params);
-  await db.insert(accountActivationTokens).values(record);
+  await database.transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, params.userId)).for("update");
+    await tx.update(accountActivationTokens).set({ usedAt: new Date() }).where(and(
+      eq(accountActivationTokens.userId, params.userId), isNull(accountActivationTokens.usedAt),
+    ));
+    await tx.insert(accountActivationTokens).values(record);
+  });
   return record;
 }
 

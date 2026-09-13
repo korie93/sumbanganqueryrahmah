@@ -17,8 +17,7 @@ import {
   persistCollectionNicknameSessionStorage,
 } from "@/pages/collection-report/utils";
 import {
-  getCredentialPasswordPolicyMessage,
-  isCredentialPasswordPolicyCompliant,
+  getCredentialPasswordValidationError,
 } from "@shared/password-policy";
 
 interface UseCollectionNicknameAccessOptions {
@@ -211,10 +210,11 @@ export function useCollectionNicknameAccess({
     const nickname = String(resolvedNickname || nicknameInput || "").trim();
     if (!nickname) return;
 
-    if (!isCredentialPasswordPolicyCompliant(nicknamePassword)) {
+    const passwordIssue = getCredentialPasswordValidationError(nicknamePassword, "ms");
+    if (passwordIssue) {
       toast({
         title: "Validation Error",
-        description: getCredentialPasswordPolicyMessage("ms"),
+        description: passwordIssue.message,
         variant: "destructive",
       });
       return;

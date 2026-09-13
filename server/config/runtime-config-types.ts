@@ -83,7 +83,6 @@ export type RuntimeConfig = {
     sessionJwtLegacyHs256VerifyUntilMs: number | null;
     auditHmacKey: string;
     bcryptCost: number;
-    collectionNicknameTempPassword: string;
     twoFactorAlgorithm: "sha1" | "sha256";
     twoFactorEncryptionSecret: string | null;
     seedDefaultUsers: boolean;

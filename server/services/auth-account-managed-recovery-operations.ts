@@ -72,7 +72,7 @@ export class AuthAccountManagedRecoveryOperations {
       "Email is required to send password reset.",
     );
     const now = new Date();
-    await this.deps.storage.invalidateUnusedPasswordResetTokens(target.id, now);
+    // Token issuance invalidates older links in the same repository transaction.
     const reset = createPasswordResetTokenPayload();
     const resetUrl = buildPasswordResetUrl(reset.token);
     const resetRequest = await this.deps.storage.createPasswordResetRequest({
@@ -113,30 +113,27 @@ export class AuthAccountManagedRecoveryOperations {
       };
     }
 
-    await this.deps.storage.resolvePendingPasswordResetRequestsForUser({
-      userId: target.id,
-      approvedBy: actor.username,
-      resetType: "email_link",
-      usedAt: now,
-    });
-
     const placeholderPasswordHash = await hashPassword(generateOneTimeToken());
-    const updatedUser = await this.deps.storage.updateUserAccount({
+    const prepared = await this.deps.storage.prepareDeliveredPasswordReset({
       userId: target.id,
+      requestId: resetRequest.id,
+      tokenHash: reset.tokenHash,
+      expectedPasswordHash: target.passwordHash,
       passwordHash: placeholderPasswordHash,
-      passwordChangedAt: now,
-      mustChangePassword: true,
-      passwordResetBySuperuser: true,
-      activatedAt: target.activatedAt ?? now,
-      failedLoginAttempts: 0,
-      lockedAt: null,
-      lockedReason: null,
-      lockedBySystem: false,
+      approvedBy: actor.username,
     });
-    const closedSessionIds = await this.deps.invalidateUserSessions(
+    if (!prepared) {
+      // The recipient may already have redeemed the link while delivery was
+      // completing. Do not clobber that password or a newer reset operation.
+      return { user: await this.deps.requireManageableTarget(target.id), closedSessionIds: [] as string[], reset: delivery };
+    }
+    const remainingSessionIds = await this.deps.invalidateUserSessions(
       target.username,
       "PASSWORD_RESET_BY_SUPERUSER",
     );
+    // The transaction already deactivated these rows, so a later active-only
+    // query cannot rediscover the IDs needed to close their live sockets.
+    const closedSessionIds = [...new Set([...prepared.closedSessionIds, ...remainingSessionIds])];
 
     await this.deps.storage.createAuditLog({
       action: "PASSWORD_RESET_APPROVED",
@@ -151,7 +148,7 @@ export class AuthAccountManagedRecoveryOperations {
     });
 
     return {
-      user: updatedUser ?? target,
+      user: prepared.user,
       closedSessionIds,
       reset: delivery,
     };

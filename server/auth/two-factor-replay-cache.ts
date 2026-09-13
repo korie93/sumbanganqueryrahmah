@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { normalizeTwoFactorCode } from "./two-factor";
 
-export type TwoFactorReplayPurpose = "disable" | "login" | "setup";
+export type TwoFactorReplayPurpose = "disable" | "login" | "setup" | "challenge";
 
 type TwoFactorReplayCacheEntry = {
   expiresAtMs: number;
@@ -27,6 +27,7 @@ export type TwoFactorReplayStore = {
 };
 
 const DEFAULT_TWO_FACTOR_REPLAY_TTL_MS = 120_000;
+export const TWO_FACTOR_CHALLENGE_REPLAY_TTL_MS = 5 * 60 * 1_000;
 const DEFAULT_TWO_FACTOR_REPLAY_MAX_ENTRIES = 10_000;
 const DEFAULT_TWO_FACTOR_REPLAY_SWEEP_INTERVAL_MS = 30_000;
 const DEFAULT_TWO_FACTOR_REPLAY_SWEEP_THRESHOLD_ENTRIES = 1_000;
@@ -34,7 +35,9 @@ const DEFAULT_TWO_FACTOR_REPLAY_SWEEP_THRESHOLD_ENTRIES = 1_000;
 export function buildTwoFactorReplayKey(params: ConsumeTwoFactorReplayCodeParams) {
   const subjectId = String(params.subjectId || "").trim();
   const purpose = params.purpose;
-  const code = normalizeTwoFactorCode(params.code);
+  const code = purpose === "challenge"
+    ? (/^[0-9a-f-]{36}$/i.test(params.code) ? params.code : null)
+    : normalizeTwoFactorCode(params.code);
   if (!subjectId || !code) {
     return "";
   }
@@ -105,8 +108,13 @@ export class TwoFactorReplayCache {
       return false;
     }
 
-    this.entries.set(key, { expiresAtMs: nowMs + this.ttlMs });
-    this.trimToMaxEntries(nowMs);
+    // Never evict an unexpired replay marker to admit a new code/challenge.
+    if (this.entries.size >= this.maxEntries && !existing) {
+      this.sweep(nowMs);
+      if (this.entries.size >= this.maxEntries) return false;
+    }
+    this.entries.set(key, { expiresAtMs: nowMs + (params.purpose === "challenge"
+      ? TWO_FACTOR_CHALLENGE_REPLAY_TTL_MS : this.ttlMs) });
     return true;
   }
 
@@ -118,35 +126,6 @@ export class TwoFactorReplayCache {
     this.sweep(nowMs);
   }
 
-  private trimToMaxEntries(nowMs = this.now()) {
-    if (this.entries.size <= this.maxEntries) {
-      return;
-    }
-
-    this.sweep(nowMs);
-
-    while (this.entries.size > this.maxEntries) {
-      const earliestExpiryKey = this.resolveEarliestExpiryKey();
-      if (!earliestExpiryKey) {
-        break;
-      }
-      this.entries.delete(earliestExpiryKey);
-    }
-  }
-
-  private resolveEarliestExpiryKey() {
-    let earliestExpiryKey: string | null = null;
-    let earliestExpiresAtMs = Number.POSITIVE_INFINITY;
-
-    for (const [key, entry] of this.entries.entries()) {
-      if (entry.expiresAtMs < earliestExpiresAtMs) {
-        earliestExpiryKey = key;
-        earliestExpiresAtMs = entry.expiresAtMs;
-      }
-    }
-
-    return earliestExpiryKey;
-  }
 }
 
 const defaultTwoFactorReplayCache = new TwoFactorReplayCache();

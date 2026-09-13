@@ -291,6 +291,7 @@ export interface CollectionStorageContract {
   setCollectionNicknamePassword(params: {
     nicknameId: string;
     passwordHash: string;
+    expectedPasswordHash?: string | null;
     mustChangePassword?: boolean;
     passwordResetBySuperuser?: boolean;
     passwordUpdatedAt?: Date | null;

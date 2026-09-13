@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import {
@@ -9,7 +10,8 @@ import {
   type PasswordResetTokenValidationPayload,
   validatePasswordResetToken,
 } from "@/lib/api/auth";
-import { getApiErrorMessage } from "@/lib/api-errors";
+import { getAuthErrorMessage } from "@/lib/auth-flow-feedback";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { broadcastForcedLogout } from "@/lib/auth-session";
 import {
   hasPublicAuthFieldErrors,
@@ -96,7 +98,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
         }
         setReset(null);
         setPhase("invalid");
-        setError(getApiErrorMessage(validationError, "Pautan tetapan semula tidak sah atau telah tamat tempoh."));
+        setError(getAuthErrorMessage(validationError, "Pautan tetapan semula tidak sah atau telah tamat tempoh.", "reset"));
       } finally {
         if (validationAbortControllerRef.current === controller) {
           validationAbortControllerRef.current = null;
@@ -159,7 +161,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
       ) {
         return;
       }
-      setError(getApiErrorMessage(resetError, "Tetapan semula kata laluan gagal."));
+      setError(getAuthErrorMessage(resetError, "Tetapan semula kata laluan gagal.", "reset"));
     } finally {
       if (resetAbortControllerRef.current === controller) {
         resetAbortControllerRef.current = null;
@@ -203,12 +205,10 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
     "aria-describedby": newPasswordDescribedBy,
     ...(newPasswordError ? { "aria-invalid": "true" as const } : {}),
   };
-  const confirmPasswordInvalidProps = confirmPasswordError
-    ? {
-      "aria-invalid": "true" as const,
-      "aria-describedby": "reset-password-confirm-error",
-    }
-    : {};
+  const confirmPasswordInvalidProps = {
+    ...getAriaInvalidProps(Boolean(confirmPassword ? newPassword !== confirmPassword : confirmPasswordError)),
+    "aria-describedby": "reset-password-confirm-error",
+  };
 
   return (
     <PublicAuthLayout
@@ -276,6 +276,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
               onChange={(event) => {
                 setNewPassword(event.target.value);
                 setNewPasswordError("");
+                setConfirmPasswordError("");
                 setError("");
               }}
               onBlur={validateNewPasswordOnBlur}
@@ -317,11 +318,12 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
               {...confirmPasswordInvalidProps}
             />
           </div>
-          {confirmPasswordError ? (
-            <p id="reset-password-confirm-error" className="public-auth-field-error" role="alert">
-              {confirmPasswordError}
-            </p>
-          ) : null}
+          <PasswordConfirmationFeedback
+            id="reset-password-confirm-error"
+            password={newPassword}
+            confirmation={confirmPassword}
+            requiredError={confirmPasswordError}
+          />
           {error ? (
             <div className="public-auth-status-card public-auth-status-card--error" role="alert">
               {error}

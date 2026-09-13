@@ -1,9 +1,6 @@
 import { addHours } from "date-fns";
 import { isManageableUserRole, normalizeAccountStatus } from "../auth/account-lifecycle";
-import {
-  getCredentialPasswordPolicyMessage,
-  isStrongPassword,
-} from "../auth/credentials";
+import { getCredentialPasswordValidationError } from "../../shared/password-policy";
 import {
   generateOneTimeToken,
   getOpaqueTokenHashCandidates,
@@ -133,27 +130,16 @@ export function createPasswordResetTokenPayload(now = new Date()): IssuedOpaqueT
 }
 
 export function assertConfirmedStrongPassword(newPassword: string, confirmPassword: string) {
-  if (!isStrongPassword(newPassword)) {
-    throw new AuthAccountError(
-      400,
-      ERROR_CODES.INVALID_PASSWORD,
-      getCredentialPasswordPolicyMessage(),
-    );
-  }
+  assertStrongPasswordInput(newPassword);
 
   if (newPassword !== confirmPassword) {
-    throw new AuthAccountError(400, ERROR_CODES.INVALID_PASSWORD, "Confirm password does not match.");
+    throw new AuthAccountError(400, ERROR_CODES.PASSWORD_CONFIRMATION_MISMATCH, "Passwords do not match.");
   }
 }
 
 export function assertStrongPasswordInput(newPassword: string) {
-  if (!isStrongPassword(newPassword)) {
-    throw new AuthAccountError(
-      400,
-      ERROR_CODES.INVALID_PASSWORD,
-      getCredentialPasswordPolicyMessage(),
-    );
-  }
+  const issue = getCredentialPasswordValidationError(newPassword);
+  if (issue) throw new AuthAccountError(400, issue.code, issue.message);
 }
 
 export async function findOpaqueTokenRecordByHashCandidates<TRecord>(
@@ -180,7 +166,14 @@ export function assertUsableActivationTokenRecord(
 
   const normalizedRecord = normalizeTokenDates(record);
 
+  // Only someone holding a genuine high-entropy link reaches these messages.
+  if (normalizedRecord.status === "active" && normalizedRecord.activatedAt) {
+    throw new AuthAccountError(409, ERROR_CODES.ACCOUNT_ALREADY_ACTIVATED, "Account already activated. Please sign in or request a password reset.");
+  }
   if (normalizedRecord.usedAt) {
+    if (normalizedRecord.status === "pending_activation") {
+      throw new AuthAccountError(410, ERROR_CODES.ACTIVATION_TOKEN_SUPERSEDED, "This activation link was replaced. Open the newest activation email or ask the administrator to resend it.");
+    }
     throw new AuthAccountError(410, ERROR_CODES.TOKEN_USED, "Activation link has already been used.");
   }
 

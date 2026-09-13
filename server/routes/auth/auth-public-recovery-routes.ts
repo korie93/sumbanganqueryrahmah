@@ -12,6 +12,7 @@ export function registerAuthPublicRecoveryRoutes(context: AuthRouteContext) {
     rateLimiters,
     jsonRoute,
     buildUserPayload,
+    closeActivitySockets,
   } = context;
 
   app.post("/api/auth/activate-account", rateLimiters.publicRecovery, jsonRoute(async (req) => {
@@ -54,11 +55,12 @@ export function registerAuthPublicRecoveryRoutes(context: AuthRouteContext) {
 
   app.post("/api/auth/reset-password-with-token", rateLimiters.publicRecovery, jsonRoute(async (req) => {
     const body = readActivationBody(req.body);
-    const user = await authAccountService.resetPasswordWithToken(body);
+    const result = await authAccountService.resetPasswordWithToken(body);
+    closeActivitySockets(result.closedSessionIds, "Password reset completed. Please login again.");
 
     return {
       ok: true,
-      user: buildUserPayload(user),
+      user: buildUserPayload(result.user),
     };
   }));
 }

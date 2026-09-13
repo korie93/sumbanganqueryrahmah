@@ -11,9 +11,8 @@ import { buildNextCurrentUser } from "@/pages/settings/settings-my-account-utils
 import type { CurrentUser } from "@/pages/settings/types";
 import {
   buildSettingsMutationErrorToast,
-  isStrongPassword,
 } from "@/pages/settings/utils";
-import { getCredentialPasswordPolicyMessage } from "@shared/password-policy";
+import { getCredentialPasswordValidationError } from "@shared/password-policy";
 import {
   normalizeCredentialUsername,
   validateCredentialUsername,
@@ -30,7 +29,7 @@ function validateCurrentPasswordInput(value: string): string | null {
 }
 
 function validateNewPasswordInput(value: string): string | null {
-  return isStrongPassword(value) ? null : getCredentialPasswordPolicyMessage();
+  return getCredentialPasswordValidationError(value, "ms")?.message ?? null;
 }
 
 function validateConfirmPasswordInput(newPassword: string, confirmPassword: string): string | null {

@@ -846,8 +846,12 @@ test("authentication self-service contracts isolate setup secrets and require mu
     ok: true,
     setup: {
       accountName: "operator.one",
+      algorithm: "SHA256",
+      digits: 6,
+      period: 30,
+      expiresAt: "2026-06-24T08:10:00.000Z",
       issuer: "SQR",
-      otpauthUrl: "otpauth://totp/SQR:operator.one?secret=ABCDEF",
+      otpauthUrl: "otpauth://totp/SQR:operator.one?secret=ABCDEF&algorithm=SHA256&digits=6&period=30",
       secret: "ABCDEF",
     },
     user,

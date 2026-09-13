@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { sql, type SQL } from "drizzle-orm";
+import { conflict } from "../http/errors";
 
 import {
   mapCollectionStaffNicknameRow,
@@ -38,6 +39,7 @@ export async function setCollectionNicknamePasswordValue(
   params: {
     nicknameId: string;
     passwordHash: string;
+    expectedPasswordHash?: string | null;
     mustChangePassword?: boolean;
     passwordResetBySuperuser?: boolean;
     passwordUpdatedAt?: Date | null;
@@ -56,7 +58,7 @@ export async function setCollectionNicknamePasswordValue(
     throw new Error("passwordHash is required.");
   }
 
-  await executor.execute(sql`
+  const result = await executor.execute(sql`
     WITH changed_nickname AS (
       UPDATE public.collection_staff_nicknames
       SET
@@ -65,12 +67,21 @@ export async function setCollectionNicknamePasswordValue(
         password_reset_by_superuser = ${passwordResetBySuperuser},
         password_updated_at = ${passwordUpdatedAt}
       WHERE id = ${nicknameId}::uuid
+        ${params.expectedPasswordHash !== undefined
+          ? sql`AND nickname_password_hash IS NOT DISTINCT FROM ${params.expectedPasswordHash}`
+          : sql``}
       RETURNING nickname
+    ), revoked_sessions AS (
+      DELETE FROM public.collection_nickname_sessions AS session
+      USING changed_nickname
+      WHERE lower(session.nickname) = lower(changed_nickname.nickname)
     )
-    DELETE FROM public.collection_nickname_sessions AS session
-    USING changed_nickname
-    WHERE lower(session.nickname) = lower(changed_nickname.nickname)
+    SELECT EXISTS (SELECT 1 FROM changed_nickname) AS password_changed
   `);
+  if (params.expectedPasswordHash !== undefined
+      && readFirstRow<{ password_changed: boolean }>(result)?.password_changed !== true) {
+    throw conflict("Password nickname telah berubah. Sila semak password semasa dan cuba semula.", "CONFLICT");
+  }
 }
 
 export async function createCollectionStaffNicknameValue(

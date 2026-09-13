@@ -15,6 +15,7 @@ export type AuthAccountAuthenticationStorage = Pick<
   | "updateUserAccount"
 > & Pick<
   PostgresStorage,
+  | "completeAccountRecovery"
   | "consumeActivationTokenById"
   | "consumePasswordResetRequestById"
   | "createPasswordResetRequest"

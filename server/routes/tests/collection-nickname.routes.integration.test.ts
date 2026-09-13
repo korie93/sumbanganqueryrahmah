@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COLLECTION_NICKNAME_TEMP_PASSWORD } from "../../routes/collection.validation";
+import { generateTemporaryPassword } from "../../auth/passwords";
+import { getCredentialPasswordValidationError, isTemporaryPasswordPolicyCompliant } from "../../../shared/password-policy";
 import { registerCollectionRoutes } from "../collection.routes";
 import type { CollectionRouteDeps } from "../collection/collection-route-shared";
 import {
@@ -98,7 +99,7 @@ function createCollectionNicknameRouteStorageDouble() {
   };
 }
 
-test("POST /api/collection/nicknames/:id/reset-password returns the configured temporary password", async () => {
+test("POST /api/collection/nicknames/:id/reset-password returns a fresh eight-character temporary password", async () => {
   const { storage, profile, auditLogs } = createCollectionNicknameRouteStorageDouble();
   const app = createJsonTestApp();
 
@@ -126,7 +127,7 @@ test("POST /api/collection/nicknames/:id/reset-password returns the configured t
     assert.equal(payload.nickname.nickname, profile.nickname);
     assert.equal(payload.nickname.mustChangePassword, true);
     assert.equal(payload.nickname.passwordResetBySuperuser, true);
-    assert.equal(payload.temporaryPassword, COLLECTION_NICKNAME_TEMP_PASSWORD);
+    assert.equal(isTemporaryPasswordPolicyCompliant(payload.temporaryPassword), true);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0]?.action, "COLLECTION_NICKNAME_PASSWORD_RESET");
   } finally {
@@ -136,6 +137,7 @@ test("POST /api/collection/nicknames/:id/reset-password returns the configured t
 
 test("POST /api/collection/nickname-auth/login accepts the reset temporary password and flags forced change", async () => {
   const { storage, profile } = createCollectionNicknameRouteStorageDouble();
+  const temporaryPassword = generateTemporaryPassword();
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
@@ -153,7 +155,7 @@ test("POST /api/collection/nickname-auth/login accepts the reset temporary passw
   await storage.setCollectionNicknamePassword({
     nicknameId: profile.id,
     passwordHash: await import("bcrypt").then(({ default: bcrypt }) =>
-      bcrypt.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, TEST_BCRYPT_COST)),
+      bcrypt.hash(temporaryPassword, TEST_BCRYPT_COST)),
     mustChangePassword: true,
     passwordResetBySuperuser: true,
     passwordUpdatedAt: new Date("2026-03-27T00:00:00.000Z"),
@@ -168,7 +170,7 @@ test("POST /api/collection/nickname-auth/login accepts the reset temporary passw
       },
       body: JSON.stringify({
         nickname: profile.nickname,
-        password: COLLECTION_NICKNAME_TEMP_PASSWORD,
+        password: temporaryPassword,
       }),
     });
 
@@ -179,6 +181,64 @@ test("POST /api/collection/nickname-auth/login accepts the reset temporary passw
     assert.equal(payload.nickname.mustChangePassword, true);
     assert.equal(payload.nickname.passwordResetBySuperuser, true);
     assert.equal(payload.nickname.requiresForcedPasswordChange, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("Collection nickname password API returns the shared validation codes without accepting mismatches", async () => {
+  const { storage, profile, auditLogs } = createCollectionNicknameRouteStorageDouble();
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage: storage as unknown as CollectionRouteDeps["storage"],
+    authenticateToken: createTestAuthenticateToken({ userId: "user-1", username: "collector.user", role: "user" }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const password of ["Short1!Aa", "1234567890123!", "lowercasepass1!", "UPPERCASEPASS1!", "NoNumbersHere!", "NoSymbolsHere12", `Aa1!${"x".repeat(256)}`]) {
+      const expected = getCredentialPasswordValidationError(password, "ms");
+      assert.ok(expected);
+      const response = await fetch(`${baseUrl}/api/collection/nickname-auth/setup-password`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: profile.nickname, newPassword: password, confirmPassword: password }),
+      });
+      assert.equal(response.status, 400);
+      const payload = await response.json();
+      assert.deepEqual(payload.error, expected);
+    }
+    const mismatch = await fetch(`${baseUrl}/api/collection/nickname-auth/setup-password`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname: profile.nickname, newPassword: "StrongPass123!", confirmPassword: "DifferentPass123!" }),
+    });
+    assert.equal(mismatch.status, 400);
+    assert.equal((await mismatch.json()).error.code, "PASSWORD_CONFIRMATION_MISMATCH");
+    assert.equal(profile.nicknamePasswordHash, null);
+    assert.equal(auditLogs.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("Collection nickname reset route preserves the superuser-only boundary", async () => {
+  const { storage, profile } = createCollectionNicknameRouteStorageDouble();
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, {
+    storage: storage as unknown as CollectionRouteDeps["storage"],
+    authenticateToken: createTestAuthenticateToken({ userId: "user-1", username: "collector.user", role: "user" }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const role of ["user", "admin", "manager"]) {
+      const response = await fetch(`${baseUrl}/api/collection/nicknames/${profile.id}/reset-password`, {
+        method: "POST", headers: { "x-test-role": role },
+      });
+      assert.equal(response.status, 403);
+    }
+    assert.equal(profile.nicknamePasswordHash, null);
   } finally {
     await stopTestServer(server);
   }

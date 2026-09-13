@@ -39,6 +39,8 @@ import {
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 import { buildLoginFailureAuditDetails } from "../lib/login-audit";
 import { t } from "../i18n/server";
+import { buildTwoFactorCredentialState } from "../auth/two-factor";
+import { consumeTwoFactorReplayCode } from "../auth/two-factor-replay-cache";
 
 type AuthAccountAuthenticationDeps = {
   storage: AuthAccountAuthenticationStorage;
@@ -259,6 +261,14 @@ export class AuthAccountAuthenticationOperations {
 
     let activeUser = user;
 
+    if (input.challenge && (
+      input.challenge.expiresAtMs <= Date.now()
+      || input.challenge.credentialState !== buildTwoFactorCredentialState(activeUser)
+    )) {
+      throw new AuthAccountError(401, ERROR_CODES.TWO_FACTOR_CHALLENGE_EXPIRED,
+        "2FA session expired or account credentials changed. Please sign in again.");
+    }
+
     const visitorBanned = await isVisitorBannedByDeviceFingerprint({
       fingerprint: input.fingerprint,
       ipAddress: input.ipAddress,
@@ -378,8 +388,19 @@ export class AuthAccountAuthenticationOperations {
       throw error;
     }
 
+    if (input.challenge && !(await consumeTwoFactorReplayCode({
+      purpose: "challenge", subjectId: activeUser.id, code: input.challenge.id,
+    }))) {
+      throw new AuthAccountError(401, ERROR_CODES.TWO_FACTOR_CHALLENGE_EXPIRED,
+        "This 2FA session has already been used or is unavailable. Please sign in again.");
+    }
+
     const sessionResult = await createAuthenticatedSession({
       details: `Login with 2FA from ${input.browserName}`,
+      expectedTwoFactor: input.challenge ?? {
+        credentialState: buildTwoFactorCredentialState(activeUser),
+        expiresAtMs: Date.now() + 30_000,
+      },
       input: {
         fingerprint: input.fingerprint,
         browserName: input.browserName,

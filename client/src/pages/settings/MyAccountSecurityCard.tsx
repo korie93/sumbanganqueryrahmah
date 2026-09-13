@@ -1,9 +1,13 @@
 import { KeyRound } from "lucide-react";
+import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getAuthenticatorSetupParameters } from "@/lib/auth-flow-feedback";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 
 interface MyAccountSecurityCardProps {
   confirmPasswordInput: string;
@@ -100,6 +104,7 @@ export function MyAccountSecurityCard({
   const isMobile = useIsMobile();
   const supportsTwoFactor = currentUserRole === "admin" || currentUserRole === "superuser";
   const securityBusy = usernameSaving || passwordSaving || twoFactorLoading;
+  const setupParameters = getAuthenticatorSetupParameters(twoFactorSetupUri);
   const twoFactorStatus = twoFactorEnabled
     ? "Diaktifkan"
     : twoFactorPendingSetup
@@ -122,9 +127,8 @@ export function MyAccountSecurityCard({
     currentPasswordErrorId,
   );
   const newPasswordValidationProps = getInvalidFieldProps(newPasswordError, newPasswordErrorId);
-  const confirmPasswordValidationProps = getInvalidFieldProps(
-    confirmPasswordError,
-    confirmPasswordErrorId,
+  const confirmPasswordValidationProps = getAriaInvalidProps(
+    Boolean(confirmPasswordInput ? newPasswordInput !== confirmPasswordInput : confirmPasswordError),
   );
   const twoFactorPasswordValidationProps = getInvalidFieldProps(
     twoFactorPasswordError,
@@ -260,6 +264,7 @@ export function MyAccountSecurityCard({
                     disabled={securityBusy}
                     autoComplete="new-password"
                     {...newPasswordValidationProps}
+                    aria-describedby={["my-account-password-policy", newPasswordError ? newPasswordErrorId : null].filter(Boolean).join(" ")}
                   />
                   {newPasswordError ? (
                     <p id={newPasswordErrorId} className="text-xs text-destructive" role="alert">
@@ -281,14 +286,17 @@ export function MyAccountSecurityCard({
                     disabled={securityBusy}
                     autoComplete="new-password"
                     {...confirmPasswordValidationProps}
+                    aria-describedby={confirmPasswordErrorId}
                   />
-                  {confirmPasswordError ? (
-                    <p id={confirmPasswordErrorId} className="text-xs text-destructive" role="alert">
-                      {confirmPasswordError}
-                    </p>
-                  ) : null}
+                  <PasswordConfirmationFeedback
+                    id={confirmPasswordErrorId}
+                    password={newPasswordInput}
+                    confirmation={confirmPasswordInput}
+                    requiredError={confirmPasswordError}
+                  />
                 </div>
               </div>
+              <PasswordStrengthMeter id="my-account-password-policy" password={newPasswordInput} />
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end" data-floating-ai-avoid="true">
                 <Button onClick={onChangePassword} disabled={securityBusy} className="w-full sm:w-auto">
                   {passwordSaving ? "Mengemas kini..." : "Tukar kata laluan"}
@@ -368,8 +376,20 @@ export function MyAccountSecurityCard({
                 {twoFactorSetupSecret ? (
                   <div className="space-y-3 rounded-xl border border-border/60 bg-background/55 p-4">
                     <p className="text-sm text-muted-foreground">
-                      Tambahkan rahsia ini ke aplikasi pengesah, kemudian masukkan kod 6 digit untuk mengaktifkan 2FA.
+                      Import URI di bawah ke aplikasi pengesah yang menyokong tetapan ini, atau tambah rahsia secara manual.
+                      Kemudian masukkan kod 6 digit untuk mengaktifkan 2FA. Jangan kongsi rahsia atau URI ini.
                     </p>
+                    {setupParameters ? (
+                      <p className="text-sm font-medium" role="status" aria-live="polite">
+                        Tetapan wajib: TOTP, algoritma {setupParameters.algorithm}, {setupParameters.digits} digit,
+                        sela {setupParameters.period} saat. Jangan gunakan tetapan lalai SHA1 untuk rahsia SHA256.
+                        Pastikan masa telefon ditetapkan secara automatik.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-destructive" role="alert">
+                        Tetapan pengesah tidak lengkap. Mulakan persediaan 2FA semula sebelum meneruskan.
+                      </p>
+                    )}
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-2">
                         <label htmlFor="my-account-two-factor-issuer" className="text-sm font-medium">
@@ -428,7 +448,7 @@ export function MyAccountSecurityCard({
                     </Button>
                   ) : null}
                   {(twoFactorPendingSetup || twoFactorSetupSecret) && !twoFactorEnabled ? (
-                    <Button onClick={onEnableTwoFactor} disabled={securityBusy} className="w-full sm:w-auto">
+                    <Button onClick={onEnableTwoFactor} disabled={securityBusy || !setupParameters} className="w-full sm:w-auto">
                       {twoFactorLoading ? "Mengesahkan..." : "Sahkan dan aktifkan 2FA"}
                     </Button>
                   ) : null}

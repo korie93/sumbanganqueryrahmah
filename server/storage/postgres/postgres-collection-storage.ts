@@ -228,6 +228,7 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
   async setCollectionNicknamePassword(params: {
     nicknameId: string;
     passwordHash: string;
+    expectedPasswordHash?: string | null;
     mustChangePassword?: boolean;
     passwordResetBySuperuser?: boolean;
     passwordUpdatedAt?: Date | null;

@@ -23,11 +23,9 @@ import { invalidateUserSessions } from "./auth-account-session-lifecycle-utils";
 export function requiresTwoFactor(
   user: Awaited<ReturnType<PostgresStorage["getUser"]>>,
 ) {
-  return (
-    (user?.role === "superuser" || user?.role === "admin")
-    && user?.twoFactorEnabled === true
-    && Boolean(String(user?.twoFactorSecretEncrypted || "").trim())
-  );
+  // An enabled factor must never disappear because its stored secret is corrupt
+  // or because an account's role changed. Verification fails closed instead.
+  return user?.twoFactorEnabled === true;
 }
 
 export async function clearFailedLoginState(

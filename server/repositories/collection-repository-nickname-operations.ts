@@ -71,6 +71,7 @@ export async function getCollectionNicknameAuthProfileByNameRepository(
 export async function setCollectionNicknamePasswordRepository(params: {
   nicknameId: string;
   passwordHash: string;
+  expectedPasswordHash?: string | null;
   mustChangePassword?: boolean;
   passwordResetBySuperuser?: boolean;
   passwordUpdatedAt?: Date | null;

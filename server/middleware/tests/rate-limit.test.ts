@@ -716,10 +716,11 @@ test("auth adaptive cooldown warning eviction removes expired entries only", (t)
   t.mock.method(logger, "warn", () => undefined);
 
   try {
-    recordAdaptiveRateLimitViolationForTests("expired-client", 1, 1_000);
+    // Use logical time: a real 1 ms LRU TTL can expire before the sweep on busy CI.
+    recordAdaptiveRateLimitViolationForTests("expired-client", 1_000, 1_000);
     recordAdaptiveRateLimitViolationForTests("active-client", 60_000, 1_000);
 
-    const result = performAdaptiveRateLimitCachePressureEvictionForTests("WARNING", 1_010);
+    const result = performAdaptiveRateLimitCachePressureEvictionForTests("WARNING", 2_001);
     const keys = getAdaptiveRateLimitCooldownKeysForTests();
 
     assert.equal(result.tier, "WARNING");

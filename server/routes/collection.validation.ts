@@ -1,4 +1,3 @@
-import { getCollectionNicknameTempPassword } from "../config/security";
 import { safeParseInteger } from "../lib/safe-parse";
 import { parseCollectionAmountMyrInput } from "../../shared/collection-amount-types";
 
@@ -24,7 +23,6 @@ export const COLLECTION_SUMMARY_MONTH_NAMES = [
   "November",
   "December",
 ] as const;
-export const COLLECTION_NICKNAME_TEMP_PASSWORD = getCollectionNicknameTempPassword();
 
 const COLLECTION_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const COLLECTION_MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;

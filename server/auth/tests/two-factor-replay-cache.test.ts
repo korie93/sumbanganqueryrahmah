@@ -34,7 +34,7 @@ test("TwoFactorReplayCache remains bounded when many distinct codes are consumed
 
   assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "111111" }), true);
   assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "222222" }), true);
-  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "333333" }), true);
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "333333" }), false);
 
   assert.equal(cache.size, 2);
 });
@@ -64,7 +64,7 @@ test("TwoFactorReplayCache defers full sweeps until the interval or size thresho
   assert.equal(cache.size, 1);
 });
 
-test("TwoFactorReplayCache trims the earliest expiring active entry instead of relying on insertion order", () => {
+test("TwoFactorReplayCache never discards an active replay marker under capacity pressure", () => {
   let now = 100_000;
   const cache = new TwoFactorReplayCache({ now: () => now, ttlMs: 120_000, maxEntries: 2 });
 
@@ -72,11 +72,22 @@ test("TwoFactorReplayCache trims the earliest expiring active entry instead of r
   now = 1_000;
   assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "222222" }), true);
   now = 2_000;
-  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "333333" }), true);
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "333333" }), false);
 
   assert.equal(cache.size, 2);
   assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "111111" }), false);
-  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "222222" }), true);
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "222222" }), false);
+});
+
+test("one-time login challenges remain consumed for the entire five-minute JWT lifetime", () => {
+  let now = 1_000;
+  const cache = new TwoFactorReplayCache({ now: () => now });
+  const input = { purpose: "challenge" as const, subjectId: "user-1", code: "78b8fdb4-aa76-4b72-a916-6e89346451fa" };
+  assert.equal(cache.consume(input), true);
+  now += 121_000;
+  assert.equal(cache.consume(input), false);
+  now += 180_000;
+  assert.equal(cache.consume(input), true);
 });
 
 test("TwoFactorReplayCache exposes the multi-worker topology constraint explicitly", () => {

@@ -24,7 +24,7 @@ export async function issueActivationToken(
 ) {
   const activation = createActivationTokenPayload();
 
-  await storage.invalidateUnusedActivationTokens(params.userId);
+  // Issuance replaces earlier links atomically inside the repository.
   await storage.createActivationToken({
     userId: params.userId,
     tokenHash: activation.tokenHash,
@@ -60,6 +60,7 @@ export async function sendActivationEmailOperation(params: {
   const activationUrl = buildActivationUrl(activation.token);
   const email = buildAccountActivationEmail({
     activationUrl,
+    resent: params.resent,
     expiresAt: activation.expiresAt,
     username: params.user.username,
   });

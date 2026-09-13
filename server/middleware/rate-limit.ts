@@ -10,6 +10,7 @@ import { createBackgroundSweepJob, type BackgroundSweepJob } from "../internal/b
 import { internalMetrics } from "../internal/metrics";
 import { logger } from "../lib/logger";
 import { createSharedRateLimitStore, RedisRateLimitStoreUnavailableError } from "./redis-rate-limit-store";
+import { canonicalAuthRateLimitPath, resolveRecoveryRateLimitAccount, resolveTwoFactorRateLimitAccount, type AuthRecoveryRateLimitStorage } from "./auth-rate-limit-subjects";
 
 type RateLimitPayload = {
   ok: false;
@@ -824,7 +825,51 @@ export function createImportsUploadRateLimiter(
 
 export const importsUploadRateLimiter = createImportsUploadRateLimiter();
 
-export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
+function createSubjectBoundPublicLimiter(options: {
+  scope: string;
+  windowMs: number;
+  max: number;
+  code: string;
+  message: string;
+  resolveAccount: (req: Request) => string | null | Promise<string | null>;
+}): RequestHandler {
+  const subjects = new WeakMap<Request, string>();
+  const networkKey = (req: Request) => `${options.scope}:network|ip:${ipKeyGenerator(resolveRequestClientIp(req) ?? "unknown")}`;
+  const aggregate = createJsonRateLimiter({
+    ...options,
+    max: runtimeConfig.rateLimiting.loginIpAttemptsPer15Minutes,
+    adaptiveCooldown: true,
+    keyGenerator: networkKey,
+    limiterName: `${options.scope}-ip-aggregate`,
+    subjectType: "ip",
+  });
+  const account = createJsonRateLimiter({
+    ...options,
+    adaptiveCooldown: true,
+    keyGenerator: (req) => subjects.get(req) ?? `${networkKey(req)}:unverified:${canonicalAuthRateLimitPath(req)}`,
+    limiterName: `${options.scope}-subject`,
+    subjectType: "account",
+  });
+  return (req, res, next) => aggregate(req, res, (error?: unknown) => {
+    if (error) return next(error);
+    // Bound expensive JWT verification / token lookups behind the network
+    // budget; never trust raw body token/identifier values as verified identity.
+    Promise.resolve().then(() => options.resolveAccount(req)).then((userId) => {
+      if (userId) subjects.set(req, `${options.scope}:${canonicalAuthRateLimitPath(req)}|${hashAuthRateLimitSubject(userId, options.scope)}`);
+      account(req, res, next);
+    }).catch(() => {
+      // A lookup failure must not degrade into a weaker per-worker/unverified
+      // quota or expose tokens/database details in logs or public responses.
+      res.setHeader("Retry-After", "5");
+      res.status(503).json({ ok: false, error: {
+        code: ERROR_CODES.SERVICE_UNAVAILABLE,
+        message: "Account security protection is temporarily unavailable. Please try again shortly.",
+      }, retryAfterMs: 5_000 });
+    });
+  });
+}
+
+export function createAuthRouteRateLimiters(storage?: AuthRecoveryRateLimitStorage): AuthRouteRateLimiters {
   startAdaptiveRateLimitCooldownSweep();
   return {
     loginIp: createJsonRateLimiter({
@@ -847,13 +892,13 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       limiterName: "login-account-limit",
       subjectType: "account",
     }),
-    twoFactorLogin: createJsonRateLimiter({
+    twoFactorLogin: createSubjectBoundPublicLimiter({
+      scope: "auth-login-2fa",
       windowMs: 15 * 60 * 1000,
       max: 5,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many authenticator code attempts. Please try again shortly.",
-      adaptiveCooldown: true,
-      keyGenerator: (req) => buildRateLimitKey(req, "auth-login-2fa"),
+      resolveAccount: resolveTwoFactorRateLimitAccount,
     }),
     twoFactorManagement: createJsonRateLimiter({
       windowMs: 60 * 1000,
@@ -865,17 +910,15 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
         return buildRateLimitKey(req, `auth-two-factor:${req.path}`, authReq.user?.username);
       },
     }),
-    publicRecovery: createJsonRateLimiter({
+    publicRecovery: createSubjectBoundPublicLimiter({
+      scope: "auth-recovery",
       windowMs: 10 * 60 * 1000,
       max: 20,
       code: ERROR_CODES.AUTH_RECOVERY_RATE_LIMITED,
       message: "Too many activation or password reset attempts. Please try again shortly.",
-      adaptiveCooldown: true,
-      keyGenerator: (req) => buildRateLimitKey(
-        req,
-        `auth-recovery:${req.path}`,
-        buildAuthRouteRateLimitSubject(req, `auth-recovery:${req.path}`),
-      ),
+      resolveAccount: (req) => canonicalAuthRateLimitPath(req) === "/api/auth/request-password-reset"
+        ? buildAuthRouteRateLimitSubject(req, "auth-recovery-request")
+        : resolveRecoveryRateLimitAccount(req, storage),
     }),
     authenticatedAuth: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,

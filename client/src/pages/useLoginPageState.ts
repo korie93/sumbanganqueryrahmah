@@ -125,6 +125,7 @@ export function useLoginPageState({
     clearCaptchaChallenge: security.clearCaptchaChallenge,
     clearLockedAccountMessage: security.clearLockedAccountMessage,
     clearLockedAccountState: security.clearLockedAccountState,
+    clearTwoFactorChallenge: security.clearTwoFactorChallenge,
     completeAuthenticatedSession: redirect.completeAuthenticatedSession,
     lockedFlow: security.lockedFlow,
     onBanned,

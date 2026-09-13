@@ -1,15 +1,10 @@
 import { CREDENTIAL_EMAIL_REGEX } from "../auth/credentials";
-import {
-  isManageableUserRole,
-  normalizeAccountStatus,
-} from "../auth/account-lifecycle";
 import { hashPassword } from "../auth/passwords";
 import type { PostgresStorage } from "../storage-postgres";
 import {
   assertConfirmedStrongPassword,
   assertUsablePasswordResetTokenRecord,
   findOpaqueTokenRecordByHashCandidates,
-  type UsablePasswordResetTokenRecord,
 } from "./auth-account-token-utils";
 import { sendPasswordResetEmailOperation } from "./auth-account-authentication-utils";
 import {
@@ -19,26 +14,6 @@ import {
 } from "./auth-account-types";
 import type { AuthAccountRecoveryDeps } from "./auth-account-recovery-shared";
 import { ERROR_CODES } from "../../shared/error-codes";
-
-async function consumePasswordResetTokenForMutation(params: {
-  storage: AuthAccountRecoveryDeps["storage"];
-  record: UsablePasswordResetTokenRecord;
-  tokenHash: string;
-  now: Date;
-}): Promise<void> {
-  const consumed = await params.storage.consumePasswordResetRequestById({
-    requestId: params.record.requestId,
-    now: params.now,
-  });
-
-  if (consumed) {
-    return;
-  }
-
-  const latest = await params.storage.getPasswordResetTokenRecordByHash(params.tokenHash);
-  assertUsablePasswordResetTokenRecord(latest, params.now);
-  throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
-}
 
 export class AuthAccountPasswordResetOperations {
   constructor(private readonly deps: AuthAccountRecoveryDeps) {}
@@ -141,50 +116,23 @@ export class AuthAccountPasswordResetOperations {
     if (!tokenHash) {
       throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
     }
-    await consumePasswordResetTokenForMutation({
-      storage: this.deps.storage,
-      record,
-      tokenHash,
-      now,
-    });
-
-    const target = await this.deps.storage.getUser(record.userId);
-    if (!target || target.status === "deleted") {
-      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
-    }
-
-    if (!isManageableUserRole(target.role)) {
-      throw new AuthAccountError(
-        409,
-        ERROR_CODES.ACCOUNT_UNAVAILABLE,
-        "Password reset is not available for this account.",
-      );
-    }
-
-    if (normalizeAccountStatus(target.status, "active") === "pending_activation") {
-      throw new AuthAccountError(
-        409,
-        ERROR_CODES.ACCOUNT_UNAVAILABLE,
-        "Pending accounts must complete activation before password reset.",
-      );
-    }
-
     const passwordHash = await hashPassword(newPassword);
-    const updatedUser = await this.deps.storage.updateUserAccount({
-      userId: target.id,
+    const completed = await this.deps.storage.completeAccountRecovery({
+      kind: "password_reset",
+      userId: record.userId,
+      tokenId: record.requestId,
+      tokenHash,
       passwordHash,
-      passwordChangedAt: now,
-      mustChangePassword: false,
-      passwordResetBySuperuser: false,
-      activatedAt: target.activatedAt ?? now,
-      failedLoginAttempts: 0,
-      lockedAt: null,
-      lockedReason: null,
-      lockedBySystem: false,
     });
+    if (!completed) {
+      const latest = await this.deps.storage.getPasswordResetTokenRecordByHash(tokenHash);
+      assertUsablePasswordResetTokenRecord(latest, new Date());
+      throw new AuthAccountError(409, ERROR_CODES.CONFLICT, "Password reset changed. Open the latest reset link again.");
+    }
 
-    await this.deps.storage.invalidateUnusedPasswordResetTokens(target.id, now);
-    await this.deps.invalidateUserSessions(target.username, "PASSWORD_RESET_COMPLETED");
+    const target = completed.user;
+    const remainingSessionIds = await this.deps.invalidateUserSessions(target.username, "PASSWORD_RESET_COMPLETED");
+    const closedSessionIds = [...new Set([...completed.closedSessionIds, ...remainingSessionIds])];
     await this.deps.storage.createAuditLog({
       action: "PASSWORD_RESET_COMPLETED",
       performedBy: target.username,
@@ -192,11 +140,11 @@ export class AuthAccountPasswordResetOperations {
       details: JSON.stringify({
         metadata: {
           reset_type: "email_link",
-          lock_cleared: Boolean(target.lockedAt),
+          lock_cleared: completed.lockCleared,
         },
       }),
     });
 
-    return updatedUser ?? target;
+    return { user: target, closedSessionIds };
   }
 }

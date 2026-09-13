@@ -159,6 +159,10 @@ export type TwoFactorStatusResponse = AuthOkResponse<{
 export type TwoFactorSetupResponse = AuthOkResponse<{
   setup: {
     accountName: string;
+    algorithm: "SHA1" | "SHA256";
+    digits: 6;
+    period: 30;
+    expiresAt: string;
     issuer: string;
     otpauthUrl: string;
     secret: string;

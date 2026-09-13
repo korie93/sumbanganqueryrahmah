@@ -107,6 +107,12 @@ jobs:
       - name: Install Playwright Chromium dependencies
         run: npx playwright install-deps chromium
 
+      - name: Verify isolated authentication transactions and browser feedback
+        timeout-minutes: 5
+        run: |
+          SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" npm run test:auth:postgres
+          npm run test:auth:browser
+
       - name: Run release readiness verification
         env:
           ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1"

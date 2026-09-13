@@ -9,6 +9,7 @@ import {
   AuthAccountError,
 } from "../../services/auth-account.service";
 import type { PostgresStorage } from "../../storage-postgres";
+import { logger } from "../../lib/logger";
 
 const UTC_NAIVE_TIMESTAMP_PATTERN =
   /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$/;
@@ -201,6 +202,14 @@ export function createAuthJsonRoute(handler: AuthRouteJsonHandler): RequestHandl
         res.json(payload);
       }
     } catch (error) {
+      if (error instanceof AuthAccountError && (
+        error.code.includes("TOKEN") || error.code.startsWith("TWO_FACTOR_")
+        || error.code === "ACCOUNT_ALREADY_ACTIVATED"
+      )) {
+        // Logger attaches the existing request context/correlation ID. Never
+        // serialize request bodies, URLs/queries, OTPs or Error.message here.
+        logger.info("Authentication flow rejected", { code: error.code, statusCode: error.statusCode });
+      }
       if (sendAuthRouteError(res, error)) {
         return;
       }

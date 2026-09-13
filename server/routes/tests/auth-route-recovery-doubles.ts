@@ -77,6 +77,23 @@ export function createActivationStorageDouble(options?: {
 
   const storage = {
     getActivationTokenRecordByHash: async (hash: string) => recordByHash.get(hash) ?? null,
+    completeAccountRecovery: async (params: Parameters<PostgresStorage["completeAccountRecovery"]>[0]) => {
+      const record = recordByHash.get(params.tokenHash);
+      if (params.kind !== "activation" || !record || record.tokenId !== params.tokenId
+          || record.userId !== params.userId || record.usedAt || user.status !== "pending_activation"
+          || new Date(record.expiresAt).getTime() <= Date.now()) return undefined;
+      const completedAt = new Date();
+      record.usedAt = completedAt;
+      record.status = "active";
+      record.activatedAt = completedAt;
+      const update: Parameters<PostgresStorage["updateUserAccount"]>[0] = { userId: user.id, passwordHash: params.passwordHash, status: "active",
+        mustChangePassword: false, passwordResetBySuperuser: false,
+        activatedAt: completedAt, passwordChangedAt: completedAt };
+      updateCalls.push(update);
+      Object.assign(user, update);
+      invalidateCalls.push(user.id);
+      return { user, lockCleared: false, closedSessionIds: [] };
+    },
     consumeActivationTokenById: async ({ tokenId, now: consumedAt }: { tokenId: string; now: Date }) => {
       const record = Array.from(recordByHash.values()).find((entry) => entry.tokenId === tokenId) ?? null;
       if (!record || record.usedAt) {
@@ -121,6 +138,8 @@ export function createPasswordResetStorageDouble(options?: {
   const invalidateCalls: Array<{ userId: string; now: Date }> = [];
   const updateCalls: Array<Parameters<PostgresStorage["updateUserAccount"]>[0]> = [];
   const deactivatedSessions: Array<{ username: string; reason: string }> = [];
+  const clearedNicknameSessionIds: string[] = [];
+  let activeSessionIds = ["activity-1", "activity-2"];
   const user: TestAuthRouteUser = {
     id: "user-reset-1",
     username: "reset.user",
@@ -157,6 +176,25 @@ export function createPasswordResetStorageDouble(options?: {
 
   const storage = {
     getPasswordResetTokenRecordByHash: async (hash: string) => recordByHash.get(hash) ?? null,
+    completeAccountRecovery: async (params: Parameters<PostgresStorage["completeAccountRecovery"]>[0]) => {
+      const record = recordByHash.get(params.tokenHash);
+      if (params.kind !== "password_reset" || !record || record.requestId !== params.tokenId
+          || record.userId !== params.userId || record.usedAt
+          || new Date(record.expiresAt).getTime() <= Date.now()) return undefined;
+      const completedAt = new Date();
+      record.usedAt = completedAt;
+      const lockCleared = user.status === "locked" || Boolean(user.lockedAt);
+      const update: Parameters<PostgresStorage["updateUserAccount"]>[0] = { userId: user.id, passwordHash: params.passwordHash,
+        status: "active", mustChangePassword: false, passwordResetBySuperuser: false,
+        activatedAt: user.activatedAt instanceof Date ? user.activatedAt : completedAt, passwordChangedAt: completedAt,
+        failedLoginAttempts: 0, lockedAt: null, lockedReason: null, lockedBySystem: false };
+      updateCalls.push(update);
+      Object.assign(user, update);
+      invalidateCalls.push({ userId: user.id, now: completedAt });
+      const closedSessionIds = activeSessionIds;
+      activeSessionIds = [];
+      return { user, lockCleared, closedSessionIds };
+    },
     consumePasswordResetRequestById: async ({ requestId, now: consumedAt }: { requestId: string; now: Date }) => {
       const record = Array.from(recordByHash.values()).find((entry) => entry.requestId === requestId) ?? null;
       if (!record || record.usedAt) {
@@ -182,10 +220,13 @@ export function createPasswordResetStorageDouble(options?: {
       invalidateCalls.push({ userId, now: invalidatedAt });
     },
     getActiveActivitiesByUsername: async (username: string) => (username === user.username
-      ? [{ id: "activity-1" }, { id: "activity-2" }]
+      ? activeSessionIds.map((id) => ({ id }))
       : []),
     deactivateUserActivities: async (username: string, reason: string) => {
       deactivatedSessions.push({ username, reason });
+    },
+    clearCollectionNicknameSessionByActivity: async (activityId: string) => {
+      clearedNicknameSessionIds.push(activityId);
     },
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
@@ -193,5 +234,5 @@ export function createPasswordResetStorageDouble(options?: {
     },
   } as unknown as PostgresStorage;
 
-  return { storage, rawToken, user, auditLogs, invalidateCalls, updateCalls, deactivatedSessions };
+  return { storage, rawToken, user, auditLogs, invalidateCalls, updateCalls, deactivatedSessions, clearedNicknameSessionIds };
 }

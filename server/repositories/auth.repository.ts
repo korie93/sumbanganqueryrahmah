@@ -3,6 +3,7 @@ import type {
   InsertUser,
   User,
 } from "../../shared/schema-postgres";
+import { completeAccountRecovery, prepareDeliveredPasswordReset, type CompleteAccountRecoveryParams, type PrepareDeliveredPasswordResetParams } from "./auth-recovery-repository-utils";
 import {
   deleteManagedUserAccount,
   getAccounts,
@@ -60,6 +61,14 @@ export type {
 } from "./auth-repository-types";
 
 export class AuthRepository {
+  async prepareDeliveredPasswordReset(params: PrepareDeliveredPasswordResetParams) {
+    return prepareDeliveredPasswordReset(params);
+  }
+
+  async completeAccountRecovery(params: CompleteAccountRecoveryParams) {
+    return completeAccountRecovery(params);
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     return getAuthUser(id);
   }
