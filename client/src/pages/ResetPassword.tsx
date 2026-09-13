@@ -19,6 +19,10 @@ import {
   validatePasswordFields,
 } from "@/pages/public-auth-form-utils";
 import {
+  getPasswordCreationFieldErrors,
+  getPasswordCreationSubmitHint,
+} from "@/pages/password-creation-feedback";
+import {
   formatPublicAuthExpiry,
   getPublicAuthTokenFromLocation,
   isPublicAuthAbortError,
@@ -162,7 +166,13 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
       ) {
         return;
       }
-      setError(getAuthErrorMessage(resetError, "Tetapan semula kata laluan gagal.", "reset"));
+      const fieldErrors = getPasswordCreationFieldErrors(resetError);
+      if (hasPublicAuthFieldErrors(fieldErrors)) {
+        setNewPasswordError(fieldErrors.newPassword ?? "");
+        setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+      } else {
+        setError(getAuthErrorMessage(resetError, "Tetapan semula kata laluan gagal.", "reset"));
+      }
     } finally {
       if (resetAbortControllerRef.current === controller) {
         resetAbortControllerRef.current = null;
@@ -192,12 +202,6 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
     setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
   };
 
-  const onPasswordKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      void handleResetPassword();
-    }
-  };
-
   const newPasswordDescribedBy = [
     "reset-password-strength",
     newPasswordError ? "reset-password-new-error" : null,
@@ -207,7 +211,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
     ...(newPasswordError ? { "aria-invalid": "true" as const } : {}),
   };
   const confirmPasswordInvalidProps = {
-    ...getAriaInvalidProps(Boolean(confirmPassword ? newPassword !== confirmPassword : confirmPasswordError)),
+    ...getAriaInvalidProps(Boolean(confirmPasswordError || (confirmPassword && newPassword !== confirmPassword))),
     "aria-describedby": "reset-password-confirm-error",
   };
 
@@ -218,6 +222,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
       description="Gunakan pautan selamat yang dihantar ke emel anda untuk menetapkan kata laluan baharu dan mendapatkan semula akses ke sistem."
       contentBusy={loading || phase === "validating"}
       visualMode="minimal"
+      className="password-creation-layout"
       showBackButton={false}
       icon={
         phase === "invalid" ? (
@@ -250,7 +255,14 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
       ) : null}
 
       {phase === "ready" && reset ? (
-        <>
+        <form
+          className="password-creation-form"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleResetPassword();
+          }}
+        >
           <dl className="public-auth-account-summary">
             <div className="public-auth-account-summary__row">
               <dt>Nama pengguna</dt>
@@ -282,9 +294,9 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
                 setError("");
               }}
               onBlur={validateNewPasswordOnBlur}
-              onKeyDown={onPasswordKeyDown}
               placeholder="Masukkan kata laluan baharu"
               autoComplete="new-password"
+              required
               disabled={loading}
               {...newPasswordInvalidProps}
             />
@@ -292,6 +304,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
           <PasswordStrengthMeter
             id="reset-password-strength"
             password={newPassword}
+            variant="checklist"
           />
           {newPasswordError ? (
             <p id="reset-password-new-error" className="public-auth-field-error" role="alert">
@@ -314,9 +327,9 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
                 setError("");
               }}
               onBlur={validateConfirmPasswordOnBlur}
-              onKeyDown={onPasswordKeyDown}
               placeholder="Masukkan semula kata laluan baharu"
               autoComplete="new-password"
+              required
               disabled={loading}
               {...confirmPasswordInvalidProps}
             />
@@ -326,19 +339,24 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             password={newPassword}
             confirmation={confirmPassword}
             requiredError={confirmPasswordError}
+            variant="enhanced"
           />
           {error ? (
             <div className="public-auth-status-card public-auth-status-card--error" role="alert">
               {error}
             </div>
           ) : null}
+          <p id="reset-password-submit-help" className="password-creation-form__submit-hint">
+            {getPasswordCreationSubmitHint({ newPassword, confirmPassword, loading, newPasswordError, confirmPasswordError })}
+          </p>
           <PublicAuthButton
-            onClick={() => void handleResetPassword()}
+            type="submit"
+            aria-describedby="reset-password-submit-help"
             disabled={loading}
           >
             {loading ? "Sedang menetapkan semula..." : "Tetapkan Kata Laluan Baharu"}
           </PublicAuthButton>
-        </>
+        </form>
       ) : null}
 
       <PublicAuthButton

@@ -75,7 +75,7 @@ test("activation form shows policy validity independently from a live mismatch",
     confirmPassword: "previous-input", confirmPasswordError: "", confirmPasswordInvalidProps: {}, error: "", loading: false,
     newPassword: "Tr0ub4dor&3-Long", newPasswordError: "", newPasswordInputRef: null, newPasswordInvalidProps: {},
     onActivate() {}, onClearConfirmPasswordError() {}, onClearFormError() {}, onClearNewPasswordError() {},
-    onConfirmPasswordBlur() {}, onConfirmPasswordChange() {}, onNewPasswordBlur() {}, onNewPasswordChange() {}, onPasswordKeyDown() {},
+    onConfirmPasswordBlur() {}, onConfirmPasswordChange() {}, onNewPasswordBlur() {}, onNewPasswordChange() {},
   }));
   assert.match(markup, /Kata laluan sah/);
   assert.match(markup, /Pengesahan kata laluan tidak sepadan/);

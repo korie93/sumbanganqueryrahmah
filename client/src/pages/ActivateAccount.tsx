@@ -13,6 +13,7 @@ import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
 } from "@/pages/public-auth-form-utils";
+import { getPasswordCreationFieldErrors } from "@/pages/password-creation-feedback";
 import {
   getPublicAuthTokenFromLocation,
   isPublicAuthAbortError,
@@ -196,7 +197,13 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       ) {
         return;
       }
-      setError(getAuthErrorMessage(activationError, "Aktivasi akaun gagal.", "activation"));
+      const fieldErrors = getPasswordCreationFieldErrors(activationError);
+      if (hasPublicAuthFieldErrors(fieldErrors)) {
+        setNewPasswordError(fieldErrors.newPassword ?? "");
+        setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+      } else {
+        setError(getAuthErrorMessage(activationError, "Aktivasi akaun gagal.", "activation"));
+      }
     } finally {
       if (activationAbortControllerRef.current === controller) {
         activationAbortControllerRef.current = null;
@@ -224,12 +231,6 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       confirmPassword,
     });
     setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
-  };
-
-  const onPasswordKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      void handleActivate();
-    }
   };
 
   const newPasswordDescribedBy = [
@@ -261,6 +262,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       description="Lengkapkan persediaan akaun kali pertama menggunakan pautan aktivasi yang dihantar ke emel anda. Langkah ini diperlukan sebelum anda boleh mula menggunakan sistem."
       contentBusy={loading || phase === "validating"}
       visualMode="minimal"
+      className="password-creation-layout"
       showBackButton={false}
       backLabel="Kembali ke log masuk"
       onBackClick={navigateToLogin}
@@ -288,7 +290,6 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
           onConfirmPasswordBlur={validateConfirmPasswordOnBlur}
           onNewPasswordChange={setNewPassword}
           onNewPasswordBlur={validateNewPasswordOnBlur}
-          onPasswordKeyDown={onPasswordKeyDown}
         />
       ) : null}
 

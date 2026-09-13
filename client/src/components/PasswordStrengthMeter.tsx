@@ -1,10 +1,12 @@
 import { evaluatePasswordStrength } from "@/lib/password-strength";
 import { getCredentialPasswordValidationIssues } from "@shared/password-policy";
+import { PasswordRequirementsChecklist } from "./PasswordRequirementsChecklist";
 
 type PasswordStrengthMeterProps = {
   className?: string;
   id?: string;
   password: string;
+  variant?: "default" | "checklist";
 };
 
 const SEGMENT_ACTIVE_CLASSES = [
@@ -30,7 +32,11 @@ export function PasswordStrengthMeter({
   className = "",
   id = "password-strength",
   password,
+  variant = "default",
 }: PasswordStrengthMeterProps) {
+  if (variant === "checklist") {
+    return <PasswordRequirementsChecklist id={id} password={password} className={className} />;
+  }
   const evaluation = evaluatePasswordStrength(password);
   const issues = getCredentialPasswordValidationIssues(password, "ms");
   const policyValid = issues.length === 0;

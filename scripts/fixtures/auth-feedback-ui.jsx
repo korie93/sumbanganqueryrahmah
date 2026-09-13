@@ -69,7 +69,9 @@ function TwoFactorSetupHarness() {
   </main>;
 }
 
-const view = new URLSearchParams(location.search).get("view");
+const parameters = new URLSearchParams(location.search);
+const view = parameters.get("view");
+document.documentElement.classList.toggle("dark", parameters.get("theme") === "dark");
 const root = createRoot(document.getElementById("root"));
 root.render(view === "activation"
   ? <ActivateAccount onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />

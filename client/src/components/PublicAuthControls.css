@@ -73,6 +73,94 @@
   box-shadow: inset 0 0 0 2px var(--public-auth-input-focus);
 }
 
+.password-creation-form {
+  display: grid;
+  gap: var(--spacing-3);
+  min-width: 0;
+}
+
+.password-creation-form__submit-hint {
+  min-height: 2.5rem;
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--public-auth-text-soft);
+}
+
+.password-creation-form .public-auth-field-error {
+  color: hsl(var(--destructive));
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__card {
+  padding: var(--spacing-5) var(--spacing-4);
+  border-radius: 1.5rem;
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__card::after {
+  display: none;
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__brand {
+  margin-bottom: var(--spacing-4);
+  gap: var(--spacing-3);
+  text-align: left;
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__brand-copy {
+  display: none;
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__brand-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__intro {
+  align-items: flex-start;
+  text-align: left;
+  margin-bottom: var(--spacing-4);
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__intro-icon {
+  display: none;
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__title {
+  margin-top: 0;
+  font-size: var(--font-size-2xl);
+  line-height: 1.25;
+}
+
+.public-auth-layout.password-creation-layout .public-auth-layout__description {
+  margin-top: var(--spacing-2);
+  line-height: 1.5;
+  text-align: left;
+}
+
+.password-creation-form .public-auth-account-summary {
+  padding: var(--spacing-3);
+  gap: var(--spacing-2);
+}
+
+.password-creation-form .public-auth-account-summary__row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--spacing-2);
+  align-items: baseline;
+}
+
+.password-creation-form .public-auth-account-summary dt {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+}
+
+@media (min-width: 640px) {
+  .public-auth-layout.password-creation-layout .public-auth-layout__card {
+    padding: var(--spacing-6);
+  }
+}
+
 .public-auth-input:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;

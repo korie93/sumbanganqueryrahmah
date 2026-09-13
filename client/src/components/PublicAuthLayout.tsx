@@ -15,6 +15,7 @@ type PublicAuthLayoutProps = {
   backLabel?: string;
   contentBusy?: boolean;
   onBackClick?: () => void;
+  className?: string;
 };
 
 /**
@@ -31,6 +32,7 @@ export function PublicAuthLayout({
   backLabel = "Kembali ke halaman utama",
   contentBusy = false,
   onBackClick,
+  className = "",
 }: PublicAuthLayoutProps) {
   const [, navigate] = useLocation();
   const contentBusyProps = contentBusy
@@ -41,7 +43,7 @@ export function PublicAuthLayout({
     : "public-auth-layout viewport-min-height";
 
   return (
-    <div className={layoutClassName}>
+    <div className={`${layoutClassName} ${className}`}>
       <div className="public-auth-layout__pattern" />
       <div className="public-auth-layout__glow public-auth-layout__glow--top" />
       <div className="public-auth-layout__glow public-auth-layout__glow--bottom" />

@@ -1,4 +1,4 @@
-import type { AriaAttributes, KeyboardEvent, Ref } from "react";
+import type { AriaAttributes, Ref } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
@@ -7,6 +7,7 @@ import { PublicAuthButton } from "@/components/PublicAuthControls";
 import type { ActivationTokenValidationPayload } from "@/lib/api/auth";
 import { formatPublicAuthExpiry } from "@/pages/public-auth-runtime-utils";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
+import { getPasswordCreationSubmitHint } from "@/pages/password-creation-feedback";
 
 export type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 
@@ -43,7 +44,6 @@ type ActivationPasswordFormProps = {
   onConfirmPasswordChange: (value: string) => void;
   onNewPasswordBlur: () => void;
   onNewPasswordChange: (value: string) => void;
-  onPasswordKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
 };
 
 type ActivationActionsProps = {
@@ -110,10 +110,16 @@ export function ActivationPasswordForm({
   onConfirmPasswordChange,
   onNewPasswordBlur,
   onNewPasswordChange,
-  onPasswordKeyDown,
 }: ActivationPasswordFormProps) {
   return (
-    <>
+    <form
+      className="password-creation-form"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        onActivate();
+      }}
+    >
       <dl className="public-auth-account-summary">
         <div className="public-auth-account-summary__row">
           <dt>Nama pengguna</dt>
@@ -146,9 +152,9 @@ export function ActivationPasswordForm({
             onClearFormError();
           }}
           onBlur={onNewPasswordBlur}
-          onKeyDown={onPasswordKeyDown}
           placeholder="Masukkan kata laluan baharu"
           autoComplete="new-password"
+          required
           disabled={loading}
           {...newPasswordInvalidProps}
         />
@@ -156,6 +162,7 @@ export function ActivationPasswordForm({
       <PasswordStrengthMeter
         id="activate-password-strength"
         password={newPassword}
+        variant="checklist"
       />
       {newPasswordError ? (
         <p id="activate-password-new-error" className="public-auth-field-error" role="alert">
@@ -178,12 +185,12 @@ export function ActivationPasswordForm({
             onClearFormError();
           }}
           onBlur={onConfirmPasswordBlur}
-          onKeyDown={onPasswordKeyDown}
           placeholder="Masukkan semula kata laluan baharu"
           autoComplete="new-password"
+          required
           disabled={loading}
           {...confirmPasswordInvalidProps}
-          {...getAriaInvalidProps(Boolean(confirmPassword ? newPassword !== confirmPassword : confirmPasswordError))}
+          {...getAriaInvalidProps(Boolean(confirmPasswordError || (confirmPassword && newPassword !== confirmPassword)))}
           aria-describedby="activate-password-confirm-error"
         />
       </div>
@@ -192,19 +199,24 @@ export function ActivationPasswordForm({
         password={newPassword}
         confirmation={confirmPassword}
         requiredError={confirmPasswordError}
+        variant="enhanced"
       />
       {error ? (
         <div className="public-auth-status-card public-auth-status-card--error" role="alert">
           {error}
         </div>
       ) : null}
+      <p id="activate-password-submit-help" className="password-creation-form__submit-hint">
+        {getPasswordCreationSubmitHint({ newPassword, confirmPassword, loading, newPasswordError, confirmPasswordError })}
+      </p>
       <PublicAuthButton
-        onClick={onActivate}
+        type="submit"
+        aria-describedby="activate-password-submit-help"
         disabled={loading}
       >
         {loading ? "Sedang mencipta kata laluan..." : "Cipta Kata Laluan"}
       </PublicAuthButton>
-    </>
+    </form>
   );
 }
 
