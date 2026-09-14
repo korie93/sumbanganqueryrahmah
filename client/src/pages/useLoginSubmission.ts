@@ -10,7 +10,7 @@ import {
 } from "@/lib/api/auth";
 import { setBannedSessionFlag, setStoredFingerprint } from "@/lib/auth-session";
 import { logClientError } from "@/lib/client-logger";
-import { getAuthErrorCode, getAuthErrorMessage } from "@/lib/auth-flow-feedback";
+import { getAuthErrorMessage, shouldRestartTwoFactorLogin } from "@/lib/auth-flow-feedback";
 import { generateFingerprint } from "@/lib/fingerprint";
 import { normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 import {
@@ -270,7 +270,7 @@ export function useLoginSubmission({
         return;
       }
 
-      if (getAuthErrorCode(err) === "TWO_FACTOR_CHALLENGE_EXPIRED") {
+      if (shouldRestartTwoFactorLogin(err)) {
         clearTwoFactorChallenge();
       }
       setError(getAuthErrorMessage(err, "Pengesahan dua faktor gagal. Sila cuba lagi."));

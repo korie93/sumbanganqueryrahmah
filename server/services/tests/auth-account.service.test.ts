@@ -746,7 +746,7 @@ test("AuthAccountService.verifyTwoFactorLogin rejects replayed authenticator cod
     (error: unknown) =>
       error instanceof AuthAccountError
       && error.statusCode === 401
-      && error.code === "TWO_FACTOR_INVALID_CODE",
+      && error.code === "TWO_FACTOR_CODE_REPLAYED",
   );
 
   assert.equal(createActivityCalls, 1);

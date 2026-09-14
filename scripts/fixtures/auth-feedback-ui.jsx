@@ -1,6 +1,6 @@
 // Browser-only harness: real page/components, mocked HTTP supplied by the runner.
 // This is not a backend or production authentication test.
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ResetPassword from "../../client/src/pages/ResetPassword";
 import ActivateAccount from "../../client/src/pages/ActivateAccount";
@@ -40,15 +40,24 @@ function CollectionPasswordHarness() {
 }
 
 function TwoFactorSetupHarness() {
-  const [currentUser, setCurrentUser] = useState({ username: "ui.fixture", role: "admin", twoFactorEnabled: false, twoFactorPendingSetup: false });
+  const [currentUser, setCurrentUser] = useState({ id: "fixture-id", username: "ui.fixture", role: "admin", twoFactorEnabled: false,
+    twoFactorPendingSetup: parameters.get("pending") === "1", twoFactorConfiguredAt: null });
   const [notice, setNotice] = useState("");
   const shared = { currentUser, isMountedRef: useRef(true), syncCurrentUser: setCurrentUser, toast: (value) => setNotice(value.description) };
   const state = useSettingsMyAccountTwoFactorState(shared);
+  useEffect(() => {
+    const changeAccount = (event) => setCurrentUser((user) => event.detail === "enabled"
+      ? { ...user, twoFactorEnabled: true, twoFactorPendingSetup: false, twoFactorConfiguredAt: new Date().toISOString() }
+      : { ...user, id: "fixture-other-id", username: "other.fixture", twoFactorEnabled: false,
+        twoFactorPendingSetup: false, twoFactorConfiguredAt: null });
+    window.addEventListener("sqr-fixture-account", changeAccount);
+    return () => window.removeEventListener("sqr-fixture-account", changeAccount);
+  }, []);
   const credentials = useSettingsMyAccountCredentialState({
     ...shared,
     forceLogoutAfterPasswordChange: () => { document.body.dataset.loginRequested = "true"; },
   });
-  return <main style={{ maxWidth: 960, margin: "24px auto", padding: 16 }}>
+  return <main data-fixture-account={currentUser.id} style={{ maxWidth: 960, margin: "24px auto", padding: 16 }}>
     <p role="status" id="fixture-notice">{notice}</p>
     <MyAccountSecurityCard
       {...state}
@@ -56,6 +65,7 @@ function TwoFactorSetupHarness() {
       currentUserRole="admin"
       onDisableTwoFactor={state.handleDisableTwoFactor} onEnableTwoFactor={state.handleEnableTwoFactor}
       onStartTwoFactorSetup={state.handleStartTwoFactorSetup}
+      onClearTwoFactorSetup={state.handleClearTwoFactorSetup}
       onTwoFactorCodeBlur={state.handleTwoFactorCodeBlur} onTwoFactorCodeInputChange={state.setTwoFactorCodeInput}
       onTwoFactorPasswordBlur={state.handleTwoFactorPasswordBlur} onTwoFactorPasswordInputChange={state.setTwoFactorPasswordInput}
       onChangePassword={credentials.handleChangePassword} onChangeUsername={credentials.handleChangeUsername}
@@ -64,6 +74,7 @@ function TwoFactorSetupHarness() {
       onNewPasswordBlur={credentials.handleNewPasswordBlur} onNewPasswordInputChange={credentials.setNewPasswordInput}
       onUsernameBlur={credentials.handleUsernameBlur} onUsernameInputChange={credentials.setUsernameInput}
       twoFactorEnabled={currentUser.twoFactorEnabled} twoFactorPendingSetup={currentUser.twoFactorPendingSetup}
+      twoFactorConfiguredAt={currentUser.twoFactorConfiguredAt}
     />
   </main>;
 }
@@ -79,6 +90,7 @@ async function renderHarness() {
     await import("../../client/src/index.css");
   }
   const root = createRoot(document.getElementById("root"));
+  window.addEventListener("sqr-fixture-unmount", () => root.render(<main data-testid="fixture-unmounted">Isolated component unmounted</main>), { once: true });
   root.render(view === "activation"
     ? <ActivateAccount onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />
     : view === "collection"

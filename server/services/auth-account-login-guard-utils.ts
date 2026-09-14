@@ -204,8 +204,8 @@ export async function verifyTwoFactorSecretCode(params: {
   ) {
     throw new AuthAccountError(
       401,
-      ERROR_CODES.TWO_FACTOR_INVALID_CODE,
-      t("auth.twoFactorInvalidCode"),
+      ERROR_CODES.TWO_FACTOR_CODE_REPLAYED,
+      "This verification code has already been used. Wait for the next code and try again.",
     );
   }
 

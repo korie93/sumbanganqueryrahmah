@@ -329,6 +329,20 @@ export function buildLoginAccountRateLimitKey(req: Request): string {
     : `auth-login|invalid:${buildLoginNetworkRateLimitKey(req)}`;
 }
 
+function buildTwoFactorManagementRateLimitKey(req: Request): string {
+  const scope = `auth-two-factor-management-v1:${canonicalAuthRateLimitPath(req)}`;
+  // These routes run the authoritative authentication guard first. Scope the
+  // sensitive OTP/password budget to its immutable account ID, not a mutable
+  // username, browser hints, request body or the network used by that account.
+  const userId = (req as AuthenticatedLikeRequest).user?.userId;
+  if (typeof userId === "string" && userId.trim()) {
+    return `${scope}|${hashAuthRateLimitSubject(userId, "auth-two-factor-management-v1")}`;
+  }
+  // Defensive fallback only: never create independent buckets from unverified
+  // identity hints when an authentication integration omits the trusted ID.
+  return `${scope}|unverified-ip:${ipKeyGenerator(resolveRequestClientIp(req) ?? "unknown")}`;
+}
+
 export function buildRequestRateLimitFingerprint(req: Request): string[] {
   const parts: string[] = [normalizeKeyPart(req.ip) ?? "unknown"];
   const directPeer = normalizeKeyPart(req.socket?.remoteAddress);
@@ -905,10 +919,9 @@ export function createAuthRouteRateLimiters(storage?: AuthRecoveryRateLimitStora
       max: 5,
       code: ERROR_CODES.AUTH_MUTATION_RATE_LIMITED,
       message: "Too many two-factor security updates. Please wait before trying again.",
-      keyGenerator: (req) => {
-        const authReq = req as AuthenticatedLikeRequest;
-        return buildRateLimitKey(req, `auth-two-factor:${req.path}`, authReq.user?.username);
-      },
+      keyGenerator: buildTwoFactorManagementRateLimitKey,
+      limiterName: "two-factor-management-account-limit",
+      subjectType: "account",
     }),
     publicRecovery: createSubjectBoundPublicLimiter({
       scope: "auth-recovery",

@@ -955,7 +955,9 @@ test("auth two-factor management limiter caps sensitive setup bursts at five per
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    (req as Request & { user: { username: string } }).user = { username: "admin.twofactor" };
+    (req as Request & { user: { userId: string; username: string } }).user = {
+      userId: "admin-twofactor-account", username: "admin.twofactor",
+    };
     next();
   });
   const limiters = createAuthRouteRateLimiters();

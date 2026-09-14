@@ -123,6 +123,23 @@ test("network flood admission precedes recovery DB lookup despite token and brow
   assert.equal(response.headers.get("ratelimit-limit"), String(max));
 });
 
+test("2FA network aggregate caps rotating valid account challenges without relying on the low anonymous quota", async (t) => {
+  const h = await harness(t, true);
+  const max = runtimeConfig.rateLimiting.loginIpAttemptsPer15Minutes;
+  for (let index = 0; index < max; index++) {
+    const response = await h.post("verify-two-factor-login", {
+      challengeToken: challenge(`two-factor-flood-${index}`),
+    }, true, `Rotating browser ${index}`);
+    assert.equal(response.status, 204);
+    await response.text();
+  }
+  const response = await h.post("verify-two-factor-login", { challengeToken: challenge("fresh-after-flood") });
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("ratelimit-limit"), String(max));
+  assert.ok(Number(response.headers.get("retry-after")) > 0);
+  assert.doesNotMatch(await response.text(), /fresh-after-flood|challengeToken/);
+});
+
 test("recovery lookup outages fail closed with a safe retry response", async (t) => {
   const h = await harness(t, false, true);
   const response = await h.post("activate-account", { token: "recovery-0" });

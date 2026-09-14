@@ -119,6 +119,10 @@ jobs:
           COLLECTION_PII_ENCRYPTION_KEY: sqr-release-ci-collection-pii-${{ github.run_id }}-${{ github.run_attempt }}-ephemeral-key-48chars
         run: npm run release:verify:local
 
+      - name: Verify built authenticator lifecycle on disposable PostgreSQL
+        timeout-minutes: 8
+        run: SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" npm run test:auth:two-factor-browser
+
       - name: Prepare immutable release candidate
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -151,6 +155,7 @@ jobs:
           path: |
             artifacts/auth-feedback-browser
             artifacts/password-public-build-browser
+            artifacts/two-factor
             artifacts/release-verification
             artifacts/sbom
             var/perf

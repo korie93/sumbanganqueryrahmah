@@ -61,6 +61,19 @@ test("normalizeAuthenticatorCode strips non-digits and limits to six digits", ()
   assert.equal(normalizeAuthenticatorCode("12a3 45678"), "123456");
 });
 
+test("buildNextCurrentUser clears the configured date after authoritative disable or fresh setup", () => {
+  const currentUser = { ...createCurrentUser(), twoFactorEnabled: true, twoFactorConfiguredAt: "2026-09-01T00:00:00.000Z" };
+  for (const pending of [false, true]) {
+    const next = buildNextCurrentUser(currentUser, currentUser.username, {
+      user: { ...currentUser, twoFactorEnabled: false, twoFactorPendingSetup: pending, twoFactorConfiguredAt: null },
+    });
+    assert.equal(next.twoFactorConfiguredAt, null);
+    assert.equal(next.twoFactorEnabled, false);
+    assert.equal(next.twoFactorPendingSetup, pending);
+  }
+  assert.equal(buildNextCurrentUser(currentUser, currentUser.username, { user: null }).twoFactorConfiguredAt, currentUser.twoFactorConfiguredAt);
+});
+
 test("canConfigureTwoFactor only allows admin and superuser", () => {
   assert.equal(canConfigureTwoFactor("admin"), true);
   assert.equal(canConfigureTwoFactor("superuser"), true);

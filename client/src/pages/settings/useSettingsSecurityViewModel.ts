@@ -40,6 +40,10 @@ type UseSettingsSecurityViewModelArgs = {
   twoFactorSetupIssuer: string;
   twoFactorSetupSecret: string;
   twoFactorSetupUri: string;
+  twoFactorSetupExpiresAt?: string | null | undefined;
+  twoFactorActionError?: string | null | undefined;
+  twoFactorConfiguredAt?: string | null | undefined;
+  handleClearTwoFactorSetup?: (() => void) | undefined;
   usernameError: string | null;
   usernameInput: string;
   usernameSaving: boolean;
@@ -84,6 +88,10 @@ export function useSettingsSecurityViewModel({
   twoFactorSetupIssuer,
   twoFactorSetupSecret,
   twoFactorSetupUri,
+  twoFactorSetupExpiresAt,
+  twoFactorActionError,
+  twoFactorConfiguredAt,
+  handleClearTwoFactorSetup,
   usernameError,
   usernameInput,
   usernameSaving,
@@ -111,6 +119,7 @@ export function useSettingsSecurityViewModel({
       onCurrentPasswordInputChange: setCurrentPasswordInput,
       onNewPasswordBlur: handleNewPasswordBlur,
       onNewPasswordInputChange: setNewPasswordInput,
+      onClearTwoFactorSetup: handleClearTwoFactorSetup,
       onStartTwoFactorSetup: () => void handleStartTwoFactorSetup(),
       onTwoFactorCodeBlur: handleTwoFactorCodeBlur,
       onTwoFactorCodeInputChange: setTwoFactorCodeInput,
@@ -130,6 +139,9 @@ export function useSettingsSecurityViewModel({
       twoFactorSetupIssuer,
       twoFactorSetupSecret,
       twoFactorSetupUri,
+      twoFactorSetupExpiresAt,
+      twoFactorActionError,
+      twoFactorConfiguredAt,
       usernameError,
       usernameInput,
       usernameSaving,
@@ -173,6 +185,10 @@ export function useSettingsSecurityViewModel({
     twoFactorSetupIssuer,
     twoFactorSetupSecret,
     twoFactorSetupUri,
+    twoFactorSetupExpiresAt,
+    twoFactorActionError,
+    twoFactorConfiguredAt,
+    handleClearTwoFactorSetup,
     usernameError,
     usernameInput,
     usernameSaving,

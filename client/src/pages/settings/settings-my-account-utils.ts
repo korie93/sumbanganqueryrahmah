@@ -29,8 +29,9 @@ export function buildNextCurrentUser(
     twoFactorPendingSetup: Boolean(
       response?.user?.twoFactorPendingSetup ?? currentUser.twoFactorPendingSetup ?? false,
     ),
-    twoFactorConfiguredAt:
-      response?.user?.twoFactorConfiguredAt ?? currentUser.twoFactorConfiguredAt ?? null,
+    twoFactorConfiguredAt: response?.user?.twoFactorConfiguredAt !== undefined
+      ? response.user.twoFactorConfiguredAt
+      : currentUser.twoFactorConfiguredAt ?? null,
   };
 }
 

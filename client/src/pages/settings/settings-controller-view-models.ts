@@ -41,6 +41,10 @@ type SecurityViewModelArgs = {
   twoFactorSetupIssuer: string;
   twoFactorSetupSecret: string;
   twoFactorSetupUri: string;
+  twoFactorSetupExpiresAt?: string | null | undefined;
+  twoFactorActionError?: string | null | undefined;
+  twoFactorConfiguredAt?: string | null | undefined;
+  onClearTwoFactorSetup?: (() => void) | undefined;
   usernameError: string | null;
   usernameInput: string;
   usernameSaving: boolean;
@@ -113,6 +117,10 @@ export function buildSettingsSecurityViewModel(
     twoFactorSetupIssuer: args.twoFactorSetupIssuer,
     twoFactorSetupSecret: args.twoFactorSetupSecret,
     twoFactorSetupUri: args.twoFactorSetupUri,
+    twoFactorSetupExpiresAt: args.twoFactorSetupExpiresAt,
+    twoFactorActionError: args.twoFactorActionError,
+    twoFactorConfiguredAt: args.twoFactorConfiguredAt,
+    onClearTwoFactorSetup: args.onClearTwoFactorSetup,
     usernameError: args.usernameError,
     usernameInput: args.usernameInput,
     usernameSaving: args.usernameSaving,

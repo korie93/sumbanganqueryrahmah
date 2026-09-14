@@ -281,6 +281,10 @@ jobs:
         timeout-minutes: 5
         run: npm run test:auth:public-build
 
+      - name: Verify actual built authenticator lifecycle on disposable PostgreSQL
+        timeout-minutes: 8
+        run: SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" npm run test:auth:two-factor-browser
+
       - name: Start built server
         run: |
           : > server.log
@@ -415,6 +419,7 @@ jobs:
             server.log
             artifacts/auth-feedback-browser
             artifacts/password-public-build-browser
+            artifacts/two-factor
             artifacts/smoke-ui
             artifacts/visual-layout
             artifacts/playwright-report

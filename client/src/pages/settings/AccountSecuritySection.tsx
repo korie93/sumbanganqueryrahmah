@@ -37,6 +37,10 @@ export interface AccountSecuritySectionProps {
   twoFactorSetupIssuer: string;
   twoFactorSetupSecret: string;
   twoFactorSetupUri: string;
+  twoFactorSetupExpiresAt?: string | null | undefined;
+  twoFactorActionError?: string | null | undefined;
+  twoFactorConfiguredAt?: string | null | undefined;
+  onClearTwoFactorSetup?: (() => void) | undefined;
   usernameError: string | null;
   usernameInput: string;
   usernameSaving: boolean;
@@ -82,6 +86,10 @@ export function AccountSecuritySection(props: AccountSecuritySectionProps) {
         twoFactorSetupIssuer={props.twoFactorSetupIssuer}
         twoFactorSetupSecret={props.twoFactorSetupSecret}
         twoFactorSetupUri={props.twoFactorSetupUri}
+        twoFactorSetupExpiresAt={props.twoFactorSetupExpiresAt}
+        twoFactorActionError={props.twoFactorActionError}
+        twoFactorConfiguredAt={props.twoFactorConfiguredAt}
+        onClearTwoFactorSetup={props.onClearTwoFactorSetup}
         usernameError={props.usernameError}
         usernameInput={props.usernameInput}
         usernameSaving={props.usernameSaving}

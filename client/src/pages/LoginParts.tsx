@@ -41,7 +41,7 @@ export function LoginAsidePanel() {
   );
 }
 
-export function LoginBrandHeader() {
+export function LoginBrandHeader({ twoFactor = false }: { twoFactor?: boolean }) {
   return (
     <div className="login-brand mb-7 flex flex-col items-center">
       <div className="login-brand-mark mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg">
@@ -53,10 +53,10 @@ export function LoginBrandHeader() {
         />
       </div>
       <h1 className="login-title text-center text-2xl font-bold">
-        Log Masuk SQR
+        {twoFactor ? "Sahkan identiti anda" : "Log Masuk SQR"}
       </h1>
       <p className="login-subtitle mt-2 text-center text-sm">
-        Platform operasi dalaman Sumbangan Query Rahmah
+        {twoFactor ? "Langkah 2 daripada 2 · Pengesahan aplikasi pengesah" : "Platform operasi dalaman Sumbangan Query Rahmah"}
       </p>
     </div>
   );

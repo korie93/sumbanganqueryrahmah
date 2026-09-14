@@ -117,7 +117,7 @@ test("activation form keeps untouched fields neutral and marks policy and matchi
   assert.match(getActivationInputMarkup(cleared, "confirm"), /data-validation-state="neutral"/);
 });
 
-test("2FA setup renders exact algorithm requirements without a remote QR or secret transmission", () => {
+test("2FA setup renders a local QR with secondary manual fallback without secret transmission", () => {
   const props = {
     confirmPasswordInput: "", confirmPasswordError: null, currentPasswordInput: "", currentPasswordError: null,
     currentUserRole: "admin", newPasswordInput: "", newPasswordError: null,
@@ -131,12 +131,14 @@ test("2FA setup renders exact algorithm requirements without a remote QR or secr
     usernameError: null, usernameInput: "operator", usernameSaving: false,
   };
   const markup = renderToStaticMarkup(createElement(MyAccountSecurityCard, props));
-  assert.match(markup, /algoritma SHA256, 6 digit/);
-  assert.match(markup, /sela 30 saat/);
-  assert.match(markup, /Jangan gunakan tetapan lalai SHA1 untuk rahsia SHA256/);
+  assert.match(markup, /data-testid="two-factor-qr"/);
+  assert.match(markup, /Imbas kod QR SQR dengan aplikasi pengesah/);
+  assert.match(markup, /Papar kunci persediaan/);
+  assert.doesNotMatch(markup, /value="TESTONLY"/);
   assert.match(markup, /masa telefon ditetapkan secara automatik/);
   assert.doesNotMatch(markup, /(?:src|href)="https?:\/\/[^\"]*(?:TESTONLY|secret=)/);
   const invalid = renderToStaticMarkup(createElement(MyAccountSecurityCard, { ...props, twoFactorSetupUri: "" }));
-  assert.match(invalid, /Tetapan pengesah tidak lengkap/);
-  assert.match(invalid, /<button[^>]*disabled=""[^>]*>Sahkan dan aktifkan 2FA<\/button>/);
+  assert.match(invalid, /Tetapan aplikasi tidak lengkap/);
+  assert.doesNotMatch(invalid, /data-testid="two-factor-qr"/);
+  assert.doesNotMatch(invalid, /Sahkan dan aktifkan 2FA/);
 });

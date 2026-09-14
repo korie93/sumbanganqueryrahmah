@@ -140,6 +140,15 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
   }, []);
 
   useEffect(() => {
+    if (!twoFactorChallengeToken) return;
+    // This follows the user's explicit login action (also on touch devices).
+    const frameId = window.requestAnimationFrame(() => {
+      twoFactorCodeInputRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [twoFactorChallengeToken]);
+
+  useEffect(() => {
     if (loading) {
       return;
     }
@@ -225,7 +234,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
             <LoginAsidePanel />
 
             <div className="login-card-form">
-              <LoginBrandHeader />
+              <LoginBrandHeader twoFactor={Boolean(twoFactorChallengeToken)} />
 
               <form className="login-form space-y-4" onSubmit={handleSubmit} noValidate {...loginFormBusyProps}>
                 <div className="space-y-2">
@@ -277,7 +286,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                       {...twoFactorInvalidProps}
                     />
                     <p id="login-two-factor-help" className="login-subtitle text-center text-xs">
-                      Masukkan kod 6 digit daripada aplikasi pengesah anda.
+                      Masukkan atau tampal kod 6 digit daripada aplikasi pengesah anda. Jika kod baru sahaja berubah, gunakan kod terkini.
                     </p>
                     {twoFactorCodeError ? (
                       <p id="login-two-factor-error" className="login-field-error text-center text-sm" role="alert">

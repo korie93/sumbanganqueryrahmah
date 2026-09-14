@@ -12,14 +12,27 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   ACTIVATION_TOKEN_SUPERSEDED: "Pautan aktivasi ini telah diganti. Gunakan pautan dalam emel terkini.",
   ACCOUNT_ALREADY_ACTIVATED: "Akaun ini sudah diaktifkan. Sila log masuk atau tetapkan semula kata laluan.",
   TWO_FACTOR_CODE_INVALID: "Kod pengesah tidak betul. Semak tetapan aplikasi pengesah dan cuba kod terkini.",
-  TWO_FACTOR_INVALID_CODE: "Kod pengesah tidak betul atau telah digunakan. Semak tetapan aplikasi dan tunggu kod baharu.",
+  TWO_FACTOR_INVALID_CODE: "Kod pengesah tidak betul. Gunakan kod terkini, semak tetapan aplikasi dan pastikan masa telefon ditetapkan secara automatik.",
   TWO_FACTOR_CODE_EXPIRED: "Kod pengesah telah tamat tempoh. Gunakan kod terkini daripada aplikasi pengesah.",
   TWO_FACTOR_CODE_REPLAYED: "Kod pengesah ini telah digunakan. Tunggu kod baharu dalam aplikasi pengesah.",
   TWO_FACTOR_CHALLENGE_EXPIRED: "Sesi pengesahan dua faktor telah tamat tempoh. Sila log masuk semula.",
+  TWO_FACTOR_CHALLENGE_INVALID: "Sesi pengesahan dua faktor tidak lagi sah. Sila log masuk semula.",
+  TWO_FACTOR_SETUP_MISSING: "Persediaan pengesah tiada. Mulakan persediaan 2FA semula.",
+  TWO_FACTOR_SECRET_INVALID: "Tetapan pengesah tidak dapat dibaca dengan selamat. Hubungi pentadbir; jangan padam akaun pengesah anda dahulu.",
+  TWO_FACTOR_NOT_ENABLED: "2FA belum diaktifkan untuk akaun ini. Muat semula status akaun sebelum mencuba lagi.",
+  TWO_FACTOR_NOT_ALLOWED: "Tetapan 2FA tidak tersedia untuk peranan akaun ini.",
+  INVALID_CURRENT_PASSWORD: "Kata laluan semasa tidak betul. Sila semak dan cuba semula.",
   TWO_FACTOR_SETUP_EXPIRED: "Persediaan pengesah telah tamat tempoh. Mulakan persediaan 2FA semula dan gunakan rahsia baharu.",
   TWO_FACTOR_ALREADY_ENABLED: "2FA sudah diaktifkan. Nyahaktifkan dengan kata laluan dan kod pengesah sebelum menyediakan semula.",
   TWO_FACTOR_RATE_LIMITED: "Terlalu banyak percubaan pengesahan. Tunggu sebentar sebelum mencuba lagi.",
+  AUTH_RATE_LIMITED: "Terlalu banyak percubaan log masuk atau kod pengesah. Tunggu sehingga had percubaan ditetapkan semula sebelum mencuba lagi.",
+  AUTH_MUTATION_RATE_LIMITED: "Terlalu banyak percubaan mengemas kini keselamatan akaun. Tunggu sehingga had percubaan ditetapkan semula sebelum mencuba lagi.",
 };
+
+export function shouldRestartTwoFactorLogin(error: unknown): boolean {
+  const code = getAuthErrorCode(error);
+  return code === "TWO_FACTOR_CHALLENGE_EXPIRED" || code === "TWO_FACTOR_CHALLENGE_INVALID";
+}
 
 export function getAuthErrorCode(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;

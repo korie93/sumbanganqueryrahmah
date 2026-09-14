@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getAuthenticatorSetupParameters } from "@/lib/auth-flow-feedback";
+import { TwoFactorSettingsPanel } from "@/pages/settings/TwoFactorSettingsPanel";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
 
 interface MyAccountSecurityCardProps {
@@ -47,6 +47,10 @@ interface MyAccountSecurityCardProps {
   twoFactorSetupIssuer: string;
   twoFactorSetupSecret: string;
   twoFactorSetupUri: string;
+  twoFactorSetupExpiresAt?: string | null | undefined;
+  twoFactorConfiguredAt?: string | null | undefined;
+  twoFactorActionError?: string | null | undefined;
+  onClearTwoFactorSetup?: (() => void) | undefined;
   usernameError: string | null;
   usernameInput: string;
   usernameSaving: boolean;
@@ -98,6 +102,10 @@ export function MyAccountSecurityCard({
   twoFactorSetupIssuer,
   twoFactorSetupSecret,
   twoFactorSetupUri,
+  twoFactorSetupExpiresAt,
+  twoFactorConfiguredAt,
+  twoFactorActionError,
+  onClearTwoFactorSetup,
   usernameError,
   usernameInput,
   usernameSaving,
@@ -105,7 +113,6 @@ export function MyAccountSecurityCard({
   const isMobile = useIsMobile();
   const supportsTwoFactor = currentUserRole === "admin" || currentUserRole === "superuser";
   const securityBusy = usernameSaving || passwordSaving || twoFactorLoading;
-  const setupParameters = getAuthenticatorSetupParameters(twoFactorSetupUri);
   const twoFactorStatus = twoFactorEnabled
     ? "Diaktifkan"
     : twoFactorPendingSetup
@@ -120,8 +127,6 @@ export function MyAccountSecurityCard({
   const currentPasswordErrorId = "my-account-current-password-error";
   const newPasswordErrorId = "my-account-new-password-error";
   const confirmPasswordErrorId = "my-account-confirm-password-error";
-  const twoFactorPasswordErrorId = "my-account-two-factor-password-error";
-  const twoFactorCodeErrorId = "my-account-two-factor-code-error";
   const usernameValidationProps = getInvalidFieldProps(usernameError, usernameErrorId);
   const currentPasswordValidationProps = getInvalidFieldProps(
     currentPasswordError,
@@ -130,14 +135,6 @@ export function MyAccountSecurityCard({
   const newPasswordValidationProps = getInvalidFieldProps(newPasswordError, newPasswordErrorId);
   const confirmPasswordValidationProps = getAriaInvalidProps(
     Boolean(confirmPasswordInput ? newPasswordInput !== confirmPasswordInput : confirmPasswordError),
-  );
-  const twoFactorPasswordValidationProps = getInvalidFieldProps(
-    twoFactorPasswordError,
-    twoFactorPasswordErrorId,
-  );
-  const twoFactorCodeValidationProps = getInvalidFieldProps(
-    twoFactorCodeError,
-    twoFactorCodeErrorId,
   );
 
   return (
@@ -168,7 +165,7 @@ export function MyAccountSecurityCard({
           </div>
         ) : null}
       </CardHeader>
-      <CardContent className={isMobile ? "pt-0" : ""}>
+      <CardContent className={isMobile ? "space-y-4 pt-0" : "space-y-6"}>
         <Card className="border-border/60 bg-background/60">
           <CardHeader className={isMobile ? "pb-4" : ""}>
             <CardTitle className="text-base">Akaun Saya</CardTitle>
@@ -305,170 +302,35 @@ export function MyAccountSecurityCard({
                 </Button>
               </div>
             </div>
-
-            {supportsTwoFactor ? (
-              <div className="space-y-4 rounded-2xl border border-border/60 bg-background/50 p-4 sm:rounded-xl sm:p-5">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Pengesahan dua faktor</h3>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge
-                      variant={twoFactorStatusVariant}
-                      className="rounded-full px-3 py-1"
-                    >
-                      {twoFactorStatus}
-                    </Badge>
-                    {twoFactorSetupSecret ? (
-                      <Badge variant="outline" className="rounded-full px-3 py-1">
-                        Rahsia persediaan sedia
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Gunakan aplikasi pengesah untuk melindungi akaun ini dengan langkah pengesahan kedua.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label htmlFor="my-account-two-factor-password" className="text-sm font-medium">
-                      Kata laluan semasa
-                    </label>
-                    <PasswordInput
-                      id="my-account-two-factor-password"
-                      name="twoFactorCurrentPassword"
-                      visibilityLabel="kata laluan semasa untuk 2FA"
-                      value={twoFactorPasswordInput}
-                      onChange={(event) => onTwoFactorPasswordInputChange(event.target.value)}
-                      onBlur={onTwoFactorPasswordBlur}
-                      disabled={securityBusy}
-                      autoComplete="current-password"
-                      {...twoFactorPasswordValidationProps}
-                    />
-                    {twoFactorPasswordError ? (
-                      <p id={twoFactorPasswordErrorId} className="text-xs text-destructive" role="alert">
-                        {twoFactorPasswordError}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="my-account-two-factor-code" className="text-sm font-medium">
-                      Kod pengesah
-                    </label>
-                    <Input
-                      id="my-account-two-factor-code"
-                      name="twoFactorAuthenticatorCode"
-                      inputMode="numeric"
-                      placeholder="000000"
-                      value={twoFactorCodeInput}
-                      onChange={(event) => onTwoFactorCodeInputChange(event.target.value)}
-                      onBlur={onTwoFactorCodeBlur}
-                      disabled={securityBusy && !twoFactorPendingSetup}
-                      pattern="[0-9]*"
-                      autoComplete="one-time-code"
-                      {...twoFactorCodeValidationProps}
-                    />
-                    {twoFactorCodeError ? (
-                      <p id={twoFactorCodeErrorId} className="text-xs text-destructive" role="alert">
-                        {twoFactorCodeError}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                {twoFactorSetupSecret ? (
-                  <div className="space-y-3 rounded-xl border border-border/60 bg-background/55 p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Import URI di bawah ke aplikasi pengesah yang menyokong tetapan ini, atau tambah rahsia secara manual.
-                      Kemudian masukkan kod 6 digit untuk mengaktifkan 2FA. Jangan kongsi rahsia atau URI ini.
-                    </p>
-                    {setupParameters ? (
-                      <p className="text-sm font-medium" role="status" aria-live="polite">
-                        Tetapan wajib: TOTP, algoritma {setupParameters.algorithm}, {setupParameters.digits} digit,
-                        sela {setupParameters.period} saat. Jangan gunakan tetapan lalai SHA1 untuk rahsia SHA256.
-                        Pastikan masa telefon ditetapkan secara automatik.
-                      </p>
-                    ) : (
-                      <p className="text-sm text-destructive" role="alert">
-                        Tetapan pengesah tidak lengkap. Mulakan persediaan 2FA semula sebelum meneruskan.
-                      </p>
-                    )}
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label htmlFor="my-account-two-factor-issuer" className="text-sm font-medium">
-                          Pengeluar
-                        </label>
-                        <Input
-                          id="my-account-two-factor-issuer"
-                          name="twoFactorSetupIssuer"
-                          value={twoFactorSetupIssuer}
-                          readOnly
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label htmlFor="my-account-two-factor-account-name" className="text-sm font-medium">
-                          Nama akaun
-                        </label>
-                        <Input
-                          id="my-account-two-factor-account-name"
-                          name="twoFactorSetupAccountName"
-                          value={twoFactorSetupAccountName}
-                          readOnly
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="my-account-two-factor-secret" className="text-sm font-medium">
-                        Rahsia pengesah
-                      </label>
-                      <Input
-                        id="my-account-two-factor-secret"
-                        name="twoFactorSetupSecret"
-                        value={twoFactorSetupSecret}
-                        readOnly
-                      />
-                    </div>
-                    {twoFactorSetupUri ? (
-                      <div className="space-y-2">
-                        <label htmlFor="my-account-two-factor-uri" className="text-sm font-medium">
-                          URI pengesahan OTP
-                        </label>
-                        <Input
-                          id="my-account-two-factor-uri"
-                          name="twoFactorSetupUri"
-                          value={twoFactorSetupUri}
-                          readOnly
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-floating-ai-avoid="true">
-                  {!twoFactorEnabled ? (
-                    <Button onClick={onStartTwoFactorSetup} disabled={securityBusy} className="w-full sm:w-auto">
-                      {twoFactorLoading && !twoFactorSetupSecret ? "Menyediakan..." : "Mulakan persediaan 2FA"}
-                    </Button>
-                  ) : null}
-                  {(twoFactorPendingSetup || twoFactorSetupSecret) && !twoFactorEnabled ? (
-                    <Button onClick={onEnableTwoFactor} disabled={securityBusy || !setupParameters} className="w-full sm:w-auto">
-                      {twoFactorLoading ? "Mengesahkan..." : "Sahkan dan aktifkan 2FA"}
-                    </Button>
-                  ) : null}
-                  {twoFactorEnabled ? (
-                    <Button
-                      variant="destructive"
-                      onClick={onDisableTwoFactor}
-                      disabled={securityBusy}
-                      className="w-full sm:w-auto"
-                    >
-                      {twoFactorLoading ? "Menyahaktifkan..." : "Nyahaktifkan 2FA"}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
           </CardContent>
         </Card>
+        {supportsTwoFactor ? (
+          <TwoFactorSettingsPanel
+            busy={securityBusy}
+            twoFactorEnabled={twoFactorEnabled}
+            twoFactorPendingSetup={twoFactorPendingSetup}
+            twoFactorLoading={twoFactorLoading}
+            twoFactorPasswordInput={twoFactorPasswordInput}
+            twoFactorPasswordError={twoFactorPasswordError}
+            twoFactorCodeInput={twoFactorCodeInput}
+            twoFactorCodeError={twoFactorCodeError}
+            twoFactorSetupSecret={twoFactorSetupSecret}
+            twoFactorSetupUri={twoFactorSetupUri}
+            twoFactorSetupAccountName={twoFactorSetupAccountName}
+            twoFactorSetupIssuer={twoFactorSetupIssuer}
+            twoFactorSetupExpiresAt={twoFactorSetupExpiresAt}
+            twoFactorConfiguredAt={twoFactorConfiguredAt}
+            twoFactorActionError={twoFactorActionError}
+            onClearTwoFactorSetup={onClearTwoFactorSetup}
+            onStartTwoFactorSetup={onStartTwoFactorSetup}
+            onEnableTwoFactor={onEnableTwoFactor}
+            onDisableTwoFactor={onDisableTwoFactor}
+            onTwoFactorPasswordInputChange={onTwoFactorPasswordInputChange}
+            onTwoFactorPasswordBlur={onTwoFactorPasswordBlur}
+            onTwoFactorCodeInputChange={onTwoFactorCodeInputChange}
+            onTwoFactorCodeBlur={onTwoFactorCodeBlur}
+          />
+        ) : null}
       </CardContent>
     </Card>
   );
