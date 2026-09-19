@@ -258,6 +258,10 @@ export function GeneralSearchCollectionHistory({ row }: GeneralSearchCollectionH
                           </div>
                         </div>
                         <dl className="mt-3 grid grid-cols-[minmax(7rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                          <dt className="text-muted-foreground">Card No</dt>
+                          <dd className="min-w-0 break-all font-medium text-foreground">
+                            {item.cardNumber?.trim() || "Tidak dinyatakan"}
+                          </dd>
                           <dt className="text-muted-foreground">Direkod pada</dt>
                           <dd className="break-words text-foreground">
                             {formatGeneralSearchCollectionRecordedAt(item.createdAt)}

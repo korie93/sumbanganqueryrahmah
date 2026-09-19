@@ -84,6 +84,7 @@ function buildRowsWithSource(params: {
         latestStaffNickname: null,
         latestCreatedByLogin: null,
         latestAccountNumber: null,
+        latestCardNumber: null,
         latestAmount: null,
         sourceImportName: null,
         sourceFilename: null,

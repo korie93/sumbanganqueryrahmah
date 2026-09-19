@@ -69,6 +69,7 @@ function createSearchRouteHarness(options?: {
           latestStaffNickname: "Collector Alpha",
           latestCreatedByLogin: "user.one",
           latestAccountNumber: "ACC-1001",
+          latestCardNumber: "0000123412345678",
           matchedAccountHash: null,
           latestAmount: "150.50",
           sourceImportName: "March Import",
@@ -95,6 +96,7 @@ function createSearchRouteHarness(options?: {
       return {
         items: [{
           id: "pool:record-1:1",
+          cardNumber: "0000123412345678",
           kind: "pool",
           isHistorical: false,
           paymentDate: "2026-08-01",
@@ -323,6 +325,7 @@ test("GET /api/search/global applies the protected limit cap and returns a priva
           latestStaffNickname: "Collector Alpha",
           latestCreatedByLogin: "user.one",
           latestAccountNumber: "ACC-1001",
+          latestCardNumber: "0000123412345678",
           latestAmount: "150.50",
           sourceImportName: null,
           sourceFilename: null,
@@ -366,6 +369,7 @@ test("GET /api/search/global exposes source details only to an authorized admin"
       latestStaffNickname: "Collector Alpha",
       latestCreatedByLogin: "user.one",
       latestAccountNumber: "ACC-1001",
+      latestCardNumber: "0000123412345678",
       latestAmount: "150.50",
       sourceImportName: "March Import",
       sourceFilename: "march.csv",
@@ -389,6 +393,7 @@ test("GET /api/search/global exposes cross-user collection status to an authenti
     const payload = await response.json();
     assert.deepEqual(collectionStatusScopes, [{ kind: "all" }]);
     assert.equal(payload.rows[0]?._collectionStatus?.state, "recorded");
+    assert.equal(payload.rows[0]?._collectionStatus?.latestCardNumber, "0000123412345678");
     assert.equal(payload.rows[0]?._collectionStatus?.latestCreatedByLogin, "user.one");
     assert.equal(payload.rows[0]?._collectionStatus?.sourceImportName, null);
   } finally {
@@ -406,6 +411,7 @@ test("GET /api/search/global grants manager all-staff collection visibility with
     const payload = await response.json();
     assert.deepEqual(collectionStatusScopes, [{ kind: "all" }]);
     assert.equal(payload.rows[0]?.["Source File"], undefined);
+    assert.equal(payload.rows[0]?._collectionStatus?.latestCardNumber, "0000123412345678");
     assert.equal(payload.rows[0]?._collectionStatus?.sourceImportName, null);
     assert.equal(payload.rows[0]?._collectionStatus?.latestCreatedByLogin, "user.one");
   } finally {
@@ -437,6 +443,7 @@ test("GET /api/search/collection-history lazily resolves an opaque source key an
     assert.equal(payload.summary.collectionAmount, "150.00");
     assert.equal(payload.summary.poolAmount, "350.00");
     assert.equal(payload.items[0]?.kind, "pool");
+    assert.equal(payload.items[0]?.cardNumber, "0000123412345678");
     assert.equal("reason" in payload.items[0], false);
     assert.deepEqual(collectionHistorySourceCalls, [{
       sourceImportId: "import-1",
@@ -650,6 +657,7 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
           latestStaffNickname: null,
           latestCreatedByLogin: null,
           latestAccountNumber: null,
+          latestCardNumber: null,
           latestAmount: null,
           sourceImportName: null,
           sourceFilename: null,

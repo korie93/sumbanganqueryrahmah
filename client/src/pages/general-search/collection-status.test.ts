@@ -18,6 +18,7 @@ test("collection status parser rejects malformed payloads safely", () => {
     latestStaffNickname: null,
     latestCreatedByLogin: null,
     latestAccountNumber: null,
+    latestCardNumber: null,
     latestAmount: null,
     sourceImportName: null,
     sourceFilename: null,
@@ -82,4 +83,27 @@ test("collection status parser bounds count and text from the API", () => {
     getGeneralSearchCollectionStatusAriaLabel(row),
     "Collection direkodkan, 1000000 rekod, disimpan oleh Collector Alpha, nombor akaun ACC-1001-VERY-LONG, jumlah RM 125.50, tarikh bayaran 04/08/2026, direkod pada 04/08/2026, 10:00",
   );
+});
+
+test("Card parser preserves verified display text, bounds hostile values, and names the correct Card for assistive technology", () => {
+  for (const state of ["recorded", "historical"]) {
+    const row = { "Card No": "UNRELATED", _collectionStatus: {
+      state, recordCount: 2, latestAccountNumber: "ACCOUNT-UNCHANGED",
+      latestCardNumber: `  ${"SS".repeat(252)}1234  `,
+    } };
+    const status = getGeneralSearchCollectionStatus(row);
+    assert.equal(status.latestCardNumber, `${"SS".repeat(252)}1234`);
+    assert.equal(status.latestAccountNumber, "ACCOUNT-UNCHANGED");
+    assert.ok(getGeneralSearchCollectionStatusAriaLabel(row).includes(`Card No ${status.latestCardNumber}`));
+    assert.doesNotMatch(getGeneralSearchCollectionStatusAriaLabel(row), /UNRELATED/);
+  }
+  const status = getGeneralSearchCollectionStatus({ _collectionStatus: {
+    state: "recorded", latestCardNumber: "9".repeat(2_000),
+  } });
+  assert.equal(status.latestCardNumber?.length, 1_024);
+  for (const latestCardNumber of [null, undefined, {}, [], 123, "", "   "]) {
+    assert.equal(getGeneralSearchCollectionStatus({ _collectionStatus: {
+      state: "recorded", latestCardNumber,
+    } }).latestCardNumber, null);
+  }
 });

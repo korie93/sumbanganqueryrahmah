@@ -12,6 +12,7 @@ export type GeneralSearchCollectionStatus = {
   latestStaffNickname: string | null;
   latestCreatedByLogin: string | null;
   latestAccountNumber: string | null;
+  latestCardNumber: string | null;
   latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
@@ -50,6 +51,7 @@ export function getGeneralSearchCollectionStatus(
       latestStaffNickname: null,
       latestCreatedByLogin: null,
       latestAccountNumber: null,
+      latestCardNumber: null,
       latestAmount: null,
       sourceImportName: null,
       sourceFilename: null,
@@ -78,6 +80,7 @@ export function getGeneralSearchCollectionStatus(
     latestStaffNickname: readNullableText(value.latestStaffNickname),
     latestCreatedByLogin: readNullableText(value.latestCreatedByLogin),
     latestAccountNumber: readNullableText(value.latestAccountNumber, 256),
+    latestCardNumber: readNullableText(value.latestCardNumber, 1_024),
     latestAmount: readNullableText(value.latestAmount, 64),
     sourceImportName: readNullableText(value.sourceImportName),
     sourceFilename: readNullableText(value.sourceFilename),
@@ -100,6 +103,7 @@ export function getGeneralSearchCollectionStatusAriaLabel(row: SearchResultRow):
       `Collection direkodkan, ${status.recordCount} rekod`,
       savedBy ? `disimpan oleh ${savedBy}` : null,
       status.latestAccountNumber ? `nombor akaun ${status.latestAccountNumber}` : null,
+      status.latestCardNumber ? `Card No ${status.latestCardNumber}` : null,
       status.latestAmount ? `jumlah RM ${status.latestAmount}` : null,
       status.latestPaymentDate
         ? `tarikh bayaran ${formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate)}`
@@ -115,6 +119,7 @@ export function getGeneralSearchCollectionStatusAriaLabel(row: SearchResultRow):
       `Rekod sejarah collection, ${status.recordCount} rekod telah dipurge`,
       savedBy ? `asalnya disimpan oleh ${savedBy}` : null,
       status.latestAccountNumber ? `nombor akaun ${status.latestAccountNumber}` : null,
+      status.latestCardNumber ? `Card No ${status.latestCardNumber}` : null,
       status.latestAmount ? `jumlah RM ${status.latestAmount}` : null,
       status.latestPaymentDate
         ? `tarikh bayaran ${formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate)}`

@@ -6,7 +6,9 @@ import {
   selectSavedCollectionSourceMatches,
 } from "../lib/saved-collection-link-utils";
 import { resolveCollectionPiiFieldValueFailClosed } from "../lib/collection-pii-encryption";
+import { logger } from "../lib/logger";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
+import { hydrateCollectionRecordSourceAccounts } from "./collection-record-source-account-utils";
 import {
   mapAdvancedSearchDataRow,
   mapSearchDataRow,
@@ -48,6 +50,31 @@ export type {
 } from "./search-repository-types";
 
 const ADVANCED_SEARCH_COLUMN_CACHE_TTL_MS = 60_000;
+
+// Display-only enrichment of already authorized, selected/paged records. Reuse
+// Collection's exact Saved link + immutable obligation/index verification; never
+// infer a card from the searched row or change existing Account No mapping.
+async function resolveSearchCollectionCards(rows: Array<Record<string, unknown>>) {
+  try {
+    const identities = await hydrateCollectionRecordSourceAccounts(dbRead, rows.map((row) => ({
+      accountNumber: "",
+      cardNumber: null as string | null,
+      cardNumberLast4: null,
+      sourceImportId: typeof row.source_import_id === "string" ? row.source_import_id : null,
+      sourceDataRowId: typeof row.source_data_row_id === "string" ? row.source_data_row_id : null,
+      sourceObligationKey: typeof row.source_obligation_key === "string" ? row.source_obligation_key : null,
+    })));
+    return identities.map((identity) => identity.cardNumber);
+  } catch {
+    // This optional display field must not discard existing Account/payment
+    // results. Fail closed to no Card and never log source data or raw errors.
+    logger.warn("General Search Card display enrichment unavailable", {
+      operation: "resolveSearchCollectionCards",
+      reason: "SOURCE_HYDRATION_UNAVAILABLE",
+    });
+    return rows.map(() => null);
+  }
+}
 
 type ColumnNameCacheEntry = {
   columns: string[];
@@ -229,6 +256,7 @@ export class SearchRepository {
           id,
           source_import_id,
           source_data_row_id,
+          source_obligation_key,
           source_import_name,
           source_filename,
           ic_number,
@@ -254,6 +282,7 @@ export class SearchRepository {
           original_record_id AS id,
           source_import_id,
           source_data_row_id,
+          source_obligation_key,
           source_import_name,
           source_filename,
           NULL::text AS ic_number,
@@ -284,6 +313,9 @@ export class SearchRepository {
         matched.account_number,
         matched.account_number_encrypted,
         matched.account_number_search_hash,
+        matched.source_import_id,
+        matched.source_data_row_id,
+        matched.source_obligation_key,
         matched.amount,
         matched.source_import_name,
         matched.source_filename,
@@ -305,6 +337,9 @@ export class SearchRepository {
           )},
           record.account_number_encrypted,
           record.account_number_search_hash,
+          record.source_import_id,
+          record.source_data_row_id,
+          record.source_obligation_key,
           record.amount,
           record.source_import_name,
           record.source_filename,
@@ -407,7 +442,9 @@ export class SearchRepository {
       ) matched ON true
     `);
 
-    return (result.rows || []).map((row): SearchCollectionStatusMatch => {
+    const rows = (result.rows || []) as Array<Record<string, unknown>>;
+    const cardNumbers = await resolveSearchCollectionCards(rows);
+    return rows.map((row, index): SearchCollectionStatusMatch => {
       const value = row as Record<string, unknown>;
       const createdAt = value.created_at;
       return {
@@ -431,6 +468,7 @@ export class SearchRepository {
           plaintext: value.account_number,
           encrypted: value.account_number_encrypted,
         }) || null,
+        latestCardNumber: cardNumbers[index] ?? null,
         matchedAccountHash: typeof value.account_number_search_hash === "string"
           ? value.account_number_search_hash
           : null,
@@ -667,6 +705,9 @@ export class SearchRepository {
       active_history AS (
         SELECT
           record.id::text AS item_id,
+          record.source_import_id,
+          record.source_data_row_id,
+          record.source_obligation_key,
           'collection'::text AS item_kind,
           false AS is_historical,
           record.payment_date,
@@ -708,6 +749,9 @@ export class SearchRepository {
       pool_history AS (
         SELECT
           ('pool:' || record.id::text || ':' || record.manual_settlement_version::text) AS item_id,
+          record.source_import_id,
+          record.source_data_row_id,
+          record.source_obligation_key,
           'pool'::text AS item_kind,
           false AS is_historical,
           record.manual_settlement_date AS payment_date,
@@ -745,6 +789,9 @@ export class SearchRepository {
       purge_history AS (
         SELECT
           record.original_record_id::text AS item_id,
+          record.source_import_id,
+          record.source_data_row_id,
+          record.source_obligation_key,
           'collection'::text AS item_kind,
           true AS is_historical,
           record.payment_date,
@@ -785,6 +832,9 @@ export class SearchRepository {
         SELECT
           ('pool:' || record.original_record_id::text || ':' || record.manual_settlement_version::text)
             AS item_id,
+          record.source_import_id,
+          record.source_data_row_id,
+          record.source_obligation_key,
           'pool'::text AS item_kind,
           true AS is_historical,
           record.manual_settlement_date AS payment_date,
@@ -881,6 +931,9 @@ export class SearchRepository {
         ), CASE WHEN summary.historical_record_count > 0 THEN 'historical' ELSE 'unclassified' END)
           AS summary_effective_status,
         history.item_id,
+        history.source_import_id,
+        history.source_data_row_id,
+        history.source_obligation_key,
         history.item_kind,
         history.is_historical,
         history.payment_date,
@@ -913,7 +966,8 @@ export class SearchRepository {
       : value == null
         ? null
         : String(value);
-    const items = rows.flatMap((row) => {
+    const cardNumbers = await resolveSearchCollectionCards(rows);
+    const items = rows.flatMap((row, index) => {
       const id = String(row.item_id || "");
       if (!id) return [];
       const automaticClassification: "cp" | "abort_cp" | null = row.automatic_classification === "cp"
@@ -930,6 +984,7 @@ export class SearchRepository {
         : "unclassified";
       return [{
         id,
+        cardNumber: cardNumbers[index] ?? null,
         kind: row.item_kind === "pool" ? "pool" as const : "collection" as const,
         isHistorical: row.is_historical === true,
         paymentDate: String(row.payment_date || ""),

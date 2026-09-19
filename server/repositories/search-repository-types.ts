@@ -131,6 +131,7 @@ export type SearchCollectionStatusMatch = {
   latestStaffNickname: string | null;
   latestCreatedByLogin: string | null;
   latestAccountNumber: string | null;
+  latestCardNumber?: string | null;
   matchedAccountHash: string | null;
   latestAmount: string | null;
   sourceImportName: string | null;
@@ -149,6 +150,7 @@ export type SearchCollectionHistorySourceRow = {
 
 export type SearchCollectionHistoryItem = {
   id: string;
+  cardNumber?: string | null;
   kind: "collection" | "pool";
   isHistorical: boolean;
   paymentDate: string;

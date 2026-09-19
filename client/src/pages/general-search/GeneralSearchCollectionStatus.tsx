@@ -27,6 +27,7 @@ export function GeneralSearchCollectionStatus({
     const source = status.sourceImportName || status.sourceFilename;
     const savedBy = status.latestStaffNickname || status.latestCreatedByLogin || "Tidak dinyatakan";
     const accountNumber = status.latestAccountNumber || "Tidak dinyatakan";
+    const cardNumber = status.latestCardNumber || "Tidak dinyatakan";
     const paymentDate = formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate);
     const recordedAt = formatGeneralSearchCollectionRecordedAt(status.latestCreatedAt);
     const amount = status.latestAmount ? formatAmountRM(status.latestAmount) : "Tidak dinyatakan";
@@ -42,15 +43,22 @@ export function GeneralSearchCollectionStatus({
         </p>
         <p className="break-words text-xs text-muted-foreground">Disimpan oleh: {savedBy}</p>
         {!showDetails ? (
-          <p className="min-w-0 text-xs text-muted-foreground">
-            Akaun Collection:{" "}
-            <span className="break-all font-medium text-foreground">{accountNumber}</span>
-          </p>
+          <>
+            <p className="min-w-0 text-xs text-muted-foreground">
+              Akaun Collection:{" "}
+              <span className="break-all font-medium text-foreground">{accountNumber}</span>
+            </p>
+            <p className="min-w-0 text-xs text-muted-foreground">
+              Card No: <span className="break-all font-medium text-foreground">{cardNumber}</span>
+            </p>
+          </>
         ) : null}
         {showDetails ? (
           <dl className="grid grid-cols-[minmax(6rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 pt-1 text-xs">
             <dt className="text-muted-foreground">Akaun Collection</dt>
             <dd className="min-w-0 break-all font-medium text-foreground">{accountNumber}</dd>
+            <dt className="text-muted-foreground">Card No</dt>
+            <dd className="min-w-0 break-all font-medium text-foreground">{cardNumber}</dd>
             <dt className="text-muted-foreground">Jumlah terkini</dt>
             <dd className="min-w-0 font-medium text-foreground">{amount}</dd>
             <dt className="text-muted-foreground">Tarikh bayaran</dt>
@@ -88,6 +96,7 @@ export function GeneralSearchCollectionStatus({
     const source = status.sourceImportName || status.sourceFilename;
     const savedBy = status.latestStaffNickname || status.latestCreatedByLogin || "Tidak dinyatakan";
     const accountNumber = status.latestAccountNumber || "Tidak dinyatakan";
+    const cardNumber = status.latestCardNumber || "Tidak dinyatakan";
     const paymentDate = formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate);
     const recordedAt = formatGeneralSearchCollectionRecordedAt(status.latestCreatedAt);
     const purgedAt = formatGeneralSearchCollectionRecordedAt(status.purgedAt);
@@ -107,9 +116,14 @@ export function GeneralSearchCollectionStatus({
           Asalnya disimpan oleh: {savedBy}
         </p>
         {!showDetails ? (
-          <p className="min-w-0 text-xs text-muted-foreground">
-            Akaun sepadan: <span className="break-all font-medium text-foreground">{accountNumber}</span>
-          </p>
+          <>
+            <p className="min-w-0 text-xs text-muted-foreground">
+              Akaun sepadan: <span className="break-all font-medium text-foreground">{accountNumber}</span>
+            </p>
+            <p className="min-w-0 text-xs text-muted-foreground">
+              Card No: <span className="break-all font-medium text-foreground">{cardNumber}</span>
+            </p>
+          </>
         ) : null}
         {showDetails ? (
           <dl className="grid grid-cols-[minmax(6rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 pt-1 text-xs">
@@ -117,6 +131,8 @@ export function GeneralSearchCollectionStatus({
             <dd className="font-medium text-foreground">Telah dipurge daripada rekod aktif</dd>
             <dt className="text-muted-foreground">Akaun sepadan</dt>
             <dd className="min-w-0 break-all font-medium text-foreground">{accountNumber}</dd>
+            <dt className="text-muted-foreground">Card No</dt>
+            <dd className="min-w-0 break-all font-medium text-foreground">{cardNumber}</dd>
             <dt className="text-muted-foreground">Jumlah asal</dt>
             <dd className="font-medium text-foreground">{amount}</dd>
             <dt className="text-muted-foreground">Tarikh bayaran</dt>

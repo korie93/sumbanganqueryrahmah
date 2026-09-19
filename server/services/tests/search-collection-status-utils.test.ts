@@ -6,6 +6,22 @@ import {
 } from "../search-collection-status-utils";
 import { MAX_SEARCH_COLLECTION_STATUS_CANDIDATES } from "../../repositories/search-repository-types";
 
+test("status Card projection preserves verified Unicode uppercase expansion without changing Account bounds", () => {
+  const card = ("\u00df".repeat(252) + "1234").toUpperCase();
+  const statuses = buildSearchCollectionStatuses({
+    rows: [{ id: "unicode-row" }], candidates: [], includeSourceDetails: false,
+    matches: [{ rowId: "unicode-row", recordCount: 1, isHistorical: false,
+      latestPaymentDate: "2026-09-01", latestCreatedAt: "2026-09-01T01:00:00.000Z",
+      latestStaffNickname: null, latestCreatedByLogin: null,
+      latestAccountNumber: "A".repeat(300), latestCardNumber: card,
+      matchedAccountHash: null, latestAmount: "10.00", sourceImportName: null,
+      sourceFilename: null, purgedAt: null, purgedBy: null, matchBasis: "source_row",
+    }],
+  });
+  assert.equal(statuses.get("unicode-row")?.latestCardNumber, card);
+  assert.equal(statuses.get("unicode-row")?.latestAccountNumber, "A".repeat(256));
+});
+
 test("search collection status candidates normalize every recognized account column", () => {
   const candidates = buildSearchCollectionStatusCandidates([
     {
@@ -108,6 +124,7 @@ test("search collection statuses expose authorized collection details while reda
       latestStaffNickname: "Collector Alpha",
       latestCreatedByLogin: "collector.login",
       latestAccountNumber: "ACC-1001",
+      latestCardNumber: "0000123412345678",
       matchedAccountHash: null,
       latestAmount: "150.50",
       sourceImportName: "NPL CC P10 JULY",
@@ -124,6 +141,7 @@ test("search collection statuses expose authorized collection details while reda
   assert.equal(statuses.get("row-1")?.latestStaffNickname, "Collector Alpha");
   assert.equal(statuses.get("row-1")?.latestCreatedByLogin, "collector.login");
   assert.equal(statuses.get("row-1")?.latestAccountNumber, "ACC-1001");
+  assert.equal(statuses.get("row-1")?.latestCardNumber, "0000123412345678");
   assert.equal(statuses.get("row-1")?.latestAmount, "150.50");
   assert.equal(statuses.get("row-1")?.sourceImportName, null);
   assert.equal(statuses.get("row-2")?.state, "not_recorded");
@@ -200,6 +218,7 @@ test("purged collection matches become historical and reuse only the matching Sa
       latestStaffNickname: "Collector History",
       latestCreatedByLogin: "collector.history",
       latestAccountNumber: "COLLECTION-2002",
+      latestCardNumber: null,
       latestAmount: "99.90",
       sourceImportName: "Historical Source",
       sourceFilename: "historical.xlsx",

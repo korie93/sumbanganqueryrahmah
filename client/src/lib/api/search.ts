@@ -33,6 +33,9 @@ const collectionHistoryItemSchema = z.object({
   settlementDate: nullableTextSchema,
   staffNickname: nullableTextSchema,
   createdByLogin: nullableTextSchema,
+  // Saved identifiers are bounded before uppercase normalization, which can
+  // expand Unicode characters. Preserve that existing verified display value.
+  cardNumber: z.string().max(1_024).nullable().optional(),
   sourceImportName: nullableTextSchema,
   sourceFilename: nullableTextSchema,
   purgedAt: nullableTextSchema,

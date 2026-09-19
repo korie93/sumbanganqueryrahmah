@@ -11,6 +11,15 @@ import {
 
 const SOURCE_ACCOUNT_HYDRATION_CHUNK_SIZE = 200;
 
+type CollectionSourceIdentityRecord = Pick<CollectionRecord,
+  | "accountNumber"
+  | "cardNumber"
+  | "cardNumberLast4"
+  | "sourceImportId"
+  | "sourceDataRowId"
+  | "sourceObligationKey"
+>;
+
 type LinkedCollectionSourceAccount = {
   sourceImportId: string;
   sourceDataRowId: string;
@@ -27,7 +36,7 @@ function buildSourceLinkKey(sourceImportId: string, sourceDataRowId: string): st
 }
 
 function collectLinkedSourceIdentityRows(
-  records: readonly CollectionRecord[],
+  records: readonly CollectionSourceIdentityRecord[],
 ): LinkedCollectionSourceAccount[] {
   const links = new Map<string, LinkedCollectionSourceAccount>();
   const conflictingLinks = new Set<string>();
@@ -69,10 +78,10 @@ function collectLinkedSourceIdentityRows(
  * value from historical authorized views. The full value remains an in-memory
  * string and is never copied to collection_records or written to logs.
  */
-export async function hydrateCollectionRecordSourceAccounts(
+export async function hydrateCollectionRecordSourceAccounts<T extends CollectionSourceIdentityRecord>(
   executor: CollectionRepositoryExecutor,
-  records: readonly CollectionRecord[],
-): Promise<CollectionRecord[]> {
+  records: readonly T[],
+): Promise<T[]> {
   const sourceLinks = collectLinkedSourceIdentityRows(records);
   if (sourceLinks.length === 0) {
     return [...records];

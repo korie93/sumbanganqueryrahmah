@@ -14,6 +14,9 @@ import {
 const MAX_SEARCH_ROW_FIELDS = 200;
 const MAX_IDENTIFIER_INPUT_LENGTH = 256;
 const MAX_COLLECTION_ACCOUNT_DISPLAY_LENGTH = 256;
+// The existing canonical source caps input at 256 before uppercase normalization,
+// which can expand Unicode. Preserve that verified value without changing policy.
+const MAX_COLLECTION_CARD_DISPLAY_LENGTH = 1024;
 
 type SearchRowForCollectionStatus = {
   id?: string | null;
@@ -29,6 +32,7 @@ export type SearchCollectionStatus = {
   latestStaffNickname: string | null;
   latestCreatedByLogin: string | null;
   latestAccountNumber: string | null;
+  latestCardNumber: string | null;
   latestAmount: string | null;
   sourceImportName: string | null;
   sourceFilename: string | null;
@@ -174,6 +178,9 @@ export function buildSearchCollectionStatuses(params: {
         latestStaffNickname: match.latestStaffNickname,
         latestCreatedByLogin: match.latestCreatedByLogin,
         latestAccountNumber,
+        latestCardNumber: typeof match.latestCardNumber === "string"
+          ? match.latestCardNumber.trim().slice(0, MAX_COLLECTION_CARD_DISPLAY_LENGTH) || null
+          : null,
         latestAmount: match.latestAmount,
         sourceImportName: params.includeSourceDetails ? match.sourceImportName : null,
         sourceFilename: params.includeSourceDetails ? match.sourceFilename : null,
@@ -192,6 +199,7 @@ export function buildSearchCollectionStatuses(params: {
       latestStaffNickname: null,
       latestCreatedByLogin: null,
       latestAccountNumber: null,
+      latestCardNumber: null,
       latestAmount: null,
       sourceImportName: null,
       sourceFilename: null,
