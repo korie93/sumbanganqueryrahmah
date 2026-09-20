@@ -5,6 +5,7 @@ import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import type { MaintenanceState } from "../config/system-settings";
 import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
+import { isRequestNamespace } from "../../shared/app-document-routes";
 
 export type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -143,7 +144,7 @@ export function createRuntimeConfigManager(options: RuntimeConfigManagerOptions)
         endTime: state.endTime,
       };
 
-      if (req.path.startsWith("/api/")) {
+      if (isRequestNamespace(req.path, "/api")) {
         if (state.type === "soft") {
           const blockedSoftPrefixes = ["/api/search", "/api/imports", "/api/ai"];
           if (!blockedSoftPrefixes.some((prefix) => req.path.startsWith(prefix))) {
@@ -157,8 +158,17 @@ export function createRuntimeConfigManager(options: RuntimeConfigManagerOptions)
         return next();
       }
 
-      if (state.type === "hard" && req.path !== "/maintenance") {
-        return res.redirect(302, "/maintenance");
+      // Keep login reachable for the existing administrator maintenance bypass.
+      // API login still enforces the maintenance account policy independently.
+      if (state.type === "hard" && req.path.toLowerCase() !== "/login") {
+        if ((req.method === "GET" || req.method === "HEAD") && req.accepts("html")) {
+          // The frontend layer owns the shell; mark it rather than redirecting
+          // to a successful (200) maintenance URL or changing the requested URL.
+          res.locals.sqrMaintenanceDocument = true;
+          res.setHeader("X-SQR-Maintenance", "1");
+        } else {
+          return res.status(503).set("Cache-Control", "no-store").json(maintenanceResponse);
+        }
       }
 
       return next();

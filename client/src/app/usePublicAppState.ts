@@ -50,6 +50,16 @@ function resolvePublicBootstrapState(): PublicBootstrapState {
   }
 
   const resolvedRoute = resolveRouteFromLocation(window.location.pathname, window.location.search);
+  if (document.querySelector('meta[name="sqr-maintenance"][content="active"]')) {
+    return {
+      currentPage: "maintenance",
+      monitorSection: "monitor",
+      isInitialized: true,
+      resolvedRoute,
+      // A 503 is not an expired login. Keep the user's stored session intact.
+      shouldRestoreSession: false,
+    };
+  }
   const savedUser = getStoredAuthenticatedUser();
   const hasAuthHintCookie = hasAuthSessionHintCookie();
   const isAnonymousChangePasswordRoute =
@@ -66,11 +76,18 @@ function resolvePublicBootstrapState(): PublicBootstrapState {
   };
 }
 
-function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) {
+export function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) {
   const storage = getBrowserLocalStorage();
   const savedPage = safeGetStorageItem(storage, "activeTab") || safeGetStorageItem(storage, "lastPage");
 
-  if (route && route.page !== "not-found" && !isPublicAuthRoutePage(route.page)) {
+  if (!route || route.page === "not-found") {
+    return {
+      currentPage: user.mustChangePassword ? "change-password" : "not-found",
+      monitorSection: "monitor" as MonitorSection,
+    };
+  }
+
+  if (!isPublicAuthRoutePage(route.page)) {
     return {
       currentPage: route.page,
       monitorSection: route.monitorSection || "monitor",
@@ -210,17 +227,14 @@ export function usePublicAppState() {
     }
 
     const onMaintenanceUpdated = (event: Event) => {
+      // A maintenance update is not proof that the whole service recovered.
+      // The status page owns its explicit checked, user-initiated return.
+      if (currentPage === "maintenance") return;
       const custom = event as CustomEvent<MaintenanceUpdatedDetail>;
       if (shouldRedirectForMaintenance(custom.detail, user?.role ?? "user")) {
         setCurrentPage("maintenance");
         replaceHistory(buildPathForPage("maintenance"));
         return;
-      }
-
-      if (currentPage === "maintenance") {
-        const restoredPage = user?.role === "user" ? "general-search" : "home";
-        setCurrentPage(restoredPage);
-        replaceHistory(buildPathForPage(restoredPage));
       }
     };
 

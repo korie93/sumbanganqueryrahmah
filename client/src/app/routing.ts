@@ -1,4 +1,5 @@
 import type { MonitorSection } from "@/app/types";
+import { isKnownAppDocumentPath } from "@shared/app-document-routes";
 
 export type ResolvedRoute = {
   page: string;
@@ -86,6 +87,7 @@ export function parseMonitorSectionFromPageInput(page: string): MonitorSection |
 }
 
 export function resolveRouteFromLocation(pathname: string, search: string): ResolvedRoute | null {
+  if (!isKnownAppDocumentPath(pathname)) return null;
   const normalizedPath = pathname.toLowerCase();
   const legacyMonitorSection = LEGACY_MONITOR_ROUTES[normalizedPath];
   const directAliasPage = DIRECT_APP_ROUTE_ALIASES[normalizedPath];

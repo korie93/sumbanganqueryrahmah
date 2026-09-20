@@ -1,0 +1,91 @@
+# Server context in the existing HTTPS site, after installing the HTTP maps.
+# Install as /etc/nginx/snippets/sqr-error-pages-server.conf. This is an additive
+# include, NOT a replacement site or a maintenance switch. Keep server_tokens off.
+# Copy the reviewed deploy/errors directory to /var/www/sqr-errors independently
+# of Node/PM2/current release. The worker must have read/traverse access only.
+
+# Upstream API/realtime errors pass through unchanged. Nginx-generated transport
+# failures still use these error_page handlers and retain their original status.
+proxy_intercept_errors off;
+error_page 502 /_sqr/errors/502.$sqr_error_format;
+error_page 503 /_sqr/errors/503.$sqr_error_format;
+error_page 504 /_sqr/errors/504.$sqr_error_format;
+
+location = /_sqr/errors/502.html {
+    internal;
+    alias /var/www/sqr-errors/502.html;
+    default_type text/html;
+    charset utf-8;
+    etag off;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+}
+location = /_sqr/errors/503.html {
+    internal;
+    alias /var/www/sqr-errors/503.html;
+    default_type text/html;
+    charset utf-8;
+    etag off;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+}
+location = /_sqr/errors/504.html {
+    internal;
+    alias /var/www/sqr-errors/504.html;
+    default_type text/html;
+    charset utf-8;
+    etag off;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+}
+location = /_sqr/errors/maintenance.html {
+    # Kept as a separately testable standalone asset; no edge maintenance flag.
+    # Existing application maintenance sends its own branded HTML503 unchanged.
+    internal;
+    alias /var/www/sqr-errors/maintenance.html;
+    default_type text/html;
+    charset utf-8;
+    etag off;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+}
+
+# JSON uses the application's stable error shape without infrastructure details.
+# No user input, URI, headers or upstream error body is interpolated.
+location = /_sqr/errors/502.json {
+    internal;
+    default_type application/json;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+    return 502 '{"ok":false,"code":"SERVICE_UNAVAILABLE","message":"SQR tidak dapat dihubungi buat sementara waktu.","error":{"code":"SERVICE_UNAVAILABLE","message":"SQR tidak dapat dihubungi buat sementara waktu."}}';
+}
+location = /_sqr/errors/503.json {
+    internal;
+    default_type application/json;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+    return 503 '{"ok":false,"code":"SERVICE_UNAVAILABLE","message":"Perkhidmatan SQR tidak tersedia buat sementara waktu.","error":{"code":"SERVICE_UNAVAILABLE","message":"Perkhidmatan SQR tidak tersedia buat sementara waktu."}}';
+}
+location = /_sqr/errors/504.json {
+    internal;
+    default_type application/json;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+    return 504 '{"ok":false,"code":"REQUEST_TIMEOUT","message":"SQR belum memberikan respons dalam tempoh yang dijangka.","error":{"code":"REQUEST_TIMEOUT","message":"SQR belum memberikan respons dalam tempoh yang dijangka."}}';
+}
+
+# The outage page must load these assets while the application is stopped.
+# Exact allowlisted paths avoid exposing other deployment files or uploads.
+location = /_sqr/errors/assets/status.css {
+    alias /var/www/sqr-errors/assets/status.css;
+    default_type text/css;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+}
+location = /_sqr/errors/assets/status.js {
+    alias /var/www/sqr-errors/assets/status.js;
+    default_type application/javascript;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+}
+location = /_sqr/errors/assets/sqr-logo.svg {
+    alias /var/www/sqr-errors/assets/sqr-logo.svg;
+    default_type image/svg+xml;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+}
+location ^~ /_sqr/errors/ {
+    default_type application/json;
+    include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
+    return 404 '{"ok":false,"code":"NOT_FOUND","message":"Not found","error":{"code":"NOT_FOUND","message":"Not found"}}';
+}

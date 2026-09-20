@@ -110,12 +110,18 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
   },
   {
     filePath: "../pages/Maintenance.tsx",
-    setupPattern: /pollIntervalId = setManagedInterval\(\(\) => \{[\s\S]*MAINTENANCE_STATUS_POLL_INTERVAL_MS\)/,
+    setupPattern: /const timeout = window\.setTimeout/,
     cleanupPatterns: [
-      /const startPolling = \(\) => \{[\s\S]*stopPolling\(\);\s*pollIntervalId = setManagedInterval/,
-      /clearManagedInterval\(pollIntervalId\)/,
-      /const tick = window\.setInterval\(\(\) => \{[\s\S]*return\s+\(\)\s*=>\s*\{[\s\S]*window\.clearInterval\(tick\)/,
+      /return\s+\(\)\s*=>\s*\{[\s\S]*controller\.abort\(\)/,
+      /window\.clearTimeout\(timeout\)/,
+      /window\.removeEventListener\("maintenance-updated", updated\)/,
     ],
+  },
+  {
+    filePath: "../components/system-status/useServiceRecovery.ts",
+    setupPattern: /const timeout = window\.setTimeout/,
+    cleanupPatterns: [/window\.clearTimeout\(timeout\)/, /active\.current\?\.abort\(\)/,
+      /document\.removeEventListener\("visibilitychange", visibility\)/],
   },
   {
     filePath: "../pages/ActivateAccount.tsx",

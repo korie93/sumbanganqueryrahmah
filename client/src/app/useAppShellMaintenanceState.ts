@@ -21,6 +21,13 @@ type UseAppShellMaintenanceStateArgs = {
 
 const MAINTENANCE_POLL_ERROR_WARNING_COOLDOWN_MS = 60_000;
 
+export function shouldPollAppShellMaintenance(currentPage: string, user: Pick<User, "role"> | null) {
+  // Once the status page is open, its explicit recovery action owns checking
+  // and leaving that page. Keep the existing entry polling everywhere else.
+  return user !== null && user.role !== "admin" && user.role !== "superuser"
+    && currentPage !== "maintenance";
+}
+
 export function isMaintenancePollingAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
 }
@@ -47,14 +54,11 @@ export function useAppShellMaintenanceState({
 
   useEffect(() => {
     const onMaintenanceUpdated = (event: Event) => {
+      if (currentPage === "maintenance") return;
       const custom = event as CustomEvent<MaintenanceUpdatedDetail>;
       if (shouldRedirectForMaintenance(custom.detail, user?.role)) {
         setCurrentPage("maintenance");
         replaceHistory(buildPathForPage("maintenance"));
-      } else if (currentPage === "maintenance") {
-        const restoredPage = user?.role === "user" ? "general-search" : "home";
-        setCurrentPage(restoredPage);
-        replaceHistory(buildPathForPage(restoredPage));
       }
     };
 
@@ -63,7 +67,7 @@ export function useAppShellMaintenanceState({
   }, [currentPage, setCurrentPage, user]);
 
   useEffect(() => {
-    if (!user || user.role === "admin" || user.role === "superuser") return;
+    if (!user || !shouldPollAppShellMaintenance(currentPage, user)) return;
     let cancelled = false;
     let activeController: AbortController | null = null;
     let lastPollingWarningAtMs = 0;
@@ -90,10 +94,6 @@ export function useAppShellMaintenanceState({
         } else {
           if (state?.maintenance === true) {
             safeSetStorageItem(storage, "maintenanceState", JSON.stringify(state));
-          }
-          if (currentPage === "maintenance") {
-            setCurrentPage("general-search");
-            replaceHistory(buildPathForPage("general-search"));
           }
         }
       } catch (error) {

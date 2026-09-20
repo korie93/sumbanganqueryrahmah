@@ -99,11 +99,73 @@ test("frontend static skips configured paths outside the working directory", asy
   const { server, baseUrl } = await startTestServer(app);
   try {
     const response = await fetch(`${baseUrl}/`);
-    assert.equal(response.status, 404);
-    assert.doesNotMatch(await response.text(), /outside/);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.match(response.headers.get("content-type") || "", /text\/html/);
+    const body = await response.text();
+    assert.match(body, /SQR/);
+    assert.doesNotMatch(body, /outside|Frontend Not Built|build:local|dist-local|nginx|Node\.js|PM2/i);
+    const missingApi = await fetch(`${baseUrl}/api/missing`, { signal: AbortSignal.timeout(2000) });
+    assert.equal(missingApi.status, 404);
+    assert.equal((await missingApi.json()).error.code, "NOT_FOUND");
+    const missingSocket = await fetch(`${baseUrl}/ws`, { signal: AbortSignal.timeout(2000) });
+    assert.equal(missingSocket.status, 404);
+    assert.doesNotMatch(await missingSocket.text(), /Kod: 503/);
   } finally {
     await stopTestServer(server);
     await fs.rm(tempRoot, { recursive: true, force: true });
     await fs.rm(siblingRoot, { recursive: true, force: true });
+  }
+});
+
+test("document HTTP status agrees with client routes without intercepting APIs, assets, methods or realtime", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-document-status-"));
+  await fs.mkdir(path.join(tempRoot, "public"));
+  await fs.writeFile(path.join(tempRoot, "public", "index.html"), '<!doctype html><html><head></head><body id="sqr-shell"></body></html>');
+  const app = createJsonTestApp();
+  for (const code of [400, 401, 403, 404, 409, 429, 500, 502, 503, 504]) {
+    app.get(`/api/test-${code}`, (_req, res) => res.status(code).json({ code }));
+  }
+  app.get("/ws/health", (_req, res) => res.status(204).end());
+  registerFrontendStatic(app, { cwd: tempRoot, paths: ["public"] });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const route of ["/", "/login", "/reset-password?token=synthetic", "/settings?section=backup-restore", "/viewer", "/general-search", "/monitor?section=audit", "/collection/save", "/collection/records", "/collection/nicknames", "/collection/nickname-summary", "/collection/daily", "/collection/billing-principal", "/collection/monthly-comparison", "/collection/summary"]) {
+      const response = await fetch(`${baseUrl}${route}`);
+      assert.equal(response.status, 200, route);
+      assert.match(await response.text(), /sqr-shell/);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+    for (const route of ["/404", "/unknown-page", "/collection/unknown", "/collection/daily-typo", "/apiculture", "/wsoops"]) {
+      for (const method of ["GET", "HEAD"]) {
+        const response = await fetch(`${baseUrl}${route}`, { method });
+        assert.equal(response.status, 404, `${method} ${route}`);
+        assert.match(response.headers.get("content-type") || "", /text\/html/);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.equal(method === "HEAD" ? await response.text() : "", "");
+      }
+    }
+    for (const route of ["/api", "/API/missing", "/api/missing", "/internal/missing"]) {
+      const response = await fetch(`${baseUrl}${route}`);
+      assert.equal(response.status, 404);
+      assert.equal((await response.json()).error.code, "NOT_FOUND");
+    }
+    for (const code of [400, 401, 403, 404, 409, 429, 500, 502, 503, 504]) {
+      const response = await fetch(`${baseUrl}/api/test-${code}`);
+      assert.equal(response.status, code);
+      assert.deepEqual(await response.json(), { code });
+    }
+    for (const route of ["/assets/missing.js", "/ws", "/socket.io/"]) {
+      const response = await fetch(`${baseUrl}${route}`);
+      assert.equal(response.status, 404);
+      assert.doesNotMatch(await response.text(), /sqr-shell/);
+    }
+    assert.equal((await fetch(`${baseUrl}/ws/health`)).status, 204);
+    const post = await fetch(`${baseUrl}/unknown-page`, { method: "POST" });
+    assert.equal(post.status, 404);
+    assert.doesNotMatch(await post.text(), /sqr-shell/);
+  } finally {
+    await stopTestServer(server);
+    await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });

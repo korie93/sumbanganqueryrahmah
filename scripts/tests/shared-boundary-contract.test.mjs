@@ -18,6 +18,7 @@ const SERVER_ONLY_SHARED_MODULES = new Set([
 const COMMON_SHARED_MODULES = new Set([
   "ai-limits",
   "api-contracts",
+  "app-document-routes",
   "audit-log-classification",
   "auth-session-expiry",
   "collection-amount-types",
@@ -28,6 +29,7 @@ const COMMON_SHARED_MODULES = new Set([
   "pagination-contracts",
   "password-policy",
   "role-feature-access",
+  "system-status",
   "trusted-types",
   "user-roles",
   "web-vitals",

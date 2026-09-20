@@ -98,6 +98,11 @@ for (const requiredPath of [
   "deploy/pm2/ecosystem.release.config.cjs",
   "deploy/immutable/deploy-release.sh",
   "deploy/immutable/rollback-release.sh",
+  "deploy/errors",
+  "deploy/nginx/sqr-error-pages-http.conf.example",
+  "deploy/nginx/sqr-error-pages-server.conf.example",
+  "deploy/nginx/sqr-error-pages-response-headers.conf.example",
+  "docs/error-experience-nginx.md",
 ]) {
   copyRequired(requiredPath);
 }

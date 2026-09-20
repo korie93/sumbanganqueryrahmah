@@ -1,0 +1,28 @@
+# HTTP context only. Install as /etc/nginx/conf.d/sqr-error-pages-http.conf.
+# These are presentation selectors, never authentication or rate-limit keys.
+map $request_method $sqr_error_safe_method {
+    default 0;
+    GET 1;
+    HEAD 1;
+}
+map $http_accept $sqr_error_accepts_html {
+    default 0;
+    ~*text/html 1;
+}
+map $http_sec_fetch_dest $sqr_error_document_destination {
+    default 0;
+    "" 1;
+    document 1;
+    iframe 1;
+}
+# Never turn data, realtime, private files or script/style requests into a page,
+# even when a caller sends Accept: text/html. $uri excludes query strings.
+map $uri $sqr_error_document_route {
+    default 1;
+    ~*^/(api|internal|ws|socket\.io|telemetry|assets|uploads|_sqr)(/|$) 0;
+    ~*\.(js|mjs|css|map|json|webmanifest|ico|png|jpe?g|svg|webp|woff2?|ttf|pdf|xlsx?)(/|$) 0;
+}
+map "$sqr_error_safe_method:$sqr_error_accepts_html:$sqr_error_document_destination:$sqr_error_document_route" $sqr_error_format {
+    default json;
+    "1:1:1:1" html;
+}

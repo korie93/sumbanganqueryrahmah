@@ -7,6 +7,7 @@ import {
   HomePage,
   ImportPage,
   MaintenanceRoutePage,
+  NotFoundPage,
   SavedPage,
   SettingsRoutePage,
   SystemMonitorLayoutPage,
@@ -107,6 +108,15 @@ function AppPageRendererImpl({
       return <SettingsRoutePage tabVisibility={tabVisibility} />;
     case "maintenance":
       return <MaintenanceRoutePage />;
+    case "not-found":
+      return (
+        <NotFoundPage
+          isAuthenticated
+          homeLabel="Kembali ke Dashboard"
+          onNavigateHome={() => onNavigate(user.role === "user" ? "general-search" : "home")}
+          onLoginClick={() => onNavigate("home")}
+        />
+      );
     case "analysis":
     case "audit":
     case "audit-logs":

@@ -1,0 +1,39 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 128 128"
+  fill="none"
+>
+  <defs>
+    <linearGradient id="sqr-logo-minimal-gradient" x1="24" y1="20" x2="100" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1298B4" />
+      <stop offset="1" stop-color="#0A728A" />
+    </linearGradient>
+  </defs>
+  <circle
+    cx="52"
+    cy="46"
+    r="28"
+    stroke="url(#sqr-logo-minimal-gradient)"
+    stroke-width="10"
+  />
+  <path
+    d="M52 73V40"
+    stroke="url(#sqr-logo-minimal-gradient)"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M39 50L52 34L65 50"
+    stroke="url(#sqr-logo-minimal-gradient)"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M72 68L98 94"
+    stroke="url(#sqr-logo-minimal-gradient)"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
+</svg>

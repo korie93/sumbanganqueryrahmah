@@ -130,6 +130,23 @@ function AppContent() {
     );
   }
 
+  if (currentPage === "not-found") {
+    return (
+      <>
+        {readySignal}
+        {renderRoutePage(
+          "not-found",
+          <NotFoundPage
+            isAuthenticated={Boolean(user)}
+            homeLabel={user ? "Kembali ke Dashboard" : "Kembali ke Halaman Utama"}
+            onNavigateHome={user ? handleAuthenticatedNavigateHome : () => handlePublicNavigate("home")}
+            onLoginClick={() => handlePublicNavigate("login")}
+          />,
+        )}
+      </>
+    );
+  }
+
   if (!user) {
     if (currentPage === "home") {
       return (
@@ -193,23 +210,6 @@ function AppContent() {
               <ResetPasswordPage
                 onBackToHome={() => handlePublicNavigate("home")}
                 onBackToLogin={() => handlePublicNavigate("login")}
-              />
-            ),
-          )}
-        </>
-      );
-    }
-
-    if (currentPage === "not-found") {
-      return (
-        <>
-          {readySignal}
-          {renderRoutePage(
-            "not-found",
-            (
-              <NotFoundPage
-                onNavigateHome={() => handlePublicNavigate("home")}
-                onLoginClick={() => handlePublicNavigate("login")}
               />
             ),
           )}

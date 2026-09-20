@@ -5,6 +5,8 @@ import path from "path";
 import { runtimeConfig } from "../config/runtime";
 import { isPathInsideDirectory } from "../config/upload-paths";
 import { logger } from "../lib/logger";
+import { buildApiErrorResponse } from "../http/api-error-response";
+import { isKnownAppDocumentPath, isRequestNamespace } from "../../shared/app-document-routes";
 
 const DEFAULT_FRONTEND_PATHS = [
   "dist-local/public",
@@ -62,7 +64,7 @@ function shouldBypassSpaFallback(requestPath: string) {
     return false;
   }
 
-  if (requestPath.startsWith("/api") || requestPath.startsWith("/ws")) {
+  if (["/api", "/internal", "/ws", "/socket.io"].some((namespace) => isRequestNamespace(requestPath, namespace))) {
     return true;
   }
 
@@ -103,6 +105,16 @@ export function registerFrontendStatic(
   const cwd = options?.cwd || process.cwd();
   const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
   const publicAppUrl = options?.publicAppUrl ?? runtimeConfig.app.publicAppUrl;
+
+  // Runs after real routes, so ordinary API status/payloads are untouched.
+  app.use((req, res, next) => {
+    if (!["/api", "/internal"].some((namespace) => isRequestNamespace(req.path, namespace))) {
+      return next();
+    }
+    return res.status(404).set("Cache-Control", "no-store").json(buildApiErrorResponse("Not found.", {
+      statusCode: 404,
+    }));
+  });
 
   logger.info("Resolving frontend static assets", { cwd });
 
@@ -153,7 +165,18 @@ export function registerFrontendStatic(
         .setHeader("Cache-Control", `public, max-age=${ROBOTS_CACHE_MAX_AGE_SECONDS}`);
       res.send(buildRobotsTxt(publicAppUrl));
     });
+    const maintenanceIndex = fs.readFileSync(foundIndex, "utf8").replace(
+      /<head(?:\s[^>]*)?>/i,
+      '$&<meta name="sqr-maintenance" content="active">',
+    );
+    app.use((req, res, next) => {
+      if (res.locals.sqrMaintenanceDocument !== true
+        || !["GET", "HEAD"].includes(req.method)
+        || (shouldBypassSpaFallback(req.path) && req.path.toLowerCase() !== "/index.html")) return next();
+      return res.status(503).set("Cache-Control", "no-store").type("html").send(maintenanceIndex);
+    });
     app.use(express.static(foundPath, {
+      index: false,
       setHeaders(res, servedPath) {
         if (!isImmutableFrontendAsset(foundPath as string, servedPath)) {
           return;
@@ -167,10 +190,12 @@ export function registerFrontendStatic(
     }));
 
     app.use((req, res, next) => {
-      if (shouldBypassSpaFallback(req.path)) {
+      if (!["GET", "HEAD"].includes(req.method) || shouldBypassSpaFallback(req.path)) {
         return next();
       }
-      return res.sendFile(foundIndex as string);
+      res.set("Cache-Control", "no-store");
+      const status = isKnownAppDocumentPath(req.path) && req.path.toLowerCase() !== "/404" ? 200 : 404;
+      return res.status(status).sendFile(foundIndex as string);
     });
 
     logger.info("Frontend static assets registered successfully");
@@ -182,17 +207,10 @@ export function registerFrontendStatic(
     suggestedCommand: "npm run build:local",
   });
 
-  app.use((req, res) => {
-    if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
-      res.status(404).send(`
-          <html>
-            <body>
-              <h1>Frontend Not Built</h1>
-              <p>Please run: <code>npm run build:local</code></p>
-              <p>Then restart the server.</p>
-            </body>
-          </html>
-        `);
-    }
+  app.use((req, res, next) => {
+    if (!["GET", "HEAD"].includes(req.method) || shouldBypassSpaFallback(req.path)) return next();
+    return res.status(503).set("Cache-Control", "no-store").type("html").send(
+      '<!doctype html><html lang="ms"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>SQR — Perkhidmatan Tidak Tersedia</title></head><body><main><h1>Perkhidmatan Tidak Tersedia</h1><p>SQR tidak dapat dihubungi buat sementara waktu. Sila cuba semula sebentar lagi.</p><a href="/">Cuba Semula</a><p>Kod: 503</p></main></body></html>',
+    );
   });
 }

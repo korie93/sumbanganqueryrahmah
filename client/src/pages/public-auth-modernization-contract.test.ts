@@ -49,14 +49,19 @@ test("public auth recovery pages expose labels and decorative icons correctly", 
   assert.match(resetSource, /aria-hidden="true" focusable="false"/);
 });
 
-test("maintenance page keeps timer cleanup logic while using the modern status layout", () => {
+test("maintenance page uses shared accessible status and bounded manual recovery without countdown polling", () => {
   const source = readPageSource("Maintenance.tsx");
+  const view = readPageSource("../components/system-status/SystemStatusView.tsx");
+  const recovery = readPageSource("../components/system-status/useServiceRecovery.ts");
 
-  assert.match(source, /maintenance-page__status-grid/);
-  assert.match(source, /role="status" aria-live="polite"/);
-  assert.match(source, /clearManagedInterval\(pollIntervalId\)/);
-  assert.match(source, /window\.clearInterval\(tick\)/);
-  assert.match(source, /activeController\?\.abort\(\)/);
+  assert.match(source, /<SystemStatusView/);
+  assert.match(view, /role="status" aria-live="polite"/);
+  assert.match(source, /useServiceRecovery\("maintenance"\)/);
+  assert.match(source, /controller\.abort\(\)/);
+  assert.match(source, /window\.clearTimeout\(timeout\)/);
+  assert.match(recovery, /active\.current\?\.abort\(\)/);
+  assert.doesNotMatch(source, /setInterval|setManagedInterval|countdown/i);
+  assert.doesNotMatch(recovery, /setInterval|setManagedInterval/);
 });
 
 test("single-tab blocked page uses readable token-based copy and accessible guidance", () => {
