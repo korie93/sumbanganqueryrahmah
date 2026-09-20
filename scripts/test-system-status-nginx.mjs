@@ -173,6 +173,15 @@ try {
   const config = `worker_processes 1; pid nginx.pid; error_log logs/error.log warn;
 events { worker_connections 128; }
 http {
+  # Representative inherited MIME mappings, as in production's mime.types.
+  types {
+    text/html html;
+    text/plain txt;
+    text/css css;
+    application/javascript js;
+    image/svg+xml svg;
+    application/json json;
+  }
   default_type application/octet-stream;
   access_log off;
   ${httpSnippet}
@@ -282,9 +291,20 @@ http {
     assert.equal(response.headers.get("cache-control"), "no-store");
     checks.push({ route: `/_sqr/errors/assets/${asset}`, status: 200, format: "static without Node" });
   }
-  const unexpected = await request("/_sqr/errors/assets/not-allowlisted.txt");
-  assert.equal(unexpected.response.status, 404);
-  assert.equal(JSON.parse(unexpected.body).code, "NOT_FOUND");
+  for (const missing of ["missing.js", "missing.css", "missing.svg", "missing.html", "missing.json", "not-allowlisted.txt", "no-extension"]) {
+    for (const method of ["GET", "HEAD"]) {
+      const route = `/_sqr/errors/assets/${missing}`;
+      const { response, body } = await request(route, { method, headers: documentHeaders });
+      assert.equal(response.status, 404, route);
+      assert.match(response.headers.get("content-type"), /^application\/json(?:;|$)/, `${route}: JSON overrides inherited MIME mappings`);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+      assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
+      if (method === "HEAD") assert.equal(body, "");
+      else assert.deepEqual(JSON.parse(body), { ok: false, code: "NOT_FOUND", message: "Not found", error: { code: "NOT_FOUND", message: "Not found" } });
+      checks.push({ route, method, status: 404, format: "json regardless of file extension without Node" });
+    }
+  }
   await startFixture(appPort);
   const recovery = await request("/api/health/live");
   assert.deepEqual(JSON.parse(recovery.body), { status: "ok", ready: true });

@@ -65,6 +65,9 @@ Only three exact public assets are served:
 
 All other paths below that prefix return a bounded JSON 404. No directory listing,
 uploads, build source, map file, configuration or filesystem path is exposed.
+The catchall clears inherited MIME mappings with location-scoped `types { }`, so
+unknown `.js`, `.css`, `.svg` and other paths still return `application/json`.
+The three exact public asset locations retain their normal content types.
 The static directory must remain readable after Node/PM2 stops or an application
 release symlink changes. Install root-owned files with worker read/traverse access,
 typically directories 0755 and files 0644; do not grant the application write access.

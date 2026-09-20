@@ -69,6 +69,31 @@ test("static fallback is independent of Node and exposes only three asset paths"
   assert.doesNotMatch(active(server), /autoindex|\/uploads|current\/|dist-local/);
 });
 
+test("unknown error asset paths clear inherited MIME types without changing public asset types", () => {
+  const fallback = active(block(server, "location ^~ /_sqr/errors/"));
+  // default_type alone does not override inherited extension mappings such as .js/.css.
+  assert.match(fallback, /\btypes\s*\{\s*\}/);
+  assert.match(fallback, /default_type application\/json;/);
+  const response = fallback.match(/return 404 '([^']+)';/);
+  assert.ok(response, "Unknown error assets must return a JSON 404 response");
+  assert.deepEqual(JSON.parse(response[1]), {
+    ok: false,
+    code: "NOT_FOUND",
+    message: "Not found",
+    error: { code: "NOT_FOUND", message: "Not found" },
+  });
+  for (const [name, contentType] of [
+    ["status.css", "text/css"],
+    ["status.js", "application/javascript"],
+    ["sqr-logo.svg", "image/svg+xml"],
+  ]) {
+    const asset = active(block(server, `location = /_sqr/errors/assets/${name}`));
+    assert.ok(asset.includes(`default_type ${contentType};`));
+    assert.ok(asset.includes(`alias /var/www/sqr-errors/assets/${name};`));
+    assert.doesNotMatch(asset, /\btypes\s*\{|return 404/);
+  }
+});
+
 test("only static fallback owns its no-store and restrictive security headers", () => {
   assert.match(headers, /add_header Cache-Control "no-store" always;/);
   assert.match(headers, /add_header X-Content-Type-Options "nosniff" always;/);

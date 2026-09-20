@@ -85,6 +85,8 @@ location = /_sqr/errors/assets/sqr-logo.svg {
     include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
 }
 location ^~ /_sqr/errors/ {
+    # Return JSON even when the unknown path inherits a .js/.css/.svg MIME type.
+    types { }
     default_type application/json;
     include /etc/nginx/snippets/sqr-error-pages-response-headers.conf;
     return 404 '{"ok":false,"code":"NOT_FOUND","message":"Not found","error":{"code":"NOT_FOUND","message":"Not found"}}';
