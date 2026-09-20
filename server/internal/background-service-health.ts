@@ -1,3 +1,4 @@
+import type { Server } from "node:http";
 import { logger } from "../lib/logger";
 import {
   clearStartupServiceDegraded,
@@ -12,6 +13,7 @@ type BackgroundServiceHealthSignalOptions = {
   retryDelayMs?: number;
   service: string;
   start: () => Promise<void>;
+  startAfterListening?: Pick<Server, "listening" | "once" | "off">;
 };
 
 type BackgroundServiceHealthSignalHandle = {
@@ -101,11 +103,19 @@ export function startBackgroundServiceWithHealthSignal(
       });
   };
 
-  runStartAttempt();
+  // Schema-dependent queues must wait for the main startup path to finish
+  // security checks and ordered storage initialization before doing any work.
+  const startupServer = options.startAfterListening;
+  if (startupServer && !startupServer.listening) {
+    startupServer.once("listening", runStartAttempt);
+  } else {
+    runStartAttempt();
+  }
 
   return {
     stop: () => {
       stopped = true;
+      startupServer?.off("listening", runStartAttempt);
       if (retryTimer) {
         clearTimeout(retryTimer);
         retryTimer = null;

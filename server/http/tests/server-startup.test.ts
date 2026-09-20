@@ -5,6 +5,7 @@ import test, { type TestContext } from "node:test";
 import bcrypt from "bcrypt";
 import express from "express";
 import { startLocalServer } from "../../internal/server-startup";
+import { startBackgroundServiceWithHealthSignal } from "../../internal/background-service-health";
 import { resetDummyBcryptHashForTests } from "../../auth/passwords";
 
 function listen(server: ReturnType<typeof createServer>, port = 0) {
@@ -92,6 +93,16 @@ test("startLocalServer fails startup before listening when bcrypt runtime self-c
   const server = createServer(app);
   const fatalReports: Array<{ reason: string; details?: string }> = [];
   let storageInitCalls = 0;
+  const startBackgroundService = t.mock.fn(async () => undefined);
+  const backgroundService = startBackgroundServiceWithHealthSignal({
+    service: "bcrypt-startup-test-queue",
+    failureReason: "TEST_QUEUE_START_FAILED",
+    failureDetails: "Test queue failed to start.",
+    failureLogMessage: "Test queue failed to start",
+    start: startBackgroundService,
+    startAfterListening: server,
+  });
+  t.after(() => backgroundService.stop());
 
   await assert.rejects(
     startLocalServer({
@@ -129,6 +140,7 @@ test("startLocalServer fails startup before listening when bcrypt runtime self-c
 
   assert.equal(server.listening, false);
   assert.equal(storageInitCalls, 0);
+  assert.equal(startBackgroundService.mock.callCount(), 0);
   assert.deepEqual(fatalReports, [
     {
       reason: "BCRYPT_RUNTIME_UNAVAILABLE",
@@ -136,6 +148,96 @@ test("startLocalServer fails startup before listening when bcrypt runtime self-c
     },
   ]);
 });
+
+for (const storageOutcome of ["ready", "failed"] as const) {
+  test(`startLocalServer keeps background services gated while storage initializes (${storageOutcome})`, async (t) => {
+    resetDummyBcryptHashForTests();
+    t.after(() => resetDummyBcryptHashForTests());
+
+    const app = express();
+    const server = createServer(app);
+    let signalStorageStarted!: () => void;
+    const storageStarted = new Promise<void>((resolve) => {
+      signalStorageStarted = resolve;
+    });
+    let resolveStorageInitialization!: () => void;
+    let rejectStorageInitialization!: (error: Error) => void;
+    const storageInitialization = new Promise<void>((resolve, reject) => {
+      resolveStorageInitialization = resolve;
+      rejectStorageInitialization = reject;
+    });
+    let storageReady = false;
+    const startBackgroundService = t.mock.fn(async () => {
+      assert.equal(storageReady, true);
+      assert.equal(server.listening, true);
+    });
+    const backgroundService = startBackgroundServiceWithHealthSignal({
+      service: `storage-${storageOutcome}-startup-test-queue`,
+      failureReason: "TEST_QUEUE_START_FAILED",
+      failureDetails: "Test queue failed to start.",
+      failureLogMessage: "Test queue failed to start",
+      start: startBackgroundService,
+      startAfterListening: server,
+    });
+
+    const startup = startLocalServer({
+      app,
+      server,
+      storage: {
+        init: async () => {
+          signalStorageStarted();
+          await storageInitialization;
+          storageReady = true;
+        },
+        getActiveActivities: async () => [],
+        expireIdleActivitySession: async () => undefined,
+      },
+      connectedClients: new Map(),
+      getRuntimeSettingsCached: async () => ({
+        sessionTimeoutMinutes: 30,
+        wsIdleMinutes: 30,
+      }),
+      defaultSessionTimeoutMinutes: 30,
+      aiPrecomputeOnStart: false,
+      categoryStatsService: {
+        warmCategoryStats: async () => ({ skipped: true, computeKeys: 0 }),
+      },
+      notifyFatalStartup: () => undefined,
+      port: 0,
+      host: "127.0.0.1",
+    });
+
+    try {
+      // Fail promptly if an earlier startup check rejects instead of waiting
+      // indefinitely for the storage stub to be called.
+      await Promise.race([storageStarted, startup]);
+      assert.equal(storageReady, false);
+      assert.equal(server.listening, false);
+      assert.equal(startBackgroundService.mock.callCount(), 0);
+
+      if (storageOutcome === "failed") {
+        const rejectedStartup = assert.rejects(startup, /test storage initialization failed/);
+        rejectStorageInitialization(new Error("test storage initialization failed"));
+        await rejectedStartup;
+        assert.equal(server.listening, false);
+        assert.equal(startBackgroundService.mock.callCount(), 0);
+      } else {
+        resolveStorageInitialization();
+        await startup;
+        assert.equal(storageReady, true);
+        assert.equal(server.listening, true);
+        assert.equal(startBackgroundService.mock.callCount(), 1);
+      }
+    } finally {
+      backgroundService.stop();
+      resolveStorageInitialization();
+      await startup.catch(() => undefined);
+      if (server.listening) {
+        await close(server);
+      }
+    }
+  });
+}
 
 test("startLocalServer cancels pending category precompute when server closes first", async (t) => {
   resetDummyBcryptHashForTests();

@@ -47,3 +47,8 @@ test("npm test keeps local regression scope below browser and release-only gates
 
   assert.doesNotMatch(testScript, /test:e2e|test:visual|smoke:ui|release:verify|build/);
 });
+
+test("HTTP CI gate includes schema-dependent background startup regression tests", () => {
+  const scripts = readPackageScripts();
+  assert.ok(scripts["test:http"].includes("server/internal/tests/background-service-health.test.ts"));
+});

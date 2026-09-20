@@ -127,6 +127,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     ensureReady: () => storage.ensureBackupsReady(),
   });
   const backupJobQueueHealthSignal = startBackgroundServiceWithHealthSignal({
+    startAfterListening: server,
     service: "backup-job-queue",
     failureReason: "BACKUP_JOB_QUEUE_START_FAILED",
     failureDetails: "Backup background job queue failed to start; see server logs.",
@@ -140,6 +141,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     }),
   });
   const collectionRollupRefreshQueueHealthSignal = startBackgroundServiceWithHealthSignal({
+    startAfterListening: server,
     service: "collection-rollup-refresh-queue",
     failureReason: "COLLECTION_ROLLUP_REFRESH_QUEUE_START_FAILED",
     failureDetails: "Collection rollup refresh queue failed to start; see server logs.",
