@@ -1205,7 +1205,9 @@ const waitForCollectionFilterButtonEnabled = async (filterButton, timeoutMs = 8_
 
 const filterCollectionRecordsBySearch = async (page, searchValue) => {
   const normalizedSearchValue = String(searchValue || "").trim();
-  const searchInput = page.getByPlaceholder("Cari nama / IC / akaun / batch / telefon / jumlah bayaran");
+  // This flow explicitly uses the desktop layout; help-copy changes must not
+  // break the shared search used by stale-delete, settlement and receipt smoke.
+  const searchInput = page.locator("#collection-records-search");
   const filterButton = page.getByRole("button", { name: "Filter", exact: true });
   let lastListResponse = null;
 
