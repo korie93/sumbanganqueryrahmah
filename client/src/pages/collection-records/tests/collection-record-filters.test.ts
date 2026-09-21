@@ -60,3 +60,46 @@ test("buildCollectionRecordFilterSnapshot ignores blank and all nickname filters
     },
   );
 });
+
+test("buildCollectionRecordFilterSnapshot preserves exact Card No strings and existing filters", () => {
+  const cardNumbers = [
+    "4181340231853188",
+    "9007199254740993",
+    "00009007199254740993",
+    "4181 3402 3185 3188",
+    "4181-3402-3185-3188",
+  ];
+
+  for (const cardNumber of cardNumbers) {
+    const filters = buildCollectionRecordFilterSnapshot({
+      fromDate: "2026-09-01",
+      toDate: "2026-09-30",
+      searchInput: `  ${cardNumber}  `,
+      canUseNicknameFilter: true,
+      nicknameFilter: "Collector Alpha",
+      canUseTeamLeaderFilter: true,
+      leaderFilter: "11111111-1111-4111-8111-111111111111",
+      sourceImportFilter: "source-1",
+      agingFilter: "D4",
+      classificationFilter: "cp",
+      sortValue: "paymentDate_desc",
+      limit: 50,
+      offset: 100,
+    });
+
+    assert.deepEqual(filters, {
+      from: "2026-09-01",
+      to: "2026-09-30",
+      search: cardNumber,
+      nickname: "Collector Alpha",
+      leaderId: "11111111-1111-4111-8111-111111111111",
+      sourceImportIds: ["source-1"],
+      agingBuckets: ["D4"],
+      classifications: ["cp"],
+      sortBy: "paymentDate",
+      sortDirection: "desc",
+      limit: 50,
+      offset: 100,
+    });
+  }
+});

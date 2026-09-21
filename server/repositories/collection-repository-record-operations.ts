@@ -11,6 +11,8 @@ import type {
   UpdateCollectionRecordInput,
   UpdateCollectionRecordOptions,
 } from "../storage-postgres";
+import { db } from "../db-postgres";
+import { resolveCollectionRecordCardSearchLinks } from "./collection-record-card-search-utils";
 import {
   createCollectionRecord,
   getCollectionMonthlyComparison,
@@ -38,6 +40,10 @@ export async function listCollectionRecordsRepository(
   filters?: CollectionRecordListFilters,
 ): Promise<CollectionRecord[]> {
   return listCollectionRecords(filters);
+}
+
+export async function resolveCollectionRecordCardSearchLinksRepository(filters: CollectionRecordAggregateFilters) {
+  return resolveCollectionRecordCardSearchLinks(db, filters);
 }
 
 export async function summarizeCollectionRecordsRepository(

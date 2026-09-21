@@ -1,4 +1,5 @@
 import { badRequest, forbidden } from "../../http/errors";
+import type { CollectionRecordAggregateFilters } from "../../storage-postgres";
 import { readPageLimit } from "../../http/validation";
 import { safeParseInteger } from "../../lib/safe-parse";
 import {
@@ -230,7 +231,7 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
       };
     }
 
-    const baseFilters = {
+    const baseFilters: CollectionRecordAggregateFilters = {
       from: from || undefined,
       to: to || undefined,
       search: search || undefined,
@@ -251,6 +252,9 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
         : undefined,
       sortDirection: sortDirectionRaw === "asc" ? "asc" as const : "desc" as const,
     };
+    if (search) {
+      baseFilters.cardSearchSourceLinks = await this.storage.resolveCollectionRecordCardSearchLinks(baseFilters);
+    }
     const [aggregate, records] = await Promise.all([
       this.storage.summarizeCollectionRecords(baseFilters),
       this.storage.listCollectionRecords({

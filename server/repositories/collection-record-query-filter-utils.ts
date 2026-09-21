@@ -106,6 +106,21 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
     if (accountNumberSearchHash) {
       searchConditions.push(sql`account_number_search_hash = ${accountNumberSearchHash}`);
     }
+    const cardLinks = filters?.cardSearchSourceLinks;
+    if (cardLinks?.length) {
+      // One bound JSON parameter avoids PostgreSQL's parameter-count ceiling.
+      // Match the exact immutable source triple, never a customer-level IC.
+      const linksJson = JSON.stringify(cardLinks);
+      searchConditions.push(sql`EXISTS (
+        SELECT 1
+        FROM jsonb_to_recordset(${linksJson}::jsonb) AS verified_card(
+          "sourceImportId" text, "sourceDataRowId" text, "sourceObligationKey" text
+        )
+        WHERE verified_card."sourceImportId" = record.source_import_id
+          AND verified_card."sourceDataRowId" = record.source_data_row_id
+          AND verified_card."sourceObligationKey" = record.source_obligation_key
+      )`);
+    }
     conditions.push(sql`(
       ${sql.join(searchConditions, sql`
       OR `)}

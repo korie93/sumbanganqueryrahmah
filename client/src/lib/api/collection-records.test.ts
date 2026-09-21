@@ -244,7 +244,7 @@ test("getCollectionRecords accepts the backend maximum page size", async () => {
 });
 
 test("getCollectionRecords preserves the full card number returned after backend authorization", async () => {
-  const fullCardNumber = "5555555555554444";
+  const fullCardNumber = "9007199254740993";
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(
     JSON.stringify(buildCollectionListPayload({
@@ -265,6 +265,56 @@ test("getCollectionRecords preserves the full card number returned after backend
     assert.equal(payload.records[0]?.accountNumber, "");
     assert.equal(payload.records[0]?.cardNumberLast4, "2537");
     assert.equal(payload.records[0]?.cardNumber, fullCardNumber);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("getCollectionRecords sends Card No as an exact search string alongside existing filters", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl: URL | undefined;
+  globalThis.fetch = (async (input) => {
+    requestedUrl = new URL(String(input), "http://localhost");
+    return new Response(JSON.stringify(buildCollectionListPayload()), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    for (const search of [
+      "4181340231853188",
+      "9007199254740993",
+      "00009007199254740993",
+      "4181 3402 3185 3188",
+      "4181-3402-3185-3188",
+      " 4181 3402 3185 3188 ",
+    ]) {
+      await getCollectionRecords({
+        search,
+        from: "2026-09-01",
+        to: "2026-09-30",
+        nickname: "Collector Alpha",
+        sourceImportIds: ["source-1"],
+        agingBuckets: ["D4"],
+        classifications: ["cp"],
+        page: 2,
+        pageSize: 50,
+      });
+
+      assert.equal(requestedUrl?.pathname, "/api/collection/list");
+      assert.deepEqual(Object.fromEntries(requestedUrl?.searchParams ?? []), {
+        search,
+        from: "2026-09-01",
+        to: "2026-09-30",
+        nickname: "Collector Alpha",
+        sourceImportIds: "source-1",
+        agingBuckets: "D4",
+        classifications: "cp",
+        page: "2",
+        pageSize: "50",
+      });
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

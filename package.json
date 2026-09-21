@@ -83,6 +83,7 @@
     "test:client": "node scripts/run-client-tests.mjs",
     "test:search:card-browser": "node scripts/general-search-card-no-browser.mjs",
     "test:search:card-postgres": "node scripts/test-search-card-no-isolated.mjs",
+    "test:collection:card-browser": "node scripts/test-collection-card-no-isolated.mjs",
     "test:e2e:smoke": "node scripts/ui-smoke.mjs",
     "test:e2e:visual": "node scripts/ui-visual-contract.mjs",
     "test:visual": "playwright test tests/visual/",

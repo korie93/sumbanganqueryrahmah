@@ -367,6 +367,10 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.listCollectionRecords(filters);
   }
 
+  async resolveCollectionRecordCardSearchLinks(filters: CollectionRecordAggregateFilters) {
+    return this.collectionRepository.resolveCollectionRecordCardSearchLinks(filters);
+  }
+
   async summarizeCollectionRecords(filters?: CollectionRecordAggregateFilters): Promise<CollectionRecordAggregate> {
     return this.collectionRepository.summarizeCollectionRecords(filters);
   }

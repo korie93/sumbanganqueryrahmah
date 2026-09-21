@@ -273,7 +273,7 @@ export function CollectionRecordsFilters({
               type="search"
               value={searchInput}
               onChange={(event) => onSearchInputChange(event.target.value)}
-              placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
+              placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
               className="h-12 rounded-2xl pl-9 text-base"
               autoComplete="off"
               autoCapitalize="none"
@@ -383,7 +383,7 @@ export function CollectionRecordsFilters({
             type="search"
             value={searchInput}
             onChange={(event) => onSearchInputChange(event.target.value)}
-            placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
+            placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
             className="h-11 rounded-xl bg-background pl-9"
             autoComplete="off"
             autoCapitalize="none"

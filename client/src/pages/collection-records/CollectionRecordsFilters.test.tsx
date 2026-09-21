@@ -11,7 +11,7 @@ test("CollectionRecordsFilters uses the collection nickname picker and compact d
       canUseTeamLeaderFilter: true,
       fromDate: "2026-05-01",
       toDate: "2026-05-15",
-      searchInput: "afiqah",
+      searchInput: "00009007199254740993",
       nicknameFilter: "all",
       leaderFilter: "all",
       sourceImportFilter: "all",
@@ -73,5 +73,11 @@ test("CollectionRecordsFilters uses the collection nickname picker and compact d
   assert.match(markup, /h-11 rounded-xl bg-background/);
   assert.match(markup, />Filter</);
   assert.match(markup, />Reset</);
+  const searchInputMarkup = markup.match(/<input\b[^>]*\bid="collection-records-search"[^>]*>/)?.[0];
+  assert.ok(searchInputMarkup);
+  assert.match(searchInputMarkup, /type="search"/);
+  assert.match(searchInputMarkup, /value="00009007199254740993"/);
+  assert.match(searchInputMarkup, /placeholder="Cari nama \/ IC \/ akaun \/ Card No \/ batch \/ telefon \/ jumlah bayaran"/);
+  assert.doesNotMatch(searchInputMarkup, /(?:maxLength|inputMode)="/i);
   assert.doesNotMatch(markup, /<select[^>]*collection-records-nickname-filter/);
 });

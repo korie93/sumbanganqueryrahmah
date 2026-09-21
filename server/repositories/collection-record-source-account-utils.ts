@@ -35,6 +35,43 @@ function buildSourceLinkKey(sourceImportId: string, sourceDataRowId: string): st
   return JSON.stringify([sourceImportId, sourceDataRowId]);
 }
 
+/** Shared authority for displayed cards and pre-pagination Card No search. */
+export function verifyCollectionRecordSourceIdentity(
+  row: Record<string, unknown>,
+  expectedObligationKey: string,
+) {
+  const canonicalSource = extractCanonicalSavedCollectionMasterRow(row.source_json_data);
+  const sourceAccountNumber = canonicalSource.accountNumber;
+  const sourceAccountHash = hashCollectionSourceIdentifier(sourceAccountNumber, "account_number");
+  const sourceCardHash = hashCollectionSourceIdentifier(canonicalSource.cardNumber, "card_number");
+  const sourceObligationKey = sourceAccountHash
+    ? `account:${sourceAccountHash}`
+    : sourceCardHash ? `card:${sourceCardHash}` : null;
+  if (!sourceObligationKey) return null;
+
+  const indexedCardHash = normalizeRequiredText(row.source_card_number_hash);
+  const indexedCardLast4 = normalizeRequiredText(row.source_card_number_last4);
+  const indexedObligationKey = normalizeRequiredText(row.source_obligation_key);
+  const normalizedCardNumber = normalizeCollectionSourceIdentifier(canonicalSource.cardNumber);
+  const governedIndexIsAvailable = Boolean(indexedCardHash || indexedCardLast4 || indexedObligationKey);
+  const governedIndexMatches = !governedIndexIsAvailable || (
+    indexedCardHash === sourceCardHash
+    && /^\d{4}$/.test(indexedCardLast4 ?? "")
+    && indexedCardLast4 === normalizedCardNumber.slice(-4)
+    && indexedObligationKey === sourceObligationKey
+  );
+  const verifiedCardNumber = sourceCardHash
+    && sourceObligationKey === expectedObligationKey
+    && governedIndexMatches
+    ? normalizedCardNumber : null;
+  return {
+    accountNumber: sourceAccountNumber,
+    cardNumber: verifiedCardNumber,
+    cardNumberLast4: verifiedCardNumber ? verifiedCardNumber.slice(-4) : null,
+    obligationKey: sourceObligationKey,
+  };
+}
+
 function collectLinkedSourceIdentityRows(
   records: readonly CollectionSourceIdentityRecord[],
 ): LinkedCollectionSourceAccount[] {
@@ -140,46 +177,8 @@ export async function hydrateCollectionRecordSourceAccounts<T extends Collection
       const expectedObligationKey = expectedObligationByLink.get(key);
       if (!expectedObligationKey) continue;
 
-      const canonicalSource = extractCanonicalSavedCollectionMasterRow(row.source_json_data);
-      const sourceAccountNumber = canonicalSource.accountNumber;
-      const sourceAccountHash = hashCollectionSourceIdentifier(
-        sourceAccountNumber,
-        "account_number",
-      );
-      const sourceCardHash = hashCollectionSourceIdentifier(
-        canonicalSource.cardNumber,
-        "card_number",
-      );
-      const sourceObligationKey = sourceAccountHash
-        ? `account:${sourceAccountHash}`
-        : sourceCardHash
-          ? `card:${sourceCardHash}`
-          : null;
-      if (!sourceObligationKey) continue;
-      const indexedCardHash = normalizeRequiredText(row.source_card_number_hash);
-      const indexedCardLast4 = normalizeRequiredText(row.source_card_number_last4);
-      const indexedObligationKey = normalizeRequiredText(row.source_obligation_key);
-      const normalizedCardNumber = normalizeCollectionSourceIdentifier(canonicalSource.cardNumber);
-      const governedIndexIsAvailable = Boolean(
-        indexedCardHash || indexedCardLast4 || indexedObligationKey,
-      );
-      const governedIndexMatches = !governedIndexIsAvailable || (
-        indexedCardHash === sourceCardHash
-        && /^\d{4}$/.test(indexedCardLast4 ?? "")
-        && indexedCardLast4 === normalizedCardNumber.slice(-4)
-        && indexedObligationKey === sourceObligationKey
-      );
-      const verifiedCardNumber = sourceCardHash
-        && sourceObligationKey === expectedObligationKey
-        && governedIndexMatches
-        ? normalizedCardNumber
-        : null;
-      sourceIdentityByLink.set(key, {
-        accountNumber: sourceAccountNumber,
-        cardNumber: verifiedCardNumber,
-        cardNumberLast4: verifiedCardNumber ? verifiedCardNumber.slice(-4) : null,
-        obligationKey: sourceObligationKey,
-      });
+      const identity = verifyCollectionRecordSourceIdentity(row, expectedObligationKey);
+      if (identity) sourceIdentityByLink.set(key, identity);
     }
   }
 

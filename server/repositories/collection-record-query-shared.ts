@@ -6,6 +6,7 @@ import type {
   CollectionReceiptValidationStatus,
 } from "../storage-postgres";
 import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
+import type { CollectionRecordCardSearchLink } from "../storage-postgres-collection-types";
 
 export const COLLECTION_MONTH_NAMES = [
   "January",
@@ -26,6 +27,7 @@ export type CollectionRecordFilters = {
   from?: string | undefined;
   to?: string | undefined;
   search?: string | undefined;
+  cardSearchSourceLinks?: CollectionRecordCardSearchLink[] | undefined;
   createdByLogin?: string | undefined;
   nicknames?: string[] | undefined;
   staffNicknameIds?: string[] | undefined;

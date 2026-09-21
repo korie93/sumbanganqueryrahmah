@@ -43,6 +43,7 @@ import {
   getCollectionRecordByIdRepository,
   getCollectionRecordDailyRollupFreshnessRepository,
   listCollectionRecordsRepository,
+  resolveCollectionRecordCardSearchLinksRepository,
   purgeCollectionRecordsOlderThanRepository,
   summarizeCollectionRecordsByNicknameAndPaymentDateRepository,
   summarizeCollectionRecordsByNicknameRepository,
@@ -136,6 +137,7 @@ export class CollectionRepository {
   readonly listCollectionDailyUsers = listCollectionDailyUsersRepository;
   readonly listCollectionRecordReceipts = listCollectionRecordReceiptsRepository;
   readonly listCollectionRecords = listCollectionRecordsRepository;
+  readonly resolveCollectionRecordCardSearchLinks = resolveCollectionRecordCardSearchLinksRepository;
   readonly listCollectionSourceConfigs = listCollectionSourceConfigs;
   readonly purgeCollectionRecordsOlderThan = purgeCollectionRecordsOlderThanRepository;
   readonly setCollectionAdminAssignedNicknameIds = setCollectionAdminAssignedNicknameIdsRepository;

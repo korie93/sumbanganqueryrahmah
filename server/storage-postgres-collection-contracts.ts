@@ -170,6 +170,7 @@ export interface CollectionStorageContract {
     receipts?: CreateCollectionRecordReceiptInput[],
   ): Promise<CollectionRecord>;
   listCollectionRecords(filters?: CollectionRecordListFilters): Promise<CollectionRecord[]>;
+  resolveCollectionRecordCardSearchLinks(filters: CollectionRecordAggregateFilters): Promise<NonNullable<CollectionRecordListFilters["cardSearchSourceLinks"]>>;
   summarizeCollectionRecords(filters?: CollectionRecordAggregateFilters): Promise<CollectionRecordAggregate>;
   summarizeCollectionRecordsByNickname(filters?: CollectionRecordAggregateFilters): Promise<CollectionNicknameAggregate[]>;
   getCollectionRecordDailyRollupFreshness(filters?: {

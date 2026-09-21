@@ -55,6 +55,7 @@ export type CollectionStoragePort = Pick<
   | "listCollectionRecordReceipts"
   | "listCollectionSavedSourceFiles"
   | "listCollectionRecords"
+  | "resolveCollectionRecordCardSearchLinks"
   | "upsertCollectionManualSettlement"
   | "revokeCollectionManualSettlement"
   | "listCollectionManualSettlementAudit"

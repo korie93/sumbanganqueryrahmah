@@ -153,12 +153,21 @@ export type CollectionRecordAggregate = {
   totalAmount: CollectionAmountMyrNumber;
 };
 
+export type CollectionRecordCardSearchLink = {
+  sourceImportId: string;
+  sourceDataRowId: string;
+  sourceObligationKey: string;
+};
+
 export type CollectionRecordListFilters = {
   from?: string | undefined;
   to?: string | undefined;
   search?: string | undefined;
+  /** Internal verified links only; never accepted from request query parameters. */
+  cardSearchSourceLinks?: CollectionRecordCardSearchLink[] | undefined;
   createdByLogin?: string | undefined;
   nicknames?: string[] | undefined;
+  staffNicknameIds?: string[] | undefined;
   receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged" | undefined;
   duplicateOnly?: boolean | undefined;
   sourceImportIds?: string[] | undefined;

@@ -732,6 +732,7 @@ export function createCoreCollectionStorageDouble(options?: {
     ) => {
       idempotency.release(params);
     },
+    resolveCollectionRecordCardSearchLinks: async () => [],
     summarizeCollectionRecords: async (filters: Record<string, unknown>) => {
       summaryCalls.push(filters);
       return {
