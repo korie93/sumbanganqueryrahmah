@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { chromium } from "playwright";
+import { expect } from "@playwright/test";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 
 // Isolated real-browser UI contract, deliberately not a real API/database E2E.
@@ -47,6 +48,11 @@ let twoFactorFixtureUser = { ...fixtureUser };
 let browser;
 let page;
 let origin;
+let phase = "fixture startup";
+function markPhase(nextPhase) {
+  phase = nextPhase;
+  console.log(`[auth-feedback-browser] START ${phase}`);
+}
 const server = await createServer({
   configFile: false, envFile: false, envDir: false,
   root: path.join(rootDir, "client"),
@@ -74,6 +80,7 @@ async function visibleText(locator, text) {
 }
 
 async function go(view, token = "fixture-link", theme = "light", extra = {}) {
+  phase = `${view}: fixture navigation`;
   await page.goto(`${origin}/?${new URLSearchParams({ view, token, theme, ...extra })}`, { waitUntil: "networkidle" });
 }
 
@@ -660,32 +667,41 @@ try {
   console.log("[auth-feedback-browser] PASS invalid/expired/used/superseded/already-activated link feedback");
 
   await go("login");
+  markPhase("login: initial OTP challenge");
   await page.getByTestId("input-username").fill("ui.fixture");
   await page.getByTestId("input-password").fill(validPassword);
   await page.getByTestId("button-login").click();
   await page.getByTestId("input-two-factor-code").waitFor({ state: "visible" });
   assert.equal(await page.evaluate(() => document.body.dataset.authenticated), undefined);
+  markPhase("login: invalid OTP rejection");
   await page.getByTestId("input-two-factor-code").fill("123456");
   await page.getByTestId("button-login").click();
   await visibleText(page.locator("[role=alert]"), "Kod pengesah tidak betul.");
   assert.equal(await page.getByTestId("input-two-factor-code").count(), 1);
   assert.equal(await page.evaluate(() => document.body.dataset.authenticated), undefined);
   loginError = "TWO_FACTOR_CODE_REPLAYED";
+  markPhase("login: replayed OTP rejection");
   await page.getByTestId("button-login").click();
   await visibleText(page.locator("[role=alert]"), "Tunggu kod baharu");
   assert.equal(await page.getByTestId("input-two-factor-code").count(), 1);
   for (const code of ["TWO_FACTOR_CHALLENGE_EXPIRED", "TWO_FACTOR_CHALLENGE_INVALID"]) {
+    markPhase(`login: ${code} rejection`);
     loginError = code;
     await page.getByTestId("input-two-factor-code").fill("654321");
     await page.getByTestId("button-login").click();
     await visibleText(page.locator("[role=alert]"), "Sila log masuk semula");
     await page.getByTestId("input-password").waitFor({ state: "visible" });
     assert.equal(await page.getByTestId("input-two-factor-code").count(), 0);
+    markPhase(`login: ${code} clean restart`);
     await page.getByTestId("button-login").click();
     await page.getByTestId("input-two-factor-code").waitFor({ state: "visible" });
     assert.equal(await page.getByTestId("input-two-factor-code").inputValue(), "");
-    assert.equal(await page.getByTestId("input-two-factor-code").evaluate((element) => element === document.activeElement), true);
+    markPhase(`login: ${code} autofocus`);
+    // Login focuses after a React effect/requestAnimationFrame, not merely when
+    // the input becomes visible. Observe that outcome without forcing focus.
+    await expect(page.getByTestId("input-two-factor-code")).toBeFocused({ timeout: 5_000 });
   }
+  markPhase("login: rejection request counts and unauthenticated state");
   assert.equal(counts.login, 3);
   assert.equal(counts.verify, 4);
   assert.equal(await page.evaluate(() => document.body.dataset.authenticated), undefined);
@@ -694,6 +710,7 @@ try {
   await go("setup");
   const panel = page.getByTestId("two-factor-settings");
   async function startGuidedSetup(checkDuplicate = false) {
+    markPhase("guided setup: password and QR");
     await panel.getByRole("button", { name: /^(Aktifkan 2FA|Mulakan semula persediaan)$/ }).click();
     await visibleText(panel.locator("[role=status]"), "Langkah 1 daripada 3");
     await page.locator("#my-account-two-factor-password").fill(validPassword);
@@ -718,9 +735,10 @@ try {
     assert.equal(await page.locator("#my-account-two-factor-code").count(), 0, "Code entry appears only after app instructions.");
   }
   async function confirmGuidedSetup() {
+    markPhase("guided setup: code step autofocus");
     await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
     await visibleText(panel.locator("[role=status]"), "Langkah 3 daripada 3");
-    assert.equal(await page.locator("#my-account-two-factor-code").evaluate((element) => element === document.activeElement), true);
+    await expect(page.locator("#my-account-two-factor-code")).toBeFocused({ timeout: 5_000 });
   }
   await visibleText(panel, "Status: Tidak aktif");
   await startGuidedSetup(true);
@@ -841,6 +859,11 @@ try {
   assert.deepEqual(reactWarnings, [], "No React warnings.");
   console.log("[auth-feedback-browser] PASS all isolated UI contracts (mocked HTTP, not backend E2E)");
 } catch (error) {
+  // Only controlled phase labels and fixed categories are safe to log. Never
+  // expose Playwright assertion details, which can include entered values.
+  const category = error?.code === "ERR_ASSERTION" || error?.matcherResult ? "assertion"
+    : error?.name === "TimeoutError" ? "timeout" : "browser-or-runtime";
+  console.error(`[auth-feedback-browser] FAIL ${phase}; category=${category}`);
   if (page) {
     const artifacts = path.join(rootDir, "artifacts/auth-feedback-browser");
     await mkdir(artifacts, { recursive: true });
