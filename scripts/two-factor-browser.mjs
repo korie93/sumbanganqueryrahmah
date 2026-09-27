@@ -20,6 +20,14 @@ export function classifyTwoFactorBrowserError(error) {
   return "browser-or-runtime";
 }
 
+export async function waitForAuthenticatedWorkspace(page) {
+  // A 200 response/cookie only proves the backend session. Let the real login
+  // callback, lazy shell and single-tab ownership finish before a hard reload.
+  // A broken login must still fail here; never retry it or manufacture state.
+  await page.locator(".sqr-workspace").waitFor({ state: "visible", timeout: 15_000 });
+  await page.getByTestId("input-username").waitFor({ state: "hidden", timeout: 15_000 });
+}
+
 export function authenticatorCode(uri, nowMs = Date.now()) {
   const parsed = new URL(uri);
   assert.equal(parsed.protocol, "otpauth:");
@@ -125,13 +133,24 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     await target.getByTestId("input-password").press("Enter");
     const result = await response;
     assert.equal(result.status(), 200, "Real password login succeeds");
-    return result.json();
+    const body = await result.json();
+    if (!body.twoFactorRequired) {
+      markPhase("password login: authenticated workspace");
+      await waitForAuthenticatedWorkspace(target);
+    }
+    return body;
   }
   async function settings(target) {
-    markPhase("settings: security category");
+    markPhase("settings: login completion");
+    await waitForAuthenticatedWorkspace(target);
+    markPhase("settings: navigation");
     await target.goto(`${baseUrl}/settings`);
+    markPhase("settings: restored authenticated workspace");
+    await waitForAuthenticatedWorkspace(target);
     // Seeded category IDs are generated database IDs, not the display name.
+    markPhase("settings: security category");
     await target.getByRole("button", { name: /^Security(?:\s|$)/ }).first().click();
+    markPhase("settings: 2FA panel");
     await target.getByTestId("two-factor-settings").waitFor({ state: "visible" });
   }
   async function layout(state, target = page) {
@@ -306,6 +325,8 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     const verified = loginPage.waitForResponse((item) => new URL(item.url()).pathname === "/api/auth/verify-two-factor-login");
     await loginPage.getByTestId("button-login").click();
     assert.equal((await verified).status(), 200, "First 2FA login creates a session");
+    markPhase("fresh login: authenticated workspace");
+    await waitForAuthenticatedWorkspace(loginPage);
     assert.equal((await api(loginPage, "/api/auth/me")).status, 200);
     const cookie = (await loginPage.context().cookies()).find((item) => item.name === "sqr_auth");
     assert.ok(cookie?.httpOnly, "Real session remains HttpOnly");
@@ -333,6 +354,8 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     const finalVerified = finalPage.waitForResponse((item) => new URL(item.url()).pathname === "/api/auth/verify-two-factor-login");
     await finalPage.getByTestId("button-login").click();
     assert.equal((await finalVerified).status(), 200, "Re-enrolled authenticator supports fresh login");
+    markPhase("re-enrollment: authenticated workspace");
+    await waitForAuthenticatedWorkspace(finalPage);
     assert.deepEqual(failures, []);
     assert.deepEqual(externalRequests, [], "No external requests including QR exfiltration");
     console.log("[two-factor-browser] PASS actual built app + PostgreSQL setup, invalid OTP, independently decoded QR/code, login gate, disable and re-enable; no API mocks");
