@@ -100,8 +100,15 @@
 
 .dashboard-review-focus {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Size by available content space and text size, not the viewport: the
+     desktop sidebar remains present when users enlarge text to 200%. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: var(--spacing-3);
+}
+
+.dashboard-review-focus > div {
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .dashboard-review-actions {
@@ -113,8 +120,7 @@
 @media (max-width: 1023px) {
   .dashboard-core-metrics,
   .dashboard-supporting-metrics,
-  .dashboard-situation-facts,
-  .dashboard-review-focus {
+  .dashboard-situation-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

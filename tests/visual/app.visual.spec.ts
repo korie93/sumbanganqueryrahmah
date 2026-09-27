@@ -100,17 +100,17 @@ const authenticatedRoutes: readonly VisualRouteSpec[] = [
   {
     id: "dashboard",
     path: "/dashboard",
-    readySelector: "main#main-content",
+    readySelector: '[data-testid="dashboard-login-command-bar"]',
   },
   {
     id: "sumbangan-form",
     path: "/collection/save",
-    readySelector: "main#main-content",
+    readySelector: "#save-collection-superuser-nickname",
   },
   {
     id: "admin-settings",
     path: "/settings",
-    readySelector: "main#main-content",
+    readySelector: "#setting-card-control-system_name",
   },
 ];
 
@@ -119,26 +119,28 @@ function buildVisualMasks(page: Page, theme: VisualTheme) {
     mask: [
       page.locator('[data-testid="button-user-menu"]'),
       page.locator('[data-testid="button-user-menu-mobile"]'),
-      page.locator('[data-testid*="count"]'),
-      page.locator('[data-testid*="date"]'),
-      page.locator('[data-testid*="timestamp"]'),
       page.locator('[data-testid="badge-dashboard-freshness"]'),
-      page.locator('[aria-live="polite"]'),
     ],
     maskColor: theme === "dark" ? "#111827" : "#f8fafc",
   };
 }
 
 async function installTheme(page: Page, theme: VisualTheme) {
+  // Keep fixture-relative dates stable without stopping timers or application loading.
+  await page.clock.setFixedTime(new Date("2026-01-15T08:20:00.000Z"));
   await page.emulateMedia({
     colorScheme: theme,
     reducedMotion: "reduce",
   });
   await page.addInitScript((nextTheme) => {
     localStorage.setItem("theme", nextTheme);
-    document.documentElement.classList.toggle("dark", nextTheme === "dark");
-    document.documentElement.dataset.theme = nextTheme;
-    document.documentElement.style.colorScheme = nextTheme;
+    const applyTheme = () => {
+      document.documentElement.classList.toggle("dark", nextTheme === "dark");
+      document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.style.colorScheme = nextTheme;
+    };
+    if (document.documentElement) applyTheme();
+    document.addEventListener("DOMContentLoaded", applyTheme, { once: true });
   }, theme);
 }
 
@@ -150,6 +152,15 @@ function jsonResponse(route: Route, body: unknown, status = 200) {
       "Cache-Control": "no-store",
     },
     status,
+  });
+}
+
+async function installMockPublicApi(page: Page) {
+  // Public snapshots never need a live session or backend state.
+  await page.route("**/api/**", (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    return jsonResponse(route, { ok: false, message: "Unauthenticated visual fixture" },
+      pathname === "/api/me" ? 401 : 404);
   });
 }
 
@@ -438,6 +449,8 @@ async function installMockAuthenticatedApi(page: Page) {
             isActive: true,
             nickname: "Collector Alpha",
             roleScope: "both",
+            createdBy: visualUser.id,
+            createdAt: "2026-01-01T00:00:00.000Z",
           },
         ],
         ok: true,
@@ -505,11 +518,24 @@ async function navigateForSnapshot(page: Page, route: VisualRouteSpec) {
   await page.locator("html.app-ready").waitFor({
     state: "attached",
     timeout: 20_000,
-  }).catch(() => undefined);
-  await page.waitForTimeout(500);
+  });
+  if (route.id === "sumbangan-form") {
+    // A superuser must explicitly select a nickname before the real form exists.
+    await page.locator(route.readySelector).click();
+    await page.getByRole("button", { name: "Collector Alpha", exact: true }).click();
+    await expect(page.locator("#save-collection-customer-name")).toBeVisible();
+    await expect(page.locator(route.readySelector)).toContainText("Collector Alpha");
+  }
+  if (route.id === "admin-settings") {
+    await expect(page.locator(route.readySelector)).toHaveValue("SQR Visual Baseline");
+  }
+  await page.evaluate(() => document.fonts.ready);
 }
 
 async function expectVisualBaseline(page: Page, name: string, theme: VisualTheme) {
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+  await expect.poll(() => page.locator("html").evaluate((element) => element.classList.contains("dark")))
+    .toBe(theme === "dark");
   const ciSnapshotTolerance =
     process.env.CI && name === "admin-settings" && theme === "dark"
       ? { maxDiffPixelRatio: 0.1 }
@@ -584,14 +610,13 @@ async function expectNoSeriousAccessibilityViolations(page: Page, label: string)
 for (const theme of visualThemes) {
   test(`public login page matches ${theme} baseline`, async ({ page }) => {
     await installTheme(page, theme);
+    await installMockPublicApi(page);
     await navigateForSnapshot(page, publicRoutes[0]);
     await expectVisualBaseline(page, "login", theme);
   });
 }
 
 test.describe("authenticated key page baselines", () => {
-  test.describe.configure({ mode: "serial" });
-
   for (const theme of visualThemes) {
     test(`authenticated pages match ${theme} baselines`, async ({ page }) => {
       await installMockAuthenticatedSession(page, theme);
@@ -654,6 +679,14 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
           : ["dashboard root missing"];
 
         return {
+          fontSize: getComputedStyle(documentElement).fontSize,
+          overflowingElements: [...document.querySelectorAll("main *")]
+            .filter((node): node is HTMLElement => node instanceof HTMLElement)
+            .filter((node) => node.getBoundingClientRect().right > documentElement.clientWidth + 1)
+            .slice(0, 16)
+            .map((node) => ({ tag: node.tagName, className: node.className,
+              right: Math.round(node.getBoundingClientRect().right),
+              width: Math.round(node.getBoundingClientRect().width) })),
           clippedDashboardActions,
           dashboardRight: dashboardRect?.right ?? Number.POSITIVE_INFINITY,
           documentClientWidth: documentElement.clientWidth,
@@ -661,7 +694,7 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
         };
       });
 
-      expect(dashboardLayout.documentScrollWidth).toBeLessThanOrEqual(
+      expect(dashboardLayout.documentScrollWidth, JSON.stringify(dashboardLayout)).toBeLessThanOrEqual(
         dashboardLayout.documentClientWidth + 1,
       );
       expect(dashboardLayout.dashboardRight).toBeLessThanOrEqual(
@@ -904,6 +937,7 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
 
 test("landing header keeps its brand readable on narrow and enlarged-text viewports", async ({ page }) => {
   await installTheme(page, "light");
+  await installMockPublicApi(page);
 
   for (const viewport of [
     { fontSize: 16, height: 568, width: 320 },

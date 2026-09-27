@@ -1,5 +1,25 @@
 # SQR shadcn-inspired frontend redesign — continuation handoff
 
+## Latest correction — 2026-09-27 CI Playwright snapshots
+
+This section supersedes older repository/delivery state below. The redesign was committed and pushed at the user's request as `ebfc457c5652b21235773d6a27ed7150bb0f0dee` on `main`. After the failed CI smoke snapshot step was fixed and locally verified, the user explicitly authorized committing and pushing this correction. Deployment remains outside the current request.
+
+Authoritative failure: GitHub CI run `36299505739`, smoke job `108565160319`, Playwright snapshot step. Original verification missed `npm run test:visual`; passing `test:e2e:visual` is a different check. Login snapshots differed ~66%, Settings light ~6%, and Dashboard document width reached1053 at viewport1024 with32px root text. No screenshot tolerance was increased.
+
+Scoped correction: adaptive rem/content-width Review focus grid and wrapping cells; two new client guards; eight reviewed light/dark baselines; real page readiness, deterministic time/theme, no broad live-region/count/date masks, explicit superuser nickname selection with schema-complete fixture. Added static loopback `test:visual:built` runner and tests; no backend/.env/existing database/production access. It runs the same visual specs without a live server. CI entrypoint unchanged.
+
+Final verified evidence:
+
+- Fresh build `sqr-1.0.0-ebfc457c5652-20260927T064909Z` PASS, `artifacts/ci-snapshot-build.log`.
+- Typecheck plus two client guards and four isolated-runner tests PASS, `artifacts/ci-snapshot-checks.log`.
+- Script suite525 PASS with one existing optional probe skipped; frontend lint PASS, `artifacts/ci-snapshot-script-lint.log`. The six subsequently added `visual-snapshot-contract.test.mjs` guards separately passed6/6.
+- All16 Playwright tests PASS twice **without snapshot updates**: `artifacts/ci-snapshot-verify-1.log` (one worker) and `artifacts/ci-snapshot-verify-2.log` (two workers). Both include Dashboard16/20/24/32px text scaling, Activity/Viewer/Import/Search table interactions and serious/critical accessibility checks. All eight actual baseline PNGs were individually reviewed, including real Collection form after nickname selection; screenshot tolerances unchanged.
+- Secret scan and `git diff --check` PASS. Server/shared/.github/package-lock unchanged; package.json only adds the optional built-static visual command. Owned preview/browser runs finished and their servers closed; no fixture database was created or used.
+
+Fix is locally verified and commit/push is authorized. Verify the resulting commit and remote branch after push, then inspect the actual GitHub Linux CI result. Do not automatically rerun workflows, deploy, or claim remote CI success from local screenshots.
+
+Local environment has Windows Chromium only (WSL not installed; Docker/Podman unavailable). Do not claim Linux CI success until an authorized push and actual GitHub result. Preserve all current uncommitted changes; do not deploy or touch secrets/data for this CSS/test correction.
+
 ## Final status — 2026-09-27: COMPLETE, local only
 
 This final section supersedes every historical ACTIVE/LIVE/pending note below. The full original34 acceptance criteria are mapped to evidence in `docs/FRONTEND_REDESIGN_REPORT.md`; no redesign phase or required verification remains. No commit, push, deployment, production connection, `.env` read/edit, or unrelated backend change was performed.

@@ -11,13 +11,9 @@
 
 [data-testid="button-user-menu"],
 [data-testid="button-user-menu-mobile"],
-[data-testid*="count"],
-[data-testid*="date"],
-[data-testid*="timestamp"],
 [data-testid="badge-dashboard-freshness"],
 [data-testid="floating-ai-toggle"],
-[data-testid="floating-ai-unread-badge"],
-[aria-live="polite"] {
+[data-testid="floating-ai-unread-badge"] {
   color: transparent !important;
   text-shadow: none !important;
 }

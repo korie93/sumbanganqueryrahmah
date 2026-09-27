@@ -1,5 +1,18 @@
 # SQR frontend redesign verification report
 
+## CI snapshot correction — 2026-09-27
+
+The original completion report below missed the separate `npm run test:visual` pixel-snapshot gate. Passing `test:e2e:visual` was not evidence that this separate suite passed. After the user-authorized commit/push of `ebfc457c5652b21235773d6a27ed7150bb0f0dee`, CI run `36299505739`, job `108565160319`, failed at Playwright visual regression snapshots: stale Login/Settings baseline images and genuine Dashboard document overflow at 200% text size. Build/test, coverage and the preceding visual-layout step passed.
+
+- The Review focus grid now adapts to available content width and rem-sized text; cells may shrink/wrap. No clipping, assertion relaxation, backend, permission or financial-calculation change.
+- All eight Login/Dashboard/Collection/Settings light/dark baseline PNGs were regenerated and individually inspected against the actual built frontend. The Collection fixture now includes schema-required creation metadata and explicitly selects a nickname before capturing the customer/payment form.
+- Snapshot readiness waits for loaded page controls, settings values and fonts. Fixed fixture time and applied-theme assertions improve determinism. Broad count/date/`aria-live` masks were removed so substantive page content is checked; existing diff thresholds are unchanged. Light/dark cases no longer skip each other after a failure.
+- `npm run test:visual:built` runs the same Playwright suite against a loopback static build with synthetic API fixtures, no backend, database or dotenv. Run `npm run build` first in the intended build environment; use `npm run test:visual:built -- --update-snapshots` only for intentional, individually reviewed visual changes, then rerun without that flag. CI still uses its existing `npm run test:visual` entrypoint.
+
+Verification: all16 Playwright tests passed twice without snapshot updates (one and two workers), including the Dashboard text-scaling/table/accessibility workflow. Build, typecheck, frontend lint,525 script checks (one existing optional probe skipped), two focused client guards and six additional snapshot-source guards passed. Secret scan and diff checks passed. Exact logs and delivery status are recorded in the latest continuation-handoff section. The user subsequently authorized commit/push of this correction. Local screenshots are Windows Chromium captures; a new GitHub Linux run remains necessary after push. The historical completion text below is not a claim that the failed GitHub run is green or that these corrective changes have been deployed.
+
+## Original redesign delivery report
+
 Status: COMPLETE — approved local frontend redesign and scoped regression/visual verification completed on 2026-09-27. This is not a deployment claim or a claim that unrelated baseline defects are fixed.
 
 Scope: the approved `SQR_SHADCN_FRONTEND_REDESIGN_ZERO_REGRESSION` specification. Local branch `main`, base HEAD `bf757c52ce261a1939117ac20f90e3be0b8cc4bf`. No commit, push, production access or deployment was performed. The continuation handoff at the repository root records exact process and artifact identities.
