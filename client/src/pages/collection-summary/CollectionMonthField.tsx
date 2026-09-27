@@ -69,7 +69,7 @@ export function CollectionMonthField({
         {...invalidAriaAttributes}
         title="Use YYYY-MM format, for example 2026-05"
         className={cn(
-          "collection-monthly-comparison-control h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm",
+          "collection-monthly-comparison-control h-11 min-w-0 w-full rounded-md border border-input bg-background px-3 text-sm md:h-9",
           showInvalidState && "border-destructive text-destructive focus-visible:ring-destructive",
         )}
       />

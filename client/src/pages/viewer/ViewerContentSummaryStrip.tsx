@@ -1,8 +1,3 @@
-import {
-  OperationalMetric,
-  OperationalSummaryStrip,
-} from "@/components/layout/OperationalPage";
-
 type ViewerContentSummaryStripProps = {
   rowsCount: number;
   totalRows: number;
@@ -23,22 +18,28 @@ export function ViewerContentSummaryStrip({
   selectedRowCount,
 }: ViewerContentSummaryStripProps) {
   return (
-    <OperationalSummaryStrip>
-      <OperationalMetric
-        label="Page rows"
-        value={rowsCount}
-        supporting={totalRows > 0 ? `Rows ${pageStart}-${pageEnd} of ${totalRows}` : "No rows loaded"}
-      />
-      <OperationalMetric
-        label="Visible columns"
-        value={`${visibleHeadersCount}/${headersCount || visibleHeadersCount}`}
-        supporting="Current table layout"
-      />
-      <OperationalMetric
-        label="Selected rows"
-        value={selectedRowCount}
-        supporting={selectedRowCount > 0 ? "Ready for focused export" : "No rows selected"}
-      />
-    </OperationalSummaryStrip>
+    <dl className="flex flex-wrap gap-x-6 gap-y-2 border-y border-border py-3 text-xs leading-5" data-testid="viewer-summary">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <dt className="text-muted-foreground">Page rows</dt>
+        <dd className="font-medium tabular-nums text-foreground">{rowsCount}</dd>
+        <dd className="text-muted-foreground">
+          {totalRows > 0 ? `Rows ${pageStart}-${pageEnd} of ${totalRows}` : "No rows loaded"}
+        </dd>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <dt className="text-muted-foreground">Visible columns</dt>
+        <dd className="font-medium tabular-nums text-foreground">
+          {visibleHeadersCount}/{headersCount || visibleHeadersCount}
+          <span className="sr-only"> — Current table layout</span>
+        </dd>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <dt className="text-muted-foreground">Selected rows</dt>
+        <dd className="font-medium tabular-nums text-foreground">{selectedRowCount}</dd>
+        <dd className={selectedRowCount > 0 ? "text-muted-foreground" : "sr-only"}>
+          {selectedRowCount > 0 ? "Ready for focused export" : "No rows selected"}
+        </dd>
+      </div>
+    </dl>
   );
 }

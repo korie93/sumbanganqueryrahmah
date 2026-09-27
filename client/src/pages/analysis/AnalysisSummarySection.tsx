@@ -1,6 +1,5 @@
 import {
   OperationalMetric,
-  OperationalSectionCard,
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
 import type { AnalysisSnapshotItem } from "@/pages/analysis/analysis-shell-utils";
@@ -11,12 +10,9 @@ type AnalysisSummarySectionProps = {
 
 export function AnalysisSummarySection({ snapshotItems }: AnalysisSummarySectionProps) {
   return (
-    <OperationalSectionCard
-      title="Quick Snapshot"
-      description="Scope, row volume, duplicate pressure, and special ID totals in the shared admin summary pattern."
-      contentClassName="space-y-0"
-    >
-      <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <section aria-labelledby="analysis-snapshot-heading" className="space-y-3">
+      <h2 id="analysis-snapshot-heading" className="text-lg font-semibold">Quick Snapshot</h2>
+      <OperationalSummaryStrip className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {snapshotItems.map((item) => (
           <OperationalMetric
             key={item.label}
@@ -27,6 +23,6 @@ export function AnalysisSummarySection({ snapshotItems }: AnalysisSummarySection
           />
         ))}
       </OperationalSummaryStrip>
-    </OperationalSectionCard>
+    </section>
   );
 }

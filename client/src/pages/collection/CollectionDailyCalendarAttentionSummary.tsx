@@ -34,7 +34,7 @@ export function CollectionDailyCalendarAttentionSummary({
         <p>{summary.title}</p>
         <span>{summary.description}</span>
       </div>
-      <div className="collection-daily-attention-summary-chips" aria-label="Attention counts">
+      <div className="collection-daily-attention-summary-chips" role="group" aria-label="Attention counts">
         <span>{summary.holidayWithCollectionCount} cuti ada kutipan</span>
         <span>{summary.workingWithoutCollectionCount} working tanpa kutipan</span>
         <span>{summary.unsavedChangesCount} belum save</span>

@@ -32,7 +32,7 @@ function ViewerVirtualizedTableImpl({
   visibleHeaders,
 }: ViewerVirtualizedTableProps) {
   return (
-    <div>
+    <div className="ops-data-table text-sm">
       <div className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border bg-muted">
         <ViewerGridShell
           gridTemplateColumns={gridTemplateColumns}

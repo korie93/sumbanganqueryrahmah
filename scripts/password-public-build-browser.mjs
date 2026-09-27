@@ -14,7 +14,7 @@ import { startPasswordPublicBuildServer } from "./lib/password-public-build-serv
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifacts = path.join(root, "artifacts/password-public-build-browser");
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
-const widths = [320, 360, 390, 430, 768, 1280];
+const widths = [320, 360, 390, 430, 768, 1024, 1280, 1440];
 const token = "public-build-fixture";
 const validPassword = "BrowserFixture1!";
 const metadata = { username: "ui.fixture", fullName: "UI Fixture", email: null, role: "user", expiresAt: "2099-01-01T00:00:00.000Z" };

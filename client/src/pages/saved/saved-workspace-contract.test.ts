@@ -6,6 +6,7 @@ const savedModuleFiles = [
   "../Saved.tsx",
   "SavedImportsList.tsx",
   "SavedImportCard.tsx",
+  "SavedImportActions.tsx",
   "SavedImportDetailDrawer.tsx",
   "SavedImportsWorkspace.tsx",
   "SavedListDensityControl.tsx",
@@ -54,8 +55,8 @@ test("saved page wires server pagination and a compact detail drawer", async () 
   assert.match(workspace, /onWorkspaceViewChange/);
   assert.doesNotMatch(workspace, /Load more|onLoadMore/);
   assert.match(importCard, /button-select-import-/);
-  assert.match(importCard, /onClick=\{\(\) => onInspect\(item\)\}/);
-  assert.match(importCard, /if \(checked\) \{\s*onInspect\(item\);/);
+  assert.match(importCard, /onClick=\{\(event\) => \{\s*overlayFocus\?\.remember\("details", event\.currentTarget\);\s*onInspect\(item\);/);
+  assert.match(importCard, /if \(checked\) \{\s*overlayFocus\?\.remember\("details", selectionRef\.current\);\s*onInspect\(item\);/);
   assert.match(workspacePanel, /role="group"/);
   assert.match(workspacePanel, /aria-label="Saved workspace views"/);
   assert.doesNotMatch(workspacePanel, /role="list"/);
@@ -69,12 +70,14 @@ test("saved files use the wide page and a viewport-sized desktop scroll region",
   const importCard = await readSavedSource("SavedImportCard.tsx");
 
   assert.match(savedPage, /<OperationalPage width="wide">/);
-  assert.match(workspace, /xl:grid-cols-\[15rem_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(workspace, /grid-cols-\[15rem_minmax\(0,1fr\)\]/);
   assert.match(importsList, /saved-files-scroll-region/);
   assert.match(importsList, /md:max-h-\[clamp\(32rem,calc\(100dvh-20rem\),52rem\)\]/);
   assert.match(importsList, /md:overflow-y-auto/);
   assert.doesNotMatch(importsList, /max-h-\[440px\]/);
-  assert.match(importCard, /xl:grid-cols-\[minmax\(0,1fr\)_auto\]/);
+  assert.match(importsList, /<table[\s\S]*aria-label="Saved imports"/);
+  assert.match(importCard, /<TableRow/);
+  assert.match(importCard, /md:table-row/);
 });
 
 test("saved file density is user-persisted and comfortable on mobile", async () => {

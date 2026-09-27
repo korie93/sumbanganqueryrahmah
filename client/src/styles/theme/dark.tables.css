@@ -8,8 +8,12 @@
   color: var(--dm-text-secondary);
 }
 
-.dark :where(tbody tr, td) {
+.dark :where(tbody tr) {
   background-color: var(--dm-table-row);
+  border-color: var(--dm-table-border) !important;
+}
+
+.dark :where(td) {
   border-color: var(--dm-table-border) !important;
 }
 

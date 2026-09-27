@@ -32,7 +32,7 @@ export function getCollectionRollupFreshnessStatus(snapshot: Pick<
 }
 
 export function getCollectionRollupFreshnessBadgeClass(status: CollectionRollupFreshnessStatus) {
-  if (status === "fresh") return "border-emerald-500/30 bg-emerald-500/15 text-emerald-500";
-  if (status === "warming") return "border-amber-500/30 bg-amber-500/15 text-amber-500";
-  return "border-red-500/30 bg-red-500/15 text-red-500";
+  if (status === "fresh") return "border-success/30 bg-success/10 text-success";
+  if (status === "warming") return "border-warning/30 bg-warning/10 text-warning";
+  return "border-destructive/30 bg-destructive/10 text-destructive";
 }

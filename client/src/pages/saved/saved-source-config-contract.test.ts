@@ -15,7 +15,7 @@ test("Saved exposes source configuration only through its superuser boundary", a
   ]);
 
   assert.match(page, /SavedSourceConfigProvider enabled=\{state\.isSuperuser\}/);
-  assert.match(card, /isSuperuser \? <SavedSourceConfigCardControl/);
+  assert.match(card, /isSuperuser \? \([\s\S]*<SavedSourceConfigCardControl compact/);
   assert.match(provider, /\{enabled \? \(/);
   assert.match(state, /if \(!enabled\) \{/);
   assert.match(state, /getCollectionSourceConfigs\(\{ signal: controller\.signal \}\)/);

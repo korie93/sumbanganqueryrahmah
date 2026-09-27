@@ -1,11 +1,13 @@
-import { BarChart3, BookMarked, Edit2, Eye, Info, Trash2 } from "lucide-react";
-import { MobileActionMenu } from "@/components/data/MobileActionMenu";
+import { useRef } from "react";
 import { badgeVariants } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { getAriaSelectedProps } from "@/lib/aria-state-props";
 import { buildSavedImportRowAriaLabel } from "@/pages/saved/saved-import-row-aria";
 import { SavedSourceConfigCardControl } from "@/pages/saved/SavedSourceConfigCardControl";
+import { SavedImportActions } from "@/pages/saved/SavedImportActions";
+import { useSavedOverlayFocus } from "@/pages/saved/SavedOverlayFocusContext";
 import { formatSavedFileSize, getSavedImportSizeBytes, getSavedImportStatus } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
 import type { SavedListDensity } from "@/pages/saved/useSavedListDensity";
@@ -27,9 +29,9 @@ type SavedImportCardProps = {
 };
 const statusToneClassName = {
   default: "border-border bg-muted/45 text-foreground",
-  success: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
-  warning: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
-  danger: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200",
+  success: "border-success/30 bg-success/10 text-success",
+  warning: "border-warning/30 bg-warning/10 text-warning",
+  danger: "border-destructive/30 bg-destructive/10 text-destructive",
 } as const;
 export function SavedImportCard({
   actionsDisabled,
@@ -47,60 +49,60 @@ export function SavedImportCard({
   onToggleSelected,
   onView,
 }: SavedImportCardProps) {
+  const overlayFocus = useSavedOverlayFocus();
+  const selectionRef = useRef<HTMLButtonElement>(null);
   const compact = density === "compact";
   const status = getSavedImportStatus(item, duplicateHashCounts);
   const rowCount = typeof item.rowCount === "number" ? item.rowCount : null;
-  const actionClassName = cn("w-full sm:w-auto", compact && "h-8 px-2 text-xs");
-  const actionIconClassName = cn("h-4 w-4", compact ? "mr-1.5" : "mr-2");
   const activePressedProps = isActive ? { "aria-pressed": "true" as const } : { "aria-pressed": "false" as const };
   const handleSelectionChange = (checked: boolean) => {
     onToggleSelected(item.id, checked);
-    if (checked) { onInspect(item); }
+    if (checked) {
+      overlayFocus?.remember("details", selectionRef.current);
+      onInspect(item);
+    }
   };
   return (
-    <div
+    <TableRow
       aria-label={buildSavedImportRowAriaLabel({
         formattedCreatedAt: formatDate(item.createdAt),
         item,
       })}
       className={cn(
-        "rounded-xl border bg-background/70 shadow-sm transition-colors",
-        compact ? "p-2.5 sm:p-3" : "p-3 sm:p-4",
-        isSelected || isActive ? "border-primary/45 bg-primary/5" : "border-border/70",
+        "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 p-3 md:table-row md:p-0",
+        compact ? "[&>td]:md:py-1" : "[&>td]:md:py-2",
+        isSelected || isActive ? "bg-primary/5" : "bg-card",
       )}
       data-density={density}
       data-testid={`card-import-${item.id}`}
-      role="group"
+      role="row"
+      {...getAriaSelectedProps(isSelected || isActive)}
     >
-      <div className={cn(
-        "grid xl:grid-cols-[minmax(0,1fr)_auto]",
-        compact ? "gap-2 xl:gap-3" : "gap-3 xl:gap-4",
-      )}>
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-start gap-3">
+      <TableCell className="col-span-2 block h-auto min-w-0 p-0 md:table-cell md:px-3">
+          <div className="flex min-w-0 items-start gap-3">
             {isSuperuser ? (
               <Checkbox
+                ref={selectionRef}
                 checked={isSelected}
                 onCheckedChange={(checked) => handleSelectionChange(Boolean(checked))}
                 aria-label={`Select ${item.name}`}
                 disabled={actionsDisabled}
-                className="mt-2"
+                className="mt-3 md:mt-2"
               />
             ) : null}
             <button
               type="button"
-              className="flex min-w-0 flex-1 items-start gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onClick={() => onInspect(item)}
+              className="min-h-11 min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:min-h-9"
+              onClick={(event) => {
+                overlayFocus?.remember("details", event.currentTarget);
+                onInspect(item);
+              }}
               {...activePressedProps}
               data-testid={`button-select-import-${item.id}`}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <BookMarked className="h-5 w-5 text-primary" />
-              </span>
-              <span className={cn("min-w-0", compact ? "space-y-1.5" : "space-y-2")}>
-                <span className="block space-y-1">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="break-words text-sm font-medium text-foreground sm:text-base">
+              <span className="block min-w-0 space-y-1">
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="min-w-0 break-words text-sm font-medium text-foreground [overflow-wrap:anywhere]">
                       {item.name}
                     </span>
                     <span
@@ -112,108 +114,39 @@ export function SavedImportCard({
                       {status.label}
                     </span>
                   </span>
-                  <span className="block break-words text-sm text-muted-foreground">{item.filename}</span>
-                </span>
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-border/70 bg-muted/50 px-2 py-1 text-2xs font-medium text-foreground/80">
-                    Imported {formatDate(item.createdAt)}
-                  </span>
-                  {rowCount !== null ? (
-                    <span className="rounded-full border border-border/70 bg-background px-2 py-1 text-2xs font-medium text-muted-foreground">
-                      {rowCount.toLocaleString()} rows
-                    </span>
+                  {item.filename !== item.name ? (
+                    <span className="block break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{item.filename}</span>
                   ) : null}
-                  <span className="rounded-full border border-border/70 bg-background px-2 py-1 text-2xs font-medium text-muted-foreground">
-                    {formatSavedFileSize(getSavedImportSizeBytes(item))}
-                  </span>
-                </span>
               </span>
             </button>
           </div>
-          {isSuperuser ? (
-            <div className="flex shrink-0 items-start justify-end md:hidden">
-              <MobileActionMenu
-                contentLabel="Saved file actions"
-                items={[
-                  {
-                    id: `rename-${item.id}`,
-                    label: "Rename",
-                    icon: Edit2,
-                    onSelect: () => onRename(item),
-                    disabled: actionsDisabled,
-                  },
-                  {
-                    id: `delete-${item.id}`,
-                    label: "Delete",
-                    icon: Trash2,
-                    onSelect: () => onDelete(item),
-                    disabled: actionsDisabled,
-                    destructive: true,
-                  },
-                ]}
-              />
-            </div>
-          ) : null}
-        </div>
-        <div className={cn(
-          "grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center xl:max-w-[40rem] xl:justify-end xl:self-start",
-          compact ? "gap-1.5" : "gap-2",
-        )}>
-          <Button
-            variant="outline"
-            className={actionClassName}
-            onClick={() => onView(item)}
-            data-testid={`button-view-${item.id}`}
-          >
-            <Eye className={actionIconClassName} />
-            View
-          </Button>
-          <Button
-            variant="outline"
-            className={actionClassName}
-            onClick={() => onAnalysis(item)}
-            data-testid={`button-analysis-${item.id}`}
-          >
-            <BarChart3 className={actionIconClassName} />
-            Analysis
-          </Button>
-          <Button
-            variant="outline"
-            className={actionClassName}
-            onClick={() => onInspect(item)}
-            {...activePressedProps}
-            data-testid={`button-inspect-${item.id}`}
-          >
-            <Info className={actionIconClassName} />
-            {isActive ? "Selected" : "Details"}
-          </Button>
-          {isSuperuser ? (
-            <Button
-              variant="outline"
-              className={cn(actionClassName, "hidden md:inline-flex")}
-              onClick={() => onRename(item)}
-              disabled={actionsDisabled}
-              data-testid={`button-rename-${item.id}`}
-            >
-              <Edit2 className={actionIconClassName} />
-              Rename
-            </Button>
-          ) : null}
-          {isSuperuser ? (
-            <Button
-              variant="outline"
-              className={cn(actionClassName, "hidden text-destructive md:inline-flex")}
-              onClick={() => onDelete(item)}
-              disabled={actionsDisabled}
-              data-testid={`button-delete-${item.id}`}
-            >
-              <Trash2 className={actionIconClassName} />
-              Delete
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {isSuperuser ? <SavedSourceConfigCardControl disabled={actionsDisabled} item={item} /> : null}
-    </div>
+      </TableCell>
+      <TableCell className="col-span-2 block h-auto min-w-0 p-0 text-xs md:table-cell md:px-3">
+        <span className="block text-muted-foreground"><span className="md:sr-only">Imported </span>{formatDate(item.createdAt)}</span>
+        <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+          {rowCount !== null ? <span className="tabular-nums">{rowCount.toLocaleString()} rows</span> : null}
+          <span>{formatSavedFileSize(getSavedImportSizeBytes(item))}</span>
+        </span>
+      </TableCell>
+      {isSuperuser ? (
+        <TableCell className="block h-auto min-w-0 p-0 md:table-cell md:px-1">
+          <span className="sr-only">Collection source: </span>
+          <SavedSourceConfigCardControl compact disabled={actionsDisabled} item={item} />
+        </TableCell>
+      ) : null}
+      <TableCell className={cn("block h-auto p-0 md:table-cell md:px-3", !isSuperuser && "col-span-2")}>
+        <SavedImportActions
+          actionsDisabled={actionsDisabled}
+          isActive={isActive}
+          isSuperuser={isSuperuser}
+          item={item}
+          onAnalysis={onAnalysis}
+          onDelete={onDelete}
+          onInspect={onInspect}
+          onRename={onRename}
+          onView={onView}
+        />
+      </TableCell>
+    </TableRow>
   );
 }

@@ -84,7 +84,7 @@ export function SavedFiltersBar({
     : "";
 
   return (
-    <div className="ops-toolbar space-y-3">
+    <div className="space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -96,15 +96,16 @@ export function SavedFiltersBar({
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
             placeholder="Search name, filename, or uploader..."
+            aria-label="Search saved imports by name, filename, or uploader"
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="h-10 pl-9"
+            className="h-11 pl-9 md:h-9"
             data-testid="input-search-saved"
           />
         </div>
-        <div className="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] lg:w-auto">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] lg:w-auto">
           <DatePickerField
             value={dateFilterValue}
             onChange={(value) => {
@@ -124,12 +125,12 @@ export function SavedFiltersBar({
             placeholder="Filter by date"
             buttonTestId="button-date-filter"
             ariaLabel={dateFilter ? `Filter by date, selected ${formatSavedFilterDate(dateFilter)}` : "Filter by date"}
-            className="w-full min-w-0 sm:min-w-[210px]"
+            className="h-11 w-full min-w-0 md:h-9 sm:min-w-[210px]"
           />
           <Button
             type="button"
             variant="outline"
-            className="h-10"
+            className="h-11 md:h-9"
             aria-controls="saved-advanced-filters"
             {...getAriaExpandedProps(advancedOpen)}
             onClick={() => setAdvancedOpen((open) => !open)}
@@ -142,7 +143,7 @@ export function SavedFiltersBar({
             <Button
               variant="ghost"
               size="sm"
-              className="h-10 justify-center sm:h-9 sm:justify-start"
+              className="col-span-2 h-11 justify-center md:h-9 sm:col-span-1 sm:justify-start"
               onClick={onClearFilters}
               data-testid="button-clear-filters"
             >
@@ -155,7 +156,7 @@ export function SavedFiltersBar({
       {advancedOpen ? (
         <div
           id="saved-advanced-filters"
-          className="grid gap-2 rounded-lg border border-border/60 bg-background/65 p-3 sm:grid-cols-3"
+          className="grid gap-2 border-t border-border pt-3 sm:grid-cols-3"
         >
           <Input
             type="search"
@@ -164,7 +165,7 @@ export function SavedFiltersBar({
             placeholder="Uploader"
             aria-label="Filter saved imports by uploader"
             autoComplete="off"
-            className="h-10"
+            className="h-11 md:h-9"
             data-testid="input-saved-uploader"
           />
           <Input
@@ -180,7 +181,7 @@ export function SavedFiltersBar({
             }}
             placeholder="Minimum rows"
             aria-label="Minimum saved import row count"
-            className="h-10"
+            className="h-11 md:h-9"
             data-testid="input-saved-min-rows"
           />
           <Input
@@ -196,7 +197,7 @@ export function SavedFiltersBar({
             }}
             placeholder="Maximum rows"
             aria-label="Maximum saved import row count"
-            className="h-10"
+            className="h-11 md:h-9"
             data-testid="input-saved-max-rows"
           />
         </div>

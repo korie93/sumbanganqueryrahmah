@@ -1,5 +1,6 @@
-import { CalendarCheck2, ShieldCheck, UserRoundCog, UsersRound } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { CalendarCheck2, ChevronDown, ShieldCheck, UserRoundCog, UsersRound } from "lucide-react";
+import { badgeVariants } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 type CollectionDailyRoleGuideProps = {
   role: string;
@@ -62,35 +63,30 @@ export function CollectionDailyRoleGuide({
   const Icon = content.icon;
 
   return (
-    <section className="collection-daily-role-guide" aria-label="Collection Daily role guidance">
-      <div className="collection-daily-role-guide-icon" aria-hidden="true">
-        <Icon className="h-5 w-5" aria-hidden="true" />
-      </div>
-
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
+    <section aria-label="Collection Daily role guidance">
+      <details className="group border-b border-border pb-2">
+        <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 rounded-md py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+          <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className={badgeVariants({ variant: "secondary" })}>
             {content.label}
-          </Badge>
-          <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-2xs">
+          </span>
+          <span className={cn(badgeVariants({ variant: "outline" }), "max-w-full")}>
             <CalendarCheck2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
             <span className="truncate">{selectedUsersLabel}</span>
-          </Badge>
-        </div>
-
-        <div className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">{content.title}</h2>
-          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          </span>
+          <span className="ml-auto text-xs text-muted-foreground">Role guidance</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <div className="space-y-2 pt-2">
+          <h2 className="text-sm font-medium text-foreground">{content.title}</h2>
+          <p className="max-w-3xl text-xs leading-5 text-muted-foreground">
             {content.description}
           </p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Role capabilities">
+            {content.facts.map((fact) => <li key={fact}>{fact}</li>)}
+          </ul>
         </div>
-      </div>
-
-      <div className="collection-daily-role-guide-facts" aria-label="Role capabilities">
-        {content.facts.map((fact) => (
-          <span key={fact}>{fact}</span>
-        ))}
-      </div>
+      </details>
     </section>
   );
 }

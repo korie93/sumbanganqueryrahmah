@@ -125,3 +125,37 @@ test("Card No preserves established full/masked text and escapes markup without 
     assert.doesNotMatch(markup, /Card No|4181000000003188/);
   }
 });
+
+for (const state of ["recorded", "historical"]) {
+  test(state + " compact status retains meaning and exposes all metadata in details", () => {
+    const row = { _collectionStatus: {
+      state,
+      recordCount: 52,
+      latestAccountNumber: "ACC-000123",
+      latestCardNumber: "00009007199254740993",
+      latestStaffNickname: "Synthetic Collector",
+      latestCreatedByLogin: "fixture.login",
+      latestPaymentDate: "2026-09-21",
+      latestAmount: "125.50",
+      sourceFilename: "synthetic.xlsx",
+    } };
+    const compact = renderToStaticMarkup(createElement(GeneralSearchCollectionStatus, {
+      row, compact: true, canSeeSourceFile: false,
+    }));
+    assert.match(compact, state === "recorded" ? /Collection direkodkan/ : /Rekod sejarah collection/);
+    assert.match(compact, /52/);
+    assert.doesNotMatch(compact, /synthetic\.xlsx|fixture\.login/);
+    const detail = renderToStaticMarkup(createElement(GeneralSearchCollectionStatus, {
+      row, compact: true, showDetails: true, canSeeSourceFile: true,
+    }));
+    assert.match(detail, /ACC-000123/);
+    assert.match(detail, /00009007199254740993/);
+    assert.match(detail, /125\.50/);
+    assert.match(detail, /Synthetic Collector/);
+    assert.match(detail, /synthetic\.xlsx/);
+    const restrictedDetail = renderToStaticMarkup(createElement(GeneralSearchCollectionStatus, {
+      row, showDetails: true, canSeeSourceFile: false,
+    }));
+    assert.doesNotMatch(restrictedDetail, /synthetic\.xlsx/);
+  });
+}

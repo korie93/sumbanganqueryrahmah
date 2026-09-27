@@ -13,6 +13,7 @@ export interface DeleteCollectionRecordDialogProps {
   open: boolean;
   deleting: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onConfirm: () => void;
 }
 
@@ -20,11 +21,12 @@ export function DeleteCollectionRecordDialog({
   open,
   deleting,
   onOpenChange,
+  onCloseAutoFocus,
   onConfirm,
 }: DeleteCollectionRecordDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>Padam Rekod</AlertDialogTitle>
           <AlertDialogDescription>

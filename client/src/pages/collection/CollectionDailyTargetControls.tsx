@@ -43,10 +43,10 @@ export function CollectionDailyTargetControls({
   return (
     <div
       className={cn(
-        "gap-3 border border-border/70 bg-background p-4 shadow-sm",
+        "gap-3 border-t border-border pt-4",
         isMobile
-          ? "space-y-4 rounded-2xl"
-          : "grid rounded-2xl md:grid-cols-[minmax(0,220px)_minmax(0,1fr)] md:items-end",
+          ? "space-y-3"
+          : "grid md:grid-cols-[minmax(0,220px)_minmax(0,1fr)] md:items-end",
       )}
     >
       <div className="space-y-1">
@@ -61,7 +61,7 @@ export function CollectionDailyTargetControls({
           value={monthlyTargetInput}
           onChange={(event) => onMonthlyTargetInputChange(event.target.value)}
           disabled={!canEditTarget}
-          className={isMobile ? "h-12 rounded-2xl bg-background" : "h-11 rounded-xl bg-background"}
+          className={isMobile ? "h-11 rounded-md bg-background" : "h-9 rounded-md bg-background"}
         />
         {!canEditTarget ? (
           <p className="text-xs text-muted-foreground">
@@ -72,7 +72,7 @@ export function CollectionDailyTargetControls({
       <div
         className={cn(
           "min-w-0 gap-2",
-          isMobile ? "grid sm:grid-cols-2" : "flex flex-col sm:flex-row sm:flex-wrap",
+          isMobile ? "grid grid-cols-2" : "flex flex-col sm:flex-row sm:flex-wrap",
         )}
         data-floating-ai-avoid="true"
       >
@@ -80,7 +80,7 @@ export function CollectionDailyTargetControls({
           type="button"
           className={cn(
             "w-full max-w-full whitespace-normal text-center",
-            isMobile ? "h-12 rounded-2xl" : "min-h-11 h-auto rounded-xl py-2 sm:w-auto",
+            isMobile ? "min-h-11 h-auto rounded-md px-2 py-2" : "min-h-9 h-auto rounded-md py-2 sm:w-auto",
           )}
           onClick={onSaveTarget}
           disabled={savingTarget || !canEditTarget}
@@ -97,7 +97,7 @@ export function CollectionDailyTargetControls({
           variant="outline"
           className={cn(
             "w-full max-w-full whitespace-normal text-center",
-            isMobile ? "h-12 rounded-2xl" : "min-h-11 h-auto rounded-xl py-2 sm:w-auto",
+            isMobile ? "min-h-11 h-auto rounded-md px-2 py-2" : "min-h-9 h-auto rounded-md py-2 sm:w-auto",
           )}
           onClick={onSaveCalendar}
           disabled={savingCalendar || !canSaveCalendarChanges}

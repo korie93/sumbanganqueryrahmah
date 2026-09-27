@@ -12,15 +12,50 @@ import type { ImportItem } from "@/pages/saved/types";
 export function SavedSourceConfigCardControl({
   disabled,
   item,
+  compact = false,
 }: {
   disabled: boolean;
   item: ImportItem;
+  compact?: boolean;
 }) {
   const sourceState = useSavedSourceConfig();
   if (!sourceState.enabled) return null;
 
   const config = sourceState.configsByImportId.get(item.id) ?? null;
   const status = config ? savedSourceStatusPresentation[config.status] : null;
+
+  if (compact) {
+    if (sourceState.loadFailed) {
+      return (
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <p>Source status unavailable</p>
+          <Button variant="outline" size="sm" className="h-11 md:h-9" onClick={sourceState.refresh}>
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />Retry status
+          </Button>
+        </div>
+      );
+    }
+    return (
+      <Button
+        variant="ghost"
+        className="h-auto min-h-11 max-w-full justify-start gap-2 px-2 py-1 text-left md:min-h-9"
+        onClick={() => sourceState.openConfig(item)}
+        disabled={disabled || sourceState.loading || sourceState.mutationPending}
+        aria-label={`${config ? "Edit source" : "Configure source"} for ${item.name}`}
+        aria-haspopup="dialog"
+        data-testid={`button-configure-source-${item.id}`}
+      >
+        <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="min-w-0 whitespace-normal">
+          <span className="block text-sm">{sourceState.loading ? "Checking..." : status?.label ?? "Not configured"}</span>
+          <span className="block text-xs font-normal text-muted-foreground">
+            {sourceState.loading ? "Loading source status" : config?.compatibilityStatus === "compatible"
+              ? "Compatible" : config ? "Needs review" : "Configure source"}
+          </span>
+        </span>
+      </Button>
+    );
+  }
 
   if (sourceState.loadFailed) {
     return (
@@ -29,7 +64,7 @@ export function SavedSourceConfigCardControl({
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           Source status is unavailable. This does not affect the Saved file.
         </p>
-        <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={sourceState.refresh}>
+        <Button variant="outline" size="sm" className="h-11 w-full md:h-9 sm:w-auto" onClick={sourceState.refresh}>
           <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
           Retry status
         </Button>
@@ -38,10 +73,10 @@ export function SavedSourceConfigCardControl({
   }
 
   return (
-    <div className="mt-3 grid gap-3 border-t border-border/60 pt-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-      <div className="min-w-0 space-y-2">
+    <div className="mt-3 grid gap-2 border-t border-border pt-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="min-w-0 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
+          <span className="text-xs font-medium text-muted-foreground">
             Collection source
           </span>
           <span className={cn(
@@ -82,7 +117,7 @@ export function SavedSourceConfigCardControl({
       <Button
         variant="outline"
         size="sm"
-        className="w-full lg:w-auto"
+        className="h-11 w-full md:h-9 lg:w-auto"
         onClick={() => sourceState.openConfig(item)}
         disabled={disabled || sourceState.loading || sourceState.mutationPending}
         aria-haspopup="dialog"

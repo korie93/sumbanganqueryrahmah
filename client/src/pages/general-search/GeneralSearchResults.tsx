@@ -115,25 +115,25 @@ export function GeneralSearchResults({
 
   if (results.length === 0) {
     return (
-      <div className="glass-wrapper p-6">
-        <div className="py-12 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <FileText className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <p className="mb-2 font-medium text-foreground">No results found</p>
-          <p className="mb-4 text-sm text-muted-foreground">
-            {advancedMode
-              ? "Try changing your filters, use different operators, or check if data has been imported."
-              : "Try different keywords or check your spelling. Make sure data has been imported first."}
-          </p>
-          <div className="mt-4 space-y-2 text-xs text-muted-foreground">
-            <p><strong>Troubleshooting:</strong></p>
-            <ul className="inline-block text-left">
-              <li>Verify data has been imported in the "Import Data" tab</li>
-              <li>Check that your search query is at least 2 characters</li>
-              <li>Try searching for different values</li>
-              <li>In advanced mode, ensure filters are correctly configured</li>
-            </ul>
+      <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <FileText className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div className="min-w-0 space-y-2">
+            <p className="text-sm font-medium text-foreground">No results found</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {advancedMode
+                ? "Try changing your filters, use different operators, or check if data has been imported."
+                : "Try different keywords or check your spelling. Make sure data has been imported first."}
+            </p>
+            <div className="space-y-2 pt-2 text-xs leading-5 text-muted-foreground">
+              <p><strong>Troubleshooting:</strong></p>
+              <ul className="list-disc space-y-1 pl-4">
+                <li>Verify data has been imported in the "Import Data" tab</li>
+                <li>Check that your search query is at least 2 characters</li>
+                <li>Try searching for different values</li>
+                <li>In advanced mode, ensure filters are correctly configured</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -146,7 +146,7 @@ export function GeneralSearchResults({
     : undefined;
 
   return (
-    <div className="glass-wrapper p-4 sm:p-6" data-floating-ai-avoid="true">
+    <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-floating-ai-avoid="true">
       <GeneralSearchResultsToolbar
         activeFilterSummaries={activeFilterSummaries}
         advancedMode={advancedMode}

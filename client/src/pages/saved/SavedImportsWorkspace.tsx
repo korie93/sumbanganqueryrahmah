@@ -83,15 +83,12 @@ export function SavedImportsWorkspace({
   const hasNoWorkspaceResults = imports.length === 0 && totalImports > 0;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)]">
-      <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
         <SavedWorkspacePanel
           activeView={workspaceView}
           summary={workspaceSummary}
           onViewChange={onWorkspaceViewChange}
         />
-      </div>
-
       <div className="min-w-0 space-y-4">
         {hasNoWorkspaceResults ? (
           <div className="ops-empty-state rounded-xl border border-border/70 bg-background/80">

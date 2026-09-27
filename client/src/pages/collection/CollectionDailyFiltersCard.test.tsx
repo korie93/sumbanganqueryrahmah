@@ -48,5 +48,8 @@ test("CollectionDailyFiltersCard renders compact desktop filter sections", () =>
   assert.match(markup, /Reporting Period/);
   assert.match(markup, /Staff Scope/);
   assert.match(markup, /Refresh/);
-  assert.match(markup, /rounded-2xl border border-border\/60 bg-background p-4 shadow-sm/);
+  assert.match(markup, /aria-labelledby="collection-daily-filters-heading"/);
+  assert.doesNotMatch(markup, /collection-daily-filters-card|ops-section-card/);
+  assert.match(markup, /for="collection-daily-year-input"/);
+  assert.match(markup, /for="collection-daily-month-input"/);
 });

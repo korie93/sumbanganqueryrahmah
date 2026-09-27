@@ -39,10 +39,10 @@ function getBulkFileStatusLabel(result: BulkFileResult): string {
 
 function getBulkFileStatusClasses(result: BulkFileResult): string {
   if (result.blocked) {
-    return "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200";
+    return "border-warning/40 bg-warning/10 text-warning";
   }
   if (result.status === "success") {
-    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200";
+    return "border-success/40 bg-success/10 text-success";
   }
   if (result.status === "error") {
     return "border-destructive/40 bg-destructive/10 text-destructive";
@@ -55,10 +55,10 @@ function getBulkFileStatusClasses(result: BulkFileResult): string {
 
 function BulkFileStatusIcon({ result }: { result: BulkFileResult }) {
   if (result.blocked) {
-    return <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-300" aria-hidden="true" />;
+    return <AlertTriangle className="h-5 w-5 text-warning" aria-hidden="true" />;
   }
   if (result.status === "success") {
-    return <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />;
+    return <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" />;
   }
   if (result.status === "error") {
     return <XCircle className="h-5 w-5 text-destructive" aria-hidden="true" />;
@@ -121,7 +121,7 @@ export function BulkImportPanel({
       />
 
       {!hasFiles ? (
-        <div className="border border-border bg-background p-4 sm:p-6">
+        <div className="rounded-lg border border-border bg-card p-4 sm:p-6">
           <div className="mb-5">
             <p className="text-xs font-semibold uppercase text-primary">Bulk workspace</p>
             <h2 className="mt-1 text-lg font-semibold text-foreground">Build an import queue</h2>
@@ -143,7 +143,7 @@ export function BulkImportPanel({
             role="button"
             tabIndex={bulkProcessing ? -1 : 0}
             aria-label="Select bulk import files"
-            className={`border-2 border-dashed border-border p-6 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-8 ${
+            className={`rounded-md border border-dashed border-input p-6 text-center transition-colors duration-150 motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
               bulkProcessing
                 ? "cursor-not-allowed opacity-70"
                 : "cursor-pointer hover:border-primary hover:bg-muted/30"
@@ -165,7 +165,7 @@ export function BulkImportPanel({
         </div>
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <div className="min-w-0 border border-border bg-background">
+          <div className="min-w-0 rounded-lg border border-border bg-card">
             <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase text-primary">Bulk import queue</p>
@@ -256,7 +256,7 @@ export function BulkImportPanel({
               ))}
             </div>
 
-            <div className="sticky bottom-0 z-10 grid gap-2 border-t border-border bg-background p-3 pb-20 sm:flex sm:items-center sm:justify-end sm:pb-3">
+            <div className="sticky bottom-0 z-10 grid gap-2 rounded-b-lg border-t border-border bg-card p-3 pb-[max(0.75rem,var(--safe-area-inset-bottom))] sm:flex sm:items-center sm:justify-end sm:pb-3" data-floating-ai-avoid="true">
               <Button
                 variant="outline"
                 onClick={onClearBulk}
@@ -289,7 +289,7 @@ export function BulkImportPanel({
             </div>
           </div>
 
-          <aside className="border border-border bg-background lg:sticky lg:top-4" aria-label="Bulk import summary">
+          <aside className="rounded-lg border border-border bg-card lg:sticky lg:top-4" aria-label="Bulk import summary">
             <div className="border-b border-border p-4">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Queue summary</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
@@ -320,7 +320,7 @@ export function BulkImportPanel({
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Successful</dt>
-                  <dd className="mt-0.5 font-medium text-emerald-700 dark:text-emerald-300">{successCount}</dd>
+                  <dd className="mt-0.5 font-medium text-success">{successCount}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Needs attention</dt>
@@ -334,7 +334,7 @@ export function BulkImportPanel({
                 {successCount > 0 ? (
                   <Badge
                     variant="outline"
-                    className="border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200"
+                    className="border-success/40 bg-success/10 text-success"
                   >
                     {successCount} imported
                   </Badge>
@@ -343,7 +343,7 @@ export function BulkImportPanel({
                 {blockedCount > 0 ? (
                   <Badge
                     variant="outline"
-                    className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+                    className="border-warning/40 bg-warning/10 text-warning"
                   >
                     {blockedCount} too large
                   </Badge>
@@ -351,7 +351,7 @@ export function BulkImportPanel({
               </div>
 
               {blockedCount > 0 ? (
-                <div className="border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-950 dark:text-amber-100">
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
                   Oversized files are skipped automatically. Other files can still be imported.
                 </div>
               ) : null}

@@ -73,10 +73,11 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /getByRole\("button", \{ name: "Cancel" \}\)\.click\(\)/);
   assert.match(visualContractSource, /cleanup dialog has internal horizontal overflow/);
   assert.match(visualContractSource, /cleanup dialog did not return focus to its trigger/);
-  assert.match(visualContractSource, /async function verifyDashboardReviewSidebarLayout/);
-  assert.match(visualContractSource, /await sidebar\.scrollIntoViewIfNeeded\(\)/);
-  assert.match(visualContractSource, /review sidebar escaped the viewport height/);
-  assert.match(visualContractSource, /tall review sidebar is not internally scrollable/);
+  assert.match(visualContractSource, /async function verifyDashboardReviewRegionLayout/);
+  assert.match(visualContractSource, /await review\.scrollIntoViewIfNeeded\(\)/);
+  assert.match(visualContractSource, /review region escaped the viewport width/);
+  assert.match(visualContractSource, /review region has internal horizontal overflow/);
+  assert.match(visualContractSource, /review region does not preserve unclipped natural vertical flow/);
   assert.match(visualContractSource, /async function verifyDashboardChartDetailLayout/);
   assert.match(visualContractSource, /button-expand-login-trends/);
   assert.match(visualContractSource, /button-expand-peak-hours/);
@@ -86,7 +87,27 @@ test("visual contract guards dashboard recent activity across browser zoom width
   assert.match(visualContractSource, /detail did not return focus to its trigger/);
   assert.match(
     visualContractSource,
-    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardReviewSidebarLayout\(page, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\);\s+await verifyDashboardCleanupDialogLayout\(page, viewportSpec\);\s+await verifyDashboardChartDetailLayout\(page, viewportSpec\)/,
+    /await verifyRouteLayout\(page, dashboardRouteSpec, viewportSpec\);\s+await verifyDashboardReviewRegionLayout\(page, viewportSpec\);\s+await verifyDashboardRecentActivityDetailLayout\(page, viewportSpec\);\s+await verifyDashboardCleanupDialogLayout\(page, viewportSpec\);\s+await verifyDashboardChartDetailLayout\(page, viewportSpec\)/,
+  );
+});
+
+test("dashboard review stays full-width, readable and naturally scrollable at every viewport", () => {
+  const reviewVerifier = visualContractSource.slice(
+    visualContractSource.indexOf("async function verifyDashboardReviewRegionLayout"),
+    visualContractSource.indexOf("async function verifyDashboardChartDialogLayout"),
+  );
+  assert.match(reviewVerifier, /dashboard-login-review-sidebar-container/);
+  assert.doesNotMatch(reviewVerifier, /viewportSpec\.width\s*[<>]|viewportHeight/);
+  assert.match(reviewVerifier, /review region does not span the workspace width/);
+  assert.match(reviewVerifier, /reviewLayout\.followingTop >= reviewLayout\.bottom - 1/);
+  assert.match(reviewVerifier, /reviewLayout\.clippedContent\.length === 0/);
+  assert.match(reviewVerifier, /child\.scrollWidth > child\.clientWidth \+ 1/);
+  assert.match(reviewVerifier, /child\.scrollHeight > child\.clientHeight \+ 1/);
+  assert.match(reviewVerifier, /await links\.count\(\) === 3/);
+  assert.match(reviewVerifier, /review shortcut is unreachable by page scrolling/);
+  assert.match(
+    visualContractSource,
+    /if \(routeSpec\.id === "dashboard"\) \{\s+await verifyDashboardReviewRegionLayout\(page, viewportSpec\);/,
   );
 });
 

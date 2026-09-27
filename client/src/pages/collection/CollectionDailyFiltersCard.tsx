@@ -1,5 +1,4 @@
 import { CalendarDays, Loader2 } from "lucide-react";
-import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CollectionDailyDesktopFiltersLayout } from "@/pages/collection/CollectionDailyDesktopFiltersLayout";
@@ -14,21 +13,19 @@ export function CollectionDailyFiltersCard({
   const isMobile = useIsMobile();
 
   return (
-    <OperationalSectionCard
-      title={
-        <span className="collection-daily-title flex items-center gap-2" data-testid="collection-daily-title">
-          <CalendarDays className="collection-daily-title-icon h-5 w-5" aria-hidden="true" />
-          Collection Daily
-        </span>
-      }
-      description="Set month, staff scope, and working-day targets from one compact workspace."
-      className="collection-daily-filters-card"
-      contentClassName="collection-daily-filters-content space-y-4"
-      actions={
+    <section className="space-y-4" aria-labelledby="collection-daily-filters-heading">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h2 id="collection-daily-filters-heading" className="collection-daily-title flex items-center gap-2 text-lg font-semibold" data-testid="collection-daily-title">
+            <CalendarDays className="collection-daily-title-icon h-4 w-4" aria-hidden="true" />
+            Collection Daily
+          </h2>
+          <p className="text-sm text-muted-foreground">Set month, staff scope, and working-day targets.</p>
+        </div>
         <Button
           type="button"
           variant="outline"
-          className={isMobile ? "collection-daily-refresh-button h-11 w-full rounded-xl sm:w-auto" : "collection-daily-refresh-button h-11 rounded-xl"}
+          className="collection-daily-refresh-button h-11 md:h-9"
           onClick={onRefresh}
           disabled={loadingOverview}
           data-testid="collection-daily-refresh"
@@ -36,8 +33,7 @@ export function CollectionDailyFiltersCard({
           {loadingOverview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
           Refresh
         </Button>
-      }
-    >
+      </header>
       {isMobile ? (
         <CollectionDailyMobileFiltersLayout
           loadingOverview={loadingOverview}
@@ -51,6 +47,6 @@ export function CollectionDailyFiltersCard({
           {...props}
         />
       )}
-    </OperationalSectionCard>
+    </section>
   );
 }

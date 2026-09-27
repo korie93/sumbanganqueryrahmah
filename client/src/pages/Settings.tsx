@@ -3,7 +3,6 @@ import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import { replaceHistory } from "@/app/routing";
 import type { TabVisibility } from "@/app/types";
-import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
 import {
@@ -132,17 +131,9 @@ export default function SettingsPage({
                   ? "Manage system tools and protected admin sections from one place."
                   : "Enterprise system configuration with role-based access and audit.")
               }
-              badge={
-                isMobile ? (
-                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
-                    {controller.categories.length} sections
-                  </Badge>
-                ) : null
-              }
-              className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : ""}
             />
 
-            <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
+            <div className="min-w-0 space-y-4">
               <SettingsSidebar
                 categories={controller.categories}
                 categoryDirtyMap={controller.categoryDirtyMap}

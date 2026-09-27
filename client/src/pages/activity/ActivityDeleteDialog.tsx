@@ -11,6 +11,7 @@ export function ActivityDeleteDialog({
 }: ActivitySelectedActivityDialogProps) {
   return (
     <ActivityConfirmationDialog
+      focusOrigin="delete"
       confirmClassName="bg-destructive text-destructive-foreground"
       confirmLabel="Delete"
       description={getDeleteDialogDescription(selectedActivity?.username)}

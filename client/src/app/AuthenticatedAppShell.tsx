@@ -22,6 +22,7 @@ import { AIProvider } from "@/context/AIContext";
 import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import "@/components/GlassWrapper.css";
 import "./AuthenticatedAppShell.css";
+import "./workspace-navigation.css";
 
 const FloatingAI = lazy(() => import("@/components/FloatingAI"));
 const FLOATING_AI_FALLBACK_READY_DELAY_MS = 1_200;
@@ -66,6 +67,7 @@ export default function AuthenticatedAppShell({
   onNavigateHome,
 }: AuthenticatedAppShellProps) {
   const [floatingAiReady, setFloatingAiReady] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!runtimeConfig.aiEnabled || floatingAiReady) return;
@@ -155,7 +157,7 @@ export default function AuthenticatedAppShell({
 
   return (
     <AIProvider>
-      <div className="viewport-min-height bg-background">
+      <div className="sqr-workspace viewport-min-height bg-background" data-sidebar-collapsed={sidebarCollapsed}>
         <AutoLogout
           onClientLogout={onClientLogout}
           onLogout={onLogout}
@@ -174,6 +176,8 @@ export default function AuthenticatedAppShell({
           savedCount={savedCount}
           tabVisibility={tabVisibility}
           featureLockdown={featureLockdown}
+          sidebarCollapsed={sidebarCollapsed}
+          onSidebarCollapsedChange={setSidebarCollapsed}
         />
         <MaintenanceModeBanner userRole={user.role} />
         <AppRouteErrorBoundary

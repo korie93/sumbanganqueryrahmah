@@ -57,17 +57,17 @@ function ResultTable({
           <TableRow className="bg-muted/30">
             <TableHead>Aging</TableHead>
             <TableHead className="text-right">TT OSP</TableHead>
-            <TableHead className="bg-primary/5 text-right">Target %</TableHead>
-            <TableHead className="bg-primary/5 text-right">Target OSP</TableHead>
+            <TableHead className="text-right">Target %</TableHead>
+            <TableHead className="text-right">Target OSP</TableHead>
             <TableHead className="text-right">Result %</TableHead>
-            <TableHead className="bg-status-online/10 text-right">OSP closed</TableHead>
+            <TableHead className="text-right">OSP closed</TableHead>
             <TableHead className="text-right">Accounts</TableHead>
-            <TableHead className="bg-status-away/10 text-right">Balance OSP</TableHead>
+            <TableHead className="text-right">Balance OSP</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rendered.map((row) => (
-            <TableRow key={row.aging} className={row.aging === "ALL" ? "font-semibold" : undefined}>
+            <TableRow key={row.aging} className={row.aging === "ALL" ? "bg-muted/30 font-semibold" : undefined}>
               <TableCell>{row.aging}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(row.totalOsp)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspPercentage(row.targetPercentage)}</TableCell>
@@ -184,12 +184,12 @@ export function BillingPrincipalClientResultTable({
   }));
 
   return (
-    <section aria-labelledby="billing-table-b-heading" className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+    <section aria-labelledby="billing-table-b-heading" className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="rounded-full border-chart-2/30 bg-chart-2/10">B</Badge>
-            <h3 id="billing-table-b-heading" className="font-semibold">Client Result</h3>
+            <Badge variant="secondary">B</Badge>
+            <h3 id="billing-table-b-heading" className="text-base font-semibold">Client Result</h3>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Your private Target % and Result % only. Amounts and weighted ALL are derived from the saved TT OSP.
@@ -200,7 +200,7 @@ export function BillingPrincipalClientResultTable({
           </p>
         </div>
         {editable ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 [&_button]:min-h-11 md:[&_button]:min-h-9">
           {dirty ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setDraft(draftFromRows(overview.clientResult.rows)); setError(""); }}>Discard changes</Button> : null}
           <Button type="button" size="sm" onClick={() => void save()} disabled={busy || (!dirty && Boolean(overview.clientResult.all.receivedDate))}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="mr-2 h-4 w-4" aria-hidden="true" />}
@@ -211,16 +211,16 @@ export function BillingPrincipalClientResultTable({
       </div>
       {error ? <p role="alert" className="mx-4 mb-4 text-sm text-destructive">{error}</p> : null}
       <div className="overflow-x-auto border-t border-border/60">
-        <Table aria-label="Table B Client Billing Principal result" className="min-w-[760px]">
+        <Table aria-label="Table B Client Billing Principal result" className="min-w-[760px] [&_td]:py-1.5">
           <TableHeader>
             <TableRow className="bg-muted/30">
               <TableHead>Aging</TableHead>
               <TableHead className="text-right">TT OSP</TableHead>
-              <TableHead className="bg-primary/5 text-right">Target %</TableHead>
-              <TableHead className="bg-primary/5 text-right">Target OSP</TableHead>
-              <TableHead className="w-36 bg-chart-2/10 text-right">Client Result %</TableHead>
-              <TableHead className="bg-status-online/10 text-right">Client OSP Closed</TableHead>
-              <TableHead className="bg-status-away/10 text-right">Balance OSP</TableHead>
+              <TableHead className="text-right">Target %</TableHead>
+              <TableHead className="text-right">Target OSP</TableHead>
+              <TableHead className="w-36 text-right">Client Result %</TableHead>
+              <TableHead className="text-right">Client OSP Closed</TableHead>
+              <TableHead className="text-right">Balance OSP</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -228,7 +228,7 @@ export function BillingPrincipalClientResultTable({
               <TableRow key={aging}>
                 <TableCell className="font-semibold">{aging}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatOspCurrency(persisted?.totalOsp)}</TableCell>
-                <TableCell>{editable ? <Input aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto w-28 text-right tabular-nums" /> : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
+                <TableCell>{editable ? <Input aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto h-11 w-28 text-right tabular-nums md:h-9" /> : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.targetOsp)}</TableCell>
                 <TableCell>
                   {editable ? (
@@ -239,7 +239,7 @@ export function BillingPrincipalClientResultTable({
                       value={draft[aging].resultPercentage}
                       onChange={(event) => update(aging, "resultPercentage", event.target.value)}
                       disabled={busy}
-                      className="text-right tabular-nums"
+                      className="h-11 text-right tabular-nums md:h-9"
                     />
                   ) : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.resultPercentage)}</span>}
                 </TableCell>
@@ -409,28 +409,28 @@ export function BillingPrincipalSavedTargetWorkspace({
   const comparison = overview?.latestComparison;
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+      <section className="min-w-0 space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">{target.name}</h2>
+              <h2 className="break-words text-base font-semibold">{target.name}</h2>
               <Badge variant="outline">Revision {target.activeRevision.revisionNumber}</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               Immutable TT OSP baseline · System and Client results only.
             </p>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
+          <div className="flex flex-wrap items-end gap-2 [&_button]:min-h-11 md:[&_button]:min-h-9">
+            <div className="min-w-0 flex-1 space-y-1 lg:flex-none">
               <Label htmlFor="billing-system-as-of">System as of</Label>
-              <Input id="billing-system-as-of" type="date" min={range.from} max={range.to} value={asOf} disabled={saving || clientDirty || exportBusy} onChange={(event) => { if (isBillingPrincipalDateInRange(event.target.value, range)) setAsOf(event.target.value); }} />
+              <Input id="billing-system-as-of" className="h-11 md:h-9" type="date" min={range.from} max={range.to} value={asOf} disabled={saving || clientDirty || exportBusy} onChange={(event) => { if (isBillingPrincipalDateInRange(event.target.value, range)) setAsOf(event.target.value); }} />
             </div>
             <Button type="button" variant="outline" onClick={() => { if (onRefresh) onRefresh(); else setRefreshVersion((value) => value + 1); }} disabled={loading || saving || clientDirty || exportBusy}>
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" /> Refresh
             </Button>
           </div>
         </div>
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+        <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <p>Table A counts each eligible account once using its saved Billing Principal OSP. Manual verified POOL values stay external to Collection amounts and user performance.</p>
         </div>
@@ -449,22 +449,22 @@ export function BillingPrincipalSavedTargetWorkspace({
 
       {overview ? (
         <>
-          <section aria-labelledby="billing-table-a-heading" className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+          <section aria-labelledby="billing-table-a-heading" className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
             <div className="p-4">
-              <div className="flex items-center gap-2"><Badge className="rounded-full">A</Badge><h3 id="billing-table-a-heading" className="font-semibold">System Result</h3></div>
+              <div className="flex items-center gap-2"><Badge variant="secondary">A</Badge><h3 id="billing-table-a-heading" className="text-base font-semibold">System Result</h3></div>
               <p className="mt-1 text-sm text-muted-foreground">Effective automatic ABORT CP plus valid Manual Verified ABORT, with each logical account counted once.</p>
             </div>
             <ResultTable rows={overview.systemResult.rows} all={overview.systemResult.all} />
           </section>
           <BillingPrincipalClientResultTable target={target} overview={overview} editable={["superuser", "manager", "admin"].includes(role)} saving={saving} exporting={exportBusy} onSave={saveClient} onDirtyChange={setClientDirty} />
-          <section aria-labelledby="billing-latest-comparison" className="rounded-2xl border border-border/70 bg-card p-4">
-            <h3 id="billing-latest-comparison" className="font-semibold">Latest Total Result Comparison</h3>
+          <section aria-labelledby="billing-latest-comparison" className="border-y border-border py-4">
+            <h3 id="billing-latest-comparison" className="text-base font-semibold">Latest Total Result Comparison</h3>
             <p className="mt-1 text-sm text-muted-foreground">This comparison is deliberately independent of the historical System date selector.</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <div className="min-w-0 rounded-xl border p-3"><p className="text-xs text-muted-foreground">System latest ALL · {comparison?.system.asOf}</p><p className="mt-1 font-semibold tabular-nums">{formatOspPercentage(comparison?.system.resultPercentage)}</p></div>
-              <div className="min-w-0 rounded-xl border p-3"><p className="text-xs text-muted-foreground">Client latest ALL · {comparison?.client?.receivedDate ?? "No submission"}</p><p className="mt-1 font-semibold tabular-nums">{comparison?.client ? formatOspPercentage(comparison.client.resultPercentage) : "—"}</p></div>
-              <div className="min-w-0 rounded-xl border p-3"><p className="text-xs text-muted-foreground">Difference (percentage points)</p><p className="mt-1 font-semibold tabular-nums">{comparison?.differencePercentagePoints == null ? "—" : formatOspPercentagePoint(comparison.differencePercentagePoints)}</p></div>
-            </div>
+            <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="min-w-0"><dt className="text-xs text-muted-foreground">System latest ALL · {comparison?.system.asOf}</dt><dd className="mt-1 font-semibold tabular-nums">{formatOspPercentage(comparison?.system.resultPercentage)}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-muted-foreground">Client latest ALL · {comparison?.client?.receivedDate ?? "No submission"}</dt><dd className="mt-1 font-semibold tabular-nums">{comparison?.client ? formatOspPercentage(comparison.client.resultPercentage) : "—"}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-muted-foreground">Difference (percentage points)</dt><dd className="mt-1 font-semibold tabular-nums">{comparison?.differencePercentagePoints == null ? "—" : formatOspPercentagePoint(comparison.differencePercentagePoints)}</dd></div>
+            </dl>
           </section>
           <BillingPrincipalInsights target={target} overview={overview} disabled={saving || clientDirty} onAccessLost={handleAccessLost} onExportBusy={setExportBusy} />
         </>

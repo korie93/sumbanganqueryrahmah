@@ -91,7 +91,7 @@ function CollectionRecordsAdvancedFilters({
   onSortValueChange,
   mobile = false,
 }: AdvancedFiltersProps) {
-  const triggerClassName = mobile ? "h-12 rounded-2xl bg-background" : "h-11 rounded-xl bg-background";
+  const triggerClassName = mobile ? "h-11 rounded-md bg-background" : "h-9 rounded-md bg-background";
 
   return (
     <>
@@ -236,7 +236,7 @@ export function CollectionRecordsFilters({
 
   if (isMobile) {
     return (
-      <div className="space-y-4 rounded-[1.5rem] border border-border/60 bg-background p-4 shadow-sm">
+      <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor={mobileFromDateButtonId}>From Date</Label>
           <DatePickerField
@@ -246,7 +246,7 @@ export function CollectionRecordsFilters({
             placeholder="Select from date..."
             ariaLabel="From Date"
             buttonTestId="collection-records-from-date"
-            className="h-12 rounded-2xl"
+            className="h-11 rounded-md"
           />
         </div>
 
@@ -259,7 +259,7 @@ export function CollectionRecordsFilters({
             placeholder="Select to date..."
             ariaLabel="To Date"
             buttonTestId="collection-records-to-date"
-            className="h-12 rounded-2xl"
+            className="h-11 rounded-md"
           />
         </div>
 
@@ -274,7 +274,7 @@ export function CollectionRecordsFilters({
               value={searchInput}
               onChange={(event) => onSearchInputChange(event.target.value)}
               placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
-              className="h-12 rounded-2xl pl-9 text-base"
+              className="h-11 rounded-md pl-9 text-base"
               autoComplete="off"
               autoCapitalize="none"
               autoCorrect="off"
@@ -298,8 +298,8 @@ export function CollectionRecordsFilters({
             onOpenChange={setMobileNicknamePickerOpen}
             onSelectEmpty={() => onNicknameFilterChange("all")}
             onSelect={onNicknameFilterChange}
-            triggerClassName="h-12 rounded-2xl bg-background text-sm"
-            popoverClassName="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-border/70 bg-popover p-2 shadow-xl"
+            triggerClassName="h-11 rounded-md bg-background text-sm"
+            popoverClassName="w-[min(360px,calc(100vw-2rem))] rounded-lg border-border bg-popover p-2 shadow-md"
           />
         ) : null}
 
@@ -323,13 +323,13 @@ export function CollectionRecordsFilters({
         />
 
         <div className="grid grid-cols-2 gap-2 pt-1" data-floating-ai-avoid="true">
-          <Button type="button" className="h-12 w-full rounded-2xl" onClick={onFilter} disabled={loadingRecords}>
+          <Button type="button" className="h-11 w-full rounded-md" onClick={onFilter} disabled={loadingRecords}>
             Filter
           </Button>
           <Button
             type="button"
             variant="outline"
-            className="h-12 w-full rounded-2xl"
+            className="h-11 w-full rounded-md"
             onClick={onReset}
             disabled={loadingRecords}
           >
@@ -343,11 +343,7 @@ export function CollectionRecordsFilters({
   return (
     <div className="space-y-3">
       <div
-        className={`grid gap-3 ${
-          canUseNicknameFilter
-            ? "2xl:grid-cols-[minmax(170px,190px)_minmax(170px,190px)_minmax(280px,1fr)_minmax(220px,240px)_auto_auto]"
-            : "xl:grid-cols-[minmax(170px,190px)_minmax(170px,190px)_minmax(280px,1fr)_auto_auto]"
-        }`}
+        className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3"
       >
       <div className="space-y-1.5">
         <Label htmlFor={desktopFromDateButtonId}>From Date</Label>
@@ -358,7 +354,7 @@ export function CollectionRecordsFilters({
           placeholder="Select from date..."
           ariaLabel="From Date"
           buttonTestId="collection-records-from-date"
-          className="h-11 rounded-xl bg-background"
+          className="h-9 rounded-md bg-background"
         />
       </div>
       <div className="space-y-1.5">
@@ -370,7 +366,7 @@ export function CollectionRecordsFilters({
           placeholder="Select to date..."
           ariaLabel="To Date"
           buttonTestId="collection-records-to-date"
-          className="h-11 rounded-xl bg-background"
+          className="h-9 rounded-md bg-background"
         />
       </div>
       <div className="space-y-1.5">
@@ -384,7 +380,7 @@ export function CollectionRecordsFilters({
             value={searchInput}
             onChange={(event) => onSearchInputChange(event.target.value)}
             placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
-            className="h-11 rounded-xl bg-background pl-9"
+            className="h-9 rounded-md bg-background pl-9"
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"
@@ -407,22 +403,22 @@ export function CollectionRecordsFilters({
           onOpenChange={setDesktopNicknamePickerOpen}
           onSelectEmpty={() => onNicknameFilterChange("all")}
           onSelect={onNicknameFilterChange}
-          triggerClassName="h-11 rounded-xl bg-background text-sm"
-          popoverClassName="w-[min(360px,calc(100vw-3rem))] rounded-2xl border-border/70 bg-popover p-2 shadow-xl"
+          triggerClassName="h-9 rounded-md bg-background text-sm"
+          popoverClassName="w-[min(360px,calc(100vw-3rem))] rounded-lg border-border bg-popover p-2 shadow-md"
         />
       ) : null}
       <div className={cn("flex items-end", canUseNicknameFilter ? "" : "xl:justify-end")} data-floating-ai-avoid="true">
-        <Button type="button" className="h-11 rounded-xl px-5" onClick={onFilter} disabled={loadingRecords}>
+        <Button type="button" className="h-9 rounded-md px-5" onClick={onFilter} disabled={loadingRecords}>
           Filter
         </Button>
       </div>
       <div className="flex items-end" data-floating-ai-avoid="true">
-        <Button type="button" variant="outline" className="h-11 rounded-xl px-5" onClick={onReset} disabled={loadingRecords}>
+        <Button type="button" variant="outline" className="h-9 rounded-md px-5" onClick={onReset} disabled={loadingRecords}>
           Reset
         </Button>
       </div>
       </div>
-      <div className={`grid gap-3 sm:grid-cols-2 ${canUseTeamLeaderFilter ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,160px),1fr))] gap-3">
         <CollectionRecordsAdvancedFilters
           canUseTeamLeaderFilter={canUseTeamLeaderFilter}
           leaderFilter={leaderFilter}

@@ -17,6 +17,12 @@ test("CollectionDailyRoleGuide explains superuser calendar controls including OF
   assert.match(markup, /Superuser workspace/);
   assert.match(markup, /Working, Holiday\/Leave atau OFF/);
   assert.match(markup, /Edit per nickname/);
+  assert.match(markup, /<details class=/);
+  assert.doesNotMatch(markup, /<details[^>]* open/);
+  assert.match(markup, /Role guidance/);
+  assert.doesNotMatch(markup.match(/<summary[^>]*>(.*?)<\/summary>/)?.[1] ?? "", /<div/);
+  assert.match(markup, /aria-label="Role capabilities"/);
+  assert.doesNotMatch(markup, /collection-daily-role-guide-icon/);
 });
 
 test("CollectionDailyRoleGuide distinguishes admin and user workspaces", () => {

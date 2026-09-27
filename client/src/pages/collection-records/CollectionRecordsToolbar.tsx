@@ -1,9 +1,6 @@
-import { Suspense, lazy } from "react";
-import { Download, FileText } from "lucide-react";
-import {
-  OperationalMetric,
-  OperationalSummaryStrip,
-} from "@/components/layout/OperationalPage";
+import { Suspense, lazy, useEffect, useRef } from "react";
+import { ChevronDown, Download, FileText } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { buildCollectionRecordsPaginationControlsState } from "@/pages/collection-records/collection-records-toolbar-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -47,7 +44,7 @@ export interface CollectionRecordsToolbarProps {
 }
 
 function CollectionRecordsPurgeSummaryCardFallback() {
-  return <div className="h-28 animate-pulse rounded-2xl border border-border/60 bg-muted/20" />;
+  return <div className="h-11 animate-pulse rounded-md border border-border bg-muted/20" />;
 }
 
 export function CollectionRecordsToolbar({
@@ -77,6 +74,18 @@ export function CollectionRecordsToolbar({
   onNextPage,
 }: CollectionRecordsToolbarProps) {
   const exportBusy = exportingExcel || exportingPdf;
+  const exportTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreExportFocus = useRef(false);
+  useEffect(() => {
+    if (loadingRecords || exportBusy || !restoreExportFocus.current) return;
+    restoreExportFocus.current = false;
+    const trigger = exportTriggerRef.current;
+    // A download may disable its launcher before Radix closes the menu. Restore
+    // it once ready, but never steal focus from another control the user chose.
+    if (trigger?.isConnected && (document.activeElement === document.body || document.activeElement === trigger)) {
+      trigger.focus({ preventScroll: true });
+    }
+  }, [exportBusy, loadingRecords]);
   const paginationControls = buildCollectionRecordsPaginationControlsState({
     hasNextPage,
     hasPreviousPage,
@@ -90,60 +99,54 @@ export function CollectionRecordsToolbar({
 
   return (
     <>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-        <OperationalSummaryStrip className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <OperationalMetric
-            label="Total Records"
-            value={summary.totalRecords}
-            supporting={summary.totalRecords === 1 ? "1 record matched" : `${summary.totalRecords} records matched`}
-          />
-          <OperationalMetric
-            label="Total Collection Amount"
-            value={formatAmountRM(summary.totalAmount)}
-            supporting={totalRecords > 0 ? "Across the filtered result set" : "No amount available yet"}
-            tone="success"
-          />
-          <OperationalMetric
-            label="Showing Now"
-            value={visibleRangeLabel}
-            supporting={`Page ${tablePage} of ${totalPages}`}
-          />
-        </OperationalSummaryStrip>
+      <div className="space-y-3">
+        <dl className="grid grid-cols-2 gap-4 border-y border-border py-3 sm:max-w-xl">
+          <div>
+            <dt className="text-xs text-muted-foreground">Total Records</dt>
+            <dd className="mt-1 text-xl font-semibold tabular-nums">{summary.totalRecords}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Total Collection Amount</dt>
+            <dd className="mt-1 text-xl font-semibold tabular-nums text-success">{formatAmountRM(summary.totalAmount)}</dd>
+          </div>
+        </dl>
 
-        <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm" data-floating-ai-avoid="true">
-          <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">
-            Actions
-          </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <div role="group" aria-label="Record Actions" data-floating-ai-avoid="true">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="secondary"
-              className="h-10 w-full rounded-xl sm:w-auto"
+              className="rounded-md"
               onClick={onOpenViewAll}
               disabled={loadingRecords || viewAllLoading}
             >
               {viewAllLoading ? "Loading..." : "View All"}
             </Button>
-            <Button
-              type="button"
-              className="h-10 w-full rounded-xl sm:w-auto"
-              variant="outline"
-              onClick={onExportExcel}
-              disabled={loadingRecords || exportBusy}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              {exportingExcel ? "Exporting..." : "Export Excel"}
-            </Button>
-            <Button
-              type="button"
-              className="h-10 w-full rounded-xl sm:w-auto"
-              variant="outline"
-              onClick={onExportPdf}
-              disabled={loadingRecords || exportBusy}
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              {exportingPdf ? "Exporting..." : "Export PDF"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button ref={exportTriggerRef} type="button" variant="outline" disabled={loadingRecords || exportBusy}>
+                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {exportBusy ? "Exporting..." : "Export"}
+                  <ChevronDown className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                onCloseAutoFocus={(event) => {
+                  if (exportTriggerRef.current?.disabled) {
+                    event.preventDefault();
+                    restoreExportFocus.current = true;
+                  }
+                }}
+              >
+                <DropdownMenuItem className="min-h-11 sm:min-h-9" disabled={loadingRecords || exportBusy} onSelect={onExportExcel}>
+                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />Export Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem className="min-h-11 sm:min-h-9" disabled={loadingRecords || exportBusy} onSelect={onExportPdf}>
+                  <FileText className="mr-2 h-4 w-4" aria-hidden="true" />Export PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -161,21 +164,18 @@ export function CollectionRecordsToolbar({
       ) : null}
 
       <div
-        className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+        className="flex flex-col gap-3 border-t border-border py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
         data-floating-ai-avoid="true"
         {...paginationBusyProps}
       >
         <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
-            Pagination
-          </p>
           <p className="text-sm text-muted-foreground">
-          {paginationControls.paginationBusy
-            ? "Updating records..."
-            : `Showing ${visibleRangeLabel} of ${totalRecords} records`}
+            {paginationControls.paginationBusy
+              ? "Updating records..."
+              : `Showing ${visibleRangeLabel} of ${totalRecords} records`}
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <label className="sr-only" htmlFor="collection-records-page-size">
             Records per page
           </label>
@@ -185,7 +185,7 @@ export function CollectionRecordsToolbar({
             value={String(tablePageSize)}
             onChange={(event) => onTablePageSizeChange(Number(event.target.value))}
             disabled={paginationControls.pageSizeDisabled}
-            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm shadow-sm sm:w-[132px]"
+            className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm sm:h-9 sm:w-[132px]"
           >
             <option value="50">50 / page</option>
             <option value="100">100 / page</option>
@@ -195,7 +195,7 @@ export function CollectionRecordsToolbar({
             type="button"
             size="sm"
             variant="outline"
-            className="h-10 w-full rounded-xl px-4 sm:w-auto"
+            className="flex-1 rounded-md px-4 sm:flex-none"
             disabled={paginationControls.previousDisabled}
             onClick={onPrevPage}
           >
@@ -208,7 +208,7 @@ export function CollectionRecordsToolbar({
             type="button"
             size="sm"
             variant="outline"
-            className="h-10 w-full rounded-xl px-4 sm:w-auto"
+            className="flex-1 rounded-md px-4 sm:flex-none"
             disabled={paginationControls.nextDisabled}
             onClick={onNextPage}
           >

@@ -61,6 +61,9 @@ test("AnalysisDataQualitySection renders an accessible score and single-file dri
   assert.match(markup, /aria-valuenow="82"/);
   assert.match(markup, /Account Number/);
   assert.match(markup, /Inspect Account Number in Viewer/);
+  assert.match(markup, /grid grid-cols-2/);
+  assert.match(markup, /text-warning/);
+  assert.doesNotMatch(markup, /minmax\(180px|minmax\(220px/);
 });
 
 test("AnalysisDataQualitySection explains why all-file mode has no Viewer drill-down", () => {

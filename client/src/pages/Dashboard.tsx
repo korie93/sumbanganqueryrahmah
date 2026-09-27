@@ -655,6 +655,21 @@ function DashboardContent() {
         data-dashboard-export-root="true"
       >
         <DashboardErrorState messages={dashboardErrorMessages} />
+        <div id="dashboard-login-snapshot" className="scroll-mt-24">
+          <DashboardSectionRenderBoundary
+            sectionName="Ringkasan dashboard"
+            boundaryKey={`summary:${summaryLoading}:${summaryErrorMessage ?? "ok"}:${summaryCards.length}`}
+          >
+            <DashboardSnapshotSection
+              summary={summary}
+              summaryCards={summaryCards}
+              summaryErrorMessage={summaryErrorMessage}
+              summaryLoading={summaryLoading}
+              summaryRetrying={summaryFetching}
+              onRetrySummary={handleRetrySummary}
+            />
+          </DashboardSectionRenderBoundary>
+        </div>
         <DashboardLoginCommandBar
           loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
           recentLoginActivities={recentLoginActivities ?? []}
@@ -679,21 +694,6 @@ function DashboardContent() {
           retrying={suspiciousLoginActivityFetching}
           totalItems={suspiciousLoginActivityPage?.pagination.totalItems ?? 0}
         />
-        <div id="dashboard-login-snapshot" className="scroll-mt-24">
-          <DashboardSectionRenderBoundary
-            sectionName="Ringkasan dashboard"
-            boundaryKey={`summary:${summaryLoading}:${summaryErrorMessage ?? "ok"}:${summaryCards.length}`}
-          >
-            <DashboardSnapshotSection
-              summary={summary}
-              summaryCards={summaryCards}
-              summaryErrorMessage={summaryErrorMessage}
-              summaryLoading={summaryLoading}
-              summaryRetrying={summaryFetching}
-              onRetrySummary={handleRetrySummary}
-            />
-          </DashboardSectionRenderBoundary>
-        </div>
         <DashboardDeferredSections
           canViewExactNetwork={canManageLoginLogs}
           defer={shouldDeferSecondaryMobileSections}

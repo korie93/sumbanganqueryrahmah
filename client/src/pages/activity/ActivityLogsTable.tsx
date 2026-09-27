@@ -57,7 +57,7 @@ export function ActivityLogsTable({
 
   return (
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
-      <div className="glass-wrapper p-6" data-floating-ai-avoid="true">
+      <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-floating-ai-avoid="true">
         <ActivityLogsTableHeader
           totalItems={totalItems}
           logsOpen={logsOpen}

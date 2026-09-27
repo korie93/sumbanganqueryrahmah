@@ -20,18 +20,17 @@ export function ViewerDataTableFallback() {
 
 export function ViewerFooterFallback() {
   return (
-    <div className="mt-4 h-[72px] animate-pulse rounded-xl border border-border/60 bg-background/70" />
+    <div className="mt-4 h-16 animate-pulse border-t border-border bg-muted" />
   );
 }
 
 export function ViewerSearchBarFallback() {
   return (
-    <div className="ops-toolbar mb-4 space-y-3">
+    <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="h-10 min-w-48 max-w-xl flex-1 animate-pulse rounded-xl border border-border/60 bg-muted/25" />
-        <div className="h-4 w-36 animate-pulse rounded bg-muted/30" />
+        <div className="h-11 min-w-0 max-w-xl flex-1 animate-pulse rounded-lg border border-border bg-muted sm:h-9" />
+        <div className="hidden h-4 w-36 animate-pulse rounded bg-muted sm:block" />
       </div>
-      <div className="h-8 w-full animate-pulse rounded-xl border border-border/50 bg-muted/20" />
     </div>
   );
 }

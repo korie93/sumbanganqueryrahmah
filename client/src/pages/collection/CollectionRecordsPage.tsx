@@ -1,7 +1,6 @@
-import { Suspense, lazy, memo, useMemo, useState } from "react";
+import { Suspense, lazy, memo, useMemo, useRef, useState } from "react";
 import { Filter, RotateCcw } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
-import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
 import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
+import { createCollectionRecordOverlayFocus } from "@/pages/collection-records/collection-record-overlay-focus";
 import { useCollectionRecordsController } from "@/pages/collection-records/useCollectionRecordsController";
 
 const CollectionRecordsFilters = lazy(() =>
@@ -91,7 +91,7 @@ function CollectionRecordsFiltersFallback() {
 
   return (
     <div className="ops-toolbar space-y-3">
-      <div className="grid gap-3 xl:grid-cols-[170px_170px_minmax(260px,1fr)_190px_auto_auto]">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3">
         {COLLECTION_RECORDS_DESKTOP_FILTER_FALLBACK_KEYS.map((key) => (
           <div
             key={`collection-records-desktop-filter-fallback-${key}`}
@@ -123,6 +123,11 @@ function CollectionRecordsToolbarFallback() {
 function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const isMobile = useIsMobile();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const mobileFiltersTriggerRef = useRef<HTMLButtonElement>(null);
+  const pageFocusRef = useRef<HTMLDivElement>(null);
+  const [overlayFocus] = useState(() => createCollectionRecordOverlayFocus(
+    () => mobileFiltersTriggerRef.current ?? pageFocusRef.current,
+  ));
   const controller = useCollectionRecordsController({ role });
   const viewModel = buildCollectionRecordsPageViewModel(controller);
   const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
@@ -182,36 +187,24 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   };
 
   return (
-    <div className="space-y-4" data-testid="collection-records-page">
+    <div ref={pageFocusRef} tabIndex={-1} className="space-y-4" data-testid="collection-records-page">
       {isMobile ? (
         <div
-          className="relative overflow-hidden rounded-[1.5rem] border border-border/60 bg-background px-4 py-4 shadow-sm"
+          className="space-y-3"
           data-floating-ai-avoid="true"
         >
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
           <div className="relative space-y-3">
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
-                Collection
-              </p>
-              <h1 className="text-collection-title font-bold tracking-tight text-foreground">
-                View Rekod Collection
-              </h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Cari, semak, dan urus rekod collection tanpa memenuhi skrin dengan kawalan yang tidak perlu.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
+                ref={mobileFiltersTriggerRef}
                 type="button"
-                className="h-11 w-full justify-center rounded-2xl"
+                className="h-11 min-w-0 flex-[2_1_12rem] justify-center gap-2 rounded-md"
                 onClick={() => setMobileFiltersOpen(true)}
               >
-                <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
+                <Filter className="h-4 w-4 shrink-0" aria-hidden="true" />
                 Search & Filters
                 {hasActiveFilters ? (
-                  <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
+                  <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-2xs">
                     {activeFilterChips.length}
                   </Badge>
                 ) : null}
@@ -219,38 +212,22 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
               <Button
                 type="button"
                 variant="outline"
-                className="h-11 w-full rounded-2xl"
+                className="h-11 min-w-0 flex-[1_1_6rem] gap-2 rounded-md"
                 onClick={handleMobileReset}
                 disabled={!hasActiveFilters || viewModel.filters.loadingRecords}
               >
-                <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                <RotateCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
                 Reset
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-2xs">
-                Records workspace
-              </Badge>
-              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-2xs">
-                Quicker scan on mobile
-              </Badge>
-            </div>
           </div>
         </div>
       ) : null}
 
-      <OperationalSectionCard
-        title={isMobile ? "Results & Actions" : "View Rekod Collection"}
-        description={
-          isMobile
-            ? "Review records, exports, and receipt actions without leaving the current collection view."
-            : "Search, review, export, and maintain collection records from a tidier workspace."
-        }
-        contentClassName="space-y-4"
-      >
+      <section aria-label="View Rekod Collection" className="space-y-4">
         {!isMobile ? (
-          <div className="ops-toolbar">
+          <div>
             <Suspense fallback={<CollectionRecordsFiltersFallback />}>
               <CollectionRecordsFilters {...viewModel.filters} />
             </Suspense>
@@ -263,14 +240,34 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <CollectionRecordsToolbar {...viewModel.toolbar} />
         </Suspense>
 
-        <CollectionRecordsTable {...viewModel.table} />
-      </OperationalSectionCard>
+        <CollectionRecordsTable
+          {...viewModel.table}
+          onEdit={(record, launcher) => {
+            const activeElement = document.activeElement;
+            overlayFocus.remember("edit", launcher ?? (
+              activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
+            ));
+            viewModel.table.onEdit(record);
+          }}
+          onDelete={(record, launcher) => {
+            const activeElement = document.activeElement;
+            overlayFocus.remember("delete", launcher ?? (
+              activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
+            ));
+            viewModel.table.onDelete(record);
+          }}
+        />
+      </section>
 
       {isMobile ? (
         <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
           <SheetContent
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              mobileFiltersTriggerRef.current?.focus({ preventScroll: true });
+            }}
             side="bottom"
-            className="rounded-t-[1.75rem] border-border/70 bg-background px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
+            className="rounded-t-2xl border-border bg-background px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
             data-floating-ai-avoid="true"
           >
             <SheetHeader className="pr-8 text-left">
@@ -302,13 +299,24 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
       {viewModel.editDialog.open ? (
         <Suspense fallback={<LazyDialogFallback label="Loading edit collection record dialog..." />}>
-          <EditCollectionRecordDialog {...viewModel.editDialog} />
+          <EditCollectionRecordDialog
+            {...viewModel.editDialog}
+            onCloseAutoFocus={(event) => overlayFocus.restore("edit", event)}
+          />
         </Suspense>
       ) : null}
 
       {viewModel.deleteDialog.open ? (
         <Suspense fallback={<LazyDialogFallback label="Loading delete collection record dialog..." />}>
-          <DeleteCollectionRecordDialog {...viewModel.deleteDialog} />
+          <DeleteCollectionRecordDialog
+            {...viewModel.deleteDialog}
+            onCloseAutoFocus={(event) => overlayFocus.restore("delete", event)}
+            onConfirm={() => {
+              // The async refresh can remove this row after the alert closes.
+              overlayFocus.remember("delete", null);
+              viewModel.deleteDialog.onConfirm();
+            }}
+          />
         </Suspense>
       ) : null}
 

@@ -60,11 +60,13 @@ test("dark mode suppresses glassmorphism and old blue page backdrops", () => {
     glassWrapperCss,
     /\.dark \.glass-wrapper\s*{[\s\S]*backdrop-filter:\s*none !important;/,
   );
-  assert.match(loginCss, /\.dark \.login-card\s*{[\s\S]*backdrop-filter:\s*none !important;/);
-  assert.match(
-    publicAuthCss,
-    /\.dark \.public-auth-layout:not\(\.public-auth-layout--minimal\) \.public-auth-layout__card\s*{[\s\S]*backdrop-filter:\s*none !important;/,
-  );
+  // Public auth no longer enables glass in either theme. Keep the global dark
+  // safeguard as well as explicit neutral surfaces, not a stale override path.
+  for (const [css, selector] of [[loginCss, "login-card"], [publicAuthCss, "public-auth-layout__card"]]) {
+    assert.doesNotMatch(css, /backdrop-filter:\s*(?:blur|saturate)\(/);
+    assert.match(css, new RegExp(`\\.dark \\.${selector}\\s*{[^}]*background:\\s*hsl\\(var\\(--card\\)\\);`));
+    assert.match(themeCss, new RegExp(`\\.dark :where\\([^)]*\\.${selector}[^)]*\\)\\s*{[^}]*backdrop-filter:\\s*none !important;`));
+  }
   assert.match(floatingAiCss, /:global\(\.dark\) \.floatingMobileBackdrop\s*{[\s\S]*backdrop-filter:\s*none !important;/);
   assert.match(navbarCss, /\.dark \.navbar-premium-glass\s*{[\s\S]*backdrop-filter:\s*none !important;/);
   assert.match(pageSources, /side-tab-nav/);

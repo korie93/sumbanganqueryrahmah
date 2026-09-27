@@ -1,7 +1,6 @@
 import { memo, useCallback } from "react";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -136,19 +135,11 @@ export const SettingCard = memo(function SettingCard({
 
   const descriptionLabel = setting.description || "No description available for this setting.";
   return (
-    <Card className="border-border/60 bg-background/70 [contain-intrinsic-size:140px] [content-visibility:auto]">
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          <div className="space-y-1.5">
+    <section aria-labelledby={settingTitleId} className="min-w-0 border-b border-border py-4 [contain-intrinsic-size:140px] [content-visibility:auto]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+          <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 id={settingTitleId} className="font-semibold">{settingLabel}</h3>
-              <span
-                className="text-muted-foreground"
-                title={descriptionLabel}
-                aria-hidden="true"
-              >
-                <Info className="w-3.5 h-3.5" />
-              </span>
+              <h3 id={settingTitleId} className="text-sm font-medium">{settingLabel}</h3>
               {setting.isCritical ? (
                 <Badge variant="destructive" className="gap-1 rounded-full">
                   <AlertTriangle className="w-3 h-3" />
@@ -157,16 +148,11 @@ export const SettingCard = memo(function SettingCard({
               ) : null}
               {isDirty ? <Badge variant="secondary" className="rounded-full">Unsaved</Badge> : null}
             </div>
-            {isMobile && setting.description ? (
-              <p id={settingDescriptionId} className="text-xs leading-5 text-muted-foreground">{setting.description}</p>
-            ) : (
-              <p id={settingDescriptionId} className="sr-only">{descriptionLabel}</p>
-            )}
-            <p className="text-xs text-muted-foreground">Key: {setting.key}</p>
+            <p id={settingDescriptionId} className="text-xs leading-5 text-muted-foreground">{descriptionLabel}</p>
+            <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">Key: {setting.key}</p>
           </div>
-          <div className="w-full lg:w-auto">{renderControl()}</div>
+          <div className="w-full shrink-0 lg:w-80">{renderControl()}</div>
         </div>
-      </CardContent>
-    </Card>
+    </section>
   );
 });

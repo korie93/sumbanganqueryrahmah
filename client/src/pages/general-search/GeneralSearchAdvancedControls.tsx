@@ -50,7 +50,7 @@ export function GeneralSearchAdvancedControls({
             variant={logic === "AND" ? "default" : "outline"}
             size={isMobile ? "default" : "sm"}
             onClick={() => onLogicChange("AND")}
-            className={isMobile ? "h-10 w-full" : ""}
+            className={isMobile ? "h-11 w-full" : "h-9"}
             data-testid="button-logic-and"
           >
             AND
@@ -59,7 +59,7 @@ export function GeneralSearchAdvancedControls({
             variant={logic === "OR" ? "default" : "outline"}
             size={isMobile ? "default" : "sm"}
             onClick={() => onLogicChange("OR")}
-            className={isMobile ? "h-10 w-full" : ""}
+            className={isMobile ? "h-11 w-full" : "h-9"}
             data-testid="button-logic-or"
           >
             OR
@@ -71,7 +71,7 @@ export function GeneralSearchAdvancedControls({
         {filters.map((filter, index) => (
           <div
             key={filter.id}
-            className={`rounded-xl bg-muted/50 p-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center gap-2"}`}
+            className={`rounded-md border border-border bg-muted/20 p-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center gap-2"}`}
             data-testid={`filter-row-${index}`}
           >
             <div className="flex items-center justify-between gap-3">
@@ -97,7 +97,7 @@ export function GeneralSearchAdvancedControls({
               value={filter.field}
               onValueChange={(value) => onUpdateFilter(filter.id, { field: value })}
             >
-              <SelectTrigger className={isMobile ? "h-11 w-full" : "w-[180px]"} data-testid={`select-field-${index}`}>
+              <SelectTrigger className={isMobile ? "h-11 w-full" : "h-9 w-[180px]"} data-testid={`select-field-${index}`}>
                 <SelectValue placeholder="Select field..." />
               </SelectTrigger>
               <SelectContent>
@@ -124,7 +124,7 @@ export function GeneralSearchAdvancedControls({
               onValueChange={(value) => onUpdateFilter(filter.id, { operator: value })}
             >
               <SelectTrigger
-                className={isMobile ? "h-11 w-full" : "w-[180px]"}
+                className={isMobile ? "h-11 w-full" : "h-9 w-[180px]"}
                 data-testid={`select-operator-${index}`}
               >
                 <SelectValue placeholder="Operator..." />
@@ -149,7 +149,7 @@ export function GeneralSearchAdvancedControls({
                 }
                 placeholder="Value..."
                 autoComplete="off"
-                className={isMobile ? "h-11 w-full" : "min-w-[150px] flex-1"}
+                className={isMobile ? "h-11 w-full" : "h-9 min-w-[150px] flex-1"}
                 data-testid={`input-value-${index}`}
               />
             ) : null}
@@ -160,7 +160,7 @@ export function GeneralSearchAdvancedControls({
                 size="icon"
                 onClick={() => onRemoveFilter(filter.id)}
                 disabled={filters.length === 1}
-                className="shrink-0"
+                className="h-9 w-9 shrink-0"
                 aria-label={`Remove filter ${index + 1}`}
                 data-testid={`button-remove-filter-${index}`}
               >
@@ -172,14 +172,14 @@ export function GeneralSearchAdvancedControls({
       </div>
 
       <div
-        className={`gap-3 rounded-xl ${isMobile ? "sticky bottom-0 -mx-4 border-t border-border/60 bg-background/95 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]" : "flex flex-wrap items-center"}`}
+        className={`gap-2 ${isMobile ? "sticky bottom-0 -mx-4 space-y-2 border-t border-border bg-background px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-3" : "flex flex-wrap items-center"}`}
         data-floating-ai-avoid="true"
       >
         <Button
           variant="outline"
           size={isMobile ? "default" : "sm"}
           onClick={onAddFilter}
-          className={isMobile ? "h-11 w-full" : ""}
+          className={isMobile ? "h-11 w-full" : "h-9"}
           data-testid="button-add-filter"
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -191,7 +191,7 @@ export function GeneralSearchAdvancedControls({
         <Button
           onClick={onSearch}
           disabled={loading}
-          className={isMobile ? "h-12 w-full" : ""}
+          className={isMobile ? "h-11 w-full" : "h-9"}
           data-testid="button-search-advanced"
         >
           {loading ? (
@@ -209,7 +209,7 @@ export function GeneralSearchAdvancedControls({
         <Button
           variant="outline"
           onClick={onReset}
-          className={isMobile ? "h-11 w-full" : ""}
+          className={isMobile ? "h-11 w-full" : "h-9"}
           data-testid="button-reset-advanced"
         >
           <RotateCcw className="mr-2 h-4 w-4" />

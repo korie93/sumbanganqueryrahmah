@@ -1,4 +1,5 @@
 import { memo, useCallback, useMemo } from "react";
+import { ChevronDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ViewerDataFieldCard } from "@/pages/viewer/ViewerDataFieldCard";
 import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
@@ -42,27 +43,29 @@ function ViewerMobileCardImpl({
   return (
     <article
       aria-label={rowAriaLabel}
-      className={`rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm ${selected ? "border-primary/40 bg-primary/5" : ""}`}
+      className={`rounded-xl border p-3 ${selected ? "border-primary bg-primary/5" : "border-border bg-card"}`}
       role="group"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
+          <p className="text-sm font-medium text-foreground">
             Row {row.__rowId + 1}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {visibleFieldsSummary}
           </p>
         </div>
-        <Checkbox
-          checked={selected}
-          onCheckedChange={handleToggleRow}
-          aria-label={`Select row ${row.__rowId + 1}`}
-        />
+        <label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-end">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={handleToggleRow}
+            aria-label={`Select row ${row.__rowId + 1}`}
+          />
+        </label>
       </div>
 
       {previewHeaders.length > 0 ? (
-        <dl className="mt-3 space-y-2">
+        <dl className="mt-2 divide-y divide-border">
           {previewHeaders.map((header) => (
             <ViewerDataFieldCard
               key={`${row.__rowId}-${header}`}
@@ -74,11 +77,12 @@ function ViewerMobileCardImpl({
       ) : null}
 
       {overflowHeaders.length > 0 ? (
-        <details className="mt-3 rounded-xl border border-border/50 bg-background/70">
-          <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-primary">
+        <details className="group mt-2 border-t border-border">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-2 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             {overflowFieldsLabel}
+            <ChevronDown className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
           </summary>
-          <dl className="space-y-2 border-t border-border/50 px-3 py-3">
+          <dl className="divide-y divide-border border-t border-border">
             {overflowHeaders.map((header) => (
               <ViewerDataFieldCard
                 key={`${row.__rowId}-${header}-extra`}

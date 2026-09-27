@@ -89,24 +89,64 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(userMenuSource, /navbar-dropdown-content/);
   assert.match(navbarStyles, /\.navbar-dropdown-content\[data-state="closed"\]\s*\{[\s\S]*animation:\s*none/);
   assert.match(scrollHintSource, /hint = translate\("common\.horizontalScroll\.hint"\)/);
-  assert.match(navbarStyles, /\.navbar-scroll-hint/);
-  assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-width:\s*thin/);
-  assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-color:\s*hsl\(var\(--muted-foreground\) \/ 0\.42\) transparent/);
+  assert.match(navbarStyles, /\.navbar-nav-shell\s*\{[\s\S]*overflow-y:\s*auto/);
+  assert.match(navbarStyles, /\.navbar-nav-shell\s*\{[\s\S]*scrollbar-width:\s*thin/);
+  assert.match(navbarStyles, /\.navbar-nav-shell\s*\{[\s\S]*scrollbar-color:\s*hsl\(var\(--muted-foreground\) \/ 0\.42\) transparent/);
+  assert.match(navbarSource, /data-testid="button-toggle-sidebar"/);
+  assert.match(navbarSource, /aria-label=\{sidebarCollapsed \? "Kembangkan navigasi" : "Kecilkan navigasi"\}/);
+  assert.match(desktopNavigationSource, /collapsed \? <TooltipContent side="right">\{item\.label\}/);
+  assert.match(desktopNavigationSource, /collapsed \? <TooltipContent side="right">\{group\.label\}/);
+  assert.match(homeButtonSource, /collapsed \? <TooltipContent side="right">Utama/);
   assert.match(navbarStyles, /@media \(max-width: 640px\)/);
   assert.doesNotMatch(navbarStyles, /@media \(max-width: 319px\)/);
   assert.match(mobileNavigationSource, /<SheetTitle>Navigasi<\/SheetTitle>/);
+  assert.match(mobileNavigationSource, /onCloseAutoFocus=\{onCloseAutoFocus\}/);
+  assert.match(navbarSource, /ref=\{mobileNavigationTriggerRef\}/);
+  assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileNavigationFocus\}/);
+  assert.match(navbarSource, /mobileNavigationTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(mobileNavigationSource, /Bahagian semasa:/);
   assert.match(mobileNavigationSource, /aria-label="Navigasi mudah alih"/);
   assert.match(mobileNavigationSource, /getAriaCurrentPageProps\(active\)/);
   assert.doesNotMatch(mobileNavigationSource, /aria-current=\{[^}]+\}/);
-  assert.match(mobileNavigationSource, /border-primary bg-primary text-primary-foreground shadow-sm/);
-  assert.match(mobileNavigationSource, /active \? "bg-primary-foreground text-primary" : "bg-primary\/10 text-primary"/);
-  assert.match(mobileNavigationSource, /rounded-full bg-primary-foreground px-2 py-0\.5 text-xxs font-semibold uppercase tracking-label-xs text-primary/);
-  assert.match(navbarStyles, /\.nav-pill\.nav-pill-active\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
-  assert.match(navbarStyles, /\.user-menu-role\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
+  assert.match(mobileNavigationSource, /bg-primary\/10 text-primary/);
+  assert.match(mobileNavigationSource, /active \? "text-primary" : "text-muted-foreground"/);
+  assert.match(mobileNavigationSource, /min-h-11 w-full/);
+  assert.match(navbarStyles, /\.nav-pill\.nav-pill-active\s*\{[\s\S]*color:\s*hsl\(var\(--primary\)\);/);
+  assert.match(navbarStyles, /\.user-menu-role\s*\{[\s\S]*color:\s*hsl\(var\(--muted-foreground\)\);/);
   assert.doesNotMatch(navbarCombinedSource, /Open user menu|Open navigation menu/);
   assert.doesNotMatch(desktopNavigationSource, /Primary navigation|Scroll for more/);
   assert.doesNotMatch(scrollHintSource, /Scroll for more/);
   assert.doesNotMatch(mobileNavigationSource, /Mobile navigation|Current section:/);
   assert.doesNotMatch(mobileNavigationSource, /border-primary\/35 bg-primary\/10 text-primary shadow-sm/);
+});
+
+test("mobile navigation releases its modal on desktop resize and restores a visible navigation control", () => {
+  const source = readSource("Navbar.tsx");
+  assert.match(source, /if \(!mobileNavOpen\) return/);
+  assert.match(source, /window\.matchMedia\("\(min-width: 1024px\)"\)/);
+  assert.match(source, /if \(desktop\.matches\) setMobileNavOpen\(false\)/);
+  assert.match(source, /desktop\.addEventListener\("change", closeOnDesktop\)/);
+  assert.match(source, /return \(\) => desktop\.removeEventListener\("change", closeOnDesktop\)/);
+  assert.match(source, /\}, \[mobileNavOpen\]\)/);
+  assert.match(source, /ref=\{desktopNavigationTriggerRef\}/);
+  assert.match(source, /desktopNavigationTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(source, /mobileNavigationTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.doesNotMatch(source, /window\.onresize\s*=/);
+});
+
+test("mobile current-page badge uses a solid contrast pair instead of stacking translucent fills", () => {
+  const source = readSource("NavbarMobileNavigation.tsx");
+  const badge = source.match(/<span className="([^"]+)">\s*Semasa\s*<\/span>/)?.[1];
+  assert.ok(badge);
+  assert.match(badge, /(?:^|\s)bg-primary(?:\s|$)/);
+  assert.match(badge, /(?:^|\s)text-primary-foreground(?:\s|$)/);
+  assert.doesNotMatch(badge, /bg-primary\/|text-primary(?:\s|$)/);
+  assert.match(source, /getAriaCurrentPageProps\(active\)/);
+});
+
+test("shared sheet opening and closing motion use the specified subtle 200ms duration", () => {
+  const source = readSource("ui/sheet.tsx");
+  assert.match(source, /data-\[state=closed\]:duration-200 data-\[state=open\]:duration-200/);
+  assert.match(source, /bg-black\/80 duration-200/);
+  assert.doesNotMatch(source, /duration-(?:300|500)/);
 });

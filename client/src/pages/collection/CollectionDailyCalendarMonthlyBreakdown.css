@@ -1,10 +1,7 @@
 .collection-daily-monthly-breakdown {
   display: grid;
   gap: 0.75rem;
-  border: 1px solid hsl(var(--border) / 0.68);
-  border-radius: 1rem;
-  background: hsl(var(--background) / 0.68);
-  padding: 0.85rem;
+  padding-bottom: 0.75rem;
 }
 
 .collection-daily-monthly-breakdown-header {
@@ -16,8 +13,8 @@
 
 .collection-daily-monthly-breakdown-kicker {
   font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: hsl(var(--muted-foreground));
 }
@@ -25,7 +22,7 @@
 .collection-daily-monthly-breakdown-header h3 {
   margin-top: 0.1rem;
   font-size: 0.9rem;
-  font-weight: 800;
+  font-weight: 600;
   color: hsl(var(--foreground));
 }
 
@@ -47,9 +44,8 @@
 .collection-daily-monthly-breakdown-leaves span {
   display: grid;
   gap: 0.15rem;
-  border-radius: 0.8rem;
-  background: hsl(var(--muted) / 0.22);
-  padding: 0.65rem;
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.5rem 0;
 }
 
 .collection-daily-monthly-breakdown-grid span,

@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo } from "react";
+import { Suspense, lazy, memo, type RefObject } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
@@ -18,6 +18,7 @@ const VIEWER_HEADER_ACTION_FALLBACK_KEYS = [
 ] as const;
 
 interface ViewerPageHeaderProps {
+  filterTriggerRef: RefObject<HTMLButtonElement>;
   importName: string;
   rowsCount: number;
   totalRows: number;
@@ -51,11 +52,11 @@ interface ViewerPageHeaderProps {
 
 function ViewerPageHeaderActionsFallback() {
   return (
-    <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+    <div className="viewer-action-toolbar">
       {VIEWER_HEADER_ACTION_FALLBACK_KEYS.map((fallbackKey) => (
         <div
           key={fallbackKey}
-          className="h-10 w-full animate-pulse rounded-md border border-border/60 bg-muted/30 sm:w-28"
+          className="h-11 w-full animate-pulse rounded-lg border border-border bg-muted sm:h-9 sm:w-28"
         />
       ))}
     </div>
@@ -63,6 +64,7 @@ function ViewerPageHeaderActionsFallback() {
 }
 
 function ViewerPageHeaderImpl({
+  filterTriggerRef,
   importName,
   rowsCount,
   totalRows,
@@ -97,7 +99,7 @@ function ViewerPageHeaderImpl({
     <OperationalPageHeader
       eyebrow="Data Viewer"
       title={
-        <div className="flex min-w-0 items-start gap-3 sm:items-center">
+        <span className="flex min-w-0 items-start gap-2 sm:items-center">
           <Button
             variant="ghost"
             size="icon"
@@ -108,8 +110,8 @@ function ViewerPageHeaderImpl({
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <span className="truncate">{importName}</span>
-        </div>
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]" title={importName}>{importName}</span>
+        </span>
       }
       description={buildViewerPageHeaderDescription(
         rowsCount,
@@ -120,6 +122,7 @@ function ViewerPageHeaderImpl({
       actions={
         <Suspense fallback={<ViewerPageHeaderActionsFallback />}>
           <ViewerPageHeaderActions
+            filterTriggerRef={filterTriggerRef}
             exportBusy={exportBusy}
             filteredRowsCount={filteredRowsCount}
             filterCount={filterCount}

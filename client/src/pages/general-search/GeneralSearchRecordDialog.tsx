@@ -32,6 +32,7 @@ import type { SearchResultRow } from "@/pages/general-search/types";
 interface GeneralSearchRecordDialogProps {
   canSeeSourceFile: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: ((event: Event) => void) | undefined;
   onRecordSelect: (record: SearchResultRow) => void;
   record: SearchResultRow | null;
   relatedRecords: SearchResultRow[];
@@ -40,6 +41,7 @@ interface GeneralSearchRecordDialogProps {
 export function GeneralSearchRecordDialog({
   canSeeSourceFile,
   onOpenChange,
+  onCloseAutoFocus,
   onRecordSelect,
   record,
   relatedRecords,
@@ -66,6 +68,7 @@ export function GeneralSearchRecordDialog({
   return (
     <Dialog open={!!record} onOpenChange={onOpenChange}>
       <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
         className={
           isMobile
             ? `${mobileFullscreenDialogViewportClassName} left-0 top-0 flex w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0`

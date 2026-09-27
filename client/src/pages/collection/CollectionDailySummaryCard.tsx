@@ -60,8 +60,7 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
       contentClassName="space-y-4"
     >
       <OperationalSummaryStrip
-        className={`grid gap-3 ${isMobile ? "grid-cols-1 sm:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-4"}`}
-        data-testid="collection-daily-summary"
+        className="collection-daily-summary-metrics"
       >
         {primaryMetrics.map((metric) => (
           <OperationalMetric
@@ -94,26 +93,24 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
         </div>
       </section>
 
-      <div className="collection-daily-supporting-panel rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold text-foreground">Supporting Indicators</h3>
+      <details className="collection-daily-supporting-panel collection-daily-disclosure">
+        <summary>Supporting Indicators</summary>
+        <div className="space-y-3 pb-3">
           <p className="text-xs leading-relaxed text-muted-foreground">
             Use these figures to judge pacing, progress variance, and working-day balance without crowding the top summary.
           </p>
+          <OperationalSummaryStrip className="collection-daily-summary-metrics">
+            {supportingMetrics.map((metric) => (
+              <OperationalMetric
+                key={metric.label}
+                label={metric.label}
+                value={metric.value}
+                tone={metric.tone}
+              />
+            ))}
+          </OperationalSummaryStrip>
         </div>
-        <OperationalSummaryStrip
-          className={`mt-4 grid gap-3 ${isMobile ? "grid-cols-1 sm:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`}
-        >
-          {supportingMetrics.map((metric) => (
-            <OperationalMetric
-              key={metric.label}
-              label={metric.label}
-              value={metric.value}
-              tone={metric.tone}
-            />
-          ))}
-        </OperationalSummaryStrip>
-      </div>
+      </details>
 
       {!isMobile ? (
         <p className="ops-inline-note">

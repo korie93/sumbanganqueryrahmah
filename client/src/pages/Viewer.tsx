@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import { ViewerContentFallback, ViewerPageHeaderFallback } from "@/pages/viewer/ViewerPageFallbacks";
 import { useViewerPageState } from "@/pages/viewer/useViewerPageState";
@@ -31,6 +31,7 @@ export default function Viewer({
   userRole,
   viewerRowsPerPage,
 }: ViewerProps) {
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const viewer = useViewerPageState({
     onNavigate,
     importId,
@@ -53,6 +54,7 @@ export default function Viewer({
     <OperationalPage width="content">
       <Suspense fallback={<ViewerPageHeaderFallback />}>
         <ViewerPageHeader
+          filterTriggerRef={filterTriggerRef}
           importName={viewer.importName}
           rowsCount={viewer.rows.length}
           totalRows={viewer.totalRows}
@@ -87,6 +89,7 @@ export default function Viewer({
 
       <Suspense fallback={<ViewerContentFallback />}>
         <ViewerContent
+          filterTriggerRef={filterTriggerRef}
           rows={viewer.rows}
           headers={viewer.headers}
           visibleHeaders={viewer.visibleHeaders}

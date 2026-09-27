@@ -13,6 +13,7 @@ type GeneralSearchCollectionStatusProps = {
   className?: string | undefined;
   row: SearchResultRow;
   showDetails?: boolean | undefined;
+  compact?: boolean | undefined;
 };
 
 export function GeneralSearchCollectionStatus({
@@ -20,6 +21,7 @@ export function GeneralSearchCollectionStatus({
   className,
   row,
   showDetails = false,
+  compact = false,
 }: GeneralSearchCollectionStatusProps) {
   const status = getGeneralSearchCollectionStatus(row);
 
@@ -31,6 +33,15 @@ export function GeneralSearchCollectionStatus({
     const paymentDate = formatGeneralSearchCollectionPaymentDate(status.latestPaymentDate);
     const recordedAt = formatGeneralSearchCollectionRecordedAt(status.latestCreatedAt);
     const amount = status.latestAmount ? formatAmountRM(status.latestAmount) : "Tidak dinyatakan";
+    if (compact && !showDetails) {
+      return (
+        <div className={cn("flex items-center gap-2 whitespace-nowrap text-sm text-success", className)}>
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Collection direkodkan</span>
+          <span className="text-xs tabular-nums text-muted-foreground">({status.recordCount})</span>
+        </div>
+      );
+    }
     return (
       <div className={cn("min-w-[13rem] space-y-1.5", className)}>
         <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
@@ -101,6 +112,15 @@ export function GeneralSearchCollectionStatus({
     const recordedAt = formatGeneralSearchCollectionRecordedAt(status.latestCreatedAt);
     const purgedAt = formatGeneralSearchCollectionRecordedAt(status.purgedAt);
     const amount = status.latestAmount ? formatAmountRM(status.latestAmount) : "Tidak dinyatakan";
+    if (compact && !showDetails) {
+      return (
+        <div className={cn("flex items-center gap-2 whitespace-nowrap text-sm text-warning", className)}>
+          <History className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>Rekod sejarah collection</span>
+          <span className="text-xs tabular-nums text-muted-foreground">({status.recordCount})</span>
+        </div>
+      );
+    }
 
     return (
       <div className={cn("min-w-[13rem] space-y-1.5", className)}>

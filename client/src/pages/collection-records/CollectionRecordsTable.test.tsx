@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CollectionRecord } from "@/lib/api";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
+import { CollectionRecordsDesktopTable } from "@/pages/collection-records/CollectionRecordsDesktopTable";
 
 const collectionRecord: CollectionRecord = {
   id: "record-1",
@@ -61,7 +62,69 @@ test("CollectionRecordsTable renders a solid desktop table with clear actions", 
     }),
   );
 
-  assert.match(markup, /rounded-\[1\.5rem\] border border-border\/60 bg-background/);
+  assert.match(markup, /rounded-lg border border-border bg-card/);
   assert.match(markup, /Loading records table\.\.\./);
   assert.doesNotMatch(markup, /bg-background\/40/);
+});
+
+test("mobile collection keeps complete record fields under details and respects action access", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { innerWidth: 390, matchMedia: () => ({ matches: true }) },
+  });
+  try {
+    const render = (canEdit: boolean, canDelete: boolean) => renderToStaticMarkup(
+      createElement(CollectionRecordsTable, {
+        loadingRecords: false,
+        visibleRecords: [collectionRecord],
+        paginatedRecords: [{ ...collectionRecord, cardNumber: "00009007199254740993" }],
+        pageOffset: 0,
+        canEdit,
+        onViewReceipt: () => undefined,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        canDeleteRow: () => canDelete,
+      }),
+    );
+    const markup = render(true, true);
+    assert.match(markup, /<details/);
+    assert.match(markup, /<summary[^>]*>Record details/);
+    assert.match(markup, /00009007199254740993/);
+    assert.match(markup, /880101105432/);
+    assert.match(markup, /0123456789/);
+    assert.match(markup, /Billing Principal \(OSP\)/);
+    assert.match(markup, /View Receipt/);
+    assert.match(markup, /aria-label="Actions for record 1"/);
+    assert.doesNotMatch(render(false, false), /aria-label="Actions for record/);
+    assert.match(render(false, true), /aria-label="Actions for record 1"/);
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "window", descriptor);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
+test("desktop collection preserves full identifiers and receipt access with permission-aware action menus", () => {
+  const render = (canEdit: boolean, canDelete: boolean) => renderToStaticMarkup(
+    createElement(CollectionRecordsDesktopTable, {
+      loadingRecords: false,
+      visibleRecords: [collectionRecord],
+      paginatedRecords: [{ ...collectionRecord, cardNumber: "00009007199254740993" }],
+      pageOffset: 50,
+      canEdit,
+      canDeleteRow: () => canDelete,
+      onViewReceipt: () => undefined,
+      onEdit: () => undefined,
+      onDelete: () => undefined,
+    }),
+  );
+  const markup = render(true, true);
+  assert.match(markup, /00009007199254740993/);
+  assert.match(markup, /880101105432/);
+  assert.match(markup, /0123456789/);
+  assert.match(markup, /aria-label="Actions for record 51"/);
+  assert.match(markup, /aria-haspopup="menu"/);
+  assert.match(markup, />View<\/button>/);
+  assert.doesNotMatch(render(false, false), /aria-label="Actions for record/);
+  assert.match(render(false, true), /aria-label="Actions for record 51"/);
 });

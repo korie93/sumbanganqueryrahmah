@@ -52,6 +52,18 @@ test("UI smoke pairs login submission with its response without a dangling rejec
   assert.doesNotMatch(smokeSource, /const loginResponsePromise = page\.waitForResponse/);
 });
 
+test("Daily smoke opens and closes the real calendar legend with the keyboard", () => {
+  const start = smokeSource.indexOf("const checkCollectionDailyPage = async");
+  const end = smokeSource.indexOf("const ensureCollectionSmokeNicknames", start);
+  assert.ok(start >= 0 && end > start);
+  const flow = smokeSource.slice(start, end);
+  assert.match(flow, /locator\("summary"\)\.filter\(\{ hasText: "Calendar legend and status codes" \}\)/);
+  assert.match(flow, /await legendDisclosure\.focus\(\);\s+await page\.keyboard\.press\("Enter"\);\s+await page\.getByTestId\("collection-daily-legend"\)\.waitFor\(\);/);
+  assert.match(flow, /await legendDisclosure\.press\("Enter"\);\s+await page\.getByTestId\("collection-daily-legend"\)\.waitFor\(\{ state: "hidden" \}\)/);
+  assert.match(flow, /firstDayCell\.click\(\)/);
+  assert.match(flow, /collection-daily-day-dialog/);
+});
+
 test("collection receipt smoke configures a governed source before automatic matching", () => {
   const sourceConfigIndex = smokeSource.indexOf(
     '`/api/collection/source-configs/${encodeURIComponent(sourceImportId)}`',

@@ -22,29 +22,31 @@ export function CollectionDailyTargetControlsSection({
 }: CollectionDailyTargetControlsSectionProps) {
   const fallback = (
     <div
-      className={`gap-3 border border-border/70 bg-background p-4 shadow-sm ${
+      role="status"
+      aria-label="Loading target controls"
+      className={`gap-3 border-t border-border pt-4 ${
         isMobile
-          ? "space-y-3 rounded-2xl"
-          : "grid rounded-2xl md:grid-cols-[220px_auto] md:items-end"
+          ? "space-y-3"
+          : "grid md:grid-cols-[220px_auto] md:items-end"
       }`}
     >
       <div className="space-y-1">
-        <div className="h-4 w-32 animate-pulse rounded bg-muted/30" />
+        <div className="h-4 w-32 animate-pulse rounded bg-muted motion-reduce:animate-none" />
         <div
-          className={`animate-pulse border border-border/60 bg-muted/20 ${
-            isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md"
+          className={`animate-pulse rounded-md bg-muted motion-reduce:animate-none ${
+            isMobile ? "h-11" : "h-9"
           }`}
         />
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-2">
         <div
-          className={`h-10 w-full animate-pulse border border-border/60 bg-muted/20 ${
-            isMobile ? "rounded-2xl" : "rounded-md"
+          className={`w-full animate-pulse rounded-md bg-muted motion-reduce:animate-none ${
+            isMobile ? "h-11" : "h-9"
           }`}
         />
         <div
-          className={`h-10 w-full animate-pulse border border-border/60 bg-muted/20 ${
-            isMobile ? "rounded-2xl" : "rounded-md"
+          className={`w-full animate-pulse rounded-md bg-muted motion-reduce:animate-none ${
+            isMobile ? "h-11" : "h-9"
           }`}
         />
       </div>

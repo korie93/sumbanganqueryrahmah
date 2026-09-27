@@ -1,3 +1,4 @@
+import { useMemo, useRef } from "react";
 import { AlertCircle, BookMarked, RefreshCw, Search, Trash2 } from "lucide-react";
 import {
   OperationalPage,
@@ -12,13 +13,22 @@ import { SavedImportsWorkspace } from "@/pages/saved/SavedImportsWorkspace";
 import { SavedLoadingSkeleton } from "@/pages/saved/SavedLoadingSkeleton";
 import { SavedSourceConfigProvider } from "@/pages/saved/SavedSourceConfigProvider";
 import { useSavedPageState } from "@/pages/saved/useSavedPageState";
+import { SavedOverlayFocusContext } from "@/pages/saved/SavedOverlayFocusContext";
+import { createSavedOverlayFocus } from "@/pages/saved/saved-overlay-focus";
 import { formatSavedImportDate } from "@/pages/saved/utils";
 import type { SavedProps } from "@/pages/saved/types";
 
 export default function Saved({ onNavigate, userRole }: SavedProps) {
   const state = useSavedPageState({ onNavigate, userRole });
+  const { searchInputRef } = state;
+  const fallbackFocusRef = useRef<HTMLButtonElement>(null);
+  const overlayFocus = useMemo(
+    () => createSavedOverlayFocus(() => searchInputRef.current ?? fallbackFocusRef.current),
+    [searchInputRef],
+  );
 
   return (
+    <SavedOverlayFocusContext.Provider value={overlayFocus}>
     <OperationalPage width="wide">
       <OperationalPageHeader
         title="Saved Imports"
@@ -52,7 +62,10 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               <Button
                 variant="destructive"
                 className="h-9 px-3 sm:h-10 sm:px-4"
-                onClick={() => state.setBulkDeleteDialogOpen(true)}
+                onClick={(event) => {
+                  overlayFocus.remember("bulk-delete", event.currentTarget);
+                  state.setBulkDeleteDialogOpen(true);
+                }}
                 disabled={state.adminActionsDisabled}
                 data-testid="button-bulk-delete"
               >
@@ -62,6 +75,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               </Button>
             ) : null}
             <Button
+              ref={fallbackFocusRef}
               variant="outline"
               className="h-9 px-3 sm:h-10 sm:px-4"
               onClick={state.handleRefresh}
@@ -76,20 +90,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
       />
 
       {!state.loading && state.totalImports > 0 ? (
-        <OperationalSectionCard
-          title={
-            <>
-              <span className="sm:hidden">Filters</span>
-              <span className="hidden sm:inline">Search and Filter</span>
-            </>
-          }
-          description={
-            <span className="hidden sm:inline">
-              Narrow the list without losing your current page context.
-            </span>
-          }
-          contentClassName="space-y-0"
-        >
+        <section aria-label="Search and Filter">
           <SavedFiltersBar
             searchTerm={state.searchTerm}
             uploaderFilter={state.uploaderFilter}
@@ -105,7 +106,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             onMaxRowsFilterChange={state.setMaxRowsFilter}
             onClearFilters={state.clearFilters}
           />
-        </OperationalSectionCard>
+        </section>
       ) : null}
 
       {state.error ? (
@@ -153,7 +154,6 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             </Button>
           </OperationalSectionCard>
         ) : (
-          <OperationalSectionCard contentClassName="space-y-0 p-3 sm:p-4 xl:p-5">
             <SavedImportsWorkspace
               activeImport={state.activeImport}
               activeImportId={state.activeImportId}
@@ -190,7 +190,6 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               onView={state.handleView}
               onWorkspaceViewChange={state.setWorkspaceView}
             />
-          </OperationalSectionCard>
         )}
       </SavedSourceConfigProvider>
 
@@ -213,5 +212,6 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         onBulkDeleteConfirm={state.handleBulkDeleteConfirm}
       />
     </OperationalPage>
+    </SavedOverlayFocusContext.Provider>
   );
 }

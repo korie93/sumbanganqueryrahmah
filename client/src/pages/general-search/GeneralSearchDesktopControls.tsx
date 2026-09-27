@@ -51,11 +51,12 @@ export function GeneralSearchDesktopControls({
   onUpdateFilter,
 }: GeneralSearchDesktopControlsProps) {
   return (
-    <div className="glass-wrapper mb-6 p-4 sm:p-6" data-floating-ai-avoid="true">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+    <div className="rounded-lg border border-border bg-card p-4" data-floating-ai-avoid="true">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button
           variant={advancedMode ? "outline" : "default"}
           size="sm"
+          className="h-9"
           onClick={() => onModeChange(false)}
           data-testid="button-simple-search"
         >
@@ -65,6 +66,7 @@ export function GeneralSearchDesktopControls({
         <Button
           variant={advancedMode ? "default" : "outline"}
           size="sm"
+          className="h-9"
           onClick={() => onModeChange(true)}
           data-testid="button-advanced-search"
         >
@@ -79,9 +81,9 @@ export function GeneralSearchDesktopControls({
       </div>
 
       {!advancedMode ? (
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="general-search-desktop-query"
               name="generalSearchQuery"
@@ -96,15 +98,15 @@ export function GeneralSearchDesktopControls({
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              className="h-12 pl-10 text-base"
+              className="h-9 pl-9 text-sm"
               data-testid="input-search"
             />
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex shrink-0 gap-2">
             <Button
               onClick={onSearch}
               disabled={loading}
-              className="h-12 px-6"
+              className="h-9 px-4"
               data-testid="button-search"
             >
               {loading ? (
@@ -122,7 +124,7 @@ export function GeneralSearchDesktopControls({
             <Button
               variant="outline"
               onClick={onReset}
-              className="h-12 px-6"
+              className="h-9 px-4"
               data-testid="button-reset"
             >
               <RotateCcw className="mr-2 h-4 w-4" />
@@ -133,7 +135,7 @@ export function GeneralSearchDesktopControls({
       ) : (
         <Suspense
           fallback={
-            <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
+            <div className="flex min-h-[160px] items-center justify-center rounded-md border border-border bg-muted/20">
               <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
             </div>
           }

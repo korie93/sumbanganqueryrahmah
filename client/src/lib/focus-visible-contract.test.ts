@@ -5,7 +5,7 @@ import { readThemeTokenSource } from "./theme-token-source.test-helper";
 const themeTokensSource = readThemeTokenSource();
 
 test("theme tokens expose a shared focus-visible ring contract", () => {
-  assert.match(themeTokensSource, /--color-focus:\s*217 91% 42%/);
+  assert.match(themeTokensSource, /--color-focus:\s*var\(--ring\)/);
   assert.match(themeTokensSource, /--focus-ring:\s*2px solid hsl\(var\(--color-focus\) \/ 0\.86\)/);
   assert.match(themeTokensSource, /--focus-ring-offset:\s*2px/);
   assert.match(themeTokensSource, /--focus-ring-radius:\s*var\(--radius-sm\)/);

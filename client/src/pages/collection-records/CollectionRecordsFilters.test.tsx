@@ -70,7 +70,8 @@ test("CollectionRecordsFilters uses the collection nickname picker and compact d
   assert.match(markup, /id="collection-records-sort-desktop"/);
   assert.match(markup, /aria-haspopup="dialog"/);
   assert.match(markup, />Semua staff</);
-  assert.match(markup, /h-11 rounded-xl bg-background/);
+  assert.match(markup, /h-9 rounded-md bg-background/);
+  assert.match(markup, /repeat\(auto-fit,minmax\(min\(100%,180px\),1fr\)\)/);
   assert.match(markup, />Filter</);
   assert.match(markup, />Reset</);
   const searchInputMarkup = markup.match(/<input\b[^>]*\bid="collection-records-search"[^>]*>/)?.[0];

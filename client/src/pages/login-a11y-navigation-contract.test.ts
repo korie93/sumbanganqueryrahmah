@@ -14,7 +14,8 @@ test("login inputs preserve keyboard-visible focus without mouse focus noise", (
   const source = readSource("Login.css");
 
   assert.match(source, /\.login-input:focus-visible\s*\{/);
-  assert.match(source, /outline:\s*2px solid var\(--login-input-focus-ring, hsl\(217 91% 60%\)\)/);
+  assert.match(source, /\.login-input:focus-visible\s*\{[^}]*outline:\s*2px solid hsl\(var\(--ring\)\);/);
+  assert.match(source, /\.login-input:focus-visible\s*\{[^}]*outline-offset:\s*2px;/);
   assert.match(source, /@supports not selector\(:focus-visible\)/);
   assert.doesNotMatch(source, /\.login-input:focus,\s*\n\.login-input:focus-visible/);
   assert.doesNotMatch(source, /\.login-input:focus\s*\{[^}]*outline:\s*none/);

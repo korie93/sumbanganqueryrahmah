@@ -63,11 +63,16 @@ test("decorative clipped surfaces use overflow clip with hidden fallback", () =>
   const monthlyCssSource = readClientSource("../pages/collection-summary/CollectionMonthlyComparisonPanel.css");
 
   assert.match(loginCssSource, /\.login-card \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
-  assert.match(dailyCssSource, /\.collection-daily-role-guide \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
-  assert.match(dailyCssSource, /\.collection-daily-filters-card,\s*\.collection-daily-calendar-card \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
+  // Role guidance is now a native disclosure, not a decorative clipped card.
+  const roleGuideSource = readClientSource("../pages/collection/CollectionDailyRoleGuide.tsx");
+  assert.match(roleGuideSource, /<details/);
+  assert.match(roleGuideSource, /<summary/);
+  assert.doesNotMatch(roleGuideSource, /overflow-hidden|overflow-clip/);
+  assert.match(dailyCssSource, /\.collection-daily-calendar-card \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
   assert.match(dailyCssSource, /\.collection-daily-mobile-day-card,\s*\.collection-daily-desktop-day \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
-  assert.match(monthlyCssSource, /\.collection-monthly-comparison-filter-card \{[\s\S]*overflow: clip;/);
-  assert.match(monthlyCssSource, /\.collection-monthly-comparison-section-card \{[\s\S]*overflow: clip;/);
+  // Monthly filters/sections no longer have decorative pseudo-headers to clip.
+  assert.doesNotMatch(monthlyCssSource, /\.collection-monthly-comparison-filter-card::before/);
+  assert.doesNotMatch(monthlyCssSource, /\.collection-monthly-comparison-section-card(?:--pace)?::before/);
 });
 
 test("route error boundary announces failures as an atomic alert", () => {

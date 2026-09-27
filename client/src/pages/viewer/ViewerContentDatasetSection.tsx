@@ -99,8 +99,9 @@ function ViewerContentDatasetSectionImpl({
   return (
     <OperationalSectionCard
       title="Dataset rows"
-      description="Search the dataset, review one page at a time, and export only what you need."
-      contentClassName="space-y-4"
+      description="Search and inspect the dataset one page at a time."
+      headerClassName="px-4 pt-4 sm:px-6 sm:pt-6"
+      contentClassName="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6"
     >
       {rows.length > 0 ? (
         <Suspense fallback={<ViewerSearchBarFallback />}>

@@ -61,7 +61,7 @@ export function ActivityInvestigationRelatedSessions({
 }: {
   deletingSessionId: string | null;
   loading: boolean;
-  onDeleteRequest: (session: RelatedSession) => void;
+  onDeleteRequest: (session: RelatedSession, trigger: HTMLButtonElement) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   pagination: ActivityInvestigation["relatedSessionsPagination"];
@@ -143,7 +143,7 @@ export function ActivityInvestigationRelatedSessions({
                           disabled={deletingSessionId !== null}
                           aria-label={`Delete related session log for ${session.username}`}
                           title="Delete related session log"
-                          onClick={() => onDeleteRequest(session)}
+                          onClick={(event) => onDeleteRequest(session, event.currentTarget)}
                         >
                           {deletingSessionId === session.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

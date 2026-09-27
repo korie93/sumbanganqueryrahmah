@@ -1,5 +1,4 @@
 import { memo, useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SummaryCardItem } from "@/pages/dashboard/types";
 
@@ -15,20 +14,19 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="dashboard-core-metrics">
         {primaryItems.map((card) => {
           const Icon = card.icon;
           return (
-            <Card
+            <article
               key={card.title}
-              className="rounded-2xl border border-border/60 bg-background shadow-sm"
+              className="dashboard-core-metric"
               data-testid={`card-${card.title.toLowerCase().replace(/\s+/g, "-")}`}
               data-floating-ai-avoid="true"
             >
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-start gap-3">
-                  <div className={`rounded-xl bg-primary/10 p-2 ${isMobile ? "shrink-0" : ""} ${card.color}`}>
-                    <Icon className="h-5 w-5" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="order-2 shrink-0 text-muted-foreground">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
                   </div>
                   <div aria-live="polite" className="min-w-0 space-y-1">
                     {summaryLoading ? (
@@ -38,7 +36,7 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
                       </div>
                     ) : (
                       <>
-                        <p className="break-words text-xl font-bold leading-none text-foreground sm:text-dashboard-metric">
+                        <p className="break-words text-2xl font-semibold leading-none text-foreground sm:text-dashboard-metric">
                           {card.value.toLocaleString()}
                         </p>
                         <p className="text-xs leading-5 text-muted-foreground">
@@ -50,66 +48,38 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
                     )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+            </article>
           );
         })}
       </div>
 
       {supportingItems.length > 0 ? (
-        <section className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
-                Supporting Signals
-              </p>
-              <h3 className="mt-1 text-base font-semibold text-foreground">Operational context</h3>
-            </div>
-            <p className="text-xs leading-5 text-muted-foreground sm:max-w-sm sm:text-right">
-              Keep lower-frequency access and data integrity indicators visible without crowding the main KPI row.
-            </p>
-          </div>
+        <section aria-label="Supporting Signals">
+          <h3 className="text-sm font-medium text-foreground">Operational context</h3>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <dl className="dashboard-supporting-metrics">
             {supportingItems.map((card) => {
-              const Icon = card.icon;
               return (
-                <Card
+                <div
                   key={card.title}
-                  className="rounded-2xl border border-border/60 bg-muted/10 shadow-none"
+                  className="dashboard-supporting-metric"
                   data-testid={`card-${card.title.toLowerCase().replace(/\s+/g, "-")}`}
                   data-floating-ai-avoid="true"
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`rounded-xl bg-primary/10 p-2 ${isMobile ? "shrink-0" : ""} ${card.color}`}>
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div aria-live="polite" className="min-w-0 space-y-1">
-                        {summaryLoading ? (
-                          <div className="space-y-1">
-                            <div className="h-7 w-12 rounded bg-muted/50 animate-pulse" aria-hidden="true" />
-                            <p className="text-xs leading-5 text-muted-foreground">{card.title}</p>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="break-words text-xl font-bold leading-none text-foreground">
-                              {card.value.toLocaleString()}
-                            </p>
-                            <p className="text-xs leading-5 text-muted-foreground">
-                              {isMobile && card.title === "Stale Record Conflicts (24h)"
-                                ? "Stale Conflicts (24h)"
-                                : card.title}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  <dt className="min-w-0 text-xs leading-5 text-muted-foreground">
+                    {isMobile && card.title === "Stale Record Conflicts (24h)"
+                      ? "Stale Conflicts (24h)"
+                      : card.title}
+                  </dt>
+                  <dd aria-live="polite" className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                    {summaryLoading ? (
+                      <div className="h-5 w-8 rounded bg-muted/50 animate-pulse" aria-hidden="true" />
+                    ) : card.value.toLocaleString()}
+                  </dd>
+                </div>
               );
             })}
-          </div>
+          </dl>
         </section>
       ) : null}
     </div>

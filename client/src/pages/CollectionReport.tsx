@@ -90,7 +90,6 @@ export default function CollectionReport() {
       : nicknameAccess.dialogStep === "login"
         ? "Signing In..."
         : "Checking...";
-  const sectionLabel = navigation.activeSidebarItem?.label || "Choose a section";
   const staffNicknameLabel = nicknameAccess.staffNickname.trim();
   const headerActions = isMobile ? undefined : (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -99,9 +98,6 @@ export default function CollectionReport() {
           Staff Nickname: {staffNicknameLabel}
         </Badge>
       ) : null}
-      <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs">
-        Section: {sectionLabel}
-      </Badge>
     </div>
   );
   const subtitle = isMobile
@@ -121,18 +117,11 @@ export default function CollectionReport() {
         title="Collection Report"
         eyebrow="Operational Workspace"
         description={subtitle}
-        badge={
-          isMobile ? (
-            <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
-              {sectionLabel}
-            </Badge>
-          ) : undefined
-        }
         actions={headerActions}
         className={isMobile ? "border-border/60 bg-background" : ""}
       />
 
-      <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="relative flex min-w-0 flex-col gap-4">
         <CollectionSidebar
           items={navigation.sidebarItems}
           mobileOpen={navigation.mobileSidebarOpen}

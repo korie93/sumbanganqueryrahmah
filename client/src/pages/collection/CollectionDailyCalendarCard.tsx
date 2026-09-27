@@ -166,7 +166,10 @@ export function CollectionDailyCalendarCard({
         className="collection-daily-calendar-card"
         contentClassName="space-y-4"
       >
-        <CollectionDailyCalendarLegend isMobile={isMobile} />
+        <details className="collection-daily-disclosure">
+          <summary>Calendar legend and status codes</summary>
+          <div className="pb-3"><CollectionDailyCalendarLegend isMobile={isMobile} /></div>
+        </details>
 
         {loadingOverview ? (
           <CollectionDailyCalendarState loading message="Loading monthly daily status..." />
@@ -186,7 +189,10 @@ export function CollectionDailyCalendarCard({
               dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
             />
 
-            <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
+            <details className="collection-daily-disclosure">
+              <summary>Monthly status and collection breakdown</summary>
+              <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
+            </details>
 
             <CollectionDailyCalendarRoleModeNotice canEditCalendar={canManage} />
 
@@ -204,13 +210,16 @@ export function CollectionDailyCalendarCard({
             />
 
             {canManage ? (
-              <CollectionDailyCalendarBulkToolbar
-                days={overview.days}
-                selectedDayNumbers={bulkSelectedDayNumbers}
-                onSelectDays={handleBulkSelectDays}
-                onClearSelection={handleBulkClearSelection}
-                onApply={handleBulkApply}
-              />
+              <details className="collection-daily-disclosure">
+                <summary>Bulk daily status update · {bulkSelectedDayNumbers.size} selected</summary>
+                <CollectionDailyCalendarBulkToolbar
+                  days={overview.days}
+                  selectedDayNumbers={bulkSelectedDayNumbers}
+                  onSelectDays={handleBulkSelectDays}
+                  onClearSelection={handleBulkClearSelection}
+                  onApply={handleBulkApply}
+                />
+              </details>
             ) : null}
 
             <CollectionDailyCalendarConflictReport

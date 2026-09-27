@@ -64,7 +64,7 @@ export default function Analysis(props: AnalysisProps) {
         {dataState.loading ? <AnalysisLoadingSkeleton /> : null}
 
         {!dataState.loading && !dataState.error && dataState.analysis ? (
-          <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start">
+          <div className="flex min-w-0 flex-col gap-4">
             <AnalysisWorkspaceNavigation
               activeSection={workspaceNavigation.activeSection}
               allResult={dataState.allResult}

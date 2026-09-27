@@ -28,7 +28,7 @@ export function CollectionSummaryBarChartDialog(props: CollectionSummaryBarChart
           type="button"
           variant="outline"
           size="sm"
-          className="h-9 rounded-full px-3"
+          className="h-11 px-3 md:h-9"
           aria-label="Lihat graf bar ringkasan kutipan"
           aria-haspopup="dialog"
         >

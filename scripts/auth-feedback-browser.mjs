@@ -15,6 +15,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const fixturePath = path.join(rootDir, "scripts/fixtures/auth-feedback-ui.jsx").replaceAll("\\", "/");
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
+const artifacts = path.join(rootDir, "artifacts/auth-feedback-browser");
 const metadata = {
   username: "ui.fixture", email: null, fullName: "UI Fixture", role: "user",
   expiresAt: "2099-01-01T00:00:00.000Z",
@@ -37,6 +38,9 @@ let setupError = "TWO_FACTOR_INVALID_CODE";
 let passwordResponseGate = null;
 let validationResponseGate = null;
 let passwordRejection = null;
+let forgotResponseGate = null;
+let forgotRejection = false;
+let forgotRequests = 0;
 let setupResponseGate = null;
 let setupLifetimeMs = 10 * 60 * 1000;
 let twoFactorFixtureUser = { ...fixtureUser };
@@ -71,6 +75,130 @@ async function visibleText(locator, text) {
 
 async function go(view, token = "fixture-link", theme = "light", extra = {}) {
   await page.goto(`${origin}/?${new URLSearchParams({ view, token, theme, ...extra })}`, { waitUntil: "networkidle" });
+}
+
+async function captureAuthState(name, theme) {
+  assert.equal(new URL(page.url()).origin, origin, "Capture only the isolated fixture.");
+  // Settle the focused-field scroll before Playwright calculates full-page mask
+  // coordinates. This changes the fixture capture position, not app behavior.
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await page.waitForFunction(() => window.scrollY === 0 && window.scrollX === 0);
+  const width = page.viewportSize().width;
+  assert.equal(await page.evaluate(() => document.documentElement.classList.contains("dark")), theme === "dark");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true,
+    `${name} ${theme}: no horizontal document overflow at ${width}px.`);
+  await mkdir(artifacts, { recursive: true });
+  // QR content is the fixed synthetic fixture only. Never capture entered
+  // passwords, OTP values or even the synthetic manual key as plain text.
+  await page.screenshot({ path: path.join(artifacts, `${name}-${width}-${theme}.png`), fullPage: true, animations: "disabled", caret: "hide",
+    mask: [page.locator('input[type="password"], #my-account-two-factor-secret, #my-account-two-factor-code, #login-two-factor-code')],
+  });
+  await page.addScriptTag({ content: axeSource });
+  const violations = await page.evaluate(async () => {
+    const result = await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
+    return result.violations.map((violation) => ({ id: violation.id, targets: violation.nodes.map((node) => node.target) }));
+  });
+  // Diagnostics contain rule IDs/selectors only, never input values or API data.
+  if (violations.length) console.log(`[auth-feedback-browser] A11Y ${name}/${width}/${theme}: ${JSON.stringify(violations)}`);
+  assert.deepEqual(violations, [], `${name} ${theme}: WCAG A/AA contract.`);
+}
+
+async function checkAdditionalAuthStateCaptures() {
+  for (const width of [390, 1280]) {
+    for (const theme of ["light", "dark"]) {
+      await page.setViewportSize({ width, height: 960 });
+      await go("forgot", "fixture-link", theme);
+      await page.locator("#forgot-password-identifier").waitFor({ state: "visible" });
+      await captureAuthState("forgot-ready", theme);
+      const before = forgotRequests;
+      await page.getByRole("button", { name: "Hantar Permintaan", exact: true }).click();
+      await page.locator("#forgot-password-identifier-error").waitFor({ state: "visible" });
+      assert.equal(forgotRequests, before, "Empty recovery identifier cannot make a request.");
+      await captureAuthState("forgot-empty-error", theme);
+      await page.locator("#forgot-password-identifier").fill("ui.fixture");
+      forgotRejection = true;
+      await page.getByRole("button", { name: "Hantar Permintaan", exact: true }).click();
+      await page.locator(".public-auth-status-card--error").waitFor({ state: "visible" });
+      await captureAuthState("forgot-request-error", theme);
+      forgotRejection = false;
+      let releaseForgot;
+      forgotResponseGate = new Promise((resolve) => { releaseForgot = resolve; });
+      try {
+        await page.getByRole("button", { name: "Hantar Permintaan", exact: true }).click();
+        await page.waitForFunction(() => document.getElementById("forgot-password-identifier")?.disabled === true);
+        await captureAuthState("forgot-pending", theme);
+      } finally { releaseForgot(); forgotResponseGate = null; }
+      await visibleText(page.locator("[role=status]"), "Jika akaun wujud");
+      await captureAuthState("forgot-submitted", theme);
+
+      await go("change", "fixture-link", theme);
+      await page.locator("#change-password-current-password").waitFor({ state: "visible" });
+      await captureAuthState("change-ready", theme);
+      await page.getByRole("button", { name: "Kemas Kini Kata Laluan", exact: true }).click();
+      await page.locator("#change-password-current-error").waitFor({ state: "visible" });
+      await captureAuthState("change-empty-error", theme);
+      await page.locator("#change-password-current-password").fill(currentPassword);
+      await page.locator("#change-password-new-password").fill(validPassword);
+      await page.locator("#change-password-confirm-password").fill(validPassword);
+      await page.getByRole("button", { name: "Kemas Kini Kata Laluan", exact: true }).click();
+      await visibleText(page.locator("[role=status]"), "Kata laluan berjaya dikemas kini");
+      await captureAuthState("change-success", theme);
+
+      await go("login", "fixture-link", theme);
+      await page.getByTestId("input-username").fill("ui.fixture");
+      await page.getByTestId("input-password").fill(validPassword);
+      await page.getByTestId("button-login").click();
+      await page.getByTestId("input-two-factor-code").waitFor({ state: "visible" });
+      await captureAuthState("login-otp-ready", theme);
+      loginError = "TWO_FACTOR_INVALID_CODE";
+      await page.getByTestId("input-two-factor-code").fill("123456");
+      await page.getByTestId("button-login").click();
+      await visibleText(page.locator("[role=alert]"), "Kod pengesah tidak betul.");
+      assert.equal(await page.evaluate(() => document.body.dataset.authenticated), undefined);
+      await captureAuthState("login-otp-invalid", theme);
+
+      twoFactorFixtureUser = { ...fixtureUser };
+      await go("setup", "fixture-link", theme);
+      const panel = page.getByTestId("two-factor-settings");
+      await panel.waitFor({ state: "visible" });
+      await captureAuthState("two-factor-off", theme);
+      await panel.getByRole("button", { name: "Aktifkan 2FA", exact: true }).click();
+      await page.locator("#my-account-two-factor-password").fill(validPassword);
+      await captureAuthState("two-factor-password", theme);
+      await panel.getByRole("button", { name: "Teruskan ke kod QR", exact: true }).click();
+      await page.getByTestId("two-factor-qr").waitFor({ state: "visible" });
+      await captureAuthState("two-factor-qr", theme);
+      await panel.getByRole("button", { name: "Tak dapat imbas kod QR? Papar kunci persediaan", exact: true }).click();
+      await page.locator("#my-account-two-factor-secret").waitFor({ state: "visible" });
+      await captureAuthState("two-factor-manual", theme);
+      await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
+      await page.locator("#my-account-two-factor-code").waitFor({ state: "visible" });
+      await captureAuthState("two-factor-confirm", theme);
+      setupError = "TWO_FACTOR_INVALID_CODE";
+      await page.locator("#my-account-two-factor-code").fill("123456");
+      await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
+      await visibleText(panel.locator("[role=alert]"), "Kod pengesah tidak betul.");
+      await captureAuthState("two-factor-invalid", theme);
+      setupError = null;
+      await page.locator("#my-account-two-factor-code").fill("345678");
+      await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
+      await visibleText(panel, "Status: Aktif");
+      assert.equal(await page.getByTestId("two-factor-qr").count(), 0);
+      await captureAuthState("two-factor-active", theme);
+      await panel.getByRole("button", { name: "Nyahaktifkan 2FA", exact: true }).click();
+      await page.locator("#my-account-two-factor-password").waitFor({ state: "visible" });
+      await captureAuthState("two-factor-disable-confirm", theme);
+      const beforeDisable = counts.disable;
+      await panel.getByRole("button", { name: "Batal", exact: true }).click();
+      assert.equal(counts.disable, beforeDisable, "Cancel never disables 2FA.");
+      assert.equal(await panel.getAttribute("data-two-factor-state"), "active");
+      console.log(`[auth-feedback-browser] PASS expanded state captures ${width}px ${theme}: ForgotPassword, ChangePassword, Login OTP, 2FA guided setup/manual/error/active/disable confirmation (synthetic HTTP)`);
+    }
+  }
 }
 
 async function checkPasswordVisibility(fieldIds) {
@@ -422,6 +550,14 @@ try {
     if (!url.pathname.startsWith("/api/")) return route.continue();
     const fulfill = (json, status = 200) => route.fulfill({ status, json });
     const failure = (code, status = 410) => fulfill({ ok: false, message: "Fixture rejection", error: { code, message: "Fixture rejection" } }, status);
+    if (url.pathname === "/api/auth/request-password-reset") {
+      assert.equal(route.request().method(), "POST");
+      assert.equal(route.request().postDataJSON().identifier, "ui.fixture");
+      forgotRequests++;
+      if (forgotResponseGate) await forgotResponseGate;
+      return forgotRejection ? failure("SERVICE_UNAVAILABLE", 503)
+        : fulfill({ ok: true, message: "Jika akaun wujud, permintaan telah diterima." });
+    }
     if (url.pathname.endsWith("/validate-activation-token") || url.pathname.endsWith("/validate-password-reset-token")) {
       if (validationResponseGate) await validationResponseGate;
       return errorCode ? failure(errorCode) : fulfill({ ok: true, [url.pathname.endsWith("/validate-activation-token") ? "activation" : "reset"]: metadata });
@@ -676,7 +812,6 @@ try {
   }
   console.log("[auth-feedback-browser] PASS delayed setup responses are discarded after account switch, unmount or newer enabled status; no stale QR, credentials or busy state");
 
-  const artifacts = path.join(rootDir, "artifacts/auth-feedback-browser");
   await mkdir(artifacts, { recursive: true });
   errorCode = null;
   for (const width of [320, 360, 390, 430, 768, 1280]) {
@@ -700,6 +835,7 @@ try {
     }
   }
   console.log("[auth-feedback-browser] PASS 390px/1280px input labels, description references and no horizontal overflow; local screenshots saved");
+  await checkAdditionalAuthStateCaptures();
   assert.deepEqual(unexpectedRequests, [], "No unexpected or external network access.");
   assert.deepEqual(pageErrors, [], "No browser runtime errors.");
   assert.deepEqual(reactWarnings, [], "No React warnings.");

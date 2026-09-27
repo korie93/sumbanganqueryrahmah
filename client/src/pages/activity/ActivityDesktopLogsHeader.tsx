@@ -14,7 +14,7 @@ export function ActivityDesktopLogsHeader({
   return (
     <div
       role="row"
-      className={`sticky top-0 z-[var(--z-sticky-header)] grid items-center gap-3 border-b border-border bg-muted/95 px-3 text-left text-sm font-medium text-muted-foreground sqr-backdrop-blur-sm ${
+      className={`sticky top-0 z-[var(--z-sticky-header)] grid items-center gap-3 border-b border-border bg-muted px-3 text-left text-sm font-medium text-muted-foreground ${
         density === "compact" ? "py-2" : "py-3"
       }`}
       style={{ gridTemplateColumns }}

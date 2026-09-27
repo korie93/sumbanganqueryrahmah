@@ -34,10 +34,10 @@ export function CollectionMonthlyComparisonDataQualityCard({
         <span
           className={
             dataQualitySummary.statusTone === "success"
-              ? "shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+              ? "shrink-0 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success"
               : dataQualitySummary.statusTone === "danger"
                 ? "shrink-0 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive"
-                : "shrink-0 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                : "shrink-0 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning"
           }
         >
           {dataQualitySummary.warningCount} review

@@ -336,7 +336,7 @@ function DashboardSuspiciousLoginWatchlistImpl({
           </div>
         ) : (
           <div
-            className="flex min-h-[120px] items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-800 dark:text-emerald-200"
+            className="flex items-center gap-3 rounded-md border border-border bg-muted/20 p-3 text-foreground"
             role="status"
           >
             <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />

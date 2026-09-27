@@ -1,4 +1,5 @@
-import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
+import { OperationalPage } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import {
   HomeDesktopListCard,
@@ -28,37 +29,26 @@ export function HomeMobileLayout({
   onPrefetchItem,
 }: HomeMobileLayoutProps) {
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-3 dark:bg-background dark:bg-none">
-      <div className="mx-auto max-w-md space-y-4">
-        <section className="home-mobile-hero">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-home-eyebrow font-semibold uppercase tracking-label-5xl text-white/80">
-                Operational Workspace
-              </p>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">SQR Workspace</h1>
-              <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/85">
-                Move between the modules you use most without digging through the full desktop navigation.
-              </p>
-            </div>
-            <span className="rounded-full border border-white/18 bg-white/12 p-3 text-white shadow-sm sqr-backdrop-blur">
-              <Sparkles className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </div>
+    <OperationalPage width="content" className="max-w-6xl">
+        <header className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">SQR Workspace</h1>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Search, manage collections, and review your data.
+          </p>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
             <span className="home-mobile-hero-chip">{visibleItemsCount} modules ready</span>
             <span className="home-mobile-hero-chip">Role: {userRole}</span>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 pt-3">
             {sections.heroActions.map((item) => {
               const Icon = item.icon;
               return (
                 <Button
                   key={`hero-${item.id}`}
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   size="lg"
                   onClick={() => onNavigateItem(item.id)}
                   onMouseEnter={() => onPrefetchItem(item.id)}
@@ -71,22 +61,19 @@ export function HomeMobileLayout({
               );
             })}
           </div>
-        </section>
+        </header>
 
         <section className="home-mobile-surface">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-label-xl text-muted-foreground">
-                Quick Actions
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-foreground">Start the next task</h2>
+              <h2 className="text-base font-semibold text-foreground">Quick Actions</h2>
             </div>
             <span className="home-mobile-count-chip">
               Top {sections.quickActions.length}
             </span>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-3 space-y-2">
             {sections.quickActions.map((item) => {
               const Icon = item.icon;
               return (
@@ -102,13 +89,13 @@ export function HomeMobileLayout({
                   <span className="home-mobile-quick-card-icon">
                     <Icon className="h-4 w-4" aria-hidden="true" />
                   </span>
-                  <div className="space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       {item.description}
                     </p>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-primary" aria-hidden="true" />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 </button>
               );
             })}
@@ -119,19 +106,14 @@ export function HomeMobileLayout({
           <section className="home-mobile-surface">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-label-xl text-muted-foreground">
-                  More Modules
-                </p>
-                <h2 className="mt-1 text-lg font-semibold text-foreground">
-                  Everything else you can access
-                </h2>
+                <h2 className="text-base font-semibold text-foreground">More Modules</h2>
               </div>
-              <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+              <span className="home-section-count-chip">
                 {sections.secondaryItems.length}
               </span>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2">
               {sections.secondaryItems.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -160,8 +142,7 @@ export function HomeMobileLayout({
             </div>
           </section>
         ) : null}
-      </div>
-    </div>
+    </OperationalPage>
   );
 }
 
@@ -177,30 +158,16 @@ export function HomeDesktopLayout({
     sections.workspaceItems.length > 0 || sections.insightsItems.length > 0 || sections.overflowItems.length > 0;
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:bg-background dark:bg-none md:p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="home-desktop-hero">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 space-y-3">
-              <p className="home-section-kicker">Workspace</p>
-              <div className="flex items-start gap-4">
-                <span className="home-desktop-hero-icon" aria-hidden="true">
-                  <Sparkles className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <h1 className="welcome-title text-4xl font-bold text-foreground md:text-5xl">SQR Workspace</h1>
-                  <p className="mt-2 text-base text-muted-foreground md:text-lg">
-                    Sumbangan Query Rahmah - Data Management System
-                  </p>
-                  <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-                    Start with the core workflows first, then move into supporting modules only when you need them.
-                    The visible navigation stays aligned with your role and current feature visibility settings.
-                  </p>
-                </div>
-              </div>
+    <OperationalPage width="content" className="max-w-6xl">
+        <header className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 space-y-1">
+              <h1 className="text-section-title font-semibold tracking-tight text-foreground">SQR Workspace</h1>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Sumbangan Query Rahmah - Data Management System
+              </p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[360px]">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 xl:pt-2">
               <div className="home-desktop-stat-chip">
                 <span className="home-desktop-stat-label">Modules Ready</span>
                 <span className="home-desktop-stat-value">{visibleItemsCount}</span>
@@ -214,10 +181,12 @@ export function HomeDesktopLayout({
                 <span className="home-desktop-stat-value capitalize">{userRole}</span>
               </div>
             </div>
-          </div>
+        </header>
 
           {sections.primaryActions.length > 0 ? (
-            <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <section aria-label="Primary workflows" className="space-y-3">
+            <h2 className="home-desktop-primary-kicker">Primary Workflow</h2>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
               {sections.primaryActions.map((item) => (
                 <HomeDesktopPrimaryCard
                   key={item.id}
@@ -227,8 +196,8 @@ export function HomeDesktopLayout({
                 />
               ))}
             </div>
+          </section>
           ) : null}
-        </section>
 
         {hasSecondarySections ? (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -236,16 +205,15 @@ export function HomeDesktopLayout({
               <section className="home-section-shell">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="home-section-kicker">Workspace</p>
-                    <h2 className="mt-1 text-xl font-semibold text-foreground">Operational modules</h2>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Import, review, and revisit the modules used most often during day-to-day operations.
+                    <h2 className="text-base font-semibold text-foreground">Operational modules</h2>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Import and manage saved datasets.
                     </p>
                   </div>
                   <span className="home-section-count-chip">{sections.workspaceItems.length}</span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="mt-3 space-y-2">
                   {sections.workspaceItems.map((item) => (
                     <HomeWorkspaceCard
                       key={item.id}
@@ -262,10 +230,9 @@ export function HomeDesktopLayout({
               <section className="home-section-shell">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="home-section-kicker">Insights</p>
-                    <h2 className="mt-1 text-xl font-semibold text-foreground">Visibility and follow-up</h2>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Keep analytics, activity, and audit views close without overloading the landing page.
+                    <h2 className="text-base font-semibold text-foreground">Visibility and follow-up</h2>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Review analytics, activity, and audit logs.
                     </p>
                   </div>
                   <span className="home-section-count-chip">
@@ -273,7 +240,7 @@ export function HomeDesktopLayout({
                   </span>
                 </div>
 
-                <div className="mt-4 space-y-3">
+                <div className="mt-3 space-y-2">
                   {insightItems.map((item) => (
                     <HomeDesktopListCard
                       key={item.id}
@@ -287,7 +254,6 @@ export function HomeDesktopLayout({
             ) : null}
           </div>
         ) : null}
-      </div>
-    </div>
+    </OperationalPage>
   );
 }

@@ -1,15 +1,14 @@
 .glass-wrapper {
-  background:
-    linear-gradient(180deg, hsl(var(--background) / 0.94), hsl(var(--card) / 0.86));
-  border: 1px solid hsl(var(--border) / 0.8);
-  border-radius: 20px;
-  box-shadow: var(--app-shell-glass-shadow);
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-surface);
+  box-shadow: none;
 }
 
 .dark .glass-wrapper {
   background: hsl(var(--card) / 1);
-  border: 1px solid hsl(var(--border) / 0.78);
-  box-shadow: var(--app-shell-glass-shadow-dark);
+  border-color: hsl(var(--border));
+  box-shadow: none;
 }
 
 .low-spec .glass-wrapper {
@@ -20,8 +19,8 @@
 
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .glass-wrapper {
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   .dark .glass-wrapper {
@@ -32,8 +31,7 @@
 
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .glass-wrapper {
-    background:
-      linear-gradient(180deg, hsl(var(--background) / 0.98), hsl(var(--card) / 0.94));
+    background: hsl(var(--card));
   }
 
   .dark .glass-wrapper {
@@ -43,6 +41,6 @@
 
 @media (max-width: 767px) and (max-height: 560px) and (orientation: landscape) {
   .glass-wrapper {
-    border-radius: 16px;
+    border-radius: var(--radius-surface);
   }
 }

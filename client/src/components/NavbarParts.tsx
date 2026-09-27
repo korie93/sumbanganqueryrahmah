@@ -16,6 +16,7 @@ type NavbarBrandClusterProps = {
   onPrefetch: (itemId: string) => void;
   showHomeButton: boolean;
   systemName?: string | undefined;
+  collapsed?: boolean | undefined;
 };
 
 type NavbarUserMenuDropdownProps = {
@@ -36,11 +37,12 @@ export function NavbarBrandCluster({
   onPrefetch,
   showHomeButton,
   systemName,
+  collapsed = false,
 }: NavbarBrandClusterProps) {
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <div className="flex min-w-0 items-center gap-2 rounded-full border border-border/70 bg-card/75 px-2.5 py-1.5 shadow-sm lg:max-w-[17rem] xl:max-w-none">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/10">
+    <div className="workspace-brand-cluster">
+      <div className="workspace-brand">
+        <div className="workspace-brand-mark">
           <BrandLogo
             decorative
             priority
@@ -48,7 +50,7 @@ export function NavbarBrandCluster({
             imageClassName="h-full w-full"
           />
         </div>
-        <div className="min-w-0">
+        <div className="workspace-brand-copy min-w-0">
           <p
             className="truncate text-sm font-semibold text-foreground"
             title={systemName || "SQR System"}
@@ -56,7 +58,7 @@ export function NavbarBrandCluster({
           >
             {systemName || "SQR System"}
           </p>
-          <p className="hidden text-2xs text-muted-foreground sm:block">
+          <p className="text-xs text-muted-foreground">
             Ruang kerja operasi
           </p>
         </div>
@@ -67,6 +69,7 @@ export function NavbarBrandCluster({
           active={activeNavigationItemId === HOME_NAV_ITEM.id}
           onNavigate={onNavigate}
           onPrefetch={onPrefetch}
+          collapsed={collapsed}
         />
       ) : null}
     </div>
@@ -95,7 +98,7 @@ export function NavbarUserMenuDropdown({
         <button
           ref={triggerRef}
           type="button"
-          className={isMobile ? "user-menu-trigger px-2.5 sm:px-3" : "user-menu-trigger max-w-[15rem] xl:max-w-none"}
+          className={isMobile ? "user-menu-trigger user-menu-trigger-mobile" : "user-menu-trigger"}
           data-testid={isMobile ? "button-user-menu-mobile" : "button-user-menu"}
           aria-label={`Buka menu pengguna untuk ${username}`}
           aria-haspopup="menu"
@@ -104,7 +107,7 @@ export function NavbarUserMenuDropdown({
             {[...username][0] || ""}
           </span>
           {isMobile ? (
-            <span className="hidden min-w-0 sm:flex sm:flex-col sm:items-start sm:leading-tight">
+            <span className="hidden min-w-0 sm:flex sm:max-w-[10rem] sm:flex-col sm:items-start sm:leading-tight">
               <span className="truncate text-xs font-medium text-foreground" title={username} aria-label={username}>
                 {username}
               </span>
@@ -113,7 +116,7 @@ export function NavbarUserMenuDropdown({
               </span>
             </span>
           ) : (
-            <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
+            <span className="user-menu-copy">
               <span className="truncate font-medium text-foreground" title={username} aria-label={username}>
                 {username}
               </span>

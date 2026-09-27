@@ -11,6 +11,7 @@ export function ActivityBanDialog({
 }: ActivitySelectedActivityDialogProps) {
   return (
     <ActivityConfirmationDialog
+      focusOrigin="ban"
       confirmClassName="bg-destructive text-destructive-foreground"
       confirmLabel="Ban"
       description={getBanDialogDescription(selectedActivity?.username)}

@@ -219,7 +219,7 @@ export default function ChangePasswordPage({
       showBackButton={false}
       contentBusy={loading}
     >
-      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
+      <div className="public-auth-note">
         Gunakan kata laluan baharu yang sukar diteka dan pastikan pengesahan kata laluan sama
         seperti yang dimasukkan.
       </div>
@@ -247,7 +247,7 @@ export default function ChangePasswordPage({
         />
       </div>
       {currentPasswordError ? (
-        <p id="change-password-current-error" className="text-sm text-amber-100" role="alert">
+        <p id="change-password-current-error" className="text-sm text-destructive" role="alert">
           {currentPasswordError}
         </p>
       ) : null}
@@ -279,7 +279,7 @@ export default function ChangePasswordPage({
         password={newPassword}
       />
       {newPasswordError ? (
-        <p id="change-password-new-error" className="text-sm text-amber-100" role="alert">
+        <p id="change-password-new-error" className="text-sm text-destructive" role="alert">
           {newPasswordError}
         </p>
       ) : null}
@@ -313,13 +313,13 @@ export default function ChangePasswordPage({
       />
 
       {error ? (
-        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
+        <div className="public-auth-status-card public-auth-status-card--error" role="alert">
           {error}
         </div>
       ) : null}
 
       {successMessage ? (
-        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
+        <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
           {successMessage}
         </div>
       ) : null}

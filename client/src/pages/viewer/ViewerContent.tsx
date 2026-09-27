@@ -11,6 +11,7 @@ import { ViewerContentSummaryStrip } from "@/pages/viewer/ViewerContentSummarySt
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 
 type ViewerContentProps = {
+  filterTriggerRef: RefObject<HTMLButtonElement>;
   rows: DataRowWithId[];
   headers: string[];
   visibleHeaders: string[];
@@ -59,6 +60,7 @@ type ViewerContentProps = {
 };
 
 function ViewerContentImpl({
+  filterTriggerRef,
   rows,
   headers,
   visibleHeaders,
@@ -123,6 +125,7 @@ function ViewerContentImpl({
       ) : null}
 
       <ViewerContentFiltersSection
+        filterTriggerRef={filterTriggerRef}
         hasRows={hasRows}
         isMobile={isMobile}
         showFilters={showFilters}

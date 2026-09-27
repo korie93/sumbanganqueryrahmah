@@ -1,8 +1,7 @@
-import { Suspense, lazy, memo, useMemo, useState } from "react";
-import { CalendarRange, Filter, RotateCcw } from "lucide-react";
+import { Suspense, lazy, memo, useMemo, useRef, useState } from "react";
+import { Filter, RotateCcw } from "lucide-react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
-import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +35,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
     role === "admin" || role === "manager" || role === "superuser";
   const isMobile = useIsMobile();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const mobileFiltersTriggerRef = useRef<HTMLButtonElement>(null);
   const summaryData = useCollectionSummaryData({ canFilterByNickname });
   const { handleSelectMonth, monthDialog, selectedMonth } =
     useCollectionSummaryMonthDialog({
@@ -68,46 +68,50 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   };
 
   return (
-    <OperationalSectionCard
-      title="Collection Summary"
-      description={summaryData.freshness?.message || "Review monthly totals with a cleaner month-by-month drill-down flow."}
-      badge={<CollectionReportFreshnessBadge freshness={summaryData.freshness} />}
-      actions={<CollectionSummaryBarChartDialog {...viewModels.barChart} />}
-      contentClassName="space-y-4"
-    >
+    <section aria-labelledby="collection-summary-heading" className="min-w-0 space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h2 id="collection-summary-heading" className="text-lg font-semibold">Collection Summary</h2>
+          <p className="text-sm text-muted-foreground">{summaryData.freshness?.message || "Review monthly totals and open a month for its collection records."}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <CollectionReportFreshnessBadge freshness={summaryData.freshness} />
+          <CollectionSummaryBarChartDialog {...viewModels.barChart} />
+        </div>
+      </header>
       {isMobile ? (
         <>
           <div
-            className="rounded-[1.5rem] border border-border/60 bg-background/80 px-3 py-3 shadow-sm"
+            className="space-y-3"
             data-floating-ai-avoid="true"
           >
             <div className="space-y-3">
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
+                  <Badge variant="secondary">
                     Year {summaryData.selectedYear}
                   </Badge>
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs">
+                  <Badge variant="outline">
                     {summaryData.selectedNicknames.length > 0
                       ? summaryData.selectedNicknameLabel
                       : "All staff nicknames"}
                   </Badge>
                 </div>
-                <h1 className="text-lg font-bold tracking-tight text-foreground">
-                  Collection Summary
-                </h1>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
-                  className="h-11 w-full justify-center rounded-2xl"
+                  ref={mobileFiltersTriggerRef}
+                  className="h-11 w-full justify-center gap-1 px-2"
+                  aria-haspopup="dialog"
+                  aria-label="Summary Filters"
                   onClick={() => setMobileFiltersOpen(true)}
                 >
-                  <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Summary Filters
+                  <Filter className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Filters
                   {activeFilterCount > 0 ? (
-                    <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
+                    <Badge variant="secondary" className="px-1.5">
                       {activeFilterCount}
                     </Badge>
                   ) : null}
@@ -115,7 +119,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11 w-full rounded-2xl"
+                  className="h-11 w-full"
                   onClick={handleResetMobileScope}
                   disabled={summaryData.loading || activeFilterCount === 0}
                 >
@@ -125,14 +129,14 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
               </div>
 
               {selectedNicknamePreview.length > 0 ? (
-                <div className="flex flex-wrap gap-2 rounded-2xl border border-border/60 bg-muted/10 p-3">
+                <div className="flex flex-wrap gap-2">
                   {selectedNicknamePreview.map((nickname) => (
-                    <Badge key={nickname} variant="secondary" className="rounded-full px-3 py-1">
+                    <Badge key={nickname} variant="secondary" className="max-w-full whitespace-normal break-words">
                       {nickname}
                     </Badge>
                   ))}
                   {remainingNicknameCount > 0 ? (
-                    <Badge variant="outline" className="rounded-full px-3 py-1">
+                    <Badge variant="outline">
                       +{remainingNicknameCount} more
                     </Badge>
                   ) : null}
@@ -144,7 +148,11 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
           <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
             <SheetContent
               side="bottom"
-              className="rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
+              className="rounded-t-2xl bg-background px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                mobileFiltersTriggerRef.current?.focus({ preventScroll: true });
+              }}
               data-floating-ai-avoid="true"
             >
               <SheetHeader className="pr-8 text-left">
@@ -155,24 +163,14 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
               </SheetHeader>
 
               <div className="mt-4 space-y-4 overflow-y-auto pr-1">
-                <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
-                  <div className="space-y-1">
-                    <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                      <CalendarRange className="h-4 w-4" aria-hidden="true" />
-                      Summary Scope
-                    </h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      Pick a reporting year first, then narrow the summary to one or more staff nicknames if needed.
-                    </p>
-                  </div>
-
+                <section className="space-y-4" aria-label="Summary scope">
                   <CollectionSummaryFilters {...viewModels.filters} />
                 </section>
 
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
-                    className="h-11 rounded-2xl"
+                    className="h-11"
                     onClick={() => setMobileFiltersOpen(false)}
                   >
                     Done
@@ -180,7 +178,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-11 rounded-2xl"
+                    className="h-11"
                     onClick={handleResetMobileScope}
                     disabled={summaryData.loading || activeFilterCount === 0}
                   >
@@ -192,21 +190,21 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
           </Sheet>
         </>
       ) : (
-        <div className="ops-toolbar">
+        <div>
           <CollectionSummaryFilters {...viewModels.filters} />
         </div>
       )}
 
-      <CollectionSummaryTable {...viewModels.table} />
-
       <CollectionSummaryTotals {...viewModels.totals} />
+
+      <CollectionSummaryTable {...viewModels.table} />
 
       {viewModels.monthDialog?.open ? (
         <Suspense fallback={<LazyDialogFallback label="Loading collection month details dialog..." />}>
           <CollectionMonthDetailsDialog {...viewModels.monthDialog} />
         </Suspense>
       ) : null}
-    </OperationalSectionCard>
+    </section>
   );
 }
 

@@ -113,7 +113,7 @@ function DashboardLoginReviewSidebarImpl({
 
   return (
     <Card
-      className="rounded-2xl border border-border/60 bg-background shadow-sm"
+      className="dashboard-review-summary"
       data-floating-ai-avoid="true"
       data-testid="card-dashboard-login-review-sidebar"
     >
@@ -122,10 +122,10 @@ function DashboardLoginReviewSidebarImpl({
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2 text-base">
               <ClipboardList className="h-5 w-5" aria-hidden="true" />
-              Review Sidebar
+              Review summary
             </CardTitle>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Ringkasan cepat supaya dashboard login tidak nampak berserabut.
+              Fokus sesi dan tindakan susulan.
             </p>
           </div>
           <Badge
@@ -141,9 +141,9 @@ function DashboardLoginReviewSidebarImpl({
           <DashboardLoginReviewSidebarSkeleton />
         ) : (
           <>
-            <section className="rounded-xl border border-border/60 bg-muted/10 p-3" aria-label="Login review focus">
-              <p className="text-xs font-semibold uppercase tracking-label-sm text-muted-foreground">Fokus semasa</p>
-              <div className="mt-3 grid gap-2">
+            <section aria-label="Login review focus">
+              <p className="sr-only">Fokus semasa</p>
+              <div className="dashboard-review-focus">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs leading-5 text-muted-foreground">Health score</span>
                   <Badge variant="outline" className={`rounded-full ${SIDEBAR_TONE_CLASS_BY_TONE[healthScore.tone]}`}>
@@ -170,7 +170,7 @@ function DashboardLoginReviewSidebarImpl({
               </div>
             </section>
 
-            <section className="rounded-xl border border-border/60 bg-background/80 p-3" aria-label="Sidebar action queue">
+            <section className="border-t border-border pt-3" aria-label="Sidebar action queue">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-label-sm text-muted-foreground">Tindakan</p>
                 <Badge variant={actionItems.length > 0 ? "outline" : "secondary"} className="rounded-full">
@@ -178,9 +178,9 @@ function DashboardLoginReviewSidebarImpl({
                 </Badge>
               </div>
               {actionItems.length > 0 ? (
-                <ol className="mt-3 space-y-2">
+                <ol className="dashboard-review-actions mt-3">
                   {actionItems.map((item) => (
-                    <li key={item.id} className="rounded-lg border border-border/60 bg-muted/10 p-2">
+                    <li key={item.id} className="min-w-0 rounded-md border border-border p-3">
                       <Badge
                         variant="outline"
                         className={`rounded-full ${SIDEBAR_PRIORITY_CLASS_BY_PRIORITY[item.priority]}`}
@@ -209,18 +209,18 @@ function DashboardLoginReviewSidebarImpl({
             </section>
 
             <nav
-              className="rounded-xl border border-border/60 bg-muted/10 p-3"
+              className="flex flex-wrap items-center gap-2 border-t border-border pt-2"
               aria-label="Dashboard login section shortcuts"
             >
-              <p className="text-xs font-semibold uppercase tracking-label-sm text-muted-foreground">Pergi ke</p>
-              <div className="mt-3 grid gap-2">
+              <p className="text-xs text-muted-foreground">Pergi ke</p>
+              <div className="flex flex-wrap gap-2">
                 {SIDEBAR_SHORTCUTS.map((shortcut) => {
                   const Icon = shortcut.icon;
                   return (
                     <a
                       key={shortcut.href}
                       href={shortcut.href}
-                      className="inline-flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex min-h-11 items-center gap-3 rounded-md px-2 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
                     >
                       <span className="inline-flex min-w-0 items-center gap-2">
                         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />

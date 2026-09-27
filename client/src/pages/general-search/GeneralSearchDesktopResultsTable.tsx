@@ -90,8 +90,8 @@ export function GeneralSearchDesktopResultsTable({
                 aria-label={rowAriaLabel}
                 className="h-[52px] border-t border-border hover:bg-muted/50"
               >
-                <td className="p-3 text-muted-foreground">{actualRowIndex + 1}</td>
-                <td className="p-3">
+                <td className="px-3 py-2 text-muted-foreground">{actualRowIndex + 1}</td>
+                <td className="px-3 py-2">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -102,8 +102,9 @@ export function GeneralSearchDesktopResultsTable({
                     View
                   </Button>
                 </td>
-                <td className="p-3 align-top">
+                <td className="px-3 py-2 align-middle">
                   <GeneralSearchCollectionStatus
+                    compact
                     canSeeSourceFile={canSeeSourceFile}
                     row={row}
                   />
@@ -113,7 +114,7 @@ export function GeneralSearchDesktopResultsTable({
                   return (
                     <td
                       key={`${actualRowIndex}-${header}`}
-                      className={`max-w-[280px] truncate whitespace-nowrap p-3 text-foreground ${
+                      className={`max-w-[280px] truncate whitespace-nowrap px-3 py-2 text-foreground ${
                         getPriorityRank(header) <= 2 ? "font-semibold" : ""
                       }`}
                       title={safeText}

@@ -5,7 +5,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 0.95rem;
+  border-radius: 0.5rem;
   padding-inline: 1rem;
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -15,7 +15,7 @@
 .public-auth-button:focus-visible,
 .public-auth-input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--public-auth-input-focus);
+  box-shadow: 0 0 0 3px hsl(var(--ring));
 }
 
 .public-auth-button:disabled,
@@ -25,38 +25,41 @@
 }
 
 .public-auth-button-primary {
-  background: var(--public-auth-primary-bg);
+  background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
-  box-shadow: 0 12px 24px -18px var(--public-auth-shadow);
+  box-shadow: none;
 }
 
 .public-auth-button-primary:focus-visible {
-  box-shadow: 0 0 0 3px var(--public-auth-primary-ring);
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .public-auth-button-ghost {
-  color: var(--public-auth-ghost-text);
+  color: hsl(var(--primary));
   border: 1px solid transparent;
 }
 
 .public-auth-button-ghost:focus-visible {
-  box-shadow: 0 0 0 3px var(--public-auth-ghost-ring);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 .public-auth-input {
+  min-width: 0;
   width: 100%;
   min-height: 3rem;
-  border-radius: 0.95rem;
-  border: 1px solid var(--public-auth-input-border);
-  background: var(--public-auth-input-bg);
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--input));
+  background: hsl(var(--card));
   padding: 0.75rem 1rem;
-  color: var(--public-auth-input-text);
+  color: hsl(var(--foreground));
   font-size: var(--font-size-base);
   transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
 }
 
 .public-auth-input::placeholder {
-  color: var(--public-auth-input-placeholder);
+  color: hsl(var(--muted-foreground));
 }
 
 .public-auth-input.public-auth-password-input {
@@ -64,13 +67,13 @@
 }
 
 .public-auth-password-toggle {
-  border-start-end-radius: 0.95rem;
-  border-end-end-radius: 0.95rem;
-  color: var(--public-auth-input-text);
+  border-start-end-radius: 0.5rem;
+  border-end-end-radius: 0.5rem;
+  color: hsl(var(--muted-foreground));
 }
 
 .public-auth-password-toggle:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--public-auth-input-focus);
+  box-shadow: inset 0 0 0 2px hsl(var(--ring));
 }
 
 .password-creation-form {
@@ -187,30 +190,37 @@
 }
 
 .public-auth-input:focus-visible {
-  border-color: var(--public-auth-primary-bg-hover);
+  border-color: hsl(var(--primary) / 0.9);
   outline: 2px solid transparent;
   outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--public-auth-input-focus);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 @supports not selector(:focus-visible) {
   .public-auth-input:focus {
-    border-color: var(--public-auth-primary-bg-hover);
-    box-shadow: 0 0 0 2px var(--public-auth-input-focus);
+    border-color: hsl(var(--primary) / 0.9);
+    box-shadow: 0 0 0 2px hsl(var(--ring));
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .public-auth-password-toggle:not(:disabled):hover {
-    background: var(--public-auth-ghost-hover-bg);
+    background: hsl(var(--muted));
   }
 
   .public-auth-button-primary:hover {
-    background: var(--public-auth-primary-bg-hover);
+    background: hsl(var(--primary) / 0.9);
   }
 
   .public-auth-button-ghost:hover {
-    background: var(--public-auth-ghost-hover-bg);
-    color: var(--public-auth-text-strong);
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-auth-button,
+  .public-auth-input {
+    transition: none;
   }
 }

@@ -2,6 +2,7 @@ import { Filter, RefreshCw, Trash2 } from "lucide-react";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { getActivityFilterCount, hasActiveActivityFilters } from "@/pages/activity/utils";
 import {
   getActivityAccessLabel,
@@ -50,7 +51,7 @@ export function ActivityPageHeader({
         </div>
       }
       actions={
-        <>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {canModerateActivity && selectedCount > 0 ? (
             <Button
               variant="destructive"
@@ -65,7 +66,9 @@ export function ActivityPageHeader({
           <Button
             variant={showFilters ? "default" : "outline"}
             onClick={onToggleFilters}
-            className={isMobile ? "w-full" : ""}
+            className="flex-1 sm:flex-none"
+            {...getAriaExpandedProps(showFilters)}
+            aria-controls={showFilters ? "activity-filters-panel" : undefined}
             data-testid="button-toggle-filters"
           >
             <Filter className="w-4 h-4 mr-2" />
@@ -80,15 +83,14 @@ export function ActivityPageHeader({
             variant="outline"
             onClick={onRefresh}
             disabled={loading}
-            className={isMobile ? "w-full" : ""}
+            className="flex-1 sm:flex-none"
             data-testid="button-refresh"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </>
+        </div>
       }
-      className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : ""}
     />
   );
 }

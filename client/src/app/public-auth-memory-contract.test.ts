@@ -48,8 +48,12 @@ test("forgot password route uses lightweight auth chrome without eager recovery 
   assert.match(publicAuthCss, /\.public-auth-layout--minimal\s+\.public-auth-layout__glow/);
   assert.match(
     publicAuthCss,
-    /\.public-auth-layout:not\(\.public-auth-layout--minimal\)\s+\.public-auth-layout__card/,
+    /\.public-auth-layout__pattern,\s*\.public-auth-layout__glow,\s*\.public-auth-layout__center-glow\s*{\s*display:\s*none;/,
   );
+  // Neither standard nor minimal auth chrome should allocate a filtered backdrop.
+  assert.doesNotMatch(publicAuthCss, /backdrop-filter:\s*(?:blur|saturate)\(/);
+  assert.doesNotMatch(publicAuthCss, /\.public-auth-layout__center-glow\s*{\s*display:\s*block;/);
+  assert.match(readFirstCssRuleBlock(publicAuthCss, ".public-auth-layout__card"), /background:\s*hsl\(var\(--card\)\);/);
 });
 
 test("public auth recovery routes receive SPA navigation callbacks", () => {

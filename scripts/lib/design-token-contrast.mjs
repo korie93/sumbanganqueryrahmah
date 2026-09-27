@@ -1,6 +1,7 @@
 import { readCssWithImports } from "./design-token-source.mjs";
 
-const HSL_TOKEN_PATTERN = /--([a-z0-9-]+):\s*([0-9.]+)\s+([0-9.]+)%\s+([0-9.]+)%;/gi;
+const TOKEN_PATTERN = /--([a-z0-9-]+):\s*([^;]+);/gi;
+const HSL_VALUE_PATTERN = /^([0-9.]+)\s+([0-9.]+)%\s+([0-9.]+)%$/;
 const DEFAULT_TOKEN_PAIRS = [
   ["background", "foreground"],
   ["background", "muted-foreground"],
@@ -57,13 +58,27 @@ export function extractCssRuleBlock(css, selector) {
 
 export function parseHslTokens(cssBlock) {
   const tokens = new Map();
+  const definitions = new Map(
+    Array.from(cssBlock.matchAll(TOKEN_PATTERN), (match) => [match[1], match[2].trim()]),
+  );
 
-  for (const match of cssBlock.matchAll(HSL_TOKEN_PATTERN)) {
-    tokens.set(match[1], {
-      h: Number.parseFloat(match[2]),
-      s: Number.parseFloat(match[3]),
-      l: Number.parseFloat(match[4]),
-    });
+  const resolve = (name, seen = new Set()) => {
+    if (seen.has(name)) return undefined;
+    const value = definitions.get(name);
+    if (!value) return undefined;
+    const alias = value.match(/^var\(--([a-z0-9-]+)\)$/i);
+    if (alias) return resolve(alias[1], new Set([...seen, name]));
+    const match = value.match(HSL_VALUE_PATTERN);
+    return match ? {
+      h: Number.parseFloat(match[1]),
+      s: Number.parseFloat(match[2]),
+      l: Number.parseFloat(match[3]),
+    } : undefined;
+  };
+
+  for (const name of definitions.keys()) {
+    const value = resolve(name);
+    if (value) tokens.set(name, value);
   }
 
   return tokens;

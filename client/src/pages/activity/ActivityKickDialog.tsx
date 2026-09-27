@@ -11,6 +11,7 @@ export function ActivityKickDialog({
 }: ActivitySelectedActivityDialogProps) {
   return (
     <ActivityConfirmationDialog
+      focusOrigin="kick"
       confirmLabel="Kick"
       description={getKickDialogDescription(selectedActivity?.username)}
       icon={<AlertTriangle className="w-5 h-5 text-amber-500" />}

@@ -79,19 +79,19 @@ export function GeneralSearchMobileControls({
   return (
     <>
       <div
-        className="glass-wrapper sticky top-2 z-[var(--z-sticky-content)] mb-3 space-y-2 p-2 shadow-lg supports-[backdrop-filter]:bg-background/80 sqr-backdrop-blur-xl"
+        className="sticky top-2 z-[var(--z-sticky-content)] space-y-3 rounded-lg border border-border bg-card p-3"
         data-floating-ai-avoid="true"
       >
         <div className="flex items-center gap-2">
-          <div className="grid flex-1 grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/25 p-1">
+          <div className="grid flex-1 grid-cols-2 gap-1 rounded-md bg-muted p-1">
             <Button
               variant="ghost"
               onClick={() => handleMobileModeChange(false)}
               className={cn(
-                "h-11 w-full rounded-lg px-2 text-xs font-medium",
+                "h-11 w-full rounded-md px-2 text-sm font-medium",
                 advancedMode
                   ? "text-muted-foreground"
-                  : "bg-background text-foreground shadow-sm hover:bg-background",
+                  : "bg-background text-foreground hover:bg-background",
               )}
               data-testid="button-simple-search"
             >
@@ -102,9 +102,9 @@ export function GeneralSearchMobileControls({
               variant="ghost"
               onClick={() => handleMobileModeChange(true)}
               className={cn(
-                "h-11 w-full rounded-lg px-2 text-xs font-medium",
+                "h-11 w-full rounded-md px-2 text-sm font-medium",
                 advancedMode
-                  ? "bg-background text-foreground shadow-sm hover:bg-background"
+                  ? "bg-background text-foreground hover:bg-background"
                   : "text-muted-foreground",
               )}
               data-testid="button-advanced-search"
@@ -159,7 +159,7 @@ export function GeneralSearchMobileControls({
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                className="h-11 rounded-xl pl-9 text-sm"
+                className="h-11 rounded-md pl-9 text-sm"
                 data-testid="input-search"
               />
             </div>
@@ -167,7 +167,7 @@ export function GeneralSearchMobileControls({
               <Button
                 onClick={onSearch}
                 disabled={loading}
-                className="h-11 w-full rounded-xl text-xs"
+                className="h-11 w-full rounded-md text-sm"
                 data-testid="button-search"
               >
                 {loading ? (
@@ -185,7 +185,7 @@ export function GeneralSearchMobileControls({
               <Button
                 variant="outline"
                 onClick={onReset}
-                className="h-11 w-full rounded-xl text-xs"
+                className="h-11 w-full rounded-md text-sm"
                 data-testid="button-reset"
               >
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
@@ -194,7 +194,7 @@ export function GeneralSearchMobileControls({
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-2">
+          <div className="rounded-md bg-muted/30 p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold text-foreground">Advanced filters ready</p>
@@ -206,7 +206,7 @@ export function GeneralSearchMobileControls({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-11 shrink-0 rounded-lg px-3 text-xs"
+                className="h-11 shrink-0 rounded-md px-3 text-sm"
                 onClick={() => setMobileAdvancedOpen(true)}
               >
                 <SlidersHorizontal className="mr-1 h-3.5 w-3.5" />
@@ -227,7 +227,7 @@ export function GeneralSearchMobileControls({
       <Sheet open={mobileAdvancedOpen} onOpenChange={setMobileAdvancedOpen}>
         <SheetContent
           side="bottom"
-          className="rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
+          className="rounded-t-lg border-border bg-background px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
           data-floating-ai-avoid="true"
         >
           <SheetHeader className="pr-8 text-left">
@@ -238,7 +238,7 @@ export function GeneralSearchMobileControls({
           </SheetHeader>
 
           <div className="mt-4 space-y-3">
-            <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3">
+            <div className="flex items-start justify-between gap-3 rounded-md bg-muted/30 p-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">
                   {advancedMode ? "Advanced filter mode" : "Simple search mode"}
@@ -251,14 +251,14 @@ export function GeneralSearchMobileControls({
                 variant="outline"
                 size="sm"
                 onClick={() => handleMobileModeChange(!advancedMode)}
-                className="h-10 shrink-0 rounded-xl px-3"
+                className="h-11 shrink-0 rounded-md px-3"
               >
                 {advancedMode ? "Use Simple" : "Use Advanced"}
               </Button>
             </div>
 
             {!advancedMode ? (
-              <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-3">
+              <div className="space-y-3 rounded-md border border-border p-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -278,7 +278,7 @@ export function GeneralSearchMobileControls({
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
-                    className="h-12 rounded-2xl pl-10 text-base"
+                    className="h-11 rounded-md pl-10 text-base"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -288,12 +288,12 @@ export function GeneralSearchMobileControls({
                       setMobileAdvancedOpen(false);
                     }}
                     disabled={loading}
-                    className="h-12 w-full"
+                    className="h-11 w-full"
                   >
                     <Search className="h-4 w-4" />
                     Search
                   </Button>
-                  <Button variant="outline" onClick={onReset} className="h-12 w-full">
+                  <Button variant="outline" onClick={onReset} className="h-11 w-full">
                     <RotateCcw className="h-4 w-4" />
                     Reset
                   </Button>
@@ -302,13 +302,13 @@ export function GeneralSearchMobileControls({
             ) : (
               <div
                 className={cn(
-                  "rounded-2xl border border-border/60 bg-background/70",
-                  "[&_.sticky]:rounded-b-[1.25rem] [&_.sticky]:border-border/60 [&_.sticky]:bg-background/96",
+                  "rounded-md bg-background",
+                  "[&_.sticky]:rounded-b-md [&_.sticky]:border-border [&_.sticky]:bg-background",
                 )}
               >
                 <Suspense
                   fallback={
-                    <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
+                    <div className="flex min-h-[160px] items-center justify-center rounded-md border border-border bg-muted/20">
                       <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                     </div>
                   }

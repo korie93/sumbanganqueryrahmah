@@ -89,3 +89,35 @@ export function resolveNextSelectedSettingsCategory({
 
   return null;
 }
+
+/** Apply a route/storage request once, without pinning subsequent category clicks. */
+export function createSettingsCategorySelectionResolver() {
+  let lastRequestedSection: string | undefined;
+  let requestApplied = false;
+
+  return ({ initialSectionId, selectedCategory, sidebarCategories, ready = true }: {
+    initialSectionId?: string | undefined;
+    selectedCategory: string;
+    sidebarCategories: SettingCategory[];
+    ready?: boolean;
+  }) => {
+    // Profile hydration can expose synthetic Backup/Account categories before
+    // loadSettings settles its server-category fallback. Do not consume the
+    // requested section until both bootstrap stages have finished.
+    if (!ready) return null;
+    if (initialSectionId !== lastRequestedSection) {
+      lastRequestedSection = initialSectionId;
+      requestApplied = false;
+    }
+    const nextCategory = resolveNextSelectedSettingsCategory({
+      initialSectionId: requestApplied ? undefined : initialSectionId,
+      selectedCategory,
+      sidebarCategories,
+    });
+    // Categories can arrive after profile loading. An unavailable request stays pending.
+    if (initialSectionId && sidebarCategories.some((category) => category.id === initialSectionId)) {
+      requestApplied = true;
+    }
+    return nextCategory;
+  };
+}

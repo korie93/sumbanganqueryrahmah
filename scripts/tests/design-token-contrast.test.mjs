@@ -188,6 +188,23 @@ test("validateThemeContrast reports insufficient token contrast", () => {
   );
 });
 
+test("HSL token aliases resolve forward references and latest declarations without hiding invalid tokens", () => {
+  const tokens = parseHslTokens(`
+    --color-focus: var(--sidebar-ring);
+    --sidebar-ring: var(--ring);
+    --ring: 207 58% 42%;
+    --ring: 207 58% 32%;
+    --missing: var(--unknown);
+    --cycle-a: var(--cycle-b);
+    --cycle-b: var(--cycle-a);
+    --invalid: 0 0% 0%;
+    --invalid: var(--unknown);
+  `);
+  assert.deepEqual(tokens.get("color-focus"), { h: 207, s: 58, l: 32 });
+  assert.deepEqual(tokens.get("sidebar-ring"), tokens.get("ring"));
+  for (const name of ["missing", "cycle-a", "cycle-b", "invalid"]) assert.equal(tokens.has(name), false);
+});
+
 test("theme token foreground pairs meet WCAG AA normal text contrast", () => {
   const report = readThemeTokenContrastReport(
     path.resolve(process.cwd(), THEME_TOKEN_ENTRY_FILE_PATH),
@@ -353,19 +370,28 @@ test("focus ring token meets WCAG UI contrast in light and dark themes", () => {
   }
 });
 
-test("dark navbar active pill keeps WCAG AA text contrast", () => {
+test("navbar active item keeps WCAG AA text contrast over each light and dark navigation surface", () => {
   const tokenCss = readThemeTokenSource();
   const navbarCss = readFileSync(
     path.resolve(process.cwd(), "client/src/components/Navbar.css"),
     "utf8",
   );
-  const darkTokens = parseHslTokens(extractCssRuleBlock(tokenCss, ".dark"));
-  const darkActivePillBlock = extractCssRuleBlock(navbarCss, ".dark .nav-pill.nav-pill-active");
+  const activeBlock = extractCssRuleBlock(navbarCss, ".nav-pill.nav-pill-active");
+  const background = activeBlock.match(/background:\s*([^;]+);/)?.[1];
+  const foreground = activeBlock.match(/color:\s*([^;]+);/)?.[1];
+  assert.ok(background && foreground, "Active navigation must define both text and surface colors");
 
-  assert.match(darkActivePillBlock, /background:\s*hsl\(var\(--primary\)\);/);
-  assert.match(darkActivePillBlock, /color:\s*hsl\(var\(--primary-foreground\)\);/);
-  assert.ok(
-    getContrastRatio(darkTokens.get("primary"), darkTokens.get("primary-foreground")) >= 4.5,
-    "dark navbar active pill text must satisfy WCAG AA contrast",
-  );
+  for (const selector of [":root", ".dark"]) {
+    const cssBlock = extractCssRuleBlock(tokenCss, selector);
+    const variables = extractCssVariableMap(cssBlock);
+    const tokens = parseHslTokens(cssBlock);
+    const activeSurface = parseHslColorValue(resolveCssVariableReferences(background, variables));
+    const activeText = parseHslColorValue(resolveCssVariableReferences(foreground, variables));
+    for (const parent of ["card", "sidebar", "background"]) {
+      const effectiveSurface = compositeColor(activeSurface, tokens.get(parent));
+      const effectiveText = compositeColor(activeText, effectiveSurface);
+      assert.ok(getContrastRatio(effectiveSurface, effectiveText) >= 4.5,
+        `${selector} active navigation on ${parent} must satisfy WCAG AA contrast`);
+    }
+  }
 });

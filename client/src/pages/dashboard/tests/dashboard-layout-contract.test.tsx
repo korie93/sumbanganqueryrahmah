@@ -79,7 +79,7 @@ test("DashboardPageHeader keeps compact solid actions and status badges", () => 
   assert.match(markup, /role="status"/);
   assert.match(markup, /PDF sedia untuk dijana/);
   assert.match(markup, /type="button"/);
-  assert.match(markup, /border-border\/60 bg-background shadow-sm/);
+  assert.match(markup, /dashboard-page-header/);
 });
 
 test("DashboardSummaryCards separates primary and supporting metrics into compact sections", () => {
@@ -95,11 +95,30 @@ test("DashboardSummaryCards separates primary and supporting metrics into compac
   assert.match(markup, /Active Sessions/);
   assert.match(markup, /Supporting Signals/);
   assert.match(markup, /Operational context/);
-  assert.match(markup, /rounded-2xl border border-border\/60 bg-background shadow-sm/);
-  assert.match(markup, /rounded-2xl border border-border\/60 bg-muted\/10 shadow-none/);
+  assert.match(markup, /dashboard-core-metric/);
+  assert.match(markup, /dashboard-supporting-metric/);
+  assert.equal((markup.match(/class="dashboard-core-metric"/g) ?? []).length, 4);
+  assert.equal((markup.match(/class="dashboard-supporting-metric"/g) ?? []).length, 5);
   assert.match(source, /export const DashboardSummaryCards = memo\(DashboardSummaryCardsImpl\)/);
   assert.match(source, /items\.slice\(0, 4\), \[items\]/);
   assert.match(source, /items\.slice\(4\), \[items\]/);
+});
+
+test("Dashboard presents KPI snapshot before situation and security review without losing its boundary", () => {
+  const source = readFileSync(path.resolve(__dirname, "../../Dashboard.tsx"), "utf8");
+  const snapshotIndex = source.indexOf('<div id="dashboard-login-snapshot"');
+  const situationIndex = source.indexOf("<DashboardLoginSituationSummary");
+  const watchlistIndex = source.indexOf("<DashboardSuspiciousLoginWatchlist");
+  const deferredIndex = source.indexOf("<DashboardDeferredSections");
+  assert.ok(snapshotIndex > 0);
+  assert.ok(snapshotIndex < situationIndex && situationIndex < watchlistIndex);
+  assert.ok(watchlistIndex < deferredIndex);
+  const snapshotSource = source.slice(snapshotIndex, situationIndex);
+  assert.match(snapshotSource, /<DashboardSectionRenderBoundary/);
+  assert.match(snapshotSource, /<DashboardSnapshotSection/);
+  assert.match(snapshotSource, /summary=\{summary\}/);
+  assert.match(snapshotSource, /summaryCards=\{summaryCards\}/);
+  assert.match(snapshotSource, /onRetrySummary=\{handleRetrySummary\}/);
 });
 
 test("DashboardSummaryCards hides loading skeletons from assistive technology", () => {
@@ -114,7 +133,7 @@ test("DashboardSummaryCards hides loading skeletons from assistive technology", 
   assert.match(markup, /animate-pulse" aria-hidden="true"/);
 });
 
-test("DashboardSnapshotSection surfaces metric count badge with compact summary copy", () => {
+test("DashboardSnapshotSection keeps compact summary copy without repeating the header metric count", () => {
   const markup = renderToStaticMarkup(
     createElement(DashboardSnapshotSection, {
       summary: {
@@ -136,8 +155,10 @@ test("DashboardSnapshotSection surfaces metric count badge with compact summary 
   );
 
   assert.match(markup, /Login Snapshot/);
-  assert.match(markup, /3 metrics/);
-  assert.match(markup, /fast operator review/);
+  assert.doesNotMatch(markup, /3 metrics/);
+  assert.match(markup, /Total Users/);
+  assert.match(markup, /Active Sessions/);
+  assert.match(markup, /Core access metrics and operational context/);
   assert.match(markup, /Access watchlist/);
   assert.match(markup, /Login readiness at a glance/);
   assert.match(markup, /Gagal login 24j/);
@@ -189,9 +210,8 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(deferredSource, /<DashboardLoginReviewSidebar/);
   assert.match(deferredSource, /function DashboardCollapsiblePanel/);
   assert.match(deferredSource, /Dashboard login review sidebar/);
-  assert.match(deferredSource, /xl:grid-cols-\[minmax\(250px,320px\)_minmax\(0,1fr\)\]/);
-  assert.match(deferredSource, /xl:max-h-\[calc\(var\(--viewport-min-height-value\)-2rem\)\]/);
-  assert.match(deferredSource, /xl:overflow-y-auto/);
+  assert.match(deferredSource, /dashboard-review-workspace grid grid-cols-1 gap-4/);
+  assert.doesNotMatch(deferredSource, /xl:sticky|xl:overflow-y-auto/);
   assert.match(deferredSource, /dashboard-login-review-sidebar-container/);
   assert.match(deferredSource, /<div className="min-w-0 space-y-4">/);
   assert.doesNotMatch(deferredSource, /2xl:grid-cols-\[minmax\(0,0\.95fr\)_minmax\(0,1\.05fr\)\]/);
@@ -253,14 +273,13 @@ test("DashboardLoginCommandBar gives operators a compact first-read status strip
     }),
   );
 
-  assert.match(markup, /Priority Command Bar/);
+  assert.match(markup, /Login status/);
   assert.match(markup, /Dashboard login priority command bar/);
   assert.match(markup, /Login risk status Attention/);
   assert.match(markup, /Health/);
   assert.match(markup, /44\/100/);
-  assert.match(markup, /Sesi aktif/);
-  assert.match(markup, /Gagal 24j/);
-  assert.match(markup, /User/);
+  assert.match(markup, /dashboard-command-status/);
+  assert.doesNotMatch(markup, /Sesi aktif|Gagal 24j/);
   assert.match(markup, /Review failed login pressure/);
   assert.match(markup, /href="\/monitor\?section=activity"/);
   assert.match(source, /buildDashboardLoginRiskInsights/);
@@ -526,8 +545,8 @@ test("DashboardLoginReviewSidebar turns scattered login panels into a compact si
     }),
   );
 
-  assert.match(markup, /Review Sidebar/);
-  assert.match(markup, /Ringkasan cepat supaya dashboard login tidak nampak berserabut/);
+  assert.match(markup, /Review summary/);
+  assert.match(markup, /Fokus sesi dan tindakan susulan/);
   assert.match(markup, /Fokus semasa/);
   assert.match(markup, /Health score/);
   assert.match(markup, /Active sessions/);
@@ -1098,12 +1117,10 @@ test("Dashboard compact decision surfaces reflow and preserve text at zoomed wid
   const watchlistSource = readFileSync(path.resolve(__dirname, "../DashboardSuspiciousLoginWatchlist.tsx"), "utf8");
   const sidebarSource = readFileSync(path.resolve(__dirname, "../DashboardLoginReviewSidebar.tsx"), "utf8");
 
-  assert.match(commandSource, /grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5/);
-  assert.match(commandSource, /mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4/);
-  assert.match(commandSource, /min-w-0 break-words/);
+  assert.match(commandSource, /flex flex-wrap items-center justify-between gap-3/);
   assert.doesNotMatch(commandSource, /mt-2 truncate text-lg/);
   assert.match(situationSource, /mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2/);
-  assert.match(situationSource, /mt-1 break-words text-sm font-bold/);
+  assert.match(situationSource, /mt-1 break-words text-sm font-medium/);
   assert.match(watchlistSource, /lg:grid-cols-\[minmax\(0,1\.05fr\)_minmax\(10rem,0\.9fr\)_minmax\(12rem,1fr\)_auto\]/);
   assert.match(watchlistSource, /break-all font-semibold text-foreground/);
   assert.match(sidebarSource, /flex flex-wrap items-start justify-between gap-3/);

@@ -196,7 +196,7 @@ export function CollectionMonthlyComparisonPanel({
 
       {!loading && !errorMessage && data ? (
         <div className="space-y-4">
-          <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <OperationalSummaryStrip className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <OperationalMetric
               label={comparison?.baseLabel ? `${comparison.baseLabel} Total` : "Base month total"}
               value={
@@ -228,6 +228,15 @@ export function CollectionMonthlyComparisonPanel({
             />
           </OperationalSummaryStrip>
 
+          <CollectionMonthlyComparisonBreakdownSection
+            chartSlot={chartSlot}
+            insights={insights}
+            monthCount={data.months.length}
+            monthlyTargetsByMonth={monthlyTargetsByMonth}
+            onMonthSelect={onMonthSelect}
+            targetSummary={targetSummary}
+          />
+
           <CollectionSameDayPaceSection
             comparisonMode={sameDayPaceComparisonMode}
             errorMessage={sameDayPaceErrorMessage}
@@ -253,14 +262,6 @@ export function CollectionMonthlyComparisonPanel({
           ) : null}
           {comparisonSummary ? <p className="sr-only">{comparisonSummary}</p> : null}
 
-          <CollectionMonthlyComparisonBreakdownSection
-            chartSlot={chartSlot}
-            insights={insights}
-            monthCount={data.months.length}
-            monthlyTargetsByMonth={monthlyTargetsByMonth}
-            onMonthSelect={onMonthSelect}
-            targetSummary={targetSummary}
-          />
         </div>
       ) : null}
     </section>

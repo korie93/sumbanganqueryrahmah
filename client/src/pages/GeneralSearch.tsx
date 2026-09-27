@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useCallback, useRef } from "react";
 import { Search } from "lucide-react";
+import { OperationalPage } from "@/components/layout/OperationalPage";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { GeneralSearchControls } from "@/pages/general-search/GeneralSearchControls";
 import { useGeneralSearchController } from "@/pages/general-search/useGeneralSearchController";
+import type { SearchResultRow } from "@/pages/general-search/types";
 
 const GeneralSearchResults = lazy(() =>
   import("@/pages/general-search/GeneralSearchResults").then((module) => ({
@@ -25,37 +26,37 @@ export default function GeneralSearch({
   userRole,
   searchResultLimit,
 }: GeneralSearchProps) {
-  const isMobile = useIsMobile();
   const controller = useGeneralSearchController({ userRole, searchResultLimit });
   const { actions, canExport, canSeeSourceFile, isLowSpecMode, state } = controller;
   const shouldShowResults = state.searched && !state.loading;
   const shouldShowRecordDialog = state.selectedRecord !== null;
+  const recordTriggerRef = useRef<HTMLElement | null>(null);
+  const selectResultRecord = useCallback((record: SearchResultRow) => {
+    // Capture before the lazy dialog mounts or its loading fallback takes focus.
+    recordTriggerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    actions.setSelectedRecord(record);
+  }, [actions.setSelectedRecord]);
+  const restoreRecordTriggerFocus = useCallback((event: Event) => {
+    const trigger = recordTriggerRef.current;
+    if (trigger?.isConnected) {
+      event.preventDefault();
+      trigger.focus({ preventScroll: true });
+    }
+    recordTriggerRef.current = null;
+  }, []);
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 px-3 py-4 dark:bg-background dark:bg-none sm:p-6">
-      <div className="mx-auto max-w-6xl">
-        {isMobile ? (
-          <div className="mb-2 px-1" data-floating-ai-avoid="true">
-            <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
-              <Search className="h-3.5 w-3.5" />
-              <span>General Search</span>
-            </div>
-            <h1 className="mt-1 text-base font-bold text-foreground">Data Search</h1>
-          </div>
-        ) : (
-          <div
-            className="relative mb-8 rounded-2xl border border-border/60 bg-background/70 px-6 py-6 text-center shadow-sm"
-            data-floating-ai-avoid="true"
-          >
-            <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
-              General Search
-            </p>
-            <h1 className="relative mt-2 text-3xl font-bold text-foreground">Data Search</h1>
-            <p className="relative mt-2 max-w-2xl text-base leading-relaxed text-muted-foreground sm:mx-auto">
-              Search imported data quickly by keyword or switch to advanced filters for more precise matching.
-            </p>
-          </div>
-        )}
+    <OperationalPage width="content" className="max-w-6xl">
+        <header className="space-y-1" data-floating-ai-avoid="true">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-section-title">
+            Data Search
+          </h1>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            Search imported data by keyword or use advanced filters for precise matching.
+          </p>
+        </header>
 
         <GeneralSearchControls
           activeFilterSummaries={state.activeFilterSummaries}
@@ -81,8 +82,8 @@ export default function GeneralSearch({
         {shouldShowResults ? (
           <Suspense
             fallback={
-              <div className="glass-wrapper p-6" role="status" aria-live="polite">
-                <div className="flex min-h-[240px] items-center justify-center">
+              <div className="rounded-lg border border-border bg-card p-6" role="status" aria-live="polite">
+                <div className="flex min-h-[120px] items-center justify-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                 </div>
               </div>
@@ -103,7 +104,7 @@ export default function GeneralSearch({
               onExportCsv={actions.exportToCSV}
               onExportPdf={actions.exportToPDF}
               onPageChange={actions.handlePageChange}
-              onRecordSelect={actions.setSelectedRecord}
+              onRecordSelect={selectResultRecord}
               onRowsPerPageChange={actions.handleResultsPerPageChange}
               pageSizeOptions={state.pageSizeOptions}
               query={state.displayQuery}
@@ -116,24 +117,24 @@ export default function GeneralSearch({
         ) : null}
 
         {!state.searched ? (
-          <div className="glass-wrapper p-6 text-center sm:p-12" data-floating-ai-avoid="true">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-              <Search className="h-8 w-8 text-primary" />
-            </div>
-            <p className="mb-2 font-medium text-foreground">Start Search</p>
-            <p className="mb-4 text-sm text-muted-foreground">
+          <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 sm:p-5" data-floating-ai-avoid="true">
+            <Search className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Start Search</p>
+              <p className="text-sm leading-6 text-muted-foreground">
               {state.advancedMode
                 ? "Add filters to search data with specific criteria."
                 : "Enter IC number, name, or keywords to search in all data."}
-            </p>
+              </p>
+            </div>
           </div>
         ) : null}
-      </div>
 
       {shouldShowRecordDialog ? (
         <Suspense fallback={<LazyDialogFallback label="Loading search result details dialog..." />}>
           <GeneralSearchRecordDialog
             canSeeSourceFile={canSeeSourceFile}
+            onCloseAutoFocus={restoreRecordTriggerFocus}
             onOpenChange={(open) => {
               if (!open) actions.setSelectedRecord(null);
             }}
@@ -143,6 +144,6 @@ export default function GeneralSearch({
           />
         </Suspense>
       ) : null}
-    </div>
+    </OperationalPage>
   );
 }

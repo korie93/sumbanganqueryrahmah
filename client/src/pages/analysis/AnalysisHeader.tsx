@@ -8,7 +8,6 @@ import {
 import {
   OperationalPageHeader,
 } from "@/components/layout/OperationalPage";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { AnalysisData, AnalysisMode, AllAnalysisResult } from "@/pages/analysis/types";
 
@@ -43,31 +42,31 @@ export function AnalysisHeader({
       eyebrow="Insights"
       description={headerDescription}
       badge={
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary" className="rounded-full px-3 py-1">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">
             {mode === "all" ? "All Files" : "Single File"}
-          </Badge>
+          </span>
           {mode === "all" && allResult ? (
-            <Badge variant="outline" className="rounded-full px-3 py-1" data-testid="badge-total-files">
-              <FileStack className="mr-1.5 h-3 w-3" />
+            <span className="inline-flex items-center tabular-nums" data-testid="badge-total-files">
+              <FileStack className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               {allResult.totalImports} files
-            </Badge>
+            </span>
           ) : null}
           {analysis ? (
-            <Badge variant="outline" className="rounded-full px-3 py-1">
-              <BarChart3 className="mr-1.5 h-3 w-3" />
+            <span className="inline-flex items-center tabular-nums">
+              <BarChart3 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               {totalRows.toLocaleString()} rows
-            </Badge>
+            </span>
           ) : null}
         </div>
       }
       actions={
-        <>
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             onClick={onBackToSaved}
             data-testid="button-back"
-            className={isMobile ? "w-full" : "w-full sm:w-auto"}
+            className={isMobile ? "flex-1" : ""}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Saved
@@ -77,7 +76,7 @@ export function AnalysisHeader({
               variant="outline"
               onClick={onReset}
               data-testid="button-reset"
-              className={isMobile ? "w-full" : "w-full sm:w-auto"}
+              className={isMobile ? "flex-1" : ""}
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               Reset (View All)
@@ -88,14 +87,13 @@ export function AnalysisHeader({
             onClick={onRefresh}
             disabled={loading}
             data-testid="button-refresh"
-            className={isMobile ? "w-full" : "w-full sm:w-auto"}
+            className={isMobile ? "flex-1" : ""}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 mr-2 motion-reduce:animate-none ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </>
+        </div>
       }
-      className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : ""}
     />
   );
 }

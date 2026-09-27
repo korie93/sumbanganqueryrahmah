@@ -116,7 +116,7 @@ export function ActivityLogsToolbar({
           <span>Sort</span>
           <select
             aria-label="Sort activity logs"
-            className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-[180px] sm:flex-none"
+            className="h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-[180px] sm:flex-none"
             data-testid="select-activity-sort"
             name="activitySort"
             value={selectedValue}

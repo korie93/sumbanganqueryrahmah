@@ -6,6 +6,7 @@ import { ViewerFilterRow } from "@/pages/viewer/ViewerFilterRow";
 import type { ColumnFilter, ViewerFilterMutableField } from "@/pages/viewer/types";
 
 interface ViewerFiltersPanelProps {
+  showHeading?: boolean;
   headers: string[];
   columnFilters: ColumnFilter[];
   onAddFilter: () => void;
@@ -15,6 +16,7 @@ interface ViewerFiltersPanelProps {
 }
 
 function ViewerFiltersPanelImpl({
+  showHeading = true,
   headers,
   columnFilters,
   onAddFilter,
@@ -23,15 +25,17 @@ function ViewerFiltersPanelImpl({
   onRemoveFilter,
 }: ViewerFiltersPanelProps) {
   return (
-    <div className="ops-toolbar mb-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="font-medium text-foreground">Column Filters</h3>
-          <p className="text-xs text-muted-foreground">
-            Narrow matching rows across the dataset without leaving the viewer.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+    <div className={showHeading ? "rounded-xl border border-border bg-card p-4" : "space-y-4"}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        {showHeading ? (
+          <div>
+            <h3 className="font-medium text-foreground">Column Filters</h3>
+            <p className="text-xs text-muted-foreground">
+              Narrow matching rows across the dataset without leaving the viewer.
+            </p>
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
           {columnFilters.length > 0 ? (
             <Button
               variant="ghost"

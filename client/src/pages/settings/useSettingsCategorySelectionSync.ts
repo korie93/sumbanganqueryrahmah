@@ -1,9 +1,10 @@
-import { useEffect } from "react";
-import { resolveNextSelectedSettingsCategory } from "@/pages/settings/settings-controller-utils";
+import { useEffect, useRef } from "react";
+import { createSettingsCategorySelectionResolver } from "@/pages/settings/settings-controller-utils";
 import type { SettingCategory } from "@/pages/settings/types";
 
 type UseSettingsCategorySelectionSyncArgs = {
   initialSectionId?: string | undefined;
+  ready: boolean;
   selectedCategory: string;
   setSelectedCategory: (value: string) => void;
   sidebarCategories: SettingCategory[];
@@ -11,18 +12,22 @@ type UseSettingsCategorySelectionSyncArgs = {
 
 export function useSettingsCategorySelectionSync({
   initialSectionId,
+  ready,
   selectedCategory,
   setSelectedCategory,
   sidebarCategories,
 }: UseSettingsCategorySelectionSyncArgs) {
+  const selectionResolverRef = useRef<ReturnType<typeof createSettingsCategorySelectionResolver> | null>(null);
   useEffect(() => {
-    const nextCategory = resolveNextSelectedSettingsCategory({
+    selectionResolverRef.current ??= createSettingsCategorySelectionResolver();
+    const nextCategory = selectionResolverRef.current({
       initialSectionId,
+      ready,
       selectedCategory,
       sidebarCategories,
     });
     if (nextCategory) {
       setSelectedCategory(nextCategory);
     }
-  }, [initialSectionId, selectedCategory, setSelectedCategory, sidebarCategories]);
+  }, [initialSectionId, ready, selectedCategory, setSelectedCategory, sidebarCategories]);
 }

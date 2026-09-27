@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Download, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
@@ -96,7 +97,7 @@ export function CollectionMonthlyComparisonSetupCard({
     : null;
 
   return (
-    <div className="collection-monthly-comparison-filter-card rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
+    <div className="collection-monthly-comparison-filter-card rounded-xl border border-border p-3 sm:p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
@@ -111,8 +112,8 @@ export function CollectionMonthlyComparisonSetupCard({
           {data ? `${data.months.length} month(s) loaded` : "Ready to apply"}
         </span>
       </div>
-      <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1.15fr)_minmax(11rem,11rem)_minmax(11rem,11rem)_auto_auto] xl:items-end">
-        <div className="space-y-1">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-[minmax(0,1fr)_10rem_10rem_auto_auto] xl:items-end">
+        <div className="col-span-2 space-y-1 xl:col-span-1">
           {canFilterByNickname ? (
             <CollectionNicknameSingleSelect
               label="Staff nickname"
@@ -124,8 +125,8 @@ export function CollectionMonthlyComparisonSetupCard({
               value={selectedNickname}
               onOpenChange={setNicknameSelectOpen}
               onSelect={onSelectedNicknameChange}
-              triggerClassName="collection-monthly-comparison-control h-11 rounded-2xl bg-background"
-              popoverClassName="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-border/70 bg-popover p-2 shadow-xl"
+              triggerClassName="collection-monthly-comparison-control h-11 rounded-md bg-background md:h-9"
+              popoverClassName="w-[min(360px,calc(100vw-2rem))] rounded-xl border-border bg-popover p-2"
             />
           ) : (
             <div className="space-y-1">
@@ -139,7 +140,7 @@ export function CollectionMonthlyComparisonSetupCard({
                 id="collection-monthly-comparison-nickname"
                 value={selectedNickname}
                 readOnly
-                className="collection-monthly-comparison-control h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm text-foreground"
+                className="collection-monthly-comparison-control h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground md:h-9"
                 aria-readonly="true"
               />
             </div>
@@ -160,31 +161,32 @@ export function CollectionMonthlyComparisonSetupCard({
           onChange={onEndMonthChange}
         />
 
-        <button
+        <Button
           type="button"
-          className="collection-monthly-comparison-primary-action inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="collection-monthly-comparison-primary-action h-11 md:h-9"
           onClick={onApply}
           disabled={loading || !hasAvailableNickname}
         >
           Apply
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="collection-monthly-comparison-secondary-action inline-flex h-11 items-center justify-center rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          variant="outline"
+          className="collection-monthly-comparison-secondary-action h-11 md:h-9"
           onClick={onReset}
           disabled={loading}
         >
           Reset
-        </button>
+        </Button>
       </div>
-      <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-foreground/68 dark:text-foreground/74">
-        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-border/70 dark:bg-card">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span>
           Single nickname only
         </span>
-        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-border/70 dark:bg-card">
+        <span>
           First month = base
         </span>
-        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-border/70 dark:bg-card">
+        <span>
           Last month = target
         </span>
       </div>
@@ -200,43 +202,41 @@ export function CollectionMonthlyComparisonSetupCard({
             ? { "aria-pressed": "true" as const }
             : { "aria-pressed": "false" as const };
           return (
-            <button
+            <Button
               key={preset.id}
               type="button"
               aria-label={`Apply quick range ${preset.label}`}
               {...pressedProps}
+              variant="outline"
               className={
                 active
-                  ? "inline-flex h-8 items-center justify-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-medium text-primary"
-                  : "inline-flex h-8 items-center justify-center rounded-full border border-border/70 bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+                  ? "h-11 border-primary bg-primary/10 px-3 text-xs text-primary md:h-9"
+                  : "h-11 px-3 text-xs md:h-9"
               }
               onClick={() => onRangePresetApply(preset)}
               disabled={loading || !hasAvailableNickname}
             >
               {preset.label}
-            </button>
+            </Button>
           );
         })}
       </div>
-      <div className="mt-3 grid gap-2 md:grid-cols-[minmax(14rem,18rem)_auto] md:items-end md:justify-between">
-        <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-2">
-          <div className="flex items-center gap-1.5">
-            <p className="text-xs font-medium text-muted-foreground">
-              Monthly target
-            </p>
-            <MonthlyComparisonHint
-              label="Monthly target explanation"
-              text="This value is read from the superuser-configured daily target for the currently applied target month and staff nickname. No manual fallback is used."
-            />
-          </div>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {targetDisplayLabel}
+      <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3 lg:flex-row lg:items-start lg:justify-between">
+        <details className="min-w-0 flex-1">
+          <summary className="min-h-11 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Monthly target: {targetDisplayLabel}
+          </summary>
+          <div className="space-y-2 pt-1">
+          <p className="text-xs text-muted-foreground">
+            Target details
+            <MonthlyComparisonHint label="Monthly target explanation"
+              text="This value is read from the superuser-configured daily target for the currently applied target month and staff nickname. No manual fallback is used." />
           </p>
           <span
             className={
               monthlyTargetAmount && monthlyTargetAmount > 0
-                ? "mt-1 inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:text-emerald-300"
-                : "mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:text-amber-300"
+                ? "inline-flex rounded-md bg-success/10 px-2 py-0.5 text-xs font-medium text-success"
+                : "inline-flex rounded-md bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
             }
           >
             {targetConfidenceLabel}
@@ -256,37 +256,38 @@ export function CollectionMonthlyComparisonSetupCard({
             monthlyTargetAmount={monthlyTargetAmount}
             monthlyTargetsByMonth={monthlyTargetsByMonth}
           />
-          {monthlyTargetErrorMessage ? (
-            <p role="status" className="mt-1 text-xs text-destructive">
-              Target unavailable: {monthlyTargetErrorMessage}
-            </p>
-          ) : null}
-        </div>
+          </div>
+        </details>
         <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
           {onPrintReport ? (
-            <button
+            <Button
               type="button"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              variant="outline"
+              className="h-11 flex-1 gap-2 md:h-9 md:flex-none"
               onClick={onPrintReport}
               disabled={loading || monthlyTargetLoading || !data}
             >
               <Printer className="h-4 w-4" aria-hidden="true" />
               Print report
-            </button>
+            </Button>
           ) : null}
           {onExportCsv ? (
-            <button
+            <Button
               type="button"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              variant="outline"
+              className="h-11 flex-1 gap-2 md:h-9 md:flex-none"
               onClick={onExportCsv}
               disabled={loading || monthlyTargetLoading || !data}
             >
               <Download className="h-4 w-4" aria-hidden="true" />
               Export CSV
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
+      {monthlyTargetErrorMessage ? (
+        <p role="status" className="mt-2 text-xs text-destructive">Target unavailable: {monthlyTargetErrorMessage}</p>
+      ) : null}
     </div>
   );
 }

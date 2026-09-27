@@ -133,4 +133,7 @@ test("BulkImportPanel presents a compact queue summary for selected files", () =
   assert.match(markup, /1 ready/);
   assert.match(markup, /1 too large/);
   assert.match(markup, /Oversized files are skipped automatically/);
+  assert.match(markup, /data-floating-ai-avoid="true"/);
+  assert.match(markup, /text-warning/);
+  assert.doesNotMatch(markup, /pb-20/);
 });

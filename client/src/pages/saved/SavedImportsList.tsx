@@ -1,6 +1,7 @@
-import { BookMarked, ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Collapsible,
   CollapsibleContent,
@@ -72,24 +73,20 @@ export function SavedImportsList({
 
   return (
     <Collapsible open={filesOpen} onOpenChange={onFilesOpenChange}>
-      <div className="rounded-xl border border-border/70 bg-background/80 p-3 shadow-sm sm:p-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between gap-3 px-3 py-2">
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="h-auto min-w-0 flex-1 items-start justify-between gap-3 p-0 text-left"
+              className="h-auto min-h-11 min-w-0 flex-1 items-start justify-between gap-3 p-0 text-left md:min-h-9"
               data-testid="button-toggle-files"
             >
               <div className="flex min-w-0 items-start gap-2">
-                <BookMarked className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-foreground">Saved Files</span>
                     <span className="text-xs text-muted-foreground sm:text-sm">({summaryLabel})</span>
                   </div>
-                  <p className="text-xs text-muted-foreground sm:hidden">
-                    Reopen files quickly or continue to Viewer and Analysis.
-                  </p>
                 </div>
               </div>
               <ChevronDown
@@ -107,15 +104,15 @@ export function SavedImportsList({
         <CollapsibleContent>
           <div
             className="
-              mt-4 space-y-3
+              min-w-0
               md:max-h-[clamp(32rem,calc(100dvh-20rem),52rem)]
-              md:overflow-y-auto md:scroll-fade-y md:overscroll-contain md:pr-2
+              md:overflow-x-auto md:overflow-y-auto md:scroll-fade-y md:overscroll-contain
               scrollbar-visible md:[scrollbar-gutter:stable]
             "
             data-testid="saved-files-scroll-region"
           >
             {isSuperuser ? (
-              <div className="flex items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2">
+              <div className="flex min-h-11 items-center gap-3 border-t px-3 py-2 md:hidden">
                 <Checkbox
                   checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
                   onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
@@ -126,7 +123,27 @@ export function SavedImportsList({
               </div>
             ) : null}
 
-            {imports.map((item) => (
+            <table className="block w-full text-sm tabular-nums md:table md:min-w-[860px] md:table-fixed" aria-label="Saved imports" role="table">
+              <TableHeader className="hidden bg-muted md:sticky md:top-0 md:z-10 md:table-header-group">
+                <TableRow>
+                  <TableHead className="px-3">
+                    <div className="flex items-center gap-3">
+                      {isSuperuser ? <Checkbox
+                        checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
+                        onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
+                        aria-label="Select all visible imports"
+                        disabled={actionsDisabled}
+                      /> : null}
+                      File
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-52 px-3">Imported / size</TableHead>
+                  {isSuperuser ? <TableHead className="w-44 px-3">Collection source</TableHead> : null}
+                  <TableHead className="w-40 px-3 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="block md:table-row-group">
+              {imports.map((item) => (
               <SavedImportCard
                 key={item.id}
                 actionsDisabled={actionsDisabled}
@@ -144,7 +161,9 @@ export function SavedImportsList({
                 onToggleSelected={onToggleSelected}
                 onView={onView}
               />
-            ))}
+              ))}
+              </TableBody>
+            </table>
           </div>
         </CollapsibleContent>
       </div>

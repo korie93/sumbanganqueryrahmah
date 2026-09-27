@@ -11,16 +11,16 @@ export function BillingPrincipalCalendarDayCard({ day, asOf, selected, onSelect 
   return <button type="button" onClick={onSelect} data-testid={`billing-calendar-day-${day.date}`}
     aria-label={`${day.date}, ${day.dailyMovement.all.closedAccountCount} accounts, new closed ${formatOspCurrency(day.dailyMovement.all.ospClosed)}, daily movement ${formatOspDailyMovement(day.dailyMovement.all.resultPercentage)} of TT OSP, in percentage points. View closed accounts.`}
     {...(day.date === asOf ? { "aria-current": "date" as const } : {})} {...getAriaPressedProps(selected)}
-    className={`min-w-0 w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected || day.date === asOf ? "border-primary" : "border-border"} ${active ? "bg-background" : "bg-muted/20"}`}>
+    className={`min-w-0 w-full rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${selected || day.date === asOf ? "border-primary" : "border-border"}`}>
     <span className="flex flex-wrap items-center justify-between gap-1">
-      <span className="text-base font-semibold">{dateLabel}</span>
+      <span className="text-sm font-semibold">{dateLabel}</span>
       <span className="text-xs text-muted-foreground">{day.date === asOf ? "System As Of" : active ? `${day.dailyMovement.all.closedAccountCount} accounts` : "No movement"}</span>
     </span>
-    <span className="mt-3 grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.7fr)] gap-x-2 text-xs text-muted-foreground">
+    <span className="mt-2 grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.7fr)] gap-x-2 text-xs text-muted-foreground">
       <span>Aging</span><span className="text-right">Movement %</span><span className="text-right">OSP closed</span>
     </span>
     {[...day.dailyMovement.rows, day.dailyMovement.all].map((row) => <span key={row.aging}
-      className={`grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.7fr)] items-start gap-x-2 py-2 text-sm tabular-nums ${row.aging === "ALL" ? "border-t font-semibold" : ""}`}>
+      className={`grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.7fr)] items-start gap-x-2 py-1.5 text-sm tabular-nums ${row.aging === "ALL" ? "border-t font-semibold" : ""}`}>
       <span>{row.aging === "ALL" ? "TOTAL" : row.aging}</span>
       <span className="min-w-0 text-right [overflow-wrap:anywhere]">{formatOspDailyMovement(row.resultPercentage)}</span>
       <span className="min-w-0 text-right [overflow-wrap:anywhere]">{formatOspCurrency(row.ospClosed)}</span>

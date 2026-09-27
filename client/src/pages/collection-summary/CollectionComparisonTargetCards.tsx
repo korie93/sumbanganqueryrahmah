@@ -69,11 +69,11 @@ export function CollectionComparisonTargetCards({
   }
 
   return (
-    <div className="mt-2 grid gap-2">
+    <div className="mt-2 grid gap-3 sm:grid-cols-2">
       {cards.map((entry) => (
         <div
           key={entry.month}
-          className="rounded-xl border border-border/50 bg-background px-2.5 py-2"
+          className="border-l border-border pl-3"
         >
           <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             {entry.label} Target
@@ -83,8 +83,8 @@ export function CollectionComparisonTargetCards({
             <span
               className={
                 entry.target === null
-                  ? "rounded-full bg-amber-500/10 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:text-amber-300"
-                  : "rounded-full bg-emerald-500/10 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:text-emerald-300"
+                  ? "rounded-md bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
+                  : "rounded-md bg-success/10 px-2 py-0.5 text-xs font-medium text-success"
               }
             >
               {entry.role}

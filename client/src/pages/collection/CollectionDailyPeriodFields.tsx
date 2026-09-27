@@ -14,7 +14,7 @@ export function CollectionDailyPeriodFields({
   isMobile,
   containerClassName,
 }: CollectionDailyPeriodFieldsProps) {
-  const inputClassName = isMobile ? "h-12 rounded-2xl bg-background" : "h-11 rounded-xl bg-background";
+  const inputClassName = isMobile ? "h-11 rounded-md bg-background" : "h-9 rounded-md bg-background";
   const wrapperClassName =
     containerClassName ?? `grid gap-3 ${isMobile ? "sm:grid-cols-2" : "md:grid-cols-4"}`;
 

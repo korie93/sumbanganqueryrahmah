@@ -478,7 +478,13 @@ const checkCollectionDailyPage = async (page, tracker) => {
   await navigateForSmoke(page, "/collection/daily");
   await page.getByTestId("collection-daily-page").waitFor();
   await page.getByTestId("collection-daily-title").waitFor();
+  const legendDisclosure = page.getByTestId("collection-daily-calendar")
+    .locator("summary").filter({ hasText: "Calendar legend and status codes" });
+  await legendDisclosure.focus();
+  await page.keyboard.press("Enter");
   await page.getByTestId("collection-daily-legend").waitFor();
+  await legendDisclosure.press("Enter");
+  await page.getByTestId("collection-daily-legend").waitFor({ state: "hidden" });
   await page.getByTestId("collection-daily-calendar").waitFor();
 
   const summaryCount = await page.getByTestId("collection-daily-summary").count();
@@ -1212,17 +1218,15 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
   let lastListResponse = null;
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
+    // Arm before typing: the old unfiltered row can still be visible during
+    // the search debounce. Opening its menu then races the pending refresh.
+    const autoResponsePromise = waitForCollectionListResponse(page, normalizedSearchValue, 1_500).catch(() => null);
     if (attempt > 0) {
       await searchInput.fill("");
     }
     await searchInput.fill(normalizedSearchValue);
 
-    const immediateTarget = await findVisibleCollectionRecord(page, normalizedSearchValue, 1_500);
-    if (immediateTarget) {
-      return immediateTarget;
-    }
-
-    const autoResponse = await waitForCollectionListResponse(page, normalizedSearchValue, 1_500).catch(() => null);
+    const autoResponse = await autoResponsePromise;
     if (autoResponse) {
       lastListResponse = autoResponse;
       const autoPayload = await autoResponse.json().catch(() => null);
@@ -1233,15 +1237,14 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
 
       const autoRecords = Array.isArray(autoPayload?.records) ? autoPayload.records : [];
       if (autoRecords.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
-        return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
+        if (await waitForCollectionFilterButtonEnabled(filterButton)) {
+          return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
+        }
+        continue;
       }
     }
 
     if (!(await waitForCollectionFilterButtonEnabled(filterButton))) {
-      const delayedTarget = await findVisibleCollectionRecord(page, normalizedSearchValue, 5_000);
-      if (delayedTarget) {
-        return delayedTarget;
-      }
       continue;
     }
 
@@ -1259,10 +1262,16 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
 
       const records = Array.isArray(payload?.records) ? payload.records : [];
       if (records.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
-        return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
+        if (await waitForCollectionFilterButtonEnabled(filterButton)) {
+          return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
+        }
+        continue;
       }
     }
 
+    // A repeated query may use the existing cache instead of making a request.
+    // Still require the explicit Filter action and a settled loading state.
+    if (!(await waitForCollectionFilterButtonEnabled(filterButton))) continue;
     const delayedTarget = await findVisibleCollectionRecord(page, normalizedSearchValue, 5_000);
     if (delayedTarget) {
       return delayedTarget;
@@ -1501,7 +1510,8 @@ const checkCollectionManualSettlementV9UiFlow = async (page, context, tracker) =
     await page.locator("#collection-records-leader-desktop").waitFor({ timeout: 15_000 });
     let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
     await targetRow.getByText(cardNumber, { exact: true }).waitFor({ timeout: 15_000 });
-    await targetRow.getByRole("button", { name: "Edit" }).click();
+    await targetRow.getByRole("button", { name: /^Actions for record / }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
 
     let editDialog = page.getByRole("dialog").filter({
       has: page.getByRole("heading", { name: "Edit Collection Record" }),
@@ -1580,7 +1590,8 @@ const checkCollectionManualSettlementV9UiFlow = async (page, context, tracker) =
 
     await navigateForSmoke(page, "/collection/records");
     targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
-    await targetRow.getByRole("button", { name: "Edit" }).click();
+    await targetRow.getByRole("button", { name: /^Actions for record / }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     editDialog = page.getByRole("dialog").filter({
       has: page.getByRole("heading", { name: "Edit Collection Record" }),
     }).first();
@@ -1798,7 +1809,8 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
     await closeReceiptPreviewDialog(page);
 
-    await targetRow.getByRole("button", { name: "Edit" }).click();
+    await targetRow.getByRole("button", { name: /^Actions for record / }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     const editDialog = page.getByRole("dialog").filter({
       has: page.getByRole("heading", { name: "Edit Collection Record" }),
     }).first();
@@ -1826,7 +1838,8 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await page.getByText(replaceReceiptName).first().waitFor({ timeout: 15_000 });
     await closeReceiptPreviewDialog(page);
 
-    await targetRow.getByRole("button", { name: "Edit" }).click();
+    await targetRow.getByRole("button", { name: /^Actions for record / }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     const removeDialog = page.getByRole("dialog").filter({
       has: page.getByRole("heading", { name: "Edit Collection Record" }),
     }).first();
@@ -2301,7 +2314,8 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
     await page.getByText("View Rekod Collection").first().waitFor();
 
     const targetRow = await filterCollectionRecordsBySearch(page, smokeRecord.accountNumber);
-    await targetRow.getByRole("button", { name: "Delete" }).click();
+    await targetRow.getByRole("button", { name: /^Actions for record / }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
 
     await page.getByText("Adakah anda pasti mahu padam rekod collection ini?").waitFor({ timeout: 15_000 });
 

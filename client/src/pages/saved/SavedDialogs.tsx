@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { ImportItem } from "@/pages/saved/types";
+import { useSavedOverlayFocus } from "@/pages/saved/SavedOverlayFocusContext";
 
 interface SavedDialogsProps {
   deleteDialogOpen: boolean;
@@ -57,10 +58,11 @@ export function SavedDialogs({
   onRenameConfirm,
   onBulkDeleteConfirm,
 }: SavedDialogsProps) {
+  const overlayFocus = useSavedOverlayFocus();
   return (
     <>
       <AlertDialog open={deleteDialogOpen} onOpenChange={onDeleteDialogOpenChange}>
-        <AlertDialogContent className="gap-5 sm:max-w-md">
+        <AlertDialogContent className="gap-5 sm:max-w-md" onCloseAutoFocus={(event) => overlayFocus?.restore("delete", event)}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Data?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -93,7 +95,7 @@ export function SavedDialogs({
       </AlertDialog>
 
       <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={onBulkDeleteDialogOpenChange}>
-        <AlertDialogContent className="gap-5 sm:max-w-md">
+        <AlertDialogContent className="gap-5 sm:max-w-md" onCloseAutoFocus={(event) => overlayFocus?.restore("bulk-delete", event)}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Selected Files?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -124,7 +126,7 @@ export function SavedDialogs({
       </AlertDialog>
 
       <Dialog open={renameDialogOpen} onOpenChange={onRenameDialogOpenChange}>
-        <DialogContent className="gap-5 sm:max-w-md">
+        <DialogContent className="gap-5 sm:max-w-md" onCloseAutoFocus={(event) => overlayFocus?.restore("rename", event)}>
           <DialogHeader>
             <DialogTitle>Rename Import</DialogTitle>
             <DialogDescription>

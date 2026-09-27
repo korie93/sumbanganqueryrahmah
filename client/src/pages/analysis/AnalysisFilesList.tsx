@@ -36,28 +36,29 @@ export function AnalysisFilesList({
   }
 
   return (
-    <Collapsible open={filesListOpen} onOpenChange={onFilesListOpenChange} className="mb-8">
-      <div className="glass-wrapper p-4">
+    <Collapsible open={filesListOpen} onOpenChange={onFilesListOpenChange} className="mb-6">
+      <div className="rounded-lg border border-border bg-card p-4">
         <CollapsibleTrigger asChild>
           <Button
             variant="ghost"
-            className="flex h-auto w-full items-start justify-between gap-3 p-0 text-left sm:items-center"
+            className="flex min-h-11 h-auto w-full items-center justify-between gap-3 p-0 text-left sm:min-h-9"
             data-testid="button-toggle-files-list"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <FileStack className="h-5 w-5 text-primary" />
+              <FileStack className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="font-semibold text-foreground">Analyzed Files List</span>
               <span className="text-sm text-muted-foreground">({allResult.imports.length})</span>
             </div>
             <ChevronDown
-              className={`h-5 w-5 text-muted-foreground transition-transform ${filesListOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${filesListOpen ? "rotate-180" : ""}`}
             />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-4 max-h-[400px] overflow-y-auto">
             {isMobile ? (
-              <div className="space-y-3">
+              <div className="divide-y divide-border">
                 {filesPaged.items.map((item, index) => (
                   <article
                     key={item.id}
@@ -66,23 +67,23 @@ export function AnalysisFilesList({
                       index: filesPaged.start + index + 1,
                       item,
                     })}
-                    className="rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+                    className="py-3 first:pt-0"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           File {filesPaged.start + index + 1}
                         </p>
                         <p className="break-words font-medium text-foreground">{item.name}</p>
                       </div>
-                      <Badge variant="secondary" className="shrink-0">
+                      <Badge variant="secondary" className="shrink-0 tabular-nums">
                         {(item.rowCount || 0).toLocaleString()} rows
                       </Badge>
                     </div>
 
-                    <dl className="mt-3 rounded-xl border border-border/60 bg-muted/20 p-3">
+                    <dl className="mt-2">
                       <div className="space-y-1">
-                        <dt className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
+                        <dt className="text-xs text-muted-foreground">
                           Filename
                         </dt>
                         <dd className="break-all text-sm text-foreground">{item.filename}</dd>
@@ -115,8 +116,8 @@ export function AnalysisFilesList({
                         <td className="p-3 text-muted-foreground">{filesPaged.start + index + 1}</td>
                         <td className="p-3 font-medium text-foreground">{item.name}</td>
                         <td className="p-3 text-muted-foreground">{item.filename}</td>
-                        <td className="p-3 text-right">
-                          <Badge variant="secondary">{(item.rowCount || 0).toLocaleString()}</Badge>
+                        <td className="p-3 text-right tabular-nums">
+                          {(item.rowCount || 0).toLocaleString()}
                         </td>
                       </tr>
                     ))}

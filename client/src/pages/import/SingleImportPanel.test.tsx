@@ -71,4 +71,9 @@ test("SingleImportPanel presents a four-step guided workflow before file selecti
   assert.match(markup, /Review data/);
   assert.match(markup, /Run import/);
   assert.match(markup, /Choose the source file/);
+  assert.match(markup, /aria-label="Step 2: Map columns"/);
+  assert.match(markup, /aria-label="Step 3: Review data"/);
+  assert.doesNotMatch(markup, /truncate text-xs[^"]*sm:hidden/);
+  assert.match(markup, /data-floating-ai-avoid="true"/);
+  assert.doesNotMatch(markup, /pb-20/);
 });

@@ -28,6 +28,7 @@ import {
 } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
 import { useSavedImportDetailState } from "@/pages/saved/useSavedImportDetailState";
+import { useSavedOverlayFocus } from "@/pages/saved/SavedOverlayFocusContext";
 
 type SavedImportDetailDrawerProps = {
   activeImport: ImportItem | null;
@@ -74,6 +75,7 @@ export function SavedImportDetailDrawer({
   onDelete,
   onView,
 }: SavedImportDetailDrawerProps) {
+  const overlayFocus = useSavedOverlayFocus();
   const detail = useSavedImportDetailState(activeImport?.id ?? null);
   const resolvedImport = activeImport && detail.summary
     ? { ...activeImport, ...detail.summary.import }
@@ -86,6 +88,7 @@ export function SavedImportDetailDrawer({
   return (
     <Sheet open={activeImport !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
+        onCloseAutoFocus={(event) => overlayFocus?.restore("details", event)}
         side="right"
         className="w-[min(94vw,30rem)] sm:max-w-md"
         data-testid="saved-import-detail-drawer"
@@ -188,7 +191,10 @@ export function SavedImportDetailDrawer({
                   variant="outline"
                   className="text-destructive"
                   disabled={actionsDisabled}
-                  onClick={() => onDelete(resolvedImport)}
+                  onClick={(event) => {
+                    overlayFocus?.remember("delete", event.currentTarget);
+                    onDelete(resolvedImport);
+                  }}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete

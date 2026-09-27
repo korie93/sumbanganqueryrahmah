@@ -107,7 +107,7 @@ function ViewerDataTableImpl({
   );
 
   return (
-    <div className="ops-table-shell min-w-0">
+    <div className={isMobile ? "min-w-0" : "ops-table-shell min-w-0"}>
       <HorizontalScrollHint
         ariaLabel="Viewer data columns"
         hint="Scroll columns"

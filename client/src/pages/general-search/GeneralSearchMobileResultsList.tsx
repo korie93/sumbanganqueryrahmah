@@ -46,11 +46,11 @@ export function GeneralSearchMobileResultsList({
               resultNumber,
               row,
             })}
-            className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm"
+            className="rounded-md border border-border bg-card p-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
-                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
+                <p className="text-xs font-medium text-muted-foreground">
                   Result {resultNumber}
                 </p>
                 <div className="break-words text-base font-semibold text-foreground">
@@ -68,7 +68,7 @@ export function GeneralSearchMobileResultsList({
                 variant="outline"
                 size="sm"
                 onClick={() => onRecordSelect(row)}
-                className="h-10 shrink-0 px-3"
+                className="h-11 shrink-0 px-3"
                 data-testid={`button-view-${rowIndex}`}
               >
                 <Eye className="mr-2 h-4 w-4" />
@@ -89,9 +89,9 @@ export function GeneralSearchMobileResultsList({
                   return (
                     <div
                       key={`${resultNumber}-${header}`}
-                      className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2"
+                      className="border-b border-border/60 pb-2 last:border-0 last:pb-0"
                     >
-                      <dt className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
+                      <dt className="text-xs font-medium text-muted-foreground">
                         {header}
                       </dt>
                       <dd
@@ -108,8 +108,8 @@ export function GeneralSearchMobileResultsList({
             ) : null}
 
             {overflowHeaders.length > 0 ? (
-              <details className="mt-3 rounded-xl border border-border/50 bg-background/70">
-                <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-primary">
+              <details className="mt-3 rounded-md border border-border bg-background">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center px-3 py-2 text-sm font-medium text-primary">
                   Show {overflowHeaders.length} more field{overflowHeaders.length === 1 ? "" : "s"}
                 </summary>
                 <dl className="space-y-2 border-t border-border/50 px-3 py-3">
@@ -118,9 +118,9 @@ export function GeneralSearchMobileResultsList({
                     return (
                       <div
                         key={`${resultNumber}-${header}-extra`}
-                        className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2"
+                        className="border-b border-border/60 pb-2 last:border-0 last:pb-0"
                       >
-                        <dt className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
+                        <dt className="text-xs font-medium text-muted-foreground">
                           {header}
                         </dt>
                         <dd className="mt-1 break-words text-sm text-foreground">

@@ -1,5 +1,5 @@
 import { Suspense, memo, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, ClipboardList, FileText, Server } from "lucide-react";
+import { BarChart3, ChevronDown, ClipboardList, FileText, Server } from "lucide-react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import {
   ActivityMonitorSectionPage,
@@ -9,9 +9,12 @@ import {
   preloadSystemMonitorSection,
   SystemPerformanceMonitorSectionPage,
 } from "@/app/system-monitor-lazy-sections";
-import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getAriaCurrentPageProps } from "@/lib/aria-state-props";
+import "./dashboard/dashboard-workspace.css";
 
 type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
 
@@ -83,6 +86,87 @@ const sectionMeta: Record<
   },
 };
 
+export function SystemMonitorNavigation({
+  activeSection,
+  availableSections,
+  onSelect,
+}: {
+  activeSection: MonitorSection;
+  availableSections: MonitorSection[];
+  onSelect: (section: MonitorSection) => void;
+}) {
+  const [sectionsOpen, setSectionsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const desktopCurrentRef = useRef<HTMLButtonElement>(null);
+  const isMobile = useIsMobile();
+  const ActiveIcon = sectionMeta[activeSection].icon;
+
+  useEffect(() => {
+    if (!isMobile) setSectionsOpen(false);
+  }, [isMobile]);
+
+  return (
+    <>
+      <nav className="monitor-context-navigation" aria-label="System Monitor">
+        {availableSections.map((section) => {
+          const Icon = sectionMeta[section].icon;
+          return (
+            <Button key={section} ref={activeSection === section ? desktopCurrentRef : undefined}
+              type="button" variant="ghost" size="sm" className="monitor-context-button"
+              {...getAriaCurrentPageProps(activeSection === section)} onClick={() => onSelect(section)}>
+              <Icon className="h-4 w-4" aria-hidden="true" />{sectionMeta[section].label}
+            </Button>
+          );
+        })}
+      </nav>
+      <div className="monitor-mobile-navigation">
+        <Sheet open={sectionsOpen} onOpenChange={setSectionsOpen}>
+          <SheetTrigger asChild>
+            <Button ref={triggerRef} variant="ghost" className="h-11 w-full justify-between px-3"
+              aria-label={`Change System Monitor section, current: ${sectionMeta[activeSection].label}`}
+              data-testid="button-monitor-sections">
+              <span className="flex min-w-0 items-center gap-2">
+                <ActiveIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{sectionMeta[activeSection].label}</span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" data-testid="monitor-sections-sheet"
+            className="data-[state=closed]:duration-200 data-[state=open]:duration-200 motion-reduce:animate-none"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              const target = isMobile ? triggerRef.current : desktopCurrentRef.current;
+              if (target?.isConnected) target.focus({ preventScroll: true });
+            }}>
+            <SheetHeader className="pr-8 text-left">
+              <SheetTitle>System Monitor</SheetTitle>
+              <SheetDescription>Choose a section for your current role.</SheetDescription>
+            </SheetHeader>
+            <nav aria-label="System Monitor sections" className="mt-4 space-y-1 pb-[var(--safe-area-inset-bottom)]">
+              {availableSections.map((section) => {
+                const Icon = sectionMeta[section].icon;
+                return (
+                  <Button key={section} type="button" variant="ghost"
+                    className="monitor-context-button h-auto min-h-11 w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left"
+                    {...getAriaCurrentPageProps(activeSection === section)}
+                    onClick={() => { onSelect(section); setSectionsOpen(false); }}>
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block text-sm">{sectionMeta[section].label}</span>
+                      <span className="block text-xs font-normal text-muted-foreground">{sectionMeta[section].description}</span>
+                    </span>
+                  </Button>
+                );
+              })}
+            </nav>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
+  );
+}
+
 export default function SystemMonitorLayout({
   showDashboard,
   showActivity,
@@ -93,11 +177,6 @@ export default function SystemMonitorLayout({
   onSectionChange,
   onNavigate,
 }: SystemMonitorLayoutProps) {
-  const isMobile = useIsMobile();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const shouldRenderNavigation = !isMobile || sidebarOpen;
-
   const availableSections = useMemo(() => {
     const sections: MonitorSection[] = [];
     if (showDashboard) sections.push("dashboard");
@@ -141,10 +220,6 @@ export default function SystemMonitorLayout({
     onSectionChange?.(activeSection);
   }, [activeSection, onSectionChange]);
 
-  useEffect(() => {
-    setSidebarOpen(false);
-  }, [activeSection]);
-
   if (availableSections.length === 0) {
     return (
       <div className="app-shell-min-height p-6">
@@ -174,38 +249,10 @@ export default function SystemMonitorLayout({
   );
 
   return (
-    <div className="app-shell-min-height bg-background px-4 py-4 lg:px-6">
-      <div className="mx-auto max-w-[1680px] space-y-4">
-        <Card className="border-border/60 bg-background/75 shadow-sm">
-          <CardHeader className="py-4">
-            <CardTitle className="text-2xl">{sectionMeta[activeSection].label}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {sectionMeta[activeSection].description}
-            </p>
-          </CardHeader>
-        </Card>
-
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">
-          {shouldRenderNavigation ? (
-            <LazySideTabNavigation
-              items={availableSections.map((section) => ({
-                key: section,
-                label: sectionMeta[section].label,
-                icon: sectionMeta[section].icon,
-                description: sectionMeta[section].description,
-              }))}
-              selectedKey={activeSection}
-              onSelect={(key) => setActiveSection(key as MonitorSection)}
-              mobileOpen={sidebarOpen}
-              onMobileOpenChange={setSidebarOpen}
-              collapsed={sidebarCollapsed}
-              onCollapsedChange={setSidebarCollapsed}
-              menuLabel="Sections"
-              navigationLabel="System Monitor"
-            />
-          ) : null}
-
-          <section className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-background/70 shadow-sm">
+    <div className="monitor-workspace app-shell-min-height">
+      <div className="mx-auto max-w-[1680px]">
+        <SystemMonitorNavigation activeSection={activeSection} availableSections={availableSections} onSelect={setActiveSection} />
+          <section className="min-w-0">
             <AppRouteErrorBoundary
               routeKey={`system-monitor:${activeSection}`}
               routeLabel={activeSection}
@@ -213,7 +260,6 @@ export default function SystemMonitorLayout({
               <Suspense fallback={sectionFallback}>{renderActiveSection()}</Suspense>
             </AppRouteErrorBoundary>
           </section>
-        </div>
       </div>
     </div>
   );

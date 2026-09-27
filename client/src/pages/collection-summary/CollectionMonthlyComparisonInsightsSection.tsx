@@ -32,8 +32,8 @@ export function CollectionMonthlyComparisonInsightsSection({
   trendExplanation,
 }: CollectionMonthlyComparisonInsightsSectionProps) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
-      <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
+    <div className="grid gap-4 border-t border-border pt-4 xl:grid-cols-2">
+      <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-medium text-foreground">Comparison summary</p>
           <MonthlyComparisonHint
@@ -43,7 +43,7 @@ export function CollectionMonthlyComparisonInsightsSection({
         </div>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">{comparison?.summary}</p>
         {trendExplanation ? (
-          <div className="mt-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-3">
+          <div className="mt-3 border-l-2 border-border pl-3">
             <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
               Trend explanation
             </p>
@@ -77,7 +77,7 @@ export function CollectionMonthlyComparisonInsightsSection({
         <CollectionMonthlyComparisonProjectionPanel projection={projection} />
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid content-start gap-x-4 gap-y-3 sm:grid-cols-2">
         <CollectionMonthlyComparisonInsightsMetricCards
           insights={insights}
           targetSummary={targetSummary}

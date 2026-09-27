@@ -127,13 +127,13 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
   };
 
   return <div className="min-w-0 space-y-5" data-testid="billing-principal-page" data-state={loading ? "loading" : error ? "error" : selectedTarget ? "populated" : "empty"}>
-    <section aria-labelledby="billing-target-workspace-heading" className="rounded-xl border bg-card p-4">
+    <section aria-labelledby="billing-target-workspace-heading" className="min-w-0 space-y-3 border-b border-border pb-4">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0 flex-1">
-          <h2 id="billing-target-workspace-heading" className="font-semibold">Billing Principal (OSP)</h2>
+          <h2 id="billing-target-workspace-heading" className="text-lg font-semibold">Billing Principal (OSP)</h2>
           <p className="mt-1 text-sm text-muted-foreground">Shared system targets and your private client results.</p>
           <Label htmlFor="billing-saved-target-select" className="mt-3 block">Saved target</Label>
-          <select id="billing-saved-target-select" className="mt-1.5 min-h-10 w-full max-w-2xl rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <select id="billing-saved-target-select" className="mt-1.5 min-h-11 w-full max-w-2xl rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
             value={selectedTargetId} onChange={(event) => { if (!controlsLocked) setSelectedTargetId(event.target.value); }} disabled={controlsLocked} aria-describedby={workspaceLocked ? "billing-workspace-lock-guidance" : undefined}>
             <option value="" disabled>Select a saved target</option>
             {targets.map((target) => <option key={target.id} value={target.id}>{target.name} — {target.assignedAdmin?.username ?? "Unassigned (legacy)"}</option>)}
@@ -143,7 +143,7 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
             <span>Page {page}</span><Button type="button" size="sm" variant="ghost" disabled={controlsLocked || !hasMore} onClick={() => { if (!controlsLocked) setPage((value) => value + 1); }}>Next targets</Button>
           </div> : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap [&_button]:min-h-11 md:[&_button]:min-h-9">
           <Button type="button" variant="outline" onClick={() => { if (!controlsLocked) setReloadVersion((value) => value + 1); }} disabled={controlsLocked}><RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />Reload Targets</Button>
           {role === "superuser" ? <BillingPrincipalSavedTargetDialog disabled={controlsLocked} onOpenChange={setConfigOpen} onSaved={(target) => { setSelectedTargetId(target.id); setPage(1); setReloadVersion((value) => value + 1); }} /> : null}
           {role === "superuser" && selectedTarget && !deleting ? <>
@@ -153,12 +153,17 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
         </div>
       </div>
       {interactionMessage ? <p id="billing-workspace-lock-guidance" role="status" className="mt-4 rounded-md border border-primary/20 bg-primary/5 p-3 text-sm">{interactionMessage}</p> : null}
-      {selectedTarget ? <div className="mt-4 space-y-2 border-t pt-3 text-sm">
+      {selectedTarget ? <div className="space-y-2 text-sm">
         <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{selectedTarget.assignedAdmin ? "Admin: " + selectedTarget.assignedAdmin.username : "Legacy — no assigned admin"}</Badge><span className="tabular-nums text-muted-foreground">{reportingWindow?.from} — {reportingWindow?.to}</span></div>
-        <p className="break-words text-muted-foreground">{selectedTarget.activeRevision.sourceSnapshots.map((source) => source.name + " · " + (source.filename || "Saved source")).join("; ")}</p>
-        <BillingPrincipalSavedTargetUpdatedAt value={selectedTarget.updatedAt} />
+        <details className="text-sm">
+          <summary className="min-h-11 cursor-pointer content-center rounded-lg text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9">Source details · {selectedTarget.activeRevision.sourceSnapshots.length} configured source{selectedTarget.activeRevision.sourceSnapshots.length === 1 ? "" : "s"}</summary>
+          <div className="space-y-2 border-l border-border py-2 pl-3">
+            <p className="break-words text-muted-foreground">{selectedTarget.activeRevision.sourceSnapshots.map((source) => source.name + " · " + (source.filename || "Saved source")).join("; ")}</p>
+            <BillingPrincipalSavedTargetUpdatedAt value={selectedTarget.updatedAt} />
+            {selectedTarget.description ? <p className="whitespace-pre-wrap break-words text-muted-foreground">{selectedTarget.description}</p> : null}
+          </div>
+        </details>
         {!reportingWindow?.sourceValidityVerified ? <p className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">Source validity is unavailable for one or more sources. Those sources use the legacy saved period; configured sources use their current validity. Historical records and the saved TT OSP baseline are retained.</p> : null}
-        {selectedTarget.description ? <p className="whitespace-pre-wrap break-words text-muted-foreground">{selectedTarget.description}</p> : null}
       </div> : null}
       {error ? <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
     </section>

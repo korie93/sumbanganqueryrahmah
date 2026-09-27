@@ -39,7 +39,7 @@ export function ActivityFiltersPanel({
   const isMobile = useIsMobile();
 
   return (
-    <Card className="mb-6 glass-wrapper border-0" data-floating-ai-avoid="true">
+    <Card id="activity-filters-panel" className="border-border bg-card" data-floating-ai-avoid="true">
       <CardHeader className={getActivityFiltersPanelHeaderClassName(isMobile)}>
         <CardTitle className={getActivityFiltersPanelTitleClassName(isMobile)}>
           <Filter className="w-5 h-5" />

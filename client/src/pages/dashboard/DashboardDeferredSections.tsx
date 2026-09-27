@@ -115,7 +115,7 @@ function DashboardCollapsiblePanel({
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="space-y-3" data-testid={`panel-${id}`}>
-      <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+      <div className="flex flex-col gap-3 border-b border-border py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">{title}</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
@@ -127,7 +127,7 @@ function DashboardCollapsiblePanel({
             size="sm"
             aria-controls={contentId}
             {...getAriaExpandedProps(open)}
-            className="h-10 rounded-xl sm:h-9"
+            className="min-h-11 sm:min-h-9"
             data-testid={`button-toggle-${id}`}
           >
             {open ? "Tutup" : "Buka"}
@@ -393,11 +393,11 @@ export function DashboardDeferredSections({
 
   return (
     <section
-      className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,320px)_minmax(0,1fr)] xl:items-start"
+      className="dashboard-review-workspace grid grid-cols-1 gap-4"
       aria-label="Dashboard login review workspace"
     >
       <aside
-        className="min-w-0 xl:sticky xl:top-4 xl:max-h-[calc(var(--viewport-min-height-value)-2rem)] xl:overflow-y-auto xl:pr-1 scroll-fade-y"
+        className="min-w-0"
         aria-label="Dashboard login review sidebar"
         data-testid="dashboard-login-review-sidebar-container"
       >

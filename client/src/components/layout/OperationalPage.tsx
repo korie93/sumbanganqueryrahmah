@@ -76,8 +76,8 @@ export function OperationalPageHeader({
   className,
 }: OperationalPageHeaderProps) {
   return (
-    <Card className={cn("ops-header-card", className)}>
-      <CardHeader className="gap-4 py-4 sm:py-5 xl:flex-row xl:items-start xl:justify-between">
+    <header className={cn("ops-header-card", className)}>
+      <div className="ops-page-heading">
         <div className="min-w-0 space-y-2">
           {eyebrow ? (
             <p className="ops-eyebrow">
@@ -86,29 +86,25 @@ export function OperationalPageHeader({
           ) : null}
           <div className="flex flex-wrap items-start gap-3">
             <div className="min-w-0 space-y-1">
-              <CardTitle
-                role="heading"
-                aria-level={1}
-                className="text-2xl leading-tight tracking-tight sm:text-section-title"
-              >
+              <h1 className="ops-page-title">
                 {title}
-              </CardTitle>
+              </h1>
               {description ? (
                 <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
                   {description}
                 </p>
               ) : null}
             </div>
-            {badge ? <div className="shrink-0">{badge}</div> : null}
+            {badge ? <div className="min-w-0 max-w-full">{badge}</div> : null}
           </div>
         </div>
         {actions ? (
-          <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+          <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center md:w-auto md:justify-end">
             {actions}
           </div>
         ) : null}
-      </CardHeader>
-    </Card>
+      </div>
+    </header>
   );
 }
 
@@ -138,7 +134,7 @@ export function OperationalSectionCard({
         >
           <div className="min-w-0 space-y-1">
             {title ? (
-              <CardTitle role="heading" aria-level={2} className="text-xl leading-tight">
+              <CardTitle role="heading" aria-level={2} className="text-lg leading-tight">
                 {title}
               </CardTitle>
             ) : null}
@@ -181,11 +177,11 @@ export function OperationalMetric({
 }: OperationalMetricProps) {
   const toneClassName =
     tone === "success"
-      ? "text-emerald-700 dark:text-emerald-300"
+      ? "text-success"
       : tone === "warning"
-        ? "text-amber-700 dark:text-amber-300"
+        ? "text-warning"
         : tone === "danger"
-          ? "text-rose-700 dark:text-rose-300"
+          ? "text-destructive"
           : "text-foreground";
 
   return (

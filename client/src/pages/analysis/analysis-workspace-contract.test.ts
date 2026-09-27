@@ -36,11 +36,11 @@ test("analysis workspace mounts content through one active section switch", () =
 test("analysis workspace navigation remains accessible and bounded", () => {
   assert.match(navigationSource, /aria-label="Analysis sections"/);
   assert.match(navigationSource, /getAriaCurrentPageProps\(active\)/);
-  assert.match(navigationSource, /const collapsedItemLabelProps = collapsed \? \{ "aria-label": item\.label \} : \{\};/);
-  assert.match(navigationSource, /\{\.\.\.collapsedItemLabelProps\}/);
+  assert.match(navigationSource, /flex min-w-0 flex-wrap gap-2/);
+  assert.match(navigationSource, /onClick=\{\(\) => onSelect\(item\.key\)\}/);
   assert.doesNotMatch(navigationSource, /aria-current=\{[^}]+\}/);
   assert.doesNotMatch(navigationSource, /aria-label=\{collapsed \? item\.label : undefined\}/);
-  assert.match(navigationSource, /Collapse analysis sidebar/);
+  assert.doesNotMatch(navigationSource, /<aside|HorizontalScrollHint|min-w-max|Collapse analysis sidebar/);
   assert.doesNotMatch(navigationSource, /dangerouslySetInnerHTML/);
   assert.doesNotMatch(navigationSource, /setInterval|setTimeout|addEventListener/);
   assert.match(navigationHookSource, /useSearch\(\)/);

@@ -18,7 +18,7 @@ export function CollectionMonthlyComparisonInsightsMetricCards({
 }: CollectionMonthlyComparisonInsightsMetricCardsProps) {
   return (
     <>
-      <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+      <div className="min-w-0 border-b border-border pb-3">
         <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
           Range total
           <span className="ml-1 inline-flex align-middle">
@@ -35,7 +35,7 @@ export function CollectionMonthlyComparisonInsightsMetricCards({
           {insights.totalRecords} record(s), avg {formatAmountRM(insights.averagePerRecord)}
         </p>
       </div>
-      <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+      <div className="min-w-0 border-b border-border pb-3">
         <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
           Best month
         </p>
@@ -46,7 +46,7 @@ export function CollectionMonthlyComparisonInsightsMetricCards({
           {insights.peakMonth ? formatAmountRM(insights.peakMonth.totalCollection) : "No collection recorded"}
         </p>
       </div>
-      <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+      <div className="min-w-0 border-b border-border pb-3">
         <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
           Weakest active
         </p>
@@ -57,7 +57,7 @@ export function CollectionMonthlyComparisonInsightsMetricCards({
           {insights.lowestActiveMonth ? formatAmountRM(insights.lowestActiveMonth.totalCollection) : "No collection recorded"}
         </p>
       </div>
-      <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+      <div className="min-w-0 border-b border-border pb-3">
         <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
           Biggest jump
           <span className="ml-1 inline-flex align-middle">
@@ -79,7 +79,7 @@ export function CollectionMonthlyComparisonInsightsMetricCards({
             : "No month increased"}
         </p>
       </div>
-      <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+      <div className="min-w-0 border-b border-border pb-3">
         <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
           Biggest drop
         </p>
@@ -95,7 +95,7 @@ export function CollectionMonthlyComparisonInsightsMetricCards({
             : "No month decreased"}
         </p>
       </div>
-      <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+      <div className="min-w-0 border-b border-border pb-3">
         <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
           Audit watch
           <span className="ml-1 inline-flex align-middle">
@@ -115,7 +115,7 @@ export function CollectionMonthlyComparisonInsightsMetricCards({
         </p>
       </div>
       {targetSummary ? (
-        <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+        <div className="min-w-0 border-b border-border pb-3">
           <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
             Target gap
           </p>

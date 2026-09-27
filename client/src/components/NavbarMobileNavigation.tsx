@@ -13,6 +13,7 @@ import { getAriaCurrentPageProps } from "@/lib/aria-state-props"
 type NavbarMobileNavigationProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onCloseAutoFocus: (event: Event) => void
   mobileItems: NavigationEntry[]
   activeMobileItemId: string
   savedCount?: number | undefined
@@ -23,6 +24,7 @@ type NavbarMobileNavigationProps = {
 function NavbarMobileNavigationImpl({
   open,
   onOpenChange,
+  onCloseAutoFocus,
   mobileItems,
   activeMobileItemId,
   savedCount,
@@ -32,9 +34,10 @@ function NavbarMobileNavigationImpl({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        onCloseAutoFocus={onCloseAutoFocus}
         id="mobile-navigation-drawer"
         side="left"
-        className="w-[min(92vw,22rem)]"
+        className="workspace-mobile-navigation w-[min(92vw,20rem)]"
       >
         <SheetHeader className="pr-8 text-left">
           <SheetTitle>Navigasi</SheetTitle>
@@ -47,7 +50,7 @@ function NavbarMobileNavigationImpl({
           </SheetDescription>
         </SheetHeader>
 
-        <nav className="mt-4 space-y-2" aria-label="Navigasi mudah alih">
+        <nav className="mt-5 space-y-1" aria-label="Navigasi mudah alih">
           {mobileItems.map((item) => {
             const Icon = item.icon
             const active = item.id === activeMobileItemId
@@ -63,13 +66,13 @@ function NavbarMobileNavigationImpl({
                 }}
                 onMouseEnter={() => onPrefetch(item.id)}
                 onFocus={() => onPrefetch(item.id)}
-                className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
+                className={`flex min-h-11 w-full items-start gap-3 rounded-md border border-transparent px-3 py-2.5 text-left transition-colors ${
                   active
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                    : "border-border/60 bg-background/70 text-foreground hover:border-border hover:bg-accent/40"
+                    ? "bg-primary/10 text-primary"
+                    : "text-foreground hover:bg-accent"
                 }`}
               >
-                <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-primary-foreground text-primary" : "bg-primary/10 text-primary"}`}>
+                <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center ${active ? "text-primary" : "text-muted-foreground"}`}>
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -78,7 +81,7 @@ function NavbarMobileNavigationImpl({
                       {formatNavigationLabel(item.label, item.id, savedCount)}
                     </span>
                     {active ? (
-                      <span className="shrink-0 rounded-full bg-primary-foreground px-2 py-0.5 text-xxs font-semibold uppercase tracking-label-xs text-primary">
+                      <span className="shrink-0 rounded-sm bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
                         Semasa
                       </span>
                     ) : null}

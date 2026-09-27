@@ -1,10 +1,7 @@
 .collection-daily-bulk-toolbar {
   display: grid;
   gap: 0.9rem;
-  border: 1px solid hsl(var(--border) / 0.72);
-  border-radius: 1rem;
-  background: linear-gradient(135deg, hsl(var(--background) / 0.92), hsl(var(--muted) / 0.22));
-  padding: 0.9rem;
+  padding-bottom: 0.75rem;
 }
 
 .collection-daily-bulk-toolbar-header {
@@ -16,8 +13,8 @@
 
 .collection-daily-bulk-toolbar-kicker {
   font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: hsl(var(--muted-foreground));
 }
@@ -25,7 +22,7 @@
 .collection-daily-bulk-toolbar-title {
   margin-top: 0.15rem;
   font-size: 0.95rem;
-  font-weight: 800;
+  font-weight: 600;
   color: hsl(var(--foreground));
 }
 

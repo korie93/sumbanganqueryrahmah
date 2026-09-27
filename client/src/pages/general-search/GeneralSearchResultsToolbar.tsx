@@ -58,7 +58,7 @@ export function GeneralSearchResultsToolbar({
   if (isMobile) {
     return (
       <div className="mb-4 space-y-3">
-        <div className="min-w-0 space-y-3">
+        <div className="min-w-0 space-y-2">
           <p className="text-foreground font-medium">
             {resultCountPrefix}{totalResults} result{totalResults === 1 ? "" : "s"} found
           </p>
@@ -75,13 +75,13 @@ export function GeneralSearchResultsToolbar({
               {mobileSummaryChips.slice(0, 5).map((summary) => (
                 <div
                   key={summary}
-                  className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-xs text-foreground"
+                  className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs text-foreground"
                 >
                   {summary}
                 </div>
               ))}
               {mobileSummaryChips.length > 5 ? (
-                <div className="shrink-0 rounded-full border border-border/60 bg-background px-3 py-1 text-xs text-muted-foreground">
+                <div className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
                   +{mobileSummaryChips.length - 5} more
                 </div>
               ) : null}
@@ -89,7 +89,7 @@ export function GeneralSearchResultsToolbar({
           ) : null}
         </div>
 
-        <details className="rounded-2xl border border-border/60 bg-background/70">
+        <details className="rounded-md border border-border bg-background">
           <summary className="cursor-pointer list-none px-3 py-3 text-sm font-medium text-foreground">
             Result tools
           </summary>
@@ -102,7 +102,7 @@ export function GeneralSearchResultsToolbar({
               >
                 <SelectTrigger
                   aria-label="Rows per page"
-                  className="h-10 w-full"
+                  className="h-11 w-full"
                   data-testid="select-rows-per-page"
                 >
                   <SelectValue />
@@ -120,7 +120,7 @@ export function GeneralSearchResultsToolbar({
             {canExport ? (
               <Suspense
                 fallback={
-                  <Button variant="outline" size="sm" disabled className="w-full">
+                  <Button variant="outline" size="sm" disabled className="h-11 w-full">
                     Export
                   </Button>
                 }
@@ -142,7 +142,7 @@ export function GeneralSearchResultsToolbar({
 
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0 space-y-3">
+      <div className="min-w-0 space-y-1">
         <p className="text-foreground font-medium">
           {resultCountPrefix}{totalResults} result{totalResults === 1 ? "" : "s"} found
         </p>
@@ -162,7 +162,7 @@ export function GeneralSearchResultsToolbar({
           >
             <SelectTrigger
               aria-label="Rows per page"
-              className="w-[110px]"
+              className="h-9 w-[90px]"
               data-testid="select-rows-per-page"
             >
               <SelectValue />
@@ -180,7 +180,7 @@ export function GeneralSearchResultsToolbar({
         {canExport ? (
           <Suspense
             fallback={
-              <Button variant="outline" size="sm" disabled className="w-full sm:w-auto">
+              <Button variant="outline" size="sm" disabled className="h-9 w-full sm:w-auto">
                 Export
               </Button>
             }

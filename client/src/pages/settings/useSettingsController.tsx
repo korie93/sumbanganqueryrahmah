@@ -197,6 +197,7 @@ export function useSettingsController({
 
   useSettingsCategorySelectionSync({
     initialSectionId,
+    ready: !profileLoading && !loading,
     selectedCategory,
     setSelectedCategory,
     sidebarCategories,

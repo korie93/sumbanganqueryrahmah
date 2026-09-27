@@ -181,7 +181,7 @@ export function highlightMatch(text: string, query: string): JSX.Element {
         const key = `${cursor}:${part}`;
         cursor += part.length;
         return part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={key} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">
+          <mark key={key} className="rounded bg-warning/15 px-0.5 text-foreground">
             {part}
           </mark>
         ) : (

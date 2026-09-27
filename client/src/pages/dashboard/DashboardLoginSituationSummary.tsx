@@ -141,7 +141,7 @@ export function buildDashboardLoginSituationSummary(input: {
 function DashboardLoginSituationSummarySkeleton() {
   return (
     <section
-      className="scroll-mt-24 rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
+      className="dashboard-situation-summary scroll-mt-24"
       role="status"
       aria-label="Loading dashboard login situation summary"
       data-floating-ai-avoid="true"
@@ -184,13 +184,13 @@ function DashboardLoginSituationSummaryImpl({
   return (
     <section
       id="dashboard-login-situation-summary"
-      className="scroll-mt-24 rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
+      className="dashboard-situation-summary scroll-mt-24"
       aria-label="Dashboard login situation summary"
       data-floating-ai-avoid="true"
       data-testid="dashboard-login-situation-summary"
     >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.55fr)]">
-        <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+      <div className="space-y-4">
+        <div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
@@ -207,8 +207,8 @@ function DashboardLoginSituationSummaryImpl({
             </Badge>
           </div>
 
-          <div className="mt-3 grid gap-3 xl:grid-cols-2">
-            <div className="rounded-lg border border-border/60 bg-background p-3">
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <div>
               <p className="text-xs font-semibold uppercase tracking-label-sm text-muted-foreground">Kenapa</p>
               <p className="mt-2 text-sm leading-6 text-foreground">{situation.headline}</p>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -218,7 +218,7 @@ function DashboardLoginSituationSummaryImpl({
               </p>
             </div>
 
-            <div className="rounded-lg border border-border/60 bg-background p-3">
+            <div>
               <p className="text-xs font-semibold uppercase tracking-label-sm text-muted-foreground">Impak user</p>
               <p className="mt-2 text-sm leading-6 text-foreground">{situation.impact}</p>
               {situation.nextAction ? (
@@ -239,19 +239,18 @@ function DashboardLoginSituationSummaryImpl({
           </div>
         </div>
 
-        <aside className="rounded-xl border border-border/60 bg-muted/10 p-3" aria-label="Situation summary facts">
-          <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">Bukti ringkas</p>
-          <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <aside aria-label="Situation summary facts">
+          <dl className="dashboard-situation-facts">
             {situation.facts.map((fact) => {
               const Icon = fact.icon;
 
               return (
-                <div key={fact.label} className={`rounded-lg border p-2 ${SITUATION_TONE_CLASS_BY_TONE[fact.tone]}`}>
-                  <dt className="flex min-w-0 items-start gap-1.5 text-xxs font-semibold uppercase tracking-label-sm opacity-85">
+                <div key={fact.label} className="min-w-0">
+                  <dt className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
                     <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     <span className="min-w-0 break-words">{fact.label}</span>
                   </dt>
-                  <dd className="mt-1 break-words text-sm font-bold text-current">{fact.value}</dd>
+                  <dd className="mt-1 break-words text-sm font-medium text-foreground">{fact.value}</dd>
                 </div>
               );
             })}

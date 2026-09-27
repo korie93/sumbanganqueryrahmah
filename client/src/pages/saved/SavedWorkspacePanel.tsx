@@ -1,4 +1,4 @@
-import { AlertTriangle, BookMarked, Clock3, Copy, Database, HardDrive } from "lucide-react";
+import { AlertTriangle, BookMarked, Clock3, Copy, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -31,24 +31,12 @@ export function SavedWorkspacePanel({
   onViewChange,
 }: SavedWorkspacePanelProps) {
   return (
-    <aside
-      className="rounded-xl border border-border/70 bg-background/80 p-3 shadow-sm"
+    <section
+      className="min-w-0 space-y-2"
       aria-label="Saved workspace filters"
     >
-      <div className="mb-3 flex items-center gap-2">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-          <Database className="h-4 w-4 text-primary" />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-foreground">Workspace</h2>
-          <p className="text-xs text-muted-foreground">
-            {summary.loadedFiles.toLocaleString()} on page · {summary.totalFiles.toLocaleString()} matching
-          </p>
-        </div>
-      </div>
-
       <div
-        className="grid grid-cols-2 gap-2 xl:grid-cols-1"
+        className="flex flex-wrap gap-1"
         role="group"
         aria-label="Saved workspace views"
       >
@@ -65,31 +53,26 @@ export function SavedWorkspacePanel({
               variant="ghost"
               {...pressedProps}
               className={cn(
-                "h-auto justify-start gap-2 rounded-lg border px-3 py-2 text-left",
+                "h-11 justify-start gap-2 rounded-md border px-3 text-left md:h-9",
                 isActive
                   ? "border-primary/45 bg-primary/10 text-foreground"
-                  : "border-border/60 bg-background/60 text-muted-foreground hover:text-foreground",
+                  : "border-transparent text-muted-foreground hover:text-foreground",
               )}
               onClick={() => onViewChange(item.id)}
               data-testid={`button-saved-view-${item.id}`}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="truncate text-xs font-medium">{item.label}</span>
+              <span className="text-sm font-medium">{item.label}</span>
             </Button>
           );
         })}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs xl:grid-cols-1">
-        <div className="rounded-lg border border-border/60 bg-muted/35 p-2">
-          <p className="text-muted-foreground">Rows</p>
-          <p className="font-semibold text-foreground">{summary.loadedRows.toLocaleString()}</p>
-        </div>
-        <div className="rounded-lg border border-border/60 bg-muted/35 p-2">
-          <p className="text-muted-foreground">Storage</p>
-          <p className="font-semibold text-foreground">{formatSavedFileSize(summary.loadedSizeBytes)}</p>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <p>{summary.loadedFiles.toLocaleString()} on page · {summary.totalFiles.toLocaleString()} matching</p>
+        <p>Rows <span className="font-medium tabular-nums text-foreground">{summary.loadedRows.toLocaleString()}</span></p>
+        <p>Storage <span className="font-medium text-foreground">{formatSavedFileSize(summary.loadedSizeBytes)}</span></p>
       </div>
-    </aside>
+    </section>
   );
 }

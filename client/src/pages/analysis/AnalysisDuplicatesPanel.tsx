@@ -39,20 +39,21 @@ export function AnalysisDuplicatesPanel({
 
   return (
     <Collapsible open={duplicatesOpen} onOpenChange={onDuplicatesOpenChange}>
-      <div className="glass-wrapper p-4">
+      <div className="rounded-lg border border-border bg-card p-4">
         <CollapsibleTrigger asChild>
           <Button
             variant="ghost"
-            className="flex h-auto w-full items-start justify-between gap-3 p-0 text-left sm:items-center"
+            className="flex min-h-11 h-auto w-full items-center justify-between gap-3 p-0 text-left sm:min-h-9"
             data-testid="button-toggle-duplicates"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
               <span className="font-semibold text-foreground">Duplicate Values</span>
               <span className="text-sm text-muted-foreground">({count})</span>
             </div>
             <ChevronDown
-              className={`h-5 w-5 text-muted-foreground transition-transform ${duplicatesOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${duplicatesOpen ? "rotate-180" : ""}`}
             />
           </Button>
         </CollapsibleTrigger>
@@ -64,7 +65,7 @@ export function AnalysisDuplicatesPanel({
           ) : (
             <div className="mt-4 max-h-[400px] overflow-y-auto">
               {isMobile ? (
-                <div className="space-y-3">
+                <div className="divide-y divide-border">
                   {duplicatesPaged.items.map((duplicate, index) => (
                     <article
                       key={duplicate.value}
@@ -73,18 +74,18 @@ export function AnalysisDuplicatesPanel({
                         duplicate,
                         index: duplicatesPaged.start + index + 1,
                       })}
-                      className="rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+                      className="py-3 first:pt-0"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-1">
-                          <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             Duplicate {duplicatesPaged.start + index + 1}
                           </p>
-                          <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+                          <div>
                             <p className="break-all font-mono text-sm text-foreground">{duplicate.value}</p>
                           </div>
                         </div>
-                        <Badge variant="destructive" className="shrink-0">
+                        <Badge variant="outline" className="shrink-0 tabular-nums text-warning">
                           {duplicate.count}x
                         </Badge>
                       </div>
@@ -134,7 +135,7 @@ export function AnalysisDuplicatesPanel({
                           <td className="p-3 text-muted-foreground">{duplicatesPaged.start + index + 1}</td>
                           <td className="p-3 font-mono text-foreground">{duplicate.value}</td>
                           <td className="p-3">
-                            <Badge variant="destructive">{duplicate.count}x</Badge>
+                            <Badge variant="outline" className="tabular-nums text-warning">{duplicate.count}x</Badge>
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-1">

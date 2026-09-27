@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCollectionNicknames, type CollectionStaffNickname } from "@/lib/api";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
 import SaveCollectionPage from "@/pages/collection/SaveCollectionPage";
@@ -44,13 +43,9 @@ export default function SuperuserSaveCollectionPage() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Nickname Collection</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0 flex-1">
+      <section aria-label="Nickname Collection" className="space-y-2 border-b border-border pb-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1 sm:max-w-md">
               <CollectionNicknameSingleSelect
                 label="Simpan untuk nickname"
                 triggerId="save-collection-superuser-nickname"
@@ -76,7 +71,7 @@ export default function SuperuserSaveCollectionPage() {
               Muat Semula
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-3xl text-xs leading-5 text-muted-foreground">
             Pilih nickname yang menerima collection. Menukar nickname mengosongkan butiran pelanggan
             dan receipt semasa; draf bayaran disimpan berasingan bagi setiap nickname.
           </p>
@@ -86,8 +81,7 @@ export default function SuperuserSaveCollectionPage() {
               Tiada nickname aktif. Aktifkan atau tambah nickname di Manage Nicknames dahulu.
             </p>
           ) : null}
-        </CardContent>
-      </Card>
+      </section>
       {selected ? (
         <SaveCollectionPage
           key={`${selected.id}:${selected.nickname}`}

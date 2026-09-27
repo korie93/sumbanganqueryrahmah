@@ -27,7 +27,7 @@ export function AnalysisTablePagination({
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
       <span className="text-xs text-muted-foreground">
         Showing {start + 1}-{end} of {totalItems.toLocaleString()} {label}
       </span>

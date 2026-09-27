@@ -10,7 +10,7 @@ export interface CollectionSummaryTotalsProps {
 
 export function CollectionSummaryTotals({ grandTotal }: CollectionSummaryTotalsProps) {
   return (
-    <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2">
+    <OperationalSummaryStrip className="grid grid-cols-2 gap-3">
       <OperationalMetric label="Grand Total Records" value={grandTotal.totalRecords} />
       <OperationalMetric
         label="Grand Total Amount"

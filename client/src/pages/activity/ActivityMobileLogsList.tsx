@@ -9,9 +9,7 @@ import {
 } from "react";
 import type { ListChildComponentProps } from "react-window";
 import { FixedSizeList } from "react-window";
-import { Search, Shield, Trash2, UserX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ACTIVITY_MOBILE_LIST_MAX_HEIGHT_PX,
@@ -28,6 +26,7 @@ import {
 import { getActivitySelectionCountLabel } from "@/pages/activity/activity-logs-table-utils";
 import { buildActivityRowAriaLabel } from "@/pages/activity/activity-row-aria";
 import { getActivityDeviceLabel } from "@/pages/activity/activity-device-utils";
+import { ActivityRowActions } from "./ActivityRowActions";
 
 type ActivityMobileLogsListProps = Pick<
   ActivityLogsTableProps,
@@ -221,65 +220,15 @@ function ActivityMobileVirtualRow({
         </div>
 
         {canModerateActivity ? (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onInvestigateClick(activity)}
-              aria-label={`Investigate session for ${activity.username}`}
-              className="w-full"
-              data-testid={`button-investigate-${activity.id}`}
-            >
-              <Search className="mr-2 h-4 w-4" />
-              Investigate
-            </Button>
-            {activity.isActive ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onKickClick(activity)}
-                  disabled={actionLoading === activity.id}
-                  aria-label={`Force logout ${activity.username}`}
-                  className="w-full"
-                  data-testid={`button-kick-${activity.id}`}
-                >
-                  <UserX className="mr-2 h-4 w-4" />
-                  Force Logout
-                </Button>
-                {activity.role !== "superuser" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onBanClick(activity)}
-                    disabled={actionLoading === activity.id}
-                    aria-label={`Ban ${activity.username}`}
-                    className="w-full text-destructive"
-                    data-testid={`button-ban-${activity.id}`}
-                  >
-                    <Shield className="mr-2 h-4 w-4" />
-                    Ban
-                  </Button>
-                ) : null}
-              </>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onDeleteClick(activity)}
-              disabled={actionLoading === activity.id}
-              aria-label={`Delete activity log for ${activity.username}`}
-              className="w-full text-destructive"
-              data-testid={`button-delete-${activity.id}`}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
-          </div>
+          <ActivityRowActions
+            mobile
+            activity={activity}
+            actionLoading={actionLoading}
+            onInvestigateClick={onInvestigateClick}
+            onBanClick={onBanClick}
+            onKickClick={onKickClick}
+            onDeleteClick={onDeleteClick}
+          />
         ) : null}
       </div>
     </ActivityPositionedRowShell>

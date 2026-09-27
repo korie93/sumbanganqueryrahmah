@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
@@ -23,41 +22,45 @@ export function CollectionRecordsPurgeSummaryCard({
   onOpenPurgeDialog,
 }: CollectionRecordsPurgeSummaryCardProps) {
   return (
-    <Card className="rounded-2xl border-amber-500/40 bg-amber-500/5 shadow-sm">
-      <CardContent className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Manual Purge Data Lama</p>
-          <p className="text-xs text-muted-foreground">
-            Rekod collection sebelum {purgeSummary?.cutoffDate || "-"} hanya boleh dipurge oleh superuser.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Eligible:{" "}
-            <span className="font-medium text-foreground">
-              {purgeSummaryLoading ? "Checking..." : purgeSummary?.eligibleRecords ?? 0}
-            </span>
-            {" | "}
-            Total:{" "}
-            <span className="font-medium text-foreground">
-              {formatAmountRM(purgeSummary?.totalAmount ?? 0)}
-            </span>
-          </p>
+    <section aria-label="Manual Purge Data Lama">
+      <details className="border-l-2 border-warning/40 bg-muted/30 px-3">
+        <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Manual Purge Data Lama · {purgeSummaryLoading ? "Checking..." : `${purgeSummary?.eligibleRecords ?? 0} eligible`}
+        </summary>
+        <div className="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              Rekod collection sebelum {purgeSummary?.cutoffDate || "-"} hanya boleh dipurge oleh superuser.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Eligible:{" "}
+              <span className="font-medium text-foreground">
+                {purgeSummaryLoading ? "Checking..." : purgeSummary?.eligibleRecords ?? 0}
+              </span>
+              {" | "}
+              Total:{" "}
+              <span className="font-medium text-foreground">
+                {formatAmountRM(purgeSummary?.totalAmount ?? 0)}
+              </span>
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-full rounded-md sm:w-auto"
+            onClick={onOpenPurgeDialog}
+            disabled={
+              loadingRecords ||
+              purgeSummaryLoading ||
+              purgingOldRecords ||
+              !purgeSummary ||
+              purgeSummary.eligibleRecords <= 0
+            }
+          >
+            {purgingOldRecords ? "Purging..." : "Purge > 6 Months"}
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="destructive"
-          className="h-10 w-full rounded-xl sm:w-auto"
-          onClick={onOpenPurgeDialog}
-          disabled={
-            loadingRecords ||
-            purgeSummaryLoading ||
-            purgingOldRecords ||
-            !purgeSummary ||
-            purgeSummary.eligibleRecords <= 0
-          }
-        >
-          {purgingOldRecords ? "Purging..." : "Purge > 6 Months"}
-        </Button>
-      </CardContent>
-    </Card>
+      </details>
+    </section>
   );
 }

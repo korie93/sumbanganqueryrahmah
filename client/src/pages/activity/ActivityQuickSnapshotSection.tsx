@@ -1,4 +1,3 @@
-import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { ActivitySummaryCards } from "@/pages/activity/ActivitySummaryCards";
 import type { ActivitySummaryCounts } from "@/pages/activity/activity-page-content-shared";
 
@@ -12,11 +11,8 @@ export function ActivityQuickSnapshotSection({
   summaryCounts,
 }: ActivityQuickSnapshotSectionProps) {
   return (
-    <OperationalSectionCard
-      title="Quick Snapshot"
-      description="Live user presence, idle sessions, forced exits, and banned accounts in one shared admin summary strip."
-      contentClassName="space-y-0"
-    >
+    <section aria-label="Live activity snapshot" className="space-y-3 border-y border-border py-3">
+      <h2 className="text-base font-semibold">Live status</h2>
       <ActivitySummaryCards
         bannedCount={bannedCount}
         className="mb-0"
@@ -25,6 +21,6 @@ export function ActivityQuickSnapshotSection({
         logoutCount={summaryCounts.logoutCount}
         onlineCount={summaryCounts.onlineCount}
       />
-    </OperationalSectionCard>
+    </section>
   );
 }

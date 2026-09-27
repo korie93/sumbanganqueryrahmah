@@ -37,6 +37,8 @@ import { getActivityDeviceTypeLabel } from "@/pages/activity/activity-device-uti
 import { getActivityActionErrorDescription } from "@/pages/activity/activity-action-state-utils";
 import { ActivityConfirmationDialog } from "@/pages/activity/ActivityConfirmationDialog";
 import { ActivityInvestigationRelatedSessions } from "@/pages/activity/ActivityInvestigationRelatedSessions";
+import { useActivityOverlayFocus } from "./ActivityOverlayFocusContext";
+import type { ActivityOverlay } from "./activity-overlay-focus";
 
 type RelatedSession = ActivityInvestigation["relatedSessions"][number];
 
@@ -304,6 +306,10 @@ export function ActivityInvestigationDrawer({
 }: ActivityInvestigationDrawerProps) {
   const { toast } = useToast();
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const overlayFocus = useActivityOverlayFocus();
+  const handingOffFocus = useRef(false);
+  const relatedDeleteTriggerRef = useRef<HTMLElement | null>(null);
+  const drawerContentRef = useRef<HTMLDivElement>(null);
   const [relatedDeleteTarget, setRelatedDeleteTarget] = useState<RelatedSession | null>(null);
   const [relatedDeleteLoadingId, setRelatedDeleteLoadingId] = useState<string | null>(null);
   const {
@@ -315,6 +321,12 @@ export function ActivityInvestigationDrawer({
     setRelatedPageSize,
   } = useActivityInvestigation(activity?.id ?? null, open);
   const actionDisabled = Boolean(activity && actionLoading === activity.id);
+  const openModeration = (overlay: ActivityOverlay, action: (activity: ActivityRecord) => void) => {
+    if (!activity) return;
+    overlayFocus?.transfer("investigate", overlay);
+    handingOffFocus.current = true;
+    action(activity);
+  };
 
   const handleRelatedDeleteConfirm = useCallback(async () => {
     if (!relatedDeleteTarget || relatedDeleteLoadingId !== null) {
@@ -364,6 +376,7 @@ export function ActivityInvestigationDrawer({
         }}
       >
         <SheetContent
+          ref={drawerContentRef}
           side="right"
           className="w-full overflow-hidden border-border/70 bg-background p-0 sm:max-w-xl"
           data-floating-ai-avoid="true"
@@ -376,6 +389,17 @@ export function ActivityInvestigationDrawer({
                 : null);
           }}
           onCloseAutoFocus={(event) => {
+            if (handingOffFocus.current) {
+              event.preventDefault();
+              handingOffFocus.current = false;
+              returnFocusRef.current = null;
+              return;
+            }
+            if (overlayFocus) {
+              overlayFocus.restore("investigate", event);
+              returnFocusRef.current = null;
+              return;
+            }
             const returnFocus = returnFocusRef.current
               ?? findInvestigationTrigger(activity?.id);
             returnFocusRef.current = null;
@@ -426,7 +450,10 @@ export function ActivityInvestigationDrawer({
                     loading={loading}
                     pagination={data.relatedSessionsPagination}
                     sessions={data.relatedSessions}
-                    onDeleteRequest={setRelatedDeleteTarget}
+                    onDeleteRequest={(session, trigger) => {
+                      relatedDeleteTriggerRef.current = trigger;
+                      setRelatedDeleteTarget(session);
+                    }}
                     onPageChange={setRelatedPage}
                     onPageSizeChange={setRelatedPageSize}
                   />
@@ -441,7 +468,7 @@ export function ActivityInvestigationDrawer({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => onDelete(activity)}
+                  onClick={() => openModeration("delete", onDelete)}
                   disabled={actionDisabled}
                   className="text-destructive"
                 >
@@ -452,7 +479,7 @@ export function ActivityInvestigationDrawer({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => onKick(activity)}
+                    onClick={() => openModeration("kick", onKick)}
                     disabled={actionDisabled}
                   >
                     <UserX className="mr-2 h-4 w-4" />
@@ -463,7 +490,7 @@ export function ActivityInvestigationDrawer({
                   <Button
                     type="button"
                     variant="destructive"
-                    onClick={() => onBan(activity)}
+                    onClick={() => openModeration("ban", onBan)}
                     disabled={actionDisabled}
                   >
                     <Ban className="mr-2 h-4 w-4" />
@@ -487,7 +514,17 @@ export function ActivityInvestigationDrawer({
         }
         icon={<Trash2 className="h-5 w-5 text-destructive" />}
         onConfirm={() => {
+          relatedDeleteTriggerRef.current = null;
           void handleRelatedDeleteConfirm();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const trigger = relatedDeleteTriggerRef.current;
+          relatedDeleteTriggerRef.current = null;
+          const fallback = drawerContentRef.current?.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+          const target = trigger?.isConnected && !(trigger instanceof HTMLButtonElement && trigger.disabled)
+            ? trigger : fallback;
+          if (target?.isConnected) target.focus({ preventScroll: true });
         }}
         onOpenChange={(dialogOpen) => {
           if (!dialogOpen && relatedDeleteLoadingId === null) {

@@ -27,7 +27,7 @@ function ViewerFooterActionsImpl({
   onNextPage,
 }: ViewerFooterActionsProps) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+    <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
       {selectedRowCount > 0 ? (
         <Button
           variant="ghost"
@@ -40,7 +40,7 @@ function ViewerFooterActionsImpl({
           Clear Selection
         </Button>
       ) : null}
-      <span className="text-center text-xs text-muted-foreground sm:text-left">
+      <span className="mr-auto text-xs tabular-nums text-muted-foreground sm:mr-0">
         {buildViewerFooterPageLabel(currentPage, totalPages)}
       </span>
       <Button
@@ -49,7 +49,7 @@ function ViewerFooterActionsImpl({
         onClick={onPrevPage}
         disabled={loadingMore || !hasPreviousPage}
         data-testid="button-viewer-prev-page"
-        className="w-full sm:w-auto"
+        className="min-w-20"
       >
         <ChevronLeft className="mr-1 h-4 w-4" />
         Prev
@@ -60,7 +60,7 @@ function ViewerFooterActionsImpl({
         onClick={onNextPage}
         disabled={loadingMore || !hasNextPage}
         data-testid="button-viewer-next-page"
-        className="w-full sm:w-auto"
+        className="min-w-20"
       >
         {loadingMore ? (
           <>

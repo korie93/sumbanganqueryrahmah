@@ -38,10 +38,10 @@ function getQualityTone(
   grade: AnalysisData["quality"]["grade"],
 ) {
   if (grade === "no_data") return "text-muted-foreground";
-  if (score >= 95) return "text-emerald-700 dark:text-emerald-300";
-  if (score >= 85) return "text-sky-700 dark:text-sky-300";
-  if (score >= 70) return "text-amber-800 dark:text-amber-200";
-  return "text-rose-700 dark:text-rose-300";
+  if (score >= 95) return "text-success";
+  if (score >= 85) return "text-info";
+  if (score >= 70) return "text-warning";
+  return "text-destructive";
 }
 
 export function AnalysisDataQualitySection({
@@ -79,7 +79,7 @@ export function AnalysisDataQualitySection({
           {quality.score}% - {qualityLabel}
         </Badge>
       }
-      contentClassName="space-y-5"
+      contentClassName="space-y-4"
     >
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3 text-sm">
@@ -99,7 +99,7 @@ export function AnalysisDataQualitySection({
         />
       </div>
 
-      <OperationalSummaryStrip className="grid gap-3 md:grid-cols-3">
+      <OperationalSummaryStrip className="grid gap-3 sm:grid-cols-3">
         <OperationalMetric
           label="Completeness"
           value={`${quality.completenessPercent}%`}
@@ -121,7 +121,7 @@ export function AnalysisDataQualitySection({
       </OperationalSummaryStrip>
 
       {quality.columnLimitReached ? (
-        <div className="flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-50/80 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/35 dark:text-amber-100">
+        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
             Column profiling reached its bounded safety limit. The score covers the first{" "}
@@ -168,19 +168,19 @@ export function AnalysisDataQualitySection({
             return (
               <article
                 key={profile.name}
-                className="grid gap-3 bg-background p-4 lg:grid-cols-[minmax(180px,1.4fr)_minmax(220px,1fr)_110px_110px_auto] lg:items-center"
+                className="grid grid-cols-2 gap-3 bg-card p-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center"
                 data-testid={`analysis-column-profile-${profile.name}`}
               >
-                <div className="min-w-0">
+                <div className="col-span-2 min-w-0 xl:col-span-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="truncate font-medium text-foreground" title={profile.name}>
+                    <h4 className="break-words font-medium text-foreground [overflow-wrap:anywhere]" title={profile.name}>
                       {profile.name}
                     </h4>
                     <Badge variant="secondary">
                       {getAnalysisColumnTypeLabel(profile.inferredType)}
                     </Badge>
                     {issueCount > 0 ? (
-                      <Badge variant="outline" className="text-amber-800 dark:text-amber-200">
+                      <Badge variant="outline" className="text-warning">
                         {issueCount} {issueCount === 1 ? "signal" : "signals"}
                       </Badge>
                     ) : null}
@@ -191,7 +191,7 @@ export function AnalysisDataQualitySection({
                   </p>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="col-span-2 min-w-0 space-y-1.5 xl:col-span-1">
                   <div className="flex justify-between gap-3 text-xs text-muted-foreground">
                     <span>Completeness</span>
                     <span>{profile.completenessPercent}%</span>
@@ -208,14 +208,14 @@ export function AnalysisDataQualitySection({
 
                 <div>
                   <p className="text-xs text-muted-foreground">Consistency</p>
-                  <p className="font-medium text-foreground">
+                  <p className="font-medium tabular-nums text-foreground">
                     {profile.typeConsistencyPercent}%
                   </p>
                 </div>
 
                 <div>
                   <p className="text-xs text-muted-foreground">Unique</p>
-                  <p className="font-medium text-foreground">
+                  <p className="font-medium tabular-nums text-foreground">
                     {formatAnalysisUniqueCount(profile)}
                   </p>
                 </div>
@@ -225,6 +225,7 @@ export function AnalysisDataQualitySection({
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="col-span-2 xl:col-span-1"
                     onClick={() => onInspectColumn(profile.name)}
                     aria-label={`Inspect ${profile.name} in Viewer`}
                   >

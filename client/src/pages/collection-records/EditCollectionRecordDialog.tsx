@@ -46,6 +46,7 @@ export interface EditCollectionRecordDialogProps {
   editRemovedReceiptIds: string[];
   editReceiptInputRef: MutableRefObject<HTMLInputElement | null>;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onCustomerNameChange: (value: string) => void;
   onIcNumberChange: (value: string) => void;
   onCustomerPhoneChange: (value: string) => void;
@@ -88,6 +89,7 @@ export function EditCollectionRecordDialog({
   editRemovedReceiptIds,
   editReceiptInputRef,
   onOpenChange,
+  onCloseAutoFocus,
   onCustomerNameChange,
   onIcNumberChange,
   onCustomerPhoneChange,
@@ -114,7 +116,7 @@ export function EditCollectionRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl overflow-auto">
+      <DialogContent className="max-w-4xl overflow-auto" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>Edit Collection Record</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>

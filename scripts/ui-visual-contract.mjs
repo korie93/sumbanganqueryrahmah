@@ -409,35 +409,88 @@ async function verifyDashboardCleanupDialogLayout(page, viewportSpec) {
   );
 }
 
-async function verifyDashboardReviewSidebarLayout(page, viewportSpec) {
-  if (viewportSpec.width < 1280) {
-    return;
-  }
-
-  const sidebar = page.getByTestId("dashboard-login-review-sidebar-container");
-  await sidebar.waitFor({ state: "visible", timeout: 10_000 });
-  await sidebar.scrollIntoViewIfNeeded();
-  const sidebarLayout = await sidebar.evaluate((element) => {
+async function verifyDashboardReviewRegionLayout(page, viewportSpec) {
+  // Keep the established test id even though review is now a full-width region,
+  // not a fixed-height desktop sidebar. Its content must remain readable through
+  // normal page scrolling, including on mobile and short/zoomed viewports.
+  const review = page.getByTestId("dashboard-login-review-sidebar-container");
+  await review.waitFor({ state: "visible", timeout: 10_000 });
+  const shortcuts = review.getByRole("navigation", { name: "Dashboard login section shortcuts" });
+  await shortcuts.waitFor({ state: "visible", timeout: 10_000 });
+  await review.scrollIntoViewIfNeeded();
+  const reviewLayout = await review.evaluate((element) => {
     const rect = element.getBoundingClientRect();
+    const workspaceRect = element.parentElement.getBoundingClientRect();
+    const followingRect = element.nextElementSibling?.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const clippedContent = Array.from(element.querySelectorAll("*")).filter((child) => {
+      if (!(child instanceof HTMLElement)) return false;
+      const childRect = child.getBoundingClientRect();
+      const childStyle = getComputedStyle(child);
+      if ((childRect.width <= 1 && childRect.height <= 1)
+        || childStyle.visibility === "hidden"
+        || childStyle.display === "none") return false;
+      return childRect.left < rect.left - 1
+        || childRect.right > rect.right + 1
+        || childRect.top < rect.top - 1
+        || childRect.bottom > rect.bottom + 1
+        || (child.clientWidth > 0 && child.scrollWidth > child.clientWidth + 1)
+        || (child.clientHeight > 0 && child.scrollHeight > child.clientHeight + 1);
+    }).map((child) => child.dataset.testid || child.tagName.toLowerCase());
     return {
       bottom: rect.bottom,
       clientHeight: element.clientHeight,
-      overflowY: getComputedStyle(element).overflowY,
+      clientWidth: element.clientWidth,
+      clippedContent,
+      followingTop: followingRect?.top ?? null,
+      left: rect.left,
+      overflowY: style.overflowY,
+      position: style.position,
+      right: rect.right,
       scrollHeight: element.scrollHeight,
-      top: rect.top,
-      viewportHeight: window.innerHeight,
+      scrollWidth: element.scrollWidth,
+      viewportWidth: window.innerWidth,
+      workspaceLeft: workspaceRect.left,
+      workspaceRight: workspaceRect.right,
     };
   });
   assert(
-    sidebarLayout.top >= -1 && sidebarLayout.bottom <= sidebarLayout.viewportHeight + 1,
-    `dashboard/${viewportSpec.id}: review sidebar escaped the viewport height`,
+    reviewLayout.left >= -1 && reviewLayout.right <= reviewLayout.viewportWidth + 1,
+    `dashboard/${viewportSpec.id}: review region escaped the viewport width`,
   );
   assert(
-    sidebarLayout.scrollHeight <= sidebarLayout.clientHeight + 1
-      || sidebarLayout.overflowY === "auto"
-      || sidebarLayout.overflowY === "scroll",
-    `dashboard/${viewportSpec.id}: tall review sidebar is not internally scrollable`,
+    Math.abs(reviewLayout.left - reviewLayout.workspaceLeft) <= 1
+      && Math.abs(reviewLayout.right - reviewLayout.workspaceRight) <= 1,
+    `dashboard/${viewportSpec.id}: review region does not span the workspace width`,
   );
+  assert(
+    reviewLayout.scrollWidth <= reviewLayout.clientWidth + 1,
+    `dashboard/${viewportSpec.id}: review region has internal horizontal overflow`,
+  );
+  assert(
+    ["static", "relative"].includes(reviewLayout.position)
+      && reviewLayout.overflowY === "visible"
+      && reviewLayout.scrollHeight <= reviewLayout.clientHeight + 1
+      && reviewLayout.followingTop !== null
+      && reviewLayout.followingTop >= reviewLayout.bottom - 1,
+    `dashboard/${viewportSpec.id}: review region does not preserve unclipped natural vertical flow`,
+  );
+  assert(
+    reviewLayout.clippedContent.length === 0,
+    `dashboard/${viewportSpec.id}: review content is clipped (${reviewLayout.clippedContent.join(", ")})`,
+  );
+  const links = shortcuts.getByRole("link");
+  assert(await links.count() === 3, `dashboard/${viewportSpec.id}: review shortcuts are missing`);
+  for (const link of await links.all()) {
+    await link.scrollIntoViewIfNeeded();
+    const reachable = await link.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0
+        && rect.left >= -1 && rect.right <= window.innerWidth + 1
+        && rect.top >= -1 && rect.bottom <= window.innerHeight + 1;
+    });
+    assert(reachable, `dashboard/${viewportSpec.id}: review shortcut is unreachable by page scrolling`);
+  }
 }
 
 async function verifyDashboardChartDialogLayout(page, viewportSpec, chartSpec) {
@@ -625,13 +678,16 @@ const run = async () => {
     for (const viewportSpec of viewportSpecs) {
       for (const routeSpec of authenticatedRouteSpecs) {
         await verifyRouteLayout(page, routeSpec, viewportSpec);
+        if (routeSpec.id === "dashboard") {
+          await verifyDashboardReviewRegionLayout(page, viewportSpec);
+        }
       }
     }
     const dashboardRouteSpec = authenticatedRouteSpecs.find((routeSpec) => routeSpec.id === "dashboard");
     if (dashboardRouteSpec) {
       for (const viewportSpec of dashboardZoomViewportSpecs) {
         await verifyRouteLayout(page, dashboardRouteSpec, viewportSpec);
-        await verifyDashboardReviewSidebarLayout(page, viewportSpec);
+        await verifyDashboardReviewRegionLayout(page, viewportSpec);
         await verifyDashboardRecentActivityDetailLayout(page, viewportSpec);
         await verifyDashboardCleanupDialogLayout(page, viewportSpec);
         await verifyDashboardChartDetailLayout(page, viewportSpec);

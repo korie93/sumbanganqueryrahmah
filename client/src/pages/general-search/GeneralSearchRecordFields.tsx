@@ -66,18 +66,18 @@ export function GeneralSearchRecordSummary({ fields }: GeneralSearchRecordSummar
   return (
     <section aria-labelledby="general-search-record-summary-heading">
       <h3
-        className="mb-2 text-xs font-semibold uppercase tracking-label-md text-muted-foreground"
+        className="mb-2 text-sm font-medium text-muted-foreground"
         id="general-search-record-summary-heading"
       >
         Ringkasan utama
       </h3>
-      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <dl className="grid grid-cols-1 gap-x-6 sm:grid-cols-3">
         {fields.map((field) => (
           <div
-            className="min-w-0 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5"
+            className="min-w-0 border-b border-border py-3"
             key={field.header}
           >
-            <dt className="break-words text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
+            <dt className="break-words text-xs font-medium text-muted-foreground">
               {field.label}
             </dt>
             <dd className="mt-1 min-w-0 break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">

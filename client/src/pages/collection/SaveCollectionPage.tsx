@@ -1,11 +1,9 @@
 import { memo } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
@@ -57,7 +55,6 @@ function SaveCollectionPage({
   onReauthenticateNickname,
 }: SaveCollectionPageProps) {
   const mutationFeedback = useMutationFeedback();
-  const isMobile = useIsMobile();
   const keyboardOpen = useMobileKeyboardState();
   const customerNameInputId = "save-collection-customer-name";
   const customerIcNumberInputId = "save-collection-customer-ic-number";
@@ -276,7 +273,7 @@ function SaveCollectionPage({
           {...batchValidationProps}
           className={cn(
             "w-full border border-input bg-background px-3 text-sm",
-            isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md",
+            "h-11 rounded-md sm:h-9",
           )}
         >
           {COLLECTION_BATCH_OPTIONS.map((item) => (
@@ -411,26 +408,10 @@ function SaveCollectionPage({
   };
 
   return (
-    <Card className={cn("border-border/60 bg-background/70", isMobile ? "overflow-hidden" : "")}>
-      <CardHeader className={cn("space-y-3", isMobile ? "relative pb-4" : "")}>
-        {isMobile ? (
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
-        ) : null}
-        <div className="relative space-y-2">
-          {isMobile ? (
-            <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
-              Collection
-            </p>
-          ) : null}
-          <CardTitle className="text-xl">Simpan Collection Individual</CardTitle>
-          {isMobile ? (
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Save one collection record at a time with a cleaner mobile flow for customer details, payment
-              info, and receipt upload.
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+    <section aria-labelledby="save-collection-form-title" className="min-w-0 space-y-4">
+      <header className="space-y-2">
+        <h2 id="save-collection-form-title" className="sr-only">Simpan Collection Individual</h2>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>Draft auto-saves in this browser session.</span>
           <span>
             Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
@@ -445,8 +426,8 @@ function SaveCollectionPage({
               : null}
           </div>
         ) : null}
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </header>
+      <div className="space-y-4">
         <SaveCollectionPostSaveActions
           summary={state.lastSavedSummary}
           onDismiss={state.clearLastSavedSummary}
@@ -486,7 +467,7 @@ function SaveCollectionPage({
 
         <div
           className={cn(
-            "-mx-6 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-6 pt-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:mx-0 sm:flex-row sm:flex-wrap sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0 sm:shadow-none sqr-sm-backdrop-blur-none",
+            "flex flex-col gap-2 border-t border-border bg-background pt-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] sm:static sm:flex-row sm:flex-wrap sm:justify-end sm:pb-0",
             keyboardOpen ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
           )}
           data-floating-ai-avoid="true"
@@ -510,7 +491,7 @@ function SaveCollectionPage({
             className={cn(
               "w-full sm:w-auto",
               !state.readiness.isReady
-                && "border-amber-500/45 text-amber-800 hover:bg-amber-500/10 dark:text-amber-200",
+                && "border-warning/45 text-warning hover:bg-warning/10",
             )}
           >
             {state.submitting
@@ -521,8 +502,8 @@ function SaveCollectionPage({
           </Button>
         </div>
         </fieldset>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 

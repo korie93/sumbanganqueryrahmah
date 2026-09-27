@@ -32,6 +32,7 @@ test("CollectionDailyCalendarDayBadge shows leave type and superuser remark", ()
   assert.match(markup, /Annual Leave/);
   assert.match(markup, /Annual leave approved/);
   assert.match(markup, /aria-label="AL - Annual Leave\. Remark: Annual leave approved"/);
+  assert.match(markup, /role="group" aria-label=/);
 });
 
 test("CollectionDailyCalendarDayBadge stays empty for ordinary working days", () => {

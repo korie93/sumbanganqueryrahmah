@@ -160,27 +160,29 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
     }
   };
 
-  return <section aria-labelledby="billing-system-analysis-heading" className="min-w-0 space-y-4 rounded-xl border bg-card p-4">
+  return <section aria-labelledby="billing-system-analysis-heading" className="min-w-0 space-y-4">
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-      <div className="min-w-0"><h3 id="billing-system-analysis-heading" className="font-semibold">System calendar</h3><p className="mt-1 break-words text-sm">{target.name} · System As Of {overview.asOf}</p><p className="mt-1 text-sm text-muted-foreground">{range.sourceValidityVerified ? "Full current source validity" : "Reporting period (includes legacy source fallback)"}: {start} — {end}. Click a day for its closed accounts.</p></div>
-      <div className="flex flex-wrap gap-2">{(["xlsx", "png", "pdf"] as const).map((format) => <Button key={format} type="button" size="sm" variant="outline" disabled={disabled || exporting !== null} aria-label={"Export Billing Principal report as " + format.toUpperCase()} onClick={() => void runExport(format)}>{exporting === format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}{format.toUpperCase()}</Button>)}
+      <div className="min-w-0"><h3 id="billing-system-analysis-heading" className="text-base font-semibold">System calendar</h3><p className="mt-1 break-words text-sm">{target.name} · System As Of {overview.asOf}</p><p className="mt-1 text-sm text-muted-foreground">{range.sourceValidityVerified ? "Full current source validity" : "Reporting period (includes legacy source fallback)"}: {start} — {end}. Click a day for its closed accounts.</p></div>
+      <div className="flex flex-wrap gap-2 [&_button]:min-h-11 md:[&_button]:min-h-9">{(["xlsx", "png", "pdf"] as const).map((format) => <Button key={format} type="button" size="sm" variant="outline" disabled={disabled || exporting !== null} aria-label={"Export Billing Principal report as " + format.toUpperCase()} onClick={() => void runExport(format)}>{exporting === format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}{format.toUpperCase()}</Button>)}
         {exporting ? <Button type="button" size="sm" variant="ghost" onClick={() => exportRef.current?.abort()}>Cancel export</Button> : null}
       </div>
     </div>
     <p className="text-xs text-muted-foreground">Exports contain saved shared values and only your saved private results. Save or discard private changes before exporting.</p>
-    <p className="text-sm text-muted-foreground">Daily movement = System OSP closed that day ÷ TT OSP × 100, shown as percentage-point movement. TOTAL (ALL) uses combined daily closed ÷ combined TT OSP, not an average. Zero TT OSP shows +0.00%. Balance remains Target OSP − cumulative closed.</p>
-    {!calendarLoading && !calendarError && calendar[0] ? <details className="rounded-md border px-3 py-2 text-sm">
-      <summary className="cursor-pointer font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">TT OSP basis and OSP for +1%</summary>
+    <details className="border-y border-border text-sm">
+      <summary className="min-h-11 cursor-pointer content-center rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9">TT OSP basis and OSP for +1%</summary>
+      <p className="py-2 text-sm leading-relaxed text-muted-foreground">Daily movement = System OSP closed that day ÷ TT OSP × 100, shown as percentage-point movement. TOTAL (ALL) uses combined daily closed ÷ combined TT OSP, not an average. Zero TT OSP shows +0.00%. Balance remains Target OSP − cumulative closed.</p>
+      {!calendarLoading && !calendarError && calendar[0] ? <>
       <table className="mt-2 w-full table-fixed text-xs sm:text-sm" aria-label="Daily movement TT OSP basis">
         <thead><tr className="text-muted-foreground"><th className="w-12 py-2 text-left font-medium">Aging</th><th className="py-2 pl-2 text-right font-medium">TT OSP</th><th className="py-2 pl-2 text-right font-medium">OSP for +1%</th></tr></thead>
         <tbody>{[...calendar[0].dailyMovement.rows, calendar[0].dailyMovement.all].map((row) => <tr key={row.aging} className={row.aging === "ALL" ? "border-t font-semibold" : undefined}>
           <td className="py-2">{row.aging === "ALL" ? "TOTAL" : row.aging}</td><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.totalOsp)}</td><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.ospRequiredForOnePercent)}</td>
         </tr>)}</tbody>
       </table>
-      <p className="mt-2 text-xs text-muted-foreground">Fixed Saved Target revision basis. OSP for +1% is TT OSP ÷ 100; displayed amounts are rounded only for readability.</p>
-    </details> : null}
+      <p className="my-2 text-xs text-muted-foreground">Fixed Saved Target revision basis. OSP for +1% is TT OSP ÷ 100; displayed amounts are rounded only for readability.</p>
+      </> : null}
+    </details>
     {exportError ? <p role="alert" className="text-sm text-destructive">{exportError}</p> : null}
-    <div className="flex flex-wrap items-end gap-2">
+    <div className="flex flex-wrap items-end gap-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_input]:h-11 [&_select]:h-11 md:[&_button]:min-h-9 md:[&_button]:min-w-9 md:[&_input]:h-9 md:[&_select]:h-9">
       <Button type="button" variant="outline" size="icon" aria-label="Previous month" disabled={month <= start.slice(0, 7)} onClick={() => shiftMonth(-1)}><ChevronLeft className="h-4 w-4" aria-hidden="true" /></Button>
       <div className="space-y-1"><Label htmlFor="billing-calendar-month">Month</Label><Input id="billing-calendar-month" type="month" value={month} min={start.slice(0, 7)} max={end.slice(0, 7)} onChange={(event) => { const value = event.target.value; if (isValidMonth(value) && value >= start.slice(0, 7) && value <= end.slice(0, 7)) setMonth(value); }} /></div>
       <Button type="button" variant="outline" size="icon" aria-label="Next month" disabled={month >= end.slice(0, 7)} onClick={() => shiftMonth(1)}><ChevronRight className="h-4 w-4" aria-hidden="true" /></Button>

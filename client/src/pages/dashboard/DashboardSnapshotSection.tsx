@@ -1,8 +1,7 @@
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
-import { Badge } from "@/components/ui/badge";
 import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
-import type { DashboardAccessSignal, DashboardAccessSignalTone, SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
+import type { DashboardAccessSignal, SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 import { buildDashboardAccessSignals } from "@/pages/dashboard/utils";
 
 type DashboardSnapshotSectionProps = {
@@ -14,53 +13,27 @@ type DashboardSnapshotSectionProps = {
   onRetrySummary: () => void;
 };
 
-function getAccessSignalToneClassName(tone: DashboardAccessSignalTone) {
-  if (tone === "danger") {
-    return "border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-200";
-  }
-
-  if (tone === "warning") {
-    return "border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200";
-  }
-
-  if (tone === "success") {
-    return "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
-  }
-
-  return "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-200";
-}
-
 function DashboardAccessWatchlist({ signals }: { signals: readonly DashboardAccessSignal[] }) {
   return (
     <section
       aria-label="Login access watchlist"
-      className="rounded-2xl border border-border/60 bg-muted/20 p-3 sm:p-4"
+      className="dashboard-access-details"
       data-testid="dashboard-access-watchlist"
     >
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
-            Access watchlist
-          </p>
-          <h3 className="mt-1 text-base font-semibold text-foreground">Login readiness at a glance</h3>
-        </div>
-        <p className="text-xs leading-5 text-muted-foreground lg:max-w-md lg:text-right">
-          Ringkasan cepat untuk sesi aktif, login berjaya, cubaan gagal, dan akaun yang disekat.
-        </p>
-      </div>
+      <h3 className="text-sm font-medium">Access watchlist</h3>
+      <p className="sr-only">Login readiness at a glance</p>
 
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {signals.map((signal) => (
-          <article
+          <div
             key={signal.title}
-            className={`rounded-xl border p-2.5 sm:p-3 ${getAccessSignalToneClassName(signal.tone)}`}
+            className="min-w-0 text-xs"
           >
-            <p className="text-xs font-semibold uppercase tracking-label-md opacity-80">{signal.title}</p>
-            <p className="mt-1.5 text-xl font-bold leading-none sm:text-2xl">{signal.value}</p>
-            <p className="mt-1.5 text-xs leading-4 opacity-85">{signal.description}</p>
-          </article>
+            <dt className="font-medium text-foreground">{signal.title}: {signal.value}</dt>
+            <dd className="mt-1 leading-5 text-muted-foreground">{signal.description}</dd>
+          </div>
         ))}
-      </div>
+      </dl>
     </section>
   );
 }
@@ -78,13 +51,9 @@ export function DashboardSnapshotSection({
   return (
     <OperationalSectionCard
       title="Login Snapshot"
-      description="Access, session, account risk, import, and conflict signals grouped for fast operator review."
-      badge={
-        <Badge variant="outline" className="rounded-full px-3 py-1.5">
-          {summaryCards.length} metrics
-        </Badge>
-      }
-      contentClassName="space-y-0"
+      description="Core access metrics and operational context."
+      contentClassName="space-y-4"
+      className="dashboard-snapshot"
     >
       {summaryErrorMessage ? (
         <DashboardSectionError
@@ -96,8 +65,8 @@ export function DashboardSnapshotSection({
         />
       ) : (
         <>
-          <DashboardAccessWatchlist signals={accessSignals} />
           <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
+          <DashboardAccessWatchlist signals={accessSignals} />
         </>
       )}
     </OperationalSectionCard>

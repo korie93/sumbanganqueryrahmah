@@ -1,15 +1,10 @@
 .login-page {
-  background: var(--login-layout-bg);
-  --login-content-fade-duration: 420ms;
-  --login-content-fade-offset: 10px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
 .login-bg-pattern {
-  opacity: 0.16;
-  background:
-    linear-gradient(90deg, var(--login-pattern-dot) 1px, transparent 1px),
-    linear-gradient(0deg, var(--login-pattern-dot) 1px, transparent 1px);
-  background-size: 56px 56px;
+  display: none;
 }
 
 .login-bg-orb {
@@ -29,14 +24,15 @@
 }
 
 .login-back-button {
-  border: 1px solid var(--login-back-button-border);
-  background: var(--login-back-button-bg);
-  color: var(--login-back-button-text);
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
 }
 
 .login-back-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--login-back-button-ring);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 .login-halo {
@@ -44,53 +40,25 @@
 }
 
 .login-content {
-  animation: content-fade var(--login-content-fade-duration) ease-out forwards;
-  opacity: 0;
-}
-
-@keyframes content-fade {
-  0% {
-    opacity: 0;
-    transform: translateY(var(--login-content-fade-offset));
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: none;
+  opacity: 1;
 }
 
 .login-card {
   position: relative;
   overflow: hidden;
   overflow: clip;
-  border-radius: 2rem;
-  background: var(--login-card-surface);
+  border-radius: 0.75rem;
+  background: hsl(var(--card));
   background-clip: padding-box;
-  border: 1px solid var(--login-card-border);
-  box-shadow: var(--login-card-shadow);
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.04);
   contain: layout paint;
 }
 
-.login-card::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: inherit;
-  background: var(--login-card-border-gradient);
-  background-size: 100% 100%;
-  z-index: var(--z-login-card-border);
-  opacity: 0.55;
-}
-
+.login-card::before,
 .login-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--login-card-overlay-gradient);
-  pointer-events: none;
-  z-index: var(--z-login-card-overlay);
+  display: none;
 }
 
 .login-card-grid {
@@ -161,51 +129,55 @@
 }
 
 .login-brand-mark {
-  background: var(--login-brand-surface);
-  border: 1px solid var(--login-brand-border);
+  height: 3rem;
+  width: 3rem;
+  border-radius: 0.75rem;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
 }
 
 .login-title {
-  color: var(--login-title-text);
+  color: hsl(var(--foreground));
 }
 
 .login-subtitle {
-  color: var(--login-subtitle-text);
+  color: hsl(var(--muted-foreground));
 }
 
 .login-field-label {
-  color: var(--login-title-text);
+  color: hsl(var(--foreground));
 }
 
 .login-input {
-  border-color: transparent;
-  background: var(--login-input-bg);
-  color: var(--login-input-text);
+  border-color: hsl(var(--input));
+  border-radius: 0.5rem;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
 }
 
 .login-input::placeholder {
-  color: var(--login-input-placeholder);
+  color: hsl(var(--muted-foreground));
 }
 
 .login-input:focus {
-  border-color: transparent;
+  border-color: hsl(var(--input));
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
 
 .login-input:focus-visible {
-  border-color: transparent;
-  outline: 2px solid var(--login-input-focus-ring, hsl(217 91% 60%));
+  border-color: hsl(var(--input));
+  outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--login-input-focus-ring, hsl(217 91% 60%));
+  box-shadow: none;
 }
 
 @supports not selector(:focus-visible) {
   .login-input:focus {
-    border-color: transparent;
-    outline: 2px solid var(--login-input-focus-ring, hsl(217 91% 60%));
+    border-color: hsl(var(--input));
+    outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
-    box-shadow: 0 0 0 2px var(--login-input-focus-ring, hsl(217 91% 60%));
+    box-shadow: none;
   }
 }
 
@@ -214,23 +186,26 @@
 }
 
 .login-password-toggle {
-  color: var(--login-password-toggle-text);
+  border-radius: 0.5rem;
+  color: hsl(var(--muted-foreground));
 }
 
 .login-password-toggle:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--login-password-toggle-ring);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 .login-submit {
-  background: var(--login-submit-gradient);
-  color: var(--login-submit-text);
-  box-shadow: var(--login-submit-shadow);
+  border-radius: 0.5rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: none;
 }
 
 .login-submit:focus-visible {
-  outline: none;
-  box-shadow: var(--login-submit-shadow), 0 0 0 3px var(--login-submit-ring);
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .login-submit-spinner {
@@ -272,12 +247,13 @@
 }
 
 .login-secondary-link {
-  color: var(--login-link-text);
+  border-radius: 0.5rem;
+  color: hsl(var(--primary));
 }
 
 .login-secondary-link:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--login-link-ring);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 .login-secondary-link {
@@ -285,7 +261,7 @@
 }
 
 .login-footer {
-  color: var(--login-footer-text);
+  color: hsl(var(--muted-foreground));
 }
 
 .login-shell {
@@ -300,7 +276,7 @@
 }
 
 .login-brand-mark {
-  box-shadow: 0 18px 34px -24px hsl(217 91% 44% / 0.42);
+  box-shadow: none;
 }
 
 .dark .login-card-aside {
@@ -308,8 +284,8 @@
 }
 
 .dark .login-card {
-  background: var(--dm-surface-elevated);
-  border-color: var(--dm-border);
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
 }
 
 .dark .login-card::before,
@@ -318,7 +294,7 @@
 }
 
 .dark .login-brand-mark {
-  box-shadow: 0 18px 34px -24px hsl(0 0% 0% / 0.38);
+  box-shadow: none;
 }
 
 .low-spec .login-card {
@@ -337,18 +313,6 @@
 .low-spec .login-content {
   opacity: 1 !important;
   transform: none !important;
-}
-
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .login-card {
-    -webkit-backdrop-filter: saturate(120%);
-    backdrop-filter: saturate(120%);
-  }
-
-  .dark .login-card {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
 }
 
 @container login-shell (min-width: 32rem) {
@@ -376,10 +340,10 @@
     animation: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: var(--login-mobile-card-surface);
+    background: hsl(var(--card));
     background-clip: padding-box;
-    border-color: var(--login-mobile-card-border);
-    box-shadow: var(--login-card-mobile-shadow);
+    border-color: hsl(var(--border));
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.04);
     contain: paint;
   }
 
@@ -424,14 +388,14 @@
   }
 
   .login-card {
-    border-radius: 1.5rem;
+    border-radius: 0.75rem;
     animation: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: var(--login-mobile-card-surface);
+    background: hsl(var(--card));
     background-clip: padding-box;
-    border-color: var(--login-mobile-card-border);
-    box-shadow: var(--login-card-mobile-shadow);
+    border-color: hsl(var(--border));
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.04);
     contain: paint;
   }
 
@@ -447,8 +411,8 @@
 
   .login-brand-mark {
     margin-bottom: 0.75rem;
-    height: 4rem;
-    width: 4rem;
+    height: 3rem;
+    width: 3rem;
   }
 
   .login-title {
@@ -515,20 +479,20 @@
 
 @media (hover: hover) and (pointer: fine) {
   .login-back-button:hover {
-    background: var(--login-back-button-bg-hover);
-    color: var(--login-back-button-text-hover);
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
   }
 
   .login-password-toggle:hover {
-    color: var(--login-password-toggle-text-hover);
+    color: hsl(var(--foreground));
   }
 
   .login-submit:hover {
-    background: var(--login-submit-gradient-hover);
+    background: hsl(var(--primary) / 0.9);
   }
 
   .login-secondary-link:hover {
-    background: var(--login-link-bg-hover);
-    color: var(--login-link-text-hover);
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
   }
 }

@@ -11,23 +11,20 @@ export function ViewerDataFieldCard({
   value,
   compact = false,
 }: ViewerDataFieldCardProps) {
-  const groupAriaLabelProps = header ? { "aria-label": header } : {};
   const displayValue = formatViewerCellValue(value);
 
   return (
     <div
-      role="group"
-      {...groupAriaLabelProps}
       className={
         compact
-          ? "rounded-lg border border-border/40 bg-muted/20 px-3 py-2"
-          : "rounded-xl border border-border/50 bg-muted/30 px-3 py-2"
+          ? "grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-1.5"
+          : "grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-2"
       }
     >
-      <p className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
+      <dt className="break-words text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
         {header}
-      </p>
-      <p className="mt-1 break-words text-sm text-foreground">{displayValue}</p>
+      </dt>
+      <dd className="min-w-0 break-words text-sm text-foreground [overflow-wrap:anywhere]">{displayValue}</dd>
     </div>
   );
 }

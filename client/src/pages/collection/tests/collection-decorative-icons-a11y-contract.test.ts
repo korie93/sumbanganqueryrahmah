@@ -23,23 +23,24 @@ const manageNicknamesSource = readCollectionSource("ManageCollectionNicknamesPag
 test("collection mobile filter action icons are decorative only", () => {
   assert.match(nicknameSummaryMobileFiltersSource, /<Filter className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
   assert.match(nicknameSummaryMobileFiltersSource, /<RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
-  assert.match(summaryPageSource, /<Filter className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(summaryPageSource, /<Filter className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);
   assert.match(summaryPageSource, /<RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
-  assert.match(recordsPageSource, /<Filter className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
-  assert.match(recordsPageSource, /<RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
+  assert.match(recordsPageSource, /<Filter className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);
+  assert.match(recordsPageSource, /<RotateCcw className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);
 });
 
 test("collection daily heading and loading icons are hidden from assistive technology", () => {
-  assert.match(dailyFiltersCardSource, /<CalendarDays className="collection-daily-title-icon h-5 w-5" aria-hidden="true" \/>/);
+  assert.match(dailyFiltersCardSource, /<CalendarDays className="collection-daily-title-icon h-4 w-4" aria-hidden="true" \/>/);
   assert.match(dailyFiltersCardSource, /<Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" \/>/);
   assert.match(dailyDayDetailsDialogSource, /<Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" \/>/);
   assert.match(dailyDayDetailsDialogPartsSource, /<Loader2 className="h-3\.5 w-3\.5 animate-spin" aria-hidden="true" \/>/);
   assert.match(dailyDayDetailsDialogPartsSource, /<Eye className="h-3\.5 w-3\.5" aria-hidden="true" \/>/);
   assert.match(dailyConflictReportSource, /<AlertTriangle className="h-4 w-4" aria-hidden="true" \/>/);
-  assert.match(summaryPageSource, /<CalendarRange className="h-4 w-4" aria-hidden="true" \/>/);
+  assert.doesNotMatch(summaryPageSource, /<CalendarRange\b/);
+  assert.match(summaryPageSource, /<h2 id="collection-summary-heading"[^>]*>Collection Summary<\/h2>/);
   assert.match(dailyAttentionSummarySource, /<Icon className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(dailyDayDetailsEmptyStateSource, /<CalendarOff className="h-5 w-5" aria-hidden="true" \/>/);
-  assert.match(dailyRoleGuideSource, /<Icon className="h-5 w-5" aria-hidden="true" \/>/);
+  assert.match(dailyRoleGuideSource, /<Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" \/>/);
   assert.match(dailyDayStatusNoticeSource, /<CalendarOff className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(dailyDayStatusNoticeSource, /<BriefcaseBusiness className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(manageNicknamesSource, /<ShieldCheck className="mr-1 h-3\.5 w-3\.5" aria-hidden="true" \/>/);

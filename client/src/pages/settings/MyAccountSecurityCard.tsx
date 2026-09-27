@@ -166,12 +166,9 @@ export function MyAccountSecurityCard({
         ) : null}
       </CardHeader>
       <CardContent className={isMobile ? "space-y-4 pt-0" : "space-y-6"}>
-        <Card className="border-border/60 bg-background/60">
-          <CardHeader className={isMobile ? "pb-4" : ""}>
-            <CardTitle className="text-base">Akaun Saya</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 sm:space-y-6">
-            <div className="space-y-4 rounded-2xl border border-border/60 bg-background/50 p-4 sm:rounded-xl sm:p-5">
+        <section className="min-w-0 space-y-4 sm:space-y-6" aria-labelledby="my-account-heading">
+          <h3 id="my-account-heading" className="text-base font-semibold">Akaun Saya</h3>
+            <div className="min-w-0 space-y-4 rounded-xl border border-border/60 p-4 sm:p-5">
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold">Identiti</h3>
                 <p className="text-xs leading-5 text-muted-foreground">
@@ -219,15 +216,15 @@ export function MyAccountSecurityCard({
               </div>
             </div>
 
-            <div className="space-y-4 rounded-2xl border border-border/60 bg-background/50 p-4 sm:rounded-xl sm:p-5">
+            <div className="min-w-0 space-y-4 rounded-xl border border-border/60 p-4 sm:p-5">
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold">Tukar kata laluan</h3>
                 <p className="text-xs leading-5 text-muted-foreground">
                   Masukkan kata laluan semasa sekali, kemudian tetapkan dan sahkan kata laluan baharu.
                 </p>
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
+              <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                <div className="min-w-0 space-y-2 lg:col-span-2">
                   <label htmlFor="my-account-current-password" className="text-sm font-medium">
                     Kata laluan semasa
                   </label>
@@ -302,8 +299,7 @@ export function MyAccountSecurityCard({
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </section>
         {supportsTwoFactor ? (
           <TwoFactorSettingsPanel
             busy={securityBusy}

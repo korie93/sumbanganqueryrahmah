@@ -50,7 +50,7 @@ test("public password browser gate uses emitted app files, not Vite or the authe
   const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
   assert.equal(scripts["test:auth:public-build"], "node scripts/password-public-build-browser.mjs");
   assert.match(runner, /startPasswordPublicBuildServer\(path\.join\(root, "dist-local\/public"\)\)/);
-  assert.match(runner, /\[320, 360, 390, 430, 768, 1280\]/);
+  assert.match(runner, /\[320, 360, 390, 430, 768, 1024, 1280, 1440\]/);
   assert.match(runner, /\["light", "dark"\]/);
   assert.match(runner, /AuthenticatedApp/);
   assert.match(runner, /serviceWorkers: "block"/);

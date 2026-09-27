@@ -192,7 +192,7 @@ export function SingleImportPanel({
     <section className="space-y-4" {...loadingBusyProps}>
       <nav
         aria-label="Import workflow progress"
-        className="overflow-hidden border border-border bg-background"
+        className="overflow-hidden rounded-lg border border-border bg-card"
       >
         <ol className="grid grid-cols-4">
           {WORKFLOW_STEPS.map((step) => {
@@ -211,9 +211,10 @@ export function SingleImportPanel({
                   }}
                   disabled={!available || loading}
                   {...getAriaCurrentStepProps(active)}
-                  className={`flex min-h-16 w-full min-w-0 items-center justify-center gap-2 px-2 py-3 text-left transition-colors sm:justify-start sm:px-4 ${
+                  aria-label={`Step ${step.id}: ${step.label}`}
+                  className={`flex min-h-16 w-full min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-center transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:justify-start sm:gap-2 sm:px-4 sm:text-left ${
                     active
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary/10 text-primary"
                       : available
                         ? "bg-background text-foreground hover:bg-muted"
                         : "cursor-not-allowed bg-muted/30 text-muted-foreground"
@@ -222,9 +223,9 @@ export function SingleImportPanel({
                   <span
                     className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
                       active
-                        ? "border-primary-foreground/40"
+                        ? "border-primary bg-primary text-primary-foreground"
                         : completed
-                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          ? "border-success bg-success text-success-foreground"
                           : "border-current"
                     }`}
                     aria-hidden="true"
@@ -233,9 +234,9 @@ export function SingleImportPanel({
                   </span>
                   <span className="hidden min-w-0 sm:block">
                     <span className="block text-2xs font-medium uppercase">Step {step.id}</span>
-                    <span className="block truncate text-sm font-semibold">{step.label}</span>
+                    <span className="block text-sm font-medium">{step.label}</span>
                   </span>
-                  <span className="truncate text-xs font-semibold sm:hidden">{step.shortLabel}</span>
+                  <span className="text-xs font-medium sm:hidden">{step.shortLabel}</span>
                 </button>
               </li>
             );
@@ -245,7 +246,7 @@ export function SingleImportPanel({
 
       {error ? (
         <div
-          className="flex items-start gap-2 border border-destructive/30 bg-destructive/10 p-3 text-destructive"
+          className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-destructive"
           role="alert"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -254,7 +255,7 @@ export function SingleImportPanel({
       ) : null}
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 border border-border bg-background">
+        <div className="min-w-0 rounded-lg border border-border bg-card">
           {activeStep === 1 ? (
             <div className="p-4 sm:p-6">
               <div className="mb-5">
@@ -276,7 +277,7 @@ export function SingleImportPanel({
                   onChange={(event) => onImportNameChange(event.target.value)}
                   placeholder="Example: June customer list"
                   autoComplete="off"
-                  className="mt-2 h-10 max-w-lg"
+                  className="mt-2 h-11 max-w-lg sm:h-9"
                   data-testid="input-import-name"
                   disabled={loading}
                 />
@@ -298,7 +299,7 @@ export function SingleImportPanel({
                 role="button"
                 tabIndex={loading ? -1 : 0}
                 aria-label="Select single import file"
-                className={`border-2 border-dashed border-border p-6 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-8 ${
+                className={`rounded-md border border-dashed border-input p-6 text-center transition-colors duration-150 motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                   loading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary hover:bg-muted/30"
                 }`}
                 onClick={() => {
@@ -489,7 +490,7 @@ export function SingleImportPanel({
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 z-10 flex flex-col gap-2 border-t border-border bg-background p-3 pb-20 sm:flex-row sm:items-center sm:justify-between sm:pb-3">
+          <div className="sticky bottom-0 z-10 flex flex-col gap-2 rounded-b-lg border-t border-border bg-card p-3 pb-[max(0.75rem,var(--safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:pb-3" data-floating-ai-avoid="true">
             <div>
               {activeStep > 1 && !loading ? (
                 <Button
@@ -554,7 +555,7 @@ export function SingleImportPanel({
           </div>
         </div>
 
-        <aside className="border border-border bg-background lg:sticky lg:top-4" aria-label="Import summary">
+        <aside className="rounded-lg border border-border bg-card lg:sticky lg:top-4" aria-label="Import summary">
           <div className="border-b border-border p-4">
             <p className="text-xs font-semibold uppercase text-muted-foreground">Import summary</p>
             <p className="mt-1 truncate text-sm font-semibold text-foreground">

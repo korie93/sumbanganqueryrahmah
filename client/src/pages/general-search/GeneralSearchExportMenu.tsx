@@ -45,7 +45,7 @@ export function GeneralSearchExportMenu({
       size="sm"
       disabled={exportingPdf}
       data-testid="button-export"
-      className="w-full sm:w-auto"
+      className={isMobile ? "h-11 w-full" : "h-9 w-auto"}
     >
       {exportingPdf ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -63,7 +63,7 @@ export function GeneralSearchExportMenu({
       </p>
       <Button
         variant="ghost"
-        className="w-full justify-start"
+        className={isMobile ? "h-11 w-full justify-start" : "h-9 w-full justify-start"}
         onClick={isMobile ? () => closeAfterAction(onExportCsv) : onExportCsv}
         data-testid="button-export-csv"
       >
@@ -72,7 +72,7 @@ export function GeneralSearchExportMenu({
       </Button>
       <Button
         variant="ghost"
-        className="w-full justify-start"
+        className={isMobile ? "h-11 w-full justify-start" : "h-9 w-full justify-start"}
         onClick={isMobile ? () => closeAfterAction(onExportPdf) : onExportPdf}
         disabled={exportingPdf}
         data-testid="button-export-pdf"
@@ -94,7 +94,7 @@ export function GeneralSearchExportMenu({
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent
           side="bottom"
-          className="rounded-t-[24px] pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
+          className="rounded-t-lg pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
         >
           <SheetHeader className="pr-8 text-left">
             <SheetTitle>Export Results</SheetTitle>

@@ -26,8 +26,8 @@ export function CollectionDailyStaffScopeField({
   onClearSelectedUsers,
   isMobile,
 }: CollectionDailyStaffScopeFieldProps) {
-  const fallbackClassName = isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl";
-  const readOnlyClassName = isMobile ? "h-12 rounded-2xl bg-background" : "h-11 rounded-xl bg-background";
+  const fallbackClassName = isMobile ? "h-11 rounded-md" : "h-9 rounded-md";
+  const readOnlyClassName = `${fallbackClassName} bg-background`;
   const fieldId = "collection-daily-current-username";
   const fieldLabelId = `${fieldId}-label`;
 

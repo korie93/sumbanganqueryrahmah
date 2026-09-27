@@ -1,3 +1,14 @@
+import { extractCssRuleBlock, parseHslTokens } from "./design-token-contrast.mjs";
+
+function hasBrowserSafeBorder(text, selector, token) {
+  const block = extractCssRuleBlock(text, selector);
+  const declarations = [...block.matchAll(new RegExp(`--${token}:\\s*([^;]+);`, "g"))];
+  const value = declarations.at(-1)?.[1]?.trim() || "";
+  if (/^hsl\(\d+(?:\.\d+)?\s+\d+(?:\.\d+)?%\s+\d+(?:\.\d+)?%\)$/.test(value)) return true;
+  const alias = value.match(/^hsl\(var\(--([a-z0-9-]+)\)\)$/);
+  return Boolean(alias && parseHslTokens(block).has(alias[1]));
+}
+
 export const DESIGN_TOKEN_COLOR_COMPATIBILITY_REQUIREMENTS = [
   {
     filePath: "client/src/styles/tokens/index.css",
@@ -7,20 +18,20 @@ export const DESIGN_TOKEN_COLOR_COMPATIBILITY_REQUIREMENTS = [
         predicate: (text) => !text.includes("hsl(from"),
       },
       {
-        label: "light theme exposes an explicit primary border token",
-        predicate: (text) => text.includes("--primary-border: hsl(217 91% 42%);"),
+        label: "light theme exposes a browser-safe primary border token",
+        predicate: (text) => hasBrowserSafeBorder(text, ":root", "primary-border"),
       },
       {
-        label: "light theme exposes an explicit accent border token",
-        predicate: (text) => text.includes("--accent-border: hsl(214 28% 74%);"),
+        label: "light theme exposes a browser-safe accent border token",
+        predicate: (text) => hasBrowserSafeBorder(text, ":root", "accent-border"),
       },
       {
-        label: "dark theme exposes an explicit primary border token",
-        predicate: (text) => text.includes("--primary-border: hsl(207 60% 48%);"),
+        label: "dark theme exposes a browser-safe primary border token",
+        predicate: (text) => hasBrowserSafeBorder(text, ".dark", "primary-border"),
       },
       {
-        label: "dark theme exposes an explicit destructive border token",
-        predicate: (text) => text.includes("--destructive-border: hsl(357 72% 38%);"),
+        label: "dark theme exposes a browser-safe destructive border token",
+        predicate: (text) => hasBrowserSafeBorder(text, ".dark", "destructive-border"),
       },
     ],
   },

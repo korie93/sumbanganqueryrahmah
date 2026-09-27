@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import ResetPassword from "../../client/src/pages/ResetPassword";
 import ActivateAccount from "../../client/src/pages/ActivateAccount";
 import ChangePassword from "../../client/src/pages/ChangePassword";
+import ForgotPassword from "../../client/src/pages/ForgotPassword";
 import Login from "../../client/src/pages/Login";
 import { CollectionNicknameDialogStepFields } from "../../client/src/pages/collection-report/CollectionNicknameDialogStepFields";
 import { MyAccountSecurityCard } from "../../client/src/pages/settings/MyAccountSecurityCard";
@@ -99,6 +100,8 @@ async function renderHarness() {
         ? <TwoFactorSetupHarness />
       : view === "change"
         ? <ChangePassword username="ui.fixture" forced />
+      : view === "forgot"
+        ? <ForgotPassword onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />
       : view === "login"
         ? <Login onLoginSuccess={() => { document.body.dataset.authenticated = "true"; }} />
         : <ResetPassword onBackToLogin={() => { document.body.dataset.loginRequested = "true"; }} />);

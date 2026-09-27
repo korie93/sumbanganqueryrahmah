@@ -2,7 +2,6 @@ import { memo, useCallback, type ChangeEvent, type RefObject } from "react";
 import { Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Input } from "@/components/ui/input";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { buildViewerSearchShortcutHint } from "@/pages/viewer/search-bar-utils";
 import { ViewerSearchSummary } from "@/pages/viewer/ViewerSearchSummary";
 
@@ -27,22 +26,14 @@ function ViewerSearchBarImpl({
   onClearAllFilters,
   onSearchChange,
 }: ViewerSearchBarProps) {
-  const isMobile = useIsMobile();
   const handleSearchInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     onSearchChange(event.target.value);
   }, [onSearchChange]);
 
   return (
-    <div
-      className={`ops-toolbar mb-4 space-y-3 ${
-        isMobile
-          ? "sticky top-2 z-[var(--z-sticky-content)] border-border/70 bg-background/95 shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85"
-          : ""
-      }`}
-      data-floating-ai-avoid={isMobile ? "true" : undefined}
-    >
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative min-w-48 max-w-xl flex-1">
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        <div className="relative min-w-0 max-w-xl flex-1">
           <label htmlFor="viewer-search-query" className="sr-only">
             Search all rows
           </label>
@@ -63,7 +54,7 @@ function ViewerSearchBarImpl({
             data-testid="input-search-viewer"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="hidden text-xs text-muted-foreground sm:block">
           Press <span className="font-medium text-foreground">{buildViewerSearchShortcutHint()}</span> to focus search
         </p>
         {showResultsSummary ? (

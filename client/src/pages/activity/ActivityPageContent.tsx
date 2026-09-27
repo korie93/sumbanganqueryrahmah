@@ -1,4 +1,7 @@
+import { useMemo } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ActivityOverlayFocusContext } from "./ActivityOverlayFocusContext";
+import { createActivityOverlayFocus } from "./activity-overlay-focus";
 import { ActivityActionDialogsSection } from "@/pages/activity/ActivityActionDialogsSection";
 import { ActivityBannedUsersSection } from "@/pages/activity/ActivityBannedUsersSection";
 import { ActivityFiltersSection } from "@/pages/activity/ActivityFiltersSection";
@@ -69,8 +72,16 @@ export function ActivityPageContent({
   summaryCounts,
   unbanDialogOpen,
 }: ActivityPageContentProps) {
+  const overlayFocus = useMemo(() => createActivityOverlayFocus(() => (
+    typeof document === "undefined" ? null : document.querySelector<HTMLButtonElement>('[data-testid="button-toggle-filters"]')
+  )), []);
   return (
-    <>
+    <ActivityOverlayFocusContext.Provider value={overlayFocus}>
+      <ActivityQuickSnapshotSection
+        bannedCount={bannedUsers.length}
+        summaryCounts={summaryCounts}
+      />
+
       <ActivityFiltersSection
         dateFromOpen={dateFromOpen}
         dateToOpen={dateToOpen}
@@ -90,24 +101,6 @@ export function ActivityPageContent({
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       ) : null}
-
-      <ActivityQuickSnapshotSection
-        bannedCount={bannedUsers.length}
-        summaryCounts={summaryCounts}
-      />
-
-      {canModerateActivity ? (
-        <ActivityRetentionPanel onCleanupComplete={onRefreshActivity} />
-      ) : null}
-
-      <ActivityBannedUsersSection
-        actionLoading={actionLoading}
-        bannedUsers={bannedUsers}
-        canModerateActivity={canModerateActivity}
-        onSelectBannedUser={onSelectBannedUser}
-        onUnbanDialogOpenChange={onUnbanDialogOpenChange}
-        shouldDeferSecondaryMobileSections={shouldDeferSecondaryMobileSections}
-      />
 
       <ActivityLogsSection
         actionLoading={actionLoading}
@@ -135,6 +128,19 @@ export function ActivityPageContent({
         partiallySelected={partiallySelected}
         selectedActivityIds={selectedActivityIds}
       />
+
+      <ActivityBannedUsersSection
+        actionLoading={actionLoading}
+        bannedUsers={bannedUsers}
+        canModerateActivity={canModerateActivity}
+        onSelectBannedUser={onSelectBannedUser}
+        onUnbanDialogOpenChange={onUnbanDialogOpenChange}
+        shouldDeferSecondaryMobileSections={shouldDeferSecondaryMobileSections}
+      />
+
+      {canModerateActivity ? (
+        <ActivityRetentionPanel onCleanupComplete={onRefreshActivity} />
+      ) : null}
 
       <ActivityInvestigationDrawer
         actionLoading={actionLoading}
@@ -180,6 +186,6 @@ export function ActivityPageContent({
         selectedBulkCount={selectedBulkCount}
         unbanDialogOpen={unbanDialogOpen}
       />
-    </>
+    </ActivityOverlayFocusContext.Provider>
   );
 }

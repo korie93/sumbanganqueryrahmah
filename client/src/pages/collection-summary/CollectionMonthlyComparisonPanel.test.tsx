@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { CollectionMonthlyComparisonPanel } from "@/pages/collection-summary/CollectionMonthlyComparisonPanel";
 import { buildCollectionSameDayPaceComparison } from "@/pages/collection-summary/collection-monthly-comparison-utils";
+import { CollectionMonthlyComparisonDataQualityCard } from "./CollectionMonthlyComparisonDataQualityCard";
 
 type PanelProps = ComponentProps<typeof CollectionMonthlyComparisonPanel>;
 
@@ -272,4 +273,16 @@ test("CollectionMonthlyComparisonPanel highlights anomaly months for audit revie
   assert.match(markup, /1 anomaly month\(s\)/);
   assert.match(markup, /Unusual jump \+34\.85% vs previous month/);
   assert.match(markup, /1 flagged/);
+});
+
+test("monthly review badge uses accessible semantic warning colors while preserving the review count", () => {
+  const markup = renderToStaticMarkup(createElement(TooltipProvider, {
+    children: createElement(CollectionMonthlyComparisonDataQualityCard, {
+      dataQualitySummary: { statusTone: "warning", statusLabel: "2 items need review", warningCount: 2, signals: [] },
+    }),
+  }));
+  assert.match(markup, /bg-warning\/10[^\"]*text-warning/);
+  assert.match(markup, /2 review/);
+  assert.match(markup, /2 items need review/);
+  assert.doesNotMatch(markup, /text-amber-700|bg-amber-500/);
 });

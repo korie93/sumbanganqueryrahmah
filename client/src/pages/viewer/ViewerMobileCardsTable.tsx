@@ -23,11 +23,11 @@ function ViewerMobileCardsTableImpl({
   return (
     <div className="space-y-3">
       {filteredRows.length > 0 ? (
-        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/80 px-3 py-2.5 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2 text-sm text-muted-foreground">
           <span>
             {filteredRows.length} row{filteredRows.length === 1 ? "" : "s"} on this page
           </span>
-          <div className="flex items-center gap-2 text-foreground">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-foreground">
             <Checkbox
               aria-label="Select all rows on this page"
               checked={selectAllFiltered && filteredRows.length > 0}
@@ -35,7 +35,7 @@ function ViewerMobileCardsTableImpl({
               data-testid="checkbox-select-all-rows"
             />
             <span className="text-sm font-medium">Select all</span>
-          </div>
+          </label>
         </div>
       ) : null}
 

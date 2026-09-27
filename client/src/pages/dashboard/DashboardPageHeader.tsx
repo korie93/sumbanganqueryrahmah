@@ -7,6 +7,7 @@ import {
   resolveDashboardFreshnessStatusMessage,
 } from "@/pages/dashboard/dashboard-freshness";
 import { resolveDashboardExportStatusMessage, type DashboardExportBlockReason } from "@/pages/dashboard/export-guards";
+import "./dashboard-workspace.css";
 
 type DashboardPageHeaderProps = {
   isMobile: boolean;
@@ -56,18 +57,17 @@ export function DashboardPageHeader({
       }
       badge={
         <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary" className="rounded-full px-3 py-1.5">
+          <Badge variant="secondary">
             Trend {trendDays}d
           </Badge>
-          <Badge variant="outline" className="rounded-full px-3 py-1.5">
+          <Badge variant="outline">
             {kpiCount} KPI akses
           </Badge>
-          <Badge variant="outline" className="rounded-full px-3 py-1.5">
+          <Badge variant="outline">
             Auto refresh
           </Badge>
           <Badge
             variant={hasDashboardErrors ? "destructive" : "outline"}
-            className="rounded-full px-3 py-1.5"
             data-testid="badge-dashboard-freshness"
             aria-label={freshnessStatusMessage}
           >
@@ -76,7 +76,7 @@ export function DashboardPageHeader({
         </div>
       }
       actions={
-        <>
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
           <Button
             type="button"
             aria-describedby="dashboard-export-status"
@@ -84,7 +84,7 @@ export function DashboardPageHeader({
             variant="outline"
             disabled={exportBlockReason !== null}
             data-testid="button-export-pdf"
-            className={isMobile ? "h-11 w-full rounded-xl" : "h-11 w-full rounded-xl sm:w-auto"}
+            className="w-full sm:w-auto"
           >
             {exportingPdf ? (
               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -99,7 +99,7 @@ export function DashboardPageHeader({
             variant="outline"
             disabled={refreshing}
             data-testid="button-refresh-dashboard"
-            className={isMobile ? "h-11 w-full rounded-xl" : "h-11 w-full rounded-xl sm:w-auto"}
+            className="w-full sm:w-auto"
           >
             <RefreshCw className={`w-4 h-4 mr-2${refreshing ? " animate-spin" : ""}`} />
             Refresh
@@ -109,13 +109,13 @@ export function DashboardPageHeader({
             role="status"
             aria-live="polite"
             data-testid="text-dashboard-export-status"
-            className="text-xs leading-5 text-muted-foreground sm:basis-full xl:max-w-[22rem] xl:text-right"
+            className="col-span-2 text-xs leading-5 text-muted-foreground sm:basis-full xl:max-w-[22rem] xl:text-right"
           >
             {exportStatusMessage}
           </p>
-        </>
+        </div>
       }
-      className={isMobile ? "rounded-[28px] border-border/60 bg-background shadow-sm" : "border-border/60 bg-background shadow-sm"}
+      className="dashboard-page-header"
     />
   );
 }

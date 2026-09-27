@@ -25,7 +25,7 @@ test("authenticated shell compacts spacing for short mobile landscape viewports"
   assert.match(shellCss, /\.ops-page-frame\s*{[\s\S]*gap:\s*var\(--spacing-3\);/);
   assert.match(shellCss, /\.ops-empty-state\s*{[\s\S]*min-height:\s*180px;/);
   assert.match(glassCss, MOBILE_LANDSCAPE_QUERY);
-  assert.match(glassCss, /\.glass-wrapper\s*{[\s\S]*border-radius:\s*16px;/);
+  assert.match(glassCss, /\.glass-wrapper\s*{[\s\S]*border-radius:\s*var\(--radius-surface\);/);
 });
 
 test("public auth and login shells keep content reachable in short mobile landscape viewports", () => {

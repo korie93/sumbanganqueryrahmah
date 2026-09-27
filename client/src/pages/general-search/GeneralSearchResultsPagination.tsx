@@ -41,12 +41,12 @@ export function GeneralSearchResultsPagination({
               size="sm"
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage === 1 || loading}
-              className="h-10 w-full"
+              className="h-11 w-full"
               data-testid="button-prev-page"
             >
               Previous
             </Button>
-            <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-center text-sm font-medium text-foreground">
+            <div className="px-2 py-2 text-center text-sm font-medium text-foreground">
               Page {currentPage} / {totalPages}
             </div>
             <Button
@@ -54,7 +54,7 @@ export function GeneralSearchResultsPagination({
               size="sm"
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage >= totalPages || loading}
-              className="h-10 w-full"
+              className="h-11 w-full"
               data-testid="button-next-page"
             >
               Next
@@ -67,6 +67,7 @@ export function GeneralSearchResultsPagination({
               size="sm"
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage === 1 || loading}
+              className="h-9"
               data-testid="button-prev-page"
             >
               Previous
@@ -90,7 +91,7 @@ export function GeneralSearchResultsPagination({
                     size="sm"
                     onClick={() => onPageChange(item)}
                     disabled={loading}
-                    className="w-8"
+                    className="h-9 w-9"
                     data-testid={`button-page-${item}`}
                   >
                     {item}
@@ -103,6 +104,7 @@ export function GeneralSearchResultsPagination({
               size="sm"
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage >= totalPages || loading}
+              className="h-9"
               data-testid="button-next-page"
             >
               Next

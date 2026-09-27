@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type RefObject } from "react";
 import {
   Sheet,
   SheetContent,
@@ -16,6 +16,7 @@ const ViewerFiltersPanel = lazy(() =>
 );
 
 type ViewerContentFiltersSectionProps = {
+  filterTriggerRef: RefObject<HTMLButtonElement>;
   hasRows: boolean;
   isMobile: boolean;
   showFilters: boolean;
@@ -29,6 +30,7 @@ type ViewerContentFiltersSectionProps = {
 };
 
 export function ViewerContentFiltersSection({
+  filterTriggerRef,
   hasRows,
   isMobile,
   showFilters,
@@ -47,6 +49,7 @@ export function ViewerContentFiltersSection({
   const filtersPanel = (
     <Suspense fallback={<ViewerFiltersPanelFallback />}>
       <ViewerFiltersPanel
+        showHeading={!isMobile}
         headers={headers}
         columnFilters={columnFilters}
         onAddFilter={onAddFilter}
@@ -65,7 +68,13 @@ export function ViewerContentFiltersSection({
           {showFilters ? (
             <SheetContent
               side="bottom"
-              className="rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
+              className="rounded-t-2xl border-border bg-background px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                if (filterTriggerRef.current?.isConnected) {
+                  filterTriggerRef.current.focus({ preventScroll: true });
+                }
+              }}
               data-floating-ai-avoid="true"
             >
               <SheetHeader className="pr-8 text-left">

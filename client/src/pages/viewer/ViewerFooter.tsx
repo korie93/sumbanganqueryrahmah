@@ -43,8 +43,9 @@ function ViewerFooterImpl({
   }
 
   return (
-    <div
-      className={`${styles.footerSafeArea} sticky z-[var(--z-sticky-content)] mt-4 flex flex-col gap-3 rounded-xl border border-border/60 bg-background/95 px-3.5 py-2.5 text-sm text-muted-foreground shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85 md:static md:z-auto md:bg-background/70 md:shadow-none sqr-md-backdrop-blur-none sm:flex-row sm:flex-wrap sm:items-center sm:justify-between`}
+    <nav
+      aria-label="Dataset pagination"
+      className={`${styles.footerSafeArea} mt-4 flex flex-col gap-2 border-t border-border pt-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:justify-between`}
       data-floating-ai-avoid="true"
     >
       <span>
@@ -68,7 +69,7 @@ function ViewerFooterImpl({
         onPrevPage={onPrevPage}
         onNextPage={onNextPage}
       />
-    </div>
+    </nav>
   );
 }
 

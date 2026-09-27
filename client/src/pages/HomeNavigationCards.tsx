@@ -26,18 +26,15 @@ export function HomeDesktopPrimaryCard({
       data-testid={`card-${item.id}`}
     >
       <span className="home-desktop-primary-card-icon">
-        <Icon className="h-5 w-5" aria-hidden="true" />
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
-      <div className="min-w-0 space-y-2">
-        <p className="home-desktop-primary-kicker">
-          Primary Workflow
-        </p>
+      <div className="min-w-0 flex-1">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold text-foreground">{item.title}</h2>
-          <p className="text-sm leading-6 text-muted-foreground">{item.description}</p>
+          <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
+          <p className="text-xs leading-5 text-muted-foreground">{item.description}</p>
         </div>
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );
 }
@@ -54,16 +51,17 @@ export function HomeWorkspaceCard({
       onClick={() => onNavigateItem(item.id)}
       onMouseEnter={() => onPrefetchItem(item.id)}
       onFocus={() => onPrefetchItem(item.id)}
-      className="home-card flex items-center gap-4 text-left"
+      className="home-card flex items-center gap-3 text-left"
       data-testid={`card-${item.id}`}
     >
       <span className="home-card-icon">
-        <Icon className="h-5 w-5" aria-hidden="true" />
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
-      <div className="home-card-text">
-        <h3 className="text-base">{item.title}</h3>
+      <div className="home-card-text min-w-0 flex-1">
+        <h3 className="text-sm">{item.title}</h3>
         <p>{item.description}</p>
       </div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );
 }

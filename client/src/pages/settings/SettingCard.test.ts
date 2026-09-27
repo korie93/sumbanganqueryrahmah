@@ -45,7 +45,7 @@ const blankLabelSelectSetting: SettingItem = {
   ],
 };
 
-test("SettingCard links desktop controls to a hidden description instead of naming the decorative info icon", () => {
+test("SettingCard keeps a visible description and named control in one flat setting row", () => {
   const markup = renderToStaticMarkup(
     createElement(SettingCard, {
       setting: textSetting,
@@ -57,10 +57,12 @@ test("SettingCard links desktop controls to a hidden description instead of nami
   );
 
   assert.match(markup, /id="setting-card-title-session_timeout_minutes"/);
-  assert.match(markup, /id="setting-card-description-session_timeout_minutes" class="sr-only"/);
+  assert.match(markup, /id="setting-card-description-session_timeout_minutes" class="text-xs leading-5 text-muted-foreground"/);
   assert.match(markup, /aria-labelledby="setting-card-title-session_timeout_minutes"/);
   assert.match(markup, /aria-describedby="setting-card-description-session_timeout_minutes"/);
-  assert.match(markup, /class="text-muted-foreground" title="How long an inactive session can remain signed in before automatic logout\." aria-hidden="true"/);
+  assert.match(markup, /^<section aria-labelledby="setting-card-title-session_timeout_minutes"/);
+  assert.match(markup, /How long an inactive session can remain signed in before automatic logout\./);
+  assert.doesNotMatch(markup, /shadcn-card|shadow|rounded-xl/);
   assert.doesNotMatch(markup, /aria-label="How long an inactive session can remain signed in before automatic logout\." /);
 });
 

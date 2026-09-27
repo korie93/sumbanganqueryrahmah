@@ -37,8 +37,8 @@ export function SaveCollectionReadySummary({
   return (
     <section
       className={isReady
-        ? "rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3"
-        : "rounded-xl border border-amber-500/35 bg-amber-500/5 p-3"}
+        ? "rounded-xl border border-success/30 bg-success/5 p-3"
+        : "rounded-xl border border-warning/35 bg-warning/5 p-3"}
       aria-label={isReady ? "Ready to save summary" : "Incomplete save summary"}
       data-ready={isReady ? "true" : "false"}
       data-testid="save-collection-readiness"
@@ -51,9 +51,9 @@ export function SaveCollectionReadySummary({
         aria-atomic="true"
       >
         {isReady ? (
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
         ) : (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
         )}
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">
@@ -66,10 +66,10 @@ export function SaveCollectionReadySummary({
           </p>
         </div>
       </div>
-      <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 lg:grid-cols-4">
         {items.map((item) => (
-          <div key={item.label} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
-            <dt className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div key={item.label} className="min-w-0 border-t border-border/50 py-2">
+            <dt className="text-xs text-muted-foreground">
               {item.label}
             </dt>
             <dd className={item.missing
@@ -86,7 +86,7 @@ export function SaveCollectionReadySummary({
                   </span>
                   <button
                     type="button"
-                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                    className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:h-9"
                     onClick={onToggleCardNumberVisibility}
                     disabled={cardNumberVisibilityDisabled}
                     aria-label={cardNumberVisible
@@ -114,13 +114,13 @@ export function SaveCollectionReadySummary({
       </dl>
       {reviewHints.length > 0 ? (
         <div
-          className="mt-3 rounded-lg border border-amber-500/35 bg-amber-500/10 p-3"
+          className="mt-3 rounded-lg border border-warning/35 bg-warning/10 p-3"
           role="status"
           aria-live="polite"
           aria-atomic="true"
         >
           <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
             <div className="min-w-0 space-y-1">
               <h4 className="text-xs font-semibold text-foreground">Receipt review hint</h4>
               <ul className="space-y-1 text-xs leading-relaxed text-muted-foreground">

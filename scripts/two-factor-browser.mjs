@@ -10,6 +10,15 @@ import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 // Only the disposable runner calls this module. No dotenv, external QR service,
 // response mocks, server OTP helper, trace/HAR or retained enrollment material.
 const require = createRequire(import.meta.url);
+export const TWO_FACTOR_LAYOUT_WIDTHS = [320, 360, 390, 430, 768, 1024, 1280, 1440];
+
+// Raw Playwright messages can include a filled password, OTP or enrollment URI.
+// Expose only an allowlisted failure category alongside our own phase labels.
+export function classifyTwoFactorBrowserError(error) {
+  if (error?.code === "ERR_ASSERTION") return "assertion";
+  if (error?.name === "TimeoutError") return "timeout";
+  return "browser-or-runtime";
+}
 
 export function authenticatorCode(uri, nowMs = Date.now()) {
   const parsed = new URL(uri);
@@ -87,6 +96,11 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
   await mkdir(artifactsDir, { recursive: true });
   const axeSource = await readFile(require.resolve("axe-core/axe.min.js"), "utf8");
   let page;
+  let phase = "browser startup";
+  function markPhase(nextPhase) {
+    phase = nextPhase;
+    console.log(`[two-factor-browser] START ${phase}`);
+  }
   async function newPage() {
     const context = await browser.newContext({ viewport: { width: 1280, height: 960 }, serviceWorkers: "block" });
     await context.route("**/*", (route) => {
@@ -100,31 +114,55 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     return result;
   }
   async function passwordLogin(target) {
+    markPhase("password login: navigation");
     await target.goto(`${baseUrl}/login`);
+    phase = "password login: username input";
     await target.getByTestId("input-username").fill(username);
+    phase = "password login: password input";
     await target.getByTestId("input-password").fill(password);
     const response = target.waitForResponse((item) => new URL(item.url()).pathname === "/api/auth/login" && item.request().method() === "POST");
+    phase = "password login: submit and response";
     await target.getByTestId("input-password").press("Enter");
     const result = await response;
     assert.equal(result.status(), 200, "Real password login succeeds");
     return result.json();
   }
   async function settings(target) {
+    markPhase("settings: security category");
     await target.goto(`${baseUrl}/settings`);
     // Seeded category IDs are generated database IDs, not the display name.
     await target.getByRole("button", { name: /^Security(?:\s|$)/ }).first().click();
     await target.getByTestId("two-factor-settings").waitFor({ state: "visible" });
   }
   async function layout(state, target = page) {
+    markPhase(`layout: ${state}`);
     const selector = state === "login-challenge" ? ".login-card-form" : '[data-testid="two-factor-settings"]';
     const panel = target.locator(selector);
-    for (const width of [320, 360, 390, 430, 768, 1280]) {
+    for (const width of TWO_FACTOR_LAYOUT_WIDTHS) {
       await target.setViewportSize({ width, height: 960 });
       for (const theme of ["light", "dark"]) {
-        await target.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), theme === "dark");
+        phase = `layout: ${state}/${width}/${theme} theme`;
+        // Authenticated settings own useTheme. Fresh public Login does not:
+        // its existing .dark styles are a separate CSS contract, not evidence
+        // that the public route subscribes to the system theme preference.
+        await target.emulateMedia({ colorScheme: theme });
+        if (state === "login-challenge") {
+          await target.evaluate((requestedTheme) => {
+            document.documentElement.classList.toggle("dark", requestedTheme === "dark");
+          }, theme);
+          assert.equal(await target.evaluate(() => document.documentElement.classList.contains("dark")), theme === "dark", "Public Login existing CSS theme contract applied");
+        } else {
+          await target.waitForFunction((requestedTheme) => {
+            const root = document.documentElement;
+            return root.dataset.theme === requestedTheme
+              && root.classList.contains("dark") === (requestedTheme === "dark")
+              && getComputedStyle(root).colorScheme === requestedTheme;
+          }, theme);
+        }
         // Theme transitions are visual, not state races: wait for their finish
         // before measuring contrast (do not disable or override app styling).
         await target.waitForTimeout(400);
+        phase = `layout: ${state}/${width}/${theme} geometry`;
         assert.ok(await target.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${state} has no page overflow at ${width}px`);
         assert.ok(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth + 1), `${state} panel fits at ${width}px`);
         const badLabels = await panel.locator("input").evaluateAll((inputs) => inputs.filter((input) => !input.labels?.length && !input.getAttribute("aria-label")).map((input) => input.id));
@@ -132,6 +170,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
         // Playwright evaluation runs in the test execution context: no injected
         // script element/TrustedScript policy and no application CSP relaxation.
         if (!(await target.evaluate(() => Boolean(window.axe)))) await target.evaluate(axeSource);
+        phase = `layout: ${state}/${width}/${theme} accessibility`;
         const violations = await target.evaluate(async (selector) => (await window.axe.run(selector, {
           runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
         })).violations.map((item) => ({ id: item.id, impact: item.impact,
@@ -139,10 +178,12 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
         })), selector);
         assert.deepEqual(violations, [], `${state} ${width}px ${theme}: accessibility`);
         if (state === "scan") {
+          phase = `layout: ${state}/${width}/${theme} independent QR decode`;
           const box = await target.getByTestId("two-factor-qr").locator("svg").boundingBox();
           assert.ok(box.width >= 160, `QR needs a usable scanning size at ${width}px`);
           await decodeRenderedQr(target);
         }
+        phase = `layout: ${state}/${width}/${theme} redacted screenshot`;
         await panel.screenshot({ path: path.join(artifactsDir, `${state}-${width}-${theme}.png`),
           mask: [target.getByTestId("two-factor-qr"), panel.locator("input")] });
       }
@@ -151,6 +192,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
       // Approximate the reduced visible area of an open mobile keyboard. This
       // is viewport/focus coverage, not a claim to drive a physical OS keyboard.
       for (const width of [320, 390]) {
+        phase = `layout: ${state}/${width} reduced-height keyboard reachability`;
         await target.setViewportSize({ width, height: 420 });
         await target.waitForTimeout(400);
         for (const input of await panel.locator("input:not([readonly]):not([disabled])").all()) {
@@ -181,9 +223,11 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
       }
     }
     await target.setViewportSize({ width: 1280, height: 960 });
-    console.log(`[two-factor-browser] PASS ${state}: six widths, light/dark, accessibility, redacted screenshots`);
+    const themeEvidence = state === "login-challenge" ? "public light/dark CSS contract" : "actual app light/dark theme";
+    console.log(`[two-factor-browser] PASS ${state}: eight widths, ${themeEvidence}, accessibility, redacted screenshots`);
   }
   async function startSetup(checkPasswordLayout = false) {
+    markPhase("enrollment: password confirmation");
     const panel = page.getByTestId("two-factor-settings");
     const start = panel.getByRole("button", { name: /^(Aktifkan 2FA|Mulakan semula persediaan)$/ });
     await start.focus();
@@ -207,6 +251,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     return uri;
   }
   async function enable(uri) {
+    markPhase("enrollment: enable with independently generated code");
     const panel = page.getByTestId("two-factor-settings");
     await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
     assert.ok(await panel.locator("#my-account-two-factor-code").evaluate((input) => document.activeElement === input), "Code step receives keyboard focus");
@@ -245,13 +290,16 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     await layout("active");
     // Honour the existing single-superuser-session policy, just as a person
     // logs out before testing a fresh login. Never weaken it for the fixture.
+    markPhase("enrollment: logout before fresh 2FA login");
     assert.equal((await api(page, "/api/activity/logout", {})).status, 200, "Initial enrollment session logs out");
 
     const loginPage = await newPage();
     const challenge = await passwordLogin(loginPage);
+    markPhase("fresh login: 2FA challenge visible");
     assert.equal(challenge.twoFactorRequired, true);
     await loginPage.getByTestId("input-two-factor-code").waitFor();
     await layout("login-challenge", loginPage);
+    markPhase("fresh login: challenge has no session before independent OTP");
     assert.equal((await api(loginPage, "/api/auth/me")).status, 401, "Password challenge has no authenticated session");
     assert.ok(!(await loginPage.context().cookies()).some((cookie) => cookie.name === "sqr_auth"), "No session cookie before OTP");
     await loginPage.getByTestId("input-two-factor-code").fill(authenticatorCode(firstUri));
@@ -266,6 +314,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     await page.getByRole("button", { name: "Nyahaktifkan 2FA", exact: true }).click();
     await layout("disable");
     await page.locator("#my-account-two-factor-password").fill(password);
+    markPhase("enrollment: disable with password and independent OTP");
     await page.locator("#my-account-two-factor-code").fill(authenticatorCode(firstUri));
     const disabled = page.waitForResponse((item) => new URL(item.url()).pathname === "/api/auth/two-factor/disable");
     await page.getByRole("button", { name: "Sahkan nyahaktifkan", exact: true }).click();
@@ -276,6 +325,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     const secondUri = await startSetup();
     assert.ok(firstUri !== secondUri, "Re-enrollment rotates the secret");
     await enable(secondUri);
+    markPhase("re-enrollment: logout before fresh rotated-secret login");
     assert.equal((await api(page, "/api/activity/logout", {})).status, 200, "Re-enrollment session logs out");
     const finalPage = await newPage();
     assert.equal((await passwordLogin(finalPage)).twoFactorRequired, true);
@@ -286,6 +336,9 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     assert.deepEqual(failures, []);
     assert.deepEqual(externalRequests, [], "No external requests including QR exfiltration");
     console.log("[two-factor-browser] PASS actual built app + PostgreSQL setup, invalid OTP, independently decoded QR/code, login gate, disable and re-enable; no API mocks");
+  } catch (error) {
+    console.error(`[two-factor-browser] FAIL ${phase}; category=${classifyTwoFactorBrowserError(error)}`);
+    throw error;
   } finally {
     await browser.close();
   }

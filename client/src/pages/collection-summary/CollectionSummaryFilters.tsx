@@ -63,9 +63,7 @@ export function CollectionSummaryFilters({
           value={selectedYear}
           onChange={(event) => onSelectedYearChange(event.target.value)}
           aria-label="Year"
-          className={`w-full border border-input bg-background px-3 text-sm ${
-            isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md"
-          }`}
+          className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9"
         >
           {yearOptions.map((year) => (
             <option key={year} value={String(year)}>
@@ -83,9 +81,7 @@ export function CollectionSummaryFilters({
                 Staff Nickname (optional)
               </p>
               <div
-                className={`animate-pulse border border-border/60 bg-muted/20 ${
-                  isMobile ? "h-12 rounded-2xl" : "h-10 rounded-xl"
-                }`}
+                className="h-11 animate-pulse rounded-md border border-border bg-muted motion-reduce:animate-none md:h-9"
               />
             </div>
           }
@@ -105,8 +101,8 @@ export function CollectionSummaryFilters({
             onToggleNickname={onToggleNickname}
             onSelectAllVisible={onSelectAllVisible}
             onClearAllSelected={onClearAllSelected}
-            triggerClassName={isMobile ? "h-12 rounded-2xl bg-background/95" : undefined}
-            popoverClassName={isMobile ? "w-[min(360px,calc(100vw-3rem))] rounded-2xl border-border/70 bg-popover/98 shadow-lg" : undefined}
+            triggerClassName="h-11 rounded-md bg-background md:h-9"
+            popoverClassName={isMobile ? "w-[min(360px,calc(100vw-2rem))] rounded-xl border-border bg-popover" : undefined}
           />
         </Suspense>
       ) : null}

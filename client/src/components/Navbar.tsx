@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Menu } from "lucide-react"
+import { ChevronRight, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { useLocation } from "wouter"
 
 import {
@@ -16,12 +16,10 @@ import { NavbarMobileNavigation } from "@/components/NavbarMobileNavigation"
 import { NavbarNotificationCenter } from "@/components/NavbarNotificationCenter"
 import { NavbarBrandCluster, NavbarUserMenuDropdown } from "@/components/NavbarParts"
 import {
-  buildDesktopNavLayoutKey,
   resolveNavbarActiveMobileItemId,
   resolveNavbarShowHomeButton,
 } from "@/components/navbar-utils"
 import { useTheme } from "@/components/useTheme"
-import { useDesktopNavOverflowState } from "@/components/useDesktopNavOverflowState"
 import {
   clearNotificationHistory,
   markNotificationHistoryRead,
@@ -30,6 +28,7 @@ import {
 } from "@/hooks/use-notification-history"
 import { getAriaExpandedProps } from "@/lib/aria-state-props"
 import { translate } from "@/lib/i18n"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import "./Navbar.css"
 
 interface NavbarProps {
@@ -43,6 +42,8 @@ interface NavbarProps {
   tabVisibility?: TabVisibility | undefined
   featureLockdown?: boolean | undefined
   monitorSection?: MonitorSection | undefined
+  sidebarCollapsed?: boolean | undefined
+  onSidebarCollapsedChange?: ((collapsed: boolean) => void) | undefined
 }
 
 function NavbarImpl({
@@ -56,14 +57,17 @@ function NavbarImpl({
   tabVisibility,
   featureLockdown = false,
   monitorSection,
+  sidebarCollapsed = false,
+  onSidebarCollapsedChange,
 }: NavbarProps) {
   const { theme, setTheme } = useTheme()
   const [routerLocation] = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const notificationHistory = useNotificationHistoryState()
-  const navScrollerRef = useRef<HTMLDivElement>(null)
   const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobileNavigationTriggerRef = useRef<HTMLButtonElement>(null)
+  const desktopNavigationTriggerRef = useRef<HTMLButtonElement>(null)
   const navbarMountedRef = useRef(true)
   const pendingFocusFramesRef = useRef<number[]>([])
 
@@ -100,6 +104,17 @@ function NavbarImpl({
   useEffect(() => {
     setMobileNavOpen(false)
   }, [activeLocation.pathname])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const desktop = window.matchMedia("(min-width: 1024px)")
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileNavOpen(false)
+    }
+    closeOnDesktop()
+    desktop.addEventListener("change", closeOnDesktop)
+    return () => desktop.removeEventListener("change", closeOnDesktop)
+  }, [mobileNavOpen])
 
   const activeNavigationItemId = useMemo(
     () =>
@@ -191,6 +206,15 @@ function NavbarImpl({
     focusMobileUserMenuTrigger()
   }, [focusMobileUserMenuTrigger])
 
+  const restoreMobileNavigationFocus = useCallback((event: Event) => {
+    event.preventDefault()
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      desktopNavigationTriggerRef.current?.focus({ preventScroll: true })
+    } else {
+      mobileNavigationTriggerRef.current?.focus({ preventScroll: true })
+    }
+  }, [])
+
   const navigateToItem = useCallback(
     (itemId: string) => {
       onNavigate(resolveNavigationTarget(itemId))
@@ -204,28 +228,56 @@ function NavbarImpl({
     })
   }, [])
 
-  const desktopNavLayoutKey = useMemo(
-    () => buildDesktopNavLayoutKey(directItems, groupedItems, savedCount, showHomeButton),
-    [directItems, groupedItems, savedCount, showHomeButton]
-  )
-  const desktopNavOverflow = useDesktopNavOverflowState(navScrollerRef, desktopNavLayoutKey)
+  const activeItem = mobileItems.find((item) => item.id === activeNavigationItemId)
+  const activeContext = activeItem?.title || activeItem?.label || systemName || "SQR Workspace"
 
   return (
-    <header className="navbar-safe-area-shell sticky top-0 z-[var(--z-navbar)] w-full border-b border-border/70 bg-background/95 supports-[backdrop-filter]:bg-background/90 sqr-backdrop-blur-md">
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-3 px-3 py-2 md:px-4 lg:min-h-16 lg:flex-row lg:items-center">
-        <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-[0_1_auto] lg:items-center lg:pr-2">
+    <>
+      <aside className="workspace-sidebar" aria-label="Ruang kerja">
           <NavbarBrandCluster
             activeNavigationItemId={activeNavigationItemId}
             showHomeButton={showHomeButton}
             systemName={systemName}
             onNavigate={navigateToItem}
             onPrefetch={prefetchItem}
+            collapsed={sidebarCollapsed}
           />
-
-          <div className="flex shrink-0 items-center gap-2 lg:hidden">
+          <NavbarDesktopNavigation
+            directItems={directItems}
+            groupedItems={groupedItems}
+            activeNavigationItemId={activeNavigationItemId}
+            savedCount={savedCount}
+            onNavigate={navigateToItem}
+            onPrefetch={prefetchItem}
+            collapsed={sidebarCollapsed}
+          />
+          <div className="workspace-sidebar-footer">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  ref={desktopNavigationTriggerRef}
+                  type="button"
+                  className="workspace-sidebar-toggle"
+                  aria-label={sidebarCollapsed ? "Kembangkan navigasi" : "Kecilkan navigasi"}
+                  {...getAriaExpandedProps(!sidebarCollapsed)}
+                  onClick={() => onSidebarCollapsedChange?.(!sidebarCollapsed)}
+                  data-testid="button-toggle-sidebar"
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+                  <span className="workspace-sidebar-copy">Kecilkan navigasi</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{sidebarCollapsed ? "Kembangkan navigasi" : "Kecilkan navigasi"}</TooltipContent>
+            </Tooltip>
+          </div>
+      </aside>
+      <header className="navbar-safe-area-shell workspace-topbar">
+        <div className="workspace-topbar-inner">
+          <div className="workspace-mobile-context">
             <button
+              ref={mobileNavigationTriggerRef}
               type="button"
-              className="nav-mobile-trigger px-3"
+              className="nav-mobile-trigger"
               aria-label={translate("common.navbar.mobileMenuLabel")}
               aria-haspopup="dialog"
               aria-controls="mobile-navigation-drawer"
@@ -234,8 +286,18 @@ function NavbarImpl({
               data-testid="button-open-mobile-nav"
             >
               <Menu className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">{translate("common.navbar.mobileMenuText")}</span>
+              <span className="sr-only">{translate("common.navbar.mobileMenuText")}</span>
             </button>
+            <span className="workspace-context-current" title={activeContext}>{activeContext}</span>
+          </div>
+
+          <div className="workspace-desktop-context">
+            <span className="workspace-context-parent">Ruang kerja</span>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="workspace-context-current" title={activeContext}>{activeContext}</span>
+          </div>
+
+          <div className="ml-auto flex shrink-0 items-center gap-1 lg:hidden">
 
             <NavbarNotificationCenter
               {...notificationHistory}
@@ -257,19 +319,6 @@ function NavbarImpl({
               onEscapeKeyDown={scheduleMobileUserMenuTriggerFocus}
             />
           </div>
-        </div>
-
-        <NavbarDesktopNavigation
-          directItems={directItems}
-          groupedItems={groupedItems}
-          activeNavigationItemId={activeNavigationItemId}
-          savedCount={savedCount}
-          onNavigate={navigateToItem}
-          onPrefetch={prefetchItem}
-          navScrollerRef={navScrollerRef}
-          desktopNavOverflow={desktopNavOverflow}
-        />
-
         <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
           <NavbarNotificationCenter
             {...notificationHistory}
@@ -294,6 +343,7 @@ function NavbarImpl({
       </div>
 
       <NavbarMobileNavigation
+        onCloseAutoFocus={restoreMobileNavigationFocus}
         open={mobileNavOpen}
         onOpenChange={setMobileNavOpen}
         mobileItems={mobileItems}
@@ -303,6 +353,7 @@ function NavbarImpl({
         onPrefetch={prefetchItem}
       />
     </header>
+    </>
   )
 }
 

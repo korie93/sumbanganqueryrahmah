@@ -46,6 +46,7 @@ export function CollectionDailyCalendarDayBadge({
           ? "collection-daily-calendar-day-badge-holiday"
           : "collection-daily-calendar-day-badge-working"
       } ${compact ? "collection-daily-calendar-day-badge-compact" : ""}`}
+      role="group"
       aria-label={summary}
       title={summary}
     >

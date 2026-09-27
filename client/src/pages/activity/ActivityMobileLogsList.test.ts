@@ -18,7 +18,7 @@ const activity: ActivityRecord = {
   isActive: true,
 };
 
-test("ActivityMobileLogsList keeps moderation actions on native buttons for keyboard access", () => {
+test("ActivityMobileLogsList keeps a primary investigation button and native moderation menu trigger", () => {
   const markup = renderToStaticMarkup(
     createElement(ActivityMobileLogsList, {
       actionLoading: null,
@@ -36,13 +36,11 @@ test("ActivityMobileLogsList keeps moderation actions on native buttons for keyb
     }),
   );
 
-  assert.match(markup, /button-kick-activity-1/);
   assert.match(markup, /button-investigate-activity-1/);
-  assert.match(markup, /button-ban-activity-1/);
-  assert.match(markup, /button-delete-activity-1/);
-  assert.match(markup, /Force logout operator\.one/);
-  assert.match(markup, /Ban operator\.one/);
-  assert.match(markup, /Delete activity log for operator\.one/);
+  assert.match(markup, /button-activity-actions-activity-1/);
+  assert.match(markup, /aria-haspopup="menu"/);
+  assert.match(markup, /More actions for operator\.one/);
+  assert.doesNotMatch(markup, /button-kick-activity-1|button-ban-activity-1|button-delete-activity-1/);
   assert.match(markup, /aria-label="Activity for operator\.one, role admin, status online,/);
   assert.match(markup, /Desktop · Windows 10\/11/);
   assert.match(markup, /type="button"/);

@@ -25,24 +25,24 @@ export function SettingsSaveBar({
   return (
     <Card
       className={cn(
-        "border-primary/40 bg-background/95 shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:shadow-sm sqr-sm-backdrop-blur-none",
-        keyboardOpen ? "static shadow-sm sqr-backdrop-blur-none" : "sticky bottom-0 z-[var(--z-sticky-content)]",
+        "border-border bg-card shadow-none sm:static",
+        keyboardOpen ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
       )}
       data-floating-ai-avoid="true"
     >
       <CardContent
-        className="flex flex-col gap-3 p-4 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] lg:flex-row lg:items-center lg:justify-between"
+        className="flex flex-col gap-3 p-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] sm:flex-row sm:items-center sm:justify-between sm:p-4"
       >
         <div className="min-w-0 space-y-2">
           <div className="flex items-center gap-2 text-sm">
             {dirtyCount > 0 ? (
               <>
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" />
                 <span>{dirtyCount} unsaved change{dirtyCount === 1 ? "" : "s"}</span>
               </>
             ) : (
               <>
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
                 <span>No unsaved changes</span>
               </>
             )}
