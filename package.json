@@ -88,6 +88,7 @@
     "test:e2e:visual": "node scripts/ui-visual-contract.mjs",
     "test:visual": "playwright test tests/visual/",
     "test:visual:built": "node scripts/test-visual-built.mjs",
+    "test:landing:built": "node scripts/landing-v21-built-browser.mjs",
     "test:visual:update": "playwright test tests/visual/ --update-snapshots",
     "test:e2e:a11y": "node scripts/ui-accessibility-contract.mjs",
     "test:a11y": "npm run test:e2e:a11y",

@@ -14,6 +14,7 @@ module.exports = {
     "./client/src/components/PasswordStrengthMeter.tsx",
     "./client/src/components/PasswordConfirmationFeedback.tsx",
     "./client/src/pages/Landing*.tsx",
+    "./client/src/pages/landing-v21/**/*.tsx",
     "./client/src/pages/Login.tsx",
     "./client/src/pages/LoginParts.tsx",
     "./client/src/pages/ForgotPassword.tsx",

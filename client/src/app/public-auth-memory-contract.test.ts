@@ -131,8 +131,11 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   const indexSource = readClientSource("../../index.html");
   const tokenSource = readThemeTokenSource();
 
-  assert.match(indexSource, /<html lang="ms">/);
-  assert.match(indexSource, /<meta name="color-scheme" content="light dark" \/>/);
+  assert.match(indexSource, /<html lang="en">/);
+  assert.match(indexSource, /<meta name="color-scheme" content="light" \/>/);
+  const metadataSource = readClientSource("document-metadata.ts");
+  assert.match(metadataSource, /isPublicLanding \? "en" : "ms"/);
+  assert.match(metadataSource, /isPublicLanding \? "light" : "light dark"/);
   assert.match(indexSource, /<meta name="mobile-web-app-capable" content="yes" \/>/);
   assert.doesNotMatch(indexSource, /apple-mobile-web-app-capable/);
   assert.match(indexSource, /<link rel="canonical" href="https:\/\/sqr-system\.com\/" \/>/);

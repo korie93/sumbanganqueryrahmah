@@ -12,10 +12,17 @@ type DocumentMetadata = {
   title: string;
   description: string;
   robots: string;
+  publicLanding?: boolean;
+  socialDescription?: string;
 };
 
 const DEFAULT_PUBLIC_DESCRIPTION =
-  "SQR System ialah platform operasi dalaman untuk general search, semakan rekod, dan pengurusan data sumbangan secara tersusun dan terkawal.";
+  "SQR brings data search, analysis, import and operational monitoring together in a fast, structured and responsive platform.";
+
+const PUBLIC_SOCIAL_DESCRIPTION =
+  "Data search, analysis and management within a structured operations platform.";
+
+let publicApplicationSchema: HTMLScriptElement | null = null;
 
 const DEFAULT_APP_DESCRIPTION =
   "Ruang kerja dalaman untuk general search, semakan rekod, laporan, dan pengurusan operasi Sumbangan Query Rahmah.";
@@ -66,9 +73,11 @@ export function resolveDocumentMetadata({
         };
       }
       return {
-        title: buildTitle(resolvedSystemName, "Platform Operasi Dalaman"),
+        title: "SQR — Sumbangan Query Rahmah",
         description: DEFAULT_PUBLIC_DESCRIPTION,
         robots: INDEXABLE_ROBOTS,
+        publicLanding: true,
+        socialDescription: PUBLIC_SOCIAL_DESCRIPTION,
       };
     case "login":
       return {
@@ -190,12 +199,35 @@ function setMetaContent(name: string, content: string, attr: "name" | "property"
 
 export function applyDocumentMetadata(metadata: DocumentMetadata) {
   if (typeof document === "undefined") return;
+  const isPublicLanding = metadata.publicLanding === true;
+  const socialDescription = metadata.socialDescription || metadata.description;
+  document.documentElement.lang = isPublicLanding ? "en" : "ms";
   document.title = metadata.title;
   setMetaContent("description", metadata.description);
   setMetaContent("robots", metadata.robots);
   setMetaContent("googlebot", metadata.robots);
   setMetaContent("og:title", metadata.title, "property");
-  setMetaContent("og:description", metadata.description, "property");
+  setMetaContent("og:description", socialDescription, "property");
   setMetaContent("twitter:title", metadata.title);
-  setMetaContent("twitter:description", metadata.description);
+  setMetaContent("twitter:description", socialDescription);
+  setMetaContent("color-scheme", isPublicLanding ? "light" : "light dark");
+  if (isPublicLanding) {
+    setMetaContent("theme-color", "#ffffff");
+  } else {
+    document.head.querySelector('meta[name="theme-color"]')?.remove();
+  }
+
+  // Reuse the parser-created, non-executable JSON-LD node. Assigning script
+  // text or HTML dynamically would introduce a Trusted Types sink under CSP.
+  const schema = document.getElementById("sqr-application-schema");
+  if (schema instanceof HTMLScriptElement && schema.type === "application/ld+json") {
+    publicApplicationSchema = schema;
+  }
+  if (isPublicLanding) {
+    if (publicApplicationSchema?.ownerDocument === document && !publicApplicationSchema.isConnected) {
+      document.head.appendChild(publicApplicationSchema);
+    }
+  } else {
+    publicApplicationSchema?.remove();
+  }
 }

@@ -21,7 +21,7 @@ function buildCompliantFilesByPath() {
       ].join("\n"),
     ],
     [
-      "client/src/pages/Landing.css",
+      "client/src/pages/landing-v21/landing-v21.css",
       "@media (max-width: 1023px) {}",
     ],
     [
@@ -60,6 +60,18 @@ test("client breakpoint contract flags unsupported CSS width breakpoints", () =>
 
   assert.equal(validation.failures.length, 1);
   assert.match(validation.failures[0], /unsupported responsive breakpoint 900px/i);
+});
+
+test("only the namespaced V21 stylesheet may retain approved reference breakpoints", () => {
+  const filesByPath = buildCompliantFilesByPath();
+  const landingPath = "client/src/pages/landing-v21/landing-v21.css";
+  filesByPath[landingPath] = [390, 900, 1040].map(width => `@media (max-width: ${width}px) {}`).join("\n");
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, []);
+  filesByPath["client/src/pages/Login.css"] = filesByPath[landingPath];
+  assert.equal(validateClientBreakpointContract({ filesByPath }).failures.length, 3);
+  delete filesByPath["client/src/pages/Login.css"];
+  filesByPath[landingPath] = "@media (max-width: 999px) {}";
+  assert.equal(validateClientBreakpointContract({ filesByPath }).failures.length, 1);
 });
 
 test("client breakpoint contract report summarizes successful checks", () => {

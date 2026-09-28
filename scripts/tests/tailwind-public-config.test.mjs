@@ -167,11 +167,10 @@ test("browser auth fixture does not mask public CSS omissions with an eager auth
 test("tailwind public config covers all landing route files", () => {
   const requiredLandingFiles = [
     "client/src/pages/Landing.tsx",
-    "client/src/pages/LandingHeroShell.tsx",
-    "client/src/pages/LandingDeferredSections.tsx",
     "client/src/pages/LandingRouteFallback.tsx",
-    "client/src/pages/LandingHeroInsightStrip.tsx",
-    "client/src/pages/LandingProductPreview.tsx",
+    "client/src/pages/landing-v21/LandingSections.tsx",
+    "client/src/pages/landing-v21/ProductPreview.tsx",
+    "client/src/pages/landing-v21/TestimonialCarousel.tsx",
   ];
 
   for (const filePath of requiredLandingFiles) {

@@ -3,6 +3,11 @@ import path from "node:path";
 
 export const ALLOWED_CLIENT_BREAKPOINT_WIDTHS = [640, 767, 768, 1023, 1024];
 
+// Preserve the approved standalone V21 layout only inside its isolated CSS.
+// Internal application breakpoints remain on the shared responsive contract.
+const LANDING_V21_BREAKPOINT_WIDTHS = [390, 900, 1040];
+const LANDING_V21_CSS_PATH = "client/src/pages/landing-v21/landing-v21.css";
+
 export const CLIENT_BREAKPOINT_CONTRACT_REQUIREMENTS = [
   {
     filePath: "client/src/lib/responsive.ts",
@@ -237,7 +242,8 @@ export function validateClientBreakpointContract(params = {}) {
     for (const match of text.matchAll(CSS_WIDTH_MEDIA_QUERY_PATTERN)) {
       cssBreakpointCount += 1;
       const width = Number(match[1]);
-      if (ALLOWED_CLIENT_BREAKPOINT_WIDTHS.includes(width)) {
+      if (ALLOWED_CLIENT_BREAKPOINT_WIDTHS.includes(width)
+        || (filePath === LANDING_V21_CSS_PATH && LANDING_V21_BREAKPOINT_WIDTHS.includes(width))) {
         continue;
       }
 
@@ -269,7 +275,7 @@ export function formatClientBreakpointContractReport(validation) {
   const inspected = `Client breakpoint contract inspected ${summary.checkedRequirementFileCount || 0}/${summary.requirementFileCount || 0} targeted files, ${summary.checkedRequirementCount || 0}/${summary.requirementCount || 0} contract markers, and ${summary.cssFileCount || 0} CSS files (${summary.cssBreakpointCount || 0} width media queries).`;
 
   if (failures.length === 0) {
-    return `${inspected}\nBreakpoint tiers remain standardized around 640/767/768/1023/1024 across the guarded client viewport paths.`;
+    return `${inspected}\nBreakpoint tiers remain standardized around 640/767/768/1023/1024 across the guarded client viewport paths. Only isolated V21 landing CSS retains its approved 390/900/1040px reference breakpoints.`;
   }
 
   return [

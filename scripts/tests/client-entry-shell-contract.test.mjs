@@ -3,7 +3,19 @@ import test from "node:test";
 import {
   collectClientEntryShellContractMatches,
   formatClientEntryShellContractReport,
+  isInertApplicationSchema,
 } from "../lib/client-entry-shell-contract.mjs";
+
+test("only strictly inert valid application JSON-LD is exempt from inline executable code checks", () => {
+  const attrs = ' id="sqr-application-schema" type="application/ld+json"';
+  const json = JSON.stringify({ "@context": "https://schema.org", "@type": "SoftwareApplication", name: "SQR", url: "https://sqr-system.com/" });
+  assert.equal(isInertApplicationSchema(attrs, json), true);
+  assert.equal(isInertApplicationSchema(attrs + ' onload="alert(1)"', json), false);
+  assert.equal(isInertApplicationSchema(attrs.replace('application/ld+json', 'text/javascript'), json), false);
+  assert.equal(isInertApplicationSchema(attrs, 'alert(1)'), false);
+  assert.equal(isInertApplicationSchema(attrs, json.replace('SQR', '<script>')), false);
+  assert.equal(isInertApplicationSchema(attrs, '{}'), false);
+});
 
 test("client entry shell contract reports success when shell assets stay externalized", () => {
   const report = formatClientEntryShellContractReport({

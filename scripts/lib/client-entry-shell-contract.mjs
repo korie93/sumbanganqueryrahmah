@@ -11,6 +11,18 @@ const STYLE_TAG_PATTERN = /<style\b[^>]*>/gi;
 const INLINE_STYLE_ATTRIBUTE_PATTERN = /\sstyle\s*=\s*(?:"[^"]*"|'[^']*')/gi;
 const SCRIPT_TAG_PATTERN = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
 
+// JSON-LD is an inert data block, not executable bootstrap code. Do not allow
+// event handlers, arbitrary types, invalid JSON, or a script-closing injection.
+export function isInertApplicationSchema(attributes, contents) {
+  if (!/^\s+id="sqr-application-schema"\s+type="application\/ld\+json"\s*$/.test(attributes)
+    || /[<>]/.test(contents)) return false;
+  try {
+    const value = JSON.parse(contents);
+    return value?.["@context"] === "https://schema.org" && value?.["@type"] === "SoftwareApplication"
+      && typeof value.name === "string" && value.url === "https://sqr-system.com/";
+  } catch { return false; }
+}
+
 export function collectClientEntryShellContractMatches(params = {}) {
   const repoRoot = params.repoRoot || process.cwd();
   const indexPath = path.join(repoRoot, CLIENT_INDEX_HTML_PATH);
@@ -39,7 +51,7 @@ export function collectClientEntryShellContractMatches(params = {}) {
     const attributes = match[1] || "";
     const contents = match[2] || "";
     const hasSrc = /\bsrc\s*=/i.test(attributes);
-    if (hasSrc) {
+    if (hasSrc || isInertApplicationSchema(attributes, contents)) {
       continue;
     }
 
@@ -137,7 +149,7 @@ export function formatClientEntryShellContractReport(result) {
   if (matches.length === 0) {
     return [
       inspected,
-      "Client entry shell remains free of inline style/script blocks and keeps boot shell assets externalized.",
+      "Client entry shell remains free of inline style/script blocks with executable code; only validated inert application JSON-LD is allowed, and keeps boot shell assets externalized.",
     ].join("\n");
   }
 

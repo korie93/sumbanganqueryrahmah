@@ -1,61 +1,15 @@
-import {
-  LandingHeroShell,
-  LandingPageShell,
-} from "@/pages/LandingHeroShell";
+import "./LandingRouteFallback.css";
 
-type LandingRouteFallbackProps = {
-  onLoginClick: () => void;
-};
-
-export default function LandingRouteFallback({ onLoginClick }: LandingRouteFallbackProps) {
+export default function LandingRouteFallback({ onLoginClick }: { onLoginClick: () => void }) {
   return (
-    <LandingPageShell onLoginClick={onLoginClick}>
-      <LandingHeroShell
-        leftDetail={(
-          <>
-            <div className="flex flex-wrap items-center gap-3" aria-hidden="true">
-              <div className="landing-placeholder-line landing-placeholder-line--accent h-11 w-full max-w-[15rem] rounded-xl" />
-              <div className="landing-placeholder-box h-11 w-full max-w-[22rem] rounded-xl" />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3" aria-hidden="true">
-              <div className="landing-placeholder-card rounded-2xl px-4 py-4">
-                <div className="landing-placeholder-line h-3 w-16 rounded-full" />
-                <div className="landing-placeholder-line mt-3 h-3 w-full rounded-full" />
-                <div className="landing-placeholder-line mt-2 h-3 w-4/5 rounded-full" />
-              </div>
-              <div className="landing-placeholder-card rounded-2xl px-4 py-4">
-                <div className="landing-placeholder-line h-3 w-20 rounded-full" />
-                <div className="landing-placeholder-line mt-3 h-3 w-full rounded-full" />
-                <div className="landing-placeholder-line mt-2 h-3 w-3/4 rounded-full" />
-              </div>
-              <div className="landing-placeholder-card rounded-2xl px-4 py-4">
-                <div className="landing-placeholder-line h-3 w-18 rounded-full" />
-                <div className="landing-placeholder-line mt-3 h-3 w-full rounded-full" />
-                <div className="landing-placeholder-line mt-2 h-3 w-4/5 rounded-full" />
-              </div>
-            </div>
-          </>
-        )}
-        rightPane={(
-          <div
-            id="about"
-            className="landing-secondary-pane landing-secondary-pane-shell rounded-3xl p-5"
-          >
-            <div className="landing-about-shell landing-about-card space-y-3 rounded-2xl p-6" aria-hidden="true">
-              <div className="landing-placeholder-line h-3 w-28 rounded-full" />
-              <div className="landing-placeholder-line h-8 max-w-sm rounded-2xl" />
-              <div className="landing-placeholder-line h-3 max-w-md rounded-full" />
-              <div className="landing-placeholder-line h-3 max-w-lg rounded-full" />
-              <div className="pt-2 space-y-3">
-                <div className="landing-placeholder-box h-16 rounded-2xl" />
-                <div className="landing-placeholder-box h-16 rounded-2xl" />
-                <div className="landing-placeholder-box h-16 rounded-2xl" />
-              </div>
-              <div className="landing-placeholder-box h-16 rounded-2xl" />
-            </div>
-          </div>
-        )}
-      />
-    </LandingPageShell>
+    <main id="main-content" tabIndex={-1} className="landing-route-fallback" aria-busy="true">
+      <p>SQR Operations Platform</p>
+      <h1>Operational data, structured<br />for faster decisions.</h1>
+      <p>SQR consolidates search, analysis, monitoring and access control into a single operational workspace designed for clarity, speed and governance.</p>
+      <a href="/login" onClick={event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault(); onLoginClick();
+      }}>Sign In</a>
+    </main>
   );
 }

@@ -48,9 +48,9 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
     cleanupPatterns: [/window\.clearTimeout\(resizeDebounceHandle\)/],
   },
   {
-    filePath: "../pages/Landing.tsx",
-    setupPattern: /LANDING_DEFERRED_SECTION_FALLBACK_DELAY_MS/,
-    cleanupPatterns: [/window\.clearTimeout\(timeoutHandle\)/],
+    filePath: "../pages/landing-v21/ProductPreview.tsx",
+    setupPattern: /window\.setInterval/,
+    cleanupPatterns: [/window\.clearInterval\(timer\)/],
   },
   {
     filePath: "../components/monitor/MonitorDeferredSection.tsx",

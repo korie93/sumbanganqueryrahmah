@@ -72,13 +72,22 @@ html.app-ready .public-auth-boot-shell {
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell {
+  --boot-shell-text: #101828;
+  --boot-shell-muted: #4c5b6b;
+  --boot-shell-highlight: #1e3a5f;
   align-items: flex-start;
+  background: #ffffff;
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell__panel {
   width: min(100%, 1276px);
   margin-top: 20px;
   border-radius: 32px;
+  border-color: #dde4ec;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.045);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell__content {
@@ -89,7 +98,7 @@ html[data-boot-shell="landing"] .public-auth-boot-shell__content {
 
 html[data-boot-shell="landing"] .public-auth-boot-shell__title {
   max-width: 780px;
-  font-size: 3.4rem;
+  font-size: clamp(2rem, 6.6vw, 3.4rem);
   line-height: 1.08;
   letter-spacing: 0;
 }
@@ -201,6 +210,6 @@ html[data-boot-shell="landing"] .public-auth-boot-shell__fields {
   }
 
   html[data-boot-shell="landing"] .public-auth-boot-shell__title {
-    font-size: 2.4rem;
+    font-size: clamp(1.8rem, 7.5vw, 2.4rem);
   }
 }

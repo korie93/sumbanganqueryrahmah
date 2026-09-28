@@ -2,9 +2,9 @@
   const publicShellCopy = {
     "/": {
       mode: "landing",
-      eyebrow: "SQR System",
-      title: "Platform kerja dalaman untuk carian, semakan, dan pengurusan rekod sumbangan.",
-      copy: "Ruang kerja operasi sedang disediakan dengan selamat.",
+      eyebrow: "SQR Operations Platform",
+      title: "Operational data, structured for faster decisions.",
+      copy: "SQR consolidates search, analysis, monitoring and access control into a single operational workspace designed for clarity, speed and governance.",
     },
     "/login": {
       mode: "public-auth",
@@ -39,6 +39,7 @@
   };
 
   const path = String(window.location.pathname || "/").toLowerCase();
+  document.documentElement.lang = path === "/" ? "en" : "ms";
   const shell = publicShellCopy[path];
   if (!shell) {
     return;

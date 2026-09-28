@@ -951,7 +951,7 @@ test("landing header keeps its brand readable on narrow and enlarged-text viewpo
 
     const brand = page.getByTestId("landing-brand-title");
     await expect(brand).toBeVisible();
-    await expect(brand).toHaveText("SQR System");
+    await expect(brand).toHaveText(/SQR\s*Sumbangan Query Rahmah/);
 
     const layout = await brand.evaluate((element) => ({
       clientWidth: element.clientWidth,
@@ -962,7 +962,7 @@ test("landing header keeps its brand readable on narrow and enlarged-text viewpo
 
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
     expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
-    await expect(page.getByRole("button", { name: "Log Masuk", exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Sign In", exact: true })).toBeVisible();
 
     const skipLink = page.getByRole("link", { name: "Langkau ke kandungan utama" });
     const hiddenSkipLinkBox = await skipLink.boundingBox();

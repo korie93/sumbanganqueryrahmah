@@ -78,40 +78,24 @@ test("single-tab blocked page uses readable token-based copy and accessible guid
   assert.match(css, /\.single-tab-blocked__actions\s*{/);
 });
 
-test("landing and public auth theme use solid neutral dark-mode auth surfaces", () => {
-  const landingCss = readPageSource("Landing.css");
+test("public auth retains neutral dark-mode surfaces independently of landing", () => {
   const tokenSource = readThemeTokenSource();
-
   assert.match(tokenSource, /--public-auth-layout-bg:\s*var\(--dm-bg\);/);
   assert.match(tokenSource, /--public-auth-shell-surface-strong:\s*var\(--color-surface-elevated\);/);
-  assert.match(tokenSource, /--public-auth-glow-top:\s*transparent;/);
-  assert.match(tokenSource, /--public-auth-halo:\s*transparent;/);
   assert.match(tokenSource, /--login-card-border-gradient:\s*none;/);
-  assert.match(tokenSource, /--login-card-overlay-gradient:\s*none;/);
-  assert.match(landingCss, /\.landing-hero-panel\s*{/);
-  assert.match(landingCss, /--landing-primary:\s*hsl\(221 83% 53%\);/);
-  assert.match(landingCss, /--landing-teal:\s*hsl\(174 72% 25%\);/);
-  assert.match(landingCss, /--landing-trust:\s*hsl\(154 58% 27%\);/);
-  assert.match(landingCss, /--landing-amber:\s*hsl\(36 84% 31%\);/);
-  assert.match(landingCss, /background:\s*linear-gradient\(180deg, var\(--landing-surface\), var\(--landing-surface-muted\)\);/);
-  assert.match(landingCss, /\.landing-placeholder-footer-shell\s*{/);
 });
 
-test("landing hero uses compact modular preview sections", () => {
-  const landingSource = readPageSource("Landing.tsx");
-  const heroShellSource = readPageSource("LandingHeroShell.tsx");
-  const insightSource = readPageSource("LandingHeroInsightStrip.tsx");
-  const previewSource = readPageSource("LandingProductPreview.tsx");
-  const smokeSource = readPageSource("../../../scripts/ui-smoke.mjs");
-
-  assert.match(landingSource, /<LandingHeroInsightStrip \/>/);
-  assert.match(landingSource, /rightPane=\{<LandingProductPreview \/>\}/);
-  assert.doesNotMatch(landingSource, /landing-feature-card/);
-  assert.match(heroShellSource, /Log Masuk ke Sistem/);
-  assert.match(heroShellSource, /className="flex flex-1 flex-col justify-start pt-5 pb-8 sm:pt-6 sm:pb-10 lg:pt-8 lg:pb-12"/);
-  assert.doesNotMatch(heroShellSource, /id="main-content"[\s\S]*justify-center/);
-  assert.match(insightSource, /role="list"/);
-  assert.match(previewSource, /landing-workspace-preview/);
-  assert.match(previewSource, /role="group"/);
-  assert.match(smokeSource, /\^\(Log In\|Log Masuk\)\$/);
+test("V21 landing integrates modular React views without changing authentication", () => {
+  const landing = readPageSource("Landing.tsx");
+  const preview = readPageSource("landing-v21/ProductPreview.tsx");
+  const links = readPageSource("landing-v21/LandingLink.tsx");
+  assert.match(landing, /<ProductPreview/);
+  assert.match(landing, /<TestimonialCarousel/);
+  assert.match(landing, /id="main-content" tabIndex=\{-1\}/);
+  assert.match(preview, /role="tablist"/);
+  assert.match(preview, /role="tabpanel"/);
+  assert.match(preview, /window.clearInterval/);
+  assert.ok(links.includes('href === "/login"'));
+  assert.match(links, /onLoginClick\(\)/);
+  assert.doesNotMatch(landing + preview, /dangerouslySetInnerHTML|fetch\(/);
 });
