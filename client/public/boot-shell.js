@@ -48,6 +48,41 @@
   document.documentElement.setAttribute("data-boot-shell", shell.mode);
   window.__SQR_BOOT_SHELL__ = shell;
 
+  // Resource hints only: authentication and routing remain owned by the app.
+  // Do not download landing assets on login/internal routes or while restoring
+  // an existing session. Denied storage simply leaves normal lazy loading in place.
+  const preloadLandingAssets = function () {
+    if (window.location.pathname !== "/") return;
+    try {
+      if (document.cookie.split(";").some(part => part.trim().startsWith("sqr_auth_hint="))
+        || window.sessionStorage.getItem("user")
+        || window.sessionStorage.getItem("banned") === "1"
+        || document.querySelector('meta[name="sqr-maintenance"][content="active"]')) return;
+      document.querySelectorAll('meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]').forEach(meta => {
+        const isScript = meta.getAttribute("name") === "sqr-landing-script";
+        const href = meta.getAttribute("content") || "";
+        const allowed = isScript ? /^\/assets\/[A-Za-z0-9_-]+\.js$/ : /^\/assets\/[A-Za-z0-9_-]+\.css$/;
+        if (!allowed.test(href)) return;
+        const link = document.createElement("link");
+        link.href = href;
+        link.fetchPriority = "high";
+        // Match Vite's anonymous-CORS module and stylesheet requests, so the
+        // eventual lazy import reuses these responses instead of fetching twice.
+        link.crossOrigin = "anonymous";
+        if (isScript) {
+          link.rel = "modulepreload";
+        } else {
+          link.rel = "preload";
+          link.as = "style";
+        }
+        document.head.appendChild(link);
+      });
+    } catch {
+      // Optional optimization must never block the public shell or session restore.
+    }
+  };
+  preloadLandingAssets();
+
   const applyShellCopy = function () {
     const eyebrow = document.getElementById("boot-shell-eyebrow");
     const title = document.getElementById("boot-shell-title");

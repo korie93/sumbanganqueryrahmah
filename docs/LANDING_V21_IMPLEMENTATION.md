@@ -144,3 +144,80 @@ is successful. This is local implementation verification, not a claim that live
 CI, deployment or all real-service integrations have been executed.
 
 IMPLEMENTATION COMPLETE — VERIFIED
+
+## CI performance follow-up — verification pending
+
+The implementation verification above predates the first pushed CI run. CI run
+[`36369860028`](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/36369860028)
+for commit `2e5403be` failed only the PageSpeed Lighthouse budget step: the mobile
+home page scored **82**, below the unchanged minimum of **85**. Its reported
+metrics were FCP **2,081 ms**, LCP **4,108 ms**, TBT **124 ms** and CLS **0**. The
+build/test, coverage, visual, accessibility and UI smoke checks passed.
+
+The Lighthouse report identified the hero heading as the LCP element. Landing
+JavaScript and CSS were discovered late in the initial loading sequence; the
+heading also depended on its entrance animation becoming visible. The scoped
+follow-up addresses those delays:
+
+- The hero heading and introductory paragraph are immediately visible, without
+  waiting for an entrance animation. Other landing motion retains its existing
+  controls and reduced-motion/low-spec handling.
+- A build-only Vite plugin emits inert metadata for the landing chunk, its CSS
+  and direct static helper dependencies not already referenced by the generated
+  HTML. Only validated same-origin `/assets/` JavaScript/CSS paths are accepted.
+- The deferred boot script receives high fetch priority and consumes those hints
+  only on the exact anonymous `/` path. It creates high-priority module/style
+  preloads; it does not execute the landing module or apply the stylesheet. The
+  existing lazy route still owns rendering and stylesheet activation.
+- Anonymous CORS settings match Vite's eventual requests, allowing the browser
+  to reuse the preloaded responses rather than requiring a different request mode.
+- Authentication-hint cookies, stored users, banned-session flags and maintenance
+  metadata suppress this optional preloading. Denied cookie or storage access
+  falls back to normal lazy loading without preventing the boot shell from painting.
+- An exact allowlist combines existing public-entry helpers and four error-boundary
+  icons into `public-runtime`; the initial static JavaScript graph shrinks from
+  16 files to five. Private pages, the rest of the icon library and heavy features
+  remain separately loaded. Main-entry and other bundle budgets are unchanged.
+- Motion preferences are read on first client render instead of initially applying
+  low-spec classes and immediately removing them. Identical preference updates
+  reuse the existing state; live preference/visibility listeners retain cleanup.
+
+This follow-up does not change backend, database, authentication or route
+decisions, and does not relax CI budgets or skip the failing performance check.
+
+Follow-up verification (2026-09-28, uncommitted fix):
+
+| Check | Result |
+| --- | --- |
+| Production build / source-map gate | PASS |
+| Typecheck / frontend and backend lint | PASS |
+| Complete client tests | 1,726 passed, zero failures |
+| Script/config tests | 544 passed, one conditional skip, zero failures |
+| Built landing, Chrome 153 (matching CI major) | 22 checks passed |
+| Existing built visual suite | 16 passed; no snapshot updates |
+| Existing bundle budgets / repository hygiene / secret scan / diff whitespace | PASS |
+
+Three sequential Lighthouse 13.0.3 mobile `perf` runs of the final frontend on
+Windows Chrome 153, using native headless launch and an isolated compressed
+loopback server, scored **84, 89, 88** (median **88**). LCP was **2.8, 2.6, 2.7 s**;
+FCP **1.6 s**, CLS **0**, accessibility **96**, best practices **96** and SEO **100**
+in all three. Two runs passed all existing home thresholds; the first remained
+one point below the performance minimum. This is measured variability, not a
+claim of a guaranteed score. No threshold or CI retry policy was changed.
+
+The final mobile login sample scored **97** performance, **100** accessibility,
+**96** best practices, LCP/FCP **1.5 s**, TBT **0 ms**, CLS **0**. SEO was **66**
+because login is intentionally non-indexable; the existing CI login policy
+excludes SEO from its score gate. Its applicable thresholds pass unchanged.
+
+Local preliminary probes included slower Chromium 148 runs and a failed native
+Chrome launch inside the Windows sandbox; final measurements used approved
+native Chrome execution. An initial Chromium 148 browser run also failed a touch
+carousel selection; the complete 22-check suite passed on CI-major Chrome 153.
+No assertion or snapshot was relaxed in response.
+
+These are local synthetic checks, not production/database traffic. A fresh
+GitHub CI result is still required after commit/push. This implementation
+verification did not rerun remote workflows or deploy. Raw local measurement reports and logs
+are under ignored `artifacts/landing-v21-reference/` (the `native-motion-*`
+reports are the three final home samples).

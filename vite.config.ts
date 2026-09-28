@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { landingResourceHints } from "./scripts/lib/vite-landing-resource-hints";
 
 const isProductionBuild = process.env.NODE_ENV === "production";
 const isProductionDeploy =
@@ -32,7 +33,7 @@ export default defineConfig({
   define: {
     __SQR_CLIENT_RELEASE_SHA__: JSON.stringify(clientReleaseSha),
   },
-  plugins: [react()],
+  plugins: [react(), landingResourceHints()],
   root: "./client",
   build: {
     outDir: "../dist-local/public",
@@ -83,6 +84,17 @@ export default defineConfig({
             || id.includes("client/src/lib/api/contract.ts")
           ) {
             return "validation";
+          }
+
+          // These tiny helpers already sit on the public entry's critical path.
+          // Keep an exact allowlist: one request instead of a queue of tiny
+          // chunks, without pulling private pages or the whole icon library in.
+          const normalizedId = id.replace(/\\/g, "/");
+          if (
+            /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props)\.ts$/.test(normalizedId)
+            || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert))\.js$/.test(normalizedId)
+          ) {
+            return "public-runtime";
           }
 
           if (!id.includes("node_modules")) {

@@ -156,3 +156,49 @@ test("vite config omits malformed release identifiers from the client bundle", a
     },
   );
 });
+
+test("landing resource hints publish only inert build-owned landing URLs", async () => {
+  const config = await importViteConfigFresh();
+  const plugin = config.plugins.find(plugin => plugin.name === "sqr-landing-resource-hints");
+  assert.equal(plugin.apply, "build");
+  const handler = plugin.transformIndexHtml.handler;
+  const landing = {
+    type: "chunk",
+    facadeModuleId: path.resolve("client/src/pages/Landing.tsx"),
+    fileName: "assets/Landing-abc123.js",
+    imports: [],
+    viteMetadata: { importedCss: new Set(["assets/Landing-def456.css"]) },
+  };
+  const bundle = {
+    landing,
+    unrelated: { type: "chunk", facadeModuleId: "/repo/client/src/pages/Login.tsx", fileName: "assets/Login-auth.js" },
+  };
+  assert.deepEqual(handler("", { bundle }), [
+    { tag: "meta", attrs: { name: "sqr-landing-script", content: "/assets/Landing-abc123.js" }, injectTo: "head" },
+    { tag: "meta", attrs: { name: "sqr-landing-style", content: "/assets/Landing-def456.css" }, injectTo: "head" },
+  ]);
+  const withImports = { ...landing, imports: ["assets/framework-shared.js", "assets/aria-state-props-helper.js"] };
+  const hints = handler('<link rel="modulepreload" href="/assets/framework-shared.js">', { bundle: { landing: withImports } });
+  assert.deepEqual(hints.filter(tag => tag.attrs.name === "sqr-landing-script").map(tag => tag.attrs.content),
+    ["/assets/Landing-abc123.js", "/assets/aria-state-props-helper.js"]);
+  assert.throws(() => handler("", { bundle: {} }), /require the emitted landing page chunk/);
+  for (const fileName of ["https://example.com/landing.js", "../outside.js", "assets/nested/landing.js"]) {
+    assert.throws(() => handler("", { bundle: { landing: { ...landing, fileName } } }), /local build asset paths/);
+  }
+});
+
+test("public runtime consolidates only the existing small shared entry dependencies", async () => {
+  const config = await importViteConfigFresh();
+  const chunk = config.build.rollupOptions.output.manualChunks;
+  for (const name of ["browser-storage", "secure-id", "web-vitals", "client-error-telemetry", "safe-url", "aria-state-props"]) {
+    assert.equal(chunk(`/repo/client/src/lib/${name}.ts`), "public-runtime");
+  }
+  for (const name of ["createLucideIcon", "Icon", "defaultAttributes", "shared/src/utils", "icons/house", "icons/refresh-cw", "icons/rotate-ccw", "icons/triangle-alert"]) {
+    assert.equal(chunk(`/repo/node_modules/lucide-react/dist/esm/${name}.js`), "public-runtime");
+  }
+  for (const id of ["client/src/pages/Search.tsx", "client/src/pages/Settings.tsx", "client/src/app/AuthenticatedAppEntry.tsx", "client/src/lib/api/client.ts", "node_modules/lucide-react/dist/esm/icons/database.js", "node_modules/web-vitals/dist/web-vitals.js"]) {
+    assert.equal(chunk(`/repo/${id}`), undefined, `Do not eagerly bundle ${id}`);
+  }
+  assert.equal(chunk("/repo/node_modules/@tanstack/react-query/build/modern/index.js"), "query");
+  assert.equal(chunk("/repo/node_modules/react/index.js"), "framework");
+});

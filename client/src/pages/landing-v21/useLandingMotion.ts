@@ -3,24 +3,38 @@ import { detectLowSpecMode } from "@/lib/low-spec-mode";
 
 type PerformanceNavigator = Navigator & { deviceMemory?: number; connection?: { saveData?: boolean; effectiveType?: string } };
 
+function readMotionPreferences() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return { reduced: true, lowSpec: true, hidden: false, touch: false };
+  }
+  const nav = navigator as PerformanceNavigator;
+  return {
+    reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    lowSpec: detectLowSpecMode() || document.documentElement.classList.contains("low-spec")
+      || (typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4)
+      || (typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 4)
+      || nav.connection?.saveData === true || ["slow-2g", "2g"].includes(nav.connection?.effectiveType ?? ""),
+    hidden: document.hidden,
+    touch: window.matchMedia("(pointer: coarse)").matches,
+  };
+}
+
 export function useLandingMotion() {
-  const [preferences, setPreferences] = useState({ reduced: true, lowSpec: true, hidden: false, touch: false });
+  // This is a client-rendered page. Read the real preference on first render
+  // instead of restyling the entire page immediately after mounting it.
+  const [preferences, setPreferences] = useState(readMotionPreferences);
   useEffect(() => {
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const pointer = window.matchMedia("(pointer: coarse)");
-    const nav = navigator as PerformanceNavigator;
-    const update = () => setPreferences({
-      reduced: motion.matches,
-      lowSpec: detectLowSpecMode() || document.documentElement.classList.contains("low-spec")
-        || (typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4)
-        || (typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 4)
-        || nav.connection?.saveData === true || ["slow-2g", "2g"].includes(nav.connection?.effectiveType ?? ""),
-      hidden: document.hidden, touch: pointer.matches,
-    });
-    update();
+    const update = () => {
+      const next = readMotionPreferences();
+      setPreferences(previous => previous.reduced === next.reduced && previous.lowSpec === next.lowSpec
+        && previous.hidden === next.hidden && previous.touch === next.touch ? previous : next);
+    };
     motion.addEventListener("change", update);
     pointer.addEventListener("change", update);
     document.addEventListener("visibilitychange", update);
+    update();
     return () => {
       motion.removeEventListener("change", update);
       pointer.removeEventListener("change", update);

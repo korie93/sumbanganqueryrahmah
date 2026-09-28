@@ -62,6 +62,22 @@ test("every landing CSS rule stays beneath its page namespace", () => {
   assert.ok(rules > 0, "The production landing stylesheet must be inspected");
 });
 
+test("hero reading content never waits for an entrance animation", () => {
+  for (const selector of [".sqr-landing .hero h1", ".sqr-landing .hero>div>p"]) {
+    let inspected = false;
+    stylesheet.walkRules(rule => {
+      if (!rule.selectors.includes(selector)) return;
+      rule.walkDecls(declaration => {
+        if (declaration.prop === "opacity") assert.equal(declaration.value, "1");
+        if (declaration.prop === "animation") assert.equal(declaration.value, "none");
+        if (declaration.prop === "animation-delay") assert.equal(declaration.value, "0s");
+      });
+      inspected = true;
+    });
+    assert.ok(inspected, `Must inspect critical content: ${selector}`);
+  }
+});
+
 test("landing keyframes and animation references cannot collide with application animations", () => {
   const names = new Set<string>();
   stylesheet.walkAtRules(/keyframes$/i, rule => {

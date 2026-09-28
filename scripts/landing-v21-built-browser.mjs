@@ -27,6 +27,15 @@ let page;
 try {
  const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce',serviceWorkers:'block'});
  await context.addInitScript(()=>{
+   // Record the first committed app DOM so resource hints must start before
+   // React asks for the lazy landing, rather than merely existing eventually.
+   const observer=new MutationObserver(()=>{
+    if(!document.getElementById('root')?.childElementCount)return;
+    window.__landingFirstAppCommit=performance.now();
+    observer.disconnect();
+   });
+   observer.observe(document,{childList:true,subtree:true});
+   window.addEventListener('pagehide',()=>observer.disconnect(),{once:true});
    const theme=sessionStorage.getItem('landing-test-theme') || 'light';
    localStorage.setItem('theme',theme);
    const applyTheme=()=>{
@@ -42,15 +51,64 @@ try {
  await context.route('**/*',fixtureRoute);
  await context.routeWebSocket('**/*',socket=>socket.close());
  page=await context.newPage();
+ const assetRequests=[];
+ page.on('request',request=>assetRequests.push(new URL(request.url()).pathname));
  page.on('pageerror',error=>failures.push(error.message));
  page.on('response',response=>{if(response.status()>=400&&!new URL(response.url()).pathname.startsWith('/api/'))failures.push(`Asset ${response.status()} ${new URL(response.url()).pathname}`);});
  await page.goto(server.origin+'/login');
  await expect(page.getByTestId('input-username')).toBeVisible();
+ const landingPaths=await page.locator('meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]').evaluateAll(elements=>elements.map(element=>element.content));
+ assert.ok(landingPaths.some(asset=>asset.endsWith('.js'))&&landingPaths.some(asset=>asset.endsWith('.css')),'Built HTML must advertise emitted landing resources');
+ // Shared helpers can legitimately be used by Login too; only the landing
+ // component and its page stylesheet must stay out of the login request graph.
+ const landingOnlyPaths=landingPaths.filter(asset=>/^\/assets\/Landing-/.test(asset));
+ assert.ok(landingOnlyPaths.length>=2);
+ assert.deepEqual(assetRequests.filter(asset=>landingOnlyPaths.includes(asset)),[],'Direct login must not download the public landing');
+ const loginLandingHints=await page.locator('link[rel="modulepreload"], link[rel="preload"]').evaluateAll((elements,assets)=>elements.filter(element=>assets.includes(new URL(element.href).pathname)).map(element=>element.rel),landingOnlyPaths);
+ assert.deepEqual(loginLandingHints,[],'Public login must not activate landing preload metadata');
+ pass('direct login keeps landing scripts and styles out of its request graph');
  const loginBefore=await page.getByTestId('input-username').evaluate(el=>{const s=getComputedStyle(el);return {height:s.height,fontSize:s.fontSize,color:s.color,background:s.backgroundColor,border:s.borderRadius};});
  await page.goto(server.origin);
  await expect(page.locator('.sqr-landing h1')).toHaveText('Operational data, structuredfor faster decisions.');
  await expect(page.locator('#boot-shell')).toHaveCount(0);
  await expect(page.locator('html')).toHaveAttribute('lang','en');
+ const landingPreloads=await page.evaluate(()=>{
+  const firstCommit=window.__landingFirstAppCommit;
+  return [...document.querySelectorAll('meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]')].map(meta=>{
+   const url=new URL(meta.content,location.href).href;
+   const isScript=meta.name==='sqr-landing-script';
+   const hint=[...document.querySelectorAll(`link[rel="${isScript?'modulepreload':'preload'}"]`)].find(link=>link.href===url);
+   const resources=performance.getEntriesByName(url,'resource');
+   return {path:meta.content,isScript,rel:hint?.rel,as:hint?.as,crossOrigin:hint?.crossOrigin,firstCommit,startTime:resources[0]?.startTime,fetchCount:resources.length};
+  });
+ });
+ for(const hint of landingPreloads){
+  assert.match(hint.path,hint.isScript?/^\/assets\/[A-Za-z0-9_-]+\.js$/:/^\/assets\/[A-Za-z0-9_-]+\.css$/);
+  assert.equal(hint.rel,hint.isScript?'modulepreload':'preload');
+  if(!hint.isScript)assert.equal(hint.as,'style');
+  assert.equal(hint.crossOrigin,'anonymous','Resource hint credentials must match Vite resource loading');
+  assert.ok(Number.isFinite(hint.firstCommit)&&Number.isFinite(hint.startTime)&&hint.startTime<hint.firstCommit,`${hint.path}: landing preload must start before the first React commit`);
+  assert.equal(hint.fetchCount,1,`${hint.path}: Vite must reuse its preloaded resource instead of fetching twice`);
+  assert.equal((await context.request.get(server.origin+hint.path)).status(),200,'Preload metadata must name an emitted asset');
+ }
+ pass('anonymous root starts reusable landing resource hints before React rendering');
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await expect(page.locator('.sqr-landing')).not.toHaveClass(/(?:low-spec|motion-paused)/);
+ const firstFrameText=await page.locator('.sqr-landing .hero h1, .sqr-landing .hero > div > p').evaluateAll(elements=>elements.map(element=>{
+  const animations=element.getAnimations();
+  for(const animation of animations){animation.pause();animation.currentTime=0;}
+  const style=getComputedStyle(element);
+  const result={opacity:style.opacity,visibility:style.visibility,display:style.display,height:element.getBoundingClientRect().height};
+  for(const animation of animations)animation.play();
+  return result;
+ }));
+ assert.equal(firstFrameText.length,2);
+ for(const text of firstFrameText){
+  assert.equal(text.opacity,'1','Normal-motion hero copy must be visible at animation time zero');
+  assert.notEqual(text.visibility,'hidden');assert.notEqual(text.display,'none');assert.ok(text.height>0);
+ }
+ await page.emulateMedia({reducedMotion:'reduce'});
+ pass('normal-motion hero heading and description paint without an entrance delay');
  const schema=await page.locator('#sqr-application-schema').textContent();
  assert.equal(JSON.parse(schema)['@type'],'SoftwareApplication');
  await expect(page).toHaveTitle('SQR — Sumbangan Query Rahmah');

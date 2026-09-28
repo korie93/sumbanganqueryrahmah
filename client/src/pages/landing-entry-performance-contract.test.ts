@@ -33,7 +33,23 @@ test("public landing route paints meaningful content before React bootstrap", ()
   );
 });
 
-function runBootShell(pathname: string) {
+type BootOptions = {
+  cookie?: string;
+  storedUser?: string;
+  banned?: string;
+  maintenance?: boolean;
+  blockedCookie?: boolean;
+  blockedStorage?: boolean;
+  blockedStorageRead?: boolean;
+  hints?: Array<{ name: string; content: string }>;
+};
+
+const validHints = [
+  { name: "sqr-landing-script", content: "/assets/Landing-fixture.js" },
+  { name: "sqr-landing-style", content: "/assets/Landing-fixture.css" },
+];
+
+function runBootShell(pathname: string, options: BootOptions = {}) {
   const elements = new Map<string, { textContent: string }>([
     ["boot-shell-eyebrow", { textContent: "" }],
     ["boot-shell-title", { textContent: "" }],
@@ -44,15 +60,52 @@ function runBootShell(pathname: string) {
     lang: "en",
     setAttribute(name: string, value: string) { attributes.set(name, value); },
   };
+  const links: Array<Record<string, string>> = [];
+  const sessionStorage = {
+    getItem(key: string) {
+      if (options.blockedStorageRead) throw new Error("Storage read denied");
+      return key === "user" ? options.storedUser ?? null : key === "banned" ? options.banned ?? null : null;
+    },
+    setItem() { assert.fail("Resource hints must never write authentication state"); },
+    removeItem() { assert.fail("Resource hints must never remove authentication state"); },
+    clear() { assert.fail("Resource hints must never clear authentication state"); },
+  };
+  const window = {
+    location: { pathname },
+    get sessionStorage() {
+      if (options.blockedStorage) throw new Error("Storage unavailable");
+      return sessionStorage;
+    },
+  };
   runInNewContext(bootShellScript, {
-    window: { location: { pathname } },
+    window,
     document: {
       documentElement,
       readyState: "complete",
+      get cookie() {
+        if (options.blockedCookie) throw new Error("Cookies unavailable");
+        return options.cookie ?? "";
+      },
+      set cookie(_value: string) { assert.fail("Resource hints must never mutate session cookies"); },
+      querySelector(selector: string) {
+        assert.equal(selector, 'meta[name="sqr-maintenance"][content="active"]');
+        return options.maintenance ? {} : null;
+      },
+      querySelectorAll(selector: string) {
+        assert.equal(selector, 'meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]');
+        return (options.hints ?? []).map(hint => ({
+          getAttribute(name: string) { return name === "name" ? hint.name : name === "content" ? hint.content : null; },
+        }));
+      },
+      createElement(name: string) {
+        assert.equal(name, "link", "Preloading must not execute a script or apply a stylesheet");
+        return {};
+      },
+      head: { appendChild(link: Record<string, string>) { links.push(link); } },
       getElementById(id: string) { return elements.get(id); },
     },
   });
-  return { documentElement, attributes, elements };
+  return { documentElement, attributes, elements, links };
 }
 
 test("landing boot uses English while direct login retains its original Malay copy", () => {
@@ -73,4 +126,59 @@ test("direct internal routes retain Malay and do not select the public landing b
   const internal = runBootShell("/general-search");
   assert.equal(internal.documentElement.lang, "ms");
   assert.equal(internal.attributes.has("data-boot-shell"), false);
+});
+
+test("anonymous root preloads build-provided landing resources without applying their CSS", () => {
+  const result = runBootShell("/", { hints: validHints });
+  assert.equal(result.links.length, 2);
+  assert.deepEqual({ ...result.links[0] }, { href: validHints[0].content, rel: "modulepreload", crossOrigin: "anonymous", fetchPriority: "high" });
+  assert.deepEqual({ ...result.links[1] }, { href: validHints[1].content, rel: "preload", as: "style", crossOrigin: "anonymous", fetchPriority: "high" });
+  assert.equal(result.links.some(link => link.rel === "stylesheet"), false);
+  const multipleStyles = runBootShell("/", { hints: [...validHints, { name: "sqr-landing-style", content: "/assets/Shared-style_2.css" }] });
+  assert.equal(multipleStyles.links.length, 3);
+  assert.equal(runBootShell("/").links.length, 0, "Development HTML may omit optional build hints");
+});
+
+test("landing preloads never run on auth, protected, maintenance or unknown routes", () => {
+  for (const pathname of ["/login", "/LOGIN", "/forgot-password", "/activate-account", "/reset-password", "/change-password", "/maintenance", "/banned", "/general-search", "/dashboard", "/settings", "/collection/save", "/unknown", "//"]) {
+    assert.equal(runBootShell(pathname, { hints: validHints }).links.length, 0, pathname);
+  }
+});
+
+test("session or maintenance hints leave existing authentication routing in charge", () => {
+  for (const options of [
+    { cookie: "sqr_auth_hint=1" },
+    { cookie: "theme=dark; sqr_auth_hint=; another=value" },
+    { storedUser: "synthetic-user" },
+    { banned: "1" },
+    { maintenance: true },
+  ]) {
+    const result = runBootShell("/", { ...options, hints: validHints });
+    assert.equal(result.links.length, 0, JSON.stringify(options));
+    assert.equal(result.attributes.get("data-boot-shell"), "landing", "Optimization must not change shell selection");
+  }
+  assert.equal(runBootShell("/", { cookie: "other_sqr_auth_hint=1; theme=light", banned: "0", hints: validHints }).links.length, 2);
+});
+
+test("denied cookie or storage access skips optional preloading and still paints the boot shell", () => {
+  for (const options of [{ blockedCookie: true }, { blockedStorage: true }, { blockedStorageRead: true }]) {
+    const result = runBootShell("/", { ...options, hints: validHints });
+    assert.equal(result.links.length, 0);
+    assert.ok(result.elements.get("boot-shell-title")?.textContent, "A failed optimization must not block the boot copy");
+  }
+});
+
+test("preload metadata accepts only emitted same-origin assets with matching extensions", () => {
+  for (const hint of [
+    { name: "sqr-landing-script", content: "https://outside.invalid/asset.js" },
+    { name: "sqr-landing-style", content: "//outside.invalid/asset.css" },
+    { name: "sqr-landing-script", content: "/assets/../private.js" },
+    { name: "sqr-landing-script", content: "/assets/%2e%2e.js" },
+    { name: "sqr-landing-script", content: "/assets/nested/asset.js" },
+    { name: "sqr-landing-script", content: "/assets/asset.js?query=1" },
+    { name: "sqr-landing-script", content: "/assets/asset.css" },
+    { name: "sqr-landing-style", content: "/assets/asset.js" },
+    { name: "sqr-landing-style", content: "/other/asset.css" },
+    { name: "sqr-landing-style", content: "" },
+  ]) assert.equal(runBootShell("/", { hints: [hint] }).links.length, 0, hint.content);
 });

@@ -2453,8 +2453,6 @@
 }
 
 .sqr-landing .hero .eyebrow,
-.sqr-landing .hero h1,
-.sqr-landing .hero>div>p,
 .sqr-landing .hero-actions,
 .sqr-landing .micro,
 .sqr-landing .capabilities,
@@ -2464,12 +2462,12 @@
   animation: sqr-landing-heroEnter .62s var(--ease) forwards;
 }
 
-.sqr-landing .hero h1 {
-  animation-delay: .07s;
-}
-
+/* Critical reading content must paint immediately, independently of motion. */
+.sqr-landing .hero h1,
 .sqr-landing .hero>div>p {
-  animation-delay: .13s;
+  opacity: 1;
+  transform: none;
+  animation: none;
 }
 
 .sqr-landing .hero-actions {
