@@ -50,7 +50,7 @@
       }
     </script>
     <link rel="stylesheet" href="/boot-shell.css" />
-    <script src="/boot-shell.js" defer fetchpriority="high"></script>
+    <link rel="preload" as="script" href="/boot-shell.js" fetchpriority="high" />
   </head>
   <body>
     <div id="boot-shell" class="public-auth-boot-shell" role="status" aria-live="polite" aria-atomic="true">
@@ -73,6 +73,7 @@
       </div>
     </div>
     <div id="root"></div>
+    <script src="/boot-shell.js" async fetchpriority="high"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

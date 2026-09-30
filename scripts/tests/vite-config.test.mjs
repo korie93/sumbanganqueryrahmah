@@ -201,6 +201,11 @@ test("public runtime consolidates only the existing small shared entry dependenc
   }
   assert.equal(chunk("/repo/node_modules/@tanstack/react-query/build/modern/index.js"), "query");
   assert.equal(chunk("/repo/node_modules/react/index.js"), "framework");
+  for (const id of ["client/src/lib/utils.ts", "node_modules/clsx/dist/clsx.mjs", "node_modules/tailwind-merge/dist/bundle-mjs.mjs"]) {
+    assert.equal(chunk(`/repo/${id}`), "ui");
+    assert.equal(chunk(`C:\\repo\\${id.replace(/\//g, "\\")}`), "ui");
+  }
+  assert.equal(chunk("/repo/client/src/lib/utils/safe-json.ts"), undefined);
 });
 
 function loginHintFixture() {
@@ -239,7 +244,7 @@ function loginHintFixture() {
   return { login, layout, main, illustration, bundle: Object.fromEntries(assets.map(asset => [asset.fileName, asset])) };
 }
 
-test("public auth runtime consolidates only login's existing small helpers and icons", async () => {
+test("public auth runtime consolidates only login's existing helpers, shared presentation and icons", async () => {
   const config = await importViteConfigFresh();
   const groups = config.build.rollupOptions.output.codeSplitting.groups;
   const authGroup = groups.find(group => group.name === "public-auth-runtime");
@@ -249,10 +254,15 @@ test("public auth runtime consolidates only login's existing small helpers and i
     assert.equal(chunk(`/repo/client/src/lib/${name}.ts`), "public-auth-runtime");
   }
   assert.equal(chunk("/repo/client/src/pages/auth-field-utils.ts"), "public-auth-runtime");
+  for (const name of ["auth/AuthV17Layout", "PublicAuthControls", "ExpandableMessage"]) {
+    const id = `client/src/components/${name}.tsx`;
+    assert.equal(chunk(`/repo/${id}`), "public-auth-runtime");
+    assert.equal(chunk(`C:\\repo\\${id.replace(/\//g, "\\")}`), "public-auth-runtime");
+  }
   for (const name of ["arrow-left", "arrow-right", "check", "eye", "eye-off", "key-round", "shield-check", "user-round", "wifi-off"]) {
     assert.equal(chunk(`/repo/node_modules/lucide-react/dist/esm/icons/${name}.js`), "public-auth-runtime");
   }
-  for (const id of ["client/src/lib/api-client.ts", "client/src/lib/api/auth.ts", "client/src/components/auth/AuthV17Layout.tsx", "client/src/pages/Login.tsx", "client/src/app/AuthenticatedAppEntry.tsx", "node_modules/lucide-react/dist/esm/icons/database.js"]) {
+  for (const id of ["client/src/lib/api-client.ts", "client/src/lib/api/auth.ts", "client/src/lib/utils.ts", "client/src/components/auth/AuthPasswordFields.tsx", "client/src/components/PublicAuthControls.test.tsx", "client/src/pages/Login.tsx", "client/src/app/AuthenticatedAppEntry.tsx", "node_modules/wouter/src/index.js", "node_modules/lucide-react/dist/esm/icons/database.js"]) {
     assert.equal(chunk(`/repo/${id}`), undefined, `Do not merge ${id} into the auth helpers`);
   }
 });

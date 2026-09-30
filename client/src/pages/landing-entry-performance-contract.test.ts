@@ -34,6 +34,9 @@ test("public landing route paints meaningful content before React bootstrap", ()
 });
 
 type BootOptions = {
+  readyState?: "loading" | "interactive" | "complete";
+  rootHasChildren?: boolean;
+  shellCopyAvailable?: boolean;
   cookie?: string;
   storedUser?: string;
   banned?: string;
@@ -61,6 +64,8 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
     setAttribute(name: string, value: string) { attributes.set(name, value); },
   };
   const links: Array<Record<string, string>> = [];
+  const readyCallbacks: Array<() => void> = [];
+  let shellCopyAvailable = options.shellCopyAvailable !== false;
   const sessionStorage = {
     getItem(key: string) {
       if (options.blockedStorageRead) throw new Error("Storage read denied");
@@ -81,7 +86,12 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
     window,
     document: {
       documentElement,
-      readyState: "complete",
+      readyState: options.readyState ?? "complete",
+      addEventListener(name: string, callback: () => void, listenerOptions: { once: boolean }) {
+        assert.equal(name, "DOMContentLoaded");
+        assert.equal(listenerOptions.once, true);
+        readyCallbacks.push(callback);
+      },
       get cookie() {
         if (options.blockedCookie) throw new Error("Cookies unavailable");
         return options.cookie ?? "";
@@ -105,11 +115,51 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
         return {};
       },
       head: { appendChild(link: Record<string, string>) { links.push(link); } },
-      getElementById(id: string) { return elements.get(id); },
+      getElementById(id: string) {
+        if (id === "root") return { hasChildNodes: () => options.rootHasChildren === true };
+        return shellCopyAvailable ? elements.get(id) : null;
+      },
     },
   });
-  return { documentElement, attributes, elements, links };
+  return {
+    documentElement, attributes, elements, links, readyCallbacks,
+    finishParsing() {
+      shellCopyAvailable = true;
+      for (const callback of readyCallbacks.splice(0)) callback();
+    },
+  };
 }
+
+test("async boot discovers assets before DOM ready and safely waits for shell copy", () => {
+  const result = runBootShell("/", {
+    readyState: "loading", shellCopyAvailable: false, hints: validHints,
+  });
+  assert.equal(result.links.length, 2, "Hints must not wait for CSS-delayed DOMContentLoaded");
+  assert.equal(result.elements.get("boot-shell-title")?.textContent, "");
+  assert.equal(result.readyCallbacks.length, 1);
+  result.finishParsing();
+  assert.equal(result.elements.get("boot-shell-title")?.textContent, "Operational data, structured for faster decisions.");
+  assert.equal(result.links.length, 2, "DOM readiness must not duplicate resource hints");
+});
+
+test("async boot applies shell copy immediately when document parsing has finished", () => {
+  for (const readyState of ["interactive", "complete"] as const) {
+    const result = runBootShell("/login", { readyState });
+    assert.equal(result.readyCallbacks.length, 0);
+    assert.equal(result.elements.get("boot-shell-title")?.textContent, "Log In SQR System");
+  }
+});
+
+test("late async boot leaves metadata, shell and preloads untouched once React owns the root", () => {
+  for (const pathname of ["/", "/login"]) {
+    const result = runBootShell(pathname, { rootHasChildren: true, hints: validHints });
+    assert.equal(result.documentElement.lang, "en", "Existing app metadata must remain unchanged");
+    assert.equal(result.attributes.size, 0);
+    assert.equal(result.links.length, 0);
+    assert.equal(result.readyCallbacks.length, 0);
+    assert.equal(result.elements.get("boot-shell-title")?.textContent, "");
+  }
+});
 
 test("landing boot uses English while direct login retains its original Malay copy", () => {
   const landing = runBootShell("/");

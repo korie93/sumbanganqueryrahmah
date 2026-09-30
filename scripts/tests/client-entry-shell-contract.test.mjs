@@ -91,37 +91,45 @@ test("client entry shell contract collector finds inline blocks and missing exte
   assert.match(labels.join("\n"), /polite status live region/i);
 });
 
-test("client entry shell contract requires the boot shell script to be deferred", async () => {
+test("client entry shell contract requires async boot after the root and head metadata", async () => {
   const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");
 
-  const repoRoot = mkdtempSync(path.join(tmpdir(), "client-entry-shell-contract-defer-"));
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "client-entry-shell-contract-async-"));
   const clientDir = path.join(repoRoot, "client");
   mkdirSync(path.join(clientDir, "public"), { recursive: true });
   writeFileSync(path.join(clientDir, "public", "boot-shell.css"), "", "utf8");
   writeFileSync(path.join(clientDir, "public", "boot-shell.js"), "", "utf8");
-  writeFileSync(
-    path.join(clientDir, "index.html"),
-    [
+  const writeFixture = ({ attributes = "async", inHead = false, withRoot = true } = {}) => {
+    const script = `<script src="/boot-shell.js" ${attributes}></script>`;
+    writeFileSync(path.join(clientDir, "index.html"), [
       "<!doctype html>",
       "<html>",
       "  <head>",
       "    <link rel=\"stylesheet\" href=\"/boot-shell.css\">",
-      "    <script src=\"/boot-shell.js\"></script>",
+      '    <meta name="sqr-login-script" content="/assets/Login-fixture.js">',
+      inHead ? script : "",
       "  </head>",
       "  <body>",
-      "    <div id=\"boot-shell\"></div>",
+      '    <div id="boot-shell" role="status" aria-live="polite" aria-atomic="true"></div>',
+      withRoot ? '<div id="root"></div>' : "",
+      inHead ? "" : script,
       "  </body>",
       "</html>",
-    ].join("\n"),
-    "utf8",
-  );
+    ].join("\n"), "utf8");
+    return collectClientEntryShellContractMatches({ repoRoot }).matches;
+  };
 
-  const result = collectClientEntryShellContractMatches({ repoRoot });
-  const labels = result.matches.map((match) => match.label);
-
-  assert.equal(result.matches.length, 2);
-  assert.match(labels.join("\n"), /must use defer/i);
-  assert.match(labels.join("\n"), /polite status live region/i);
+  assert.deepEqual(writeFixture(), []);
+  for (const attributes of ["", "defer"]) {
+    const matches = writeFixture({ attributes });
+    assert.equal(matches.length, 1);
+    assert.match(matches[0].label, /must use async/i);
+  }
+  for (const options of [{ inHead: true }, { withRoot: false }]) {
+    const matches = writeFixture(options);
+    assert.equal(matches.length, 1);
+    assert.match(matches[0].label, /must follow the app root and all head resource metadata/i);
+  }
 });

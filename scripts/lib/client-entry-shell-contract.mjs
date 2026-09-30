@@ -80,7 +80,14 @@ export function collectClientEntryShellContractMatches(params = {}) {
     bootShellJsScriptMatch?.[1] || "",
     bootShellJsScriptMatch?.[2] || "",
   ].join(" ");
-  const hasDeferredBootShellScript = /\bdefer\b/i.test(bootShellJsScriptAttributes);
+  const hasAsyncBootShellScript = /\basync\b/i.test(bootShellJsScriptAttributes);
+  const rootMarkupMatch = html.match(/<[^>]*\bid\s*=\s*["']root["'][^>]*>/i);
+  const headEnd = html.search(/<\/head\s*>/i);
+  const hasBootScriptAfterRoot = Boolean(rootMarkupMatch
+    && headEnd >= 0
+    && bootShellJsScriptMatch
+    && bootShellJsScriptMatch.index > headEnd
+    && bootShellJsScriptMatch.index > rootMarkupMatch.index);
 
   if (hasBootShellMarkup && !hasBootShellCssLink) {
     matches.push({
@@ -98,10 +105,18 @@ export function collectClientEntryShellContractMatches(params = {}) {
     });
   }
 
-  if (hasBootShellJsScript && !hasDeferredBootShellScript) {
+  if (hasBootShellJsScript && !hasAsyncBootShellScript) {
     matches.push({
       filePath: CLIENT_INDEX_HTML_PATH,
-      label: "boot shell script must use defer so it does not block initial rendering",
+      label: "boot shell script must use async so resource discovery does not wait for stylesheets",
+      snippet: bootShellJsScriptMatch?.[0] || BOOT_SHELL_JS_PUBLIC_PATH,
+    });
+  }
+
+  if (hasBootShellJsScript && !hasBootScriptAfterRoot) {
+    matches.push({
+      filePath: CLIENT_INDEX_HTML_PATH,
+      label: "async boot shell script must follow the app root and all head resource metadata",
       snippet: bootShellJsScriptMatch?.[0] || BOOT_SHELL_JS_PUBLIC_PATH,
     });
   }

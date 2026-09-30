@@ -1,4 +1,8 @@
 (function () {
+  // Async execution can arrive after React starts; the app then owns metadata
+  // and routing, so a late optional boot script must not overwrite either.
+  if (document.getElementById("root")?.hasChildNodes()) return;
+
   const publicShellCopy = {
     "/": {
       mode: "landing",

@@ -68,27 +68,29 @@ export default defineConfig({
             // or shared validation and become an eager dependency of every page.
             priority: 10,
             name(id) {
+              const normalizedId = id.replace(/\\/g, "/");
               if (
-                id.includes("vite/preload-helper")
-                || id.includes("node_modules/react/")
-                || id.includes("node_modules/react-dom/")
-                || id.includes("node_modules/scheduler/")
+                normalizedId.includes("vite/preload-helper")
+                || normalizedId.includes("node_modules/react/")
+                || normalizedId.includes("node_modules/react-dom/")
+                || normalizedId.includes("node_modules/scheduler/")
               ) {
                 return "framework";
               }
 
               if (
-                id.includes("node_modules/clsx/")
-                || id.includes("node_modules/tailwind-merge/")
-                || id.includes("node_modules/class-variance-authority/")
+                normalizedId.includes("node_modules/clsx/")
+                || normalizedId.includes("node_modules/tailwind-merge/")
+                || normalizedId.includes("node_modules/class-variance-authority/")
+                || /\/client\/src\/lib\/utils\.ts$/.test(normalizedId)
               ) {
                 return "ui";
               }
 
               if (
-                id.includes("node_modules/zod")
-                || id.includes("shared/api-contracts.ts")
-                || id.includes("client/src/lib/api/contract.ts")
+                normalizedId.includes("node_modules/zod")
+                || normalizedId.includes("shared/api-contracts.ts")
+                || normalizedId.includes("client/src/lib/api/contract.ts")
               ) {
                 return "validation";
               }
@@ -96,7 +98,6 @@ export default defineConfig({
               // These tiny helpers already sit on the public entry's critical path.
               // Keep an exact allowlist: one request instead of a queue of tiny
               // chunks, without pulling private pages or the whole icon library in.
-              const normalizedId = id.replace(/\\/g, "/");
               if (
                 /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props)\.ts$/.test(normalizedId)
                 || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert))\.js$/.test(normalizedId)
@@ -104,25 +105,27 @@ export default defineConfig({
                 return "public-runtime";
               }
 
-              if (!id.includes("node_modules")) {
+              if (!normalizedId.includes("node_modules")) {
                 return undefined;
               }
 
-              if (id.includes("@tanstack/react-query")) return "query";
-              if (id.includes("xlsx")) return "excel";
-              if (id.includes("jspdf")) return "pdf";
-              if (id.includes("html2canvas")) return "capture";
+              if (normalizedId.includes("@tanstack/react-query")) return "query";
+              if (normalizedId.includes("xlsx")) return "excel";
+              if (normalizedId.includes("jspdf")) return "pdf";
+              if (normalizedId.includes("html2canvas")) return "capture";
 
               return undefined;
             },
           }, {
             name: "public-auth-runtime",
-            // Exact existing login dependencies only; retain normal chunking
-            // for views, API clients, private features and other icons.
+            // Exact existing login dependencies only. Consolidate tiny shared
+            // controls/layout requests, while route facades and API clients stay
+            // separate and private features retain normal lazy chunking.
             test(id) {
               const normalizedId = id.replace(/\\/g, "/");
               return /\/client\/src\/lib\/(?:interaction-media|fingerprint|i18n|auth-flow-feedback|api-errors)\.ts$/.test(normalizedId)
                 || /\/client\/src\/pages\/auth-field-utils\.ts$/.test(normalizedId)
+                || /\/client\/src\/components\/(?:auth\/AuthV17Layout|PublicAuthControls|ExpandableMessage)\.tsx$/.test(normalizedId)
                 || /\/node_modules\/lucide-react\/dist\/esm\/icons\/(?:arrow-left|arrow-right|check|eye|eye-off|key-round|shield-check|user-round|wifi-off)\.js$/.test(normalizedId);
             },
           }],

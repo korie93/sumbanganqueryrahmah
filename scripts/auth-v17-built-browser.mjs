@@ -93,6 +93,86 @@ async function captureReference() {
   }
 }
 
+async function verifyAsyncBootScheduling() {
+  // Hold the initial stylesheet: deferred scripts cannot execute past this
+  // barrier, but async boot must already start discovering login resources.
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const fixture = createAuthV17Fixture(server.origin);
+  let releaseCss;
+  const cssGate = new Promise((resolve) => { releaseCss = resolve; });
+  const held = [];
+  const finished = new Set();
+  await context.route("**/*", (route) => {
+    if (!/^\/assets\/index-[A-Za-z0-9_-]+\.css$/.test(new URL(route.request().url()).pathname)) return fixture.route(route);
+    const pending = cssGate.then(() => fixture.route(route));
+    held.push(pending);
+    return pending;
+  });
+  await context.routeWebSocket("**/*", (socket) => socket.close());
+  const page = await context.newPage();
+  page.on("requestfinished", (request) => finished.add(new URL(request.url()).pathname));
+  try {
+    await page.goto(`${server.origin}/login`, { waitUntil: "commit" });
+    await expect.poll(() => held.length).toBe(1);
+    const hint = page.locator('meta[name="sqr-login-image"]');
+    await expect(hint).toHaveCount(1);
+    const artwork = await hint.getAttribute("content");
+    await expect(page.locator(`link[rel="preload"][as="image"][href="${artwork}"]`)).toHaveCount(1);
+    await expect.poll(() => finished.has(artwork)).toBe(true);
+    await expect(page.getByTestId("input-username")).toHaveCount(0);
+    assert.equal(await page.locator('script[src="/boot-shell.js"]').evaluate((element) => element.async), true);
+    assert.equal(await page.locator('script[src="/boot-shell.js"]').evaluate((element) => {
+      const root = document.getElementById("root");
+      return Boolean(root && (root.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING)
+        && [...document.querySelectorAll('meta[name^="sqr-login-"]')].every((meta) => meta.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING));
+    }), true, "Built metadata and root must be parsed before async boot can execute.");
+    releaseCss();
+    await expect(page.getByTestId("input-username")).toBeVisible();
+    assert.deepEqual(fixture.state.unexpected, []);
+    pass("async boot discovers and fetches login artwork while the initial stylesheet is still blocked");
+  } finally {
+    releaseCss();
+    await Promise.allSettled(held);
+    await context.close();
+  }
+
+  // A cache miss may make async boot arrive after React. It must be a no-op
+  // then, retaining app metadata and leaving authentication/navigation alone.
+  const lateContext = await browser.newContext({ serviceWorkers: "block" });
+  const lateFixture = createAuthV17Fixture(server.origin);
+  let releaseBoot;
+  const bootGate = new Promise((resolve) => { releaseBoot = resolve; });
+  const lateHeld = [];
+  await lateContext.route("**/*", (route) => {
+    if (new URL(route.request().url()).pathname !== "/boot-shell.js") return lateFixture.route(route);
+    const pending = bootGate.then(() => lateFixture.route(route));
+    lateHeld.push(pending);
+    return pending;
+  });
+  await lateContext.routeWebSocket("**/*", (socket) => socket.close());
+  const latePage = await lateContext.newPage();
+  try {
+    await latePage.goto(`${server.origin}/login`, { waitUntil: "domcontentloaded" });
+    await expect(latePage.getByTestId("input-username")).toBeVisible();
+    await expect(latePage.locator("#boot-shell")).toHaveCount(0);
+    await latePage.getByRole("button", { name: "English", exact: true }).click();
+    await expect(latePage.locator("main.auth-v17")).toHaveAttribute("lang", "en");
+    const metadata = () => latePage.evaluate(() => ({ lang: document.documentElement.lang, authLang: document.querySelector("main.auth-v17")?.getAttribute("lang"), title: document.title, pathname: location.pathname }));
+    const before = await metadata();
+    releaseBoot();
+    await latePage.waitForLoadState("load");
+    assert.deepEqual(await metadata(), before);
+    assert.equal(await latePage.evaluate(() => document.documentElement.hasAttribute("data-boot-shell") || window.__SQR_BOOT_SHELL__ !== undefined), false);
+    assert.equal(lateHeld.length, 1, "The head preload and async script reuse the same boot request.");
+    assert.deepEqual(lateFixture.state.unexpected, []);
+    pass("late async boot preserves React metadata and navigation without duplicate script requests");
+  } finally {
+    releaseBoot();
+    await Promise.allSettled(lateHeld);
+    await lateContext.close();
+  }
+}
+
 async function verifyLoginResourceHints() {
   // A cold, isolated context proves the artwork is discovered from the built
   // resource hints, not from a cached stylesheet or an already-mounted login.
@@ -133,7 +213,8 @@ async function verifyLoginResourceHints() {
     assert.equal(new Set(hints.map((hint) => hint.href)).size, hints.length, "Login resource hints are deduplicated.");
     assert.ok(hints.every((hint) => !privateAssetPattern.test(hint.href)), "Hints include only public Login dependencies, not authenticated or heavy feature chunks.");
     assert.equal(scripts.filter((hint) => /^\/assets\/public-auth-runtime-/.test(hint.href)).length, 1, "Login helpers stay in a lazy, route-hinted chunk, not the shared HTML entry.");
-    assert.ok(scripts.length <= 12, "Login's shared helpers/icons must not regress into a long queue of tiny requests.");
+    assert.ok(scripts.length <= 6, "Login's shared helpers/controls must not regress into a long queue of tiny requests.");
+    assert.ok(styles.length <= 2, "The shared auth controls/layout must not split into separate stylesheet requests.");
 
     await expect.poll(() => heldRequests.length).toBe(1);
     await expect.poll(() => hints.every((hint) => requests.includes(hint.href))).toBe(true);
@@ -181,6 +262,8 @@ try {
     await fs.writeFile(path.join(artifacts, "reference-report.json"), JSON.stringify({ status: "PASS", boundary: "supplied visual reference only, no demo form submitted", viewports: authV17Viewports, screenshots }, null, 2));
   } else {
   server = await startVisualBuiltServer(path.join(root, "dist-local/public"));
+  phase = "async boot scheduling";
+  await verifyAsyncBootScheduling();
   phase = "cold login resource hints";
   await verifyLoginResourceHints();
   const context = await browser.newContext({ viewport: { width: 1366, height: 768 }, reducedMotion: "reduce", serviceWorkers: "block" });
