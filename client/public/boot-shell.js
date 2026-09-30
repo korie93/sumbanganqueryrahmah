@@ -49,31 +49,43 @@
   window.__SQR_BOOT_SHELL__ = shell;
 
   // Resource hints only: authentication and routing remain owned by the app.
-  // Do not download landing assets on login/internal routes or while restoring
-  // an existing session. Denied storage simply leaves normal lazy loading in place.
-  const preloadLandingAssets = function () {
-    if (window.location.pathname !== "/") return;
+  // Each exact public route fetches only its own build-provided resources.
+  // Existing sessions and denied storage keep normal lazy loading in place.
+  const preloadPublicRouteAssets = function () {
+    const resource = window.location.pathname === "/" ? "landing"
+      : window.location.pathname === "/login" ? "login" : null;
+    if (!resource) return;
     try {
       if (document.cookie.split(";").some(part => part.trim().startsWith("sqr_auth_hint="))
         || window.sessionStorage.getItem("user")
         || window.sessionStorage.getItem("banned") === "1"
         || document.querySelector('meta[name="sqr-maintenance"][content="active"]')) return;
-      document.querySelectorAll('meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]').forEach(meta => {
-        const isScript = meta.getAttribute("name") === "sqr-landing-script";
+      const prefix = "sqr-" + resource;
+      const selector = 'meta[name="' + prefix + '-script"], meta[name="' + prefix + '-style"]'
+        + (resource === "login" ? ', meta[name="sqr-login-image"]' : "");
+      document.querySelectorAll(selector).forEach(meta => {
+        const name = meta.getAttribute("name");
+        const isScript = name === prefix + "-script";
+        const isStyle = name === prefix + "-style";
+        const isImage = resource === "login" && name === "sqr-login-image";
+        if (!isScript && !isStyle && !isImage) return;
         const href = meta.getAttribute("content") || "";
-        const allowed = isScript ? /^\/assets\/[A-Za-z0-9_-]+\.js$/ : /^\/assets\/[A-Za-z0-9_-]+\.css$/;
+        const allowed = isScript ? /^\/assets\/[A-Za-z0-9_-]+\.js$/
+          : isStyle ? /^\/assets\/[A-Za-z0-9_-]+\.css$/
+            : /^\/assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/;
         if (!allowed.test(href)) return;
         const link = document.createElement("link");
         link.href = href;
         link.fetchPriority = "high";
         // Match Vite's anonymous-CORS module and stylesheet requests, so the
         // eventual lazy import reuses these responses instead of fetching twice.
-        link.crossOrigin = "anonymous";
+        // CSS background images use no-CORS requests; do not change that mode.
+        if (!isImage) link.crossOrigin = "anonymous";
         if (isScript) {
           link.rel = "modulepreload";
         } else {
           link.rel = "preload";
-          link.as = "style";
+          link.as = isImage ? "image" : "style";
         }
         document.head.appendChild(link);
       });
@@ -81,7 +93,7 @@
       // Optional optimization must never block the public shell or session restore.
     }
   };
-  preloadLandingAssets();
+  preloadPublicRouteAssets();
 
   const applyShellCopy = function () {
     const eyebrow = document.getElementById("boot-shell-eyebrow");

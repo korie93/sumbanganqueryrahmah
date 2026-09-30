@@ -46,6 +46,65 @@ PAGESPEED_MIN_SEO_SCORE=82 \
 npm run perf:pagespeed:local:strict
 ```
 
+## Login Resource Discovery
+
+The V17 login illustration is a CSS background in a lazy-loaded auth layout.
+CI run `36722159642` passed the UI, auth, visual and accessibility checks, but
+failed the login performance budget (71): the 62 KB illustration was requested
+only after the login/shared-module waterfall, about 5.5 seconds into navigation.
+Its LCP was 6.5 seconds; this was not a login API failure or an image-size issue.
+
+The production build advertises the emitted login module, its static dependency
+graph, associated styles and exact hashed illustration URL as inert metadata.
+The existing external boot script activates those resource hints only for an
+anonymous, exact `/login` navigation. Session hints, stored users, banned and
+maintenance states, and denied storage access skip the optimization. Other
+routes do not activate the login hints. Styles are preloaded, not applied;
+modules are fetched, not executed; routing and authentication remain unchanged.
+The image uses a non-CORS preload to match the CSS background request and avoid
+downloading it twice. Dynamic/private feature imports are not traversed.
+
+Preloading alone is insufficient when many tiny icon/helper chunks still queue
+behind HTTP/1.1 connection limits. An exact allowlist of existing login helpers
+and icons is grouped into one lazy `public-auth-runtime` chunk. Existing vendor
+and entry groups retain higher priority to prevent that group absorbing shared
+icon core or validation and becoming eager on every route. See Rolldown's
+[code-splitting priorities](https://rolldown.rs/reference/OutputOptions.codeSplitting).
+
+Regression coverage checks build metadata, route/session isolation and early,
+single-fetch image discovery while the lazy login module is held back. Keep
+the score thresholds and login's deliberate noindex policy unchanged when
+investigating this class of failure.
+
+### Verification of the login discovery fix (2026-09-30)
+
+Local Lighthouse 13.0.3 / Chrome 153 measurements used the production build
+served from an isolated, compressed loopback fixture, without dotenv, a real
+database, or production requests. The same mobile preset and existing
+route-specific score thresholds were used; no CI gate or retry policy changed.
+
+| Login build | Performance | LCP |
+| --- | ---: | ---: |
+| Before fix | 73 | 6.1 s |
+| Preloads alone (insufficient) | 74 | 5.3 s |
+| Final lazy helper grouping + preloads | 88 | 3.6 s |
+| Final confirmation | 89 | 3.5 s |
+
+The final login reports also scored accessibility 100 and best practices 96.
+The unchanged landing measured 84 then 87 (LCP 2.8/2.7 s; TBT 450/360 ms), so
+retain both results as local rendering variance rather than claiming every
+local performance run passed. GitHub's next full run remains the release gate.
+
+Other verification: production build, bundle budgets, TypeScript (including
+the Vite plugin separately), client lint, secret scan, 611 client tests,
+569 script tests (one existing skip), 36 V17 browser checks, 22 landing checks,
+and all 17 existing visual tests passed without updating snapshots.
+Script tests needed a clean test environment to exclude an unrelated local
+`LOG_FORMAT` value. Browser functional checks used the explicit installed
+Chrome executable as CI does; the default local Chromium suppressed a
+carousel click after a synthetic swipe, so no carousel code/assertions were
+changed to accommodate that browser-specific result.
+
 ## Local Usage
 
 Create `.env.smoke.local` or export the same PostgreSQL variables used by smoke

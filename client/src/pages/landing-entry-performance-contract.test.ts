@@ -92,8 +92,11 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
         return options.maintenance ? {} : null;
       },
       querySelectorAll(selector: string) {
-        assert.equal(selector, 'meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]');
-        return (options.hints ?? []).map(hint => ({
+        const expected = pathname === "/login"
+          ? 'meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"]'
+          : 'meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]';
+        assert.equal(selector, expected);
+        return (options.hints ?? []).filter(hint => selector.includes(`meta[name="${hint.name}"]`)).map(hint => ({
           getAttribute(name: string) { return name === "name" ? hint.name : name === "content" ? hint.content : null; },
         }));
       },
@@ -181,4 +184,72 @@ test("preload metadata accepts only emitted same-origin assets with matching ext
     { name: "sqr-landing-style", content: "/other/asset.css" },
     { name: "sqr-landing-style", content: "" },
   ]) assert.equal(runBootShell("/", { hints: [hint] }).links.length, 0, hint.content);
+});
+
+const validLoginHints = [
+  { name: "sqr-login-image", content: "/assets/sqr-illustration-fixture.webp" },
+  { name: "sqr-login-script", content: "/assets/Login-fixture.js" },
+  { name: "sqr-login-script", content: "/assets/Shared-auth_fixture.js" },
+  { name: "sqr-login-style", content: "/assets/AuthV17Layout-fixture.css" },
+];
+
+test("anonymous exact login preloads its scripts, styles and LCP image without applying CSS", () => {
+  const result = runBootShell("/login", { hints: [...validHints, ...validLoginHints] });
+  assert.equal(result.links.length, 4);
+  assert.deepEqual({ ...result.links[0] }, {
+    href: validLoginHints[0].content, rel: "preload", as: "image", fetchPriority: "high",
+  }, "CSS background-image reuse requires no crossorigin attribute on the image preload");
+  assert.deepEqual({ ...result.links[1] }, {
+    href: validLoginHints[1].content, rel: "modulepreload", crossOrigin: "anonymous", fetchPriority: "high",
+  });
+  assert.deepEqual({ ...result.links[3] }, {
+    href: validLoginHints[3].content, rel: "preload", as: "style", crossOrigin: "anonymous", fetchPriority: "high",
+  });
+  assert.equal(result.links.some(link => link.rel === "stylesheet"), false);
+  assert.equal(result.attributes.get("data-boot-shell"), "public-auth");
+  assert.equal(runBootShell("/login").links.length, 0, "Development HTML omits optional build hints");
+});
+
+test("login resources never preload on landing, other auth, internal or noncanonical routes", () => {
+  for (const pathname of ["/", "/LOGIN", "/login/", "/forgot-password", "/activate-account", "/reset-password", "/maintenance", "/banned", "/general-search", "/settings", "/unknown"]) {
+    assert.equal(runBootShell(pathname, { hints: validLoginHints }).links.length, 0, pathname);
+  }
+  const landing = runBootShell("/", { hints: [...validHints, ...validLoginHints] });
+  assert.equal(landing.links.length, 2);
+  assert.ok(landing.links.every(link => link.href.includes("Landing-")));
+});
+
+test("login preloading cannot bypass session, maintenance or storage-denied guards", () => {
+  for (const options of [
+    { cookie: "sqr_auth_hint=1" }, { cookie: "theme=dark; sqr_auth_hint=; another=value" },
+    { storedUser: "synthetic-user" }, { banned: "1" }, { maintenance: true },
+    { blockedCookie: true }, { blockedStorage: true }, { blockedStorageRead: true },
+  ]) {
+    const result = runBootShell("/login", { ...options, hints: validLoginHints });
+    assert.equal(result.links.length, 0, JSON.stringify(options));
+    assert.ok(result.elements.get("boot-shell-title")?.textContent);
+  }
+  assert.equal(runBootShell("/login", {
+    cookie: "other_sqr_auth_hint=1", banned: "0", hints: validLoginHints,
+  }).links.length, 4);
+});
+
+test("login preload rejects external, traversal, mismatched and nonillustration asset URLs", () => {
+  for (const hint of [
+    { name: "sqr-login-script", content: "https://outside.invalid/asset.js" },
+    { name: "sqr-login-style", content: "//outside.invalid/asset.css" },
+    { name: "sqr-login-script", content: "/assets/../private.js" },
+    { name: "sqr-login-script", content: "/assets/%2e%2e.js" },
+    { name: "sqr-login-script", content: "/assets/nested/asset.js" },
+    { name: "sqr-login-script", content: "/assets/asset.js?query=1" },
+    { name: "sqr-login-script", content: "/assets/asset.css" },
+    { name: "sqr-login-style", content: "/assets/asset.js" },
+    { name: "sqr-login-image", content: "https://outside.invalid/sqr-illustration-a.webp" },
+    { name: "sqr-login-image", content: "/assets/sqr-illustration-a.webp?query=1" },
+    { name: "sqr-login-image", content: "/assets/../sqr-illustration-a.webp" },
+    { name: "sqr-login-image", content: "/assets/another-image.webp" },
+    { name: "sqr-login-image", content: "/assets/sqr-illustration-a.svg" },
+    { name: "sqr-login-image", content: "/assets/sqr-illustration.webp" },
+    { name: "sqr-login-image", content: "" },
+  ]) assert.equal(runBootShell("/login", { hints: [hint] }).links.length, 0, hint.content);
 });

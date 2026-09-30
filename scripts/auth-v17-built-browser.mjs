@@ -93,6 +93,87 @@ async function captureReference() {
   }
 }
 
+async function verifyLoginResourceHints() {
+  // A cold, isolated context proves the artwork is discovered from the built
+  // resource hints, not from a cached stylesheet or an already-mounted login.
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", serviceWorkers: "block" });
+  const fixture = createAuthV17Fixture(server.origin);
+  const requests = [];
+  const finished = new Set();
+  const errors = [];
+  const heldRequests = [];
+  let releaseLogin;
+  const loginGate = new Promise((resolve) => { releaseLogin = resolve; });
+  const loginScriptPattern = /^\/assets\/Login-[A-Za-z0-9_-]+\.js$/;
+  const privateAssetPattern = /^\/assets\/(?:AuthenticatedAppEntry|AuthenticatedAppShell|AppQueryProvider|Home|Import|Saved|Viewer|GeneralSearch|CollectionReport|BillingPrincipalReportPage|Settings|SystemMonitorLayout|Activity|Analysis|AI|BackupRestore|query|charts|pdf|excel|capture)-/;
+  await context.route("**/*", (route) => {
+    if (!loginScriptPattern.test(new URL(route.request().url()).pathname)) return fixture.route(route);
+    const held = loginGate.then(() => fixture.route(route));
+    heldRequests.push(held);
+    return held;
+  });
+  await context.routeWebSocket("**/*", (socket) => socket.close());
+  const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
+  page.on("request", (request) => requests.push(new URL(request.url()).pathname));
+  page.on("requestfinished", (request) => finished.add(new URL(request.url()).pathname));
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    // Do not wait for load: the intentionally held Login chunk must not execute
+    // until its image and stylesheet preloads have already completed.
+    await page.goto(`${server.origin}/login`, { waitUntil: "commit" });
+    await expect(page.locator('meta[name="sqr-login-image"]')).toHaveCount(1);
+    const hints = await page.locator('meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"]').evaluateAll((elements) => elements.map((element) => ({ name: element.getAttribute("name"), href: element.getAttribute("content") })));
+    const scripts = hints.filter((hint) => hint.name === "sqr-login-script");
+    const styles = hints.filter((hint) => hint.name === "sqr-login-style");
+    const image = hints.find((hint) => hint.name === "sqr-login-image");
+    assert.equal(scripts.filter((hint) => loginScriptPattern.test(hint.href)).length, 1, "The emitted Login module is hinted exactly once.");
+    assert.ok(styles.length > 0, "Login's emitted stylesheet closure is hinted.");
+    assert.match(image.href, /^\/assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/);
+    assert.equal(new Set(hints.map((hint) => hint.href)).size, hints.length, "Login resource hints are deduplicated.");
+    assert.ok(hints.every((hint) => !privateAssetPattern.test(hint.href)), "Hints include only public Login dependencies, not authenticated or heavy feature chunks.");
+    assert.equal(scripts.filter((hint) => /^\/assets\/public-auth-runtime-/.test(hint.href)).length, 1, "Login helpers stay in a lazy, route-hinted chunk, not the shared HTML entry.");
+    assert.ok(scripts.length <= 12, "Login's shared helpers/icons must not regress into a long queue of tiny requests.");
+
+    await expect.poll(() => heldRequests.length).toBe(1);
+    await expect.poll(() => hints.every((hint) => requests.includes(hint.href))).toBe(true);
+    await expect.poll(() => [image, ...styles].every((hint) => finished.has(hint.href))).toBe(true);
+    await expect(page.locator(".auth-v17")).toHaveCount(0);
+    await expect(page.getByTestId("input-username")).toHaveCount(0);
+    for (const hint of hints) {
+      // Vite may already add its real stylesheet while the Login module is
+      // held. That is distinct from our inert preload, not a duplicate hint.
+      const relation = hint.name === "sqr-login-script" ? "modulepreload" : "preload";
+      const link = page.locator(`head link[rel="${relation}"][href="${hint.href}"]`);
+      await expect(link).toHaveCount(1);
+      await expect(link).toHaveAttribute("fetchpriority", "high");
+      await expect(link).toHaveAttribute("rel", relation);
+      if (hint.name === "sqr-login-image") {
+        await expect(link).toHaveAttribute("as", "image");
+        assert.equal(await link.getAttribute("crossorigin"), null, "CSS background preload must keep no-CORS mode.");
+      } else {
+        await expect(link).toHaveAttribute("crossorigin", "anonymous");
+        if (hint.name === "sqr-login-style") await expect(link).toHaveAttribute("as", "style");
+      }
+    }
+
+    releaseLogin();
+    await expect(page.getByTestId("input-username")).toBeVisible();
+    await page.waitForLoadState("load");
+    const background = await page.locator(".auth-v17-art").evaluate((element) => getComputedStyle(element, "::before").backgroundImage);
+    assert.ok(background.includes(image.href), "The early image is the exact background used by the mounted V17 login.");
+    assert.equal(requests.filter((href) => href === image.href).length, 1, "Mounting Login reuses the image preload without a duplicate CORS fetch.");
+    assert.deepEqual(requests.filter((href) => privateAssetPattern.test(href)), [], "Anonymous login does not fetch authenticated shells or heavy private features.");
+    assert.deepEqual(fixture.state.unexpected, [], "Resource hints stay within the isolated public API boundary.");
+    assert.deepEqual(errors, [], "Preloading must not introduce module or runtime errors.");
+    pass("cold login preloads exact artwork, scripts and styles before lazy mount, without duplicate image fetch or private chunks");
+  } finally {
+    releaseLogin();
+    await Promise.allSettled(heldRequests);
+    await context.close();
+  }
+}
+
 try {
   browser = await chromium.launch(resolvePlaywrightLaunchOptions());
   if (args.includes("--reference") || args.includes("--reference-only")) await captureReference();
@@ -100,6 +181,8 @@ try {
     await fs.writeFile(path.join(artifacts, "reference-report.json"), JSON.stringify({ status: "PASS", boundary: "supplied visual reference only, no demo form submitted", viewports: authV17Viewports, screenshots }, null, 2));
   } else {
   server = await startVisualBuiltServer(path.join(root, "dist-local/public"));
+  phase = "cold login resource hints";
+  await verifyLoginResourceHints();
   const context = await browser.newContext({ viewport: { width: 1366, height: 768 }, reducedMotion: "reduce", serviceWorkers: "block" });
   const fixture = createAuthV17Fixture(server.origin);
   await context.route("**/*", fixture.route);
