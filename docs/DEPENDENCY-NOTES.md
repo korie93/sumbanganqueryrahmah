@@ -23,6 +23,64 @@ Release policy:
 - New external tarball sources are blocked unless they are vendored and covered by an integrity verification script.
 - Major dependency upgrades should be dependency-only pull requests with rollback notes.
 
+## 2026-10-01 CI Security Patch
+
+[CI run 36787892874](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/36787892874)
+on `af4f7dc4` failed `build-and-test` at **Audit dependencies** on
+`@grpc/grpc-js` (high). Coverage and smoke UI were skipped; this run did not
+reach the Lighthouse gate. The same audit failure reproduced locally.
+
+Only two resolved packages change, without a new override:
+
+- `@grpc/grpc-js`: lockfile-only `1.14.4` to `1.14.5`, within OpenTelemetry's
+  existing `^1.14.3` dependency range. The upstream patch fixes handling of
+  unauthorized TLS peer certificates in certain server configurations
+  ([GHSA-m9gg-hp2v-232j](https://github.com/advisories/GHSA-m9gg-hp2v-232j)) and
+  disclosure of handler exception details
+  ([1.14.5 release notes](https://github.com/grpc/grpc-node/releases/tag/%40grpc%2Fgrpc-js%401.14.5)).
+  This transitive package arrives through the OpenTelemetry SDK's gRPC exporters;
+  SQR's configured trace exporter remains HTTP. No app authentication or TLS
+  configuration is changed, and the audit finding alone does not establish that
+  SQR's production configuration was exploitable.
+- `dompurify`: exact runtime pin `3.4.13` to `3.4.16`, also reused by `jspdf`.
+  This removes the additional low-severity hook/`IN_PLACE` finding reported by
+  npm audit ([3.4.16 release notes](https://github.com/cure53/DOMPurify/releases/tag/3.4.16)).
+  The application's sanitizer policies and allowlists remain unchanged.
+
+The targeted command was `npm update @grpc/grpc-js dompurify --ignore-scripts
+--no-audit --no-fund`, after updating the exact DOMPurify manifest pin. No
+package lifecycle scripts ran, other resolved packages changed, or audit
+thresholds/exceptions/install-script permissions were relaxed.
+
+`scripts/tests/dependency-grpc-regressions.test.mjs`, included in `test:scripts`,
+checks ordinary unary request compatibility, sanitized handler errors and the
+unauthorized-certificate boundary. It uses an ephemeral loopback listener and
+an unconnected TLS socket, not production telemetry, credentials or a database.
+An additional local Chromium probe exercised the actual application DOMPurify
+paths for trusted HTML, AI display and Monthly Collection report HTML, checking
+that safe formatting survives and unsafe elements/attributes are removed.
+
+Local verification:
+
+- `npm run audit:dependencies`: PASS; raw `npm audit --json` reports zero
+  vulnerabilities at every severity, including low.
+- `npm ci --ignore-scripts --dry-run --no-audit --no-fund`: PASS manifest/lock
+  consistency (a dry run, not a fresh installation claim).
+- Production build, sourcemap guard, TypeScript, bundle budgets and secret scan:
+  PASS.
+- Client tests: 614 PASS. Script suites: 572 PASS, one existing skip, using a
+  clean test environment without local dotenv configuration.
+- Built auth browser suite: 38 PASS, including login/MFA, password recovery,
+  strict CSP and Trusted Types. The isolated real-DOM sanitizer probe also passed.
+- Login Lighthouse with real security headers: performance 90, accessibility
+  100, best practices 100, LCP 3.3 s; all existing login gates pass. The first
+  attempt produced `NO_NAVSTART` rather than a usable score; one repeat passed
+  without code or threshold changes. Both reports remain in the ignored
+  `artifacts/login-lcp-fix/perf-dependency-patch-login-ci-headers*.json` files.
+
+Verification logs are retained under ignored `artifacts/dependency-20261001-*`
+and `artifacts/dependency-dompurify-probe.mjs`. Production was not modified.
+
 ## 2026-09-30 CI Security Patch
 
 [CI run 36714876215](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/36714876215) on `b171cfd0` failed the dependency audit on `brace-expansion` (high), `ip-address` (moderate), and `nodemailer` (high). The same gate reproduced all three locally. These dependencies were unchanged by the V17 authentication UI commit; the current registry advisories now reject the previous locked versions.
