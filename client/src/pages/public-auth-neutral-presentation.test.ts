@@ -8,7 +8,7 @@ function readSource(relativePath: string) {
   return readFileSync(path.resolve(process.cwd(), "client/src", relativePath), "utf8");
 }
 
-const login = readSource("pages/Login.css");
+const v17 = readSource("components/auth/AuthV17Layout.css");
 const layout = readSource("components/PublicAuthLayout.css");
 const controls = readSource("components/PublicAuthControls.css");
 
@@ -21,18 +21,26 @@ function declaration(source: string, selector: string, property: string) {
   return value;
 }
 
-test("public auth pilot uses semantic solid surfaces without changing shared color tokens", () => {
-  assert.equal(declaration(login, ".login-page", "background"), "hsl(var(--background))");
+test("V17 auth uses a scoped light split layout without a heavy form card", () => {
+  assert.equal(declaration(v17, ".auth-v17", "display"), "grid");
+  assert.match(declaration(v17, ".auth-v17", "grid-template-columns") ?? "", /minmax\(0, [^)]+\) minmax\(/);
+  assert.equal(declaration(v17, ".auth-v17", "color-scheme"), "light");
+  assert.equal(declaration(v17, ".auth-v17", "background"), "#fff");
+  assert.equal(declaration(v17, ".auth-v17-view", "background"), "transparent");
+  assert.equal(declaration(v17, ".auth-v17-view", "border"), "0");
+  assert.equal(declaration(v17, ".auth-v17-view", "box-shadow"), "none");
+  assert.doesNotMatch(v17, /backdrop-filter:\s*(?:blur|saturate)/);
+  assert.doesNotMatch(v17, /(?:^|\})\s*(?:body|html|:root|\.dark)\s*\{/);
+});
+
+test("legacy shared auth surfaces remain semantic and independent of V17", () => {
   assert.equal(declaration(layout, ".public-auth-layout", "background"), "hsl(var(--background))");
-  for (const [source, selector] of [[login, ".login-card"], [layout, ".public-auth-layout__card"]]) {
+  for (const [source, selector] of [[layout, ".public-auth-layout__card"]]) {
     assert.equal(declaration(source, selector, "background"), "hsl(var(--card))");
     assert.equal(declaration(source, selector, "border-radius"), "0.75rem");
     assert.equal(declaration(source, selector, "box-shadow"), "0 1px 2px hsl(0 0% 0% / 0.04)");
     assert.doesNotMatch(source, /backdrop-filter:\s*(?:blur|saturate)/);
   }
-  assert.equal(declaration(login, ".login-bg-pattern", "display"), "none");
-  assert.equal(declaration(login, ".login-content", "opacity"), "1");
-  assert.equal(declaration(login, ".login-content", "animation"), "none");
   assert.doesNotMatch(layout, /\.public-auth-layout__center-glow\s*\{\s*display:\s*block/);
 });
 
@@ -45,22 +53,22 @@ test("auth controls keep large touch targets, readable input text and visible bo
   assert.equal(declaration(controls, ".public-auth-input", "font-size"), "var(--font-size-base)");
   assert.equal(declaration(controls, ".public-auth-input", "min-width"), "0");
   assert.equal(declaration(controls, ".public-auth-input", "border"), "1px solid hsl(var(--input))");
-  assert.equal(declaration(login, ".login-input", "border-color"), "hsl(var(--input))");
-  assert.equal(declaration(login, ".login-input::placeholder", "color"), "hsl(var(--muted-foreground))");
+  assert.ok(Number.parseFloat(declaration(v17, ".auth-v17 .public-auth-input", "min-height") ?? "0") >= 44);
+  assert.match(declaration(v17, ".auth-v17 .public-auth-input", "border") ?? "", /^1px solid /);
+  assert.ok(declaration(v17, ".auth-v17 .public-auth-input::placeholder", "color"));
   assert.equal(declaration(controls, ".public-auth-input::placeholder", "color"), "hsl(var(--muted-foreground))");
   assert.equal(declaration(controls, ".public-auth-input.public-auth-password-input", "padding-inline-end"), "7rem");
 });
 
 test("auth focus treatment remains visible with keyboard and reduced motion", () => {
-  assert.equal(declaration(login, ".login-input:focus-visible", "outline"), "2px solid hsl(var(--ring))");
-  assert.equal(declaration(login, ".login-input:focus-visible", "outline-offset"), "2px");
+  assert.match(declaration(v17, ".auth-v17 :focus-visible", "outline") ?? "", /^[23]px solid /);
+  assert.equal(declaration(v17, ".auth-v17 :focus-visible", "outline-offset"), "2px");
   assert.equal(declaration(controls, ".public-auth-button-primary:focus-visible", "outline"), "2px solid hsl(var(--ring))");
   assert.match(controls, /\.public-auth-password-toggle:focus-visible\s*\{\s*box-shadow: inset 0 0 0 2px hsl\(var\(--ring\)\);/);
-  for (const source of [login, layout, controls]) {
+  for (const source of [v17, layout, controls]) {
     assert.match(source, /@media \(prefers-reduced-motion: reduce\)/);
   }
   assert.match(controls, /@supports not selector\(:focus-visible\)/);
-  assert.match(login, /@supports not selector\(:focus-visible\)/);
 });
 
 test("password creation compact overrides and validation colors remain intact", () => {
@@ -76,10 +84,12 @@ test("password creation compact overrides and validation colors remain intact", 
 });
 
 test("public auth keeps bounded widths and short-screen/single-tab recovery layouts", () => {
-  assert.equal(declaration(login, ".login-shell", "max-width"), "min(32rem, 100%)");
+  assert.equal(declaration(v17, ".auth-v17-wrap", "width"), "min(100%, 480px)");
+  assert.match(v17, /@media \(max-width: 699px\)[\s\S]*\.auth-v17\s*\{\s*display:\s*block;/);
+  assert.match(v17, /@media[^\{]*max-height:[\s\S]*\.auth-v17-wrap\s*\{\s*transform:\s*none;/);
   assert.equal(declaration(layout, ".public-auth-layout__container", "max-width"), "40rem");
   assert.equal(declaration(layout, ".public-auth-layout--minimal .public-auth-layout__container", "max-width"), "34rem");
-  for (const source of [login, layout]) {
+  for (const source of [layout]) {
     assert.match(source, /max-height: 560px/);
     assert.match(source, /max-height: 900px/);
     assert.match(source, /var\(--safe-area-inset-bottom\)/);

@@ -9,6 +9,7 @@ type ExpandableMessageProps = {
   children: React.ReactNode;
   className?: string | undefined;
   previewLimit?: number | undefined;
+  locale?: "ms" | "en";
 };
 
 /**
@@ -19,6 +20,7 @@ export function ExpandableMessage({
   children,
   className,
   previewLimit,
+  locale = "ms",
 }: ExpandableMessageProps) {
   const [expanded, setExpanded] = React.useState(false);
   const messageId = React.useId();
@@ -44,11 +46,11 @@ export function ExpandableMessage({
           buttonClassName,
         )}
         aria-controls={messageId}
-        aria-label={expanded ? "Ringkaskan mesej penuh" : "Papar mesej penuh"}
+        aria-label={locale === "en" ? expanded ? "Collapse full message" : "Show full message" : expanded ? "Ringkaskan mesej penuh" : "Papar mesej penuh"}
         {...getAriaExpandedProps(expanded)}
         onClick={() => setExpanded((current) => !current)}
       >
-        {expanded ? "Ringkaskan mesej" : "Papar mesej penuh"}
+        {locale === "en" ? expanded ? "Collapse message" : "Show full message" : expanded ? "Ringkaskan mesej" : "Papar mesej penuh"}
       </button>
     </span>
   );

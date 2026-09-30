@@ -5,13 +5,14 @@ import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
 import { PasswordInput } from "@/components/PasswordInput";
 import { PublicAuthButton } from "@/components/PublicAuthControls";
-import { PublicAuthLayout } from "@/components/PublicAuthLayout";
+import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
+import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import {
   resetPasswordWithToken,
   type PasswordResetTokenValidationPayload,
   validatePasswordResetToken,
 } from "@/lib/api/auth";
-import { getAuthErrorMessage } from "@/lib/auth-flow-feedback";
+import { getAuthErrorMessage, localizeAuthFeedback } from "@/lib/auth-flow-feedback";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { broadcastForcedLogout } from "@/lib/auth-session";
 import {
@@ -22,6 +23,7 @@ import {
   getPasswordCreationFieldErrors,
   getPasswordCreationSubmitHint,
   getPasswordCreationValidationStates,
+  localizePasswordFeedback,
 } from "@/pages/password-creation-feedback";
 import {
   formatPublicAuthExpiry,
@@ -38,6 +40,7 @@ type ResetPasswordPageProps = {
 
 export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: ResetPasswordPageProps = {}) {
   const [, navigate] = useLocation();
+  const { locale, t } = useAuthLocale();
   const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [reset, setReset] = useState<PasswordResetTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ResetPhase>(token ? "validating" : "invalid");
@@ -228,14 +231,13 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
   };
 
   return (
-    <PublicAuthLayout
-      badge="Tetapan Semula Kata Laluan"
-      title="Cipta Kata Laluan Baharu"
-      description="Gunakan pautan selamat yang dihantar ke emel anda untuk menetapkan kata laluan baharu dan mendapatkan semula akses ke sistem."
+    <AuthV17Layout
+      badge={t("auth.v17Recovery.resetBadge")}
+      title={t(phase === "success" ? "auth.v17Recovery.resetSuccessTitle" : phase === "invalid" ? "auth.v17Recovery.invalidTitle" : "auth.v17Recovery.resetTitle")}
+      description={t("auth.v17Recovery.resetDescription")}
       contentBusy={loading || phase === "validating"}
       visualMode="minimal"
       className="password-creation-layout"
-      showBackButton={false}
       icon={
         phase === "invalid" ? (
           <ShieldAlert className="h-7 w-7" aria-hidden="true" focusable="false" />
@@ -249,20 +251,19 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
     >
       {phase === "validating" ? (
         <div className="public-auth-status-card public-auth-status-card--info" role="status" aria-live="polite">
-          Sedang mengesahkan pautan tetapan semula anda...
+          {t("auth.v17Recovery.resetValidating")}
         </div>
       ) : null}
 
       {phase === "invalid" ? (
         <div className="public-auth-status-card public-auth-status-card--error" role="alert">
-          {error || "Pautan tetapan semula tidak sah atau telah tamat tempoh."}
+          {localizeAuthFeedback(error, locale) || t("auth.v17Recovery.resetInvalid")}
         </div>
       ) : null}
 
       {phase === "success" ? (
         <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
-          Tetapan semula kata laluan berjaya. Anda kini boleh log masuk menggunakan username dan
-          kata laluan baharu.
+          {t("auth.v17Recovery.resetSuccess")}
         </div>
       ) : null}
 
@@ -277,27 +278,29 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
         >
           <dl className="public-auth-account-summary">
             <div className="public-auth-account-summary__row">
-              <dt>Nama pengguna</dt>
+              <dt>{t("auth.v17Recovery.username")}</dt>
               <dd>{reset.username}</dd>
             </div>
             <div className="public-auth-account-summary__row">
-              <dt>Peranan</dt>
+              <dt>{t("auth.v17Recovery.role")}</dt>
               <dd>{reset.role}</dd>
             </div>
             <div className="public-auth-account-summary__row">
-              <dt>Tamat tempoh</dt>
+              <dt>{t("auth.v17Recovery.expires")}</dt>
               <dd>{formatPublicAuthExpiry(reset.expiresAt)}</dd>
             </div>
           </dl>
           <div className="space-y-2">
             <label htmlFor="reset-password-new-password" className="public-auth-field-label">
-              Kata laluan baharu
+              {t("auth.v17Recovery.newPassword")}
             </label>
             <PasswordInput
               id="reset-password-new-password"
               name="newPassword"
               variant="public-auth"
-              visibilityLabel="kata laluan baharu"
+              visibilityLabel={t("auth.v17Recovery.newPasswordVisibility")}
+              locale={locale}
+              capsLockMessage={t("auth.v17Recovery.capsLock")}
               value={newPassword}
               data-validation-state={validationStates.newPassword}
               onChange={(event) => {
@@ -308,7 +311,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
                 setError("");
               }}
               onBlur={validateNewPasswordOnBlur}
-              placeholder="Masukkan kata laluan baharu"
+              placeholder={t("auth.v17Recovery.newPasswordPlaceholder")}
               autoComplete="new-password"
               required
               disabled={loading}
@@ -320,21 +323,24 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             password={newPassword}
             variant="checklist"
             interacted={newPasswordInteracted}
+            locale={locale}
           />
           {newPasswordError ? (
             <p id="reset-password-new-error" className="public-auth-field-error" role="alert">
-              {newPasswordError}
+              {localizePasswordFeedback(newPasswordError, locale)}
             </p>
           ) : null}
           <div className="space-y-2">
             <label htmlFor="reset-password-confirm-password" className="public-auth-field-label">
-              Sahkan kata laluan baharu
+              {t("auth.v17Recovery.confirmPassword")}
             </label>
             <PasswordInput
               id="reset-password-confirm-password"
               name="confirmPassword"
               variant="public-auth"
-              visibilityLabel="pengesahan kata laluan baharu"
+              visibilityLabel={t("auth.v17Recovery.confirmPasswordVisibility")}
+              locale={locale}
+              capsLockMessage={t("auth.v17Recovery.capsLock")}
               value={confirmPassword}
               data-validation-state={validationStates.confirmPassword}
               onChange={(event) => {
@@ -343,7 +349,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
                 setError("");
               }}
               onBlur={validateConfirmPasswordOnBlur}
-              placeholder="Masukkan semula kata laluan baharu"
+              placeholder={t("auth.v17Recovery.confirmPasswordPlaceholder")}
               autoComplete="new-password"
               required
               disabled={loading}
@@ -354,26 +360,31 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             id="reset-password-confirm-error"
             password={newPassword}
             confirmation={confirmPassword}
-            requiredError={confirmPasswordError}
+            requiredError={localizePasswordFeedback(confirmPasswordError, locale)}
             variant="enhanced"
+            locale={locale}
           />
           {error ? (
             <div className="public-auth-status-card public-auth-status-card--error" role="alert">
-              {error}
+              {localizeAuthFeedback(error, locale)}
             </div>
           ) : null}
           <p id="reset-password-submit-help" className="password-creation-form__submit-hint">
-            {getPasswordCreationSubmitHint({ newPassword, confirmPassword, loading, newPasswordError, confirmPasswordError })}
+            {localizePasswordFeedback(getPasswordCreationSubmitHint({ newPassword, confirmPassword, loading, newPasswordError, confirmPasswordError }), locale)}
           </p>
           <PublicAuthButton
             type="submit"
             aria-describedby="reset-password-submit-help"
             disabled={loading}
           >
-            {loading ? "Sedang menetapkan semula..." : "Tetapkan Kata Laluan Baharu"}
+            {t(loading ? "auth.v17Recovery.resetting" : "auth.v17Recovery.resetSubmit")}
           </PublicAuthButton>
         </form>
       ) : null}
+
+      {phase === "invalid" ? <PublicAuthButton type="button" onClick={() => navigate("/forgot-password")}>
+        {t("auth.v17Recovery.requestNewLink")}
+      </PublicAuthButton> : null}
 
       <PublicAuthButton
         type="button"
@@ -381,8 +392,8 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
         onClick={navigateToLogin}
       >
         <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
-        Kembali ke log masuk
+        {t("auth.v17Recovery.backToLogin")}
       </PublicAuthButton>
-    </PublicAuthLayout>
+    </AuthV17Layout>
   );
 }

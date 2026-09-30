@@ -30,6 +30,12 @@ const resources: Record<AppLocale, Record<TranslationNamespace, TranslationDicti
 };
 
 let activeLocale: AppLocale = DEFAULT_LOCALE;
+const localeListeners = new Set<() => void>();
+
+export function subscribeAppLocale(listener: () => void) {
+  localeListeners.add(listener);
+  return () => { localeListeners.delete(listener); };
+}
 
 export function normalizeAppLocale(value: string | null | undefined): AppLocale {
   const normalized = String(value || "").trim().toLowerCase();
@@ -41,7 +47,11 @@ export function getAppLocale() {
 }
 
 export function setAppLocale(locale: string) {
-  activeLocale = normalizeAppLocale(locale);
+  const next = normalizeAppLocale(locale);
+  if (activeLocale !== next) {
+    activeLocale = next;
+    localeListeners.forEach((listener) => listener());
+  }
   return activeLocale;
 }
 

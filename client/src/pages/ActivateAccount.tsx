@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { PublicAuthLayout } from "@/components/PublicAuthLayout";
+import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
+import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import {
   activateAccount,
   type ActivationTokenValidationPayload,
@@ -34,6 +35,7 @@ type ActivateAccountPageProps = {
 
 export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPageProps) {
   const [, navigate] = useLocation();
+  const { t } = useAuthLocale();
   const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [activation, setActivation] = useState<ActivationTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ActivationPhase>(token ? "validating" : "invalid");
@@ -254,22 +256,19 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
 
   const title =
     phase === "success"
-      ? "Kata Laluan Berjaya Dicipta"
+      ? t("auth.v17Recovery.createdTitle")
       : phase === "ready"
-        ? "Cipta Kata Laluan"
-        : "Aktivasi Akaun";
+        ? t("auth.v17Recovery.createTitle")
+        : t("auth.v17Recovery.activationTitle");
 
   return (
-    <PublicAuthLayout
-      badge="Aktivasi Akaun"
+    <AuthV17Layout
+      badge={t("auth.v17Recovery.activationBadge")}
       title={title}
-      description="Lengkapkan persediaan akaun kali pertama menggunakan pautan aktivasi yang dihantar ke emel anda. Langkah ini diperlukan sebelum anda boleh mula menggunakan sistem."
+      description={t("auth.v17Recovery.activationDescription")}
       contentBusy={loading || phase === "validating"}
       visualMode="minimal"
       className="password-creation-layout"
-      showBackButton={false}
-      backLabel="Kembali ke log masuk"
-      onBackClick={navigateToLogin}
       icon={<ActivateAccountIcon phase={phase} />}
     >
       <ActivationStatusCard error={error} phase={phase} />
@@ -305,6 +304,6 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
         phase={phase}
         onBackToLogin={navigateToLogin}
       />
-    </PublicAuthLayout>
+    </AuthV17Layout>
   );
 }

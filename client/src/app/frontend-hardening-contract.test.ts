@@ -58,11 +58,14 @@ test("z-index layering uses shared design tokens instead of hardcoded local laye
 });
 
 test("decorative clipped surfaces use overflow clip with hidden fallback", () => {
-  const loginCssSource = readClientSource("../pages/Login.css");
+  const authCssSource = readClientSource("../components/auth/AuthV17Layout.css");
   const dailyCssSource = readClientSource("../pages/collection/CollectionDailyPage.css");
   const monthlyCssSource = readClientSource("../pages/collection-summary/CollectionMonthlyComparisonPanel.css");
 
-  assert.match(loginCssSource, /\.login-card \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
+  // Only the illustration may clip: form fields and messages retain natural flow.
+  assert.match(authCssSource, /\.auth-v17-brand-panel\s*\{[^}]*overflow:\s*hidden;/);
+  assert.match(authCssSource, /\.auth-v17-view\s*\{[^}]*border:\s*0;[^}]*box-shadow:\s*none;/);
+  assert.doesNotMatch(authCssSource, /\.auth-v17-(?:wrap|view|content)\s*\{[^}]*(?:overflow:\s*(?:hidden|clip)|max-height:)/);
   // Role guidance is now a native disclosure, not a decorative clipped card.
   const roleGuideSource = readClientSource("../pages/collection/CollectionDailyRoleGuide.tsx");
   assert.match(roleGuideSource, /<details/);

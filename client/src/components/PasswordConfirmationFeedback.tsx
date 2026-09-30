@@ -6,13 +6,14 @@ type PasswordConfirmationFeedbackProps = {
   confirmation: string;
   requiredError?: string | null;
   variant?: "default" | "enhanced";
+  locale?: "ms" | "en";
 };
 
-export function getPasswordConfirmationFeedback(password: string, confirmation: string) {
+export function getPasswordConfirmationFeedback(password: string, confirmation: string, locale: "ms" | "en" = "ms") {
   if (!confirmation) return null;
   return password === confirmation
-    ? { matches: true, message: "Pengesahan kata laluan sepadan." }
-    : { matches: false, message: "Pengesahan kata laluan tidak sepadan." };
+    ? { matches: true, message: locale === "en" ? "Password confirmation matches." : "Pengesahan kata laluan sepadan." }
+    : { matches: false, message: locale === "en" ? "Password confirmation does not match." : "Pengesahan kata laluan tidak sepadan." };
 }
 
 /** Match feedback is separate from password validity: matching weak passwords remain invalid. */
@@ -22,8 +23,9 @@ export function PasswordConfirmationFeedback({
   confirmation,
   requiredError,
   variant = "default",
+  locale = "ms",
 }: PasswordConfirmationFeedbackProps) {
-  const feedback = getPasswordConfirmationFeedback(password, confirmation);
+  const feedback = getPasswordConfirmationFeedback(password, confirmation, locale);
   const message = feedback?.message || (!confirmation ? requiredError : "");
   if (variant === "enhanced") {
     const enhancedMessage = requiredError || message;

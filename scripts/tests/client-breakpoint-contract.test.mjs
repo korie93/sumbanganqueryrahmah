@@ -90,3 +90,20 @@ test("client breakpoint contract report summarizes successful checks", () => {
   assert.match(report, /inspected 10\/10 targeted files, 25\/25 contract markers, and 7 CSS files/i);
   assert.match(report, /standardized around 640\/767\/768\/1023\/1024/i);
 });
+
+test("only the isolated V17 auth stylesheet may retain the canonical reference breakpoints", () => {
+  const filesByPath = buildCompliantFilesByPath();
+  const authPath = "client/src/components/auth/AuthV17Layout.css";
+  const widths = [380, 699, 700, 980, 981, 1200];
+  filesByPath[authPath] = widths.map((width) => `@media (min-width: ${width}px) {}`).join("\n");
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, []);
+
+  // Neither nearby auth files nor authenticated workspace CSS inherit the exception.
+  for (const otherPath of ["client/src/pages/Login.css", "client/src/components/auth/Other.css", "client/src/app/AuthenticatedAppShell.css"]) {
+    const copy = { ...filesByPath, [otherPath]: filesByPath[authPath] };
+    assert.equal(validateClientBreakpointContract({ filesByPath: copy }).failures.length, widths.length);
+  }
+
+  filesByPath[authPath] = "@media (max-width: 999px) {}";
+  assert.equal(validateClientBreakpointContract({ filesByPath }).failures.length, 1);
+});

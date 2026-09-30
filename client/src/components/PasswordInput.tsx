@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 type PasswordInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
   visibilityLabel: string;
   variant?: "default" | "public-auth";
+  locale?: "ms" | "en";
+  capsLockMessage?: string;
 };
 
 /** Password field with an independent, accessible show/hide control; masked by default. */
@@ -18,11 +20,17 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
     value,
     visibilityLabel,
     variant = "default",
+    locale = "ms",
+    capsLockMessage,
+    onKeyDown,
+    onKeyUp,
+    onBlur,
     ...props
   }, ref) {
     const generatedId = useId();
     const inputId = id ?? generatedId;
     const [showPassword, setShowPassword] = useState(false);
+    const [capsLock, setCapsLock] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
     const selectionRef = useRef<{ start: number; end: number; direction: "forward" | "backward" | "none" } | null>(null);
     const setInputRef = useCallback((input: HTMLInputElement | null) => {
@@ -57,7 +65,8 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
     }, [visible, disabled]);
 
     return (
-      <div className="relative min-w-0 w-full">
+      <div className="min-w-0 w-full">
+        <div className="relative min-w-0 w-full">
         <InputComponent
           autoCapitalize="none"
           autoCorrect="off"
@@ -68,6 +77,19 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           type={visible ? "text" : "password"}
           value={value}
           disabled={disabled}
+          aria-describedby={[props["aria-describedby"], capsLockMessage && capsLock ? `${inputId}-caps-lock` : null].filter(Boolean).join(" ") || undefined}
+          onKeyDown={(event) => {
+            if (capsLockMessage) setCapsLock(event.getModifierState("CapsLock"));
+            onKeyDown?.(event);
+          }}
+          onKeyUp={(event) => {
+            if (capsLockMessage) setCapsLock(event.getModifierState("CapsLock"));
+            onKeyUp?.(event);
+          }}
+          onBlur={(event) => {
+            setCapsLock(false);
+            onBlur?.(event);
+          }}
           className={cn(
             variant === "public-auth"
               ? "public-auth-input public-auth-password-input"
@@ -78,7 +100,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
         <button
           type="button"
           aria-controls={inputId}
-          aria-label={`${visible ? "Sembunyikan" : "Lihat"} ${visibilityLabel}`}
+          aria-label={`${locale === "en" ? visible ? "Hide" : "Show" : visible ? "Sembunyikan" : "Lihat"} ${visibilityLabel}`}
           {...getAriaPressedProps(visible)}
           disabled={disabled}
           onPointerDown={(event) => {
@@ -105,8 +127,10 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           {visible
             ? <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" focusable="false" />
             : <Eye className="h-4 w-4 shrink-0" aria-hidden="true" focusable="false" />}
-          <span>{visible ? "Sembunyi" : "Lihat"}</span>
+          <span>{locale === "en" ? visible ? "Hide" : "Show" : visible ? "Sembunyi" : "Lihat"}</span>
         </button>
+        </div>
+        {capsLockMessage && capsLock && !disabled ? <p id={`${inputId}-caps-lock`} className="auth-v17-caps" role="status">{capsLockMessage}</p> : null}
       </div>
     );
   },

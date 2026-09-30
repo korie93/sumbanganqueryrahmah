@@ -155,7 +155,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
   }
   async function layout(state, target = page) {
     markPhase(`layout: ${state}`);
-    const selector = state === "login-challenge" ? ".login-card-form" : '[data-testid="two-factor-settings"]';
+    const selector = state === "login-challenge" ? ".auth-v17-wrap" : '[data-testid="two-factor-settings"]';
     const panel = target.locator(selector);
     for (const width of TWO_FACTOR_LAYOUT_WIDTHS) {
       await target.setViewportSize({ width, height: 960 });

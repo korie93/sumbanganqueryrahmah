@@ -159,6 +159,9 @@ async function installMockPublicApi(page: Page) {
   // Public snapshots never need a live session or backend state.
   await page.route("**/api/**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/health" && route.request().method() === "GET") {
+      return jsonResponse(route, { status: "ok", ready: true });
+    }
     return jsonResponse(route, { ok: false, message: "Unauthenticated visual fixture" },
       pathname === "/api/me" ? 401 : 404);
   });
@@ -457,6 +460,60 @@ async function installMockAuthenticatedApi(page: Page) {
       });
     }
 
+    if (pathname === "/api/activity/retention") {
+      return jsonResponse(route, {
+        ok: true, success: true,
+        retention: {
+          policy: { autoCleanupEnabled: true, batchSize: 500, securityRetentionDays: 365, standardRetentionDays: 90 },
+          preview: { protectedActiveBanCount: 0, securityEligibleCount: 0, standardEligibleCount: 0, totalEligibleCount: 0 },
+          securityCutoff: "2025-01-15T08:20:00.000Z", standardCutoff: "2025-10-17T08:20:00.000Z",
+        },
+      });
+    }
+
+    if (pathname === "/api/collection/list") {
+      return jsonResponse(route, {
+        ok: true, records: [], total: 0, totalAmount: 0,
+        page: 1, pageSize: 20, limit: 20, offset: 0, nextCursor: null,
+        pagination: { mode: "hybrid", page: 1, pageSize: 20, limit: 20,
+          offset: 0, total: 0, totalPages: 1, nextCursor: null,
+          hasNextPage: false, hasPreviousPage: false },
+      });
+    }
+    if (pathname === "/api/collection/source-files") {
+      return jsonResponse(route, { ok: true, sourceFiles: [], pagination: { limit: 50, total: 0, nextCursor: null } });
+    }
+    if (pathname === "/api/collection/teams") {
+      return jsonResponse(route, { ok: true, teams: [] });
+    }
+    if (pathname === "/api/collection/report/billing-principal/saved-targets") {
+      return jsonResponse(route, { ok: true, targets: [], page: 1, pageSize: 20, hasMore: false });
+    }
+    if (pathname === "/api/analyze/all") {
+      return jsonResponse(route, {
+        totalImports: 1, totalRows: 0,
+        imports: [{ id: "visual-import-1", name: "Baseline Import", filename: "baseline-import.csv", rowCount: 0 }],
+        analysis: {
+          icLelaki: { count: 0, samples: [] }, icPerempuan: { count: 0, samples: [] },
+          noPolis: { count: 0, samples: [] }, noTentera: { count: 0, samples: [] },
+          passportMY: { count: 0, samples: [] }, passportLuarNegara: { count: 0, samples: [] },
+          duplicates: { count: 0, items: [] }, columns: [],
+          quality: { score: 0, grade: "no_data", completenessPercent: 0, typeConsistencyPercent: 0,
+            profiledColumns: 0, columnsNeedingReview: 0, columnsWithMissingValues: 0, mixedTypeColumns: 0,
+            limitedCardinalityColumns: 0, totalApplicableCells: 0, populatedCells: 0, emptyCells: 0, columnLimitReached: false },
+        },
+      });
+    }
+    if (pathname === "/api/admin/users") {
+      return jsonResponse(route, { ok: true, users: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 } });
+    }
+    if (pathname === "/api/admin/password-reset-requests") {
+      return jsonResponse(route, { ok: true, requests: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 } });
+    }
+    if (pathname === "/api/admin/dev-mail-outbox") {
+      return jsonResponse(route, { ok: true, enabled: false, previews: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 } });
+    }
+
     if (request.method() === "POST" && pathname === "/api/activity/logout") {
       return jsonResponse(route, { ok: true });
     }
@@ -630,6 +687,40 @@ test.describe("authenticated key page baselines", () => {
         await logoutVisualSession(page);
       }
     });
+  }
+});
+
+test("V17 auth changes preserve authenticated module shells", async ({ page }) => {
+  test.setTimeout(120_000);
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await installMockAuthenticatedSession(page, "light");
+  const modules: VisualRouteSpec[] = [
+    { id: "home", path: "/", readySelector: "h1:has-text('SQR Workspace')" },
+    { id: "general-search", path: "/general-search", readySelector: "[data-testid='input-search']" },
+    { id: "collection-records", path: "/collection/records", readySelector: "[data-testid='collection-records-page']" },
+    { id: "billing", path: "/collection/billing-principal", readySelector: "[data-testid='billing-principal-page'][data-state='empty']" },
+    { id: "analysis", path: "/monitor?section=analysis", readySelector: "[data-testid='text-analysis-title']" },
+    { id: "activity", path: "/monitor?section=activity", readySelector: "[data-testid^='activity-row-']" },
+    { id: "accounts", path: "/settings?section=account-management", readySelector: "h3:has-text('Account health summary')" },
+  ];
+  try {
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const module of modules) {
+        await navigateForSnapshot(page, module);
+        await expect(page.locator(".auth-v17")).toHaveCount(0);
+        await expect(page.getByTestId("input-password")).toHaveCount(0);
+        await expect(page.locator("main#main-content")).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+          `${module.id}/${width}: no document-level horizontal overflow`).toBe(true);
+        await expect(page.getByText(/API contract mismatch|Something went wrong|Analysis unavailable/)).toHaveCount(0);
+        await page.screenshot({ path: test.info().outputPath(`${module.id}-${width}.png`), fullPage: true, animations: "disabled" });
+      }
+    }
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await logoutVisualSession(page);
   }
 });
 

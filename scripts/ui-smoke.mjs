@@ -3062,7 +3062,7 @@ const waitForVisible = async (locator, timeout = 1_500) => {
 };
 
 const ensureLoginPageVisible = async (page) => {
-  const loginHeading = page.locator("h1.login-title").first();
+  const loginHeading = page.getByRole("heading", { name: /^(Selamat kembali|Welcome back)$/, level: 1 });
   const usernameInput = page.getByTestId("input-username");
   const waitForInteractiveLogin = async () => {
     await page.locator("html.app-ready").waitFor({
@@ -3078,7 +3078,7 @@ const ensureLoginPageVisible = async (page) => {
     return;
   }
 
-  const publicLoginButton = page.getByRole("button", { name: /^(Log In|Log Masuk)$/ }).first();
+  const publicLoginButton = page.getByRole("link", { name: /^Sign In$/ }).first();
   if (await waitForVisible(publicLoginButton, 2_000)) {
     try {
       await publicLoginButton.click({ force: true, timeout: 5_000 });

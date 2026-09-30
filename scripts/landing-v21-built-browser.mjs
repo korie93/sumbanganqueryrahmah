@@ -19,6 +19,7 @@ const failures=[];
 const fixtureRoute=route=>{
  const request=route.request(),url=new URL(request.url());
  if(url.origin!==server.origin){failures.push(`Off-origin ${url.origin}`);return route.abort();}
+ if(url.pathname==='/api/health'&&request.method()==='GET')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:'ok',ready:true})});
  if(url.pathname.startsWith('/api/'))return route.fulfill({status:url.pathname==='/api/me'?401:404,contentType:'application/json',body:JSON.stringify({ok:false,message:'Isolated landing fixture'})});
  if(!['GET','HEAD'].includes(request.method())){failures.push('Unexpected mutation');return route.abort();}
  return route.continue();
@@ -188,7 +189,7 @@ try {
  await expect(page.locator('#sqr-application-schema')).toHaveCount(0);
  const loginAfter=await page.getByTestId('input-username').evaluate(el=>{const s=getComputedStyle(el);return {height:s.height,fontSize:s.fontSize,color:s.color,background:s.backgroundColor,border:s.borderRadius};});
  assert.deepEqual(loginAfter,loginBefore,'No landing CSS leakage into login');
- await page.getByRole('button',{name:'Kembali ke halaman utama',exact:true}).click();
+ await page.getByRole('button',{name:'Laman utama',exact:true}).click();
  await expect(page.locator('.sqr-landing')).toBeVisible();
  await expect(page.locator('#sqr-application-schema')).toHaveCount(1);
  pass('SPA login round-trip, language/schema cleanup and CSS isolation');
@@ -272,7 +273,7 @@ try {
  await expect(strictPage.locator('#view-analysis')).toBeVisible();
  await strictPage.locator('.nav-actions a[href="/login"]').click();
  await expect(strictPage.getByTestId('input-username')).toBeVisible();
- await strictPage.getByRole('button',{name:'Kembali ke halaman utama',exact:true}).click();
+ await strictPage.getByRole('button',{name:'Laman utama',exact:true}).click();
  await expect(strictPage.locator('#sqr-application-schema')).toHaveCount(1);
  assert.deepEqual(cspViolations,[],'Strict production-like CSP and Trusted Types');
  await strictPage.close();

@@ -155,6 +155,7 @@ jobs:
           path: |
             artifacts/auth-feedback-browser
             artifacts/password-public-build-browser
+            artifacts/auth-v17-browser
             artifacts/two-factor
             artifacts/release-verification
             artifacts/sbom

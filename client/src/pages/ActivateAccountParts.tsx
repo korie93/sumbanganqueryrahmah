@@ -4,12 +4,15 @@ import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
 import { PasswordInput } from "@/components/PasswordInput";
 import { PublicAuthButton } from "@/components/PublicAuthControls";
+import { useAuthLocale } from "@/components/auth/useAuthLocale";
+import { localizeAuthFeedback } from "@/lib/auth-flow-feedback";
 import type { ActivationTokenValidationPayload } from "@/lib/api/auth";
 import { formatPublicAuthExpiry } from "@/pages/public-auth-runtime-utils";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import {
   getPasswordCreationSubmitHint,
   getPasswordCreationValidationStates,
+  localizePasswordFeedback,
 } from "@/pages/password-creation-feedback";
 
 export type ActivationPhase = "invalid" | "ready" | "success" | "validating";
@@ -68,10 +71,11 @@ export function ActivateAccountIcon({ phase }: ActivateAccountIconProps) {
 }
 
 export function ActivationStatusCard({ error, phase }: ActivationStatusCardProps) {
+  const { locale, t } = useAuthLocale();
   if (phase === "validating") {
     return (
       <div className="public-auth-status-card public-auth-status-card--info" role="status" aria-live="polite">
-        Sedang mengesahkan pautan aktivasi anda...
+        {t("auth.v17Recovery.activationValidating")}
       </div>
     );
   }
@@ -79,7 +83,7 @@ export function ActivationStatusCard({ error, phase }: ActivationStatusCardProps
   if (phase === "invalid") {
     return (
       <div className="public-auth-status-card public-auth-status-card--error" role="alert">
-        {error || "Pautan aktivasi tidak sah atau telah tamat tempoh."}
+        {localizeAuthFeedback(error, locale) || t("auth.v17Recovery.activationInvalid")}
       </div>
     );
   }
@@ -87,7 +91,7 @@ export function ActivationStatusCard({ error, phase }: ActivationStatusCardProps
   if (phase === "success") {
     return (
       <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
-        Kata laluan berjaya dicipta. Anda akan dibawa semula ke halaman log masuk sebentar lagi.
+        {t("auth.v17Recovery.activationSuccess")}
       </div>
     );
   }
@@ -116,6 +120,7 @@ export function ActivationPasswordForm({
   onNewPasswordBlur,
   onNewPasswordChange,
 }: ActivationPasswordFormProps) {
+  const { locale, t } = useAuthLocale();
   const validationStates = getPasswordCreationValidationStates({
     newPassword,
     confirmPassword,
@@ -134,28 +139,30 @@ export function ActivationPasswordForm({
     >
       <dl className="public-auth-account-summary">
         <div className="public-auth-account-summary__row">
-          <dt>Nama pengguna</dt>
+          <dt>{t("auth.v17Recovery.username")}</dt>
           <dd>{activation.username}</dd>
         </div>
         <div className="public-auth-account-summary__row">
-          <dt>Peranan</dt>
+          <dt>{t("auth.v17Recovery.role")}</dt>
           <dd>{activation.role}</dd>
         </div>
         <div className="public-auth-account-summary__row">
-          <dt>Tamat tempoh</dt>
+          <dt>{t("auth.v17Recovery.expires")}</dt>
           <dd>{formatPublicAuthExpiry(activation.expiresAt)}</dd>
         </div>
       </dl>
       <div className="space-y-2">
         <label htmlFor="activate-account-new-password" className="public-auth-field-label">
-          Kata laluan baharu
+          {t("auth.v17Recovery.newPassword")}
         </label>
         <PasswordInput
           ref={newPasswordInputRef}
           id="activate-account-new-password"
           name="newPassword"
           variant="public-auth"
-          visibilityLabel="kata laluan baharu"
+          visibilityLabel={t("auth.v17Recovery.newPasswordVisibility")}
+          locale={locale}
+          capsLockMessage={t("auth.v17Recovery.capsLock")}
           value={newPassword}
           data-validation-state={validationStates.newPassword}
           onChange={(event) => {
@@ -165,7 +172,7 @@ export function ActivationPasswordForm({
             onClearFormError();
           }}
           onBlur={onNewPasswordBlur}
-          placeholder="Masukkan kata laluan baharu"
+          placeholder={t("auth.v17Recovery.newPasswordPlaceholder")}
           autoComplete="new-password"
           required
           disabled={loading}
@@ -178,21 +185,24 @@ export function ActivationPasswordForm({
         password={newPassword}
         variant="checklist"
         interacted={newPasswordInteracted}
+        locale={locale}
       />
       {newPasswordError ? (
         <p id="activate-password-new-error" className="public-auth-field-error" role="alert">
-          {newPasswordError}
+          {localizePasswordFeedback(newPasswordError, locale)}
         </p>
       ) : null}
       <div className="space-y-2">
         <label htmlFor="activate-account-confirm-password" className="public-auth-field-label">
-          Sahkan kata laluan baharu
+          {t("auth.v17Recovery.confirmPassword")}
         </label>
         <PasswordInput
           id="activate-account-confirm-password"
           name="confirmPassword"
           variant="public-auth"
-          visibilityLabel="pengesahan kata laluan baharu"
+          visibilityLabel={t("auth.v17Recovery.confirmPasswordVisibility")}
+          locale={locale}
+          capsLockMessage={t("auth.v17Recovery.capsLock")}
           value={confirmPassword}
           data-validation-state={validationStates.confirmPassword}
           onChange={(event) => {
@@ -201,7 +211,7 @@ export function ActivationPasswordForm({
             onClearFormError();
           }}
           onBlur={onConfirmPasswordBlur}
-          placeholder="Masukkan semula kata laluan baharu"
+          placeholder={t("auth.v17Recovery.confirmPasswordPlaceholder")}
           autoComplete="new-password"
           required
           disabled={loading}
@@ -214,29 +224,31 @@ export function ActivationPasswordForm({
         id="activate-password-confirm-error"
         password={newPassword}
         confirmation={confirmPassword}
-        requiredError={confirmPasswordError}
+        requiredError={localizePasswordFeedback(confirmPasswordError, locale)}
         variant="enhanced"
+        locale={locale}
       />
       {error ? (
         <div className="public-auth-status-card public-auth-status-card--error" role="alert">
-          {error}
+          {localizeAuthFeedback(error, locale)}
         </div>
       ) : null}
       <p id="activate-password-submit-help" className="password-creation-form__submit-hint">
-        {getPasswordCreationSubmitHint({ newPassword, confirmPassword, loading, newPasswordError, confirmPasswordError })}
+        {localizePasswordFeedback(getPasswordCreationSubmitHint({ newPassword, confirmPassword, loading, newPasswordError, confirmPasswordError }), locale)}
       </p>
       <PublicAuthButton
         type="submit"
         aria-describedby="activate-password-submit-help"
         disabled={loading}
       >
-        {loading ? "Sedang mencipta kata laluan..." : "Cipta Kata Laluan"}
+        {t(loading ? "auth.v17Recovery.creating" : "auth.v17Recovery.createSubmit")}
       </PublicAuthButton>
     </form>
   );
 }
 
 export function ActivationActions({ onBackToLogin, phase }: ActivationActionsProps) {
+  const { t } = useAuthLocale();
   return (
     <>
       {phase === "success" ? (
@@ -244,7 +256,7 @@ export function ActivationActions({ onBackToLogin, phase }: ActivationActionsPro
           type="button"
           onClick={onBackToLogin}
         >
-          Buka Halaman Log Masuk
+          {t("auth.v17Recovery.openLogin")}
         </PublicAuthButton>
       ) : null}
 
@@ -254,7 +266,7 @@ export function ActivationActions({ onBackToLogin, phase }: ActivationActionsPro
         onClick={onBackToLogin}
       >
         <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
-        Kembali ke log masuk
+        {t("auth.v17Recovery.backToLogin")}
       </PublicAuthButton>
     </>
   );

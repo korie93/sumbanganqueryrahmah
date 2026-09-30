@@ -114,7 +114,7 @@ export const submitPasswordLoginWithRetry = async (page, {
 
 export const ensureLoginPageVisible = async (page, contextLabel = "Authenticated contract") => {
   const loginHeading = page.getByRole("heading", {
-    name: /^(Log Masuk SQR|Log In SQR System)$/,
+    name: /^(Selamat kembali|Welcome back)$/,
     level: 1,
   });
   const usernameInput = page.getByTestId("input-username");
@@ -128,7 +128,7 @@ export const ensureLoginPageVisible = async (page, contextLabel = "Authenticated
     return;
   }
 
-  const publicLoginButton = page.getByRole("button", { name: /^Log In$/ }).first();
+  const publicLoginButton = page.getByRole("link", { name: /^Sign In$/ }).first();
   if (await waitForVisible(publicLoginButton, 2_000)) {
     await publicLoginButton.click();
     await page.waitForLoadState("networkidle");
@@ -349,12 +349,14 @@ export async function completeTwoFactorLoginIfNeeded(page, {
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await page.getByTestId("input-two-factor-code").waitFor({ state: "visible", timeout: 10_000 });
+    const currentCode = await resolveCurrentTwoFactorCode(normalizedUsername);
+    await page.getByTestId("input-two-factor-code").fill(currentCode);
     await page.waitForFunction(
       () => {
         const button = document.querySelector('[data-testid="button-login"]');
         return button instanceof HTMLButtonElement
           && button.disabled === false
-          && /sahkan kod/i.test(button.innerText || "");
+          && /^(sahkan|verify)$/i.test((button.innerText || "").trim());
       },
       { timeout: 10_000 },
     );
@@ -366,8 +368,6 @@ export async function completeTwoFactorLoginIfNeeded(page, {
       { timeout: 15_000 },
     );
 
-    const currentCode = await resolveCurrentTwoFactorCode(normalizedUsername);
-    await page.getByTestId("input-two-factor-code").fill(currentCode);
     await page.getByTestId("button-login").click();
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(250);

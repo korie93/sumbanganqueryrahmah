@@ -11,22 +11,22 @@ function readPageSource(relativePath: string) {
   return readFileSync(path.resolve(__dirname, relativePath), "utf8");
 }
 
-test("login page uses the compact modern shell without animated orb layers", () => {
-  const source = `${readPageSource("Login.tsx")}\n${readPageSource("LoginParts.tsx")}`;
-  const css = readPageSource("Login.css");
+test("login page uses the V17 split shell without decorative form cards", () => {
+  const source = readPageSource("Login.tsx");
+  const css = readPageSource("../components/auth/AuthV17Layout.css");
 
-  assert.match(source, /login-card login-card-grid/);
-  assert.match(source, /className="login-shell relative w-full"/);
-  assert.doesNotMatch(source, /login-shell[^"]*max-w-5xl/);
-  assert.match(css, /\.login-shell\s*{\s*max-width: min\(32rem, 100%\);/);
+  assert.match(source, /<AuthV17Layout/);
+  assert.match(source, /className="auth-v17-login"/);
+  assert.doesNotMatch(source, /login-card|login-shell|LoginAsidePanel|LoginBrandHeader/);
+  assert.match(css, /\.auth-v17-view\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/);
   assert.doesNotMatch(source, /login-bg-orb--/);
   assert.doesNotMatch(source, /floating-slow/);
-  assert.match(source, /<form className="login-form space-y-4" onSubmit=\{handleSubmit\} noValidate/);
-  assert.match(source, /aria-label="Papar kata laluan"/);
-  assert.match(source, /aria-label="Sembunyi kata laluan"/);
-  assert.match(source, /aria-pressed="false"/);
-  assert.match(source, /aria-pressed="true"/);
-  assert.match(source, /className="login-alert--warning-subtext mt-1 text-xs"[\s\S]*role="status"[\s\S]*aria-live="polite"[\s\S]*aria-atomic="true"/);
+  assert.match(source, /<form className="login-form" onSubmit=\{handleSubmit\} noValidate/);
+  assert.match(source, /aria-label=\{t\(showPassword \? "auth\.v17\.hidePassword" : "auth\.v17\.showPassword"\)\}/);
+  assert.match(source, /getAriaPressedProps\(showPassword\)/);
+  assert.match(source, /aria-controls="login-password"/);
+  assert.match(source, /className="login-locked-alert" role="alert"/);
+  assert.match(source, /role="status" aria-live="polite" aria-atomic="true"/);
 });
 
 test("public auth recovery pages expose labels and decorative icons correctly", () => {
@@ -35,15 +35,15 @@ test("public auth recovery pages expose labels and decorative icons correctly", 
   const resetSource = readPageSource("ResetPassword.tsx");
 
   assert.match(forgotSource, /<label htmlFor="forgot-password-identifier" className="public-auth-field-label">/);
-  assert.match(forgotSource, /showBackButton=\{false\}/);
+  assert.match(forgotSource, /<AuthV17Layout/);
   assert.match(activateSource, /<label htmlFor="activate-account-new-password" className="public-auth-field-label">/);
   assert.match(activateSource, /<dl className="public-auth-account-summary">/);
   assert.match(activateSource, /visualMode="minimal"/);
-  assert.match(activateSource, /showBackButton=\{false\}/);
+  assert.match(activateSource, /<AuthV17Layout/);
   assert.match(resetSource, /<label htmlFor="reset-password-new-password" className="public-auth-field-label">/);
   assert.match(resetSource, /<dl className="public-auth-account-summary">/);
   assert.match(resetSource, /visualMode="minimal"/);
-  assert.match(resetSource, /showBackButton=\{false\}/);
+  assert.match(resetSource, /<AuthV17Layout/);
   assert.match(forgotSource, /aria-hidden="true" focusable="false"/);
   assert.match(activateSource, /aria-hidden="true" focusable="false"/);
   assert.match(resetSource, /aria-hidden="true" focusable="false"/);

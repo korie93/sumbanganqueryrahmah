@@ -13,6 +13,7 @@ type DocumentMetadata = {
   description: string;
   robots: string;
   publicLanding?: boolean;
+  publicAuth?: boolean;
   socialDescription?: string;
 };
 
@@ -81,6 +82,7 @@ export function resolveDocumentMetadata({
       };
     case "login":
       return {
+        publicAuth: true,
         title: buildTitle(resolvedSystemName, "Log In"),
         description:
           "Akses ke ruang kerja dalaman SQR System untuk general search, semakan rekod, dan pengurusan operasi.",
@@ -88,6 +90,7 @@ export function resolveDocumentMetadata({
       };
     case "forgot-password":
       return {
+        publicAuth: true,
         title: buildTitle(resolvedSystemName, "Lupa Kata Laluan"),
         description:
           "Mulakan semula akses akaun anda melalui aliran pemulihan kata laluan SQR System.",
@@ -95,6 +98,7 @@ export function resolveDocumentMetadata({
       };
     case "reset-password":
       return {
+        publicAuth: true,
         title: buildTitle(resolvedSystemName, "Tetapan Semula Kata Laluan"),
         description:
           "Selesaikan penetapan semula kata laluan untuk kembali mengakses ruang kerja dalaman SQR System.",
@@ -102,6 +106,7 @@ export function resolveDocumentMetadata({
       };
     case "activate-account":
       return {
+        publicAuth: true,
         title: buildTitle(resolvedSystemName, "Aktivasi Akaun"),
         description:
           "Aktifkan akaun pengguna bagi mendapatkan akses ke sistem operasi dalaman SQR System.",
@@ -200,6 +205,14 @@ function setMetaContent(name: string, content: string, attr: "name" | "property"
 export function applyDocumentMetadata(metadata: DocumentMetadata) {
   if (typeof document === "undefined") return;
   const isPublicLanding = metadata.publicLanding === true;
+  const isPublicAuth = metadata.publicAuth === true;
+  for (const [rel, href] of [
+    ["icon", isPublicAuth ? "/auth-v17/favicon.svg" : "/brand/sqr-logo-minimal.svg"],
+    ["shortcut icon", isPublicAuth ? "/auth-v17/favicon.svg" : "/brand/sqr-logo-minimal.svg"],
+    ["apple-touch-icon", isPublicAuth ? "/auth-v17/apple-touch-icon.png" : "/apple-touch-icon.png"],
+  ]) {
+    document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`)?.setAttribute("href", href);
+  }
   const socialDescription = metadata.socialDescription || metadata.description;
   document.documentElement.lang = isPublicLanding ? "en" : "ms";
   document.title = metadata.title;
@@ -210,7 +223,7 @@ export function applyDocumentMetadata(metadata: DocumentMetadata) {
   setMetaContent("og:description", socialDescription, "property");
   setMetaContent("twitter:title", metadata.title);
   setMetaContent("twitter:description", socialDescription);
-  setMetaContent("color-scheme", isPublicLanding ? "light" : "light dark");
+  setMetaContent("color-scheme", isPublicLanding || isPublicAuth ? "light" : "light dark");
   if (isPublicLanding) {
     setMetaContent("theme-color", "#ffffff");
   } else {

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
-import { PublicAuthLayout } from "@/components/PublicAuthLayout";
+import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
+import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import { requestPasswordReset } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { localizeAuthFeedback } from "@/lib/auth-flow-feedback";
 import {
   hasPublicAuthFieldErrors,
   validateIdentifierField,
@@ -21,6 +23,7 @@ export default function ForgotPasswordPage({
   onBackToLogin,
 }: ForgotPasswordPageProps) {
   const [, navigate] = useLocation();
+  const { locale, t } = useAuthLocale();
   const [identifier, setIdentifier] = useState("");
   const [identifierError, setIdentifierError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -90,26 +93,27 @@ export default function ForgotPasswordPage({
   const layoutBackProps = onBackToHome ? { onBackClick: onBackToHome } : {};
 
   return (
-    <PublicAuthLayout
-      badge="Pemulihan Akses"
-      title="Permintaan Tetapan Semula Kata Laluan"
-      description="Masukkan username atau emel anda untuk menghantar permintaan tetapan semula. Permintaan ini akan disemak oleh superuser sebelum pautan selamat dihantar kepada akaun yang berkaitan."
+    <AuthV17Layout
+      badge={t("auth.v17Recovery.forgotBadge")}
+      title={t("auth.v17Recovery.forgotTitle")}
+      description={t("auth.v17Recovery.forgotDescription")}
       icon={<LifeBuoy className="h-7 w-7" aria-hidden="true" focusable="false" />}
       visualMode="minimal"
-      showBackButton={false}
       contentBusy={loading}
       {...layoutBackProps}
     >
       {submitted ? (
         <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
-          Jika akaun wujud, permintaan tetapan semula telah dihantar kepada superuser untuk semakan.
-          Emel tetapan semula hanya akan dihantar selepas permintaan diluluskan.
+          {t("auth.v17Recovery.forgotSuccess")}
         </div>
       ) : (
-        <>
+        <form noValidate className="auth-v17-form" onSubmit={(event) => {
+          event.preventDefault();
+          void handleSubmit();
+        }}>
           <div className="space-y-2">
             <label htmlFor="forgot-password-identifier" className="public-auth-field-label">
-              Username atau emel
+              {t("auth.v17Recovery.identifier")}
             </label>
             <PublicAuthInput
               id="forgot-password-identifier"
@@ -121,12 +125,7 @@ export default function ForgotPasswordPage({
                 setError("");
               }}
               onBlur={handleIdentifierBlur}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void handleSubmit();
-                }
-              }}
-              placeholder="Username atau emel"
+              placeholder={t("auth.v17Recovery.identifier")}
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect="off"
@@ -136,26 +135,25 @@ export default function ForgotPasswordPage({
             />
             {identifierError ? (
               <p id="forgot-password-identifier-error" className="public-auth-field-error" role="alert">
-                {identifierError}
+                {localizeAuthFeedback(identifierError, locale)}
               </p>
             ) : null}
           </div>
           <div className="public-auth-note">
-            Demi keselamatan, sistem hanya memaparkan status umum dan tidak mendedahkan sama ada
-            sesuatu akaun benar-benar wujud.
+            {t("auth.v17Recovery.forgotNote")}
           </div>
           {error ? (
             <div className="public-auth-status-card public-auth-status-card--error" role="alert">
-              {error}
+              {localizeAuthFeedback(error, locale)}
             </div>
           ) : null}
           <PublicAuthButton
-            onClick={() => void handleSubmit()}
+            type="submit"
             disabled={loading}
           >
-            {loading ? "Sedang menghantar..." : "Hantar Permintaan"}
+            {t(loading ? "auth.v17Recovery.sending" : "auth.v17Recovery.sendRequest")}
           </PublicAuthButton>
-        </>
+        </form>
       )}
 
       <PublicAuthButton
@@ -170,8 +168,8 @@ export default function ForgotPasswordPage({
         }}
       >
         <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
-        Kembali ke log masuk
+        {t("auth.v17Recovery.backToLogin")}
       </PublicAuthButton>
-    </PublicAuthLayout>
+    </AuthV17Layout>
   );
 }

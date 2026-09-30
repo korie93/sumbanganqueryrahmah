@@ -30,7 +30,7 @@ test("authenticated shell compacts spacing for short mobile landscape viewports"
 
 test("public auth and login shells keep content reachable in short mobile landscape viewports", () => {
   const publicAuthCss = readClientSource("../components/PublicAuthLayout.css");
-  const loginCss = readClientSource("../pages/Login.css");
+  const v17Css = readClientSource("../components/auth/AuthV17Layout.css");
 
   assert.match(publicAuthCss, MOBILE_LANDSCAPE_QUERY);
   assert.match(
@@ -42,12 +42,8 @@ test("public auth and login shells keep content reachable in short mobile landsc
     /\.public-auth-layout__halo,[\s\S]*\.public-auth-layout__center-glow\s*{[\s\S]*display:\s*none;/,
   );
 
-  assert.match(loginCss, MOBILE_LANDSCAPE_QUERY);
-  assert.match(
-    loginCss,
-    /\.login-content--shell\s*{[\s\S]*align-items:\s*flex-start;[\s\S]*justify-content:\s*flex-start;[\s\S]*calc\(0\.75rem \+ var\(--safe-area-inset-bottom\)\)/,
-  );
-  assert.match(loginCss, /\.login-card-form\s*{[\s\S]*padding:\s*1rem 1\.1rem !important;/);
-  assert.match(loginCss, /\.login-bg-orb\s*{[\s\S]*display:\s*none;/);
-  assert.match(loginCss, /\.login-card::before,[\s\S]*\.login-bg-effect\s*{[\s\S]*display:\s*none;/);
+  assert.match(v17Css, /min-height:\s*100vh;\s*min-height:\s*100dvh;/);
+  assert.match(v17Css, /@media[^\{]*max-height:[\s\S]*\.auth-v17-wrap\s*\{\s*transform:\s*none;/);
+  assert.match(v17Css, /@media \(max-width: 699px\)[\s\S]*\.auth-v17-side\s*\{\s*min-height:\s*auto;/);
+  assert.doesNotMatch(v17Css, /\.auth-v17-(?:side|wrap|view|content)\s*\{[^}]*(?:overflow:\s*(?:hidden|clip)|max-height:)/);
 });

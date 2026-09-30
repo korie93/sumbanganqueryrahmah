@@ -7,7 +7,7 @@ function readClientSource(...segments: string[]): string {
   return readFileSync(path.resolve(process.cwd(), "client", "src", ...segments), "utf8");
 }
 
-const loginPartsSource = readClientSource("pages", "LoginParts.tsx");
+const loginSource = readClientSource("pages", "Login.tsx");
 const setupCardSource = readClientSource(
   "pages",
   "collection-summary",
@@ -20,12 +20,11 @@ const monthFieldSource = readClientSource(
 );
 
 test("login password visibility control has stable accessible names and pressed state", () => {
-  assert.match(loginPartsSource, /aria-label="Sembunyi kata laluan"/);
-  assert.match(loginPartsSource, /aria-label="Papar kata laluan"/);
-  assert.match(loginPartsSource, /aria-pressed="true"/);
-  assert.match(loginPartsSource, /aria-pressed="false"/);
-  assert.match(loginPartsSource, /<EyeOff className="h-5 w-5" aria-hidden="true" focusable="false" \/>/);
-  assert.match(loginPartsSource, /<Eye className="h-5 w-5" aria-hidden="true" focusable="false" \/>/);
+  assert.match(loginSource, /aria-label=\{t\(showPassword \? "auth\.v17\.hidePassword" : "auth\.v17\.showPassword"\)\}/);
+  assert.match(loginSource, /getAriaPressedProps\(showPassword\)/);
+  assert.match(loginSource, /aria-controls="login-password"/);
+  assert.match(loginSource, /<EyeOff size=\{18\} aria-hidden="true" \/>/);
+  assert.match(loginSource, /<Eye size=\{18\} aria-hidden="true" \/>/);
 });
 
 test("monthly comparison quick range controls expose group and pressed semantics", () => {

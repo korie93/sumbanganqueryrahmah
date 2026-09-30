@@ -281,6 +281,10 @@ jobs:
         timeout-minutes: 5
         run: npm run test:auth:public-build
 
+      - name: Verify V17 authentication states and responsive views
+        timeout-minutes: 5
+        run: npm run test:auth:v17
+
       - name: Verify actual built public landing page
         timeout-minutes: 5
         run: npm run test:landing:built
@@ -423,6 +427,7 @@ jobs:
             server.log
             artifacts/auth-feedback-browser
             artifacts/password-public-build-browser
+            artifacts/auth-v17-browser
             artifacts/landing-v21-browser
             artifacts/two-factor
             artifacts/smoke-ui

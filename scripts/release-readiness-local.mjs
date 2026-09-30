@@ -272,6 +272,7 @@ const run = async () => {
   await runNpm(["run", "verify:bundle-budgets"], { env: releaseBuildEnv });
   console.log("Release readiness: verifying actual built public password pages...");
   await runNpm(["run", "test:auth:public-build"], { env: releaseBuildEnv });
+  await runNpm(["run", "test:auth:v17"], { env: releaseBuildEnv });
 
   const serverProcess = startManagedServerProcess(
     npmCommand,

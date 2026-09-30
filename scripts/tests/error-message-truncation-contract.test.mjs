@@ -23,7 +23,7 @@ test("long toast and login messages use the shared expandable disclosure", () =>
   const expandableSource = readRepoFile("client/src/components/ExpandableMessage.tsx");
 
   assert.match(toasterSource, /<ExpandableMessage>\{description\}<\/ExpandableMessage>/);
-  assert.match(loginSource, /<ExpandableMessage>\{error\}<\/ExpandableMessage>/);
+  assert.match(loginSource, /<ExpandableMessage locale=\{locale\}>\{localizeAuthFeedback\(error, locale\)\}<\/ExpandableMessage>/);
   assert.match(expandableSource, /getAriaExpandedProps\(expanded\)/);
   assert.doesNotMatch(expandableSource, /aria-expanded=\{[^}]+\}/);
   assert.match(expandableSource, /aria-controls=\{messageId\}/);

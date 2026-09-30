@@ -197,6 +197,10 @@ async function runCase(spec, width, theme) {
         return route.abort();
       }
       if (!url.pathname.startsWith("/api/")) return route.continue();
+      if (url.pathname === "/api/health") {
+        assert.equal(route.request().method(), "GET");
+        return route.fulfill({ json: { status: "ok", ready: true } });
+      }
       if (url.pathname === spec.validation) {
         assert.equal(route.request().postDataJSON().token, token);
         return route.fulfill({ json: { ok: true, [spec.metadataKey]: metadata } });

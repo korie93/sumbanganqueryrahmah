@@ -38,10 +38,12 @@ test("visual contract authenticated login follows the stable login test ids", ()
 
 test("visual contract keeps the login page reachability helper aligned with the login form", () => {
   assert.match(authContractUtilsSource, /const ensureLoginPageVisible = async \(page, contextLabel = "Authenticated contract"\) =>/);
-  assert.match(visualContractSource, /contentSelector: "\.login-shell"/);
+  assert.match(visualContractSource, /contentSelector: "\.auth-v17-wrap"/);
+  assert.match(accessibilityContractSource, /contentSelector: "\.auth-v17-wrap"/);
   assert.match(visualContractSource, /if \(routeSpec\.path === "\/login"\) {\s+await ensureLoginPageVisible\(page, `\$\{routeSpec\.id\}\/\$\{viewportSpec\.id\}`\);\s+}/);
-  assert.match(authContractUtilsSource, /Log Masuk SQR/);
-  assert.match(authContractUtilsSource, /Log In SQR System/);
+  assert.match(authContractUtilsSource, /Selamat kembali/);
+  assert.match(authContractUtilsSource, /Welcome back/);
+  assert.match(authContractUtilsSource, /getByRole\("link", \{ name: \/\^Sign In\$\/ \}\)/);
   assert.match(authContractUtilsSource, /getByTestId\("input-username"\)/);
   assert.match(authContractUtilsSource, /await usernameInput\.waitFor\(\{ state: "visible", timeout: 10_000 \}\)/);
   assert.match(loginPageSource, /data-testid="input-username"/);
@@ -134,7 +136,7 @@ test("visual and accessibility contracts verify the session through /api/me befo
   assert.match(authContractUtilsSource, /TWO_FACTOR_ENCRYPTION_KEY is required/);
   assert.match(authContractUtilsSource, /button-user-menu/);
   assert.match(authContractUtilsSource, /button-open-mobile-nav/);
-  assert.match(authContractUtilsSource, /Sahkan Kod/i);
+  assert.match(authContractUtilsSource, /sahkan\|verify/i);
 
   assert.match(accessibilityContractSource, /probeAuthSession/);
   assert.match(accessibilityContractSource, /submitPasswordLoginWithRetry/);
@@ -143,6 +145,17 @@ test("visual and accessibility contracts verify the session through /api/me befo
   assert.match(accessibilityContractSource, /const navigateForAccessibilityContract = async \(page, routePath\) =>/);
   assert.match(accessibilityContractSource, /waitUntil: "domcontentloaded"/);
   assert.match(accessibilityContractSource, /await navigateForAccessibilityContract\(page, "\/"\)/);
+});
+
+test("MFA contract fills the six-digit code before waiting for the gated submit button", () => {
+  const challenge = authContractUtilsSource.slice(authContractUtilsSource.indexOf("export async function completeTwoFactorLoginIfNeeded"));
+  const fill = challenge.indexOf('getByTestId("input-two-factor-code").fill(currentCode)');
+  const enabled = challenge.indexOf("button.disabled === false");
+  const submit = challenge.indexOf('getByTestId("button-login").click()');
+  assert.ok(fill >= 0 && fill < enabled && enabled < submit);
+  assert.match(challenge, /sahkan\|verify/i);
+  assert.match(challenge, /await resolveCurrentTwoFactorCode\(normalizedUsername\)/);
+  assert.match(challenge, /lastVerifyResponse\.ok\(\)/);
 });
 
 test("accessibility contract covers core authenticated work surfaces", () => {

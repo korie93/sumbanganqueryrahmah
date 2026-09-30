@@ -32,28 +32,25 @@ test("public authentication routes do not warm the authenticated shell before lo
 });
 
 test("login shell avoids persistent compositor hints on large decorative layers", () => {
-  const loginCss = readClientSource("../pages/Login.css");
+  const loginCss = readClientSource("../components/auth/AuthV17Layout.css");
 
-  assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".login-bg-orb"), /will-change:/);
-  assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".login-content"), /will-change:/);
+  assert.match(loginCss, /\.auth-v17-art\s*\{/);
+  assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".auth-v17-art"), /will-change:/);
+  assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".auth-v17-view"), /will-change:/);
 });
 
 test("forgot password route uses lightweight auth chrome without eager recovery preloading", () => {
   const appSource = readClientSource("../App.tsx");
   const forgotPasswordSource = readClientSource("../pages/ForgotPassword.tsx");
-  const publicAuthCss = readClientSource("../components/PublicAuthLayout.css");
+  const publicAuthCss = readClientSource("../components/auth/AuthV17Layout.css");
 
   assert.doesNotMatch(appSource, /ForgotPasswordPage\.preload\s*\(/);
-  assert.match(forgotPasswordSource, /visualMode="minimal"/);
-  assert.match(publicAuthCss, /\.public-auth-layout--minimal\s+\.public-auth-layout__glow/);
-  assert.match(
-    publicAuthCss,
-    /\.public-auth-layout__pattern,\s*\.public-auth-layout__glow,\s*\.public-auth-layout__center-glow\s*{\s*display:\s*none;/,
-  );
+  assert.match(forgotPasswordSource, /<AuthV17Layout/);
+  assert.match(publicAuthCss, /\.auth-v17-art::before\s*\{[^}]*sqr-illustration\.webp/);
   // Neither standard nor minimal auth chrome should allocate a filtered backdrop.
   assert.doesNotMatch(publicAuthCss, /backdrop-filter:\s*(?:blur|saturate)\(/);
-  assert.doesNotMatch(publicAuthCss, /\.public-auth-layout__center-glow\s*{\s*display:\s*block;/);
-  assert.match(readFirstCssRuleBlock(publicAuthCss, ".public-auth-layout__card"), /background:\s*hsl\(var\(--card\)\);/);
+  assert.doesNotMatch(publicAuthCss, /animation:[^;]*infinite|will-change:\s*(?:transform|opacity)/);
+  assert.match(readFirstCssRuleBlock(publicAuthCss, ".auth-v17-view"), /background:\s*transparent;/);
 });
 
 test("public auth recovery routes receive SPA navigation callbacks", () => {
@@ -65,7 +62,7 @@ test("public auth recovery routes receive SPA navigation callbacks", () => {
   assert.match(appSource, /onBanned=\{handleBannedSessionDetected\}/);
   assert.match(appSource, /<ResetPasswordPage[\s\S]*onBackToHome=\{\(\) => handlePublicNavigate\("home"\)\}/);
   assert.match(appSource, /onBackToLogin=\{\(\) => handlePublicNavigate\("login"\)\}/);
-  assert.match(activateSource, /onBackClick=\{navigateToLogin\}/);
+  assert.match(activateSource, /<ActivationActions[\s\S]*onBackToLogin=\{navigateToLogin\}/);
   assert.match(resetPasswordSource, /const layoutBackProps = onBackToHome \? \{ onBackClick: onBackToHome \} : \{\};/);
   assert.match(resetPasswordSource, /onClick=\{navigateToLogin\}/);
 });
@@ -86,15 +83,18 @@ test("glass wrapper base styles are owned by the component stylesheet", () => {
 
 test("login page exposes real labels and a stable primary heading", () => {
   const loginSource = readClientSource("../pages/Login.tsx");
-  const loginPartsSource = readClientSource("../pages/LoginParts.tsx");
-  const combinedLoginSource = `${loginSource}\n${loginPartsSource}`;
+  const authLayout = readClientSource("../components/auth/AuthV17Layout.tsx");
+  const otpSource = readClientSource("../components/auth/AuthOtpInput.tsx");
 
-  assert.match(combinedLoginSource, /<h1 className="login-title/);
-  assert.doesNotMatch(combinedLoginSource, /<h2 className="login-title/);
-  assert.match(loginSource, /<label htmlFor="login-username" className="login-field-label/);
-  assert.match(loginSource, /<label htmlFor="login-password" className="login-field-label/);
-  assert.match(loginSource, /<label htmlFor="login-two-factor-code" className="login-field-label/);
-  assert.match(loginSource, /pattern="\[0-9\]\*"/);
+  assert.match(loginSource, /<AuthV17Layout/);
+  assert.match(authLayout, /<h1 id="auth-v17-title">\{title\}<\/h1>/);
+  assert.equal((authLayout.match(/<h1\b/g) ?? []).length, 1);
+  assert.match(loginSource, /<label htmlFor="login-username" className="public-auth-field-label/);
+  assert.match(loginSource, /<label htmlFor="login-password" className="public-auth-field-label/);
+  assert.match(loginSource, /<label htmlFor="login-two-factor-code" className="public-auth-field-label/);
+  assert.match(loginSource, /<AuthOtpInput/);
+  assert.match(otpSource, /autoComplete="one-time-code" maxLength=\{6\} pattern="\[0-9\]\{6\}"/);
+  assert.match(otpSource, /className="auth-v17-otp__slots" aria-hidden="true"/);
 });
 
 test("client entry fails clearly if the app root is missing", () => {
@@ -135,7 +135,9 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   assert.match(indexSource, /<meta name="color-scheme" content="light" \/>/);
   const metadataSource = readClientSource("document-metadata.ts");
   assert.match(metadataSource, /isPublicLanding \? "en" : "ms"/);
-  assert.match(metadataSource, /isPublicLanding \? "light" : "light dark"/);
+  assert.match(metadataSource, /isPublicLanding \|\| isPublicAuth \? "light" : "light dark"/);
+  assert.match(metadataSource, /const isPublicAuth = metadata\.publicAuth === true;/);
+  assert.match(metadataSource, /isPublicAuth \? "\/auth-v17\/favicon\.svg" : "\/brand\/sqr-logo-minimal\.svg"/);
   assert.match(indexSource, /<meta name="mobile-web-app-capable" content="yes" \/>/);
   assert.doesNotMatch(indexSource, /apple-mobile-web-app-capable/);
   assert.match(indexSource, /<link rel="canonical" href="https:\/\/sqr-system\.com\/" \/>/);

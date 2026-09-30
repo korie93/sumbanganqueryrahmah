@@ -8,6 +8,7 @@ type PasswordStrengthMeterProps = {
   password: string;
   variant?: "default" | "checklist";
   interacted?: boolean;
+  locale?: "ms" | "en";
 };
 
 const SEGMENT_ACTIVE_CLASSES = [
@@ -35,12 +36,14 @@ export function PasswordStrengthMeter({
   password,
   variant = "default",
   interacted = false,
+  locale = "ms",
 }: PasswordStrengthMeterProps) {
   if (variant === "checklist") {
-    return <PasswordRequirementsChecklist id={id} password={password} className={className} interacted={interacted} />;
+    return <PasswordRequirementsChecklist id={id} password={password} className={className} interacted={interacted} locale={locale} />;
   }
   const evaluation = evaluatePasswordStrength(password);
-  const issues = getCredentialPasswordValidationIssues(password, "ms");
+  const issues = getCredentialPasswordValidationIssues(password, locale);
+  const english = locale === "en";
   const policyValid = issues.length === 0;
   const filledSegments = password.length > 0 ? evaluation.level + 1 : 0;
   const activeSegmentClass = SEGMENT_ACTIVE_CLASSES[evaluation.level];
@@ -51,15 +54,15 @@ export function PasswordStrengthMeter({
       id={id}
       role="status"
       aria-live="polite"
-      aria-label={`${evaluation.ariaLabel}. ${policyValid ? "Kata laluan sah." : "Syarat kata laluan belum dipenuhi."}`}
+      aria-label={`${evaluation.ariaLabel}. ${english ? policyValid ? "Password is valid." : "Password requirements are not met." : policyValid ? "Kata laluan sah." : "Syarat kata laluan belum dipenuhi."}`}
       className={`rounded-lg border border-slate-200/80 bg-white/70 p-3 text-xs text-slate-600 shadow-sm dark:border-border/70 dark:bg-card dark:text-muted-foreground ${className}`}
     >
       <div className="flex items-center justify-between gap-3">
         <span className="font-medium text-slate-700 dark:text-card-foreground">
-          Kekuatan kata laluan
+          {english ? "Password strength" : "Kekuatan kata laluan"}
         </span>
         <span className={`font-semibold ${labelClass}`}>
-          {evaluation.malayLabel}
+          {english ? evaluation.label : evaluation.malayLabel}
         </span>
       </div>
       <div className="mt-2 grid grid-cols-5 gap-1" aria-hidden="true">
@@ -82,7 +85,7 @@ export function PasswordStrengthMeter({
         </ul>
       ) : (
         <p className="mt-2 text-green-700 dark:text-green-200">
-          Kata laluan sah. Semua syarat kata laluan dipenuhi.
+          {english ? "Password is valid. All password requirements are met." : "Kata laluan sah. Semua syarat kata laluan dipenuhi."}
         </p>
       )}
     </div>

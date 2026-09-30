@@ -32,12 +32,12 @@ const publicRouteSpecs = [
   {
     id: "login",
     path: "/login",
-    contentSelector: ".login-card",
+    contentSelector: ".auth-v17-wrap",
   },
   {
     id: "forgot-password",
     path: "/forgot-password",
-    contentSelector: ".public-auth-layout__card",
+    contentSelector: ".auth-v17-wrap",
   },
 ];
 

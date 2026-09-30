@@ -25,7 +25,7 @@ test("dark mode exposes neutral corporate semantic tokens", () => {
 
 test("dark mode suppresses glassmorphism and old blue page backdrops", () => {
   const glassWrapperCss = readClientSource("components/GlassWrapper.css");
-  const loginCss = readClientSource("pages/Login.css");
+  const v17Css = readClientSource("components/auth/AuthV17Layout.css");
   const publicAuthCss = readClientSource("components/PublicAuthLayout.css");
   const floatingAiCss = readClientSource("components/FloatingAI.module.css");
   const navbarCss = readClientSource("components/Navbar.css");
@@ -62,11 +62,17 @@ test("dark mode suppresses glassmorphism and old blue page backdrops", () => {
   );
   // Public auth no longer enables glass in either theme. Keep the global dark
   // safeguard as well as explicit neutral surfaces, not a stale override path.
-  for (const [css, selector] of [[loginCss, "login-card"], [publicAuthCss, "public-auth-layout__card"]]) {
+  for (const [css, selector] of [[publicAuthCss, "public-auth-layout__card"]]) {
     assert.doesNotMatch(css, /backdrop-filter:\s*(?:blur|saturate)\(/);
     assert.match(css, new RegExp(`\\.dark \\.${selector}\\s*{[^}]*background:\\s*hsl\\(var\\(--card\\)\\);`));
     assert.match(themeCss, new RegExp(`\\.dark :where\\([^)]*\\.${selector}[^)]*\\)\\s*{[^}]*backdrop-filter:\\s*none !important;`));
   }
+  // V17 is an explicitly scoped light reference, even when the workspace is dark.
+  // Its palette must not overwrite the authenticated dark theme or enable glass.
+  assert.match(v17Css, /\.auth-v17\s*\{[^}]*color-scheme:\s*light;/);
+  assert.doesNotMatch(v17Css, /(?:^|\})\s*(?:body|html|:root|\.dark)\s*\{/);
+  assert.doesNotMatch(v17Css, /backdrop-filter:\s*(?:blur|saturate)\(/);
+  assert.match(v17Css, /\.auth-v17-view\s*\{[^}]*box-shadow:\s*none;/);
   assert.match(floatingAiCss, /:global\(\.dark\) \.floatingMobileBackdrop\s*{[\s\S]*backdrop-filter:\s*none !important;/);
   assert.match(navbarCss, /\.dark \.navbar-premium-glass\s*{[\s\S]*backdrop-filter:\s*none !important;/);
   assert.match(pageSources, /side-tab-nav/);

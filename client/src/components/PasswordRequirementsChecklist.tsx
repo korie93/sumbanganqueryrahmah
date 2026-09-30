@@ -7,6 +7,7 @@ type PasswordRequirementsChecklistProps = {
   password: string;
   className?: string;
   interacted?: boolean;
+  locale?: "ms" | "en";
 };
 
 const STRENGTH_SEGMENT_CLASSES = [
@@ -26,14 +27,15 @@ const STRENGTH_LABEL_CLASSES = [
 ] as const;
 
 /** Stable checklist from the shared password policy, with a separate strength estimate. */
-export function PasswordRequirementsChecklist({ id, password, className = "", interacted = false }: PasswordRequirementsChecklistProps) {
-  const { valid, requirements, satisfiedCount } = getPasswordRequirements(password);
+export function PasswordRequirementsChecklist({ id, password, className = "", interacted = false, locale = "ms" }: PasswordRequirementsChecklistProps) {
+  const { valid, requirements, satisfiedCount } = getPasswordRequirements(password, locale);
+  const english = locale === "en";
   const evaluated = interacted || password.length > 0;
   const strength = evaluatePasswordStrength(password);
   const filledSegments = password ? strength.level + 1 : 0;
   const policyMessage = valid
-    ? "Kata laluan sah. Semua syarat dipenuhi."
-    : "Lengkapkan semua syarat sebelum meneruskan.";
+    ? english ? "Password is valid. All requirements are met." : "Kata laluan sah. Semua syarat dipenuhi."
+    : english ? "Meet all requirements before continuing." : "Lengkapkan semua syarat sebelum meneruskan.";
 
   return (
     <section
@@ -42,10 +44,10 @@ export function PasswordRequirementsChecklist({ id, password, className = "", in
       className={`rounded-xl border border-border bg-background p-3 text-sm text-foreground ${className}`}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id={`${id}-heading`} className="text-sm font-semibold">Keperluan kata laluan</h2>
-        <span data-password-requirement-count className={`text-xs ${valid ? "text-green-700 dark:text-green-200" : "text-muted-foreground"}`}>{satisfiedCount}/{requirements.length} dipenuhi</span>
+        <h2 id={`${id}-heading`} className="text-sm font-semibold">{english ? "Password requirements" : "Keperluan kata laluan"}</h2>
+        <span data-password-requirement-count className={`text-xs ${valid ? "text-green-700 dark:text-green-200" : "text-muted-foreground"}`}>{satisfiedCount}/{requirements.length} {english ? "met" : "dipenuhi"}</span>
       </div>
-      <ul className="mt-3 space-y-2" aria-label="Syarat kata laluan">
+      <ul className="mt-3 space-y-2" aria-label={english ? "Password rules" : "Syarat kata laluan"}>
         {requirements.map(({ id: requirementId, label, satisfied }) => {
           const state = satisfied ? "success" : evaluated ? "error" : "neutral";
           const Icon = satisfied ? CheckCircle2 : evaluated ? CircleX : Circle;
@@ -58,16 +60,16 @@ export function PasswordRequirementsChecklist({ id, password, className = "", in
               className={`flex items-start gap-2 leading-5 ${satisfied ? "text-green-700 dark:text-green-200" : evaluated ? "text-red-700 dark:text-red-200" : "text-muted-foreground"}`}
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" focusable="false" />
-              <span><span className="sr-only">{satisfied ? "Dipenuhi: " : evaluated ? "Belum dipenuhi: " : "Belum dinilai: "}</span>{label}</span>
+              <span><span className="sr-only">{english ? satisfied ? "Met: " : evaluated ? "Not met: " : "Not assessed: " : satisfied ? "Dipenuhi: " : evaluated ? "Belum dipenuhi: " : "Belum dinilai: "}</span>{label}</span>
             </li>
           );
         })}
       </ul>
       <div className="mt-3 border-t border-border pt-3">
         <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_6rem] items-baseline gap-2">
-          <span className="text-sm font-medium">Kekuatan kata laluan</span>
+          <span className="text-sm font-medium">{english ? "Password strength" : "Kekuatan kata laluan"}</span>
           <span className={`text-right text-sm font-medium ${password ? STRENGTH_LABEL_CLASSES[strength.level] : "text-muted-foreground"}`} data-password-strength-label>
-            {password ? strength.malayLabel : "Belum dinilai"}
+            {password ? english ? strength.label : strength.malayLabel : english ? "Not assessed" : "Belum dinilai"}
           </span>
         </div>
         <div className="mt-2 grid grid-cols-5 gap-1" data-password-strength-level={password ? strength.level : "none"} aria-hidden="true">
@@ -82,7 +84,7 @@ export function PasswordRequirementsChecklist({ id, password, className = "", in
             />
           ))}
         </div>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">Anggaran kekuatan, bukan pengesahan syarat.</p>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">{english ? "A strength estimate, not a policy check." : "Anggaran kekuatan, bukan pengesahan syarat."}</p>
         <p
           data-password-policy-status={valid ? "valid" : "incomplete"}
           className={`mt-1 min-h-10 text-sm leading-5 ${valid ? "text-green-700 dark:text-green-200" : evaluated ? "text-red-700 dark:text-red-200" : "text-muted-foreground"}`}

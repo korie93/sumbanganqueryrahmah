@@ -20,7 +20,7 @@ test("UI smoke navigation avoids networkidle for authenticated SPA routes", () =
 test("UI smoke bounds the landing login click and falls back to the canonical login route", () => {
   assert.match(
     smokeSource,
-    /const loginHeading = page\.locator\("h1\.login-title"\)\.first\(\);/,
+    /const loginHeading = page\.getByRole\("heading", \{ name: \/\^\(Selamat kembali\|Welcome back\)\$\/, level: 1 \}\);/,
   );
   assert.match(
     smokeSource,

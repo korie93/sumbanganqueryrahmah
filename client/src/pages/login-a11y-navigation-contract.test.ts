@@ -10,24 +10,22 @@ function readSource(fileName: string) {
   return readFileSync(path.resolve(__dirname, fileName), "utf8");
 }
 
-test("login inputs preserve keyboard-visible focus without mouse focus noise", () => {
-  const source = readSource("Login.css");
-
-  assert.match(source, /\.login-input:focus-visible\s*\{/);
-  assert.match(source, /\.login-input:focus-visible\s*\{[^}]*outline:\s*2px solid hsl\(var\(--ring\)\);/);
-  assert.match(source, /\.login-input:focus-visible\s*\{[^}]*outline-offset:\s*2px;/);
-  assert.match(source, /@supports not selector\(:focus-visible\)/);
-  assert.doesNotMatch(source, /\.login-input:focus,\s*\n\.login-input:focus-visible/);
-  assert.doesNotMatch(source, /\.login-input:focus\s*\{[^}]*outline:\s*none/);
+test("V17 auth controls and OTP slots preserve visible keyboard focus", () => {
+  const source = readSource("../components/auth/AuthV17Layout.css");
+  const otp = readSource("../components/auth/AuthOtpInput.tsx");
+  assert.match(source, /\.auth-v17 :focus-visible\s*\{[^}]*outline:\s*[23]px solid /);
+  assert.match(source, /\.auth-v17 :focus-visible\s*\{[^}]*outline-offset:\s*2px;/);
+  assert.match(source, /\.auth-v17-otp__slot\[data-active="true"\]\s*\{[^}]*box-shadow:/);
+  assert.match(otp, /onFocus=\{\(event\) => \{ setFocused\(true\)/);
+  assert.match(otp, /onBlur=\{\(event\) => \{ setFocused\(false\)/);
 });
 
-test("login card spacing uses container queries with a media-query fallback", () => {
-  const source = readSource("Login.css");
-
-  assert.match(source, /container-name:\s*login-shell/);
-  assert.match(source, /container-type:\s*inline-size/);
-  assert.match(source, /@container login-shell \(min-width:\s*32rem\)/);
-  assert.match(source, /@supports not \(container-type:\s*inline-size\)/);
+test("V17 login uses a bounded split form with a stacked mobile fallback", () => {
+  const source = readSource("../components/auth/AuthV17Layout.css");
+  assert.match(source, /\.auth-v17\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:/);
+  assert.match(source, /\.auth-v17-wrap\s*\{[^}]*width:\s*min\(100%, 480px\);/);
+  assert.match(source, /@media \(max-width: 699px\)[\s\S]*\.auth-v17\s*\{\s*display:\s*block;/);
+  assert.match(source, /\.auth-v17-view\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/);
 });
 
 test("login fallback navigation uses router navigation instead of manual history events", () => {

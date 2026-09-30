@@ -107,13 +107,13 @@ const publicRouteSpecs = [
   {
     id: "login",
     path: "/login",
-    contentSelector: ".login-shell",
+    contentSelector: ".auth-v17-wrap",
     primarySelector: "[data-testid='button-login']",
   },
   {
     id: "forgot-password",
     path: "/forgot-password",
-    contentSelector: ".public-auth-layout__card",
+    contentSelector: ".auth-v17-wrap",
     primarySelector: ".public-auth-layout__content button",
   },
 ];

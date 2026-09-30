@@ -557,6 +557,10 @@ try {
     if (!url.pathname.startsWith("/api/")) return route.continue();
     const fulfill = (json, status = 200) => route.fulfill({ status, json });
     const failure = (code, status = 410) => fulfill({ ok: false, message: "Fixture rejection", error: { code, message: "Fixture rejection" } }, status);
+    if (url.pathname === "/api/health") {
+      assert.equal(route.request().method(), "GET");
+      return fulfill({ status: "ok", ready: true });
+    }
     if (url.pathname === "/api/auth/request-password-reset") {
       assert.equal(route.request().method(), "POST");
       assert.equal(route.request().postDataJSON().identifier, "ui.fixture");
