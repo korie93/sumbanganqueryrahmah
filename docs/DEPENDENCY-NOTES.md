@@ -23,6 +23,38 @@ Release policy:
 - New external tarball sources are blocked unless they are vendored and covered by an integrity verification script.
 - Major dependency upgrades should be dependency-only pull requests with rollback notes.
 
+## 2026-09-30 CI Security Patch
+
+[CI run 36714876215](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/36714876215) on `b171cfd0` failed the dependency audit on `brace-expansion` (high), `ip-address` (moderate), and `nodemailer` (high). The same gate reproduced all three locally. These dependencies were unchanged by the V17 authentication UI commit; the current registry advisories now reject the previous locked versions.
+
+Only these three resolved packages are updated:
+
+- `nodemailer`: exact runtime pin `9.1.1` → `10.0.13`. The audited 9.x line has no offered fix; the new version addresses the DNS/TLS-servername and address-parser advisories, including [GHSA-g57g-f23g-4646](https://github.com/advisories/GHSA-g57g-f23g-4646). [Nodemailer 10](https://github.com/nodemailer/nodemailer/releases/tag/v10.0.0) requires Node 20+, which fits SQR's existing Node 24 requirement. Its bundled ESM/CJS declarations require importing `Transporter` explicitly in `server/mail/mailer.ts`; no transport settings, credentials, message content or delivery policy change. Version [10.0.13](https://github.com/nodemailer/nodemailer/releases/tag/v10.0.13) also includes the subsequent parser/SASL fixes.
+- `ip-address`: existing override floor `^10.4.0` → `^10.7.2`, locked to `10.7.2`. This addresses cross-family subnet comparisons and bounded IPv6 parsing, including [GHSA-j6r3-76f7-8jcv](https://github.com/advisories/GHSA-j6r3-76f7-8jcv). Existing rate-limit policies and IPv4/IPv6 key behavior are not changed.
+- `brace-expansion`: lockfile-only `5.0.9` → `5.0.12`, within the existing `minimatch` dependency range. This addresses nesting/rewrite resource limits, including [GHSA-q2hr-2g5m-vwhr](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr). No new override is needed.
+
+Audit severity thresholds, workflow gates, install-script allowlist and all other resolved packages are unchanged. `npm update nodemailer ip-address brace-expansion --ignore-scripts --no-audit --no-fund` performed the targeted lock/install update without executing package lifecycle scripts.
+
+Regression coverage (automatically included by `test:scripts`):
+
+- Existing dependency tests retain mail serialization and file/URL access restrictions.
+- `scripts/tests/nodemailer-upgrade.test.mjs` uses a synthetic loopback SMTP receiver to verify text/HTML delivery, safe quoted-recipient envelopes, rejection handling and fail-closed `requireTLS`; it never sends real email.
+- `scripts/tests/dependency-ip-glob-regressions.test.mjs` verifies address-family boundaries, link-local/mapped/NAT64 classification, input bounds, rate-limit keys and small bounded glob expansions. No resource-exhaustion workload or remote network request is used.
+
+Local verification on 2026-09-30:
+
+- `npm run audit:dependencies`: PASS, no moderate-or-higher advisory remains.
+- `npm ci --ignore-scripts --dry-run --no-audit --no-fund`: PASS manifest/lock consistency; this is a dry run, not a claim of a fresh CI installation.
+- `npm run typecheck`, `npm run lint`, `npm run build`: PASS, including zero production source maps.
+- `npm run test:scripts`: 565 PASS, one existing optional base-HEAD Viewer probe skipped. Includes all new dependency regressions.
+- Targeted mail, mail-template, dev-outbox, client-IP and rate-limit suites: 56 PASS, zero skips.
+- `npm run test:auth`: final isolated repeat 144 PASS, zero skips. The first run had one failure in the unchanged five-microsecond CSRF timing assertion; the same full command passed when repeated alone without weakening or changing that test. Logs for both attempts are retained locally.
+- Repository hygiene, secret scan and `git diff --check`: PASS.
+
+Evidence logs are in ignored `artifacts/dependency-fix-*.log`; no real SMTP credentials or production data were used. The failed remote run above is confirmed, but no remote rerun or deployment is claimed by these local results.
+
+Release/rollback boundary: this is a dependency-focused fix, not a production deployment. If compatibility problems appear after release, stop the rollout and use the normal approved-release rollback procedure; the previous dependency graph remains vulnerable and must not be described as a security fix. Do not suppress the audit to restore green CI. Rebuild release artifacts from the final committed lockfile and rerun the existing CI gates before deploying.
+
 ## 2026-09-09 CI Security Patch
 
 [CI run 34291870873](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/34291870873) stopped at the dependency audit before application tests ran. The fix updates only two resolved packages:

@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
 import { isDevMailOutboxEnabled, writeDevMailPreview } from "./dev-mail-outbox";
@@ -31,7 +31,7 @@ type SendMailInput = {
 };
 
 let cachedTransportConfig: MailTransportConfig | null = null;
-let cachedTransporter: nodemailer.Transporter | null = null;
+let cachedTransporter: Transporter | null = null;
 
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -192,7 +192,7 @@ function readTransportConfig(): MailTransportConfig | null {
   return cachedTransportConfig;
 }
 
-function getTransporter(config: MailTransportConfig): nodemailer.Transporter {
+function getTransporter(config: MailTransportConfig): Transporter {
   if (cachedTransporter) return cachedTransporter;
 
   const auth = (() => {
