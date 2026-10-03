@@ -8,6 +8,7 @@ import {
 import { clearAuthSessionCookie } from "../../auth/session-cookie";
 import { rotateCsrfTokenAfterPrivilegeEscalation } from "../../http/csrf";
 import type { AuthRouteContext } from "./auth-route-shared";
+import { registerAccountAvatarRoutes } from "./auth-avatar-routes";
 
 export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
   const {
@@ -17,20 +18,21 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     rateLimiters,
     jsonRoute,
     closeActivitySockets,
-    buildUserPayload,
+    buildCurrentUserPayload,
     buildOkPayload,
   } = context;
 
   const handleMe = jsonRoute(async (req) => {
     const user = await authAccountService.getCurrentUser(req.user);
     return buildOkPayload({
-      user: buildUserPayload(user),
+      user: await buildCurrentUserPayload(user),
       sessionExpiresAt: req.user?.sessionExpiresAt ?? null,
     });
   });
 
   app.get("/api/me", authenticateToken, handleMe);
   app.get("/api/auth/me", authenticateToken, handleMe);
+  registerAccountAvatarRoutes(context);
 
   app.get(
     "/api/auth/two-factor",
@@ -44,7 +46,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
           pendingSetup: Boolean(user.twoFactorSecretEncrypted) && user.twoFactorEnabled !== true,
           configuredAt: user.twoFactorConfiguredAt ?? null,
         },
-        user: buildUserPayload(user),
+        user: await buildCurrentUserPayload(user),
       });
     }),
   );
@@ -63,7 +65,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
       });
       return buildOkPayload({
         setup: result.setup,
-        user: buildUserPayload(result.user),
+        user: await buildCurrentUserPayload(result.user),
       });
     }),
   );
@@ -81,7 +83,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
         route: req.path,
       });
       return buildOkPayload({
-        user: buildUserPayload(user),
+        user: await buildCurrentUserPayload(user),
       });
     }),
   );
@@ -99,7 +101,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
         route: req.path,
       });
       return buildOkPayload({
-        user: buildUserPayload(user),
+        user: await buildCurrentUserPayload(user),
       });
     }),
   );
@@ -121,7 +123,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
       return {
         ok: true,
         forceLogout: true,
-        user: buildUserPayload(result.user),
+        user: await buildCurrentUserPayload(result.user),
       };
     }),
   );
@@ -149,7 +151,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
       return {
         ok: true,
         forceLogout: result.forceLogout,
-        user: buildUserPayload(result.user),
+        user: await buildCurrentUserPayload(result.user),
       };
     }),
   );

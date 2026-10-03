@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { TabVisibility } from "@/app/types";
 import { useSettingsBootstrap } from "@/pages/settings/useSettingsBootstrap";
@@ -9,11 +9,9 @@ import {
   canAccessBackupCategory,
   findSettingsDisplayCategory,
 } from "@/pages/settings/settings-controller-utils";
-import { useSettingsMyAccount } from "@/pages/settings/useSettingsMyAccount";
-import { useSettingsSecurityViewModel } from "@/pages/settings/useSettingsSecurityViewModel";
 import { useSettingsSystemSettings } from "@/pages/settings/useSettingsSystemSettings";
 import { useSettingsCategorySelectionSync } from "@/pages/settings/useSettingsCategorySelectionSync";
-import type { SettingCategory } from "@/pages/settings/types";
+import type { CurrentUser, SettingCategory } from "@/pages/settings/types";
 
 type UseSettingsControllerArgs = {
   initialSectionId?: string | undefined;
@@ -30,63 +28,16 @@ export function useSettingsController({
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
   }, []);
 
-  const myAccount = useSettingsMyAccount({
-    isMountedRef,
-    toast,
-  });
-  const {
-    confirmPasswordInput,
-    confirmPasswordError,
-    currentPasswordInput,
-    currentPasswordError,
-    currentUser,
-    handleConfirmPasswordBlur,
-    handleClearTwoFactorSetup,
-    handleDisableTwoFactor,
-    handleEnableTwoFactor,
-    handleChangePassword,
-    handleChangeUsername,
-    handleCurrentPasswordBlur,
-    handleNewPasswordBlur,
-    handleStartTwoFactorSetup,
-    handleTwoFactorCodeBlur,
-    handleTwoFactorPasswordBlur,
-    handleUsernameBlur,
-    hydrateCurrentUser,
-    newPasswordInput,
-    newPasswordError,
-    passwordSaving,
-    setConfirmPasswordInput,
-    setCurrentPasswordInput,
-    setNewPasswordInput,
-    setTwoFactorCodeInput,
-    setTwoFactorPasswordInput,
-    setUsernameInput,
-    twoFactorCodeError,
-    twoFactorCodeInput,
-    twoFactorLoading,
-    twoFactorPasswordError,
-    twoFactorPasswordInput,
-    twoFactorSetupAccountName,
-    twoFactorSetupIssuer,
-    twoFactorSetupSecret,
-    twoFactorSetupUri,
-    twoFactorSetupExpiresAt,
-    twoFactorActionError,
-    usernameError,
-    usernameInput,
-    usernameSaving,
-  } = myAccount;
+  const [currentUser, hydrateCurrentUser] = useState<CurrentUser | null>(null);
   const canEditSystemSettings =
     currentUser?.role === "admin" || currentUser?.role === "superuser";
   const isSuperuser = currentUser?.role === "superuser";
-  const canAccessAccountSecurity =
-    currentUser?.role === "superuser" || currentUser?.role === "admin";
   const canAccessAccountManagement = currentUser?.role === "superuser";
   const currentUserRole = currentUser?.role ?? "";
   const canAccessBackupSection = canAccessBackupCategory(currentUser?.role, tabVisibility);
@@ -105,7 +56,6 @@ export function useSettingsController({
     dirtyCount,
     handleSave,
     isRolePermissionCategory,
-    isSecurityCategory,
     loadSettings,
     loading,
     maintenanceSettingsSummary,
@@ -147,53 +97,6 @@ export function useSettingsController({
     }),
     [currentCategory, isAccountManagementCategory, isBackupCategory, sidebarCategories],
   );
-  const security = useSettingsSecurityViewModel({
-    canAccessAccountSecurity,
-    confirmPasswordInput,
-    confirmPasswordError,
-    currentPasswordInput,
-    currentPasswordError,
-    currentUserRole,
-    handleConfirmPasswordBlur,
-    handleChangePassword,
-    handleChangeUsername,
-    handleCurrentPasswordBlur,
-    handleDisableTwoFactor,
-    handleEnableTwoFactor,
-    handleNewPasswordBlur,
-    handleStartTwoFactorSetup,
-    handleTwoFactorCodeBlur,
-    handleTwoFactorPasswordBlur,
-    handleUsernameBlur,
-    isSecurityCategory,
-    newPasswordInput,
-    newPasswordError,
-    passwordSaving,
-    setConfirmPasswordInput,
-    setCurrentPasswordInput,
-    setNewPasswordInput,
-    setTwoFactorCodeInput,
-    setTwoFactorPasswordInput,
-    setUsernameInput,
-    twoFactorCodeError,
-    twoFactorCodeInput,
-    twoFactorEnabled: currentUser?.twoFactorEnabled === true,
-    twoFactorConfiguredAt: currentUser?.twoFactorConfiguredAt ?? null,
-    handleClearTwoFactorSetup,
-    twoFactorLoading,
-    twoFactorPasswordError,
-    twoFactorPasswordInput,
-    twoFactorPendingSetup: currentUser?.twoFactorPendingSetup === true,
-    twoFactorSetupAccountName,
-    twoFactorSetupIssuer,
-    twoFactorSetupSecret,
-    twoFactorSetupUri,
-    twoFactorSetupExpiresAt,
-    twoFactorActionError,
-    usernameError,
-    usernameInput,
-    usernameSaving,
-  });
 
   useSettingsCategorySelectionSync({
     initialSectionId,
@@ -207,7 +110,6 @@ export function useSettingsController({
     currentUser,
     profileLoading,
     canEditSystemSettings,
-    canAccessAccountSecurity,
     isSuperuser,
     currentUserRole,
     categories: sidebarCategories,
@@ -215,7 +117,6 @@ export function useSettingsController({
     setSelectedCategory,
     currentCategory: currentCategoryForDisplay,
     isRolePermissionCategory,
-    isSecurityCategory,
     maintenanceSettingsSummary,
     isAccountManagementCategory,
     isBackupCategory,
@@ -246,7 +147,6 @@ export function useSettingsController({
       }),
       [confirmCriticalOpen, persistChanges, saving, setConfirmCriticalOpen],
     ),
-    security,
     loadingState: {
       loading,
       profileLoading,

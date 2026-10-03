@@ -21,6 +21,8 @@
   --background: 0 0% 100%;
   --foreground: 214 51% 12%;
   --border: 211 29% 88%;
+  /* Shared password toggles must keep a light hover surface in this light shell. */
+  --muted: 240 5% 95%;
   --muted-foreground: 215 15% 43%;
   min-height: 100vh;
   min-height: 100dvh;

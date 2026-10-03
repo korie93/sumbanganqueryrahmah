@@ -16,6 +16,8 @@ export const BackupRestorePage = lazyWithPreload(() => import("@/pages/BackupRes
 export const AIPage = lazyWithPreload(() => import("@/pages/AI"));
 export const BannedPage = lazyWithPreload(() => import("@/pages/Banned"));
 export const SettingsRoutePage = lazyWithPreload(() => import("@/pages/Settings"));
+export const AccountPage = lazyWithPreload(() => import("@/pages/Account"));
+export const SecurityPage = lazyWithPreload(() => import("@/pages/Security"));
 export const MaintenanceRoutePage = lazyWithPreload(() => import("@/pages/Maintenance"));
 export const SystemMonitorLayoutPage = lazyWithPreload(() => import("@/pages/SystemMonitorLayout"));
 export const CollectionReportPage = lazyWithPreload(() => import("@/pages/CollectionReport"));

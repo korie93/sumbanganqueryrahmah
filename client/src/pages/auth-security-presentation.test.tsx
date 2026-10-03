@@ -6,23 +6,23 @@ import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
 import { Router } from "wouter";
 import ChangePassword from "./ChangePassword";
-import { MyAccountSecurityCard } from "./settings/MyAccountSecurityCard";
+import { PersonalSecurityForm } from "./security/PersonalSecurityForm";
 
 const source = (file: string) => readFileSync(path.resolve(process.cwd(), "client/src", file), "utf8");
 
-function securityProps(role: string, busy = false): ComponentProps<typeof MyAccountSecurityCard> {
+function securityProps(role: string, busy = false): ComponentProps<typeof PersonalSecurityForm> {
   return {
     confirmPasswordInput: "", confirmPasswordError: null, currentPasswordInput: "", currentPasswordError: null,
-    currentUserRole: role, newPasswordInput: "", newPasswordError: null, usernameInput: "fixture", usernameError: null,
-    passwordSaving: busy, usernameSaving: false, twoFactorLoading: false, twoFactorEnabled: false,
+    currentUserRole: role, newPasswordInput: "", newPasswordError: null,
+    passwordSaving: busy, twoFactorLoading: false, twoFactorEnabled: false,
     twoFactorPendingSetup: false, twoFactorPasswordInput: "", twoFactorPasswordError: null,
     twoFactorCodeInput: "", twoFactorCodeError: null, twoFactorSetupAccountName: "", twoFactorSetupIssuer: "",
     twoFactorSetupSecret: "", twoFactorSetupUri: "",
-    onDisableTwoFactor() {}, onEnableTwoFactor() {}, onChangePassword() {}, onChangeUsername() {},
+    onDisableTwoFactor() {}, onEnableTwoFactor() {}, onChangePassword() {},
     onConfirmPasswordBlur() {}, onConfirmPasswordInputChange() {}, onCurrentPasswordBlur() {}, onCurrentPasswordInputChange() {},
     onNewPasswordBlur() {}, onNewPasswordInputChange() {}, onStartTwoFactorSetup() {}, onTwoFactorCodeBlur() {},
     onTwoFactorCodeInputChange() {}, onTwoFactorPasswordBlur() {}, onTwoFactorPasswordInputChange() {},
-    onUsernameBlur() {}, onUsernameInputChange() {},
+    passwordExpanded: true, onPasswordExpandedChange() {}, onClearPassword() {},
   };
 }
 
@@ -41,13 +41,14 @@ test("change-password helpers and status messages use readable shared auth surfa
   assert.equal((page.match(/className="text-sm text-destructive" role="alert"/g) ?? []).length, 2);
 });
 
-test("account security uses one outer card and labelled identity/password region", () => {
-  const html = renderToStaticMarkup(createElement(MyAccountSecurityCard, securityProps("admin")));
-  assert.equal((html.match(/class="shadcn-card /g) ?? []).length, 1);
-  assert.match(html, /<section[^>]*aria-labelledby="my-account-heading"/);
-  assert.match(html, /id="my-account-heading"[^>]*>Akaun Saya/);
-  assert.match(html, /lg:grid-cols-2/);
+test("personal security uses flat labelled password and 2FA sections without identity editing", () => {
+  const html = renderToStaticMarkup(createElement(PersonalSecurityForm, securityProps("admin")));
+  assert.equal((html.match(/class="shadcn-card /g) ?? []).length, 0);
+  assert.match(html, /<section[^>]*aria-labelledby="security-password-heading"/);
+  assert.match(html, /aria-label="Change password"/);
+  assert.match(html, /sm:grid-cols-2/);
   assert.doesNotMatch(html, /md:grid-cols-3/);
+  assert.doesNotMatch(html, /my-account-username|my-account-role|Log Keluar|Logout/);
   assert.equal((html.match(/type="password"/g) ?? []).length, 3);
   assert.equal((html.match(/autoComplete="new-password"/gi) ?? []).length, 2);
   for (const id of ["current-password", "new-password", "confirm-password"]) {
@@ -57,18 +58,38 @@ test("account security uses one outer card and labelled identity/password region
 });
 
 test("security presentation preserves 2FA role gate and shared busy guards", () => {
-  for (const role of ["user", "admin", "superuser"]) {
-    const html = renderToStaticMarkup(createElement(MyAccountSecurityCard, securityProps(role, true)));
-    assert.equal(html.includes('data-testid="two-factor-settings"'), role !== "user");
+  for (const role of ["user", "manager", "admin", "superuser"]) {
+    const html = renderToStaticMarkup(createElement(PersonalSecurityForm, securityProps(role, true)));
+    const supportsTwoFactor = role === "admin" || role === "superuser";
+    assert.equal(html.includes('data-testid="two-factor-settings"'), supportsTwoFactor);
+    assert.equal(html.includes('data-testid="two-factor-unavailable"'), !supportsTwoFactor);
     const inputs = html.match(/<input\b[^>]*>/g) ?? [];
-    assert.equal(inputs.length, 5);
+    assert.equal(inputs.length, 3);
     assert.ok(inputs.every((input) => input.includes('disabled=""')));
     assert.match(html, /type="password"/);
   }
-  const page = source("pages/settings/MyAccountSecurityCard.tsx");
-  assert.match(page, /usernameSaving \|\| passwordSaving \|\| twoFactorLoading/);
-  assert.match(page, /onClick=\{onChangePassword\}/);
-  assert.match(page, /onClick=\{onChangeUsername\}/);
-  assert.match(page, /onEnableTwoFactor=\{onEnableTwoFactor\}/);
-  assert.match(page, /onDisableTwoFactor=\{onDisableTwoFactor\}/);
+  const page = source("pages/security/PersonalSecurityForm.tsx");
+  assert.match(page, /props.passwordSaving \|\| props.twoFactorLoading/);
+  assert.match(page, /event.preventDefault\(\); props.onChangePassword\(\)/);
+  assert.match(page, /<TwoFactorSettingsPanel \{\.\.\.props\} busy=\{busy\}/);
+  assert.doesNotMatch(page, /onChangeUsername/);
+});
+
+test("personal security keeps the password form closed until requested", () => {
+  const html = renderToStaticMarkup(createElement(PersonalSecurityForm, { ...securityProps("user"), passwordExpanded: false }));
+  assert.match(html, /data-testid="security-change-password"/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.doesNotMatch(html, /type="password"|<form/);
+  assert.match(html, /current security policy/);
+});
+
+test("Settings has no personal credential state or duplicate personal form", () => {
+  const page = source("pages/Settings.tsx");
+  const controller = source("pages/settings/useSettingsController.tsx");
+  assert.doesNotMatch(page + controller, /AccountSecuritySection|useSettingsMyAccount|useSettingsSecurityViewModel|PersonalSecurityForm/);
+  assert.match(page, /currentCategory\?\.settings/);
+  const security = source("pages/Security.tsx");
+  assert.match(security, /useSettingsMyAccountCredentialState/);
+  assert.match(security, /useSettingsMyAccountTwoFactorState/);
+  assert.doesNotMatch(security, /getMe|logout|newUsername/);
 });

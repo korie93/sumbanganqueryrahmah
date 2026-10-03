@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import { BROWSER_TELEMETRY_PATHS } from "../routes/telemetry-route-constants";
 import { CSP_REPORT_ENDPOINT_PATH } from "./local-http-security";
+import { ACCOUNT_AVATAR_ENDPOINT, ACCOUNT_AVATAR_MAX_BASE64_LENGTH } from "../../shared/account-avatar";
 
 const CSP_REPORT_BODY_LIMIT = "8kb";
 const BROWSER_TELEMETRY_BODY_LIMIT = "4kb";
@@ -27,6 +28,8 @@ export function registerLocalHttpBodyParsers(app: Express, options: LocalHttpBod
   app.use("/api/imports", express.urlencoded({ extended: true, limit: options.importBodyLimit }));
   app.use("/api/collection", express.json({ limit: options.collectionBodyLimit }));
   app.use("/api/collection", express.urlencoded({ extended: true, limit: options.collectionBodyLimit }));
+  // Permit one bounded base64 image without increasing the global/default JSON budget.
+  app.use(ACCOUNT_AVATAR_ENDPOINT, express.json({ limit: ACCOUNT_AVATAR_MAX_BASE64_LENGTH + 1024 }));
   app.use(CSP_REPORT_ENDPOINT_PATH, express.json({
     limit: CSP_REPORT_BODY_LIMIT,
     type: ["application/csp-report", "application/reports+json", "application/json"],

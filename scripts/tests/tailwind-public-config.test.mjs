@@ -50,7 +50,7 @@ test("public Tailwind covers shared auth components without scanning the authent
   for (const filePath of [
     "client/src/components/NavigationBar.tsx",
     "client/src/components/ui/sidebar.tsx",
-    "client/src/pages/settings/MyAccountSecurityCard.tsx",
+    "client/src/pages/security/PersonalSecurityForm.tsx",
     "client/src/pages/collection-report/CollectionNicknameDialogStepFields.tsx",
     "client/src/pages/BillingPrincipal.tsx",
   ]) {

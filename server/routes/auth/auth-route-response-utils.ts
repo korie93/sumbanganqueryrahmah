@@ -98,6 +98,7 @@ export function buildUserPayload(user: Awaited<ReturnType<PostgresStorage["getUs
     twoFactorEnabled: user.twoFactorEnabled,
     twoFactorPendingSetup: Boolean(user.twoFactorSecretEncrypted) && user.twoFactorEnabled !== true,
     twoFactorConfiguredAt: buildNullableIsoTimestamp(user.twoFactorConfiguredAt),
+    createdAt: buildNullableIsoTimestamp(user.createdAt),
     activatedAt: buildNullableIsoTimestamp(user.activatedAt),
     passwordChangedAt: buildNullableIsoTimestamp(user.passwordChangedAt),
     lastLoginAt: buildNullableIsoTimestamp(user.lastLoginAt),

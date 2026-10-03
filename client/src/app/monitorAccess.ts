@@ -1,4 +1,5 @@
 import { canAccessRoleFeature } from "@shared/role-feature-access";
+import { canAccessPersonalPage, isPersonalPage } from "./personal-routes";
 import type { MonitorSection, MonitorSectionVisibility, TabVisibility } from "@/app/types";
 
 export function isSuperuserFeatureOffMode(
@@ -8,6 +9,8 @@ export function isSuperuserFeatureOffMode(
 ) {
   if (!role || role === "superuser") return false;
   if (!tabVisibilityLoaded || !tabs) return false;
+  // User Home remains reachable even when every optional module is disabled.
+  if (role === "user") return false;
   if (!canAccessRoleFeature(role, "general-search", tabs)) return false;
 
   const nonSearchEntries = Object.entries(tabs).filter(
@@ -79,7 +82,7 @@ export function getDefaultPageForRole(
   if (role === "superuser") return "home";
   if (!tabVisibilityLoaded) return "forbidden";
   const candidates = [
-    ...(role === "user" ? ["general-search", "home"] : ["home", "general-search"]),
+    "home", "general-search",
     "collection-report", "import", "saved", "viewer", "settings", "backup",
   ];
   const ordinaryPage = candidates.find((page) => canAccessRoleFeature(role, page, tabs));
@@ -95,6 +98,7 @@ export function isPageEnabled(
   tabVisibilityLoaded: boolean,
 ) {
   if (["forbidden", "maintenance", "change-password", "not-found"].includes(page)) return true;
+  if (isPersonalPage(page)) return canAccessPersonalPage(role);
   if (role !== "superuser" && !tabVisibilityLoaded) return false;
   // AI has its own runtime control, not a configurable Role & Permission tab.
   if (page === "ai") return role === "admin" || role === "user" || role === "superuser";

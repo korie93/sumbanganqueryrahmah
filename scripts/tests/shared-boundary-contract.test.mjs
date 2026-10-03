@@ -16,6 +16,7 @@ const SERVER_ONLY_SHARED_MODULES = new Set([
 ]);
 
 const COMMON_SHARED_MODULES = new Set([
+  "account-avatar",
   "ai-limits",
   "api-contracts",
   "app-document-routes",

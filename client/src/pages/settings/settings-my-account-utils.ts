@@ -1,4 +1,5 @@
-import { broadcastForcedLogout, persistAuthenticatedUser } from "@/lib/auth-session";
+import { broadcastForcedLogout } from "@/lib/auth-session";
+import { syncAccountProfile } from "@/lib/account-profile";
 import { normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 
@@ -10,6 +11,8 @@ export function buildNextCurrentUser(
   },
 ): CurrentUser {
   return {
+    ...currentUser,
+    ...response.user,
     id: String(response?.user?.id || currentUser.id),
     username: String(response?.user?.username || normalizedUsername),
     fullName: response?.user?.fullName ?? currentUser.fullName ?? null,
@@ -36,8 +39,7 @@ export function buildNextCurrentUser(
 }
 
 export function syncSettingsCurrentUser(nextUser: CurrentUser) {
-  persistAuthenticatedUser(nextUser);
-  window.dispatchEvent(new CustomEvent("profile-updated", { detail: nextUser }));
+  syncAccountProfile(nextUser, "two-factor");
 }
 
 export function forceLogoutAfterPasswordChange() {

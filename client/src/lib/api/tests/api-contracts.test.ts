@@ -143,7 +143,6 @@ import {
   updateManagedUserRole,
   updateManagedUserStatus,
   startTwoFactorSetup,
-  updateMyCredentials,
   validateActivationToken,
   validatePasswordResetToken,
 } from "@/lib/api/auth";
@@ -890,10 +889,11 @@ test("authentication self-service contracts isolate setup secrets and require mu
 });
 
 test("authentication self-service API wrappers reject malformed success payloads", async () => {
+  let passwordResponse: unknown = { ok: true, forceLogout: "yes", user: createAuthUserContract() };
   const restoreFetch = withMockFetch((async (input) => {
     const url = String(input);
     if (url === "/api/auth/change-password") {
-      return jsonResponse({ ok: true, forceLogout: "yes", user: createAuthUserContract() });
+      return jsonResponse(passwordResponse);
     }
     if (url === "/api/auth/two-factor") {
       return jsonResponse({
@@ -928,9 +928,6 @@ test("authentication self-service API wrappers reject malformed success payloads
     if (url === "/api/auth/two-factor/disable") {
       return jsonResponse({ ok: true, user: null, forceLogout: false });
     }
-    if (url === "/api/me/credentials") {
-      return jsonResponse({ ok: true, user: createAuthUserContract() });
-    }
     throw new Error(`Unexpected URL: ${url}`);
   }) as typeof fetch);
 
@@ -955,9 +952,10 @@ test("authentication self-service API wrappers reject malformed success payloads
       () => disableTwoFactor({ currentPassword: "old", code: "123456" }),
       /API contract mismatch for \/api\/auth\/two-factor\/disable/,
     );
+    passwordResponse = { ok: true, user: createAuthUserContract() };
     await assert.rejects(
-      () => updateMyCredentials({ newUsername: "operator.two" }),
-      /API contract mismatch for \/api\/me\/credentials/,
+      () => changeMyPassword({ currentPassword: "old", newPassword: "new" }),
+      /API contract mismatch for \/api\/auth\/change-password/,
     );
   } finally {
     restoreFetch();

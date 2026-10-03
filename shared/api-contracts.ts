@@ -520,6 +520,8 @@ export const authCurrentUserSchema = z.object({
   email: nullableStringSchema,
   role: nonEmptyStringSchema,
   status: z.enum(["pending_activation", "active", "suspended", "disabled"]),
+  createdAt: authOptionalNullableTimestampSchema,
+  avatarUrl: z.string().regex(/^\/api\/me\/avatar\?v=[a-f0-9]{24}$/).nullable().optional().default(null),
   mustChangePassword: z.boolean(),
   passwordResetBySuperuser: z.boolean(),
   isBanned: z.boolean().nullable(),
@@ -1128,11 +1130,26 @@ export const collectionMonthlySummaryRowSchema = z.object({
   totalAmount: z.number().finite().nonnegative(),
 });
 
+export const collectionDashboardSummarySchema = z.object({
+  month: z.number().int().min(1).max(12),
+  scopeLabel: nonEmptyStringSchema,
+  canViewLeaderBreakdown: z.boolean(),
+  leaders: z.array(z.object({
+    id: nonEmptyStringSchema,
+    name: nonEmptyStringSchema,
+    totalRecords: nonNegativeIntSchema,
+    totalAmount: z.number().finite().nonnegative(),
+  })),
+  unassignedAmount: z.number().finite().nonnegative(),
+});
+export type CollectionDashboardSummaryContract = z.infer<typeof collectionDashboardSummarySchema>;
+
 export const collectionMonthlySummaryResponseSchema = z.object({
   ok: z.literal(true),
   year: z.number().int().min(2000).max(2100),
   summary: z.array(collectionMonthlySummaryRowSchema).max(12),
   freshness: collectionReportFreshnessSchema.optional(),
+  dashboard: collectionDashboardSummarySchema.optional(),
 });
 
 const collectionPurgeResponseBaseSchema = z.object({

@@ -25,7 +25,7 @@ const ownCredentialPatchBodySchema = z.object({
   newUsername: optionalString,
   currentPassword: optionalString,
   newPassword: optionalString,
-}).passthrough();
+}).strict();
 
 export function readPasswordChangeBody(bodyRaw: unknown) {
   return parseRequestBody(passwordChangeBodySchema, bodyRaw);

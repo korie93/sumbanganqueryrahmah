@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { NavigationEntry } from "@/app/navigation";
 
 export type HomeNavigationHandlers = {
@@ -6,91 +6,14 @@ export type HomeNavigationHandlers = {
   onPrefetchItem: (itemId: string) => void;
 };
 
-type HomeNavigationCardProps = HomeNavigationHandlers & {
-  item: NavigationEntry;
-};
-
-export function HomeDesktopPrimaryCard({
-  item,
-  onNavigateItem,
-  onPrefetchItem,
-}: HomeNavigationCardProps) {
+export function HomeNavigationCard({ item, primary = false, onNavigateItem, onPrefetchItem }:
+  HomeNavigationHandlers & { item: NavigationEntry; primary?: boolean }) {
   const Icon = item.icon;
-  return (
-    <button
-      type="button"
-      onClick={() => onNavigateItem(item.id)}
-      onMouseEnter={() => onPrefetchItem(item.id)}
-      onFocus={() => onPrefetchItem(item.id)}
-      className="home-desktop-primary-card"
-      data-testid={`card-${item.id}`}
-    >
-      <span className="home-desktop-primary-card-icon">
-        <Icon className="h-4 w-4" aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
-          <p className="text-xs leading-5 text-muted-foreground">{item.description}</p>
-        </div>
-      </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </button>
-  );
-}
-
-export function HomeWorkspaceCard({
-  item,
-  onNavigateItem,
-  onPrefetchItem,
-}: HomeNavigationCardProps) {
-  const Icon = item.icon;
-  return (
-    <button
-      type="button"
-      onClick={() => onNavigateItem(item.id)}
-      onMouseEnter={() => onPrefetchItem(item.id)}
-      onFocus={() => onPrefetchItem(item.id)}
-      className="home-card flex items-center gap-3 text-left"
-      data-testid={`card-${item.id}`}
-    >
-      <span className="home-card-icon">
-        <Icon className="h-4 w-4" aria-hidden="true" />
-      </span>
-      <div className="home-card-text min-w-0 flex-1">
-        <h3 className="text-sm">{item.title}</h3>
-        <p>{item.description}</p>
-      </div>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </button>
-  );
-}
-
-export function HomeDesktopListCard({
-  item,
-  onNavigateItem,
-  onPrefetchItem,
-}: HomeNavigationCardProps) {
-  const Icon = item.icon;
-  return (
-    <button
-      type="button"
-      onClick={() => onNavigateItem(item.id)}
-      onMouseEnter={() => onPrefetchItem(item.id)}
-      onFocus={() => onPrefetchItem(item.id)}
-      className="home-desktop-list-card"
-      data-testid={`card-${item.id}`}
-    >
-      <span className="home-desktop-list-card-icon">
-        <Icon className="h-4 w-4" aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1 text-left">
-        <h3 className="truncate text-sm font-semibold text-foreground">{item.title}</h3>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          {item.description}
-        </p>
-      </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-    </button>
-  );
+  return <button type="button" className={primary ? "home-primary-card" : "home-module-row"}
+    data-testid={`card-${item.id}`} onClick={() => onNavigateItem(item.id)}
+    onMouseEnter={() => onPrefetchItem(item.id)} onFocus={() => onPrefetchItem(item.id)}>
+    <span className="home-module-icon"><Icon size={17} aria-hidden="true" /></span>
+    <span className="home-module-copy"><strong>{item.title || item.label}</strong><span>{item.description}</span></span>
+    <ArrowRight size={15} className="text-muted-foreground" aria-hidden="true" />
+  </button>;
 }

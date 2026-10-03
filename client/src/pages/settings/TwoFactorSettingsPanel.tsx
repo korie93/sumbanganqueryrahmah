@@ -131,7 +131,7 @@ export function TwoFactorSettingsPanel(props: TwoFactorSettingsPanelProps) {
     {props.twoFactorCodeError ? <p id={codeErrorId} className="text-sm text-destructive" role="alert">{props.twoFactorCodeError}</p> : null}
   </div>;
 
-  return <section className="min-w-0 space-y-5 rounded-xl border border-border bg-background p-4 sm:p-5" aria-labelledby="two-factor-heading" data-testid="two-factor-settings" data-two-factor-state={props.twoFactorEnabled ? "active" : hasSetup ? "setup" : "off"}>
+  return <section className="personal-section min-w-0 space-y-5" aria-labelledby="two-factor-heading" data-testid="two-factor-settings" data-two-factor-state={props.twoFactorEnabled ? "active" : hasSetup ? "setup" : "off"}>
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
         {props.twoFactorEnabled ? <ShieldCheck className="h-5 w-5 shrink-0" aria-hidden="true" /> : <ShieldOff className="h-5 w-5 shrink-0" aria-hidden="true" />}

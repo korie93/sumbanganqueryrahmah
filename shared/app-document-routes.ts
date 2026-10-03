@@ -3,6 +3,7 @@
 const APP_DOCUMENT_PATHS = new Set([
   "/", "/login", "/banned", "/maintenance", "/forgot-password",
   "/activate-account", "/reset-password", "/change-password", "/settings",
+  "/account", "/security",
   "/search", "/general-search", "/import", "/saved", "/viewer", "/ai",
   "/monitor", "/dashboard", "/activity", "/analysis", "/audit", "/audit-logs",
   "/collection-report", "/collection/save", "/collection/records",

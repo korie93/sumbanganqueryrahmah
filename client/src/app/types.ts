@@ -4,6 +4,8 @@ export interface User {
   role: string;
   fullName?: string | null | undefined;
   email?: string | null | undefined;
+  createdAt?: string | null | undefined;
+  avatarUrl?: string | null | undefined;
   status?: string | undefined;
   mustChangePassword?: boolean | undefined;
   passwordResetBySuperuser?: boolean | undefined;

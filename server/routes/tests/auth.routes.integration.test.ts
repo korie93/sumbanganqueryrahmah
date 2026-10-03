@@ -649,7 +649,7 @@ test("PATCH /api/me/credentials rejects username-only updates while password cha
   }
 });
 
-test("PATCH /api/me/credentials updates the current username without forcing logout", async () => {
+test("PATCH /api/me/credentials rejects self username updates without mutating identity", async () => {
   const { storage, user, auditLogs, activityUsernameUpdates } = createOwnCredentialsStorageDouble();
   const app = createJsonTestApp();
 
@@ -672,18 +672,14 @@ test("PATCH /api/me/credentials updates the current username without forcing log
       }),
     });
 
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 403);
     const payload = await response.json();
-    assert.equal(payload.ok, true);
-    assert.equal(payload.forceLogout, false);
-    assert.equal(payload.user.username, "renamed.user");
-    assert.deepEqual(activityUsernameUpdates, [{
-      previousUsername: "credential.user",
-      nextUsername: "renamed.user",
-    }]);
-    assert.match(String(response.headers.get("set-cookie") || ""), /sqr_csrf=/);
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "USER_USERNAME_CHANGED");
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, "PERMISSION_DENIED");
+    assert.equal(user.username, "credential.user");
+    assert.deepEqual(activityUsernameUpdates, []);
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal(auditLogs.length, 0);
   } finally {
     await stopTestServer(server);
   }

@@ -85,16 +85,3 @@ export async function disableTwoFactor(
     "/api/auth/two-factor/disable",
   );
 }
-
-export async function updateMyCredentials(payload: {
-  newUsername?: string;
-  currentPassword?: string;
-  newPassword?: string;
-}): Promise<AuthUserForceLogoutResponse> {
-  const response = await apiRequest("PATCH", "/api/me/credentials", payload);
-  return parseApiJson(
-    response,
-    authUserForceLogoutResponseSchema,
-    "/api/me/credentials",
-  );
-}

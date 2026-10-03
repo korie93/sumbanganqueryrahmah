@@ -1,4 +1,5 @@
 import type { User } from "@/app/types";
+import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 import type { LoginSuccessResponse } from "@/lib/api/auth";
 import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import { normalizeAuthIdentifier, normalizeTwoFactorCode } from "@/pages/auth-field-utils";
@@ -21,6 +22,8 @@ export function buildAuthenticatedUser(response: LoginSuccessResponse): User {
     username: normalizeAuthIdentifier(response.user?.username || username),
     fullName: response.user?.fullName ?? null,
     email: response.user?.email ?? null,
+    createdAt: response.user?.createdAt ?? null,
+    avatarUrl: response.user?.avatarUrl ?? null,
     role: String(response.user?.role || role),
     status: String(response.user?.status || response.status || "active"),
     mustChangePassword: Boolean(response.user?.mustChangePassword ?? response.mustChangePassword ?? false),
@@ -40,9 +43,7 @@ export function resolveAuthenticatedDefaultTab(
     return "change-password";
   }
 
-  return user.role === "admin" || user.role === "superuser"
-    ? "home"
-    : "general-search";
+  return resolveAuthenticatedRoleHomePage(user.role);
 }
 
 export function normalizeLoginErrorMessage(message: string): string {

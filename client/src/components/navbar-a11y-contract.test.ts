@@ -1,150 +1,107 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const readSource = (filename: string) => readFileSync(new URL(filename, import.meta.url), "utf8");
 
-function readSource(fileName: string) {
-  return readFileSync(path.resolve(__dirname, fileName), "utf8");
-}
-
-test("navbar controls use Malay accessible labels and include username context", () => {
-  const navbarSource = readSource("Navbar.tsx");
-  const navbarPartsSource = readSource("NavbarParts.tsx");
-  const notificationCenterSource = readSource("NavbarNotificationCenter.tsx");
-  const navbarCombinedSource = `${navbarSource}\n${navbarPartsSource}`;
-  const homeButtonSource = readSource("NavbarHomeButton.tsx");
-  const desktopNavigationSource = readSource("NavbarDesktopNavigation.tsx");
-  const userMenuSource = readSource("NavbarUserMenuContent.tsx");
-  const mobileNavigationSource = readSource("NavbarMobileNavigation.tsx");
-  const scrollHintSource = readSource("HorizontalScrollHint.tsx");
-  const navbarStyles = readSource("Navbar.css");
-
-  assert.match(navbarSource, /aria-label=\{translate\("common\.navbar\.mobileMenuLabel"\)\}/);
-  assert.match(navbarSource, /\{translate\("common\.navbar\.mobileMenuText"\)\}/);
-  assert.match(navbarSource, /<button[\s\S]*data-testid="button-open-mobile-nav"/);
-  assert.doesNotMatch(navbarSource, /<div[^>]*data-testid="button-open-mobile-nav"/);
-  assert.match(navbarSource, /getAriaExpandedProps\(mobileNavOpen\)/);
-  assert.doesNotMatch(navbarSource, /"aria-expanded": mobileNavOpen/);
-  assert.match(navbarSource, /useNotificationHistoryState\(\)/);
-  assert.match(navbarSource, /variant="mobile"/);
-  assert.match(navbarSource, /variant="desktop"/);
-  assert.match(notificationCenterSource, /aria-label=\{triggerLabel\}/);
-  assert.match(notificationCenterSource, /aria-label="Pusat notifikasi"/);
-  assert.match(notificationCenterSource, /aria-label="Kosongkan sejarah notifikasi"/);
-  assert.match(notificationCenterSource, /aria-label=\{`Sejarah notifikasi \$\{group\.module\}`\}/);
-  assert.match(notificationCenterSource, /aria-label="Notifikasi perlu tindakan"/);
-  assert.match(notificationCenterSource, /aria-label="Senarai notifikasi perlu tindakan"/);
-  assert.match(notificationCenterSource, /aria-label=\{`Buang notifikasi: \$\{entry\.title\}`\}/);
-  assert.match(notificationCenterSource, /role="tablist"/);
-  assert.match(notificationCenterSource, /aria-label="Tapis notifikasi"/);
-  assert.match(notificationCenterSource, /role="tabpanel"/);
-  assert.match(notificationCenterSource, /getAriaSelectedProps\(selected\)/);
-  assert.doesNotMatch(notificationCenterSource, /aria-selected=\{[^}]+\}/);
-  assert.match(notificationCenterSource, /aria-label="Ringkasan notifikasi"/);
-  assert.match(notificationCenterSource, /groupNotificationEntriesByModule/);
-  assert.match(notificationCenterSource, /NOTIFICATION_CENTER_RENDER_LIMIT = NOTIFICATION_HISTORY_LIMIT/);
-  assert.match(notificationCenterSource, /visibleEntries\.slice\(0, NOTIFICATION_CENTER_RENDER_LIMIT\)/);
-  assert.match(notificationCenterSource, /Notifikasi \$\{group\.module\}/);
-  assert.match(notificationCenterSource, /entry\.action\.href/);
-  assert.match(notificationCenterSource, /onMarkRead\(\)/);
-  assert.match(navbarSource, /removeNotificationHistoryEntry/);
-  assert.doesNotMatch(notificationCenterSource, /localStorage|sessionStorage|setInterval|setTimeout/);
-  assert.match(navbarCombinedSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
-  assert.match(navbarSource, /onCloseAutoFocus=\{restoreDesktopUserMenuFocus\}/);
-  assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileUserMenuFocus\}/);
-  assert.match(navbarSource, /onEscapeKeyDown=\{scheduleDesktopUserMenuTriggerFocus\}/);
-  assert.match(navbarSource, /onEscapeKeyDown=\{scheduleMobileUserMenuTriggerFocus\}/);
-  assert.match(navbarSource, /pendingFocusFramesRef/);
-  assert.match(navbarSource, /navbarMountedRef/);
-  assert.match(navbarSource, /clearPendingUserMenuFocusFrames\(\)/);
-  assert.match(navbarSource, /window\.requestAnimationFrame\(\(\) => \{/);
-  assert.match(navbarSource, /window\.cancelAnimationFrame\(frameHandle\)/);
-  assert.doesNotMatch(navbarSource, /setTimeout\([^)]*focus|globalThis\.setTimeout/);
-  assert.match(navbarSource, /if \(!navbarMountedRef\.current\) \{/);
-  assert.match(navbarSource, /useEffect\(\(\) => \{\s*setMobileNavOpen\(false\)\s*\}, \[activeLocation\.pathname\]\)/);
-  assert.match(navbarSource, /desktopUserMenuTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(navbarCombinedSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
-  assert.doesNotMatch(navbarSource, /window\.location/);
-  assert.match(homeButtonSource, /aria-label="Utama"/);
-  assert.match(homeButtonSource, />Utama<\/span>/);
-  assert.match(homeButtonSource, /nav-home-pill !hidden lg:!inline-flex/);
-  assert.match(desktopNavigationSource, /aria-label="Navigasi utama"/);
-  assert.match(desktopNavigationSource, /getAriaCurrentPageProps\(isActive\)/);
-  assert.match(desktopNavigationSource, /getAriaCurrentPageProps\(active\)/);
-  assert.match(desktopNavigationSource, /getAriaCurrentPageProps\(activeItem\)/);
-  assert.doesNotMatch(desktopNavigationSource, /aria-current=\{[^}]+\}/);
-  assert.match(desktopNavigationSource, /onEscapeKeyDown=\{\(\) => \{/);
-  assert.match(desktopNavigationSource, /onCloseAutoFocus=\{\(event\) => \{/);
-  assert.match(desktopNavigationSource, /groupTriggerRefs\.current\.get\(groupId\)\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(desktopNavigationSource, /scheduleGroupTriggerFocus\(group\.id\)/);
-  assert.match(desktopNavigationSource, /pendingGroupFocusFramesRef/);
-  assert.match(desktopNavigationSource, /clearPendingGroupTriggerFocusFrames\(\)/);
-  assert.match(desktopNavigationSource, /window\.requestAnimationFrame\(\(\) => \{/);
-  assert.match(desktopNavigationSource, /window\.cancelAnimationFrame\(frameHandle\)/);
-  assert.doesNotMatch(desktopNavigationSource, /setTimeout\([^)]*focus|globalThis\.setTimeout/);
-  assert.match(desktopNavigationSource, /if \(!navMountedRef\.current\) \{/);
-  assert.match(userMenuSource, /navbar-dropdown-content/);
-  assert.match(navbarStyles, /\.navbar-dropdown-content\[data-state="closed"\]\s*\{[\s\S]*animation:\s*none/);
-  assert.match(scrollHintSource, /hint = translate\("common\.horizontalScroll\.hint"\)/);
-  assert.match(navbarStyles, /\.navbar-nav-shell\s*\{[\s\S]*overflow-y:\s*auto/);
-  assert.match(navbarStyles, /\.navbar-nav-shell\s*\{[\s\S]*scrollbar-width:\s*thin/);
-  assert.match(navbarStyles, /\.navbar-nav-shell\s*\{[\s\S]*scrollbar-color:\s*hsl\(var\(--muted-foreground\) \/ 0\.42\) transparent/);
-  assert.match(navbarSource, /data-testid="button-toggle-sidebar"/);
-  assert.match(navbarSource, /aria-label=\{sidebarCollapsed \? "Kembangkan navigasi" : "Kecilkan navigasi"\}/);
-  assert.match(desktopNavigationSource, /collapsed \? <TooltipContent side="right">\{item\.label\}/);
-  assert.match(desktopNavigationSource, /collapsed \? <TooltipContent side="right">\{group\.label\}/);
-  assert.match(homeButtonSource, /collapsed \? <TooltipContent side="right">Utama/);
-  assert.match(navbarStyles, /@media \(max-width: 640px\)/);
-  assert.doesNotMatch(navbarStyles, /@media \(max-width: 319px\)/);
-  assert.match(mobileNavigationSource, /<SheetTitle>Navigasi<\/SheetTitle>/);
-  assert.match(mobileNavigationSource, /onCloseAutoFocus=\{onCloseAutoFocus\}/);
-  assert.match(navbarSource, /ref=\{mobileNavigationTriggerRef\}/);
-  assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileNavigationFocus\}/);
-  assert.match(navbarSource, /mobileNavigationTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(mobileNavigationSource, /Bahagian semasa:/);
-  assert.match(mobileNavigationSource, /aria-label="Navigasi mudah alih"/);
-  assert.match(mobileNavigationSource, /getAriaCurrentPageProps\(active\)/);
-  assert.doesNotMatch(mobileNavigationSource, /aria-current=\{[^}]+\}/);
-  assert.match(mobileNavigationSource, /bg-primary\/10 text-primary/);
-  assert.match(mobileNavigationSource, /active \? "text-primary" : "text-muted-foreground"/);
-  assert.match(mobileNavigationSource, /min-h-11 w-full/);
-  assert.match(navbarStyles, /\.nav-pill\.nav-pill-active\s*\{[\s\S]*color:\s*hsl\(var\(--primary\)\);/);
-  assert.match(navbarStyles, /\.user-menu-role\s*\{[\s\S]*color:\s*hsl\(var\(--muted-foreground\)\);/);
-  assert.doesNotMatch(navbarCombinedSource, /Open user menu|Open navigation menu/);
-  assert.doesNotMatch(desktopNavigationSource, /Primary navigation|Scroll for more/);
-  assert.doesNotMatch(scrollHintSource, /Scroll for more/);
-  assert.doesNotMatch(mobileNavigationSource, /Mobile navigation|Current section:/);
-  assert.doesNotMatch(mobileNavigationSource, /border-primary\/35 bg-primary\/10 text-primary shadow-sm/);
-});
-
-test("mobile navigation releases its modal on desktop resize and restores a visible navigation control", () => {
+test("V7.9 shell derives every navigation surface from the production permission registry", () => {
   const source = readSource("Navbar.tsx");
-  assert.match(source, /if \(!mobileNavOpen\) return/);
-  assert.match(source, /window\.matchMedia\("\(min-width: 1024px\)"\)/);
-  assert.match(source, /if \(desktop\.matches\) setMobileNavOpen\(false\)/);
-  assert.match(source, /desktop\.addEventListener\("change", closeOnDesktop\)/);
-  assert.match(source, /return \(\) => desktop\.removeEventListener\("change", closeOnDesktop\)/);
-  assert.match(source, /\}, \[mobileNavOpen\]\)/);
-  assert.match(source, /ref=\{desktopNavigationTriggerRef\}/);
-  assert.match(source, /desktopNavigationTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(source, /mobileNavigationTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.doesNotMatch(source, /window\.onresize\s*=/);
+  for (const selector of ["getVisibleNavItems", "getVisiblePrimaryNavItems", "getVisibleNavigationGroups"]) {
+    assert.ok(source.includes(selector));
+  }
+  assert.match(source, /items=\{allItems\}/);
+  assert.match(source, /canAccessSettings = allItems\.some\(\(item\) => item\.id === "settings"\)/);
+  assert.match(source, /canAccessSettings=\{canAccessSettings\}/);
+  assert.match(source, /onAccount=\{\(\) => navigateProfile\("account"\)\}/);
+  assert.match(source, /onSecurity=\{\(\) => navigateProfile\("security"\)\}/);
+  assert.doesNotMatch(source, /canAccessAccount/);
+  assert.doesNotMatch(source, /userRole === "(?:superuser|admin|manager|user)"/);
+  assert.match(source, /resolveNavigationTarget\(itemId\)/);
+  // Wouter's location hook is pathname-only; Settings child selection needs its query hook.
+  assert.match(source, /const routerSearch = useSearch\(\)/);
+  assert.match(source, /search: queryIndex < 0 \? routerSearch : routerLocation\.slice\(queryIndex\)/);
 });
 
-test("mobile current-page badge uses a solid contrast pair instead of stacking translucent fills", () => {
+test("desktop flyouts are nonmodal navigation regions with full-row keyboard controls", () => {
+  const source = readSource("NavbarDesktopNavigation.tsx");
+  assert.match(source, /<Popover[^>]*modal=\{false\}/);
+  assert.match(source, /<PopoverContent asChild side="right"/);
+  assert.match(source, /<nav role="navigation"/);
+  assert.match(source, /aria-controls=\{panelId\} \{\.\.\.getAriaExpandedProps\(open\)\}/);
+  assert.match(source, /event\.key === "ArrowRight"/);
+  assert.match(source, /onGroupChange\(group\.id, true\)/);
+  assert.match(source, /querySelector<HTMLButtonElement>\("button"\)\?\.focus/);
+  assert.match(source, /groupTriggerRefs\.current\.get\(group\.id\)\?\.focus/);
+  assert.doesNotMatch(source, /DropdownMenu|role="dialog"|aria-modal/);
+});
+
+test("collapsed anchored layers await measured stable geometry and cancel abandoned requests", () => {
+  const source = readSource("useSidebarExpansion.ts");
+  assert.match(source, /getBoundingClientRect\(\)\.width/);
+  assert.match(source, /stableFrames >= 2/);
+  assert.match(source, /pendingAction\.current = action/);
+  assert.match(source, /onCollapsedChange\?\.\(false\)/);
+  assert.match(source, /window\.cancelAnimationFrame/);
+  assert.match(source, /useEffect\(\(\) => cancel/);
+  const navbar = readSource("Navbar.tsx");
+  assert.match(navbar, /afterExpansion\(\(\) =>/);
+  assert.match(navbar, /cancelOutsideExpansion/);
+  assert.match(navbar, /cancelPendingOnEscape/);
+});
+
+test("mobile navigation retains a modal drawer with inline mutually exclusive submenus", () => {
   const source = readSource("NavbarMobileNavigation.tsx");
-  const badge = source.match(/<span className="([^"]+)">\s*Semasa\s*<\/span>/)?.[1];
-  assert.ok(badge);
-  assert.match(badge, /(?:^|\s)bg-primary(?:\s|$)/);
-  assert.match(badge, /(?:^|\s)text-primary-foreground(?:\s|$)/);
-  assert.doesNotMatch(badge, /bg-primary\/|text-primary(?:\s|$)/);
-  assert.match(source, /getAriaCurrentPageProps\(active\)/);
+  assert.match(source, /<Sheet open=\{open\} onOpenChange=\{onOpenChange\}/);
+  assert.match(source, /id="mobile-navigation-drawer"/);
+  assert.match(source, /aria-label="Mobile navigation"/);
+  assert.match(source, /getAriaExpandedProps\(expanded\)\} aria-controls/);
+  assert.match(source, /setActiveGroup\(expanded \? null : group\.id\)/);
+  assert.match(source, /if \(activeGroup\) \{\s*event\.preventDefault\(\)/);
+  assert.match(source, /groupRefs\.current\.get\(activeGroup\)\?\.focus/);
+  assert.match(source, /onCloseAutoFocus=\{onCloseAutoFocus\}/);
+  assert.doesNotMatch(source, /Popover|workspace-nav-flyout/);
+  assert.match(source, /bg-primary px-1\.5 py-0\.5 text-xs font-medium text-primary-foreground/);
 });
 
-test("shared sheet opening and closing motion use the specified subtle 200ms duration", () => {
+test("utility layers preserve session notifications and production logout", () => {
+  const navbar = readSource("Navbar.tsx");
+  const profile = readSource("NavbarUserMenuContent.tsx");
+  const notifications = readSource("NavbarNotificationCenter.tsx");
+  assert.match(navbar, /useNotificationHistoryState\(\)/);
+  assert.match(navbar, /removeNotificationHistoryEntry/);
+  assert.match(navbar, /workspace-sidebar-footer">\{profile\("desktop"\)\}/);
+  assert.match(navbar, /Switch to light mode/);
+  assert.match(navbar, /Switch to dark mode/);
+  assert.match(profile, /void onLogout\(\)/);
+  assert.match(profile, /data-testid="button-logout"/);
+  assert.match(profile, /<span>Logout<\/span>/);
+  assert.equal((profile.match(/data-testid="button-logout"/g) ?? []).length, 1);
+  assert.match(profile, /canAccessSettings \? <DropdownMenuItem onSelect=\{onSettings\}/);
+  assert.doesNotMatch(profile, /clearAuthenticatedUserStorage|localStorage\.clear|window\.location/);
+  assert.match(notifications, /aria-label=\{triggerLabel\}/);
+  assert.match(notifications, /aria-controls=/);
+  assert.match(notifications, /sideOffset=\{8\}/);
+  assert.match(notifications, /collisionPadding=\{12\}/);
+  assert.match(notifications, /NOTIFICATION_CENTER_RENDER_LIMIT = NOTIFICATION_HISTORY_LIMIT/);
+  assert.match(notifications, /onMarkRead\(\)/);
+  assert.doesNotMatch(notifications, /localStorage|sessionStorage|setInterval|setTimeout/);
+});
+
+test("responsive shell closes transient layers on resize and restores visible navigation focus", () => {
+  const source = readSource("Navbar.tsx");
+  assert.match(source, /window\.matchMedia\(LARGE_UP_MEDIA_QUERY\)/);
+  assert.match(source, /if \(media\.matches\) setMobileNavOpen\(false\)/);
+  assert.match(source, /window\.addEventListener\("resize", resize\)/);
+  assert.match(source, /window\.removeEventListener\("resize", resize\)/);
+  assert.match(source, /desktopNavigationTriggerRef\.current\?\.focus/);
+  assert.match(source, /mobileNavigationTriggerRef\.current\?\.focus/);
+  const styles = readSource("Navbar.css");
+  assert.match(styles, /prefers-reduced-motion: reduce/);
+  assert.match(styles, /\.workspace-nav-flyout\[data-state="closed"\][\s\S]*pointer-events: none/);
+  assert.match(styles, /@media \(max-width: 1023px\)/);
+});
+
+test("shared drawer motion remains subtle and unchanged", () => {
   const source = readSource("ui/sheet.tsx");
   assert.match(source, /data-\[state=closed\]:duration-200 data-\[state=open\]:duration-200/);
   assert.match(source, /bg-black\/80 duration-200/);

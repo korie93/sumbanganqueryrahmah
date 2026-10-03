@@ -203,7 +203,7 @@ async function verifyRolePermissions(superuser, manager, ordinary) {
   await savePermissions(true, true);
   // This existing page is not reloaded: the live notification must update it.
   await managerPage.getByTestId("nav-group-insights").click();
-  const activityMenu = managerPage.getByRole("menuitem", { name: /^Activity\b/ });
+  const activityMenu = managerPage.getByTestId("desktop-flyout-insights").getByTestId("flyout-nav-activity");
   await activityMenu.waitFor({ state: "visible" });
   await activityMenu.click();
   currentPage = managerPage;
@@ -226,7 +226,7 @@ async function verifyRolePermissions(superuser, manager, ordinary) {
   await managerPage.getByRole("heading", { name: "Activity Monitor", exact: true }).waitFor({ state: "hidden" });
   await managerPage.getByTestId("nav-general-search").waitFor({ state: "hidden" });
   await managerPage.getByTestId("nav-group-insights").click();
-  assert.equal(await managerPage.getByRole("menuitem", { name: /^Activity\b/ }).count(), 0);
+  assert.equal(await managerPage.getByTestId("desktop-flyout-insights").getByTestId("flyout-nav-activity").count(), 0);
   await managerPage.keyboard.press("Escape");
   await api(manager.context, "GET", "/api/activity/page?page=1&pageSize=10", 403);
   await api(manager.context, "GET", "/api/search?q=permission-fixture-absent", 403);

@@ -242,8 +242,8 @@ test("special Settings deep links wait for real bootstrap and allow later catego
   assert.match(workflow, /await response\.finished\(\)/);
   assert.match(workflow, /payload\.categories\?\.find/);
   assert.match(workflow, /\["General", "Security"\]/);
-  assert.match(workflow, /await page\.getByTestId\("two-factor-settings"\)\.waitFor\(\)/);
-  assert.match(workflow, /await page\.locator\("#my-account-new-password"\)\.waitFor\(\)/);
+  assert.match(workflow, /await page\.getByTestId\("two-factor-settings"\)\.count\(\), 0/);
+  assert.match(workflow, /await page\.locator\("#my-account-new-password"\)\.count\(\), 0/);
   assert.match(workflow, /Applied deep link does not pin later category navigation/);
   assert.match(workflow, /Deep-link category change restores mobile launcher focus/);
   assert.match(workflow, /Save Changes.*isDisabled\(\), true/);

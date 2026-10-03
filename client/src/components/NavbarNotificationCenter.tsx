@@ -36,6 +36,8 @@ type NavbarNotificationCenterProps = NotificationHistoryState & {
   onDismissEntry: (entryId: string) => void;
   onMarkRead: () => void;
   variant: "desktop" | "mobile";
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
 };
 
 const notificationIcons = {
@@ -53,7 +55,7 @@ type NotificationHistoryModuleGroup = {
   entries: NotificationHistoryEntry[];
 };
 
-const FALLBACK_NOTIFICATION_MODULE = "Sistem";
+const FALLBACK_NOTIFICATION_MODULE = "System";
 const ACTION_REQUIRED_PREVIEW_LIMIT = 2;
 const NOTIFICATION_CENTER_RENDER_LIMIT = NOTIFICATION_HISTORY_LIMIT;
 
@@ -62,10 +64,10 @@ const notificationFilters: ReadonlyArray<{
   label: string;
   variants?: readonly NotificationHistoryVariant[];
 }> = [
-  { id: "all", label: "Semua" },
-  { id: "destructive", label: "Ralat", variants: ["destructive"] },
-  { id: "success", label: "Berjaya", variants: ["success"] },
-  { id: "warning", label: "Perhatian", variants: ["warning"] },
+  { id: "all", label: "All" },
+  { id: "destructive", label: "Errors", variants: ["destructive"] },
+  { id: "success", label: "Success", variants: ["success"] },
+  { id: "warning", label: "Warnings", variants: ["warning"] },
 ];
 
 function matchesNotificationFilter(
@@ -94,9 +96,9 @@ function getNotificationFilterCounts(entries: readonly NotificationHistoryEntry[
 
 function getNotificationSeveritySummary(filterCounts: NotificationFilterCounts) {
   return [
-    { id: "destructive", label: "Ralat", count: filterCounts.destructive },
-    { id: "warning", label: "Perhatian", count: filterCounts.warning },
-    { id: "success", label: "Berjaya", count: filterCounts.success },
+    { id: "destructive", label: "Errors", count: filterCounts.destructive },
+    { id: "warning", label: "Warnings", count: filterCounts.warning },
+    { id: "success", label: "Success", count: filterCounts.success },
   ] as const;
 }
 
@@ -140,11 +142,13 @@ export function NavbarNotificationCenter({
   onMarkRead,
   unreadCount,
   variant,
+  open,
+  onOpenChange,
 }: NavbarNotificationCenterProps) {
   const [activeFilter, setActiveFilter] = useState<NotificationHistoryFilter>("all");
   const triggerLabel = unreadCount > 0
-    ? `Buka pusat notifikasi, ${unreadCount} belum dibaca`
-    : "Buka pusat notifikasi";
+    ? `Open notifications, ${unreadCount} unread`
+    : "Open notifications";
   const filterCounts = useMemo(() => getNotificationFilterCounts(entries), [entries]);
   const severitySummary = useMemo(
     () => getNotificationSeveritySummary(filterCounts),
@@ -175,8 +179,10 @@ export function NavbarNotificationCenter({
 
   return (
     <Popover
-      onOpenChange={(open) => {
-        if (open) {
+      {...(open !== undefined ? { open } : {})}
+      onOpenChange={(nextOpen) => {
+        onOpenChange?.(nextOpen);
+        if (nextOpen) {
           onMarkRead();
         }
       }}
@@ -186,6 +192,7 @@ export function NavbarNotificationCenter({
           type="button"
           className="nav-notification-trigger"
           aria-label={triggerLabel}
+          aria-controls={`notification-center-${variant}`}
           data-testid={`button-notification-center-${variant}`}
         >
           <Bell className="h-4 w-4" aria-hidden="true" />
@@ -201,15 +208,17 @@ export function NavbarNotificationCenter({
       </PopoverTrigger>
 
       <PopoverContent
+        id={`notification-center-${variant}`}
         align="end"
         sideOffset={8}
-        className="w-[min(24rem,calc(100vw-1rem))] overflow-hidden p-0"
-        aria-label="Pusat notifikasi"
+        collisionPadding={12}
+        className="max-h-[var(--radix-popover-content-available-height)] w-[min(24rem,calc(100vw-1rem))] overflow-y-auto overscroll-contain p-0"
+        aria-label="Notifications"
       >
         <div className="flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-foreground">Notifikasi</h2>
-            <p className="text-xs text-muted-foreground">Sejarah sesi semasa</p>
+            <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
+            <p className="text-xs text-muted-foreground">Current session history</p>
           </div>
           <Button
             type="button"
@@ -218,10 +227,10 @@ export function NavbarNotificationCenter({
             className="shrink-0"
             disabled={entries.length === 0}
             onClick={onClear}
-            aria-label="Kosongkan sejarah notifikasi"
+            aria-label="Clear notification history"
           >
             <Trash2 aria-hidden="true" />
-            Kosongkan
+            Clear
           </Button>
         </div>
 
@@ -229,7 +238,7 @@ export function NavbarNotificationCenter({
           <div
             className="grid grid-cols-3 gap-2 border-b border-border bg-background px-3 py-2"
             role="group"
-            aria-label="Ringkasan notifikasi"
+            aria-label="Notification summary"
           >
             {severitySummary.map((item) => (
               <div
@@ -250,22 +259,22 @@ export function NavbarNotificationCenter({
         {actionRequiredEntries.length > 0 ? (
           <section
             className="border-b border-border bg-destructive/5 px-3 py-3"
-            aria-label="Notifikasi perlu tindakan"
+            aria-label="Action required notifications"
           >
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-label-xs text-foreground">
-                  Perlu tindakan
+                  Action required
                 </p>
                 <p className="text-2xs text-muted-foreground">
-                  {actionRequiredEntries.length} isu aktif dalam sesi ini
+                  {actionRequiredEntries.length} active issues in this session
                 </p>
               </div>
               <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-2xs font-semibold text-foreground">
                 {actionRequiredEntries.length}
               </span>
             </div>
-            <ul className="grid gap-2" aria-label="Senarai notifikasi perlu tindakan">
+            <ul className="grid gap-2" aria-label="Action required notification list">
               {actionRequiredPreviewEntries.map((entry) => {
                 const presentation = getNotificationHistoryPresentation(entry.variant);
                 return (
@@ -288,7 +297,7 @@ export function NavbarNotificationCenter({
                         size="icon"
                         className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7"
                         onClick={() => onDismissEntry(entry.id)}
-                        aria-label={`Buang notifikasi: ${entry.title}`}
+                        aria-label={`Dismiss notification: ${entry.title}`}
                       >
                         <X className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
@@ -315,7 +324,7 @@ export function NavbarNotificationCenter({
           <div
             className="flex flex-wrap gap-1 border-b border-border bg-muted/20 px-3 py-2"
             role="tablist"
-            aria-label="Tapis notifikasi"
+            aria-label="Filter notifications"
           >
             {notificationFilters.map((filter) => {
               const selected = activeFilter === filter.id;
@@ -360,9 +369,9 @@ export function NavbarNotificationCenter({
               <BellOff className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-sm font-medium text-foreground">Tiada notifikasi</p>
+              <p className="text-sm font-medium text-foreground">No notifications</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Makluman baharu akan muncul di sini.
+                New notifications will appear here.
               </p>
             </div>
           </div>
@@ -377,9 +386,9 @@ export function NavbarNotificationCenter({
               <BellOff className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-sm font-medium text-foreground">Tiada notifikasi dalam filter ini</p>
+              <p className="text-sm font-medium text-foreground">No notifications in this filter</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Tukar filter untuk melihat sejarah sesi lain.
+                Choose another filter to view session history.
               </p>
             </div>
           </div>
@@ -394,7 +403,7 @@ export function NavbarNotificationCenter({
               <section
                 key={group.module}
                 className="border-b border-border/70 last:border-b-0"
-                aria-label={`Notifikasi ${group.module}`}
+                aria-label={`${group.module} notifications`}
               >
                 <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/70 bg-popover px-4 py-2">
                   <p className="truncate text-2xs font-bold uppercase tracking-label-xs text-foreground">
@@ -404,7 +413,7 @@ export function NavbarNotificationCenter({
                     {group.entries.length}
                   </span>
                 </div>
-                <ol aria-label={`Sejarah notifikasi ${group.module}`}>
+                <ol aria-label={`${group.module} notification history`}>
                   {group.entries.map((entry) => {
                     const presentation = getNotificationHistoryPresentation(entry.variant);
                     const NotificationIcon = notificationIcons[entry.variant];
@@ -444,7 +453,7 @@ export function NavbarNotificationCenter({
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-foreground sm:h-7 sm:w-7"
                                 onClick={() => onDismissEntry(entry.id)}
-                                aria-label={`Buang notifikasi: ${entry.title}`}
+                                aria-label={`Dismiss notification: ${entry.title}`}
                               >
                                 <X className="h-3.5 w-3.5" aria-hidden="true" />
                               </Button>

@@ -28,7 +28,6 @@ export function useSettingsSystemSettings({
     [categories, selectedCategory],
   );
   const isRolePermissionCategory = currentCategory?.name === "Roles & Permissions";
-  const isSecurityCategory = currentCategory?.name === "Security";
   const roleSections = useMemo(
     () => buildSettingsRoleSections(currentCategory, isRolePermissionCategory),
     [currentCategory, isRolePermissionCategory],
@@ -71,7 +70,6 @@ export function useSettingsSystemSettings({
     dirtyCount,
     handleSave,
     isRolePermissionCategory,
-    isSecurityCategory,
     loadSettings,
     loading,
     maintenanceSettingsSummary,

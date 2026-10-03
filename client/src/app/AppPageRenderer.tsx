@@ -1,6 +1,8 @@
 import { memo } from "react";
 import {
   AIPage,
+  AccountPage,
+  SecurityPage,
   CollectionReportPage,
   ForbiddenPage,
   GeneralSearchPage,
@@ -14,7 +16,9 @@ import {
   ViewerPage,
 } from "@/app/lazy-pages";
 import { isPageEnabled } from "@/app/monitorAccess";
+import { isPersonalPage } from "@/app/personal-routes";
 import { PageSpinner } from "@/app/PageSpinner";
+import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 import type {
   AppRuntimeConfig,
   MonitorSection,
@@ -51,7 +55,7 @@ function AppPageRendererImpl({
   onNavigate,
   onMonitorSectionChange,
 }: AppPageRendererProps) {
-  if (user.role !== "superuser" && !tabVisibilityLoaded) return <PageSpinner />;
+  if (user.role !== "superuser" && !tabVisibilityLoaded && !isPersonalPage(currentPage)) return <PageSpinner />;
   const pageEnabled = isPageEnabled(user.role, currentPage, tabVisibility, tabVisibilityLoaded);
 
   if (!pageEnabled) {
@@ -62,8 +66,12 @@ function AppPageRendererImpl({
     && !monitorVisibility[monitorSection]) return <ForbiddenPage />;
 
   switch (currentPage) {
+    case "account":
+      return <AccountPage user={user} />;
+    case "security":
+      return <SecurityPage user={user} />;
     case "home":
-      return <HomePage onNavigate={onNavigate} userRole={user.role} tabVisibility={tabVisibility} />;
+      return <HomePage onNavigate={onNavigate} user={user} userRole={user.role} tabVisibility={tabVisibility} />;
     case "import":
       return <ImportPage onNavigate={onNavigate} importUploadLimitBytes={runtimeConfig.importUploadLimitBytes} />;
     case "saved":
@@ -113,7 +121,7 @@ function AppPageRendererImpl({
         <NotFoundPage
           isAuthenticated
           homeLabel="Kembali ke Dashboard"
-          onNavigateHome={() => onNavigate(user.role === "user" ? "general-search" : "home")}
+          onNavigateHome={() => onNavigate(resolveAuthenticatedRoleHomePage(user.role))}
           onLoginClick={() => onNavigate("home")}
         />
       );

@@ -28,16 +28,16 @@ function NavbarHomeButtonImpl({
           onFocus={() => onPrefetch(HOME_NAV_ITEM.id)}
           className={`nav-pill nav-home-pill !hidden lg:!inline-flex${active ? " nav-pill-active" : ""}`}
           data-testid="nav-home"
-          aria-label="Utama"
+          aria-label="Home"
           {...getAriaCurrentPageProps(active)}
         >
           <span className="nav-pill-icon">
             <Home className="h-4 w-4" aria-hidden="true" />
           </span>
-          <span className="nav-pill-label">Utama</span>
+          <span className="nav-pill-label">Home</span>
         </button>
       </TooltipTrigger>
-      {collapsed ? <TooltipContent side="right">Utama</TooltipContent> : null}
+      {collapsed ? <TooltipContent side="right">Home</TooltipContent> : null}
     </Tooltip>
   )
 }

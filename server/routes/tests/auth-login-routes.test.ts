@@ -31,6 +31,7 @@ function createTwoFactorSigningFailureContext(app: ReturnType<typeof createJsonT
     buildManagedUserPayload: (user: Record<string, unknown>) => user,
     buildOkPayload: <T extends Record<string, unknown>>(payload: T) => ({ ok: true, ...payload }),
     buildUserPayload: (user: Record<string, unknown> | null) => user,
+    buildCurrentUserPayload: async (user: Record<string, unknown> | null) => user,
     closeActivitySockets: () => undefined,
     jsonRoute: createAuthJsonRoute,
     parseBrowserName: () => "Test Browser",

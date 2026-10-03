@@ -52,7 +52,8 @@ test("buildAuthenticatedUser prefers nested user fields and normalizes username 
 test("resolveAuthenticatedDefaultTab honors password-change and role priorities", () => {
   assert.equal(resolveAuthenticatedDefaultTab({ role: "user", mustChangePassword: true }), "change-password");
   assert.equal(resolveAuthenticatedDefaultTab({ role: "admin", mustChangePassword: false }), "home");
-  assert.equal(resolveAuthenticatedDefaultTab({ role: "user", mustChangePassword: false }), "general-search");
+  assert.equal(resolveAuthenticatedDefaultTab({ role: "user", mustChangePassword: false }), "home");
+  assert.equal(resolveAuthenticatedDefaultTab({ role: "manager", mustChangePassword: false }), "home");
 });
 
 test("normalizeLoginErrorMessage rewrites banned-account messages", () => {

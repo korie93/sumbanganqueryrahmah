@@ -33,6 +33,8 @@ const DIRECT_APP_ROUTE_ALIASES: Record<string, string> = {
   "/saved": "saved",
   "/viewer": "viewer",
   "/ai": "ai",
+  "/account": "account",
+  "/security": "security",
 };
 
 const DIRECT_APP_PAGE_PATHS: Record<string, string> = {
@@ -41,6 +43,8 @@ const DIRECT_APP_PAGE_PATHS: Record<string, string> = {
   saved: "/saved",
   viewer: "/viewer",
   ai: "/ai",
+  account: "/account",
+  security: "/security",
 };
 
 const MONITOR_PAGE_SECTIONS: Record<string, MonitorSection> = {
@@ -117,6 +121,10 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
     return { page: "change-password" };
   }
   if (normalizedPath === "/settings") {
+    const section = new URLSearchParams(search).get("section");
+    if (section === "account" || section === "my-account") return { page: "account", normalizedPath: "/account" };
+    if (section === "account-security") return { page: "security", normalizedPath: "/security" };
+    // The existing Security category still owns system policy, not personal 2FA.
     return { page: "settings" };
   }
   if (normalizedPath === "/collection-report" || normalizedPath.startsWith("/collection/")) {

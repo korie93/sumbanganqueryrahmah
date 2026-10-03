@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
 import {
   prefetchNavigationTargetWithDiagnostics,
@@ -18,6 +18,7 @@ import type {
 import AutoLogout from "@/components/AutoLogout";
 import { LazySuspenseFallback } from "@/components/LazySuspenseFallback";
 import Navbar from "@/components/Navbar";
+import { NavbarUserMenuDropdown } from "@/components/NavbarParts";
 import { AIProvider } from "@/context/AIContext";
 import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import "@/components/GlassWrapper.css";
@@ -68,6 +69,8 @@ export default function AuthenticatedAppShell({
 }: AuthenticatedAppShellProps) {
   const [floatingAiReady, setFloatingAiReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [passwordProfileOpen, setPasswordProfileOpen] = useState(false);
+  const passwordProfileRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!runtimeConfig.aiEnabled || floatingAiReady) return;
@@ -106,6 +109,8 @@ export default function AuthenticatedAppShell({
       featureLockdown,
       monitorSection,
       tabVisibility,
+      tabVisibilityLoaded,
+      mustChangePassword: user.mustChangePassword,
       userRole: user.role,
     });
     if (targets.length === 0) {
@@ -129,7 +134,7 @@ export default function AuthenticatedAppShell({
       cancelled = true;
       cancelIdlePreload();
     };
-  }, [currentPage, featureLockdown, monitorSection, tabVisibility, user.role]);
+  }, [currentPage, featureLockdown, monitorSection, tabVisibility, tabVisibilityLoaded, user.mustChangePassword, user.role]);
 
   if (user.mustChangePassword) {
     return (
@@ -141,6 +146,15 @@ export default function AuthenticatedAppShell({
           heartbeatIntervalMinutes={runtimeConfig.heartbeatIntervalMinutes}
           username={user.username}
         />
+        <div className="flex justify-end px-4 pt-4">
+          <div className="w-56 max-w-full">
+          <NavbarUserMenuDropdown open={passwordProfileOpen} onOpenChange={setPasswordProfileOpen}
+            triggerRef={passwordProfileRef} variant="mobile" username={user.username} userRole={user.role}
+            canAccessSettings={false} onAccount={() => { setPasswordProfileOpen(false); onNavigate("account"); }}
+            onSecurity={() => { setPasswordProfileOpen(false); onNavigate("security"); }}
+            onSettings={() => {}} onLogout={onLogout} />
+          </div>
+        </div>
         <AppRouteErrorBoundary
           routeKey="change-password"
           routeLabel="change-password"
@@ -172,6 +186,7 @@ export default function AuthenticatedAppShell({
           onLogout={onLogout}
           userRole={user.role}
           username={user.username}
+          avatarUrl={user.avatarUrl}
           systemName={systemName}
           savedCount={savedCount}
           tabVisibility={tabVisibility}

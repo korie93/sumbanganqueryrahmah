@@ -7,6 +7,8 @@ type PredictivePrefetchArgs = {
   featureLockdown: boolean;
   monitorSection?: MonitorSection | null | undefined;
   tabVisibility: TabVisibility;
+  tabVisibilityLoaded: boolean;
+  mustChangePassword?: boolean | undefined;
   userRole: string;
 };
 
@@ -142,23 +144,21 @@ export function resolvePredictivePrefetchTargets({
   featureLockdown,
   monitorSection,
   tabVisibility,
+  tabVisibilityLoaded,
+  mustChangePassword,
   userRole,
 }: PredictivePrefetchArgs): NavigationPrefetchTarget[] {
-  if (featureLockdown) {
-    return currentPage === "general-search" ? [] : ["general-search"];
-  }
+  if (!tabVisibilityLoaded || mustChangePassword) return [];
 
-  const prioritizedSourceIds = currentPage === "home"
+  const prioritizedSourceIds = currentPage === "home" && !featureLockdown
     ? getVisibleHomeItems(userRole, tabVisibility).map((item) => item.id)
     : getVisibleNavItems(userRole, tabVisibility, featureLockdown)
       .map((item) => item.id)
       .filter((itemId) => itemId !== "home");
 
-  const normalizedCandidates = dedupeTargets([
-    ...prioritizedSourceIds.map((itemId) =>
-      normalizeNavigationPrefetchTarget(resolveNavigationTarget(itemId))),
-    ...NAVIGATION_PREFETCH_PRIORITY,
-  ]);
+  // Priorities order authorized destinations; they must never add permissions.
+  const normalizedCandidates = dedupeTargets(prioritizedSourceIds.map((itemId) =>
+    normalizeNavigationPrefetchTarget(resolveNavigationTarget(itemId))));
   const currentTarget = resolveCurrentNavigationTarget(currentPage, monitorSection);
 
   return normalizedCandidates

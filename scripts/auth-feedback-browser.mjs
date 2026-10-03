@@ -394,6 +394,7 @@ async function checkPasswordFeedback(view, prefix, confirmationPrefix, meterId, 
 
 async function checkCredentialPasswordFlow(view) {
   await go(view);
+  if (view === "settings") await page.getByTestId("security-change-password").click();
   const prefix = view === "change" ? "change-password" : "my-account";
   const ids = [`${prefix}-current-password`, `${prefix}-new-password`, `${prefix}-confirm-password`];
   const [current, password, confirmation] = ids.map((id) => page.locator(`#${id}`));
@@ -417,8 +418,8 @@ async function checkCredentialPasswordFlow(view) {
   await checkPasswordVisibility(ids);
   await submitPasswordAndCheckPending(submit, ids);
   await visibleText(page.locator("[role=status]"), view === "change" ? "Kata laluan berjaya dikemas kini" : "Password changed successfully");
-  const countKey = view === "change" ? "change" : "credentials";
-  assert.equal(counts[countKey], before[countKey] + 1, "Matching confirmation submits exactly once.");
+  assert.equal(counts.change, before.change + 1, "Matching confirmation submits exactly once through the canonical password endpoint.");
+  assert.equal(counts.credentials, before.credentials, "Personal password changes never send a broad identity update.");
   for (const input of [current, password, confirmation]) {
     assert.equal(await input.inputValue(), "", "Successful password change clears sensitive input values.");
     assert.equal(await input.getAttribute("type"), "password");
@@ -495,27 +496,45 @@ async function checkPublicPasswordLayout(view, width, theme, artifacts) {
   const confirmation = page.locator(`#${prefix}-confirm-password`);
   await password.fill("PalmRiverMountain7");
   await confirmation.fill("DifferentFixture1!");
+  const layoutPhase = `${view} ${width}px ${theme}`;
+  phase = `${layoutPhase}: permanent input labels`;
   const missingLabels = await page.locator("input").evaluateAll((elements) => elements.filter((element) => !element.labels?.length).map((element) => element.id));
   assert.deepEqual(missingLabels, [], `${view} needs permanent associated labels at ${width}px.`);
   for (const input of [password, confirmation]) {
+    phase = `${layoutPhase}: password autocomplete`;
     assert.equal(await input.getAttribute("autocomplete"), "new-password");
     const inputId = await input.getAttribute("id");
     const toggle = page.locator(`button[aria-controls="${inputId}"]`);
     const inputBox = await input.boundingBox();
     const toggleBox = await toggle.boundingBox();
+    phase = `${layoutPhase}: visibility control touch target`;
     assert.ok(toggleBox.width >= 44 && toggleBox.height >= 44, "Public password controls need comfortable touch targets.");
+    phase = `${layoutPhase}: visibility control field alignment`;
     assert.ok(toggleBox.x >= inputBox.x && toggleBox.x + toggleBox.width <= inputBox.x + inputBox.width + 1, "Eye control remains aligned within its own field.");
+    phase = `${layoutPhase}: visibility control text clearance`;
     assert.ok(await input.evaluate((element) => parseFloat(getComputedStyle(element).paddingRight)) >= toggleBox.width, "Input text must not overlap the visibility control.");
   }
+  phase = `${layoutPhase}: description references`;
   const invalidDescriptions = await page.locator("[aria-describedby]").evaluateAll((elements) => elements.flatMap((element) => element.getAttribute("aria-describedby").split(/\s+/).filter((id) => id && !document.getElementById(id))));
   assert.deepEqual(invalidDescriptions, [], `${view} description references must exist.`);
+  phase = `${layoutPhase}: horizontal overflow`;
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, `${view} ${theme} has horizontal overflow at ${width}px.`);
+  phase = `${layoutPhase}: hovered visibility control WCAG A/AA accessibility`;
+  // Exercise the real hover surface explicitly; cursor position from prior
+  // scenarios must not determine whether a dark-workspace contrast bug is seen.
+  const visibilityControl = page.locator(`button[aria-controls="${prefix}-new-password"]`);
+  await visibilityControl.hover();
+  await expect(visibilityControl).toHaveJSProperty("disabled", false);
+  assert.equal(await visibilityControl.evaluate((element) => element.matches(":hover")), true);
   await page.addScriptTag({ content: axeSource });
   const accessibility = await page.evaluate(async () => {
     const result = await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } });
     return result.violations.map((violation) => ({ id: violation.id, nodes: violation.nodes.map((node) => node.target) }));
   });
+  // Rule IDs/selectors identify regressions without exposing entered values.
+  if (accessibility.length) console.log(`[auth-feedback-browser] A11Y ${view}/${width}/${theme}: ${JSON.stringify(accessibility)}`);
   assert.deepEqual(accessibility, [], `${view} ${theme} must pass WCAG A/AA automated checks including contrast at ${width}px.`);
+  phase = `${layoutPhase}: credentials remain out of browser storage`;
   assert.equal(await page.evaluate((secrets) => [localStorage, sessionStorage].some((storage) => Object.values(storage).some((value) => secrets.some((secret) => value.includes(secret)))) , [validPassword, currentPassword, "PalmRiverMountain7", "DifferentFixture1!"]), false, "Password entries must never persist in browser storage.");
   await page.screenshot({ path: path.join(artifacts, `${view}-${width}-${theme}-requirements.png`), fullPage: true });
   if (width === 320 || width === 1280) {
@@ -524,6 +543,7 @@ async function checkPublicPasswordLayout(view, width, theme, artifacts) {
     await page.screenshot({ path: path.join(artifacts, `${view}-${width}-${theme}-matching.png`), fullPage: true });
   }
   if (width === 390) {
+    phase = `${layoutPhase}: keyboard-sized viewport reachability`;
     // A reduced viewport approximates space taken by a mobile keyboard; this is
     // not a claim to run the real Android/iOS software keyboard.
     await page.setViewportSize({ width, height: 420 });
@@ -847,6 +867,7 @@ try {
     for (const view of ["reset", "activation", "change", "settings", "collection", "login", "setup"]) {
       errorCode = null;
       await go(view);
+      if (view === "settings" || view === "setup") await page.getByTestId("security-change-password").click();
       await page.locator("input").first().waitFor({ state: "visible" });
       const missingLabels = await page.locator("input").evaluateAll((elements) => elements.filter((element) => !element.labels?.length && !element.getAttribute("aria-label") && !element.getAttribute("aria-labelledby")).map((element) => element.id));
       assert.deepEqual(missingLabels, [], `${view} inputs need accessible labels.`);

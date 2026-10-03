@@ -17,6 +17,7 @@ import {
 import { getCollectionReportFreshness } from "./collection-report-freshness";
 import { resolveUserOwnedCollectionRecordFilters } from "./collection-record-read-shared";
 import { canViewAllStaff } from "../../../shared/user-roles";
+import { getCollectionDashboardSummary } from "./collection-dashboard-summary";
 
 export class CollectionRecordSummaryReadOperations extends CollectionServiceSupport {
   async getSummary(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: SummaryQuery) {
@@ -31,6 +32,20 @@ export class CollectionRecordSummaryReadOperations extends CollectionServiceSupp
     if (parsedYear === null) {
       throw badRequest("Invalid year.");
     }
+
+    const includeDashboard = normalizeCollectionText(query.includeDashboard) === "1";
+    const dashboardMonth = includeDashboard
+      ? safeParseInteger(query.month, { min: 1, max: 12 })
+      : null;
+    if (includeDashboard && dashboardMonth === null) throw badRequest("Invalid dashboard month.");
+    const dashboardOptions = {
+      year: parsedYear,
+      month: dashboardMonth ?? 1,
+      canViewLeaderBreakdown: canViewAllStaff(user.role) && requestedNicknameFilters.length === 0,
+      scopeLabel: canViewAllStaff(user.role) && requestedNicknameFilters.length === 0
+        ? "All Collection records"
+        : "Your authorized Collection scope",
+    };
 
     let nicknameFilters: string[] | undefined;
     if (canViewAllStaff(user.role)) {
@@ -59,6 +74,9 @@ export class CollectionRecordSummaryReadOperations extends CollectionServiceSupp
         const emptySummary = this.buildEmptySummary(parsedYear);
         return {
           ...emptySummary,
+          ...(includeDashboard ? {
+            dashboard: await getCollectionDashboardSummary(this.storage, dashboardOptions),
+          } : {}),
           freshness: await getCollectionReportFreshness(this.storage, {
             from: `${parsedYear}-01-01`,
             to: `${parsedYear}-12-31`,
@@ -88,6 +106,9 @@ export class CollectionRecordSummaryReadOperations extends CollectionServiceSupp
       year: parsedYear,
       summary,
       freshness,
+      ...(includeDashboard ? {
+        dashboard: await getCollectionDashboardSummary(this.storage, dashboardOptions),
+      } : {}),
     };
   }
 

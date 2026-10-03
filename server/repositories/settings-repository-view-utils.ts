@@ -7,7 +7,12 @@ import {
   isAdminMaintenanceEditableKey,
   parseSettingType,
 } from "./settings-repository-value-utils";
-import { getRoleFeatureRestriction, parseRoleFeatureSettingKey } from "../../shared/role-feature-access";
+import {
+  getRoleFeatureRestriction,
+  isMandatoryRoleHome,
+  MANDATORY_ROLE_HOME_DESCRIPTION,
+  parseRoleFeatureSettingKey,
+} from "../../shared/role-feature-access";
 
 type SettingRow = Record<string, unknown>;
 
@@ -40,22 +45,23 @@ export function buildSystemSettingItem(input: {
   const { row, canEdit, options: settingOptions = [] } = input;
   const roleFeature = parseRoleFeatureSettingKey(String(row.key));
   const restriction = roleFeature ? getRoleFeatureRestriction(roleFeature.role, roleFeature.feature) : null;
+  const mandatoryHome = roleFeature ? isMandatoryRoleHome(roleFeature.role, roleFeature.feature) : false;
 
   return {
     key: String(row.key),
     label: String(row.label),
-    description: restriction ?? (row.description ? String(row.description) : null),
+    description: mandatoryHome ? MANDATORY_ROLE_HOME_DESCRIPTION : restriction ?? (row.description ? String(row.description) : null),
     type: parseSettingType(row.type),
-    value: restriction ? "false" : String(row.value ?? ""),
+    value: mandatoryHome ? "true" : restriction ? "false" : String(row.value ?? ""),
     defaultValue:
-      row.default_value === null || row.default_value === undefined
+      mandatoryHome ? "true" : row.default_value === null || row.default_value === undefined
         ? null
         : String(row.default_value),
     isCritical: row.is_critical === true,
     updatedAt: row.updated_at ? new Date(row.updated_at as string | number | Date) : null,
     permission: {
       canView: row.can_view === true || row.can_view === undefined,
-      canEdit: canEdit && !restriction,
+      canEdit: canEdit && !restriction && !mandatoryHome,
     },
     options: settingOptions,
   };

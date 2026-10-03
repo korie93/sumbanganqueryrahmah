@@ -165,11 +165,17 @@ async function verifyShell(page, { baseUrl, width, capture, diagnostics }) {
     const group = page.getByTestId("nav-group-workspace");
     await group.focus();
     await page.keyboard.press("Enter");
-    await page.getByRole("menu").waitFor();
+    const workspaceFlyout = page.getByTestId("desktop-flyout-workspace");
+    await workspaceFlyout.waitFor();
+    await page.locator(".sqr-workspace[data-sidebar-collapsed='false']").waitFor();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "true");
     await page.keyboard.press("Escape");
-    await page.getByRole("menu").waitFor({ state: "hidden" });
-    await assertFocus(page, group, "Workspace menu returns keyboard focus");
+    await workspaceFlyout.waitFor({ state: "hidden" });
+    await assertFocus(page, group, "Workspace navigation returns keyboard focus");
     await toggle.focus();
+    await page.keyboard.press("Enter");
+    await page.locator(".sqr-workspace[data-sidebar-collapsed='true']").waitFor();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
     await page.keyboard.press("Enter");
     await page.locator(".sqr-workspace[data-sidebar-collapsed='false']").waitFor();
     assert.equal(await toggle.getAttribute("aria-expanded"), "true");
@@ -921,8 +927,10 @@ async function verifySettingsDeepLinks(page, { baseUrl, width, capture, diagnost
       await page.waitForURL((url) => url.pathname === "/settings" && url.searchParams.get("section") === category.id);
       await page.getByRole("heading", { level: 1, name: categoryName, exact: true }).waitFor();
       if (categoryName === "Security") {
-        await page.getByTestId("two-factor-settings").waitFor();
-        await page.locator("#my-account-new-password").waitFor();
+        assert.equal(await page.getByTestId("two-factor-settings").count(), 0,
+          "Administrative Security contains no duplicate personal 2FA form");
+        assert.equal(await page.locator("#my-account-new-password").count(), 0,
+          "Administrative Security contains no duplicate personal password form");
       }
       if (width < 768) {
         await page.getByRole("dialog", { name: "Settings Menu", exact: true }).waitFor({ state: "hidden" });

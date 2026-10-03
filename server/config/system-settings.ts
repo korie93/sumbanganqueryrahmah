@@ -1,3 +1,5 @@
+import { MANDATORY_ROLE_HOME_DESCRIPTION } from "../../shared/role-feature-access";
+
 export type SettingInputType = "text" | "number" | "boolean" | "select" | "timestamp";
 
 export type SettingsPermission = {
@@ -80,7 +82,7 @@ export const ROLE_TAB_SETTINGS: Record<ConfigurableRole, RoleTabSetting[]> = {
     { pageId: "settings", suffix: "settings", label: "Manager Tab: Settings", description: "Keep Settings unavailable to manager.", defaultEnabled: false },
   ],
   user: [
-    { pageId: "home", suffix: "home", label: "User Tab: Home", description: "Allow user to open Home tab.", defaultEnabled: false },
+    { pageId: "home", suffix: "home", label: "User Tab: Home", description: MANDATORY_ROLE_HOME_DESCRIPTION, defaultEnabled: true },
     { pageId: "import", suffix: "import", label: "User Tab: Import", description: "Allow user to open Import tab.", defaultEnabled: false },
     { pageId: "saved", suffix: "saved", label: "User Tab: Saved", description: "Allow user to open Saved tab.", defaultEnabled: false },
     { pageId: "viewer", suffix: "viewer", label: "User Tab: Viewer", description: "Allow user to open Viewer tab.", defaultEnabled: false },

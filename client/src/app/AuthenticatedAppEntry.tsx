@@ -9,6 +9,7 @@ import type { MonitorSection, User } from "@/app/types";
 import { initializeTrustedTypesRuntime } from "@/lib/trusted-types-runtime";
 import { useAuthenticatedAppState } from "@/app/useAuthenticatedAppState";
 import { useSingleTabSession } from "@/app/useSingleTabSession";
+import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 import "../index.css";
 
 const AuthenticatedAppShell = lazyWithPreload(() => import("@/app/AuthenticatedAppShell"));
@@ -75,7 +76,7 @@ export default function AuthenticatedAppEntry({
       return;
     }
 
-    handleNavigate(user.role === "user" ? "general-search" : "home");
+    handleNavigate(resolveAuthenticatedRoleHomePage(user.role));
   };
 
   const {

@@ -1,0 +1,18 @@
+.personal-page { width: 100%; max-width: 48rem; margin-inline: auto; padding: clamp(1rem, 3vw, 2.5rem); min-width: 0; color: hsl(var(--foreground)); }
+.personal-page-header { padding-bottom: 1.75rem; }
+.personal-page-header h1 { font-size: clamp(1.5rem, 2.5vw, 1.875rem); font-weight: 650; letter-spacing: -.025em; }
+.personal-page-header p, .personal-footnote, .personal-photo-actions p { margin-top: .5rem; font-size: .875rem; line-height: 1.6; color: hsl(var(--muted-foreground)); }
+.personal-section, .personal-row { border-top: 1px solid hsl(var(--border)); padding-block: 1.5rem; min-width: 0; }
+.personal-section h2, .personal-row dt { font-size: .9375rem; font-weight: 600; }
+.personal-row dd { margin-top: .5rem; font-size: .9375rem; overflow-wrap: anywhere; line-height: 1.6; }
+.personal-photo-row { display: flex; align-items: center; gap: 1.25rem; margin-top: 1.25rem; }
+.personal-avatar-preview { width: 5rem; height: 5rem; flex-shrink: 0; border-radius: 50%; overflow: hidden; border: 1px solid hsl(var(--border)); }
+.personal-avatar-preview > img { width: 100%; height: 100%; object-fit: cover; }
+.personal-photo-actions { min-width: 0; }
+.personal-photo-save { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.personal-error, .personal-notice { margin-top: 1rem; font-size: .875rem; overflow-wrap: anywhere; }
+.personal-error { color: hsl(var(--destructive)); }
+.personal-notice { color: hsl(var(--foreground)); }
+.personal-page button { min-height: 2.75rem; }
+.personal-page button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+@media (max-width: 640px) { .personal-photo-row { align-items: flex-start; gap: .875rem; } .personal-avatar-preview { width: 4rem; height: 4rem; } }

@@ -8,7 +8,7 @@ const HOUR_MS = 60 * MINUTE_MS;
 const NOTIFICATION_TIME_ZONE = "Asia/Kuala_Lumpur";
 const NOTIFICATION_OCCURRENCE_DISPLAY_LIMIT = 99;
 
-const notificationDateTimeFormatter = new Intl.DateTimeFormat("ms-MY", {
+const notificationDateTimeFormatter = new Intl.DateTimeFormat("en-MY", {
   timeZone: NOTIFICATION_TIME_ZONE,
   day: "2-digit",
   month: "short",
@@ -16,7 +16,7 @@ const notificationDateTimeFormatter = new Intl.DateTimeFormat("ms-MY", {
   minute: "2-digit",
 });
 
-const notificationTimeFormatter = new Intl.DateTimeFormat("ms-MY", {
+const notificationTimeFormatter = new Intl.DateTimeFormat("en-MY", {
   timeZone: NOTIFICATION_TIME_ZONE,
   hour: "2-digit",
   minute: "2-digit",
@@ -39,23 +39,23 @@ const NOTIFICATION_PRESENTATION: Record<
   NotificationHistoryPresentation
 > = {
   default: {
-    label: "Makluman",
+    label: "Notice",
     toneClassName: "text-foreground",
   },
   destructive: {
-    label: "Ralat",
+    label: "Error",
     toneClassName: "text-destructive",
   },
   info: {
-    label: "Informasi",
+    label: "Information",
     toneClassName: "text-primary",
   },
   success: {
-    label: "Berjaya",
+    label: "Success",
     toneClassName: "text-emerald-700 dark:text-emerald-300",
   },
   warning: {
-    label: "Perhatian",
+    label: "Warning",
     toneClassName: "text-amber-800 dark:text-amber-300",
   },
 };
@@ -65,15 +65,15 @@ export function formatNotificationHistoryTimestamp(
   now = Date.now(),
 ): string {
   if (!Number.isFinite(timestamp) || !Number.isFinite(now)) {
-    return "Masa tidak tersedia";
+    return "Time unavailable";
   }
 
   const ageMs = Math.max(0, now - timestamp);
   if (ageMs < MINUTE_MS) {
-    return "Baru sahaja";
+    return "Just now";
   }
   if (ageMs < HOUR_MS) {
-    return `${Math.floor(ageMs / MINUTE_MS)} min lalu`;
+    return `${Math.floor(ageMs / MINUTE_MS)} min ago`;
   }
 
   const createdAt = new Date(timestamp);
@@ -102,5 +102,5 @@ export function formatNotificationOccurrenceDigest(count: number): string {
     ? `${NOTIFICATION_OCCURRENCE_DISPLAY_LIMIT}+`
     : String(normalizedCount);
 
-  return `Digest: ${countLabel} kejadian serupa`;
+  return `Digest: ${countLabel} similar events`;
 }

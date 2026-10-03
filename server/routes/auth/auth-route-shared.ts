@@ -11,6 +11,9 @@ import {
 } from "../../middleware/rate-limit";
 import type { MaintenanceState } from "../../config/system-settings";
 import type { PostgresStorage } from "../../storage-postgres";
+import { runtimeConfig } from "../../config/runtime";
+import { AccountAvatarRepository } from "../../repositories/account-avatar.repository";
+import { AccountAvatarService } from "../../services/account-avatar.service";
 import {
   buildDeliveryPayload,
   buildManagedUserPayload,
@@ -44,6 +47,10 @@ export type AuthRouteContext = {
   app: Express;
   storage: PostgresStorage;
   authAccountService: AuthAccountService;
+  accountAvatarService: AccountAvatarService;
+  buildCurrentUserPayload: (user: Awaited<ReturnType<PostgresStorage["getUser"]>>) => Promise<
+    (NonNullable<ReturnType<typeof buildUserPayload>> & { avatarUrl: string | null }) | null
+  >;
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   rateLimiters: AuthRouteRateLimiters;
@@ -66,6 +73,7 @@ export type AuthRouteContext = {
     twoFactorEnabled: boolean | null;
     twoFactorPendingSetup: boolean | null;
     twoFactorConfiguredAt: string | null;
+    createdAt: string | null;
     activatedAt: string | null;
     passwordChangedAt: string | null;
     lastLoginAt: string | null;
@@ -124,11 +132,22 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
     ...createAuthRouteRateLimiters(storage),
     ...deps.rateLimiters,
   };
+  const accountAvatarService = new AccountAvatarService({
+    authAccountService,
+    repository: new AccountAvatarRepository(runtimeConfig.app.uploadsRootDir),
+    storage,
+  });
 
   return {
     app,
     storage,
     authAccountService,
+    accountAvatarService,
+    async buildCurrentUserPayload(user) {
+      const payload = buildUserPayload(user);
+      if (!payload || !user) return null;
+      return { ...payload, avatarUrl: await accountAvatarService.getAvatarUrl(user) };
+    },
     authenticateToken,
     requireRole,
     rateLimiters,

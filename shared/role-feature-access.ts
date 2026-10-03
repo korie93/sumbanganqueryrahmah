@@ -11,6 +11,13 @@ export function normalizeRoleFeatureId(feature: string): string {
   return feature === "audit" ? "audit-logs" : feature;
 }
 
+export const MANDATORY_ROLE_HOME_DESCRIPTION = "Home is the required landing page for user accounts and cannot be disabled.";
+
+/** The user landing shell does not grant any of the datasets or modules inside it. */
+export function isMandatoryRoleHome(role: string | undefined, feature: string): boolean {
+  return role === "user" && normalizeRoleFeatureId(feature) === "home";
+}
+
 export function getRoleFeatureRestriction(role: string, feature: string): string | null {
   const id = normalizeRoleFeatureId(feature);
   if (!(ROLE_FEATURE_IDS as readonly string[]).includes(id)) return "Unknown feature.";
@@ -29,7 +36,7 @@ export function getRoleFeatureRestriction(role: string, feature: string): string
 }
 
 export function isRoleFeatureConfigurable(role: string, feature: string): boolean {
-  return role !== "superuser" && getRoleFeatureRestriction(role, feature) === null;
+  return role !== "superuser" && !isMandatoryRoleHome(role, feature) && getRoleFeatureRestriction(role, feature) === null;
 }
 
 export function canAccessRoleFeature(
@@ -39,6 +46,7 @@ export function canAccessRoleFeature(
 ): boolean {
   if (!role || getRoleFeatureRestriction(role, feature) !== null) return false;
   if (role === "superuser") return true;
+  if (isMandatoryRoleHome(role, feature)) return true;
   return tabs?.[normalizeRoleFeatureId(feature)] === true;
 }
 

@@ -15,11 +15,10 @@ test("navbar mobile trigger exposes the expanded state for assistive technology"
 
   assert.match(source, /aria-controls="mobile-navigation-drawer"/);
   assert.match(source, /getAriaExpandedProps\(mobileNavOpen\)/);
-  assert.match(source, /\{\.\.\.mobileNavTriggerExpandedProps\}/);
+  assert.doesNotMatch(source, /aria-expanded=\{[^}]+\}/);
   assert.doesNotMatch(source, /"aria-expanded": mobileNavOpen/);
   assert.doesNotMatch(source, /"aria-expanded": "true"/);
   assert.doesNotMatch(source, /"aria-expanded": "false"/);
-  assert.doesNotMatch(source, /aria-expanded=\{[^}]+\}/);
   assert.match(source, /aria-haspopup="dialog"/);
 });
 

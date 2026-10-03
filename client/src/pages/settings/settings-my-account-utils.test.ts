@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   buildNextCurrentUser,
@@ -78,4 +79,19 @@ test("canConfigureTwoFactor only allows admin and superuser", () => {
   assert.equal(canConfigureTwoFactor("admin"), true);
   assert.equal(canConfigureTwoFactor("superuser"), true);
   assert.equal(canConfigureTwoFactor("user"), false);
+  assert.equal(canConfigureTwoFactor("manager"), false);
+});
+
+test("2FA synchronization preserves current profile metadata and accepts authoritative avatar removal", () => {
+  const current = { ...createCurrentUser(), createdAt: "2026-01-01T00:00:00.000Z", avatarUrl: "/api/me/avatar?v=fixture" };
+  const next = buildNextCurrentUser(current, current.username, { user: { ...createCurrentUser(), twoFactorEnabled: true } });
+  assert.equal(next.avatarUrl, current.avatarUrl);
+  assert.equal(next.createdAt, current.createdAt);
+  assert.equal(next.twoFactorEnabled, true);
+  assert.equal(buildNextCurrentUser(current, current.username, { user: { ...current, avatarUrl: null } }).avatarUrl, null);
+});
+
+test("Security scopes profile synchronization to 2FA so response snapshots cannot roll back avatar fields", () => {
+  const source = readFileSync(new URL("./settings-my-account-utils.ts", import.meta.url), "utf8");
+  assert.match(source, /syncAccountProfile\(nextUser, "two-factor"\)/);
 });

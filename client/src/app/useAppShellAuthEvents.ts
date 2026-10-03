@@ -6,11 +6,9 @@ import {
 import { replaceHistory } from "@/app/routing";
 import type { User } from "@/app/types";
 import { persistAuthenticatedUser } from "@/lib/auth-session";
+import { mergeAccountProfile } from "@/lib/account-profile";
 
-type ProfileUpdatedDetail = {
-  username?: string;
-  role?: string;
-};
+type ProfileUpdatedDetail = User;
 
 type UseAppShellAuthEventsArgs = {
   applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
@@ -27,16 +25,11 @@ export function useAppShellAuthEvents({
     const onProfileUpdated = (event: Event) => {
       const detail = (event as CustomEvent<ProfileUpdatedDetail>).detail;
       if (!detail?.username || !detail?.role) return;
-      const username = detail.username;
-      const role = detail.role;
-
       setUser((previous) => {
-        if (!previous) {
-          const nextUser = { username, role };
-          persistAuthenticatedUser(nextUser);
-          return nextUser;
-        }
-        const nextUser = { ...previous, username, role };
+        // A late response from an old account must never recreate a logged-out
+        // session or overwrite the next account's state.
+        const nextUser = mergeAccountProfile(previous, detail);
+        if (!nextUser || nextUser === previous) return previous;
         persistAuthenticatedUser(nextUser);
         return nextUser;
       });

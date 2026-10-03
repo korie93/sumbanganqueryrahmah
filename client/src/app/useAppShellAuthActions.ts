@@ -26,6 +26,7 @@ import {
 import type { MonitorSection, User } from "@/app/types";
 import { clearNotificationHistory } from "@/hooks/use-notification-history";
 import { clearAppQueryCache } from "@/lib/query-client-runtime";
+import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 
 type UseAppShellAuthActionsArgs = {
   setCurrentPage: Dispatch<SetStateAction<string>>;
@@ -104,6 +105,16 @@ export function useAppShellAuthActions({
       return;
     }
 
+    if (loggedInUser.role === "user") {
+      const homePage = resolveAuthenticatedRoleHomePage(loggedInUser.role);
+      const storage = getBrowserLocalStorage();
+      setCurrentPage(homePage);
+      safeSetStorageItem(storage, "activeTab", homePage);
+      safeSetStorageItem(storage, "lastPage", homePage);
+      replaceHistory("/");
+      return;
+    }
+
     if (typeof window !== "undefined") {
       const resolvedRoute = resolveRouteFromLocation(
         window.location.pathname,
@@ -120,7 +131,7 @@ export function useAppShellAuthActions({
       }
     }
 
-    setCurrentPage(loggedInUser.role === "user" ? "general-search" : "home");
+    setCurrentPage(resolveAuthenticatedRoleHomePage(loggedInUser.role));
   }, [applyResolvedRoute, setCurrentPage, setUser]);
 
   return {

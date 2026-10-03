@@ -1,360 +1,234 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronRight, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react"
-import { useLocation } from "wouter"
-
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react";
+import { useLocation, useSearch } from "wouter";
 import {
-  getVisibleNavItems,
-  getVisibleNavigationGroups,
-  getVisiblePrimaryNavItems,
-  resolveNavigationTarget,
-  resolveActiveNavigationItemId,
-} from "@/app/navigation"
-import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefetch"
-import type { MonitorSection, TabVisibility } from "@/app/types"
-import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation"
-import { NavbarMobileNavigation } from "@/components/NavbarMobileNavigation"
-import { NavbarNotificationCenter } from "@/components/NavbarNotificationCenter"
-import { NavbarBrandCluster, NavbarUserMenuDropdown } from "@/components/NavbarParts"
+  getVisibleNavItems, getVisibleNavigationGroups, getVisiblePrimaryNavItems,
+  resolveNavigationTarget, resolveActiveNavigationItemId,
+} from "@/app/navigation";
+import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefetch";
+import type { MonitorSection, TabVisibility } from "@/app/types";
+import { NavbarCommandSearch } from "@/components/NavbarCommandSearch";
+import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation";
+import { NavbarMobileNavigation } from "@/components/NavbarMobileNavigation";
+import { NavbarNotificationCenter } from "@/components/NavbarNotificationCenter";
+import { NavbarBrandCluster, NavbarUserMenuDropdown } from "@/components/NavbarParts";
+import { useSidebarExpansion } from "@/components/useSidebarExpansion";
+import { useTheme } from "@/components/useTheme";
 import {
-  resolveNavbarActiveMobileItemId,
-  resolveNavbarShowHomeButton,
-} from "@/components/navbar-utils"
-import { useTheme } from "@/components/useTheme"
-import {
-  clearNotificationHistory,
-  markNotificationHistoryRead,
-  removeNotificationHistoryEntry,
+  clearNotificationHistory, markNotificationHistoryRead, removeNotificationHistoryEntry,
   useNotificationHistoryState,
-} from "@/hooks/use-notification-history"
-import { getAriaExpandedProps } from "@/lib/aria-state-props"
-import { translate } from "@/lib/i18n"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import "./Navbar.css"
+} from "@/hooks/use-notification-history";
+import { LARGE_UP_MEDIA_QUERY } from "@/lib/responsive";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
+import "./Navbar.css";
 
 interface NavbarProps {
-  currentPage: string
-  onNavigate: (page: string, importId?: string) => void
-  onLogout: () => void | Promise<void>
-  userRole: string
-  username: string
-  systemName?: string | undefined
-  savedCount?: number | undefined
-  tabVisibility?: TabVisibility | undefined
-  featureLockdown?: boolean | undefined
-  monitorSection?: MonitorSection | undefined
-  sidebarCollapsed?: boolean | undefined
-  onSidebarCollapsedChange?: ((collapsed: boolean) => void) | undefined
+  currentPage: string;
+  onNavigate: (page: string, importId?: string) => void;
+  onLogout: () => void | Promise<void>;
+  userRole: string;
+  username: string;
+  avatarUrl?: string | null | undefined;
+  systemName?: string | undefined;
+  savedCount?: number | undefined;
+  tabVisibility?: TabVisibility | undefined;
+  featureLockdown?: boolean | undefined;
+  monitorSection?: MonitorSection | undefined;
+  sidebarCollapsed?: boolean | undefined;
+  onSidebarCollapsedChange?: ((collapsed: boolean) => void) | undefined;
 }
+type UtilityLayer = "search" | "notification" | "profile-desktop" | "profile-mobile" | null;
 
 function NavbarImpl({
-  currentPage,
-  onNavigate,
-  onLogout,
-  userRole,
-  username,
-  systemName,
-  savedCount,
-  tabVisibility,
-  featureLockdown = false,
-  monitorSection,
-  sidebarCollapsed = false,
-  onSidebarCollapsedChange,
+  currentPage, onNavigate, onLogout, userRole, username, avatarUrl, systemName, savedCount,
+  tabVisibility, featureLockdown = false, monitorSection, sidebarCollapsed = false, onSidebarCollapsedChange,
 }: NavbarProps) {
-  const { theme, setTheme } = useTheme()
-  const [routerLocation] = useLocation()
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const notificationHistory = useNotificationHistoryState()
-  const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
-  const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
-  const mobileNavigationTriggerRef = useRef<HTMLButtonElement>(null)
-  const desktopNavigationTriggerRef = useRef<HTMLButtonElement>(null)
-  const navbarMountedRef = useRef(true)
-  const pendingFocusFramesRef = useRef<number[]>([])
+  const { theme, setTheme } = useTheme();
+  const [routerLocation] = useLocation();
+  const routerSearch = useSearch();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [utilityLayer, setUtilityLayer] = useState<UtilityLayer>(null);
+  const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia(LARGE_UP_MEDIA_QUERY).matches);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileNavigationTriggerRef = useRef<HTMLButtonElement>(null);
+  const desktopNavigationTriggerRef = useRef<HTMLButtonElement>(null);
+  const notificationHistory = useNotificationHistoryState();
+  const { afterExpansion, cancelExpansion } = useSidebarExpansion(sidebarCollapsed, onSidebarCollapsedChange, sidebarRef);
 
-  const directItems = useMemo(
-    () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
-    [featureLockdown, tabVisibility, userRole]
-  )
-  const groupedItems = useMemo(
-    () => getVisibleNavigationGroups(userRole, tabVisibility ?? null, featureLockdown),
-    [featureLockdown, tabVisibility, userRole]
-  )
-  const mobileItems = useMemo(
-    () => getVisibleNavItems(userRole, tabVisibility ?? null, featureLockdown),
-    [featureLockdown, tabVisibility, userRole]
-  )
+  const directItems = useMemo(() => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown), [featureLockdown, tabVisibility, userRole]);
+  const groupedItems = useMemo(() => getVisibleNavigationGroups(userRole, tabVisibility ?? null, featureLockdown), [featureLockdown, tabVisibility, userRole]);
+  const allItems = useMemo(() => getVisibleNavItems(userRole, tabVisibility ?? null, featureLockdown), [featureLockdown, tabVisibility, userRole]);
+  const mobileDirectItems = useMemo(() => allItems.filter((item) => item.id === "home" || directItems.some((direct) => direct.id === item.id)), [allItems, directItems]);
+  const showHomeButton = allItems.some((item) => item.id === "home");
+  const canAccessSettings = allItems.some((item) => item.id === "settings");
+  const activeNavigationItemId = useMemo(() => {
+    const queryIndex = routerLocation.indexOf("?");
+    return resolveActiveNavigationItemId(currentPage, {
+      monitorSection, pathname: queryIndex < 0 ? routerLocation : routerLocation.slice(0, queryIndex),
+      search: queryIndex < 0 ? routerSearch : routerLocation.slice(queryIndex),
+    });
+  }, [currentPage, monitorSection, routerLocation, routerSearch]);
+  const activeItem = allItems.find((item) => item.id === activeNavigationItemId);
+  const activeContext = currentPage === "account" ? "Account" : currentPage === "security" ? "Security" : activeItem?.title || activeItem?.label || systemName || "SQR Workspace";
 
-  const showHomeButton = useMemo(
-    () => resolveNavbarShowHomeButton(mobileItems),
-    [mobileItems]
-  )
-  const activeLocation = useMemo(() => {
-    const queryIndex = routerLocation.indexOf("?")
-    return queryIndex >= 0
-      ? {
-        pathname: routerLocation.slice(0, queryIndex),
-        search: routerLocation.slice(queryIndex),
-      }
-      : {
-        pathname: routerLocation,
-        search: "",
-      }
-  }, [routerLocation])
+  const closeLayers = useCallback(() => {
+    cancelExpansion();
+    setActiveGroup(null);
+    setUtilityLayer(null);
+  }, [cancelExpansion]);
 
   useEffect(() => {
-    setMobileNavOpen(false)
-  }, [activeLocation.pathname])
+    closeLayers();
+    setMobileNavOpen(false);
+  }, [closeLayers, currentPage, monitorSection, routerLocation, routerSearch]);
 
   useEffect(() => {
-    if (!mobileNavOpen) return
-    const desktop = window.matchMedia("(min-width: 1024px)")
-    const closeOnDesktop = () => {
-      if (desktop.matches) setMobileNavOpen(false)
-    }
-    closeOnDesktop()
-    desktop.addEventListener("change", closeOnDesktop)
-    return () => desktop.removeEventListener("change", closeOnDesktop)
-  }, [mobileNavOpen])
-
-  const activeNavigationItemId = useMemo(
-    () =>
-      resolveActiveNavigationItemId(currentPage, {
-        monitorSection,
-        pathname: activeLocation.pathname,
-        search: activeLocation.search,
-      }),
-    [activeLocation.pathname, activeLocation.search, currentPage, monitorSection]
-  )
-  const activeMobileItemId = useMemo(
-    () => resolveNavbarActiveMobileItemId(mobileItems, activeNavigationItemId),
-    [activeNavigationItemId, mobileItems]
-  )
-  const mobileNavTriggerExpandedProps = getAriaExpandedProps(mobileNavOpen)
-
-  const clearPendingUserMenuFocusFrames = useCallback(() => {
-    if (typeof window !== "undefined") {
-      for (const frameHandle of pendingFocusFramesRef.current) {
-        window.cancelAnimationFrame(frameHandle)
-      }
-    }
-    pendingFocusFramesRef.current = []
-  }, [])
+    if (activeGroup && !groupedItems.some((group) => group.id === activeGroup)) setActiveGroup(null);
+  }, [activeGroup, groupedItems]);
 
   useEffect(() => {
-    navbarMountedRef.current = true
-
+    const media = window.matchMedia(LARGE_UP_MEDIA_QUERY);
+    const changeViewport = () => {
+      setDesktop(media.matches);
+      closeLayers();
+      if (media.matches) setMobileNavOpen(false);
+    };
+    const resize = () => { closeLayers(); };
+    const cancelOutsideExpansion = (event: PointerEvent) => {
+      if (event.target instanceof Node && !sidebarRef.current?.contains(event.target)) cancelExpansion();
+    };
+    const cancelPendingOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancelExpansion();
+    };
+    media.addEventListener("change", changeViewport);
+    window.addEventListener("resize", resize);
+    document.addEventListener("pointerdown", cancelOutsideExpansion);
+    document.addEventListener("keydown", cancelPendingOnEscape);
     return () => {
-      navbarMountedRef.current = false
-      clearPendingUserMenuFocusFrames()
-    }
-  }, [clearPendingUserMenuFocusFrames])
+      media.removeEventListener("change", changeViewport);
+      window.removeEventListener("resize", resize);
+      document.removeEventListener("pointerdown", cancelOutsideExpansion);
+      document.removeEventListener("keydown", cancelPendingOnEscape);
+    };
+  }, [cancelExpansion, closeLayers]);
 
-  const scheduleUserMenuTriggerFocus = useCallback((focusTrigger: () => void) => {
-    clearPendingUserMenuFocusFrames()
-    if (typeof window === "undefined") {
-      if (navbarMountedRef.current) {
-        focusTrigger()
-      }
-      return
-    }
-
-    const frameHandle = window.requestAnimationFrame(() => {
-      pendingFocusFramesRef.current = pendingFocusFramesRef.current.filter(
-        (pendingFrameHandle) => pendingFrameHandle !== frameHandle
-      )
-      if (!navbarMountedRef.current) {
-        return
-      }
-      focusTrigger()
-    })
-    pendingFocusFramesRef.current.push(frameHandle)
-  }, [clearPendingUserMenuFocusFrames])
-
-  const focusDesktopUserMenuTrigger = useCallback(() => {
-    desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    scheduleUserMenuTriggerFocus(() => {
-      desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    })
-  }, [scheduleUserMenuTriggerFocus])
-
-  const focusMobileUserMenuTrigger = useCallback(() => {
-    mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    scheduleUserMenuTriggerFocus(() => {
-      mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    })
-  }, [scheduleUserMenuTriggerFocus])
-
-  const scheduleDesktopUserMenuTriggerFocus = useCallback(() => {
-    scheduleUserMenuTriggerFocus(() => {
-      desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    })
-  }, [scheduleUserMenuTriggerFocus])
-
-  const scheduleMobileUserMenuTriggerFocus = useCallback(() => {
-    scheduleUserMenuTriggerFocus(() => {
-      mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    })
-  }, [scheduleUserMenuTriggerFocus])
-
-  const restoreDesktopUserMenuFocus = useCallback((event: Event) => {
-    event.preventDefault()
-    focusDesktopUserMenuTrigger()
-  }, [focusDesktopUserMenuTrigger])
-
-  const restoreMobileUserMenuFocus = useCallback((event: Event) => {
-    event.preventDefault()
-    focusMobileUserMenuTrigger()
-  }, [focusMobileUserMenuTrigger])
-
-  const restoreMobileNavigationFocus = useCallback((event: Event) => {
-    event.preventDefault()
-    if (window.matchMedia("(min-width: 1024px)").matches) {
-      desktopNavigationTriggerRef.current?.focus({ preventScroll: true })
-    } else {
-      mobileNavigationTriggerRef.current?.focus({ preventScroll: true })
-    }
-  }, [])
-
-  const navigateToItem = useCallback(
-    (itemId: string) => {
-      onNavigate(resolveNavigationTarget(itemId))
-    },
-    [onNavigate]
-  )
+  const navigateToItem = useCallback((itemId: string) => {
+    closeLayers();
+    setMobileNavOpen(false);
+    if (desktop && sidebarCollapsed) onSidebarCollapsedChange?.(false);
+    onNavigate(resolveNavigationTarget(itemId));
+  }, [closeLayers, desktop, onNavigate, onSidebarCollapsedChange, sidebarCollapsed]);
   const prefetchItem = useCallback((itemId: string) => {
-    void prefetchNavigationTargetWithDiagnostics(resolveNavigationTarget(itemId), {
-      source: "navbar",
-      itemId,
-    })
-  }, [])
+    void prefetchNavigationTargetWithDiagnostics(resolveNavigationTarget(itemId), { source: "navbar", itemId });
+  }, []);
+  const changeGroup = useCallback((groupId: string | null, focusFirst = false) => {
+    if (!groupId) { setActiveGroup(null); cancelExpansion(); return; }
+    setUtilityLayer(null);
+    afterExpansion(() => {
+      setActiveGroup(groupId);
+      if (focusFirst && groupId === activeGroup) document.getElementById(`desktop-flyout-${groupId}`)?.querySelector<HTMLButtonElement>("button")?.focus();
+    });
+  }, [activeGroup, afterExpansion, cancelExpansion]);
+  const toggleSidebar = useCallback(() => {
+    closeLayers();
+    onSidebarCollapsedChange?.(!sidebarCollapsed);
+  }, [closeLayers, onSidebarCollapsedChange, sidebarCollapsed]);
+  const toggleTheme = useCallback(() => {
+    closeLayers();
+    setTheme(theme === "dark" ? "light" : "dark");
+  }, [closeLayers, setTheme, theme]);
+  const changeUtility = useCallback((layer: Exclude<UtilityLayer, null>, open: boolean) => {
+    if (!open) {
+      setUtilityLayer((current) => current === layer ? null : current);
+      cancelExpansion();
+      return;
+    }
+    closeLayers();
+    if (layer === "search") setMobileNavOpen(false);
+    if (layer === "profile-desktop") afterExpansion(() => setUtilityLayer(layer));
+    else setUtilityLayer(layer);
+  }, [afterExpansion, cancelExpansion, closeLayers]);
+  const changeMobileNav = useCallback((open: boolean) => {
+    closeLayers();
+    setMobileNavOpen(open);
+  }, [closeLayers]);
+  const restoreMobileNavigationFocus = useCallback((event: Event) => {
+    event.preventDefault();
+    if (window.matchMedia(LARGE_UP_MEDIA_QUERY).matches) desktopNavigationTriggerRef.current?.focus({ preventScroll: true });
+    else mobileNavigationTriggerRef.current?.focus({ preventScroll: true });
+  }, []);
+  const navigateProfile = useCallback((page: "account" | "security" | "settings") => {
+    closeLayers();
+    setMobileNavOpen(false);
+    onNavigate(page);
+  }, [closeLayers, onNavigate]);
 
-  const activeItem = mobileItems.find((item) => item.id === activeNavigationItemId)
-  const activeContext = activeItem?.title || activeItem?.label || systemName || "SQR Workspace"
+  const profile = (variant: "desktop" | "mobile") => (
+    <NavbarUserMenuDropdown variant={variant} open={utilityLayer === `profile-${variant}`}
+      onOpenChange={(open) => changeUtility(`profile-${variant}`, open)}
+      triggerRef={variant === "desktop" ? desktopUserMenuTriggerRef : mobileUserMenuTriggerRef}
+      username={username} userRole={userRole} collapsed={variant === "desktop" && sidebarCollapsed}
+      avatarUrl={avatarUrl} canAccessSettings={canAccessSettings} onAccount={() => navigateProfile("account")}
+      onSecurity={() => navigateProfile("security")} onSettings={() => navigateProfile("settings")} onLogout={onLogout} />
+  );
 
   return (
     <>
-      <aside className="workspace-sidebar" aria-label="Ruang kerja">
-          <NavbarBrandCluster
-            activeNavigationItemId={activeNavigationItemId}
-            showHomeButton={showHomeButton}
-            systemName={systemName}
-            onNavigate={navigateToItem}
-            onPrefetch={prefetchItem}
-            collapsed={sidebarCollapsed}
-          />
-          <NavbarDesktopNavigation
-            directItems={directItems}
-            groupedItems={groupedItems}
-            activeNavigationItemId={activeNavigationItemId}
-            savedCount={savedCount}
-            onNavigate={navigateToItem}
-            onPrefetch={prefetchItem}
-            collapsed={sidebarCollapsed}
-          />
-          <div className="workspace-sidebar-footer">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  ref={desktopNavigationTriggerRef}
-                  type="button"
-                  className="workspace-sidebar-toggle"
-                  aria-label={sidebarCollapsed ? "Kembangkan navigasi" : "Kecilkan navigasi"}
-                  {...getAriaExpandedProps(!sidebarCollapsed)}
-                  onClick={() => onSidebarCollapsedChange?.(!sidebarCollapsed)}
-                  data-testid="button-toggle-sidebar"
-                >
-                  {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
-                  <span className="workspace-sidebar-copy">Kecilkan navigasi</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">{sidebarCollapsed ? "Kembangkan navigasi" : "Kecilkan navigasi"}</TooltipContent>
-            </Tooltip>
-          </div>
+      <aside ref={sidebarRef} className="workspace-sidebar" aria-label="Workspace sidebar"
+        onClickCapture={(event) => {
+          if (sidebarCollapsed && event.target instanceof Element && !event.target.closest("button,a")) onSidebarCollapsedChange?.(false);
+        }}>
+        <NavbarBrandCluster activeNavigationItemId={activeNavigationItemId} showHomeButton={showHomeButton}
+          systemName={systemName} onNavigate={navigateToItem} onPrefetch={prefetchItem} collapsed={sidebarCollapsed}
+          collapseControl={<button ref={desktopNavigationTriggerRef} type="button" className="workspace-sidebar-toggle"
+            aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            {...getAriaExpandedProps(!sidebarCollapsed)} onClick={toggleSidebar} data-testid="button-toggle-sidebar">
+            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+          </button>} />
+        <NavbarDesktopNavigation directItems={directItems} groupedItems={groupedItems} activeNavigationItemId={activeNavigationItemId}
+          savedCount={savedCount} onNavigate={navigateToItem} onPrefetch={prefetchItem} collapsed={sidebarCollapsed}
+          activeGroup={activeGroup} onGroupChange={changeGroup} />
+        <div className="workspace-sidebar-footer">{profile("desktop")}</div>
       </aside>
       <header className="navbar-safe-area-shell workspace-topbar">
         <div className="workspace-topbar-inner">
           <div className="workspace-mobile-context">
-            <button
-              ref={mobileNavigationTriggerRef}
-              type="button"
-              className="nav-mobile-trigger"
-              aria-label={translate("common.navbar.mobileMenuLabel")}
-              aria-haspopup="dialog"
-              aria-controls="mobile-navigation-drawer"
-              {...mobileNavTriggerExpandedProps}
-              onClick={() => setMobileNavOpen(true)}
-              data-testid="button-open-mobile-nav"
-            >
+            <button ref={mobileNavigationTriggerRef} type="button" className="nav-mobile-trigger"
+              aria-label="Open navigation" aria-haspopup="dialog" aria-controls="mobile-navigation-drawer"
+              {...getAriaExpandedProps(mobileNavOpen)} onClick={() => changeMobileNav(true)} data-testid="button-open-mobile-nav">
               <Menu className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only">{translate("common.navbar.mobileMenuText")}</span>
             </button>
             <span className="workspace-context-current" title={activeContext}>{activeContext}</span>
           </div>
-
           <div className="workspace-desktop-context">
-            <span className="workspace-context-parent">Ruang kerja</span>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="workspace-context-current" title={activeContext}>{activeContext}</span>
           </div>
-
-          <div className="ml-auto flex shrink-0 items-center gap-1 lg:hidden">
-
-            <NavbarNotificationCenter
-              {...notificationHistory}
-              variant="mobile"
-              onClear={clearNotificationHistory}
-              onDismissEntry={removeNotificationHistoryEntry}
-              onMarkRead={markNotificationHistoryRead}
-            />
-
-            <NavbarUserMenuDropdown
-              variant="mobile"
-              triggerRef={mobileUserMenuTriggerRef}
-              username={username}
-              userRole={userRole}
-              theme={theme}
-              setTheme={setTheme}
-              onLogout={onLogout}
-              onCloseAutoFocus={restoreMobileUserMenuFocus}
-              onEscapeKeyDown={scheduleMobileUserMenuTriggerFocus}
-            />
+          <NavbarCommandSearch items={allItems} desktop={desktop} open={utilityLayer === "search"} onOpenChange={(open) => changeUtility("search", open)}
+            onNavigate={navigateToItem} theme={theme} onToggleTheme={toggleTheme}
+            sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
+          <div className="workspace-topbar-utilities">
+            <button type="button" className="nav-theme-trigger" data-testid="button-toggle-theme"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleTheme}>
+              {theme === "dark" ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+            </button>
+            <span className="workspace-utility-divider" aria-hidden="true" />
+            <NavbarNotificationCenter {...notificationHistory} variant={desktop ? "desktop" : "mobile"}
+              open={utilityLayer === "notification"} onOpenChange={(open) => changeUtility("notification", open)}
+              onClear={clearNotificationHistory} onDismissEntry={removeNotificationHistoryEntry} onMarkRead={markNotificationHistoryRead} />
           </div>
-        <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
-          <NavbarNotificationCenter
-            {...notificationHistory}
-            variant="desktop"
-            onClear={clearNotificationHistory}
-            onDismissEntry={removeNotificationHistoryEntry}
-            onMarkRead={markNotificationHistoryRead}
-          />
-
-          <NavbarUserMenuDropdown
-            variant="desktop"
-            triggerRef={desktopUserMenuTriggerRef}
-            username={username}
-            userRole={userRole}
-            theme={theme}
-            setTheme={setTheme}
-            onLogout={onLogout}
-            onCloseAutoFocus={restoreDesktopUserMenuFocus}
-            onEscapeKeyDown={scheduleDesktopUserMenuTriggerFocus}
-          />
         </div>
-      </div>
-
-      <NavbarMobileNavigation
-        onCloseAutoFocus={restoreMobileNavigationFocus}
-        open={mobileNavOpen}
-        onOpenChange={setMobileNavOpen}
-        mobileItems={mobileItems}
-        activeMobileItemId={activeMobileItemId}
-        savedCount={savedCount}
-        onNavigate={navigateToItem}
-        onPrefetch={prefetchItem}
-      />
-    </header>
+      </header>
+      <NavbarMobileNavigation open={mobileNavOpen} onOpenChange={changeMobileNav} onCloseAutoFocus={restoreMobileNavigationFocus}
+        directItems={mobileDirectItems} groupedItems={groupedItems} activeMobileItemId={activeNavigationItemId}
+        savedCount={savedCount} onNavigate={navigateToItem} onPrefetch={prefetchItem}
+        profile={profile("mobile")} profileOpen={utilityLayer === "profile-mobile"} />
     </>
-  )
+  );
 }
 
-export default memo(NavbarImpl)
+export default memo(NavbarImpl);

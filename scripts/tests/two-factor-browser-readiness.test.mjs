@@ -107,8 +107,9 @@ test("all actual successful login paths wait for the authenticated workspace, ex
   assert.match(source, /assert\.equal\(\(await finalVerified\)\.status\(\), 200,[^\n]*\);\s*(?:markPhase\([^\n]*\);\s*)?await waitForAuthenticatedWorkspace\(finalPage\);/);
 });
 
-test("Settings navigation waits for the authenticated shell before and after loading the protected route", () => {
+test("personal Security navigation waits for the authenticated shell before and after loading the protected route", () => {
   const settings = source.match(/async function settings\(target\) \{([\s\S]*?)\n  \}/)?.[1];
   assert.ok(settings, "Settings helper remains identifiable");
-  assert.match(settings, /await waitForAuthenticatedWorkspace\(target\);[\s\S]*await target\.goto\([\s\S]*await waitForAuthenticatedWorkspace\(target\);[\s\S]*getByRole\("button", \{ name: \/\^Security/);
+  assert.match(settings, /await waitForAuthenticatedWorkspace\(target\);[\s\S]*await target\.goto\(`\$\{baseUrl\}\/security`\);[\s\S]*await waitForAuthenticatedWorkspace\(target\);[\s\S]*getByTestId\("two-factor-settings"\)/);
+  assert.doesNotMatch(settings, /\/settings|Security.*click/);
 });

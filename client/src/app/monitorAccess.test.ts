@@ -6,8 +6,24 @@ import {
   canViewDashboardSection,
   canViewMonitorSection,
   getDefaultMonitorSection,
+  getDefaultPageForRole,
+  isSuperuserFeatureOffMode,
   isPageEnabled,
 } from "./monitorAccess";
+
+test("user Home remains the landing shell without granting disabled data modules", () => {
+  const tabs = { home: false, "general-search": true, "collection-report": false, dashboard: false };
+  assert.equal(getDefaultPageForRole("user", tabs, true), "home");
+  assert.equal(isPageEnabled("user", "home", tabs, true), true);
+  assert.equal(isSuperuserFeatureOffMode("user", tabs, true), false);
+  assert.equal(isPageEnabled("user", "collection-report", tabs, true), false);
+  assert.equal(isPageEnabled("user", "dashboard", tabs, true), false);
+  assert.equal(isPageEnabled("user", "home", null, false), false);
+  assert.equal(isPageEnabled("user", "home", null, true), true);
+  assert.equal(isPageEnabled("user", "collection-report", null, true), false);
+  assert.equal(isPageEnabled("admin", "home", tabs, true), false);
+  assert.equal(isPageEnabled("manager", "home", tabs, true), false);
+});
 
 test("manager can open dashboard and analysis without gaining monitor or audit access", () => {
   const tabs = {

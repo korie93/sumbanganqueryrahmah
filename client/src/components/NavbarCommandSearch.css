@@ -1,0 +1,75 @@
+.workspace-command-desktop {
+  position: relative;
+  flex: 0 1 26rem;
+  min-width: 12rem;
+  max-width: 26rem;
+}
+
+.workspace-command-inline {
+  position: relative;
+  overflow: visible;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-control);
+  background: hsl(var(--muted) / 0.3);
+}
+
+.workspace-command-inline [cmdk-input-wrapper] { border: 0; }
+.workspace-command-inline [cmdk-input] { height: 36px; padding-right: 3.5rem; }
+.workspace-command-shortcut {
+  position: absolute;
+  right: var(--spacing-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: hsl(var(--muted-foreground));
+  font-size: var(--font-size-xs);
+  pointer-events: none;
+}
+
+.workspace-command-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: var(--z-popover);
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-control);
+  background: hsl(var(--popover));
+  box-shadow: 0 4px 12px hsl(var(--foreground) / 0.06);
+}
+
+.workspace-command-results { max-height: min(26rem, calc(100svh - 8rem)); overscroll-behavior: contain; }
+.workspace-command-results [cmdk-item] { gap: var(--spacing-3); padding: var(--spacing-3); font-size: var(--font-size-sm); cursor: pointer; }
+.workspace-command-results [cmdk-item] span { overflow-wrap: anywhere; }
+.workspace-command-mobile-trigger {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  color: hsl(var(--muted-foreground));
+}
+.workspace-command-mobile-trigger:hover { color: hsl(var(--foreground)); background: hsl(var(--accent)); }
+.workspace-command-mobile-trigger:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+
+@media (max-width: 1023px) {
+  .workspace-command-sheet {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    max-height: calc(100svh - var(--spacing-6));
+    transform: none;
+    gap: var(--spacing-3);
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    padding: 0 0 max(var(--spacing-3), var(--safe-area-inset-bottom));
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-command-sheet, .workspace-command-results * { animation: none; transition: none; }
+}

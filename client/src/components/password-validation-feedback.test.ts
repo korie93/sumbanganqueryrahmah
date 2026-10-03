@@ -7,7 +7,7 @@ import { PasswordConfirmationFeedback, getPasswordConfirmationFeedback } from ".
 import { PasswordStrengthMeter } from "./PasswordStrengthMeter";
 import { isCredentialPasswordPolicyCompliant, getCredentialPasswordValidationIssues } from "@shared/password-policy";
 import { CollectionNicknameDialogStepFields } from "../pages/collection-report/CollectionNicknameDialogStepFields";
-import { MyAccountSecurityCard } from "../pages/settings/MyAccountSecurityCard";
+import { PersonalSecurityForm } from "../pages/security/PersonalSecurityForm";
 
 // These node:test assertions inspect markup, not styling. The actual stylesheet
 // is exercised by the browser contract; Node's ESM loader cannot evaluate CSS.
@@ -121,23 +121,23 @@ test("2FA setup renders a local QR with secondary manual fallback without secret
   const props = {
     confirmPasswordInput: "", confirmPasswordError: null, currentPasswordInput: "", currentPasswordError: null,
     currentUserRole: "admin", newPasswordInput: "", newPasswordError: null,
-    onDisableTwoFactor() {}, onEnableTwoFactor() {}, onChangePassword() {}, onChangeUsername() {},
+    onDisableTwoFactor() {}, onEnableTwoFactor() {}, onChangePassword() {},
     onConfirmPasswordBlur() {}, onConfirmPasswordInputChange() {}, onCurrentPasswordBlur() {}, onCurrentPasswordInputChange() {},
     onNewPasswordBlur() {}, onNewPasswordInputChange() {}, onStartTwoFactorSetup() {}, onTwoFactorCodeBlur() {},
-    onTwoFactorCodeInputChange() {}, onTwoFactorPasswordBlur() {}, onTwoFactorPasswordInputChange() {}, onUsernameBlur() {}, onUsernameInputChange() {},
+    onTwoFactorCodeInputChange() {}, onTwoFactorPasswordBlur() {}, onTwoFactorPasswordInputChange() {},
     passwordSaving: false, twoFactorCodeError: null, twoFactorCodeInput: "", twoFactorEnabled: false, twoFactorLoading: false,
     twoFactorPasswordError: null, twoFactorPasswordInput: "", twoFactorPendingSetup: true, twoFactorSetupAccountName: "operator",
     twoFactorSetupIssuer: "SQR", twoFactorSetupSecret: "TESTONLY", twoFactorSetupUri: "otpauth://totp/SQR:operator?secret=TESTONLY&algorithm=SHA256&digits=6&period=30",
-    usernameError: null, usernameInput: "operator", usernameSaving: false,
+    passwordExpanded: false, onPasswordExpandedChange() {}, onClearPassword() {},
   };
-  const markup = renderToStaticMarkup(createElement(MyAccountSecurityCard, props));
+  const markup = renderToStaticMarkup(createElement(PersonalSecurityForm, props));
   assert.match(markup, /data-testid="two-factor-qr"/);
   assert.match(markup, /Imbas kod QR SQR dengan aplikasi pengesah/);
   assert.match(markup, /Papar kunci persediaan/);
   assert.doesNotMatch(markup, /value="TESTONLY"/);
   assert.match(markup, /masa telefon ditetapkan secara automatik/);
   assert.doesNotMatch(markup, /(?:src|href)="https?:\/\/[^\"]*(?:TESTONLY|secret=)/);
-  const invalid = renderToStaticMarkup(createElement(MyAccountSecurityCard, { ...props, twoFactorSetupUri: "" }));
+  const invalid = renderToStaticMarkup(createElement(PersonalSecurityForm, { ...props, twoFactorSetupUri: "" }));
   assert.match(invalid, /Tetapan aplikasi tidak lengkap/);
   assert.doesNotMatch(invalid, /data-testid="two-factor-qr"/);
   assert.doesNotMatch(invalid, /Sahkan dan aktifkan 2FA/);

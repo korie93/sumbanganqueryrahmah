@@ -54,3 +54,11 @@ test("settings bootstrap seed keeps admin editable allowlist intentional", () =>
   assert.equal(ADMIN_EDITABLE_SETTING_KEYS.has("jwt_expiry_hours"), false);
   assert.equal(ADMIN_EDITABLE_SETTING_KEYS.has("activity_auto_cleanup_enabled"), false);
 });
+
+test("settings bootstrap seeds user Home enabled without enabling user analytics", () => {
+  const seed = buildSettingsSeedItems();
+  const home = seed.find((setting) => setting.key === roleTabSettingKey("user", "home"));
+  assert.equal(home?.value, "true");
+  assert.equal(home?.defaultValue, "true");
+  assert.equal(seed.find((setting) => setting.key === roleTabSettingKey("user", "dashboard"))?.value, "false");
+});

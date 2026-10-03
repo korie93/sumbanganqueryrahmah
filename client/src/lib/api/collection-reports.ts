@@ -1,5 +1,6 @@
 import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
+import type { CollectionDashboardSummaryContract } from "@shared/api-contracts";
 import type {
   CollectionMonthlyComparisonResponse,
   CollectionMonthlyTargetResponse,
@@ -14,9 +15,18 @@ import {
   collectionNicknameSummaryResponseSchema,
 } from "@shared/api-contracts";
 
-export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string | undefined; nicknames?: string[] | undefined }) {
+export async function getCollectionMonthlySummary(filters: {
+  year: number;
+  nickname?: string | undefined;
+  nicknames?: string[] | undefined;
+  dashboardMonth?: number | undefined;
+}, options?: { signal?: AbortSignal | undefined; timeoutMs?: number | undefined }) {
   const params = new URLSearchParams();
   params.set("year", String(filters.year));
+  if (filters.dashboardMonth !== undefined) {
+    params.set("includeDashboard", "1");
+    params.set("month", String(filters.dashboardMonth));
+  }
   const nicknameList = Array.isArray(filters.nicknames)
     ? filters.nicknames.map((value) => String(value || "").trim()).filter(Boolean)
     : [];
@@ -26,7 +36,7 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
   if (filters.nickname && filters.nickname.trim()) {
     params.set("nickname", filters.nickname.trim());
   }
-  const response = await apiRequest("GET", `/api/collection/summary?${params.toString()}`);
+  const response = await apiRequest("GET", `/api/collection/summary?${params.toString()}`, undefined, options);
   return parseApiJson(
     response,
     collectionMonthlySummaryResponseSchema,
@@ -36,6 +46,7 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
     year: number;
     summary: CollectionMonthlySummary[];
     freshness?: CollectionReportFreshness;
+    dashboard?: CollectionDashboardSummaryContract;
   }>;
 }
 

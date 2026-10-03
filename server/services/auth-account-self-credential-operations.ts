@@ -1,4 +1,4 @@
-import { buildCredentialAuditDetails, normalizeUsernameInput } from "../auth/credentials";
+import { buildCredentialAuditDetails } from "../auth/credentials";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import type { PostgresStorage } from "../storage-postgres";
 import { assertStrongPasswordInput } from "./auth-account-token-utils";
@@ -114,35 +114,10 @@ export class AuthAccountSelfCredentialOperations {
     };
   }
 
-  async changeOwnUsername(actor: AuthAccountUser, newUsernameRaw: string) {
-    const newUsername = normalizeUsernameInput(newUsernameRaw);
-    const previousUsername = actor.username;
-
-    this.deps.validateUsername(newUsername);
-    await this.deps.ensureUniqueIdentity({ username: newUsername, ignoreUserId: actor.id });
-
-    if (newUsername === previousUsername) {
-      return actor;
-    }
-
-    const updatedUser = await this.deps.storage.updateUserCredentials({
-      userId: actor.id,
-      newUsername,
-    });
-
-    await this.deps.storage.updateActivitiesUsername(previousUsername, newUsername);
-    await this.deps.storage.createAuditLog({
-      action: "USER_USERNAME_CHANGED",
-      performedBy: actor.id,
-      targetUser: actor.id,
-      details: buildCredentialAuditDetails({
-        actor_user_id: actor.id,
-        target_user_id: actor.id,
-        changedField: "username",
-      }),
-    });
-
-    return updatedUser ?? actor;
+  async changeOwnUsername(_actor: AuthAccountUser, _newUsernameRaw: string): Promise<AuthAccountUser> {
+    // Keep the legacy service entry point fail-closed. Administrative Account
+    // Management owns identity changes; the personal account page is read-only.
+    throw new AuthAccountError(403, ERROR_CODES.PERMISSION_DENIED, "Username is read-only. Contact an administrator for account changes.");
   }
 
   async updateOwnCredentials(actor: AuthAccountUser, input: UpdateOwnCredentialsInput) {
@@ -167,7 +142,8 @@ export class AuthAccountSelfCredentialOperations {
     let closedSessionIds: string[] = [];
 
     if (input.hasUsernameField) {
-      updatedUser = await this.changeOwnUsername(updatedUser, input.newUsername ?? "");
+      // Reject mixed username/password payloads before writing either field.
+      await this.changeOwnUsername(updatedUser, input.newUsername ?? "");
     }
 
     if (input.hasPasswordField) {

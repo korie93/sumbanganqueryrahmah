@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { getRoleFeatureRestriction, parseRoleFeatureSettingKey } from "../../shared/role-feature-access";
+import {
+  getRoleFeatureRestriction,
+  isMandatoryRoleHome,
+  MANDATORY_ROLE_HOME_DESCRIPTION,
+  parseRoleFeatureSettingKey,
+} from "../../shared/role-feature-access";
 import { db } from "../db-postgres";
 import { getRequestIdFromContext } from "../lib/request-context";
 import type { SystemSettingItem } from "../config/system-settings";
@@ -29,6 +34,9 @@ export async function updateRolePermissions(input: RolePermissionUpdateInput): P
   for (const update of input.updates) {
     const parsed = parseRoleFeatureSettingKey(update.key);
     if (!parsed) return { status: "invalid", message: "Unknown role permission key." };
+    if (isMandatoryRoleHome(parsed.role, parsed.feature)) {
+      return { status: "forbidden", message: MANDATORY_ROLE_HOME_DESCRIPTION };
+    }
     const restriction = getRoleFeatureRestriction(parsed.role, parsed.feature);
     if (restriction) return { status: "forbidden", message: restriction };
     const value = normalizeSettingValue("boolean", update.value);

@@ -23,7 +23,18 @@ test("ChangePassword ignores stale or aborted submit completions", () => {
   assert.match(source, /mountedRef\.current && requestId === changePasswordRequestIdRef\.current/);
 });
 
-test("ChangePassword aborts active submit controllers on unmount and logout", () => {
-  assert.match(source, /changePasswordAbortControllerRef\.current\?\.abort\("unmount"\)/);
-  assert.match(source, /changePasswordAbortControllerRef\.current\?\.abort\("logout"\)/);
+test("ChangePassword aborts on unmount while the profile menu owns real session logout", () => {
+  assert.match(source, /mountedRef\.current = false;\s*changePasswordRequestIdRef\.current \+= 1;\s*changePasswordAbortControllerRef\.current\?\.abort\("unmount"\);\s*changePasswordAbortControllerRef\.current = null;/);
+  assert.match(source, /window\.clearTimeout\(redirectTimeoutRef\.current\)/);
+  assert.doesNotMatch(source, /handleLogout|clearAuthenticatedUserStorage|Log Keluar|<LogOut/);
+
+  const readApp = (name: string) => readFileSync(path.resolve(process.cwd(), "client/src/app", name), "utf8");
+  const shell = readApp("AuthenticatedAppShell.tsx");
+  const forcedBranch = shell.slice(shell.indexOf("if (user.mustChangePassword)"), shell.indexOf("<AIProvider>"));
+  assert.match(forcedBranch, /<NavbarUserMenuDropdown[\s\S]*onLogout=\{onLogout\}/);
+  assert.match(forcedBranch, /<ChangePasswordPage forced username=\{user.username\}/);
+  assert.match(readApp("AuthenticatedAppEntry.tsx"), /onLogout=\{handleLogout\}/);
+  assert.match(readApp("useAuthenticatedAppState.ts"), /handleLogout = useCallback\(async \(\) => \{[\s\S]*await performAppLogout/);
+  assert.match(readApp("logout-flow.ts"), /await activityLogout\(activityId\)/);
+  assert.match(readApp("logout-flow.ts"), /finally \{\s*performClientLogout\(/);
 });

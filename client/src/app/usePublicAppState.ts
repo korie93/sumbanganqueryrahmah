@@ -24,6 +24,7 @@ import {
   setBannedSessionFlag,
 } from "@/lib/auth-session";
 import { shouldRedirectForMaintenance } from "@/app/maintenance-client-policy";
+import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 
 type PublicBootstrapState = {
   currentPage: string;
@@ -101,20 +102,20 @@ export function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user:
     };
   }
 
+  // A user entering through login starts at Home, not a previously saved module.
+  if (user.role === "user") {
+    return {
+      currentPage: resolveAuthenticatedRoleHomePage(user.role),
+      monitorSection: "monitor" as MonitorSection,
+    };
+  }
+
   if (savedPage === "backup") {
     safeSetStorageItem(storage, "activeTab", "settings");
     safeSetStorageItem(storage, "lastPage", "settings");
     replaceHistory("/settings?section=backup-restore");
     return {
       currentPage: "settings",
-      monitorSection: "monitor" as MonitorSection,
-    };
-  }
-
-  if (user.role === "user") {
-    const nextPage = savedPage === "settings" ? "settings" : "general-search";
-    return {
-      currentPage: nextPage,
       monitorSection: "monitor" as MonitorSection,
     };
   }
@@ -188,7 +189,11 @@ export function usePublicAppState() {
     const route = typeof window !== "undefined"
       ? resolveRouteFromLocation(window.location.pathname, window.location.search)
       : null;
-    const nextState = resolveAuthenticatedEntryPage(route, loggedInUser);
+    // Fresh user logins always start at Home; restoring an existing session
+    // still preserves a deliberately opened authenticated deep link.
+    const nextState = resolveAuthenticatedEntryPage(
+      loggedInUser.role === "user" ? { page: "login" } : route, loggedInUser,
+    );
 
     setUser(loggedInUser);
     setCurrentPage(nextState.currentPage);
@@ -206,7 +211,7 @@ export function usePublicAppState() {
       return;
     }
 
-    if (route && !isPublicAuthRoutePage(route.page)) {
+    if (loggedInUser.role !== "user" && route && !isPublicAuthRoutePage(route.page)) {
       if (route.normalizedPath) {
         replaceHistory(route.normalizedPath);
       }
@@ -279,6 +284,11 @@ export function usePublicAppState() {
           username,
           fullName: me.fullName ?? null,
           email: me.email ?? null,
+          createdAt: me.createdAt ?? null,
+          avatarUrl: me.avatarUrl ?? null,
+          twoFactorEnabled: me.twoFactorEnabled,
+          twoFactorPendingSetup: me.twoFactorPendingSetup,
+          twoFactorConfiguredAt: me.twoFactorConfiguredAt ?? null,
           role,
           status: me.status,
           mustChangePassword: forcePasswordChange || Boolean(me.mustChangePassword),
@@ -292,6 +302,12 @@ export function usePublicAppState() {
         setUser(nextUser);
         setCurrentPage(nextState.currentPage);
         setMonitorSection(nextState.monitorSection);
+        if (!nextUser.mustChangePassword && bootstrap.resolvedRoute?.normalizedPath) {
+          replaceHistory(bootstrap.resolvedRoute.normalizedPath);
+        } else if (nextUser.role === "user" && bootstrap.resolvedRoute
+          && isPublicAuthRoutePage(bootstrap.resolvedRoute.page)) {
+          replaceHistory(buildPathForPage(nextState.currentPage));
+        }
       } catch {
         if (!cancelled) {
           clearAuthenticatedUserStorage();

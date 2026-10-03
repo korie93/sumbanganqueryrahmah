@@ -12,7 +12,7 @@ export const roleNavigation = {
   manager: ["home", "import", "general-search", "collection-report", "analysis", "dashboard"],
   // Existing canViewSystemPerformance defaults false and gates admin monitor.
   admin: ["home", "import", "saved", "viewer", "general-search", "collection-report", "analysis", "settings"],
-  user: ["general-search", "collection-report"],
+  user: ["home", "general-search", "collection-report"],
 };
 
 export function resolveRedesignRoleChecksEnabled(env = {}) {
@@ -69,6 +69,10 @@ async function login(page, baseUrl, account, role) {
   const session = await api(page, baseUrl, "GET", "/api/me");
   assert.equal(session.user?.username, account.username);
   assert.equal(session.user?.role, role, "Role proof comes from actual authenticated /api/me, not localStorage");
+  if (role === "user") {
+    await page.getByTestId("home-dashboard").waitFor();
+    assert.equal(new URL(page.url()).pathname, "/", "User login starts at the mandatory Home page");
+  }
   return session.user;
 }
 
@@ -82,11 +86,26 @@ async function verifyNavigation(page, baseUrl, role, width, capture) {
   for (const id of Object.keys(labels)) assert.equal(visibility.tabs[id] === true, expected.includes(id), `${role} fresh ${id} permission`);
   if (width < 1024) {
     await page.getByTestId("button-open-mobile-nav").click();
-    const nav = page.getByRole("navigation", { name: "Navigasi mudah alih", exact: true });
+    const nav = page.getByRole("navigation", { name: "Mobile navigation", exact: true });
     await nav.waitFor();
-    assert.equal(await nav.getByRole("button").count(), expected.length);
-    for (const id of Object.keys(labels)) assert.equal(await nav.getByRole("button", { name: new RegExp(`^${labels[id]}(?:\\s|$)`) }).count(), expected.includes(id) ? 1 : 0, `${role} mobile ${id} visibility`);
+    for (const [group, ids] of [["workspace", ["import", "saved", "viewer"]], ["insights", ["dashboard", "activity", "monitor", "analysis", "audit-logs"]], ["settings-menu", ["settings", "backup"]]]) {
+      const trigger = page.getByTestId(`mobile-nav-group-${group}`);
+      const visible = ids.filter((id) => expected.includes(id));
+      assert.equal(await trigger.count(), visible.length ? 1 : 0, `${role} mobile ${group} group visibility`);
+      if (!visible.length) continue;
+      await trigger.click();
+      const submenu = page.getByTestId(`mobile-submenu-${group}`);
+      await submenu.waitFor();
+      assert.equal(await submenu.getByRole("button").count(), visible.length);
+      for (const id of ids) assert.equal(await submenu.getByTestId(`mobile-nav-${id}`).count(), visible.includes(id) ? 1 : 0, `${role} mobile ${id} visibility`);
+    }
+    for (const id of ["home", "general-search", "collection-report"]) assert.equal(await nav.getByTestId(`mobile-nav-${id}`).count(), expected.includes(id) ? 1 : 0, `${role} mobile primary ${id}`);
     await capture("navigation-mobile");
+    if (await nav.locator('[data-testid^="mobile-submenu-"]').count()) {
+      await page.keyboard.press("Escape");
+      assert.equal(await nav.locator('[data-testid^="mobile-submenu-"]').count(), 0, "First Escape closes the active inline group");
+      assert.equal(await nav.isVisible(), true, "The drawer remains open after closing its group");
+    }
     await page.keyboard.press("Escape");
     await nav.waitFor({ state: "hidden" });
   } else {
@@ -97,10 +116,10 @@ async function verifyNavigation(page, baseUrl, role, width, capture) {
       assert.equal(await trigger.count(), visible.length ? 1 : 0, `${role} ${group} group visibility`);
       if (!visible.length) continue;
       await trigger.click();
-      const menu = page.getByRole("menu");
+      const menu = page.getByTestId(`desktop-flyout-${group}`);
       await menu.waitFor();
-      assert.equal(await menu.getByRole("menuitem").count(), visible.length);
-      for (const id of ids) assert.equal(await menu.getByRole("menuitem", { name: new RegExp(`^${labels[id]}(?:\\s|$)`) }).count(), visible.includes(id) ? 1 : 0, `${role} ${id} menu visibility`);
+      assert.equal(await menu.getByRole("button").count(), visible.length);
+      for (const id of ids) assert.equal(await menu.getByTestId(`flyout-nav-${id}`).count(), visible.includes(id) ? 1 : 0, `${role} ${id} navigation visibility`);
       await capture(`navigation-${group}`);
       await page.keyboard.press("Escape");
     }
@@ -112,7 +131,7 @@ async function verifyNavigation(page, baseUrl, role, width, capture) {
     try {
       await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded" });
       if (route.startsWith("/monitor")) await page.getByRole("heading", { name: "403 Forbidden", exact: true }).waitFor();
-      else await page.getByTestId(role === "user" ? "input-search" : "card-general-search").waitFor();
+      else await page.getByTestId("home-dashboard").waitFor();
     } catch (error) { error.roleStep = `guard ${route}`; throw error; }
   }
   await capture("guarded-route");

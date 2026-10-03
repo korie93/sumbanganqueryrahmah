@@ -84,6 +84,28 @@ test("getCollectionMonthlySummary rejects malformed amount payloads", async () =
   }
 });
 
+test("Home summary opts into authorized dashboard data and forwards cancellation without changing legacy defaults", async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  let requestUrl = "";
+  let requestSignal: AbortSignal | null | undefined;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestUrl = String(input);
+    requestSignal = init?.signal;
+    return new Response(JSON.stringify({
+      ok: true, year: 2026, summary: [{ month: 10, monthName: "October", totalRecords: 1, totalAmount: 10 }],
+      dashboard: { month: 10, scopeLabel: "Your authorized Collection scope", canViewLeaderBreakdown: false, leaders: [], unassignedAmount: 0 },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const result = await getCollectionMonthlySummary({ year: 2026, dashboardMonth: 10 }, { signal: controller.signal });
+    assert.equal(result.dashboard?.canViewLeaderBreakdown, false);
+    assert.deepEqual(result.dashboard?.leaders, []);
+    assert.match(requestUrl, /\/api\/collection\/summary\?year=2026&includeDashboard=1&month=10$/);
+    assert.equal(requestSignal, controller.signal);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("getCollectionNicknameSummary forwards query params and AbortSignal", async () => {
   const requests: Array<{ input: string; signal: AbortSignal | null }> = [];
   const originalFetch = globalThis.fetch;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { KeyRound, LogOut } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
 import { PasswordInput } from "@/components/PasswordInput";
@@ -11,7 +11,6 @@ import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
   broadcastForcedLogout,
-  clearAuthenticatedUserStorage,
   setStoredForcePasswordChange,
 } from "@/lib/auth-session";
 import {
@@ -60,18 +59,6 @@ export default function ChangePasswordPage({
       }
     };
   }, []);
-
-  const handleLogout = () => {
-    changePasswordRequestIdRef.current += 1;
-    changePasswordAbortControllerRef.current?.abort("logout");
-    changePasswordAbortControllerRef.current = null;
-    if (redirectTimeoutRef.current) {
-      window.clearTimeout(redirectTimeoutRef.current);
-      redirectTimeoutRef.current = null;
-    }
-    clearAuthenticatedUserStorage();
-    navigate("/");
-  };
 
   const handleSubmit = async () => {
     const requestId = ++changePasswordRequestIdRef.current;
@@ -331,14 +318,6 @@ export default function ChangePasswordPage({
         {loading ? "Sedang mengemas kini..." : "Kemas Kini Kata Laluan"}
       </PublicAuthButton>
 
-      <PublicAuthButton
-        type="button"
-        variant="ghost"
-        onClick={handleLogout}
-      >
-        <LogOut className="mr-2 h-4 w-4" />
-        Log Keluar
-      </PublicAuthButton>
     </PublicAuthLayout>
   );
 }

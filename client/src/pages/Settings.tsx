@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { useSearch } from "wouter";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import { replaceHistory } from "@/app/routing";
@@ -22,11 +23,6 @@ type SettingsPageProps = {
 };
 
 const BackupRestore = lazy(() => import("@/pages/BackupRestore"));
-const AccountSecuritySection = lazy(() =>
-  import("@/pages/settings/AccountSecuritySection").then((module) => ({
-    default: module.AccountSecuritySection,
-  })),
-);
 const SettingsRoleSections = lazy(() =>
   import("@/pages/settings/SettingsRoleSections").then((module) => ({
     default: module.SettingsRoleSections,
@@ -67,13 +63,14 @@ export default function SettingsPage({
 }: SettingsPageProps) {
   const isMobile = useIsMobile();
   const storage = getBrowserLocalStorage();
+  const search = useSearch();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const requestedSection = useMemo(() => {
     if (typeof window === "undefined") return initialSectionId;
-    const sectionFromUrl = new URLSearchParams(window.location.search).get("section");
+    const sectionFromUrl = new URLSearchParams(search).get("section");
     return sectionFromUrl || initialSectionId || safeGetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY) || undefined;
-  }, [initialSectionId, storage]);
+  }, [initialSectionId, search, storage]);
 
   const controller = useSettingsController({
     initialSectionId: requestedSection,
@@ -162,13 +159,7 @@ export default function SettingsPage({
                     <Suspense fallback={<SettingsSectionFallback label="Loading backup tools..." />}>
                       <BackupRestore userRole={controller.currentUserRole} embedded />
                     </Suspense>
-                  ) : controller.isSecurityCategory &&
-                    controller.canAccessAccountSecurity &&
-                    controller.security ? (
-                      <Suspense fallback={<SettingsSectionFallback label="Loading account security..." />}>
-                        <AccountSecuritySection {...controller.security} />
-                      </Suspense>
-                    ) : controller.isAccountManagementCategory ? (
+                  ) : controller.isAccountManagementCategory ? (
                       <Suspense fallback={<SettingsSectionFallback label="Loading account management..." />}>
                         <SettingsAccountManagementBoundary
                           confirmCriticalOpen={controller.criticalSaveDialog.confirmCriticalOpen}

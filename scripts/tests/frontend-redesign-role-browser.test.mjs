@@ -16,7 +16,7 @@ test("role checks are strictly opt-in and reject remote or arbitrary account inp
 });
 
 test("actual default navigation expectations preserve protected role boundaries", () => {
-  assert.deepEqual(roleNavigation.user, ["general-search", "collection-report"]);
+  assert.deepEqual(roleNavigation.user, ["home", "general-search", "collection-report"]);
   assert.ok(roleNavigation.admin.includes("settings") && !roleNavigation.manager.includes("settings"));
   assert.ok(!roleNavigation.admin.includes("monitor"), "Admin monitor additionally requires the existing System Performance capability");
   for (const role of ["manager", "admin", "user"]) assert.ok(!roleNavigation[role].includes("backup") && !roleNavigation[role].includes("audit-logs"));

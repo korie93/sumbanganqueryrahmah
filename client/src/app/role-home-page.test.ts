@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveAuthenticatedRoleHomePage } from "./role-home-page";
 
-test("resolveAuthenticatedRoleHomePage sends unknown roles to the general search workspace", () => {
-  assert.equal(resolveAuthenticatedRoleHomePage("user"), "general-search");
+test("every supported role lands on Home while unknown roles keep their restricted fallback", () => {
+  assert.equal(resolveAuthenticatedRoleHomePage("user"), "home");
   assert.equal(resolveAuthenticatedRoleHomePage("admin"), "home");
   assert.equal(resolveAuthenticatedRoleHomePage("manager"), "home");
   assert.equal(resolveAuthenticatedRoleHomePage("superuser"), "home");

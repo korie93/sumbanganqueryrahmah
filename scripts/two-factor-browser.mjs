@@ -141,16 +141,13 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     return body;
   }
   async function settings(target) {
-    markPhase("settings: login completion");
+    markPhase("security: login completion");
     await waitForAuthenticatedWorkspace(target);
-    markPhase("settings: navigation");
-    await target.goto(`${baseUrl}/settings`);
-    markPhase("settings: restored authenticated workspace");
+    markPhase("security: navigation");
+    await target.goto(`${baseUrl}/security`);
+    markPhase("security: restored authenticated workspace");
     await waitForAuthenticatedWorkspace(target);
-    // Seeded category IDs are generated database IDs, not the display name.
-    markPhase("settings: security category");
-    await target.getByRole("button", { name: /^Security(?:\s|$)/ }).first().click();
-    markPhase("settings: 2FA panel");
+    markPhase("security: 2FA panel");
     await target.getByTestId("two-factor-settings").waitFor({ state: "visible" });
   }
   async function layout(state, target = page) {

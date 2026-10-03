@@ -88,6 +88,18 @@ const visualSearchRows = Array.from({ length: 3 }, (_, index) =>
   ),
 );
 
+test.use({ serviceWorkers: "block" });
+test.beforeEach(async ({ context, baseURL }) => {
+  const origin = new URL(baseURL!).origin;
+  expect(new URL(origin).protocol).toBe("http:");
+  expect(new URL(origin).hostname).toBe("127.0.0.1");
+  expect(new URL(origin).port).not.toBe("");
+  await context.routeWebSocket("**/*", (socket) => socket.close());
+  await context.route("**/*", (route) => new URL(route.request().url()).origin === origin
+    ? route.continue()
+    : route.abort());
+});
+
 const publicRoutes: readonly VisualRouteSpec[] = [
   {
     id: "login",
@@ -460,6 +472,16 @@ async function installMockAuthenticatedApi(page: Page) {
       });
     }
 
+    if (pathname === "/api/collection/summary") {
+      return jsonResponse(route, {
+        ok: true,
+        year: 2026,
+        summary: [{ month: 1, monthName: "January", totalRecords: 0, totalAmount: 0 }],
+        dashboard: { month: 1, scopeLabel: "All Collection records", canViewLeaderBreakdown: true,
+          leaders: [], unassignedAmount: 0 },
+      });
+    }
+
     if (pathname === "/api/activity/retention") {
       return jsonResponse(route, {
         ok: true, success: true,
@@ -605,7 +627,9 @@ async function expectVisualBaseline(page: Page, name: string, theme: VisualTheme
         element.parentElement?.remove();
       });
     });
-  await expect(page).toHaveScreenshot(`${name}-${theme}.png`, {
+  // Keep every route in the theme reviewable after a visual mismatch. Soft
+  // assertions still fail the test; they only avoid hiding later page diffs.
+  await expect.soft(page).toHaveScreenshot(`${name}-${theme}.png`, {
     animations: "disabled",
     caret: "hide",
     fullPage: false,
@@ -696,7 +720,7 @@ test("V17 auth changes preserve authenticated module shells", async ({ page }) =
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await installMockAuthenticatedSession(page, "light");
   const modules: VisualRouteSpec[] = [
-    { id: "home", path: "/", readySelector: "h1:has-text('SQR Workspace')" },
+    { id: "home", path: "/", readySelector: '[data-testid="home-dashboard"] [data-testid="collection-overview"][data-state="empty"]' },
     { id: "general-search", path: "/general-search", readySelector: "[data-testid='input-search']" },
     { id: "collection-records", path: "/collection/records", readySelector: "[data-testid='collection-records-page']" },
     { id: "billing", path: "/collection/billing-principal", readySelector: "[data-testid='billing-principal-page'][data-state='empty']" },

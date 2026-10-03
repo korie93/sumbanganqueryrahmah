@@ -17,6 +17,7 @@ import {
 } from "@/app/routing";
 import type { MonitorSection, TabVisibility, User } from "@/app/types";
 import { canAccessRoleFeature } from "@shared/role-feature-access";
+import { isPersonalPage } from "@/app/personal-routes";
 
 type UseAppShellNavigationArgs = {
   featureLockdown: boolean;
@@ -47,7 +48,8 @@ export function useAppShellNavigation({
   }, [setSelectedImportId]);
 
   const handleNavigate = useCallback((page: string, importId?: string) => {
-    if (user?.role !== "superuser" && !tabVisibilityLoaded) return;
+    const personalPage = page === "/account" ? "account" : page === "/security" ? "security" : page;
+    if (user?.role !== "superuser" && !tabVisibilityLoaded && !isPersonalPage(personalPage)) return;
     const storage = getBrowserLocalStorage();
     if (page === "backup") {
       if (!isPageEnabled(user?.role, "backup", tabVisibility, tabVisibilityLoaded)) {
@@ -63,7 +65,9 @@ export function useAppShellNavigation({
     }
 
     const monitorSectionTarget = parseMonitorSectionFromPageInput(page);
-    const requestedPage = monitorSectionTarget ? "monitor" : page;
+    // Preserve system Security links; personal links have their own exact routes.
+    const systemSecurityTarget = page === "/settings?section=security";
+    const requestedPage = monitorSectionTarget ? "monitor" : systemSecurityTarget ? "settings" : personalPage;
     const preserveViewerSelection = requestedPage === "viewer" && Boolean(importId);
 
     if (!preserveViewerSelection) {
@@ -78,7 +82,7 @@ export function useAppShellNavigation({
       return;
     }
 
-    if (featureLockdown && requestedPage !== "general-search") {
+    if (featureLockdown && requestedPage !== "general-search" && !isPersonalPage(requestedPage)) {
       setCurrentPage("general-search");
       safeSetStorageItem(storage, "activeTab", "general-search");
       safeSetStorageItem(storage, "lastPage", "general-search");
@@ -121,11 +125,12 @@ export function useAppShellNavigation({
 
     setCurrentPage(requestedPage);
     if (requestedPage === "settings") {
-      safeRemoveStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY);
+      if (systemSecurityTarget) safeSetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY, "security");
+      else safeRemoveStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY);
     }
     safeSetStorageItem(storage, "activeTab", requestedPage);
     safeSetStorageItem(storage, "lastPage", requestedPage);
-    replaceHistory(buildPathForPage(requestedPage));
+    replaceHistory(systemSecurityTarget ? "/settings?section=security" : buildPathForPage(requestedPage));
 
     if (importId) {
       setSelectedImportId(importId);

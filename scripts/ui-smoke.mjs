@@ -246,14 +246,19 @@ const getVisibleUserMenuTrigger = async (page) => {
   if (await mobileTrigger.isVisible().catch(() => false)) {
     return mobileTrigger;
   }
-
-  return page.locator('button[aria-label^="Buka menu pengguna"]:visible').first();
+  const drawerTrigger = page.getByTestId("button-open-mobile-nav");
+  if (await drawerTrigger.isVisible().catch(() => false)) {
+    await drawerTrigger.click();
+    await mobileTrigger.waitFor({ state: "visible" });
+    return mobileTrigger;
+  }
+  throw new Error("No reachable profile trigger exists in the authenticated shell");
 };
 
 const openUserMenu = async (page) => {
   const trigger = await getVisibleUserMenuTrigger(page);
   await trigger.click();
-  await page.getByRole("menuitemradio", { name: "Light Mode" }).waitFor();
+  await page.getByTestId("button-logout").waitFor();
 };
 
 const closeMenus = async (page) => {
@@ -345,7 +350,7 @@ const checkDesktopNavbar = async (page, tracker) => {
   await waitForSmokeDocumentReady(page);
 
   await page.getByTestId("nav-home").waitFor();
-  await page.getByRole("navigation").waitFor();
+  await page.locator("aside.workspace-sidebar").getByRole("navigation").waitFor();
   await page.getByTestId("nav-general-search").waitFor();
   await page.getByTestId("nav-collection-report").waitFor();
   await getNavGroupTrigger(page, "workspace").waitFor();
@@ -358,8 +363,9 @@ const checkDesktopNavbar = async (page, tracker) => {
   );
 
   await getNavGroupTrigger(page, "settings").click();
-  await page.getByRole("menuitem", { name: /Backup & Restore/i }).waitFor();
-  await page.getByRole("menuitem", { name: /Backup & Restore/i }).click();
+  const settingsFlyout = page.getByTestId("desktop-flyout-settings-menu");
+  await settingsFlyout.getByRole("button", { name: /Backup & Restore/i }).waitFor();
+  await settingsFlyout.getByRole("button", { name: /Backup & Restore/i }).click();
   await waitForSmokeDocumentReady(page);
   await page.waitForURL(/\/settings\?section=backup-restore/);
   await page.getByText("Backup & Restore").first().waitFor();
@@ -379,7 +385,7 @@ const checkKeyboardMenuAccess = async (page, tracker) => {
     "Settings menu trigger should be focusable from the keyboard",
   );
   await page.keyboard.press("Enter");
-  await page.getByRole("menuitem", { name: /Backup & Restore/i }).waitFor();
+  await page.getByTestId("desktop-flyout-settings-menu").getByRole("button", { name: /Backup & Restore/i }).waitFor();
   assert(await settingsTrigger.getAttribute("aria-expanded") === "true", "Settings menu should open via keyboard");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(100);
@@ -395,7 +401,7 @@ const checkKeyboardMenuAccess = async (page, tracker) => {
     "User menu trigger should be focusable from the keyboard",
   );
   await page.keyboard.press("Enter");
-  await page.getByRole("menuitemradio", { name: "Light Mode" }).waitFor();
+  await page.getByTestId("button-logout").waitFor();
   assert(await userTrigger.getAttribute("aria-expanded") === "true", "User menu should open via keyboard");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(100);
@@ -409,11 +415,12 @@ const checkKeyboardMenuAccess = async (page, tracker) => {
 };
 
 const checkUserMenuThemeMode = async (page, tracker) => {
-  await openUserMenu(page);
-
-  await page.getByRole("menuitemradio", { name: "Light Mode" }).waitFor();
-  await page.getByRole("menuitemradio", { name: "Dark Mode" }).waitFor();
-  await page.getByRole("menuitemradio", { name: "Dark Mode" }).click();
+  const themeToggle = page.getByTestId("button-toggle-theme");
+  if (await page.locator("html").evaluate((element) => element.classList.contains("dark"))) {
+    await themeToggle.click();
+  }
+  assert(await themeToggle.getAttribute("aria-label") === "Switch to dark mode", "Theme action should describe the next mode");
+  await themeToggle.click();
 
   let themeState = await page.evaluate(() => ({
     isDark: document.documentElement.classList.contains("dark"),
@@ -423,8 +430,8 @@ const checkUserMenuThemeMode = async (page, tracker) => {
   assert(themeState.isDark, "Dark mode should apply document dark class");
   assert(themeState.storedTheme === "dark", "Dark mode should persist in localStorage");
 
-  await openUserMenu(page);
-  await page.getByRole("menuitemradio", { name: "Light Mode" }).click();
+  assert(await themeToggle.getAttribute("aria-label") === "Switch to light mode", "Dark theme action should describe the next mode");
+  await themeToggle.click();
 
   themeState = await page.evaluate(() => ({
     isDark: document.documentElement.classList.contains("dark"),
@@ -448,15 +455,21 @@ const checkMobileNavbar = async (page, tracker) => {
   await mobileNavTrigger.waitFor();
   await mobileNavTrigger.click();
 
-  const mobileNavigation = page.getByRole("navigation", { name: "Navigasi mudah alih" });
-  await page.getByRole("heading", { name: "Navigasi" }).waitFor();
+  const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation", exact: true });
+  await page.locator("#mobile-navigation-drawer").waitFor();
   await mobileNavigation.getByRole("button", { name: /^Home\b/i }).waitFor();
-  await mobileNavigation.getByRole("button", { name: /Backup & Restore/i }).waitFor();
+  await page.getByTestId("mobile-nav-group-settings-menu").click();
+  await page.getByTestId("mobile-submenu-settings-menu").getByRole("button", { name: /Backup & Restore/i }).waitFor();
 
   tracker.assertClean("mobile navbar");
   tracker.clear();
 
-  await closeMenus(page);
+  await page.keyboard.press("Escape");
+  await page.getByTestId("mobile-submenu-settings-menu").waitFor({ state: "hidden" });
+  assert(await page.getByTestId("mobile-nav-group-settings-menu").evaluate((element) => element === document.activeElement), "Escape returns focus to the mobile group before closing the drawer");
+  await page.keyboard.press("Escape");
+  await page.locator("#mobile-navigation-drawer").waitFor({ state: "hidden" });
+  assert(await mobileNavTrigger.evaluate((element) => element === document.activeElement), "Closing the drawer restores its trigger");
 };
 
 const checkHomeEntryPoint = async (page, tracker) => {
@@ -466,7 +479,7 @@ const checkHomeEntryPoint = async (page, tracker) => {
   await page.getByTestId("nav-home").click();
   await waitForSmokeDocumentReady(page);
   await page.waitForURL(/\/$/);
-  await page.getByRole("heading", { name: "SQR Workspace", level: 1 }).waitFor();
+  await page.getByTestId("home-dashboard").waitFor();
   await page.getByTestId("card-general-search").waitFor();
 
   tracker.assertClean("home entry point");

@@ -33,3 +33,16 @@ test("expanded screenshots mask credential and manual key values while retaining
   assert.match(source, /window\.scrollTo\(\{ top: 0, left: 0, behavior: "instant" \}\)/);
   assert.match(source, /fullPage: true, animations: "disabled", caret: "hide"/);
 });
+
+test("public password layouts exercise real hover contrast with credential-safe failure phases", () => {
+  const start = source.indexOf("async function checkPublicPasswordLayout(");
+  const end = source.indexOf("  await server.listen();", start);
+  assert.ok(start >= 0 && end > start, "The public-layout assertions remain identifiable with LF or CRLF sources.");
+  const layout = source.slice(start, end);
+  assert.match(layout, /await visibilityControl\.hover\(\)/);
+  assert.match(layout, /element\.matches\(":hover"\)/);
+  assert.ok(layout.indexOf("await visibilityControl.hover()") < layout.indexOf("window.axe.run(document"));
+  assert.match(layout, /hovered visibility control WCAG A\/AA accessibility/);
+  assert.match(layout, /violation\.id, nodes: violation\.nodes\.map\(\(node\) => node\.target\)/);
+  assert.doesNotMatch(layout, /disableRules|checkContrast:\s*false|failureSummary/);
+});

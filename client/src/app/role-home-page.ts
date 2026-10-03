@@ -1,5 +1,5 @@
 const AUTHENTICATED_ROLE_HOME_PAGE: Record<string, string> = {
-  user: "general-search",
+  user: "home",
   admin: "home",
   manager: "home",
   superuser: "home",

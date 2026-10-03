@@ -1,87 +1,39 @@
-import { LogOut, Moon, Sun } from "lucide-react"
-
-import {
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
+import { LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
+import { AccountAvatar } from "@/components/AccountAvatar";
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 type NavbarUserMenuContentProps = {
-  username: string
-  userRole: string
-  theme: string
-  setTheme: (theme: "light" | "dark") => void
-  onLogout: () => void | Promise<void>
-  onCloseAutoFocus?: (event: Event) => void
-  onEscapeKeyDown?: (event: KeyboardEvent) => void
-}
+  username: string;
+  userRole: string;
+  canAccessSettings: boolean;
+  avatarUrl?: string | null | undefined;
+  onAccount: () => void;
+  onSecurity: () => void;
+  onSettings: () => void;
+  onLogout: () => void | Promise<void>;
+  variant: "desktop" | "mobile";
+  onCloseAutoFocus?: ((event: Event) => void) | undefined;
+};
 
-/**
- * Renders the navbar user menu content surface with standard SQR layout behavior.
- */
-export function NavbarUserMenuContent({
-  username,
-  userRole,
-  theme,
-  setTheme,
-  onLogout,
-  onCloseAutoFocus,
-  onEscapeKeyDown,
-}: NavbarUserMenuContentProps) {
+/** Existing account security and logout actions anchored to the sidebar profile. */
+export function NavbarUserMenuContent({ username, userRole, canAccessSettings, avatarUrl, onAccount, onSecurity, onSettings, onLogout, variant, onCloseAutoFocus }: NavbarUserMenuContentProps) {
   return (
-    <DropdownMenuContent
-      align="end"
-      className="navbar-dropdown-content w-[min(18rem,calc(100vw-1rem))] rounded-xl p-2"
-      onCloseAutoFocus={onCloseAutoFocus}
-      onEscapeKeyDown={onEscapeKeyDown}
-    >
-      <DropdownMenuLabel className="rounded-xl border border-border/60 bg-muted/20 p-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-semibold uppercase text-primary"
-            aria-hidden="true"
-          >
-            {[...username][0] || ""}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{username}</span>
-            <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-label-xs text-primary">
-              {userRole}
-            </span>
-          </span>
-        </div>
+    <DropdownMenuContent side={variant === "desktop" ? "right" : "top"} align="end" sideOffset={16} collisionPadding={12}
+      className="navbar-dropdown-content workspace-profile-menu w-[min(17rem,calc(100vw-1.5rem))] p-2"
+      onCloseAutoFocus={onCloseAutoFocus}>
+      <DropdownMenuLabel className="min-w-0 px-3 py-2">
+        <AccountAvatar username={username} avatarUrl={avatarUrl} className="mb-2 h-9 w-9" />
+        <span className="block break-words">{username}</span>
+        <span className="mt-1 block text-xs font-normal capitalize text-muted-foreground">{userRole}</span>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel className="px-2 pb-1 pt-2 text-xs uppercase tracking-label-lg text-muted-foreground">
-        Appearance
-      </DropdownMenuLabel>
-      <DropdownMenuRadioGroup
-        value={theme}
-        onValueChange={(value) => setTheme(value === "dark" ? "dark" : "light")}
-      >
-        <DropdownMenuRadioItem value="light" className="rounded-lg px-3 py-2.5">
-          <Sun className="h-4 w-4" aria-hidden="true" />
-          <span>Light Mode</span>
-        </DropdownMenuRadioItem>
-        <DropdownMenuRadioItem value="dark" className="rounded-lg px-3 py-2.5">
-          <Moon className="h-4 w-4" aria-hidden="true" />
-          <span>Dark Mode</span>
-        </DropdownMenuRadioItem>
-      </DropdownMenuRadioGroup>
+      <DropdownMenuItem onSelect={onAccount} className="min-h-11 px-3"><UserRound aria-hidden="true" /><span>Account</span></DropdownMenuItem>
+      <DropdownMenuItem onSelect={onSecurity} className="min-h-11 px-3"><ShieldCheck aria-hidden="true" /><span>Security</span></DropdownMenuItem>
+      {canAccessSettings ? <DropdownMenuItem onSelect={onSettings} className="min-h-11 px-3"><Settings aria-hidden="true" /><span>Settings</span></DropdownMenuItem> : null}
       <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onSelect={() => {
-          void onLogout()
-        }}
-        className="rounded-lg px-3 py-2.5 text-destructive focus:text-destructive"
-        data-testid="button-logout"
-      >
-        <LogOut className="h-4 w-4" aria-hidden="true" />
-        <span>Logout</span>
+      <DropdownMenuItem onSelect={() => { void onLogout(); }} className="min-h-11 px-3 text-destructive focus:text-destructive" data-testid="button-logout">
+        <LogOut aria-hidden="true" /><span>Logout</span>
       </DropdownMenuItem>
     </DropdownMenuContent>
-  )
+  );
 }

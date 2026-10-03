@@ -9,11 +9,12 @@ test("configurable features agree across menu and direct pages for every support
     for (const feature of ["activity", "general-search", "home", "import", "collection-report", "analysis", "dashboard"]) {
       for (const enabled of [true, false]) {
         const tabs = { [feature]: enabled };
-        assert.equal(getVisibleNavItems(role, tabs, false).some((item) => item.id === feature), enabled, `${role}/${feature}/menu`);
-        assert.equal(isPageEnabled(role, feature, tabs, true), enabled, `${role}/${feature}/page`);
+        const expected = role === "user" && feature === "home" ? true : enabled;
+        assert.equal(getVisibleNavItems(role, tabs, false).some((item) => item.id === feature), expected, `${role}/${feature}/menu`);
+        assert.equal(isPageEnabled(role, feature, tabs, true), expected, `${role}/${feature}/page`);
       }
     }
-    assert.deepEqual(getVisibleNavItems(role, null, false), []);
+    assert.deepEqual(getVisibleNavItems(role, null, false).map((item) => item.id), role === "user" ? ["home"] : []);
     assert.equal(isPageEnabled(role, "home", { home: true }, false), false);
     assert.equal(isPageEnabled(role, "backup", { backup: true }, true), false);
   }

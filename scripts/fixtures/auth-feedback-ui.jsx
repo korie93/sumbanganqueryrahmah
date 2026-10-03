@@ -8,12 +8,13 @@ import ChangePassword from "../../client/src/pages/ChangePassword";
 import ForgotPassword from "../../client/src/pages/ForgotPassword";
 import Login from "../../client/src/pages/Login";
 import { CollectionNicknameDialogStepFields } from "../../client/src/pages/collection-report/CollectionNicknameDialogStepFields";
-import { MyAccountSecurityCard } from "../../client/src/pages/settings/MyAccountSecurityCard";
+import { PersonalSecurityForm } from "../../client/src/pages/security/PersonalSecurityForm";
 import { useSettingsMyAccountTwoFactorState } from "../../client/src/pages/settings/useSettingsMyAccountTwoFactorState";
 import { useSettingsMyAccountCredentialState } from "../../client/src/pages/settings/useSettingsMyAccountCredentialState";
 import "../../client/src/styles/tokens/index.css";
 import "../../client/src/public-shell.css";
 import "../../client/src/styles/theme/index.css";
+import "../../client/src/pages/personal-account.css";
 
 function CollectionPasswordHarness() {
   const [password, setPassword] = useState("");
@@ -44,6 +45,7 @@ function TwoFactorSetupHarness() {
   const [currentUser, setCurrentUser] = useState({ id: "fixture-id", username: "ui.fixture", role: "admin", twoFactorEnabled: false,
     twoFactorPendingSetup: parameters.get("pending") === "1", twoFactorConfiguredAt: null });
   const [notice, setNotice] = useState("");
+  const [passwordExpanded, setPasswordExpanded] = useState(false);
   const shared = { currentUser, isMountedRef: useRef(true), syncCurrentUser: setCurrentUser, toast: (value) => setNotice(value.description) };
   const state = useSettingsMyAccountTwoFactorState(shared);
   useEffect(() => {
@@ -60,20 +62,21 @@ function TwoFactorSetupHarness() {
   });
   return <main data-fixture-account={currentUser.id} style={{ maxWidth: 960, margin: "24px auto", padding: 16 }}>
     <p role="status" id="fixture-notice">{notice}</p>
-    <MyAccountSecurityCard
+    <PersonalSecurityForm
       {...state}
       {...credentials}
       currentUserRole="admin"
+      passwordExpanded={passwordExpanded} onPasswordExpandedChange={setPasswordExpanded}
+      onClearPassword={credentials.clearPasswordFields}
       onDisableTwoFactor={state.handleDisableTwoFactor} onEnableTwoFactor={state.handleEnableTwoFactor}
       onStartTwoFactorSetup={state.handleStartTwoFactorSetup}
       onClearTwoFactorSetup={state.handleClearTwoFactorSetup}
       onTwoFactorCodeBlur={state.handleTwoFactorCodeBlur} onTwoFactorCodeInputChange={state.setTwoFactorCodeInput}
       onTwoFactorPasswordBlur={state.handleTwoFactorPasswordBlur} onTwoFactorPasswordInputChange={state.setTwoFactorPasswordInput}
-      onChangePassword={credentials.handleChangePassword} onChangeUsername={credentials.handleChangeUsername}
+      onChangePassword={credentials.handleChangePassword}
       onConfirmPasswordBlur={credentials.handleConfirmPasswordBlur} onConfirmPasswordInputChange={credentials.setConfirmPasswordInput}
       onCurrentPasswordBlur={credentials.handleCurrentPasswordBlur} onCurrentPasswordInputChange={credentials.setCurrentPasswordInput}
       onNewPasswordBlur={credentials.handleNewPasswordBlur} onNewPasswordInputChange={credentials.setNewPasswordInput}
-      onUsernameBlur={credentials.handleUsernameBlur} onUsernameInputChange={credentials.setUsernameInput}
       twoFactorEnabled={currentUser.twoFactorEnabled} twoFactorPendingSetup={currentUser.twoFactorPendingSetup}
       twoFactorConfiguredAt={currentUser.twoFactorConfiguredAt}
     />

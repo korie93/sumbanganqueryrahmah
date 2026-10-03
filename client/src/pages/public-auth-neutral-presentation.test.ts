@@ -125,6 +125,18 @@ function contrast(first: Rgb, second: Rgb) {
   return (values[1] + 0.05) / (values[0] + 0.05);
 }
 
+test("light V17 password visibility controls keep a scoped accessible hover surface under dark workspace themes", () => {
+  const foreground = declaration(v17, ".auth-v17", "--auth-muted");
+  const background = declaration(v17, ".auth-v17", "--muted");
+  assert.ok(foreground);
+  assert.match(foreground, /^#[0-9a-f]{6}$/i);
+  assert.ok(background, "A light-only auth shell must not inherit the dark workspace hover surface.");
+  const textRgb = [1, 3, 5].map((start) => Number.parseInt(foreground.slice(start, start + 2), 16) / 255) as Rgb;
+  assert.ok(contrast(textRgb, hslRgb(background)) >= 4.5, "The visibility label must meet WCAG AA on its hovered surface.");
+  assert.equal(declaration(v17, ".auth-v17 .public-auth-password-toggle", "color"), "var(--auth-muted)");
+  assert.match(controls, /\.public-auth-password-toggle:not\(:disabled\):hover\s*\{\s*background: hsl\(var\(--muted\)\);/);
+});
+
 test("chosen semantic auth colors meet static contrast contracts in both palettes", () => {
   // Token-level evidence only: real dark auth activation still needs browser QA.
   const tokens = postcss.parse(readSource("styles/tokens/colors/_semantic.css"));

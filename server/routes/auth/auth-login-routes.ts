@@ -24,6 +24,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
     jsonRoute,
     closeActivitySockets,
     buildUserPayload,
+    buildCurrentUserPayload,
     signSessionToken,
     signTwoFactorChallengeToken,
     verifyTwoFactorChallengeToken,
@@ -105,7 +106,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
       activityId: activity.id,
       mustChangePassword: user.mustChangePassword,
       status: user.status,
-      user: buildUserPayload(user),
+      user: await buildCurrentUserPayload(user),
       sessionExpiresAt: session.expiresAt,
     };
   });
@@ -178,7 +179,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
         activityId: result.activity.id,
         mustChangePassword: result.user.mustChangePassword,
         status: result.user.status,
-        user: buildUserPayload(result.user),
+        user: await buildCurrentUserPayload(result.user),
         sessionExpiresAt: session.expiresAt,
       };
     }),

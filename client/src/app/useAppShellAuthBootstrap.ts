@@ -27,6 +27,7 @@ import {
   safeSetStorageItem,
 } from "@/lib/browser-storage";
 import { getMe } from "@/lib/api";
+import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 
 type UseAppShellAuthBootstrapArgs = {
   applyResolvedRoute: (route: ResolvedRoute | null) => boolean;
@@ -96,6 +97,11 @@ export function useAppShellAuthBootstrap({
             username,
             fullName: me.fullName ?? null,
             email: me.email ?? null,
+            createdAt: me.createdAt ?? null,
+            avatarUrl: me.avatarUrl ?? null,
+            twoFactorEnabled: me.twoFactorEnabled ?? false,
+            twoFactorPendingSetup: me.twoFactorPendingSetup ?? false,
+            twoFactorConfiguredAt: me.twoFactorConfiguredAt ?? null,
             role,
             status: me.status,
             mustChangePassword: forcePasswordChange || Boolean(me.mustChangePassword),
@@ -111,12 +117,13 @@ export function useAppShellAuthBootstrap({
             if (nextUser.mustChangePassword) {
               setCurrentPage("change-password");
               replaceHistory("/change-password");
+            } else if (nextUser.role === "user") {
+              setCurrentPage(resolveAuthenticatedRoleHomePage(nextUser.role));
+              replaceHistory("/");
             } else if (savedPage === "backup") {
               safeSetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY, "backup-restore");
               setCurrentPage("settings");
               replaceHistory("/settings?section=backup-restore");
-            } else if (nextUser.role === "user") {
-              setCurrentPage(savedPage === "settings" ? "settings" : "general-search");
             } else if (savedPage) {
               const savedMonitorSection = parseMonitorSectionFromPageInput(savedPage);
               if (savedMonitorSection) {

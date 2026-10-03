@@ -3,6 +3,8 @@ export type CurrentUser = {
   username: string;
   fullName?: string | null;
   email?: string | null;
+  createdAt?: string | null;
+  avatarUrl?: string | null;
   role: string;
   status: string;
   mustChangePassword: boolean;
