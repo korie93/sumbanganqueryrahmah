@@ -245,7 +245,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
   async function startSetup(checkPasswordLayout = false) {
     markPhase("enrollment: password confirmation");
     const panel = page.getByTestId("two-factor-settings");
-    const start = panel.getByRole("button", { name: /^(Aktifkan 2FA|Mulakan semula persediaan)$/ });
+    const start = panel.getByRole("button", { name: /^(Activate 2FA|Restart setup)$/ });
     await start.focus();
     await start.press("Enter");
     assert.ok(await panel.locator("#my-account-two-factor-password").evaluate((input) => document.activeElement === input), "Password step receives keyboard focus");
@@ -269,7 +269,7 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
   async function enable(uri) {
     markPhase("enrollment: enable with independently generated code");
     const panel = page.getByTestId("two-factor-settings");
-    await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
+    await panel.getByRole("button", { name: "I have added the account", exact: true }).click();
     assert.ok(await panel.locator("#my-account-two-factor-code").evaluate((input) => document.activeElement === input), "Code step receives keyboard focus");
     await panel.locator("#my-account-two-factor-code").fill(authenticatorCode(uri));
     const response = page.waitForResponse((item) => new URL(item.url()).pathname === "/api/auth/two-factor/enable" && item.request().method() === "POST");
@@ -287,21 +287,21 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     const firstUri = await startSetup(true);
     await layout("scan");
     const panel = page.getByTestId("two-factor-settings");
-    await panel.getByRole("button", { name: "Tak dapat imbas kod QR? Papar kunci persediaan", exact: true }).click();
+    await panel.getByRole("button", { name: "Can't scan the QR code? Show setup key", exact: true }).click();
     assert.ok(await page.locator("#my-account-two-factor-secret").inputValue() === new URL(firstUri).searchParams.get("secret"));
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: baseUrl });
-    await panel.getByRole("button", { name: "Salin kunci", exact: true }).click();
+    await panel.getByRole("button", { name: "Copy key", exact: true }).click();
     assert.ok(await page.evaluate(() => navigator.clipboard.readText()) === new URL(firstUri).searchParams.get("secret"), "Manual key copy uses the exact current enrollment");
     await layout("manual");
-    await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
+    await panel.getByRole("button", { name: "I have added the account", exact: true }).click();
     const currentCodes = [-1, 0, 1].map((step) => authenticatorCode(firstUri, Date.now() + step * 30_000));
     const wrong = ["000000", "111111", "222222", "333333"].find((code) => !currentCodes.includes(code));
     await panel.locator("#my-account-two-factor-code").fill(wrong);
-    await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
-    await panel.getByRole("alert").filter({ hasText: "Kod pengesah tidak betul" }).waitFor();
+    await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
+    await panel.getByRole("alert").filter({ hasText: "The authenticator code is incorrect" }).waitFor();
     assert.equal((await api(page, "/api/auth/two-factor")).body.twoFactor.enabled, false);
     await layout("invalid-code");
-    await panel.getByRole("button", { name: "Kembali ke kod QR", exact: true }).click();
+    await panel.getByRole("button", { name: "Back to QR code", exact: true }).click();
     await enable(firstUri);
     await layout("active");
     // Honour the existing single-superuser-session policy, just as a person
@@ -329,13 +329,13 @@ export async function runTwoFactorBrowser({ baseUrl, username, password, artifac
     assert.ok(cookie?.httpOnly, "Real session remains HttpOnly");
     await page.context().close(); page = loginPage;
     await settings(page);
-    await page.getByRole("button", { name: "Nyahaktifkan 2FA", exact: true }).click();
+    await page.getByRole("button", { name: "Disable 2FA", exact: true }).click();
     await layout("disable");
     await page.locator("#my-account-two-factor-password").fill(password);
     markPhase("enrollment: disable with password and independent OTP");
     await page.locator("#my-account-two-factor-code").fill(authenticatorCode(firstUri));
     const disabled = page.waitForResponse((item) => new URL(item.url()).pathname === "/api/auth/two-factor/disable");
-    await page.getByRole("button", { name: "Sahkan nyahaktifkan", exact: true }).click();
+    await page.getByRole("button", { name: "Confirm disable", exact: true }).click();
     assert.equal((await disabled).status(), 200);
     await page.locator('[data-two-factor-state="off"]').waitFor();
     const disabledStatus = await api(page, "/api/auth/two-factor");

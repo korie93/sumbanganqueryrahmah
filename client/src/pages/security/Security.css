@@ -1,0 +1,21 @@
+.personal-security-page .security-overview {
+  border: 1px solid hsl(var(--border));
+  border-radius: .75rem;
+  background: hsl(var(--muted) / .3);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+.security-overview h2 { font-size: .9375rem; font-weight: 600; }
+.security-overview-items { display: grid; gap: 1rem; margin-top: 1rem; }
+.security-overview-items > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; }
+.security-overview-items dt { display: flex; align-items: center; gap: .5rem; color: hsl(var(--muted-foreground)); font-size: .875rem; }
+.security-overview-items dt svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+.security-overview-items dd { font-size: .8125rem; font-weight: 600; }
+.security-overview-items dd[data-state="enabled"] { color: hsl(var(--primary)); }
+.security-overview > p { color: hsl(var(--muted-foreground)); margin-top: 1rem; font-size: .8125rem; line-height: 1.6; }
+.personal-security-page .personal-security-sections { min-width: 0; }
+.personal-security-page .auth-v17-caps { margin-top: .375rem; color: hsl(var(--destructive)); font-size: .8125rem; line-height: 1.5; }
+.personal-security-page #personal-password-form { border-top: 1px solid hsl(var(--border)); padding-top: 1.25rem; }
+.personal-security-page #my-account-password-policy { border-color: hsl(var(--border)); background: hsl(var(--muted) / .3); color: hsl(var(--muted-foreground)); box-shadow: none; }
+.personal-security-page [data-testid="two-factor-settings"] { overflow-wrap: anywhere; }
+.personal-security-page [data-testid="two-factor-qr"] { max-width: 18rem; margin-inline: auto; }

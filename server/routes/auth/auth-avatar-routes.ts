@@ -24,4 +24,9 @@ export function registerAccountAvatarRoutes(context: AuthRouteContext) {
     const user = await accountAvatarService.update(req.user, req.body);
     return { ok: true, user: await buildCurrentUserPayload(user) };
   }));
+  app.delete(ACCOUNT_AVATAR_ENDPOINT, authenticateToken, rateLimiters.authenticatedAuth, jsonRoute(async (req) => {
+    parseRequestBody(z.object({}).strict(), req.query);
+    const user = await accountAvatarService.remove(req.user, req.body);
+    return { ok: true, user: await buildCurrentUserPayload(user) };
+  }));
 }

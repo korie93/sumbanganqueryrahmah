@@ -68,11 +68,12 @@ export function PersonalSecurityForm(props: PersonalSecurityFormProps) {
           onClick={() => props.passwordExpanded ? closePasswordForm() : props.onPasswordExpandedChange(true)}>Change password</Button>
       </div>
       {props.passwordExpanded ? <form id="personal-password-form" className="mt-5 min-w-0 space-y-4" noValidate
-        aria-label="Change password" onSubmit={(event) => { event.preventDefault(); props.onChangePassword(); }}>
-        <p className="text-sm leading-6 text-muted-foreground">Masukkan kata laluan semasa, kemudian tetapkan dan sahkan kata laluan baharu. Anda perlu log masuk semula selepas pertukaran.</p>
+        aria-label="Change password" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closePasswordForm(); } }}
+        onSubmit={(event) => { event.preventDefault(); if (!busy) props.onChangePassword(); }}>
+        <p className="text-sm leading-6 text-muted-foreground">Enter your current password, then set and confirm a new one. Changing your password ends your active sessions. You will need to sign in again.</p>
         <div className="space-y-2">
-          <label htmlFor="my-account-current-password" className="text-sm font-medium">Kata laluan semasa</label>
-          <PasswordInput ref={currentPasswordRef} id="my-account-current-password" name="currentPassword" visibilityLabel="kata laluan semasa"
+          <label htmlFor="my-account-current-password" className="text-sm font-medium">Current password</label>
+          <PasswordInput ref={currentPasswordRef} id="my-account-current-password" name="currentPassword" visibilityLabel="current password" locale="en" capsLockMessage="Caps Lock is on."
             value={props.currentPasswordInput} onChange={(event) => props.onCurrentPasswordInputChange(event.target.value)}
             onBlur={props.onCurrentPasswordBlur} disabled={busy} autoComplete="current-password" className="min-h-11"
             {...getAriaInvalidProps(Boolean(props.currentPasswordError))}
@@ -81,8 +82,8 @@ export function PersonalSecurityForm(props: PersonalSecurityFormProps) {
         </div>
         <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           <div className="min-w-0 space-y-2">
-            <label htmlFor="my-account-new-password" className="text-sm font-medium">Kata laluan baharu</label>
-            <PasswordInput ref={newPasswordRef} id="my-account-new-password" name="newPassword" visibilityLabel="kata laluan baharu"
+            <label htmlFor="my-account-new-password" className="text-sm font-medium">New password</label>
+            <PasswordInput ref={newPasswordRef} id="my-account-new-password" name="newPassword" visibilityLabel="new password" locale="en" capsLockMessage="Caps Lock is on."
               value={props.newPasswordInput} onChange={(event) => props.onNewPasswordInputChange(event.target.value)}
               onBlur={props.onNewPasswordBlur} disabled={busy} autoComplete="new-password" className="min-h-11"
               {...getAriaInvalidProps(Boolean(props.newPasswordError))}
@@ -90,24 +91,24 @@ export function PersonalSecurityForm(props: PersonalSecurityFormProps) {
             {props.newPasswordError ? <p id="my-account-new-password-error" className="text-sm text-destructive" role="alert">{props.newPasswordError}</p> : null}
           </div>
           <div className="min-w-0 space-y-2">
-            <label htmlFor="my-account-confirm-password" className="text-sm font-medium">Sahkan kata laluan baharu</label>
-            <PasswordInput ref={confirmationRef} id="my-account-confirm-password" name="confirmPassword" visibilityLabel="pengesahan kata laluan baharu"
+            <label htmlFor="my-account-confirm-password" className="text-sm font-medium">Confirm new password</label>
+            <PasswordInput ref={confirmationRef} id="my-account-confirm-password" name="confirmPassword" visibilityLabel="password confirmation" locale="en" capsLockMessage="Caps Lock is on."
               value={props.confirmPasswordInput} onChange={(event) => props.onConfirmPasswordInputChange(event.target.value)}
               onBlur={props.onConfirmPasswordBlur} disabled={busy} autoComplete="new-password" className="min-h-11"
               {...getAriaInvalidProps(Boolean(props.confirmPasswordInput ? props.newPasswordInput !== props.confirmPasswordInput : props.confirmPasswordError))}
               aria-describedby={confirmationId} />
-            <PasswordConfirmationFeedback id={confirmationId} password={props.newPasswordInput} confirmation={props.confirmPasswordInput} requiredError={props.confirmPasswordError} />
+            <PasswordConfirmationFeedback id={confirmationId} password={props.newPasswordInput} confirmation={props.confirmPasswordInput} requiredError={props.confirmPasswordError} locale="en" />
           </div>
         </div>
-        <PasswordStrengthMeter id="my-account-password-policy" password={props.newPasswordInput} />
+        <PasswordStrengthMeter id="my-account-password-policy" password={props.newPasswordInput} locale="en" />
         {props.passwordActionError ? <p role="alert" className="text-sm text-destructive">{props.passwordActionError}</p> : null}
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end" data-floating-ai-avoid="true">
           <Button type="button" variant="outline" onClick={closePasswordForm} disabled={busy} className="min-h-11">Cancel</Button>
-          <Button type="submit" disabled={busy} className="min-h-11">{props.passwordSaving ? "Mengemas kini..." : "Tukar kata laluan"}</Button>
+          <Button type="submit" disabled={busy} className="min-h-11">{props.passwordSaving ? "Updating..." : "Update password"}</Button>
         </div>
       </form> : null}
     </section>
-    {canConfigureTwoFactor(props.currentUserRole) ? <TwoFactorSettingsPanel {...props} busy={busy} />
+    {canConfigureTwoFactor(props.currentUserRole) ? <TwoFactorSettingsPanel {...props} busy={busy} locale="en" />
       : <section className="personal-section space-y-3" aria-labelledby="two-factor-heading" data-testid="two-factor-unavailable">
         <h2 id="two-factor-heading" className="flex items-center gap-2 text-base font-semibold"><ShieldOff className="h-4 w-4 shrink-0" aria-hidden="true" />Two-factor authentication</h2>
         <p className="text-sm leading-6">Status: {props.twoFactorEnabled ? "Enabled" : props.twoFactorPendingSetup ? "Setup pending" : "Disabled"}</p>

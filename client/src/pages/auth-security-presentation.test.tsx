@@ -70,7 +70,7 @@ test("security presentation preserves 2FA role gate and shared busy guards", () 
   }
   const page = source("pages/security/PersonalSecurityForm.tsx");
   assert.match(page, /props.passwordSaving \|\| props.twoFactorLoading/);
-  assert.match(page, /event.preventDefault\(\); props.onChangePassword\(\)/);
+  assert.match(page, /event.preventDefault\(\); if \(!busy\) props.onChangePassword\(\)/);
   assert.match(page, /<TwoFactorSettingsPanel \{\.\.\.props\} busy=\{busy\}/);
   assert.doesNotMatch(page, /onChangeUsername/);
 });

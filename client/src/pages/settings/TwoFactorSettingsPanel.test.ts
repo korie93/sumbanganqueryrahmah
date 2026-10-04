@@ -73,3 +73,26 @@ test("malformed setup fails closed and expiry errors remain distinct from code e
   assert.match(expired, /Persediaan tamat tempoh/);
   assert.doesNotMatch(expired, /my-account-two-factor-code-error/);
 });
+
+test("personal English presentation retains the same guarded setup and active states", () => {
+  const off = render({ locale: "en" });
+  assert.match(off, /Two-factor authentication/);
+  assert.match(off, /Status: Not enabled/);
+  assert.match(off, /Activate 2FA/);
+  assert.match(off, /not sent by email or SMS/);
+  assert.doesNotMatch(off, /Aktifkan|Pengesahan|recovery codes|<input/);
+
+  const setup = render({ locale: "en", twoFactorPendingSetup: true, twoFactorSetupSecret: syntheticSecret,
+    twoFactorSetupUri: syntheticUri, twoFactorSetupExpiresAt: "2026-10-04T04:30:00.000Z" });
+  assert.match(setup, /Step 2 of 3/);
+  assert.match(setup, /SHA256, 6 digits and 30 seconds/);
+  assert.match(setup, /I have added the account/);
+  assert.match(setup, /Complete setup before/);
+  assert.doesNotMatch(setup, /Langkah|kod QR|TESTONLY|otpauth:|<input/);
+
+  const active = render({ locale: "en", twoFactorEnabled: true, twoFactorSetupSecret: syntheticSecret, twoFactorSetupUri: syntheticUri });
+  assert.match(active, /Status: Enabled/);
+  assert.match(active, /Authenticator app \(TOTP\)/);
+  assert.match(active, /Disable 2FA/);
+  assert.doesNotMatch(active, /TESTONLY|data-testid="two-factor-qr"|<input/);
+});

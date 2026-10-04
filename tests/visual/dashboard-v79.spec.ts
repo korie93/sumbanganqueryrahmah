@@ -504,6 +504,9 @@ test("V7.9 mobile drawer owns focus, opens inline groups and restores its trigge
   await expect(page.getByTestId("button-user-menu-mobile")).toBeVisible();
   await page.getByTestId("button-user-menu-mobile").click();
   await expect(page.getByTestId("button-logout")).toBeVisible();
+  // Visibility can precede Radix's post-mount focus scope and Escape listener.
+  await expect.poll(() => page.locator(".workspace-profile-menu").evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("button-logout")).toBeHidden();
   await expect(page.getByTestId("button-user-menu-mobile")).toBeFocused();
@@ -620,6 +623,9 @@ test("V7.9 collapsed navigation waits for expanded geometry and switches layers 
     await expect(page.locator(".workspace-command-popup")).toBeVisible();
     await page.keyboard.press("Escape");
     await profile.click();
+    await expect(page.locator(".workspace-profile-menu")).toBeVisible();
+    await expect.poll(() => page.locator(".workspace-profile-menu").evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await page.keyboard.press("Escape");
     await expect(profile).toBeFocused();
   }

@@ -9,3 +9,10 @@ export async function updateAccountAvatar(payload: AccountAvatarUpload, signal: 
   if (!result.user) throw new Error("Account photo response is missing.");
   return result.user;
 }
+
+export async function removeAccountAvatar(signal: AbortSignal) {
+  const response = await apiRequest("DELETE", ACCOUNT_AVATAR_ENDPOINT, undefined, { signal, timeoutMs: 60_000 });
+  const result = await parseApiJson(response, authUserMutationResponseSchema, ACCOUNT_AVATAR_ENDPOINT);
+  if (!result.user || result.user.avatarUrl !== null) throw new Error("Account photo response is missing.");
+  return result.user;
+}

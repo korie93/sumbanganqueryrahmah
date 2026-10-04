@@ -22,6 +22,7 @@ test.use({ serviceWorkers: "block" });
 async function installPersonalFixture(page: Page, baseURL: string | undefined, options: {
   role?: Role; theme?: Theme; settings?: boolean; longIdentity?: boolean; mustChangePassword?: boolean;
   holdSessionValidation?: boolean; holdAvatarSave?: boolean; sessionValidationTwoFactorEnabled?: boolean;
+  initialAvatar?: boolean; noEmail?: boolean; holdAvatarRemove?: boolean;
 } = {}) {
   expect(baseURL, "Use the isolated static build runner").toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -31,9 +32,9 @@ async function installPersonalFixture(page: Page, baseURL: string | undefined, o
   const role = options.role ?? "admin";
   const user = {
     id: `personal-${role}-fixture`, username: options.longIdentity ? "long.personal.account.fixture.username" : `personal.${role}`,
-    fullName: "Personal Account Fixture", email: options.longIdentity
+    fullName: "Personal Account Fixture", email: options.noEmail ? null : options.longIdentity
       ? "long.personal.account.fixture.address@department.example.test" : "personal@example.test",
-    role, createdAt: "2026-02-15T04:05:00.000Z", avatarUrl: null as string | null,
+    role, createdAt: "2026-02-15T04:05:00.000Z", avatarUrl: options.initialAvatar ? avatarUrl : null as string | null,
     status: "active", mustChangePassword: options.mustChangePassword ?? false,
     passwordResetBySuperuser: false, isBanned: false, twoFactorEnabled: false,
     twoFactorPendingSetup: false, twoFactorConfiguredAt: null as string | null,
@@ -43,8 +44,10 @@ async function installPersonalFixture(page: Page, baseURL: string | undefined, o
     user, requests: [] as string[], unexpected: [] as string[], errors: [] as string[], consoleErrors: [] as string[],
     expectedHttpErrors: new Set<string>(), loggedOut: false, logoutCalls: 0,
     avatarCalls: 0, rejectAvatar: false, passwordCalls: 0, setupCalls: 0, enableCalls: 0, disableCalls: 0,
+    removeCalls: 0, rejectRemove: false, lastAvatarPayload: null as null | { fileName: string; mimeType: string; contentBase64: string },
     meCalls: 0, sessionValidationReleased: false, releaseSessionValidation: () => {},
     releaseAvatarSave: () => {},
+    releaseAvatarRemove: () => {},
   };
   let releaseSessionValidation: () => void = () => {};
   const sessionValidationGate = new Promise<void>((resolve) => { releaseSessionValidation = resolve; });
@@ -52,6 +55,9 @@ async function installPersonalFixture(page: Page, baseURL: string | undefined, o
   let releaseAvatarSave: () => void = () => {};
   const avatarSaveGate = new Promise<void>((resolve) => { releaseAvatarSave = resolve; });
   fixture.releaseAvatarSave = releaseAvatarSave;
+  let releaseAvatarRemove: () => void = () => {};
+  const avatarRemoveGate = new Promise<void>((resolve) => { releaseAvatarRemove = resolve; });
+  fixture.releaseAvatarRemove = releaseAvatarRemove;
   const respond = (route: Route, body: unknown, status = 200) => {
     if (status >= 400) fixture.expectedHttpErrors.add(`${status} ${new URL(route.request().url()).pathname}`);
     return route.fulfill({ status, json: body, headers: { "Cache-Control": "no-store" } });
@@ -126,10 +132,31 @@ async function installPersonalFixture(page: Page, baseURL: string | undefined, o
     if (endpoint === "PUT /api/me/avatar") {
       fixture.avatarCalls++;
       expect([...url.searchParams.keys()]).toEqual([]);
-      expect(request.postDataJSON()).toEqual({ fileName: "portrait.png", mimeType: "image/png", contentBase64: png.toString("base64") });
+      const payload = request.postDataJSON();
+      expect(Object.keys(payload).sort()).toEqual(["contentBase64", "fileName", "mimeType"]);
+      expect(payload.fileName).toMatch(/^[a-z0-9._-]+\.(webp|jpe?g)$/i);
+      expect(["image/webp", "image/jpeg"]).toContain(payload.mimeType);
+      const image = Buffer.from(payload.contentBase64, "base64");
+      expect(image.toString("base64")).toBe(payload.contentBase64);
+      expect(image.byteLength).toBeGreaterThan(0);
+      expect(image.byteLength).toBeLessThanOrEqual(1024 * 1024);
+      if (payload.mimeType === "image/webp") {
+        expect(image.toString("ascii", 0, 4)).toBe("RIFF");
+        expect(image.toString("ascii", 8, 12)).toBe("WEBP");
+      } else expect(image.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+      fixture.lastAvatarPayload = payload;
       if (options.holdAvatarSave) await avatarSaveGate;
       if (fixture.rejectAvatar) return failure(route, "REQUEST_BODY_INVALID", "The image could not be saved. Please choose another image.");
       user.avatarUrl = avatarUrl;
+      return respond(route, { ok: true, user });
+    }
+    if (endpoint === "DELETE /api/me/avatar") {
+      fixture.removeCalls++;
+      expect([...url.searchParams.keys()]).toEqual([]);
+      expect(request.postData()).toBeNull();
+      if (options.holdAvatarRemove) await avatarRemoveGate;
+      if (fixture.rejectRemove) return failure(route, "AVATAR_REMOVE_FAILED", "The profile photo could not be removed. Please try again.");
+      user.avatarUrl = null;
       return respond(route, { ok: true, user });
     }
     if (endpoint === "GET /api/me/avatar") {
@@ -211,22 +238,70 @@ async function openPage(page: Page, path: string, heading: string) {
 async function profile(page: Page) {
   const desktop = page.getByTestId("button-user-menu");
   const mobile = page.getByTestId("button-user-menu-mobile");
-  if (await desktop.isVisible()) { await desktop.click(); return desktop; }
-  if (!(await mobile.isVisible())) await page.getByTestId("button-open-mobile-nav").click();
-  await mobile.click();
-  return mobile;
+  const trigger = await desktop.isVisible() ? desktop : mobile;
+  if (!(await trigger.isVisible())) await page.getByTestId("button-open-mobile-nav").click();
+  await trigger.click();
+  const menu = page.locator(".workspace-profile-menu");
+  await expect(menu).toBeVisible();
+  // Radix's focus scope mounts before its dismissable layer finishes registering.
+  // Wait for real menu focus and post-mount paints before keyboard interactions.
+  await expect.poll(() => menu.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  return trigger;
 }
 
 async function noOverflow(page: Page) {
   const geometry = await page.evaluate(() => ({ width: document.documentElement.clientWidth,
     scroll: document.documentElement.scrollWidth,
-    clipped: [...document.querySelectorAll("main input, main button, .workspace-profile-menu")].filter((element) => {
+    clipped: [...document.querySelectorAll("main input, main button, .workspace-profile-menu, [role=dialog], [role=alertdialog]")].filter((element) => {
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0 && (rect.left < -1 || rect.right > document.documentElement.clientWidth + 1);
     }).map((element) => element.id || element.getAttribute("data-testid") || element.tagName),
   }));
   expect(geometry.scroll, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.width + 1);
   expect(geometry.clipped).toEqual([]);
+}
+
+async function containedDialog(page: Page, name: string, role: "dialog" | "alertdialog" = "dialog") {
+  const dialog = page.getByRole(role, { name, exact: true });
+  await expect(dialog).toBeVisible();
+  const geometry = await dialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+      width: window.innerWidth, height: window.innerHeight, scroll: element.scrollWidth, client: element.clientWidth };
+  });
+  expect(geometry.left, JSON.stringify(geometry)).toBeGreaterThanOrEqual(0);
+  expect(geometry.top, JSON.stringify(geometry)).toBeGreaterThanOrEqual(0);
+  expect(geometry.right, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.width);
+  expect(geometry.bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.height);
+  expect(geometry.scroll, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.client + 1);
+  return dialog;
+}
+
+async function patternedPhoto(page: Page, width = 400, height = 240) {
+  const encoded = await page.evaluate(({ width, height }) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width; canvas.height = height;
+    const context = canvas.getContext("2d")!;
+    for (const [index, color] of ["#e33b3b", "#2ba067", "#386bdd", "#ffce33"].entries()) {
+      context.fillStyle = color;
+      context.fillRect(index % 2 * width / 2, Math.floor(index / 2) * height / 2, width / 2, height / 2);
+    }
+    return canvas.toDataURL("image/png").split(",")[1]!;
+  }, { width, height });
+  return { name: "portrait.png", mimeType: "image/png", buffer: Buffer.from(encoded, "base64") };
+}
+
+async function verifyAvatarOutput(page: Page, payload: Awaited<ReturnType<typeof installPersonalFixture>>["lastAvatarPayload"]) {
+  expect(payload).not.toBeNull();
+  const dimensions = await page.evaluate(async ({ mimeType, contentBase64 }) => {
+    const bytes = Uint8Array.from(atob(contentBase64), (character) => character.charCodeAt(0));
+    const image = await createImageBitmap(new Blob([bytes], { type: mimeType }));
+    const dimensions = { width: image.width, height: image.height };
+    image.close();
+    return dimensions;
+  }, payload!);
+  expect(dimensions).toEqual({ width: 512, height: 512 });
 }
 
 async function containedTwoFactorQr(page: Page) {
@@ -302,7 +377,7 @@ for (const [role, allowed] of [["superuser", true], ["admin", true], ["admin", f
 for (const theme of ["light", "dark"] as Theme[]) for (const viewport of viewports) {
   test(`Personal Account and Security ${theme} at ${viewport.width} stay readable and unclipped`, async ({ page, baseURL }) => {
     await page.setViewportSize(viewport);
-    const fixture = await installPersonalFixture(page, baseURL, { theme, longIdentity: true });
+    const fixture = await installPersonalFixture(page, baseURL, { theme, longIdentity: true, initialAvatar: true });
     await openPage(page, "/account", "Account");
     await expect(page.getByTestId("account-username")).toHaveText(fixture.user.username);
     await expect(page.getByTestId("account-email")).toHaveText(fixture.user.email);
@@ -311,6 +386,23 @@ for (const theme of ["light", "dark"] as Theme[]) for (const viewport of viewpor
     await noOverflow(page);
     await accessible(page);
     await page.screenshot({ path: test.info().outputPath("account.png"), animations: "disabled" });
+    const viewerTrigger = page.getByRole("button", { name: "View profile picture", exact: true });
+    await viewerTrigger.click();
+    await containedDialog(page, "Profile picture");
+    await noOverflow(page);
+    await accessible(page);
+    await page.screenshot({ path: test.info().outputPath("avatar-viewer.png"), animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await expect(viewerTrigger).toBeFocused();
+    await page.getByTestId("avatar-input").setInputFiles({ name: "portrait.png", mimeType: "image/png", buffer: png });
+    const editor = await containedDialog(page, "Adjust profile photo");
+    await expect(page.getByTestId("avatar-crop-preview")).toBeVisible();
+    await noOverflow(page);
+    await accessible(page);
+    await page.screenshot({ path: test.info().outputPath("avatar-editor.png"), animations: "disabled" });
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    expect(fixture.avatarCalls).toBe(0);
     await profile(page);
     await noOverflow(page);
     await page.screenshot({ path: test.info().outputPath("profile.png"), animations: "disabled" });
@@ -323,16 +415,16 @@ for (const theme of ["light", "dark"] as Theme[]) for (const viewport of viewpor
     await accessible(page);
     await page.screenshot({ path: test.info().outputPath("security-password.png"), animations: "disabled" });
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByTestId("two-factor-settings").getByRole("button", { name: "Aktifkan 2FA", exact: true }).click();
+    await page.getByTestId("two-factor-settings").getByRole("button", { name: "Activate 2FA", exact: true }).click();
     await page.locator("#my-account-two-factor-password").fill(fixturePassword);
-    await page.getByRole("button", { name: "Teruskan ke kod QR", exact: true }).click();
+    await page.getByRole("button", { name: "Continue to QR code", exact: true }).click();
     await expect(page.getByTestId("two-factor-qr")).toBeVisible();
     await noOverflow(page);
     await containedTwoFactorQr(page);
     await accessible(page);
     await page.screenshot({ path: test.info().outputPath("security-setup.png"), animations: "disabled",
       mask: [page.getByTestId("two-factor-qr")] });
-    await page.getByRole("button", { name: "Tak dapat imbas kod QR? Papar kunci persediaan", exact: true }).click();
+    await page.getByRole("button", { name: "Can't scan the QR code? Show setup key", exact: true }).click();
     await expect(page.locator("#two-factor-manual-setup")).toBeVisible();
     await noOverflow(page);
     await containedTwoFactorQr(page);
@@ -353,11 +445,12 @@ for (const role of ["superuser", "manager", "admin", "user"] as const) test(`Per
   await expect(page.getByTestId("avatar-preview")).toBeVisible();
   fixture.rejectAvatar = true;
   await page.getByTestId("avatar-save").click();
-  await expect(page.locator("main [role=alert]")).toContainText("could not be saved");
+  await expect(page.getByRole("dialog", { name: "Adjust profile photo", exact: true }).getByRole("alert")).toContainText("could not be saved");
   expect(fixture.avatarCalls).toBe(1);
   fixture.rejectAvatar = false;
   await page.getByTestId("avatar-save").click();
   await expect.poll(() => fixture.avatarCalls).toBe(2);
+  await verifyAvatarOutput(page, fixture.lastAvatarPayload);
   const updatedImages = page.locator(`img[src="${avatarUrl}"]`);
   await expect.poll(() => updatedImages.count()).toBeGreaterThanOrEqual(2);
   await profile(page);
@@ -366,8 +459,159 @@ for (const role of ["superuser", "manager", "admin", "user"] as const) test(`Per
   await page.reload();
   await expect(page.getByTestId("account-username")).toHaveText(fixture.user.username);
   await expect.poll(() => updatedImages.count()).toBeGreaterThanOrEqual(2);
+  await page.getByRole("button", { name: "Remove photo", exact: true }).click();
+  const removal = await containedDialog(page, "Remove profile photo?", "alertdialog");
+  expect(fixture.removeCalls).toBe(0);
+  await removal.getByRole("button", { name: "Remove photo", exact: true }).click();
+  await expect(removal).toHaveCount(0);
+  await expect(page.locator("main [role=status]")).toHaveText("Profile picture removed.");
+  await expect.poll(() => fixture.removeCalls).toBe(1);
+  await expect(updatedImages).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remove photo", exact: true })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("user") || "{}").avatarUrl)).toBeNull();
+  await profile(page);
+  await expect(updatedImages).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(page.getByTestId("account-username")).toHaveText(fixture.user.username);
+  await expect(updatedImages).toHaveCount(0);
   expect(fixture.requests.some((request) => /credentials|\/users\//.test(request))).toBe(false);
   clean(fixture);
+});
+
+test("Personal avatar crop supports keyboard, pointer, zoom, rotation and reset before a bounded save", async ({ page, baseURL }) => {
+  const fixture = await installPersonalFixture(page, baseURL, { role: "user", initialAvatar: true });
+  await openPage(page, "/account", "Account");
+  await page.getByTestId("avatar-input").setInputFiles(await patternedPhoto(page));
+  const editor = await containedDialog(page, "Adjust profile photo");
+  const canvas = page.getByTestId("avatar-crop-preview");
+  const stage = editor.getByRole("button", { name: "Reposition photo", exact: true });
+  await expect(canvas).toBeVisible();
+  await expect(page.getByTestId("avatar-save")).toBeEnabled();
+  const pixels = () => canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+  const original = await pixels();
+  const zoom = editor.getByRole("slider", { name: "Zoom", exact: true });
+  const initialZoom = await zoom.inputValue();
+  await zoom.focus();
+  await zoom.press("ArrowRight");
+  await expect.poll(() => zoom.inputValue()).not.toBe(initialZoom);
+  await stage.focus();
+  await stage.press("+");
+  await stage.press("ArrowRight");
+  await expect.poll(pixels).not.toBe(original);
+  const beforeDrag = await pixels();
+  const bounds = await canvas.boundingBox();
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds!.x + bounds!.width / 2 - 30, bounds!.y + bounds!.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(pixels).not.toBe(beforeDrag);
+  const beforeRotate = await pixels();
+  await editor.getByRole("button", { name: "Rotate clockwise", exact: true }).click();
+  await expect.poll(pixels).not.toBe(beforeRotate);
+  await editor.getByRole("button", { name: "Reset crop", exact: true }).click();
+  await expect(zoom).toHaveValue(initialZoom);
+  await expect.poll(pixels).toBe(original);
+  expect(fixture.avatarCalls).toBe(0);
+  await expect(page.getByTestId("avatar-preview").locator("img")).toHaveAttribute("src", avatarUrl);
+  await page.getByTestId("avatar-save").click();
+  await expect(editor).toHaveCount(0);
+  await expect.poll(() => fixture.avatarCalls).toBe(1);
+  await verifyAvatarOutput(page, fixture.lastAvatarPayload);
+  clean(fixture);
+});
+
+test("Personal avatar editor cancel preserves the saved photo and rejects unsafe input before upload", async ({ page, baseURL }) => {
+  const fixture = await installPersonalFixture(page, baseURL, { role: "user", initialAvatar: true });
+  await openPage(page, "/account", "Account");
+  const input = page.getByTestId("avatar-input");
+  await input.setInputFiles({ name: "oversized.png", mimeType: "image/png", buffer: Buffer.alloc(1024 * 1024 + 1) });
+  await expect(page.locator("main [role=alert]")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Adjust profile photo", exact: true })).toHaveCount(0);
+  for (const file of [
+    { name: "malformed.png", mimeType: "image/png", buffer: Buffer.from("not a valid PNG") },
+    await patternedPhoto(page, 2049, 2),
+  ]) {
+    await input.setInputFiles(file);
+    const invalidEditor = await containedDialog(page, "Adjust profile photo");
+    await expect(invalidEditor.getByRole("alert")).toBeVisible();
+    await expect(page.getByTestId("avatar-save")).toBeDisabled();
+    await invalidEditor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(invalidEditor).toHaveCount(0);
+    expect(fixture.avatarCalls).toBe(0);
+  }
+  await input.setInputFiles(await patternedPhoto(page));
+  const editor = await containedDialog(page, "Adjust profile photo");
+  await editor.getByRole("button", { name: "Rotate clockwise", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Change photo", exact: true })).toBeFocused();
+  await expect(page.getByTestId("avatar-preview").locator("img")).toHaveAttribute("src", avatarUrl);
+  expect(fixture.avatarCalls).toBe(0);
+  clean(fixture);
+});
+
+test("Personal Account copies the real username and explains an absent email without editing identity", async ({ page, baseURL }) => {
+  const fixture = await installPersonalFixture(page, baseURL, { role: "user", noEmail: true });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(baseURL!).origin });
+  await openPage(page, "/account", "Account");
+  await expect(page.getByTestId("account-email")).toContainText("Not provided");
+  await expect(page.locator("main")).toContainText(/administrator/i);
+  await page.getByRole("button", { name: "Copy username", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(fixture.user.username);
+  await expect(page.locator("main input:not([type=file]), main textarea, main [contenteditable=true]")).toHaveCount(0);
+  expect(fixture.requests.filter((request) => /^(PUT|PATCH|DELETE) /.test(request))).toEqual([]);
+  clean(fixture);
+});
+
+test("Personal avatar removal requires confirmation and recovers after server failure", async ({ page, baseURL }) => {
+  const fixture = await installPersonalFixture(page, baseURL, { role: "user", initialAvatar: true });
+  await openPage(page, "/account", "Account");
+  const trigger = page.getByRole("button", { name: "Remove photo", exact: true });
+  await trigger.click();
+  const dialog = await containedDialog(page, "Remove profile photo?", "alertdialog");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Change photo", exact: true })).toBeFocused();
+  expect(fixture.removeCalls).toBe(0);
+  await trigger.click();
+  fixture.rejectRemove = true;
+  await dialog.getByRole("button", { name: "Remove photo", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("The request could not be completed. Please try again in a moment.");
+  await expect(page.getByTestId("avatar-preview").locator("img")).toHaveAttribute("src", avatarUrl);
+  fixture.rejectRemove = false;
+  await dialog.getByRole("button", { name: "Remove photo", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.removeCalls).toBe(2);
+  await expect(page.locator(`img[src="${avatarUrl}"]`)).toHaveCount(0);
+  clean(fixture);
+});
+
+test("Personal avatar removal locks duplicate writes and survives stale session validation", async ({ page, baseURL }) => {
+  const fixture = await installPersonalFixture(page, baseURL, {
+    role: "user", initialAvatar: true, holdSessionValidation: true, holdAvatarRemove: true,
+  });
+  try {
+    await openPage(page, "/account", "Account");
+    await expect.poll(() => fixture.meCalls).toBe(2);
+    await page.getByRole("button", { name: "Remove photo", exact: true }).click();
+    const dialog = await containedDialog(page, "Remove profile photo?", "alertdialog");
+    const confirm = dialog.getByRole("button", { name: /^(Remove photo|Removing…)$/ });
+    await confirm.evaluate((element) => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+    await expect.poll(() => fixture.removeCalls).toBe(1);
+    await expect(confirm).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    fixture.releaseAvatarRemove();
+    await expect(dialog).toHaveCount(0);
+    fixture.releaseSessionValidation();
+    await expect.poll(() => fixture.sessionValidationReleased).toBe(true);
+    await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("user") || "{}").avatarUrl)).toBeNull();
+    await expect(page.locator(`img[src="${avatarUrl}"]`)).toHaveCount(0);
+    expect(fixture.removeCalls).toBe(1);
+    clean(fixture);
+  } finally { fixture.releaseAvatarRemove(); fixture.releaseSessionValidation(); }
 });
 
 test("Personal avatar survives an older in-flight session validation response", async ({ page, baseURL }) => {
@@ -430,15 +674,16 @@ test("Personal avatar saving locks input and prevents duplicate writes", async (
     const picker = page.getByTestId("avatar-input");
     await picker.setInputFiles({ name: "portrait.png", mimeType: "image/png", buffer: png });
     const save = page.getByTestId("avatar-save");
+    await expect(save).toBeEnabled();
     // Two synchronous DOM activations exercise the pre-render request lock.
     await save.evaluate((element) => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
     await expect.poll(() => fixture.avatarCalls).toBe(1);
     await expect(save).toBeDisabled();
     await expect(save).toHaveText("Saving…");
     await expect(picker).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Change photo", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Change photo", exact: true, includeHidden: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
-    await expect(page.locator("section[aria-labelledby=account-photo-title]")).toHaveAttribute("aria-busy", "true");
+    await expect(page.getByRole("region", { name: "Profile picture", exact: true, includeHidden: true })).toHaveAttribute("aria-busy", "true");
     fixture.releaseAvatarSave();
     await expect(page.locator("main [role=status]")).toHaveText("Profile picture updated.");
     await expect(save).toHaveCount(0);
@@ -479,7 +724,7 @@ test("Personal password confirms independently, preserves server rejection, and 
   const current = page.locator("#my-account-current-password");
   const password = page.locator("#my-account-new-password");
   const confirmation = page.locator("#my-account-confirm-password");
-  const submit = page.getByRole("button", { name: "Tukar kata laluan", exact: true });
+  const submit = page.getByRole("button", { name: "Update password", exact: true });
   await current.fill("Wrong-synthetic-password-123!");
   await password.fill(nextPassword);
   await submit.click();
@@ -490,7 +735,7 @@ test("Personal password confirms independently, preserves server rejection, and 
   expect(fixture.passwordCalls).toBe(0);
   await confirmation.fill(nextPassword);
   await submit.click();
-  await expect(page.locator("#my-account-current-password-error")).toContainText("Kata laluan semasa tidak betul");
+  await expect(page.locator("#my-account-current-password-error")).toContainText("Your current password is incorrect");
   expect(fixture.passwordCalls).toBe(1);
   await expect(password).toHaveValue(nextPassword);
   await expect(password).toHaveAttribute("type", "password");
@@ -503,26 +748,61 @@ test("Personal password confirms independently, preserves server rejection, and 
   clean(fixture);
 });
 
+test("Personal Security keeps English password guidance, Caps Lock and keyboard cancellation accessible", async ({ page, baseURL }) => {
+  const fixture = await installPersonalFixture(page, baseURL, { role: "user" });
+  await openPage(page, "/security", "Security");
+  const trigger = page.getByTestId("security-change-password");
+  await trigger.click();
+  const current = page.getByLabel("Current password", { exact: true });
+  const password = page.getByLabel("New password", { exact: true });
+  const confirmation = page.getByLabel("Confirm new password", { exact: true });
+  await expect(current).toBeFocused();
+  await current.fill(fixturePassword);
+  await current.evaluate((element) => element.dispatchEvent(new KeyboardEvent("keydown", { key: "a", modifierCapsLock: true, bubbles: true })));
+  await expect(page.locator("#my-account-current-password-caps-lock")).toHaveText("Caps Lock is on.");
+  await expect(current).toHaveAttribute("aria-describedby", /my-account-current-password-caps-lock/);
+  await password.fill(nextPassword);
+  await expect(page.locator("#my-account-current-password-caps-lock")).toHaveCount(0);
+  await confirmation.fill(nextPassword);
+  await page.getByRole("button", { name: "Show new password", exact: true }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await expect(current).toHaveAttribute("type", "password");
+  await expect(confirmation).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Hide new password", exact: true }).click();
+  await expect(password).toHaveAttribute("type", "password");
+  await confirmation.press("Escape");
+  await expect(page.getByRole("form", { name: "Change password", exact: true })).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  for (const field of [current, password, confirmation]) {
+    await expect(field).toHaveValue("");
+    await expect(field).toHaveAttribute("type", "password");
+  }
+  expect(fixture.passwordCalls).toBe(0);
+  await accessible(page);
+  clean(fixture);
+});
+
 test("Personal 2FA uses server setup, rejects invalid code, enables only after verification, and confirms disable", async ({ page, baseURL }) => {
   const fixture = await installPersonalFixture(page, baseURL);
   await openPage(page, "/security", "Security");
   const panel = page.getByTestId("two-factor-settings");
   await expect(panel).toHaveAttribute("data-two-factor-state", "off");
-  await panel.getByRole("button", { name: "Aktifkan 2FA", exact: true }).click();
+  await panel.getByRole("button", { name: "Activate 2FA", exact: true }).click();
   await panel.locator("#my-account-two-factor-password").fill(fixturePassword);
-  await panel.getByRole("button", { name: "Teruskan ke kod QR", exact: true }).click();
+  await panel.getByRole("button", { name: "Continue to QR code", exact: true }).click();
   await expect(page.getByTestId("two-factor-qr")).toBeVisible();
   await expect(panel).toHaveAttribute("data-two-factor-state", "setup");
   expect(fixture.setupCalls).toBe(1);
   expect(fixture.user.twoFactorEnabled).toBe(false);
   await expect(page.locator("#my-account-two-factor-secret")).toHaveCount(0);
-  await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
+  await panel.getByRole("button", { name: "I have added the account", exact: true }).click();
   await panel.locator("#my-account-two-factor-code").fill("123456");
-  await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
-  await expect(panel.locator("#my-account-two-factor-code-error")).toContainText("Kod pengesah tidak betul");
+  await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
+  await expect(panel.locator("#my-account-two-factor-code-error")).toContainText("The authenticator code is incorrect");
   await expect(panel).toHaveAttribute("data-two-factor-state", "setup");
   await panel.locator("#my-account-two-factor-code").fill("345678");
-  await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
+  await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
   await expect(panel).toHaveAttribute("data-two-factor-state", "active");
   expect(fixture.enableCalls).toBe(2);
   await expect(page.getByTestId("two-factor-qr")).toHaveCount(0);
@@ -530,13 +810,17 @@ test("Personal 2FA uses server setup, rejects invalid code, enables only after v
   await expect(panel).toHaveAttribute("data-two-factor-state", "active");
   await expect(page.getByTestId("two-factor-qr")).toHaveCount(0);
   expect(fixture.setupCalls).toBe(1);
-  await panel.getByRole("button", { name: "Nyahaktifkan 2FA", exact: true }).click();
+  await panel.getByRole("button", { name: "Disable 2FA", exact: true }).click();
   expect(fixture.disableCalls).toBe(0);
   await panel.locator("#my-account-two-factor-password").fill(fixturePassword);
   await panel.locator("#my-account-two-factor-code").fill("456789");
-  await panel.getByRole("button", { name: "Sahkan nyahaktifkan", exact: true }).click();
+  await panel.getByRole("button", { name: "Confirm disable", exact: true }).click();
   await expect(panel).toHaveAttribute("data-two-factor-state", "off");
   expect(fixture.disableCalls).toBe(1);
+  await expect.poll(() => page.evaluate(() => {
+    const values = [localStorage, sessionStorage].flatMap((storage) => Object.keys(storage).map((key) => storage.getItem(key) ?? ""));
+    return values.some((value) => value.includes("JBSWY3DPEHPK3PXP") || value.includes("otpauth://"));
+  })).toBe(false);
   expect(fixture.requests).not.toContain("GET /api/settings");
   clean(fixture);
 });

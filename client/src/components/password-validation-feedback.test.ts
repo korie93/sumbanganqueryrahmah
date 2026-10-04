@@ -132,13 +132,13 @@ test("2FA setup renders a local QR with secondary manual fallback without secret
   };
   const markup = renderToStaticMarkup(createElement(PersonalSecurityForm, props));
   assert.match(markup, /data-testid="two-factor-qr"/);
-  assert.match(markup, /Imbas kod QR SQR dengan aplikasi pengesah/);
-  assert.match(markup, /Papar kunci persediaan/);
+  assert.match(markup, /Scan the SQR QR code with your authenticator app/);
+  assert.match(markup, /Show setup key/);
   assert.doesNotMatch(markup, /value="TESTONLY"/);
-  assert.match(markup, /masa telefon ditetapkan secara automatik/);
+  assert.match(markup, /time is set automatically/);
   assert.doesNotMatch(markup, /(?:src|href)="https?:\/\/[^\"]*(?:TESTONLY|secret=)/);
   const invalid = renderToStaticMarkup(createElement(PersonalSecurityForm, { ...props, twoFactorSetupUri: "" }));
-  assert.match(invalid, /Tetapan aplikasi tidak lengkap/);
+  assert.match(invalid, /Authenticator settings are incomplete/);
   assert.doesNotMatch(invalid, /data-testid="two-factor-qr"/);
-  assert.doesNotMatch(invalid, /Sahkan dan aktifkan 2FA/);
+  assert.doesNotMatch(invalid, /Verify and enable 2FA/);
 });

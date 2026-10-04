@@ -87,18 +87,28 @@ test("all authenticated roles can save their own avatar and canonical current-us
 test("avatar routes reject anonymous, forbidden account states, another identity and protected payload fields", async () => {
   const f = await fixture();
   try {
-    for (const method of ["GET", "PUT"]) {
+    for (const method of ["GET", "PUT", "DELETE"]) {
       assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { method })).status, 401);
     }
     for (const key of ["userId", "username", "email", "role", "permissions", "status", "path"]) {
       const response = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "PUT", headers: f.headers, body: JSON.stringify({ ...upload, [key]: "other" }) });
       assert.equal(response.status, 400);
+      const removeResponse = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "DELETE", headers: f.headers, body: JSON.stringify({ [key]: "other" }) });
+      assert.equal(removeResponse.status, 400);
     }
     assert.equal((await fetch(`${f.baseUrl}/api/me/avatar?userId=other`, { headers: f.headers })).status, 400);
     assert.equal((await fetch(`${f.baseUrl}/api/me/avatar/other`, { method: "PUT", headers: f.headers, body: JSON.stringify(upload) })).status, 404);
+    for (const query of ["userId=other", "v=0123456789abcdef01234567"]) {
+      assert.equal((await fetch(`${f.baseUrl}/api/me/avatar?${query}`, { method: "DELETE", headers: f.headers })).status, 400);
+    }
+    assert.equal((await fetch(`${f.baseUrl}/api/me/avatar/other`, { method: "DELETE", headers: f.headers })).status, 404);
+    for (const body of [[], null, "other", 1]) {
+      assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { method: "DELETE", headers: f.headers, body: JSON.stringify(body) })).status, 400);
+    }
     for (const state of [{ isBanned: true }, { status: "disabled" }, { status: "deleted" }, { mustChangePassword: true }]) {
       Object.assign(f.user, { isBanned: false, status: "active", mustChangePassword: false }, state);
       assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { method: "PUT", headers: f.headers, body: JSON.stringify(upload) })).status, 403);
+      assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { method: "DELETE", headers: f.headers })).status, 403);
     }
     assert.equal(f.auditLogs.length, 0);
   } finally { await f.dispose(); }
@@ -109,12 +119,60 @@ test("avatar mutation remains CSRF protected and scoped JSON parsing accepts abo
   try {
     const csrfRejected = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "PUT", headers: { ...f.headers, cookie: "sqr_auth=fixture-session" }, body: JSON.stringify(upload) });
     assert.equal(csrfRejected.status, 403);
+    const csrfRemoveRejected = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "DELETE", headers: { ...f.headers, cookie: "sqr_auth=fixture-session" } });
+    assert.equal(csrfRemoveRejected.status, 403);
     assert.equal(f.limiterCalls(), 0);
     const aboveDefault = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "PUT", headers: f.headers, body: JSON.stringify({ ...upload, contentBase64: Buffer.alloc(20000).toString("base64") }) });
     assert.equal(aboveDefault.status, 400, "Scoped parser admits the bounded payload; image validation rejects non-image content.");
     const excessive = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "PUT", headers: f.headers, body: JSON.stringify({ ...upload, contentBase64: "A".repeat(1_500_000) }) });
     assert.equal(excessive.status, 413);
     assert.equal(f.auditLogs.length, 0);
+  } finally { await f.dispose(); }
+});
+
+test("all authenticated roles can remove only their own avatar and synchronize a canonical empty avatar", async () => {
+  const f = await fixture();
+  try {
+    const otherUser = { ...f.user, id: "another-account-id", username: "another.account" };
+    const originalGetUser = f.storage.getUser.bind(f.storage);
+    f.storage.getUser = async (id) => id === otherUser.id
+      ? otherUser as unknown as NonNullable<Awaited<ReturnType<typeof originalGetUser>>>
+      : originalGetUser(id);
+    const otherHeaders = { ...f.headers, "x-test-userid": otherUser.id, "x-test-username": otherUser.username };
+    assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { method: "PUT", headers: otherHeaders, body: JSON.stringify(upload) })).status, 200);
+
+    for (const role of ["user", "admin", "manager", "superuser"]) {
+      f.user.role = role;
+      const headers = { ...f.headers, "x-test-role": role };
+      assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { method: "PUT", headers, body: JSON.stringify(upload) })).status, 200);
+      const removed = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "DELETE", headers });
+      const payload = await removed.json();
+      assert.equal(removed.status, 200, JSON.stringify(payload));
+      assert.equal(payload.ok, true);
+      assert.equal(payload.user.id, f.user.id);
+      assert.equal(payload.user.avatarUrl, null);
+      assert.equal(payload.user.createdAt, "2026-03-01T00:00:00.000Z");
+      assert.equal(authCurrentUserSchema.safeParse(payload.user).success, true);
+      assert.equal(payload.user.passwordHash, undefined);
+      assert.equal(payload.user.twoFactorSecretEncrypted, undefined);
+      assert.equal(JSON.stringify(payload).includes("profile-avatars"), false);
+      assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { headers })).status, 404);
+      assert.equal((await (await fetch(`${f.baseUrl}/api/auth/me`, { headers })).json()).user.avatarUrl, null);
+      const repeated = await fetch(`${f.baseUrl}/api/me/avatar`, { method: "DELETE", headers, body: "{}" });
+      assert.equal(repeated.status, 200);
+      assert.equal((await repeated.json()).user.avatarUrl, null);
+      assert.equal((await fetch(`${f.baseUrl}/api/me/avatar`, { headers: otherHeaders })).status, 200);
+    }
+    assert.equal(f.limiterCalls(), 13, "Every save/remove attempt retains the existing authenticated limiter.");
+    const removalLogs = f.auditLogs.filter((entry) => entry.action === "USER_PROFILE_PICTURE_REMOVED");
+    assert.equal(removalLogs.length, 4, "Already-absent photos do not produce duplicate removal events.");
+    for (const entry of removalLogs) {
+      assert.equal(entry.performedBy, f.user.id);
+      assert.equal(entry.targetUser, f.user.id);
+      assert.deepEqual(JSON.parse(entry.details!), { removed: true });
+    }
+    assert.equal(f.credentialUpdates.length, 0);
+    assert.equal(f.accountUpdates.length, 0);
   } finally { await f.dispose(); }
 });
 

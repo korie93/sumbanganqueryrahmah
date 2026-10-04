@@ -9,10 +9,11 @@ import { getCredentialPasswordValidationError } from "@shared/password-policy";
 type UseSettingsMyAccountCredentialStateArgs = UseSettingsMyAccountArgs & {
   currentUser: CurrentUser | null;
   forceLogoutAfterPasswordChange: () => void;
+  locale?: "ms" | "en";
 };
 
 const validateCurrentPassword = (value: string) => value ? null : "Current password is required.";
-const validateNewPassword = (value: string) => getCredentialPasswordValidationError(value, "ms")?.message ?? null;
+const validateNewPassword = (value: string, locale: "ms" | "en") => getCredentialPasswordValidationError(value, locale)?.message ?? null;
 const validateConfirmation = (value: string, confirmation: string) =>
   value === confirmation ? null : "Confirm password does not match.";
 
@@ -24,6 +25,7 @@ export function useSettingsMyAccountCredentialState({
   forceLogoutAfterPasswordChange,
   isMountedRef,
   toast,
+  locale = "ms",
 }: UseSettingsMyAccountCredentialStateArgs) {
   const [currentPasswordInput, setCurrentPassword] = useState("");
   const [currentPasswordError, setCurrentPasswordError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export function useSettingsMyAccountCredentialState({
     // A synchronous lock prevents repeat submissions before React re-renders.
     if (!currentUser || requestRef.current || accountKeyRef.current !== accountKey) return;
     const currentError = validateCurrentPassword(currentPasswordInput);
-    const newError = validateNewPassword(newPasswordInput);
+    const newError = validateNewPassword(newPasswordInput, locale);
     const confirmationError = validateConfirmation(newPasswordInput, confirmPasswordInput);
     setCurrentPasswordError(currentError);
     setNewPasswordError(newError);
@@ -109,7 +111,7 @@ export function useSettingsMyAccountCredentialState({
       if (response.forceLogout) forceLogoutAfterPasswordChange();
     } catch (error: unknown) {
       if (!isCurrent()) return;
-      const message = getAuthErrorMessage(error, "Password could not be changed. Please try again.");
+      const message = getAuthErrorMessage(error, "Password could not be changed. Please try again.", undefined, locale);
       const code = getAuthErrorCode(error);
       if (code === "INVALID_CURRENT_PASSWORD") setCurrentPasswordError(message);
       else if (code === "INVALID_PASSWORD") setNewPasswordError(message);
@@ -121,7 +123,7 @@ export function useSettingsMyAccountCredentialState({
       }
     }
   }, [accountKey, clearPasswordFields, confirmPasswordInput, currentPasswordInput, currentUser,
-    forceLogoutAfterPasswordChange, isMountedRef, newPasswordInput, toast]);
+    forceLogoutAfterPasswordChange, isMountedRef, locale, newPasswordInput, toast]);
 
   return {
     clearPasswordFields,
@@ -132,7 +134,7 @@ export function useSettingsMyAccountCredentialState({
     handleConfirmPasswordBlur: () => setConfirmPasswordError(validateConfirmation(newPasswordInput, confirmPasswordInput)),
     handleCurrentPasswordBlur: () => setCurrentPasswordError(validateCurrentPassword(currentPasswordInput)),
     handleNewPasswordBlur: () => {
-      setNewPasswordError(validateNewPassword(newPasswordInput));
+      setNewPasswordError(validateNewPassword(newPasswordInput, locale));
       if (confirmPasswordInput) setConfirmPasswordError(validateConfirmation(newPasswordInput, confirmPasswordInput));
     },
     handleChangePassword,

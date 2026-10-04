@@ -1,0 +1,38 @@
+.personal-account-page { max-width: 44rem; }
+.account-profile-hero { display: flex; flex-direction: column; align-items: center; padding: 2rem 1.25rem; border: 1px solid hsl(var(--border)); border-radius: .75rem; background: hsl(var(--card)); text-align: center; gap: 1rem; }
+.account-avatar-button { display: block; border-radius: 50%; flex-shrink: 0; }
+.account-avatar-large { display: block; width: 9rem; height: 9rem; border: 2px solid hsl(var(--border)); border-radius: 50%; overflow: hidden; }
+.account-avatar-button:hover { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+.account-profile-identity { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem; max-width: 100%; }
+.account-profile-name { font-size: 1.375rem; font-weight: 650; overflow-wrap: anywhere; min-width: 0; }
+.account-role-label { padding: .25rem .5rem; font-size: .75rem; color: hsl(var(--muted-foreground)); background: hsl(var(--muted)); border-radius: .5rem; text-transform: capitalize; }
+.account-photo-help { font-size: .8125rem; line-height: 1.6; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+.account-photo-actions, .account-photo-tools, .account-photo-dialog-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem; }
+.account-photo-actions svg, .account-photo-tools svg { width: 1rem; height: 1rem; margin-right: .5rem; flex-shrink: 0; }
+.account-details-section { margin-top: 1.5rem; }
+.account-details-section h2 { font-size: 1rem; font-weight: 600; margin-bottom: .75rem; }
+.account-username-row dd { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.account-username-row dd span { min-width: 0; }
+.account-username-row button { flex-shrink: 0; }
+.account-email-note { display: flex; align-items: flex-start; gap: .75rem; padding: 1rem; border: 1px solid hsl(var(--border)); border-radius: .5rem; color: hsl(var(--muted-foreground)); font-size: .875rem; line-height: 1.6; }
+.account-email-note svg { flex-shrink: 0; width: 1.125rem; height: 1.125rem; margin-top: .125rem; }
+.account-photo-dialog { max-width: 30rem; min-width: 0; }
+.account-photo-dialog button { min-height: 2.75rem; }
+.account-photo-dialog > button[aria-label="Close"] { width: 2.75rem; top: .25rem; right: .25rem; display: grid; place-items: center; }
+.account-photo-dialog [id^="radix-"] { overflow-wrap: anywhere; }
+.account-photo-dialog h2 { padding-right: 1.5rem; }
+.account-avatar-viewer { width: min(100%, 22rem); aspect-ratio: 1; margin-inline: auto; border-radius: 50%; overflow: hidden; border: 1px solid hsl(var(--border)); }
+.account-crop-stage { position: relative; display: block; width: min(100%, 15rem); aspect-ratio: 1; margin-inline: auto; overflow: hidden; border-radius: 50%; border: 2px solid hsl(var(--border)); background: hsl(var(--muted)); cursor: grab; touch-action: none; padding: 0; }
+.account-crop-stage:active { cursor: grabbing; }
+.account-crop-stage:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.account-crop-stage canvas { display: block; width: 100%; height: 100%; }
+.account-photo-loading { position: absolute; inset: 0; display: grid; place-items: center; font-size: .875rem; }
+.account-crop-zoom { display: flex; align-items: center; gap: .75rem; min-width: 0; font-size: .875rem; }
+.account-crop-zoom input { flex: 1; min-width: 0; min-height: 2.75rem; accent-color: hsl(var(--primary)); }
+.account-crop-zoom output { min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
+.account-photo-dialog-actions { justify-content: flex-end; }
+.account-photo-dialog[aria-busy="true"] > button[aria-label="Close"] { pointer-events: none; opacity: .4; }
+@media (max-width: 640px) {
+  .account-profile-hero { padding: 1.5rem 1rem; }
+  .account-photo-dialog-actions > button { flex: 1; }
+}

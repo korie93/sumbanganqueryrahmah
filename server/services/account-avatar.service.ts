@@ -1,5 +1,7 @@
 import type { AuthenticatedUser } from "../auth/guards";
+import { z } from "zod";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { parseRequestBody } from "../http/validation";
 import { AuthAccountError } from "./auth-account-types";
 import { inspectStoredAvatar, validateAccountAvatarUpload } from "../lib/account-avatar-image";
 import { logger } from "../lib/logger";
@@ -12,7 +14,7 @@ type Account = NonNullable<Awaited<ReturnType<AuthAccountService["getCurrentUser
 export class AccountAvatarService {
   constructor(private readonly deps: {
     authAccountService: Pick<AuthAccountService, "getCurrentUser">;
-    repository: Pick<AccountAvatarRepository, "getUrl" | "read" | "save">;
+    repository: Pick<AccountAvatarRepository, "getUrl" | "read" | "save" | "remove">;
     storage: Pick<PostgresStorage, "createAuditLog">;
   }) {}
 
@@ -54,6 +56,21 @@ export class AccountAvatarService {
       targetUser: actor.id,
       details: JSON.stringify({ mimeType: image.mimeType, bytes: image.buffer.length }),
     });
+    return actor;
+  }
+
+  async remove(authUser: AuthenticatedUser | undefined, body: unknown) {
+    const actor = await this.requireActor(authUser);
+    parseRequestBody(z.object({}).strict().optional(), body);
+    const removed = await this.deps.repository.remove(actor.id);
+    if (removed) {
+      await this.deps.storage.createAuditLog({
+        action: "USER_PROFILE_PICTURE_REMOVED",
+        performedBy: actor.id,
+        targetUser: actor.id,
+        details: JSON.stringify({ removed: true }),
+      });
+    }
     return actor;
   }
 }

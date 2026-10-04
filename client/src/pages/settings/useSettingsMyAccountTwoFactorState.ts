@@ -6,13 +6,17 @@ import type { SyncCurrentUserFn, UseSettingsMyAccountArgs } from "@/pages/settin
 import { buildNextCurrentUser, canConfigureTwoFactor, normalizeAuthenticatorCode } from "@/pages/settings/settings-my-account-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 
-type Args = UseSettingsMyAccountArgs & { currentUser: CurrentUser | null; syncCurrentUser: SyncCurrentUserFn };
+type Args = UseSettingsMyAccountArgs & { currentUser: CurrentUser | null; syncCurrentUser: SyncCurrentUserFn; locale?: "ms" | "en" };
 type PendingSetup = { accountKey: string; accountName: string; issuer: string; secret: string; uri: string; expiresAt: string };
-const EXPIRED_MESSAGE = "Persediaan 2FA telah tamat tempoh. Mulakan semula dan gantikan entri lama dalam aplikasi pengesah.";
-const validatePassword = (value: string) => value ? null : "Sila masukkan kata laluan semasa.";
-const validateCode = (value: string) => normalizeAuthenticatorCode(value).length === 6 ? null : "Sila masukkan kod pengesah 6 digit.";
+const expiredMessage = (locale: "ms" | "en") => locale === "en"
+  ? "Two-factor setup has expired. Start again and replace the old entry in your authenticator app."
+  : "Persediaan 2FA telah tamat tempoh. Mulakan semula dan gantikan entri lama dalam aplikasi pengesah.";
+const validatePassword = (value: string, locale: "ms" | "en") => value ? null
+  : locale === "en" ? "Enter your current password." : "Sila masukkan kata laluan semasa.";
+const validateCode = (value: string, locale: "ms" | "en") => normalizeAuthenticatorCode(value).length === 6 ? null
+  : locale === "en" ? "Enter the 6-digit authenticator code." : "Sila masukkan kod pengesah 6 digit.";
 
-export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, syncCurrentUser, toast }: Args) {
+export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, syncCurrentUser, toast, locale = "ms" }: Args) {
   const [twoFactorPasswordInput, setPassword] = useState("");
   const [twoFactorPasswordError, setPasswordError] = useState<string | null>(null);
   const [twoFactorCodeInput, setCode] = useState("");
@@ -76,7 +80,7 @@ export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, 
     if (!setup || setup.accountKey !== accountKey) return;
     const expire = () => {
       clearSetup();
-      setActionError(EXPIRED_MESSAGE);
+      setActionError(expiredMessage(locale));
     };
     const remaining = Date.parse(setup.expiresAt) - Date.now();
     if (!Number.isFinite(remaining) || remaining <= 0) {
@@ -85,7 +89,7 @@ export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, 
     }
     const timeout = window.setTimeout(expire, remaining);
     return () => window.clearTimeout(timeout);
-  }, [accountKey, clearSetup, setup]);
+  }, [accountKey, clearSetup, locale, setup]);
 
   const beginRequest = useCallback(() => {
     if (!currentUser || currentAccountRef.current !== accountKey || requestRef.current.controller || !canConfigureTwoFactor(currentUser.role)) return null;
@@ -118,7 +122,7 @@ export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, 
 
   const handleStartTwoFactorSetup = useCallback(async () => {
     if (!currentUser || requestRef.current.controller) return;
-    const validation = validatePassword(twoFactorPasswordInput);
+    const validation = validatePassword(twoFactorPasswordInput, locale);
     setPasswordError(validation);
     if (validation) return;
     const request = beginRequest();
@@ -135,21 +139,21 @@ export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, 
       setPasswordError(null);
     } catch (error: unknown) {
       if (!request.isCurrent()) return;
-      const message = getAuthErrorMessage(error, "Persediaan 2FA gagal. Sila cuba lagi.");
+      const message = getAuthErrorMessage(error, locale === "en" ? "Two-factor setup failed. Please try again." : "Persediaan 2FA gagal. Sila cuba lagi.", undefined, locale);
       if (getAuthErrorCode(error) === "INVALID_CURRENT_PASSWORD") setPasswordError(message);
       else setActionError(message);
       if (getAuthErrorCode(error) === "TWO_FACTOR_ALREADY_ENABLED") await reconcileStatus(request);
     } finally { request.finish(); }
-  }, [accountKey, beginRequest, currentUser, reconcileStatus, syncCurrentUser, twoFactorPasswordInput]);
+  }, [accountKey, beginRequest, currentUser, locale, reconcileStatus, syncCurrentUser, twoFactorPasswordInput]);
 
   const handleEnableTwoFactor = useCallback(async () => {
     if (!currentUser || requestRef.current.controller) return;
     if (!setup || setup.accountKey !== accountKey || !Number.isFinite(Date.parse(setup.expiresAt)) || Date.parse(setup.expiresAt) <= Date.now()) {
       clearSetup();
-      setActionError(EXPIRED_MESSAGE);
+      setActionError(expiredMessage(locale));
       return;
     }
-    const validation = validateCode(twoFactorCodeInput);
+    const validation = validateCode(twoFactorCodeInput, locale);
     setCodeError(validation);
     if (validation) return;
     const request = beginRequest();
@@ -160,23 +164,26 @@ export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, 
       syncCurrentUser(buildNextCurrentUser(currentUser, currentUser.username, response));
       clearSetup();
       setActionError(null);
-      toast(buildMutationSuccessToast({ title: "2FA berjaya diaktifkan", description: "Gunakan kod daripada aplikasi pengesah apabila anda log masuk." }));
+      toast(buildMutationSuccessToast({
+        title: locale === "en" ? "2FA enabled" : "2FA berjaya diaktifkan",
+        description: locale === "en" ? "Use a code from your authenticator app when you sign in." : "Gunakan kod daripada aplikasi pengesah apabila anda log masuk.",
+      }));
     } catch (error: unknown) {
       if (!request.isCurrent()) return;
       const code = getAuthErrorCode(error);
-      const message = getAuthErrorMessage(error, "Pengesahan 2FA gagal. Sila cuba lagi.");
+      const message = getAuthErrorMessage(error, locale === "en" ? "Two-factor verification failed. Please try again." : "Pengesahan 2FA gagal. Sila cuba lagi.", undefined, locale);
       if (["TWO_FACTOR_SETUP_EXPIRED", "TWO_FACTOR_SETUP_MISSING", "TWO_FACTOR_ALREADY_ENABLED", "TWO_FACTOR_SECRET_INVALID"].includes(code ?? "")) {
         clearSetup();
         setActionError(message);
         await reconcileStatus(request);
       } else setCodeError(message);
     } finally { request.finish(); }
-  }, [accountKey, beginRequest, clearSetup, currentUser, reconcileStatus, setup, syncCurrentUser, toast, twoFactorCodeInput]);
+  }, [accountKey, beginRequest, clearSetup, currentUser, locale, reconcileStatus, setup, syncCurrentUser, toast, twoFactorCodeInput]);
 
   const handleDisableTwoFactor = useCallback(async () => {
     if (!currentUser || requestRef.current.controller) return;
-    const passwordValidation = validatePassword(twoFactorPasswordInput);
-    const codeValidation = validateCode(twoFactorCodeInput);
+    const passwordValidation = validatePassword(twoFactorPasswordInput, locale);
+    const codeValidation = validateCode(twoFactorCodeInput, locale);
     setPasswordError(passwordValidation);
     setCodeError(codeValidation);
     if (passwordValidation || codeValidation) return;
@@ -188,11 +195,14 @@ export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, 
       syncCurrentUser(buildNextCurrentUser(currentUser, currentUser.username, response));
       clearSetup();
       setActionError(null);
-      toast(buildMutationSuccessToast({ title: "2FA telah dinyahaktifkan", description: "Anda boleh mengaktifkannya semula dengan persediaan baharu." }));
+      toast(buildMutationSuccessToast({
+        title: locale === "en" ? "2FA disabled" : "2FA telah dinyahaktifkan",
+        description: locale === "en" ? "You can enable it again with a new setup." : "Anda boleh mengaktifkannya semula dengan persediaan baharu.",
+      }));
     } catch (error: unknown) {
       if (!request.isCurrent()) return;
       const code = getAuthErrorCode(error);
-      const message = getAuthErrorMessage(error, "2FA tidak dapat dinyahaktifkan. Sila cuba lagi.");
+      const message = getAuthErrorMessage(error, locale === "en" ? "Two-factor authentication could not be disabled. Please try again." : "2FA tidak dapat dinyahaktifkan. Sila cuba lagi.", undefined, locale);
       if (code === "INVALID_CURRENT_PASSWORD") setPasswordError(message);
       else if (["TWO_FACTOR_INVALID_CODE", "TWO_FACTOR_CODE_INVALID", "TWO_FACTOR_CODE_REPLAYED"].includes(code ?? "")) setCodeError(message);
       else setActionError(message);
@@ -201,13 +211,13 @@ export function useSettingsMyAccountTwoFactorState({ currentUser, isMountedRef, 
         await reconcileStatus(request);
       }
     } finally { request.finish(); }
-  }, [beginRequest, clearSetup, currentUser, reconcileStatus, syncCurrentUser, toast, twoFactorCodeInput, twoFactorPasswordInput]);
+  }, [beginRequest, clearSetup, currentUser, locale, reconcileStatus, syncCurrentUser, toast, twoFactorCodeInput, twoFactorPasswordInput]);
 
   const visibleSetup = setup?.accountKey === accountKey && !currentUser?.twoFactorEnabled ? setup : null;
   return {
     handleClearTwoFactorSetup, handleDisableTwoFactor, handleEnableTwoFactor, handleStartTwoFactorSetup,
-    handleTwoFactorCodeBlur: () => setCodeError(validateCode(twoFactorCodeInput)),
-    handleTwoFactorPasswordBlur: () => setPasswordError(validatePassword(twoFactorPasswordInput)),
+    handleTwoFactorCodeBlur: () => setCodeError(validateCode(twoFactorCodeInput, locale)),
+    handleTwoFactorPasswordBlur: () => setPasswordError(validatePassword(twoFactorPasswordInput, locale)),
     setTwoFactorCodeInput, setTwoFactorPasswordInput, twoFactorActionError, twoFactorCodeError, twoFactorCodeInput,
     twoFactorLoading, twoFactorPasswordError, twoFactorPasswordInput,
     twoFactorSetupAccountName: visibleSetup?.accountName ?? "",

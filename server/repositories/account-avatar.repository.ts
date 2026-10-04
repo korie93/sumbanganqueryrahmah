@@ -99,4 +99,19 @@ export class AccountAvatarRepository {
       });
     }
   }
+
+  async remove(userId: string): Promise<boolean> {
+    if (!await this.checkDirectory(false)) return false;
+    const destination = this.filePath(userId);
+    try {
+      const entry = await fs.lstat(destination);
+      if (!entry.isFile() || entry.isSymbolicLink()) throw new Error("Avatar storage entry is not valid.");
+      // Remove only this account's hashed entry, never a directory or link target.
+      await fs.unlink(destination);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw error;
+    }
+  }
 }

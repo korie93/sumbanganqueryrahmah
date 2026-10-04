@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { updateAccountAvatar } from "./account-avatar";
+import { removeAccountAvatar, updateAccountAvatar } from "./account-avatar";
 
 const user = {
   id: "avatar-user", username: "avatar.user", role: "user", status: "active",
@@ -24,5 +24,30 @@ test("avatar update consumes the mutation contract without a session expiry fiel
     const result = await updateAccountAvatar(payload, new AbortController().signal);
     assert.equal(result.avatarUrl, user.avatarUrl);
     assert.equal(result.createdAt, user.createdAt);
+  } finally { globalThis.fetch = original; }
+});
+
+test("avatar removal uses the authenticated self endpoint without body or target selector", async () => {
+  const original = globalThis.fetch;
+  const signal = new AbortController().signal;
+  globalThis.fetch = async (input, init) => {
+    assert.equal(String(input), "/api/me/avatar");
+    assert.equal(init?.method, "DELETE");
+    assert.equal(init?.credentials, "include");
+    assert.equal(init?.body, undefined);
+    assert(init?.signal);
+    return Response.json({ ok: true, user: { ...user, avatarUrl: null } });
+  };
+  try { assert.equal((await removeAccountAvatar(signal)).avatarUrl, null); }
+  finally { globalThis.fetch = original; }
+});
+
+test("avatar removal does not report success for a missing or nonremoved user response", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => Response.json({ ok: true, user });
+    await assert.rejects(removeAccountAvatar(new AbortController().signal));
+    globalThis.fetch = async () => Response.json({ ok: true });
+    await assert.rejects(removeAccountAvatar(new AbortController().signal));
   } finally { globalThis.fetch = original; }
 });

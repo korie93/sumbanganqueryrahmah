@@ -31,9 +31,9 @@ test("restarted expired and invalid login challenges await real OTP autofocus wi
 });
 
 test("guided authenticator setup awaits code-entry autofocus without forcing focus", () => {
-  const confirm = section("async function confirmGuidedSetup() {", 'await visibleText(panel, "Status: Tidak aktif")');
-  assert.match(confirm, /await panel\.getByRole\("button", \{ name: "Saya sudah tambah akaun", exact: true \}\)\.click\(\)/);
-  assert.match(confirm, /await visibleText\(panel\.locator\("\[role=status\]"\), "Langkah 3 daripada 3"\)/);
+  const confirm = section("async function confirmGuidedSetup() {", 'await visibleText(panel, "Status: Not enabled")');
+  assert.match(confirm, /await panel\.getByRole\("button", \{ name: "I have added the account", exact: true \}\)\.click\(\)/);
+  assert.match(confirm, /await visibleText\(panel\.locator\("\[role=status\]"\), "Step 3 of 3"\)/);
   assert.match(confirm, /await expect\(page\.locator\("#my-account-two-factor-code"\)\)\.toBeFocused\(\{ timeout: 5_000 \}\)/);
   assertObservesAutofocusOnly(confirm);
 });
@@ -57,4 +57,18 @@ test("autofocus failures keep credential-safe diagnostics and a masked screensho
   assert.match(failure, /throw new Error\("Isolated auth UI verification failed\./);
   assert.match(failure, /raw errors are suppressed/);
   assert.doesNotMatch(failure, /error(?:\?|)\.(?:message|stack)|\$\{error\}|cause:\s*error|console\.(?:error|log|warn)\(error\)/);
+});
+
+test("personal Security verification follows English UI without changing public auth language", () => {
+  const credential = section("async function checkCredentialPasswordFlow(view) {", "async function checkPasswordRejections(view) {");
+  assert.match(credential, /view === "change" \? "Kemas Kini Kata Laluan" : "Update password"/);
+  assert.match(credential, /view === "change" \? "Pengesahan kata laluan tidak sepadan\." : "Password confirmation does not match\."/);
+  assert.match(credential, /checkPasswordVisibility\(ids, view === "change" \? "ms" : "en"\)/);
+  const fixture = readFileSync(new URL("../fixtures/auth-feedback-ui.jsx", import.meta.url), "utf8");
+  assert.match(fixture, /syncCurrentUser: setCurrentUser, locale: "en"/);
+  const guided = section('await go("setup");', 'console.log("[auth-feedback-browser] PASS guided 2FA setup');
+  assert.match(guided, /Verify and enable 2FA/);
+  assert.match(guided, /The authenticator code is incorrect/);
+  assert.match(guided, /Start setup again/);
+  assert.doesNotMatch(guided, /Aktifkan 2FA|Langkah|Kod pengesah tidak betul/);
 });

@@ -173,34 +173,34 @@ async function checkAdditionalAuthStateCaptures() {
       const panel = page.getByTestId("two-factor-settings");
       await panel.waitFor({ state: "visible" });
       await captureAuthState("two-factor-off", theme);
-      await panel.getByRole("button", { name: "Aktifkan 2FA", exact: true }).click();
+      await panel.getByRole("button", { name: "Activate 2FA", exact: true }).click();
       await page.locator("#my-account-two-factor-password").fill(validPassword);
       await captureAuthState("two-factor-password", theme);
-      await panel.getByRole("button", { name: "Teruskan ke kod QR", exact: true }).click();
+      await panel.getByRole("button", { name: "Continue to QR code", exact: true }).click();
       await page.getByTestId("two-factor-qr").waitFor({ state: "visible" });
       await captureAuthState("two-factor-qr", theme);
-      await panel.getByRole("button", { name: "Tak dapat imbas kod QR? Papar kunci persediaan", exact: true }).click();
+      await panel.getByRole("button", { name: "Can't scan the QR code? Show setup key", exact: true }).click();
       await page.locator("#my-account-two-factor-secret").waitFor({ state: "visible" });
       await captureAuthState("two-factor-manual", theme);
-      await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
+      await panel.getByRole("button", { name: "I have added the account", exact: true }).click();
       await page.locator("#my-account-two-factor-code").waitFor({ state: "visible" });
       await captureAuthState("two-factor-confirm", theme);
       setupError = "TWO_FACTOR_INVALID_CODE";
       await page.locator("#my-account-two-factor-code").fill("123456");
-      await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
-      await visibleText(panel.locator("[role=alert]"), "Kod pengesah tidak betul.");
+      await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
+      await visibleText(panel.locator("[role=alert]"), "The authenticator code is incorrect.");
       await captureAuthState("two-factor-invalid", theme);
       setupError = null;
       await page.locator("#my-account-two-factor-code").fill("345678");
-      await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
-      await visibleText(panel, "Status: Aktif");
+      await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
+      await visibleText(panel, "Status: Enabled");
       assert.equal(await page.getByTestId("two-factor-qr").count(), 0);
       await captureAuthState("two-factor-active", theme);
-      await panel.getByRole("button", { name: "Nyahaktifkan 2FA", exact: true }).click();
+      await panel.getByRole("button", { name: "Disable 2FA", exact: true }).click();
       await page.locator("#my-account-two-factor-password").waitFor({ state: "visible" });
       await captureAuthState("two-factor-disable-confirm", theme);
       const beforeDisable = counts.disable;
-      await panel.getByRole("button", { name: "Batal", exact: true }).click();
+      await panel.getByRole("button", { name: "Cancel", exact: true }).click();
       assert.equal(counts.disable, beforeDisable, "Cancel never disables 2FA.");
       assert.equal(await panel.getAttribute("data-two-factor-state"), "active");
       console.log(`[auth-feedback-browser] PASS expanded state captures ${width}px ${theme}: ForgotPassword, ChangePassword, Login OTP, 2FA guided setup/manual/error/active/disable confirmation (synthetic HTTP)`);
@@ -208,7 +208,7 @@ async function checkAdditionalAuthStateCaptures() {
   }
 }
 
-async function checkPasswordVisibility(fieldIds) {
+async function checkPasswordVisibility(fieldIds, locale = "ms") {
   const before = { ...counts };
   const values = await Promise.all(fieldIds.map((id) => page.locator(`#${id}`).inputValue()));
   for (const id of fieldIds) {
@@ -219,14 +219,14 @@ async function checkPasswordVisibility(fieldIds) {
     assert.equal(await toggle.getAttribute("type"), "button", "Visibility must never submit the form.");
     assert.equal(await toggle.getAttribute("aria-pressed"), "false");
     const hiddenLabel = await toggle.getAttribute("aria-label");
-    assert.match(hiddenLabel, /^Lihat .+/, "Toggle needs a field-specific accessible label.");
+    assert.match(hiddenLabel, locale === "en" ? /^Show .+/ : /^Lihat .+/, "Toggle needs a field-specific accessible label.");
     await input.focus();
     await input.evaluate((element) => element.setSelectionRange(2, 6, "forward"));
     await toggle.click();
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
     assert.equal(await input.getAttribute("type"), "text");
     assert.equal(await toggle.getAttribute("aria-pressed"), "true");
-    assert.equal(await toggle.getAttribute("aria-label"), hiddenLabel.replace(/^Lihat /, "Sembunyikan "));
+    assert.equal(await toggle.getAttribute("aria-label"), locale === "en" ? hiddenLabel.replace(/^Show /, "Hide ") : hiddenLabel.replace(/^Lihat /, "Sembunyikan "));
     assert.equal(await input.evaluate((element) => document.activeElement === element), true, "Pointer toggle preserves input focus.");
     assert.deepEqual(await input.evaluate((element) => [element.selectionStart, element.selectionEnd]), [2, 6], `${id}: pointer toggle preserves the selected password range.`);
     for (const otherId of fieldIds.filter((candidate) => candidate !== id)) {
@@ -399,7 +399,7 @@ async function checkCredentialPasswordFlow(view) {
   const ids = [`${prefix}-current-password`, `${prefix}-new-password`, `${prefix}-confirm-password`];
   const [current, password, confirmation] = ids.map((id) => page.locator(`#${id}`));
   const feedback = page.locator(`#${prefix}-confirm${view === "change" ? "" : "-password"}-error`);
-  const submit = page.getByRole("button", { name: view === "change" ? "Kemas Kini Kata Laluan" : "Tukar kata laluan", exact: true });
+  const submit = page.getByRole("button", { name: view === "change" ? "Kemas Kini Kata Laluan" : "Update password", exact: true });
   const before = { ...counts };
   await current.fill(currentPassword);
   await password.fill(validPassword);
@@ -409,13 +409,13 @@ async function checkCredentialPasswordFlow(view) {
   assert.equal(await confirmation.getAttribute("aria-invalid"), "true");
   assert.deepEqual(counts, before, "Blank confirmation must not reach the password mutation API.");
   await confirmation.fill("DifferentFixture1!");
-  await visibleText(feedback, "Pengesahan kata laluan tidak sepadan.");
+  await visibleText(feedback, view === "change" ? "Pengesahan kata laluan tidak sepadan." : "Password confirmation does not match.");
   await submit.click();
   assert.deepEqual(counts, before, "Mismatched confirmation must not reach the password mutation API.");
   await confirmation.fill(validPassword);
-  await visibleText(feedback, "Pengesahan kata laluan sepadan.");
+  await visibleText(feedback, view === "change" ? "Pengesahan kata laluan sepadan." : "Password confirmation matches.");
   assert.equal(await confirmation.getAttribute("aria-invalid"), null);
-  await checkPasswordVisibility(ids);
+  await checkPasswordVisibility(ids, view === "change" ? "ms" : "en");
   await submitPasswordAndCheckPending(submit, ids);
   await visibleText(page.locator("[role=status]"), view === "change" ? "Kata laluan berjaya dikemas kini" : "Password changed successfully");
   assert.equal(counts.change, before.change + 1, "Matching confirmation submits exactly once through the canonical password endpoint.");
@@ -735,8 +735,8 @@ try {
   const panel = page.getByTestId("two-factor-settings");
   async function startGuidedSetup(checkDuplicate = false) {
     markPhase("guided setup: password and QR");
-    await panel.getByRole("button", { name: /^(Aktifkan 2FA|Mulakan semula persediaan)$/ }).click();
-    await visibleText(panel.locator("[role=status]"), "Langkah 1 daripada 3");
+    await panel.getByRole("button", { name: /^(Activate 2FA|Restart setup)$/ }).click();
+    await visibleText(panel.locator("[role=status]"), "Step 1 of 3");
     await page.locator("#my-account-two-factor-password").fill(validPassword);
     const before = counts.setup;
     if (checkDuplicate) {
@@ -751,72 +751,72 @@ try {
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         assert.equal(counts.setup, before + 1, "Duplicate setup submits must share one in-flight request.");
       } finally { releaseSetup(); setupResponseGate = null; }
-    } else await panel.getByRole("button", { name: "Teruskan ke kod QR", exact: true }).click();
+    } else await panel.getByRole("button", { name: "Continue to QR code", exact: true }).click();
     await page.getByTestId("two-factor-qr").waitFor({ state: "visible" });
-    await visibleText(panel.locator("[role=status]"), "Langkah 2 daripada 3");
+    await visibleText(panel.locator("[role=status]"), "Step 2 of 3");
     assert.equal(await page.locator("#my-account-two-factor-password").count(), 0);
     assert.equal(await page.locator("#my-account-two-factor-secret").count(), 0, "Manual setup key starts hidden.");
     assert.equal(await page.locator("#my-account-two-factor-code").count(), 0, "Code entry appears only after app instructions.");
   }
   async function confirmGuidedSetup() {
     markPhase("guided setup: code step autofocus");
-    await panel.getByRole("button", { name: "Saya sudah tambah akaun", exact: true }).click();
-    await visibleText(panel.locator("[role=status]"), "Langkah 3 daripada 3");
+    await panel.getByRole("button", { name: "I have added the account", exact: true }).click();
+    await visibleText(panel.locator("[role=status]"), "Step 3 of 3");
     await expect(page.locator("#my-account-two-factor-code")).toBeFocused({ timeout: 5_000 });
   }
-  await visibleText(panel, "Status: Tidak aktif");
+  await visibleText(panel, "Status: Not enabled");
   await startGuidedSetup(true);
-  await panel.getByRole("button", { name: "Tak dapat imbas kod QR? Papar kunci persediaan", exact: true }).click();
-  await visibleText(panel.locator("#two-factor-manual-setup"), "TOTP, SHA256, 6 digit, 30 saat");
+  await panel.getByRole("button", { name: "Can't scan the QR code? Show setup key", exact: true }).click();
+  await visibleText(panel.locator("#two-factor-manual-setup"), "TOTP, SHA256, 6 digits, 30 seconds");
   await page.locator("#my-account-two-factor-secret").waitFor({ state: "visible" });
   await confirmGuidedSetup();
   await page.locator("#my-account-two-factor-code").fill("123 456");
   assert.equal(await page.locator("#my-account-two-factor-code").inputValue(), "123456");
-  await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
-  await visibleText(panel.locator("[role=alert]"), "Kod pengesah tidak betul.");
+  await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
+  await visibleText(panel.locator("[role=alert]"), "The authenticator code is incorrect.");
   assert.equal(await panel.getAttribute("data-two-factor-state"), "setup");
   setupError = "TWO_FACTOR_SETUP_EXPIRED";
   await page.locator("#my-account-two-factor-code").fill("654321");
-  await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
-  await visibleText(panel.locator("[role=alert]"), "Mulakan persediaan 2FA semula");
+  await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
+  await visibleText(panel.locator("[role=alert]"), "Start setup again");
   assert.equal(await page.getByTestId("two-factor-qr").count(), 0, "Expired setup must clear QR material.");
   assert.equal(await page.locator("#my-account-two-factor-secret").count(), 0, "Expired setup must clear secret.");
   await startGuidedSetup();
   await confirmGuidedSetup();
   setupError = null;
   await page.locator("#my-account-two-factor-code").fill("345678");
-  await panel.getByRole("button", { name: "Sahkan dan aktifkan 2FA", exact: true }).click();
-  await visibleText(page.locator("#fixture-notice"), "Gunakan kod daripada aplikasi pengesah");
-  await visibleText(panel, "Status: Aktif");
-  await visibleText(panel, "Diaktifkan pada");
+  await panel.getByRole("button", { name: "Verify and enable 2FA", exact: true }).click();
+  await visibleText(page.locator("#fixture-notice"), "Use a code from your authenticator app");
+  await visibleText(panel, "Status: Enabled");
+  await visibleText(panel, "Enabled on");
   assert.equal(await panel.getAttribute("data-two-factor-state"), "active");
   assert.equal(await page.getByTestId("two-factor-qr").count(), 0);
   assert.equal(await page.locator("#my-account-two-factor-secret").count(), 0);
-  await panel.getByRole("button", { name: "Nyahaktifkan 2FA", exact: true }).click();
+  await panel.getByRole("button", { name: "Disable 2FA", exact: true }).click();
   assert.equal(await page.locator("#my-account-two-factor-password").inputValue(), "", "Successful setup clears the current password.");
   await page.locator("#my-account-two-factor-password").fill(validPassword);
   await page.locator("#my-account-two-factor-code").fill("456789");
-  await panel.getByRole("button", { name: "Sahkan nyahaktifkan", exact: true }).click();
-  await visibleText(panel, "Status: Tidak aktif");
-  assert.equal((await panel.innerText()).includes("Diaktifkan pada"), false, "Disable must clear the old enabled date.");
+  await panel.getByRole("button", { name: "Confirm disable", exact: true }).click();
+  await visibleText(panel, "Status: Not enabled");
+  assert.equal((await panel.innerText()).includes("Enabled on"), false, "Disable must clear the old enabled date.");
   assert.equal(counts.setup, 2);
   assert.equal(counts.enable, 3);
   assert.equal(counts.disable, 1);
 
   await startGuidedSetup();
   await go("setup", "fixture-link", "light", { pending: "1" });
-  await visibleText(panel, "Persediaan sebelum ini belum selesai");
+  await visibleText(panel, "Your previous setup is incomplete");
   assert.equal(await page.getByTestId("two-factor-qr").count(), 0);
   assert.equal(await page.locator("#my-account-two-factor-code").count(), 0, "Reloaded pending setup cannot verify unknown setup material.");
   await startGuidedSetup();
   const beforeCancel = { ...counts };
-  await panel.getByRole("button", { name: "Batalkan persediaan", exact: true }).click();
+  await panel.getByRole("button", { name: "Cancel setup", exact: true }).click();
   assert.equal(await page.getByTestId("two-factor-qr").count(), 0);
   assert.equal(await page.locator("#my-account-two-factor-secret").count(), 0);
   assert.deepEqual(counts, beforeCancel, "Cancel clears only local secret state without an unauthorized server mutation.");
   setupLifetimeMs = 1500;
   await startGuidedSetup();
-  await visibleText(panel.locator("[role=alert]"), "telah tamat tempoh");
+  await visibleText(panel.locator("[role=alert]"), "setup has expired");
   assert.equal(await page.getByTestId("two-factor-qr").count(), 0);
   assert.equal(await page.locator("#my-account-two-factor-code").count(), 0);
   setupLifetimeMs = 10 * 60 * 1000;
@@ -824,13 +824,13 @@ try {
 
   for (const transition of ["switch", "unmount", "enabled"]) {
     await go("setup");
-    await panel.getByRole("button", { name: "Aktifkan 2FA", exact: true }).click();
+    await panel.getByRole("button", { name: "Activate 2FA", exact: true }).click();
     await page.locator("#my-account-two-factor-password").fill(validPassword);
     let releaseSetup;
     setupResponseGate = new Promise((resolve) => { releaseSetup = resolve; });
     try {
       const received = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/auth/two-factor/setup");
-      await panel.getByRole("button", { name: "Teruskan ke kod QR", exact: true }).click();
+      await panel.getByRole("button", { name: "Continue to QR code", exact: true }).click();
       await received;
       await page.evaluate((action) => window.dispatchEvent(new CustomEvent(
         action === "unmount" ? "sqr-fixture-unmount" : "sqr-fixture-account", { detail: action },
@@ -849,7 +849,7 @@ try {
       assert.equal(await page.locator("#my-account-two-factor-password").isDisabled(), false, "Stale request does not leave the new account busy.");
     } else if (transition === "enabled") {
       assert.equal(await panel.getAttribute("data-two-factor-state"), "active", "Newer enabled state cannot be replaced by an older pending setup response.");
-      assert.equal(await panel.getByRole("button", { name: "Nyahaktifkan 2FA", exact: true }).isDisabled(), false);
+      assert.equal(await panel.getByRole("button", { name: "Disable 2FA", exact: true }).isDisabled(), false);
     } else assert.equal(await panel.count(), 0, "Unmounted settings cannot be restored by a late response.");
   }
   console.log("[auth-feedback-browser] PASS delayed setup responses are discarded after account switch, unmount or newer enabled status; no stale QR, credentials or busy state");

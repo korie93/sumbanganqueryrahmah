@@ -46,7 +46,7 @@ function TwoFactorSetupHarness() {
     twoFactorPendingSetup: parameters.get("pending") === "1", twoFactorConfiguredAt: null });
   const [notice, setNotice] = useState("");
   const [passwordExpanded, setPasswordExpanded] = useState(false);
-  const shared = { currentUser, isMountedRef: useRef(true), syncCurrentUser: setCurrentUser, toast: (value) => setNotice(value.description) };
+  const shared = { currentUser, isMountedRef: useRef(true), syncCurrentUser: setCurrentUser, locale: "en", toast: (value) => setNotice(value.description) };
   const state = useSettingsMyAccountTwoFactorState(shared);
   useEffect(() => {
     const changeAccount = (event) => setCurrentUser((user) => event.detail === "enabled"

@@ -49,10 +49,38 @@ test("avatar storage allows a trusted deployment-root link but rejects image and
     }
     await fs.writeFile(path.join(root, "target"), "private outside content");
     await assert.rejects(repository.read("one"), /not valid/);
+    await assert.rejects(repository.remove("one"), /not valid/);
+    assert.equal(await fs.readFile(path.join(root, "target"), "utf8"), "private outside content");
+    assert.equal((await fs.lstat(file)).isSymbolicLink(), true);
     assert.equal(await repository.getUrl("one"), null);
     await fs.unlink(file);
     await fs.rmdir(avatarDirectory);
     await fs.symlink(root, avatarDirectory, process.platform === "win32" ? "junction" : "dir");
     await assert.rejects(repository.save("one", Buffer.from("unsafe")), /not valid/);
+    await assert.rejects(repository.remove("one"), /not valid/);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
+test("avatar removal is idempotent, does not create storage and isolates immutable account IDs", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-avatar-remove-"));
+  try {
+    const repository = new AccountAvatarRepository(root);
+    assert.equal(await repository.remove("missing"), false);
+    assert.deepEqual(await fs.readdir(root), []);
+    await repository.save("one", Buffer.from("first account"));
+    await repository.save("../two", Buffer.from("second account"));
+    assert.equal(await repository.remove("two"), false);
+    assert.equal(await repository.remove("one"), true);
+    assert.equal(await repository.remove("one"), false);
+    assert.equal(await repository.getUrl("one"), null);
+    assert.equal(await repository.read("one"), null);
+    assert.equal((await repository.read("../two"))?.toString(), "second account");
+    assert.deepEqual(await fs.readdir(path.join(root, "profile-avatars")), [`${createHash("sha256").update("../two").digest("hex")}.avatar`]);
+    await assert.rejects(repository.remove(""), /identity is required/);
+
+    const directoryEntry = path.join(root, "profile-avatars", `${createHash("sha256").update("directory").digest("hex")}.avatar`);
+    await fs.mkdir(directoryEntry);
+    await assert.rejects(repository.remove("directory"), /not valid/);
+    assert.equal((await fs.stat(directoryEntry)).isDirectory(), true);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
