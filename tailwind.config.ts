@@ -1,9 +1,11 @@
 import type { Config } from "tailwindcss";
+import compatibilityTheme from "./tailwind.compat.cjs";
 
 export default {
   darkMode: ["selector", ".dark"],
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
+    ...compatibilityTheme,
     extend: {
       borderRadius: {
         lg: "var(--radius-surface)",

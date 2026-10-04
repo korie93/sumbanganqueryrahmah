@@ -115,7 +115,7 @@ export function SideTabNavigation({
                   onClick={() => handleSelect(item.key)}
                   data-active="true"
                   className={cn(
-                    "side-tab-nav-item relative flex min-h-[4.75rem] w-full items-center rounded-[1.4rem] px-3.5 py-3 text-sm text-foreground transition-[transform,background-color,color,box-shadow] duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-primary/55 dark:focus-visible:ring-offset-card",
+                    "side-tab-nav-item relative flex min-h-[4.75rem] w-full items-center rounded-[1.4rem] px-3.5 py-3 text-sm text-foreground transition-[transform,translate,background-color,color,box-shadow] duration-150 hover:-translate-y-px focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-primary/55 dark:focus-visible:ring-offset-card",
                     collapsed ? "justify-center" : "justify-start gap-3",
                   )}
                   aria-label={item.label}
@@ -155,7 +155,7 @@ export function SideTabNavigation({
                   onClick={() => handleSelect(item.key)}
                   data-active="false"
                   className={cn(
-                    "side-tab-nav-item relative flex min-h-[4.75rem] w-full items-center rounded-[1.4rem] px-3.5 py-3 text-sm text-foreground/80 transition-[transform,background-color,color,box-shadow] duration-150 hover:-translate-y-px hover:bg-accent/55 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:text-foreground/84 dark:hover:bg-accent dark:hover:text-foreground dark:focus-visible:ring-primary/45 dark:focus-visible:ring-offset-card",
+                    "side-tab-nav-item relative flex min-h-[4.75rem] w-full items-center rounded-[1.4rem] px-3.5 py-3 text-sm text-foreground/80 transition-[transform,translate,background-color,color,box-shadow] duration-150 hover:-translate-y-px hover:bg-accent/55 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:text-foreground/84 dark:hover:bg-accent dark:hover:text-foreground dark:focus-visible:ring-primary/45 dark:focus-visible:ring-offset-card",
                     collapsed ? "justify-center" : "justify-start gap-3",
                   )}
                   aria-label={item.label}

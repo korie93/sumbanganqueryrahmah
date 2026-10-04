@@ -106,7 +106,7 @@ export function CollectionRecordsTable({
                 </div>
               </dl>
               <details className="group border-t border-border">
-                <summary className="flex min-h-11 cursor-pointer items-center justify-between text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <summary className="flex min-h-11 cursor-pointer items-center justify-between text-sm font-medium text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                   Record details
                   <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
                 </summary>

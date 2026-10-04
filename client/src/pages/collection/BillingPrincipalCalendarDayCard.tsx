@@ -11,7 +11,7 @@ export function BillingPrincipalCalendarDayCard({ day, asOf, selected, onSelect 
   return <button type="button" onClick={onSelect} data-testid={`billing-calendar-day-${day.date}`}
     aria-label={`${day.date}, ${day.dailyMovement.all.closedAccountCount} accounts, new closed ${formatOspCurrency(day.dailyMovement.all.ospClosed)}, daily movement ${formatOspDailyMovement(day.dailyMovement.all.resultPercentage)} of TT OSP, in percentage points. View closed accounts.`}
     {...(day.date === asOf ? { "aria-current": "date" as const } : {})} {...getAriaPressedProps(selected)}
-    className={`min-w-0 w-full rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${selected || day.date === asOf ? "border-primary" : "border-border"}`}>
+    className={`min-w-0 w-full rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${selected || day.date === asOf ? "border-primary" : "border-border"}`}>
     <span className="flex flex-wrap items-center justify-between gap-1">
       <span className="text-sm font-semibold">{dateLabel}</span>
       <span className="text-xs text-muted-foreground">{day.date === asOf ? "System As Of" : active ? `${day.dailyMovement.all.closedAccountCount} accounts` : "No movement"}</span>

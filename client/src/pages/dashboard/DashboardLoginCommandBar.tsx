@@ -98,7 +98,7 @@ function DashboardLoginCommandBarImpl({
         {nextAction ? (
           <a
             href={nextAction.targetHref}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+            className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
           >
             <span className="truncate">{nextAction.title}</span>
             <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />

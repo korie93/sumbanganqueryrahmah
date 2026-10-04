@@ -133,7 +133,7 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
           <h2 id="billing-target-workspace-heading" className="text-lg font-semibold">Billing Principal (OSP)</h2>
           <p className="mt-1 text-sm text-muted-foreground">Shared system targets and your private client results.</p>
           <Label htmlFor="billing-saved-target-select" className="mt-3 block">Saved target</Label>
-          <select id="billing-saved-target-select" className="mt-1.5 min-h-11 w-full max-w-2xl rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
+          <select id="billing-saved-target-select" className="mt-1.5 min-h-11 w-full max-w-2xl rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
             value={selectedTargetId} onChange={(event) => { if (!controlsLocked) setSelectedTargetId(event.target.value); }} disabled={controlsLocked} aria-describedby={workspaceLocked ? "billing-workspace-lock-guidance" : undefined}>
             <option value="" disabled>Select a saved target</option>
             {targets.map((target) => <option key={target.id} value={target.id}>{target.name} — {target.assignedAdmin?.username ?? "Unassigned (legacy)"}</option>)}
@@ -156,7 +156,7 @@ export function BillingPrincipalSavedTargetShell({ role }: { role: string }) {
       {selectedTarget ? <div className="space-y-2 text-sm">
         <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{selectedTarget.assignedAdmin ? "Admin: " + selectedTarget.assignedAdmin.username : "Legacy — no assigned admin"}</Badge><span className="tabular-nums text-muted-foreground">{reportingWindow?.from} — {reportingWindow?.to}</span></div>
         <details className="text-sm">
-          <summary className="min-h-11 cursor-pointer content-center rounded-lg text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9">Source details · {selectedTarget.activeRevision.sourceSnapshots.length} configured source{selectedTarget.activeRevision.sourceSnapshots.length === 1 ? "" : "s"}</summary>
+          <summary className="min-h-11 cursor-pointer content-center rounded-lg text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:min-h-9">Source details · {selectedTarget.activeRevision.sourceSnapshots.length} configured source{selectedTarget.activeRevision.sourceSnapshots.length === 1 ? "" : "s"}</summary>
           <div className="space-y-2 border-l border-border py-2 pl-3">
             <p className="break-words text-muted-foreground">{selectedTarget.activeRevision.sourceSnapshots.map((source) => source.name + " · " + (source.filename || "Saved source")).join("; ")}</p>
             <BillingPrincipalSavedTargetUpdatedAt value={selectedTarget.updatedAt} />

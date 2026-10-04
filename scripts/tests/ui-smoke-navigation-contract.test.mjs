@@ -17,6 +17,20 @@ test("UI smoke navigation avoids networkidle for authenticated SPA routes", () =
   assert.doesNotMatch(smokeSource, /networkidle/);
 });
 
+test("desktop smoke verifies the destination heading rather than the hidden mobile breadcrumb", () => {
+  const flow = smokeSource.slice(smokeSource.indexOf("const checkDesktopNavbar"), smokeSource.indexOf("const checkKeyboardMenuAccess"));
+  assert.match(flow, /locator\("#main-content"\)\.getByRole\("heading", \{ name: "Backup & Restore", exact: true \}\)/);
+  assert.doesNotMatch(flow, /getByText\("Backup & Restore"\)\.first\(\)/);
+  assert.doesNotMatch(smokeSource, /getByText\("Backup & Restore"\)\.first\(\)/);
+});
+
+test("profile smoke awaits the lazy authenticated shell before choosing a visible trigger", () => {
+  const flow = smokeSource.slice(smokeSource.indexOf("const getVisibleUserMenuTrigger"), smokeSource.indexOf("const openUserMenu"));
+  assert.match(flow, /button-user-menu.*:visible.*button-user-menu-mobile.*:visible.*button-open-mobile-nav.*:visible/);
+  assert.match(flow, /waitFor\(\{ state: "visible", timeout: SMOKE_NAVIGATION_TIMEOUT_MS \}\)/);
+  assert.ok(flow.indexOf(".waitFor(") < flow.indexOf(".isVisible("));
+});
+
 test("UI smoke bounds the landing login click and falls back to the canonical login route", () => {
   assert.match(
     smokeSource,

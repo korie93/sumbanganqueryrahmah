@@ -8,7 +8,7 @@ SQR is an internal operations system. The supported browser matrix is intentiona
 | --- | ---: | --- |
 | Chrome | 120 | Primary Chromium target for CI smoke, visual, and accessibility contracts. |
 | Microsoft Edge | 120 | Supported through the Chromium target. |
-| Firefox | 121 | Supported for core app use, including Firefox scrollbar styling. |
+| Firefox | 128 | Tailwind CSS 4 minimum; includes modern color and registered-property support. |
 | Safari | 17.4 | Supported for current macOS/iOS platform behaviour. |
 | iOS Safari | 17.4 | Supported for mobile operational flows and PWA metadata. |
 

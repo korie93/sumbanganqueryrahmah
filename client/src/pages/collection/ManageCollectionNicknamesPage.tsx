@@ -81,7 +81,7 @@ function ManageCollectionNicknamesPage({
           className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-background/80 px-4 py-4 shadow-sm"
           data-floating-ai-avoid="true"
         >
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-24 bg-linear-to-br/srgb from-primary/12 via-primary/6 to-transparent" />
           <div className="relative space-y-4">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">

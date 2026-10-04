@@ -65,7 +65,7 @@ export function CollectionDailyRoleGuide({
   return (
     <section aria-label="Collection Daily role guidance">
       <details className="group border-b border-border pb-2">
-        <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 rounded-md py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 rounded-md py-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
           <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <span className={badgeVariants({ variant: "secondary" })}>
             {content.label}

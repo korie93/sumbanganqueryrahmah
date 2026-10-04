@@ -86,7 +86,7 @@ export function MonthlyCollectionComparisonChart({
             <label className="inline-flex h-8 items-center gap-1 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition focus-within:ring-2 focus-within:ring-ring">
               <span>Inspect</span>
               <select
-                className="max-w-[7.5rem] bg-transparent text-xs outline-none"
+                className="max-w-[7.5rem] bg-transparent text-xs outline-hidden"
                 value=""
                 aria-label="Open monthly drill-down records"
                 onChange={handleInspectMonthChange}

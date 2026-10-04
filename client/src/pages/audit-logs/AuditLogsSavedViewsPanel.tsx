@@ -100,7 +100,7 @@ export function AuditLogsSavedViewsPanel({
           >
             <button
               type="button"
-              className="min-w-0 flex-1 rounded-lg px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-w-0 flex-1 rounded-lg px-2 py-1 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => handleApplyView(view)}
               title={view.description}
               data-testid={`button-apply-audit-view-${view.id}`}

@@ -127,6 +127,15 @@ try {
    await page.locator(`#tab-${name}`).click();
    await expect(page.locator(`#view-${name}`)).toBeVisible();
    assert.equal(await page.locator('.preview-view:visible').count(),1);
+   const panels=await page.locator('.preview-view').evaluateAll(elements=>elements.map(element=>({
+    id:element.id,hidden:element.hidden,children:element.childElementCount,label:element.getAttribute('aria-labelledby'),
+   })));
+   assert.equal(panels.length,3,'All tab-panel ARIA targets must remain available');
+   for(const panel of panels){
+    assert.equal(panel.label,`tab-${panel.id.slice('view-'.length)}`);
+    assert.equal(panel.hidden,panel.id!==`view-${name}`);
+    assert.equal(panel.children>0,!panel.hidden,'Only the selected preview may build demo content');
+   }
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`No overflow ${width}/${name}`);
   }
   await page.locator('#tab-overview').click();

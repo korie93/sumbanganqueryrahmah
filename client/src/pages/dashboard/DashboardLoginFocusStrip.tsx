@@ -67,7 +67,7 @@ function DashboardLoginFocusStripImpl() {
             <a
               key={item.href}
               href={item.href}
-              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
             >
               <span className="inline-flex shrink-0 items-center justify-center text-muted-foreground">
                 <Icon className="h-4 w-4" aria-hidden="true" />

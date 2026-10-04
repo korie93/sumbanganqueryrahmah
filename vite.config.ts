@@ -40,6 +40,8 @@ export default defineConfig({
     outDir: "../dist-local/public",
     emptyOutDir: true,
     sourcemap: enableSourceMaps,
+    cssMinify: "lightningcss",
+    cssTarget: ["chrome120", "edge120", "firefox128", "safari17.4"],
     // 500 kB is an intentional warning threshold, not a target bundle size.
     // Large feature-isolated chunks such as Excel/PDF/chart tooling are lazy-loaded
     // and verified separately by bundle-budget checks in repo scripts.

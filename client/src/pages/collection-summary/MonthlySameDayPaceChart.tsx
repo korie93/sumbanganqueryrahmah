@@ -64,7 +64,7 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
           <label className="inline-flex h-8 items-center gap-1 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition focus-within:ring-2 focus-within:ring-ring">
             <span>Inspect day</span>
             <select
-              className="max-w-[5rem] bg-transparent text-xs outline-none"
+              className="max-w-[5rem] bg-transparent text-xs outline-hidden"
               value={selectedPoint?.day ?? ""}
               aria-label="Inspect same-day comparison point"
               onChange={(event) => setSelectedDay(Number(event.target.value))}

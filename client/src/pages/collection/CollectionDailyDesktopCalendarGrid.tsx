@@ -108,7 +108,7 @@ export function CollectionDailyDesktopCalendarGrid({
           >
             <button
               type="button"
-              className="collection-daily-day-button w-full rounded-md p-2 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              className="collection-daily-day-button w-full rounded-md p-2 text-left transition-colors hover:brightness-95 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}${matchesActiveFilter ? "" : " - Not matching current quick filter"}${isSelected ? " - Selected" : ""}`}
               onClick={() => onSelectDate(day.date)}
               data-testid={`collection-daily-day-${day.day}`}

@@ -169,7 +169,7 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
     </div>
     <p className="text-xs text-muted-foreground">Exports contain saved shared values and only your saved private results. Save or discard private changes before exporting.</p>
     <details className="border-y border-border text-sm">
-      <summary className="min-h-11 cursor-pointer content-center rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9">TT OSP basis and OSP for +1%</summary>
+      <summary className="min-h-11 cursor-pointer content-center rounded-lg font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:min-h-9">TT OSP basis and OSP for +1%</summary>
       <p className="py-2 text-sm leading-relaxed text-muted-foreground">Daily movement = System OSP closed that day ÷ TT OSP × 100, shown as percentage-point movement. TOTAL (ALL) uses combined daily closed ÷ combined TT OSP, not an average. Zero TT OSP shows +0.00%. Balance remains Target OSP − cumulative closed.</p>
       {!calendarLoading && !calendarError && calendar[0] ? <>
       <table className="mt-2 w-full table-fixed text-xs sm:text-sm" aria-label="Daily movement TT OSP basis">

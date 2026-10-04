@@ -26,7 +26,7 @@ const publicOnlyPatterns = [
 test("authenticated Tailwind CSS excludes routes already covered by the public entry", () => {
   assert.match(
     authenticatedCss,
-    /^@config "\.\.\/\.\.\/tailwind\.authenticated\.config\.ts";/,
+    /@config "\.\.\/\.\.\/tailwind\.authenticated\.config\.ts";/,
   );
 
   for (const pattern of publicOnlyPatterns) {

@@ -143,7 +143,7 @@ export function BulkImportPanel({
             role="button"
             tabIndex={bulkProcessing ? -1 : 0}
             aria-label="Select bulk import files"
-            className={`rounded-md border border-dashed border-input p-6 text-center transition-colors duration-150 motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+            className={`rounded-md border border-dashed border-input p-6 text-center transition-colors duration-150 motion-reduce:transition-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
               bulkProcessing
                 ? "cursor-not-allowed opacity-70"
                 : "cursor-pointer hover:border-primary hover:bg-muted/30"

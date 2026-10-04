@@ -400,7 +400,7 @@ export function SettingsRoleSections({
         </TabsList>
 
         <details className="group min-w-0 rounded-lg border border-border bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             <span>Role Comparison</span>
             <ChevronDown className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
           </summary>

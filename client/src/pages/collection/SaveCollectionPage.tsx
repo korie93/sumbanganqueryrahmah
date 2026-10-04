@@ -238,7 +238,7 @@ function SaveCollectionPage({
           />
           <button
             type="button"
-            className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
             onClick={state.toggleCardNumberInputVisibility}
             disabled={state.submitting || !state.cardNumber}
             aria-label={state.isCardNumberInputVisible ? "Hide card number" : "Show card number"}

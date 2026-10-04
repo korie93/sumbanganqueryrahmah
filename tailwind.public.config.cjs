@@ -26,6 +26,7 @@ module.exports = {
     "./client/src/pages/Banned.tsx",
   ],
   theme: {
+    ...require("./tailwind.compat.cjs"),
     extend: {
       borderRadius: {
         lg: ".5625rem",

@@ -86,7 +86,7 @@ export function SaveCollectionReadySummary({
                   </span>
                   <button
                     type="button"
-                    className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:h-9"
+                    className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:h-9"
                     onClick={onToggleCardNumberVisibility}
                     disabled={cardNumberVisibilityDisabled}
                     aria-label={cardNumberVisible

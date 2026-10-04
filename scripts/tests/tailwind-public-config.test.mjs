@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 import { matchesGlob } from "node:path";
 import { fileURLToPath } from "node:url";
 import postcss from "postcss";
-import tailwindcss from "tailwindcss";
+import tailwindcss from "@tailwindcss/postcss";
+import tailwindPostcssCompatibility from "../lib/tailwind-postcss-compat.mjs";
 
 const require = createRequire(import.meta.url);
 const tailwindPublicConfig = require("../../tailwind.public.config.cjs");
@@ -48,11 +49,11 @@ test("public Tailwind covers shared auth components without scanning the authent
     );
   }
   for (const filePath of [
-    "client/src/components/NavigationBar.tsx",
+    "client/src/components/Navbar.tsx",
     "client/src/components/ui/sidebar.tsx",
     "client/src/pages/security/PersonalSecurityForm.tsx",
     "client/src/pages/collection-report/CollectionNicknameDialogStepFields.tsx",
-    "client/src/pages/BillingPrincipal.tsx",
+    "client/src/pages/collection/BillingPrincipalDayDialog.tsx",
   ]) {
     assert.equal(isCoveredByPublicTailwind(filePath), false, `${filePath} must not broaden public CSS`);
   }
@@ -65,7 +66,7 @@ test("compiled public CSS includes real password component layout and state decl
   // Compile the actual public entry, including its @config directive, rather
   // than scanning fabricated inline content or borrowing authenticated CSS.
   const publicCssFile = fileURLToPath(new URL("../../client/src/public-shell.css", import.meta.url));
-  const compiled = await postcss([tailwindcss()]).process(readFileSync(publicCssFile, "utf8"), {
+  const compiled = await postcss([tailwindcss({ optimize: { minify: false } }), tailwindPostcssCompatibility()]).process(readFileSync(publicCssFile, "utf8"), {
     from: publicCssFile,
   });
   const declarationsBySelector = new Map();
@@ -76,34 +77,33 @@ test("compiled public CSS includes real password component layout and state decl
   });
   for (const [selector, property, expectedValue] of [
     [".absolute", "position", "absolute"],
-    [".inset-y-0", "top", "0px"],
-    [".inset-y-0", "bottom", "0px"],
-    [".w-28", "width", "7rem"],
-    [".h-4", "height", "1rem"],
-    [".w-4", "width", "1rem"],
+    [".inset-y-0", "inset-block", "0"],
+    [".w-28", "width", "calc(var(--spacing, .25rem) * 28)"],
+    [".h-4", "height", "calc(var(--spacing, .25rem) * 4)"],
+    [".w-4", "width", "calc(var(--spacing, .25rem) * 4)"],
     [".shrink-0", "flex-shrink", "0"],
     [".grid-cols-5", "grid-template-columns", "repeat(5, minmax(0, 1fr))"],
-    [".grid-cols-\\[minmax\\(0\\2c 1fr\\)_6rem\\]", "grid-template-columns", "minmax(0,1fr) 6rem"],
-    [".min-h-10", "min-height", "2.5rem"],
+    [".grid-cols-\\[minmax\\(0\\,1fr\\)_6rem\\]", "grid-template-columns", "minmax(0, 1fr) 6rem"],
+    [".min-h-10", "min-height", "calc(var(--spacing, .25rem) * 10)"],
     [".sr-only", "position", "absolute"],
     [".sr-only", "width", "1px"],
     [".sr-only", "height", "1px"],
     [".sr-only", "padding", "0"],
     [".sr-only", "margin", "-1px"],
     [".sr-only", "overflow", "hidden"],
-    [".sr-only", "clip", "rect(0, 0, 0, 0)"],
+    [".sr-only", "clip-path", "inset(50%)"],
     [".sr-only", "white-space", "nowrap"],
     [".sr-only", "border-width", "0"],
-    [".text-green-700", "color", /rgb\(21 128 61\b/],
-    [".text-red-700", "color", /rgb\(185 28 28\b/],
-    [".bg-red-700", "background-color", /rgb\(185 28 28\b/],
-    [".bg-amber-700", "background-color", /rgb\(180 83 9\b/],
-    [".bg-green-600", "background-color", /rgb\(22 163 74\b/],
-    [".bg-green-800", "background-color", /rgb\(22 101 52\b/],
-    [".bg-orange-700", "background-color", /rgb\(194 65 12\b/],
-    [".bg-yellow-700", "background-color", /rgb\(161 98 7\b/],
-    [".bg-lime-700", "background-color", /rgb\(77 124 15\b/],
-    [".bg-green-700", "background-color", /rgb\(21 128 61\b/],
+    [".text-green-700", "color", "#15803d"],
+    [".text-red-700", "color", "#b91c1c"],
+    [".bg-red-700", "background-color", "#b91c1c"],
+    [".bg-amber-700", "background-color", "#b45309"],
+    [".bg-green-600", "background-color", "#16a34a"],
+    [".bg-green-800", "background-color", "#166534"],
+    [".bg-orange-700", "background-color", "#c2410c"],
+    [".bg-yellow-700", "background-color", "#a16207"],
+    [".bg-lime-700", "background-color", "#4d7c0f"],
+    [".bg-green-700", "background-color", "#15803d"],
   ]) {
     const value = declarationsBySelector.get(selector)?.get(property);
     assert.ok(value, `${selector} must emit ${property} in the public bundle`);
@@ -112,14 +112,14 @@ test("compiled public CSS includes real password component layout and state decl
   }
   assert.notEqual(declarationsBySelector.get(".sr-only").get("display"), "none", "Checklist state labels stay available to assistive technology");
   for (const [selector, property, expectedColor] of [
-    [".dark\\:text-green-200:where(.dark, .dark *)", "color", /rgb\(187 247 208\b/],
-    [".dark\\:bg-amber-400:where(.dark, .dark *)", "background-color", /rgb\(251 191 36\b/],
-    [".dark\\:bg-green-400:where(.dark, .dark *)", "background-color", /rgb\(74 222 128\b/],
-    [".dark\\:bg-green-300:where(.dark, .dark *)", "background-color", /rgb\(134 239 172\b/],
+    [".dark\\:text-green-200:where(.dark, .dark *)", "color", "#bbf7d0"],
+    [".dark\\:bg-amber-400:where(.dark, .dark *)", "background-color", "#fbbf24"],
+    [".dark\\:bg-green-400:where(.dark, .dark *)", "background-color", "#4ade80"],
+    [".dark\\:bg-green-300:where(.dark, .dark *)", "background-color", "#86efac"],
   ]) {
     const value = declarationsBySelector.get(selector)?.get(property);
     assert.ok(value, `${selector} must ship the dark checklist state`);
-    assert.match(value, expectedColor);
+    assert.equal(value, expectedColor);
   }
 
   // This stylesheet is directly imported by public auth controls, not by the

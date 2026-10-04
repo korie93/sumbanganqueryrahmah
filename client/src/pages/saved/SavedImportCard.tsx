@@ -92,7 +92,7 @@ export function SavedImportCard({
             ) : null}
             <button
               type="button"
-              className="min-h-11 min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:min-h-9"
+              className="min-h-11 min-w-0 flex-1 rounded-md text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:min-h-9"
               onClick={(event) => {
                 overlayFocus?.remember("details", event.currentTarget);
                 onInspect(item);

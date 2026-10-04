@@ -78,7 +78,7 @@ function ViewerMobileCardImpl({
 
       {overflowHeaders.length > 0 ? (
         <details className="group mt-2 border-t border-border">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-2 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-2 text-sm font-medium text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             {overflowFieldsLabel}
             <ChevronDown className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
           </summary>

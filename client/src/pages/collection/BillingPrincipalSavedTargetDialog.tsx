@@ -17,7 +17,7 @@ import {
 import { parseApiError } from "./utils";
 import { BILLING_PRINCIPAL_AGINGS, calculateTargetOspPreview, formatOspCurrency } from "./billing-principal-report-utils";
 
-const selectClass = "min-h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const selectClass = "min-h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 type AdminOption = BillingPrincipalTargetOptions["admins"][number];
 type SourceOption = BillingPrincipalTargetOptions["sources"][number];
 

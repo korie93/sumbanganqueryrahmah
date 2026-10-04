@@ -42,7 +42,7 @@ export function ExpandableMessage({
       <button
         type="button"
         className={cn(
-          "inline-flex min-h-7 items-center rounded px-1 font-medium underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "inline-flex min-h-7 items-center rounded px-1 font-medium underline underline-offset-2 outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           buttonClassName,
         )}
         aria-controls={messageId}

@@ -21,7 +21,7 @@ type CollectionMonthlyComparisonBreakdownSectionProps = {
 };
 
 const BREAKDOWN_TOGGLE_BUTTON_CLASS_NAME =
-  "inline-flex h-11 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9";
+  "inline-flex h-11 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9";
 
 export function CollectionMonthlyComparisonBreakdownSection({
   chartSlot,

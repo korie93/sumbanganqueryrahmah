@@ -34,7 +34,7 @@ function CollectionMonthlyComparisonBreakdownList({
           <button
             key={month.month}
             type="button"
-            className="grid gap-3 rounded-2xl border border-border/50 bg-background px-3 py-3 text-left transition hover:border-primary/40 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:border-border/50 disabled:hover:bg-background"
+            className="grid gap-3 rounded-2xl border border-border/50 bg-background px-3 py-3 text-left transition hover:border-primary/40 hover:bg-primary/[0.03] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:border-border/50 disabled:hover:bg-background"
             onClick={() => onMonthSelect?.(month.month)}
             disabled={!onMonthSelect}
             aria-label={`View collection records for ${month.label}`}

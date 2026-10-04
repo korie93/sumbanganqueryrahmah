@@ -45,7 +45,7 @@ export function CollectionSidebar({
               {...getAriaCurrentPageProps(active)}
               data-active={active ? "true" : "false"}
               className={cn(
-                "inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
                 active
                   ? "border-primary/30 bg-primary/10 text-primary"
                   : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -104,7 +104,7 @@ export function CollectionSidebar({
                   }}
                   {...getAriaCurrentPageProps(active)}
                   className={cn(
-                    "flex min-h-11 w-full items-start gap-3 rounded-md px-3 py-3 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "flex min-h-11 w-full items-start gap-3 rounded-md px-3 py-3 text-left text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
                     active ? "bg-primary/10 text-primary" : "text-foreground hover:bg-accent",
                   )}
                 >

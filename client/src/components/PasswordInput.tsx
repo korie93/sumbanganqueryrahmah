@@ -118,7 +118,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           }}
           onClick={() => setShowPassword((current) => !current)}
           className={cn(
-            "absolute inset-y-0 right-0 inline-flex w-28 items-center justify-center gap-1 rounded-r-md px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50",
+            "absolute inset-y-0 right-0 inline-flex w-28 items-center justify-center gap-1 rounded-r-md px-2 text-xs font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50",
             variant === "public-auth"
               ? "public-auth-password-toggle"
               : "text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring",

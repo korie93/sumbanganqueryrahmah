@@ -300,7 +300,7 @@ function MonitorAlertsSectionImpl({
                             name="monitorAlertHistoryRetentionDays"
                             value={historyRetentionDays}
                             onChange={(event) => setHistoryRetentionDays(event.target.value)}
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                             disabled={deleteHistoryBusy}
                             aria-label="Delete resolved alert history older than"
                           >

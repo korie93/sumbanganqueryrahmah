@@ -64,7 +64,7 @@ export function ToastRequestReference({ requestId }: ToastRequestReferenceProps)
       </span>
       <button
         type="button"
-        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-current/25 px-2 text-xs font-semibold transition-colors hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-2 dark:hover:bg-white/10"
+        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-current/25 px-2 text-xs font-semibold transition-colors hover:bg-black/5 focus:outline-hidden focus:ring-2 focus:ring-current focus:ring-offset-2 dark:hover:bg-white/10"
         aria-label={copyText.label}
         title={copyText.label}
         onClick={() => {

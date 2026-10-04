@@ -76,7 +76,7 @@ export function LoginPasswordVisibilityButton({
   onToggle,
 }: LoginPasswordVisibilityButtonProps) {
   const buttonClassName =
-    "login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors";
+    "login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 [transform:translateY(-50%)] items-center justify-center rounded-xl transition-colors";
 
   if (showPassword) {
     return (

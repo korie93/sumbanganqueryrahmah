@@ -120,7 +120,7 @@ export function GeneralSearchCollapsibleRecordSection({
       className="group rounded-lg border border-border/60 bg-muted/15 px-3"
       open={defaultOpen || undefined}
     >
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-sm font-semibold text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
         <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
         <span className="min-w-0" id={id}>{title}</span>
         <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">

@@ -48,7 +48,10 @@ export function ProductPreview({ motionPaused }: { motionPaused: boolean }) {
         <div className="appbar"><div className="traffic" aria-hidden="true"><i /><i /><i /></div><div className="app-title">SQR — {previews[active].title}</div></div>
         <div className="app"><PreviewSidebar /><div className="main">
           {previews.map(({ name, View }, index) => (
-            <div key={name} className={`preview-view motion-ready${active === index ? " is-active tab-enter" : ""}`} id={`view-${name}`} role="tabpanel" aria-labelledby={`tab-${name}`} hidden={active !== index} tabIndex={0}><View /></div>
+            <div key={name} className={`preview-view motion-ready${active === index ? " is-active tab-enter" : ""}`} id={`view-${name}`} role="tabpanel" aria-labelledby={`tab-${name}`} hidden={active !== index} tabIndex={0}>
+              {/* Keep every tab's ARIA target, but only build the visible demo. */}
+              {active === index && <View />}
+            </div>
           ))}
         </div></div>
       </div>

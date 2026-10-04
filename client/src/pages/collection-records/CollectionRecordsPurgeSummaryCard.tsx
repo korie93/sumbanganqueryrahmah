@@ -24,7 +24,7 @@ export function CollectionRecordsPurgeSummaryCard({
   return (
     <section aria-label="Manual Purge Data Lama">
       <details className="border-l-2 border-warning/40 bg-muted/30 px-3">
-        <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
           Manual Purge Data Lama · {purgeSummaryLoading ? "Checking..." : `${purgeSummary?.eligibleRecords ?? 0} eligible`}
         </summary>
         <div className="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between">

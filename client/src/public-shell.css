@@ -1,8 +1,11 @@
+/* Keep utility specificity/source order compatible with the unlayered app CSS.
+   Reference theme values must not overwrite SQR's runtime font/spacing tokens. */
+@import "tailwindcss/theme.css" theme(reference);
+@import "tailwindcss/preflight.css";
+@import "./styles/tailwind-preflight-compat.css";
+@import "tailwindcss/utilities.css" source(none);
+@import "./styles/tailwind-compat.css";
 @config "../../tailwind.public.config.cjs";
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 .sqr-backdrop-blur-none {
   -webkit-backdrop-filter: none !important;

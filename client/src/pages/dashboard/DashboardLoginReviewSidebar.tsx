@@ -190,7 +190,7 @@ function DashboardLoginReviewSidebarImpl({
                       <p className="mt-2 text-xs font-semibold leading-5 text-foreground">{item.title}</p>
                       <a
                         href={item.targetHref}
-                        className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {item.actionLabel}
                         <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -220,7 +220,7 @@ function DashboardLoginReviewSidebarImpl({
                     <a
                       key={shortcut.href}
                       href={shortcut.href}
-                      className="inline-flex min-h-11 items-center gap-3 rounded-md px-2 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                      className="inline-flex min-h-11 items-center gap-3 rounded-md px-2 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
                     >
                       <span className="inline-flex min-w-0 items-center gap-2">
                         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />

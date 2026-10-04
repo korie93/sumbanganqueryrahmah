@@ -223,7 +223,7 @@ export function CollectionMonthlyComparisonSetupCard({
       </div>
       <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3 lg:flex-row lg:items-start lg:justify-between">
         <details className="min-w-0 flex-1">
-          <summary className="min-h-11 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <summary className="min-h-11 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             Monthly target: {targetDisplayLabel}
           </summary>
           <div className="space-y-2 pt-1">

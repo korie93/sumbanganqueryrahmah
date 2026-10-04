@@ -237,6 +237,10 @@ const captureStartupFailureArtifact = async (error) => {
 };
 
 const getVisibleUserMenuTrigger = async (page) => {
+  // A document can be ready before the lazy authenticated shell has mounted.
+  // Wait for a reachable control, not a fixed sleep or a hidden desktop copy.
+  await page.locator('[data-testid="button-user-menu"]:visible, [data-testid="button-user-menu-mobile"]:visible, [data-testid="button-open-mobile-nav"]:visible')
+    .first().waitFor({ state: "visible", timeout: SMOKE_NAVIGATION_TIMEOUT_MS });
   const desktopTrigger = page.getByTestId("button-user-menu");
   if (await desktopTrigger.isVisible().catch(() => false)) {
     return desktopTrigger;
@@ -368,7 +372,12 @@ const checkDesktopNavbar = async (page, tracker) => {
   await settingsFlyout.getByRole("button", { name: /Backup & Restore/i }).click();
   await waitForSmokeDocumentReady(page);
   await page.waitForURL(/\/settings\?section=backup-restore/);
-  await page.getByText("Backup & Restore").first().waitFor();
+  await page.locator("#main-content").getByRole("heading", { name: "Backup & Restore", exact: true }).waitFor();
+  await page.waitForFunction(() => {
+    const content = document.querySelector("#main-content");
+    const sidebar = document.querySelector("aside.workspace-sidebar");
+    return content && sidebar && content.getBoundingClientRect().left >= sidebar.getBoundingClientRect().right - 1;
+  });
 
   tracker.assertClean("desktop navbar");
   tracker.clear();
@@ -1926,7 +1935,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
 const checkBackupRestoreUiFlow = async (page, context, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await navigateForSmoke(page, "/settings?section=backup-restore");
-  await page.getByText("Backup & Restore").first().waitFor();
+  await page.locator("#main-content").getByRole("heading", { name: "Backup & Restore", exact: true }).waitFor();
 
   if (await page.getByTestId("button-create-backup").count() === 0) {
     consumeExpectedBackupRestoreBootstrapRateLimitNoise(tracker);
@@ -1968,7 +1977,7 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
       .first();
     await createdBackupItem.waitFor({ state: "visible", timeout: 20_000 }).catch(async () => {
       await navigateForSmoke(page, "/settings?section=backup-restore");
-      await page.getByText("Backup & Restore").first().waitFor();
+      await page.locator("#main-content").getByRole("heading", { name: "Backup & Restore", exact: true }).waitFor();
       await createdBackupItem.waitFor({ state: "visible", timeout: 30_000 });
     });
 

@@ -12,7 +12,7 @@ function InfoHintImpl({ text }: InfoHintProps) {
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="inline-flex rounded-sm border-0 bg-transparent p-0 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex rounded-sm border-0 bg-transparent p-0 text-muted-foreground transition hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-label="Maklumat bantuan"
         >
           <CircleHelp className="h-3.5 w-3.5" />

@@ -212,7 +212,7 @@ export function SingleImportPanel({
                   disabled={!available || loading}
                   {...getAriaCurrentStepProps(active)}
                   aria-label={`Step ${step.id}: ${step.label}`}
-                  className={`flex min-h-16 w-full min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-center transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:justify-start sm:gap-2 sm:px-4 sm:text-left ${
+                  className={`flex min-h-16 w-full min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-center transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:justify-start sm:gap-2 sm:px-4 sm:text-left ${
                     active
                       ? "bg-primary/10 text-primary"
                       : available
@@ -299,7 +299,7 @@ export function SingleImportPanel({
                 role="button"
                 tabIndex={loading ? -1 : 0}
                 aria-label="Select single import file"
-                className={`rounded-md border border-dashed border-input p-6 text-center transition-colors duration-150 motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                className={`rounded-md border border-dashed border-input p-6 text-center transition-colors duration-150 motion-reduce:transition-none focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                   loading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary hover:bg-muted/30"
                 }`}
                 onClick={() => {

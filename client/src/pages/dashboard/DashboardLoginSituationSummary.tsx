@@ -224,7 +224,7 @@ function DashboardLoginSituationSummaryImpl({
               {situation.nextAction ? (
                 <a
                   href={situation.nextAction.targetHref}
-                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {situation.nextAction.title}
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

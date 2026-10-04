@@ -1,7 +1,13 @@
+/* Public shell owns preflight; authenticated navigation adds utilities only. */
+@import "tailwindcss/theme.css" theme(reference);
+@import "tailwindcss/utilities.css" source(none);
+@import "./styles/tailwind-compat.css";
 @config "../../tailwind.authenticated.config.ts";
-
-@tailwind components;
-@tailwind utilities;
+/* v4 source exclusions are explicit; negated legacy content globs are not enough. */
+@source not "./**/*.test.{ts,tsx}";
+@source not "./pages/Landing*.tsx";
+@source not "./pages/landing-v21";
+@source not "./pages/{Login,LoginParts,ForgotPassword,ActivateAccount,ActivateAccountParts,ResetPassword,Banned,NotFound}.tsx";
 
 .touch-target {
   position: relative;

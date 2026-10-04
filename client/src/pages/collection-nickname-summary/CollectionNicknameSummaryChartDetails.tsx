@@ -225,7 +225,7 @@ export function CollectionNicknameTargetOutcomeStrip({
           <button
             key={outcome.filter}
             type="button"
-            className={`min-w-0 px-3 py-2.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`min-w-0 px-3 py-2.5 text-center transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
               activeFilter === outcome.filter
                 ? "bg-muted text-foreground"
                 : "bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"

@@ -23,6 +23,33 @@ Release policy:
 - New external tarball sources are blocked unless they are vendored and covered by an integrity verification script.
 - Major dependency upgrades should be dependency-only pull requests with rollback notes.
 
+## 2026-10-03 Tailwind 4 migration
+
+[CI run 37118294053](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/37118294053)
+failed the dependency gate on `braces@3.0.3` and its Tailwind 3 transitive chain.
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) had no
+patched braces version at migration time. The user approved the major migration.
+
+- Pin `tailwindcss` and the official `@tailwindcss/postcss` adapter to `4.3.3`;
+  pin `tailwind-merge` to the compatible `3.7.0`. Remove unused autoprefixer.
+- The lockfile removes braces, micromatch, fast-glob and chokidar. There is no
+  vulnerability exception, threshold reduction, vendored fork or forced override.
+- Preserve v3 visual values in `tailwind.compat.cjs`, explicit content boundaries,
+  one public preflight, original sibling spacing semantics and forced-colors focus
+  treatment. See `docs/CSS_ARCHITECTURE.md` for the compatibility bridge.
+- Firefox's supported floor is now128 (Tailwind4 requirement); Chrome120 and
+  Safari17.4 floors remain unchanged. Production CSS targets the same browser set.
+- Build and existing screenshot baselines must pass without updating images merely
+  to accept migration differences. Bundle limits remain140KB raw/24KB gzip for
+  authenticated CSS; the current result is135.6KB/22.7KB after equivalent HSL
+  alpha simplification. Live audit currently has no moderate+ findings.
+
+Rollback must revert the manifest, lockfile, compiler config and CSS/class migration
+together; downgrading only Tailwind is not compatible and reintroduces the advisory.
+No backend, database, deployment, or permission changes are required.
+Final verification evidence is recorded in
+`CODEX_CONTINUATION_HANDOFF_TAILWIND_V4_AUDIT_FIX.md`.
+
 ## 2026-10-01 CI Security Patch
 
 [CI run 36787892874](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/36787892874)

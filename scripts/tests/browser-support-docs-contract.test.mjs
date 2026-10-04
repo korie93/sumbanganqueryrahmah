@@ -15,7 +15,7 @@ test("package browserslist declares the supported modern browser matrix", () => 
   assert.deepEqual(packageJson.browserslist.production, [
     "Chrome >= 120",
     "Edge >= 120",
-    "Firefox >= 121",
+    "Firefox >= 128",
     "Safari >= 17.4",
     "ios_saf >= 17.4",
     "not dead",

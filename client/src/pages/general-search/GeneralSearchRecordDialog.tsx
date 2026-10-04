@@ -71,7 +71,7 @@ export function GeneralSearchRecordDialog({
         onCloseAutoFocus={onCloseAutoFocus}
         className={
           isMobile
-            ? `${mobileFullscreenDialogViewportClassName} left-0 top-0 flex w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
+            ? `${mobileFullscreenDialogViewportClassName} left-0 top-0 flex w-screen max-w-none [transform:translate(0,0)] flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
             : "flex max-h-[88dvh] w-[min(94vw,960px)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[min(94vw,960px)] sm:max-w-none sm:p-0"
         }
         data-testid="general-search-record-dialog"

@@ -1,0 +1,7 @@
+/* Keep hover behavior unchanged during this compiler migration. */
+@custom-variant hover (&:hover);
+
+/* v3 focus rings defaulted to blue-500 at 50%, not currentColor. */
+@theme reference {
+  --default-ring-color: rgb(59 130 246 / 0.5);
+}

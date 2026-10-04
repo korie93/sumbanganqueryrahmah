@@ -13,8 +13,50 @@ responsive behavior, accessibility, dan performance kekal konsisten.
 
 ## Styling Layers
 
+### Tailwind 4 compatibility contract
+
+`postcss.config.js` uses the official v4 adapter. `tailwind.compat.cjs` retains
+the prior sRGB palette and visual scales; the existing JS configs retain semantic
+SQR tokens. CSS imports use a reference theme so generated root variables cannot
+overwrite or self-reference application `--font-*`, `--spacing-*` or `--shadow-*`.
+Utilities remain unlayered to preserve the existing application cascade; only
+Tailwind's registered-property fallback uses its own native layer.
+
+`scripts/lib/tailwind-postcss-compat.mjs` is a small, tested migration bridge:
+
+- Restore v3 `space-x/y` and divider following-sibling rules (including hidden
+  children and reverse flags), preserving existing forms and table separators.
+- Simplify only opaque semantic HSL + transparent mixes to equivalent alpha HSL;
+  remove the corresponding redundant color-mix-only fallback wrapper. Other
+  mixes/support checks are untouched. This keeps original CSS bundle limits.
+- Give animate-plugin default resets zero specificity so explicit slide/fade/zoom
+  modifiers still win when v4 reorders data-side/state/swipe variants. Animation
+  names/durations retain their original specificity and motion is browser-tested.
+- Normalize the legacy plugin's invalid `-var(--spacing-*)` negative distances
+  to `calc(var(--spacing-*) * -1)` so directional slides use the intended tokens.
+
+The public entry alone owns preflight. Authenticated CSS uses explicit v4
+`@source not` exclusions for public-only routes and test files. Do not broaden
+public scanning to fix a missing class. Use complete static utility tokens,
+explicit `[var(--token)]` values, v4 trailing `!` important syntax and
+`outline-hidden` for the previous accessible `outline-none` behavior.
+The shared compatibility theme retains the original default blue/50 ring color;
+explicit semantic ring colors still override it. Existing gradients use `/srgb`.
+Dialog and AlertDialog centering uses `[transform:translate(-50%,-50%)]`, so the
+animate plugin's transform keyframes replace it rather than adding an additional
+individual `translate` offset. Fullscreen dialog callers override that same
+transform property. Select offsets and Toast swipe transforms follow the same
+contract; explicit transition-property lists include `translate` when utilities
+still use individual translations. Cover both motion and reduced-motion states.
+Vite performs final minification for the documented browser floor; Firefox128 is
+required. Do not re-enable a second Tailwind optimization pass without checking
+CSS output size and cascade. Remove the compatibility bridge only with an
+intentional layout migration and browser verification, not a dependency bump.
+
+### Entry ownership
+
 1. `client/src/public-shell.css`
-   Digunakan oleh [main.tsx](../client/src/main.tsx) untuk memuatkan Tailwind `base`, `components`, dan `utilities` bagi shell awal aplikasi.
+   Digunakan oleh [main.tsx](../client/src/main.tsx) untuk memuatkan Tailwind4 preflight dan utilities bagi shell awal aplikasi; sumber awam kekal terhad melalui config dan `source(none)`.
 
 2. `client/src/styles/tokens/index.css`
    Sumber utama design tokens. Entry ini memuatkan subfail token seperti `_colors.css`, `_spacing.css`, `_typography.css`, `_shadows.css`, `_z-index.css`, `_safe-area.css`, dan `_animations.css`. `client/src/theme-tokens.css` kekal sebagai wrapper keserasian kecil sahaja.

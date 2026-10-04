@@ -1,0 +1,25 @@
+/* Retain the v3 defaults relied on by existing components. Public entry only. */
+*,
+::before,
+::after {
+  border-color: #e5e7eb;
+}
+
+body {
+  line-height: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  opacity: 1;
+  color: #9ca3af;
+}
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+:disabled {
+  cursor: default;
+}

@@ -85,7 +85,7 @@ export function AppPaginationBar({
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
         <select
           aria-label={pageSizeLabel}
-          className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-[120px]"
+          className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-[120px]"
           name="pageSize"
           value={String(pageSize)}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
