@@ -15,6 +15,7 @@ const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/
 const viewports = [
   { width: 1366, height: 768 }, { width: 1024, height: 768 }, { width: 768, height: 1024 },
   { width: 430, height: 900 }, { width: 390, height: 844 }, { width: 360, height: 800 },
+  { width: 320, height: 800 },
 ];
 test.use({ serviceWorkers: "block" });
 
@@ -228,6 +229,40 @@ async function noOverflow(page: Page) {
   expect(geometry.clipped).toEqual([]);
 }
 
+async function containedTwoFactorQr(page: Page) {
+  const panel = page.getByTestId("two-factor-settings");
+  const wrapper = panel.getByTestId("two-factor-qr");
+  await expect(wrapper.locator("svg")).toBeVisible();
+  // Page-wide overflow alone misses a QR wrapper protruding into page padding.
+  // Check the actual security panel and rendered QR without reading enrollment data.
+  const geometry = await panel.evaluate((element) => {
+    const qr = element.querySelector<HTMLElement>('[data-testid="two-factor-qr"]')!;
+    const svg = qr.querySelector("svg")!;
+    const bounds = (node: Element) => {
+      const rect = node.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
+    };
+    return {
+      panel: { ...bounds(element), clientWidth: element.clientWidth, scrollWidth: element.scrollWidth },
+      wrapper: { ...bounds(qr), clientWidth: qr.clientWidth, scrollWidth: qr.scrollWidth },
+      svg: bounds(svg),
+    };
+  });
+  expect(geometry.panel.scrollWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.panel.clientWidth + 1);
+  expect(geometry.wrapper.scrollWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.wrapper.clientWidth + 1);
+  expect(geometry.wrapper.left).toBeGreaterThanOrEqual(geometry.panel.left - 1);
+  expect(geometry.wrapper.right).toBeLessThanOrEqual(geometry.panel.right + 1);
+  expect(geometry.wrapper.top).toBeGreaterThanOrEqual(geometry.panel.top - 1);
+  expect(geometry.wrapper.bottom).toBeLessThanOrEqual(geometry.panel.bottom + 1);
+  expect(geometry.svg.left).toBeGreaterThanOrEqual(geometry.wrapper.left - 1);
+  expect(geometry.svg.right).toBeLessThanOrEqual(geometry.wrapper.right + 1);
+  expect(geometry.svg.top).toBeGreaterThanOrEqual(geometry.wrapper.top - 1);
+  expect(geometry.svg.bottom).toBeLessThanOrEqual(geometry.wrapper.bottom + 1);
+  expect(geometry.svg.width, "QR remains large enough to scan").toBeGreaterThanOrEqual(160);
+  expect(geometry.svg.height, "QR remains large enough to scan").toBeGreaterThanOrEqual(160);
+  expect(Math.abs(geometry.svg.width - geometry.svg.height), "QR preserves square proportions").toBeLessThanOrEqual(1);
+}
+
 async function accessible(page: Page) {
   await page.evaluate(axeSource);
   const violations = await page.evaluate(async () => {
@@ -293,9 +328,15 @@ for (const theme of ["light", "dark"] as Theme[]) for (const viewport of viewpor
     await page.getByRole("button", { name: "Teruskan ke kod QR", exact: true }).click();
     await expect(page.getByTestId("two-factor-qr")).toBeVisible();
     await noOverflow(page);
+    await containedTwoFactorQr(page);
     await accessible(page);
     await page.screenshot({ path: test.info().outputPath("security-setup.png"), animations: "disabled",
       mask: [page.getByTestId("two-factor-qr")] });
+    await page.getByRole("button", { name: "Tak dapat imbas kod QR? Papar kunci persediaan", exact: true }).click();
+    await expect(page.locator("#two-factor-manual-setup")).toBeVisible();
+    await noOverflow(page);
+    await containedTwoFactorQr(page);
+    await accessible(page);
     clean(fixture);
   });
 }

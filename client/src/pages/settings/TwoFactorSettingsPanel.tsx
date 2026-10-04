@@ -175,7 +175,7 @@ export function TwoFactorSettingsPanel(props: TwoFactorSettingsPanelProps) {
         {expiryDate ? <p className="text-sm leading-6 text-muted-foreground">Selesaikan sebelum {expiryDate}. Jika tamat tempoh, mulakan semula persediaan.</p> : null}
         {!confirmStep ? <div className="space-y-4">
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-6"><li>Buka aplikasi pengesah, contohnya Ente Auth, pada telefon anda.</li><li>Pilih tambah akaun, kemudian imbas kod QR di bawah.</li><li>Pastikan akaun <strong className="break-all">{props.twoFactorSetupIssuer}: {props.twoFactorSetupAccountName}</strong> muncul dalam aplikasi.</li></ol>
-          <div className="-mx-3 flex justify-center rounded-lg border border-border bg-white sm:mx-0 sm:p-2" data-testid="two-factor-qr">
+          <div className="flex justify-center rounded-lg border border-border bg-white sm:p-2" data-testid="two-factor-qr">
             <QRCodeSVG value={props.twoFactorSetupUri} size={240} marginSize={4} level="M" bgColor="#ffffff" fgColor="#000000" title="Imbas kod QR SQR dengan aplikasi pengesah" className="h-auto max-w-full" />
           </div>
           <p className="text-sm leading-6 text-muted-foreground">Jangan kongsi kod QR atau kunci persediaan ini. Pastikan masa telefon ditetapkan secara automatik.</p>

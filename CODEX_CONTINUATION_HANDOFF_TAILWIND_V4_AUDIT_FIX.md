@@ -1,5 +1,46 @@
 # Tailwind 4 audit fix — cross-account continuation
 
+## CI follow-up: 2026-10-04 — authenticator mobile panel overflow
+
+Migration commit `c3f52a349a3f65367e3f77b12340d3a3da267403` was pushed to main.
+GitHub CI run `37163938476` passed build-and-test and coverage-gate, but smoke-ui
+job `111323800435` failed "Verify actual built authenticator lifecycle on disposable
+PostgreSQL" at `layout: scan/320/light geometry`: `scan panel fits at 320px`.
+The unchanged local lifecycle test reproduced exactly the same failure.
+
+Root cause: the previous Account/Security integration removed the section's
+horizontal card padding, but its QR wrapper retained `-mx-3`. That wrapper
+protruded 12px beyond each panel edge below the `sm` breakpoint. Page-wide
+overflow checks missed it because the surrounding page still had padding.
+
+The follow-up removes only the obsolete QR-wrapper margins (`-mx-3 sm:mx-0`).
+QR sizing, quiet zone, colors, OTP handling, backend and permissions are unchanged.
+Regression coverage now includes 320px, panel/wrapper/SVG containment, usable square
+QR dimensions and manual-key expansion in both themes. CI gates/timeouts and
+snapshot baselines are unchanged.
+
+Verification evidence (ignored local artifacts):
+
+- `artifacts/ci-37163938476-two-factor-before.log`: reproduced the CI failure.
+- `artifacts/ci-37163938476-build.log`: build and production sourcemap gate PASS.
+- `artifacts/ci-37163938476-two-factor-fixed.log`: full real built-app + disposable
+  PostgreSQL lifecycle PASS, including independent QR decoding, invalid OTP,
+  authenticated login, disable and rotated-secret re-enrollment. All eight layout
+  states passed at eight widths in both themes. Fixture processes stopped and
+  only their temporary app/database directory was removed (`run-1uuE6o`).
+- Focused component/authenticator tests: 9/9 PASS. Bundle budgets PASS.
+- `artifacts/ci-37163938476-lint.log`: changed frontend files lint PASS.
+- `artifacts/ci-37163938476-personal-browser.log`: 40/40 browser regressions PASS
+  (Account/Security, both themes, 320px containment and manual-key expansion).
+- `artifacts/ci-37163938476-typecheck.log`: full TypeScript check PASS.
+- Independent patch review, secret guard and `git diff --check`: PASS.
+
+User explicitly requested commit and push for this follow-up on 2026-10-04.
+This checkpoint accompanies that delivery; inspect git log/status and origin/main
+to confirm its commit/push state. Remote CI success for it is not yet claimed.
+No server deployment or production-data access was performed. Local implementation
+and verification are complete; deployment is not authorized by this delivery request.
+
 ## Status: 2026-10-04 (Asia/Singapore)
 
 Implementation and final local verification are COMPLETE, including the previously

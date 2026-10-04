@@ -41,6 +41,10 @@ test("SETUP uses a local responsive black-on-white QR and hides manual material 
   assert.match(markup, /Ente Auth/);
   assert.match(markup, /SHA256, 6 digit dan 30 saat/);
   assert.match(markup, /data-testid="two-factor-qr"/);
+  // The personal section has no horizontal padding to absorb negative margins.
+  const qrWrapperClasses = markup.match(/<div class="([^"]*)" data-testid="two-factor-qr"/)?.[1];
+  assert.ok(qrWrapperClasses, "QR wrapper is present");
+  assert.doesNotMatch(qrWrapperClasses, /(?:^|\s)(?:\S+:)?-m[xlrse]?-/);
   assert.match(markup, /width="240"/);
   assert.match(markup, /fill="#ffffff"/);
   assert.match(markup, /fill="#000000"/);
