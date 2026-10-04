@@ -23,6 +23,7 @@ import { CollectionSidebar } from "@/pages/collection-report/CollectionSidebar";
 import { useCollectionNicknameAccess } from "@/pages/collection-report/useCollectionNicknameAccess";
 import { useCollectionReportNavigation } from "@/pages/collection-report/useCollectionReportNavigation";
 import { canViewCollectionNicknameSummary } from "@shared/user-roles";
+import "./CollectionReport.css";
 
 const CollectionNicknameDialog = lazy(() =>
   import("@/pages/collection-report/CollectionNicknameDialog").then((module) => ({
@@ -112,7 +113,10 @@ export default function CollectionReport() {
       || (!bypassesNicknameAccess && !nicknameAccess.canAccessCollection));
 
   return (
-    <OperationalPage width="wide">
+    <OperationalPage
+      width={navigation.subPage === "save" && !isReadOnlyManager ? "form" : "report"}
+      className="collection-report-frame"
+    >
       <OperationalPageHeader
         title="Collection Report"
         eyebrow="Operational Workspace"
@@ -121,7 +125,7 @@ export default function CollectionReport() {
         className={isMobile ? "border-border/60 bg-background" : ""}
       />
 
-      <div className="relative flex min-w-0 flex-col gap-4">
+      <div className="collection-report-sections relative flex min-w-0 flex-col gap-4">
         <CollectionSidebar
           items={navigation.sidebarItems}
           mobileOpen={navigation.mobileSidebarOpen}

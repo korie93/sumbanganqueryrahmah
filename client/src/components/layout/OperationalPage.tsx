@@ -5,8 +5,15 @@ import { cn } from "@/lib/utils";
 type OperationalPageProps = {
   children: ReactNode;
   className?: string | undefined;
-  width?: "wide" | "content";
+  width?: "wide" | "content" | "form" | "report";
 };
+
+const pageWidthClasses = {
+  wide: "max-w-[1680px]",
+  content: "max-w-7xl",
+  form: "max-w-[1120px]",
+  report: "max-w-[1480px]",
+} as const;
 
 type OperationalPageHeaderProps = {
   title: ReactNode;
@@ -54,7 +61,7 @@ export function OperationalPage({
       <div
         className={cn(
           "ops-page-frame",
-          width === "content" ? "max-w-7xl" : "max-w-[1680px]",
+          pageWidthClasses[width],
           className,
         )}
       >

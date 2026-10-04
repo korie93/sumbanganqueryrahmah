@@ -1,0 +1,12 @@
+/* Keep the heading, section navigation and content on the same page grid. */
+.ops-page-frame.collection-report-frame,
+.collection-report-frame .collection-report-sections {
+  gap: var(--spacing-4);
+}
+
+@media (min-width: 768px) {
+  .ops-page-frame.collection-report-frame,
+  .collection-report-frame .collection-report-sections {
+    gap: var(--spacing-6);
+  }
+}

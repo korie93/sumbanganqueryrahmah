@@ -10,7 +10,6 @@ import type {
   CollectionStaffNickname,
   CollectionTeamOption,
 } from "@/lib/api";
-import { cn } from "@/lib/utils";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
 import {
   Select,
@@ -96,7 +95,7 @@ function CollectionRecordsAdvancedFilters({
   return (
     <>
       {canUseTeamLeaderFilter ? (
-        <div className="min-w-0 space-y-1.5">
+        <div className="min-w-0 space-y-2">
           <Label htmlFor={`collection-records-leader-${mobile ? "mobile" : "desktop"}`}>Team Leader</Label>
           <Select value={leaderFilter} onValueChange={onLeaderFilterChange} disabled={loadingTeams}>
             <SelectTrigger
@@ -117,7 +116,7 @@ function CollectionRecordsAdvancedFilters({
         </div>
       ) : null}
 
-      <div className="min-w-0 space-y-1.5">
+      <div className="min-w-0 space-y-2">
         <Label htmlFor={`collection-records-source-${mobile ? "mobile" : "desktop"}`}>Saved Source / Batch</Label>
         <Select value={sourceImportFilter} onValueChange={onSourceImportFilterChange} disabled={loadingSources}>
           <SelectTrigger
@@ -137,7 +136,7 @@ function CollectionRecordsAdvancedFilters({
         </Select>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor={`collection-records-aging-${mobile ? "mobile" : "desktop"}`}>Aging</Label>
         <Select value={agingFilter} onValueChange={onAgingFilterChange}>
           <SelectTrigger id={`collection-records-aging-${mobile ? "mobile" : "desktop"}`} className={triggerClassName}>
@@ -152,7 +151,7 @@ function CollectionRecordsAdvancedFilters({
         </Select>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor={`collection-records-classification-${mobile ? "mobile" : "desktop"}`}>Classification</Label>
         <Select value={classificationFilter} onValueChange={onClassificationFilterChange}>
           <SelectTrigger id={`collection-records-classification-${mobile ? "mobile" : "desktop"}`} className={triggerClassName}>
@@ -166,7 +165,7 @@ function CollectionRecordsAdvancedFilters({
         </Select>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor={`collection-records-sort-${mobile ? "mobile" : "desktop"}`}>Susunan</Label>
         <Select value={sortValue} onValueChange={onSortValueChange}>
           <SelectTrigger id={`collection-records-sort-${mobile ? "mobile" : "desktop"}`} className={triggerClassName}>
@@ -341,84 +340,89 @@ export function CollectionRecordsFilters({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div
-        className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3"
+        className="flex flex-wrap items-end gap-4"
+        data-testid="collection-records-primary-filters"
       >
-      <div className="space-y-1.5">
-        <Label htmlFor={desktopFromDateButtonId}>From Date</Label>
-        <DatePickerField
-          buttonId={desktopFromDateButtonId}
-          value={fromDate}
-          onChange={onFromDateChange}
-          placeholder="Select from date..."
-          ariaLabel="From Date"
-          buttonTestId="collection-records-from-date"
-          className="h-9 rounded-md bg-background"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor={desktopToDateButtonId}>To Date</Label>
-        <DatePickerField
-          buttonId={desktopToDateButtonId}
-          value={toDate}
-          onChange={onToDateChange}
-          placeholder="Select to date..."
-          ariaLabel="To Date"
-          buttonTestId="collection-records-to-date"
-          className="h-9 rounded-md bg-background"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="collection-records-search">Search</Label>
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            id="collection-records-search"
-            name="collectionRecordsSearch"
-            type="search"
-            value={searchInput}
-            onChange={(event) => onSearchInputChange(event.target.value)}
-            placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
-            className="h-9 rounded-md bg-background pl-9"
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
+        <div className="min-w-0 flex-[1_1_10rem] space-y-2">
+          <Label htmlFor={desktopFromDateButtonId}>From Date</Label>
+          <DatePickerField
+            buttonId={desktopFromDateButtonId}
+            value={fromDate}
+            onChange={onFromDateChange}
+            placeholder="Select from date..."
+            ariaLabel="From Date"
+            buttonTestId="collection-records-from-date"
+            className="h-9 rounded-md bg-background"
           />
         </div>
+        <div className="min-w-0 flex-[1_1_10rem] space-y-2">
+          <Label htmlFor={desktopToDateButtonId}>To Date</Label>
+          <DatePickerField
+            buttonId={desktopToDateButtonId}
+            value={toDate}
+            onChange={onToDateChange}
+            placeholder="Select to date..."
+            ariaLabel="To Date"
+            buttonTestId="collection-records-to-date"
+            className="h-9 rounded-md bg-background"
+          />
+        </div>
+        <div className="min-w-0 flex-[2_1_18rem] space-y-2">
+          <Label htmlFor="collection-records-search">Search</Label>
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="collection-records-search"
+              name="collectionRecordsSearch"
+              type="search"
+              value={searchInput}
+              onChange={(event) => onSearchInputChange(event.target.value)}
+              placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
+              className="h-9 rounded-md bg-background pl-9"
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </div>
+        </div>
+        {canUseNicknameFilter ? (
+          <div className="min-w-0 flex-[1_1_12rem] [&>div]:space-y-2">
+            <CollectionNicknameSingleSelect
+              label="Staff Nickname (optional)"
+              triggerId="collection-records-nickname-filter"
+              open={desktopNicknamePickerOpen}
+              loading={loadingNicknames}
+              selectedLabel={selectedNicknameLabel}
+              options={nicknameOptionsList}
+              value={nicknameFilter === "all" ? "" : nicknameFilter}
+              emptySelectionLabel="Semua staff"
+              emptySelectionActive={nicknameFilter === "all"}
+              searchPlaceholder="Cari nickname staff..."
+              onOpenChange={setDesktopNicknamePickerOpen}
+              onSelectEmpty={() => onNicknameFilterChange("all")}
+              onSelect={onNicknameFilterChange}
+              triggerClassName="h-9 rounded-md bg-background text-sm"
+              popoverClassName="w-[min(360px,calc(100vw-3rem))] rounded-lg border-border bg-popover p-2 shadow-md"
+            />
+          </div>
+        ) : null}
+        <div
+          className="flex shrink-0 flex-wrap items-center gap-2"
+          data-floating-ai-avoid="true"
+          data-testid="collection-records-filter-actions"
+        >
+          <Button type="button" className="h-9 rounded-md px-5" onClick={onFilter} disabled={loadingRecords}>
+            Filter
+          </Button>
+          <Button type="button" variant="outline" className="h-9 rounded-md px-5" onClick={onReset} disabled={loadingRecords}>
+            Reset
+          </Button>
+        </div>
       </div>
-      {canUseNicknameFilter ? (
-        <CollectionNicknameSingleSelect
-          label="Staff Nickname (optional)"
-          triggerId="collection-records-nickname-filter"
-          open={desktopNicknamePickerOpen}
-          loading={loadingNicknames}
-          selectedLabel={selectedNicknameLabel}
-          options={nicknameOptionsList}
-          value={nicknameFilter === "all" ? "" : nicknameFilter}
-          emptySelectionLabel="Semua staff"
-          emptySelectionActive={nicknameFilter === "all"}
-          searchPlaceholder="Cari nickname staff..."
-          onOpenChange={setDesktopNicknamePickerOpen}
-          onSelectEmpty={() => onNicknameFilterChange("all")}
-          onSelect={onNicknameFilterChange}
-          triggerClassName="h-9 rounded-md bg-background text-sm"
-          popoverClassName="w-[min(360px,calc(100vw-3rem))] rounded-lg border-border bg-popover p-2 shadow-md"
-        />
-      ) : null}
-      <div className={cn("flex items-end", canUseNicknameFilter ? "" : "xl:justify-end")} data-floating-ai-avoid="true">
-        <Button type="button" className="h-9 rounded-md px-5" onClick={onFilter} disabled={loadingRecords}>
-          Filter
-        </Button>
-      </div>
-      <div className="flex items-end" data-floating-ai-avoid="true">
-        <Button type="button" variant="outline" className="h-9 rounded-md px-5" onClick={onReset} disabled={loadingRecords}>
-          Reset
-        </Button>
-      </div>
-      </div>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,160px),1fr))] gap-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,160px),1fr))] gap-4">
         <CollectionRecordsAdvancedFilters
           canUseTeamLeaderFilter={canUseTeamLeaderFilter}
           leaderFilter={leaderFilter}

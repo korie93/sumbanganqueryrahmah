@@ -2,7 +2,31 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
-import { OperationalMetric, OperationalPageHeader, OperationalSectionCard } from "./OperationalPage";
+import { OperationalMetric, OperationalPage, OperationalPageHeader, OperationalSectionCard } from "./OperationalPage";
+
+test("operational page provides bounded form and report widths without changing existing pages", () => {
+  for (const [width, widthClass] of [
+    ["form", "max-w-[1120px]"],
+    ["report", "max-w-[1480px]"],
+    ["content", "max-w-7xl"],
+    ["wide", "max-w-[1680px]"],
+  ] as const) {
+    const markup = renderToStaticMarkup(createElement(OperationalPage, {
+      width,
+      className: "collection-report-frame",
+      children: createElement("p", null, "Page content"),
+    }));
+    assert.ok(markup.includes(widthClass));
+    assert.match(markup, /ops-page-frame/);
+    assert.match(markup, /collection-report-frame/);
+    assert.match(markup, /<p>Page content<\/p>/);
+  }
+
+  const defaultMarkup = renderToStaticMarkup(createElement(OperationalPage, {
+    children: "Existing page",
+  }));
+  assert.ok(defaultMarkup.includes("max-w-[1680px]"));
+});
 
 test("operational page heading keeps context and actions without a nested card", () => {
   const markup = renderToStaticMarkup(createElement(OperationalPageHeader, {

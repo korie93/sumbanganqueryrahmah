@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 type VisualTheme = "light" | "dark";
+type VisualRole = "superuser" | "admin" | "user" | "manager";
 
 interface VisualRouteSpec {
   readonly id: string;
@@ -179,7 +180,7 @@ async function installMockPublicApi(page: Page) {
   });
 }
 
-async function installMockAuthenticatedApi(page: Page) {
+async function installMockAuthenticatedApi(page: Page, role: VisualRole = "superuser") {
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -189,7 +190,7 @@ async function installMockAuthenticatedApi(page: Page) {
       return jsonResponse(route, {
         ok: true,
         sessionExpiresAt: visualSessionExpiresAt,
-        user: visualUser,
+        user: { ...visualUser, role },
       });
     }
 
@@ -210,8 +211,8 @@ async function installMockAuthenticatedApi(page: Page) {
 
     if (pathname === "/api/settings/tab-visibility") {
       return jsonResponse(route, {
-        role: visualUser.role,
-        tabs: {},
+        role,
+        tabs: role === "superuser" ? {} : { home: true, "collection-report": true },
       });
     }
 
@@ -456,6 +457,13 @@ async function installMockAuthenticatedApi(page: Page) {
       });
     }
 
+    if (pathname === "/api/collection/nickname-auth/session") {
+      return jsonResponse(route, {
+        ok: true,
+        nickname: { id: "visual-nickname-1", nickname: "Collector Alpha" },
+      });
+    }
+
     if (pathname === "/api/collection/nicknames") {
       return jsonResponse(route, {
         nicknames: [
@@ -505,6 +513,14 @@ async function installMockAuthenticatedApi(page: Page) {
     if (pathname === "/api/collection/source-files") {
       return jsonResponse(route, { ok: true, sourceFiles: [], pagination: { limit: 50, total: 0, nextCursor: null } });
     }
+    if (pathname === "/api/collection/source-configs") {
+      return jsonResponse(route, { ok: true, sourceConfigs: [] });
+    }
+    if (pathname === "/api/collection/purge-summary") {
+      return jsonResponse(route, {
+        ok: true, retentionMonths: 6, cutoffDate: "2025-07-15", eligibleRecords: 0, totalAmount: 0,
+      });
+    }
     if (pathname === "/api/collection/teams") {
       return jsonResponse(route, { ok: true, teams: [] });
     }
@@ -544,9 +560,9 @@ async function installMockAuthenticatedApi(page: Page) {
   });
 }
 
-async function installMockAuthenticatedSession(page: Page, theme: VisualTheme) {
+async function installMockAuthenticatedSession(page: Page, theme: VisualTheme, role: VisualRole = "superuser") {
   await installTheme(page, theme);
-  await installMockAuthenticatedApi(page);
+  await installMockAuthenticatedApi(page, role);
   await page.addInitScript(({ nextTheme, user }) => {
     const now = Date.now();
     const expiresAt = now + 60 * 60 * 1000;
@@ -582,7 +598,7 @@ async function installMockAuthenticatedSession(page: Page, theme: VisualTheme) {
       window.addEventListener("pagehide", () => observer.disconnect(), { once: true });
       hideFloatingAi();
     }, { once: true });
-  }, { nextTheme: theme, user: visualUser });
+  }, { nextTheme: theme, user: { ...visualUser, role } });
 }
 
 async function navigateForSnapshot(page: Page, route: VisualRouteSpec) {
@@ -745,6 +761,104 @@ test("V17 auth changes preserve authenticated module shells", async ({ page }) =
     expect(pageErrors).toEqual([]);
   } finally {
     await logoutVisualSession(page);
+  }
+});
+
+test.describe("Collection layout polish", () => {
+  for (const theme of visualThemes) {
+    for (const width of [320, 390, 768, 1280, 1920]) {
+      test(`${theme} at ${width}px keeps forms bounded and filters reachable`, async ({ page }) => {
+        const pageErrors: string[] = [];
+        page.on("pageerror", (error) => pageErrors.push(error.message));
+        page.on("console", (message) => {
+          if (message.type() === "error") pageErrors.push(message.text());
+        });
+        await page.setViewportSize({ width, height: 900 });
+        await installMockAuthenticatedSession(page, theme);
+        await navigateForSnapshot(page, authenticatedRoutes[1]);
+        const frame = page.locator(".collection-report-frame");
+        await expect(frame).toHaveCSS("max-width", "1120px");
+        await expect(frame).toHaveCSS("gap", width >= 768 ? "24px" : "16px");
+        const saveWidth = (await frame.boundingBox())!.width;
+        expect(saveWidth).toBeLessThanOrEqual(1120);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        await page.locator("#save-collection-customer-name").fill("Layout Test Customer");
+        await page.locator("#save-collection-customer-name").blur();
+        await page.getByRole("button", { name: "Reset Form", exact: true }).click();
+        await expect(page.locator("#save-collection-customer-name")).toHaveValue("");
+        await page.screenshot({ path: test.info().outputPath("save.png"), fullPage: true, animations: "disabled" });
+
+        await navigateForSnapshot(page, {
+          id: "collection-records", path: "/collection/records", readySelector: "[data-testid='collection-records-page']",
+        });
+        await expect(frame).toHaveCSS("max-width", "1480px");
+        expect((await frame.boundingBox())!.width).toBeLessThanOrEqual(1480);
+        if (width === 1920) expect((await frame.boundingBox())!.width).toBeGreaterThan(saveWidth);
+        const mobileFilters = page.getByRole("button", { name: /^Search & Filters(?: \d+)?$/ });
+        if (width < 768) await mobileFilters.click();
+        const search = page.locator(width < 768 ? "#collection-records-search-mobile" : "#collection-records-search");
+        await expect(search).toBeVisible();
+        if (width >= 1280) {
+          const dateWidth = (await page.getByTestId("collection-records-from-date").boundingBox())!.width;
+          expect((await search.boundingBox())!.width).toBeGreaterThan(dateWidth);
+        }
+        if (width >= 768) {
+          const actions = page.getByTestId("collection-records-filter-actions");
+          await expect(actions.getByRole("button")).toHaveCount(2);
+          const filterBox = (await actions.getByRole("button", { name: "Filter", exact: true }).boundingBox())!;
+          const resetBox = (await actions.getByRole("button", { name: "Reset", exact: true }).boundingBox())!;
+          expect(Math.abs(filterBox.y - resetBox.y)).toBeLessThanOrEqual(1);
+        }
+        const clippedControls = await page.locator(width < 768 ? '[role="dialog"]' : ".collection-report-frame").evaluate((root) =>
+          [...root.querySelectorAll("button, input, select")].filter((node) => {
+            const rect = node.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && (rect.left < -1 || rect.right > innerWidth + 1);
+          }).map((node) => node.id || node.textContent?.trim()),
+        );
+        expect(clippedControls).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        const cardNo = "00009007199254740993";
+        const searched = page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/collection/list" && url.searchParams.get("search") === cardNo;
+        });
+        await search.fill(cardNo);
+        await page.getByRole("button", { name: "Filter", exact: true }).click();
+        await searched;
+        if (width < 768) await mobileFilters.click();
+        await expect(search).toHaveValue(cardNo);
+        await page.getByRole("button", { name: "Reset", exact: true }).click();
+        if (width < 768) await mobileFilters.click();
+        await expect(search).toHaveValue("");
+        await page.screenshot({ path: test.info().outputPath("records.png"), fullPage: true, animations: "disabled" });
+        expect(pageErrors).toEqual([]);
+      });
+    }
+  }
+
+  for (const role of ["admin", "user", "manager"] as const) {
+    test(`${role} retains its save and filter permissions`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await installMockAuthenticatedSession(page, "light", role);
+      await page.goto("/collection/save");
+      const frame = page.locator(".collection-report-frame");
+      if (role === "manager") {
+        await expect(page.getByTestId("collection-records-page")).toBeVisible();
+        await expect(frame).toHaveCSS("max-width", "1480px");
+        await expect(page.locator("#save-collection-customer-name")).toHaveCount(0);
+      } else {
+        await expect(page.locator("#save-collection-customer-name")).toBeVisible();
+        await expect(frame).toHaveCSS("max-width", "1120px");
+        await page.getByRole("navigation", { name: "Collection sections", exact: true })
+          .getByRole("button", { name: "View Rekod Collection", exact: true }).click();
+        await expect(page.getByTestId("collection-records-page")).toBeVisible();
+        await expect(frame).toHaveCSS("max-width", "1480px");
+      }
+      await expect(page.locator("#collection-records-search")).toBeVisible();
+      await expect(page.locator("#collection-records-nickname-filter")).toHaveCount(role === "user" ? 0 : 1);
+      await expect(page.locator("#collection-records-leader-desktop")).toHaveCount(role === "manager" ? 1 : 0);
+      await expect(page.getByTestId("collection-records-filter-actions").getByRole("button")).toHaveCount(2);
+    });
   }
 });
 
