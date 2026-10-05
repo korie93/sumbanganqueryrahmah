@@ -233,6 +233,24 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
     const body = dialog.locator(".overflow-y-auto");
     expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
     const footerTop = (await bounds(save)).y;
+    // Pending cards are shared with Save Collection; check them in the narrower
+    // edit body too, without sending receipt bytes to any backend.
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 100; canvas.height = 300;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#dbeafe"; context.fillRect(0, 0, 100, 300);
+      return canvas.toDataURL("image/png").split(",")[1]!;
+    });
+    const upload = dialog.locator('input[name="collectionReceiptUpload"]');
+    await upload.setInputFiles({ name: "Synthetic edit receipt.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") });
+    const pending = dialog.getByTestId("receipt-draft-card");
+    await expect(pending).toHaveCount(1);
+    await pending.getByLabel("Reference / no. transaksi", { exact: true }).fill("SYNTHETIC-EDIT-PREVIEW");
+    await pending.getByRole("button", { name: "Lihat besar resit 1", exact: true }).click();
+    await expect(pending.getByRole("button", { name: "Kecilkan resit 1", exact: true })).toHaveAttribute("aria-expanded", "true");
+    await expect(pending.getByLabel("Reference / no. transaksi", { exact: true })).toHaveValue("SYNTHETIC-EDIT-PREVIEW");
+    expect(await body.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await body.evaluate((element) => { element.scrollTop = element.scrollHeight; });
     expect(Math.abs((await bounds(save)).y - footerTop)).toBeLessThan(2);
     const dialogBounds = await bounds(dialog);

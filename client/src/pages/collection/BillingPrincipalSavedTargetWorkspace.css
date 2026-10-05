@@ -1,0 +1,38 @@
+/* Table.containerProps owns scrolling; keep pinned Aging cells in this region. */
+.billing-osp-table-scroll {
+  isolation: isolate;
+  scroll-padding-inline: calc(var(--spacing-24) + var(--spacing-2)) var(--spacing-2);
+}
+
+.billing-osp-table-aging {
+  position: sticky;
+  left: 0;
+  z-index: var(--z-inline);
+  width: var(--spacing-24);
+  min-width: var(--spacing-24);
+  white-space: nowrap;
+  box-shadow: inset -1px 0 hsl(var(--border));
+}
+
+.billing-osp-table-scroll td.billing-osp-table-aging {
+  background: hsl(var(--card));
+}
+
+.billing-osp-table-scroll th.billing-osp-table-aging,
+.billing-osp-table-scroll .billing-osp-table-total td.billing-osp-table-aging,
+.billing-osp-table-scroll tfoot td.billing-osp-table-aging,
+.billing-osp-table-scroll tr:hover td.billing-osp-table-aging {
+  background: hsl(var(--muted));
+}
+
+.billing-osp-table-scroll th.billing-osp-table-aging {
+  z-index: var(--z-sticky-content);
+}
+
+.dark .billing-osp-table-scroll tbody td.billing-osp-table-aging {
+  background: var(--dm-table-row);
+}
+
+.dark .billing-osp-table-scroll tbody tr:hover td.billing-osp-table-aging {
+  background: var(--dm-table-row-hover);
+}

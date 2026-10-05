@@ -1,9 +1,12 @@
+import { useId, useState } from "react";
 import { FileImage, FileText, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { resolveSafePreviewSourceUrl } from "@/lib/safe-url";
+import { cn } from "@/lib/utils";
 import type {
   CollectionReceiptDraftPreview,
 } from "@/pages/collection/useCollectionReceiptDraftPreviews";
@@ -39,7 +42,11 @@ export function CollectionReceiptDraftCard({
   onDraftChange,
   onRemove,
 }: CollectionReceiptDraftCardProps) {
+  const previewId = useId();
+  const [previewExpanded, setPreviewExpanded] = useState(false);
   const safePreviewUrl = resolveSafePreviewSourceUrl(preview.url);
+  const canExpandPreview = preview.kind === "image" && Boolean(safePreviewUrl);
+  const expanded = canExpandPreview && previewExpanded;
   const amountInputId = `pending-receipt-amount-${index}`;
   const dateInputId = `pending-receipt-date-${index}`;
   const referenceInputId = `pending-receipt-reference-${index}`;
@@ -50,20 +57,27 @@ export function CollectionReceiptDraftCard({
     : undefined;
 
   return (
-    <article className="rounded-xl border border-border/70 bg-background shadow-sm">
-      <div className="grid gap-0 overflow-hidden rounded-xl lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.15fr)]">
-        <div className="flex min-h-72 items-center justify-center border-b border-border/60 bg-muted/20 p-4 lg:border-b-0 lg:border-r">
+    <article className="min-w-0 rounded-xl border border-border/70 bg-background shadow-sm" data-testid="receipt-draft-card">
+      <div className={cn("grid min-w-0 gap-0 overflow-hidden rounded-xl", !expanded && "sm:grid-cols-[10rem_minmax(0,1fr)]")}>
+        <div className={cn(
+          "flex min-w-0 flex-wrap items-center justify-center gap-3 border-b border-border/60 bg-muted/20 p-3",
+          expanded ? "flex-col" : "sm:flex-col sm:border-b-0 sm:border-r",
+        )} data-testid="receipt-draft-preview">
           {preview.kind === "image" ? (
             safePreviewUrl ? (
               <img
+                id={previewId}
                 src={safePreviewUrl}
                 alt={`Preview receipt ${index + 1}: ${preview.file.name}`}
                 width={hasPreviewDimensions ? preview.width : undefined}
                 height={hasPreviewDimensions ? preview.height : undefined}
-                className="h-auto max-h-[30rem] w-full rounded-lg object-contain"
+                className={cn(
+                  "min-w-0 rounded-lg object-contain",
+                  expanded ? "h-auto max-h-[30rem] w-full" : "h-32 w-32 shrink-0",
+                )}
                 loading="lazy"
                 decoding="async"
-                style={previewAspectRatio ? { aspectRatio: previewAspectRatio } : undefined}
+                style={expanded && previewAspectRatio ? { aspectRatio: previewAspectRatio } : undefined}
               />
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -82,13 +96,28 @@ export function CollectionReceiptDraftCard({
               <Badge variant="outline">Preview unavailable</Badge>
             </div>
           )}
+          {canExpandPreview ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="min-h-11 shrink-0 sm:min-h-9"
+              onClick={() => setPreviewExpanded((current) => !current)}
+              disabled={disabled}
+              aria-label={`${expanded ? "Kecilkan" : "Lihat besar"} resit ${index + 1}`}
+              aria-controls={previewId}
+              {...getAriaExpandedProps(expanded)}
+            >
+              {expanded ? "Kecilkan" : "Lihat besar"}
+            </Button>
+          ) : null}
         </div>
 
         <div className="min-w-0 space-y-4 p-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{receiptPositionLabel}</Badge>
-              <p className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground">
+              <p className="order-last min-w-0 basis-full break-words text-sm font-semibold text-foreground sm:order-none sm:basis-0 sm:flex-1">
                 {preview.file.name}
               </p>
               <Badge variant={pendingStatusCopy.badgeVariant}>

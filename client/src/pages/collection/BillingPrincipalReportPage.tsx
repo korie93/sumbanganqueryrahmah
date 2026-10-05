@@ -1,5 +1,6 @@
 import { getStoredAuthenticatedUser } from "@/lib/auth-session";
 import { BillingPrincipalSavedTargetShell } from "./BillingPrincipalSavedTargetShell";
+import "./BillingPrincipalSavedTargetWorkspace.css";
 
 export default function BillingPrincipalReportPage({ role }: { role: string }) {
   const user = getStoredAuthenticatedUser();

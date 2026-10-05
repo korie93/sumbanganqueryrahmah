@@ -42,7 +42,7 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
-function ResultTable({
+export function BillingPrincipalSystemResultTable({
   rows,
   all,
 }: {
@@ -51,11 +51,18 @@ function ResultTable({
 }) {
   const rendered = [...rows, all];
   return (
-    <div className="overflow-x-auto border-t border-border/60">
-      <Table aria-label="Table A System Billing Principal result" className="min-w-[820px]">
+      <Table
+        aria-label="Table A System Billing Principal result"
+        className="min-w-[820px]"
+        containerProps={{
+          role: "region",
+          "aria-label": "Table A System Result, scroll to view more columns",
+          className: "billing-osp-table-scroll border-t border-border/60",
+        }}
+      >
         <TableHeader>
           <TableRow className="bg-muted/30">
-            <TableHead>Aging</TableHead>
+            <TableHead className="billing-osp-table-aging">Aging</TableHead>
             <TableHead className="text-right">TT OSP</TableHead>
             <TableHead className="text-right">Target %</TableHead>
             <TableHead className="text-right">Target OSP</TableHead>
@@ -67,8 +74,8 @@ function ResultTable({
         </TableHeader>
         <TableBody>
           {rendered.map((row) => (
-            <TableRow key={row.aging} className={row.aging === "ALL" ? "bg-muted/30 font-semibold" : undefined}>
-              <TableCell>{row.aging}</TableCell>
+            <TableRow key={row.aging} className={row.aging === "ALL" ? "billing-osp-table-total bg-muted/30 font-semibold" : undefined}>
+              <TableCell className="billing-osp-table-aging">{row.aging}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(row.totalOsp)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspPercentage(row.targetPercentage)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(row.targetOsp)}</TableCell>
@@ -80,7 +87,6 @@ function ResultTable({
           ))}
         </TableBody>
       </Table>
-    </div>
   );
 }
 
@@ -210,25 +216,32 @@ export function BillingPrincipalClientResultTable({
         ) : null}
       </div>
       {error ? <p role="alert" className="mx-4 mb-4 text-sm text-destructive">{error}</p> : null}
-      <div className="overflow-x-auto border-t border-border/60">
-        <Table aria-label="Table B Client Billing Principal result" className="min-w-[760px] [&_td]:py-1.5">
+        <Table
+          aria-label="Table B Client Billing Principal result"
+          className="min-w-[760px] [&_td]:py-1.5"
+          containerProps={{
+            role: "region",
+            "aria-label": "Table B Client Result, scroll to view more columns",
+            className: "billing-osp-table-scroll border-t border-border/60",
+          }}
+        >
           <TableHeader>
             <TableRow className="bg-muted/30">
-              <TableHead>Aging</TableHead>
+              <TableHead className="billing-osp-table-aging">Aging</TableHead>
               <TableHead className="text-right">TT OSP</TableHead>
-              <TableHead className="text-right">Target %</TableHead>
-              <TableHead className="text-right">Target OSP</TableHead>
-              <TableHead className="w-36 text-right">Client Result %</TableHead>
-              <TableHead className="text-right">Client OSP Closed</TableHead>
-              <TableHead className="text-right">Balance OSP</TableHead>
+              <TableHead className="py-2 text-right">Target %<span className="block text-xs font-normal">{editable ? "Editable" : "Saved"}</span></TableHead>
+              <TableHead className="py-2 text-right">Target OSP<span className="block text-xs font-normal">Calculated</span></TableHead>
+              <TableHead className="w-36 py-2 text-right">Client Result %<span className="block text-xs font-normal">{editable ? "Editable" : "Saved"}</span></TableHead>
+              <TableHead className="py-2 text-right">Client OSP Closed<span className="block text-xs font-normal">Calculated</span></TableHead>
+              <TableHead className="py-2 text-right">Balance OSP<span className="block text-xs font-normal">Calculated</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map(({ aging, persisted, calculated }) => (
               <TableRow key={aging}>
-                <TableCell className="font-semibold">{aging}</TableCell>
+                <TableCell className="billing-osp-table-aging font-semibold">{aging}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatOspCurrency(persisted?.totalOsp)}</TableCell>
-                <TableCell>{editable ? <Input aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto h-11 w-28 text-right tabular-nums md:h-9" /> : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
+                <TableCell>{editable ? <Input aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto h-11 w-28 border-border text-right tabular-nums shadow-none md:h-9" /> : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.targetOsp)}</TableCell>
                 <TableCell>
                   {editable ? (
@@ -239,7 +252,7 @@ export function BillingPrincipalClientResultTable({
                       value={draft[aging].resultPercentage}
                       onChange={(event) => update(aging, "resultPercentage", event.target.value)}
                       disabled={busy}
-                      className="h-11 text-right tabular-nums md:h-9"
+                      className="h-11 border-border text-right tabular-nums shadow-none md:h-9"
                     />
                   ) : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.resultPercentage)}</span>}
                 </TableCell>
@@ -250,7 +263,7 @@ export function BillingPrincipalClientResultTable({
           </TableBody>
           <TableFooter>
             <TableRow>
-              <TableCell>ALL</TableCell>
+              <TableCell className="billing-osp-table-aging">ALL<span className="block text-xs font-normal text-muted-foreground">Calculated</span></TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.totalOsp)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspPercentage(preview?.all.targetPercentage)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.targetOsp)}</TableCell>
@@ -260,7 +273,6 @@ export function BillingPrincipalClientResultTable({
             </TableRow>
           </TableFooter>
         </Table>
-      </div>
     </section>
   );
 }
@@ -454,7 +466,7 @@ export function BillingPrincipalSavedTargetWorkspace({
               <div className="flex items-center gap-2"><Badge variant="secondary">A</Badge><h3 id="billing-table-a-heading" className="text-base font-semibold">System Result</h3></div>
               <p className="mt-1 text-sm text-muted-foreground">Effective automatic ABORT CP plus valid Manual Verified ABORT, with each logical account counted once.</p>
             </div>
-            <ResultTable rows={overview.systemResult.rows} all={overview.systemResult.all} />
+            <BillingPrincipalSystemResultTable rows={overview.systemResult.rows} all={overview.systemResult.all} />
           </section>
           <BillingPrincipalClientResultTable target={target} overview={overview} editable={["superuser", "manager", "admin"].includes(role)} saving={saving} exporting={exportBusy} onSave={saveClient} onDirtyChange={setClientDirty} />
           <section aria-labelledby="billing-latest-comparison" className="border-y border-border py-4">
