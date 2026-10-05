@@ -112,11 +112,12 @@
 }
 
 .collection-monthly-comparison-progress--previous {
-  --collection-monthly-comparison-progress-fill: hsl(var(--chart-4));
+  --collection-monthly-comparison-progress-fill: hsl(var(--muted-foreground));
 }
 
+/* A configured target is a neutral reference, not a failure state. */
 .collection-monthly-comparison-progress--target {
-  --collection-monthly-comparison-progress-fill: hsl(var(--destructive) / 0.72);
+  --collection-monthly-comparison-progress-fill: hsl(var(--foreground));
 }
 
 .collection-monthly-comparison-progress--danger {

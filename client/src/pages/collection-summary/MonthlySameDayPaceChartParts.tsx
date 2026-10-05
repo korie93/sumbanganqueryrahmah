@@ -306,7 +306,7 @@ export function MonthlySameDayPaceChartCanvas({
             type="monotone"
             dataKey="previousCumulative"
             name={pace.previousLabel}
-            stroke="hsl(var(--chart-4))"
+            stroke="hsl(var(--muted-foreground))"
             strokeWidth={2.5}
             strokeDasharray="6 5"
             dot={SAME_DAY_PREVIOUS_DOT}
@@ -318,7 +318,7 @@ export function MonthlySameDayPaceChartCanvas({
               type="monotone"
               dataKey="targetExpected"
               name="Target pace"
-              stroke="hsl(var(--destructive))"
+              stroke="hsl(var(--foreground))"
               strokeWidth={2}
               strokeDasharray="3 5"
               dot={false}

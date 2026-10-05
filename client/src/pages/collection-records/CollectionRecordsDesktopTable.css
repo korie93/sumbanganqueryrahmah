@@ -1,0 +1,45 @@
+/* The shared Table wrapper owns both scroll axes, including sticky headers. */
+.collection-records-table-scroll {
+  isolation: isolate;
+  max-height: min(40rem, calc(var(--viewport-min-height-value) * 0.64));
+  scroll-padding-inline: 17rem var(--spacing-2);
+  scroll-padding-block: var(--spacing-16) var(--spacing-2);
+}
+
+.collection-records-table-scroll--actions {
+  scroll-padding-right: 10rem;
+}
+
+.collection-records-table-identity,
+.collection-records-table-actions {
+  position: sticky;
+  z-index: var(--z-inline);
+}
+
+.collection-records-table-identity {
+  left: 0;
+  width: 16rem;
+  min-width: 16rem;
+  box-shadow: inset -1px 0 hsl(var(--border));
+}
+
+.collection-records-table-actions {
+  right: 0;
+  width: 9rem;
+  min-width: 9rem;
+  box-shadow: inset 1px 0 hsl(var(--border));
+}
+
+.collection-records-table-scroll td:is(.collection-records-table-identity, .collection-records-table-actions) {
+  background: hsl(var(--card));
+}
+
+.collection-records-table-scroll tr:hover td:is(.collection-records-table-identity, .collection-records-table-actions),
+.collection-records-table-scroll tr[data-state="selected"] td:is(.collection-records-table-identity, .collection-records-table-actions) {
+  background: hsl(var(--muted));
+}
+
+/* Corner cells stay above the scrolling header and opaque pinned body cells. */
+.collection-records-table-scroll th:is(.collection-records-table-identity, .collection-records-table-actions) {
+  z-index: var(--z-sticky-content);
+}

@@ -35,7 +35,7 @@ export interface CollectionRecordsTableProps {
 
 function CollectionRecordsDesktopTableFallback() {
   return (
-    <div className="min-h-[420px] max-h-[64vh] overflow-auto rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+    <div role="status" className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
       Loading records table...
     </div>
   );

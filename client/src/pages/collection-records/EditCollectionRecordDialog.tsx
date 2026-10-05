@@ -116,12 +116,15 @@ export function EditCollectionRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl overflow-auto" onCloseAutoFocus={onCloseAutoFocus}>
-        <DialogHeader>
+      <DialogContent
+        className="flex max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:p-0"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
+        <DialogHeader className="shrink-0 border-b px-4 py-4 pr-12 text-left sm:px-6 sm:pr-12">
           <DialogTitle>Edit Collection Record</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="edit-collection-customer-name">Customer Name</Label>
             <Input
@@ -273,11 +276,16 @@ export function EditCollectionRecordDialog({
             />
           ) : null}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={savingEdit}>
+        <DialogFooter className="shrink-0 flex-row justify-end gap-2 border-t px-4 py-4 sm:gap-2 sm:space-x-0 sm:px-6">
+          <Button
+            className="min-h-11 flex-1 sm:flex-none"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={savingEdit}
+          >
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={savingEdit}>
+          <Button className="min-h-11 flex-1 sm:flex-none" onClick={onSave} disabled={savingEdit}>
             {savingEdit ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>

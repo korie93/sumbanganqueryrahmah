@@ -243,7 +243,7 @@ export function MonthlyCollectionComparisonChartCanvas({
               type="monotone"
               dataKey="monthlyTarget"
               name="Monthly target"
-              stroke="hsl(var(--destructive))"
+              stroke="hsl(var(--foreground))"
               strokeWidth={2}
               strokeDasharray="6 4"
               dot={false}
