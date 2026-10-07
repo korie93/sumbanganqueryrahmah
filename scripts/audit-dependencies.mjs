@@ -1,40 +1,31 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
-  analyzeDependencyAuditReport,
+  analyzeDependencyAuditExecution,
   analyzePackageLockSources,
   analyzePackageOverrides,
   analyzeSecurityCriticalDependencyPins,
+  DEPENDENCY_AUDIT_MAX_BUFFER,
+  DEPENDENCY_AUDIT_TIMEOUT_MS,
 } from "./lib/dependency-audit.mjs";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const npmArgs = ["audit", "--json"];
 const npmExecPath = process.env.npm_execpath;
+const spawnOptions = {
+  encoding: "utf8",
+  timeout: DEPENDENCY_AUDIT_TIMEOUT_MS,
+  maxBuffer: DEPENDENCY_AUDIT_MAX_BUFFER,
+  windowsHide: true,
+};
 const result = npmExecPath
-  ? spawnSync(process.execPath, [npmExecPath, ...npmArgs], { encoding: "utf8" })
+  ? spawnSync(process.execPath, [npmExecPath, ...npmArgs], spawnOptions)
   : spawnSync(npmCommand, npmArgs, {
-      encoding: "utf8",
+      ...spawnOptions,
       shell: process.platform === "win32",
     });
 
-if (result.error) {
-  console.error(`Unable to run npm audit: ${result.error.message}`);
-  process.exit(1);
-}
-
-let auditReport;
-try {
-  auditReport = JSON.parse(result.stdout || "{}");
-} catch (error) {
-  console.error("Unable to parse npm audit JSON output.");
-  if (result.stderr) {
-    console.error(result.stderr.trim());
-  }
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-}
-
-const { allowed, failures } = analyzeDependencyAuditReport(auditReport);
+const { allowed, failures } = analyzeDependencyAuditExecution(result);
 let packageSourceResult = { allowed: [], failures: [] };
 let packageOverridesResult = { failures: [] };
 let securityCriticalPinResult = { failures: [] };
@@ -45,9 +36,8 @@ try {
   securityCriticalPinResult = analyzeSecurityCriticalDependencyPins(packageJson);
   const packageLock = JSON.parse(readFileSync("package-lock.json", "utf8"));
   packageSourceResult = analyzePackageLockSources(packageLock);
-} catch (error) {
+} catch {
   console.error("Unable to inspect package dependency metadata.");
-  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
 

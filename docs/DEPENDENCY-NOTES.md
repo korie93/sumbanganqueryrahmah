@@ -8,6 +8,64 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-10-07 security patches and fail-closed audit
+
+The production post-deployment audit for `7e99b17a` identified 11 runtime
+package findings. A fresh full local audit also identified three build-time
+findings (14 total). These findings are not evidence of exploitation. Updates:
+
+- `compression`: exact `1.8.2`, addressing premature-response-close zlib cleanup
+  ([GHSA-vc2v-76pw-4v95](https://github.com/advisories/GHSA-vc2v-76pw-4v95)).
+- `proxy-addr`: lockfile-only `2.0.8` within Express's existing `^2.0.7` range,
+  addressing mapped-IPv6 trust-range matching
+  ([GHSA-jqcg-44mw-7w3h](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)).
+  No application proxy trust or rate-limit settings change.
+- OpenTelemetry auto-instrumentations: exact `0.79.0`, the first release with
+  all eight patched database instrumentations; SDK and HTTP trace exporter
+  align to exact `0.221.0`. This removes unconditional `db.user` attributes
+  ([GHSA-qqmp-wf37-98f9](https://github.com/advisories/GHSA-qqmp-wf37-98f9)).
+  The app's telemetry enablement and destination remain unchanged. External
+  collector dashboards using legacy HTTP/network/database semantic attribute
+  names may need adjustment; none were found in repository consumers.
+- `source-map-js`: lockfile-only `1.2.2`, within existing PostCSS ranges,
+  addressing invalid indexed-map offsets
+  ([GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)).
+- Remove the unused `@tailwindcss/typography` dev dependency. No Tailwind plugin
+  registration or `prose` class consumers exist in the app; removing it also
+  removes its vulnerable `postcss-selector-parser` chain
+  ([GHSA-rj75-hqrm-r3gf](https://github.com/advisories/GHSA-rj75-hqrm-r3gf)).
+  No CSS source, theme, selector override or visual design change is needed.
+
+Targeted npm updates use `--ignore-scripts --no-audit --no-fund`. OpenTelemetry's
+transitive packages move within the upgraded package's supported ranges; no new
+dependency override or vulnerability exception is introduced. The resolved
+`protobufjs@7.6.6` postinstall was reviewed: it only reads package metadata and
+prints a version-scheme warning, with no network access or writes. Its existing
+exact-version lifecycle permission moves from `7.6.5` to `7.6.6` only.
+
+The audit gate now requires a complete npm audit v2 report and consistent
+severity counts. Empty/truncated output, npm error reports, unsupported shapes,
+timeouts, signals and abnormal exit statuses must fail closed with sanitized
+diagnostics. Valid findings remain subject to the same moderate+ threshold;
+no allowlist or retry-to-ignore behavior is added. Historical green CI is not
+proof that the latest registry advisory feed is clean, nor is the reason for
+the earlier CI/production difference assumed.
+
+Before release, run the focused dependency regressions, script suite, HTTP/auth
+and telemetry checks, typecheck/lint, production build, bundle budgets and built
+browser checks. Use the committed lockfile and normal approved release process.
+Do not patch the immutable production directory or use `npm audit fix --force`.
+Rolling back to the previous lockfile reintroduces affected packages; it is a
+compatibility recovery option, not a security remediation.
+
+Local verification on 2026-10-07: full and production npm audits reported zero
+findings; the hardened audit gate, typecheck, lint, build, bundle budgets and
+secret scan passed. Tests passed: 1,811 client, 704 selected backend, 708 scripts
+(one existing optional baseline check skipped), 29 built layout checks and 38
+built auth checks. All 30 emitted CSS content hashes were unchanged. These are
+local checks, not a GitHub CI or production deployment result; live PostgreSQL
+and Redis integration gates were not run for this dependency patch.
+
 ## CI Automation
 
 Dependency audit automation is active in GitHub Actions:
@@ -149,9 +207,9 @@ Release/rollback boundary: this is a dependency-focused fix, not a production de
 
 The audit threshold, exact-pin policy, and lifecycle-script allowlist are unchanged. `scripts/tests/dependency-security-regressions.test.mjs` checks offline mail serialization, transporter file/URL restrictions in the legacy message API, and bounded YAML merge-work accounting. It runs with `npm run test:scripts`; `npm run audit:dependencies` checks the installed dependency graph against current advisories.
 
-## compression@1.8.1
+## compression@1.8.2
 
-`compression@1.8.1` remains in use because the Express middleware API is stable and current `npm audit` does not report a vulnerability for this package in this project. The risk being controlled here is CPU or memory pressure from broad compression behavior, not request decompression.
+`compression@1.8.2` fixes the premature-response-close memory leak identified in the advisory above while preserving the Express middleware API. The existing application controls below still bound broad compression behavior; they are not substitutes for the upstream security patch and do not concern request decompression.
 
 Verified mitigation:
 

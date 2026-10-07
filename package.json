@@ -144,9 +144,9 @@
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/auto-instrumentations-node": "0.78.0",
-    "@opentelemetry/exporter-trace-otlp-http": "0.220.0",
-    "@opentelemetry/sdk-node": "0.220.0",
+    "@opentelemetry/auto-instrumentations-node": "0.79.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.221.0",
+    "@opentelemetry/sdk-node": "0.221.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -181,7 +181,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "compression": "1.8.1",
+    "compression": "1.8.2",
     "date-fns": "^3.6.0",
     "dompurify": "3.4.16",
     "dotenv": "16.6.1",
@@ -226,7 +226,6 @@
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "4.3.3",
-    "@tailwindcss/typography": "^0.5.16",
     "@types/bcrypt": "^6.0.0",
     "@types/busboy": "^1.5.4",
     "@types/compression": "^1.8.1",
@@ -277,6 +276,6 @@
     "core-js@3.47.0": true,
     "esbuild@0.28.1": true,
     "msgpackr-extract@3.0.4": true,
-    "protobufjs@7.6.5": true
+    "protobufjs@7.6.6": true
   }
 }

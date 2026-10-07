@@ -11,7 +11,10 @@ The gate intentionally fails on new moderate-or-higher advisories and on new
 external tarball sources. Any allowlist entry must include a reason in
 `scripts/lib/dependency-audit.mjs`.
 
-Final-polish dependency decisions, including the `compression@1.8.1` DoS
+Audit process errors and malformed/incomplete npm audit reports also fail closed;
+an unavailable advisory service must never be reported as a clean dependency graph.
+
+Final-polish dependency decisions, including the `compression@1.8.2` DoS
 mitigation verification and package override removal criteria, are documented in
 `docs/DEPENDENCY-NOTES.md`.
 
