@@ -1,0 +1,11 @@
+/* Reserve room for the workspace header, search and result controls. A maximum
+   (not a fixed height) keeps short result sets compact. Page scrolling remains
+   available when advanced filters or zoom require more room above the table. */
+.general-search-results-viewport {
+  max-height: clamp(10rem, calc(var(--viewport-min-height-value) - 26rem), 52rem);
+}
+
+.general-search-results-viewport--virtual {
+  /* Spacer changes already preserve position through the virtual window. */
+  overflow-anchor: none;
+}

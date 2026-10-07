@@ -5,6 +5,7 @@ import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { GeneralSearchControls } from "@/pages/general-search/GeneralSearchControls";
 import { useGeneralSearchController } from "@/pages/general-search/useGeneralSearchController";
 import type { SearchResultRow } from "@/pages/general-search/types";
+import "@/pages/general-search/general-search-layout.css";
 
 const GeneralSearchResults = lazy(() =>
   import("@/pages/general-search/GeneralSearchResults").then((module) => ({
@@ -48,8 +49,8 @@ export default function GeneralSearch({
   }, []);
 
   return (
-    <OperationalPage width="content" className="max-w-6xl">
-        <header className="space-y-1" data-floating-ai-avoid="true">
+    <OperationalPage width="report" className="general-search-page">
+        <header className="w-full max-w-6xl space-y-1" data-floating-ai-avoid="true">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-section-title">
             Data Search
           </h1>

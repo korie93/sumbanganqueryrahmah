@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState, type UIEvent } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import { FileText } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { GeneralSearchMobileResultsList } from "@/pages/general-search/GeneralSearchMobileResultsList";
@@ -8,7 +8,6 @@ import type { SearchResultRow } from "@/pages/general-search/types";
 import {
   buildGeneralSearchPaginationItems,
   buildGeneralSearchResultsRange,
-  buildGeneralSearchVirtualRowsState,
 } from "@/pages/general-search/general-search-results-utils";
 import { highlightMatch } from "@/pages/general-search/utils";
 
@@ -68,27 +67,6 @@ export function GeneralSearchResults({
   totalResultsIsApproximate,
 }: GeneralSearchResultsProps) {
   const isMobile = useIsMobile();
-  const [tableScrollTop, setTableScrollTop] = useState(0);
-
-  useEffect(() => {
-    setTableScrollTop(0);
-  }, [currentPage, results, resultsPerPage]);
-
-  const {
-    bottomSpacerHeight,
-    enableVirtualRows,
-    topSpacerHeight,
-    virtualEndRow,
-    virtualStartRow,
-  } = useMemo(
-    () =>
-      buildGeneralSearchVirtualRowsState(
-        results.length,
-        isLowSpecMode,
-        tableScrollTop,
-      ),
-    [isLowSpecMode, results.length, tableScrollTop],
-  );
   const { rangeEnd, rangeStart, totalPages } = useMemo(
     () =>
       buildGeneralSearchResultsRange(
@@ -101,13 +79,6 @@ export function GeneralSearchResults({
   const pageItems = useMemo(
     () => buildGeneralSearchPaginationItems(currentPage, totalPages),
     [currentPage, totalPages],
-  );
-  const virtualRows = useMemo(
-    () =>
-      enableVirtualRows
-        ? results.slice(virtualStartRow, virtualEndRow)
-        : results,
-    [enableVirtualRows, results, virtualEndRow, virtualStartRow],
   );
 
   const renderCellValue = (safeText: string) =>
@@ -140,13 +111,8 @@ export function GeneralSearchResults({
     );
   }
 
-  const handleDesktopTableScroll = enableVirtualRows
-    ? (event: UIEvent<HTMLDivElement>) =>
-        setTableScrollTop(event.currentTarget.scrollTop)
-    : undefined;
-
   return (
-    <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-floating-ai-avoid="true">
+    <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-testid="general-search-results" data-floating-ai-avoid="true">
       <GeneralSearchResultsToolbar
         activeFilterSummaries={activeFilterSummaries}
         advancedMode={advancedMode}
@@ -184,16 +150,14 @@ export function GeneralSearchResults({
           }
         >
           <GeneralSearchDesktopResultsTable
-            bottomSpacerHeight={bottomSpacerHeight}
-            enableVirtualRows={enableVirtualRows}
+            currentPage={currentPage}
+            resultsPerPage={resultsPerPage}
+            isLowSpecMode={isLowSpecMode}
             canSeeSourceFile={canSeeSourceFile}
             headers={headers}
             onRecordSelect={onRecordSelect}
-            onScroll={handleDesktopTableScroll}
             renderCellValue={renderCellValue}
-            topSpacerHeight={topSpacerHeight}
-            virtualRows={virtualRows}
-            virtualStartRow={virtualStartRow}
+            results={results}
           />
         </Suspense>
       )}

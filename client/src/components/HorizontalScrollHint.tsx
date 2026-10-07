@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type UIEventHandler } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject, type UIEventHandler } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +14,7 @@ type HorizontalScrollHintProps = {
   children: ReactNode;
   className?: string;
   viewportClassName?: string;
+  viewportRef?: RefObject<HTMLDivElement>;
   hint?: string;
   navigationLabel?: string;
   onScroll?: UIEventHandler<HTMLDivElement>;
@@ -36,13 +37,15 @@ export function HorizontalScrollHint({
   children,
   className,
   viewportClassName,
+  viewportRef: suppliedViewportRef,
   hint = translate("common.horizontalScroll.hint"),
   navigationLabel = "Horizontal column navigation",
   onScroll,
   showNavigationControls = false,
   showScrollbar = false,
 }: HorizontalScrollHintProps) {
-  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const localViewportRef = useRef<HTMLDivElement>(null);
+  const viewportRef = suppliedViewportRef ?? localViewportRef;
   const [overflowState, setOverflowState] = useState<HorizontalOverflowState>({
     canScroll: false,
     canScrollLeft: false,
@@ -110,7 +113,7 @@ export function HorizontalScrollHint({
         window.cancelAnimationFrame(frame);
       }
     };
-  }, [children]);
+  }, [children, viewportRef]);
 
   const scrollByViewport = (direction: -1 | 1) => {
     const viewportNode = viewportRef.current;

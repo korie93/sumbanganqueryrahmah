@@ -46,3 +46,10 @@ test("horizontal scroll hint can expose accessible viewport-sized navigation con
   assert.match(source, /disabled=\{!overflowState\.canScrollLeft\}/);
   assert.match(source, /disabled=\{!overflowState\.canScrollRight\}/);
 });
+
+test("horizontal scroll hint optionally shares its existing scroll viewport without adding a wrapper", () => {
+  assert.match(source, /viewportRef\?: RefObject<HTMLDivElement>/);
+  assert.match(source, /suppliedViewportRef \?\? localViewportRef/);
+  assert.match(source, /ref=\{viewportRef\}/);
+  assert.match(source, /resizeObserver\.observe\(viewportNode\)/);
+});

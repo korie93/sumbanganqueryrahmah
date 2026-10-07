@@ -51,7 +51,7 @@ export function GeneralSearchDesktopControls({
   onUpdateFilter,
 }: GeneralSearchDesktopControlsProps) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4" data-floating-ai-avoid="true">
+    <div className="w-full max-w-6xl rounded-lg border border-border bg-card p-4" data-testid="general-search-controls" data-floating-ai-avoid="true">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button
           variant={advancedMode ? "outline" : "default"}
