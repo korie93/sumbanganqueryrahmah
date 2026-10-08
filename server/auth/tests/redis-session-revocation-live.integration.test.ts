@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { createClient } from "redis";
+import { observeRedisDegradation } from "./helpers/redis-degradation-observer";
 
 const redisUrl = process.env.SQR_SESSION_REVOCATION_TEST_REDIS_URL;
 const required = process.env.SQR_SESSION_REVOCATION_TEST_REDIS_REQUIRED === "1";
@@ -163,14 +164,20 @@ test("live Redis session readiness recovers while idle and stays degraded when G
     const initialReadyEvents = readyEvents;
     const initialErrors = errorEvents;
     const initialReads = successfulReads;
-    const clientId = await within(client.clientId(), "identify fixture connection");
-    assert.equal(await within(control.clientKill({ filter: "ID", id: clientId }), "disconnect only fixture client"), 1);
-    await waitFor(() => errorEvents > initialErrors && degraded(), "disconnect marks session readiness degraded");
-    // Do not call store.isRevoked/revoke here: only the recovery probe may clear
-    // degradation, including while there is no logged-in application traffic.
-    await waitFor(() => readyEvents > initialReadyEvents && !degraded(), "idle session readiness recovery");
-    assert.ok(successfulReads > initialReads, "recovery must confirm GET access, not only socket readiness");
-    assert.equal(clients.length, 1, "node-redis should recover its original connection");
+    // The store's error handler is already registered. Observe immediately after
+    // it handles the disconnect: node-redis can reconnect and recover faster than
+    // a polling interval, including before CLIENT KILL's control reply arrives.
+    const observation = observeRedisDegradation(client, degraded);
+    try {
+      const clientId = await within(client.clientId(), "identify fixture connection");
+      assert.equal(await within(control.clientKill({ filter: "ID", id: clientId }), "disconnect only fixture client"), 1);
+      await waitFor(() => errorEvents > initialErrors && observation.hasObservedDegradation(), "disconnect marks session readiness degraded");
+      // No application requests here: only the recovery probe may clear health.
+      await waitFor(() => readyEvents > initialReadyEvents && successfulReads > initialReads && !degraded(), "idle session readiness recovery");
+      assert.equal(clients.length, 1, "node-redis should recover its original connection");
+    } finally {
+      observation.stop();
+    }
   });
 
   await t.test("ready and PING cannot clear GET-denied health; restoring GET recovers without a request", async () => {

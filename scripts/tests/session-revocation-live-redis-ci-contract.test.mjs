@@ -39,6 +39,20 @@ test("live Redis fixture checks a nullable ACL identity through the untransforme
     "An existing ACL identity must be rejected before creation or cleanup takes ownership.");
 });
 
+test("live Redis idle recovery captures transient degradation before disconnect and still requires read recovery", () => {
+  const source = readFileSync("server/auth/tests/redis-session-revocation-live.integration.test.ts", "utf8");
+  const scenario = source.split('await t.test("a real disconnected idle connection')[1]?.split('await t.test("ready and PING')[0] || "";
+  assert.match(scenario, /observeRedisDegradation\(client, degraded\)/);
+  assert.ok(scenario.indexOf("observeRedisDegradation(") < scenario.indexOf("control.clientKill("),
+    "Observe disconnect health before triggering CLIENT KILL.");
+  assert.match(scenario, /errorEvents > initialErrors && observation\.hasObservedDegradation\(\)/);
+  assert.doesNotMatch(scenario, /errorEvents > initialErrors && degraded\(\)/);
+  assert.match(scenario, /readyEvents > initialReadyEvents && successfulReads > initialReads && !degraded\(\)/);
+  assert.match(scenario, /finally\s*\{\s*observation\.stop\(\)/);
+  assert.doesNotMatch(scenario, /store\.(?:isRevoked|revoke)\(|clearStartupServiceDegraded\(/,
+    "The fixture cannot recover readiness itself or use an application request to mask missing idle recovery.");
+});
+
 test("installed Redis raw ACL command preserves null, existing identities and errors over RESP2", { timeout: 5_000 }, async (t) => {
   // A loopback protocol fixture tests the installed client's real reply decoder.
   // It is not a Redis substitute for the required live ACL/reconnect CI test.
