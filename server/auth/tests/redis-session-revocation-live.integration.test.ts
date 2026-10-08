@@ -100,7 +100,10 @@ test("live Redis session readiness recovers while idle and stays degraded when G
   } catch {
     assert.fail("The required isolated Redis service is unavailable (connection details withheld).");
   }
-  assert.equal(await within(control.aclGetUser(username), "check fixture ACL identity"), null);
+  // ACL GETUSER returns null for an absent user; node-redis's RESP2 aclGetUser
+  // transformer dereferences that null. Preserve the raw reply and still reject
+  // existing identities or command errors before claiming fixture ownership.
+  assert.equal(await within(control.sendCommand(["ACL", "GETUSER", username]), "check fixture ACL identity"), null);
   userCreated = true;
   await within(control.aclSetUser(username, [
     "reset", "on", `>${password}`, `~${prefix}:*`,
