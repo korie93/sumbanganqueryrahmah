@@ -94,6 +94,13 @@ jobs:
           SQR_RATE_LIMIT_TEST_REDIS_REQUIRED: "1"
         run: node --import tsx --test server/http/tests/rate-limit-live-redis.integration.test.ts
 
+      - name: Verify live Redis session revocation recovery
+        timeout-minutes: 2
+        env:
+          SQR_SESSION_REVOCATION_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+          SQR_SESSION_REVOCATION_TEST_REDIS_REQUIRED: "1"
+        run: node --import tsx --test server/auth/tests/redis-session-revocation-live.integration.test.ts
+
       - name: Run services tests
         run: npm run test:services
 

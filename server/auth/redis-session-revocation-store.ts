@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { setMaxListeners } from "node:events";
 import { logger as defaultLogger } from "../lib/logger";
 import { internalMetrics } from "../internal/metrics";
 import {
@@ -17,6 +18,7 @@ type LoggerLike = Pick<typeof defaultLogger, "warn"> & Partial<Pick<typeof defau
 
 type RedisSessionRevocationClientLike = {
   connect: () => Promise<unknown>;
+  destroy?: () => void;
   eval?: (
     script: string,
     options: { arguments: string[]; keys: string[] },
@@ -44,7 +46,15 @@ type RedisSessionRevocationStoreOptions = {
   logger?: LoggerLike;
   now?: () => number;
   prefix?: string;
+  recoveryTimeoutMs?: number;
+  recoveryRetryMs?: number;
   warningRepeatMs?: number;
+};
+
+type RedisConnection = {
+  client: RedisSessionRevocationClientLike;
+  cancellation: AbortController;
+  pendingWrites: number;
 };
 
 const MIN_REVOCATION_TTL_MS = 1_000;
@@ -225,16 +235,29 @@ function resolveTtlMs(expiresAtMs: number, now = Date.now()): number {
   return Math.max(MIN_REVOCATION_TTL_MS, parsed - now);
 }
 
+function boundedRecoveryDelay(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(1, Math.min(60_000, Math.trunc(value))) : 5_000;
+}
+
 export class RedisSessionRevocationStore implements SessionRevocationStore {
   private readonly config: SharedRateLimitStoreConfig;
   private readonly createRedisClient: RedisSessionRevocationClientFactory | null;
   private readonly logger: LoggerLike;
   private readonly now: () => number;
   private readonly prefix: string;
-  private client: RedisSessionRevocationClientLike | null = null;
-  private clientPromise: Promise<RedisSessionRevocationClientLike | null> | null = null;
+  private connection: RedisConnection | null = null;
+  private clientPromise: Promise<RedisConnection | null> | null = null;
+  private recoveryPromise: Promise<void> | null = null;
+  private recoveryTimer: NodeJS.Timeout | null = null;
+  private readonly recoveryTimeoutMs: number;
+  private readonly recoveryRetryMs: number;
+  private readonly recoveryProbeKey: string;
+  private failureVersion = 0;
+  private degraded = false;
+  private writeFailure = false;
   private lastWarningAt = 0;
-  private readonly pendingRevocationKeys = new Set<string>();
+  private readonly pendingRevocationKeys = new Map<string, number>();
   private shuttingDown = false;
   private warningEmitted = false;
   private readonly warningRepeatMs: number;
@@ -245,6 +268,10 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     this.logger = options.logger ?? defaultLogger;
     this.now = options.now ?? Date.now;
     this.prefix = normalizeRedisPrefix(options.prefix);
+    this.recoveryTimeoutMs = boundedRecoveryDelay(options.recoveryTimeoutMs);
+    this.recoveryRetryMs = boundedRecoveryDelay(options.recoveryRetryMs);
+    // Read-only, unguessable probe in the same ACL namespace; never a real JWT or a write.
+    this.recoveryProbeKey = this.buildRedisKey(crypto.randomUUID());
     this.warningRepeatMs = Math.max(1, Math.trunc(Number(options.warningRepeatMs ?? REDIS_UNAVAILABLE_WARNING_REPEAT_MS)));
   }
 
@@ -254,53 +281,63 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
       return true;
     }
 
-    const client = await this.getClient();
-    if (!client) {
-      this.logRedisFailure(new Error("Redis session revocation store is unavailable."));
+    const connection = await this.getClient();
+    if (!connection) {
+      if (!this.degraded) this.logRedisFailure(new RedisSessionRevocationUnavailableError());
       return true;
     }
 
+    const version = this.failureVersion;
     try {
-      const value = await client.get(redisKey);
-      this.recordRedisRecovery();
-      return value != null;
+      const value = await this.withDeadline(connection, () => connection.client.get(redisKey));
+      if (!this.isCurrent(connection) || version !== this.failureVersion) return true;
+      this.recordRedisRecovery(connection, version);
+      return value != null || this.pendingRevocationKeys.has(redisKey);
     } catch (error) {
-      this.handleRedisFailure(error, "isRevoked");
+      this.handleRedisFailure(connection, error, "isRevoked");
       return true;
     }
   }
 
   async revoke(record: SessionRevocationRecord): Promise<void> {
-    const client = await this.getClient();
-    if (!client) {
+    const connection = await this.getClient();
+    if (!connection) {
       const error = new RedisSessionRevocationUnavailableError();
-      this.logRedisFailure(error);
+      if (!this.degraded) this.logRedisFailure(error);
       throw error;
     }
 
     const redisKey = this.buildRedisKey(record.jwtId);
-    this.pendingRevocationKeys.add(redisKey);
+    this.pendingRevocationKeys.set(redisKey, (this.pendingRevocationKeys.get(redisKey) ?? 0) + 1);
+    connection.pendingWrites += 1;
+    const version = this.failureVersion;
     try {
-      await this.writeRevocationAtomically(client, redisKey, resolveTtlMs(record.expiresAtMs));
-      this.recordRedisRecovery();
+      await this.withDeadline(connection, () => this.writeRevocationAtomically(
+        connection.client, redisKey, resolveTtlMs(record.expiresAtMs),
+      ));
+      if (!this.isCurrent(connection) || version !== this.failureVersion) {
+        throw new RedisSessionRevocationUnavailableError();
+      }
+      this.recordRedisRecovery(connection, version, true);
     } catch (error) {
-      this.handleRedisFailure(error, "revoke");
+      this.handleRedisFailure(connection, error, "revoke");
       throw new RedisSessionRevocationUnavailableError(
         "Redis session revocation write failed.",
       );
     } finally {
-      this.pendingRevocationKeys.delete(redisKey);
+      connection.pendingWrites -= 1;
+      const remaining = (this.pendingRevocationKeys.get(redisKey) ?? 1) - 1;
+      if (remaining > 0) this.pendingRevocationKeys.set(redisKey, remaining);
+      else this.pendingRevocationKeys.delete(redisKey);
     }
   }
 
   async close() {
     this.shuttingDown = true;
-    const pendingClient = await (this.clientPromise?.catch(() => null) ?? null);
-    const client = this.client ?? pendingClient;
-    this.client = null;
+    this.clearRecoveryTimer();
+    if (this.connection) this.retireConnection(this.connection);
     this.clientPromise = null;
     this.pendingRevocationKeys.clear();
-    await this.closeClient(client);
   }
 
   private buildRedisKey(jwtId: string) {
@@ -312,9 +349,8 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     if (this.config.provider !== "redis" || !this.config.redisUrl || this.shuttingDown) {
       return null;
     }
-    if (this.client) {
-      return this.client;
-    }
+    if (this.clientPromise) return this.clientPromise;
+    if (this.connection) return this.connection;
 
     if (!this.clientPromise) {
       const clientPromise = this.connect();
@@ -325,34 +361,38 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
             this.clientPromise = null;
           }
         })
-        .catch((error) => {
-          this.logRedisFailure(error, "connect-finalize");
-        });
+        .catch(() => { /* connect() already records sanitized failures. */ });
     }
 
     return this.clientPromise;
   }
 
-  private async connect(): Promise<RedisSessionRevocationClientLike | null> {
-    let client: RedisSessionRevocationClientLike | null = null;
+  private async connect(): Promise<RedisConnection | null> {
+    let connection: RedisConnection | null = null;
     try {
       const createRedisClient = this.createRedisClient ?? await resolveDefaultRedisClientFactory();
-      client = createRedisClient({
+      if (this.shuttingDown) return null;
+      const client = createRedisClient({
         socket: resolveRedisSessionRevocationSocketOptions(this.logger, this.config.redisUrl),
         url: this.config.redisUrl as string,
       });
-      client.on?.("error", (error) => this.logRedisFailure(error));
-      await client.connect();
-      if (this.shuttingDown) {
-        await this.closeClient(client);
-        return null;
-      }
-      this.client = client;
-      this.recordRedisRecovery();
-      return client;
+      const candidate = { client, cancellation: new AbortController(), pendingWrites: 0 };
+      // A single connection legitimately serves many concurrent session checks.
+      setMaxListeners(0, candidate.cancellation.signal);
+      connection = candidate;
+      this.connection = candidate;
+      client.on?.("error", (error) => {
+        if (this.isCurrent(candidate)) this.logRedisFailure(error, "connection");
+      });
+      client.on?.("ready", () => {
+        if (this.isCurrent(candidate)) this.startRecovery();
+      });
+      await this.withDeadline(candidate, () => client.connect());
+      // A successful handshake alone does not prove GET/EVAL permissions or storage health.
+      return this.isCurrent(candidate) ? candidate : null;
     } catch (error) {
-      await this.closeClient(client);
-      this.logRedisFailure(error, "connect");
+      if (connection) this.handleRedisFailure(connection, error, "connect");
+      else this.logRedisFailure(error, "connect");
       return null;
     }
   }
@@ -373,26 +413,33 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     await client.set(redisKey, SESSION_REVOCATION_VALUE, { NX: true, PX: ttlMs });
   }
 
-  private handleRedisFailure(error: unknown, operation: string) {
-    const client = this.client;
-    this.client = null;
-    void this.closeClient(client);
+  private isCurrent(connection: RedisConnection) {
+    return !this.shuttingDown && this.connection === connection;
+  }
+
+  private handleRedisFailure(connection: RedisConnection, error: unknown, operation: string) {
+    if (!this.isCurrent(connection)) return;
+    // Retiring a failed reader also aborts any writes using this connection.
+    // Record that uncertainty before stale write callbacks are ignored.
+    if (operation === "revoke" || connection.pendingWrites > 0) this.writeFailure = true;
     this.logRedisFailure(error, operation);
+    this.retireConnection(connection);
   }
 
   private logRedisFailure(error: unknown, operation = "unknown") {
+    if (this.shuttingDown) return;
     const classification = classifyRedisSessionRevocationError(error);
     internalMetrics.increment("sessionRevocationRedisErrorsTotal");
-
-    const now = this.now();
-    if (this.warningEmitted && now - this.lastWarningAt < this.warningRepeatMs) {
-      return;
-    }
+    this.degraded = true;
+    this.failureVersion += 1;
     markStartupServiceDegraded(
       SESSION_REVOCATION_HEALTH_SERVICE,
       SESSION_REVOCATION_DEGRADED_REASON,
       buildFailClosedHealthDetail(classification),
     );
+    this.scheduleRecovery();
+    const now = this.now();
+    if (this.warningEmitted && now - this.lastWarningAt < this.warningRepeatMs) return;
     this.warningEmitted = true;
     this.lastWarningAt = now;
     const logPayload = {
@@ -411,22 +458,90 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     );
   }
 
-  private recordRedisRecovery() {
+  private recordRedisRecovery(connection: RedisConnection, version: number, write = false) {
+    if (!this.isCurrent(connection) || version !== this.failureVersion) return;
+    if (write) this.writeFailure = false;
+    // GET/PING cannot establish recovery from a failed EVAL/SET (for example an ACL denial).
+    if (this.writeFailure) return;
+    this.degraded = false;
+    this.clearRecoveryTimer();
     clearStartupServiceDegraded(SESSION_REVOCATION_HEALTH_SERVICE);
     this.warningEmitted = false;
     this.lastWarningAt = 0;
   }
 
-  private async closeClient(client: RedisSessionRevocationClientLike | null) {
-    if (!client?.quit) {
-      return;
-    }
+  private clearRecoveryTimer() {
+    if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
+    this.recoveryTimer = null;
+  }
 
+  private scheduleRecovery() {
+    if (this.shuttingDown || !this.degraded || this.recoveryTimer || this.recoveryPromise) return;
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = null;
+      this.startRecovery();
+    }, this.recoveryRetryMs);
+    this.recoveryTimer.unref();
+  }
+
+  private startRecovery() {
+    if (this.shuttingDown || !this.degraded || this.recoveryPromise) return;
+    this.clearRecoveryTimer();
+    const recovery = this.probeRecovery();
+    this.recoveryPromise = recovery;
+    void recovery.finally(() => {
+      if (this.recoveryPromise === recovery) this.recoveryPromise = null;
+      this.scheduleRecovery();
+    }).catch(() => { /* Probe failures are handled inside probeRecovery(). */ });
+  }
+
+  private async probeRecovery() {
+    const connection = await this.getClient();
+    if (!connection || !this.isCurrent(connection)) return;
+    const version = this.failureVersion;
     try {
-      await client.quit();
+      await this.withDeadline(connection, () => connection.client.get(this.recoveryProbeKey));
+      this.recordRedisRecovery(connection, version);
     } catch (error) {
-      this.logRedisFailure(error, "close");
+      this.handleRedisFailure(connection, error, "recovery");
     }
+  }
+
+  private retireConnection(connection: RedisConnection) {
+    if (this.connection === connection) {
+      this.connection = null;
+      this.clientPromise = null;
+    }
+    connection.cancellation.abort();
+    try {
+      // QUIT can hang on an unresponsive socket; node-redis destroy flushes queued commands.
+      if (connection.client.destroy) connection.client.destroy();
+      else void connection.client.quit?.().catch(() => {});
+    } catch { /* A disconnected/retired client must not change the replacement's health. */ }
+  }
+
+  private withDeadline<T>(connection: RedisConnection, operation: () => Promise<T>): Promise<T> {
+    const signal = connection.cancellation.signal;
+    return new Promise<T>((resolve, reject) => {
+      const abort = () => fail(new RedisSessionRevocationUnavailableError());
+      const timer = setTimeout(() => fail(Object.assign(
+        new RedisSessionRevocationUnavailableError(), { code: "ETIMEDOUT" },
+      )), this.recoveryTimeoutMs);
+      // Keep a pending request bounded even when it is the only remaining work in a test/process.
+      const cleanup = () => {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", abort);
+      };
+      const fail = (error: unknown) => { cleanup(); reject(error); };
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) { abort(); return; }
+      void Promise.resolve().then(() => {
+        signal.throwIfAborted();
+        return operation();
+      }).then(
+        (value) => { cleanup(); resolve(value); }, fail,
+      );
+    });
   }
 }
 

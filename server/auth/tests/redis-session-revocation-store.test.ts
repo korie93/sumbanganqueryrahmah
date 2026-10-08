@@ -13,8 +13,16 @@ import {
 } from "../../internal/startup-health";
 
 const SESSION_REVOCATION_HEALTH_SERVICE = "session-revocation-store";
+const stores: RedisSessionRevocationStore[] = [];
 
-test.afterEach(() => {
+function createStore(options: ConstructorParameters<typeof RedisSessionRevocationStore>[0]) {
+  const store = new RedisSessionRevocationStore(options);
+  stores.push(store);
+  return store;
+}
+
+test.afterEach(async () => {
+  await Promise.all(stores.splice(0).map((store) => store.close()));
   clearStartupServiceDegraded(SESSION_REVOCATION_HEALTH_SERVICE);
 });
 
@@ -36,7 +44,7 @@ test("classifyRedisSessionRevocationError separates retryable and non-retryable 
 test("RedisSessionRevocationStore persists revoked JWT ids with a bounded TTL", async () => {
   const values = new Map<string, string>();
   const setCalls: Array<{ key: string; options: { NX?: boolean; PX: number }; value: string }> = [];
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -78,7 +86,7 @@ test("RedisSessionRevocationStore persists revoked JWT ids with a bounded TTL", 
 test("RedisSessionRevocationStore uses an atomic Lua revoke when eval is available", async () => {
   const values = new Map<string, string>();
   const evalCalls: Array<{ arguments: string[]; keys: string[]; script: string }> = [];
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -123,7 +131,7 @@ test("RedisSessionRevocationStore uses an atomic Lua revoke when eval is availab
 test("RedisSessionRevocationStore keeps concurrent revokes idempotent", async () => {
   const values = new Map<string, string>();
   let committedWrites = 0;
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -179,7 +187,7 @@ test("RedisSessionRevocationStore treats in-flight local revocations as revoked"
   const releaseEvalPromise = new Promise<void>((resolve) => {
     releaseEval = resolve;
   });
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -224,7 +232,7 @@ test("RedisSessionRevocationStore treats in-flight local revocations as revoked"
 test("RedisSessionRevocationStore rejects session checks closed when Redis is unavailable", async () => {
   const warnings: Array<{ message: string; payload: unknown }> = [];
   let now = 1_000;
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -281,7 +289,7 @@ test("RedisSessionRevocationStore logs sanitized Redis failures and marks health
     new Error("redis://:secret@example.test token=jwt-1 userId=user-1"),
     { code: "ECONNREFUSED" },
   );
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -339,7 +347,7 @@ test("RedisSessionRevocationStore logs sanitized Redis failures and marks health
 
 test("RedisSessionRevocationStore clears degraded health after Redis recovers", async () => {
   let connectAttempts = 0;
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -392,7 +400,7 @@ test("RedisSessionRevocationStore clears degraded health after Redis recovers", 
 test("RedisSessionRevocationStore retries after a failed Redis connection", async () => {
   let factoryCalls = 0;
   let getCalls = 0;
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",
@@ -433,7 +441,7 @@ test("RedisSessionRevocationStore retries after a failed Redis connection", asyn
 });
 
 test("RedisSessionRevocationStore rejects revocation writes when Redis is unavailable", async () => {
-  const store = new RedisSessionRevocationStore({
+  const store = createStore({
     config: {
       distributedStoreConfigured: true,
       provider: "redis",

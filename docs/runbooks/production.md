@@ -94,6 +94,36 @@ Expected app behavior during Redis outage:
 - Protected requests can be rejected instead of silently downgrading to memory.
 - Treat repeated Redis degraded logs as an infrastructure incident.
 
+### Session revocation readiness recovery
+
+The `session-revocation-store` degraded marker is owned by the revocation store,
+not the general Redis PING monitor. After a connection/read failure, the store
+checks recovery on Redis `ready` events and retries while idle. Recovery requires
+a successful read-only `GET` in the configured revocation key namespace; socket
+readiness or `PONG` alone does not clear it. The probe never writes a token,
+deletes a key, or changes existing revocations.
+
+- A single recovery probe runs at a time. The default retry delay and each
+  connect/command deadline are five seconds. Timed-out connections are destroyed;
+  shutdown cancels pending work and recovery timers.
+- Session reads still fail closed during failures. A failed or interrupted
+  revocation write keeps readiness degraded until a subsequent actual revocation
+  write succeeds. A successful GET cannot prove EVAL/SET permissions or repair a
+  failed write; no automatic replay of that failed revocation is performed.
+- If readiness remains degraded after Redis is reachable, inspect sanitized
+  `session_revocation_redis_failure` events and the Redis user's namespace/command
+  permissions, including GET and EVAL/SET. Follow the normal account/session
+  recovery workflow for the rejected operation. Do not bypass revocation checks
+  or erase the health marker just to make a deployment pass.
+- Other degraded services still independently block readiness. This recovery
+  changes no database schema, frontend behavior, or environment requirements.
+
+CI verifies idle reconnect and a real GET-denied ACL against its disposable Redis
+service. `server/auth/tests/redis-session-revocation-live.integration.test.ts`
+only runs when explicitly supplied an isolated loopback test URL; never point it
+at production Redis (it creates a temporary ACL user and disconnects its own
+fixture client).
+
 ## Session Secret Rotation
 
 Planned rotation uses a manual compatibility window:
