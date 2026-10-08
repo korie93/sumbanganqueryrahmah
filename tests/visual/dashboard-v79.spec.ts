@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { closeKeyboardMenu, openKeyboardMenu } from "../../scripts/lib/ui-keyboard-menu.mjs";
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 
@@ -481,6 +482,30 @@ test("V7.9 desktop flyouts, command search and profile restore keyboard focus", 
   expect(await page.evaluate(() => localStorage.getItem("theme"))).toBe("dark");
   assertFixtureClean(fixture);
 });
+
+for (const reducedMotion of ["no-preference", "reduce"] as const) {
+  test(`V7.9 smoke keyboard focus follows the real menu lifecycle with ${reducedMotion} motion`, async ({ page, baseURL }) => {
+    const fixture = await installFixture(page, baseURL);
+    await page.emulateMedia({ reducedMotion });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openWorkspace(page);
+    const settings = page.getByTestId("nav-group-settings-menu");
+    const flyout = page.getByTestId("desktop-flyout-settings-menu");
+    // Match smoke's preceding desktop navigation before reopening the same flyout.
+    await settings.click();
+    await flyout.getByRole("button", { name: /Backup & Restore/i }).click();
+    await expect(page.locator("#main-content").getByRole("heading", { name: "Backup & Restore", exact: true })).toBeVisible();
+    const profile = page.getByTestId("button-user-menu");
+    const profileMenu = page.getByRole("menu").filter({ has: page.getByTestId("button-logout") });
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await openKeyboardMenu(page, settings, flyout);
+      await closeKeyboardMenu(page, settings, flyout);
+      await openKeyboardMenu(page, profile, profileMenu);
+      await closeKeyboardMenu(page, profile, profileMenu);
+    }
+    assertFixtureClean(fixture);
+  });
+}
 
 test("V7.9 mobile drawer owns focus, opens inline groups and restores its trigger", async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 390, height: 844 });

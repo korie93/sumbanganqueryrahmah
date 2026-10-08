@@ -31,6 +31,16 @@ test("profile smoke awaits the lazy authenticated shell before choosing a visibl
   assert.ok(flow.indexOf(".waitFor(") < flow.indexOf(".isVisible("));
 });
 
+test("keyboard smoke waits for menu lifecycle and focus instead of a fixed sleep", () => {
+  const flow = smokeSource.slice(smokeSource.indexOf("const checkKeyboardMenuAccess"), smokeSource.indexOf("const checkUserMenuThemeMode"));
+  for (const [trigger, menu] of [["settingsTrigger", "settingsMenu"], ["userTrigger", "userMenu"]]) {
+    assert.ok(flow.includes(`await openKeyboardMenu(page, ${trigger}, ${menu})`));
+    assert.ok(flow.includes(`await closeKeyboardMenu(page, ${trigger}, ${menu})`));
+  }
+  assert.doesNotMatch(flow, /waitForTimeout|\.focus\(/);
+  assert.match(flow, /tracker\.assertClean\("keyboard menu access"\)/);
+});
+
 test("UI smoke bounds the landing login click and falls back to the canonical login route", () => {
   assert.match(
     smokeSource,

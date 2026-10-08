@@ -3,6 +3,7 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
+import { closeKeyboardMenu, openKeyboardMenu } from "./lib/ui-keyboard-menu.mjs";
 
 const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const username = process.env.SMOKE_TEST_USERNAME || "";
@@ -388,36 +389,16 @@ const checkKeyboardMenuAccess = async (page, tracker) => {
   await waitForSmokeDocumentReady(page);
 
   const settingsTrigger = getNavGroupTrigger(page, "settings");
-  await settingsTrigger.focus();
-  assert(
-    await settingsTrigger.evaluate((element) => element === document.activeElement),
-    "Settings menu trigger should be focusable from the keyboard",
-  );
-  await page.keyboard.press("Enter");
-  await page.getByTestId("desktop-flyout-settings-menu").getByRole("button", { name: /Backup & Restore/i }).waitFor();
-  assert(await settingsTrigger.getAttribute("aria-expanded") === "true", "Settings menu should open via keyboard");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(100);
-  assert(
-    await settingsTrigger.evaluate((element) => element === document.activeElement),
-    "Focus should return to the settings menu trigger after Escape",
-  );
+  const settingsMenu = page.getByTestId("desktop-flyout-settings-menu");
+  await openKeyboardMenu(page, settingsTrigger, settingsMenu);
+  await settingsMenu.getByRole("button", { name: /Backup & Restore/i }).waitFor();
+  await closeKeyboardMenu(page, settingsTrigger, settingsMenu);
 
   const userTrigger = await getVisibleUserMenuTrigger(page);
-  await userTrigger.focus();
-  assert(
-    await userTrigger.evaluate((element) => element === document.activeElement),
-    "User menu trigger should be focusable from the keyboard",
-  );
-  await page.keyboard.press("Enter");
+  const userMenu = page.getByRole("menu").filter({ has: page.getByTestId("button-logout") });
+  await openKeyboardMenu(page, userTrigger, userMenu);
   await page.getByTestId("button-logout").waitFor();
-  assert(await userTrigger.getAttribute("aria-expanded") === "true", "User menu should open via keyboard");
-  await page.keyboard.press("Escape");
-  await page.waitForTimeout(100);
-  assert(
-    await userTrigger.evaluate((element) => element === document.activeElement),
-    "Focus should return to the user menu trigger after Escape",
-  );
+  await closeKeyboardMenu(page, userTrigger, userMenu);
 
   tracker.assertClean("keyboard menu access");
   tracker.clear();
