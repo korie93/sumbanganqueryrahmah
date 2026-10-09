@@ -80,7 +80,8 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
 
 test("save action remains discoverable without presenting an incomplete form as save-ready", () => {
   assert.match(saveCollectionPageSource, /variant=\{state\.readiness\.isReady \? "default" : "outline"\}/);
-  assert.match(saveCollectionPageSource, /aria-describedby="save-collection-readiness-status"/);
+  assert.match(saveCollectionPageSource, /aria-describedby=\{actionHint[\s\S]*?"save-collection-readiness-status save-collection-action-hint"[\s\S]*?: "save-collection-readiness-status"\}/);
+  assert.match(saveCollectionPageSource, /<p id="save-collection-action-hint" role="status"/);
   assert.match(saveCollectionPageSource, /state\.readiness\.isReady[\s\S]*\? "Save Collection"[\s\S]*: "Semak Medan Wajib"/);
   assert.match(saveCollectionPageSource, /onClick=\{state\.handleSubmit\}/);
 });

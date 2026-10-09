@@ -14,6 +14,9 @@ type ElementProps = {
   children?: ReactNode;
   className?: string;
   disabled?: boolean;
+  id?: string;
+  role?: string;
+  "aria-describedby"?: string;
   onClick?: () => void;
   onCloseAutoFocus?: (event: Event) => void;
 };
@@ -117,6 +120,7 @@ test("edit collection preserves Save, Cancel and launcher focus callbacks in the
   assert.equal(content.props.onCloseAutoFocus, restoreFocus);
   assert.equal(cancel.props.children, "Cancel");
   assert.equal(save.props.children, "Save");
+  assert.equal(save.props["aria-describedby"], undefined);
   assert.match(footer.props.className ?? "", /\bflex-row\b/);
   for (const action of [cancel, save]) {
     assert.match(action.props.className ?? "", /\bmin-h-11\b/);
@@ -131,8 +135,17 @@ test("edit collection preserves Save, Cancel and launcher focus callbacks in the
 
 test("saving collection still disables both footer actions and all editable input fields", () => {
   const { body, footer } = dialogParts(fixture({ savingEdit: true }));
-  for (const action of elements(footer.props.children)) assert.equal(action.props.disabled, true);
-  assert.equal(elements(footer.props.children)[1].props.children, "Saving...");
+  const actions = elements(footer.props.children).filter((element) => element.type === Button);
+  for (const action of actions) assert.equal(action.props.disabled, true);
+  assert.equal(actions[1].props.children, "Saving...");
+  const reason = elements(footer.props.children).find((element) => element.type === "p");
+  assert.ok(reason);
+  assert.equal(reason.props.children, "Changes are being saved. Please wait before saving again.");
+  assert.equal(reason.props.role, "status");
+  assert.equal(actions[1].props["aria-describedby"], reason.props.id);
+  assert.match(reason.props.className ?? "", /\bw-full\b/);
+  assert.doesNotMatch(reason.props.className ?? "", /sr-only/);
+  assert.match(footer.props.className ?? "", /\bflex-wrap\b/);
   for (const field of descendants(body).filter((element) => element.type === Input)) {
     assert.equal(field.props.disabled, true);
   }

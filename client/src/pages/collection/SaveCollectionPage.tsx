@@ -21,6 +21,7 @@ import { SaveCollectionReadySummary } from "@/pages/collection/SaveCollectionRea
 import { SaveCollectionSubmitAlert } from "@/pages/collection/SaveCollectionSubmitAlert";
 import { CollectionSourceMatchField } from "@/pages/collection/CollectionSourceMatchField";
 import { SAVE_COLLECTION_IDENTITY_FIELD_LIMITS } from "@/pages/collection/save-collection-page-utils";
+import { getSaveCollectionActionHint } from "@/pages/collection/save-collection-submit-feedback";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
 import type { CollectionBatch } from "@/lib/api";
@@ -112,6 +113,11 @@ function SaveCollectionPage({
   );
   const amountValidationProps = getInvalidFieldProps(state.fieldErrors.amount, amountErrorId);
   const requiredFieldProps = getAriaRequiredProps(true);
+  const actionHint = getSaveCollectionActionHint({
+    submitting: state.submitting,
+    accessSuspended,
+    canReauthenticateNickname: Boolean(onReauthenticateNickname),
+  });
 
   usePageShortcuts([
     {
@@ -472,6 +478,11 @@ function SaveCollectionPage({
           )}
           data-floating-ai-avoid="true"
         >
+          {actionHint ? (
+            <p id="save-collection-action-hint" role="status" className="w-full text-xs leading-5 text-muted-foreground sm:basis-full sm:text-right">
+              {actionHint}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -486,7 +497,9 @@ function SaveCollectionPage({
             variant={state.readiness.isReady ? "default" : "outline"}
             onClick={state.handleSubmit}
             disabled={state.submitting}
-            aria-describedby="save-collection-readiness-status"
+            aria-describedby={actionHint
+              ? "save-collection-readiness-status save-collection-action-hint"
+              : "save-collection-readiness-status"}
             data-ready={state.readiness.isReady ? "true" : "false"}
             className={cn(
               "w-full sm:w-auto",

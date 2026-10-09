@@ -151,6 +151,9 @@ export function BillingPrincipalClientResultTable({
     return draft[aging].targetPercentage !== (persisted?.targetPercentage ?? "0.0000")
       || draft[aging].resultPercentage !== (persisted?.resultPercentage ?? "0.0000");
   });
+  const saveDisabledReason = saving ? "Saving your private Client Result. Please wait."
+    : exporting ? "Wait for the report export to finish or cancel it before saving."
+      : !dirty && overview.clientResult.all.receivedDate ? "No unsaved changes to save." : "";
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const preview = calculateOspClientPreview(overview.clientResult.rows.map((row) => ({ ...row, ...draft[row.aging] })));
 
@@ -206,12 +209,15 @@ export function BillingPrincipalClientResultTable({
           </p>
         </div>
         {editable ? (
-          <div className="flex flex-wrap gap-2 [&_button]:min-h-11 md:[&_button]:min-h-9">
-          {dirty ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setDraft(draftFromRows(overview.clientResult.rows)); setError(""); }}>Discard changes</Button> : null}
-          <Button type="button" size="sm" onClick={() => void save()} disabled={busy || (!dirty && Boolean(overview.clientResult.all.receivedDate))}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="mr-2 h-4 w-4" aria-hidden="true" />}
-            {saving ? "Saving…" : "Save Client Result"}
-          </Button>
+          <div className="min-w-0 space-y-2 sm:max-w-xs">
+            <div className="flex flex-wrap gap-2 [&_button]:min-h-11 md:[&_button]:min-h-9">
+              {dirty ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setDraft(draftFromRows(overview.clientResult.rows)); setError(""); }}>Discard changes</Button> : null}
+              <Button type="button" size="sm" onClick={() => void save()} disabled={busy || (!dirty && Boolean(overview.clientResult.all.receivedDate))} aria-describedby={saveDisabledReason ? "billing-client-save-disabled-reason" : undefined}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="mr-2 h-4 w-4" aria-hidden="true" />}
+                {saving ? "Saving…" : "Save Client Result"}
+              </Button>
+            </div>
+            {saveDisabledReason ? <p id="billing-client-save-disabled-reason" role="status" className="break-words text-xs text-muted-foreground">{saveDisabledReason}</p> : null}
           </div>
         ) : null}
       </div>
@@ -478,7 +484,9 @@ export function BillingPrincipalSavedTargetWorkspace({
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Difference (percentage points)</dt><dd className="mt-1 font-semibold tabular-nums">{comparison?.differencePercentagePoints == null ? "—" : formatOspPercentagePoint(comparison.differencePercentagePoints)}</dd></div>
             </dl>
           </section>
-          <BillingPrincipalInsights target={target} overview={overview} disabled={saving || clientDirty} onAccessLost={handleAccessLost} onExportBusy={setExportBusy} />
+          <BillingPrincipalInsights target={target} overview={overview} disabled={saving || clientDirty}
+            disabledReason={saving ? "Saving your private Client Result. Wait before exporting." : "Save or discard your private Client Result changes before exporting."}
+            onAccessLost={handleAccessLost} onExportBusy={setExportBusy} />
         </>
       ) : null}
     </div>

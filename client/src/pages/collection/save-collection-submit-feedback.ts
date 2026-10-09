@@ -2,6 +2,18 @@ import { parseCollectionApiErrorDetails } from "@/pages/collection/utils";
 
 export type SaveCollectionSubmitFailureKind = "validation" | "request";
 
+export function getSaveCollectionActionHint(params: {
+  submitting: boolean;
+  accessSuspended: boolean;
+  canReauthenticateNickname: boolean;
+}): string | null {
+  if (params.submitting) return "Collection sedang disimpan. Tunggu sehingga proses selesai.";
+  if (!params.accessSuspended) return null;
+  return params.canReauthenticateNickname
+    ? "Sahkan nickname semula sebelum menyimpan."
+    : "Semakan nickname sedang berjalan. Tunggu sehingga selesai sebelum menyimpan.";
+}
+
 export type SaveCollectionSubmitFailure = {
   kind: SaveCollectionSubmitFailureKind;
   title: string;

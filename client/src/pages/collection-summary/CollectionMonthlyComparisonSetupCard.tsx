@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -67,6 +67,20 @@ export function CollectionMonthlyComparisonSetupCard({
   targetSummary,
 }: CollectionMonthlyComparisonSetupCardProps) {
   const [nicknameSelectOpen, setNicknameSelectOpen] = useState(false);
+  const exportContextId = useId();
+  const exportDisabledReason = loading
+    ? "Wait for the monthly comparison to finish loading before exporting or printing."
+    : monthlyTargetLoading
+      ? "Wait for the monthly targets to finish loading before exporting or printing."
+      : !data
+        ? hasAvailableNickname
+          ? "Load a comparison with Apply before exporting or printing."
+          : "A staff nickname visible to your account is required before loading a report."
+        : null;
+  const hasUnappliedFilters = data && (
+    data.startMonth !== startMonth || data.endMonth !== endMonth
+    || data.nickname.trim().toLowerCase() !== selectedNickname.trim().toLowerCase()
+  );
   const selectedNicknameLabel = useMemo(() => {
     const normalizedValue = String(selectedNickname || "").trim();
     if (!normalizedValue) {
@@ -258,32 +272,47 @@ export function CollectionMonthlyComparisonSetupCard({
           />
           </div>
         </details>
-        <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
-          {onPrintReport ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 flex-1 gap-2 md:h-9 md:flex-none"
-              onClick={onPrintReport}
-              disabled={loading || monthlyTargetLoading || !data}
-            >
-              <Printer className="h-4 w-4" aria-hidden="true" />
-              Print report
-            </Button>
-          ) : null}
-          {onExportCsv ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 flex-1 gap-2 md:h-9 md:flex-none"
-              onClick={onExportCsv}
-              disabled={loading || monthlyTargetLoading || !data}
-            >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Export CSV
-            </Button>
-          ) : null}
-        </div>
+        {onPrintReport || onExportCsv ? (
+          <div className="min-w-0 space-y-2 lg:max-w-sm">
+            <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
+              {onPrintReport ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 flex-1 gap-2 md:h-9 md:flex-none"
+                  onClick={onPrintReport}
+                  disabled={loading || monthlyTargetLoading || !data}
+                  aria-describedby={exportContextId}
+                >
+                  <Printer className="h-4 w-4" aria-hidden="true" />
+                  Print report
+                </Button>
+              ) : null}
+              {onExportCsv ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 flex-1 gap-2 md:h-9 md:flex-none"
+                  onClick={onExportCsv}
+                  disabled={loading || monthlyTargetLoading || !data}
+                  aria-describedby={exportContextId}
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Export CSV
+                </Button>
+              ) : null}
+            </div>
+            <div id={exportContextId} data-testid="monthly-comparison-export-context" className="space-y-1 break-words text-xs leading-5 text-muted-foreground">
+              {data ? (
+                <p>Export / print scope: {data.startMonth} to {data.endMonth} · {data.nickname}.</p>
+              ) : null}
+              {hasUnappliedFilters ? (
+                <p>Uses the last loaded report. Apply changed filters to update the export.</p>
+              ) : null}
+              {exportDisabledReason ? <p role="status">{exportDisabledReason}</p> : null}
+            </div>
+          </div>
+        ) : null}
       </div>
       {monthlyTargetErrorMessage ? (
         <p role="status" className="mt-2 text-xs text-destructive">Target unavailable: {monthlyTargetErrorMessage}</p>

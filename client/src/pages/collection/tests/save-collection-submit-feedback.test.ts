@@ -3,7 +3,19 @@ import test from "node:test";
 import {
   buildSaveCollectionRequestFailure,
   buildSaveCollectionValidationFailure,
+  getSaveCollectionActionHint,
 } from "../save-collection-submit-feedback";
+
+test("save action hint explains busy and nickname locks without blocking incomplete forms", () => {
+  for (const canReauthenticateNickname of [false, true]) {
+    assert.equal(getSaveCollectionActionHint({ submitting: false, accessSuspended: false, canReauthenticateNickname }), null);
+    for (const accessSuspended of [false, true]) {
+      assert.match(getSaveCollectionActionHint({ submitting: true, accessSuspended, canReauthenticateNickname })!, /sedang disimpan/);
+    }
+  }
+  assert.match(getSaveCollectionActionHint({ submitting: false, accessSuspended: true, canReauthenticateNickname: true })!, /Sahkan nickname semula/);
+  assert.match(getSaveCollectionActionHint({ submitting: false, accessSuspended: true, canReauthenticateNickname: false })!, /Semakan nickname sedang berjalan/);
+});
 
 test("buildSaveCollectionValidationFailure keeps validation errors inline and non-retryable", () => {
   const failure = buildSaveCollectionValidationFailure({

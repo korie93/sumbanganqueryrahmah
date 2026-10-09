@@ -71,6 +71,40 @@ test("collection export remains disabled while records load or either download i
   assert.match(source, /trigger\.focus\(\{ preventScroll: true \}\)/);
 });
 
+test("collection export describes all pages with applied filters without promising a stale row count", () => {
+  for (const summary of [{ totalRecords: 146, totalAmount: 82900 }, { totalRecords: 0, totalAmount: 0 }]) {
+    const markup = renderToolbar({ summary });
+    const exportButton = markup.match(/<button[^>]*aria-haspopup="menu"[^>]*>/)?.[0];
+    const scope = markup.match(/<p[^>]*id="collection-records-export-scope"[^>]*>(.*?)<\/p>/)?.[0];
+    assert.ok(exportButton);
+    assert.ok(scope);
+    assert.match(exportButton, /aria-describedby="collection-records-export-scope"/);
+    assert.doesNotMatch(exportButton, /disabled=/);
+    assert.match(scope, /Excel and PDF include records across all pages using the filters last applied to the table\./);
+    assert.doesNotMatch(scope, /sr-only|\b146\b|\b0\b/);
+    assert.doesNotMatch(markup, /id="collection-records-export-disabled-reason"/);
+  }
+});
+
+test("collection export gives a visible reason for each existing disabled state", () => {
+  for (const [overrides, message] of [
+    [{ loadingRecords: true }, "Wait for records to finish loading before exporting."],
+    [{ exportingExcel: true }, "Your export is being prepared. Please wait before starting another."],
+    [{ exportingPdf: true }, "Your export is being prepared. Please wait before starting another."],
+    [{ loadingRecords: true, exportingPdf: true }, "Your export is being prepared. Please wait before starting another."],
+  ] as const) {
+    const markup = renderToolbar(overrides);
+    const exportButton = markup.match(/<button[^>]*aria-haspopup="menu"[^>]*>/)?.[0];
+    const reason = markup.match(/<p[^>]*id="collection-records-export-disabled-reason"[^>]*>(.*?)<\/p>/)?.[0];
+    assert.ok(exportButton);
+    assert.ok(reason);
+    assert.match(exportButton, /aria-describedby="collection-records-export-scope collection-records-export-disabled-reason"/);
+    assert.match(reason, /role="status"/);
+    assert.doesNotMatch(reason, /sr-only/);
+    assert.ok(reason.includes(message));
+  }
+});
+
 test("purge disclosure retains cutoff, amount and guarded destructive action", () => {
   const renderPurge = (eligibleRecords: number) => renderToStaticMarkup(createElement(CollectionRecordsPurgeSummaryCard, {
     loadingRecords: false,

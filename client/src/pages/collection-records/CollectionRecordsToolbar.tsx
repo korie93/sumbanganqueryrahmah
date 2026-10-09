@@ -74,6 +74,11 @@ export function CollectionRecordsToolbar({
   onNextPage,
 }: CollectionRecordsToolbarProps) {
   const exportBusy = exportingExcel || exportingPdf;
+  const exportDisabledReason = exportBusy
+    ? "Your export is being prepared. Please wait before starting another."
+    : loadingRecords
+      ? "Wait for records to finish loading before exporting."
+      : null;
   const exportTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreExportFocus = useRef(false);
   useEffect(() => {
@@ -124,7 +129,13 @@ export function CollectionRecordsToolbar({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button ref={exportTriggerRef} type="button" variant="outline" disabled={loadingRecords || exportBusy}>
+                <Button
+                  ref={exportTriggerRef}
+                  type="button"
+                  variant="outline"
+                  disabled={loadingRecords || exportBusy}
+                  aria-describedby={`collection-records-export-scope${exportDisabledReason ? " collection-records-export-disabled-reason" : ""}`}
+                >
                   <Download className="mr-2 h-4 w-4" aria-hidden="true" />
                   {exportBusy ? "Exporting..." : "Export"}
                   <ChevronDown className="ml-2 h-4 w-4" aria-hidden="true" />
@@ -148,6 +159,23 @@ export function CollectionRecordsToolbar({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          <p
+            id="collection-records-export-scope"
+            data-testid="collection-records-export-scope"
+            className="mt-2 max-w-xl text-xs leading-relaxed text-muted-foreground"
+          >
+            Excel and PDF include records across all pages using the filters last applied to the table.
+          </p>
+          {exportDisabledReason ? (
+            <p
+              id="collection-records-export-disabled-reason"
+              data-testid="collection-records-export-disabled-reason"
+              role="status"
+              className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground"
+            >
+              {exportDisabledReason}
+            </p>
+          ) : null}
         </div>
       </div>
 

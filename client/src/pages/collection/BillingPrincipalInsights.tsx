@@ -78,8 +78,8 @@ function triggerDownload(blob: Blob, fileName: string) {
   } finally { link.remove(); URL.revokeObjectURL(url); }
 }
 
-export function BillingPrincipalInsights({ target, overview, disabled = false, onAccessLost, onExportBusy }: {
-  target: BillingPrincipalSavedTarget; overview: BillingPrincipalSavedTargetOverview; disabled?: boolean;
+export function BillingPrincipalInsights({ target, overview, disabled = false, disabledReason, onAccessLost, onExportBusy }: {
+  target: BillingPrincipalSavedTarget; overview: BillingPrincipalSavedTargetOverview; disabled?: boolean; disabledReason?: string;
   onAccessLost: () => void; onExportBusy: (busy: boolean) => void;
 }) {
   const range = useMemo(() => getBillingPrincipalReportingWindow(target.activeRevision), [target.activeRevision]);
@@ -97,6 +97,9 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
   const [calendarError, setCalendarError] = useState("");
   const [exportError, setExportError] = useState("");
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const exportDisabledReason = exporting
+    ? "Export in progress. Wait or cancel before starting another export."
+    : disabled ? disabledReason || "Save or discard your private Client Result changes before exporting." : "";
   const [retry, setRetry] = useState(0);
   const exportRef = useRef<AbortController | null>(null);
   useEffect(() => () => exportRef.current?.abort(), []);
@@ -163,11 +166,16 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, o
   return <section aria-labelledby="billing-system-analysis-heading" className="min-w-0 space-y-4">
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-0"><h3 id="billing-system-analysis-heading" className="text-base font-semibold">System calendar</h3><p className="mt-1 break-words text-sm">{target.name} · System As Of {overview.asOf}</p><p className="mt-1 text-sm text-muted-foreground">{range.sourceValidityVerified ? "Full current source validity" : "Reporting period (includes legacy source fallback)"}: {start} — {end}. Click a day for its closed accounts.</p></div>
-      <div className="flex flex-wrap gap-2 [&_button]:min-h-11 md:[&_button]:min-h-9">{(["xlsx", "png", "pdf"] as const).map((format) => <Button key={format} type="button" size="sm" variant="outline" disabled={disabled || exporting !== null} aria-label={"Export Billing Principal report as " + format.toUpperCase()} onClick={() => void runExport(format)}>{exporting === format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}{format.toUpperCase()}</Button>)}
-        {exporting ? <Button type="button" size="sm" variant="ghost" onClick={() => exportRef.current?.abort()}>Cancel export</Button> : null}
+      <div className="min-w-0 space-y-2 lg:max-w-md">
+        <div className="flex flex-wrap gap-2 [&_button]:min-h-11 md:[&_button]:min-h-9">{(["xlsx", "png", "pdf"] as const).map((format) => <Button key={format} type="button" size="sm" variant="outline" disabled={disabled || exporting !== null} aria-describedby={exportDisabledReason ? "billing-export-scope billing-export-disabled-reason" : "billing-export-scope"} aria-label={"Export Billing Principal report as " + format.toUpperCase()} onClick={() => void runExport(format)}>{exporting === format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}{format.toUpperCase()}</Button>)}
+          {exporting ? <Button type="button" size="sm" variant="ghost" onClick={() => exportRef.current?.abort()}>Cancel export</Button> : null}
+        </div>
+        <p id="billing-export-scope" className="break-words text-xs leading-relaxed text-muted-foreground">
+          Export scope: {range.sourceValidityVerified ? "full source validity" : "full reporting period (includes legacy source fallback)"} {start} — {end}; Table A as of {overview.asOf}. Month and Cumulative aging controls do not limit exports. Includes saved shared values and only your saved private results.
+        </p>
+        {exportDisabledReason ? <p id="billing-export-disabled-reason" role="status" className="break-words text-xs text-muted-foreground">{exportDisabledReason}</p> : null}
       </div>
     </div>
-    <p className="text-xs text-muted-foreground">Exports contain saved shared values and only your saved private results. Save or discard private changes before exporting.</p>
     <details className="border-y border-border text-sm">
       <summary className="min-h-11 cursor-pointer content-center rounded-lg font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:min-h-9">TT OSP basis and OSP for +1%</summary>
       <p className="py-2 text-sm leading-relaxed text-muted-foreground">Daily movement = System OSP closed that day ÷ TT OSP × 100, shown as percentage-point movement. TOTAL (ALL) uses combined daily closed ÷ combined TT OSP, not an average. Zero TT OSP shows +0.00%. Balance remains Target OSP − cumulative closed.</p>

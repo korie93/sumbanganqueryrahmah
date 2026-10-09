@@ -6,13 +6,19 @@ test.use({ serviceWorkers: "block" });
 const nickname = "Monthly Synthetic Collector";
 const now = "2026-10-15T08:00:00.000Z";
 
-async function installFixture(page: Page, baseURL: string | undefined, theme: "light" | "dark") {
+async function installFixture(page: Page, baseURL: string | undefined, theme: "light" | "dark", options: {
+  loading?: "comparison" | "target";
+} = {}) {
   expect(baseURL, "Run through npm run test:visual:built").toBeTruthy();
   const origin = new URL(baseURL!).origin;
   expect(new URL(origin).hostname).toBe("127.0.0.1");
   expect(new URL(origin).protocol).toBe("http:");
   expect(new URL(origin).port).not.toBe("");
-  const fixture = { unexpected: [] as string[], errors: [] as string[] };
+  const fixture = {
+    unexpected: [] as string[], errors: [] as string[],
+    comparisonRequests: [] as string[], release: () => {},
+  };
+  const gate = new Promise<void>((resolve) => { fixture.release = resolve; });
   const respond = (route: Route, body: unknown, status = 200) => route.fulfill({
     status, json: body, headers: { "Cache-Control": "no-store" },
   });
@@ -70,8 +76,10 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
       expect(url.searchParams.get("nickname")).toBe(nickname);
       const startMonth = url.searchParams.get("startMonth")!;
       const endMonth = url.searchParams.get("endMonth")!;
+      fixture.comparisonRequests.push(`${startMonth}:${endMonth}`);
       expect(startMonth).toMatch(/^2026-\d{2}$/);
       expect(endMonth).toBe("2026-10");
+      if (options.loading === "comparison") await gate;
       const months = Array.from({ length: 11 - Number(startMonth.slice(-2)) }, (_, index) => {
         const month = Number(startMonth.slice(-2)) + index;
         const recordCount = month === 10 ? 15 : 30;
@@ -91,6 +99,7 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
       expect(url.searchParams.get("nickname")).toBe(nickname);
       const key = url.searchParams.get("month")!;
       expect(key).toMatch(/^2026-\d{2}$/);
+      if (options.loading === "target") await gate;
       return respond(route, { ok: true, nickname, month: { key, year: 2026, month: Number(key.slice(-2)) },
         monthlyTarget: 31000, configured: true, source: "configured" });
     }
@@ -119,6 +128,80 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
   });
   page.on("pageerror", (error) => fixture.errors.push(error.message));
   return fixture;
+}
+
+for (const width of [1366, 320]) {
+  test(`Monthly export scope at ${width}px follows the loaded report until Apply`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const fixture = await installFixture(page, baseURL, "light");
+    await page.goto("/collection/monthly-comparison");
+    const panel = page.locator(".collection-monthly-comparison-panel");
+    const start = panel.getByLabel("Start month", { exact: true });
+    const apply = panel.getByRole("button", { name: "Apply", exact: true });
+    const scope = panel.getByTestId("monthly-comparison-export-context");
+    const csv = panel.getByRole("button", { name: "Export CSV", exact: true });
+    const print = panel.getByRole("button", { name: "Print report", exact: true });
+    await expect(csv).toBeEnabled();
+    await start.fill("2026-09");
+    await apply.click();
+    await expect(panel.getByText("2 month(s) loaded", { exact: true })).toBeVisible();
+    await expect(csv).toBeEnabled();
+    await expect(scope).toBeVisible();
+    await expect(scope).toContainText("2026-09 to 2026-10");
+    await expect(scope).toContainText(nickname);
+    await expect(csv).toHaveAccessibleDescription(/2026-09 to 2026-10/);
+    await expect(print).toHaveAccessibleDescription(/2026-09 to 2026-10/);
+
+    const requestCount = fixture.comparisonRequests.length;
+    await start.fill("2026-08");
+    await expect(start).toHaveValue("2026-08");
+    await expect(scope).toContainText("2026-09 to 2026-10");
+    await expect(scope).not.toContainText("2026-08");
+    await expect(scope).toContainText(/Apply changed filters/i);
+    await expect(csv).toBeEnabled();
+    await expect(print).toBeEnabled();
+    expect(fixture.comparisonRequests).toHaveLength(requestCount);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    expect(await scope.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await testInfo.attach(`monthly-export-context-${width}`, {
+      body: await panel.locator(".collection-monthly-comparison-filter-card").screenshot(), contentType: "image/png",
+    });
+
+    await apply.click();
+    await expect(panel.getByText("3 month(s) loaded", { exact: true })).toBeVisible();
+    await expect(csv).toBeEnabled();
+    await expect(scope).toContainText("2026-08 to 2026-10");
+    await expect(scope).not.toContainText(/Apply changed filters/i);
+    expect(fixture.comparisonRequests.at(-1)).toBe("2026-08:2026-10");
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const loading of ["comparison", "target"] as const) {
+  test(`Monthly export explains ${loading} loading without a hover at phone width`, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const fixture = await installFixture(page, baseURL, "light", { loading });
+    try {
+      await page.goto("/collection/monthly-comparison");
+      const panel = page.locator(".collection-monthly-comparison-panel");
+      const scope = panel.getByTestId("monthly-comparison-export-context");
+      const reason = loading === "comparison" ? /comparison.*loading|loading.*comparison/i : /target.*loading|loading.*target/i;
+      await expect(scope).toBeVisible();
+      await expect(scope).toContainText(reason);
+      for (const name of ["Export CSV", "Print report"]) {
+        const action = panel.getByRole("button", { name, exact: true });
+        await expect(action).toBeDisabled();
+        await expect(action).toHaveAccessibleDescription(reason);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      fixture.release();
+      await expect(panel.getByRole("button", { name: "Export CSV", exact: true })).toBeEnabled();
+      await expect(scope).not.toContainText(reason);
+      expect(fixture.unexpected).toEqual([]);
+      expect(fixture.errors).toEqual([]);
+    } finally { fixture.release(); }
+  });
 }
 
 for (const theme of ["light", "dark"] as const) {

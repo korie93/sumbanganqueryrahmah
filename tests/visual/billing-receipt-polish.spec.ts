@@ -25,7 +25,9 @@ function billingFixture() {
   return dataset;
 }
 
-async function installFixture(page: Page, baseURL: string | undefined, theme: "light" | "dark") {
+async function installFixture(page: Page, baseURL: string | undefined, theme: "light" | "dark", options: {
+  holdClientSave?: boolean;
+} = {}) {
   expect(baseURL, "Run through npm run test:visual:built").toBeTruthy();
   const origin = new URL(baseURL!).origin;
   expect(new URL(origin).hostname).toBe("127.0.0.1");
@@ -35,7 +37,8 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
   const { target, revision } = dataset.overview;
   const targetPath = "/api/collection/report/billing-principal/saved-targets";
   const revisionPath = `${targetPath}/${target.id}/revisions/${revision.id}`;
-  const fixture = { unexpected: [] as string[], errors: [] as string[] };
+  const fixture = { unexpected: [] as string[], errors: [] as string[], clientSaves: 0, release: () => {} };
+  const saveGate = new Promise<void>((resolve) => { fixture.release = resolve; });
   const respond = (route: Route, body: unknown, status = 200) => route.fulfill({
     status, json: body, headers: { "Cache-Control": "no-store" },
   });
@@ -98,6 +101,16 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
     if (endpoint === `GET ${revisionPath}/calendar`) return respond(route, {
       ok: true, from: revision.from, to: revision.to, aging: "ALL", days: dataset.calendar,
     });
+    if (endpoint === `PUT ${revisionPath}/client-results` && options.holdClientSave) {
+      fixture.clientSaves++;
+      const submitted = request.postDataJSON() as { rows: Array<{ aging: string; targetPercentage: string }> };
+      expect(submitted.rows.find((row) => row.aging === "D3")?.targetPercentage).toBe("45");
+      await saveGate;
+      const clientResult = dataset.overview.clientResult;
+      clientResult.rows[0] = { ...clientResult.rows[0]!, targetPercentage: "45.0000", targetOsp: "4500.00", balanceOsp: "-3000.00" };
+      Object.assign(clientResult.all, { targetPercentage: "48.7500", targetOsp: "19500.00", balanceOsp: "-10500.00" });
+      return respond(route, { ok: true, clientResult, latestComparison: dataset.overview.latestComparison });
+    }
     if (["POST /api/telemetry/client-errors", "POST /api/telemetry/web-vitals"].includes(endpoint)) {
       return respond(route, { ok: true });
     }
@@ -164,6 +177,39 @@ async function syntheticPng(page: Page, width: number, height: number) {
   return Buffer.from(encoded, "base64");
 }
 
+test("Billing explains a pending private save beside save and export actions on a phone", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fixture = await installFixture(page, baseURL, "light", { holdClientSave: true });
+  try {
+    await page.goto("/collection/billing-principal");
+    const client = page.getByRole("table", { name: "Table B Client Billing Principal result", exact: true });
+    await client.getByLabel("D3 private target percentage").fill("45");
+    await page.getByRole("button", { name: "Save Client Result", exact: true }).click();
+    await expect.poll(() => fixture.clientSaves).toBe(1);
+    const saveReason = page.locator("#billing-client-save-disabled-reason");
+    const exportReason = page.locator("#billing-export-disabled-reason");
+    await expect(saveReason).toBeVisible();
+    await expect(saveReason).toContainText(/Saving your private Client Result/i);
+    const saving = page.getByRole("button", { name: "Saving…", exact: true });
+    await expect(saving).toBeDisabled();
+    await expect(saving).toHaveAccessibleDescription(/Saving your private Client Result/i);
+    await expect(exportReason).toBeVisible();
+    const exports = page.getByRole("button", { name: /^Export Billing Principal report as / });
+    await expect(exports).toHaveCount(3);
+    for (const action of await exports.all()) {
+      await expect(action).toBeDisabled();
+      await expect(action).toHaveAccessibleDescription(/Saving.*Wait before exporting/i);
+    }
+    await assertPageFits(page);
+    fixture.release();
+    await expect(client.getByLabel("D3 private target percentage")).toHaveValue("45.0000");
+    await expect(page.getByRole("button", { name: "Save Client Result", exact: true })).toHaveAccessibleDescription(/No unsaved changes/i);
+    await expect(exportReason).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  } finally { fixture.release(); }
+});
+
 for (const theme of ["light", "dark"] as const) for (const viewport of [
   { width: 1366, height: 600 }, { width: 390, height: 844 }, { width: 320, height: 740 },
 ]) {
@@ -195,11 +241,46 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
     await expect(client.getByRole("columnheader", { name: "Client Result % Editable", exact: true })).toBeVisible();
     await expect(client.getByRole("columnheader").filter({ hasText: "Calculated" })).toHaveCount(3);
     await expect(client.locator("tfoot").getByRole("textbox")).toHaveCount(0);
+    const exportScope = page.locator("#billing-export-scope");
+    const exportReason = page.locator("#billing-export-disabled-reason");
+    const save = page.getByRole("button", { name: "Save Client Result", exact: true });
+    const saveReason = page.locator("#billing-client-save-disabled-reason");
+    const exports = page.getByRole("button", { name: /^Export Billing Principal report as / });
+    await expect(exportScope).toBeVisible();
+    await expect(exportScope).toContainText("2026-09-01");
+    await expect(exportScope).toContainText("2026-09-30");
+    await expect(exportScope).toContainText(/Table A as of 2026-09-20/i);
+    await expect(exportScope).toContainText(/Month and Cumulative aging.*do not limit/i);
+    await expect(exportScope).toContainText(/only your saved private results/i);
+    await expect(exports).toHaveCount(3);
+    for (const action of await exports.all()) {
+      await expect(action).toBeEnabled();
+      await expect(action).toHaveAccessibleDescription(/only your saved private results/i);
+    }
+    await expect(save).toBeDisabled();
+    await expect(saveReason).toBeVisible();
+    await expect(save).toHaveAccessibleDescription(/No unsaved changes/i);
+    await expect(exportReason).toHaveCount(0);
     await client.getByLabel("D3 private target percentage").fill("45");
     await expect(client.getByLabel("D3 private target percentage")).toHaveValue("45");
-    await expect(page.getByRole("button", { name: "Save Client Result", exact: true })).toBeEnabled();
+    await expect(save).toBeEnabled();
+    await expect(saveReason).toHaveCount(0);
+    await expect(exportReason).toBeVisible();
+    await expect(exportReason).toContainText(/Save or discard.*changes/i);
+    for (const action of await exports.all()) {
+      await expect(action).toBeDisabled();
+      await expect(action).toHaveAccessibleDescription(/Save or discard.*changes/i);
+    }
+    await assertPageFits(page);
+    expect(await exportScope.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await testInfo.attach(`billing-export-context-${theme}-${viewport.width}`, {
+      body: await exportScope.locator("..").screenshot(), contentType: "image/png",
+    });
     await page.getByRole("button", { name: "Discard changes", exact: true }).click();
     await expect(client.getByLabel("D3 private target percentage")).toHaveValue("50.0000");
+    await expect(exportReason).toHaveCount(0);
+    for (const action of await exports.all()) await expect(action).toBeEnabled();
+    await expect(save).toHaveAccessibleDescription(/No unsaved changes/i);
     await assertPageFits(page);
     expect(fixture.unexpected).toEqual([]);
     expect(fixture.errors).toEqual([]);
@@ -211,6 +292,9 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
     await page.goto("/collection/save");
     const upload = page.locator('input[name="collectionReceiptUpload"]');
     await expect(upload).toHaveCount(1);
+    // Missing fields keep the existing guided-validation action available.
+    await expect(page.getByRole("button", { name: "Semak Medan Wajib", exact: true })).toBeEnabled();
+    await expect(page.locator("#save-collection-action-hint")).toHaveCount(0);
     await upload.setInputFiles({ name: portraitFilename, mimeType: "image/png", buffer: await syntheticPng(page, 240, 720) });
     await upload.setInputFiles({ name: "Synthetic landscape.png", mimeType: "image/png", buffer: await syntheticPng(page, 720, 240) });
     await upload.setInputFiles({ name: "Synthetic receipt.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n% Synthetic preview-only fixture\n%%EOF") });

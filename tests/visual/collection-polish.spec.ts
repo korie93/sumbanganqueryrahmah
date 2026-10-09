@@ -176,6 +176,12 @@ for (const state of ["single", "empty", "loading"] as const) test(`Collection po
   try {
     await openRecords(page);
     const scroll = page.locator(".collection-records-table-scroll");
+    const exportButton = page.getByRole("button", { name: "Export", exact: true });
+    const exportScope = page.getByTestId("collection-records-export-scope");
+    const exportReason = page.getByTestId("collection-records-export-disabled-reason");
+    await expect(exportScope).toBeVisible();
+    await expect(exportScope).toContainText(/all pages/i);
+    await expect(exportScope).toContainText(/filters last applied/i);
     if (state === "single") {
       await expect(scroll).toBeVisible();
       await expect(scroll.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
@@ -187,6 +193,18 @@ for (const state of ["single", "empty", "loading"] as const) test(`Collection po
       await expect(status).toBeVisible();
       expect((await bounds(status)).height).toBeLessThan(160);
       await expect(scroll).toHaveCount(0);
+    }
+    if (state === "loading") {
+      await expect(exportButton).toBeDisabled();
+      await expect(exportReason).toBeVisible();
+      await expect(exportReason).toContainText(/loading/i);
+      await expect(exportButton).toHaveAccessibleDescription(/all pages[\s\S]*loading/i);
+    } else {
+      // An empty result keeps the existing export gate; the action explains an
+      // empty export when invoked, so the new helper must not disable it.
+      await expect(exportButton).toBeEnabled();
+      await expect(exportReason).toHaveCount(0);
+      await expect(exportButton).toHaveAccessibleDescription(/all pages/i);
     }
     await assertPageFits(page);
     expect(fixture.unexpected).toEqual([]);
@@ -204,11 +222,18 @@ test("Collection polish manager keeps read-only actions unchanged", async ({ pag
   expect(fixture.errors).toEqual([]);
 });
 
-for (const width of [320, 390]) test(`Collection polish mobile records preserve fields at ${width}px`, async ({ page, baseURL }) => {
+for (const width of [320, 390]) test(`Collection polish mobile records preserve fields at ${width}px`, async ({ page, baseURL }, testInfo) => {
   await page.setViewportSize({ width, height: 844 });
   const fixture = await installFixture(page, baseURL, { count: 1 });
   await openRecords(page);
   await expect(page.getByRole("button", { name: "Actions for record 1" })).toBeVisible();
+  const exportScope = page.getByTestId("collection-records-export-scope");
+  await expect(exportScope).toBeVisible();
+  await expect(exportScope).toContainText(/all pages/i);
+  expect(await exportScope.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await testInfo.attach(`records-export-context-${width}`, {
+    body: await page.getByRole("group", { name: "Record Actions", exact: true }).screenshot(), contentType: "image/png",
+  });
   await page.getByText("Record details", { exact: true }).click();
   await expect(page.getByText("00009007199254740993", { exact: true })).toBeVisible();
   await assertPageFits(page);

@@ -276,7 +276,16 @@ export function EditCollectionRecordDialog({
             />
           ) : null}
         </div>
-        <DialogFooter className="shrink-0 flex-row justify-end gap-2 border-t px-4 py-4 sm:gap-2 sm:space-x-0 sm:px-6">
+        <DialogFooter className="shrink-0 flex-row flex-wrap justify-end gap-2 border-t px-4 py-4 sm:gap-2 sm:space-x-0 sm:px-6">
+          {savingEdit ? (
+            <p
+              id="edit-collection-save-disabled-reason"
+              role="status"
+              className="w-full text-xs leading-relaxed text-muted-foreground"
+            >
+              Changes are being saved. Please wait before saving again.
+            </p>
+          ) : null}
           <Button
             className="min-h-11 flex-1 sm:flex-none"
             variant="outline"
@@ -285,7 +294,12 @@ export function EditCollectionRecordDialog({
           >
             Cancel
           </Button>
-          <Button className="min-h-11 flex-1 sm:flex-none" onClick={onSave} disabled={savingEdit}>
+          <Button
+            className="min-h-11 flex-1 sm:flex-none"
+            onClick={onSave}
+            disabled={savingEdit}
+            aria-describedby={savingEdit ? "edit-collection-save-disabled-reason" : undefined}
+          >
             {savingEdit ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>
