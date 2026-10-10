@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
+import { CollectionRecordEditChangeSummary } from "../CollectionRecordEditChangeSummary";
 import {
   EditCollectionRecordDialog,
   type EditCollectionRecordDialogProps,
@@ -34,6 +35,10 @@ function fixture(overrides: Partial<EditCollectionRecordDialogProps> = {}): Edit
   return {
     open: true,
     savingEdit: false,
+    changeReview: {
+      hasChanges: true,
+      changes: [{ key: "customerName", label: "Customer Name", before: "Original Customer", after: "Customer One" }],
+    },
     loadingNicknames: false,
     editingRecord: null,
     canManageManualSettlement: false,
@@ -98,10 +103,15 @@ test("edit collection keeps the title and actions outside a single shrinking scr
   assert.equal(body.type, "div");
   assert.match(body.props.className ?? "", /\bmin-h-0\b/);
   assert.match(body.props.className ?? "", /\bflex-1\b/);
+  // Explicit minmax(0, 1fr) avoids an implicit min-content column for long receipt names.
+  assert.match(body.props.className ?? "", /\bgrid-cols-1\b/);
   assert.match(body.props.className ?? "", /\boverflow-y-auto\b/);
   assert.match(body.props.className ?? "", /\boverscroll-contain\b/);
   assert.equal(descendants(body).filter((element) => element.type === Input).length, 5);
   assert.equal(descendants(body).filter((element) => element.type === CollectionReceiptPanel).length, 1);
+  const bodyChildren = elements(body.props.children);
+  assert.equal(bodyChildren[bodyChildren.length - 1]?.type, CollectionRecordEditChangeSummary);
+  assert.equal(descendants(footer).filter((element) => element.type === CollectionRecordEditChangeSummary).length, 0);
   assert.equal(descendants(body).filter((element) => element.type === DialogFooter).length, 0);
 });
 
@@ -152,4 +162,37 @@ test("saving collection still disables both footer actions and all editable inpu
   const receipts = descendants(body).find((element) => element.type === CollectionReceiptPanel);
   assert.ok(receipts);
   assert.equal(receipts.props.disabled, true);
+});
+
+test("an unchanged collection disables Save with a visible reason while Cancel remains available", () => {
+  const closed: boolean[] = [];
+  const { footer } = dialogParts(fixture({
+    changeReview: { hasChanges: false, changes: [] },
+    onOpenChange: (open) => { closed.push(open); },
+  }));
+  const [reason, cancel, save] = elements(footer.props.children);
+  assert.equal(reason.type, "p");
+  assert.equal(reason.props.children, "Tiada perubahan untuk disimpan.");
+  assert.doesNotMatch(reason.props.className ?? "", /sr-only/);
+  assert.equal(reason.props.role, undefined);
+  assert.equal(save.props["aria-describedby"], reason.props.id);
+  assert.equal(save.props.children, "Save");
+  assert.equal(save.props.disabled, true);
+  assert.equal(cancel.props.disabled, false);
+  cancel.props.onClick?.();
+  assert.deepEqual(closed, [false]);
+});
+
+test("the saving status takes priority over the no-change reason", () => {
+  const { footer } = dialogParts(fixture({
+    savingEdit: true,
+    changeReview: { hasChanges: false, changes: [] },
+  }));
+  const [reason, cancel, save] = elements(footer.props.children);
+  assert.equal(reason.props.children, "Changes are being saved. Please wait before saving again.");
+  assert.equal(reason.props.role, "status");
+  assert.equal(save.props["aria-describedby"], reason.props.id);
+  assert.equal(save.props.children, "Saving...");
+  assert.equal(cancel.props.disabled, true);
+  assert.equal(save.props.disabled, true);
 });

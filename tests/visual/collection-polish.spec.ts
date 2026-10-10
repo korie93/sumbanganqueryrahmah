@@ -35,7 +35,7 @@ function syntheticRecord(index: number, receiptCount = 0) {
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
   count?: number; role?: "admin" | "manager"; theme?: "light" | "dark";
-  loading?: boolean; receipts?: number; paginate?: boolean;
+  loading?: boolean; receipts?: number; paginate?: boolean; receiptFileName?: string;
 } = {}) {
   expect(baseURL).toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -44,7 +44,18 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   expect(new URL(origin).port).not.toBe("");
   const role = options.role ?? "admin";
   const records = Array.from({ length: options.count ?? 20 }, (_, index) => syntheticRecord(index, options.receipts));
-  const fixture = { unexpected: [] as string[], errors: [] as string[], receiptViews: [] as string[], saves: 0, release: () => {} };
+  if (options.receiptFileName) for (const record of records) for (const receipt of record.receipts) {
+    receipt.originalFileName = options.receiptFileName;
+  }
+  const fixture = {
+    unexpected: [] as string[], errors: [] as string[], receiptViews: [] as string[], saves: 0, release: () => {},
+    mutations: [] as Array<{
+      fields: Record<string, string[]>;
+      files: Array<{ field: string; name: string; type: string; size: number }>;
+      idempotencyKey: string;
+      idempotencyFingerprint: string;
+    }>,
+  };
   const gate = new Promise<void>((resolve) => { fixture.release = resolve; });
   const respond = (route: Route, body: unknown, status = 200) => route.fulfill({
     status, json: body, headers: { "Cache-Control": "no-store" },
@@ -142,9 +153,23 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (endpoint === "GET /api/collection/purge-summary") return respond(route,
       { ok: true, retentionMonths: 6, cutoffDate: "2026-04-05", eligibleRecords: 0, totalAmount: 0 });
     if (endpoint === "PATCH /api/collection/polish-record-1") {
+      const form = await new Response(new Uint8Array(request.postDataBuffer()!), {
+        headers: { "content-type": request.headers()["content-type"]! },
+      }).formData();
+      const fields: Record<string, string[]> = {};
+      const files: typeof fixture.mutations[number]["files"] = [];
+      for (const [key, value] of form.entries()) {
+        if (typeof value === "string") (fields[key] ??= []).push(value);
+        else files.push({ field: key, name: value.name, type: value.type, size: value.size });
+      }
+      const idempotencyKey = request.headers()["x-idempotency-key"] ?? "";
+      const idempotencyFingerprint = request.headers()["x-idempotency-fingerprint"] ?? "";
+      expect(fields.expectedUpdatedAt).toEqual([now]);
+      expect(idempotencyKey).not.toBe("");
+      expect(idempotencyFingerprint).not.toBe("");
+      fixture.mutations.push({ fields, files, idempotencyKey, idempotencyFingerprint });
       fixture.saves++;
-      expect(request.postData()).toContain("Synthetic Updated Customer");
-      records[0] = { ...records[0]!, customerName: "Synthetic Updated Customer" };
+      records[0] = { ...records[0]!, customerName: fields.customerName![0]! };
       return respond(route, { ok: true, record: records[0] });
     }
     if (["POST /api/telemetry/client-errors", "POST /api/telemetry/web-vitals"].includes(endpoint)) {
@@ -160,6 +185,23 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
 async function openRecords(page: Page) {
   await page.goto("/collection/records");
   await expect(page.getByTestId("collection-records-page")).toBeVisible();
+}
+
+async function openFirstEdit(page: Page) {
+  await page.getByRole("button", { name: "Actions for record 1", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit Collection Record", exact: true });
+  await expect(dialog.getByRole("textbox", { name: "Customer Name", exact: true })).toBeFocused();
+  await expect(dialog).toHaveCSS("pointer-events", "auto");
+  return dialog;
+}
+
+async function expectNoEditChanges(dialog: Locator) {
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
+  await expect(save).toBeDisabled();
+  await expect(save).toHaveAccessibleDescription("Tiada perubahan untuk disimpan.");
+  await expect(dialog.getByText("Tiada perubahan untuk disimpan.", { exact: true })).toBeVisible();
+  await expect(dialog.getByTestId("edit-collection-change-summary")).toHaveCount(0);
 }
 
 async function assertPageFits(page: Page) {
@@ -603,6 +645,7 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
     await expect(dialog).toBeVisible();
     const save = dialog.getByRole("button", { name: "Save", exact: true });
     const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+    await expectNoEditChanges(dialog);
     await expect(save).toBeInViewport();
     await expect(cancel).toBeInViewport();
     const body = dialog.locator(".overflow-y-auto");
@@ -619,6 +662,7 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
     });
     const upload = dialog.locator('input[name="collectionReceiptUpload"]');
     await upload.setInputFiles({ name: "Synthetic edit receipt.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") });
+    await expect(save).toBeEnabled();
     const pending = dialog.getByTestId("receipt-draft-card");
     await expect(pending).toHaveCount(1);
     await pending.getByLabel("Reference / no. transaksi", { exact: true }).fill("SYNTHETIC-EDIT-PREVIEW");
@@ -640,6 +684,7 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
     await launcher.click();
     await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     await dialog.getByLabel("Customer Name", { exact: true }).fill("Synthetic Updated Customer");
+    await expect(save).toBeEnabled();
     await save.click();
     await expect.poll(() => fixture.saves).toBe(1);
     await expect(dialog).toHaveCount(0);
@@ -649,6 +694,168 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
       ? page.getByRole("button", { name: /Search & Filters/ })
       : page.getByTestId("collection-records-page")).toBeFocused();
     await expect(page.getByText("Synthetic Updated Customer", { exact: true })).toBeVisible();
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const theme of ["light", "dark"] as const) for (const width of [1366, 390]) {
+  test(`Collection edit ${theme} ${width}px reviews only changed fields and disables reverted Save`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const fixture = await installFixture(page, baseURL, { count: 1, theme });
+    await openRecords(page);
+    const dialog = await openFirstEdit(page);
+    await expectNoEditChanges(dialog);
+    const save = dialog.getByRole("button", { name: "Save", exact: true });
+    const amount = dialog.getByLabel("Amount (RM)", { exact: true });
+    const name = dialog.getByLabel("Customer Name", { exact: true });
+    await amount.fill("1250");
+    await expectNoEditChanges(dialog);
+    await name.fill(" Synthetic Customer 1 ");
+    await expectNoEditChanges(dialog);
+    await name.fill("Synthetic Updated Customer");
+    await amount.fill("1400.25");
+    await expect(save).toBeEnabled();
+    const review = dialog.getByTestId("edit-collection-change-summary");
+    await expect(review.locator("summary")).toHaveText("2 perubahan");
+    await expect(review).not.toHaveAttribute("open", "");
+    await review.locator("summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(review).toHaveAttribute("open", "");
+    await expect(review.locator("li")).toHaveCount(2);
+    await expect(review.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+    await expect(review.getByText("Synthetic Updated Customer", { exact: true })).toBeVisible();
+    await expect(review.getByText("RM 1250.00", { exact: true })).toBeVisible();
+    await expect(review.getByText("RM 1400.25", { exact: true })).toBeVisible();
+    await expect(review.getByText("IC Number", { exact: true })).toHaveCount(0);
+    await dialog.locator(".overflow-y-auto").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect(review.getByText("Synthetic Updated Customer", { exact: true })).toBeInViewport();
+    await expect(review.getByText("RM 1400.25", { exact: true })).toBeInViewport();
+    await expect(save).toBeInViewport();
+    await assertPageFits(page);
+    await testInfo.attach(`edit-review-${theme}-${width}`, { body: await page.screenshot(), contentType: "image/png" });
+    await amount.fill("1250.00");
+    await expect(review.locator("summary")).toHaveText("1 perubahan");
+    await expect(review).toHaveAttribute("open", "");
+    await name.fill("Synthetic Customer 1");
+    await expectNoEditChanges(dialog);
+    expect(fixture.saves).toBe(0);
+    await name.fill("Synthetic Updated Customer");
+    await save.click();
+    await expect(dialog).toHaveCount(0);
+    expect(fixture.saves).toBe(1);
+    expect(fixture.mutations[0]!.fields.customerName).toEqual(["Synthetic Updated Customer"]);
+    expect(fixture.mutations[0]!.fields.amount).toEqual(["1250"]);
+    expect(fixture.mutations[0]!.files).toEqual([]);
+    await openFirstEdit(page);
+    await expectNoEditChanges(dialog);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(fixture.saves).toBe(1);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const width of [1366, 390]) {
+  test(`Collection edit receipt-only changes and undo at ${width}px keep Save accurate`, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1 });
+    await openRecords(page);
+    const dialog = await openFirstEdit(page);
+    await expectNoEditChanges(dialog);
+    const save = dialog.getByRole("button", { name: "Save", exact: true });
+    const receiptAmount = dialog.getByLabel("Existing receipt amount for Synthetic receipt 1.png", { exact: true });
+    const reference = dialog.getByLabel("Existing receipt reference for Synthetic receipt 1.png", { exact: true });
+    const review = dialog.getByTestId("edit-collection-change-summary");
+    await receiptAmount.fill("125");
+    await expectNoEditChanges(dialog);
+    await reference.fill("SYNTHETIC-UPDATED");
+    await expect(save).toBeEnabled();
+    await review.locator("summary").click();
+    await expect(review.getByText("SYNTHETIC-0", { exact: true })).toBeVisible();
+    await expect(review.getByText("SYNTHETIC-UPDATED", { exact: true })).toBeVisible();
+    await reference.fill("SYNTHETIC-0");
+    await expectNoEditChanges(dialog);
+    await dialog.getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(save).toBeEnabled();
+    await review.locator("summary").click();
+    await expect(review.getByText("Receipt dibuang", { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Undo Remove", exact: true }).click();
+    await expectNoEditChanges(dialog);
+    const upload = dialog.locator('input[name="collectionReceiptUpload"]');
+    await upload.setInputFiles({ name: "Synthetic new.png", mimeType: "image/png", buffer: receiptPng });
+    await expect(save).toBeEnabled();
+    await expect(review.locator("summary")).toHaveText("1 perubahan");
+    await dialog.getByTestId("receipt-draft-card").getByRole("button", { name: "Remove", exact: true }).click();
+    await expectNoEditChanges(dialog);
+    expect(fixture.saves).toBe(0);
+    await reference.fill("SYNTHETIC-UPDATED");
+    await save.click();
+    await expect(dialog).toHaveCount(0);
+    expect(fixture.saves).toBe(1);
+    const mutation = fixture.mutations[0]!;
+    const metadata = JSON.parse(mutation.fields.existingReceiptMetadata![0]!);
+    expect(metadata[0].receiptId).toBe("polish-record-1-receipt-0");
+    expect(metadata[0].receiptReference).toBe("SYNTHETIC-UPDATED");
+    expect(mutation.files).toEqual([]);
+    expect(mutation.fields.removeReceiptIds).toBeUndefined();
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+test("Collection edit same-count receipt replacement preserves removal confirmation and payload", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1 });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  await dialog.getByRole("button", { name: "Remove", exact: true }).click();
+  await dialog.locator('input[name="collectionReceiptUpload"]').setInputFiles({ name: "replacement.png", mimeType: "image/png", buffer: receiptPng });
+  const review = dialog.getByTestId("edit-collection-change-summary");
+  await expect(review.locator("summary")).toHaveText("2 perubahan");
+  await review.locator("summary").click();
+  await expect(review.getByText("Receipt dibuang", { exact: true })).toBeVisible();
+  await expect(review.getByText("Receipt ditambah", { exact: true })).toBeVisible();
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
+  page.once("dialog", (confirmation) => confirmation.dismiss());
+  await save.click();
+  await expect(save).toBeEnabled();
+  expect(fixture.saves).toBe(0);
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.saves).toBe(1);
+  const mutation = fixture.mutations[0]!;
+  expect(mutation.fields.removeReceiptIds).toEqual(["polish-record-1-receipt-0"]);
+  expect(mutation.fields.removeReceipt).toEqual(["true"]);
+  expect(JSON.parse(mutation.fields.existingReceiptMetadata![0]!)).toEqual([]);
+  expect(mutation.files).toEqual([{ field: "receipts", name: "replacement.png", type: "image/png", size: receiptPng.length }]);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const theme of ["light", "dark"] as const) for (const viewport of [{ width: 320, height: 844 }, { width: 740, height: 360 }]) {
+  test(`Collection edit ${theme} long summary wraps at ${viewport.width}x${viewport.height}`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const filename = `${"SyntheticLongFile".repeat(10)}.png`;
+    const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1, receiptFileName: filename, theme });
+    await openRecords(page);
+    const dialog = await openFirstEdit(page);
+    await dialog.getByLabel("Account Number", { exact: true }).fill(`0000${"9876543210".repeat(12)}`);
+    await dialog.getByLabel(`Existing receipt reference for ${filename}`, { exact: true }).fill("SYNTHETIC-NEW-REFERENCE");
+    const review = dialog.getByTestId("edit-collection-change-summary");
+    await review.locator("summary").click();
+    await expect(review).toHaveAttribute("open", "");
+    await expect(review.locator("li")).toHaveCount(2);
+    const body = dialog.locator(".overflow-y-auto");
+    await body.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    expect(await body.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect(await review.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
+    await assertPageFits(page);
+    await testInfo.attach(`edit-review-long-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: "image/png" });
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(fixture.saves).toBe(0);
     expect(fixture.unexpected).toEqual([]);
     expect(fixture.errors).toEqual([]);
   });

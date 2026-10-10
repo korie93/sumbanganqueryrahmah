@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CollectionBatch,
   CollectionRecord,
@@ -24,6 +24,7 @@ import {
   parseCollectionApiErrorDetails,
 } from "@/pages/collection/utils";
 import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
+import { buildCollectionRecordEditChanges } from "./collection-record-edit-changes";
 
 type UseCollectionRecordEditSaveActionArgs = {
   editingRecord: CollectionRecord | null;
@@ -80,6 +81,17 @@ export function useCollectionRecordEditSaveAction({
   const savingEditInFlightRef = useRef(false);
   const editMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  // Share one comparison between the review UI and mutation guard. This is
+  // page-local draft state; it does not replace backend validation or access checks.
+  const changeReview = useMemo(() => buildCollectionRecordEditChanges({
+    editingRecord, customerName, icNumber, customerPhone, accountNumber,
+    batch, paymentDate, amount, staffNickname, newReceiptFiles,
+    existingReceiptDrafts, pendingReceiptDrafts, removedReceiptIds,
+  }), [
+    editingRecord, customerName, icNumber, customerPhone, accountNumber,
+    batch, paymentDate, amount, staffNickname, newReceiptFiles,
+    existingReceiptDrafts, pendingReceiptDrafts, removedReceiptIds,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -92,7 +104,7 @@ export function useCollectionRecordEditSaveAction({
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
-    if (!editingRecord || savingEdit || savingEditInFlightRef.current) {
+    if (!editingRecord || !changeReview.hasChanges || savingEdit || savingEditInFlightRef.current) {
       return;
     }
 
@@ -239,6 +251,7 @@ export function useCollectionRecordEditSaveAction({
     accountNumber,
     amount,
     batch,
+    changeReview.hasChanges,
     closeDialog,
     customerName,
     customerPhone,
@@ -260,6 +273,7 @@ export function useCollectionRecordEditSaveAction({
   ]);
 
   return {
+    changeReview,
     savingEdit,
     resetEditMutationIntent,
     handleSaveEdit,

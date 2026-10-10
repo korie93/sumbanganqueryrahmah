@@ -124,6 +124,7 @@ export function useCollectionRecordEdit({
     () => ({
       open: editOpen,
       savingEdit: saveAction.savingEdit,
+      changeReview: saveAction.changeReview,
       loadingNicknames,
       editingRecord,
       canManageManualSettlement,

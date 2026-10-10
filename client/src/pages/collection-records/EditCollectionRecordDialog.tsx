@@ -22,10 +22,13 @@ import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPane
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { CollectionManualSettlementPanel } from "./CollectionManualSettlementPanel";
+import { CollectionRecordEditChangeSummary } from "./CollectionRecordEditChangeSummary";
+import type { CollectionRecordEditChanges } from "./collection-record-edit-changes";
 
 export interface EditCollectionRecordDialogProps {
   open: boolean;
   savingEdit: boolean;
+  changeReview: CollectionRecordEditChanges;
   loadingNicknames: boolean;
   editingRecord: CollectionRecord | null;
   canManageManualSettlement: boolean;
@@ -69,6 +72,7 @@ export interface EditCollectionRecordDialogProps {
 export function EditCollectionRecordDialog({
   open,
   savingEdit,
+  changeReview,
   loadingNicknames,
   editingRecord,
   canManageManualSettlement,
@@ -113,6 +117,7 @@ export function EditCollectionRecordDialog({
   const batchTriggerId = "edit-collection-batch";
   const paymentDateButtonId = "edit-collection-payment-date-button";
   const staffNicknameTriggerId = "edit-collection-staff-nickname";
+  const saveDisabled = savingEdit || !changeReview.hasChanges;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,7 +129,7 @@ export function EditCollectionRecordDialog({
           <DialogTitle>Edit Collection Record</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 md:grid-cols-2">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="edit-collection-customer-name">Customer Name</Label>
             <Input
@@ -275,6 +280,7 @@ export function EditCollectionRecordDialog({
               onChanged={onManualSettlementChanged}
             />
           ) : null}
+          <CollectionRecordEditChangeSummary changeReview={changeReview} />
         </div>
         <DialogFooter className="shrink-0 flex-row flex-wrap justify-end gap-2 border-t px-4 py-4 sm:gap-2 sm:space-x-0 sm:px-6">
           {savingEdit ? (
@@ -284,6 +290,13 @@ export function EditCollectionRecordDialog({
               className="w-full text-xs leading-relaxed text-muted-foreground"
             >
               Changes are being saved. Please wait before saving again.
+            </p>
+          ) : !changeReview.hasChanges ? (
+            <p
+              id="edit-collection-save-disabled-reason"
+              className="w-full text-xs leading-relaxed text-muted-foreground"
+            >
+              Tiada perubahan untuk disimpan.
             </p>
           ) : null}
           <Button
@@ -297,8 +310,8 @@ export function EditCollectionRecordDialog({
           <Button
             className="min-h-11 flex-1 sm:flex-none"
             onClick={onSave}
-            disabled={savingEdit}
-            aria-describedby={savingEdit ? "edit-collection-save-disabled-reason" : undefined}
+            disabled={saveDisabled}
+            aria-describedby={saveDisabled ? "edit-collection-save-disabled-reason" : undefined}
           >
             {savingEdit ? "Saving..." : "Save"}
           </Button>
