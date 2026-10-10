@@ -141,3 +141,28 @@ test("save collection progress exposes non-visual step state text", () => {
   assert.match(saveCollectionProgressSource, /aria-live="polite"/);
   assert.match(saveCollectionProgressSource, /aria-atomic="true"/);
 });
+
+test("visible required markers follow existing required fields without changing accessible names or either-or rules", () => {
+  assert.match(saveCollectionPageSource, /const requiredMarker = \(\s+<span aria-hidden="true"/);
+  assert.match(saveCollectionPageSource, /Medan bertanda \(wajib\) mesti dilengkapkan/);
+  for (const id of ["customerNameInputId", "customerIcNumberInputId", "customerPhoneInputId", "batchInputId", "paymentDateButtonId", "amountInputId"]) {
+    assert.match(saveCollectionPageSource, new RegExp(`<Label htmlFor=\\{${id}\\}>[^<]*\\{requiredMarker\\}</Label>`));
+  }
+  for (const id of ["accountNumberInputId", "cardNumberInputId"]) {
+    const label = saveCollectionPageSource.match(new RegExp(`<Label htmlFor=\\{${id}\\}>[^<]*</Label>`))?.[0];
+    assert.ok(label);
+    assert.doesNotMatch(label, /requiredMarker|wajib/);
+  }
+});
+
+test("draft guidance states privacy limits and correction/reset are scoped to the current form", () => {
+  assert.match(saveCollectionPageSource, /Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah\./);
+  assert.match(saveCollectionPageSource, /Maklumat pelanggan, nombor akaun\/kad dan fail resit tidak disimpan dalam draf\./);
+  assert.match(saveCollectionPageSource, /Isi atau muat naik semula selepas reload\./);
+  assert.doesNotMatch(saveCollectionPageSource, /Draft auto-saves in this browser session\./);
+  assert.match(saveCollectionPageSource, /correctionDisabled=\{state\.submitting \|\| accessSuspended \|\| state\.resetConfirmOpen\}/);
+  assert.match(saveCollectionPageSource, /if \(!state\.submitting && !accessSuspended && !state\.resetConfirmOpen\) \{\s+focusSaveCollectionField\(field\)/);
+  assert.match(saveCollectionPageSource, /id="save-collection-reset-form"/);
+  assert.match(saveCollectionPageSource, /<\/fieldset>\s+<SaveCollectionResetDialog/);
+  assert.match(saveCollectionPageSource, /onConfirm=\{state\.confirmReset\}/);
+});

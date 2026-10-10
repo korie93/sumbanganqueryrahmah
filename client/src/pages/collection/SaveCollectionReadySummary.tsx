@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import type {
+  SaveCollectionFieldName,
   SaveCollectionFormValues,
   SaveCollectionReadiness,
 } from "@/pages/collection/save-collection-page-utils";
@@ -9,6 +10,7 @@ import {
   buildSaveCollectionReadySummary,
   buildSaveCollectionReceiptReviewHints,
 } from "@/pages/collection/save-collection-ready-summary";
+import { getSaveCollectionFieldTarget } from "@/pages/collection/save-collection-field-navigation";
 
 type SaveCollectionReadySummaryProps = {
   values: SaveCollectionFormValues;
@@ -18,6 +20,8 @@ type SaveCollectionReadySummaryProps = {
   cardNumberVisible: boolean;
   cardNumberVisibilityDisabled?: boolean;
   onToggleCardNumberVisibility: () => void;
+  onCorrectField?: (field: SaveCollectionFieldName) => void;
+  correctionDisabled?: boolean;
 };
 
 export function SaveCollectionReadySummary({
@@ -28,6 +32,8 @@ export function SaveCollectionReadySummary({
   cardNumberVisible,
   cardNumberVisibilityDisabled = false,
   onToggleCardNumberVisibility,
+  onCorrectField,
+  correctionDisabled = false,
 }: SaveCollectionReadySummaryProps) {
   const items = buildSaveCollectionReadySummary({ values, receiptCount, readiness });
   const reviewHints = buildSaveCollectionReceiptReviewHints({ values, receiptDrafts });
@@ -67,7 +73,9 @@ export function SaveCollectionReadySummary({
         </div>
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 lg:grid-cols-4">
-        {items.map((item) => (
+        {items.map((item) => {
+          const correctionTarget = item.field ? getSaveCollectionFieldTarget(item.field) : undefined;
+          return (
           <div key={item.label} className="min-w-0 border-t border-border/50 py-2">
             <dt className="text-xs text-muted-foreground">
               {item.label}
@@ -109,8 +117,25 @@ export function SaveCollectionReadySummary({
             {item.error ? (
               <dd className="mt-1 text-xs leading-relaxed text-destructive">{item.error}</dd>
             ) : null}
+            {item.error && correctionTarget && onCorrectField ? (
+              <dd>
+                <button
+                  type="button"
+                  className="mt-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-xs font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                  aria-label={`Betulkan ${correctionTarget.label}`}
+                  aria-controls={correctionTarget.id}
+                  disabled={correctionDisabled}
+                  onClick={() => {
+                    if (!correctionDisabled && item.field) onCorrectField(item.field);
+                  }}
+                >
+                  Betulkan
+                </button>
+              </dd>
+            ) : null}
           </div>
-        ))}
+          );
+        })}
       </dl>
       {reviewHints.length > 0 ? (
         <div

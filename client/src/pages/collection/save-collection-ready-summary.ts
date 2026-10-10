@@ -9,6 +9,7 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 export type SaveCollectionReadySummaryItem = {
+  field?: SaveCollectionFieldName;
   label: string;
   value: string;
   missing?: boolean;
@@ -44,6 +45,7 @@ function buildValidatedSummaryItem(params: {
   const normalizedValue = formatSummaryValue(params.value);
 
   return {
+    field: params.field,
     label: params.label,
     value: error && normalizedValue !== "Belum diisi" ? "Perlu diperbetulkan" : normalizedValue,
     missing: Boolean(error),

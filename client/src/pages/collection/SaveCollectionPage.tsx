@@ -18,10 +18,12 @@ import { SaveCollectionFormSection } from "@/pages/collection/SaveCollectionForm
 import { SaveCollectionPostSaveActions } from "@/pages/collection/SaveCollectionPostSaveActions";
 import { SaveCollectionProgress } from "@/pages/collection/SaveCollectionProgress";
 import { SaveCollectionReadySummary } from "@/pages/collection/SaveCollectionReadySummary";
+import { SaveCollectionResetDialog } from "@/pages/collection/SaveCollectionResetDialog";
 import { SaveCollectionSubmitAlert } from "@/pages/collection/SaveCollectionSubmitAlert";
 import { CollectionSourceMatchField } from "@/pages/collection/CollectionSourceMatchField";
 import { SAVE_COLLECTION_IDENTITY_FIELD_LIMITS } from "@/pages/collection/save-collection-page-utils";
 import { getSaveCollectionActionHint } from "@/pages/collection/save-collection-submit-feedback";
+import { focusSaveCollectionField } from "@/pages/collection/save-collection-field-navigation";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
 import type { CollectionBatch } from "@/lib/api";
@@ -113,6 +115,9 @@ function SaveCollectionPage({
   );
   const amountValidationProps = getInvalidFieldProps(state.fieldErrors.amount, amountErrorId);
   const requiredFieldProps = getAriaRequiredProps(true);
+  const requiredMarker = (
+    <span aria-hidden="true" className="text-xs font-normal text-muted-foreground">(wajib)</span>
+  );
   const actionHint = getSaveCollectionActionHint({
     submitting: state.submitting,
     accessSuspended,
@@ -134,7 +139,7 @@ function SaveCollectionPage({
   const customerFields = (
     <>
       <div className="space-y-2">
-        <Label htmlFor={customerNameInputId}>Customer Name</Label>
+        <Label htmlFor={customerNameInputId}>Customer Name {requiredMarker}</Label>
         <Input
           id={customerNameInputId}
           name="customerName"
@@ -154,7 +159,7 @@ function SaveCollectionPage({
         ) : null}
       </div>
       <div className="space-y-2">
-        <Label htmlFor={customerIcNumberInputId}>IC Number</Label>
+        <Label htmlFor={customerIcNumberInputId}>IC Number {requiredMarker}</Label>
         <Input
           id={customerIcNumberInputId}
           name="customerIcNumber"
@@ -175,7 +180,7 @@ function SaveCollectionPage({
         ) : null}
       </div>
       <div className="space-y-2">
-        <Label htmlFor={customerPhoneInputId}>Customer Phone Number</Label>
+        <Label htmlFor={customerPhoneInputId}>Customer Phone Number {requiredMarker}</Label>
         <Input
           id={customerPhoneInputId}
           name="customerPhoneNumber"
@@ -266,7 +271,7 @@ function SaveCollectionPage({
         ) : null}
       </div>
       <div className="space-y-2">
-        <Label htmlFor={batchInputId}>Batch</Label>
+        <Label htmlFor={batchInputId}>Batch {requiredMarker}</Label>
         <select
           id={batchInputId}
           name="collectionBatch"
@@ -295,7 +300,7 @@ function SaveCollectionPage({
         ) : null}
       </div>
       <div className="space-y-2">
-        <Label htmlFor={paymentDateButtonId}>Payment Date</Label>
+        <Label htmlFor={paymentDateButtonId}>Payment Date {requiredMarker}</Label>
         <DatePickerField
           buttonId={paymentDateButtonId}
           value={state.paymentDate}
@@ -316,7 +321,7 @@ function SaveCollectionPage({
         ) : null}
       </div>
       <div className="space-y-2">
-        <Label htmlFor={amountInputId}>Amount (RM)</Label>
+        <Label htmlFor={amountInputId}>Amount (RM) {requiredMarker}</Label>
         <Input
           id={amountInputId}
           name="collectionAmount"
@@ -417,15 +422,23 @@ function SaveCollectionPage({
     <section aria-labelledby="save-collection-form-title" className="min-w-0 space-y-4">
       <header className="space-y-2">
         <h2 id="save-collection-form-title" className="sr-only">Simpan Collection Individual</h2>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>Draft auto-saves in this browser session.</span>
-          <span>
+        <div className="space-y-1 text-xs leading-5 text-muted-foreground">
+          <p>Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.</p>
+          <p>
+            Maklumat pelanggan, nombor akaun/kad dan fail resit tidak disimpan dalam draf.
+            {" "}Isi atau muat naik semula selepas reload.
+          </p>
+          <p>
             Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
-          </span>
+          </p>
         </div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Medan bertanda (wajib) mesti dilengkapkan. Isi sekurang-kurangnya satu: Account Number atau Card Number.
+        </p>
         {state.draftRestoreNotice ? (
           <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Draft restored.</span>
+            {" "}Batch, tarikh bayaran dan jumlah sahaja.
             {state.restoreNoticeLabel ? ` Last saved ${state.restoreNoticeLabel}.` : null}
             {state.draftRestoreNotice.hadPendingReceipts
               ? " Pending receipt files need to be uploaded again before saving."
@@ -469,6 +482,12 @@ function SaveCollectionPage({
           cardNumberVisible={state.isCardNumberReviewVisible}
           cardNumberVisibilityDisabled={state.submitting}
           onToggleCardNumberVisibility={state.toggleCardNumberReviewVisibility}
+          correctionDisabled={state.submitting || accessSuspended || state.resetConfirmOpen}
+          onCorrectField={(field) => {
+            if (!state.submitting && !accessSuspended && !state.resetConfirmOpen) {
+              focusSaveCollectionField(field);
+            }
+          }}
         />
 
         <div
@@ -484,6 +503,7 @@ function SaveCollectionPage({
             </p>
           ) : null}
           <Button
+            id="save-collection-reset-form"
             type="button"
             variant="outline"
             onClick={state.clearForm}
@@ -515,6 +535,12 @@ function SaveCollectionPage({
           </Button>
         </div>
         </fieldset>
+        <SaveCollectionResetDialog
+          open={state.resetConfirmOpen}
+          disabled={state.submitting || accessSuspended}
+          onOpenChange={state.onResetConfirmOpenChange}
+          onConfirm={state.confirmReset}
+        />
       </div>
     </section>
   );

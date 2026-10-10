@@ -49,6 +49,33 @@ test("buildSaveCollectionReadySummary never exposes the full card number by defa
   assert.doesNotMatch(JSON.stringify(summary), new RegExp(cardNumber));
 });
 
+test("summary retains stable field keys while receipts have no editable form target", () => {
+  const summary = buildSaveCollectionReadySummary({ values: baseValues, receiptCount: 0 });
+  assert.deepEqual(summary.map((item) => item.field), [
+    "staffNickname", "customerName", "icNumber", "customerPhone", "accountNumber",
+    "cardNumber", "batch", "paymentDate", "amount", undefined,
+  ]);
+});
+
+test("summary corrections preserve account-or-card validation without making both required", () => {
+  for (const values of [
+    { ...baseValues, accountNumber: "" },
+    { ...baseValues, cardNumber: "" },
+  ]) {
+    const summary = buildSaveCollectionReadySummary({ values, receiptCount: 0 });
+    for (const field of ["accountNumber", "cardNumber"]) {
+      assert.equal(summary.find((item) => item.field === field)?.error, undefined);
+      assert.equal(summary.find((item) => item.field === field)?.missing, false);
+    }
+  }
+  const missingBoth = buildSaveCollectionReadySummary({
+    values: { ...baseValues, accountNumber: "", cardNumber: "" }, receiptCount: 0,
+  });
+  for (const field of ["accountNumber", "cardNumber"]) {
+    assert.equal(missingBoth.find((item) => item.field === field)?.error, "Enter an Account Number or Card Number.");
+  }
+});
+
 test("buildSaveCollectionReadySummary marks missing and invalid values from shared validation", () => {
   const summary = buildSaveCollectionReadySummary({
     values: {

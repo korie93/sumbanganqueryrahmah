@@ -1,4 +1,4 @@
-import { type ChangeEvent, useCallback } from "react";
+import { type ChangeEvent, useCallback, useRef, useState } from "react";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { useSaveCollectionDraftState } from "@/pages/collection/useSaveCollectionDraftState";
 import { useSaveCollectionFormState } from "@/pages/collection/useSaveCollectionFormState";
@@ -6,6 +6,10 @@ import type { CollectionReceiptPendingStatus } from "@/pages/collection/collecti
 import { useSaveCollectionReceiptState } from "@/pages/collection/useSaveCollectionReceiptState";
 import { useSaveCollectionSubmitState } from "@/pages/collection/useSaveCollectionSubmitState";
 import { useCollectionSourceMatching } from "@/pages/collection/useCollectionSourceMatching";
+import {
+  getSaveCollectionResetDecision,
+  hasSaveCollectionResettableWork,
+} from "./save-collection-reset-guard";
 
 type MutationFeedbackApi = {
   notifyMutationError: ReturnType<typeof useMutationFeedback>["notifyMutationError"];
@@ -29,6 +33,9 @@ export function useSaveCollectionPageState({
   onSubmittingChange,
   mutationFeedback,
 }: UseSaveCollectionPageStateOptions) {
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const resetConfirmPendingRef = useRef(false);
+  const submitActionInFlightRef = useRef(false);
   const formState = useSaveCollectionFormState({ staffNickname });
   const receiptState = useSaveCollectionReceiptState({ mutationFeedback });
   const sourceMatchState = useCollectionSourceMatching({
@@ -73,7 +80,7 @@ export function useSaveCollectionPageState({
   const {
     clearLastSavedSummary,
     clearSubmitFailure,
-    handleSubmit,
+    handleSubmit: submitCollection,
     lastSavedSummary,
     resetSubmitMutationIntent,
     submitFailure,
@@ -113,12 +120,68 @@ export function useSaveCollectionPageState({
     clearReceiptState();
   }, [clearReceiptState, clearSubmitFailure]);
 
-  const clearForm = useCallback(() => {
+  const resetForm = useCallback(() => {
     clearLastSavedSummary();
     clearSubmitFailure();
     resetSubmitMutationIntent();
     clearPageState();
   }, [clearLastSavedSummary, clearPageState, clearSubmitFailure, resetSubmitMutationIntent]);
+
+  const hasResettableWork = hasSaveCollectionResettableWork({
+    values: formState.values,
+    receiptFileCount: receiptState.receiptFiles.length,
+    receiptDrafts: receiptState.receiptDrafts,
+    draftRestoreNotice: draftState.draftRestoreNotice,
+  });
+
+  const clearForm = useCallback(() => {
+    if (resetConfirmPendingRef.current) return;
+    const decision = getSaveCollectionResetDecision({
+      hasWork: hasResettableWork,
+      submitting: submitting || submitActionInFlightRef.current,
+      accessSuspended: Boolean(accessSuspended),
+    });
+    if (decision === "ignore") return;
+    if (decision === "confirm") {
+      resetConfirmPendingRef.current = true;
+      setResetConfirmOpen(true);
+      return;
+    }
+    resetForm();
+  }, [accessSuspended, hasResettableWork, resetForm, submitting]);
+
+  const onResetConfirmOpenChange = useCallback((open: boolean) => {
+    if (open || submitting || submitActionInFlightRef.current || accessSuspended) return;
+    // Cancel/Escape only closes the confirmation. Drafts, receipt previews,
+    // matching, feedback and the current mutation intent remain untouched.
+    resetConfirmPendingRef.current = false;
+    setResetConfirmOpen(false);
+  }, [accessSuspended, submitting]);
+
+  const confirmReset = useCallback(() => {
+    if (!resetConfirmPendingRef.current) return;
+    const decision = getSaveCollectionResetDecision({
+      hasWork: hasResettableWork,
+      submitting: submitting || submitActionInFlightRef.current,
+      accessSuspended: Boolean(accessSuspended),
+      confirmed: true,
+    });
+    if (decision !== "reset") return;
+    // Consume synchronously so a repeated click cannot clear a new draft.
+    resetConfirmPendingRef.current = false;
+    setResetConfirmOpen(false);
+    resetForm();
+  }, [accessSuspended, hasResettableWork, resetForm, submitting]);
+
+  const handleSubmit = useCallback(async () => {
+    if (resetConfirmPendingRef.current || submitActionInFlightRef.current) return;
+    submitActionInFlightRef.current = true;
+    try {
+      await submitCollection();
+    } finally {
+      submitActionInFlightRef.current = false;
+    }
+  }, [submitCollection]);
 
   return {
     fileInputRef: receiptState.fileInputRef,
@@ -157,6 +220,9 @@ export function useSaveCollectionPageState({
     setAmount: formState.setAmount,
     validateField: formState.validateField,
     clearForm,
+    resetConfirmOpen,
+    onResetConfirmOpenChange,
+    confirmReset,
     clearLastSavedSummary,
     clearSubmitFailure: submitState.clearSubmitFailure,
     handleReceiptChange,

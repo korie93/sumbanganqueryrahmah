@@ -785,6 +785,10 @@ test.describe("Collection layout polish", () => {
         await page.locator("#save-collection-customer-name").fill("Layout Test Customer");
         await page.locator("#save-collection-customer-name").blur();
         await page.getByRole("button", { name: "Reset Form", exact: true }).click();
+        const resetConfirmation = page.getByRole("alertdialog", { name: "Kosongkan borang?" });
+        await expect(resetConfirmation).toBeVisible();
+        await resetConfirmation.getByRole("button", { name: "Kosongkan Borang", exact: true }).click();
+        await expect(resetConfirmation).toBeHidden();
         await expect(page.locator("#save-collection-customer-name")).toHaveValue("");
         await page.screenshot({ path: test.info().outputPath("save.png"), fullPage: true, animations: "disabled" });
 
