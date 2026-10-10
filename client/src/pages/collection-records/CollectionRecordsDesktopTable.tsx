@@ -24,6 +24,7 @@ export function CollectionRecordsDesktopTable({
   paginatedRecords,
   pageOffset,
   canEdit,
+  lastViewedRecordId = null,
   onViewReceipt,
   onEdit,
   onDelete,
@@ -75,6 +76,7 @@ export function CollectionRecordsDesktopTable({
           {paginatedRecords.map((record, index) => (
               <TableRow
                 key={record.id}
+                data-last-viewed={record.id === lastViewedRecordId ? "true" : undefined}
                 aria-label={buildCollectionRecordRowAriaLabel({
                   formattedAmount: formatAmountRM(record.amount),
                   formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
@@ -87,6 +89,7 @@ export function CollectionRecordsDesktopTable({
                 </TableCell>
                 <TableCell className="collection-records-table-identity py-2 font-medium">
                   <span className="block w-56 whitespace-normal wrap-anywhere">{record.customerName}</span>
+                  {record.id === lastViewedRecordId ? <span className="sr-only">Last opened record</span> : null}
                 </TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.icNumber}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.accountNumber || "-"}</TableCell>
@@ -109,7 +112,7 @@ export function CollectionRecordsDesktopTable({
                       variant="outline"
                       size="sm"
                       className="h-9 rounded-md px-3 text-foreground"
-                      onClick={() => onViewReceipt(record)}
+                      onClick={(event) => onViewReceipt(record, event.currentTarget)}
                     >
                       <Eye className="mr-1.5 h-3.5 w-3.5" />
                       {(record.receipts?.length || 0) > 1 ? `View (${record.receipts.length})` : "View"}

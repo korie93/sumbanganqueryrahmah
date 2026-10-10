@@ -34,6 +34,21 @@ test("collection edit close restores the real launcher without scrolling", () =>
   assert.deepEqual(fallback.calls, []);
 });
 
+test("receipt closes back to its launcher without scrolling or consuming the parent edit origin", () => {
+  const row = focusTarget();
+  const nestedReceiptButton = focusTarget();
+  const fallback = focusTarget();
+  const focus = createCollectionRecordOverlayFocus(() => fallback);
+  focus.remember("edit", row);
+  focus.remember("receipt", nestedReceiptButton);
+  focus.restore("receipt", closeEvent());
+  assert.deepEqual(nestedReceiptButton.calls, [{ preventScroll: true }]);
+  assert.deepEqual(row.calls, []);
+  focus.restore("edit", closeEvent());
+  assert.deepEqual(row.calls, [{ preventScroll: true }]);
+  assert.deepEqual(fallback.calls, []);
+});
+
 test("edit and delete own separate launchers and consume each origin on close", () => {
   const edit = focusTarget();
   const deletion = focusTarget();
@@ -99,6 +114,8 @@ test("unmounted or disabled fallback targets are not focused", () => {
 
 test("mobile menu only suppresses close restoration when handing focus to an overlay", () => {
   const source = readFileSync(path.resolve("client/src/pages/collection-records/CollectionRecordActions.tsx"), "utf8");
+  assert.match(source, /<DropdownMenu modal=\{false\}>/);
+  assert.doesNotMatch(source, /document\.body|pointerEvents|setTimeout/);
   assert.match(source, /ref=\{triggerRef\}/);
   assert.match(source, /handingOffFocus\.current = true;\s*action\(record, triggerRef\.current \?\? undefined\)/);
   assert.match(source, /if \(handingOffFocus\.current\) event\.preventDefault\(\);\s*handingOffFocus\.current = false/);
@@ -114,11 +131,11 @@ test("desktop shares the launcher-aware menu and both lazy dialogs restore focus
   assert.match(desktop, /onEdit=\{onEdit\}/);
   assert.match(desktop, /onDelete=\{onDelete\}/);
   assert.match(desktop, /canEdit \|\| canDeleteRow\(record\)/);
-  for (const overlay of ["edit", "delete"]) {
+  for (const overlay of ["edit", "delete", "receipt"]) {
     assert.match(page, new RegExp(`onCloseAutoFocus=\\{\\(event\\) => overlayFocus\\.restore\\("${overlay}", event\\)\\}`));
   }
   assert.match(page, /overlayFocus\.remember\("delete", null\);\s*viewModel\.deleteDialog\.onConfirm\(\)/);
-  for (const file of ["EditCollectionRecordDialog.tsx", "DeleteCollectionRecordDialog.tsx"]) {
+  for (const file of ["EditCollectionRecordDialog.tsx", "DeleteCollectionRecordDialog.tsx", "ReceiptPreviewDialog.tsx"]) {
     assert.match(readFileSync(path.join(directory, file), "utf8"), /onCloseAutoFocus=\{onCloseAutoFocus\}/);
   }
 });

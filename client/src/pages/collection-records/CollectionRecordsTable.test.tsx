@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CollectionRecord } from "@/lib/api";
-import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
+import { CollectionRecordsTable, type CollectionRecordsTableProps } from "@/pages/collection-records/CollectionRecordsTable";
 import { CollectionRecordsDesktopTable } from "@/pages/collection-records/CollectionRecordsDesktopTable";
 
 const collectionRecord: CollectionRecord = {
@@ -128,3 +128,61 @@ test("desktop collection preserves full identifiers and receipt access with perm
   assert.doesNotMatch(render(false, false), /aria-label="Actions for record/);
   assert.match(render(false, true), /aria-label="Actions for record 51"/);
 });
+
+for (const layout of ["desktop", "mobile"] as const) {
+  test(`${layout} collection highlights only the last opened stable record ID`, () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { innerWidth: layout === "mobile" ? 390 : 1280, matchMedia: () => ({ matches: layout === "mobile" }) },
+    });
+    try {
+      const firstRecord = { ...collectionRecord, cardNumber: "00009007199254740993" };
+      // Customer details can repeat; only the record ID identifies the opened row.
+      const secondRecord = { ...firstRecord, id: "record-2" };
+      const render = (overrides: Partial<CollectionRecordsTableProps> = {}) => renderToStaticMarkup(
+        createElement(layout === "mobile" ? CollectionRecordsTable : CollectionRecordsDesktopTable, {
+          loadingRecords: false,
+          visibleRecords: [firstRecord, secondRecord],
+          paginatedRecords: [firstRecord, secondRecord],
+          pageOffset: 50,
+          canEdit: false,
+          canDeleteRow: () => false,
+          onViewReceipt: () => undefined,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          ...overrides,
+        }),
+      );
+      const getHighlightedRecord = (markup: string) => {
+        const records = markup.match(layout === "mobile" ? /<article\b[\s\S]*?<\/article>/g : /<tr\b[\s\S]*?<\/tr>/g) ?? [];
+        return records.filter((recordMarkup) => recordMarkup.includes('data-last-viewed="true"'));
+      };
+
+      for (const markup of [render(), render({ lastViewedRecordId: undefined }), render({ lastViewedRecordId: null }), render({ lastViewedRecordId: "missing-record" })]) {
+        assert.equal(getHighlightedRecord(markup).length, 0);
+        assert.doesNotMatch(markup, /Last opened record/);
+      }
+
+      const markup = render({ lastViewedRecordId: secondRecord.id });
+      const highlightedRecords = getHighlightedRecord(markup);
+      assert.equal(highlightedRecords.length, 1);
+      assert.match(highlightedRecords[0]!, /aria-label="Collection record 52,/);
+      assert.match(highlightedRecords[0]!, /<span class="sr-only">Last opened record<\/span>/);
+      assert.equal((markup.match(/Last opened record/g) ?? []).length, 1);
+      assert.doesNotMatch(markup, /aria-selected|data-state="selected"/);
+      for (const identifier of ["00009007199254740993", firstRecord.icNumber, firstRecord.customerPhone, firstRecord.accountNumber]) {
+        assert.ok(highlightedRecords[0]!.includes(identifier));
+      }
+
+      const reordered = render({ paginatedRecords: [secondRecord, firstRecord], pageOffset: 0, lastViewedRecordId: secondRecord.id });
+      const reorderedHighlight = getHighlightedRecord(reordered);
+      assert.equal(reorderedHighlight.length, 1);
+      assert.match(reorderedHighlight[0]!, /aria-label="Collection record 1,/);
+      assert.equal(getHighlightedRecord(render({ paginatedRecords: [firstRecord], lastViewedRecordId: secondRecord.id })).length, 0);
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, "window", descriptor);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+}

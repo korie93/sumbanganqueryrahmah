@@ -27,7 +27,9 @@ export interface CollectionRecordsTableProps {
   paginatedRecords: CollectionRecord[];
   pageOffset: number;
   canEdit: boolean;
-  onViewReceipt: (record: CollectionRecord) => void;
+  lastViewedRecordId?: string | null | undefined;
+  onViewReceipt: (record: CollectionRecord, launcher?: HTMLElement) => void;
+  onRecordDetailsToggle?: ((record: CollectionRecord, open: boolean) => void) | undefined;
   onEdit: (record: CollectionRecord, launcher?: HTMLElement) => void;
   onDelete: (record: CollectionRecord, launcher?: HTMLElement) => void;
   canDeleteRow: (record: CollectionRecord) => boolean;
@@ -47,7 +49,9 @@ export function CollectionRecordsTable({
   paginatedRecords,
   pageOffset,
   canEdit,
+  lastViewedRecordId = null,
   onViewReceipt,
+  onRecordDetailsToggle,
   onEdit,
   onDelete,
   canDeleteRow,
@@ -69,19 +73,21 @@ export function CollectionRecordsTable({
           paginatedRecords.map((record, index) => (
             <article
               key={record.id}
+              data-last-viewed={record.id === lastViewedRecordId ? "true" : undefined}
               aria-label={buildCollectionRecordRowAriaLabel({
                 formattedAmount: formatAmountRM(record.amount),
                 formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
                 record,
                 recordNumber: pageOffset + index + 1,
               })}
-              className="space-y-3 rounded-lg border border-border bg-card p-4"
+              className="space-y-3 rounded-lg border border-border bg-card p-4 data-[last-viewed=true]:bg-muted data-[last-viewed=true]:shadow-[inset_3px_0_0_hsl(var(--primary))]"
               role="group"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
                   <p className="text-xs text-muted-foreground">
                     Record #{pageOffset + index + 1}
+                    {record.id === lastViewedRecordId ? <span className="sr-only">Last opened record</span> : null}
                   </p>
                   <h3 className="break-words text-base font-semibold text-foreground">
                     {record.customerName}
@@ -105,7 +111,10 @@ export function CollectionRecordsTable({
                   <dd className="break-all">{getCollectionCardNumberLabel(record.cardNumber)}</dd>
                 </div>
               </dl>
-              <details className="group border-t border-border">
+              <details
+                className="group border-t border-border"
+                onToggle={(event) => onRecordDetailsToggle?.(record, event.currentTarget.open)}
+              >
                 <summary className="flex min-h-11 cursor-pointer items-center justify-between text-sm font-medium text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
                   Record details
                   <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
@@ -156,7 +165,7 @@ export function CollectionRecordsTable({
                     type="button"
                     variant="outline"
                     className="min-h-11 flex-1 justify-center rounded-md"
-                    onClick={() => onViewReceipt(record)}
+                    onClick={(event) => onViewReceipt(record, event.currentTarget)}
                   >
                     <Eye className="mr-2 h-4 w-4" />
                     {(record.receipts?.length || 0) > 1 ? `View Receipt (${record.receipts.length})` : "View Receipt"}
@@ -188,6 +197,7 @@ export function CollectionRecordsTable({
         paginatedRecords={paginatedRecords}
         pageOffset={pageOffset}
         canEdit={canEdit}
+        lastViewedRecordId={lastViewedRecordId}
         onViewReceipt={onViewReceipt}
         onEdit={onEdit}
         onDelete={onDelete}

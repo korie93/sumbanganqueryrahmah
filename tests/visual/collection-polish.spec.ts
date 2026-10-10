@@ -5,6 +5,8 @@ import { expect, test, type Locator, type Page, type Route } from "@playwright/t
 test.use({ serviceWorkers: "block" });
 const now = "2026-10-05T08:00:00.000Z";
 const nickname = "Synthetic Collector";
+// A tiny generated fixture image; receipt tests never read receipt files.
+const receiptPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7xkAAAAASUVORK5CYII=", "base64");
 
 function syntheticRecord(index: number, receiptCount = 0) {
   const id = `polish-record-${index + 1}`;
@@ -15,9 +17,9 @@ function syntheticRecord(index: number, receiptCount = 0) {
     paymentDate: "2026-10-04", amount: "1250.00", receiptFile: null,
     receipts: Array.from({ length: receiptCount }, (_, receiptIndex) => ({
       id: `${id}-receipt-${receiptIndex}`, collectionRecordId: id,
-      storagePath: `/receipts/synthetic-${receiptIndex}.pdf`,
-      originalFileName: `Synthetic receipt ${receiptIndex + 1}.pdf`, originalMimeType: "application/pdf",
-      originalExtension: ".pdf", fileSize: 1024, receiptAmount: "125.00", extractedAmount: "125.00",
+      storagePath: `/receipts/synthetic-${receiptIndex}.png`,
+      originalFileName: `Synthetic receipt ${receiptIndex + 1}.png`, originalMimeType: "image/png",
+      originalExtension: ".png", fileSize: receiptPng.length, receiptAmount: "125.00", extractedAmount: "125.00",
       extractionStatus: "suggested", extractionConfidence: 0.98,
       receiptDate: "2026-10-04", receiptReference: `SYNTHETIC-${receiptIndex}`,
       fileHash: `synthetic-hash-${receiptIndex}`, createdAt: now,
@@ -33,7 +35,7 @@ function syntheticRecord(index: number, receiptCount = 0) {
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
   count?: number; role?: "admin" | "manager"; theme?: "light" | "dark";
-  loading?: boolean; receipts?: number;
+  loading?: boolean; receipts?: number; paginate?: boolean;
 } = {}) {
   expect(baseURL).toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -42,7 +44,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   expect(new URL(origin).port).not.toBe("");
   const role = options.role ?? "admin";
   const records = Array.from({ length: options.count ?? 20 }, (_, index) => syntheticRecord(index, options.receipts));
-  const fixture = { unexpected: [] as string[], errors: [] as string[], saves: 0, release: () => {} };
+  const fixture = { unexpected: [] as string[], errors: [] as string[], receiptViews: [] as string[], saves: 0, release: () => {} };
   const gate = new Promise<void>((resolve) => { fixture.release = resolve; });
   const respond = (route: Route, body: unknown, status = 200) => route.fulfill({
     status, json: body, headers: { "Cache-Control": "no-store" },
@@ -99,12 +101,41 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     }] });
     if (endpoint === "GET /api/collection/list") {
       if (options.loading) await gate;
-      const limit = Math.max(20, records.length);
-      return respond(route, { ok: true, records, total: records.length, totalAmount: records.length * 1250,
-        page: 1, pageSize: limit, limit, offset: 0, nextCursor: null,
-        pagination: { mode: "hybrid", page: 1, pageSize: limit, limit, offset: 0,
-          total: records.length, totalPages: 1, nextCursor: null, hasNextPage: false, hasPreviousPage: false },
+      const search = (url.searchParams.get("search") ?? "").toLowerCase();
+      const matching = records.filter((record) => record.customerName.toLowerCase().includes(search));
+      const paginated = options.paginate || url.searchParams.has("page");
+      const limit = paginated
+        ? Number(url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? "50")
+        : Math.max(20, records.length);
+      const requestedPage = Number(url.searchParams.get("page") ?? "1");
+      const cursor = url.searchParams.get("cursor");
+      if (paginated && (![10, 25, 50, 100, 200].includes(limit)
+        || !Number.isInteger(requestedPage) || requestedPage < 1
+        || (cursor && !/^polish-offset-\d+$/.test(cursor)))) {
+        fixture.unexpected.push(`Invalid synthetic pagination: ${url.search}`);
+        return respond(route, { ok: false, message: "Invalid synthetic pagination" }, 400);
+      }
+      const offset = paginated
+        ? cursor ? Number(cursor.slice("polish-offset-".length)) : (requestedPage - 1) * limit
+        : 0;
+      const pageRecords = matching.slice(offset, offset + limit);
+      const pageNumber = Math.floor(offset / limit) + 1;
+      const nextCursor = paginated && offset + limit < matching.length ? `polish-offset-${offset + limit}` : null;
+      return respond(route, { ok: true, records: pageRecords, total: matching.length, totalAmount: matching.length * 1250,
+        page: pageNumber, pageSize: limit, limit, offset, nextCursor,
+        pagination: { mode: "hybrid", page: pageNumber, pageSize: limit, limit, offset,
+          total: matching.length, totalPages: Math.max(1, Math.ceil(matching.length / limit)),
+          nextCursor, hasNextPage: nextCursor !== null, hasPreviousPage: offset > 0 },
       });
+    }
+    // Only exact record/receipt pairs created above may load fixture bytes.
+    for (const record of records) for (const receipt of record.receipts) {
+      if (endpoint === `GET /api/collection/${record.id}/receipts/${receipt.id}/view`) {
+        fixture.receiptViews.push(record.id);
+        return route.fulfill({ status: 200, body: receiptPng, contentType: "image/png", headers: {
+          "Cache-Control": "no-store", "Content-Disposition": `inline; filename="${receipt.originalFileName}"`,
+        } });
+      }
     }
     if (endpoint === "GET /api/collection/source-configs") return respond(route, { ok: true, sourceConfigs: [] });
     if (endpoint === "GET /api/collection/teams") return respond(route, { ok: true, teams: [] });
@@ -139,6 +170,35 @@ async function bounds(locator: Locator) {
   const rect = await locator.boundingBox();
   expect(rect).not.toBeNull();
   return rect!;
+}
+
+async function recordScrollPositions(page: Page) {
+  return page.getByTestId("collection-records-page").evaluate((element) => {
+    const positions = [{ target: "window", left: window.scrollX, top: window.scrollY }];
+    let ancestor: Element | null = element;
+    while (ancestor) {
+      positions.push({ target: `${ancestor.tagName}#${ancestor.id}`, left: ancestor.scrollLeft, top: ancestor.scrollTop });
+      ancestor = ancestor.parentElement;
+    }
+    const table = element.querySelector(".collection-records-table-scroll");
+    if (table) positions.push({ target: "records-table", left: table.scrollLeft, top: table.scrollTop });
+    return positions;
+  });
+}
+
+async function expectReceiptImage(page: Page) {
+  const dialog = page.getByRole("dialog", { name: "Receipt Preview", exact: true });
+  await expect(dialog).toBeVisible();
+  const image = dialog.getByRole("img", { name: "Synthetic receipt 1.png", exact: true });
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  return dialog;
+}
+
+async function expectLastOpened(page: Page, record: Locator) {
+  await expect(page.locator('[data-last-viewed="true"]')).toHaveCount(1);
+  await expect(record).toHaveAttribute("data-last-viewed", "true");
+  await expect(record.getByText("Last opened record", { exact: true })).toHaveCount(1);
 }
 
 for (const theme of ["light", "dark"] as const) for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 600 }]) test(`Collection polish ${theme} ${viewport.width}x${viewport.height} pins identity/actions and one vertical header`, async ({ page, baseURL }, testInfo) => {
@@ -212,12 +272,302 @@ for (const state of ["single", "empty", "loading"] as const) test(`Collection po
   } finally { fixture.release(); }
 });
 
-test("Collection polish manager keeps read-only actions unchanged", async ({ page, baseURL }) => {
-  const fixture = await installFixture(page, baseURL, { role: "manager", count: 1 });
+for (const width of [1366, 390]) test(`Collection polish manager receipt return keeps read-only actions unchanged at ${width}px`, async ({ page, baseURL }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const fixture = await installFixture(page, baseURL, { role: "manager", count: 1, receipts: 1 });
   await openRecords(page);
   await expect(page.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Actions for record/ })).toHaveCount(0);
   await expect(page.locator(".collection-records-table-actions")).toHaveCount(0);
+  const row = page.getByTestId("collection-records-page").locator(width < 768 ? "article" : "tbody tr").first();
+  const launcher = row.getByRole("button", { name: width < 768 ? "View Receipt" : "View", exact: true });
+  await launcher.scrollIntoViewIfNeeded();
+  await launcher.focus();
+  const before = await recordScrollPositions(page);
+  await page.keyboard.press("Enter");
+  const preview = await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(launcher).toBeFocused();
+  await expectLastOpened(page, row);
+  await expect.poll(() => recordScrollPositions(page)).toEqual(before);
+  await expect(page.getByRole("button", { name: /^Actions for record/ })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Edit", exact: true })).toHaveCount(0);
+  expect(fixture.receiptViews).toEqual(["polish-record-1"]);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const theme of ["light", "dark"] as const) test(`Collection return ${theme} desktop remembers one record without moving table or page`, async ({ page, baseURL }, testInfo) => {
+  await page.setViewportSize({ width: 1366, height: 600 });
+  const fixture = await installFixture(page, baseURL, { theme, receipts: 1 });
+  await openRecords(page);
+  const table = page.locator(".collection-records-table-scroll");
+  await expect(table.locator("tbody tr")).toHaveCount(20);
+  await table.scrollIntoViewIfNeeded();
+  await table.evaluate((element) => { element.scrollTop = 220; element.scrollLeft = element.scrollWidth; });
+  const recordA = table.locator("tbody tr").nth(8);
+  const recordB = table.locator("tbody tr").nth(9);
+  const receiptA = recordA.getByRole("button", { name: "View", exact: true });
+  await receiptA.scrollIntoViewIfNeeded();
+  await receiptA.focus();
+  const beforeReceipt = await recordScrollPositions(page);
+  expect(beforeReceipt.find((position) => position.target === "records-table")!.left).toBeGreaterThan(0);
+  expect(beforeReceipt.find((position) => position.target === "records-table")!.top).toBeGreaterThan(0);
+  await page.keyboard.press("Enter");
+  const preview = await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(receiptA).toBeFocused();
+  await expectLastOpened(page, recordA);
+  await expect.poll(() => recordScrollPositions(page)).toEqual(beforeReceipt);
+
+  const actionsB = recordB.getByRole("button", { name: "Actions for record 10", exact: true });
+  await actionsB.scrollIntoViewIfNeeded();
+  await actionsB.focus();
+  const beforeEdit = await recordScrollPositions(page);
+  await page.keyboard.press("Enter");
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "Edit Collection Record", exact: true });
+  await expect(edit).toBeVisible();
+  await expectLastOpened(page, recordB);
+  await expect(recordA).not.toHaveAttribute("data-last-viewed", "true");
+
+  // Opening a receipt inside Edit must return to that dialog before returning
+  // to the row, with neither scroll container being repositioned by focus.
+  const nestedReceipt = edit.getByRole("button", { name: "View", exact: true });
+  await nestedReceipt.scrollIntoViewIfNeeded();
+  const editBody = edit.locator(".overflow-y-auto");
+  const editScrollTop = await editBody.evaluate((element) => element.scrollTop);
+  await nestedReceipt.click();
+  await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(nestedReceipt).toBeFocused();
+  await expect(edit).toBeVisible();
+  await expect.poll(() => editBody.evaluate((element) => element.scrollTop)).toBe(editScrollTop);
+  await edit.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  await expect(actionsB).toBeFocused();
+  await expectLastOpened(page, recordB);
+  await expect.poll(() => recordScrollPositions(page)).toEqual(beforeEdit);
+  await testInfo.attach(`records-last-opened-${theme}-desktop`, { body: await page.screenshot(), contentType: "image/png" });
+  expect(fixture.receiptViews).toEqual(["polish-record-9", "polish-record-10"]);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const theme of ["light", "dark"] as const) test(`Collection return ${theme} mobile keeps details and overlays at the opened record`, async ({ page, baseURL }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fixture = await installFixture(page, baseURL, { theme, count: 12, receipts: 1 });
+  await openRecords(page);
+  const cards = page.getByTestId("collection-records-page").locator("article");
+  await expect(cards).toHaveCount(12);
+  const recordA = cards.nth(6);
+  const recordB = cards.nth(7);
+  for (const card of [recordA, recordB]) {
+    const details = card.locator("details");
+    const summary = details.locator("summary");
+    await summary.scrollIntoViewIfNeeded();
+    await summary.focus();
+    const beforeDetails = await recordScrollPositions(page);
+    expect(beforeDetails.some((position) => position.top > 0)).toBe(true);
+    const summaryTop = (await bounds(summary)).y;
+    await page.keyboard.press("Enter");
+    await expect(details).toHaveAttribute("open", "");
+    await expectLastOpened(page, card);
+    await page.keyboard.press("Enter");
+    await expect(details).not.toHaveAttribute("open", "");
+    await expect(summary).toBeFocused();
+    await expect(summary).toBeInViewport();
+    await expectLastOpened(page, card);
+    await expect.poll(() => recordScrollPositions(page)).toEqual(beforeDetails);
+    expect(Math.abs((await bounds(summary)).y - summaryTop)).toBeLessThan(2);
+  }
+  await expect(recordA).not.toHaveAttribute("data-last-viewed", "true");
+
+  const receiptB = recordB.getByRole("button", { name: "View Receipt", exact: true });
+  await receiptB.scrollIntoViewIfNeeded();
+  await receiptB.focus();
+  const beforeReceipt = await recordScrollPositions(page);
+  await page.keyboard.press("Enter");
+  const preview = await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(receiptB).toBeFocused();
+  await expectLastOpened(page, recordB);
+  await expect.poll(() => recordScrollPositions(page)).toEqual(beforeReceipt);
+
+  const actionsB = recordB.getByRole("button", { name: "Actions for record 8", exact: true });
+  await actionsB.focus();
+  const beforeEdit = await recordScrollPositions(page);
+  await page.keyboard.press("Enter");
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "Edit Collection Record", exact: true });
+  await expect(edit).toBeVisible();
+  await expect(edit.getByRole("textbox", { name: "Customer Name", exact: true })).toBeFocused();
+  await expect(edit).toHaveCSS("pointer-events", "auto");
+  await page.keyboard.press("Escape");
+  await expect(edit).toHaveCount(0);
+  await expect(actionsB).toBeFocused();
+  await expectLastOpened(page, recordB);
+  await expect.poll(() => recordScrollPositions(page)).toEqual(beforeEdit);
+  await testInfo.attach(`records-last-opened-${theme}-mobile`, { body: await page.screenshot(), contentType: "image/png" });
+  expect(fixture.receiptViews).toEqual(["polish-record-8"]);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection return clears the previous marker when filters or pagination change", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  const fixture = await installFixture(page, baseURL, { count: 60, paginate: true });
+  await openRecords(page);
+  const table = page.locator(".collection-records-table-scroll");
+  await expect(table.locator("tbody tr")).toHaveCount(50);
+  const markFirstRecord = async () => {
+    const row = table.locator("tbody tr").first();
+    await row.getByRole("button", { name: "Actions for record 1", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+    const edit = page.getByRole("dialog", { name: "Edit Collection Record", exact: true });
+    await expect(edit).toBeVisible();
+    // Visibility can precede the outgoing action menu's dismissable-layer
+    // cleanup. Wait for the dialog to own focus and accept input before Escape.
+    await expect(edit.getByRole("textbox", { name: "Customer Name", exact: true })).toBeFocused();
+    await expect(edit).toHaveCSS("pointer-events", "auto");
+    await page.keyboard.press("Escape");
+    await expect(edit).toHaveCount(0);
+    await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
+    await expectLastOpened(page, row);
+  };
+  await markFirstRecord();
+  await page.getByLabel("Search", { exact: true }).fill("Synthetic");
+  await expect(page.locator('[data-last-viewed="true"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(table.locator("tbody tr")).toHaveCount(50);
+  await expect(table.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+  await markFirstRecord();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(table.getByText("Synthetic Customer 51", { exact: true })).toBeVisible();
+  await expect(table.locator("tbody tr")).toHaveCount(10);
+  await expect(page.locator('[data-last-viewed="true"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Prev", exact: true }).click();
+  await expect(table.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-last-viewed="true"]')).toHaveCount(0);
+  await markFirstRecord();
+  await page.getByLabel("Records per page", { exact: true }).selectOption("100");
+  await expect(table.locator("tbody tr")).toHaveCount(60);
+  await expect(page.locator('[data-last-viewed="true"]')).toHaveCount(0);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const width of [1366, 390]) test(`Collection return keyboard menu and cancelled dialogs release page interaction at ${width}px`, async ({ page, baseURL }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const fixture = await installFixture(page, baseURL, { count: 1 });
+  await openRecords(page);
+  const row = page.getByTestId("collection-records-page").locator(width < 768 ? "article" : "tbody tr").first();
+  // Include the background launcher in the locator while a modal hides it
+  // from the accessibility tree, so its inherited pointer lock can be checked.
+  const launcher = row.getByRole("button", { name: "Actions for record 1", exact: true, includeHidden: true });
+  const body = page.locator("body");
+  const editItem = page.getByRole("menuitem", { name: "Edit", exact: true });
+  await launcher.scrollIntoViewIfNeeded();
+  await launcher.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(editItem).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(launcher).toBeFocused();
+  await expect(body).toHaveCSS("pointer-events", "auto");
+
+  await page.keyboard.press("ArrowDown");
+  await expect(editItem).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "Delete", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  const remove = page.getByRole("alertdialog", { name: "Padam Rekod", exact: true });
+  await expect(remove.getByRole("button", { name: "Batal", exact: true })).toBeFocused();
+  await expect(remove).toHaveCSS("pointer-events", "auto");
+  await expect(body).toHaveCSS("pointer-events", "none");
+  await expect(launcher).toHaveCSS("pointer-events", "none");
+  await page.keyboard.press("Enter");
+  await expect(remove).toHaveCount(0);
+  await expect(launcher).toBeFocused();
+  await expect(body).toHaveCSS("pointer-events", "auto");
+  await expect(page.locator('[data-last-viewed="true"]')).toHaveCount(0);
+
+  await page.keyboard.press("ArrowDown");
+  await expect(editItem).toBeFocused();
+  await page.keyboard.press("Enter");
+  const edit = page.getByRole("dialog", { name: "Edit Collection Record", exact: true });
+  await expect(edit.getByRole("textbox", { name: "Customer Name", exact: true })).toBeFocused();
+  await expect(edit).toHaveCSS("pointer-events", "auto");
+  await expect(body).toHaveCSS("pointer-events", "none");
+  await expect(launcher).toHaveCSS("pointer-events", "none");
+  await page.keyboard.press("Escape");
+  await expect(edit).toHaveCount(0);
+  await expect(launcher).toBeFocused();
+  await expect(body).toHaveCSS("pointer-events", "auto");
+  await expectLastOpened(page, row);
+
+  // A normal pointer action after both handoffs catches a lingering page lock.
+  await page.getByRole("button", { name: "View All", exact: true }).click();
+  const viewAll = page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection", exact: true });
+  await expect(viewAll.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+  await viewAll.getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(viewAll).toHaveCount(0);
+  await expect(body).toHaveCSS("pointer-events", "auto");
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection return restores a nested View All receipt to its own record", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  const fixture = await installFixture(page, baseURL, { count: 2, receipts: 1 });
+  await openRecords(page);
+  const table = page.locator(".collection-records-table-scroll");
+  await expect(table.locator("tbody tr")).toHaveCount(2);
+  const recordA = table.locator("tbody tr").nth(0);
+  const recordB = table.locator("tbody tr").nth(1);
+  await recordA.getByRole("button", { name: "View", exact: true }).click();
+  const preview = await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expectLastOpened(page, recordA);
+
+  const viewAllLauncher = page.getByRole("button", { name: "View All", exact: true });
+  await viewAllLauncher.scrollIntoViewIfNeeded();
+  await viewAllLauncher.focus();
+  const beforeViewAll = await recordScrollPositions(page);
+  await viewAllLauncher.click();
+  const viewAll = page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection", exact: true });
+  await expect(viewAll.locator("tbody tr")).toHaveCount(2);
+  const nestedReceipt = viewAll.locator("tbody tr").nth(1).getByRole("button", { name: "View", exact: true });
+  await nestedReceipt.scrollIntoViewIfNeeded();
+  const viewAllScroll = () => viewAll.locator(".overflow-auto").evaluateAll((elements) => elements.map((element) => ({
+    left: element.scrollLeft, top: element.scrollTop,
+  })));
+  const beforeNestedReceipt = await viewAllScroll();
+  await nestedReceipt.click();
+  await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(viewAll).toBeVisible();
+  await expect(nestedReceipt).toBeFocused();
+  await expect.poll(viewAllScroll).toEqual(beforeNestedReceipt);
+  await expectLastOpened(page, recordB);
+  await expect(recordA).not.toHaveAttribute("data-last-viewed", "true");
+  await viewAll.getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(viewAll).toHaveCount(0);
+  await expectLastOpened(page, recordB);
+  await expect.poll(() => recordScrollPositions(page)).toEqual(beforeViewAll);
+  expect(fixture.receiptViews).toEqual(["polish-record-1", "polish-record-2"]);
+  expect(fixture.saves).toBe(0);
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
 });

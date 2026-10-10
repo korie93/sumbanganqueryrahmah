@@ -17,6 +17,7 @@ import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRec
 import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
 import { createCollectionRecordOverlayFocus } from "@/pages/collection-records/collection-record-overlay-focus";
 import { useCollectionRecordsController } from "@/pages/collection-records/useCollectionRecordsController";
+import { useCollectionRecordReturnHighlight } from "@/pages/collection-records/useCollectionRecordReturnHighlight";
 
 const CollectionRecordsFilters = lazy(() =>
   import("@/pages/collection-records/CollectionRecordsFilters").then((module) => ({
@@ -130,6 +131,22 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   ));
   const controller = useCollectionRecordsController({ role });
   const viewModel = buildCollectionRecordsPageViewModel(controller);
+  const returnContextKey = JSON.stringify([
+    role, viewModel.toolbar.tablePage, viewModel.toolbar.tablePageSize,
+    viewModel.filters.fromDate, viewModel.filters.toDate, viewModel.filters.searchInput,
+    viewModel.filters.nicknameFilter, viewModel.filters.leaderFilter,
+    viewModel.filters.sourceImportFilter, viewModel.filters.agingFilter,
+    viewModel.filters.classificationFilter, viewModel.filters.sortValue,
+  ]);
+  const { lastViewedRecordId, markViewed } = useCollectionRecordReturnHighlight(
+    returnContextKey, viewModel.table.paginatedRecords,
+  );
+  const rememberReceiptLauncher = (launcher?: HTMLElement) => {
+    const activeElement = document.activeElement;
+    overlayFocus.remember("receipt", launcher ?? (
+      activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
+    ));
+  };
   const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
     const items: ActiveFilterChip[] = [];
     if (viewModel.filters.fromDate) {
@@ -242,11 +259,19 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
         <CollectionRecordsTable
           {...viewModel.table}
+          lastViewedRecordId={lastViewedRecordId}
+          onRecordDetailsToggle={(record) => markViewed(record.id)}
+          onViewReceipt={(record, launcher) => {
+            rememberReceiptLauncher(launcher);
+            markViewed(record.id);
+            viewModel.table.onViewReceipt(record);
+          }}
           onEdit={(record, launcher) => {
             const activeElement = document.activeElement;
             overlayFocus.remember("edit", launcher ?? (
               activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
             ));
+            markViewed(record.id);
             viewModel.table.onEdit(record);
           }}
           onDelete={(record, launcher) => {
@@ -293,7 +318,10 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
       {viewModel.receiptPreview.open ? (
         <Suspense fallback={<LazyDialogFallback label="Loading receipt preview dialog..." />}>
-          <ReceiptPreviewDialog {...viewModel.receiptPreview} />
+          <ReceiptPreviewDialog
+            {...viewModel.receiptPreview}
+            onCloseAutoFocus={(event) => overlayFocus.restore("receipt", event)}
+          />
         </Suspense>
       ) : null}
 
@@ -302,6 +330,10 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <EditCollectionRecordDialog
             {...viewModel.editDialog}
             onCloseAutoFocus={(event) => overlayFocus.restore("edit", event)}
+            onViewExistingReceipt={(receipt) => {
+              rememberReceiptLauncher();
+              viewModel.editDialog.onViewExistingReceipt(receipt);
+            }}
           />
         </Suspense>
       ) : null}
@@ -328,7 +360,14 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
       {viewModel.viewAll.open ? (
         <Suspense fallback={<LazyDialogFallback label="Loading all collection records dialog..." />}>
-          <ViewAllRecordsDialog {...viewModel.viewAll} />
+          <ViewAllRecordsDialog
+            {...viewModel.viewAll}
+            onViewReceipt={(record) => {
+              rememberReceiptLauncher();
+              markViewed(record.id);
+              viewModel.viewAll.onViewReceipt(record);
+            }}
+          />
         </Suspense>
       ) : null}
     </div>

@@ -35,8 +35,18 @@
 }
 
 .collection-records-table-scroll tr:hover td:is(.collection-records-table-identity, .collection-records-table-actions),
+.collection-records-table-scroll tr[data-last-viewed="true"] td:is(.collection-records-table-identity, .collection-records-table-actions),
 .collection-records-table-scroll tr[data-state="selected"] td:is(.collection-records-table-identity, .collection-records-table-actions) {
   background: hsl(var(--muted));
+}
+
+.collection-records-table-scroll tr[data-last-viewed="true"] {
+  background: hsl(var(--muted));
+}
+
+/* Keep the return marker visible on the pinned identity without resizing the row. */
+.collection-records-table-scroll tr[data-last-viewed="true"] td.collection-records-table-identity {
+  box-shadow: inset 3px 0 hsl(var(--primary)), inset -1px 0 hsl(var(--border));
 }
 
 /* Corner cells stay above the scrolling header and opaque pinned body cells. */

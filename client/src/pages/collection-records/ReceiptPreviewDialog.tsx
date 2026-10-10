@@ -40,6 +40,7 @@ export interface ReceiptPreviewDialogProps {
   error: string;
   kind: ReceiptPreviewKind;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   onSelectReceipt: (receiptId: string) => void;
   onDownload: () => void;
   onClose: () => void;
@@ -57,6 +58,7 @@ export function ReceiptPreviewDialog({
   error,
   kind,
   onOpenChange,
+  onCloseAutoFocus,
   onSelectReceipt,
   onDownload,
   onClose,
@@ -93,6 +95,7 @@ export function ReceiptPreviewDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
         className={
           isMobile
             ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`

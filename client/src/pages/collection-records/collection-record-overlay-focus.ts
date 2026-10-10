@@ -1,4 +1,4 @@
-type CollectionRecordOverlay = "edit" | "delete";
+type CollectionRecordOverlay = "edit" | "delete" | "receipt";
 type CollectionRecordFocusTarget = Pick<HTMLElement, "isConnected" | "focus"> & { disabled?: boolean };
 type FocusCloseEvent = Pick<Event, "preventDefault">;
 

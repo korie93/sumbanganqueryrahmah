@@ -36,7 +36,9 @@ export function CollectionRecordActions({
   };
 
   return (
-    <DropdownMenu>
+    // The row menu must release its layer without overlapping a second modal
+    // pointer lock when Edit/Delete opens. The dialogs remain modal.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           ref={triggerRef}
