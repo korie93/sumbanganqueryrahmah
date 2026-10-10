@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Button } from "@/components/ui/button";
 import { DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker-field";
+import { SelectTrigger } from "@/components/ui/select";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import { CollectionRecordEditChangeSummary } from "../CollectionRecordEditChangeSummary";
 import { CollectionRecordDiscardDialog } from "../CollectionRecordDiscardDialog";
@@ -19,8 +22,11 @@ type ElementProps = {
   id?: string;
   role?: string;
   "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
+  buttonId?: string;
   onClick?: () => void;
   onCloseAutoFocus?: (event: Event) => void;
+  onKeyDown?: (event: { key: string; defaultPrevented: boolean; preventDefault: () => void; stopPropagation: () => void }) => void;
   onPointerDownOutside?: (event: { detail: { originalEvent: { button: number; ctrlKey: boolean; preventDefault: () => void } } }) => void;
 };
 
@@ -37,6 +43,8 @@ function fixture(overrides: Partial<EditCollectionRecordDialogProps> = {}): Edit
   return {
     open: true,
     savingEdit: false,
+    validationErrors: {},
+    validationAttempt: 0,
     discardConfirmOpen: false,
     onDiscardConfirmOpenChange: noop,
     onDiscardChanges: noop,
@@ -234,6 +242,84 @@ test("dirty primary outside dismissal prevents native focus stealing without cha
         ...pointer, preventDefault: () => { prevented += 1; },
       } } });
       assert.equal(prevented, dirty && !saving && pointer.button === 0 && !pointer.ctrlKey ? 1 : 0);
+    }
+  }
+});
+
+test("edit validation links every field error to its own control including date and selects", () => {
+  const validationErrors = {
+    customerName: "Customer Name is required.",
+    icNumber: "IC Number is required.",
+    customerPhone: "Customer Phone Number is invalid.",
+    accountNumber: "Account Number or a previously matched Card Number is required.",
+    batch: "Batch is not valid.",
+    paymentDate: "Payment Date cannot be in the future.",
+    amount: "Amount must be greater than 0.",
+    staffNickname: "Sila pilih Staff Nickname rasmi daripada senarai.",
+  };
+  const { body } = dialogParts(fixture({ validationErrors, validationAttempt: 1 }));
+  const children = descendants(body);
+  const controls = children.filter((element) => [Input, SelectTrigger, DatePickerField].includes(element.type as typeof Input));
+  assert.equal(controls.length, 8);
+  assert.equal(body.props.id, "edit-collection-fields");
+  const messages = Object.values(validationErrors);
+  for (const [index, control] of controls.entries()) {
+    assert.equal(control.props["aria-invalid"], true);
+    assert.match(control.props.className ?? "", /aria-invalid:border-destructive/);
+    assert.ok(control.props.className?.includes("aria-invalid:[--dm-input-border:hsl(var(--destructive))]"));
+    const message = children.find((element) => element.props.id === control.props["aria-describedby"]);
+    assert.ok(message);
+    assert.equal(message.type, "p");
+    assert.equal(message.props.children, messages[index]);
+    assert.match(message.props.className ?? "", /text-destructive/);
+  }
+});
+
+test("pristine and corrected edit fields have no error text or invalid ARIA state", () => {
+  for (const validationErrors of [{}, { amount: "Amount must be greater than 0." }]) {
+    const { body } = dialogParts(fixture({ validationErrors }));
+    const children = descendants(body);
+    const inputs = children.filter((element) => element.type === Input);
+    for (const input of inputs) {
+      const invalidAmount = input.props.id === "edit-collection-amount" && "amount" in validationErrors;
+      assert.equal(input.props["aria-invalid"], invalidAmount ? true : undefined);
+      assert.equal(input.props["aria-describedby"], invalidAmount ? "edit-collection-amount-error" : undefined);
+    }
+    assert.equal(children.filter((element) => element.type === "p" && element.props.id?.endsWith("-error")).length, Object.keys(validationErrors).length);
+  }
+});
+
+test("discard confirmation handles only unhandled Escape and never discards or closes while saving", () => {
+  for (const saving of [false, true]) {
+    let root: ReactElement<ElementProps> | undefined;
+    const changed: boolean[] = [];
+    let discarded = 0;
+    function Harness() {
+      root = CollectionRecordDiscardDialog({
+        open: true, saving,
+        onOpenChange: (open) => { changed.push(open); },
+        onDiscard: () => { discarded += 1; },
+      });
+      return null;
+    }
+    renderToStaticMarkup(createElement(Harness));
+    assert.ok(root);
+    const content = elements(root.props.children)[0];
+    assert.ok(content.props.onKeyDown);
+    for (const key of ["Enter", "Escape"]) for (const defaultPrevented of [false, true]) {
+      changed.length = 0;
+      let prevented = 0;
+      let stopped = 0;
+      content.props.onKeyDown({
+        key, defaultPrevented,
+        preventDefault: () => { prevented += 1; },
+        stopPropagation: () => { stopped += 1; },
+      });
+      const handles = key === "Escape" && !defaultPrevented;
+      assert.equal(prevented, handles ? 1 : 0);
+      assert.equal(stopped, handles ? 1 : 0);
+      assert.deepEqual(changed, handles && !saving ? [false] : []);
+      assert.equal(discarded, 0);
     }
   }
 });

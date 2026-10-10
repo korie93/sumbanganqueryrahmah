@@ -17,7 +17,9 @@ import {
 import {
   cloneReceiptIds,
   confirmExistingReceiptRemoval,
+  getCollectionRecordEditFieldErrors,
   getCollectionRecordEditValidationError,
+  type CollectionRecordEditFieldErrors,
 } from "@/pages/collection-records/collection-record-edit-utils";
 import {
   emitCollectionDataChanged,
@@ -25,6 +27,8 @@ import {
 } from "@/pages/collection/utils";
 import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 import { buildCollectionRecordEditChanges } from "./collection-record-edit-changes";
+
+const EMPTY_VALIDATION_ERRORS: CollectionRecordEditFieldErrors = {};
 
 type UseCollectionRecordEditSaveActionArgs = {
   editingRecord: CollectionRecord | null;
@@ -81,6 +85,17 @@ export function useCollectionRecordEditSaveAction({
   const savingEditInFlightRef = useRef(false);
   const editMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [validationAttempt, setValidationAttempt] = useState(0);
+  const currentValidationErrors = useMemo(() => getCollectionRecordEditFieldErrors({
+    customerName, icNumber, customerPhone, accountNumber, batch, paymentDate,
+    amount, staffNickname, editingRecord, nicknameOptions,
+  }), [
+    customerName, icNumber, customerPhone, accountNumber, batch, paymentDate,
+    amount, staffNickname, editingRecord, nicknameOptions,
+  ]);
+  // A failed Save enables live field feedback for this draft only. Deriving the
+  // errors means corrected fields clear without stealing focus while typing.
+  const validationErrors = validationAttempt > 0 ? currentValidationErrors : EMPTY_VALIDATION_ERRORS;
   // Share one comparison between the review UI and mutation guard. This is
   // page-local draft state; it does not replace backend validation or access checks.
   const changeReview = useMemo(() => buildCollectionRecordEditChanges({
@@ -101,6 +116,7 @@ export function useCollectionRecordEditSaveAction({
 
   const resetEditMutationIntent = useCallback(() => {
     editMutationIntentRef.current = null;
+    setValidationAttempt(0);
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
@@ -121,10 +137,15 @@ export function useCollectionRecordEditSaveAction({
       nicknameOptions,
     });
     if (validationError) {
-      notifyMutationError({
-        title: "Validation Error",
-        description: validationError,
-      });
+      setValidationAttempt((previousAttempt) => previousAttempt + 1);
+      // Field descriptions and focus provide feedback without a duplicate toast.
+      // Keep the generic fallback for validation errors without a field mapping.
+      if (Object.keys(currentValidationErrors).length === 0) {
+        notifyMutationError({
+          title: "Validation Error",
+          description: validationError,
+        });
+      }
       return;
     }
 
@@ -255,6 +276,7 @@ export function useCollectionRecordEditSaveAction({
     closeDialog,
     customerName,
     customerPhone,
+    currentValidationErrors,
     editingRecord,
     existingReceiptDrafts,
     icNumber,
@@ -275,6 +297,8 @@ export function useCollectionRecordEditSaveAction({
   return {
     changeReview,
     savingEdit,
+    validationErrors,
+    validationAttempt,
     resetEditMutationIntent,
     handleSaveEdit,
   };

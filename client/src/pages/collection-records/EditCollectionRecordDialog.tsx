@@ -1,4 +1,4 @@
-import type { ChangeEvent, MutableRefObject } from "react";
+import { useEffect, useRef, type ChangeEvent, type MutableRefObject } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +25,28 @@ import { CollectionManualSettlementPanel } from "./CollectionManualSettlementPan
 import { CollectionRecordEditChangeSummary } from "./CollectionRecordEditChangeSummary";
 import { CollectionRecordDiscardDialog } from "./CollectionRecordDiscardDialog";
 import type { CollectionRecordEditChanges } from "./collection-record-edit-changes";
+import type { CollectionRecordEditField, CollectionRecordEditFieldErrors } from "./collection-record-edit-utils";
+
+const editFieldsId = "edit-collection-fields";
+
+function CollectionRecordValidationFocus({ open, attempt }: { open: boolean; attempt: number }) {
+  const handledAttempt = useRef(0);
+  useEffect(() => {
+    if (!open || attempt === 0) {
+      handledAttempt.current = 0;
+      return;
+    }
+    if (handledAttempt.current === attempt) return;
+    handledAttempt.current = attempt;
+    // Only a new invalid Save moves focus; correcting a field must not steal it.
+    const field = document.getElementById(editFieldsId)?.querySelector<HTMLElement>(
+      '[data-edit-field] [aria-invalid="true"]:not([disabled])',
+    );
+    field?.focus({ preventScroll: true });
+    field?.closest("[data-edit-field]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [open, attempt]);
+  return null;
+}
 
 export interface EditCollectionRecordDialogProps {
   open: boolean;
@@ -33,6 +55,8 @@ export interface EditCollectionRecordDialogProps {
   onDiscardConfirmOpenChange: (open: boolean) => void;
   onDiscardChanges: () => void;
   changeReview: CollectionRecordEditChanges;
+  validationErrors: CollectionRecordEditFieldErrors;
+  validationAttempt: number;
   loadingNicknames: boolean;
   editingRecord: CollectionRecord | null;
   canManageManualSettlement: boolean;
@@ -80,6 +104,8 @@ export function EditCollectionRecordDialog({
   onDiscardConfirmOpenChange,
   onDiscardChanges,
   changeReview,
+  validationErrors,
+  validationAttempt,
   loadingNicknames,
   editingRecord,
   canManageManualSettlement,
@@ -125,6 +151,19 @@ export function EditCollectionRecordDialog({
   const paymentDateButtonId = "edit-collection-payment-date-button";
   const staffNicknameTriggerId = "edit-collection-staff-nickname";
   const saveDisabled = savingEdit || !changeReview.hasChanges;
+  const errorId = (field: CollectionRecordEditField) => `edit-collection-${field}-error`;
+  const fieldErrorProps = (field: CollectionRecordEditField) => ({
+    "aria-invalid": validationErrors[field] ? true : undefined,
+    "aria-describedby": validationErrors[field] ? errorId(field) : undefined,
+    // Dark form styles consume --dm-input-border; scope its error override to
+    // this invalid control rather than changing shared styles for every form.
+    className: "aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive aria-invalid:[--dm-input-border:hsl(var(--destructive))]",
+  });
+  const fieldError = (field: CollectionRecordEditField) => validationErrors[field] ? (
+    <p id={errorId(field)} className="text-sm leading-relaxed text-destructive">
+      {validationErrors[field]}
+    </p>
+  ) : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -144,8 +183,8 @@ export function EditCollectionRecordDialog({
           <DialogTitle>Edit Collection Record</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 md:grid-cols-2">
-          <div className="space-y-2">
+        <div id={editFieldsId} className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 md:grid-cols-2">
+          <div data-edit-field="customerName" className="min-w-0 space-y-2">
             <Label htmlFor="edit-collection-customer-name">Customer Name</Label>
             <Input
               id="edit-collection-customer-name"
@@ -154,9 +193,11 @@ export function EditCollectionRecordDialog({
               onChange={(event) => onCustomerNameChange(event.target.value)}
               autoComplete="name"
               disabled={savingEdit}
+              {...fieldErrorProps("customerName")}
             />
+            {fieldError("customerName")}
           </div>
-          <div className="space-y-2">
+          <div data-edit-field="icNumber" className="min-w-0 space-y-2">
             <Label htmlFor="edit-collection-ic-number">IC Number</Label>
             <Input
               id="edit-collection-ic-number"
@@ -165,9 +206,11 @@ export function EditCollectionRecordDialog({
               onChange={(event) => onIcNumberChange(event.target.value)}
               autoComplete="off"
               disabled={savingEdit}
+              {...fieldErrorProps("icNumber")}
             />
+            {fieldError("icNumber")}
           </div>
-          <div className="space-y-2">
+          <div data-edit-field="customerPhone" className="min-w-0 space-y-2">
             <Label htmlFor="edit-collection-customer-phone">Customer Phone Number</Label>
             <Input
               id="edit-collection-customer-phone"
@@ -177,28 +220,32 @@ export function EditCollectionRecordDialog({
               onChange={(event) => onCustomerPhoneChange(event.target.value)}
               autoComplete="tel"
               disabled={savingEdit}
+              {...fieldErrorProps("customerPhone")}
             />
+            {fieldError("customerPhone")}
           </div>
-          <div className="space-y-2">
+          <div data-edit-field="accountNumber" className="min-w-0 space-y-2">
             <Label htmlFor="edit-collection-account-number">Account Number</Label>
             <Input
               id="edit-collection-account-number"
               name="accountNumber"
+              {...fieldErrorProps("accountNumber")}
               value={editAccountNumber}
               onChange={(event) => onAccountNumberChange(event.target.value)}
               autoComplete="off"
               disabled={savingEdit}
             />
+            {fieldError("accountNumber")}
             {editingRecord?.cardNumber ? (
               <p className="text-xs text-muted-foreground">
                 Matched Card: {getCollectionCardNumberLabel(editingRecord.cardNumber)}
               </p>
             ) : null}
           </div>
-          <div className="space-y-2">
+          <div data-edit-field="batch" className="min-w-0 space-y-2">
             <Label htmlFor={batchTriggerId}>Batch</Label>
             <Select value={editBatch} onValueChange={(value) => onBatchChange(value as CollectionBatch)} disabled={savingEdit}>
-              <SelectTrigger id={batchTriggerId}>
+              <SelectTrigger id={batchTriggerId} {...fieldErrorProps("batch")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -209,8 +256,9 @@ export function EditCollectionRecordDialog({
                 ))}
               </SelectContent>
             </Select>
+            {fieldError("batch")}
           </div>
-          <div className="space-y-2">
+          <div data-edit-field="paymentDate" className="min-w-0 space-y-2">
             <Label htmlFor={paymentDateButtonId}>Payment Date</Label>
             <DatePickerField
               buttonId={paymentDateButtonId}
@@ -221,13 +269,16 @@ export function EditCollectionRecordDialog({
               ariaLabel="Payment Date"
               buttonTestId="edit-collection-payment-date"
               disabledDates={{ after: new Date(`${maxPaymentDate}T23:59:59`) }}
+              {...fieldErrorProps("paymentDate")}
             />
+            {fieldError("paymentDate")}
           </div>
-          <div className="space-y-2">
+          <div data-edit-field="amount" className="min-w-0 space-y-2">
             <Label htmlFor="edit-collection-amount">Amount (RM)</Label>
             <Input
               id="edit-collection-amount"
               name="collectionAmount"
+              {...fieldErrorProps("amount")}
               type="number"
               min="0"
               step="0.01"
@@ -236,15 +287,16 @@ export function EditCollectionRecordDialog({
               autoComplete="off"
               disabled={savingEdit}
             />
+            {fieldError("amount")}
           </div>
-          <div className="space-y-2">
+          <div data-edit-field="staffNickname" className="min-w-0 space-y-2">
             <Label htmlFor={staffNicknameTriggerId}>Staff Nickname</Label>
             <Select
               value={editStaffNickname}
               onValueChange={onStaffNicknameChange}
               disabled={savingEdit || loadingNicknames}
             >
-              <SelectTrigger id={staffNicknameTriggerId}>
+              <SelectTrigger id={staffNicknameTriggerId} {...fieldErrorProps("staffNickname")}>
                 <SelectValue placeholder="Pilih staff nickname" />
               </SelectTrigger>
               <SelectContent>
@@ -265,6 +317,7 @@ export function EditCollectionRecordDialog({
                 ) : null}
               </SelectContent>
             </Select>
+            {fieldError("staffNickname")}
           </div>
           <div className="space-y-2 md:col-span-2">
             <p className="text-sm font-medium leading-none text-foreground">Receipt Upload</p>
@@ -295,6 +348,7 @@ export function EditCollectionRecordDialog({
               onChanged={onManualSettlementChanged}
             />
           ) : null}
+          <CollectionRecordValidationFocus open={open} attempt={validationAttempt} />
           <CollectionRecordEditChangeSummary changeReview={changeReview} />
         </div>
         <DialogFooter className="shrink-0 flex-row flex-wrap justify-end gap-2 border-t px-4 py-4 sm:gap-2 sm:space-x-0 sm:px-6">

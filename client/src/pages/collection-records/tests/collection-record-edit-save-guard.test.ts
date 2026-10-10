@@ -61,12 +61,22 @@ test("unchanged and formatting-equivalent edits do not invoke any mutation side 
   }
 });
 
-test("changed invalid input still reaches existing validation instead of bypassing it", async () => {
-  const { action, errors, effects } = renderSaveAction({ customerName: "" });
-  assert.equal(action.changeReview.hasChanges, true);
-  await action.handleSaveEdit();
-  assert.deepEqual(errors, [{ title: "Validation Error", description: "Customer Name is required." }]);
-  assert.deepEqual(effects, []);
+test("invalid drafts start without errors and cannot mutate or show duplicate validation toasts", async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => { requests += 1; throw new Error("Unexpected synthetic network request"); };
+  try {
+    const { action, errors, effects } = renderSaveAction({ customerName: "", amount: "0" });
+    assert.equal(action.changeReview.hasChanges, true);
+    assert.equal(action.validationAttempt, 0);
+    assert.deepEqual(action.validationErrors, {});
+    await action.handleSaveEdit();
+    assert.deepEqual(errors, []);
+    assert.deepEqual(effects, []);
+    assert.equal(requests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("no selected record cannot become a saveable edit", async () => {
@@ -82,9 +92,41 @@ test("the dialog and save guard share the review without changing version or ide
   const edit = readFileSync("client/src/pages/collection-records/useCollectionRecordEdit.ts", "utf8");
   assert.match(edit, /changeReview: saveAction\.changeReview/);
   assert.match(source, /if \(!editingRecord \|\| !changeReview\.hasChanges \|\| savingEdit \|\| savingEditInFlightRef\.current\)/);
-  assert.ok(source.indexOf("!changeReview.hasChanges") < source.indexOf("const validationError"));
+  assert.ok(source.indexOf("!changeReview.hasChanges") < source.indexOf("const validationError ="));
   assert.match(source, /expectedUpdatedAt: editingRecord\.updatedAt \|\| editingRecord\.createdAt/);
   assert.match(source, /idempotencyFingerprint: editMutationIntentRef\.current\.fingerprint/);
   assert.match(source, /idempotencyKey: editMutationIntentRef\.current\.key/);
   assert.match(source, /confirmExistingReceiptRemoval\(removeReceiptIds\.length\)/);
+});
+
+test("inline feedback is draft-local, derives corrected errors, and retries focus only on invalid Save", () => {
+  const source = readFileSync("client/src/pages/collection-records/useCollectionRecordEditSaveAction.ts", "utf8");
+  const edit = readFileSync("client/src/pages/collection-records/useCollectionRecordEdit.ts", "utf8");
+  assert.match(source, /const \[validationAttempt, setValidationAttempt\] = useState\(0\)/);
+  assert.match(source, /const currentValidationErrors = useMemo\(\(\) => getCollectionRecordEditFieldErrors\(/);
+  assert.match(source, /validationAttempt > 0 \? currentValidationErrors : EMPTY_VALIDATION_ERRORS/);
+  assert.match(source, /if \(validationError\) \{\s+setValidationAttempt\(\(previousAttempt\) => previousAttempt \+ 1\)/);
+  assert.equal((source.match(/setValidationAttempt\(\(previousAttempt\) => previousAttempt \+ 1\)/g) || []).length, 1);
+  assert.match(source, /const resetEditMutationIntent = useCallback\(\(\) => \{\s+editMutationIntentRef\.current = null;\s+setValidationAttempt\(0\)/);
+  assert.match(edit, /validationErrors: saveAction\.validationErrors/);
+  assert.match(edit, /validationAttempt: saveAction\.validationAttempt/);
+  for (const [start, end] of [
+    ["const handleEditDialogOpenChange", "const handleDiscardConfirmOpenChange"],
+    ["const handleDiscardChanges", "const openEditDialog"],
+    ["const openEditDialog", "const editDialog"],
+  ]) {
+    const callback = edit.slice(edit.indexOf(start), edit.indexOf(end));
+    assert.match(callback, /saveAction\.resetEditMutationIntent\(\)/);
+  }
+  const continueEdit = edit.slice(edit.indexOf("const handleDiscardConfirmOpenChange"), edit.indexOf("const handleDiscardChanges"));
+  assert.doesNotMatch(continueEdit, /resetEditMutationIntent|setValidationAttempt/);
+  assert.equal((source.match(/closeDialog\(\);\s+resetEditState\(\);\s+resetEditMutationIntent\(\)/g) || []).length, 2);
+});
+
+test("API failures retain the existing toast instead of guessing a field mapping", () => {
+  const source = readFileSync("client/src/pages/collection-records/useCollectionRecordEditSaveAction.ts", "utf8");
+  const errorHandling = source.slice(source.indexOf("} catch (error: unknown)"), source.indexOf("} finally {"));
+  assert.match(errorHandling, /title: "Failed to Update Record"/);
+  assert.match(errorHandling, /description: apiErrorDetails\.message/);
+  assert.doesNotMatch(errorHandling, /setValidationAttempt|getCollectionRecordEditFieldErrors|validationErrors/);
 });

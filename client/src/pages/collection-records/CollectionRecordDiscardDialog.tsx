@@ -30,6 +30,14 @@ export function CollectionRecordDiscardDialog({
       <AlertDialogContent
         className="sm:max-w-md"
         overlayClassName="z-[var(--z-modal-content)]"
+        onKeyDown={(event) => {
+          // A rapidly reopened layer can receive focus before Radix's document
+          // Escape listener is ready. Handle only an otherwise unhandled Escape.
+          if (event.key !== "Escape" || event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (!saving) onOpenChange(false);
+        }}
         onOpenAutoFocus={() => {
           // Radix then focuses Cancel (the safe choice). Remember the edit
           // control because this confirmation has no single trigger button.

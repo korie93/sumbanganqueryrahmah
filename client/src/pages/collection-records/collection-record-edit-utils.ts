@@ -45,7 +45,19 @@ type CollectionRecordEditValidationArgs = {
   nicknameOptions: CollectionStaffNickname[];
 };
 
-export function getCollectionRecordEditValidationError({
+export type CollectionRecordEditField =
+  | "customerName"
+  | "icNumber"
+  | "customerPhone"
+  | "accountNumber"
+  | "batch"
+  | "paymentDate"
+  | "amount"
+  | "staffNickname";
+
+export type CollectionRecordEditFieldErrors = Partial<Record<CollectionRecordEditField, string>>;
+
+export function getCollectionRecordEditFieldErrors({
   customerName,
   icNumber,
   customerPhone,
@@ -56,34 +68,36 @@ export function getCollectionRecordEditValidationError({
   staffNickname,
   editingRecord,
   nicknameOptions,
-}: CollectionRecordEditValidationArgs) {
+}: CollectionRecordEditValidationArgs): CollectionRecordEditFieldErrors {
+  // Preserve the existing validation order and messages for both inline feedback
+  // and callers that still need the first validation error only.
+  const errors: CollectionRecordEditFieldErrors = {};
   if (!customerName.trim()) {
-    return "Customer Name is required.";
+    errors.customerName = "Customer Name is required.";
   }
   if (!icNumber.trim()) {
-    return "IC Number is required.";
+    errors.icNumber = "IC Number is required.";
   }
   if (!isValidCustomerPhone(customerPhone)) {
-    return "Customer Phone Number is invalid.";
+    errors.customerPhone = "Customer Phone Number is invalid.";
   }
   if (!accountNumber.trim() && !editingRecord?.cardNumberLast4) {
-    return "Account Number or a previously matched Card Number is required.";
+    errors.accountNumber = "Account Number or a previously matched Card Number is required.";
   }
   if (!COLLECTION_BATCH_OPTIONS.includes(batch)) {
-    return "Batch is not valid.";
+    errors.batch = "Batch is not valid.";
   }
   if (!isValidDate(paymentDate)) {
-    return "Payment Date is invalid.";
-  }
-  if (isFutureDate(paymentDate)) {
-    return "Payment Date cannot be in the future.";
+    errors.paymentDate = "Payment Date is invalid.";
+  } else if (isFutureDate(paymentDate)) {
+    errors.paymentDate = "Payment Date cannot be in the future.";
   }
   if (!isPositiveAmount(amount)) {
-    return "Amount must be greater than 0.";
+    errors.amount = "Amount must be greater than 0.";
   }
 
   if (!editingRecord) {
-    return "No record selected for editing.";
+    return errors;
   }
 
   const normalizedStaffNickname = staffNickname.trim();
@@ -94,9 +108,14 @@ export function getCollectionRecordEditValidationError({
       (item) => item.nickname === normalizedStaffNickname && item.isActive,
     );
     if (!isOfficialNickname) {
-      return "Sila pilih Staff Nickname rasmi daripada senarai.";
+      errors.staffNickname = "Sila pilih Staff Nickname rasmi daripada senarai.";
     }
   }
 
-  return null;
+  return errors;
+}
+
+export function getCollectionRecordEditValidationError(args: CollectionRecordEditValidationArgs) {
+  const firstFieldError = Object.values(getCollectionRecordEditFieldErrors(args))[0];
+  return firstFieldError ?? (args.editingRecord ? null : "No record selected for editing.");
 }

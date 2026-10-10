@@ -7,7 +7,9 @@ import type {
 } from "@/lib/api";
 import {
   cloneReceiptIds,
+  getCollectionRecordEditFieldErrors,
   getCollectionRecordEditValidationError,
+  type CollectionRecordEditFieldErrors,
 } from "@/pages/collection-records/collection-record-edit-utils";
 
 const baseEditingRecord = {
@@ -103,4 +105,80 @@ test("getCollectionRecordEditValidationError permits an existing Card-only gover
     ),
     null,
   );
+});
+
+test("field errors preserve every existing rule, message, and first-error order", () => {
+  const expected: CollectionRecordEditFieldErrors = {
+    customerName: "Customer Name is required.",
+    icNumber: "IC Number is required.",
+    customerPhone: "Customer Phone Number is invalid.",
+    accountNumber: "Account Number or a previously matched Card Number is required.",
+    batch: "Batch is not valid.",
+    paymentDate: "Payment Date is invalid.",
+    amount: "Amount must be greater than 0.",
+    staffNickname: "Sila pilih Staff Nickname rasmi daripada senarai.",
+  };
+  const invalidArgs = buildValidationArgs({
+    customerName: " ", icNumber: " ", customerPhone: "123", accountNumber: " ",
+    batch: "invalid" as CollectionBatch, paymentDate: "not-a-date", amount: "0",
+    staffNickname: "staff-inactive",
+  });
+  assert.deepEqual(getCollectionRecordEditFieldErrors(invalidArgs), expected);
+  const validArgs = buildValidationArgs();
+  for (const [field, message] of Object.entries(expected)) {
+    assert.equal(getCollectionRecordEditValidationError(invalidArgs), message);
+    Object.assign(invalidArgs, { [field]: validArgs[field as keyof typeof validArgs] });
+    assert.equal(getCollectionRecordEditFieldErrors(invalidArgs)[field as keyof typeof expected], undefined);
+  }
+  assert.deepEqual(getCollectionRecordEditFieldErrors(invalidArgs), {});
+  assert.equal(getCollectionRecordEditValidationError(invalidArgs), null);
+});
+
+test("date feedback keeps invalid format before future-date validation", () => {
+  for (const [paymentDate, message] of [
+    ["9999-not-a-date", "Payment Date is invalid."],
+    ["9999-01-01", "Payment Date cannot be in the future."],
+  ]) {
+    const args = buildValidationArgs({ paymentDate });
+    assert.deepEqual(getCollectionRecordEditFieldErrors(args), { paymentDate: message });
+    assert.equal(getCollectionRecordEditValidationError(args), message);
+  }
+});
+
+test("field feedback preserves nickname exceptions and existing card-only records", () => {
+  for (const args of [
+    buildValidationArgs({ staffNickname: " staff-b " }),
+    buildValidationArgs({
+      nicknameOptions: [], staffNickname: "legacy-staff",
+      editingRecord: { ...baseEditingRecord, collectionStaffNickname: "legacy-staff" },
+    }),
+    buildValidationArgs({
+      accountNumber: "", editingRecord: { ...baseEditingRecord, cardNumberLast4: "5678" },
+    }),
+  ]) {
+    assert.deepEqual(getCollectionRecordEditFieldErrors(args), {});
+    assert.equal(getCollectionRecordEditValidationError(args), null);
+  }
+});
+
+test("missing-record errors remain generic and retain existing priority", () => {
+  const args = buildValidationArgs({ editingRecord: null, staffNickname: "unlisted" });
+  assert.deepEqual(getCollectionRecordEditFieldErrors(args), {});
+  assert.equal(getCollectionRecordEditValidationError(args), "No record selected for editing.");
+  assert.deepEqual(getCollectionRecordEditFieldErrors({ ...args, amount: "0" }), {
+    amount: "Amount must be greater than 0.",
+  });
+  assert.equal(getCollectionRecordEditValidationError({ ...args, amount: "0" }), "Amount must be greater than 0.");
+});
+
+test("field feedback contains fixed messages, never submitted sensitive field values", () => {
+  const args = buildValidationArgs({
+    customerPhone: "synthetic-private-phone", paymentDate: "synthetic-private-date",
+    amount: "synthetic-private-amount", staffNickname: "synthetic-private-nickname",
+  });
+  const messages = JSON.stringify(getCollectionRecordEditFieldErrors(args));
+  assert.doesNotMatch(messages, /synthetic-private/);
+  assert.deepEqual(Object.keys(getCollectionRecordEditFieldErrors(args)), [
+    "customerPhone", "paymentDate", "amount", "staffNickname",
+  ]);
 });

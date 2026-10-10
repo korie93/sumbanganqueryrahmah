@@ -164,6 +164,8 @@ export function useCollectionRecordEdit({
       discardConfirmOpen,
       savingEdit: saveAction.savingEdit,
       changeReview: saveAction.changeReview,
+      validationErrors: saveAction.validationErrors,
+      validationAttempt: saveAction.validationAttempt,
       loadingNicknames,
       editingRecord,
       canManageManualSettlement,

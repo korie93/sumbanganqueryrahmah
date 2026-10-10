@@ -13,7 +13,7 @@ function syntheticRecord(index: number, receiptCount = 0) {
   return {
     id, customerName: `Synthetic Customer ${index + 1}`, icNumber: "880101105432",
     customerPhone: "0123456789", accountNumber: `SYNTHETIC-ACCOUNT-${index + 1}`,
-    cardNumber: "00009007199254740993", cardNumberLast4: "0993", batch: "P10",
+    cardNumber: "00009007199254740993", cardNumberLast4: "0993" as string | null, batch: "P10",
     paymentDate: "2026-10-04", amount: "1250.00", receiptFile: null,
     receipts: Array.from({ length: receiptCount }, (_, receiptIndex) => ({
       id: `${id}-receipt-${receiptIndex}`, collectionRecordId: id,
@@ -37,6 +37,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   count?: number; role?: "admin" | "manager"; theme?: "light" | "dark";
   loading?: boolean; receipts?: number; paginate?: boolean; receiptFileName?: string;
   holdSave?: boolean; saveOutcome?: "failure" | "conflict";
+  recordOverrides?: Partial<ReturnType<typeof syntheticRecord>>;
 } = {}) {
   expect(baseURL).toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -44,7 +45,9 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   expect(new URL(origin).protocol).toBe("http:");
   expect(new URL(origin).port).not.toBe("");
   const role = options.role ?? "admin";
-  const records = Array.from({ length: options.count ?? 20 }, (_, index) => syntheticRecord(index, options.receipts));
+  const records = Array.from({ length: options.count ?? 20 }, (_, index) => ({
+    ...syntheticRecord(index, options.receipts), ...options.recordOverrides,
+  }));
   if (options.receiptFileName) for (const record of records) for (const receipt of record.receipts) {
     receipt.originalFileName = options.receiptFileName;
   }
@@ -212,6 +215,19 @@ async function expectNoEditChanges(dialog: Locator) {
   await expect(save).toHaveAccessibleDescription("Tiada perubahan untuk disimpan.");
   await expect(dialog.getByText("Tiada perubahan untuk disimpan.", { exact: true })).toBeVisible();
   await expect(dialog.getByTestId("edit-collection-change-summary")).toHaveCount(0);
+}
+
+async function expectEditFieldError(dialog: Locator, field: Locator, message: string) {
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await expect(field).toHaveAccessibleDescription(message);
+  const error = dialog.getByText(message, { exact: true });
+  await expect(error).toBeVisible();
+  await expect(field).toHaveCSS("border-top-color", await error.evaluate((element) => getComputedStyle(element).color));
+}
+
+async function expectEditFieldCorrected(field: Locator) {
+  await expect(field).not.toHaveAttribute("aria-invalid", "true");
+  await expect(field).not.toHaveAttribute("aria-describedby", /-error(?:\s|$)/);
 }
 
 async function expectUnsavedConfirmation(page: Page) {
@@ -727,6 +743,242 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
 }
 
 for (const theme of ["light", "dark"] as const) for (const width of [1366, 390]) {
+  test(`Collection inline validation ${theme} ${width}px shows field errors only after Save and focuses each correction`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1, theme });
+    await openRecords(page);
+    const dialog = await openFirstEdit(page);
+    const name = dialog.getByLabel("Customer Name", { exact: true });
+    const ic = dialog.getByLabel("IC Number", { exact: true });
+    const phone = dialog.getByLabel("Customer Phone Number", { exact: true });
+    const amount = dialog.getByLabel("Amount (RM)", { exact: true });
+    const save = dialog.getByRole("button", { name: "Save", exact: true });
+    const body = dialog.locator("#edit-collection-fields");
+    await expect(dialog.locator('[aria-invalid="true"]')).toHaveCount(0);
+    await name.fill("");
+    await ic.fill("");
+    await phone.fill("12");
+    await amount.fill("0");
+    await expect(dialog.locator('[aria-invalid="true"]')).toHaveCount(0);
+    await expect(dialog.getByText("Customer Name is required.", { exact: true })).toHaveCount(0);
+    await save.click();
+    await expectEditFieldError(dialog, name, "Customer Name is required.");
+    await expectEditFieldError(dialog, ic, "IC Number is required.");
+    await expectEditFieldError(dialog, phone, "Customer Phone Number is invalid.");
+    await expectEditFieldError(dialog, amount, "Amount must be greater than 0.");
+    await expect(dialog.locator('[aria-invalid="true"]')).toHaveCount(4);
+    await expect(name).toBeFocused();
+    await expect(name).toBeInViewport();
+    await expect(page.getByText("Validation Error", { exact: true })).toHaveCount(0);
+    expect(fixture.mutations).toEqual([]);
+    await assertPageFits(page);
+    await testInfo.attach(`inline-errors-${theme}-${width}`, { body: await page.screenshot(), contentType: "image/png" });
+
+    await name.fill("Synthetic corrected customer");
+    await expectEditFieldCorrected(name);
+    await expect(name).toBeFocused();
+    await expect(ic).not.toBeFocused();
+    await body.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await save.click();
+    await expect(ic).toBeFocused();
+    await expect(ic).toBeInViewport();
+    await ic.fill("880101105432");
+    await expectEditFieldCorrected(ic);
+    await expect(ic).toBeFocused();
+    await expect(phone).not.toBeFocused();
+    await save.click();
+    await expect(phone).toBeFocused();
+    await expect(phone).toBeInViewport();
+    // Repeating the exact same invalid Save still refocuses the first error.
+    await amount.focus();
+    await save.click();
+    await expect(phone).toBeFocused();
+    await phone.fill("0123456789");
+    await expectEditFieldCorrected(phone);
+    await expect(phone).toBeFocused();
+    await save.click();
+    await expect(amount).toBeFocused();
+    await expect(amount).toBeInViewport();
+    await expect(save).toBeInViewport();
+    await testInfo.attach(`inline-amount-error-${theme}-${width}`, { body: await page.screenshot(), contentType: "image/png" });
+    expect(fixture.mutations).toEqual([]);
+    await amount.fill("1251.25");
+    await expectEditFieldCorrected(amount);
+    await expect(dialog.locator('[aria-invalid="true"]')).toHaveCount(0);
+    await save.click();
+    await expect(dialog).toHaveCount(0);
+    expect(fixture.saves).toBe(1);
+    const mutation = fixture.mutations[0]!;
+    expect(mutation.fields.customerName).toEqual(["Synthetic corrected customer"]);
+    expect(mutation.fields.amount).toEqual(["1251.25"]);
+    expect(mutation.fields.expectedUpdatedAt).toEqual([now]);
+    expect(mutation.idempotencyKey).not.toBe("");
+    expect(mutation.idempotencyFingerprint).not.toBe("");
+    const metadata = JSON.parse(mutation.fields.existingReceiptMetadata![0]!);
+    expect(metadata[0].receiptId).toBe("polish-record-1-receipt-0");
+    expect(metadata[0].receiptReference).toBe("SYNTHETIC-0");
+    expect(mutation.files).toEqual([]);
+    const reopened = await openFirstEdit(page);
+    await expect(reopened.locator('[aria-invalid="true"]')).toHaveCount(0);
+    await reopened.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const width of [1366, 390]) test(`Collection inline validation ${width}px continues errors and receipt drafts but clears them after discard`, async ({ page, baseURL }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1 });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const name = dialog.getByLabel("Customer Name", { exact: true });
+  const reference = dialog.getByLabel("Existing receipt reference for Synthetic receipt 1.png", { exact: true });
+  await name.fill("");
+  await reference.fill("SYNTHETIC-UNSAVED-REFERENCE");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expectEditFieldError(dialog, name, "Customer Name is required.");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  const confirmation = await expectUnsavedConfirmation(page);
+  await confirmation.getByRole("button", { name: "Teruskan Edit", exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(name).toHaveValue("");
+  await expectEditFieldError(dialog, name, "Customer Name is required.");
+  await expect(reference).toHaveValue("SYNTHETIC-UNSAVED-REFERENCE");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(name).toBeFocused();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discardPendingEdit(page);
+  const reopened = await openFirstEdit(page);
+  await expect(reopened.locator('[aria-invalid="true"]')).toHaveCount(0);
+  await expect(name).toHaveValue("Synthetic Customer 1");
+  await expect(reference).toHaveValue("SYNTHETIC-0");
+  await expectNoEditChanges(reopened);
+  await name.fill("");
+  await expect(reopened.locator('[aria-invalid="true"]')).toHaveCount(0);
+  await name.fill("Synthetic Customer 1");
+  await reopened.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(fixture.mutations).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection inline validation preserves required phone and matched-card account exception", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { count: 1 });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const phone = dialog.getByLabel("Customer Phone Number", { exact: true });
+  const account = dialog.getByLabel("Account Number", { exact: true });
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
+  await phone.fill("");
+  await account.fill("");
+  await save.click();
+  await expectEditFieldError(dialog, phone, "Customer Phone Number is invalid.");
+  await expect(phone).toBeFocused();
+  await expectEditFieldCorrected(account);
+  await expect(dialog.getByText("Account Number or a previously matched Card Number is required.", { exact: true })).toHaveCount(0);
+  expect(fixture.mutations).toEqual([]);
+  await phone.fill("0123456789");
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.saves).toBe(1);
+  expect(fixture.mutations[0]!.fields.accountNumber).toEqual([""]);
+  expect(fixture.mutations[0]!.fields.customerPhone).toEqual(["0123456789"]);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection inline validation requires an account when no matched card exists", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { count: 1, recordOverrides: { cardNumber: "", cardNumberLast4: null } });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const account = dialog.getByLabel("Account Number", { exact: true });
+  await account.fill("");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expectEditFieldError(dialog, account, "Account Number or a previously matched Card Number is required.");
+  await expect(account).toBeFocused();
+  expect(fixture.mutations).toEqual([]);
+  await account.fill("SYNTHETIC-CORRECTED-ACCOUNT");
+  await expectEditFieldCorrected(account);
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.saves).toBe(1);
+  expect(fixture.mutations[0]!.fields.accountNumber).toEqual(["SYNTHETIC-CORRECTED-ACCOUNT"]);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection inline validation focuses a future date without opening its calendar and preserves batch selection", async ({ page, baseURL }) => {
+  // Invalid batches are rejected by the response contract before rendering;
+  // unit tests cover that defensive validator branch. Keep HTTP fixtures valid.
+  const fixture = await installFixture(page, baseURL, { count: 1, recordOverrides: { paymentDate: "2026-10-06" } });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const batch = dialog.getByRole("combobox", { name: "Batch", exact: true });
+  const date = dialog.getByTestId("edit-collection-payment-date");
+  await dialog.getByLabel("Customer Name", { exact: true }).fill("Synthetic corrected legacy record");
+  await expect(dialog.locator('[aria-invalid="true"]')).toHaveCount(0);
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
+  await batch.click();
+  await page.getByRole("option", { name: "P25", exact: true }).click();
+  await expectEditFieldCorrected(batch);
+  await expect(batch).toBeFocused();
+  await save.click();
+  await expectEditFieldError(dialog, date, "Payment Date cannot be in the future.");
+  await expect(date).toBeFocused();
+  await expect(date).toBeInViewport();
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await expect(page.getByRole("grid")).toHaveCount(0);
+  expect(fixture.mutations).toEqual([]);
+  await date.click();
+  await page.getByRole("grid", { name: "October 2026", exact: true }).getByRole("gridcell", { name: "4", exact: true }).click();
+  await expectEditFieldCorrected(date);
+  await expect(date).toBeFocused();
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.saves).toBe(1);
+  expect(fixture.mutations[0]!.fields.batch).toEqual(["P25"]);
+  expect(fixture.mutations[0]!.fields.paymentDate).toEqual(["2026-10-04"]);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const { theme, viewport } of [
+  { theme: "light" as const, viewport: { width: 320, height: 844 } },
+  { theme: "dark" as const, viewport: { width: 740, height: 360 } },
+]) test(`Collection inline validation ${theme} messages and footer fit ${viewport.width}x${viewport.height}`, async ({ page, baseURL }, testInfo) => {
+  await page.setViewportSize(viewport);
+  const fixture = await installFixture(page, baseURL, { count: 1, theme, recordOverrides: { cardNumber: "", cardNumberLast4: null } });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const account = dialog.getByLabel("Account Number", { exact: true });
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
+  await account.fill("");
+  await save.click();
+  await expectEditFieldError(dialog, account, "Account Number or a previously matched Card Number is required.");
+  await expect(account).toBeFocused();
+  await expect(account).toBeInViewport();
+  const error = dialog.getByText("Account Number or a previously matched Card Number is required.", { exact: true });
+  await expect(error).toBeInViewport();
+  const body = dialog.locator("#edit-collection-fields");
+  expect(await body.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  expect(await error.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await expect(save).toBeInViewport();
+  await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
+  const rect = await bounds(dialog);
+  expect(rect.x).toBeGreaterThanOrEqual(0);
+  expect(rect.y).toBeGreaterThanOrEqual(0);
+  expect(rect.x + rect.width).toBeLessThanOrEqual(viewport.width + 1);
+  expect(rect.y + rect.height).toBeLessThanOrEqual(viewport.height + 1);
+  await assertPageFits(page);
+  await testInfo.attach(`inline-validation-layout-${theme}-${viewport.width}x${viewport.height}`, { body: await page.screenshot(), contentType: "image/png" });
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discardPendingEdit(page);
+  expect(fixture.mutations).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const theme of ["light", "dark"] as const) for (const width of [1366, 390]) {
   test(`Collection edit ${theme} ${width}px reviews only changed fields and disables reverted Save`, async ({ page, baseURL }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });
     const fixture = await installFixture(page, baseURL, { count: 1, theme });
@@ -1098,6 +1350,8 @@ for (const outcome of ["success", "failure", "conflict"] as const) test(`Collect
     if (outcome === "failure") {
       await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
       await expect(name).toHaveValue("Synthetic gated save");
+      await expect(dialog.locator('[aria-invalid="true"]')).toHaveCount(0);
+      await expect(page.getByText("Failed to Update Record", { exact: true })).toBeVisible();
       await expect(confirmation).toHaveCount(0);
       await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
       await discardPendingEdit(page);
