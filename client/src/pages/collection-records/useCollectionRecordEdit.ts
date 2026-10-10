@@ -10,6 +10,7 @@ import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { COLLECTION_BATCH_OPTIONS, getTodayIsoDate } from "@/pages/collection/utils";
 import { useCollectionRecordEditReceiptState } from "@/pages/collection-records/useCollectionRecordEditReceiptState";
 import { useCollectionRecordEditSaveAction } from "@/pages/collection-records/useCollectionRecordEditSaveAction";
+import { getCollectionRecordEditCloseDecision } from "./collection-record-edit-close-policy";
 
 type UseCollectionRecordEditArgs = {
   canManageManualSettlement: boolean;
@@ -28,6 +29,7 @@ export function useCollectionRecordEdit({
 }: UseCollectionRecordEditArgs) {
   const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
   const [editOpen, setEditOpen] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CollectionRecord | null>(null);
   const [editCustomerName, setEditCustomerName] = useState("");
   const [editIcNumber, setEditIcNumber] = useState("");
@@ -57,10 +59,12 @@ export function useCollectionRecordEdit({
   });
 
   const closeEditDialog = useCallback(() => {
+    setDiscardConfirmOpen(false);
     setEditOpen(false);
   }, []);
 
   const resetEditState = useCallback(() => {
+    setDiscardConfirmOpen(false);
     setEditingRecord(null);
     setEditCustomerName("");
     setEditIcNumber("");
@@ -96,16 +100,50 @@ export function useCollectionRecordEdit({
   });
 
   const handleEditDialogOpenChange = useCallback((open: boolean) => {
-    setEditOpen(open);
     if (open) {
+      setDiscardConfirmOpen(false);
+      setEditOpen(true);
       return;
     }
 
+    const decision = getCollectionRecordEditCloseDecision({
+      hasChanges: saveAction.changeReview.hasChanges,
+      savingEdit: saveAction.savingEdit,
+    });
+    if (decision === "ignore") return;
+    if (decision === "confirm") {
+      setDiscardConfirmOpen(true);
+      return;
+    }
+
+    closeEditDialog();
     resetEditState();
     saveAction.resetEditMutationIntent();
-  }, [resetEditState, saveAction]);
+  }, [closeEditDialog, resetEditState, saveAction]);
+
+  const handleDiscardConfirmOpenChange = useCallback((open: boolean) => {
+    if (saveAction.savingEdit || open) return;
+    // Continuing the edit (including Escape in the confirmation) preserves all
+    // field values, receipt drafts, pending files, and the current save intent.
+    setDiscardConfirmOpen(false);
+  }, [saveAction.savingEdit]);
+
+  const handleDiscardChanges = useCallback(() => {
+    if (!discardConfirmOpen) return;
+    const decision = getCollectionRecordEditCloseDecision({
+      hasChanges: saveAction.changeReview.hasChanges,
+      savingEdit: saveAction.savingEdit,
+      discardConfirmed: true,
+    });
+    if (decision !== "close") return;
+
+    closeEditDialog();
+    resetEditState();
+    saveAction.resetEditMutationIntent();
+  }, [closeEditDialog, discardConfirmOpen, resetEditState, saveAction]);
 
   const openEditDialog = useCallback((record: CollectionRecord) => {
+    setDiscardConfirmOpen(false);
     setEditingRecord(record);
     setEditCustomerName(record.customerName);
     setEditIcNumber(record.icNumber);
@@ -123,6 +161,7 @@ export function useCollectionRecordEdit({
   const editDialog = useMemo(
     () => ({
       open: editOpen,
+      discardConfirmOpen,
       savingEdit: saveAction.savingEdit,
       changeReview: saveAction.changeReview,
       loadingNicknames,
@@ -145,6 +184,8 @@ export function useCollectionRecordEdit({
       editRemovedReceiptIds: receiptState.editRemovedReceiptIds,
       editReceiptInputRef: receiptState.editReceiptInputRef,
       onOpenChange: handleEditDialogOpenChange,
+      onDiscardConfirmOpenChange: handleDiscardConfirmOpenChange,
+      onDiscardChanges: handleDiscardChanges,
       onCustomerNameChange: setEditCustomerName,
       onIcNumberChange: setEditIcNumber,
       onCustomerPhoneChange: setEditCustomerPhone,
@@ -169,6 +210,7 @@ export function useCollectionRecordEdit({
     }),
     [
       editAccountNumber,
+      discardConfirmOpen,
       canManageManualSettlement,
       editAmount,
       editBatch,
@@ -180,6 +222,8 @@ export function useCollectionRecordEdit({
       editStaffNickname,
       editingRecord,
       handleEditDialogOpenChange,
+      handleDiscardConfirmOpenChange,
+      handleDiscardChanges,
       loadingNicknames,
       maxPaymentDate,
       nicknameOptions,

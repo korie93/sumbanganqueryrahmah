@@ -38,3 +38,13 @@ test("bottom sheet viewport contract is centralized and does not use raw dvh", (
   assert.match(sheetSource, /viewportSafeSheetMaxHeightClassName/);
   assert.doesNotMatch(sheetSource, /max-h-\[[^\]]*dvh/);
 });
+
+test("nested alert backdrops can opt into the parent layer without changing shared defaults", () => {
+  const source = readFileSync(path.resolve(__dirname, "alert-dialog.tsx"), "utf8");
+  assert.match(source, /overlayClassName\?: string/);
+  assert.match(source, /\(\{ className, overlayClassName, \.\.\.props \}, ref\)/);
+  assert.match(source, /<AlertDialogOverlay className=\{overlayClassName\} \/>/);
+  assert.match(source, /z-\[var\(--z-modal-overlay\)\]/);
+  assert.match(source, /z-\[var\(--z-modal-content\)\]/);
+  assert.doesNotMatch(source, /overlayClassName\s*=/); // Overrides are optional, never a new global default.
+});

@@ -36,6 +36,7 @@ function syntheticRecord(index: number, receiptCount = 0) {
 async function installFixture(page: Page, baseURL: string | undefined, options: {
   count?: number; role?: "admin" | "manager"; theme?: "light" | "dark";
   loading?: boolean; receipts?: number; paginate?: boolean; receiptFileName?: string;
+  holdSave?: boolean; saveOutcome?: "failure" | "conflict";
 } = {}) {
   expect(baseURL).toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -48,7 +49,8 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     receipt.originalFileName = options.receiptFileName;
   }
   const fixture = {
-    unexpected: [] as string[], errors: [] as string[], receiptViews: [] as string[], saves: 0, release: () => {},
+    unexpected: [] as string[], errors: [] as string[], receiptViews: [] as string[], saves: 0,
+    release: () => {}, releaseSave: () => {},
     mutations: [] as Array<{
       fields: Record<string, string[]>;
       files: Array<{ field: string; name: string; type: string; size: number }>;
@@ -57,6 +59,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     }>,
   };
   const gate = new Promise<void>((resolve) => { fixture.release = resolve; });
+  const saveGate = new Promise<void>((resolve) => { fixture.releaseSave = resolve; });
   const respond = (route: Route, body: unknown, status = 200) => route.fulfill({
     status, json: body, headers: { "Cache-Control": "no-store" },
   });
@@ -169,6 +172,13 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
       expect(idempotencyFingerprint).not.toBe("");
       fixture.mutations.push({ fields, files, idempotencyKey, idempotencyFingerprint });
       fixture.saves++;
+      if (options.holdSave) await saveGate;
+      if (options.saveOutcome === "failure") return respond(route, {
+        ok: false, code: "SYNTHETIC_VALIDATION_ERROR", message: "Synthetic save rejected; draft remains available.",
+      }, 422);
+      if (options.saveOutcome === "conflict") return respond(route, {
+        ok: false, code: "COLLECTION_RECORD_VERSION_CONFLICT", message: "Synthetic record changed elsewhere.",
+      }, 409);
       records[0] = { ...records[0]!, customerName: fields.customerName![0]! };
       return respond(route, { ok: true, record: records[0] });
     }
@@ -202,6 +212,22 @@ async function expectNoEditChanges(dialog: Locator) {
   await expect(save).toHaveAccessibleDescription("Tiada perubahan untuk disimpan.");
   await expect(dialog.getByText("Tiada perubahan untuk disimpan.", { exact: true })).toBeVisible();
   await expect(dialog.getByTestId("edit-collection-change-summary")).toHaveCount(0);
+}
+
+async function expectUnsavedConfirmation(page: Page) {
+  const confirmation = page.getByRole("alertdialog", { name: "Perubahan belum disimpan", exact: true });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toHaveAccessibleDescription("Perubahan pada rekod dan resit belum disimpan. Buang perubahan ini?");
+  await expect(confirmation.getByRole("button", { name: "Teruskan Edit", exact: true })).toBeFocused();
+  return confirmation;
+}
+
+async function discardPendingEdit(page: Page) {
+  const confirmation = await expectUnsavedConfirmation(page);
+  await confirmation.getByRole("button", { name: "Buang Perubahan", exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Edit Collection Record", exact: true })).toHaveCount(0);
+  await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
 }
 
 async function assertPageFits(page: Page) {
@@ -678,6 +704,7 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
     await assertPageFits(page);
     await testInfo.attach(`edit-${viewport.width}x${viewport.height}`, { body: await page.screenshot(), contentType: "image/png" });
     await cancel.click();
+    await discardPendingEdit(page);
     await expect(dialog).toHaveCount(0);
     await expect(launcher).toBeFocused();
     expect(fixture.saves).toBe(0);
@@ -855,8 +882,333 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [{ width:
     await assertPageFits(page);
     await testInfo.attach(`edit-review-long-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: "image/png" });
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await discardPendingEdit(page);
     expect(fixture.saves).toBe(0);
     expect(fixture.unexpected).toEqual([]);
     expect(fixture.errors).toEqual([]);
   });
 }
+
+for (const theme of ["light", "dark"] as const) for (const viewport of [{ width: 1366, height: 768 }, { width: 390, height: 844 }]) {
+  test(`Collection unsaved ${theme} ${viewport.width}px protects every dismiss route and restores focus`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const fixture = await installFixture(page, baseURL, { count: 1, theme });
+    await openRecords(page);
+    const launcher = page.getByRole("button", { name: "Actions for record 1", exact: true });
+    const dialog = await openFirstEdit(page);
+    const customerName = dialog.getByLabel("Customer Name", { exact: true });
+    await customerName.fill("Synthetic unsaved draft");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    const confirmation = await expectUnsavedConfirmation(page);
+    await expect(confirmation.getByRole("button", { name: "Teruskan Edit", exact: true })).toBeInViewport();
+    await expect(confirmation.getByRole("button", { name: "Buang Perubahan", exact: true })).toBeInViewport();
+    expect(await confirmation.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    const confirmationBounds = await bounds(confirmation);
+    expect(confirmationBounds.x).toBeGreaterThanOrEqual(0);
+    expect(confirmationBounds.y).toBeGreaterThanOrEqual(0);
+    expect(confirmationBounds.x + confirmationBounds.width).toBeLessThanOrEqual(viewport.width + 1);
+    expect(confirmationBounds.y + confirmationBounds.height).toBeLessThanOrEqual(viewport.height + 1);
+    await assertPageFits(page);
+    await testInfo.attach(`edit-unsaved-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: "image/png" });
+    // The confirmation is genuinely modal, including when its overlay is clicked.
+    await page.mouse.click(2, 2);
+    await expect(confirmation).toBeVisible();
+    expect(fixture.saves).toBe(0);
+    await confirmation.getByRole("button", { name: "Teruskan Edit", exact: true }).click();
+    await expect(confirmation).toHaveCount(0);
+    await expect(customerName).toHaveValue("Synthetic unsaved draft");
+    await expect(dialog).toHaveCSS("pointer-events", "auto");
+    await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expectUnsavedConfirmation(page);
+    // Escape dismisses only the confirmation, preserving the original draft.
+    await page.keyboard.press("Escape");
+    await expect(confirmation).toHaveCount(0);
+    await expect(customerName).toHaveValue("Synthetic unsaved draft");
+    await expect(dialog).toHaveCSS("pointer-events", "auto");
+    await page.keyboard.press("Escape");
+    await expectUnsavedConfirmation(page);
+    await confirmation.getByRole("button", { name: "Teruskan Edit", exact: true }).click();
+    await expect(confirmation).toHaveCount(0);
+    await page.mouse.click(2, 2);
+    await discardPendingEdit(page);
+    await expect(launcher).toBeFocused();
+    expect(fixture.saves).toBe(0);
+    expect(fixture.mutations).toEqual([]);
+
+    // Reopening does not resurrect abandoned draft data or leave a pointer lock.
+    await openFirstEdit(page);
+    await expect(customerName).toHaveValue("Synthetic Customer 1");
+    await expectNoEditChanges(dialog);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(confirmation).toHaveCount(0);
+    await expect(launcher).toBeFocused();
+    await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
+    await page.getByRole("button", { name: "View All", exact: true }).click();
+    const allRecords = page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection", exact: true });
+    await expect(allRecords).toBeVisible();
+    await allRecords.getByRole("button", { name: "Close", exact: true }).first().click();
+    await expect(allRecords).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const width of [1366, 390]) test(`Collection unsaved ${width}px pristine cosmetic and reverted drafts close directly`, async ({ page, baseURL }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1 });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const confirmation = page.getByRole("alertdialog", { name: "Perubahan belum disimpan", exact: true });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(confirmation).toHaveCount(0);
+  await openFirstEdit(page);
+  await dialog.getByLabel("Customer Name", { exact: true }).fill("  Synthetic Customer 1  ");
+  await dialog.getByLabel("Amount (RM)", { exact: true }).fill("1250");
+  await expectNoEditChanges(dialog);
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(confirmation).toHaveCount(0);
+  await openFirstEdit(page);
+  const reference = dialog.getByLabel("Existing receipt reference for Synthetic receipt 1.png", { exact: true });
+  await reference.fill("SYNTHETIC-CHANGED");
+  await reference.fill("SYNTHETIC-0");
+  await dialog.getByRole("button", { name: "Remove", exact: true }).click();
+  await dialog.getByRole("button", { name: "Undo Remove", exact: true }).click();
+  await expectNoEditChanges(dialog);
+  await page.mouse.click(2, 2);
+  await expect(dialog).toHaveCount(0);
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const width of [1366, 390]) test(`Collection unsaved ${width}px preserves receipt metadata removals and uploads until discard`, async ({ page, baseURL }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1 });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const reference = dialog.getByLabel("Existing receipt reference for Synthetic receipt 1.png", { exact: true });
+  await reference.fill("SYNTHETIC-UNSAVED-REFERENCE");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  let confirmation = await expectUnsavedConfirmation(page);
+  await confirmation.getByRole("button", { name: "Teruskan Edit", exact: true }).click();
+  await expect(reference).toHaveValue("SYNTHETIC-UNSAVED-REFERENCE");
+  await reference.fill("SYNTHETIC-0");
+  await dialog.getByRole("button", { name: "Remove", exact: true }).click();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  confirmation = await expectUnsavedConfirmation(page);
+  await confirmation.getByRole("button", { name: "Teruskan Edit", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Undo Remove", exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Undo Remove", exact: true }).click();
+  await dialog.locator('input[name="collectionReceiptUpload"]').setInputFiles({
+    name: "Synthetic unsaved upload.png", mimeType: "image/png", buffer: receiptPng,
+  });
+  const pending = dialog.getByTestId("receipt-draft-card");
+  await pending.getByLabel("Reference / no. transaksi", { exact: true }).fill("SYNTHETIC-UPLOAD-REFERENCE");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expectUnsavedConfirmation(page);
+  await page.keyboard.press("Escape");
+  await expect(pending).toHaveCount(1);
+  await expect(pending.getByLabel("Reference / no. transaksi", { exact: true })).toHaveValue("SYNTHETIC-UPLOAD-REFERENCE");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discardPendingEdit(page);
+  await openFirstEdit(page);
+  await expect(reference).toHaveValue("SYNTHETIC-0");
+  await expect(dialog.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
+  await expect(pending).toHaveCount(0);
+  await expectNoEditChanges(dialog);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.mutations).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection unsaved nested receipt select and calendar close without discarding their parent draft", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1 });
+  await openRecords(page);
+  const dialog = await openFirstEdit(page);
+  const name = dialog.getByLabel("Customer Name", { exact: true });
+  const confirmation = page.getByRole("alertdialog", { name: "Perubahan belum disimpan", exact: true });
+  await name.fill("Synthetic nested draft");
+  const batch = dialog.getByRole("combobox", { name: "Batch", exact: true });
+  await batch.click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await expect(confirmation).toHaveCount(0);
+  await expect(batch).toBeFocused();
+  const paymentDate = dialog.getByTestId("edit-collection-payment-date");
+  await paymentDate.click();
+  await expect(page.getByRole("grid")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("grid")).toHaveCount(0);
+  await expect(confirmation).toHaveCount(0);
+  await expect(paymentDate).toBeFocused();
+  const receipt = dialog.getByRole("button", { name: "View", exact: true });
+  await receipt.click();
+  const preview = await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(confirmation).toHaveCount(0);
+  await expect(receipt).toBeFocused();
+  await expect(name).toHaveValue("Synthetic nested draft");
+  await expect(dialog).toHaveCSS("pointer-events", "auto");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discardPendingEdit(page);
+  expect(fixture.receiptViews).toEqual(["polish-record-1"]);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const outcome of ["success", "failure", "conflict"] as const) test(`Collection unsaved saving gate preserves ${outcome} close behavior`, async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, {
+    count: 1, holdSave: true, ...(outcome !== "success" ? { saveOutcome: outcome } : {}),
+  });
+  try {
+    await openRecords(page);
+    const dialog = await openFirstEdit(page);
+    const name = dialog.getByLabel("Customer Name", { exact: true });
+    const confirmation = page.getByRole("alertdialog", { name: "Perubahan belum disimpan", exact: true });
+    await name.fill("Synthetic gated save");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(() => fixture.saves).toBe(1);
+    await expect(dialog.getByRole("button", { name: "Saving...", exact: true })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+    await expect(name).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    await expect(confirmation).toHaveCount(0);
+    const close = dialog.getByRole("button", { name: "Close", exact: true });
+    if (await close.isEnabled()) await close.click();
+    await expect(dialog).toBeVisible();
+    await expect(confirmation).toHaveCount(0);
+    await page.mouse.click(2, 2);
+    await expect(dialog).toBeVisible();
+    await expect(confirmation).toHaveCount(0);
+    fixture.releaseSave();
+    if (outcome === "failure") {
+      await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+      await expect(name).toHaveValue("Synthetic gated save");
+      await expect(confirmation).toHaveCount(0);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await discardPendingEdit(page);
+    } else {
+      await expect(dialog).toHaveCount(0);
+      await expect(confirmation).toHaveCount(0);
+      await expect(page.getByText(outcome === "success" ? "Synthetic gated save" : "Synthetic Customer 1", { exact: true })).toBeVisible();
+    }
+    await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
+    expect(fixture.saves).toBe(1);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  } finally { fixture.releaseSave(); }
+});
+
+test("Collection unsaved repeated confirmation handoffs retain safe focus and draft interaction", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { count: 1 });
+  await openRecords(page);
+  const launcher = page.getByRole("button", { name: "Actions for record 1", exact: true });
+  const dialog = await openFirstEdit(page);
+  const name = dialog.getByLabel("Customer Name", { exact: true });
+  const confirmation = page.getByRole("alertdialog", { name: "Perubahan belum disimpan", exact: true });
+  await name.fill("Synthetic repeated draft");
+  for (let iteration = 0; iteration < 8; iteration++) {
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expectUnsavedConfirmation(page);
+    await expect(confirmation).toHaveCSS("pointer-events", "auto");
+    await page.keyboard.press("Escape");
+    await expect(confirmation).toHaveCount(0);
+    await expect(dialog).toHaveCSS("pointer-events", "auto");
+    await expect(name).toHaveValue("Synthetic repeated draft");
+    await page.mouse.click(2, 2);
+    await expectUnsavedConfirmation(page);
+    await expect(confirmation).toHaveCSS("pointer-events", "auto");
+    await confirmation.getByRole("button", { name: "Teruskan Edit", exact: true }).click();
+    await expect(confirmation).toHaveCount(0);
+    await expect(dialog).toHaveCSS("pointer-events", "auto");
+    await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await expect(name).toHaveValue("Synthetic repeated draft");
+    expect(fixture.mutations).toEqual([]);
+  }
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discardPendingEdit(page);
+  await expect(launcher).toBeFocused();
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const viewport of [{ width: 320, height: 844 }, { width: 740, height: 360 }]) {
+  test(`Collection unsaved confirmation stays reachable at ${viewport.width}x${viewport.height}`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const theme = viewport.width === 320 ? "light" : "dark";
+    const fixture = await installFixture(page, baseURL, { count: 1, theme });
+    await openRecords(page);
+    const launcher = page.getByRole("button", { name: "Actions for record 1", exact: true });
+    const dialog = await openFirstEdit(page);
+    await dialog.getByLabel("Customer Name", { exact: true }).fill("Synthetic narrow confirmation");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    const confirmation = await expectUnsavedConfirmation(page);
+    const rect = await bounds(confirmation);
+    expect(rect.x).toBeGreaterThanOrEqual(0);
+    expect(rect.y).toBeGreaterThanOrEqual(0);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(viewport.width + 1);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(viewport.height + 1);
+    expect(await confirmation.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await expect(confirmation.getByRole("button", { name: "Teruskan Edit", exact: true })).toBeInViewport();
+    await expect(confirmation.getByRole("button", { name: "Buang Perubahan", exact: true })).toBeInViewport();
+    await assertPageFits(page);
+    await testInfo.attach(`edit-unsaved-${theme}-${viewport.width}x${viewport.height}`, {
+      body: await page.screenshot(), contentType: "image/png",
+    });
+    await discardPendingEdit(page);
+    await expect(launcher).toBeFocused();
+    expect(fixture.saves).toBe(0);
+    expect(fixture.mutations).toEqual([]);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+test.describe("Collection unsaved actual touch dismissal", () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test("Collection unsaved touch outside preserves safe focus through continue and discard", async ({ page, baseURL }) => {
+    const fixture = await installFixture(page, baseURL, { count: 1 });
+    await openRecords(page);
+    const launcher = page.getByRole("button", { name: "Actions for record 1", exact: true });
+    const dialog = await openFirstEdit(page);
+    const name = dialog.getByLabel("Customer Name", { exact: true });
+    await name.fill("Synthetic touch draft");
+    // Radix defers touch outside dismissal to click rather than pointerdown.
+    // Use a real touch sequence so desktop mouse coverage cannot mask that path.
+    await page.touchscreen.tap(2, 2);
+    const confirmation = await expectUnsavedConfirmation(page);
+    await expect(confirmation).toHaveCSS("pointer-events", "auto");
+    await confirmation.getByRole("button", { name: "Teruskan Edit", exact: true }).tap();
+    await expect(confirmation).toHaveCount(0);
+    await expect(name).toHaveValue("Synthetic touch draft");
+    await expect(dialog).toHaveCSS("pointer-events", "auto");
+    await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await page.touchscreen.tap(2, 2);
+    await expectUnsavedConfirmation(page);
+    await confirmation.getByRole("button", { name: "Buang Perubahan", exact: true }).tap();
+    await expect(confirmation).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
+    await expect(launcher).toBeFocused();
+    await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
+    expect(fixture.saves).toBe(0);
+    expect(fixture.mutations).toEqual([]);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+});

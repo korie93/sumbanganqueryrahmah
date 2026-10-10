@@ -6,6 +6,7 @@ import { DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialo
 import { Input } from "@/components/ui/input";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import { CollectionRecordEditChangeSummary } from "../CollectionRecordEditChangeSummary";
+import { CollectionRecordDiscardDialog } from "../CollectionRecordDiscardDialog";
 import {
   EditCollectionRecordDialog,
   type EditCollectionRecordDialogProps,
@@ -20,6 +21,7 @@ type ElementProps = {
   "aria-describedby"?: string;
   onClick?: () => void;
   onCloseAutoFocus?: (event: Event) => void;
+  onPointerDownOutside?: (event: { detail: { originalEvent: { button: number; ctrlKey: boolean; preventDefault: () => void } } }) => void;
 };
 
 function elements(children: ReactNode): ReactElement<ElementProps>[] {
@@ -35,6 +37,9 @@ function fixture(overrides: Partial<EditCollectionRecordDialogProps> = {}): Edit
   return {
     open: true,
     savingEdit: false,
+    discardConfirmOpen: false,
+    onDiscardConfirmOpenChange: noop,
+    onDiscardChanges: noop,
     changeReview: {
       hasChanges: true,
       changes: [{ key: "customerName", label: "Customer Name", before: "Original Customer", after: "Customer One" }],
@@ -195,4 +200,40 @@ test("the saving status takes priority over the no-change reason", () => {
   assert.equal(save.props.children, "Saving...");
   assert.equal(cancel.props.disabled, true);
   assert.equal(save.props.disabled, true);
+});
+
+test("discard confirmation stays separate from edit scrolling and uses guarded callbacks", () => {
+  const onOpenChange = () => undefined;
+  const onDiscard = () => undefined;
+  const root = EditCollectionRecordDialog(fixture({
+    discardConfirmOpen: true,
+    onDiscardConfirmOpenChange: onOpenChange,
+    onDiscardChanges: onDiscard,
+  }));
+  const [content, confirm] = elements(root.props.children);
+  assert.equal(content.type, DialogContent);
+  assert.equal(confirm.type, CollectionRecordDiscardDialog);
+  const props = confirm.props as {
+    open: boolean; saving: boolean; onOpenChange: typeof onOpenChange; onDiscard: typeof onDiscard;
+  };
+  assert.equal(props.open, true);
+  assert.equal(props.saving, false);
+  assert.equal(props.onOpenChange, onOpenChange);
+  assert.equal(props.onDiscard, onDiscard);
+  assert.equal(descendants(content).some((element) => element.type === CollectionRecordDiscardDialog), false);
+});
+
+test("dirty primary outside dismissal prevents native focus stealing without changing pristine or context clicks", () => {
+  for (const dirty of [false, true]) for (const saving of [false, true]) {
+    const { content } = dialogParts(fixture({
+      changeReview: { hasChanges: dirty, changes: [] }, savingEdit: saving,
+    }));
+    for (const pointer of [{ button: 0, ctrlKey: false }, { button: 2, ctrlKey: false }, { button: 0, ctrlKey: true }]) {
+      let prevented = 0;
+      content.props.onPointerDownOutside?.({ detail: { originalEvent: {
+        ...pointer, preventDefault: () => { prevented += 1; },
+      } } });
+      assert.equal(prevented, dirty && !saving && pointer.button === 0 && !pointer.ctrlKey ? 1 : 0);
+    }
+  }
 });

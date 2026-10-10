@@ -23,11 +23,15 @@ import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-val
 import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { CollectionManualSettlementPanel } from "./CollectionManualSettlementPanel";
 import { CollectionRecordEditChangeSummary } from "./CollectionRecordEditChangeSummary";
+import { CollectionRecordDiscardDialog } from "./CollectionRecordDiscardDialog";
 import type { CollectionRecordEditChanges } from "./collection-record-edit-changes";
 
 export interface EditCollectionRecordDialogProps {
   open: boolean;
   savingEdit: boolean;
+  discardConfirmOpen: boolean;
+  onDiscardConfirmOpenChange: (open: boolean) => void;
+  onDiscardChanges: () => void;
   changeReview: CollectionRecordEditChanges;
   loadingNicknames: boolean;
   editingRecord: CollectionRecord | null;
@@ -72,6 +76,9 @@ export interface EditCollectionRecordDialogProps {
 export function EditCollectionRecordDialog({
   open,
   savingEdit,
+  discardConfirmOpen,
+  onDiscardConfirmOpenChange,
+  onDiscardChanges,
   changeReview,
   loadingNicknames,
   editingRecord,
@@ -124,6 +131,14 @@ export function EditCollectionRecordDialog({
       <DialogContent
         className="flex max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:p-0"
         onCloseAutoFocus={onCloseAutoFocus}
+        onPointerDownOutside={(event) => {
+          const pointer = event.detail.originalEvent;
+          if (changeReview.hasChanges && !savingEdit && pointer.button === 0 && !pointer.ctrlKey) {
+            // Opening the confirmation during pointerdown must not let the
+            // original outside click move focus back out of the new dialog.
+            pointer.preventDefault();
+          }
+        }}
       >
         <DialogHeader className="shrink-0 border-b px-4 py-4 pr-12 text-left sm:px-6 sm:pr-12">
           <DialogTitle>Edit Collection Record</DialogTitle>
@@ -317,6 +332,12 @@ export function EditCollectionRecordDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <CollectionRecordDiscardDialog
+        open={discardConfirmOpen}
+        saving={savingEdit}
+        onOpenChange={onDiscardConfirmOpenChange}
+        onDiscard={onDiscardChanges}
+      />
     </Dialog>
   );
 }
