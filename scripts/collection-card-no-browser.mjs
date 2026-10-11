@@ -27,6 +27,11 @@ export async function runCollectionCardNoBrowser({ baseUrl, username, password, 
     externalRequests.push(url.origin); return route.abort();
   });
   const mark = (label) => { checks.push(label); console.log(`[collection-card-no-browser] PASS ${label}`); };
+  // The opt-in baseline reproduction uses a pre-compact-view build only.
+  const emptyRecords = expectMissingCard
+    ? page.getByText("No collection records found.", { exact: true })
+    : page.getByTestId("collection-records-empty-state")
+      .getByRole("heading", { name: "Tiada rekod sepadan", exact: true });
   async function list(query) {
     const result = await page.evaluate(async (search) => {
       const response = await fetch(`/api/collection/list?${search}`, { credentials: "include" });
@@ -60,10 +65,10 @@ export async function runCollectionCardNoBrowser({ baseUrl, username, password, 
       assert.deepEqual(await page.locator("tbody tr[aria-label] td:nth-child(5)").allInnerTexts(), expectedCards,
         "Real table Card No cells exactly match the returned strings without rounding or clipping digits");
     }
-    else await page.getByText("No collection records found.", { exact: true }).waitFor();
+    else await emptyRecords.waitFor();
     if (screenshot) {
       if (total) await page.locator("tbody tr[aria-label]").first().scrollIntoViewIfNeeded();
-      else await page.getByText("No collection records found.", { exact: true }).scrollIntoViewIfNeeded();
+      else await emptyRecords.scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(artifactsDir, `${screenshot}.png`) });
     }
     return payload;
@@ -85,6 +90,16 @@ export async function runCollectionCardNoBrowser({ baseUrl, username, password, 
     await page.getByTestId("collection-records-page").waitFor();
     await page.locator("#collection-records-search").waitFor();
     await page.getByText(/^Showing .* of 59 records$/).waitFor();
+    // Positional Card No assertions below intentionally exercise the full table.
+    // The default compact view combines Account and Card in a single cell.
+    if (!expectMissingCard) {
+      const fullView = page.getByRole("group", { name: "Paparan rekod", exact: true })
+        .getByRole("button", { name: "Lengkap", exact: true });
+      await fullView.click();
+      assert.equal(await fullView.getAttribute("aria-pressed"), "true");
+    }
+    await page.getByRole("table", { name: "Collection records", exact: true })
+      .getByRole("columnheader", { name: "Card Number", exact: true }).waitFor();
     mark("real authenticated View Rekod Collection mounted with 59 synthetic records");
     const byIc = await queryUi("990101019999", 52, "ic-existing-record");
     assert.ok(byIc.records.some((record) => record.cardNumber === cardA));

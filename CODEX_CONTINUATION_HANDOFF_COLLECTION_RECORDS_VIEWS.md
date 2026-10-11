@@ -2,7 +2,7 @@
 
 Updated: 2026-10-11 (Asia/Singapore)
 
-Status: IMPLEMENTATION COMPLETE — local verification finished; user authorized commit and push on 2026-10-11. Deployment remains out of scope. Confirm publication from Git history and remote state.
+Status: FEATURE PUBLISHED as `7919060d12b1e57526325704938ad5f697164ac2` on `main`. Follow-up CI smoke compatibility fix is COMPLETE and verified locally; user authorized its commit and push on 2026-10-11. Confirm publication from Git history and remote state. Deployment remains out of scope.
 
 ## Current goal and authorization
 
@@ -50,7 +50,29 @@ Initial browser failures were resolved, not ignored: three dark assertions compa
 
 ## Publication boundary / next action
 
-Implementation and required verification are complete locally. All test/build sessions finished and temporary static servers closed with their runners. User authorized commit and push on 2026-10-11; publish only this scoped change and handoff, then verify the remote commit. Do not deploy or access production without a fresh request. These local checks do not claim that GitHub CI or production has already run this change.
+The feature was committed and pushed as `7919060d12b1e57526325704938ad5f697164ac2`, with the remote verified. After the CI repair and local verification, the user explicitly requested "tolong commit dan push" on 2026-10-11. Publish only the six scoped smoke compatibility, regression and handoff files, then verify the remote commit. Do not deploy or access production without a fresh request. Local checks do not claim that GitHub CI has run the new fix.
+
+## CI smoke follow-up (2026-10-11)
+
+- Evidence: [CI run 38115731799](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/38115731799), commit `7919060d12b1e57526325704938ad5f697164ac2`, `smoke-ui` job `114401009022`. Build/test, coverage, visual layout, Playwright snapshots and accessibility passed. `Run UI smoke` failed in `checkCollectionReceiptUiFlow`: the exact Saved source filename was not visible within 15 seconds. Lighthouse was skipped after that failure.
+- Root cause: the receipt smoke still expected the Source File column in the default record view. The new default Ringkas intentionally omits that column; Lengkap retains it. This is a stale smoke assumption, not evidence of lost source linkage or a save failure.
+- Fix: explicitly select `Paparan rekod` > `Lengkap` before the existing exact source-provenance assertion. Receipt view/edit/delete, permissions and all existing smoke phases remain intact. No longer timeout, retry bypass or skipped assertion was introduced.
+- Regression: a VM test executes the actual receipt smoke sequence and requires full-view selection before source verification; it failed before the fix and passed afterward. Six built-browser mode cases additionally assert the source filename is absent in Ringkas and visible in Lengkap.
+- Related audit: the standalone Card No browser harness also assumed the old full-table cell layout and empty-state wording. Its default current-build path now explicitly selects Lengkap, verifies the Card Number header, and requires the filtered empty-state heading. The documented, explicit `--expect-missing-card` old-build reproduction keeps its old selectors only in that mode; current verification has no automatic fallback. Exact Card No strings, totals, pagination and permission assertions are preserved.
+- Scope: test scripts, regression assertions and this handoff only. No application, backend, database schema, dependency, CI workflow or visual baseline changes.
+
+Verified locally on the fresh build:
+
+- `npm run build`: passed (`artifacts/records-smoke-fix-build.log`); server and frontend rebuilt together.
+- Full real-app UI smoke: passed every phase, including receipt, Billing XLSX/PNG/PDF, backup restore and logout. Command: `SQR_REDESIGN_SMOKE_ONLY=1 node scripts/test-frontend-redesign-isolated.mjs` (`artifacts/records-smoke-fix-real-smoke.log`). Fresh loopback PostgreSQL with synthetic records and generated credentials only.
+- `node scripts/test-collection-card-no-isolated.mjs`: passed all 14 browser/API phase checks (`artifacts/records-smoke-fix-card.log`). Includes full-card precision, 50+1 pagination, filters, tampered/missing/historical data, mobile, logout and admin/user out-of-scope denial.
+- Both real-app runners confirmed their processes stopped and removed only their temporary synthetic application/database directories. Existing local and production data, receipts and uploads were not used.
+- Six focused compact/full browser cases passed in light/dark at 1366/1024/768px (`artifacts/records-smoke-fix-visual.log`); strict standalone TypeScript check of the browser spec passed.
+- Focused smoke/Card harness tests, script syntax, repository hygiene, tracked secret scan and `git diff --check` passed.
+- Complete `npm run test:scripts`: exit 0; 658 MJS tests passed with one existing platform-conditional skip, and all 63 TS script tests passed (`artifacts/records-smoke-fix-scripts.log`).
+- Final changed-file secret guard and diff checks passed. Independent review confirmed the original assertions remain intact and identified the legacy reproduction compatibility caveat; the explicit mode split above resolves it without weakening current-build verification. The old historical build itself was not rerun.
+
+Next: commit and push the authorized fix, then confirm local/remote alignment. All test/build sessions finished and both temporary database fixtures were cleaned up by their runners. GitHub CI still needs a new run after push; do not report it green based only on these local checks.
 
 ## Portable continuation
 

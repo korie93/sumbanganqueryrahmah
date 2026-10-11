@@ -48,6 +48,29 @@ test("Collection Card baseline reproduction is explicit while default verificati
   assert.match(browser, /EXPECTED BASELINE DEFECT/);
   assert.match(browser, /longCard = "9007199254740993123"/);
   assert.match(browser, /sourceImportIds: "fixture-card-source-b"/);
+  assert.match(browser, /if \(!expectMissingCard\) \{\s*const fullView = page\.getByRole/);
+  assert.match(browser, /const emptyRecords = expectMissingCard\s*\? page\.getByText\("No collection records found\.", \{ exact: true \}\)\s*: page\.getByTestId\("collection-records-empty-state"\)/);
+});
+
+test("Collection Card browser explicitly selects the full desktop view before checking positional card cells", () => {
+  const fullViewIndex = browser.indexOf('const fullView = page.getByRole("group", { name: "Paparan rekod", exact: true })');
+  const selectIndex = browser.indexOf("await fullView.click()", fullViewIndex);
+  const headingIndex = browser.indexOf('name: "Card Number", exact: true', selectIndex);
+  const firstQueryIndex = browser.indexOf('const byIc = await queryUi(');
+  assert.ok(fullViewIndex >= 0 && selectIndex > fullViewIndex);
+  assert.ok(headingIndex > selectIndex && firstQueryIndex > headingIndex);
+  assert.match(browser, /getByRole\("button", \{ name: "Lengkap", exact: true \}\)/);
+  assert.match(browser, /assert\.equal\(await fullView\.getAttribute\("aria-pressed"\), "true"\)/);
+  assert.match(browser, /td:nth-child\(5\)/);
+  assert.match(browser, /assert\.deepEqual\([\s\S]*expectedCards,[\s\S]*without rounding or clipping digits/);
+});
+
+test("Collection Card empty searches require the filtered empty state rather than a loading or request failure", () => {
+  assert.match(browser, /: page\.getByTestId\("collection-records-empty-state"\)\s*\.getByRole\("heading", \{ name: "Tiada rekod sepadan", exact: true \}\)/);
+  assert.match(browser, /else await emptyRecords\.waitFor\(\)/);
+  assert.match(browser, /else await emptyRecords\.scrollIntoViewIfNeeded\(\)/);
+  assert.match(browser, /assert\.equal\(result\.status\(\), 200/);
+  assert.match(browser, /assert\.equal\(payload\.total, total/);
 });
 
 test("Collection Card cleanup requires stopped processes and verified narrow nonsymlink directory", () => {

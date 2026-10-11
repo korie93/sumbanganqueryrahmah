@@ -309,6 +309,8 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   await expect(full).toHaveAttribute("aria-pressed", "false");
   await expect(table.getByRole("columnheader")).toHaveCount(8);
   await expect(table.getByRole("columnheader", { name: "IC Number", exact: true })).toHaveCount(0);
+  const sourceFilename = "Synthetic source with long descriptive name.xlsx";
+  await expect(table.getByText(sourceFilename, { exact: true })).toHaveCount(0);
   const row = table.locator("tbody tr").first();
   for (const value of ["Synthetic Customer 1", "SYNTHETIC-ACCOUNT-1", "00009007199254740993", nickname]) {
     await expect(row.getByText(value, { exact: true })).toBeVisible();
@@ -346,6 +348,7 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   }
   await expect(row.getByText("880101105432", { exact: true })).toHaveCount(1);
   await expect(row.getByText("0123456789", { exact: true })).toHaveCount(1);
+  await expect(row.getByText(sourceFilename, { exact: true })).toBeVisible();
   expect(await table.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(compactWidth);
   await assertPageFits(page);
   await compact.click();

@@ -1807,6 +1807,9 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     await navigateForSmoke(page, "/collection/records");
     await page.getByText("View Rekod Collection").first().waitFor();
     let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
+    // Source provenance belongs to the full view; records now start compact.
+    await page.getByRole("group", { name: "Paparan rekod", exact: true })
+      .getByRole("button", { name: "Lengkap", exact: true }).click();
     await targetRow.getByText(sourceImport.name, { exact: true }).waitFor({ timeout: 15_000 });
 
     await targetRow.getByRole("button", { name: /View/ }).click();
