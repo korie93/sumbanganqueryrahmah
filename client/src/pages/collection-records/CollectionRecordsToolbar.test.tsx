@@ -50,7 +50,49 @@ test("CollectionRecordsToolbar shows two useful totals and one export menu witho
   assert.match(markup, /Page 2 \/ 3/);
   assert.match(markup, /role="group" aria-label="Record Actions"/);
   assert.doesNotMatch(markup, /shadow-sm/);
+  assert.doesNotMatch(markup, /text-success/);
   assert.doesNotMatch(markup, /Manual Purge/);
+});
+
+test("collection summary remains compact, readable and separate from action controls", () => {
+  const markup = renderToolbar();
+  const summary = markup.match(/<dl[^>]*>(.*?)<\/dl>/)?.[0];
+  assert.ok(summary);
+  assert.match(markup, /data-testid="collection-records-summary-actions"/);
+  assert.match(summary, /aria-label="Collection summary"/);
+  assert.match(summary, /aria-busy="false"/);
+  assert.match(summary, /flex-wrap/);
+  assert.match(summary, /<dt class="text-sm text-muted-foreground"/);
+  assert.match(summary, /<dd[^>]*text-base[^>]*>146<\/dd>/);
+  assert.match(summary, /RM\s*82,900\.00/);
+  assert.doesNotMatch(summary, /<button|text-xs|text-xl/);
+  assert.match(markup, /sm:flex-row sm:flex-wrap sm:items-center sm:justify-between/);
+  assert.match(markup, /aria-label="Record Actions"[^>]*sm:ml-auto/);
+});
+
+test("collection summary does not present stale totals while the applied results load", () => {
+  const markup = renderToolbar({ loadingRecords: true });
+  const summary = markup.match(/<dl[^>]*>(.*?)<\/dl>/)?.[0];
+  assert.ok(summary);
+  assert.match(summary, /aria-busy="true"/);
+  assert.equal((summary.match(/>—<\/dd>/g) ?? []).length, 2);
+  assert.doesNotMatch(summary, /146|82,900/);
+  assert.match(markup, /Updating records\.\.\./);
+  assert.match(markup, /Wait for records to finish loading before exporting\./);
+});
+
+test("collection summary retains exact zero and large totals with wrapping safeguards", () => {
+  for (const [summary, amount] of [
+    [{ totalRecords: 0, totalAmount: 0 }, "RM 0.00"],
+    [{ totalRecords: 999999, totalAmount: 987654321.09 }, "RM 987,654,321.09"],
+  ] as const) {
+    const markup = renderToolbar({ summary });
+    const summaryMarkup = markup.match(/<dl[^>]*>(.*?)<\/dl>/)?.[0];
+    assert.ok(summaryMarkup);
+    assert.match(summaryMarkup, new RegExp(`>${summary.totalRecords}</dd>`));
+    assert.ok(summaryMarkup.replace(/\s/g, " ").includes(amount));
+    assert.equal((summaryMarkup.match(/\[overflow-wrap:anywhere\]/g) ?? []).length, 2);
+  }
 });
 
 test("collection export remains disabled while records load or either download is running", () => {

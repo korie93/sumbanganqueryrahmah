@@ -1,6 +1,6 @@
 import { Suspense, lazy, memo, useMemo, useRef, useState } from "react";
-import { Filter, RotateCcw } from "lucide-react";
-import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
+import { Filter } from "lucide-react";
+import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
+import { CollectionRecordsSearch } from "@/pages/collection-records/CollectionRecordsSearch";
+import { buildCollectionRecordsActiveFilters } from "@/pages/collection-records/collection-record-active-filters";
+import { isValidDate } from "@/pages/collection/utils";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
 import { buildCollectionRecordFilterSnapshot, getCollectionRecordsRecoveryState } from "@/pages/collection-records/collection-record-filters";
 import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
@@ -60,11 +63,11 @@ type CollectionRecordsPageProps = {
   role: string;
 };
 
-const COLLECTION_RECORDS_MOBILE_FILTER_FALLBACK_KEYS = ["date", "nickname", "search", "status"] as const;
+const COLLECTION_RECORDS_MOBILE_FILTER_FALLBACK_KEYS = ["date", "nickname", "source", "status"] as const;
 const COLLECTION_RECORDS_DESKTOP_FILTER_FALLBACK_KEYS = [
   "from-date",
   "to-date",
-  "search",
+  "source",
   "nickname",
   "actions",
   "summary",
@@ -112,11 +115,10 @@ function CollectionRecordsToolbarFallback() {
         {COLLECTION_RECORDS_TOOLBAR_FALLBACK_KEYS.map((key) => (
           <div
             key={`collection-records-toolbar-fallback-${key}`}
-            className="h-20 animate-pulse rounded-xl border border-border/60 bg-muted/20"
+            className="h-12 animate-pulse rounded-xl border border-border/60 bg-muted/20"
           />
         ))}
       </div>
-      <div className="h-28 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
       <div className="h-16 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
     </div>
   );
@@ -124,11 +126,11 @@ function CollectionRecordsToolbarFallback() {
 
 function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   const isMobile = useIsMobile();
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const mobileFiltersTriggerRef = useRef<HTMLButtonElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersTriggerRef = useRef<HTMLButtonElement>(null);
   const pageFocusRef = useRef<HTMLDivElement>(null);
   const [overlayFocus] = useState(() => createCollectionRecordOverlayFocus(
-    () => mobileFiltersTriggerRef.current ?? pageFocusRef.current,
+    () => filtersTriggerRef.current ?? pageFocusRef.current,
   ));
   const controller = useCollectionRecordsController({ role });
   const viewModel = buildCollectionRecordsPageViewModel(controller);
@@ -149,111 +151,80 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
       activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
     ));
   };
-  const activeFilterChips = useMemo<ActiveFilterChip[]>(() => {
-    const items: ActiveFilterChip[] = [];
-    if (viewModel.filters.fromDate) {
-      items.push({
-        id: "collection-from-date",
-        label: `From ${formatIsoDateToDDMMYYYY(viewModel.filters.fromDate)}`,
-        onRemove: () => viewModel.filters.onFromDateChange(""),
-      });
-    }
-    if (viewModel.filters.toDate) {
-      items.push({
-        id: "collection-to-date",
-        label: `To ${formatIsoDateToDDMMYYYY(viewModel.filters.toDate)}`,
-        onRemove: () => viewModel.filters.onToDateChange(""),
-      });
-    }
-    if (viewModel.filters.searchInput.trim()) {
-      items.push({
-        id: "collection-search",
-        label: `Search: ${viewModel.filters.searchInput.trim()}`,
-        onRemove: () => viewModel.filters.onSearchInputChange(""),
-      });
-    }
-    if (viewModel.filters.canUseNicknameFilter && viewModel.filters.nicknameFilter !== "all") {
-      items.push({
-        id: "collection-nickname",
-        label: `Nickname: ${viewModel.filters.nicknameFilter}`,
-        onRemove: () => viewModel.filters.onNicknameFilterChange("all"),
-      });
-    }
-    if (viewModel.filters.canUseTeamLeaderFilter && viewModel.filters.leaderFilter !== "all") {
-      const selectedTeam = viewModel.filters.teamOptions.find(
-        (team) => team.id === viewModel.filters.leaderFilter,
-      );
-      items.push({
-        id: "collection-team-leader",
-        label: `Leader: ${selectedTeam?.leaderNickname || "Selected team"}`,
-        onRemove: () => viewModel.filters.onLeaderFilterChange("all"),
-      });
-    }
-    return items;
-  }, [
-    viewModel.filters,
-  ]);
-  const hasActiveFilters = activeFilterChips.length > 0;
-
-  const handleMobileFilter = () => {
-    viewModel.filters.onFilter();
-    setMobileFiltersOpen(false);
+  const { items: activeFilterChips, filterCount } = useMemo(
+    () => buildCollectionRecordsActiveFilters(viewModel.filters), [viewModel.filters],
+  );
+  const focusSearch = () => {
+    const searchField = document.getElementById(isMobile ? "collection-records-search-mobile" : "collection-records-search");
+    (searchField ?? pageFocusRef.current)?.focus({ preventScroll: true });
   };
-
-  const handleMobileReset = () => {
+  const closeFilters = () => {
+    setFiltersOpen(false);
+    filtersTriggerRef.current?.focus({ preventScroll: true });
+  };
+  const handleFilter = () => {
+    viewModel.filters.onFilter();
+    // Keep invalid controls visible while the controller reports its validation error.
+    const { fromDate, toDate } = viewModel.filters;
+    if ((!fromDate || isValidDate(fromDate)) && (!toDate || isValidDate(toDate))
+      && (!fromDate || !toDate || fromDate <= toDate)) closeFilters();
+  };
+  const handleReset = () => {
     viewModel.filters.onReset();
-    setMobileFiltersOpen(false);
+    closeFilters();
   };
 
   return (
     <div ref={pageFocusRef} tabIndex={-1} className="space-y-4" data-testid="collection-records-page">
-      {isMobile ? (
-        <div
-          className="space-y-3"
-          data-floating-ai-avoid="true"
-        >
-          <div className="relative space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                ref={mobileFiltersTriggerRef}
-                type="button"
-                className="h-11 min-w-0 flex-[2_1_12rem] justify-center gap-2 rounded-md"
-                onClick={() => setMobileFiltersOpen(true)}
-              >
-                <Filter className="h-4 w-4 shrink-0" aria-hidden="true" />
-                Search & Filters
-                {hasActiveFilters ? (
-                  <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-2xs">
-                    {activeFilterChips.length}
-                  </Badge>
-                ) : null}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 min-w-0 flex-[1_1_6rem] gap-2 rounded-md"
-                onClick={handleMobileReset}
-                disabled={!hasActiveFilters || viewModel.filters.loadingRecords}
-              >
-                <RotateCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
-                Reset
-              </Button>
-            </div>
-
-          </div>
-        </div>
-      ) : null}
-
       <section aria-label="View Rekod Collection" className="space-y-4">
+        <div className="flex flex-wrap items-end gap-2" data-floating-ai-avoid="true">
+          <CollectionRecordsSearch mobile={isMobile} value={viewModel.filters.searchInput} onChange={viewModel.filters.onSearchInputChange} />
+          <Button
+            ref={filtersTriggerRef}
+            type="button"
+            variant="outline"
+            className="h-11 shrink-0 gap-2 rounded-md"
+            data-testid="collection-records-filter-toggle"
+            {...getAriaExpandedProps(filtersOpen)}
+            aria-controls="collection-records-filter-panel"
+            aria-haspopup={isMobile ? "dialog" : undefined}
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            <Filter className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Penapis
+            {filterCount > 0 ? (
+              <Badge data-testid="collection-records-filter-count" variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-xs">
+                {filterCount}
+              </Badge>
+            ) : null}
+          </Button>
+        </div>
         {!isMobile ? (
-          <div>
-            <Suspense fallback={<CollectionRecordsFiltersFallback />}>
-              <CollectionRecordsFilters {...viewModel.filters} />
-            </Suspense>
+          <div
+            id="collection-records-filter-panel"
+            role="region"
+            aria-label="Penapis rekod"
+            hidden={!filtersOpen}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !event.defaultPrevented && event.currentTarget.contains(event.target as Node)) {
+                event.preventDefault();
+                closeFilters();
+              }
+            }}
+          >
+            {filtersOpen ? (
+              <Suspense fallback={<CollectionRecordsFiltersFallback />}>
+                <CollectionRecordsFilters {...viewModel.filters} onFilter={handleFilter} onReset={handleReset} />
+              </Suspense>
+            ) : null}
           </div>
         ) : null}
 
-        <ActiveFilterChips items={activeFilterChips} onClearAll={viewModel.filters.onReset} />
+        <ActiveFilterChips
+          className="[&>span]:max-w-full [&>span>span]:min-w-0 [&>span>button]:shrink-0 [&_button]:min-h-8 [&_button]:min-w-8"
+          items={activeFilterChips.map((item) => ({ ...item, onRemove: () => { item.onRemove?.(); focusSearch(); } }))}
+          onClearAll={() => { viewModel.filters.onReset(); focusSearch(); }}
+        />
 
         <Suspense fallback={<CollectionRecordsToolbarFallback />}>
           <CollectionRecordsToolbar {...viewModel.toolbar} />
@@ -266,8 +237,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           onClearSearch={() => {
             viewModel.filters.onSearchInputChange("");
             // The recovery button disappears on refresh; retain a useful focus target.
-            const searchField = document.getElementById("collection-records-search");
-            (searchField ?? pageFocusRef.current)?.focus({ preventScroll: true });
+            focusSearch();
           }}
           onResetFilters={() => {
             pageFocusRef.current?.focus({ preventScroll: true });
@@ -303,21 +273,21 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
       </section>
 
       {isMobile ? (
-        <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
           <SheetContent
+            id="collection-records-filter-panel"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
-              mobileFiltersTriggerRef.current?.focus({ preventScroll: true });
+              filtersTriggerRef.current?.focus({ preventScroll: true });
             }}
             side="bottom"
             className="rounded-t-2xl border-border bg-background px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
             data-floating-ai-avoid="true"
           >
             <SheetHeader className="pr-8 text-left">
-              <SheetTitle>Search & Filters</SheetTitle>
+              <SheetTitle>Penapis rekod</SheetTitle>
               <SheetDescription>
-                Narrow collection records by date, keyword, or staff nickname without losing your place in the
-                results list.
+                Pilih penapis rekod. Pilihan dikekalkan apabila panel ditutup; Search kekal di luar panel.
               </SheetDescription>
             </SheetHeader>
 
@@ -325,8 +295,8 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
               <Suspense fallback={<CollectionRecordsFiltersFallback />}>
                 <CollectionRecordsFilters
                   {...viewModel.filters}
-                  onFilter={handleMobileFilter}
-                  onReset={handleMobileReset}
+                  onFilter={handleFilter}
+                  onReset={handleReset}
                 />
               </Suspense>
             </div>

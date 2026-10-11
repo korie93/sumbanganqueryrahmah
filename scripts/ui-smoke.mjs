@@ -1201,15 +1201,26 @@ const waitForCollectionRecordVisible = async (page, searchValue, timeoutMs = 20_
   throw new Error(`Collection record "${String(searchValue || "").trim()}" did not become visible.`);
 };
 
-const waitForCollectionFilterButtonEnabled = async (filterButton, timeoutMs = 8_000) => {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await filterButton.isEnabled().catch(() => false)) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+const waitForCollectionRecordsSettled = async (page, timeoutMs = 8_000) => {
+  const recordsPage = page.getByTestId("collection-records-page");
+  try {
+    // Filter controls are unmounted while collapsed. Observe the actual records
+    // lifecycle instead, including after applying a filter closes the panel.
+    await recordsPage.getByText("Loading records...", { exact: true }).waitFor({ state: "hidden", timeout: timeoutMs });
+    await recordsPage.getByText("Updating records...", { exact: true }).waitFor({ state: "hidden", timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
   }
-  return false;
+};
+
+const openCollectionRecordsFilters = async (page) => {
+  const panel = page.locator("#collection-records-filter-panel");
+  if (!(await panel.isVisible())) {
+    await page.getByTestId("collection-records-filter-toggle").click();
+  }
+  await panel.waitFor({ state: "visible", timeout: 15_000 });
+  return panel;
 };
 
 const filterCollectionRecordsBySearch = async (page, searchValue) => {
@@ -1217,7 +1228,6 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
   // This flow explicitly uses the desktop layout; help-copy changes must not
   // break the shared search used by stale-delete, settlement and receipt smoke.
   const searchInput = page.locator("#collection-records-search");
-  const filterButton = page.getByRole("button", { name: "Filter", exact: true });
   let lastListResponse = null;
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -1240,19 +1250,22 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
 
       const autoRecords = Array.isArray(autoPayload?.records) ? autoPayload.records : [];
       if (autoRecords.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
-        if (await waitForCollectionFilterButtonEnabled(filterButton)) {
+        if (await waitForCollectionRecordsSettled(page)) {
           return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
         }
         continue;
       }
     }
 
-    if (!(await waitForCollectionFilterButtonEnabled(filterButton))) {
+    if (!(await waitForCollectionRecordsSettled(page))) {
       continue;
     }
 
+    const filterPanel = await openCollectionRecordsFilters(page);
+    const filterButton = filterPanel.getByRole("button", { name: "Filter", exact: true });
     const listResponsePromise = waitForCollectionListResponse(page, normalizedSearchValue, 5_000).catch(() => null);
     await filterButton.click();
+    await filterPanel.waitFor({ state: "hidden", timeout: 15_000 });
     const listResponse = await listResponsePromise;
     if (listResponse) {
       lastListResponse = listResponse;
@@ -1265,7 +1278,7 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
 
       const records = Array.isArray(payload?.records) ? payload.records : [];
       if (records.some((record) => recordMatchesCollectionSearch(record, normalizedSearchValue))) {
-        if (await waitForCollectionFilterButtonEnabled(filterButton)) {
+        if (await waitForCollectionRecordsSettled(page)) {
           return waitForCollectionRecordVisible(page, normalizedSearchValue, 10_000);
         }
         continue;
@@ -1274,7 +1287,7 @@ const filterCollectionRecordsBySearch = async (page, searchValue) => {
 
     // A repeated query may use the existing cache instead of making a request.
     // Still require the explicit Filter action and a settled loading state.
-    if (!(await waitForCollectionFilterButtonEnabled(filterButton))) continue;
+    if (!(await waitForCollectionRecordsSettled(page))) continue;
     const delayedTarget = await findVisibleCollectionRecord(page, normalizedSearchValue, 5_000);
     if (delayedTarget) {
       return delayedTarget;
@@ -1510,7 +1523,10 @@ const checkCollectionManualSettlementV9UiFlow = async (page, context, tracker) =
     await page.setViewportSize({ width: 1440, height: 900 });
     await navigateForSmoke(page, "/collection/records");
     await page.getByText("View Rekod Collection").first().waitFor({ timeout: 15_000 });
-    await page.locator("#collection-records-leader-desktop").waitFor({ timeout: 15_000 });
+    const recordFilters = await openCollectionRecordsFilters(page);
+    await recordFilters.locator("#collection-records-leader-desktop").waitFor({ timeout: 15_000 });
+    await page.getByTestId("collection-records-filter-toggle").click();
+    await recordFilters.waitFor({ state: "hidden", timeout: 15_000 });
     let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
     await targetRow.getByText(cardNumber, { exact: true }).waitFor({ timeout: 15_000 });
     await targetRow.getByRole("button", { name: /^Actions for record / }).click();

@@ -26,7 +26,9 @@ test("collection mobile filter action icons are decorative only", () => {
   assert.match(summaryPageSource, /<Filter className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);
   assert.match(summaryPageSource, /<RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
   assert.match(recordsPageSource, /<Filter className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);
-  assert.match(recordsPageSource, /<RotateCcw className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);
+  // The optional record filters no longer have a duplicate outer Reset action.
+  const recordsSearchSource = readCollectionSource("../collection-records/CollectionRecordsSearch.tsx");
+  assert.match(recordsSearchSource, /<Search\b[^>]*aria-hidden="true"/);
 });
 
 test("collection daily heading and loading icons are hidden from assistive technology", () => {

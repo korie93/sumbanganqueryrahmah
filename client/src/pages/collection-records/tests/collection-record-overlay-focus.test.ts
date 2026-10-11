@@ -140,17 +140,26 @@ test("desktop shares the launcher-aware menu and both lazy dialogs restore focus
   }
 });
 
-test("mobile filter actions wrap by content width without clipping the label or filter count", () => {
+test("filter disclosure preserves external search, selected counts and accessible close focus on both layouts", () => {
   const page = readFileSync(path.resolve("client/src/pages/collection/CollectionRecordsPage.tsx"), "utf8");
-  const start = page.indexOf('ref={mobileFiltersTriggerRef}');
-  const end = page.indexOf('<section aria-label="View Rekod Collection"', start);
-  const toolbar = page.slice(start, end);
-  assert.match(page.slice(start - 150, start), /flex flex-wrap gap-2/);
-  assert.match(toolbar, /flex-\[2_1_12rem\]/);
-  assert.match(toolbar, /flex-\[1_1_6rem\]/);
-  assert.match(toolbar, /shrink-0 rounded-full/);
-  assert.match(toolbar, /Search & Filters/);
-  assert.match(toolbar, /activeFilterChips\.length/);
-  assert.match(toolbar, /onClick=\{handleMobileReset\}/);
-  assert.match(toolbar, /setMobileFiltersOpen\(true\)/);
+  assert.match(page, /const \[filtersOpen, setFiltersOpen\] = useState\(false\)/);
+  assert.match(page, /flex flex-wrap items-end gap-2/);
+  const searchPosition = page.indexOf("<CollectionRecordsSearch");
+  const panelPosition = page.indexOf('id="collection-records-filter-panel"');
+  assert.ok(searchPosition > 0 && searchPosition < panelPosition);
+  assert.equal((page.match(/<CollectionRecordsSearch\b/g) ?? []).length, 1);
+  assert.match(page, /<CollectionRecordsSearch mobile=\{isMobile\} value=\{viewModel\.filters\.searchInput\} onChange=\{viewModel\.filters\.onSearchInputChange\}/);
+  assert.match(page, /ref=\{filtersTriggerRef\}/);
+  assert.match(page, /getAriaExpandedProps\(filtersOpen\)/);
+  assert.match(page, /aria-controls="collection-records-filter-panel"/);
+  assert.match(page, /aria-haspopup=\{isMobile \? "dialog" : undefined\}/);
+  assert.match(page, /data-testid="collection-records-filter-count"[^>]*shrink-0 rounded-full/);
+  assert.match(page, /filterCount > 0/);
+  assert.match(page, /hidden=\{!filtersOpen\}/);
+  assert.match(page, /event\.key === "Escape" && !event\.defaultPrevented/);
+  assert.match(page, /const closeFilters = \(\) => \{\s*setFiltersOpen\(false\);\s*filtersTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(page, /<Sheet open=\{filtersOpen\} onOpenChange=\{setFiltersOpen\}/);
+  assert.match(page, /onCloseAutoFocus=\{\(event\) => \{\s*event\.preventDefault\(\);\s*filtersTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(page, /item\.onRemove\?\.\(\); focusSearch\(\)/);
+  assert.match(page, /onClearAll=\{\(\) => \{ viewModel\.filters\.onReset\(\); focusSearch\(\); \}\}/);
 });

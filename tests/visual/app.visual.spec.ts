@@ -798,10 +798,11 @@ test.describe("Collection layout polish", () => {
         await expect(frame).toHaveCSS("max-width", "1480px");
         expect((await frame.boundingBox())!.width).toBeLessThanOrEqual(1480);
         if (width === 1920) expect((await frame.boundingBox())!.width).toBeGreaterThan(saveWidth);
-        const mobileFilters = page.getByRole("button", { name: /^Search & Filters(?: \d+)?$/ });
-        if (width < 768) await mobileFilters.click();
+        const filterToggle = page.getByTestId("collection-records-filter-toggle");
         const search = page.locator(width < 768 ? "#collection-records-search-mobile" : "#collection-records-search");
         await expect(search).toBeVisible();
+        await expect(page.getByTestId("collection-records-from-date")).not.toBeVisible();
+        await filterToggle.click();
         if (width >= 1280) {
           const dateWidth = (await page.getByTestId("collection-records-from-date").boundingBox())!.width;
           expect((await search.boundingBox())!.width).toBeGreaterThan(dateWidth);
@@ -821,18 +822,19 @@ test.describe("Collection layout polish", () => {
         );
         expect(clippedControls).toEqual([]);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        await page.getByRole("button", { name: "Filter", exact: true }).click();
+        await expect(page.getByTestId("collection-records-from-date")).not.toBeVisible();
         const cardNo = "00009007199254740993";
         const searched = page.waitForResponse((response) => {
           const url = new URL(response.url());
           return url.pathname === "/api/collection/list" && url.searchParams.get("search") === cardNo;
         });
         await search.fill(cardNo);
-        await page.getByRole("button", { name: "Filter", exact: true }).click();
         await searched;
-        if (width < 768) await mobileFilters.click();
         await expect(search).toHaveValue(cardNo);
+        await filterToggle.click();
         await page.getByRole("button", { name: "Reset", exact: true }).click();
-        if (width < 768) await mobileFilters.click();
+        if (width < 768) await expect(page.getByRole("dialog", { name: "Penapis rekod", exact: true })).toHaveCount(0);
         await expect(search).toHaveValue("");
         await page.screenshot({ path: test.info().outputPath("records.png"), fullPage: true, animations: "disabled" });
         expect(pageErrors).toEqual([]);
@@ -859,6 +861,7 @@ test.describe("Collection layout polish", () => {
         await expect(frame).toHaveCSS("max-width", "1480px");
       }
       await expect(page.locator("#collection-records-search")).toBeVisible();
+      await page.getByTestId("collection-records-filter-toggle").click();
       await expect(page.locator("#collection-records-nickname-filter")).toHaveCount(role === "user" ? 0 : 1);
       await expect(page.locator("#collection-records-leader-desktop")).toHaveCount(role === "manager" ? 1 : 0);
       await expect(page.getByTestId("collection-records-filter-actions").getByRole("button")).toHaveCount(2);

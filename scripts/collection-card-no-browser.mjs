@@ -180,15 +180,16 @@ export async function runCollectionCardNoBrowser({ baseUrl, username, password, 
     mark("clearing search resets first page and restores all scoped records");
     phase = "mobile Card No search";
     await page.setViewportSize({ width: 390, height: 900 });
-    await page.getByRole("button", { name: /^Search & Filters/ }).click();
     const mobileInput = page.locator("#collection-records-search-mobile");
+    await mobileInput.waitFor({ state: "visible" });
+    assert.equal(await page.getByRole("dialog", { name: "Penapis rekod", exact: true }).count(), 0,
+      "Mobile Card No search is directly available without opening filters");
     const mobileResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname === "/api/collection/list" && url.searchParams.get("search") === "9999 1234 1234 5678";
     });
     await mobileInput.fill("9999 1234 1234 5678");
     assert.equal((await (await mobileResponse).json()).total, 1);
-    await page.keyboard.press("Escape");
     await page.locator("article").filter({ hasText: cardB }).waitFor();
     await page.locator("article").filter({ hasText: cardB }).scrollIntoViewIfNeeded();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);

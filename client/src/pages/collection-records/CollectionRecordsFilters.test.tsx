@@ -79,21 +79,17 @@ test("CollectionRecordsFilters uses the collection nickname picker and compact d
   assert.match(markup, /class="flex flex-wrap items-end gap-4" data-testid="collection-records-primary-filters"/);
   assert.match(markup, />Filter</);
   assert.match(markup, />Reset</);
-  const searchInputMarkup = markup.match(/<input\b[^>]*\bid="collection-records-search"[^>]*>/)?.[0];
-  assert.ok(searchInputMarkup);
-  assert.match(searchInputMarkup, /type="search"/);
-  assert.match(searchInputMarkup, /value="00009007199254740993"/);
-  assert.match(searchInputMarkup, /placeholder="Cari nama \/ IC \/ akaun \/ Card No \/ batch \/ telefon \/ jumlah bayaran"/);
-  assert.doesNotMatch(searchInputMarkup, /(?:maxLength|inputMode)="/i);
+  assert.doesNotMatch(markup, /id="collection-records-search(?:-mobile)?"/);
+  assert.doesNotMatch(markup, /00009007199254740993/);
   assert.doesNotMatch(markup, /<select[^>]*collection-records-nickname-filter/);
 });
 
-test("CollectionRecordsFilters gives search more room and keeps desktop actions together", () => {
+test("CollectionRecordsFilters keeps dates and desktop actions together without duplicating the external search", () => {
   const markup = renderFilters();
 
   assert.match(markup, /class="min-w-0 flex-\[1_1_10rem\] space-y-2"><label[^>]*for="collection-records-from-date-button"/);
   assert.match(markup, /class="min-w-0 flex-\[1_1_10rem\] space-y-2"><label[^>]*for="collection-records-to-date-button"/);
-  assert.match(markup, /class="min-w-0 flex-\[2_1_18rem\] space-y-2"><label[^>]*for="collection-records-search"/);
+  assert.doesNotMatch(markup, /for="collection-records-search(?:-mobile)?"/);
   assert.match(markup, /class="min-w-0 flex-\[1_1_12rem\] \[&amp;&gt;div\]:space-y-2"/);
   const actions = markup.match(/<div\b[^>]*data-testid="collection-records-filter-actions"[^>]*>(.*?)<\/div>/)?.[1];
   assert.ok(actions);
@@ -123,7 +119,6 @@ test("CollectionRecordsFilters preserves permission gates and disabled actions i
   const fieldOrder = [
     "collection-records-from-date-button",
     "collection-records-to-date-button",
-    "collection-records-search",
     "collection-records-filter-actions",
   ].map((id) => markup.indexOf(id));
   assert.ok(fieldOrder.every((position, index) => position >= 0 && (index === 0 || position > fieldOrder[index - 1])));

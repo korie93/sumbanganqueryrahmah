@@ -327,13 +327,19 @@ async function verifyCollection(page, { baseUrl, width, capture, diagnostics, bi
   await page.keyboard.press("Escape");
   await sectionDrawer.waitFor({ state: "hidden" });
   await assertFocus(page, sectionTrigger, "Collection sections restore launcher focus");
-  const filterTrigger = page.getByRole("button", { name: /^Search & Filters(?: \d+)?$/ });
+  const mobileSearch = page.locator("#collection-records-search-mobile");
+  await mobileSearch.waitFor({ state: "visible" });
+  assert.equal(await mobileSearch.evaluate((element) => element.closest('[role="dialog"]') === null), true,
+    "Mobile Collection search stays outside the optional filter sheet");
+  const filterTrigger = page.getByTestId("collection-records-filter-toggle");
   await assertButtonContentsFit(filterTrigger, "Collection filter launcher", diagnostics);
   await filterTrigger.focus();
   await page.keyboard.press("Enter");
-  const filters = page.getByRole("dialog", { name: "Search & Filters", exact: true });
+  const filters = page.getByRole("dialog", { name: "Penapis rekod", exact: true });
   await filters.waitFor();
-  await filters.locator("#collection-records-search-mobile").waitFor();
+  await filters.getByTestId("collection-records-from-date").waitFor();
+  assert.equal(await filters.locator("input[type='search']").count(), 0,
+    "Filter sheet does not duplicate the directly available record search");
   await assertDialogFits(filters, "Collection filter sheet", diagnostics);
   await capture("collection-filters", width);
   await page.keyboard.press("Escape");
@@ -376,18 +382,27 @@ async function selectFixtureNickname(page, triggerId) {
 
 async function scopeOriginalCollectionRecords(page, width) {
   // The opt-in August supplement must not weaken the original September checks.
-  let step = "open records filter sheet";
+  let step = "open records filters";
   try {
-    if (width < 768) await page.getByRole("button", { name: /^Search & Filters(?: \d+)?$/ }).click();
+    const toggle = page.getByTestId("collection-records-filter-toggle");
+    await toggle.click();
+    const filters = width < 768
+      ? page.getByRole("dialog", { name: "Penapis rekod", exact: true })
+      : page.locator("#collection-records-filter-panel");
+    await filters.waitFor({ state: "visible" });
     step = "select original synthetic nickname";
     await selectFixtureNickname(page, width < 768 ? "collection-records-nickname-filter-mobile" : "collection-records-nickname-filter");
     if (width < 768) {
       step = "close records filter sheet";
-      const sheet = page.getByRole("dialog", { name: "Search & Filters", exact: true });
+      const sheet = page.getByRole("dialog", { name: "Penapis rekod", exact: true });
       // Selecting closes the nested nickname popover asynchronously. Use the
       // sheet's own close control here; its Escape path is verified separately.
       await sheet.getByRole("button", { name: "Close", exact: true }).click();
       await sheet.waitFor({ state: "hidden" });
+    } else {
+      step = "close records filter panel";
+      await toggle.click();
+      await filters.waitFor({ state: "hidden" });
     }
     step = "wait original 59 records";
     await page.getByText(/^Showing .* of 59 records$/).waitFor();
@@ -1104,7 +1119,7 @@ export async function runFrontendRedesignBrowser({ baseUrl, username, password, 
           theme, { timeout: 3_000 });
         }
         if (id === "collection-records" && width < 768) {
-          await assertButtonContentsFit(page.getByRole("button", { name: /^Search & Filters(?: \d+)?$/ }), "Collection filter launcher", manifest.diagnostics);
+          await assertButtonContentsFit(page.getByTestId("collection-records-filter-toggle"), "Collection filter launcher", manifest.diagnostics);
         }
         if (checks.includes("a11y") && ["collection-record-actions", "collection-export-excel-menu", "collection-export-pdf-menu",
           "saved-file-actions", "viewer-more-actions", "activity-row-actions"].includes(id)) {

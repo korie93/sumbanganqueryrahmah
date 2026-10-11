@@ -5,8 +5,8 @@ import test from "node:test";
 import vm from "node:vm";
 
 const smokeSource = readFileSync(path.resolve("scripts/ui-smoke.mjs"), "utf8");
-const filtersSource = readFileSync(
-  path.resolve("client/src/pages/collection-records/CollectionRecordsFilters.tsx"),
+const searchSource = readFileSync(
+  path.resolve("client/src/pages/collection-records/CollectionRecordsSearch.tsx"),
   "utf8",
 );
 const helperStart = smokeSource.indexOf("const filterCollectionRecordsBySearch = async");
@@ -14,7 +14,8 @@ const helperEnd = smokeSource.indexOf("const fillReceiptAmountInput = async", he
 assert.ok(helperStart >= 0 && helperEnd > helperStart);
 
 test("collection smoke waits for the filtered response before using a previously visible row", async () => {
-  assert.match(filtersSource, /<Input\b[^>]*\bid="collection-records-search"[^>]*\btype="search"/);
+  assert.match(searchSource, /"collection-records-search-mobile" : "collection-records-search"/);
+  assert.match(searchSource, /<Input\b[^>]*\bid=\{id\}[^>]*\btype="search"/);
 
   const searchValue = "00009007199254740993";
   const filledValues = [];
@@ -51,7 +52,7 @@ test("collection smoke waits for the filtered response before using a previously
         return response;
       },
       recordMatchesCollectionSearch: (record, value) => record.accountNumber === value,
-      waitForCollectionFilterButtonEnabled: async () => {
+      waitForCollectionRecordsSettled: async () => {
         steps.push("settled");
         return true;
       },
@@ -91,12 +92,20 @@ test("cached Collection searches still apply the Filter action and wait for load
     `${smokeSource.slice(helperStart, helperEnd)}\nfilterCollectionRecordsBySearch;`,
     {
       waitForCollectionListResponse: async () => { steps.push("response"); return null; },
-      waitForCollectionFilterButtonEnabled: async () => { steps.push("settled"); return true; },
+      waitForCollectionRecordsSettled: async () => { steps.push("settled"); return true; },
+      openCollectionRecordsFilters: async (actualPage) => {
+        assert.equal(actualPage, page);
+        steps.push("open panel");
+        return {
+          getByRole: page.getByRole,
+          waitFor: async ({ state }) => { assert.equal(state, "hidden"); steps.push("closed panel"); },
+        };
+      },
       findVisibleCollectionRecord: async () => { steps.push("row"); return targetRow; },
     },
   );
   assert.equal(await filter(page, "000000000000000002"), targetRow);
-  assert.deepEqual(steps, ["response", "fill", "settled", "response", "filter", "settled", "row"]);
+  assert.deepEqual(steps, ["response", "fill", "settled", "open panel", "response", "filter", "closed panel", "settled", "row"]);
 });
 
 test("receipt smoke selects the full record view before checking Saved source provenance", async () => {

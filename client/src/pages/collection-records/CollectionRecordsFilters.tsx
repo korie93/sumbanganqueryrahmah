@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatePickerField } from "@/components/ui/date-picker-field";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type {
@@ -191,7 +189,6 @@ export function CollectionRecordsFilters({
   canUseTeamLeaderFilter,
   fromDate,
   toDate,
-  searchInput,
   nicknameFilter,
   leaderFilter,
   sourceImportFilter,
@@ -207,7 +204,6 @@ export function CollectionRecordsFilters({
   loadingRecords,
   onFromDateChange,
   onToDateChange,
-  onSearchInputChange,
   onNicknameFilterChange,
   onLeaderFilterChange,
   onSourceImportFilterChange,
@@ -260,26 +256,6 @@ export function CollectionRecordsFilters({
             buttonTestId="collection-records-to-date"
             className="h-11 rounded-md"
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="collection-records-search-mobile">Search</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="collection-records-search-mobile"
-              name="collectionRecordsSearchMobile"
-              type="search"
-              value={searchInput}
-              onChange={(event) => onSearchInputChange(event.target.value)}
-              placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
-              className="h-11 rounded-md pl-9 text-base"
-              autoComplete="off"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </div>
         </div>
 
         {canUseNicknameFilter ? (
@@ -368,25 +344,6 @@ export function CollectionRecordsFilters({
             buttonTestId="collection-records-to-date"
             className="h-9 rounded-md bg-background"
           />
-        </div>
-        <div className="min-w-0 flex-[2_1_18rem] space-y-2">
-          <Label htmlFor="collection-records-search">Search</Label>
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="collection-records-search"
-              name="collectionRecordsSearch"
-              type="search"
-              value={searchInput}
-              onChange={(event) => onSearchInputChange(event.target.value)}
-              placeholder="Cari nama / IC / akaun / Card No / batch / telefon / jumlah bayaran"
-              className="h-9 rounded-md bg-background pl-9"
-              autoComplete="off"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </div>
         </div>
         {canUseNicknameFilter ? (
           <div className="min-w-0 flex-[1_1_12rem] [&>div]:space-y-2">

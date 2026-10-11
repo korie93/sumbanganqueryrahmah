@@ -104,20 +104,28 @@ export function CollectionRecordsToolbar({
 
   return (
     <>
-      <div className="space-y-3">
-        <dl className="grid grid-cols-2 gap-4 border-y border-border py-3 sm:max-w-xl">
-          <div>
-            <dt className="text-xs text-muted-foreground">Total Records</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">{summary.totalRecords}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">Total Collection Amount</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums text-success">{formatAmountRM(summary.totalAmount)}</dd>
-          </div>
-        </dl>
+      <div className="space-y-2" data-testid="collection-records-summary-actions">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <dl
+            className="flex min-w-0 flex-wrap items-baseline gap-x-6 gap-y-2"
+            aria-busy={loadingRecords}
+            aria-label="Collection summary"
+          >
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+              <dt className="text-sm text-muted-foreground">Total Records</dt>
+              <dd className="min-w-0 text-base font-semibold tabular-nums [overflow-wrap:anywhere]">
+                {loadingRecords ? "—" : summary.totalRecords}
+              </dd>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+              <dt className="text-sm text-muted-foreground">Total Collection Amount</dt>
+              <dd className="min-w-0 text-base font-semibold tabular-nums [overflow-wrap:anywhere]">
+                {loadingRecords ? "—" : formatAmountRM(summary.totalAmount)}
+              </dd>
+            </div>
+          </dl>
 
-        <div role="group" aria-label="Record Actions" data-floating-ai-avoid="true">
-          <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Record Actions" data-floating-ai-avoid="true" className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <Button
               type="button"
               variant="secondary"
@@ -159,24 +167,24 @@ export function CollectionRecordsToolbar({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <p
-            id="collection-records-export-scope"
-            data-testid="collection-records-export-scope"
-            className="mt-2 max-w-xl text-xs leading-relaxed text-muted-foreground"
-          >
-            Excel and PDF include records across all pages using the filters last applied to the table.
-          </p>
-          {exportDisabledReason ? (
-            <p
-              id="collection-records-export-disabled-reason"
-              data-testid="collection-records-export-disabled-reason"
-              role="status"
-              className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground"
-            >
-              {exportDisabledReason}
-            </p>
-          ) : null}
         </div>
+        <p
+          id="collection-records-export-scope"
+          data-testid="collection-records-export-scope"
+          className="text-sm leading-relaxed text-muted-foreground"
+        >
+          Excel and PDF include records across all pages using the filters last applied to the table.
+        </p>
+        {exportDisabledReason ? (
+          <p
+            id="collection-records-export-disabled-reason"
+            data-testid="collection-records-export-disabled-reason"
+            role="status"
+            className="text-sm leading-relaxed text-muted-foreground"
+          >
+            {exportDisabledReason}
+          </p>
+        ) : null}
       </div>
 
       {canPurgeOldRecords ? (

@@ -5,6 +5,7 @@ import { expect, test, type Locator, type Page, type Route } from "@playwright/t
 test.use({ serviceWorkers: "block" });
 const now = "2026-10-05T08:00:00.000Z";
 const nickname = "Synthetic Collector";
+const filterSourceName = "Synthetic source with a deliberately long name for compact filter labels and narrow screens.xlsx";
 // A tiny generated fixture image; receipt tests never read receipt files.
 const receiptPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7xkAAAAASUVORK5CYII=", "base64");
 
@@ -28,7 +29,7 @@ function syntheticRecord(index: number, receiptCount = 0) {
     receiptValidationStatus: receiptCount ? "matched" : "unverified",
     receiptValidationMessage: null, receiptCount, duplicateReceiptFlag: false,
     createdByLogin: "polish.admin", collectionStaffNickname: nickname,
-    createdAt: now, updatedAt: now, sourceFilename: "Synthetic source with long descriptive name.xlsx",
+    createdAt: now, updatedAt: now, sourceImportId: "polish-source", sourceFilename: "Synthetic source with long descriptive name.xlsx",
     totalDue: "1500.00", billingPrincipalOsp: "1000.00", cpStatus: "cp", agingBucket: "D3",
   };
 }
@@ -36,7 +37,7 @@ function syntheticRecord(index: number, receiptCount = 0) {
 async function installFixture(page: Page, baseURL: string | undefined, options: {
   count?: number; role?: "admin" | "manager"; theme?: "light" | "dark";
   loading?: boolean; receipts?: number; paginate?: boolean; receiptFileName?: string;
-  holdSave?: boolean; saveOutcome?: "failure" | "conflict";
+  holdSave?: boolean; saveOutcome?: "failure" | "conflict"; filterSources?: boolean;
   recordOverrides?: Partial<ReturnType<typeof syntheticRecord>>;
 } = {}) {
   expect(baseURL).toBeTruthy();
@@ -46,7 +47,9 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   expect(new URL(origin).port).not.toBe("");
   const role = options.role ?? "admin";
   const records = Array.from({ length: options.count ?? 20 }, (_, index) => ({
-    ...syntheticRecord(index, options.receipts), ...options.recordOverrides,
+    ...syntheticRecord(index, options.receipts),
+    ...(options.filterSources && index > 0 ? { sourceImportId: "other-synthetic-source" } : {}),
+    ...options.recordOverrides,
   }));
   if (options.receiptFileName) for (const record of records) for (const receipt of record.receipts) {
     receipt.originalFileName = options.receiptFileName;
@@ -125,10 +128,14 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
       if (options.loading) await gate;
       const search = (url.searchParams.get("search") ?? "").toLowerCase();
       const aging = (url.searchParams.get("agingBuckets") ?? "").split(",").filter(Boolean);
+      const sources = (url.searchParams.get("sourceImportIds") ?? "").split(",").filter(Boolean);
+      const classifications = (url.searchParams.get("classifications") ?? "").split(",").filter(Boolean);
       const from = url.searchParams.get("from") ?? "";
       const to = url.searchParams.get("to") ?? "";
       const matching = records.filter((record) => record.customerName.toLowerCase().includes(search)
         && (!aging.length || aging.includes(record.agingBucket))
+        && (!sources.length || sources.includes(record.sourceImportId))
+        && (!classifications.length || classifications.includes(record.cpStatus))
         && (!from || record.paymentDate >= from)
         && (!to || record.paymentDate <= to));
       const paginated = options.paginate || url.searchParams.has("page");
@@ -165,7 +172,12 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
         } });
       }
     }
-    if (endpoint === "GET /api/collection/source-configs") return respond(route, { ok: true, sourceConfigs: [] });
+    if (endpoint === "GET /api/collection/source-configs") return respond(route, { ok: true, sourceConfigs: options.filterSources ? [{
+      sourceImportId: "polish-source", sourceImportName: filterSourceName, sourceFilename: filterSourceName,
+      rowCount: records.length, validFrom: "2026-10-01", validTo: "2026-10-31", cycleKey: "2026-10",
+      enabled: true, compatibilityStatus: "compatible", compatibilityIssues: [], indexedRowCount: records.length,
+      configuredBy: "polish.admin", configuredAt: now, updatedAt: now, status: "active",
+    }] : [] });
     if (endpoint === "GET /api/collection/teams") return respond(route, { ok: true, teams: [] });
     if (endpoint === "GET /api/collection/purge-summary") return respond(route,
       { ok: true, retentionMonths: 6, cutoffDate: "2026-04-05", eligibleRecords: 0, totalAmount: 0 });
@@ -296,6 +308,228 @@ async function expectLastOpened(page: Page, record: Locator) {
   await expect(record.getByText("Last opened record", { exact: true })).toHaveCount(1);
 }
 
+for (const theme of ["light", "dark"] as const) for (const width of [320, 390, 768, 1280, 1920]) {
+  test(`Collection filter disclosure ${theme} ${width}px keeps search outside and preserves closed filters`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const fixture = await installFixture(page, baseURL, { count: 2, theme });
+    await openRecords(page);
+    const mobile = width < 768;
+    const search = page.getByLabel("Search", { exact: true });
+    const toggle = page.getByTestId("collection-records-filter-toggle");
+    const panel = page.getByRole(mobile ? "dialog" : "region", { name: "Penapis rekod", exact: true });
+    const aging = page.locator(`#collection-records-aging-${mobile ? "mobile" : "desktop"}`);
+    await expect(search).toBeVisible();
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(panel).not.toBeVisible();
+    await expect(page.getByTestId("collection-records-from-date")).not.toBeVisible();
+    await expect(page.getByTestId("collection-records-filter-count")).toHaveCount(0);
+    expect((await bounds(search)).height).toBeGreaterThanOrEqual(44);
+    expect((await bounds(toggle)).height).toBeGreaterThanOrEqual(44);
+    await search.fill("Synthetic Customer 1");
+    await expect.poll(() => new URLSearchParams(fixture.listRequests.at(-1)).get("search")).toBe("Synthetic Customer 1");
+    await expect(search).toBeFocused();
+    await expect(page.getByTestId("collection-records-filter-count")).toHaveCount(0);
+    await expect(page.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+    await expect(page.getByText("Synthetic Customer 2", { exact: true })).toHaveCount(0);
+    await assertPageFits(page);
+
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(panel).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(panel.getByLabel("Search", { exact: true })).toHaveCount(0);
+    if (!mobile) await expect(toggle).toHaveAttribute("aria-controls", "collection-records-filter-panel");
+    await aging.click();
+    await page.getByRole("option", { name: "D3", exact: true }).click();
+    await expect.poll(() => new URLSearchParams(fixture.listRequests.at(-1)).get("agingBuckets")).toBe("D3");
+    await expect(page.getByTestId("collection-records-filter-count")).toHaveText("1");
+    await assertPageFits(page);
+    await testInfo.attach(`filters-open-${theme}-${width}`, { body: await page.screenshot(), contentType: "image/png" });
+    if (mobile) await page.keyboard.press("Escape");
+    else await toggle.click();
+    await expect(panel).not.toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toBeFocused();
+    await expect(search).toHaveValue("Synthetic Customer 1");
+    const chips = page.getByRole("region", { name: "Active filters", exact: true });
+    await expect(chips.getByRole("button", { name: "Remove filter Aging: D3", exact: true })).toBeVisible();
+
+    // Closing is presentation-only: a later search must retain the hidden aging filter.
+    await search.fill("Synthetic Customer 2");
+    await expect.poll(() => {
+      const query = new URLSearchParams(fixture.listRequests.at(-1));
+      return query.get("search") === "Synthetic Customer 2" && query.get("agingBuckets") === "D3";
+    }).toBe(true);
+    await expect(page.getByText("Synthetic Customer 2", { exact: true })).toBeVisible();
+    await expect(search).toBeFocused();
+    await toggle.click();
+    await expect(aging).toContainText("D3");
+    await panel.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect(panel).not.toBeVisible();
+    await expect(toggle).toBeFocused();
+    await expect(search).toHaveValue("Synthetic Customer 2");
+    await expect(page.getByTestId("collection-records-filter-count")).toHaveText("1");
+    await assertPageFits(page);
+    await search.scrollIntoViewIfNeeded();
+    await testInfo.attach(`filters-collapsed-${theme}-${width}`, { body: await page.screenshot(), contentType: "image/png" });
+    expect(fixture.saves).toBe(0);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const width of [320, 1280]) test(`Collection advanced filter chips ${width}px expose source, aging, classification and sort while collapsed`, async ({ page, baseURL }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  const fixture = await installFixture(page, baseURL, { count: 2, filterSources: true });
+  await openRecords(page);
+  const mobile = width < 768;
+  const suffix = mobile ? "mobile" : "desktop";
+  const toggle = page.getByTestId("collection-records-filter-toggle");
+  const panel = page.getByRole(mobile ? "dialog" : "region", { name: "Penapis rekod", exact: true });
+  const chips = page.getByRole("region", { name: "Active filters", exact: true });
+  const select = async (field: string, label: string) => {
+    await page.locator(`#collection-records-${field}-${suffix}`).click();
+    await page.getByRole("option", { name: label, exact: true }).click();
+  };
+  await toggle.click();
+  await select("source", `${filterSourceName} (2 rows)`);
+  await panel.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(panel).not.toBeVisible();
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveText("1");
+  await expect(chips.getByRole("button", { name: `Remove filter Source: ${filterSourceName}`, exact: true })).toBeVisible();
+  await assertPageFits(page);
+  await testInfo.attach(`filters-long-source-${width}`, { body: await page.screenshot(), contentType: "image/png" });
+  // Source alone must expose a working clear action; the old mobile counter missed it.
+  await chips.getByRole("button", { name: "Clear all", exact: true }).click();
+  await expect(chips).toHaveCount(0);
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveCount(0);
+  // Reset may serve the initial unfiltered result from the existing query cache.
+  await expect(page.getByText("Synthetic Customer 2", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Search", { exact: true })).toBeFocused();
+
+  await toggle.click();
+  await select("source", `${filterSourceName} (2 rows)`);
+  await select("aging", "D3");
+  await select("classification", "CP");
+  await select("sort", "Jumlah: terendah");
+  await panel.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(panel).not.toBeVisible();
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveText("4");
+  for (const label of [`Source: ${filterSourceName}`, "Aging: D3", "Classification: CP", "Sort: Jumlah: terendah"]) {
+    await expect(chips.getByRole("button", { name: `Remove filter ${label}`, exact: true })).toBeVisible();
+  }
+  await expect.poll(() => {
+    const query = new URLSearchParams(fixture.listRequests.at(-1));
+    return query.get("sourceImportIds") === "polish-source" && query.get("agingBuckets") === "D3"
+      && query.get("classifications") === "cp" && query.get("sortBy") === "amount" && query.get("sortDirection") === "asc";
+  }).toBe(true);
+  await page.getByLabel("Search", { exact: true }).fill("Synthetic Customer 1");
+  await expect.poll(() => new URLSearchParams(fixture.listRequests.at(-1)).get("search")).toBe("Synthetic Customer 1");
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveText("4");
+  await chips.getByRole("button", { name: "Remove filter Aging: D3", exact: true }).click();
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveText("3");
+  await expect.poll(() => {
+    const query = new URLSearchParams(fixture.listRequests.at(-1));
+    return !query.has("agingBuckets") && query.get("sourceImportIds") === "polish-source" && query.get("classifications") === "cp";
+  }).toBe(true);
+  await assertPageFits(page);
+  await toggle.click();
+  await expect(page.locator(`#collection-records-aging-${suffix}`)).toContainText("Semua aging");
+  await expect(page.locator(`#collection-records-source-${suffix}`)).toContainText(filterSourceName);
+  await expect(page.locator(`#collection-records-classification-${suffix}`)).toContainText("CP");
+  await expect(page.locator(`#collection-records-sort-${suffix}`)).toContainText("Jumlah: terendah");
+  await assertPageFits(page);
+  await panel.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(panel).not.toBeVisible();
+  await expect(toggle).toBeFocused();
+  await expect(chips).toHaveCount(0);
+  await expect(page.getByLabel("Search", { exact: true })).toHaveValue("");
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveCount(0);
+  await expect(page.getByText("Synthetic Customer 2", { exact: true })).toBeVisible();
+  // A new query proves Reset cleared hidden source/classification/sort as well.
+  await page.getByLabel("Search", { exact: true }).fill("Synthetic Customer 2");
+  await expect.poll(() => {
+    const query = new URLSearchParams(fixture.listRequests.at(-1));
+    return query.get("search") === "Synthetic Customer 2" && !query.has("sourceImportIds") && !query.has("agingBuckets") && !query.has("classifications")
+      && query.get("sortBy") === "paymentDate" && query.get("sortDirection") === "desc";
+  }).toBe(true);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+for (const width of [390, 1280]) test(`Collection filter disclosure ${width}px keeps invalid dates open for correction`, async ({ page, baseURL }) => {
+  await page.setViewportSize({ width, height: 900 });
+  const fixture = await installFixture(page, baseURL, { count: 2 });
+  await openRecords(page);
+  const toggle = page.getByTestId("collection-records-filter-toggle");
+  const panel = page.getByRole(width < 768 ? "dialog" : "region", { name: "Penapis rekod", exact: true });
+  const chooseDay = async (id: string, day: string) => {
+    await page.getByTestId(id).click();
+    await page.getByRole("grid", { name: "October 2026", exact: true }).getByRole("gridcell", { name: day, exact: true }).click();
+  };
+  await toggle.click();
+  await chooseDay("collection-records-from-date", "5");
+  await chooseDay("collection-records-to-date", "4");
+  await panel.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(page.getByText("From Date cannot be later than To Date.", { exact: true })).toBeVisible();
+  await expect(panel).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await chooseDay("collection-records-from-date", "3");
+  await panel.getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(panel).not.toBeVisible();
+  await expect(toggle).toBeFocused();
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveText("2");
+  await expect(page.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection filter disclosure keyboard nesting and responsive handoff retain state", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { count: 2 });
+  await openRecords(page);
+  const toggle = page.getByTestId("collection-records-filter-toggle");
+  const desktopPanel = page.getByRole("region", { name: "Penapis rekod", exact: true });
+  const mobilePanel = page.getByRole("dialog", { name: "Penapis rekod", exact: true });
+  await toggle.click();
+  const date = page.getByTestId("collection-records-from-date");
+  await date.click();
+  await expect(page.getByRole("grid")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("grid")).toHaveCount(0);
+  await expect(desktopPanel).toBeVisible();
+  await expect(date).toBeFocused();
+  const aging = page.locator("#collection-records-aging-desktop");
+  await aging.click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await expect(desktopPanel).toBeVisible();
+  await expect(aging).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(desktopPanel).not.toBeVisible();
+  await expect(toggle).toBeFocused();
+  await page.getByLabel("Search", { exact: true }).fill("Synthetic Customer 1");
+  await toggle.click();
+  await aging.click();
+  await page.getByRole("option", { name: "D3", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(mobilePanel).toBeVisible();
+  await expect(page.locator("#collection-records-aging-mobile")).toContainText("D3");
+  await expect(mobilePanel.getByLabel("Search", { exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(mobilePanel).toHaveCount(0);
+  await expect(desktopPanel).toBeVisible();
+  await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
+  await expect(aging).toContainText("D3");
+  await toggle.click();
+  await expect(page.getByLabel("Search", { exact: true })).toHaveValue("Synthetic Customer 1");
+  await expect(page.getByTestId("collection-records-filter-count")).toHaveText("1");
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
 for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024, 768]) test(`Collection record modes ${theme} fit ${width}px and retain identifiers and receipt actions`, async ({ page, baseURL }, testInfo) => {
   await page.setViewportSize({ width, height: 900 });
   const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1, theme });
@@ -415,6 +649,7 @@ test("Collection record empty recovery clears only search before resetting other
   await expect(empty.getByText("Tiada rekod sepadan", { exact: true })).toBeVisible();
   await expect(empty.getByRole("button", { name: "Kosongkan carian", exact: true })).toBeVisible();
   await expect(empty.getByRole("button", { name: "Reset penapis", exact: true })).toHaveCount(0);
+  await page.getByTestId("collection-records-filter-toggle").click();
   const aging = page.locator("#collection-records-aging-desktop");
   await aging.click();
   await page.getByRole("option", { name: "D4", exact: true }).click();
@@ -430,6 +665,7 @@ test("Collection record empty recovery clears only search before resetting other
   await expect(empty.getByText("Tiada rekod sepadan", { exact: true })).toBeVisible();
   await expect(empty.getByRole("button", { name: "Kosongkan carian", exact: true })).toHaveCount(0);
   await empty.getByRole("button", { name: "Reset penapis", exact: true }).click();
+  if (!(await aging.isVisible())) await page.getByTestId("collection-records-filter-toggle").click();
   await expect(aging).toContainText("Semua aging");
   await expect(table.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
   await expect(table.locator("tbody tr")).toHaveCount(50);
@@ -445,9 +681,7 @@ test("Collection record empty recovery stays reachable on mobile without a mode 
   const fixture = await installFixture(page, baseURL, { count: 1 });
   await openRecords(page);
   await expect(page.getByTestId("collection-records-page").locator("article")).toHaveCount(1);
-  await page.getByRole("button", { name: /Search & Filters/ }).click();
   await page.getByLabel("Search", { exact: true }).fill("No matching customer");
-  await page.getByRole("button", { name: "Filter", exact: true }).click();
   const empty = page.getByTestId("collection-records-empty-state");
   await expect(empty.getByText("Tiada rekod sepadan", { exact: true })).toBeVisible();
   await expect(page.getByRole("group", { name: "Paparan rekod", exact: true })).toHaveCount(0);
@@ -753,6 +987,7 @@ test("Collection return clears the previous marker when filters or pagination ch
   await markFirstRecord();
   await page.getByLabel("Search", { exact: true }).fill("Synthetic");
   await expect(page.locator('[data-last-viewed="true"]')).toHaveCount(0);
+  await page.getByTestId("collection-records-filter-toggle").click();
   await page.getByRole("button", { name: "Filter", exact: true }).click();
   await expect(table.locator("tbody tr")).toHaveCount(50);
   await expect(table.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
@@ -963,9 +1198,7 @@ for (const viewport of [{ width: 1366, height: 600 }, { width: 390, height: 844 
     await expect(dialog).toHaveCount(0);
     // Saving refreshes the table and removes the original launcher. The existing
     // overlay-focus contract restores the stable page/filter fallback instead.
-    await expect(viewport.width < 768
-      ? page.getByRole("button", { name: /Search & Filters/ })
-      : page.getByTestId("collection-records-page")).toBeFocused();
+    await expect(page.getByTestId("collection-records-filter-toggle")).toBeFocused();
     await expect(page.getByText("Synthetic Updated Customer", { exact: true })).toBeVisible();
     expect(fixture.unexpected).toEqual([]);
     expect(fixture.errors).toEqual([]);
