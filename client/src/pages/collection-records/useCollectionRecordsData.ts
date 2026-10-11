@@ -32,6 +32,7 @@ export function useCollectionRecordsData({
   const {
     records,
     loadingRecords,
+    recordsLoadFailed,
     nicknameOptions,
     loadingNicknames,
     page,
@@ -206,7 +207,7 @@ export function useCollectionRecordsData({
     if (consumeInitialAutoFetch()) {
       return;
     }
-    if (consumeNextAutoFetch()) {
+    if (consumeNextAutoFetch(buildCurrentFilters(trimmedSearch, pageSize, 0))) {
       return;
     }
 
@@ -264,10 +265,9 @@ export function useCollectionRecordsData({
       return;
     }
 
-    markSkipNextAutoFetch();
-    await loadFirstPage(
-      buildCurrentFilters(searchInputRef.current, pageSize, 0),
-    );
+    const filters = buildCurrentFilters(searchInputRef.current, pageSize, 0);
+    markSkipNextAutoFetch(filters);
+    await loadFirstPage(filters);
   }, [
     buildCurrentFilters,
     fromDateRef,
@@ -280,7 +280,6 @@ export function useCollectionRecordsData({
   ]);
 
   const handleResetFilter = useCallback(() => {
-    markSkipNextAutoFetch();
     handleFromDateChange("");
     handleToDateChange("");
     handleSearchInputChange("");
@@ -290,8 +289,10 @@ export function useCollectionRecordsData({
     handleAgingFilterChange("all");
     handleClassificationFilterChange("all");
     handleSortValueChange("paymentDate_desc");
+    markSkipNextAutoFetch(buildCurrentFilters("", pageSize, 0));
     void loadFirstPage({});
   }, [
+    buildCurrentFilters,
     handleFromDateChange,
     handleNicknameFilterChange,
     handleLeaderFilterChange,
@@ -303,11 +304,13 @@ export function useCollectionRecordsData({
     handleToDateChange,
     loadFirstPage,
     markSkipNextAutoFetch,
+    pageSize,
   ]);
 
   return {
     records,
     loadingRecords,
+    recordsLoadFailed,
     fromDate,
     toDate,
     searchInput,

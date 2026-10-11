@@ -41,6 +41,7 @@ export function useCollectionRecordsQueryState() {
 
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
+  const [recordsLoadFailed, setRecordsLoadFailed] = useState(false);
   const [nicknameOptions, setNicknameOptions] = useState<CollectionStaffNickname[]>([]);
   const [loadingNicknames, setLoadingNicknames] = useState(false);
   const [page, setPage] = useState(1);
@@ -195,10 +196,12 @@ export function useCollectionRecordsQueryState() {
         setPage(page);
         setPageSize(safePageSize);
         setLoadingRecords(false);
+        setRecordsLoadFailed(false);
         return;
       }
 
       setLoadingRecords(true);
+      setRecordsLoadFailed(false);
       try {
         abortRecordsRequest();
         const controller = new AbortController();
@@ -259,6 +262,7 @@ export function useCollectionRecordsQueryState() {
           description: parseApiError(error),
           variant: "destructive",
         });
+        setRecordsLoadFailed(true);
       } finally {
         if (recordsAbortControllerRef.current && requestId === recordsRequestIdRef.current) {
           recordsAbortControllerRef.current = null;
@@ -345,6 +349,7 @@ export function useCollectionRecordsQueryState() {
   return {
     records,
     loadingRecords,
+    recordsLoadFailed,
     nicknameOptions,
     loadingNicknames,
     page,

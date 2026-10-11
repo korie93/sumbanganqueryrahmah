@@ -107,6 +107,7 @@ test("mobile collection keeps complete record fields under details and respects 
 test("desktop collection preserves full identifiers and receipt access with permission-aware action menus", () => {
   const render = (canEdit: boolean, canDelete: boolean) => renderToStaticMarkup(
     createElement(CollectionRecordsDesktopTable, {
+      viewMode: "full",
       loadingRecords: false,
       visibleRecords: [collectionRecord],
       paginatedRecords: [{ ...collectionRecord, cardNumber: "00009007199254740993" }],
@@ -142,6 +143,7 @@ for (const layout of ["desktop", "mobile"] as const) {
       const secondRecord = { ...firstRecord, id: "record-2" };
       const render = (overrides: Partial<CollectionRecordsTableProps> = {}) => renderToStaticMarkup(
         createElement(layout === "mobile" ? CollectionRecordsTable : CollectionRecordsDesktopTable, {
+          ...(layout === "desktop" ? { viewMode: "full" as const } : {}),
           loadingRecords: false,
           visibleRecords: [firstRecord, secondRecord],
           paginatedRecords: [firstRecord, secondRecord],
@@ -186,3 +188,103 @@ for (const layout of ["desktop", "mobile"] as const) {
     }
   });
 }
+
+function renderDesktopRecords(overrides: Partial<CollectionRecordsTableProps> & { viewMode?: "compact" | "full" } = {}) {
+  return renderToStaticMarkup(createElement(CollectionRecordsDesktopTable, {
+    loadingRecords: false,
+    visibleRecords: [collectionRecord],
+    paginatedRecords: [{ ...collectionRecord, accountNumber: "0000007788", cardNumber: "00009007199254740993" }],
+    pageOffset: 0,
+    canEdit: true,
+    canDeleteRow: () => true,
+    onViewReceipt: () => undefined,
+    onEdit: () => undefined,
+    onDelete: () => undefined,
+    ...overrides,
+  }));
+}
+
+function getDesktopHeaders(markup: string) {
+  return Array.from(markup.matchAll(/<th\b[^>]*>([^<]*)<\/th>/g), (match) => match[1]);
+}
+
+test("desktop defaults to eight compact columns with complete authorized Account and Card strings", () => {
+  const markup = renderDesktopRecords();
+  assert.deepEqual(getDesktopHeaders(markup), [
+    "No.", "Customer Name", "Account / Card", "Amount", "Payment Date", "Receipt", "Staff Nickname", "Actions",
+  ]);
+  assert.match(markup, /collection-records-table--compact min-w-\[64rem\] table-fixed/);
+  assert.match(markup, /<dt[^>]*>Account<\/dt><dd>0000007788<\/dd>/);
+  assert.match(markup, /<dt[^>]*>Card<\/dt><dd>00009007199254740993<\/dd>/);
+  assert.match(markup, /<dl class="space-y-1\.5 whitespace-normal wrap-anywhere"/);
+  assert.match(markup, /<td[^>]*whitespace-normal wrap-anywhere[^>]*>SW\.AFIQAH_1332<\/td>/);
+  assert.doesNotMatch(markup, /880101105432|0123456789|IC Number|Customer Phone Number|TOTAL DUE/);
+  assert.match(markup, />View<\/button>/);
+  assert.match(markup, /aria-label="Actions for record 1"/);
+  assert.equal((markup.match(/<td\b/g) ?? []).length, 8);
+});
+
+test("full desktop view retains all eighteen columns and full supplied record values", () => {
+  const markup = renderDesktopRecords({ viewMode: "full" });
+  assert.deepEqual(getDesktopHeaders(markup), [
+    "No.", "Customer Name", "IC Number", "Account Number", "Card Number", "Customer Phone Number", "Batch", "Amount",
+    "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Payment Date", "Receipt", "Staff Nickname", "Source File", "Actions",
+  ]);
+  assert.equal((markup.match(/<td\b/g) ?? []).length, 18);
+  for (const value of ["0000007788", "00009007199254740993", collectionRecord.icNumber, collectionRecord.customerPhone]) {
+    assert.ok(markup.includes(value));
+  }
+  assert.match(markup, /min-w-\[2140px\]/);
+  assert.doesNotMatch(markup, /collection-records-table--compact/);
+});
+
+for (const viewMode of ["compact", "full"] as const) {
+  test(`${viewMode} desktop leaves masked data masked and uses a neutral amount color`, () => {
+    const markup = renderDesktopRecords({
+      viewMode,
+      paginatedRecords: [{ ...collectionRecord, accountNumber: "••••7788", cardNumber: "••••0993" }],
+    });
+    assert.match(markup, /••••7788/);
+    assert.match(markup, /••••0993/);
+    assert.doesNotMatch(markup, /0000007788|00009007199254740993|text-success/);
+    assert.match(markup, /<td[^>]*font-medium tabular-nums text-right text-foreground[^>]*>RM\s*1,250\.00<\/td>/);
+  });
+}
+
+test("compact desktop omits Actions when no row is editable or deletable without losing receipt access", () => {
+  const markup = renderDesktopRecords({ canEdit: false, canDeleteRow: () => false });
+  assert.equal(getDesktopHeaders(markup).length, 7);
+  assert.equal((markup.match(/<td\b/g) ?? []).length, 7);
+  assert.doesNotMatch(markup, /Actions|collection-records-table-actions|collection-records-table-scroll--actions/);
+  assert.match(markup, />View<\/button>/);
+  for (const access of [{ canEdit: true, canDeleteRow: () => false }, { canEdit: false, canDeleteRow: () => true }]) {
+    const allowedMarkup = renderDesktopRecords(access);
+    assert.equal(getDesktopHeaders(allowedMarkup).length, 8);
+    assert.match(allowedMarkup, /aria-label="Actions for record 1"/);
+  }
+});
+
+test("compact desktop retains per-row delete checks and last-opened markers by stable ID", () => {
+  const secondRecord = { ...collectionRecord, id: "record-2" };
+  const markup = renderDesktopRecords({
+    canEdit: false,
+    canDeleteRow: (record) => record.id === secondRecord.id,
+    visibleRecords: [collectionRecord, secondRecord],
+    paginatedRecords: [collectionRecord, secondRecord],
+    lastViewedRecordId: secondRecord.id,
+  });
+  assert.equal(getDesktopHeaders(markup).length, 8);
+  assert.doesNotMatch(markup, /aria-label="Actions for record 1"/);
+  assert.match(markup, /aria-label="Actions for record 2"/);
+  const rows = markup.match(/<tr\b[\s\S]*?<\/tr>/g) ?? [];
+  const highlightedRows = rows.filter((row) => row.includes('data-last-viewed="true"'));
+  assert.equal(highlightedRows.length, 1);
+  assert.match(highlightedRows[0]!, /aria-label="Collection record 2,/);
+  assert.equal((markup.match(/Last opened record/g) ?? []).length, 1);
+});
+
+test("compact desktop uses existing placeholders for missing Account or Card identifiers", () => {
+  const markup = renderDesktopRecords({ paginatedRecords: [{ ...collectionRecord, accountNumber: "", cardNumber: null }] });
+  assert.match(markup, /<dt[^>]*>Account<\/dt><dd>-<\/dd>/);
+  assert.match(markup, /<dt[^>]*>Card<\/dt><dd>-<\/dd>/);
+});

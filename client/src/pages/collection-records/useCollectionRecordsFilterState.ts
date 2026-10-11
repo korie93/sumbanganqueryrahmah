@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useRef, useState } from "react";
 import type { CollectionRecordFilters } from "@/pages/collection-records/types";
 import { buildCollectionRecordFilterSnapshot } from "@/pages/collection-records/collection-record-filters";
+import { buildCollectionRecordsCacheKey } from "@/pages/collection-records/records-query-cache";
 
 type UseCollectionRecordsFilterStateOptions = {
   canUseNicknameFilter: boolean;
@@ -14,7 +15,7 @@ export function useCollectionRecordsFilterState({
   pageSize,
 }: UseCollectionRecordsFilterStateOptions) {
   const skipInitialAutoFetchRef = useRef(true);
-  const skipNextAutoFetchRef = useRef(false);
+  const skipNextAutoFetchRef = useRef<string | null>(null);
   const fromDateRef = useRef("");
   const toDateRef = useRef("");
   const searchInputRef = useRef("");
@@ -106,8 +107,8 @@ export function useCollectionRecordsFilterState({
     [canUseNicknameFilter, canUseTeamLeaderFilter, pageSize],
   );
 
-  const markSkipNextAutoFetch = useCallback(() => {
-    skipNextAutoFetchRef.current = true;
+  const markSkipNextAutoFetch = useCallback((filters: CollectionRecordFilters) => {
+    skipNextAutoFetchRef.current = buildCollectionRecordsCacheKey(filters);
   }, []);
 
   const consumeInitialAutoFetch = useCallback(() => {
@@ -116,10 +117,12 @@ export function useCollectionRecordsFilterState({
     return true;
   }, []);
 
-  const consumeNextAutoFetch = useCallback(() => {
-    if (!skipNextAutoFetchRef.current) return false;
-    skipNextAutoFetchRef.current = false;
-    return true;
+  const consumeNextAutoFetch = useCallback((filters: CollectionRecordFilters) => {
+    const skippedKey = skipNextAutoFetchRef.current;
+    skipNextAutoFetchRef.current = null;
+    // A manual refresh may have no pending effect. Never suppress a later,
+    // different search/filter change (including clear-search recovery).
+    return skippedKey !== null && skippedKey === buildCollectionRecordsCacheKey(filters);
   }, []);
 
   return {

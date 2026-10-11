@@ -1,5 +1,16 @@
 import type { CollectionRecordFilters } from "@/pages/collection-records/types";
 
+// Sorting/pagination change presentation, not which records can match.
+export function getCollectionRecordsRecoveryState(filters: CollectionRecordFilters) {
+  return {
+    hasSearch: Boolean(filters.search?.trim()),
+    hasFilters: Boolean(
+      filters.from || filters.to || filters.nickname || filters.leaderId
+      || filters.sourceImportIds?.length || filters.agingBuckets?.length || filters.classifications?.length,
+    ),
+  };
+}
+
 type BuildCollectionRecordFilterSnapshotArgs = {
   fromDate?: string;
   toDate?: string;

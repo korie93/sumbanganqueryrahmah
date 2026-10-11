@@ -36,6 +36,7 @@ export function useCollectionRecordsController({
   const {
     records,
     loadingRecords,
+    recordsLoadFailed,
     fromDate,
     toDate,
     searchInput,
@@ -228,6 +229,7 @@ export function useCollectionRecordsController({
 
   return {
     canEdit,
+    recordsLoadFailed,
     canDeleteGlobal,
     canUseNicknameFilter,
     canUseTeamLeaderFilter,

@@ -25,7 +25,8 @@ const bundle = buildSync({
         onViewReceipt() {}, onEdit() {}, onDelete() {} };
       const render = (overrides) => renderToStaticMarkup(createElement(CollectionRecordsDesktopTable, { ...props, ...overrides }));
       console.log(JSON.stringify({
-        rows: render({}), readonly: render({ canEdit: false, canDeleteRow: () => false }),
+        rows: render({ viewMode: "full" }), readonly: render({ viewMode: "full", canEdit: false, canDeleteRow: () => false }),
+        compact: render({}), compactReadonly: render({ canEdit: false, canDeleteRow: () => false }),
         empty: render({ visibleRecords: [], paginatedRecords: [] }), loading: render({ loadingRecords: true }),
         shared: renderToStaticMarkup(createElement(Table, { "aria-label": "Unchanged shared table" })),
       }));
@@ -57,6 +58,22 @@ test("pinned identity and actions preserve full identifiers, pagination and perm
   assert.match(markup.rows, /aria-label="Actions for record 51"/);
   assert.doesNotMatch(markup.readonly, /aria-label="Actions for record/);
   assert.doesNotMatch(markup.readonly, /collection-records-table-actions|collection-records-table-scroll--actions/);
+});
+
+test("compact records keep primary fields in eight columns without coloring amounts as success", () => {
+  assert.equal((markup.compact.match(/scope="col"/g) || []).length, 8);
+  assert.equal((markup.compactReadonly.match(/scope="col"/g) || []).length, 7);
+  for (const content of [markup.compact, markup.compactReadonly]) {
+    for (const value of ["Synthetic Customer", "00000000000001", "00009007199254740993", "1,250.00", "Synthetic Collector"]) {
+      assert.ok(content.includes(value));
+    }
+    assert.doesNotMatch(content, /2140px|text-success/);
+    assert.doesNotMatch(content, /<th[^>]*>(?:IC Number|Customer Phone Number|TOTAL DUE|Billing Principal \(OSP\)|CP Status|Aging|Match|Source File)<\/th>/);
+    assert.doesNotMatch(content, /000000000001<\/td>|0100000000<\/td>/);
+  }
+  assert.match(markup.compact, /aria-label="Actions for record 51"/);
+  assert.doesNotMatch(markup.compactReadonly, /aria-label="Actions for record|collection-records-table-actions|collection-records-table-scroll--actions/);
+  assert.doesNotMatch(markup.rows, /text-success/);
 });
 
 test("empty/loading records remain compact visible status messages without a wide empty table", () => {

@@ -14,6 +14,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
+import { buildCollectionRecordFilterSnapshot, getCollectionRecordsRecoveryState } from "@/pages/collection-records/collection-record-filters";
 import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
 import { createCollectionRecordOverlayFocus } from "@/pages/collection-records/collection-record-overlay-focus";
 import { useCollectionRecordsController } from "@/pages/collection-records/useCollectionRecordsController";
@@ -131,6 +132,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   ));
   const controller = useCollectionRecordsController({ role });
   const viewModel = buildCollectionRecordsPageViewModel(controller);
+  const recoveryState = getCollectionRecordsRecoveryState(buildCollectionRecordFilterSnapshot(viewModel.filters));
   const returnContextKey = JSON.stringify([
     role, viewModel.toolbar.tablePage, viewModel.toolbar.tablePageSize,
     viewModel.filters.fromDate, viewModel.filters.toDate, viewModel.filters.searchInput,
@@ -259,6 +261,22 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
 
         <CollectionRecordsTable
           {...viewModel.table}
+          {...recoveryState}
+          recordsLoadFailed={controller.recordsLoadFailed}
+          onClearSearch={() => {
+            viewModel.filters.onSearchInputChange("");
+            // The recovery button disappears on refresh; retain a useful focus target.
+            const searchField = document.getElementById("collection-records-search");
+            (searchField ?? pageFocusRef.current)?.focus({ preventScroll: true });
+          }}
+          onResetFilters={() => {
+            pageFocusRef.current?.focus({ preventScroll: true });
+            viewModel.filters.onReset();
+          }}
+          onReloadRecords={() => {
+            pageFocusRef.current?.focus({ preventScroll: true });
+            viewModel.filters.onFilter();
+          }}
           lastViewedRecordId={lastViewedRecordId}
           onRecordDetailsToggle={(record) => markViewed(record.id)}
           onViewReceipt={(record, launcher) => {

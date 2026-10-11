@@ -53,6 +53,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   }
   const fixture = {
     unexpected: [] as string[], errors: [] as string[], receiptViews: [] as string[], saves: 0,
+    listRequests: [] as string[], failLists: false,
     release: () => {}, releaseSave: () => {},
     mutations: [] as Array<{
       fields: Record<string, string[]>;
@@ -117,9 +118,19 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
       id: "polish-nickname", nickname, isActive: true, roleScope: "both", createdBy: "polish-admin", createdAt: now,
     }] });
     if (endpoint === "GET /api/collection/list") {
+      fixture.listRequests.push(url.search);
+      if (fixture.failLists) return respond(route, {
+        ok: false, code: "INTERNAL_ERROR", message: "Synthetic records unavailable.",
+      }, 500);
       if (options.loading) await gate;
       const search = (url.searchParams.get("search") ?? "").toLowerCase();
-      const matching = records.filter((record) => record.customerName.toLowerCase().includes(search));
+      const aging = (url.searchParams.get("agingBuckets") ?? "").split(",").filter(Boolean);
+      const from = url.searchParams.get("from") ?? "";
+      const to = url.searchParams.get("to") ?? "";
+      const matching = records.filter((record) => record.customerName.toLowerCase().includes(search)
+        && (!aging.length || aging.includes(record.agingBucket))
+        && (!from || record.paymentDate >= from)
+        && (!to || record.paymentDate <= to));
       const paginated = options.paginate || url.searchParams.has("page");
       const limit = paginated
         ? Number(url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? "50")
@@ -285,10 +296,206 @@ async function expectLastOpened(page: Page, record: Locator) {
   await expect(record.getByText("Last opened record", { exact: true })).toHaveCount(1);
 }
 
+for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024, 768]) test(`Collection record modes ${theme} fit ${width}px and retain identifiers and receipt actions`, async ({ page, baseURL }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1, theme });
+  await openRecords(page);
+  await expect(page.getByLabel("Search", { exact: true })).toBeVisible();
+  const modes = page.getByRole("group", { name: "Paparan rekod", exact: true });
+  const compact = modes.getByRole("button", { name: "Ringkas", exact: true });
+  const full = modes.getByRole("button", { name: "Lengkap", exact: true });
+  const table = page.getByRole("table", { name: "Collection records", exact: true });
+  await expect(compact).toHaveAttribute("aria-pressed", "true");
+  await expect(full).toHaveAttribute("aria-pressed", "false");
+  await expect(table.getByRole("columnheader")).toHaveCount(8);
+  await expect(table.getByRole("columnheader", { name: "IC Number", exact: true })).toHaveCount(0);
+  const row = table.locator("tbody tr").first();
+  for (const value of ["Synthetic Customer 1", "SYNTHETIC-ACCOUNT-1", "00009007199254740993", nickname]) {
+    await expect(row.getByText(value, { exact: true })).toBeVisible();
+  }
+  await expect(row.getByRole("button", { name: "View", exact: true })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Actions for record 1", exact: true })).toBeVisible();
+  const amount = row.getByText(/^(?:RM\s*)?1,250\.00$/);
+  await expect(amount).not.toHaveClass(/text-success/);
+  await expect(amount).toHaveClass(/\btext-foreground\b/);
+  const foreground = await amount.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.style.color = "hsl(var(--foreground))";
+    element.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  await expect(amount).toHaveCSS("color", foreground);
+  const compactWidth = await table.evaluate((element) => element.getBoundingClientRect().width);
+  await assertPageFits(page);
+  if (width === 1366) {
+    await table.scrollIntoViewIfNeeded();
+    await testInfo.attach(`records-compact-${theme}`, {
+      body: await page.screenshot(), contentType: "image/png",
+    });
+  }
+  // Exercise the selector with keyboard input as well as its pressed semantics.
+  await full.focus();
+  await page.keyboard.press("Enter");
+  await expect(full).toHaveAttribute("aria-pressed", "true");
+  await expect(compact).toHaveAttribute("aria-pressed", "false");
+  await expect(table.getByRole("columnheader")).toHaveCount(18);
+  for (const heading of ["IC Number", "Customer Phone Number", "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Source File"]) {
+    await expect(table.getByRole("columnheader", { name: heading, exact: true })).toHaveCount(1);
+  }
+  await expect(row.getByText("880101105432", { exact: true })).toHaveCount(1);
+  await expect(row.getByText("0123456789", { exact: true })).toHaveCount(1);
+  expect(await table.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(compactWidth);
+  await assertPageFits(page);
+  await compact.click();
+  await expect(table.getByRole("columnheader")).toHaveCount(8);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection record modes preserve filtered page, totals and export scope without refetching", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  const fixture = await installFixture(page, baseURL, { count: 60, paginate: true });
+  await openRecords(page);
+  const table = page.getByRole("table", { name: "Collection records", exact: true });
+  await expect(table.locator("tbody tr")).toHaveCount(50);
+  await page.getByLabel("Search", { exact: true }).fill("Synthetic");
+  await expect.poll(() => fixture.listRequests.some((query) => new URLSearchParams(query).get("search") === "Synthetic")).toBe(true);
+  await expect(page.getByRole("button", { name: "Next", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(table.getByText("Synthetic Customer 51", { exact: true })).toBeVisible();
+  await expect(table.locator("tbody tr")).toHaveCount(10);
+  await expect(page.getByText("Page 2 / 2", { exact: true })).toBeVisible();
+  const requests = fixture.listRequests.length;
+  const totalsPanel = page.locator("dl").filter({ has: page.getByText("Total Records", { exact: true }) });
+  const totals = await totalsPanel.locator("dd").allTextContents();
+  const exportScope = await page.getByTestId("collection-records-export-scope").textContent();
+  const modes = page.getByRole("group", { name: "Paparan rekod", exact: true });
+  await modes.getByRole("button", { name: "Lengkap", exact: true }).click();
+  await expect(table.getByRole("columnheader")).toHaveCount(18);
+  await expect(page.getByText("Page 2 / 2", { exact: true })).toBeVisible();
+  await expect(table.getByRole("button", { name: "Actions for record 51", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Search", { exact: true })).toHaveValue("Synthetic");
+  expect(await totalsPanel.locator("dd").allTextContents()).toEqual(totals);
+  expect(await page.getByTestId("collection-records-export-scope").textContent()).toBe(exportScope);
+  // A mode switch must remain presentation-only even after the filter debounce window.
+  await page.waitForTimeout(450);
+  expect(fixture.listRequests.length).toBe(requests);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(modes).toHaveCount(0);
+  await expect(page.getByTestId("collection-records-page").locator("article")).toHaveCount(10);
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await expect(modes.getByRole("button", { name: "Lengkap", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(table.getByRole("columnheader")).toHaveCount(18);
+  await expect(page.getByText("Page 2 / 2", { exact: true })).toBeVisible();
+  await modes.getByRole("button", { name: "Ringkas", exact: true }).click();
+  await expect(table.getByRole("columnheader")).toHaveCount(8);
+  expect(fixture.listRequests.length).toBe(requests);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection record empty recovery clears only search before resetting other filters", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  const fixture = await installFixture(page, baseURL, { count: 60, paginate: true });
+  await openRecords(page);
+  const table = page.getByRole("table", { name: "Collection records", exact: true });
+  await expect(table.locator("tbody tr")).toHaveCount(50);
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(table.getByText("Synthetic Customer 51", { exact: true })).toBeVisible();
+  const search = page.getByLabel("Search", { exact: true });
+  await search.fill("No synthetic customer matches this search");
+  const empty = page.getByTestId("collection-records-empty-state");
+  await expect(empty.getByText("Tiada rekod sepadan", { exact: true })).toBeVisible();
+  await expect(empty.getByRole("button", { name: "Kosongkan carian", exact: true })).toBeVisible();
+  await expect(empty.getByRole("button", { name: "Reset penapis", exact: true })).toHaveCount(0);
+  const aging = page.locator("#collection-records-aging-desktop");
+  await aging.click();
+  await page.getByRole("option", { name: "D4", exact: true }).click();
+  await expect.poll(() => fixture.listRequests.some((query) => new URLSearchParams(query).get("agingBuckets") === "D4")).toBe(true);
+  await expect(empty.getByRole("button", { name: "Reset penapis", exact: true })).toBeVisible();
+  await empty.getByRole("button", { name: "Kosongkan carian", exact: true }).click();
+  await expect(search).toHaveValue("");
+  await expect(aging).toContainText("D4");
+  await expect.poll(() => {
+    const query = new URLSearchParams(fixture.listRequests.at(-1));
+    return query.get("agingBuckets") === "D4" && !query.has("search");
+  }).toBe(true);
+  await expect(empty.getByText("Tiada rekod sepadan", { exact: true })).toBeVisible();
+  await expect(empty.getByRole("button", { name: "Kosongkan carian", exact: true })).toHaveCount(0);
+  await empty.getByRole("button", { name: "Reset penapis", exact: true }).click();
+  await expect(aging).toContainText("Semua aging");
+  await expect(table.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+  await expect(table.locator("tbody tr")).toHaveCount(50);
+  await expect(page.getByText("Page 1 / 2", { exact: true })).toBeVisible();
+  await expect(empty).toHaveCount(0);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection record empty recovery stays reachable on mobile without a mode switch", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const fixture = await installFixture(page, baseURL, { count: 1 });
+  await openRecords(page);
+  await expect(page.getByTestId("collection-records-page").locator("article")).toHaveCount(1);
+  await page.getByRole("button", { name: /Search & Filters/ }).click();
+  await page.getByLabel("Search", { exact: true }).fill("No matching customer");
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
+  const empty = page.getByTestId("collection-records-empty-state");
+  await expect(empty.getByText("Tiada rekod sepadan", { exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Paparan rekod", exact: true })).toHaveCount(0);
+  const clear = empty.getByRole("button", { name: "Kosongkan carian", exact: true });
+  await expect(clear).toBeVisible();
+  expect((await bounds(clear)).height).toBeGreaterThanOrEqual(44);
+  await assertPageFits(page);
+  await clear.click();
+  await expect(page.getByTestId("collection-records-page").locator("article")).toHaveCount(1);
+  await expect(empty).toHaveCount(0);
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection record load failure offers retry without claiming that no records exist", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  const fixture = await installFixture(page, baseURL, { count: 1 });
+  fixture.failLists = true;
+  await openRecords(page);
+  await expect(page.getByText("Rekod tidak dapat dimuatkan", { exact: true })).toBeVisible();
+  await expect(page.getByText("Tiada rekod untuk dipaparkan", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Tiada rekod sepadan", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Kosongkan carian", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset penapis", exact: true })).toHaveCount(0);
+  fixture.failLists = false;
+  await page.getByRole("button", { name: "Cuba semula", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Collection records", exact: true })
+    .getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Rekod tidak dapat dimuatkan", { exact: true })).toHaveCount(0);
+  expect(fixture.listRequests.length).toBeGreaterThanOrEqual(2);
+  // Retrying unchanged filters must not swallow the next automatic search.
+  const search = page.getByLabel("Search", { exact: true });
+  await search.fill("No matching customer after retry");
+  await expect(page.getByText("Tiada rekod sepadan", { exact: true })).toBeVisible();
+  await expect.poll(() => new URLSearchParams(fixture.listRequests.at(-1)).get("search"))
+    .toBe("No matching customer after retry");
+  await page.getByRole("button", { name: "Kosongkan carian", exact: true }).click();
+  await expect(search).toHaveValue("");
+  await expect(page.getByRole("table", { name: "Collection records", exact: true })
+    .getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
+  expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
 for (const theme of ["light", "dark"] as const) for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 600 }]) test(`Collection polish ${theme} ${viewport.width}x${viewport.height} pins identity/actions and one vertical header`, async ({ page, baseURL }, testInfo) => {
   await page.setViewportSize(viewport);
   const fixture = await installFixture(page, baseURL, { theme });
   await openRecords(page);
+  await page.getByRole("group", { name: "Paparan rekod", exact: true }).getByRole("button", { name: "Lengkap", exact: true }).click();
   const scroll = page.locator(".collection-records-table-scroll");
   await expect(scroll.locator("tbody tr")).toHaveCount(20);
   await scroll.scrollIntoViewIfNeeded();
@@ -332,11 +539,15 @@ for (const state of ["single", "empty", "loading"] as const) test(`Collection po
       expect((await bounds(scroll)).height).toBeLessThan(300);
       expect(await scroll.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
     } else {
-      const status = page.getByRole("status").filter({ hasText: state === "loading"
-        ? "Loading records..." : "No collection records found." });
+      const status = state === "loading"
+        ? page.getByRole("status").filter({ hasText: "Loading records..." })
+        : page.getByTestId("collection-records-empty-state");
       await expect(status).toBeVisible();
       expect((await bounds(status)).height).toBeLessThan(160);
       await expect(scroll).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Kosongkan carian", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Reset penapis", exact: true })).toHaveCount(0);
+      if (state === "empty") await expect(status.getByText("Tiada rekod untuk dipaparkan", { exact: true })).toBeVisible();
     }
     if (state === "loading") {
       await expect(exportButton).toBeDisabled();
@@ -363,6 +574,15 @@ for (const width of [1366, 390]) test(`Collection polish manager receipt return 
   await expect(page.getByText("Synthetic Customer 1", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Actions for record/ })).toHaveCount(0);
   await expect(page.locator(".collection-records-table-actions")).toHaveCount(0);
+  if (width >= 768) {
+    const table = page.getByRole("table", { name: "Collection records", exact: true });
+    const modes = page.getByRole("group", { name: "Paparan rekod", exact: true });
+    await expect(table.getByRole("columnheader")).toHaveCount(7);
+    await modes.getByRole("button", { name: "Lengkap", exact: true }).click();
+    await expect(table.getByRole("columnheader")).toHaveCount(18);
+    await expect(table.getByRole("button", { name: /^Actions for record/ })).toHaveCount(0);
+    await modes.getByRole("button", { name: "Ringkas", exact: true }).click();
+  }
   const row = page.getByTestId("collection-records-page").locator(width < 768 ? "article" : "tbody tr").first();
   const launcher = row.getByRole("button", { name: width < 768 ? "View Receipt" : "View", exact: true });
   await launcher.scrollIntoViewIfNeeded();
@@ -387,6 +607,7 @@ for (const theme of ["light", "dark"] as const) test(`Collection return ${theme}
   await page.setViewportSize({ width: 1366, height: 600 });
   const fixture = await installFixture(page, baseURL, { theme, receipts: 1 });
   await openRecords(page);
+  await page.getByRole("group", { name: "Paparan rekod", exact: true }).getByRole("button", { name: "Lengkap", exact: true }).click();
   const table = page.locator(".collection-records-table-scroll");
   await expect(table.locator("tbody tr")).toHaveCount(20);
   await table.scrollIntoViewIfNeeded();
@@ -661,6 +882,9 @@ for (const width of [320, 390]) test(`Collection polish mobile records preserve 
   const fixture = await installFixture(page, baseURL, { count: 1 });
   await openRecords(page);
   await expect(page.getByRole("button", { name: "Actions for record 1" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Paparan rekod", exact: true })).toHaveCount(0);
+  const amount = page.getByTestId("collection-records-page").locator("article").getByText(/^(?:RM\s*)?1,250\.00$/);
+  await expect(amount).not.toHaveClass(/text-success/);
   const exportScope = page.getByTestId("collection-records-export-scope");
   await expect(exportScope).toBeVisible();
   await expect(exportScope).toContainText(/all pages/i);
@@ -671,6 +895,9 @@ for (const width of [320, 390]) test(`Collection polish mobile records preserve 
   await page.getByText("Record details", { exact: true }).click();
   await expect(page.getByText("00009007199254740993", { exact: true })).toBeVisible();
   await assertPageFits(page);
+  await testInfo.attach(`records-mobile-${width}`, {
+    body: await page.getByTestId("collection-records-page").locator("article").screenshot(), contentType: "image/png",
+  });
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
 });

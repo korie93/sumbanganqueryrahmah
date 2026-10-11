@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState } from "react";
 import { ChevronDown, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { getAriaPressedProps } from "@/lib/aria-state-props";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
 import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -14,6 +15,7 @@ import {
 } from "@/pages/collection-records/collection-coverage";
 import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { CollectionRecordActions } from "./CollectionRecordActions";
+import { CollectionRecordsEmptyState, type CollectionRecordsEmptyStateProps } from "./CollectionRecordsEmptyState";
 
 const CollectionRecordsDesktopTable = lazy(() =>
   import("@/pages/collection-records/CollectionRecordsDesktopTable").then((module) => ({
@@ -21,7 +23,7 @@ const CollectionRecordsDesktopTable = lazy(() =>
   })),
 );
 
-export interface CollectionRecordsTableProps {
+export interface CollectionRecordsTableProps extends CollectionRecordsEmptyStateProps {
   loadingRecords: boolean;
   visibleRecords: CollectionRecord[];
   paginatedRecords: CollectionRecord[];
@@ -55,22 +57,40 @@ export function CollectionRecordsTable({
   onEdit,
   onDelete,
   canDeleteRow,
+  hasSearch,
+  hasFilters,
+  recordsLoadFailed,
+  onClearSearch,
+  onResetFilters,
+  onReloadRecords,
 }: CollectionRecordsTableProps) {
   const isMobile = useIsMobile();
+  // Presentation only: never stored with user data or included in list/export requests.
+  const [viewMode, setViewMode] = useState<"compact" | "full">("compact");
+
+  if (loadingRecords) {
+    return (
+      <div role="status" className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+        Loading records...
+      </div>
+    );
+  }
+
+  if (visibleRecords.length === 0) {
+    return <CollectionRecordsEmptyState
+      hasSearch={hasSearch}
+      hasFilters={hasFilters}
+      recordsLoadFailed={recordsLoadFailed}
+      onClearSearch={onClearSearch}
+      onResetFilters={onResetFilters}
+      onReloadRecords={onReloadRecords}
+    />;
+  }
 
   if (isMobile) {
     return (
       <div className="min-h-[180px] space-y-3">
-        {loadingRecords ? (
-          <div className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            Loading records...
-          </div>
-        ) : visibleRecords.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            No collection records found for the current filters.
-          </div>
-        ) : (
-          paginatedRecords.map((record, index) => (
+        {paginatedRecords.map((record, index) => (
             <article
               key={record.id}
               data-last-viewed={record.id === lastViewedRecordId ? "true" : undefined}
@@ -92,7 +112,7 @@ export function CollectionRecordsTable({
                   <h3 className="break-words text-base font-semibold text-foreground">
                     {record.customerName}
                   </h3>
-                  <p className="text-sm font-medium tabular-nums text-success">
+                  <p className="text-sm font-medium tabular-nums text-foreground">
                     {formatAmountRM(record.amount)}
                   </p>
                 </div>
@@ -183,15 +203,33 @@ export function CollectionRecordsTable({
                 ) : null}
               </div>
             </article>
-          ))
-        )}
+          ))}
       </div>
     );
   }
 
   return (
+    <div className="min-w-0 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p id="collection-records-view-hint" className="text-xs text-muted-foreground">
+          Ringkas untuk semakan harian. Lengkap untuk semua kolum. Eksport kekal lengkap.
+        </p>
+        <div role="group" aria-label="Paparan rekod" aria-describedby="collection-records-view-hint" className="flex shrink-0 gap-1">
+          <Button type="button" variant={viewMode === "compact" ? "secondary" : "ghost"}
+            className="min-h-11 sm:min-h-11" {...getAriaPressedProps(viewMode === "compact")}
+            onClick={() => setViewMode("compact")}>
+            Ringkas
+          </Button>
+          <Button type="button" variant={viewMode === "full" ? "secondary" : "ghost"}
+            className="min-h-11 sm:min-h-11" {...getAriaPressedProps(viewMode === "full")}
+            onClick={() => setViewMode("full")}>
+            Lengkap
+          </Button>
+        </div>
+      </div>
     <Suspense fallback={<CollectionRecordsDesktopTableFallback />}>
       <CollectionRecordsDesktopTable
+        viewMode={viewMode}
         loadingRecords={loadingRecords}
         visibleRecords={visibleRecords}
         paginatedRecords={paginatedRecords}
@@ -204,5 +242,6 @@ export function CollectionRecordsTable({
         canDeleteRow={canDeleteRow}
       />
     </Suspense>
+    </div>
   );
 }

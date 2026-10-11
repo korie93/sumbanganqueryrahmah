@@ -16,7 +16,9 @@ import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { CollectionRecordActions } from "./CollectionRecordActions";
 import "./CollectionRecordsDesktopTable.css";
 
-type CollectionRecordsDesktopTableProps = CollectionRecordsTableProps;
+type CollectionRecordsDesktopTableProps = CollectionRecordsTableProps & {
+  viewMode?: "compact" | "full";
+};
 
 export function CollectionRecordsDesktopTable({
   loadingRecords,
@@ -29,6 +31,7 @@ export function CollectionRecordsDesktopTable({
   onEdit,
   onDelete,
   canDeleteRow,
+  viewMode = "compact",
 }: CollectionRecordsDesktopTableProps) {
   if (loadingRecords || visibleRecords.length === 0) {
     return (
@@ -39,37 +42,45 @@ export function CollectionRecordsDesktopTable({
   }
 
   const hasRowActions = canEdit || paginatedRecords.some(canDeleteRow);
+  const isCompact = viewMode === "compact";
+  const showActionsColumn = !isCompact || hasRowActions;
 
   return (
       <Table
         aria-label="Collection records"
-        className="min-w-[2140px] text-sm"
+        className={cn("text-sm", isCompact ? "collection-records-table--compact min-w-[64rem] table-fixed" : "min-w-[2140px]")}
         containerProps={{
           role: "region",
           "aria-label": "Collection records, scroll to view more columns and rows",
-          className: cn("collection-records-table-scroll rounded-lg border border-border bg-card", hasRowActions && "collection-records-table-scroll--actions"),
+          className: cn("collection-records-table-scroll rounded-lg border border-border bg-card", isCompact && "collection-records-table-scroll--compact", hasRowActions && "collection-records-table-scroll--actions"),
         }}
       >
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-[72px] border-b border-border/70 bg-muted">No.</TableHead>
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact ? "w-16" : "w-[72px]")}>No.</TableHead>
             <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-muted">Customer Name</TableHead>
+            {isCompact ? (
+              <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-36 border-b border-border/70 bg-muted">Account / Card</TableHead>
+            ) : <>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">IC Number</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Account Number</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Card Number</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Customer Phone Number</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Batch</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right">Amount</TableHead>
+            </>}
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", isCompact && "w-28")}>Amount</TableHead>
+            {!isCompact ? <>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right">TOTAL DUE</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right">Billing Principal (OSP)</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">CP Status</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Aging</TableHead>
             <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Match</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Payment Date</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Receipt</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Staff Nickname</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Source File</TableHead>
-            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", hasRowActions && "collection-records-table-actions")}>Actions</TableHead>
+            </> : null}
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Payment Date</TableHead>
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Receipt</TableHead>
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Staff Nickname</TableHead>
+            {!isCompact ? <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Source File</TableHead> : null}
+            {showActionsColumn ? <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", hasRowActions && "collection-records-table-actions")}>Actions</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -88,22 +99,39 @@ export function CollectionRecordsDesktopTable({
                   {pageOffset + index + 1}
                 </TableCell>
                 <TableCell className="collection-records-table-identity py-2 font-medium">
-                  <span className="block w-56 whitespace-normal wrap-anywhere">{record.customerName}</span>
+                  <span className={cn("block whitespace-normal wrap-anywhere", isCompact ? "w-full" : "w-56")}>{record.customerName}</span>
                   {record.id === lastViewedRecordId ? <span className="sr-only">Last opened record</span> : null}
                 </TableCell>
+                {isCompact ? (
+                  <TableCell className="py-2">
+                    <dl className="space-y-1.5 whitespace-normal wrap-anywhere">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Account</dt>
+                        <dd>{record.accountNumber || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Card</dt>
+                        <dd>{getCollectionCardNumberLabel(record.cardNumber)}</dd>
+                      </div>
+                    </dl>
+                  </TableCell>
+                ) : <>
                 <TableCell className="py-2 whitespace-nowrap">{record.icNumber}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.accountNumber || "-"}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{getCollectionCardNumberLabel(record.cardNumber)}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.customerPhone}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.batch}</TableCell>
-                <TableCell className="py-2 whitespace-nowrap font-medium tabular-nums text-right text-success">
+                </>}
+                <TableCell className={cn("py-2 font-medium tabular-nums text-right text-foreground", isCompact ? "whitespace-normal wrap-anywhere" : "whitespace-nowrap")}>
                   {formatAmountRM(record.amount)}
                 </TableCell>
+                {!isCompact ? <>
                 <TableCell className="py-2 whitespace-nowrap text-right tabular-nums">{formatCollectionOptionalAmount(record.totalDue)}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap text-right tabular-nums">{formatCollectionOptionalAmount(record.billingPrincipalOsp)}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap font-medium">{getCollectionCpStatusLabel(record)}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{record.agingBucket || "-"}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">{getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy)}</TableCell>
+                </> : null}
                 <TableCell className="py-2 whitespace-nowrap">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
                 <TableCell className="py-2 whitespace-nowrap">
                   {(record.receipts?.length || 0) > 0 ? (
@@ -111,7 +139,7 @@ export function CollectionRecordsDesktopTable({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-9 rounded-md px-3 text-foreground"
+                      className={cn("h-9 rounded-md px-3 text-foreground", isCompact && "h-auto min-h-9 max-w-full whitespace-normal px-2 [&>svg]:shrink-0")}
                       onClick={(event) => onViewReceipt(record, event.currentTarget)}
                     >
                       <Eye className="mr-1.5 h-3.5 w-3.5" />
@@ -121,11 +149,11 @@ export function CollectionRecordsDesktopTable({
                     <span className="text-muted-foreground">-</span>
                   )}
                 </TableCell>
-                <TableCell className="py-2 whitespace-nowrap">{record.collectionStaffNickname}</TableCell>
-                <TableCell className="max-w-[240px] truncate py-2" title={getCollectionRecordSourceLabel(record)}>
+                <TableCell className={cn("py-2", isCompact ? "whitespace-normal wrap-anywhere" : "whitespace-nowrap")}>{record.collectionStaffNickname}</TableCell>
+                {!isCompact ? <TableCell className="max-w-[240px] truncate py-2" title={getCollectionRecordSourceLabel(record)}>
                   {getCollectionRecordSourceLabel(record)}
-                </TableCell>
-                <TableCell className={cn("py-2 text-right whitespace-nowrap", hasRowActions && "collection-records-table-actions")}>
+                </TableCell> : null}
+                {showActionsColumn ? <TableCell className={cn("py-2 text-right whitespace-nowrap", hasRowActions && "collection-records-table-actions")}>
                   {canEdit || canDeleteRow(record) ? (
                     <CollectionRecordActions
                       record={record}
@@ -136,7 +164,7 @@ export function CollectionRecordsDesktopTable({
                       onDelete={onDelete}
                     />
                   ) : null}
-                </TableCell>
+                </TableCell> : null}
               </TableRow>
             ))}
         </TableBody>
