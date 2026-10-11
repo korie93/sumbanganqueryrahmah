@@ -47,7 +47,7 @@ export function useCollectionSourceMatching(
     setResult(next);
   }, []);
 
-  const cancelMatching = useCallback(() => {
+  const clearMatchingResources = useCallback(() => {
     if (debounceRef.current !== null) clearTimeout(debounceRef.current);
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
     debounceRef.current = null;
@@ -58,9 +58,9 @@ export function useCollectionSourceMatching(
   }, []);
 
   const resetMatches = useCallback(() => {
-    cancelMatching();
+    clearMatchingResources();
     updateResult(null);
-  }, [cancelMatching, updateResult]);
+  }, [clearMatchingResources, updateResult]);
 
   const runMatching = useCallback(async (expectedContextKey?: string) => {
     const current = contextRef.current;
@@ -68,7 +68,7 @@ export function useCollectionSourceMatching(
       !current.contextKey || !current.input || current.paused
       || (expectedContextKey !== undefined && expectedContextKey !== current.contextKey)
     ) return;
-    cancelMatching();
+    clearMatchingResources();
     const controller = new AbortController();
     controllerRef.current = controller;
     const requestId = requestIdRef.current;
@@ -91,7 +91,7 @@ export function useCollectionSourceMatching(
     );
     const finish = (next: MatchingResult) => {
       if (!isCurrentRequest()) return;
-      cancelMatching();
+      clearMatchingResources();
       updateResult(next);
     };
     const fail = (error: unknown) => {
@@ -125,18 +125,18 @@ export function useCollectionSourceMatching(
     } catch (error: unknown) {
       if (isCurrentRequest()) fail(error);
     }
-  }, [cancelMatching, updateResult]);
+  }, [clearMatchingResources, updateResult]);
 
   useEffect(() => {
-    cancelMatching();
+    clearMatchingResources();
     const previous = resultRef.current;
     const completed = previous?.contextKey === contextKey && previous.status !== "checking";
     if (!completed) updateResult(null);
     if (contextKey && !paused && !completed) {
       debounceRef.current = setTimeout(() => void runMatching(contextKey), COLLECTION_MATCHING_DEBOUNCE_MS);
     }
-    return cancelMatching;
-  }, [contextKey, paused, cancelMatching, runMatching, updateResult]);
+    return clearMatchingResources;
+  }, [contextKey, paused, clearMatchingResources, runMatching, updateResult]);
 
   // Suppress the old context during render, before effect cleanup can run.
   const visibleResult = contextKey && result?.contextKey === contextKey ? result : null;

@@ -2,6 +2,24 @@
 
 Updated: 2026-10-11 (Asia/Singapore)
 
+## Latest CI repair — COMPLETE LOCALLY, PUBLICATION AUTHORIZED (2026-10-11)
+
+The earlier 17-file implementation was committed and pushed as `024112ad49e9a28164c3cfe396dfededc1336789`. The publication/implementation sections below are historical. The user then reported failure in `build-and-test / Run script tests`; this section supersedes older completion notes for the latest work. After local verification, the user explicitly requested commit and push of this repair. Deployment and production access remain outside this request.
+
+Evidence: GitHub CI run `38099128292`, job `114351196492`, failed `scripts/tests/client-timer-ownership.test.mjs` with `useCollectionSourceMatching.ts: setTimeout without clearTimeout cleanup`. The same failure was reproduced locally. Cleanup already existed: `cancelMatching` cleared both timer refs, aborted the request and invalidated its ID, and was returned by the effect. The static ownership checker only recognizes cleanup helpers named `clear[A-Z]...`, causing a false positive.
+
+Fix: renamed the internal callback and every call/dependency to `clearMatchingResources`, without changing runtime behavior. Added a focused ownership regression test checking both timers, controller abort/reset, request-ID invalidation, and the shared cleanup returned by the effect and called by reset/completion. The generic timer analyzer and CI workflow remain unchanged; no exemptions or removed assertions.
+
+Verification:
+
+- Original failure reproduced; new ownership test also failed before the rename. Final focused timer suite: **3/3 passed**.
+- Full `npm run test:scripts`: **717 passed, 0 failed, 1 pre-existing conditional Viewer skip** (MJS 654 pass + 1 skip; TypeScript 63 pass). Log: `artifacts/ci-timer-script-tests.log`. Run with an OS-only test environment, disabled dotenv and unusable loopback PostgreSQL port 1; no database or production access.
+- Matching policy/lifecycle/display and Save accessibility tests: **32/32 passed**. Initial Windows sandbox run could not initialize tsx (`uv_os_get_passwd ENOMEM`); scoped outside-sandbox rerun passed.
+- `npm run typecheck`: **PASS**. ESLint on the changed hook: **PASS**.
+- Independent read-only review: no actionable findings; hook diff is strictly an identifier rename and all dependency references are updated.
+
+This is local verification, not a successful GitHub rerun. No build/browser rerun was needed for this behavior-neutral rename; earlier browser results below belong to the previous implementation. The publication scope is the matching hook, timer ownership test and this handoff, using a normal push to the existing `main` branch with Git hooks enabled. Check current Git status/history and the remote branch for the actual publication outcome; do not infer CI success or deployment from this note.
+
 ## Publication authorization — 2026-10-11
 
 After the completed implementation below, the user explicitly requested commit and push. That later request supersedes the earlier no-commit/no-push scope notes, which describe the implementation phase. Publish the 17 reviewed files to the existing `main` branch using a normal push, with secret guards enabled. Repository hygiene/secret scan and current remote ancestry were rechecked before staging. Deployment is still not requested. Verify the resulting commit and remote branch with Git rather than assuming push or CI success from this note.

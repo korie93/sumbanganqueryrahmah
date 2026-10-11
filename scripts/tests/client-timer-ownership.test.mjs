@@ -126,3 +126,20 @@ test("useEffect browser timers have deterministic cleanup", () => {
 
   assert.deepEqual(failures, []);
 });
+
+test("Collection matching owns both timers and returns its shared cancellation cleanup", () => {
+  const source = readSource("client/src/pages/collection/useCollectionSourceMatching.ts");
+  const cleanup = source.match(/const clearMatchingResources = useCallback\(\(\) => \{([\s\S]*?)\n  \}, \[\]\);/)?.[1];
+
+  assert.ok(cleanup, "Matching cleanup must remain a stable, explicit resource owner");
+  for (const timer of ["debounceRef", "timeoutRef"]) {
+    assert.ok(cleanup.includes(`if (${timer}.current !== null) clearTimeout(${timer}.current);`));
+    assert.ok(cleanup.includes(`${timer}.current = null;`));
+  }
+  assert.ok(cleanup.includes("controllerRef.current?.abort();"));
+  assert.ok(cleanup.includes("controllerRef.current = null;"));
+  assert.ok(cleanup.includes("requestIdRef.current += 1;"));
+  assert.match(source, /useEffect\(\(\) => \{\s+clearMatchingResources\(\);[\s\S]*?debounceRef\.current = setTimeout\([\s\S]*?return clearMatchingResources;\s+\}, \[contextKey, paused, clearMatchingResources, runMatching, updateResult\]\);/);
+  assert.match(source, /const resetMatches = useCallback\(\(\) => \{\s+clearMatchingResources\(\);/);
+  assert.match(source, /const finish = \(next: MatchingResult\) => \{\s+if \(!isCurrentRequest\(\)\) return;\s+clearMatchingResources\(\);/);
+});
