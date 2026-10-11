@@ -93,7 +93,7 @@ test("collection receipt smoke configures a governed source before automatic mat
     '`/api/collection/source-configs/${encodeURIComponent(sourceImportId)}`',
   );
   const sourceMatchIndex = smokeSource.indexOf(
-    'page.getByRole("button", { name: "Semak Auto-matching" }).click()',
+    'const [sourceMatchResponse] = await Promise.all([',
   );
   const createWaitIndex = smokeSource.indexOf("const createResponsePromise", sourceMatchIndex);
   const saveIndex = smokeSource.indexOf(
@@ -118,8 +118,11 @@ test("collection receipt smoke configures a governed source before automatic mat
   assert.match(smokeSource, /validFrom: values\.validFrom \?\? "2000-01-01"/);
   assert.match(smokeSource, /validTo: values\.validTo \?\? "2099-12-31"/);
   assert.doesNotMatch(smokeSource, /save-collection-source-file/);
+  assert.doesNotMatch(smokeSource, /name: "Semak Auto-matching"/);
+  assert.match(smokeSource, /const \[sourceMatchResponse\] = await Promise\.all\(\[[\s\S]*?getInputByLabel\(page, "Amount \(RM\)"\)\.fill\("12\.34"\),\s+\]\)/);
   assert.doesNotMatch(smokeSource, /getByLabel\("Aging"/);
-  assert.match(smokeSource, /page\.getByText\("Abort CP", \{ exact: true \}\)/);
+  assert.match(smokeSource, /page\.locator\("#save-collection-source-match-status"\)[\s\S]*?hasText: "Padanan Saved ditemui\."/);
+  assert.doesNotMatch(smokeSource, /page\.getByText\("Abort CP", \{ exact: true \}\)/);
   assert.match(smokeSource, /String\(matchedSource\.projectedCumulative \|\| ""\) === "12\.34"/);
   assert.ok(sourceConfigIndex >= 0 && sourceConfigIndex < sourceMatchIndex);
   assert.ok(sourceMatchIndex >= 0 && sourceMatchIndex < createWaitIndex);

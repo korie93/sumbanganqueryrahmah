@@ -1,38 +1,65 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { useCollectionSourceMatching } from "../useCollectionSourceMatching";
 
-const source = readFileSync(
-  path.resolve(process.cwd(), "client/src/pages/collection/useCollectionSourceMatching.ts"),
-  "utf8",
-).replace(/\r\n/g, "\n");
+const identity = {
+  customerName: "Synthetic Customer",
+  icNumber: "SYNTHETIC-001",
+  customerPhone: "0100000000",
+  accountNumber: "TEST-ACCOUNT",
+  cardNumber: "",
+  paymentDate: "2024-01-15",
+  amount: "10",
+};
 
-test("auto matching aborts in-flight requests on identity change and unmount", () => {
-  assert.match(source, /matchingControllerRef\.current\?\.abort\(\)/);
-  assert.match(source, /useEffect\(\(\) => \(\) => \{/);
-  assert.match(source, /matchingRequestIdRef\.current \+= 1/);
+function renderMatching(
+  input = identity,
+  options: Parameters<typeof useCollectionSourceMatching>[1] = {},
+) {
+  const snapshots: ReturnType<typeof useCollectionSourceMatching>[] = [];
+  function Fixture() {
+    snapshots.push(useCollectionSourceMatching(input, options));
+    return null;
+  }
+  renderToStaticMarkup(createElement(Fixture));
+  return snapshots[0]!;
+}
+
+test("an incomplete matching form starts without validation errors or a selected match", () => {
+  const result = renderMatching({ ...identity, customerName: "" });
+  assert.equal(result.status, "incomplete");
+  assert.equal(result.error, "");
+  assert.equal(result.errorKind, null);
+  assert.equal(result.selectedMatch, null);
+  assert.equal(result.hasSearched, false);
+  assert.equal(result.canRetry, false);
 });
 
-test("auto matching ignores aborted and superseded responses", () => {
-  assert.match(source, /requestId !== matchingRequestIdRef\.current/);
-  assert.match(source, /requestFingerprint !== identityFingerprintRef\.current/);
-  assert.match(source, /isAbortError\(matchingError\)/);
+test("a complete form starts waiting rather than implying a completed search", () => {
+  const result = renderMatching();
+  assert.equal(result.status, "waiting");
+  assert.equal(result.loading, false);
+  assert.equal(result.hasSearched, false);
+  assert.equal(result.canRetry, false);
+  assert.deepEqual(result.matches, []);
 });
 
-test("auto matching validates identity, date, and amount before its request", () => {
-  const validationIndex = source.indexOf("validateSaveCollectionIdentityFields(identity)");
-  const requestIndex = source.indexOf("await getCollectionSourceMatches(identity, { signal: controller.signal })");
-
-  assert.notEqual(validationIndex, -1);
-  assert.notEqual(requestIndex, -1);
-  assert.ok(validationIndex < requestIndex);
-  assert.doesNotMatch(source, /sourceImportId/);
-  assert.doesNotMatch(source, /getCollectionSavedSourceFiles/);
+test("reset confirmation and submitting can pause a complete form before effects run", () => {
+  const result = renderMatching(identity, { paused: true });
+  assert.equal(result.status, "paused");
+  assert.equal(result.loading, false);
+  assert.equal(result.canRetry, false);
 });
 
-test("auto matching sends only identity, payment date, and amount", () => {
-  assert.match(source, /getCollectionSourceMatches\(identity, \{ signal: controller\.signal \}\)/);
-  assert.doesNotMatch(source, /selectedSourceFile/);
-  assert.doesNotMatch(source, /sourceFiles/);
+test("disabled matching has no matching context even with complete identity", () => {
+  const result = renderMatching(identity, { enabled: false, paused: true, scopeKey: "other-nickname" });
+  assert.equal(result.status, "paused");
+  assert.equal(result.selectedMatch, null);
+  assert.equal(result.error, "");
+  assert.equal(result.canRetry, false);
 });
+
+// Stateful timing, cancellation, stale responses, and pause/resume behavior run
+// against the real React hook in tests/visual/collection-auto-matching.spec.ts.

@@ -34,8 +34,13 @@ export function useSaveCollectionPageState({
   mutationFeedback,
 }: UseSaveCollectionPageStateOptions) {
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [matchingSubmissionPending, setMatchingSubmissionPending] = useState(false);
   const resetConfirmPendingRef = useRef(false);
   const submitActionInFlightRef = useRef(false);
+  const reportSubmittingChange = useCallback((pending: boolean) => {
+    setMatchingSubmissionPending(pending);
+    onSubmittingChange?.(pending);
+  }, [onSubmittingChange]);
   const formState = useSaveCollectionFormState({ staffNickname });
   const receiptState = useSaveCollectionReceiptState({ mutationFeedback });
   const sourceMatchState = useCollectionSourceMatching({
@@ -46,7 +51,11 @@ export function useSaveCollectionPageState({
     cardNumber: formState.cardNumber,
     paymentDate: formState.paymentDate,
     amount: formState.amount,
-  }, formState.applyFieldErrors);
+  }, {
+    enabled: !accessSuspended && staffNickname.trim().length >= 2,
+    paused: resetConfirmOpen || matchingSubmissionPending,
+    scopeKey: staffNickname.trim(),
+  });
   const draftState = useSaveCollectionDraftState({
     staffNickname,
     values: formState.values,
@@ -72,7 +81,7 @@ export function useSaveCollectionPageState({
     onSaved,
     accessSuspended,
     onReauthenticateNickname,
-    onSubmittingChange,
+    onSubmittingChange: reportSubmittingChange,
     mutationFeedback,
     clearPageState,
     applyFieldErrors: formState.applyFieldErrors,
@@ -230,12 +239,12 @@ export function useSaveCollectionPageState({
     handleClearPendingReceipts,
     handlePendingDraftChange,
     sourceMatching: {
+      status: sourceMatchState.status,
       error: sourceMatchState.error,
-      hasSearched: sourceMatchState.hasSearched,
-      loading: sourceMatchState.loading,
-      matches: sourceMatchState.matches,
+      errorKind: sourceMatchState.errorKind,
+      canRetry: sourceMatchState.canRetry,
       selectedMatch: sourceMatchState.selectedMatch,
-      runMatching: sourceMatchState.runMatching,
+      retryMatching: sourceMatchState.retryMatching,
     },
     handleSubmit,
   };

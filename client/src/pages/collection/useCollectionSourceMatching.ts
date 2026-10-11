@@ -1,151 +1,182 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getCollectionSourceMatches, type CollectionSourceMatch } from "@/lib/api";
-import { resolveMutationErrorMessage } from "@/lib/mutation-feedback";
 import {
-  type SaveCollectionFieldErrors,
-  validateSaveCollectionIdentityFields,
-} from "@/pages/collection/save-collection-page-utils";
-import { isFutureDate, isPositiveAmount, isValidDate } from "@/pages/collection/utils";
+  classifyCollectionMatchingError,
+  COLLECTION_MATCHING_DEBOUNCE_MS,
+  COLLECTION_MATCHING_TIMEOUT_MS,
+  normalizeCollectionMatchingInput,
+  type CollectionMatchingErrorKind,
+  type CollectionMatchingStatus,
+  type CollectionSourceMatchingInput,
+} from "./collection-source-matching-policy";
 
-type CollectionSourceMatchingInput = {
-  customerName: string;
-  icNumber: string;
-  customerPhone: string;
-  accountNumber: string;
-  cardNumber: string;
-  paymentDate: string;
-  amount: string;
+type MatchingResult = {
+  contextKey: string;
+  status: "checking" | "matched" | "no-match" | "error";
+  matches: CollectionSourceMatch[];
+  error: string;
+  errorKind: CollectionMatchingErrorKind | null;
+  retryAt: number;
 };
 
-function isAbortError(error: unknown) {
-  return typeof DOMException !== "undefined"
-    && error instanceof DOMException
-    && error.name === "AbortError";
-}
+type MatchingOptions = {
+  enabled?: boolean;
+  paused?: boolean;
+  scopeKey?: string;
+};
 
 export function useCollectionSourceMatching(
   identity: CollectionSourceMatchingInput,
-  onValidationErrors?: (errors: SaveCollectionFieldErrors) => void,
+  { enabled = true, paused = false, scopeKey = "" }: MatchingOptions = {},
 ) {
-  const matchingControllerRef = useRef<AbortController | null>(null);
-  const matchingRequestIdRef = useRef(0);
-  const [matches, setMatches] = useState<CollectionSourceMatch[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
-  const identityFingerprint = useMemo(() => JSON.stringify({
-    customerName: identity.customerName.trim(),
-    icNumber: identity.icNumber.trim(),
-    customerPhone: identity.customerPhone.trim(),
-    accountNumber: identity.accountNumber.trim(),
-    cardNumber: identity.cardNumber.trim(),
-    paymentDate: identity.paymentDate.trim(),
-    amount: identity.amount.trim(),
-  }), [
-    identity.accountNumber,
-    identity.cardNumber,
-    identity.amount,
-    identity.customerName,
-    identity.customerPhone,
-    identity.icNumber,
-    identity.paymentDate,
-  ]);
-  const identityFingerprintRef = useRef(identityFingerprint);
-  identityFingerprintRef.current = identityFingerprint;
+  const input = normalizeCollectionMatchingInput(identity);
+  const contextKey = enabled && input ? JSON.stringify([scopeKey, input]) : null;
+  const contextRef = useRef({ contextKey, input, paused });
+  contextRef.current = { contextKey, input, paused };
+
+  const controllerRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultRef = useRef<MatchingResult | null>(null);
+  const [result, setResult] = useState<MatchingResult | null>(null);
+  const [retryClock, setRetryClock] = useState(0);
+
+  const updateResult = useCallback((next: MatchingResult | null) => {
+    resultRef.current = next;
+    setResult(next);
+  }, []);
+
+  const cancelMatching = useCallback(() => {
+    if (debounceRef.current !== null) clearTimeout(debounceRef.current);
+    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+    debounceRef.current = null;
+    timeoutRef.current = null;
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    requestIdRef.current += 1;
+  }, []);
 
   const resetMatches = useCallback(() => {
-    matchingControllerRef.current?.abort();
-    matchingControllerRef.current = null;
-    matchingRequestIdRef.current += 1;
-    setMatches([]);
-    setLoading(false);
-    setError("");
-    setHasSearched(false);
-  }, []);
+    cancelMatching();
+    updateResult(null);
+  }, [cancelMatching, updateResult]);
 
-  useEffect(() => {
-    resetMatches();
-  }, [identityFingerprint, resetMatches]);
-
-  useEffect(() => () => {
-    matchingControllerRef.current?.abort();
-    matchingRequestIdRef.current += 1;
-  }, []);
-
-  const runMatching = useCallback(async () => {
-    const validationErrors = validateSaveCollectionIdentityFields(identity);
-    if (!isValidDate(identity.paymentDate) || isFutureDate(identity.paymentDate)) {
-      validationErrors.paymentDate = !isValidDate(identity.paymentDate)
-        ? "Payment Date is invalid."
-        : "Payment Date cannot be in the future.";
-    }
-    if (!isPositiveAmount(identity.amount)) {
-      validationErrors.amount = "Amount must be greater than 0.";
-    }
-    if (Object.keys(validationErrors).length > 0) {
-      resetMatches();
-      onValidationErrors?.(validationErrors);
-      setError("Lengkapkan maklumat customer, payment date, dan amount sebelum semak auto-matching.");
-      return;
-    }
-
-    onValidationErrors?.({});
-    matchingControllerRef.current?.abort();
+  const runMatching = useCallback(async (expectedContextKey?: string) => {
+    const current = contextRef.current;
+    if (
+      !current.contextKey || !current.input || current.paused
+      || (expectedContextKey !== undefined && expectedContextKey !== current.contextKey)
+    ) return;
+    cancelMatching();
     const controller = new AbortController();
-    matchingControllerRef.current = controller;
-    const requestId = ++matchingRequestIdRef.current;
-    const requestFingerprint = identityFingerprint;
-    setLoading(true);
-    setError("");
-    setHasSearched(false);
-    setMatches([]);
+    controllerRef.current = controller;
+    const requestId = requestIdRef.current;
+    const requestContextKey = current.contextKey;
+    const pending: MatchingResult = {
+      contextKey: requestContextKey,
+      status: "checking",
+      matches: [],
+      error: "",
+      errorKind: null,
+      retryAt: 0,
+    };
+    updateResult(pending);
+
+    const isCurrentRequest = () => (
+      !controller.signal.aborted
+      && requestId === requestIdRef.current
+      && requestContextKey === contextRef.current.contextKey
+      && !contextRef.current.paused
+    );
+    const finish = (next: MatchingResult) => {
+      if (!isCurrentRequest()) return;
+      cancelMatching();
+      updateResult(next);
+    };
+    const fail = (error: unknown) => {
+      const failure = classifyCollectionMatchingError(error);
+      finish({
+        ...pending,
+        status: failure.errorKind === "no-match" ? "no-match" : "error",
+        error: failure.message,
+        errorKind: failure.errorKind,
+        retryAt: Date.now() + failure.retryAfterMs,
+      });
+    };
+
+    // The API leaves timeouts to callers that supply an AbortSignal.
+    timeoutRef.current = setTimeout(() => {
+      fail(new DOMException("Matching request timed out", "TimeoutError"));
+    }, COLLECTION_MATCHING_TIMEOUT_MS);
 
     try {
-      const response = await getCollectionSourceMatches(identity, { signal: controller.signal });
-      if (
-        controller.signal.aborted
-        || requestId !== matchingRequestIdRef.current
-        || requestFingerprint !== identityFingerprintRef.current
-      ) return;
-      setMatches(response.matches);
-      setHasSearched(true);
-      if (response.matches.length === 0) {
-        setError("Tiada padanan Saved yang sah untuk maklumat ini.");
+      const response = await getCollectionSourceMatches(current.input, { signal: controller.signal });
+      if (response.matches.length > 1) {
+        finish({ ...pending, status: "error", errorKind: "ambiguous" });
+      } else {
+        finish({
+          ...pending,
+          status: response.matches.length === 1 ? "matched" : "no-match",
+          matches: response.matches,
+          errorKind: response.matches.length === 0 ? "no-match" : null,
+        });
       }
-    } catch (matchingError: unknown) {
-      if (
-        controller.signal.aborted
-        || requestId !== matchingRequestIdRef.current
-        || requestFingerprint !== identityFingerprintRef.current
-        || isAbortError(matchingError)
-      ) return;
-      setMatches([]);
-      setHasSearched(true);
-      setError(resolveMutationErrorMessage(
-        matchingError,
-        "Auto-matching gagal. Cuba lagi sebentar.",
-      ));
-    } finally {
-      if (
-        !controller.signal.aborted
-        && requestId === matchingRequestIdRef.current
-        && requestFingerprint === identityFingerprintRef.current
-      ) {
-        setLoading(false);
-        matchingControllerRef.current = null;
-      }
+    } catch (error: unknown) {
+      if (isCurrentRequest()) fail(error);
     }
-  }, [identity, identityFingerprint, onValidationErrors, resetMatches]);
+  }, [cancelMatching, updateResult]);
 
-  const selectedMatch = matches.length === 1 ? matches[0]! : null;
+  useEffect(() => {
+    cancelMatching();
+    const previous = resultRef.current;
+    const completed = previous?.contextKey === contextKey && previous.status !== "checking";
+    if (!completed) updateResult(null);
+    if (contextKey && !paused && !completed) {
+      debounceRef.current = setTimeout(() => void runMatching(contextKey), COLLECTION_MATCHING_DEBOUNCE_MS);
+    }
+    return cancelMatching;
+  }, [contextKey, paused, cancelMatching, runMatching, updateResult]);
 
+  // Suppress the old context during render, before effect cleanup can run.
+  const visibleResult = contextKey && result?.contextKey === contextKey ? result : null;
+  const status: CollectionMatchingStatus = !enabled ? "paused" : !contextKey
+    ? "incomplete"
+    : paused ? "paused" : visibleResult?.status ?? "waiting";
+  const retryAt = visibleResult?.retryAt ?? 0;
+  useEffect(() => {
+    if (status !== "error" || visibleResult?.errorKind !== "transient" || retryAt <= Date.now()) return;
+    // This timer only enables the button. It never retries a request.
+    const timer = setTimeout(() => setRetryClock(Date.now()), Math.min(retryAt - Date.now(), 2_147_483_647));
+    return () => clearTimeout(timer);
+  }, [status, visibleResult?.errorKind, retryAt, retryClock]);
+
+  const canRetry = status === "error"
+    && visibleResult?.errorKind === "transient"
+    && retryAt <= Date.now();
+  const retryMatching = useCallback(() => {
+    const current = contextRef.current;
+    const previous = resultRef.current;
+    if (
+      !current.contextKey || current.paused
+      || previous?.contextKey !== current.contextKey
+      || previous.status !== "error" || previous.errorKind !== "transient"
+      || previous.retryAt > Date.now()
+    ) return;
+    void runMatching();
+  }, [runMatching]);
+
+  const matches = visibleResult?.matches ?? [];
   return {
-    error,
-    hasSearched,
-    loading,
-    matches,
-    selectedMatch,
+    status,
+    error: visibleResult?.error ?? "",
+    errorKind: visibleResult?.errorKind ?? null,
+    canRetry,
+    retryMatching,
     resetMatches,
-    runMatching,
+    matches,
+    selectedMatch: matches.length === 1 ? matches[0]! : null,
+    loading: status === "checking",
+    hasSearched: Boolean(visibleResult && visibleResult.status !== "checking"),
   };
 }

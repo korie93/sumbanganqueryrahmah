@@ -1706,19 +1706,19 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       value: paymentDate,
       buttonTestId: "save-collection-payment-date",
     });
-    await getInputByLabel(page, "Amount (RM)").fill("12.34");
-    await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
-    await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
-    await fillReceiptAmountInput(page, "12.34");
-
+    // Register the listener before the last matching field becomes valid.
     const [sourceMatchResponse] = await Promise.all([
       page.waitForResponse(
         (response) =>
           response.request().method() === "POST"
           && new URL(response.url()).pathname === "/api/collection/source-matches",
       ),
-      page.getByRole("button", { name: "Semak Auto-matching" }).click(),
+      getInputByLabel(page, "Amount (RM)").fill("12.34"),
     ]);
+    await page.locator('input[type="file"]').setInputFiles(saveReceiptPath);
+    await page.getByText(saveReceiptName).first().waitFor({ timeout: 15_000 });
+    await fillReceiptAmountInput(page, "12.34");
+
     const sourceMatchRawText = await sourceMatchResponse.text();
     const sourceMatchPayload = sourceMatchRawText ? JSON.parse(sourceMatchRawText) : {};
     assert(
@@ -1744,7 +1744,8 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       "collection receipt UI smoke should receive authoritative Calling Date and cumulative settlement",
     );
 
-    await page.getByText("Abort CP", { exact: true }).waitFor({ timeout: 15_000 });
+    await page.locator("#save-collection-source-match-status")
+      .filter({ hasText: "Padanan Saved ditemui." }).waitFor({ timeout: 15_000 });
 
     const createResponsePromise = page.waitForResponse(
       (response) =>

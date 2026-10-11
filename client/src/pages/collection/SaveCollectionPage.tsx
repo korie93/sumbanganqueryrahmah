@@ -385,27 +385,6 @@ function SaveCollectionPage({
       {receiptPanel}
     </SaveCollectionFormSection>
   );
-  const sourceMatchSection = (
-    <SaveCollectionFormSection
-      title="Saved Matching & Coverage"
-      description="Backend memilih source, Aging, Calling Date, dan status CP berdasarkan rekod Saved yang sepadan."
-      className="col-span-full"
-    >
-      <div className="col-span-full">
-        <CollectionSourceMatchField
-          disabled={state.submitting}
-          error={state.sourceMatching.error}
-          hasSearched={state.sourceMatching.hasSearched}
-          loading={state.sourceMatching.loading}
-          matches={state.sourceMatching.matches}
-          onMatch={() => {
-            void state.sourceMatching.runMatching();
-          }}
-          selectedMatch={state.sourceMatching.selectedMatch}
-        />
-      </div>
-    </SaveCollectionFormSection>
-  );
   const readySummaryValues = {
     staffNickname,
     customerName: state.customerName,
@@ -470,7 +449,6 @@ function SaveCollectionPage({
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-4">
           {customerSection}
           {paymentSection}
-          {sourceMatchSection}
           {receiptSection}
         </div>
 
@@ -490,7 +468,17 @@ function SaveCollectionPage({
           }}
         />
 
+        <CollectionSourceMatchField
+          disabled={state.submitting || accessSuspended || state.resetConfirmOpen}
+          status={state.sourceMatching.status}
+          error={state.sourceMatching.error}
+          errorKind={state.sourceMatching.errorKind}
+          canRetry={state.sourceMatching.canRetry}
+          onRetry={state.sourceMatching.retryMatching}
+        />
+
         <div
+          id="save-collection-actions"
           className={cn(
             "flex flex-col gap-2 border-t border-border bg-background pt-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] sm:static sm:flex-row sm:flex-wrap sm:justify-end sm:pb-0",
             keyboardOpen ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
@@ -518,8 +506,8 @@ function SaveCollectionPage({
             onClick={state.handleSubmit}
             disabled={state.submitting}
             aria-describedby={actionHint
-              ? "save-collection-readiness-status save-collection-action-hint"
-              : "save-collection-readiness-status"}
+              ? "save-collection-readiness-status save-collection-source-match-status save-collection-action-hint"
+              : "save-collection-readiness-status save-collection-source-match-status"}
             data-ready={state.readiness.isReady ? "true" : "false"}
             className={cn(
               "w-full sm:w-auto",

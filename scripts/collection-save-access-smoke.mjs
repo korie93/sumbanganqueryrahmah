@@ -149,17 +149,17 @@ async function fillAndMatch(page, fixture) {
     await page.locator(`#save-collection-${field}`).fill(value);
   }
   await page.getByTestId("save-collection-payment-date").click();
-  await page.locator('button[name="day"]:not(.day-outside):not([disabled])')
-    .filter({ hasText: new RegExp(`^\\s*${now.getDate()}\\s*$`) }).first().click();
+  const [response] = await Promise.all([
+    page.waitForResponse((response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/api/collection/source-matches"),
+    page.locator('button[name="day"]:not(.day-outside):not([disabled])')
+      .filter({ hasText: new RegExp(`^\\s*${now.getDate()}\\s*$`) }).first().click(),
+  ]);
   await page.locator('input[type="file"]').setInputFiles({
     name: fixture.receiptName, mimeType: "image/png", buffer: receiptBuffer,
   });
   await page.getByText(fixture.receiptName, { exact: true }).first().waitFor();
   await page.getByPlaceholder("Receipt Amount (RM)").last().fill(fixture.values.amount);
-  const matchPromise = page.waitForResponse((response) =>
-    response.request().method() === "POST" && new URL(response.url()).pathname === "/api/collection/source-matches");
-  await page.getByRole("button", { name: "Semak Auto-matching", exact: true }).click();
-  const response = await matchPromise;
   assert.equal(response.status(), 200, "Matching must succeed.");
   const payload = await response.json();
   assert(payload.matches?.some((match) => match.sourceImportId === fixture.sourceId), "Matching must use the fixture Saved source.");
