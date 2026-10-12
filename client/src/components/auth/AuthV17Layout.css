@@ -53,9 +53,9 @@
   mask-image: linear-gradient(#000, transparent 52%);
 }
 .auth-v17-top { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding-right: 14px; }
-.auth-v17-brand { display: flex; align-items: center; gap: 11px; color: #12314f; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
-.auth-v17-brand small { display: block; margin-top: 1px; color: #61768b; font-size: 11.5px; font-weight: 500; }
-.auth-v17-mark { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(145deg, #2b78bc, #194f80); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .06em; box-shadow: inset 0 0 0 1px #ffffff2e, 0 8px 20px #1f5f9926; }
+.auth-v17-brand { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 4px; }
+.auth-v17-brand small { display: block; color: #61768b; font-size: 11.5px; font-weight: 500; }
+.auth-v17-logo { width: 156px; max-width: 100%; }
 .auth-v17-status { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; border: 1px solid #dbe6ef; background: #ffffffc7; color: #53677c; font-size: 11.5px; }
 .auth-v17-status i, .auth-v17-secure i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #218348; box-shadow: 0 0 0 4px #3dbb751c; }
 .auth-v17-status--warn i { background: #b45309; }
@@ -162,9 +162,8 @@
     background: linear-gradient(to bottom, transparent 72%, #fff), radial-gradient(75% 80% at 20% 15%, #62a6e229, transparent 70%), linear-gradient(145deg, #fbfdff, #eef6fb); }
   .auth-v17-status, .auth-v17-intro, .auth-v17-curve, .auth-v17-secure { display: none; }
   .auth-v17-top { min-height: auto; }
-  .auth-v17-brand { font-size: 15px; }
   .auth-v17-brand small { font-size: 10.5px; }
-  .auth-v17-mark { width: 36px; height: 36px; border-radius: 10px; }
+  .auth-v17-logo { width: 128px; }
   .auth-v17-art { position: absolute; inset: 0; margin: 0; min-height: 0; }
   .auth-v17-art::before { inset: 0; background-position: right bottom; background-size: auto 100%; mask-image: linear-gradient(to bottom, #000 0, #000 84%, transparent); }
   .auth-v17-side { min-height: auto; padding: 22px 18px 32px; }

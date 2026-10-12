@@ -75,10 +75,10 @@ test("static landing metadata and structured data use the approved copy and depl
   assert.equal(schema.name, metadata.title);
   assert.equal(schema.description, metadata.description);
   assert.equal(schema.url, "https://sqr-system.com/");
-  assert.equal(schema.image, "https://sqr-system.com/brand/sqr-logo-minimal.webp");
-  assert.ok(existsSync(new URL("../../public/brand/sqr-logo-minimal.webp", import.meta.url)));
-  assert.ok(existsSync(new URL("../../public/apple-touch-icon.png", import.meta.url)));
-  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png"/);
+  assert.equal(schema.image, "https://sqr-system.com/brand/sqr-social-logo-light.png");
+  assert.ok(existsSync(new URL("../../public/brand/sqr-social-logo-light.png", import.meta.url)));
+  assert.ok(existsSync(new URL("../../public/brand/apple-touch-icon-180x180.png", import.meta.url)));
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\/brand\/apple-touch-icon-180x180\.png"/);
   assert.doesNotMatch(html, /\/assets\/(?:og-cover|apple-touch-icon)\.png/);
 });
 

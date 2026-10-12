@@ -37,10 +37,10 @@ export interface CollectionRecordsTableProps extends CollectionRecordsEmptyState
   canDeleteRow: (record: CollectionRecord) => boolean;
 }
 
-function CollectionRecordsDesktopTableFallback() {
+function renderRecordsLoading(label = "Loading records table...") {
   return (
     <div role="status" className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-      Loading records table...
+      {label}
     </div>
   );
 }
@@ -69,11 +69,7 @@ export function CollectionRecordsTable({
   const [viewMode, setViewMode] = useState<"compact" | "full">("compact");
 
   if (loadingRecords) {
-    return (
-      <div role="status" className="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-        Loading records...
-      </div>
-    );
+    return renderRecordsLoading("Loading records...");
   }
 
   if (visibleRecords.length === 0) {
@@ -140,42 +136,22 @@ export function CollectionRecordsTable({
                   <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
                 </summary>
               <dl className="grid gap-3 pb-3 text-sm">
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">IC Number</dt>
-                  <dd className="break-all">{record.icNumber || "-"}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">Customer Phone</dt>
-                  <dd>{record.customerPhone || "-"}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">Batch</dt>
-                  <dd>{record.batch || "-"}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">TOTAL DUE</dt>
-                  <dd>{formatCollectionOptionalAmount(record.totalDue)}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">Billing Principal (OSP)</dt>
-                  <dd>{formatCollectionOptionalAmount(record.billingPrincipalOsp)}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">CP Status</dt>
-                  <dd className="font-medium">{getCollectionCpStatusLabel(record)}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">Aging / Match</dt>
-                  <dd>{record.agingBucket || "-"} / {getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy)}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">Staff Nickname</dt>
-                  <dd>{record.collectionStaffNickname || "-"}</dd>
-                </div>
-                <div className="space-y-1">
-                  <dt className="text-xs text-muted-foreground">Source File</dt>
-                  <dd className="break-words">{getCollectionRecordSourceLabel(record)}</dd>
-                </div>
+                {([
+                  ["IC Number", record.icNumber || "-", "break-all"],
+                  ["Customer Phone", record.customerPhone || "-"],
+                  ["Batch", record.batch || "-"],
+                  ["TOTAL DUE", formatCollectionOptionalAmount(record.totalDue)],
+                  ["Billing Principal (OSP)", formatCollectionOptionalAmount(record.billingPrincipalOsp)],
+                  ["CP Status", getCollectionCpStatusLabel(record), "font-medium"],
+                  ["Aging / Match", `${record.agingBucket || "-"} / ${getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy)}`],
+                  ["Staff Nickname", record.collectionStaffNickname || "-"],
+                  ["Source File", getCollectionRecordSourceLabel(record), "break-words"],
+                ] as [string, string, string?][]).map(([label, value, className]) => (
+                  <div key={label} className="space-y-1">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className={className}>{value}</dd>
+                  </div>
+                ))}
               </dl>
               </details>
 
@@ -227,7 +203,7 @@ export function CollectionRecordsTable({
           </Button>
         </div>
       </div>
-    <Suspense fallback={<CollectionRecordsDesktopTableFallback />}>
+    <Suspense fallback={renderRecordsLoading()}>
       <CollectionRecordsDesktopTable
         viewMode={viewMode}
         loadingRecords={loadingRecords}

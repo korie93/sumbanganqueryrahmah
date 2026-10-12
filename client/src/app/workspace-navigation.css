@@ -79,9 +79,6 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-control);
-  background: hsl(var(--primary) / 0.08);
-  color: hsl(var(--primary));
 }
 
 .workspace-brand-cluster > .nav-home-pill {

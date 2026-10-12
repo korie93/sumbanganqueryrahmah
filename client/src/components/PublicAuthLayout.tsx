@@ -73,7 +73,7 @@ export function PublicAuthLayout({
           <div className="public-auth-layout__card">
             <div className="public-auth-layout__brand">
               <div className="public-auth-layout__brand-icon">
-                <BrandLogo decorative priority className="h-8 w-8" imageClassName="h-full w-full" />
+                <BrandLogo variant="icon" decorative priority className="h-full w-full" imageClassName="h-full w-full" />
               </div>
               <div className="min-w-0">
                 <p className="public-auth-layout__badge">

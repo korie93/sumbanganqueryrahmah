@@ -1,2 +1,4 @@
 artifacts/** linguist-generated=true
 var/perf/** linguist-generated=true
+client/public/brand/*.svg -text
+deploy/errors/assets/sqr-logo.svg -text

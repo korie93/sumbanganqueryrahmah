@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { RelativeDate } from "./RelativeDate";
 
 // Illustrative values from the supplied design; this preview never requests API data.
@@ -584,9 +585,13 @@ export function PreviewSidebar() {
     <>
       <aside className="sidebar">
         <div className="side-brand">
-          <span className="brand-mark">
-            SQR
-          </span>
+          <BrandLogo
+            variant="icon"
+            theme="light"
+            decorative
+            className="preview-brand-icon"
+            imageClassName="landing-brand-image"
+          />
           <div>
             <strong>
               SQR

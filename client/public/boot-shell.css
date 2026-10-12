@@ -120,6 +120,13 @@ html[data-boot-shell="landing"] .public-auth-boot-shell__fields {
   color: var(--boot-shell-highlight);
 }
 
+.public-auth-boot-shell__brand {
+  display: block;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
 .public-auth-boot-shell__title {
   margin: 0;
   font-size: clamp(1.9rem, 4.8vw, 2.3rem);

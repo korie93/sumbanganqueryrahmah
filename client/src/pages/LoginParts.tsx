@@ -44,12 +44,13 @@ export function LoginAsidePanel() {
 export function LoginBrandHeader({ twoFactor = false }: { twoFactor?: boolean }) {
   return (
     <div className="login-brand mb-7 flex flex-col items-center">
-      <div className="login-brand-mark mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg">
+      <div className="mb-4 flex w-full items-center justify-center">
         <BrandLogo
+          variant="full"
           decorative
           priority
-          className="block h-10 w-10"
-          imageClassName="h-full w-full"
+          className="w-40 max-w-full"
+          imageClassName="w-full"
         />
       </div>
       <h1 className="login-title text-center text-2xl font-bold">

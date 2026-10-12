@@ -1187,7 +1187,9 @@ test("landing header keeps its brand readable on narrow and enlarged-text viewpo
 
     const brand = page.getByTestId("landing-brand-title");
     await expect(brand).toBeVisible();
-    await expect(brand).toHaveText(/SQR\s*Sumbangan Query Rahmah/);
+    await expect(brand).toHaveAccessibleName("SQR — home");
+    await expect(brand.locator("img")).toHaveAttribute("src", "/brand/sqr-full-logo-light.svg");
+    await expect.poll(() => brand.locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
 
     const layout = await brand.evaluate((element) => ({
       clientWidth: element.clientWidth,

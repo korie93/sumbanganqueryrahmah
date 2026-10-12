@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useAuthLocale } from "./useAuthLocale";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
 import { safeJsonParseResult } from "@/lib/utils/safe-json";
+import { BrandLogo } from "@/components/BrandLogo";
 import "./AuthV17Layout.css";
 
 type Props = {
@@ -59,8 +60,9 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
       <section className="auth-v17-brand-panel" aria-label={t("auth.v17.platform")}>
         <div className="auth-v17-curve" aria-hidden="true" />
         <div className="auth-v17-top">
-          <div className="auth-v17-brand"><div className="auth-v17-mark" aria-hidden="true">SQR</div>
-            <div>SQR<small>{t("auth.v17.platform")}</small></div>
+          <div className="auth-v17-brand">
+            <BrandLogo variant="full" theme="light" priority className="auth-v17-logo" />
+            <small>{t("auth.v17.platform")}</small>
           </div>
           {health && !offline ? <span className={`auth-v17-status${health === "ready" ? "" : " auth-v17-status--warn"}`} role="status">
             <i aria-hidden="true" />{t(health === "ready" ? "auth.v17.operational" : "auth.v17.unavailable")}

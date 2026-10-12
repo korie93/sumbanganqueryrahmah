@@ -1,0 +1,57 @@
+{
+  "sources": [
+    {
+      "theme": "light",
+      "file": "assets/brand/q-mark-light-source.png",
+      "sha256": "07e5e47d3a1851200301dc22b49764b6bb174b48843bc2462700ba3c0dc5ea5e"
+    },
+    {
+      "theme": "dark",
+      "file": "assets/brand/q-mark-dark-source.png",
+      "sha256": "ba84d8b9b9142727fdb2e88538ed1685a51ca1ccddef872bdc719aab3c111994"
+    }
+  ],
+  "method": "Proportional canvas downsampling only; no crop or recoloring. Status WEBP quality 1 in passive SVG, all other raster exports PNG.",
+  "files": [
+    {
+      "file": "client/public/brand/sqr-q-mark-light.png",
+      "bytes": 11750,
+      "sha256": "affaad5a2ae2fcef544447671382239fb9267aec5d904dc75c68df7db1a69c3c"
+    },
+    {
+      "file": "client/public/brand/sqr-q-mark-dark.png",
+      "bytes": 25438,
+      "sha256": "108bbeb250eef15ac57d7bc5cf119b8a53664f0c3e7d95540a8751269ff5d776"
+    },
+    {
+      "file": "client/public/brand/apple-touch-icon-180x180.png",
+      "bytes": 48209,
+      "sha256": "6a62fcf7d2ec89056a2b9a120c13056e892baffff5ae082e018fd80ef795563e"
+    },
+    {
+      "file": "client/public/brand/icon-192x192.png",
+      "bytes": 53981,
+      "sha256": "a40dfefbc2516f441b87e1caf4c0610dede5ea12dd81f16d6d582ea4eb550620"
+    },
+    {
+      "file": "client/public/brand/icon-512x512.png",
+      "bytes": 299371,
+      "sha256": "8aabc9d64ed8c1fb515c0e2472740e4be61d39ad66bf4b44732f421f2fe7563a"
+    },
+    {
+      "file": "client/public/brand/favicon.svg",
+      "bytes": 10968,
+      "sha256": "1702d1e81cb1e881d8ac96d79f0d9c0c8332f6b48987c1f3f153f351cbc144bf"
+    },
+    {
+      "file": "client/public/brand/sqr-q-status.svg",
+      "bytes": 15917,
+      "sha256": "668bfbb2492519b49cf7bda26028b820d8985ee4556dd40929ce3558283ce696"
+    },
+    {
+      "file": "client/public/brand/favicon.ico",
+      "bytes": 16539,
+      "sha256": "ddd493b56c31ddc5d000240f642e0932f1f6fa9be017735785947c9f6e659c96"
+    }
+  ]
+}

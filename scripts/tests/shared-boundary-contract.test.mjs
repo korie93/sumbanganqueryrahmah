@@ -22,6 +22,7 @@ const COMMON_SHARED_MODULES = new Set([
   "app-document-routes",
   "audit-log-classification",
   "auth-session-expiry",
+  "brand-assets",
   "collection-amount-types",
   "collection-daily-status",
   "client-error-telemetry",

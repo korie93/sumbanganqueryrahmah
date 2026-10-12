@@ -67,6 +67,21 @@ test("CollectionRecordsTable renders a solid desktop table with clear actions", 
   assert.doesNotMatch(markup, /bg-background\/40/);
 });
 
+test("record loading preserves its exact accessible status markup", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionRecordsTable, {
+    loadingRecords: true,
+    visibleRecords: [collectionRecord],
+    paginatedRecords: [collectionRecord],
+    pageOffset: 0,
+    canEdit: false,
+    onViewReceipt: () => undefined,
+    onEdit: () => undefined,
+    onDelete: () => undefined,
+    canDeleteRow: () => false,
+  }));
+  assert.equal(markup, '<div role="status" class="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">Loading records...</div>');
+});
+
 test("mobile collection keeps complete record fields under details and respects action access", () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", {
@@ -94,6 +109,12 @@ test("mobile collection keeps complete record fields under details and respects 
     assert.match(markup, /880101105432/);
     assert.match(markup, /0123456789/);
     assert.match(markup, /Billing Principal \(OSP\)/);
+    assert.deepEqual([...markup.matchAll(/<dt[^>]*>(.*?)<\/dt>/g)].map((match) => match[1]), [
+      "Account Number", "Card Number", "IC Number", "Customer Phone", "Batch", "TOTAL DUE",
+      "Billing Principal (OSP)", "CP Status", "Aging / Match", "Staff Nickname", "Source File",
+    ]);
+    assert.match(markup, /<dd class="break-all">880101105432<\/dd>/);
+    assert.match(markup, /<dd>SW.AFIQAH_1332<\/dd>/);
     assert.match(markup, /View Receipt/);
     assert.match(markup, /aria-label="Actions for record 1"/);
     assert.doesNotMatch(render(false, false), /aria-label="Actions for record/);

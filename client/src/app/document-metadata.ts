@@ -1,5 +1,6 @@
 import type { MonitorSection, User } from "@/app/types";
 import { DEFAULT_SYSTEM_NAME } from "@/app/constants";
+import { SQR_BRAND_ASSETS } from "@shared/brand-assets";
 
 type DocumentMetadataInput = {
   currentPage: string;
@@ -207,9 +208,9 @@ export function applyDocumentMetadata(metadata: DocumentMetadata) {
   const isPublicLanding = metadata.publicLanding === true;
   const isPublicAuth = metadata.publicAuth === true;
   for (const [rel, href] of [
-    ["icon", isPublicAuth ? "/auth-v17/favicon.svg" : "/brand/sqr-logo-minimal.svg"],
-    ["shortcut icon", isPublicAuth ? "/auth-v17/favicon.svg" : "/brand/sqr-logo-minimal.svg"],
-    ["apple-touch-icon", isPublicAuth ? "/auth-v17/apple-touch-icon.png" : "/apple-touch-icon.png"],
+    ["icon", SQR_BRAND_ASSETS.favicon.svg],
+    ["shortcut icon", SQR_BRAND_ASSETS.favicon.ico],
+    ["apple-touch-icon", SQR_BRAND_ASSETS.appleTouchIcon],
   ]) {
     document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`)?.setAttribute("href", href);
   }

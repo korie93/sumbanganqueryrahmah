@@ -137,12 +137,13 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   assert.match(metadataSource, /isPublicLanding \? "en" : "ms"/);
   assert.match(metadataSource, /isPublicLanding \|\| isPublicAuth \? "light" : "light dark"/);
   assert.match(metadataSource, /const isPublicAuth = metadata\.publicAuth === true;/);
-  assert.match(metadataSource, /isPublicAuth \? "\/auth-v17\/favicon\.svg" : "\/brand\/sqr-logo-minimal\.svg"/);
+  assert.match(metadataSource, /\["icon", SQR_BRAND_ASSETS\.favicon\.svg\]/);
+  assert.doesNotMatch(metadataSource, /\/auth-v17\/favicon|sqr-logo-minimal/);
   assert.match(indexSource, /<meta name="mobile-web-app-capable" content="yes" \/>/);
   assert.doesNotMatch(indexSource, /apple-mobile-web-app-capable/);
   assert.match(indexSource, /<link rel="canonical" href="https:\/\/sqr-system\.com\/" \/>/);
   assert.match(indexSource, /<meta property="og:url" content="https:\/\/sqr-system\.com\/" \/>/);
-  assert.match(indexSource, /<meta name="twitter:image" content="https:\/\/sqr-system\.com\/brand\/sqr-logo-minimal\.webp" \/>/);
+  assert.match(indexSource, /<meta name="twitter:image" content="https:\/\/sqr-system\.com\/brand\/sqr-social-logo-light\.png" \/>/);
   assert.doesNotMatch(indexSource, /<link rel="icon" type="image\/webp"/);
   assert.match(tokenSource, /\.dark\s*{[\s\S]*color-scheme:\s*dark;[\s\S]*--background:/);
   assert.doesNotMatch(
@@ -165,7 +166,7 @@ test("web app manifest exposes a lightweight internal shortcut", () => {
     url: "/general-search",
     icons: [
       {
-        src: "/brand/sqr-logo-minimal.svg",
+        src: "/brand/favicon.svg",
         sizes: "any",
         type: "image/svg+xml",
         purpose: "any",

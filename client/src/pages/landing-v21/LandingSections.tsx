@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { LandingLink } from "./LandingLink";
 
 // Approved V21 content converted into semantic React markup. No production data.
@@ -9,12 +10,14 @@ export function LandingNavigation() {
         <div className="container">
           <nav className="nav" aria-label="Primary navigation">
             <LandingLink className="brand" href="#main-content" aria-label="SQR — home" data-testid="landing-brand-title">
-              <span className="brand-mark">
-                SQR
-              </span>
-              <span>
-                Sumbangan Query Rahmah
-              </span>
+              <BrandLogo
+                variant="full"
+                theme="light"
+                decorative
+                priority
+                className="landing-brand-logo"
+                imageClassName="landing-brand-image"
+              />
             </LandingLink>
             <div className="nav-links">
               <LandingLink href="#features">
@@ -879,12 +882,13 @@ export function LandingFooter() {
         <div className="container footer-inner">
           <div>
             <div className="footer-brand">
-              <span className="brand-mark">
-                SQR
-              </span>
-              <span>
-                Sumbangan Query Rahmah
-              </span>
+              <BrandLogo
+                variant="full"
+                theme="light"
+                alt="Sumbangan Query Rahmah (SQR)"
+                className="landing-brand-logo"
+                imageClassName="landing-brand-image"
+              />
             </div>
             <div className="footer-copy">
               An internal operations platform focused on search, analysis, monitoring and access control within a consistent interface.

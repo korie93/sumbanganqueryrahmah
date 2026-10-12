@@ -85,6 +85,7 @@ export default defineConfig({
                 || normalizedId.includes("node_modules/tailwind-merge/")
                 || normalizedId.includes("node_modules/class-variance-authority/")
                 || /\/client\/src\/lib\/utils\.ts$/.test(normalizedId)
+                || /\/client\/src\/components\/BrandLogo\.tsx$/.test(normalizedId)
               ) {
                 return "ui";
               }
@@ -102,6 +103,7 @@ export default defineConfig({
               // chunks, without pulling private pages or the whole icon library in.
               if (
                 /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props)\.ts$/.test(normalizedId)
+                || /\/shared\/brand-assets\.ts$/.test(normalizedId)
                 || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert))\.js$/.test(normalizedId)
               ) {
                 return "public-runtime";
@@ -117,6 +119,19 @@ export default defineConfig({
               if (normalizedId.includes("html2canvas")) return "capture";
 
               return undefined;
+            },
+          }, {
+            // React must retain framework ownership before shared branding is
+            // collected into UI; otherwise dependency traversal can
+            // move React into the brand's chunk and perturb every private route.
+            priority: 20,
+            name: "framework",
+            test(id) {
+              const normalizedId = id.replace(/\\/g, "/");
+              return normalizedId.includes("vite/preload-helper")
+                || normalizedId.includes("node_modules/react/")
+                || normalizedId.includes("node_modules/react-dom/")
+                || normalizedId.includes("node_modules/scheduler/");
             },
           }, {
             name: "public-auth-runtime",

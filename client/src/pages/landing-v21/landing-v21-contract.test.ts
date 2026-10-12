@@ -109,7 +109,7 @@ test("landing CSS has no external imports, assets or document-wide registrations
 });
 
 test("landing components do not import application auth, API clients or additional runtimes", () => {
-  const approvedShared = new Set(["react", "@/lib/aria-state-props", "@/lib/low-spec-mode"]);
+  const approvedShared = new Set(["react", "@/lib/aria-state-props", "@/lib/low-spec-mode", "@/components/BrandLogo"]);
   for (const source of sourceFiles) {
     for (const node of descendants(source)) {
       if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
@@ -134,6 +134,63 @@ test("landing components do not import application auth, API clients or addition
       }
     }
   }
+});
+
+test("landing branding uses light full logos and the supplied transparent Q on its pale surface", () => {
+  const expectedVariants = new Map([
+    ["LandingNavigation", "full"],
+    ["LandingFooter", "full"],
+    ["PreviewSidebar", "icon"],
+  ]);
+  const inspected = new Set<string>();
+  for (const source of sourceFiles) {
+    for (const node of descendants(source)) {
+      if (!ts.isJsxSelfClosingElement(node) || node.tagName.getText() !== "BrandLogo") continue;
+      const owner = nearestFunction(node);
+      assert.ok(owner && ts.isFunctionDeclaration(owner) && owner.name);
+      const ownerName = owner.name.text;
+      const attributes = new Map(node.attributes.properties.filter(ts.isJsxAttribute).map(attribute => [
+        attribute.name.getText(),
+        attribute.initializer && ts.isStringLiteral(attribute.initializer) ? attribute.initializer.text : attribute.initializer?.getText() ?? true,
+      ]));
+      assert.equal(attributes.get("variant"), expectedVariants.get(ownerName), `${ownerName}: use the correct full or compact brand asset`);
+      assert.equal(attributes.get("theme"), "light", `${ownerName}: branding follows the fixed pale landing surface`);
+      assert.equal(attributes.get("imageClassName"), "landing-brand-image");
+      if (ownerName === "LandingFooter") {
+        assert.equal(attributes.get("alt"), "Sumbangan Query Rahmah (SQR)");
+      } else {
+        assert.equal(attributes.get("decorative"), true, `${ownerName}: surrounding text or link label already names the brand`);
+      }
+      if (ownerName === "LandingNavigation") assert.equal(attributes.get("priority"), true, "Above-the-fold branding must not wait for lazy loading");
+      assert.ok(!inspected.has(ownerName), `${ownerName}: do not render duplicate full brand names`);
+      inspected.add(ownerName);
+    }
+    assert.doesNotMatch(source.text, /className="brand-mark"|sqr-logo-minimal\.(?:svg|webp)/);
+  }
+  assert.deepEqual([...inspected].sort(), [...expectedVariants.keys()].sort());
+});
+
+test("landing logos retain their aspect ratio inside compact navigation and preview spaces", () => {
+  const declarationsFor = (selector: string) => {
+    const declarations = new Map<string, string>();
+    stylesheet.walkRules(rule => {
+      if (!rule.selectors.includes(selector)) return;
+      rule.walkDecls(declaration => { declarations.set(declaration.prop, declaration.value); });
+    });
+    return declarations;
+  };
+  const image = declarationsFor(".sqr-landing .landing-brand-image");
+  assert.equal(image.get("width"), "auto", "Full logos must use intrinsic width, not a square frame");
+  assert.equal(image.get("max-width"), "100%");
+  assert.equal(image.get("height"), "44px", "Header logo must fit the existing mobile navigation height");
+  assert.equal(image.get("object-fit"), "contain");
+  const preview = declarationsFor(".sqr-landing .preview-brand-icon .landing-brand-image");
+  assert.equal(preview.get("width"), "32px");
+  assert.equal(preview.get("height"), "32px");
+  assert.equal(declarationsFor(".sqr-landing .footer-brand .landing-brand-image").get("height"), "64px");
+  stylesheet.walkRules(rule => {
+    assert.ok(!rule.selector.includes(".brand-mark"), "Remove the old text-box logo styling");
+  });
 });
 
 test("landing observers, event listeners and scheduled work belong to effects with matching cleanup", () => {

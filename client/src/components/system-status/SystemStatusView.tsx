@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowRight, CheckCircle2, Clock3, RefreshCw, SearchX, ServerOff, WifiOff, Wrench } from "lucide-react";
 import { SYSTEM_STATUS_CONTENT, type SystemStatusKind } from "@shared/system-status";
+import { SQR_BRAND_ASSETS } from "@shared/brand-assets";
 
 type StatusAction = { label: string; onClick?: () => void; href?: string; kind?: "navigate" | "retry" };
 export type SystemStatusViewProps = {
@@ -19,7 +20,7 @@ const icons = { "404": SearchX, "502": ServerOff, "503": ServerOff, "504": Clock
 
 /** Shared accessible status layout; also rendered at build time for independent Nginx fallbacks. */
 export function SystemStatusView({ state, primary, secondary, busy = false, disabled = false,
-  feedback = "", children, logoSrc = "/brand/sqr-logo-minimal.svg", staticRecovery = false,
+  feedback = "", children, logoSrc = SQR_BRAND_ASSETS.icon.dark, staticRecovery = false,
 }: SystemStatusViewProps) {
   const content = SYSTEM_STATUS_CONTENT[state];
   const Icon = icons[state];

@@ -304,10 +304,24 @@ try {
  assert.ok(rect);
  const client=await touchContext.newCDPSession(touchPage);
  const y=Math.min(800,Math.max(60,rect.y+rect.height/2));
+ // Pace a real native swipe across frames. Back-to-back CDP touch moves can be
+ // coalesced into one frame or leave a fling consuming the following dot tap.
+ const touchFrame=()=>touchPage.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:rect.x+rect.width*.85,y}]});
- for(const part of [.7,.5,.3,.15])await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:rect.x+rect.width*part,y}]});
+ for(let step=1;step<=16;step++){
+  await touchFrame();
+  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:rect.x+rect.width*(.85-.77*step/16),y}]});
+ }
+ await touchFrame();
  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  await expect.poll(()=>touchTrack.evaluate(el=>el.scrollLeft)).toBeGreaterThan(20);
+ let previousOffset=-1,settledSamples=0;
+ await expect.poll(async()=>{
+  const offset=await touchTrack.evaluate(el=>el.scrollLeft);
+  settledSamples=Math.abs(offset-previousOffset)<1?settledSamples+1:0;
+  previousOffset=offset;
+  return settledSamples;
+ },{intervals:[100],message:'Native swipe and scroll snapping must finish before the dot tap'}).toBeGreaterThanOrEqual(3);
  await expect(touchPage.locator('#testimonial-current')).not.toHaveText('1');
  await touchPage.getByRole('button',{name:'Comment 5',exact:true}).tap();
  await expect(touchPage.locator('#testimonial-current')).toHaveText('5');

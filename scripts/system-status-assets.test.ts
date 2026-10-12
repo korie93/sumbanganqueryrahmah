@@ -84,6 +84,7 @@ test("all static error pages have only local independent assets and small uncomp
     assert.match(html, /<html lang="ms">/);
     assert.match(html, /name="viewport"/);
     assert.match(html, /name="robots" content="noindex, nofollow"/);
+    assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/_sqr\/errors\/assets\/sqr-logo\.svg">/);
     assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
     assert.match(html, /<noscript>/, "Safe navigation must remain available without JavaScript.");
     assert.match(html, /<a href="\/"[^>]*data-status-primary/);
@@ -101,7 +102,7 @@ test("all static error pages have only local independent assets and small uncomp
   }
   assert.doesNotMatch(read("deploy/errors/assets/status.css"), /@import|@font-face|url\s*\(/i);
   assert.doesNotMatch(read("deploy/errors/assets/status.js"), /\bimport\s*\(|\brequire\s*\(|\bsetInterval\s*\(/);
-  assert.equal(read("deploy/errors/assets/sqr-logo.svg"), read("client/public/brand/sqr-logo-minimal.svg"));
+  assert.equal(read("deploy/errors/assets/sqr-logo.svg"), read("client/public/brand/sqr-q-status.svg"));
 });
 
 test("release packaging copies and checksums independent error assets and scoped Nginx integration", () => {

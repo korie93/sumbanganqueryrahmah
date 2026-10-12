@@ -5,6 +5,7 @@
 @import "./styles/tailwind-preflight-compat.css";
 @import "tailwindcss/utilities.css" source(none);
 @import "./styles/tailwind-compat.css";
+@import "./components/BrandLogo.css";
 @config "../../tailwind.public.config.cjs";
 
 .sqr-backdrop-blur-none {

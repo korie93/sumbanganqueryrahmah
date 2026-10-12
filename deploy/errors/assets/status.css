@@ -51,7 +51,7 @@
 .sqr-status__frame { max-width: 1080px; margin: 0 auto; }
 .sqr-status__header { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 24px; border-bottom: 1px solid var(--status-border); }
 .sqr-status__brand { display: flex; align-items: center; gap: 12px; }
-.sqr-status__brand img { flex: 0 0 44px; width: 44px; height: 44px; }
+.sqr-status__brand img { flex: 0 0 44px; width: 44px; height: 44px; object-fit: contain; }
 .sqr-status__wordmark { font-size: 1.25rem; font-weight: 750; letter-spacing: .09em; line-height: 1.3; }
 .sqr-status__brand-name { color: var(--status-muted); font-size: .875rem; }
 .sqr-status__eyebrow { font-size: .8125rem; font-weight: 650; text-transform: uppercase; letter-spacing: .12em; color: var(--status-muted); }

@@ -208,6 +208,25 @@ test("public runtime consolidates only the existing small shared entry dependenc
   assert.equal(chunk("/repo/client/src/lib/utils/safe-json.ts"), undefined);
 });
 
+test("shared branding stays independent of lazy auth without absorbing framework dependencies", async () => {
+  const config = await importViteConfigFresh();
+  const groups = config.build.rollupOptions.output.codeSplitting.groups;
+  const shared = groups[0];
+  const framework = groups.find(group => group.name === "framework");
+  const auth = groups.find(group => group.name === "public-auth-runtime");
+  assert.ok(framework.priority > shared.priority);
+  assert.ok(shared.priority > (auth.priority ?? 0));
+  for (const [id, chunk] of [["shared/brand-assets.ts", "public-runtime"], ["client/src/components/BrandLogo.tsx", "ui"]]) {
+    assert.equal(shared.name(`/repo/${id}`), chunk);
+    assert.equal(shared.name(`C:\\repo\\${id.replace(/\//g, "\\")}`), chunk);
+    assert.equal(framework.test(`/repo/${id}`), false);
+  }
+  for (const id of ["node_modules/react/index.js", "node_modules/react-dom/index.js", "node_modules/react/jsx-runtime.js", "node_modules/scheduler/index.js"]) {
+    assert.equal(framework.test(`/repo/${id}`), true);
+    assert.equal(framework.test(`C:\\repo\\${id.replace(/\//g, "\\")}`), true);
+  }
+});
+
 function loginHintFixture() {
   const chunk = (fileName, imports = [], metadata = {}) => ({
     type: "chunk", fileName, imports, dynamicImports: [],

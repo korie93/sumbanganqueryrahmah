@@ -126,20 +126,29 @@
 .sqr-landing .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 700;
+  flex: 0 0 auto;
+  min-height: 44px;
 }
 
-.sqr-landing .brand-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(180deg,#618fb7,#416d93);
-  font-size: 11px;
-  font-weight: 800;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
+.sqr-landing .landing-brand-logo,
+.sqr-landing .preview-brand-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
+}
+
+.sqr-landing .landing-brand-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: 44px;
+  object-fit: contain;
+}
+
+.sqr-landing .preview-brand-icon .landing-brand-image {
+  width: 32px;
+  height: 32px;
 }
 
 .sqr-landing .nav-links,
@@ -2291,9 +2300,6 @@
   .sqr-landing .nav-actions .btn-ghost {
     display: none;
   }
-  .sqr-landing .brand span:last-child {
-    font-size: 13px;
-  }
   .sqr-landing .hero {
     padding: 78px 0 48px;
   }
@@ -2645,11 +2651,8 @@
   font-weight: 700;
 }
 
-.sqr-landing .footer-brand .brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  font-size: 10px;
+.sqr-landing .footer-brand .landing-brand-image {
+  height: 64px;
 }
 
 .sqr-landing .footer-copy {

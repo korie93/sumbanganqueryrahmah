@@ -1,0 +1,26 @@
+.sqr-brand-logo {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+  line-height: 0;
+}
+
+.sqr-brand-logo__image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* display:none removes the inactive image from both layout and the accessibility tree. */
+.sqr-brand-logo[data-brand-theme="auto"] > [data-brand-image-theme="dark"] {
+  display: none;
+}
+
+:root:is(.dark, [data-theme="dark"]) .sqr-brand-logo[data-brand-theme="auto"] > [data-brand-image-theme="light"] {
+  display: none;
+}
+
+:root:is(.dark, [data-theme="dark"]) .sqr-brand-logo[data-brand-theme="auto"] > [data-brand-image-theme="dark"] {
+  display: block;
+}
