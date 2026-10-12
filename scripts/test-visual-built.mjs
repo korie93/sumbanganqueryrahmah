@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isKnownAppDocumentPath, isRequestNamespace } from "../shared/app-document-routes.ts";
 
 const repoRoot = fileURLToPath(new URL("../", import.meta.url));
 const osEnvironmentKeys = ["PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "HOME"];
@@ -71,7 +72,9 @@ export async function startVisualBuiltServer(publicDirectory) {
       const pathname = decodeURIComponent(new URL(request.url, "http://fixture.invalid").pathname);
       const segments = pathname.split("/");
       if (pathname.includes("\\") || pathname.includes("\0") || segments.some((part) => part.startsWith("."))
-        || segments[1] === "api" || segments[1] === "ws") return void response.writeHead(404).end();
+        || ["/api", "/internal", "/ws", "/socket.io"].some((namespace) => isRequestNamespace(pathname, namespace))) {
+        return void response.writeHead(404).end();
+      }
       const requestedFile = path.resolve(root, pathname.slice(1));
       if (requestedFile !== root && !inside(requestedFile)) return void response.writeHead(404).end();
       const extension = path.extname(requestedFile).toLowerCase();
@@ -80,7 +83,10 @@ export async function startVisualBuiltServer(publicDirectory) {
       const type = contentTypes[path.extname(resolved).toLowerCase()];
       if (!type) return void response.writeHead(404).end();
       response.setHeader("Content-Type", type);
-      response.writeHead(200).end(request.method === "HEAD" ? undefined : await readFile(resolved));
+      // Match the production shell: an unknown SPA document still renders the
+      // app, but must retain HTTP 404 rather than conceal failures in CI tests.
+      const status = extension || (isKnownAppDocumentPath(pathname) && pathname.toLowerCase() !== "/404") ? 200 : 404;
+      response.writeHead(status).end(request.method === "HEAD" ? undefined : await readFile(resolved));
     } catch {
       response.writeHead(404).end();
     }

@@ -83,6 +83,7 @@ for (const theme of ["light", "dark"] as const) {
   test(`brand migration public logo and favicon across SPA routes (${theme})`, async ({ page, baseURL }, testInfo) => {
     expect(new URL(baseURL!).hostname).toBe("127.0.0.1");
     const errors: string[] = [];
+    const notFoundUrl = new URL("/not-a-brand-page", baseURL!).href;
     await page.emulateMedia({ colorScheme: theme });
     await page.addInitScript((value) => localStorage.setItem("theme", value), theme);
     await page.context().routeWebSocket("**/*", (socket) => socket.close());
@@ -99,7 +100,19 @@ for (const theme of ["light", "dark"] as const) {
       return route.continue();
     });
     page.on("pageerror", (error) => errors.push(error.message));
-    page.on("response", (response) => { if (response.status() >= 400 && !new URL(response.url()).pathname.startsWith("/api/")) errors.push(`Asset ${response.status()}`); });
+    page.on("response", (response) => {
+      const request = response.request();
+      // This test deliberately opens the real 404 page. Only its exact main
+      // document may return 404; missing images/scripts and other errors still fail.
+      const expectedNotFoundDocument = response.status() === 404
+        && response.url() === notFoundUrl
+        && request.isNavigationRequest()
+        && request.resourceType() === "document"
+        && request.frame() === page.mainFrame();
+      if (response.status() >= 400 && !new URL(response.url()).pathname.startsWith("/api/") && !expectedNotFoundDocument) {
+        errors.push(`${request.resourceType()} ${response.status()} ${new URL(response.url()).pathname}`);
+      }
+    });
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
@@ -123,7 +136,9 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/forgot-password");
     await loadedLogo(page.locator(".auth-v17-brand img"), "/brand/sqr-full-logo-light.svg", 665 / 310);
     await metadata(page);
-    await page.goto("/not-a-brand-page");
+    const notFoundResponse = await page.goto(notFoundUrl);
+    expect(notFoundResponse?.status()).toBe(404);
+    expect(notFoundResponse?.headers()["content-type"]).toContain("text/html");
     await loadedLogo(page.locator(".sqr-status__brand img"), "/brand/sqr-q-mark-dark.png", 1);
     await metadata(page);
     expect(errors).toEqual([]);

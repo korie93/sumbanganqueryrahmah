@@ -77,3 +77,38 @@ test("runner executes the verified installed CLI without shell, backend or doten
   assert.match(source, /assert\.rejects\(access\(disabledDotenvPath\), \{ code: "ENOENT" \}\)/);
   assert.doesNotMatch(source, /import ["']dotenv|dist-local\/server|pg_ctl|initdb|\.\.\.process\.env|execSync|shell: true/);
 });
+
+test("loopback preview preserves production document status for GET and HEAD without treating missing assets as SPA pages", async () => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), "sqr-visual-document-test-"));
+  const html = "<!doctype html><title>Synthetic document status</title>";
+  let server;
+  try {
+    await writeFile(path.join(fixture, "index.html"), html);
+    server = await startVisualBuiltServer(fixture);
+    for (const [route, status] of [
+      ["/", 200], ["/login", 200], ["/LOGIN", 200], ["/login?language=ms", 200],
+      ["/collection/records?search=synthetic", 200], ["/403", 200],
+      ["/not-a-brand-page", 404], ["/not-a-brand-page?test=1", 404], ["/404", 404],
+      ["/login/", 404], ["/login/?language=ms", 404],
+    ]) {
+      for (const method of ["GET", "HEAD"]) {
+        const response = await fetch(server.origin + route, { method });
+        assert.equal(response.status, status, `${method} ${route}`);
+        assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.equal(await response.text(), method === "HEAD" ? "" : html);
+      }
+    }
+    for (const route of ["/missing.js", "/API/me", "/api", "/INTERNAL/health", "/internal", "/WS", "/ws/session", "/SOCKET.IO", "/socket.io/session"]) {
+      for (const method of ["GET", "HEAD"]) {
+        const response = await fetch(server.origin + route, { method });
+        assert.equal(response.status, 404, `${method} ${route}`);
+        assert.equal(response.headers.get("content-type"), null);
+        assert.equal(await response.text(), "");
+      }
+    }
+  } finally {
+    if (server) await server.close();
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
