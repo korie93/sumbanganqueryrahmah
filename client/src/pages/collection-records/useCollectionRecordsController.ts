@@ -8,7 +8,7 @@ import {
 } from "@/lib/api";
 import {
   buildCollectionRecordsTableViewModel,
-  buildCollectionRecordsToolbarViewModel,
+  type CollectionRecordsToolbarViewModel,
 } from "@/pages/collection-records/collection-records-view-models";
 import { useCollectionRecordsActions } from "@/pages/collection-records/useCollectionRecordsActions";
 import { useCollectionRecordEdit } from "@/pages/collection-records/useCollectionRecordEdit";
@@ -178,34 +178,33 @@ export function useCollectionRecordsController({
       visibleRecords,
     ],
   );
-  const toolbar = useMemo(
-    () =>
-      buildCollectionRecordsToolbarViewModel({
-        summary,
-        loadingRecords,
-        viewAllLoading,
-        exportingExcel: actions.toolbar.exportingExcel,
-        exportingPdf: actions.toolbar.exportingPdf,
-        canPurgeOldRecords,
-        purgeSummaryLoading: actions.toolbar.purgeSummaryLoading,
-        purgingOldRecords: actions.toolbar.purgingOldRecords,
-        purgeSummary: actions.toolbar.purgeSummary,
-        pagedStart,
-        pagedEnd,
-        totalRecords,
-        tablePage: page,
-        totalPages,
-        tablePageSize: pageSize,
-        hasNextPage,
-        hasPreviousPage,
-        onOpenViewAll: () => void handleOpenViewAll(),
-        onOpenPurgeDialog: () => void actions.toolbar.onOpenPurgeDialog(),
-        onExportExcel: () => void actions.toolbar.onExportExcel(),
-        onExportPdf: () => void actions.toolbar.onExportPdf(),
-        onTablePageSizeChange: handlePageSizeChange,
-        onPrevPage: handlePrevPage,
-        onNextPage: handleNextPage,
-      }),
+  const toolbar = useMemo<CollectionRecordsToolbarViewModel>(
+    () => ({
+      summary,
+      loadingRecords,
+      viewAllLoading,
+      exportingExcel: actions.toolbar.exportingExcel,
+      exportingPdf: actions.toolbar.exportingPdf,
+      canPurgeOldRecords,
+      purgeSummaryLoading: actions.toolbar.purgeSummaryLoading,
+      purgingOldRecords: actions.toolbar.purgingOldRecords,
+      purgeSummary: actions.toolbar.purgeSummary,
+      pagedStart,
+      pagedEnd,
+      totalRecords,
+      tablePage: page,
+      totalPages,
+      tablePageSize: pageSize,
+      hasNextPage,
+      hasPreviousPage,
+      onOpenViewAll: () => void handleOpenViewAll(),
+      onOpenPurgeDialog: () => void actions.toolbar.onOpenPurgeDialog(),
+      onExportExcel: () => void actions.toolbar.onExportExcel(),
+      onExportPdf: () => void actions.toolbar.onExportPdf(),
+      onTablePageSizeChange: handlePageSizeChange,
+      onPrevPage: handlePrevPage,
+      onNextPage: handleNextPage,
+    }),
     [
       actions.toolbar,
       canPurgeOldRecords,
