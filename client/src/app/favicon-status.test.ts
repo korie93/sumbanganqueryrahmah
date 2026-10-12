@@ -10,8 +10,8 @@ import {
 } from "./favicon-status";
 
 const offlinePng = "data:image/png;base64,c3ludGhldGljLW9mZmxpbmU=";
-const onlinePng = "/brand/favicon-online-v1-32.png";
-const onlineIco = "/brand/favicon-online-v1.ico";
+const onlinePng = "/brand/favicon-online-v2-32.png";
+const onlineIco = "/brand/favicon-online-v2.ico";
 
 class ListenerTarget extends EventTarget {
   readonly listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();

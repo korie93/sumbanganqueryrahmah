@@ -29,12 +29,13 @@ The default is `variant="icon"`, `theme="auto"`. The latest PNG reference takes 
 | --- | --- |
 | Full logo, pale/dark surface | `/brand/sqr-full-logo-light.svg`, `/brand/sqr-full-logo-dark.svg` |
 | Compact icon, light/dark | `/brand/sqr-q-mark-light.png`, `/brand/sqr-q-mark-dark.png` |
-| Favicon | `/brand/favicon.svg`, `/brand/favicon.ico` |
+| Static fallback favicon | `/brand/favicon.svg`, `/brand/favicon.ico` |
+| Browser tab, connected/disconnected | `/brand/favicon-online-v2-32.png`, `/brand/favicon-online-v2.ico`, `/brand/favicon-offline-v2-32.png` |
 | Apple touch icon | `/brand/apple-touch-icon-180x180.png` |
 | App icons | `/brand/icon-192x192.png`, `/brand/icon-512x512.png` |
 | Logo-based social metadata | `/brand/sqr-social-logo-light.png` |
 
-PNG app icons are declared `purpose: "any"`, not `maskable`: no maskable-safe-area artwork was supplied. Boot/status/favicon use the new dark-backed Q, whose own background keeps it readable on either page theme. `scripts/export-brand-icons.mjs` performs offline canvas downsampling only (no crop, recoloring, background removal or generative redraw). `assets/brand/q-mark-exports.json` records approved source hashes and every generated asset hash. Run `node scripts/export-brand-icons.mjs` manually to regenerate, then `npm run build:status`; normal builds verify checked-in exports, not generate them with a browser.
+PNG app icons are declared `purpose: "any"`, not `maskable`: no maskable-safe-area artwork was supplied. Boot/status/static fallback icons use the new dark-backed Q, whose own background keeps it readable on either page theme. The browser tab uses the separate transparent pair described below. `scripts/export-brand-icons.mjs` performs offline canvas downsampling only (no crop, recoloring, background removal or generative redraw). `assets/brand/q-mark-exports.json` records approved source hashes and every generated asset hash. Run `node scripts/export-brand-icons.mjs` manually to regenerate, then `npm run build:status`; normal builds verify checked-in exports, not generate them with a browser.
 
 The favicon SVG embeds its 64px PNG export; the independent status SVG embeds a 96px WEBP export at quality 1. These are honest raster-backed SVG containers, not traced vectors. The existing `/_sqr/errors/assets/sqr-logo.svg` URL/MIME/Nginx allowlist stay unchanged, and the independent 32KiB asset budget remains enforced. Full logos continue to use true SVGs. Small Q images are about 12/25KB instead of loading the 0.55/1.43MB originals at runtime.
 
@@ -58,7 +59,12 @@ Independent error documents reuse `/_sqr/errors/assets/sqr-logo.svg` for both th
 
 Favicon URLs have changed, avoiding most stale-cache issues. If a browser still shows the old icon, reload without cache or close/reopen the tab; installed home-screen/PWA icons may require removing and re-adding the shortcut. Do not clear account/session or collection storage just to refresh branding.
 
-Browser tab icons now use the separate supplied online/offline package; their
-connection-aware controller does not replace the Q artwork above. See
+Browser tab icons show only the Q on a transparent background following the
+user's 13 October correction: blue with the original decorative dots when
+connected, grey with dots removed when disconnected. Both use the approved
+original transparent Q PNG with proportional mechanical exports, without AI
+redrawing. Their versioned `v2` paths avoid the earlier white tile cache. The
+connection-aware controller does not replace the workspace, touch, PWA or
+independently hosted Nginx artwork above. See
 [favicon connectivity](FAVICON_CONNECTIVITY.md) for status semantics, exact asset
 provenance, verification and rollout.

@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 test.use({ serviceWorkers: "block" });
-const onlinePng = "/brand/favicon-online-v1-32.png";
-const onlineIco = "/brand/favicon-online-v1.ico";
+const onlinePng = "/brand/favicon-online-v2-32.png";
+const onlineIco = "/brand/favicon-online-v2.ico";
 const offlinePng = "data:image/png;base64," + readFileSync("client/src/assets/favicon-status/offline-32.png").toString("base64");
 type ResponseMode = "ok" | "503" | "html" | "marker" | "cache" | "redirect" | "network";
 
@@ -126,7 +126,7 @@ test("favicon status grey PNG works offline under application CSP and survives S
 });
 
 for (const theme of ["light", "dark"] as const) {
-  test(`favicon status supplied 16/32/48 PNGs decode and paint online blue/offline grey (${theme})`, async ({ page, baseURL }, testInfo) => {
+  test(`favicon status transparent 16/32/48 PNGs paint online blue/offline grey without a tile (${theme})`, async ({ page, baseURL }, testInfo) => {
     expect(new URL(baseURL!).hostname).toBe("127.0.0.1");
     // Use an image document so this asset proof does not depend on a backend or polling.
     await page.goto(onlinePng);
@@ -138,21 +138,39 @@ for (const theme of ["light", "dark"] as const) {
       frame.style.padding = "24px"; frame.style.display = "flex"; frame.style.gap = "24px";
       document.body.replaceChildren(frame);
       for (const state of ["online", "offline"]) for (const size of [16, 32, 48]) {
-        const img = new Image(); img.src = `/brand/favicon-${state}-v1-${size}.png`; await img.decode();
+        const img = new Image(); img.src = `/brand/favicon-${state}-v2-${size}.png`; await img.decode();
         img.width = size; img.height = size; frame.appendChild(img);
         const canvas = document.createElement("canvas"); canvas.width = size; canvas.height = size;
         const ctx = canvas.getContext("2d")!; ctx.drawImage(img, 0, 0);
         const data = ctx.getImageData(0, 0, size, size).data;
-        let blue = 0;
-        for (let i = 0; i < data.length; i += 4) if (data[i + 3]! > 0 && data[i + 2]! - data[i]! > 40) blue++;
-        results.push({ state, size, width: img.naturalWidth, height: img.naturalHeight, blue });
+        let blue = 0, visible = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3]! > 0) {
+            visible++;
+            if (data[i + 2]! - data[i]! > 40) blue++;
+          }
+        }
+        const corners = [0, size - 1, (size - 1) * size, size * size - 1]
+          .map(pixel => data[pixel * 4 + 3]);
+        const holeAlpha = data[(Math.floor(size * 0.5) * size + Math.floor(size * 0.42)) * 4 + 3];
+        const dotAlpha = data[(Math.floor(size * 0.15) * size + Math.floor(size * 0.91)) * 4 + 3];
+        results.push({ state, size, width: img.naturalWidth, height: img.naturalHeight, blue, visible, corners, holeAlpha, dotAlpha });
       }
       return results;
     }, theme);
     for (const sample of samples) {
       expect([sample.width, sample.height]).toEqual([sample.size, sample.size]);
-      if (sample.state === "online") expect(sample.blue).toBeGreaterThan(5);
-      else expect(sample.blue).toBe(0);
+      expect(sample.corners, `${sample.state} ${sample.size}px has no opaque background`).toEqual([0, 0, 0, 0]);
+      expect(sample.visible, `${sample.state} ${sample.size}px Q remains visible`).toBeGreaterThan(5);
+      expect(sample.visible).toBeLessThan(sample.size * sample.size);
+      expect(sample.holeAlpha, `${sample.state} ${sample.size}px Q hole is transparent, not a tile`).toBe(0);
+      if (sample.state === "online") {
+        expect(sample.blue).toBeGreaterThan(5);
+        expect(sample.dotAlpha, `${sample.size}px blue Q retains its decorative dots`).toBeGreaterThan(0);
+      } else {
+        expect(sample.blue).toBe(0);
+        expect(sample.dotAlpha, `${sample.size}px grey Q has no decorative dots`).toBe(0);
+      }
     }
     await page.screenshot({ path: testInfo.outputPath(`favicon-sizes-${theme}.png`) });
   });

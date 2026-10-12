@@ -1,11 +1,15 @@
 # Browser tab connectivity favicon
 
-The browser tab uses the exact supplied online/offline images from
-`SQR_Favicon_Online_Offline_GMAIL_SAFE.zip`. Online is the blue Q with its original
-decorative dots; offline is the grey Q without dots. The package's white tile is
-intentional. `assets/brand/favicon-status-provenance.json` records the ZIP SHA256,
-entry names and hashes. Existing workspace, login, status-page, touch and PWA
-artwork remains independent of the tab icon.
+The browser tab shows only the Q on a transparent background, with no square or
+tile. Online is the blue Q with its original decorative dots; offline is the
+same Q in grey without dots. Following the user's 13 October correction, these
+icons are proportional exports of the approved original transparent Q PNG
+(SHA256 `07e5e47d3a1851200301dc22b49764b6bb174b48843bc2462700ba3c0dc5ea5e`).
+The offline variant removes the disconnected decorative dots and converts the
+remaining Q to grey mechanically; no AI redrawing is used.
+`assets/brand/favicon-status-provenance.json` records the source and export
+hashes and method. Existing workspace, login, status-page, touch and PWA artwork
+remains independent of the tab icon.
 
 ## Runtime and endpoint
 
@@ -31,9 +35,11 @@ changes; metadata updates no longer write tab icons. HMR disposes the controller
   `?inline` asset import. The grey icon requires no image request after failure.
   Original online URLs, MIME types and sizes are restored on recovery. No new
   icon links are appended; the touch icon and manifest are not modified.
-- New `favicon-online-v1-*` static names avoid the previous icon cache. There is
+- New `favicon-online-v2-*` static names avoid the previous tiled icon cache. There is
   no cache-busting URL on every poll. Requests use same-origin relative URLs,
   `cache: no-store`, `redirect: error` and `credentials: omit`.
+  The earlier `v1` files remain available for tabs running a cached older client;
+  the current HTML and controller paths use `v2`.
 - The existing API proxy forwards this endpoint; API responses already have
   no-store headers. No service worker is registered in this repository. If one is
   introduced later, this endpoint must remain network-only.
@@ -68,8 +74,9 @@ npm run test:visual:built -- --grep "favicon status|brand migration" --workers=1
 Browser scenarios use a loopback static production-build server and synthetic
 API fixtures. They cover backend 503, HTML fallback, missing marker/no-store,
 redirect, network failure, repeated recovery, actual browser offline, navigation,
-reload, embedded PNG decoding under the relevant application CSP, and supplied
-16/32/48px assets against light/dark backgrounds. Unit tests additionally cover
+reload, embedded PNG decoding under the relevant application CSP, and transparent
+16/32/48px assets against light/dark backgrounds. Pixel assertions require
+transparent corners and a visible Q; offline pixels have no blue hue. Unit tests additionally cover
 actual timeout scheduling, cancellation races, hidden tabs, page lifecycle,
 duplicate installation and listener/timer cleanup. Backend tests exercise
 startup/degraded/failed states and independent bounded office-IP quotas.
@@ -128,3 +135,28 @@ Implementation and local verification are complete. Commit and push were
 requested on 13 October 2026. The local build has dirty-source metadata and must
 not be used as a production release artifact. Production deployment is a separate
 step using an approved CI artifact after CI and Release Verification succeed.
+
+## Transparent tab icon correction — 13 October 2026
+
+The original checkpoint above describes the initial ZIP implementation. The
+subsequent correction replaces its white tiles with the transparent Q exports
+under `favicon-online-v2-*` and `favicon-offline-v2-*`. The 32px offline PNG is
+still embedded for network failures, and polling/endpoint behavior is unchanged.
+The online icon retains the source's dots; the offline icon has none. Production
+must deploy the approved artifact for this correction before existing server
+pages can load the new pair.
+
+`scripts/export-favicon-status-icons.mjs` regenerates the exports locally from
+the hash-verified original. It removes transparent source padding, adds one clear
+output pixel at each edge, and retains common online/offline dimensions. It does
+not contact an application server or use AI. Normal builds verify the checked-in
+exports rather than invoking this manual exporter.
+
+Correction verification: 21 focused asset/controller tests and 14 production-built
+Chromium scenarios PASS. PNG checks prove transparent corners and the Q's hollow
+center at 16/32/48px, online decorative dots and their absence offline, plus a
+neutral grey offline Q on both surface themes. Online ICO frames match the PNG
+exports. TypeScript, scoped ESLint, build, bundle budgets, secret scan and diff
+check PASS. Login screenshot baselines and unrelated brand artwork remain
+unchanged. Commit and push of this correction were requested on 13 October 2026;
+production deployment remains a separate step.

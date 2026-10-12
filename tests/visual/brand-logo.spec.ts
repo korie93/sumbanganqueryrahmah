@@ -15,10 +15,10 @@ async function loadedLogo(image: Locator, source: string, ratio: number) {
 }
 
 async function metadata(page: Page) {
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/favicon-online-v1-32.png");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/favicon-online-v2-32.png");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("type", "image/png");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("sizes", "32x32");
-  await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("href", "/brand/favicon-online-v1.ico");
+  await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("href", "/brand/favicon-online-v2.ico");
   await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("type", "image/x-icon");
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/brand/apple-touch-icon-180x180.png");
 }
@@ -31,6 +31,7 @@ test("brand migration supplied favicon and device icons decode without request i
   for (const [source, size] of [
     ["/brand/favicon.svg", 64],
     ["/brand/favicon.ico", 64],
+    ["/brand/favicon-online-v2.ico", 64],
     ["/brand/apple-touch-icon-180x180.png", 180],
     ["/brand/icon-192x192.png", 192],
     ["/brand/icon-512x512.png", 512],
