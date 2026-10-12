@@ -45,11 +45,14 @@ function createControlState(overrides?: Partial<WorkerControlState>): WorkerCont
   };
 }
 
-function createApiProtectionTestApp(options: { adaptiveRateStore?: AdaptiveRateStateStore } = {}) {
+function createApiProtectionTestApp(options: {
+  adaptiveRateStore?: AdaptiveRateStateStore;
+  controlState?: Partial<WorkerControlState>;
+} = {}) {
   const app = express();
   const { adaptiveRateLimit, systemProtectionMiddleware } = createApiProtectionMiddleware({
     ...(options.adaptiveRateStore ? { adaptiveRateStore: options.adaptiveRateStore } : {}),
-    getControlState: () => createControlState(),
+    getControlState: () => createControlState(options.controlState),
     getDbProtection: () => false,
   });
 
@@ -78,6 +81,18 @@ function createApiProtectionTestApp(options: { adaptiveRateStore?: AdaptiveRateS
 
   app.get("/api/noisy", (_req, res) => {
     res.json({ ok: true, route: "noisy" });
+  });
+  app.get("/api/health/connectivity", (_req, res) => {
+    res.status(204).end();
+  });
+  app.post("/api/health/connectivity", (_req, res) => {
+    res.status(204).end();
+  });
+  app.get("/api/health/connectivity-lookalike", (_req, res) => {
+    res.status(204).end();
+  });
+  app.get("/api/health/connectivity/nested", (_req, res) => {
+    res.status(204).end();
   });
   app.get("/api/me", (_req, res) => {
     res.json({ ok: true, route: "me" });
@@ -126,6 +141,81 @@ test("adaptive API protection still throttles generic API bursts", async () => {
     assert.equal(payload.mode, "NORMAL");
     assert.equal(typeof payload.retryAfterMs, "number");
     assert.ok(payload.retryAfterMs >= 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("connectivity GET and HEAD probes share a bounded NAT bucket without consuming ordinary API quota", async () => {
+  const app = createApiProtectionTestApp({ controlState: { throttleFactor: 1 } });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const probes = await Promise.all(Array.from({ length: 120 }, (_, index) =>
+      fetch(`${baseUrl}/api/health/connectivity?probe=${index}`, {
+        method: index % 2 === 0 ? "GET" : "HEAD",
+      })));
+    assert.equal(probes.filter((response) => response.status === 204).length, 120);
+
+    const overflow = await fetch(`${baseUrl}/api/health/connectivity`);
+    assert.equal(overflow.status, 429);
+    assert.equal(overflow.headers.get("ratelimit-limit"), "120");
+    assert.equal((await overflow.json()).scope, "connectivity");
+
+    for (let index = 0; index < 40; index += 1) {
+      const response = await fetch(`${baseUrl}/api/noisy`);
+      assert.equal(response.status, 200);
+    }
+    assert.equal((await fetch(`${baseUrl}/api/noisy`)).status, 429);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("connectivity NAT probes remain reachable during protection mode but lookalikes and writes retain ordinary quotas", async () => {
+  const app = createApiProtectionTestApp({ controlState: {
+    mode: "PROTECTION",
+    dbProtection: true,
+    rejectHeavyRoutes: true,
+    throttleFactor: 0.2,
+  } });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const probes = await Promise.all(Array.from({ length: 60 }, () =>
+      fetch(`${baseUrl}/api/health/connectivity`)));
+    assert.equal(probes.filter((response) => response.status === 204).length, 60);
+    assert.ok(probes.every((response) => response.headers.get("ratelimit-limit") === "120"));
+
+    for (const path of ["/api/health/connectivity-lookalike", "/api/health/connectivity/nested"]) {
+      for (let index = 0; index < 4; index += 1) {
+        const response = await fetch(`${baseUrl}${path}`);
+        assert.equal(response.status, 204);
+        assert.equal(response.headers.get("ratelimit-limit"), "8");
+      }
+    }
+    const write = await fetch(`${baseUrl}/api/health/connectivity`, { method: "POST" });
+    assert.equal(write.status, 429);
+    assert.equal((await write.json()).scope, "api");
+    assert.equal((await fetch(`${baseUrl}/api/health/connectivity`)).status, 204);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("connectivity probes reject closed when the shared rate state is unavailable", async () => {
+  const app = createApiProtectionTestApp({ adaptiveRateStore: {
+    increment: async () => {
+      throw new Error("redis-unavailable");
+    },
+  } });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/health/connectivity`);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("x-sqr-connectivity"), null);
+    assert.equal((await response.json()).reason, "adaptive_rate_state_unavailable");
   } finally {
     await stopTestServer(server);
   }

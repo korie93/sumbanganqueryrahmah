@@ -12,6 +12,11 @@ export const SQR_BRAND_ASSETS = {
     svg: "/brand/favicon.svg",
     ico: "/brand/favicon.ico",
   },
+  tabFavicon: {
+    onlinePng: "/brand/favicon-online-v1-32.png",
+    onlineIco: "/brand/favicon-online-v1.ico",
+    offlinePng: "/brand/favicon-offline-v1-32.png",
+  },
   appleTouchIcon: "/brand/apple-touch-icon-180x180.png",
   appIcon192: "/brand/icon-192x192.png",
   appIcon512: "/brand/icon-512x512.png",

@@ -72,6 +72,9 @@ export async function installFixture(page: Page, baseURL: string | undefined, op
       return route.abort();
     }
     const endpoint = `${request.method()} ${url.pathname}`;
+    if (endpoint === "GET /api/health/connectivity") return route.fulfill({
+      status: 204, headers: { "X-SQR-Connectivity": "ok", "Cache-Control": "no-store" },
+    });
     if (endpoint === "GET /api/health") return respond(route, { status: "ok", ready: true });
     if (endpoint === "GET /api/maintenance-status") return respond(route,
       { maintenance: false, message: "Fixture available", type: "soft", startTime: null, endTime: null });

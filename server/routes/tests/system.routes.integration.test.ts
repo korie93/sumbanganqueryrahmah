@@ -434,6 +434,86 @@ async function withProductionLikeRuntime<T>(isProductionLike: boolean, run: () =
   }
 }
 
+test("GET /api/health/connectivity is public and database-independent during startup and degraded services", async (t) => {
+  const cases: Array<{ name: string; startup: Partial<StartupHealthSnapshot> }> = [
+    { name: "ready", startup: {} },
+    { name: "starting", startup: { ready: false, stage: "booting" } },
+    {
+      name: "degraded",
+      startup: {
+        degraded: true,
+        degradedServices: [{
+          details: "Private database details",
+          reason: "DATABASE_UNREACHABLE",
+          service: "database",
+          updatedAt: "2026-03-24T00:00:01.000Z",
+        }],
+      },
+    },
+  ];
+  for (const { name, startup } of cases) {
+    await t.test(name, async () => {
+      let authCalls = 0;
+      let databaseCalls = 0;
+      const app = createJsonTestApp();
+      registerSystemRoutes(app, createBaseSystemRouteDeps({
+        authenticateToken: (_req, res) => {
+          authCalls += 1;
+          res.status(401).end();
+        },
+        checkDbConnectivity: async () => {
+          databaseCalls += 1;
+          return false;
+        },
+        getStartupHealthSnapshot: () => createStartupSnapshot(startup),
+      }));
+      const { server, baseUrl } = await startTestServer(app);
+
+      try {
+        const response = await fetch(`${baseUrl}/api/health/connectivity?probe=1`, {
+          headers: { "If-None-Match": "*" },
+        });
+        assert.equal(response.status, 204);
+        assert.equal(response.headers.get("x-sqr-connectivity"), "ok");
+        assert.equal(response.headers.get("cache-control"), "no-store, no-cache, must-revalidate");
+        assert.equal(response.headers.get("pragma"), "no-cache");
+        assert.equal(response.headers.get("expires"), "0");
+        assert.equal(response.headers.get("etag"), null);
+        assert.equal(response.headers.get("set-cookie"), null);
+        assert.equal(await response.text(), "");
+        assert.equal(authCalls, 0);
+        assert.equal(databaseCalls, 0);
+      } finally {
+        await stopTestServer(server);
+      }
+    });
+  }
+});
+
+test("GET /api/health/connectivity fails without a success marker or internal details after startup failure", async () => {
+  const { app } = createSystemRouteHarness({
+    startup: {
+      failed: true,
+      ready: false,
+      failureReason: "private startup failure",
+      failureDetails: "private service details",
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/health/connectivity`);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("x-sqr-connectivity"), null);
+    assert.equal(response.headers.get("cache-control"), "no-store, no-cache, must-revalidate");
+    assert.equal(response.headers.get("pragma"), "no-cache");
+    assert.equal(response.headers.get("expires"), "0");
+    assert.equal(await response.text(), "");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/health/live exposes only public-safe liveness fields", async () => {
   const { app } = createSystemRouteHarness({
     startup: {

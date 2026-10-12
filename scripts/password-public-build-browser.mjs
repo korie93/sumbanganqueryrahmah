@@ -197,6 +197,9 @@ async function runCase(spec, width, theme) {
         return route.abort();
       }
       if (!url.pathname.startsWith("/api/")) return route.continue();
+      if (url.pathname === "/api/health/connectivity" && route.request().method() === "GET") {
+        return route.fulfill({ status: 204, headers: { "X-SQR-Connectivity": "ok", "Cache-Control": "no-store" } });
+      }
       if (url.pathname === "/api/health") {
         assert.equal(route.request().method(), "GET");
         return route.fulfill({ json: { status: "ok", ready: true } });

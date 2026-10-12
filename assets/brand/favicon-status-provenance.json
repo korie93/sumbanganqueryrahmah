@@ -1,0 +1,55 @@
+{
+  "source": "SQR_Favicon_Online_Offline_GMAIL_SAFE.zip",
+  "zipSha256": "bb9317a15a158e05e51adcb8427ecaaedaad78974d1c0505a8e6d3d38a728f84",
+  "note": "Exact supplied bytes; no redraw. Only browser tab favicons change; existing PWA, touch, UI and Nginx Q assets remain separately owned.",
+  "files": [
+    {
+      "file": "client/public/brand/favicon-online-v1.ico",
+      "zipEntry": "favicon/favicon.ico",
+      "sha256": "bd1c2765cde23e9e1d6a1ee6a8414aa343e3532db4bdd6245dcbaaa580d30ebd",
+      "bytes": 11915
+    },
+    {
+      "file": "client/public/brand/favicon-online-v1-16.png",
+      "zipEntry": "favicon/favicon-16x16.png",
+      "sha256": "98dd401855017aba9080ec907619b997791e7513b7d99df708d91cc7f8f5ead4",
+      "bytes": 837
+    },
+    {
+      "file": "client/public/brand/favicon-online-v1-32.png",
+      "zipEntry": "favicon/favicon-32x32.png",
+      "sha256": "45583d4991dd0ce972ec0234488c4a292cf77c0c3e9aa3f2606458cedb3ca068",
+      "bytes": 2074
+    },
+    {
+      "file": "client/public/brand/favicon-online-v1-48.png",
+      "zipEntry": "favicon/favicon-48x48.png",
+      "sha256": "0d9ae7240edac4ba5cdfe5459bb990e3024d9434bcaf232026e9658b73020aea",
+      "bytes": 3606
+    },
+    {
+      "file": "client/public/brand/favicon-offline-v1-16.png",
+      "zipEntry": "favicon/favicon-offline-16x16.png",
+      "sha256": "35bcf59c2c10353067d673d4139453dfeaf6de8c0d7f473d5748063f36c900de",
+      "bytes": 782
+    },
+    {
+      "file": "client/public/brand/favicon-offline-v1-32.png",
+      "zipEntry": "favicon/favicon-offline-32x32.png",
+      "sha256": "945296eb2aaeac0d562460ca95cc76993d6194720e029d80f24e5432ae9acdec",
+      "bytes": 1805
+    },
+    {
+      "file": "client/public/brand/favicon-offline-v1-48.png",
+      "zipEntry": "favicon/favicon-offline-48x48.png",
+      "sha256": "0f566141d496fc25e2be38263c2ad8a15e803c53aa1ed6a51d25719c6f5bb42a",
+      "bytes": 2911
+    },
+    {
+      "file": "client/src/assets/favicon-status/offline-32.png",
+      "zipEntry": "favicon/favicon-offline-32x32.png",
+      "sha256": "945296eb2aaeac0d562460ca95cc76993d6194720e029d80f24e5432ae9acdec",
+      "bytes": 1805
+    }
+  ]
+}

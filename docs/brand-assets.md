@@ -57,3 +57,8 @@ App deployment alone does not update the separately hosted Nginx fallback files.
 Independent error documents reuse `/_sqr/errors/assets/sqr-logo.svg` for both the page mark and favicon, so outage pages do not depend on the app server. The two login screenshot baselines were reviewed and updated for the larger supplied full logo; authenticated baseline images are unchanged. Landing touch tests pace native swipe events across animation frames and wait for snapping to settle before the next tap; their assertions remain intact. Verify ICO decoding in a browser test **without** request interception: Playwright aborts paths ending `/favicon.ico` when routing is enabled; that is not evidence of a corrupt ICO. The dedicated brand test covers this.
 
 Favicon URLs have changed, avoiding most stale-cache issues. If a browser still shows the old icon, reload without cache or close/reopen the tab; installed home-screen/PWA icons may require removing and re-adding the shortcut. Do not clear account/session or collection storage just to refresh branding.
+
+Browser tab icons now use the separate supplied online/offline package; their
+connection-aware controller does not replace the Q artwork above. See
+[favicon connectivity](FAVICON_CONNECTIVITY.md) for status semantics, exact asset
+provenance, verification and rollout.

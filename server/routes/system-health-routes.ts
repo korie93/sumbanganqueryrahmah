@@ -74,6 +74,19 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
     getBackgroundQueueHealthSnapshot,
   } = context;
 
+  app.get("/api/health/connectivity", routeHandler((_req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    if (getStartupHealthSnapshot().failed) {
+      return res.status(503).end();
+    }
+
+    res.setHeader("X-SQR-Connectivity", "ok");
+    return res.status(204).end();
+  }));
+
   app.get("/api/health/live", routeHandler((_req, res) => {
     const startup = getStartupHealthSnapshot();
     res.json(buildPublicHealthPayload({

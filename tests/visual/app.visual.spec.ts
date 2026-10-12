@@ -172,6 +172,9 @@ async function installMockPublicApi(page: Page) {
   // Public snapshots never need a live session or backend state.
   await page.route("**/api/**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/health/connectivity" && route.request().method() === "GET") return route.fulfill({
+      status: 204, headers: { "X-SQR-Connectivity": "ok", "Cache-Control": "no-store" },
+    });
     if (pathname === "/api/health" && route.request().method() === "GET") {
       return jsonResponse(route, { status: "ok", ready: true });
     }
@@ -185,6 +188,10 @@ async function installMockAuthenticatedApi(page: Page, role: VisualRole = "super
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
+
+    if (pathname === "/api/health/connectivity" && request.method() === "GET") return route.fulfill({
+      status: 204, headers: { "X-SQR-Connectivity": "ok", "Cache-Control": "no-store" },
+    });
 
     if (pathname === "/api/me") {
       return jsonResponse(route, {

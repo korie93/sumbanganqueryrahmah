@@ -1,0 +1,159 @@
+import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+
+test.use({ serviceWorkers: "block" });
+const onlinePng = "/brand/favicon-online-v1-32.png";
+const onlineIco = "/brand/favicon-online-v1.ico";
+const offlinePng = "data:image/png;base64," + readFileSync("client/src/assets/favicon-status/offline-32.png").toString("base64");
+type ResponseMode = "ok" | "503" | "html" | "marker" | "cache" | "redirect" | "network";
+
+async function fixture(page: Page, baseURL: string) {
+  expect(new URL(baseURL).hostname).toBe("127.0.0.1");
+  let mode: ResponseMode = "ok";
+  let probes = 0;
+  const unexpected: string[] = [];
+  await page.clock.install();
+  await page.context().routeWebSocket("**/*", socket => socket.close());
+  await page.route("**/*", route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== new URL(baseURL).origin) { unexpected.push("off-origin"); return route.abort(); }
+    if (url.pathname === "/api/health/connectivity") {
+      probes++;
+      expect(request.method()).toBe("GET");
+      expect(request.headers()["cookie"]).toBeUndefined();
+      expect(request.headers()["authorization"]).toBeUndefined();
+      if (mode === "network") return route.abort("failed");
+      if (mode === "redirect") return route.fulfill({ status: 302, headers: { location: "/login" } });
+      if (mode === "html") return route.fulfill({ status: 200, contentType: "text/html", body: "<html>SPA fallback</html>" });
+      if (mode === "503") return route.fulfill({ status: 503, body: "" });
+      const headers: Record<string, string> = {};
+      if (mode !== "marker") headers["X-SQR-Connectivity"] = "ok";
+      if (mode !== "cache") headers["Cache-Control"] = "no-store";
+      return route.fulfill({ status: 204, headers });
+    }
+    if (url.pathname === "/api/health") return route.fulfill({ json: { status: "ok", ready: true } });
+    if (url.pathname === "/api/maintenance-status") return route.fulfill({ json: { maintenance: false } });
+    if (url.pathname === "/api/me") return route.fulfill({ status: 401, json: { ok: false } });
+    if (url.pathname.startsWith("/api/telemetry/")) return route.fulfill({ json: { ok: true } });
+    if (url.pathname.startsWith("/api/") || !["GET", "HEAD"].includes(request.method())) {
+      unexpected.push(`${request.method()} ${url.pathname}`); return route.abort();
+    }
+    if (request.resourceType() === "document") {
+      return route.fetch().then(response => route.fulfill({ response, headers: {
+        ...response.headers(),
+        // Match the existing application's relevant CSP directives, including
+        // permission for a bundled PNG while external scripts remain restricted.
+        "Content-Security-Policy": "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; style-src-attr 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      } }));
+    }
+    return route.continue();
+  });
+  await page.goto("/login");
+  await expect(page.getByTestId("input-username")).toBeVisible();
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("data-sqr-connectivity", "online");
+  return { mode: (next: ResponseMode) => { mode = next; }, probes: () => probes, unexpected };
+}
+async function checkLinks(page: Page, state: "online" | "offline") {
+  const icon = page.locator('link[rel="icon"]'), shortcut = page.locator('link[rel="shortcut icon"]');
+  await expect(icon).toHaveCount(1);
+  await expect(shortcut).toHaveCount(1);
+  await expect(icon).toHaveAttribute("data-sqr-connectivity", state);
+  await expect(shortcut).toHaveAttribute("data-sqr-connectivity", state);
+  await expect(icon).toHaveAttribute("href", state === "offline" ? offlinePng : onlinePng);
+  await expect(shortcut).toHaveAttribute("href", state === "offline" ? offlinePng : onlineIco);
+  await expect(icon).toHaveAttribute("type", "image/png");
+  await expect(icon).toHaveAttribute("sizes", "32x32");
+  await expect(shortcut).toHaveAttribute("type", state === "offline" ? "image/png" : "image/x-icon");
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/brand/apple-touch-icon-180x180.png");
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/site.webmanifest");
+}
+async function confirmFailure(page: Page, probes: () => number) {
+  const before = probes();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(probes).toBe(before + 1);
+  await checkLinks(page, "online");
+  await page.clock.fastForward(2_100);
+  await expect.poll(probes).toBe(before + 2);
+  await checkLinks(page, "offline");
+}
+
+test("favicon status handles backend failures, false positives and repeated recovery without duplicate links", async ({ page, baseURL }) => {
+  const f = await fixture(page, baseURL!);
+  for (const mode of ["503", "html", "marker", "cache", "redirect", "network"] as const) {
+    f.mode(mode);
+    await confirmFailure(page, f.probes);
+    f.mode("ok");
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await checkLinks(page, "online");
+  }
+  const before = f.probes();
+  await page.clock.fastForward(20_100);
+  await expect.poll(f.probes).toBe(before + 1);
+  expect(f.unexpected).toEqual([]);
+});
+
+test("favicon status grey PNG works offline under application CSP and survives SPA navigation", async ({ page, baseURL }) => {
+  const cspErrors: string[] = [];
+  page.on("console", message => {
+    if (message.type() === "error" && /content security policy|violates.*directive/i.test(message.text())) cspErrors.push(message.text());
+  });
+  const f = await fixture(page, baseURL!);
+  await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+  await expect(page.getByTestId("landing-brand-title")).toBeVisible();
+  await page.locator('.nav-actions a[href="/login"]').click();
+  await expect(page.getByTestId("input-username")).toBeVisible();
+  const before = f.probes();
+  await page.context().setOffline(true);
+  await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+  await checkLinks(page, "offline");
+  const decoded = await page.evaluate(async () => {
+    const img = new Image(); img.src = document.querySelector<HTMLLinkElement>('link[rel="icon"]')!.href;
+    await img.decode(); return [img.naturalWidth, img.naturalHeight];
+  });
+  expect(decoded).toEqual([32, 32]);
+  await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+  await expect(page.getByTestId("landing-brand-title")).toBeVisible();
+  await checkLinks(page, "offline");
+  await page.clock.fastForward(40_100);
+  expect(f.probes()).toBe(before);
+  await page.context().setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await checkLinks(page, "online");
+  await page.reload();
+  await checkLinks(page, "online");
+  expect(f.unexpected).toEqual([]);
+  expect(cspErrors).toEqual([]);
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`favicon status supplied 16/32/48 PNGs decode and paint online blue/offline grey (${theme})`, async ({ page, baseURL }, testInfo) => {
+    expect(new URL(baseURL!).hostname).toBe("127.0.0.1");
+    // Use an image document so this asset proof does not depend on a backend or polling.
+    await page.goto(onlinePng);
+    await page.emulateMedia({ colorScheme: theme });
+    const samples = await page.evaluate(async theme => {
+      const results = [];
+      const frame = document.createElement("div");
+      frame.style.background = theme === "dark" ? "#111827" : "#ffffff";
+      frame.style.padding = "24px"; frame.style.display = "flex"; frame.style.gap = "24px";
+      document.body.replaceChildren(frame);
+      for (const state of ["online", "offline"]) for (const size of [16, 32, 48]) {
+        const img = new Image(); img.src = `/brand/favicon-${state}-v1-${size}.png`; await img.decode();
+        img.width = size; img.height = size; frame.appendChild(img);
+        const canvas = document.createElement("canvas"); canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext("2d")!; ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, size, size).data;
+        let blue = 0;
+        for (let i = 0; i < data.length; i += 4) if (data[i + 3]! > 0 && data[i + 2]! - data[i]! > 40) blue++;
+        results.push({ state, size, width: img.naturalWidth, height: img.naturalHeight, blue });
+      }
+      return results;
+    }, theme);
+    for (const sample of samples) {
+      expect([sample.width, sample.height]).toEqual([sample.size, sample.size]);
+      if (sample.state === "online") expect(sample.blue).toBeGreaterThan(5);
+      else expect(sample.blue).toBe(0);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`favicon-sizes-${theme}.png`) });
+  });
+}

@@ -375,12 +375,20 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     const userId = resolveRateLimitUserId(req);
     const method = String(req.method || "GET").toUpperCase();
     const path = req.path || "/";
+    const isConnectivityProbe = (method === "GET" || method === "HEAD")
+      && path === "/api/health/connectivity";
 
     let bucketScope = "api";
     let baseLimit = 40;
     let minLimit = 8;
 
-    if (path.startsWith("/api/ai/")) {
+    if (isConnectivityProbe) {
+      // Cheap public probes have a bounded NAT bucket independent of staff API
+      // traffic. They stay reachable while heavier routes are being protected.
+      bucketScope = "connectivity";
+      baseLimit = 120;
+      minLimit = 120;
+    } else if (path.startsWith("/api/ai/")) {
       bucketScope = "ai";
       baseLimit = 14;
       minLimit = 4;
@@ -411,7 +419,9 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 
     const modePenalty = controlState.mode === "PROTECTION" ? 0.5 : controlState.mode === "DEGRADED" ? 0.75 : 1;
     const throttle = clamp(controlState.throttleFactor || 1, 0.2, 1.2);
-    const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
+    const dynamicLimit = isConnectivityProbe
+      ? baseLimit
+      : Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
 
     if (userId) {
       const requestClass = resolveRequestClass(req);

@@ -14,12 +14,17 @@ test("approved brand SVGs are passive same-origin assets with original dimension
     }
 });
 
-test("favicon, touch and PWA declarations stay aligned with central brand paths", () => {
+test("tab favicon, touch and PWA declarations stay aligned with their central brand paths", () => {
   const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
-  for (const url of [SQR_BRAND_ASSETS.favicon.svg, SQR_BRAND_ASSETS.favicon.ico, SQR_BRAND_ASSETS.appleTouchIcon]) {
+  for (const url of [SQR_BRAND_ASSETS.tabFavicon.onlinePng, SQR_BRAND_ASSETS.tabFavicon.onlineIco, SQR_BRAND_ASSETS.appleTouchIcon]) {
     assert.ok(html.includes(`href="${url}"`));
     assert.ok(existsSync(asset(url)));
   }
+  assert.match(html, /<link rel="icon" type="image\/png" sizes="32x32"/);
+  assert.match(html, /<link rel="shortcut icon" type="image\/x-icon"/);
+  assert.ok(existsSync(asset(SQR_BRAND_ASSETS.tabFavicon.offlinePng)));
+  // Installed app icons keep the supplied Q artwork independent of tab status.
+  for (const url of [SQR_BRAND_ASSETS.favicon.svg, SQR_BRAND_ASSETS.favicon.ico]) assert.ok(existsSync(asset(url)));
   const manifest = JSON.parse(readFileSync(asset("/site.webmanifest"), "utf8"));
   assert.deepEqual(manifest.icons.map((icon: { src: string }) => icon.src), [SQR_BRAND_ASSETS.favicon.svg, SQR_BRAND_ASSETS.appIcon192, SQR_BRAND_ASSETS.appIcon512]);
   assert.equal(manifest.shortcuts[0].icons[0].src, SQR_BRAND_ASSETS.favicon.svg);

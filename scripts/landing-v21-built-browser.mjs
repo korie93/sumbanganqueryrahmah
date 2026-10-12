@@ -19,6 +19,7 @@ const failures=[];
 const fixtureRoute=route=>{
  const request=route.request(),url=new URL(request.url());
  if(url.origin!==server.origin){failures.push(`Off-origin ${url.origin}`);return route.abort();}
+ if(url.pathname==='/api/health/connectivity'&&request.method()==='GET')return route.fulfill({status:204,headers:{'X-SQR-Connectivity':'ok','Cache-Control':'no-store'}});
  if(url.pathname==='/api/health'&&request.method()==='GET')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:'ok',ready:true})});
  if(url.pathname.startsWith('/api/'))return route.fulfill({status:url.pathname==='/api/me'?401:404,contentType:'application/json',body:JSON.stringify({ok:false,message:'Isolated landing fixture'})});
  if(!['GET','HEAD'].includes(request.method())){failures.push('Unexpected mutation');return route.abort();}

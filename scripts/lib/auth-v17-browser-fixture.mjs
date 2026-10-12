@@ -40,6 +40,9 @@ export function createAuthV17Fixture(origin) {
       state.unexpected.push(`Unexpected static method ${request.method()}`);
       return requestRoute.abort();
     }
+    if (url.pathname === "/api/health/connectivity" && request.method() === "GET") {
+      return requestRoute.fulfill({ status: 204, headers: { "X-SQR-Connectivity": "ok", "Cache-Control": "no-store" } });
+    }
     if (url.pathname === "/api/health" && request.method() === "GET") {
       return requestRoute.fulfill({ json: { status: "ok", ready: true } });
     }

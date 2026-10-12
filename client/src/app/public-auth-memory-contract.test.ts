@@ -137,7 +137,8 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   assert.match(metadataSource, /isPublicLanding \? "en" : "ms"/);
   assert.match(metadataSource, /isPublicLanding \|\| isPublicAuth \? "light" : "light dark"/);
   assert.match(metadataSource, /const isPublicAuth = metadata\.publicAuth === true;/);
-  assert.match(metadataSource, /\["icon", SQR_BRAND_ASSETS\.favicon\.svg\]/);
+  assert.doesNotMatch(metadataSource, /\["(?:icon|shortcut icon)",/);
+  assert.match(metadataSource, /\["apple-touch-icon", SQR_BRAND_ASSETS\.appleTouchIcon\]/);
   assert.doesNotMatch(metadataSource, /\/auth-v17\/favicon|sqr-logo-minimal/);
   assert.match(indexSource, /<meta name="mobile-web-app-capable" content="yes" \/>/);
   assert.doesNotMatch(indexSource, /apple-mobile-web-app-capable/);

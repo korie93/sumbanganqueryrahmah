@@ -208,8 +208,6 @@ export function applyDocumentMetadata(metadata: DocumentMetadata) {
   const isPublicLanding = metadata.publicLanding === true;
   const isPublicAuth = metadata.publicAuth === true;
   for (const [rel, href] of [
-    ["icon", SQR_BRAND_ASSETS.favicon.svg],
-    ["shortcut icon", SQR_BRAND_ASSETS.favicon.ico],
     ["apple-touch-icon", SQR_BRAND_ASSETS.appleTouchIcon],
   ]) {
     document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`)?.setAttribute("href", href);

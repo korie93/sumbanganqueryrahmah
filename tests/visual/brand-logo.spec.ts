@@ -15,8 +15,11 @@ async function loadedLogo(image: Locator, source: string, ratio: number) {
 }
 
 async function metadata(page: Page) {
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/favicon.svg");
-  await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("href", "/brand/favicon.ico");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/favicon-online-v1-32.png");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("type", "image/png");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("sizes", "32x32");
+  await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("href", "/brand/favicon-online-v1.ico");
+  await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("type", "image/x-icon");
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/brand/apple-touch-icon-180x180.png");
 }
 
@@ -90,6 +93,9 @@ for (const theme of ["light", "dark"] as const) {
     await page.context().route("**/*", (route) => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin !== new URL(baseURL!).origin) { errors.push("off-origin"); return route.abort(); }
+      if (url.pathname === "/api/health/connectivity" && request.method() === "GET") return route.fulfill({
+        status: 204, headers: { "X-SQR-Connectivity": "ok", "Cache-Control": "no-store" },
+      });
       if (url.pathname === "/api/health") return route.fulfill({ json: { status: "ok", ready: true } });
       if (url.pathname === "/api/maintenance-status") return route.fulfill({ json: { maintenance: false } });
       if (url.pathname === "/api/me") return route.fulfill({ status: 401, json: { ok: false } });
