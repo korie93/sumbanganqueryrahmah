@@ -47,6 +47,115 @@ test("brand migration supplied favicon and device icons decode without request i
 });
 
 for (const theme of ["light", "dark"] as const) {
+  test(`desktop Q menu toggle stays transparent and keyboard accessible without changing mobile (${theme})`, async ({ page, baseURL }, testInfo) => {
+    const fixture = await installFixture(page, baseURL, { theme });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openSave(page);
+    const toggle = page.getByTestId("button-toggle-sidebar");
+    const logo = toggle.locator(".sqr-brand-logo");
+    const image = logo.locator("img");
+    const mobile = page.getByTestId("button-open-mobile-nav");
+    const drawer = page.locator("#mobile-navigation-drawer");
+    await expect(toggle).toHaveAccessibleName("Collapse navigation");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toHaveAttribute("title", "Collapse navigation");
+    await expect(toggle).toHaveCSS("width", "36px");
+    await expect(logo).toHaveAttribute("aria-hidden", "true");
+    await expect(logo).toHaveAttribute("data-brand-theme", "light");
+    await expect(image).toHaveCount(1);
+    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
+    await expect(image).toHaveAttribute("alt", "");
+    await expect(image).toHaveCSS("width", "24px");
+    await expect(image).toHaveCSS("height", "24px");
+    await expect(image).toHaveCSS("filter", "none");
+    await expect(toggle.locator("svg")).toHaveCount(0);
+    const pixels = await image.evaluate((element: HTMLImageElement) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = element.naturalWidth;
+      canvas.height = element.naturalHeight;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(element, 0, 0);
+      const { width, height } = canvas;
+      const data = context.getImageData(0, 0, width, height).data;
+      const alpha = (x: number, y: number) => data[(Math.floor(y) * width + Math.floor(x)) * 4 + 3];
+      let blue = 0;
+      for (let offset = 0; offset < data.length; offset += 4) {
+        if (data[offset + 3]! > 0 && data[offset + 2]! - data[offset]! > 40) blue++;
+      }
+      return {
+        corners: [alpha(0, 0), alpha(width - 1, 0), alpha(0, height - 1), alpha(width - 1, height - 1)],
+        hole: alpha(width * 0.5, height * 0.5),
+        dot: alpha(width * 0.85, height * 0.2),
+        blue,
+      };
+    });
+    expect(pixels.corners, "The desktop Q has no tile or opaque background").toEqual([0, 0, 0, 0]);
+    expect(pixels.hole, "The original hollow Q remains transparent").toBe(0);
+    expect(pixels.dot, "The original Q retains its decorative dots").toBeGreaterThan(0);
+    expect(pixels.blue, "Both themes keep the approved blue Q, not a grey connectivity icon").toBeGreaterThan(100);
+    await page.locator("aside.workspace-sidebar").screenshot({ path: testInfo.outputPath(`desktop-q-expanded-${theme}.png`), animations: "disabled" });
+
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toHaveAccessibleName("Expand navigation");
+    await expect(toggle).toHaveAttribute("title", "Expand navigation");
+    await expect(toggle).toBeFocused();
+    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
+    await expect(image).toHaveCSS("width", "24px");
+    await page.locator("aside.workspace-sidebar").screenshot({ path: testInfo.outputPath(`desktop-q-collapsed-${theme}.png`), animations: "disabled" });
+    await page.keyboard.press("Space");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toHaveAccessibleName("Collapse navigation");
+    await expect(toggle).toBeFocused();
+
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await expect(toggle).toBeVisible();
+    await expect(mobile).toBeHidden();
+    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    for (const width of [1023, 768, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(toggle).toBeHidden();
+      await expect(mobile).toBeVisible();
+      await expect(mobile).toHaveAccessibleName("Open navigation");
+      await expect(mobile.locator("svg.lucide-menu")).toBeVisible();
+      await expect(mobile.locator(".sqr-brand-logo, img")).toHaveCount(0);
+      await mobile.click();
+      await expect(drawer).toBeVisible();
+      await expect(mobile).toHaveAttribute("aria-expanded", "true");
+      // Portal visibility can precede Radix's focus scope and Escape listener.
+      // Observe focus and post-mount paints before testing actual dismissal.
+      await expect.poll(() => drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await page.keyboard.press("Escape");
+      await expect(drawer).toBeHidden();
+      await expect(mobile).toHaveAttribute("aria-expanded", "false");
+      await expect(mobile).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    }
+    // Closing an open mobile drawer at the exact desktop breakpoint restores
+    // focus to the Q toggle while preserving its prior collapsed rail state.
+    await page.setViewportSize({ width: 1023, height: 900 });
+    await mobile.click();
+    await expect(drawer).toBeVisible();
+    await expect.poll(() => drawer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await expect(drawer).toBeHidden();
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAccessibleName("Expand navigation");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
+    await page.keyboard.press("Space");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toBeFocused();
+    await checkFixture(page, fixture);
+  });
+
   test(`brand migration password-change Q fills its unframed slot (${theme})`, async ({ page, baseURL }, testInfo) => {
     const fixture = await installFixture(page, baseURL, { theme });
     // Enter through the real workspace: Navbar applies the selected root theme.

@@ -101,6 +101,34 @@ test("responsive shell closes transient layers on resize and restores visible na
   assert.match(styles, /@media \(max-width: 1023px\)/);
 });
 
+test("desktop sidebar toggle uses the original decorative blue Q without changing mobile navigation", () => {
+  const navbar = readSource("Navbar.tsx");
+  const desktopButton = navbar.match(/<button ref=\{desktopNavigationTriggerRef\}[\s\S]*?<\/button>/)?.[0];
+  assert.ok(desktopButton, "Keep the existing desktop toggle and focus reference");
+  assert.match(desktopButton, /aria-label=\{sidebarCollapsed \? "Expand navigation" : "Collapse navigation"\}/);
+  assert.match(desktopButton, /getAriaExpandedProps\(!sidebarCollapsed\)/);
+  assert.match(desktopButton, /onClick=\{toggleSidebar\}/);
+  assert.match(desktopButton, /data-testid="button-toggle-sidebar"/);
+  assert.match(desktopButton, /<BrandLogo variant="icon" theme="light" decorative priority/);
+  assert.match(desktopButton, /className="workspace-sidebar-toggle-logo"/);
+  assert.doesNotMatch(desktopButton, /PanelLeft|Menu|offline|filter|transform/);
+
+  const mobileButton = navbar.match(/<button ref=\{mobileNavigationTriggerRef\}[\s\S]*?<\/button>/)?.[0];
+  assert.ok(mobileButton);
+  assert.match(mobileButton, /data-testid="button-open-mobile-nav"/);
+  assert.match(mobileButton, /<Menu className="h-4 w-4" aria-hidden="true"/);
+  assert.doesNotMatch(mobileButton, /BrandLogo|workspace-sidebar-toggle-logo/);
+
+  const css = readSource("../app/workspace-navigation.css");
+  const toggleStyles = css.match(/\.workspace-sidebar-toggle \{[^}]+\}/)?.[0];
+  assert.ok(toggleStyles);
+  assert.match(toggleStyles, /width: 36px/);
+  assert.match(toggleStyles, /min-height: 36px/);
+  assert.match(toggleStyles, /padding: var\(--spacing-1\)/);
+  assert.match(css, /\.workspace-sidebar-toggle-logo \{\s*width: 24px;\s*height: 24px;\s*flex-shrink: 0;/);
+  assert.match(css, /\.workspace-sidebar-toggle:focus-visible \{\s*outline: 2px solid hsl\(var\(--ring\)\)/);
+});
+
 test("shared drawer motion remains subtle and unchanged", () => {
   const source = readSource("ui/sheet.tsx");
   assert.match(source, /data-\[state=closed\]:duration-200 data-\[state=open\]:duration-200/);

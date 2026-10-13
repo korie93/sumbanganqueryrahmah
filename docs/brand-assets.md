@@ -25,6 +25,15 @@ Full-logo SVGs and the 4096×1909 social PNG remain byte-for-byte copies. On 12 
 
 The default is `variant="icon"`, `theme="auto"`. The latest PNG reference takes precedence over the earlier dark-Q-only choice: light surfaces use the transparent Q; dark surfaces use the supplied navy-backed Q. Full logos reserve 665×310 geometry; 128×128 compact exports preserve a 1:1 ratio and support existing 32–60px slots at 2× density. Auto follows the root theme with CSS, without changing saved preferences or mounting another theme controller. Fixed pale landing/auth surfaces use light full logos; landing preview uses transparent Q. No extra CSS frame/background/inset is added. Decorative marks are hidden from assistive technology; semantic logos retain an accessible name.
 
+The main desktop sidebar toggle (1024px and above) uses the original transparent
+blue Q with dots, displayed at 24px inside a 36px button. It explicitly selects
+the light icon asset in both surface themes to avoid a navy tile. This is static
+brand artwork, independent of the connection-aware tab favicon. The existing
+Expand/Collapse labels, keyboard behavior, focus and sidebar state remain intact.
+The mobile/tablet hamburger and drawer, other sidebar action glyphs and ordinary
+workspace logos are unchanged. Built-browser coverage is selected with
+`--grep "desktop Q menu toggle"`.
+
 | Purpose | Public path |
 | --- | --- |
 | Full logo, pale/dark surface | `/brand/sqr-full-logo-light.svg`, `/brand/sqr-full-logo-dark.svg` |

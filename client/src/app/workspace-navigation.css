@@ -94,7 +94,7 @@
 
 .workspace-sidebar-toggle {
   display: flex;
-  width: 32px;
+  width: 36px;
   flex-shrink: 0;
   margin-left: auto;
   min-height: 36px;
@@ -102,11 +102,18 @@
   justify-content: center;
   border: 1px solid transparent;
   border-radius: var(--radius-control);
-  padding: var(--spacing-2);
+  padding: var(--spacing-1);
   background: transparent;
   color: hsl(var(--muted-foreground));
   font-size: var(--font-size-xs);
   cursor: pointer;
+}
+
+.workspace-sidebar-toggle-logo {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .workspace-sidebar-toggle:hover {

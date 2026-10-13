@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react";
+import { Menu, Moon, Sun } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import {
   getVisibleNavItems, getVisibleNavigationGroups, getVisiblePrimaryNavItems,
@@ -7,6 +7,7 @@ import {
 } from "@/app/navigation";
 import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefetch";
 import type { MonitorSection, TabVisibility } from "@/app/types";
+import { BrandLogo } from "@/components/BrandLogo";
 import { NavbarCommandSearch } from "@/components/NavbarCommandSearch";
 import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation";
 import { NavbarMobileNavigation } from "@/components/NavbarMobileNavigation";
@@ -187,7 +188,8 @@ function NavbarImpl({
             aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             {...getAriaExpandedProps(!sidebarCollapsed)} onClick={toggleSidebar} data-testid="button-toggle-sidebar">
-            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+            <BrandLogo variant="icon" theme="light" decorative priority
+              className="workspace-sidebar-toggle-logo" imageClassName="h-full w-full" />
           </button>} />
         <NavbarDesktopNavigation directItems={directItems} groupedItems={groupedItems} activeNavigationItemId={activeNavigationItemId}
           savedCount={savedCount} onNavigate={navigateToItem} onPrefetch={prefetchItem} collapsed={sidebarCollapsed}
