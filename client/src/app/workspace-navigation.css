@@ -93,11 +93,13 @@
 }
 
 .workspace-sidebar-toggle {
+  position: relative;
   display: flex;
-  width: 36px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   margin-left: auto;
-  min-height: 36px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   border: 1px solid transparent;
@@ -110,10 +112,26 @@
 }
 
 .workspace-sidebar-toggle-logo {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.workspace-sidebar-expand-icon {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.workspace-sidebar-toggle:is(:hover, :focus-visible) .workspace-sidebar-toggle-logo {
+  opacity: 0;
+}
+
+.workspace-sidebar-toggle:is(:hover, :focus-visible) .workspace-sidebar-expand-icon {
+  opacity: 1;
 }
 
 .workspace-sidebar-toggle:hover {
@@ -129,7 +147,7 @@
 @media (min-width: 1024px) {
   .sqr-workspace {
     padding-left: var(--workspace-sidebar-width);
-    transition: padding-left 160ms ease;
+    transition: padding-left 200ms ease;
   }
 
   .sqr-workspace[data-sidebar-collapsed="true"] {
@@ -148,7 +166,7 @@
     padding-bottom: var(--safe-area-inset-bottom);
     padding-left: var(--safe-area-inset-left);
     background: hsl(var(--card));
-    transition: width 160ms ease;
+    transition: width 200ms ease;
   }
 
   .workspace-topbar-inner {
@@ -202,7 +220,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sqr-workspace,
-  .workspace-sidebar {
+  .workspace-sidebar,
+  .workspace-sidebar-toggle-logo,
+  .workspace-sidebar-expand-icon {
     transition: none;
   }
 }

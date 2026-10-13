@@ -1,11 +1,13 @@
 import { ChevronDown } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getAriaCurrentPageProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
+import { LARGE_UP_MEDIA_QUERY } from "@/lib/responsive";
 import type { CollectionSidebarItem, CollectionSubPage } from "@/pages/collection-report/types";
+import { getCollectionSectionShortLabel } from "./collection-section-labels";
 
 export interface CollectionSidebarProps {
   items: CollectionSidebarItem[];
@@ -26,14 +28,33 @@ export function CollectionSidebar({
 }: CollectionSidebarProps) {
   const isMobile = useIsMobile();
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const desktopNavRef = useRef<HTMLElement>(null);
   const selectedItem = useMemo(
     () => items.find((item) => item.key === selectedSubPage) || items[0],
     [items, selectedSubPage],
   );
 
+  useEffect(() => {
+    const nav = desktopNavRef.current;
+    if (!nav || isMobile) return;
+    // Scroll the strip, never the page. Native Tab focus also reveals overflowed buttons.
+    const revealCurrent = () => {
+      if (!window.matchMedia(LARGE_UP_MEDIA_QUERY).matches) return;
+      const active = nav.querySelector<HTMLButtonElement>('[data-active="true"]');
+      if (!active) return;
+      const container = nav.getBoundingClientRect(), button = active.getBoundingClientRect();
+      if (button.left < container.left) nav.scrollLeft += button.left - container.left;
+      else if (button.right > container.right) nav.scrollLeft += button.right - container.right;
+    };
+    revealCurrent();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(revealCurrent) : null;
+    observer?.observe(nav);
+    return () => observer?.disconnect();
+  }, [isMobile, items, selectedSubPage]);
+
   if (!isMobile) {
     return (
-      <nav aria-label="Collection sections" className="flex flex-wrap gap-1 border-b border-border pb-3">
+      <nav ref={desktopNavRef} aria-label="Collection sections" className="collection-section-nav flex flex-wrap gap-1 border-b border-border pb-3">
         {items.map((item) => {
           const Icon = item.icon;
           const active = item.key === selectedSubPage;
@@ -42,17 +63,20 @@ export function CollectionSidebar({
               key={item.key}
               type="button"
               onClick={() => onSelectSubPage(item.key)}
+              aria-label={item.label}
+              title={item.label}
               {...getAriaCurrentPageProps(active)}
               data-active={active ? "true" : "false"}
               className={cn(
-                "inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+                "collection-section-link inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
                 active
                   ? "border-primary/30 bg-primary/10 text-primary"
                   : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {item.label}
+              <span className="collection-section-label-full">{item.label}</span>
+              <span className="collection-section-label-short" aria-hidden="true">{getCollectionSectionShortLabel(item.key, item.label)}</span>
             </button>
           );
         })}

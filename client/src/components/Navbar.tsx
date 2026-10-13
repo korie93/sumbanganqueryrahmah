@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Menu, Moon, Sun } from "lucide-react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import {
   getVisibleNavItems, getVisibleNavigationGroups, getVisiblePrimaryNavItems,
@@ -7,7 +7,6 @@ import {
 } from "@/app/navigation";
 import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefetch";
 import type { MonitorSection, TabVisibility } from "@/app/types";
-import { BrandLogo } from "@/components/BrandLogo";
 import { NavbarCommandSearch } from "@/components/NavbarCommandSearch";
 import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation";
 import { NavbarMobileNavigation } from "@/components/NavbarMobileNavigation";
@@ -22,6 +21,19 @@ import {
 import { LARGE_UP_MEDIA_QUERY } from "@/lib/responsive";
 import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import "./Navbar.css";
+
+function StaticSidebarQ() {
+  return <span className="workspace-sidebar-toggle-logo" aria-hidden="true">
+    <img src="/brand/sidebar-q-static.png" width={128} height={128}
+      className="h-full w-full object-contain" alt="" decoding="async" draggable={false} />
+  </span>;
+}
+
+// Expanded/mobile navigation downloads no motion code or stylesheet. A failed
+// optional chunk still leaves the real Q and the native expand button usable.
+const SidebarAnimatedQ = lazy(() => import("@/components/SidebarAnimatedQ")
+  .then(module => ({ default: module.SidebarAnimatedQ }))
+  .catch(() => ({ default: StaticSidebarQ })));
 
 interface NavbarProps {
   currentPage: string;
@@ -188,8 +200,10 @@ function NavbarImpl({
             aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             {...getAriaExpandedProps(!sidebarCollapsed)} onClick={toggleSidebar} data-testid="button-toggle-sidebar">
-            <BrandLogo variant="icon" theme="light" decorative priority
-              className="workspace-sidebar-toggle-logo" imageClassName="h-full w-full" />
+            {sidebarCollapsed ? <>
+              {desktop && <Suspense fallback={<StaticSidebarQ />}><SidebarAnimatedQ /></Suspense>}
+              <PanelLeftOpen className="workspace-sidebar-expand-icon h-5 w-5" aria-hidden="true" />
+            </> : <PanelLeftClose className="h-5 w-5" aria-hidden="true" />}
           </button>} />
         <NavbarDesktopNavigation directItems={directItems} groupedItems={groupedItems} activeNavigationItemId={activeNavigationItemId}
           savedCount={savedCount} onNavigate={navigateToItem} onPrefetch={prefetchItem} collapsed={sidebarCollapsed}

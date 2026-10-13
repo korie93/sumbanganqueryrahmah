@@ -1,12 +1,90 @@
 /* Keep the heading, section navigation and content on the same page grid. */
 .ops-page-frame.collection-report-frame,
-.collection-report-frame .collection-report-sections {
+.collection-report-frame .collection-report-navigation {
   gap: var(--spacing-4);
 }
 
+.collection-report-navigation {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.collection-section-label-short { display: none; }
+
 @media (min-width: 768px) {
   .ops-page-frame.collection-report-frame,
-  .collection-report-frame .collection-report-sections {
+  .collection-report-frame .collection-report-navigation {
     gap: var(--spacing-6);
   }
+}
+
+@media (min-width: 1024px) {
+  .ops-page-frame.collection-report-frame { gap: var(--spacing-4); }
+
+  .collection-report-frame .collection-report-navigation {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--spacing-3);
+    border-bottom: 1px solid hsl(var(--border));
+    padding-bottom: var(--spacing-3);
+  }
+
+  .collection-report-context {
+    order: 2;
+    flex: 0 1 auto;
+    max-width: 180px;
+    padding: 0;
+  }
+
+  /* The topbar already identifies the module. Keep its single h1 accessible,
+     without repeating the large module banner above every section. */
+  .collection-report-context .ops-page-heading > div:first-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .collection-report-context .ops-page-heading { display: block; }
+  /* Constrain the shared header's actions wrapper before truncating its badge. */
+  .collection-report-context .ops-page-heading > div:nth-child(2) {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .collection-report-staff-badge {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .collection-section-nav {
+    order: 1;
+    flex: 1 1 0%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: var(--spacing-1);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    border-bottom: 0;
+    padding: var(--spacing-1);
+  }
+
+  .collection-section-link {
+    flex-shrink: 0;
+    min-height: 40px;
+    gap: var(--spacing-2);
+    padding-inline: var(--spacing-3);
+    white-space: nowrap;
+  }
+
+  .collection-section-label-full { display: none; }
+  .collection-section-label-short { display: inline; }
 }

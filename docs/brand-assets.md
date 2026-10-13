@@ -77,3 +77,10 @@ connection-aware controller does not replace the workspace, touch, PWA or
 independently hosted Nginx artwork above. See
 [favicon connectivity](FAVICON_CONNECTIVITY.md) for status semantics, exact asset
 provenance, verification and rollout.
+
+The desktop workspace sidebar is an explicit transparent-icon exception to
+generic `theme="auto"` rendering: its expanded brand header selects the light
+transparent blue Q for both themes, avoiding the navy-backed dark icon. Its
+collapsed Q uses mechanically exported original layers for lightweight motion;
+see [desktop sidebar Q](sidebar-animated-q.md). Other logo consumers and favicon
+connectivity assets remain unchanged.

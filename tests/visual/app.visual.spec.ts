@@ -785,7 +785,7 @@ test.describe("Collection layout polish", () => {
         await navigateForSnapshot(page, authenticatedRoutes[1]);
         const frame = page.locator(".collection-report-frame");
         await expect(frame).toHaveCSS("max-width", "1120px");
-        await expect(frame).toHaveCSS("gap", width >= 768 ? "24px" : "16px");
+        await expect(frame).toHaveCSS("gap", width >= 768 && width < 1024 ? "24px" : "16px");
         const saveWidth = (await frame.boundingBox())!.width;
         expect(saveWidth).toBeLessThanOrEqual(1120);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);

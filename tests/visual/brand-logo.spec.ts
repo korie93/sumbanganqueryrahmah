@@ -47,28 +47,50 @@ test("brand migration supplied favicon and device icons decode without request i
 });
 
 for (const theme of ["light", "dark"] as const) {
-  test(`desktop Q menu toggle stays transparent and keyboard accessible without changing mobile (${theme})`, async ({ page, baseURL }, testInfo) => {
+  test(`desktop animated Q menu toggle keeps its state and keyboard actions without changing mobile (${theme})`, async ({ page, baseURL }, testInfo) => {
     const fixture = await installFixture(page, baseURL, { theme });
     await page.setViewportSize({ width: 1440, height: 900 });
     await openSave(page);
     const toggle = page.getByTestId("button-toggle-sidebar");
-    const logo = toggle.locator(".sqr-brand-logo");
-    const image = logo.locator("img");
+    const logo = toggle.locator(".workspace-sidebar-toggle-logo");
+    const image = logo.locator("img.sidebar-q-static");
     const mobile = page.getByTestId("button-open-mobile-nav");
     const drawer = page.locator("#mobile-navigation-drawer");
     await expect(toggle).toHaveAccessibleName("Collapse navigation");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(toggle).toHaveAttribute("title", "Collapse navigation");
-    await expect(toggle).toHaveCSS("width", "36px");
+    await expect(toggle).toHaveCSS("width", "44px");
+    await expect(toggle).toHaveCSS("height", "44px");
+    await expect(toggle.locator("svg.lucide-panel-left-close")).toBeVisible();
+    const expandedBrand = page.locator(".workspace-brand-mark .sqr-brand-logo");
+    await expect(expandedBrand.locator("img")).toHaveCount(1);
+    await loadedLogo(expandedBrand.locator("img"), "/brand/sqr-q-mark-light.png", 1);
+    await expect(expandedBrand.locator('[src="/brand/sqr-q-mark-dark.png"]')).toHaveCount(0);
+    await expect(logo).toHaveCount(0);
+    await page.locator("aside.workspace-sidebar").screenshot({ path: testInfo.outputPath(`desktop-q-expanded-${theme}.png`), animations: "disabled" });
+
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toHaveAccessibleName("Expand navigation");
+    await expect(toggle).toHaveAttribute("title", "Expand navigation");
+    await expect(toggle).toBeFocused();
     await expect(logo).toHaveAttribute("aria-hidden", "true");
-    await expect(logo).toHaveAttribute("data-brand-theme", "light");
+    await expect(logo).toHaveAttribute("data-motion", "reduced");
     await expect(image).toHaveCount(1);
-    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
+    await expect(image).toHaveAttribute("src", "/brand/sidebar-q-static.png");
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
     await expect(image).toHaveAttribute("alt", "");
-    await expect(image).toHaveCSS("width", "24px");
-    await expect(image).toHaveCSS("height", "24px");
+    await expect(logo).toHaveCSS("width", "32px");
+    await expect(logo).toHaveCSS("height", "32px");
     await expect(image).toHaveCSS("filter", "none");
-    await expect(toggle.locator("svg")).toHaveCount(0);
+    await expect(toggle.locator("svg.lucide-panel-left-open")).toHaveCSS("opacity", "1");
+    await expect(toggle.locator("svg.lucide-panel-left-close")).toHaveCount(0);
+    // Keyboard focus exposes the expand action. Resting state exposes the Q,
+    // without changing the button's first-click or Enter/Space behavior.
+    await page.keyboard.press("Tab");
+    await page.mouse.move(500, 150);
+    await expect(logo).toHaveCSS("opacity", "1");
     const pixels = await image.evaluate((element: HTMLImageElement) => {
       const canvas = document.createElement("canvas");
       canvas.width = element.naturalWidth;
@@ -78,44 +100,43 @@ for (const theme of ["light", "dark"] as const) {
       const { width, height } = canvas;
       const data = context.getImageData(0, 0, width, height).data;
       const alpha = (x: number, y: number) => data[(Math.floor(y) * width + Math.floor(x)) * 4 + 3];
-      let blue = 0;
+      let blue = 0, dots = 0;
       for (let offset = 0; offset < data.length; offset += 4) {
         if (data[offset + 3]! > 0 && data[offset + 2]! - data[offset]! > 40) blue++;
+        const pixel = offset / 4;
+        if (pixel % width >= width * 0.7 && Math.floor(pixel / width) < height * 0.3 && data[offset + 3]! > 0) dots++;
       }
       return {
         corners: [alpha(0, 0), alpha(width - 1, 0), alpha(0, height - 1), alpha(width - 1, height - 1)],
         hole: alpha(width * 0.5, height * 0.5),
-        dot: alpha(width * 0.85, height * 0.2),
+        dots,
         blue,
       };
     });
     expect(pixels.corners, "The desktop Q has no tile or opaque background").toEqual([0, 0, 0, 0]);
     expect(pixels.hole, "The original hollow Q remains transparent").toBe(0);
-    expect(pixels.dot, "The original Q retains its decorative dots").toBeGreaterThan(0);
+    expect(pixels.dots, "The original Q retains its decorative dots").toBeGreaterThan(0);
     expect(pixels.blue, "Both themes keep the approved blue Q, not a grey connectivity icon").toBeGreaterThan(100);
-    await page.locator("aside.workspace-sidebar").screenshot({ path: testInfo.outputPath(`desktop-q-expanded-${theme}.png`), animations: "disabled" });
-
-    await toggle.focus();
-    await page.keyboard.press("Enter");
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(toggle).toHaveAccessibleName("Expand navigation");
-    await expect(toggle).toHaveAttribute("title", "Expand navigation");
-    await expect(toggle).toBeFocused();
-    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
-    await expect(image).toHaveCSS("width", "24px");
     await page.locator("aside.workspace-sidebar").screenshot({ path: testInfo.outputPath(`desktop-q-collapsed-${theme}.png`), animations: "disabled" });
+    await toggle.hover();
+    await expect(logo).toHaveCSS("opacity", "0");
+    await expect(toggle.locator("svg.lucide-panel-left-open")).toHaveCSS("opacity", "1");
+    await page.mouse.move(500, 150);
+    await toggle.focus();
     await page.keyboard.press("Space");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(toggle).toHaveAccessibleName("Collapse navigation");
     await expect(toggle).toBeFocused();
+    await expect(logo).toHaveCount(0);
 
     await page.setViewportSize({ width: 1024, height: 900 });
     await expect(toggle).toBeVisible();
     await expect(mobile).toBeHidden();
-    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
+    await expect(toggle.locator("svg.lucide-panel-left-close")).toBeVisible();
     await toggle.focus();
     await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(image).toHaveAttribute("src", "/brand/sidebar-q-static.png");
     for (const width of [1023, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(toggle).toBeHidden();
@@ -123,6 +144,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(mobile).toHaveAccessibleName("Open navigation");
       await expect(mobile.locator("svg.lucide-menu")).toBeVisible();
       await expect(mobile.locator(".sqr-brand-logo, img")).toHaveCount(0);
+      await expect(logo).toHaveCount(0);
       await mobile.click();
       await expect(drawer).toBeVisible();
       await expect(mobile).toHaveAttribute("aria-expanded", "true");
@@ -149,7 +171,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(toggle).toBeFocused();
     await expect(toggle).toHaveAccessibleName("Expand navigation");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await loadedLogo(image, "/brand/sqr-q-mark-light.png", 1);
+    await expect(image).toHaveAttribute("src", "/brand/sidebar-q-static.png");
     await page.keyboard.press("Space");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(toggle).toBeFocused();
@@ -260,16 +282,16 @@ for (const theme of ["light", "dark"] as const) {
     expect(errors).toEqual([]);
   });
 
-  test(`brand migration workspace selects the supplied Q for its surface theme (${theme})`, async ({ page, baseURL }, testInfo) => {
+  test(`brand migration workspace retains the transparent supplied Q across surface themes (${theme})`, async ({ page, baseURL }, testInfo) => {
     const fixture = await installFixture(page, baseURL, { theme });
     await page.setViewportSize({ width: 1440, height: 900 });
     await openSave(page);
     const brand = page.locator(".workspace-brand-mark .sqr-brand-logo");
     await expect(brand).toHaveAttribute("data-brand-variant", "icon");
     await expect(brand.locator("img:visible")).toHaveCount(1);
-    await loadedLogo(brand.locator("img:visible"), `/brand/sqr-q-mark-${theme}.png`, 1);
-    await expect(brand.locator("img")).toHaveCount(2);
-    await expect(brand).toHaveAttribute("data-brand-theme", "auto");
+    await loadedLogo(brand.locator("img:visible"), "/brand/sqr-q-mark-light.png", 1);
+    await expect(brand.locator("img")).toHaveCount(1);
+    await expect(brand).toHaveAttribute("data-brand-theme", "light");
     const frame = page.locator(".workspace-brand-mark");
     await expect(frame).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(frame).toHaveCSS("border-width", "0px");
@@ -279,8 +301,10 @@ for (const theme of ["light", "dark"] as const) {
     await metadata(page);
     await page.screenshot({ path: testInfo.outputPath(`workspace-${theme}.png`), fullPage: true });
     await page.getByTestId("button-toggle-theme").click();
-    const next = theme === "light" ? "dark" : "light";
-    await loadedLogo(brand.locator("img:visible"), `/brand/sqr-q-mark-${next}.png`, 1);
+    await expect.poll(() => page.locator("html").evaluate((element) => element.classList.contains("dark"))).toBe(theme === "light");
+    await loadedLogo(brand.locator("img:visible"), "/brand/sqr-q-mark-light.png", 1);
+    await expect(brand.locator("img")).toHaveCount(1);
+    await expect(brand).toHaveAttribute("data-brand-theme", "light");
     await expect(frame).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await page.getByTestId("button-toggle-sidebar").click();
     await expect(page.getByRole("button", { name: "Expand navigation", exact: true })).toBeVisible();
@@ -288,7 +312,9 @@ for (const theme of ["light", "dark"] as const) {
     // Do not alter navigation layout solely to introduce a second compact logo.
     await expect(brand).toBeHidden();
     await page.getByTestId("button-toggle-sidebar").click();
-    await loadedLogo(brand.locator("img:visible"), `/brand/sqr-q-mark-${next}.png`, 1);
+    await loadedLogo(brand.locator("img:visible"), "/brand/sqr-q-mark-light.png", 1);
+    await expect(brand.locator("img")).toHaveCount(1);
+    await expect(brand).toHaveAttribute("data-brand-theme", "light");
     await page.setViewportSize({ width: 390, height: 844 });
     await checkFixture(page, fixture);
   });

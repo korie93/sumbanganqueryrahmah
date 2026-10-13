@@ -8,6 +8,7 @@ import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import MaintenanceModeBanner from "@/app/MaintenanceModeBanner";
 import { PageSpinner } from "@/app/PageSpinner";
 import { ChangePasswordPage } from "@/app/lazy-pages";
+import { useDesktopSidebarPreference } from "@/app/useDesktopSidebarPreference";
 import type {
   AppRuntimeConfig,
   MonitorSection,
@@ -68,7 +69,7 @@ export default function AuthenticatedAppShell({
   onNavigateHome,
 }: AuthenticatedAppShellProps) {
   const [floatingAiReady, setFloatingAiReady] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { sidebarCollapsed, setSidebarCollapsed } = useDesktopSidebarPreference(user);
   const [passwordProfileOpen, setPasswordProfileOpen] = useState(false);
   const passwordProfileRef = useRef<HTMLButtonElement>(null);
 

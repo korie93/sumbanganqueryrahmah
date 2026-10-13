@@ -101,7 +101,15 @@ test("responsive shell closes transient layers on resize and restores visible na
   assert.match(styles, /@media \(max-width: 1023px\)/);
 });
 
-test("desktop sidebar toggle uses the original decorative blue Q without changing mobile navigation", () => {
+test("expanded sidebar uses the transparent original Q in both light and dark themes", () => {
+  const parts = readSource("NavbarParts.tsx");
+  const mark = parts.match(/<div className="workspace-brand-mark">[\s\S]*?<\/div>/)?.[0];
+  assert.ok(mark);
+  assert.match(mark, /<BrandLogo variant="icon" theme="light" decorative priority/);
+  assert.doesNotMatch(mark, /theme="(?:auto|dark)"|bg-|background/);
+});
+
+test("desktop sidebar toggle preserves immediate actions and exposes the correct expanded and collapsed icons", () => {
   const navbar = readSource("Navbar.tsx");
   const desktopButton = navbar.match(/<button ref=\{desktopNavigationTriggerRef\}[\s\S]*?<\/button>/)?.[0];
   assert.ok(desktopButton, "Keep the existing desktop toggle and focus reference");
@@ -109,24 +117,73 @@ test("desktop sidebar toggle uses the original decorative blue Q without changin
   assert.match(desktopButton, /getAriaExpandedProps\(!sidebarCollapsed\)/);
   assert.match(desktopButton, /onClick=\{toggleSidebar\}/);
   assert.match(desktopButton, /data-testid="button-toggle-sidebar"/);
-  assert.match(desktopButton, /<BrandLogo variant="icon" theme="light" decorative priority/);
-  assert.match(desktopButton, /className="workspace-sidebar-toggle-logo"/);
-  assert.doesNotMatch(desktopButton, /PanelLeft|Menu|offline|filter|transform/);
+  assert.match(desktopButton, /sidebarCollapsed \? <>/);
+  assert.match(desktopButton, /desktop && <Suspense/);
+  assert.match(desktopButton, /<SidebarAnimatedQ\s*\/>/);
+  assert.match(desktopButton, /<PanelLeftOpen className="workspace-sidebar-expand-icon h-5 w-5" aria-hidden="true"/);
+  assert.match(desktopButton, /: <PanelLeftClose className="h-5 w-5" aria-hidden="true"/);
+  assert.doesNotMatch(desktopButton, /<BrandLogo|<Menu|offline|filter|transform|onMouseEnter|onPointerEnter/);
+  const action = navbar.match(/const toggleSidebar = useCallback\(\(\) => \{[^}]+\}/)?.[0];
+  assert.ok(action);
+  assert.match(action, /onSidebarCollapsedChange\?\.\(!sidebarCollapsed\)/);
+  assert.doesNotMatch(action, /setTimeout|setInterval|requestAnimationFrame/);
 
   const mobileButton = navbar.match(/<button ref=\{mobileNavigationTriggerRef\}[\s\S]*?<\/button>/)?.[0];
   assert.ok(mobileButton);
   assert.match(mobileButton, /data-testid="button-open-mobile-nav"/);
   assert.match(mobileButton, /<Menu className="h-4 w-4" aria-hidden="true"/);
-  assert.doesNotMatch(mobileButton, /BrandLogo|workspace-sidebar-toggle-logo/);
+  assert.doesNotMatch(mobileButton, /BrandLogo|SidebarAnimatedQ|PanelLeft|workspace-sidebar-toggle-logo/);
 
   const css = readSource("../app/workspace-navigation.css");
   const toggleStyles = css.match(/\.workspace-sidebar-toggle \{[^}]+\}/)?.[0];
   assert.ok(toggleStyles);
-  assert.match(toggleStyles, /width: 36px/);
-  assert.match(toggleStyles, /min-height: 36px/);
+  assert.match(toggleStyles, /width: 44px/);
+  assert.match(toggleStyles, /height: 44px/);
+  assert.match(toggleStyles, /min-height: 44px/);
   assert.match(toggleStyles, /padding: var\(--spacing-1\)/);
-  assert.match(css, /\.workspace-sidebar-toggle-logo \{\s*width: 24px;\s*height: 24px;\s*flex-shrink: 0;/);
+  assert.match(css, /\.workspace-sidebar-toggle-logo \{\s*width: 32px;\s*height: 32px;\s*flex-shrink: 0;/);
   assert.match(css, /\.workspace-sidebar-toggle:focus-visible \{\s*outline: 2px solid hsl\(var\(--ring\)\)/);
+});
+
+test("collapsed desktop artwork lazy loads behind a genuine static Q instead of increasing every initial shell", () => {
+  const navbar = readSource("Navbar.tsx");
+  assert.match(navbar, /const SidebarAnimatedQ = lazy\(/);
+  assert.match(navbar, /import\("@\/components\/SidebarAnimatedQ"\)/);
+  assert.match(navbar, /default:\s*\w+\.SidebarAnimatedQ/);
+  assert.doesNotMatch(navbar, /import\s*\{\s*SidebarAnimatedQ\s*\}\s*from/);
+  assert.match(navbar, /desktop && <Suspense fallback=\{/);
+  assert.match(navbar, /className="workspace-sidebar-toggle-logo[^"\n]*"[^>]*aria-hidden="true"/);
+  assert.match(navbar, /src="\/brand\/sidebar-q-static\.png"/);
+  assert.match(navbar, /alt=""/);
+
+  const artwork = readSource("SidebarAnimatedQ.tsx");
+  assert.match(artwork, /className="workspace-sidebar-toggle-logo sidebar-q-artwork"/);
+  assert.match(artwork, /aria-hidden="true" data-motion=\{state\}/);
+  assert.match(artwork, /className="sidebar-q-static" src="\/brand\/sidebar-q-static\.png"/);
+  assert.match(artwork, /const ready = loaded === ALL_LOADED && !failed/);
+  assert.match(artwork, /onError=\{\(\) => setFailed\(true\)\}/);
+  assert.match(artwork, /!failed && <span className="sidebar-q-layers"/);
+  assert.doesNotMatch(artwork, /favicon|offline|fetch\(|WebSocket|<svg|<canvas/);
+});
+
+test("desktop Q hover and keyboard focus reveal the action while pausing decorative motion", () => {
+  const css = readSource("../app/workspace-navigation.css");
+  assert.match(css, /\.workspace-sidebar-toggle:is\(:hover, :focus-visible\) \.workspace-sidebar-toggle-logo \{\s*opacity: 0;/);
+  assert.match(css, /\.workspace-sidebar-toggle:is\(:hover, :focus-visible\) \.workspace-sidebar-expand-icon \{\s*opacity: 1;/);
+  const motionCss = readSource("SidebarAnimatedQ.css");
+  assert.match(motionCss, /\.workspace-sidebar-toggle:is\(:hover, :focus-visible\) :is\(\.sidebar-q-dot, \.sidebar-q-sheen\) \{\s*animation-play-state: paused;/);
+  assert.match(motionCss, /data-motion="playing"[^}]+animation-play-state: running/);
+  assert.match(motionCss, /data-motion="reduced"[^}]+animation: none/);
+  assert.match(motionCss, /prefers-reduced-motion: reduce/);
+  assert.match(motionCss, /mask: url\("\/brand\/sidebar-q-body\.png"\)/);
+
+  const artwork = readSource("SidebarAnimatedQ.tsx");
+  assert.match(artwork, /new IntersectionObserver/);
+  assert.match(artwork, /document\.visibilityState === "visible"/);
+  assert.match(artwork, /observer\?\.disconnect\(\)/);
+  assert.match(artwork, /media\.removeEventListener\("change", update\)/);
+  assert.match(artwork, /document\.removeEventListener\("visibilitychange", update\)/);
+  assert.doesNotMatch(artwork, /requestAnimationFrame|setInterval|setTimeout/);
 });
 
 test("shared drawer motion remains subtle and unchanged", () => {

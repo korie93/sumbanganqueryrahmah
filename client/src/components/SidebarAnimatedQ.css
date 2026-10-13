@@ -1,0 +1,100 @@
+.sidebar-q-artwork {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  pointer-events: none;
+}
+
+.sidebar-q-artwork img,
+.sidebar-q-layers,
+.sidebar-q-sheen-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar-q-artwork img { object-fit: contain; }
+
+.sidebar-q-layers {
+  visibility: hidden;
+}
+
+.sidebar-q-artwork[data-ready="true"] .sidebar-q-layers {
+  visibility: visible;
+}
+
+.sidebar-q-artwork[data-ready="true"] .sidebar-q-static {
+  visibility: hidden;
+}
+
+.sidebar-q-artwork[data-motion="reduced"] .sidebar-q-layers { visibility: hidden; }
+.sidebar-q-artwork[data-motion="reduced"] .sidebar-q-static { visibility: visible; }
+
+.sidebar-q-sheen-clip {
+  overflow: hidden;
+  mask: url("/brand/sidebar-q-body.png") center / contain no-repeat;
+}
+
+.sidebar-q-sheen {
+  opacity: 0;
+  animation: sidebar-q-sheen 3.2s linear infinite paused;
+}
+
+.sidebar-q-dot {
+  animation: sidebar-q-dots 3.2s ease-in-out infinite paused;
+}
+
+.sidebar-q-dot-2 { animation-name: sidebar-q-dots-high; }
+.sidebar-q-dot-3 { animation-name: sidebar-q-dots-low; }
+.sidebar-q-dot-4 { animation-name: sidebar-q-dots-small; }
+
+.sidebar-q-artwork[data-motion="playing"] :is(.sidebar-q-dot, .sidebar-q-sheen) {
+  animation-play-state: running;
+}
+
+.workspace-sidebar-toggle:is(:hover, :focus-visible) :is(.sidebar-q-dot, .sidebar-q-sheen) {
+  animation-play-state: paused;
+}
+
+/* Only transforms and opacity change; the original Q body and alpha mask stay fixed. */
+@keyframes sidebar-q-sheen {
+  0% { transform: translateX(-32px); opacity: 0; }
+  18% { transform: translateX(-12px); opacity: 0.18; }
+  36% { transform: translateX(-4px); opacity: 0.48; }
+  54% { transform: translateX(14px); opacity: 0.18; }
+  74%, 100% { transform: translateX(32px); opacity: 0; }
+}
+
+@keyframes sidebar-q-dots {
+  0%, 18%, 92%, 100% { transform: translate(0, 0); opacity: 1; }
+  36% { transform: translate(1px, -1px); opacity: 0.95; }
+  54% { transform: translate(1.5px, -1.5px); opacity: 0.8; }
+  74% { transform: translate(0.5px, -0.5px); opacity: 0.85; }
+}
+@keyframes sidebar-q-dots-high {
+  0%, 18%, 92%, 100% { transform: translate(0, 0); opacity: 1; }
+  36% { transform: translate(1px, -1.5px); opacity: 0.95; }
+  54% { transform: translate(1.5px, -2px); opacity: 0.75; }
+  74% { transform: translate(0.5px, -1px); opacity: 0.8; }
+}
+@keyframes sidebar-q-dots-low {
+  0%, 18%, 92%, 100% { transform: translate(0, 0); opacity: 1; }
+  36% { transform: translate(0.5px, -0.5px); opacity: 0.95; }
+  54% { transform: translate(1px, -1px); opacity: 0.85; }
+  74% { transform: translate(0.5px, 0); opacity: 0.9; }
+}
+@keyframes sidebar-q-dots-small {
+  0%, 18%, 92%, 100% { transform: translate(0, 0); opacity: 1; }
+  36% { transform: translate(1px, -1px); opacity: 0.9; }
+  54% { transform: translate(2px, -2px); opacity: 0.65; }
+  74% { transform: translate(0.5px, -0.5px); opacity: 0.8; }
+}
+
+.sidebar-q-artwork[data-motion="reduced"] :is(.sidebar-q-dot, .sidebar-q-sheen) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-q-artwork :is(.sidebar-q-dot, .sidebar-q-sheen) { animation: none; }
+}

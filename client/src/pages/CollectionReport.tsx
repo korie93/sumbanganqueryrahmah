@@ -95,7 +95,7 @@ export default function CollectionReport() {
   const headerActions = isMobile ? undefined : (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {staffNicknameLabel ? (
-        <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
+        <Badge variant="secondary" title={`Staff Nickname: ${staffNicknameLabel}`} className="collection-report-staff-badge rounded-full px-3 py-1 text-2xs">
           Staff Nickname: {staffNicknameLabel}
         </Badge>
       ) : null}
@@ -117,15 +117,14 @@ export default function CollectionReport() {
       width={navigation.subPage === "save" && !isReadOnlyManager ? "form" : "report"}
       className="collection-report-frame"
     >
-      <OperationalPageHeader
-        title="Collection Report"
-        eyebrow="Operational Workspace"
-        description={subtitle}
-        actions={headerActions}
-        className={isMobile ? "border-border/60 bg-background" : ""}
-      />
-
-      <div className="collection-report-sections relative flex min-w-0 flex-col gap-4">
+      <div className="collection-report-navigation">
+        <OperationalPageHeader
+          title="Collection Report"
+          eyebrow="Operational Workspace"
+          description={subtitle}
+          actions={headerActions}
+          className={`collection-report-context ${isMobile ? "border-border/60 bg-background" : ""}`}
+        />
         <CollectionSidebar
           items={navigation.sidebarItems}
           mobileOpen={navigation.mobileSidebarOpen}
@@ -135,19 +134,19 @@ export default function CollectionReport() {
           selectedSubPage={navigation.subPage}
           sidebarCollapsed={navigation.sidebarCollapsed}
         />
+      </div>
 
-        <div className="min-w-0 flex-1">
-          <CollectionReportContent
-            canAccessCollection={nicknameAccess.canAccessCollection}
-            checkingNicknameSession={nicknameAccess.checkingNicknameSession}
-            nicknameReauthenticationRequired={nicknameAccess.nicknameReauthenticationRequired}
-            onReauthenticateNickname={nicknameAccess.requestNicknameReauthentication}
-            role={role}
-            staffNickname={nicknameAccess.staffNickname}
-            subPage={navigation.subPage}
-            onOpenNicknameDialog={() => nicknameAccess.setNicknameDialogOpen(true)}
-          />
-        </div>
+      <div className="collection-report-content min-w-0 flex-1">
+        <CollectionReportContent
+          canAccessCollection={nicknameAccess.canAccessCollection}
+          checkingNicknameSession={nicknameAccess.checkingNicknameSession}
+          nicknameReauthenticationRequired={nicknameAccess.nicknameReauthenticationRequired}
+          onReauthenticateNickname={nicknameAccess.requestNicknameReauthentication}
+          role={role}
+          staffNickname={nicknameAccess.staffNickname}
+          subPage={navigation.subPage}
+          onOpenNicknameDialog={() => nicknameAccess.setNicknameDialogOpen(true)}
+        />
       </div>
 
       {shouldRenderNicknameDialog ? (

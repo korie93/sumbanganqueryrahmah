@@ -22,7 +22,7 @@ export function NavbarBrandCluster({ activeNavigationItemId, onNavigate, onPrefe
   return (
     <div className="workspace-brand-cluster">
       <div className="workspace-brand">
-        <div className="workspace-brand-mark"><BrandLogo variant="icon" decorative priority className="h-full w-full" imageClassName="h-full w-full" /></div>
+        <div className="workspace-brand-mark"><BrandLogo variant="icon" theme="light" decorative priority className="h-full w-full" imageClassName="h-full w-full" /></div>
         <div className="workspace-brand-copy min-w-0">
           <p className="truncate text-sm font-semibold text-foreground" title={systemName || "SQR System"} aria-label={systemName || "SQR System"}>{systemName || "SQR System"}</p>
           <p className="text-xs text-muted-foreground">Operations workspace</p>

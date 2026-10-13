@@ -1,0 +1,86 @@
+{
+  "source": "assets/brand/q-mark-light-source.png",
+  "sourceSha256": "07e5e47d3a1851200301dc22b49764b6bb174b48843bc2462700ba3c0dc5ea5e",
+  "crop": {
+    "x": 154,
+    "y": 154,
+    "size": 1001
+  },
+  "size": 128,
+  "transparentPadding": 4,
+  "components": [
+    {
+      "id": 3,
+      "pixels": 291412,
+      "minX": 178,
+      "minY": 299
+    },
+    {
+      "id": 6,
+      "pixels": 66504,
+      "minX": 574,
+      "minY": 720
+    },
+    {
+      "id": 1,
+      "pixels": 16561,
+      "minX": 1002,
+      "minY": 196
+    },
+    {
+      "id": 2,
+      "pixels": 11778,
+      "minX": 876,
+      "minY": 291
+    },
+    {
+      "id": 5,
+      "pixels": 11212,
+      "minX": 964,
+      "minY": 417
+    },
+    {
+      "id": 4,
+      "pixels": 1700,
+      "minX": 1012,
+      "minY": 352
+    }
+  ],
+  "outputs": [
+    {
+      "file": "client/public/brand/sidebar-q-static.png",
+      "bytes": 11556,
+      "sha256": "3a4c192638e5e797a23a2227707761f7808a64db2357d25c9e709c822c078314"
+    },
+    {
+      "file": "client/public/brand/sidebar-q-body.png",
+      "bytes": 10000,
+      "sha256": "aaac14f79f584de08665d0ad64ad75d182d9bc7701fd0d98915bddc95258d664"
+    },
+    {
+      "file": "client/public/brand/sidebar-q-dot-1.png",
+      "bytes": 709,
+      "sha256": "65ce5446538be41578cde0c0794b4ad325cfa1b045793902eff70bbfa0962c2e"
+    },
+    {
+      "file": "client/public/brand/sidebar-q-dot-2.png",
+      "bytes": 787,
+      "sha256": "cf5008054fcd7bddc403c5a259f23aec2643ec584a21ede39fe49a6f3f03d12f"
+    },
+    {
+      "file": "client/public/brand/sidebar-q-dot-3.png",
+      "bytes": 682,
+      "sha256": "c0fd01f6fa683b9a6d449dcaa483f3e426752cc4183d8a898193ea7ab20c6759"
+    },
+    {
+      "file": "client/public/brand/sidebar-q-dot-4.png",
+      "bytes": 333,
+      "sha256": "d3679858621447dd6adf5dea1ee53a1fdd4aefb808ed4c67871252b6374c9342"
+    },
+    {
+      "file": "client/public/brand/sidebar-q-sheen.png",
+      "bytes": 1244,
+      "sha256": "2d873f6521b486b586f1cd94bd6af932f3b1588678ecbd69fef9e2a1f262f300"
+    }
+  ]
+}
