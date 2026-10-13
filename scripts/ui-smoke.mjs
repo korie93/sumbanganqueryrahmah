@@ -1522,7 +1522,9 @@ const checkCollectionManualSettlementV9UiFlow = async (page, context, tracker) =
     await applySmokeCollectionNicknameSession(page, nickname);
     await page.setViewportSize({ width: 1440, height: 900 });
     await navigateForSmoke(page, "/collection/records");
-    await page.getByText("View Rekod Collection").first().waitFor({ timeout: 15_000 });
+    await page.getByRole("navigation", { name: "Collection sections", exact: true })
+      .getByRole("button", { name: "View Rekod Collection", exact: true })
+      .waitFor({ timeout: 15_000 });
     const recordFilters = await openCollectionRecordsFilters(page);
     await recordFilters.locator("#collection-records-leader-desktop").waitFor({ timeout: 15_000 });
     await page.getByTestId("collection-records-filter-toggle").click();
@@ -1696,7 +1698,9 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
       uniqueSuffix,
     });
     await navigateForSmoke(page, "/collection/save");
-    await page.getByText("Simpan Collection Individual").first().waitFor();
+    await page.getByRole("navigation", { name: "Collection sections", exact: true })
+      .getByRole("button", { name: "Simpan Collection Individual", exact: true })
+      .waitFor();
 
     // Superuser saves require an explicit UI selection, not a browser auth marker.
     const nicknamePicker = page.locator("#save-collection-superuser-nickname");
@@ -1821,7 +1825,9 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     });
 
     await navigateForSmoke(page, "/collection/records");
-    await page.getByText("View Rekod Collection").first().waitFor();
+    await page.getByRole("navigation", { name: "Collection sections", exact: true })
+      .getByRole("button", { name: "View Rekod Collection", exact: true })
+      .waitFor();
     let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
     // Source provenance belongs to the full view; records now start compact.
     await page.getByRole("group", { name: "Paparan rekod", exact: true })
@@ -2334,7 +2340,9 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
     await navigateForSmoke(page, "/collection/records");
-    await page.getByText("View Rekod Collection").first().waitFor();
+    await page.getByRole("navigation", { name: "Collection sections", exact: true })
+      .getByRole("button", { name: "View Rekod Collection", exact: true })
+      .waitFor();
 
     const targetRow = await filterCollectionRecordsBySearch(page, smokeRecord.accountNumber);
     await targetRow.getByRole("button", { name: /^Actions for record / }).click();

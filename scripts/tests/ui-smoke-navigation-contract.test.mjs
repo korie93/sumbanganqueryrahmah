@@ -24,6 +24,60 @@ test("desktop smoke verifies the destination heading rather than the hidden mobi
   assert.doesNotMatch(smokeSource, /getByText\("Backup & Restore"\)\.first\(\)/);
 });
 
+test("collection smoke selects accessible section buttons instead of hidden full-label spans", () => {
+  const sectionLabels = [
+    "Simpan Collection Individual", "View Rekod Collection", "Collection Summary",
+    "Monthly Comparison", "Collection Daily", "Billing Principal (OSP)",
+    "Nickname Summary", "Manage Nickname",
+  ];
+  const escapedLabels = sectionLabels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const fullTextSelector = new RegExp(`\\.getByText\\(\\s*["'\\x60](?:${escapedLabels.join("|")})["'\\x60]`, "i");
+  for (const label of sectionLabels) {
+    assert.match(`page.getByText("${label}").first().waitFor()`, fullTextSelector);
+  }
+  assert.doesNotMatch(smokeSource, fullTextSelector,
+    "Desktop labels are shortened visually; use the native button's full accessible name for section navigation");
+
+  const flows = [
+    ["const checkCollectionManualSettlementV9UiFlow = async", "const checkCollectionReceiptUiFlow = async", ["View Rekod Collection"]],
+    ["const checkCollectionReceiptUiFlow = async", "const checkBackupRestoreUiFlow = async", ["Simpan Collection Individual", "View Rekod Collection"]],
+    ["const checkCollectionRecordsStaleDeleteConflict = async", "const isLiveCookie", ["View Rekod Collection"]],
+  ];
+  for (const [startMarker, endMarker, labels] of flows) {
+    const start = smokeSource.indexOf(startMarker);
+    const end = smokeSource.indexOf(endMarker, start);
+    assert.ok(start >= 0 && end > start);
+    const flow = smokeSource.slice(start, end);
+    for (const label of labels) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      assert.match(flow, new RegExp(`getByRole\\("button",\\s*\\{\\s*name:\\s*"${escaped}",\\s*exact:\\s*true\\s*\\}\\)\\s*\\.waitFor\\(`),
+        `${startMarker}: readiness must wait for the actual accessible section button`);
+    }
+  }
+  assert.match(smokeSource, /getByRole\("heading", \{ name: "Billing Principal \(OSP\)", exact: true \}\)\.waitFor/);
+});
+
+test("stale-delete navigation fixes retain the real version conflict and cleanup assertions", () => {
+  const start = smokeSource.indexOf("const checkCollectionRecordsStaleDeleteConflict = async");
+  const end = smokeSource.indexOf("const isLiveCookie", start);
+  assert.ok(start >= 0 && end > start);
+  const flow = smokeSource.slice(start, end);
+  assert.match(flow, /provisionStaleDeleteConflictRecord\(context\)/);
+  assert.match(flow, /apiJsonRequest\(\s*context,\s*"PATCH",\s*`\/api\/collection\/\$\{encodeURIComponent\(smokeRecord\.id\)\}`/);
+  assert.match(flow, /expectedUpdatedAt: smokeRecord\.expectedUpdatedAt/);
+  assert.match(flow, /const updatedRecord = mutationResponse\.payload\?\.record/);
+  assert.match(flow, /assert\(cleanupVersion,/);
+  assert.match(flow, /getByRole\("button", \{ name: "Padam" \}\)\.click\(\)/);
+  assert.match(flow, /consumeExpectedCollectionDeleteConflict\(tracker, smokeRecord\.id\)/);
+  assert.match(flow, /assert\(\s*consumedConflicts >= 1,/);
+  assert.match(flow, /Expected at least one 409 DELETE \/api\/collection/);
+  assert.match(flow, /await waitForCollectionRecordVisible\(page, smokeRecord\.accountNumber\)/);
+  assert.match(flow, /tracker\.assertClean\("collection records stale-delete conflict"\)/);
+  assert.match(flow, /finally \{\s*try \{\s*await cleanupStaleDeleteConflictRecord\(context,/);
+  assert.match(flow, /expectedUpdatedAt: cleanupVersion/);
+  assert.match(flow, /cleanup stale-delete source import/);
+});
+
 test("profile smoke awaits the lazy authenticated shell before choosing a visible trigger", () => {
   const flow = smokeSource.slice(smokeSource.indexOf("const getVisibleUserMenuTrigger"), smokeSource.indexOf("const openUserMenu"));
   assert.match(flow, /button-user-menu.*:visible.*button-user-menu-mobile.*:visible.*button-open-mobile-nav.*:visible/);
