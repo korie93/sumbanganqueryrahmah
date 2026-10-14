@@ -1,0 +1,41 @@
+/* One short gesture on the interacted menu only; idle icons use no animation. */
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  :is(.workspace-sidebar .nav-pill, .workspace-nav-flyout .workspace-flyout-item):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) .sidebar-menu-icon-motion {
+    transform-box: fill-box;
+    transform-origin: center;
+    /* The existing low-spec reset is !important. Override only these bounded
+       interacted menu SVGs; keep its heavy-motion and transition savings. */
+    animation-duration: 220ms !important;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1) !important;
+    animation-iteration-count: 1 !important;
+    animation-fill-mode: none !important;
+  }
+
+  :is(.workspace-sidebar .nav-pill, .workspace-nav-flyout .workspace-flyout-item):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) .sidebar-menu-icon-motion[data-sidebar-icon-motion="lift"] {
+    animation-name: sidebar-icon-lift !important;
+  }
+
+  :is(.workspace-sidebar .nav-pill, .workspace-nav-flyout .workspace-flyout-item):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) .sidebar-menu-icon-motion[data-sidebar-icon-motion="inspect"] {
+    animation-name: sidebar-icon-inspect !important;
+  }
+
+  :is(.workspace-sidebar .nav-pill, .workspace-nav-flyout .workspace-flyout-item):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) .sidebar-menu-icon-motion[data-sidebar-icon-motion="tilt"] {
+    animation-name: sidebar-icon-tilt !important;
+  }
+}
+
+@keyframes sidebar-icon-lift {
+  0%, 100% { transform: none; }
+  45% { transform: translateY(-1.5px) scale(1.04); }
+}
+
+@keyframes sidebar-icon-inspect {
+  0%, 100% { transform: none; }
+  45% { transform: translate(1px, -1px) scale(1.07); }
+}
+
+@keyframes sidebar-icon-tilt {
+  0%, 100% { transform: none; }
+  35% { transform: rotate(-8deg); }
+  65% { transform: rotate(4deg); }
+}

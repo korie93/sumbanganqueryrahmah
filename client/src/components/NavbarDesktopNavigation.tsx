@@ -4,7 +4,9 @@ import type { NavigationEntry, NavigationGroup } from "@/app/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatSavedCountBadge } from "@/components/navbar-utils";
+import { getSidebarIconMotion } from "@/components/sidebar-icon-motion";
 import { getAriaCurrentPageProps, getAriaExpandedProps } from "@/lib/aria-state-props";
+import "./SidebarIconMotion.css";
 
 type NavbarDesktopNavigationProps = {
   directItems: NavigationEntry[];
@@ -41,7 +43,7 @@ function NavbarDesktopNavigationImpl({
                     onClick={() => onNavigate(item.id)}
                     onMouseEnter={() => onPrefetch(item.id)} onFocus={() => onPrefetch(item.id)}
                     data-testid={`nav-${item.id}`} className={`nav-pill${isActive ? " nav-pill-active" : ""}`}>
-                    <span className="nav-pill-icon"><Icon className="h-4 w-4" aria-hidden="true" /></span>
+                    <span className="nav-pill-icon"><Icon className="sidebar-menu-icon-motion h-4 w-4" data-sidebar-icon-motion={getSidebarIconMotion(item.id)} aria-hidden="true" /></span>
                     <span className="nav-pill-label">{item.id === "general-search" ? item.title : item.label}</span>
                   </button>
                 </TooltipTrigger>
@@ -83,7 +85,7 @@ function NavbarDesktopNavigationImpl({
                         onFocus={() => group.items.forEach((item) => onPrefetch(item.id))}
                         className={`nav-pill${active ? " nav-pill-active" : ""}${open ? " nav-parent-open" : ""}`}
                         data-testid={`nav-group-${group.id}`}>
-                        <span className="nav-pill-icon"><Icon className="h-4 w-4" aria-hidden="true" /></span>
+                        <span className="nav-pill-icon"><Icon className="sidebar-menu-icon-motion h-4 w-4" data-sidebar-icon-motion={getSidebarIconMotion(group.id)} aria-hidden="true" /></span>
                         <span className="nav-pill-label">{group.label}</span>
                         <ChevronRight className="nav-group-chevron h-3.5 w-3.5" aria-hidden="true" />
                       </button>
@@ -117,7 +119,7 @@ function NavbarDesktopNavigationImpl({
                         <button key={item.id} type="button" className={`workspace-flyout-item${activeItem ? " is-active" : ""}`}
                           data-testid={`flyout-nav-${item.id}`} {...getAriaCurrentPageProps(activeItem)}
                           onClick={() => onNavigate(item.id)} onFocus={() => onPrefetch(item.id)}>
-                          <ItemIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <ItemIcon className="sidebar-menu-icon-motion h-4 w-4 shrink-0" data-sidebar-icon-motion={getSidebarIconMotion(item.id)} aria-hidden="true" />
                           <span><strong>{item.title || item.label}{badge ? ` (${badge})` : ""}</strong><small>{item.description}</small></span>
                         </button>
                       );

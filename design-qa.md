@@ -111,3 +111,46 @@ Only two old Save Collection baseline PNGs were refreshed after opening and inde
 This supersedes the earlier pending browser-contract notes only. The optional CPU 4×/6× trace/heap harness, physical-device/GPU behavior, backend production mutations and remote CI remain unverified. This is a focused 49-case suite, not the complete repository's 323 tests. No production data, commit, push or deployment was involved.
 
 final result: passed
+
+---
+
+# Desktop sidebar menu gestures — 2026-10-14
+
+Product Design scoped extension → built preview → source/implementation comparison. User approved hover animations for all desktop sidebar menu icons, including low-spec PCs, then explicitly approved isolated Playwright and 4x/6x CPU testing. No new design direction, library or logo artwork was required.
+
+## Source and comparison evidence
+
+- Source visual truth: actual pre-change superuser Records view at `http://127.0.0.1:4177/collection/records`, expanded sidebar, generated 200-record fixture. `artifacts/sidebar-q/sidebar-icons-before-light-clip.jpg` and `sidebar-icons-before-dark.jpg` are both 1493x1343 JPEGs.
+- Matched implementation captures: `sidebar-icons-after-light.jpg` and `sidebar-icons-after-dark.jpg`, both 1493x1343. These show the first build at rest, before the animation-only low-spec importance fix. Matching effective CSS viewport: 2149x1343, DPR approximately 0.67, requested browser override 1440x900. Existing browser zoom was preserved.
+- Full-context comparison: `artifacts/sidebar-q/sidebar-icons-comparison-full.png`, opened and inspected. Four equally sized 900x500 top-left crops are combined at 1800x1072, including sidebar, topbar, section strip and Records controls. No rescaling, recoloring or browser chrome is included.
+- Final-build native screenshot fallback: `sidebar-icons-final-browser-light.jpg` (3173x2004) and `sidebar-icons-final-browser.jpg` (3207x2004). This browser surface includes additional backing space and different scrollbar capture; it is not used to infer pixel-exact page-margin changes.
+- Final focused comparison: `sidebar-icons-comparison-final-focus.png`, opened and inspected. Source and final light/dark sidebar regions are combined in one 960x396 input using identical 240x360 top-left crops with no resampling. Important typography, all six expanded menu controls and the original transparent Q are readable. The first matched full comparison remains the context evidence; the final focused crop confirms the last animation-only fix did not alter the sidebar's resting appearance.
+- Playwright gesture attachments capture actual production CSS at a paused 45% pose, with a separate 1440x900/DPR1 synthetic Save state. `gesture-home-final.png`, `gesture-general-search-final.png`, `gesture-settings-menu-final.png` and `gesture-viewer-final.png` in `artifacts/sidebar-q/` were opened and inspected. The gestures remain small, original glyphs remain recognizable, and row labels/buttons do not move. These are intentional motion evidence, not same-route pixel comparisons, screenshot baselines or performance measurements.
+
+## Five fidelity surfaces
+
+1. Fonts/typography: unchanged system-ui/Segoe UI stack, 14px, weight 500, 21px line height, normal letter spacing in the observed Home label. Copy wrapping, hierarchy and truncated/collapsed behavior remain native. Source/final focused crops show no font drift.
+2. Spacing/layout rhythm: existing approximately 40px menu height and 16px SVG boxes remain. SVG transforms do not move button boxes, sidebar width or main content. Expanded/collapsed hit targets, label gaps, radii and flyout density are preserved.
+3. Colors/tokens: inherited foreground, active primary tokens and hover surfaces remain unchanged. No new accent, glow, shadow, opacity effect or recoloring was added. Both themes retain their existing active Collection treatment.
+4. Asset/image quality: original Lucide glyphs and stroke weight remain. The supplied transparent Q and favicon exports are untouched; no box, tracing, custom SVG art or raster replacement was introduced. Slight temporary transforms are the approved intentional difference.
+5. Copy/content: Home, General Search, Collection, Workspace, Insights, Settings and all flyout labels/descriptions/accessibility names remain unchanged. Synthetic rows are test content, not production data.
+
+## Findings and corrections
+
+The matched idle comparisons found no actionable P0/P1/P2 visual drift. The approved difference is a small 220ms lift/inspect/tilt on the enabled hovered or keyboard-focused menu glyph, not its row or label. Source/implementation comparisons do not certify physical zoom or GPU performance.
+
+During implementation review, the existing global low-spec animation reset would have suppressed the new gestures. Its global rule is unchanged; narrowly scoped important animation longhands inside the desktop/no-reduced-motion media gate now override it only for these interacted SVGs. Actual low-spec coverage is required before handoff.
+
+Test corrections: the initial width guard falsely matched the breakpoint; the initial helper searched for a nested nav instead of Popover `asChild`'s real nav and consequently dismissed it by moving focus outside; normal-mode Dashboard/Backup prefetch required exact synthetic API contracts; a 6x CPU animation-start pause listener could run after a 220ms animation finished. The pose test now pauses only target play-state before the real interaction, without inventing name/duration/iterations. Separate unpaused start/completion/replay and native-action assertions remain. Finally, expanded/collapsed matrices were split into independently bounded cases for CI. Exact geometry assertions now wait for the existing finite sidebar-width/flyout-entry ancestor effects to finish before sampling; those effects remain enabled and no layout tolerance was added. No production handlers, timeouts, tolerances, baselines or permission guards were changed to accommodate tests.
+
+## Verification and limitations
+
+Final full frontend units: 1970 passed, no failures/skips. Application and browser-spec semantic TypeScript, scoped ESLint, production client build, bundle budgets, storage/breakpoint guards, secret scan and repository hygiene passed. Existing selected Collection/brand/Q suite passed 49/49 before the low-spec-only CSS adjustment. A subsequent final-build 23/23 run passed the original combined-state gesture cases, both CPU rates and twelve baseline/Q cases. After splitting the matrix for CI, the final motion specification passed **15/15**, no failures/skips/retries, in approximately two minutes. Runtime implementation was unchanged between those last two runs.
+
+The in-app browser's actual reduced-motion preference remains respected. Its final built preview rendered the real menu markers, preserved geometry and logged no browser console errors. No OS setting, production server, database, credentials or user records were modified. CPU testing uses an isolated Chromium context with synthetic responses; it does not replace physical-device/GPU, FPS, input-latency, heap-leak, complete-repository, production backend or remote CI verification.
+
+Final coverage: eight role/state matrices (normal superuser/admin/user plus explicit low-spec superuser, each expanded/collapsed), keyboard/flyout focus return and a genuine General Search transition, unpaused finite completion/replay, reduced-motion/disabled controls, mobile 390px/tablet 1023px, and actual low-spec 4x/6x CPU cases. CPU cases confirm a real unpaused gesture starts and finishes with no idle loop, preserve target-only sampled motion, and retain native menu actions. They are functional evidence, not a latency/FPS guarantee.
+
+Final report: `artifacts/playwright-report/index.html`; final result file reports `passed` with an empty failed-tests list. The successful earlier final-build 23-case report is preserved at `artifacts/sidebar-q/motion-final-23-report/`. No actionable P0/P1/P2 finding remains within this scoped implementation. No commit, push or deployment was performed.
+
+final result: passed

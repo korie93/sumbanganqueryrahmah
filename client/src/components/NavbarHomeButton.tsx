@@ -2,6 +2,7 @@ import { memo } from "react"
 import { Home } from "lucide-react"
 
 import { HOME_NAV_ITEM } from "@/app/navigation"
+import { getSidebarIconMotion } from "@/components/sidebar-icon-motion"
 import { getAriaCurrentPageProps } from "@/lib/aria-state-props"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -32,7 +33,7 @@ function NavbarHomeButtonImpl({
           {...getAriaCurrentPageProps(active)}
         >
           <span className="nav-pill-icon">
-            <Home className="h-4 w-4" aria-hidden="true" />
+            <Home className="sidebar-menu-icon-motion h-4 w-4" data-sidebar-icon-motion={getSidebarIconMotion(HOME_NAV_ITEM.id)} aria-hidden="true" />
           </span>
           <span className="nav-pill-label">Home</span>
         </button>
