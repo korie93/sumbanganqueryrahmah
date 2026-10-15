@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { isChromiumPdfViewerResource } from "./helpers/chromium-pdf-resources";
 
 // Production assets, synthetic records and generated in-memory media only.
 // The static runner has no backend; unexpected network requests fail closed.
@@ -82,15 +83,21 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   await page.clock.setFixedTime(new Date(now));
   await page.emulateMedia({ colorScheme: options.theme ?? "light", reducedMotion: "reduce" });
   await page.context().addCookies([{ name: "sqr_auth_hint", value: "1", url: origin }]);
-  await page.addInitScript(({ theme, staff }) => {
+  await page.addInitScript(({ theme, staff, fixtureOrigin }) => {
+    // Init scripts also run in the native PDF frame. Seed only this app's
+    // synthetic loopback origin, never browser-owned or unrelated documents.
+    if (window !== window.top || location.origin !== fixtureOrigin) return;
     localStorage.setItem("theme", theme);
     sessionStorage.setItem("collection_staff_nickname", staff);
     sessionStorage.setItem("collection_staff_nickname_auth", "1");
-  }, { theme: options.theme ?? "light", staff: nickname });
+  }, { theme: options.theme ?? "light", staff: nickname, fixtureOrigin: origin });
   await page.context().routeWebSocket("**/*", (socket) => socket.close());
   await page.context().route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    // Google Chrome exposes its built-in PDF UI to routing on CI. These
+    // internal resources are not outbound requests; other origins stay blocked.
+    if (isChromiumPdfViewerResource(url)) return route.continue();
     if (url.origin !== origin) {
       fixture.unexpected.push(`Off-origin ${url.origin}${url.pathname}`);
       return route.abort();
@@ -363,7 +370,8 @@ test("Receipt viewer development StrictMode restores media after replay and clea
   const unexpected: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/*", (route) => {
-    if (new URL(route.request().url()).origin === origin) return route.continue();
+    const url = new URL(route.request().url());
+    if (isChromiumPdfViewerResource(url) || url.origin === origin) return route.continue();
     unexpected.push(route.request().url());
     return route.abort();
   });

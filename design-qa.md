@@ -372,3 +372,63 @@ within this scope. Continuation instructions and exact limitations are saved in
 `CODEX_CONTINUATION_HANDOFF_COLLECTION_FRONTEND_POLISH.md`.
 
 final result: passed
+
+## Collection CI follow-up — 2026-10-15 (run 38669128827)
+
+CI evidence exposed P1 mobile Retry occlusion and P2 blur-triggered layout/focus
+instability. These were functional assertions inside the visual-snapshot stage,
+not baseline pixel mismatches. Original CI: 10 failed, 347 passed.
+
+Source evidence:
+`artifacts/ci-38669128827/evidence/artifacts/playwright-test-results/`;
+matching cases `collection-auto-matching-A-8697a-ack-and-retry-light-390x844-chromium`
+and `collection-auto-matching-A-bcbf1-back-and-retry-dark-390x844-chromium`.
+Post-fix captures: matching-retry PNGs in corresponding `focused-results/` cases.
+Combined full-view evidence: `compare-retry-{light,dark}.png` (804×880).
+Readable focused evidence: `compare-retry-{light,dark}-focus.png` (804×330).
+The main agent opened both full composites and the light focused composite.
+
+Both source and implementation captures are 390×844 pixels, CSS 390×844, DPR1.
+State: completed synthetic fields, terminal matching error, Retry scrolled into
+view, light/dark. CI Linux versus local Windows Chrome font rasterization and
+system fallback differ; no pixel-equality claim is made across those platforms.
+
+Iteration: before, the sticky Reset/Save footer painted over the matching error
+and Retry. After, error/no-match actions flow normally below the feedback; Retry
+is fully visible, has a 44px target and passes elementFromPoint plus trial click.
+Normal matched-state actions retain their original sticky behavior.
+
+Five-surface check: typography hierarchy and font declarations unchanged;
+spacing/grid/radii unchanged except intentional attention-state footer flow;
+semantic green/amber and light/dark tokens unchanged; original brand/media
+assets untouched; app-specific matching/field/privacy copy retained. No new
+visual target or unrelated redesign is introduced. All existing snapshot
+baselines and tolerances remain unchanged in this follow-up.
+
+Stable native review details prevent correction controls remounting. Blur-only
+validation stays inline; an explicit invalid submit opens review. In-app Browser
+verified whitespace Reset confirmation, cancel, disclosure opening, consecutive
+correction focus and no console errors. Evidence: `iab-reset-fixed.png` in the
+same artifact folder. Preview: loopback51974 (synthetic, read-only).
+
+Receipt fixture-only Chrome resource boundaries and top-level storage seeding
+are corrected; four PDF/development-StrictMode cases pass on installed Chrome.
+Nested filter tests synchronize actual focus/Sheet exit without delays or
+weaker request/data assertions. Final full browser run passes **357/357** on
+installed Google Chrome, no retries/skips/failures, in 17.7 minutes. Evidence:
+`full-chrome.log`, preserved `full-final-report/index.html` and
+`full-final-results/` in the same artifact folder. This includes all original
+10 failures, unchanged light/dark snapshot baselines, receipt original bytes,
+actual development lifecycle, Save correction/reset/suspended access and
+Nickname draft/applied scope. Application and affected browser-spec types,
+full client lint, 2017 client tests, 729 script tests (one existing skip),
+bundle budgets, secret guard and diff checks pass. No actionable P0/P1/P2
+finding remains in this focused repair.
+
+This is a local static/synthetic Chrome run, not a remote GitHub rerun or real
+backend/database/production save. The user subsequently approved commit/push for
+these fixes; remote CI must be verified on that new commit. Browser-internal
+exceptions exist only in the test fixtures; app CSP,
+safe-URL handling, backend permissions, data and receipt files are untouched.
+
+final result: passed

@@ -25,7 +25,9 @@ test("collection form groups use headings and clear boundaries without nested de
   const page = readFileSync(new URL("../SaveCollectionPage.tsx", import.meta.url), "utf8");
   assert.match(page, /<section aria-labelledby="save-collection-form-title"/);
   assert.match(page, /<fieldset disabled=\{accessSuspended\}/);
-  assert.match(page, /keyboardOpen \? "static" : "sticky bottom-0/);
+  assert.match(page, /useStaticActions \? "static" : "sticky bottom-0/);
+  assert.match(page, /const matchingNeedsAttention = state\.sourceMatching\.status === "error"\s*\|\| state\.sourceMatching\.status === "no-match"/);
+  assert.match(page, /const useStaticActions = keyboardOpen \|\| matchingNeedsAttention/);
   assert.match(page, /data-floating-ai-avoid="true"/);
   assert.doesNotMatch(page, /bg-gradient|backdrop|<Card|cleaner mobile flow/);
 });

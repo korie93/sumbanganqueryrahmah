@@ -1,6 +1,9 @@
 # Collection frontend and receipt-viewer handoff
 
-Updated: 2026-10-15. Status: implementation and scoped verification complete.
+Updated: 2026-10-15. Original polish committed/pushed as `9e63a5db`.
+Follow-up: reported CI visual-stage failures fixed and full local verification
+complete. The user approved committing and pushing this follow-up on 2026-10-15;
+this handoff accompanies the CI repair commit. Check Git for the current SHA.
 
 ## User-approved goal and boundaries
 
@@ -21,7 +24,8 @@ Open this same local repository, then read this file, `AGENTS.md`,
 `docs/collection-frontend-polish.md` and the latest Collection section of
 `design-qa.md`. Inspect `git status --short`. Collection polish files belong to this
 feature commit; preserve any later unrelated user work and never commit environment
-secrets. No required implementation work remains in this goal.
+secrets. The original goal is complete, but the newly reported CI follow-up must
+be checked against the section below before claiming the latest state complete.
 
 Chat and goal state do not automatically transfer between accounts. This file is
 the durable handoff; the user can ask the new account to review it and perform a
@@ -33,7 +37,7 @@ when moving machines, or regenerate its captures/tests before claiming it exists
 ## Implemented
 
 - Save: balanced payment grid, neutral completeness guidance, correction details
-  open for real errors, concise receipt upload copy. Matching behavior unchanged.
+  open on explicit submit errors, concise receipt upload copy. Matching behavior unchanged.
 - Records: outside search and folded filters retained; both date controls expose
   persistent inverted-range feedback.
 - Summary/Monthly/Daily: current-month emphasis and tabular figures; supporting
@@ -118,3 +122,49 @@ Main IAB tab3 is the user-facing preview; re-mark it deliverable in later turns.
 No real-database save, production deployment, remote CI/release-readiness,
 physical-device/GPU measurement or complete WCAG/native PDF-engine certification
 is claimed. Synthetic preview aggregates are not formula validation evidence.
+
+## CI follow-up: run 38669128827
+
+The pushed `9e63a5db` CI visual stage failed 10 tests; 347 passed. There were no
+pixel-baseline mismatch failures. Root causes and fixes:
+
+- Mobile sticky actions covered matching Retry at 390px. Error/no-match actions
+  now use normal flow; existing bounds remain and a painted hit-target check was
+  added. Ordinary/keyboard behavior remains unchanged.
+- Dynamic review wrapper remounted correction controls, and auto-expansion on
+  blur moved Reset mid-click. Keep one native details container and expand only
+  on explicit submit failure/complete fields. Inline blur errors remain.
+- Guidance tests now explicitly open the intentionally folded correction list.
+  Focus, privacy, suspended-access and unsaved-work assertions stay intact.
+- Nested nickname Popover/Sheet Escape tests wait for restored focus before the
+  second Escape; draft/applied/background-refresh assertions are unchanged.
+- Receipt fixtures recognize Chrome's exact built-in PDF extension and internal
+  resource host, with regression tests rejecting external/lookalike/credential/
+  port URLs. Synthetic storage setup runs only in the top-level app origin.
+
+Evidence: ignored `artifacts/ci-38669128827/`. Original CI evidence is under
+`evidence/artifacts/playwright-test-results/`. Current focused results show all
+form/matching/report cases green; the final four PDF/StrictMode tests pass on
+installed Google Chrome. The complete suite passed **357/357**, no retries,
+failures or skips, in 17.7 minutes (`full-chrome.log`, `full-final-report/`,
+`full-final-results/`). All 10 cases that failed remotely pass in this run.
+Current application and affected browser-spec TypeScript, full client lint,
+client tests **2017/2017**, script tests **729 passed + one existing skip**,
+bundle budgets, secret guard and diff checks are green. Browser specs are
+covered by semantic TypeScript; the repository ESLint config targets app code,
+not Playwright specs. No baseline PNG, tolerance, timeout or workflow changed.
+
+The ignored runner `verify-local.mjs --full` uses static frontend only, loopback,
+installed Google Chrome and fresh synthetic environment; it never loads dotenv
+or starts a backend/database. `verify-checks.mjs` records static/unit checks.
+QA inspected same-input light/dark CI-before/local-after comparisons and actual
+in-app Reset/correction interactions; the latest `design-qa.md` result is passed.
+Current synthetic preview is `http://127.0.0.1:51974/collection/save` (session61263,
+PID9156, IAB tab3). The older preview session50488 was stopped; treat its earlier
+51103 URL above as historical. Verify any process/port before reusing it.
+
+All required local CI-fix work is complete. The user approved commit/push for
+this follow-up; production deployment is not authorized. Remote GitHub CI must
+be checked on the new commit after push; a full backend/database/deployment
+smoke run is not claimed. Never restart shared
+Playwright reporting or rebuild dist-local during another browser run.

@@ -123,6 +123,9 @@ function SaveCollectionPage({
     accessSuspended,
     canReauthenticateNickname: Boolean(onReauthenticateNickname),
   });
+  const matchingNeedsAttention = state.sourceMatching.status === "error"
+    || state.sourceMatching.status === "no-match";
+  const useStaticActions = keyboardOpen || matchingNeedsAttention;
 
   usePageShortcuts([
     {
@@ -462,7 +465,7 @@ function SaveCollectionPage({
           cardNumberVisibilityDisabled={state.submitting}
           onToggleCardNumberVisibility={state.toggleCardNumberReviewVisibility}
           correctionDisabled={state.submitting || accessSuspended || state.resetConfirmOpen}
-          showValidationDetails={Boolean(state.submitFailure) || Object.values(state.fieldErrors).some(Boolean)}
+          showValidationDetails={Boolean(state.submitFailure)}
           onCorrectField={(field) => {
             if (!state.submitting && !accessSuspended && !state.resetConfirmOpen) {
               focusSaveCollectionField(field);
@@ -483,7 +486,7 @@ function SaveCollectionPage({
           id="save-collection-actions"
           className={cn(
             "flex flex-col gap-2 border-t border-border bg-background pt-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] sm:static sm:flex-row sm:flex-wrap sm:justify-end sm:pb-0",
-            keyboardOpen ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
+            useStaticActions ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
           )}
           data-floating-ai-avoid="true"
         >

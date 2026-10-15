@@ -99,6 +99,10 @@ for (const viewport of [{ width: 320, height: 844 }, { width: 740, height: 360 }
   };
   const summary = page.getByTestId("save-collection-readiness");
   await summary.scrollIntoViewIfNeeded();
+  const missingFields = summary.locator("details");
+  await expect(missingFields).not.toHaveAttribute("open");
+  await summary.locator("summary").click();
+  await expect(missingFields).toHaveAttribute("open", "");
   await testInfo.attach(`summary-${viewport.width}`, {
     body: await summary.screenshot({ path: testInfo.outputPath(`summary-${viewport.width}.png`) }), contentType: "image/png",
   });
@@ -203,6 +207,9 @@ test("Save guidance superuser selection and suspended access preserve local work
   await page.locator("#save-collection-superuser-nickname").click();
   await page.getByRole("button", { name: nickname, exact: true }).click();
   await page.locator("#save-collection-customer-name").fill("Synthetic Superuser Draft");
+  const readiness = page.getByTestId("save-collection-readiness");
+  await readiness.locator("summary").click();
+  await expect(readiness.getByRole("button", { name: "Betulkan Amount (RM)", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Muat Semula", exact: true }).click();
   try {
     await expect(reset(page)).toBeDisabled();

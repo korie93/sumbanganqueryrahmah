@@ -42,7 +42,6 @@ export function SaveCollectionReadySummary({
   const isReady = readiness.isReady;
   const fullCardNumber = values.cardNumber.trim();
   const showReview = isReady || showValidationDetails;
-  const ReviewContainer = showReview ? "div" : "details";
 
   return (
     <section
@@ -80,13 +79,11 @@ export function SaveCollectionReadySummary({
           </p>
         </div>
       </div>
-      <ReviewContainer className="group">
-        {!showReview ? (
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md text-xs font-medium text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            Lihat medan yang perlu dilengkapkan
-            <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
-          </summary>
-        ) : null}
+      <details className="group" open={showReview ? true : undefined}>
+        <summary hidden={showReview} className="min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md text-xs font-medium text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&:not([hidden])]:flex [&::-webkit-details-marker]:hidden">
+          Lihat medan yang perlu dilengkapkan
+          <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 lg:grid-cols-4">
         {items.map((item) => {
           const correctionTarget = item.field ? getSaveCollectionFieldTarget(item.field) : undefined;
@@ -152,7 +149,7 @@ export function SaveCollectionReadySummary({
           );
         })}
       </dl>
-      </ReviewContainer>
+      </details>
       {reviewHints.length > 0 ? (
         <div
           className="mt-3 rounded-lg border border-warning/35 bg-warning/10 p-3"

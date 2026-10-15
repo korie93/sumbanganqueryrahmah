@@ -6,6 +6,22 @@ import { checkFixture, installFixture as installSessionFixture, nickname } from 
 test.use({ serviceWorkers: "block" });
 const alternateNickname = "Report Alternate Collector";
 
+async function closeNicknamePopover(page: Page) {
+  const trigger = page.getByRole("button", { name: /^(Pilih staff nickname|\d+ nickname dipilih)$/ });
+  await page.keyboard.press("Escape");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  // Radix restores focus after unmount. Wait for that before dismissing the
+  // containing Sheet so a second Escape cannot target the exiting Popover.
+  await expect(trigger).toBeFocused();
+}
+
+async function closeMobileFilters(page: Page) {
+  const sheet = page.getByRole("dialog", { name: "Nickname Summary Filters", exact: true });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+}
+
 async function installFixture(page: Page, baseURL: string | undefined, options: {
   role?: "admin" | "user" | "superuser"; theme?: "light" | "dark"; additionalNickname?: string;
 } = {}) {
@@ -69,7 +85,7 @@ test("Report controls applied-scope status wraps a long unbroken nickname on mob
   await page.getByRole("button", { name: /^Summary Filters/ }).click();
   await page.getByRole("button", { name: "Pilih staff nickname", exact: true }).click();
   await page.getByRole("checkbox", { name: longNickname, exact: true }).check();
-  await page.keyboard.press("Escape");
+  await closeNicknamePopover(page);
   for (const [testId, day] of [["from", "1"], ["to", "10"]]) {
     await page.getByTestId(`collection-nickname-summary-${testId}-date`).click();
     await page.locator('button[name="day"]:not(.day-outside)').filter({ hasText: new RegExp(`^${day}$`) }).click();
@@ -77,7 +93,7 @@ test("Report controls applied-scope status wraps a long unbroken nickname on mob
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   const status = page.getByTestId("collection-nickname-summary-filter-status");
   await expect(status).toContainText(longNickname);
-  await page.keyboard.press("Escape");
+  await closeMobileFilters(page);
   await expect(status).toBeVisible();
   await expect(status).toHaveCSS("overflow-wrap", /^(anywhere|break-word)$/);
   const layout = await status.evaluate((element) => {
@@ -164,13 +180,16 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.goto("/collection/nickname-summary");
     const mobile = width < 768;
     const openFilters = async () => {
-      if (mobile) await page.getByRole("button", { name: /^Summary Filters/ }).click();
+      if (mobile) {
+        await page.getByRole("button", { name: /^Summary Filters/ }).click();
+        await expect(page.getByRole("dialog", { name: "Nickname Summary Filters", exact: true })).toBeVisible();
+      }
     };
     await openFilters();
     const nicknameTrigger = () => page.getByRole("button", { name: /^(Pilih staff nickname|\d+ nickname dipilih)$/ });
     await nicknameTrigger().click();
     await page.getByRole("checkbox", { name: nickname, exact: true }).check();
-    await page.keyboard.press("Escape");
+    await closeNicknamePopover(page);
     for (const [testId, day] of [["from", "1"], ["to", "10"]]) {
       await page.getByTestId(`collection-nickname-summary-${testId}-date`).click();
       await page.locator('button[name="day"]:not(.day-outside)').filter({ hasText: new RegExp(`^${day}$`) }).click();
@@ -178,15 +197,15 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const status = page.getByTestId("collection-nickname-summary-filter-status");
     await expect(status).toContainText("Filters applied.");
-    if (mobile) await page.keyboard.press("Escape");
+    if (mobile) await closeMobileFilters(page);
     await expect(page.getByRole("heading", { name: "Aggregate by Nickname", exact: true })).toBeVisible();
     expect(fixture.summaryRequests).toHaveLength(1);
     if (mobile) await expect(page.getByText("Applied", { exact: true })).toBeVisible();
     await openFilters();
     await nicknameTrigger().click();
     await page.getByRole("checkbox", { name: alternateNickname, exact: true }).check();
-    await page.keyboard.press("Escape");
-    if (mobile) await page.keyboard.press("Escape");
+    await closeNicknamePopover(page);
+    if (mobile) await closeMobileFilters(page);
     await expect(status).toContainText("Draft changes are not applied.");
     await expect(status).toContainText(`Showing results for ${nickname}`);
     await expect(status).not.toContainText(alternateNickname);
@@ -213,7 +232,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(status).toContainText("Filters applied.");
     await expect(status).toContainText(alternateNickname);
     expect(fixture.summaryRequests).toHaveLength(4);
-    if (mobile) await page.keyboard.press("Escape");
+    if (mobile) await closeMobileFilters(page);
     await checkFixture(page, fixture);
   });
 }

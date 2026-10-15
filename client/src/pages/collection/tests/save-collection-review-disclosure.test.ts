@@ -30,18 +30,20 @@ test("an incomplete first-run form offers a neutral, closed correction disclosur
   assert.match(markup, /aria-controls="save-collection-customer-name"/);
 });
 
-test("validation details cannot be folded away while errors are displayed", () => {
+test("an explicit submit failure opens the stable review without a collapse control", () => {
   const markup = renderSummary({ ...values, customerName: "" }, true);
-  assert.doesNotMatch(markup, /<details|<summary/);
+  assert.match(markup, /<details class="group" open=""><summary hidden=""/);
   assert.match(markup, /aria-label="Betulkan Customer Name"/);
   assert.match(markup, /border-warning\/35 bg-warning\/5/);
   const page = readFileSync(new URL("../SaveCollectionPage.tsx", import.meta.url), "utf8");
-  assert.match(page, /showValidationDetails=\{Boolean\(state\.submitFailure\) \|\| Object\.values\(state\.fieldErrors\)\.some\(Boolean\)\}/);
+  assert.match(page, /showValidationDetails=\{Boolean\(state\.submitFailure\)\}/);
+  assert.doesNotMatch(page, /showValidationDetails=\{[^}]*fieldErrors/);
 });
 
 test("completed form fields expose the review without claiming a completed source match", () => {
   const markup = renderSummary(values);
-  assert.doesNotMatch(markup, /<details|Ready to Save/);
+  assert.match(markup, /<details class="group" open=""><summary hidden=""/);
+  assert.doesNotMatch(markup, /Ready to Save/);
   assert.match(markup, /Medan Wajib Lengkap/);
   assert.match(markup, /Status padanan Saved ditunjukkan berasingan di bawah/);
   assert.match(markup, /<dl class="grid grid-cols-2/);

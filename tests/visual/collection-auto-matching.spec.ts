@@ -508,6 +508,7 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   const feedback = page.locator("#save-collection-matching-feedback");
   const actions = page.locator("#save-collection-actions");
   const save = actions.getByRole("button", { name: "Save Collection", exact: true });
+  await expect(actions).toHaveCSS("position", viewport.width < 640 ? "sticky" : "static");
   await expect(page.getByRole("heading", { name: "Saved Matching & Coverage", exact: true })).toHaveCount(0);
   await expect(page.getByText("Synthetic Saved Source", { exact: true })).toHaveCount(0);
   await expect(page.getByText("TOTAL DUE", { exact: true })).toHaveCount(0);
@@ -532,9 +533,15 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   await expect(retry(page)).toBeInViewport();
   const feedbackBox = (await feedback.boundingBox())!;
   const actionBox = (await actions.boundingBox())!;
+  await expect(actions).toHaveCSS("position", "static");
   expect(feedbackBox.height).toBeLessThan(viewport.height / 2);
   expect(feedbackBox.y + feedbackBox.height).toBeLessThanOrEqual(actionBox.y + 1);
   expect((await retry(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect(await retry(page).evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const painted = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return Boolean(painted && element.contains(painted));
+  })).toBe(true);
   await retry(page).click({ trial: true });
   await testInfo.attach(`matching-retry-${theme}-${viewport.width}`, {
     body: await page.screenshot({ path: testInfo.outputPath(`matching-retry-${theme}-${viewport.width}.png`), animations: "disabled" }),

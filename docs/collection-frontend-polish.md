@@ -8,7 +8,11 @@ and does not require a database migration.
 
 - Save Collection: balanced payment fields, shorter receipt guidance and a neutral
   first-run field-completeness summary. The correction list is available on demand;
-  field/submit errors keep the correction review visible. Field completeness is
+  explicit submit errors open the review; blur-only errors stay next to their
+  fields without expanding the closed review or shifting Reset mid-click. One
+  stable native disclosure preserves correction controls during validation.
+  Matching error/no-match states use normal-flow mobile actions so feedback and
+  Retry cannot be covered by the sticky footer. Field completeness is
   not labelled as successful source matching.
 - Records: search remains outside the folded filter panel. An inverted date range
   now has persistent inline feedback associated with both date controls.
@@ -60,3 +64,9 @@ existing CSS-only test loader. Real CSS is verified separately in built browsers
 Visual comparison evidence and limitations for this implementation are recorded in
 the Collection section of the repository's `design-qa.md`. Screenshot baselines
 must not be updated merely to conceal a layout or accessibility regression.
+
+Chrome's native PDF viewer requests browser-internal resources in CI. The receipt
+fixtures permit only the exact built-in PDF extension and `chrome://resources`;
+HTTP/external origins remain blocked. Fixture storage initialization is restricted
+to the top-level synthetic app origin, never PDF frames. Nested nickname-filter
+tests wait for Popover focus restoration before dismissing the containing Sheet.
