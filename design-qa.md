@@ -154,3 +154,221 @@ Final coverage: eight role/state matrices (normal superuser/admin/user plus expl
 Final report: `artifacts/playwright-report/index.html`; final result file reports `passed` with an empty failed-tests list. The successful earlier final-build 23-case report is preserved at `artifacts/sidebar-q/motion-final-23-report/`. No actionable P0/P1/P2 finding remains within this scoped implementation. No commit, push or deployment was performed.
 
 final result: passed
+
+---
+
+# Collection workspace and receipt viewer polish — 2026-10-15
+
+## Scope and visual target
+
+Product Design continued the approved Collection and receipt-viewer improvements,
+using the existing application as the visual target. This is incremental polish,
+not a replacement design system. The intended differences are a quieter first-run
+Save form, less prominent supporting report controls, clearer applied-filter
+state, compact nickname management, and a receipt viewer with more usable image
+space and genuine fit-relative mobile zoom.
+
+No backend, shared API, permission, monetary formula, original receipt, database
+or dependency changes are included. Local browser fixtures use fictional records
+and generated files. During implementation verification, no production connection,
+mutation, commit, push or deploy was performed. The user subsequently approved
+committing and pushing the completed changes; deployment remains a separate action.
+
+## Evidence and normalization
+
+All paths below are under `artifacts/collection-polish-20261015/` unless stated.
+Source truth was captured from this checkout's pre-change Git HEAD
+`315a657a50ce`, served separately from an ignored local archive. Implementation
+evidence comes from the changed client source on a loopback-only synthetic
+preview. Source and implementation were captured in the same Codex in-app tab
+with matched route, superuser role, theme, fixture content and CSS viewport.
+
+Desktop CSS viewport was 1440×1024. The temporary in-app viewport override used
+a reported DPR of approximately 0.67; its full-page capture adds inverse-density
+backing canvas. The comparison helper removes only that excess backing canvas:
+left 1440 pixels, height capped at `ceil(raw height × .67)`. UI pixels are not
+resampled. Full-page heights intentionally differ after disclosure and form
+density changes; they are not represented as pixel-exact screenshot baselines.
+
+| Surface | Source PNG pixels | Implementation PNG pixels | Combined evidence |
+| --- | --- | --- | --- |
+| Manage | `before-manage.png` 2115×1528 | `after-manage.png` 2115×1528 | `compare-manage.png` 2904×1072 |
+| Save | `before-save.png` 2115×2761 | `after-save.png` 2149×1849 | `compare-save.png` 2904×1898 |
+| Monthly | `before-monthly.png` 2115×4912 | `after-monthly.png` 2115×1952 | `compare-monthly.png` 2904×3340 |
+| Daily | `before-daily.png` 2115×4952 | `after-daily.png` 2115×4560 | `compare-daily.png` 2904×3366 |
+| Receipt | `before-receipt.png` 2149×1528 | `after-receipt.png` 2149×1528 | `compare-receipt.png` 2904×1072 |
+
+All five combined inputs were opened and inspected. Readable native-pixel focused
+comparisons were also opened for Save, Manage, Monthly and Daily:
+`compare-*-focus.png` (2424 pixels wide, 1002–1098 high). These use the same
+240px-left/70px-top crop in both source and implementation. Receipt controls are
+readable in the full desktop comparison and separate mobile comparison.
+
+Mobile source and implementation both measured 389×843 CSS pixels and reported
+DPR approximately 0.67. Raw `before-mobile-receipt.png` and
+`after-mobile-receipt.png` are both 581×2587. The helper removes the in-app
+full-page stitching offset, taking the visible 389×843 app region at source y=1
+and implementation y=613 without resampling. `compare-mobile-receipt.png`
+(802×891) puts both visible app regions in the same input and was inspected.
+These offsets describe the browser capture, not CSS page margins.
+
+Additional rendered evidence: `after-date-error.png`, `after-summary.png`,
+`after-monthly-expanded.png`, `after-mobile-zoom.png`, `after-mobile-pdf.png`,
+`after-retry.png`, `after-manage-dark.png`, `after-receipt-dark.png` and
+`after-mobile-receipt-dark.png`. The dark Manage and viewer captures were opened
+and inspected. `final-preview.png` (2149×1528) shows the final light receipt
+viewer after restoring the normal viewport. Its actual CSS size was 1440×1024,
+reported DPR approximately 1.34, and the image was loaded with a 960px width.
+Final in-app console checks returned no warnings or errors.
+
+Final-source capture follow-up: the loopback helper was restarted at
+`http://127.0.0.1:51103` to discard its disabled-watcher transform cache. A normal
+viewport reset changed backing density; those mismatched captures were not used
+for acceptance. Daily and receipt were recaptured at the original 1440×1024 CSS /
+approximately 0.67 DPR override. Their full/focused combined inputs were rebuilt,
+opened and inspected again. The final Daily visible label is Calendar display
+mode, matching its accessible name. No actionable P0/P1/P2 drift remained.
+
+## Five fidelity surfaces
+
+1. **Typography:** the existing system font stack, small UI labels and heading
+   scale remain. Focused comparisons show consistent weights, line height and
+   wrapping. The large duplicated mobile Manage hero was removed intentionally;
+   a compact heading remains. Numeric summaries use tabular figures. Billing's
+   semantic ALL row header retains the existing total-row emphasis.
+2. **Spacing and layout:** Save payment fields now form a balanced inner grid on
+   desktop, returning to a single column when narrow. Its correction list is
+   initially folded without hiding actual submit/field failures. Monthly's main
+   metrics and monthly chart remain visible; same-day and supporting analysis are
+   available through native disclosures. Daily keeps attention, conflict and
+   dirty-state feedback visible while folding supporting tools. Receipt controls
+   consume less vertical space, with the document retaining native scrolling.
+3. **Tokens and color:** existing foreground, border, background and semantic
+   theme tokens remain. Initial incomplete fields use neutral guidance rather
+   than an error-colored wall. Actual errors and unsaved states remain distinct
+   and labelled in text, not color alone. Dark viewer chrome does not invert or
+   recolor the original receipt document.
+4. **Assets:** supplied transparent Q branding, original Lucide glyphs and receipt
+   originals are unchanged. No replacement logo, custom-drawn approximation,
+   generated decorative art or rasterized UI was introduced. Image fit/zoom uses
+   natural dimensions; rotated images have a positive enclosing scroll canvas.
+5. **Copy:** shortened upload guidance still states accepted types and 5MB limit.
+   Field completeness is explicitly not successful matching. Receipt choices
+   include filenames and selected state. PDF actions appear once. Applied scope
+   and pending draft changes are described separately; Movement uses percentage
+   points rather than an ambiguous percentage label.
+
+## Review findings and corrections
+
+The matched visual comparisons found no unresolved P0/P1/P2 mismatch against the
+approved incremental target. The shorter page heights and moved/folded supporting
+content are intended changes, not hidden content loss. Expanded Monthly charts
+were verified to render with nonzero dimensions. Dedicated export/print builders
+remain unchanged and browser-print CSS exposes the folded report contents.
+
+Implementation review also corrected the following before acceptance; these are
+functional checks, not invented screenshot-QA iterations:
+
+- Receipt details needed a keyboard-scrollable focus target: the actual controlled
+  region now has `tabIndex=0` and a visible focus ring.
+- Fit calculations could oscillate when a scrollbar changed available width:
+  the image scroller now reserves a stable scrollbar gutter.
+- Dynamic pressed/expanded props now use the repository's ARIA helpers.
+- Nickname background refresh could accidentally apply pending draft filters:
+  it now uses the last validated applied scope and does not interrupt Apply.
+- Long unbroken applied nickname text now wraps within narrow screens;
+  System ALL retains semibold emphasis after changing Aging cells to row headers.
+
+An additional P2 development-lifecycle issue was reproduced using the real
+receipt component in an isolated in-memory React development bundle. StrictMode's
+simulated cleanup removed the image source (naturalWidth=0, stuck loading) and
+replaced the PDF source with `about:blank`; non-strict controls retained their
+blob sources. This cleanup pattern predates the polish, but the new loading
+state makes a correction appropriate within viewer scope. Evidence:
+`receipt-dev-strict-repro.log`. Setup now restores the captured validated source
+for both media types, while actual unmount cleanup remains. The valid-PDF
+reproduction (`receipt-dev-strict-valid-pdf.log`) shows preserved sources for
+strict and non-strict controls, a decoded image and no page errors. The dedicated
+development browser regression passed inside the final production matrix and
+checks media teardown as well. PDF frames no longer use an indefinite overlay
+that depends on inconsistent native load events; authenticated fetch loading is
+retained. The final IAB DOM exposed the iframe and single PDF actions with no
+Opening PDF status. The native PDF engine itself is not certified here.
+
+Browser-test assumptions were corrected without weakening app behavior: scroll
+edge assertions account for the reserved gutter; downloaded names use the existing
+safe filename convention; manual Retry is tested with a terminal HTTP failure,
+separately from the HTTP client's automatic retry. One run received a static 404
+while a concurrent build replaced the local index. The subsequent stable-build
+reruns passed; no timeout, screenshot tolerance or mask was relaxed for it.
+
+The first long-nickname test expected a specific computed wrapping keyword,
+whereas existing global CSS supplies the safe break-word fallback. It now accepts
+either wrapping keyword while still requiring the actual paragraph and its
+scrollWidth to fit inside the mobile viewport. This does not hide overflow.
+
+Only two Save form baselines were refreshed after the main agent inspected
+expected/actual/diff triptychs and native-pixel focused comparisons. Source and
+implementation images are 1280×720 at the existing snapshot's matched state.
+`compare-save-snapshot-{light,dark}.png` (3872×752) contains all three, and
+`compare-save-snapshot-{light,dark}-focus.png` (2036×462) makes typography, inputs,
+spacing and copy readable. Differences are the approved payment inner grid and
+shorter guidance; branding, shell, colors and safe fields are retained. A hash
+audit (`save-baseline-hashes.json`) proves the other six baseline PNGs are
+byte-identical. Both refreshed baselines passed in the final non-update run.
+
+## Verification and limitations
+
+Final frontend tests passed 2017/2017 (1186 + 831), no failures or skips. This
+includes the 28 task-specific TSX presentation cases now connected to the normal
+`.test.ts` runner through a scoped regression entry and the existing CSS hook.
+The standalone focused presentation run also passed 28/28. Full
+client ESLint, semantic TypeScript, production build, sourcemap gate, spacing,
+color compatibility, breakpoint, storage, bundle budget, repository hygiene and
+tracked/new-file secret guards passed. Browser-spec semantic TypeScript passed
+with a local Node/Vite/DOM test configuration. Final production build:
+`sqr-1.0.0-315a657a50ce-20261015T013713Z` (dirty source, not committed).
+The script suite passed 727 tests with one existing skip and no failures in an isolated
+test environment; an earlier run loading local dotenv was discarded because its
+LOG_FORMAT setting did not match the test environment's schema. No environment
+file was changed to make tests pass.
+
+An exploratory all-57-TSX run without the existing CSS hook reported seven CSS
+import initialization failures and one unchanged RoleGuide capitalization
+assertion. It is not claimed as green. The affected Collection presentation tests
+pass with the correct hook and now run under the normal client command; unrelated
+legacy tests were not changed or silently skipped.
+
+In-app interactions checked actual mobile zoom growth, rotation and keyboard
+scrolling, receipt selection, PDF action counts, retry loading, Escape/focus
+return, field correction focus, inverted-date feedback, native disclosures and
+Manage action menus. The earlier stable production receipt/Billing browser matrix passed
+24/24, including byte-identical original PDF downloads, terminal HTTP/decode retry,
+mobile/desktop light/dark viewing, draft receipt cards and populated Billing
+sticky tables/private-save state. Its preserved report is
+`artifacts/collection-polish-20261015/receipt-final-report/index.html` and its log
+is `receipt-playwright-final.log`. After the final viewer fix, the combined stable
+built suite passed **60/60**, no skips, failures or retries, in approximately 8.2
+minutes. It covers the real development StrictMode regression, image/PDF/retry
+flows, Billing sticky headers/private state, Monthly keyboard disclosures and
+print reveal, Daily modes/role restrictions/day dialogs, Nickname draft/applied
+scope and both background events, responsive layout/role guards and reviewed
+authenticated snapshots. Report behavior separately passed 15/15; the initial
+Collection navigation matrix passed 14/14. The final combined report/results are
+`artifacts/collection-polish-20261015/final-combined-report/index.html` and
+`final-combined-results/`, with `final-combined-browser.log`.
+
+This is synthetic frontend verification, not a real-database save, full remote
+CI/release-readiness run, comprehensive WCAG certification, physical-device/GPU
+test or native PDF-engine guarantee. Dedicated original-file downloads are
+preserved; no real receipt or collection was used for testing. Preview aggregate
+fixtures are presentation data and must not be used to validate financial
+formulas.
+
+Implementation checklist: visual comparisons inspected; scoped source review
+complete; final static checks complete; stable browser, report/navigation and
+development lifecycle checks complete; no actionable P0/P1/P2 finding remains
+within this scope. Continuation instructions and exact limitations are saved in
+`CODEX_CONTINUATION_HANDOFF_COLLECTION_FRONTEND_POLISH.md`.
+
+final result: passed

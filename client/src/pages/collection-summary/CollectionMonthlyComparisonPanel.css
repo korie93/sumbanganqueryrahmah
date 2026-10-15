@@ -2,6 +2,35 @@
   --collection-monthly-comparison-muted-surface: hsl(var(--muted));
 }
 
+.collection-monthly-comparison-disclosure {
+  border-top: 1px solid hsl(var(--border));
+}
+
+.collection-monthly-comparison-disclosure > summary {
+  min-height: 2.75rem;
+  padding-block: 0.75rem;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  color: hsl(var(--foreground));
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.collection-monthly-comparison-disclosure > summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media print {
+  .collection-monthly-comparison-panel details::details-content {
+    content-visibility: visible;
+  }
+
+  .collection-monthly-comparison-panel details > :not(summary) {
+    display: block !important;
+  }
+}
+
 .collection-monthly-comparison-filter-card,
 .collection-monthly-comparison-state-card {
   background: hsl(var(--card));

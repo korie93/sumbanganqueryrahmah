@@ -225,9 +225,9 @@ async function verifyBilling(page, baseUrl, role, fixture, capture) {
   assert.equal(Number(after.systemResult.all.ospClosed), 10000, "Private edits do not mutate Table A");
   await page.reload({ waitUntil: "domcontentloaded" });
   await table.waitFor();
-  const total = table.getByRole("row").filter({ has: page.getByRole("cell", { name: "ALL", exact: true }) });
-  await page.waitForFunction(({ amount }) => [...document.querySelectorAll("table[aria-label='Table B Client Billing Principal result'] tfoot tr")].some((row) => row.firstElementChild?.textContent === "ALL" && Number(row.children[5]?.textContent?.replace(/[^\d.-]/g, "")) === amount), { amount: expected });
-  assert.equal(Number((await total.getByRole("cell").nth(5).innerText()).replace(/[^\d.-]/g, "")), expected);
+  const total = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: /^ALL\b/ }) });
+  await page.waitForFunction(({ amount }) => [...document.querySelectorAll("table[aria-label='Table B Client Billing Principal result'] tfoot tr")].some((row) => row.firstElementChild?.firstChild?.textContent?.trim() === "ALL" && Number(row.children[5]?.textContent?.replace(/[^\d.-]/g, "")) === amount), { amount: expected });
+  assert.equal(Number((await total.locator("th, td").nth(5).innerText()).replace(/[^\d.-]/g, "")), expected);
   await table.scrollIntoViewIfNeeded();
   await capture("billing-private-result");
 }

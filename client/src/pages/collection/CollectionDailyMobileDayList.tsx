@@ -149,6 +149,7 @@ export function CollectionDailyMobileDayList({
                 <Button
                   type="button"
                   variant="outline"
+                  aria-haspopup="dialog"
                   className="h-10 rounded-xl bg-background/80"
                   aria-label={`View collection details for ${formatDateDDMMYYYY(day.date)}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}`}
                   onClick={() => onSelectDate(day.date)}
@@ -163,6 +164,7 @@ export function CollectionDailyMobileDayList({
                     variant="default"
                     className="h-10 rounded-xl"
                     aria-pressed="true"
+                    aria-haspopup="dialog"
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
                     onClick={() => onEditDay(day.day)}
                   >
@@ -176,6 +178,7 @@ export function CollectionDailyMobileDayList({
                     variant="outline"
                     className="h-10 rounded-xl"
                     aria-pressed="false"
+                    aria-haspopup="dialog"
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
                     onClick={() => onEditDay(day.day)}
                   >

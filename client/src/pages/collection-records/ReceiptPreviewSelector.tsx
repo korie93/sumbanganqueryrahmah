@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
+import { getAriaPressedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
 
@@ -18,56 +18,32 @@ export function ReceiptPreviewSelector({
   isMobile,
   onSelectReceipt,
 }: ReceiptPreviewSelectorProps) {
-  if (receipts.length <= 1) {
-    return null;
-  }
+  if (receipts.length <= 1) return null;
+  const selectedIndex = receipts.findIndex((receipt) => receipt.id === selectedReceipt?.id);
 
   return (
-    <div
-      className={cn(
-        "rounded-md border border-border/60 bg-background/40 p-3",
-        isMobile ? "mx-3 mt-3" : "mt-3 flex flex-wrap items-center gap-2",
-      )}
-    >
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Receipts
-      </span>
-      {isMobile ? (
-        <HorizontalScrollHint
-          className="mt-2"
-          viewportClassName="flex w-max min-w-full gap-2"
-          hint="Swipe receipts"
-        >
-          {receipts.map((receipt, index) => (
-            <Button
-              key={receipt.id}
-              type="button"
-              size="sm"
-              variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
-              onClick={() => onSelectReceipt(receipt.id)}
-              disabled={loading}
-              className="shrink-0"
-            >
-              #{index + 1}
-            </Button>
-          ))}
-        </HorizontalScrollHint>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          {receipts.map((receipt, index) => (
-            <Button
-              key={receipt.id}
-              type="button"
-              size="sm"
-              variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
-              onClick={() => onSelectReceipt(receipt.id)}
-              disabled={loading}
-            >
-              #{index + 1}
-            </Button>
-          ))}
-        </div>
-      )}
+    <div className={cn("min-w-0 shrink-0", isMobile ? "mx-3 mt-2" : "mt-2")}>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Receipt {Math.max(0, selectedIndex) + 1} of {receipts.length}
+      </p>
+      <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Choose receipt" aria-busy={loading}>
+        {receipts.map((receipt, index) => (
+          <Button
+            key={receipt.id}
+            type="button"
+            size="sm"
+            variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
+            onClick={() => onSelectReceipt(receipt.id)}
+            {...getAriaPressedProps(selectedReceipt?.id === receipt.id)}
+            aria-label={`Receipt ${index + 1}: ${receipt.originalFileName || "Unnamed receipt"}`}
+            title={receipt.originalFileName || `Receipt ${index + 1}`}
+            className="max-w-[12rem] shrink-0 gap-2"
+          >
+            <span className="shrink-0">{index + 1}.</span>
+            <span className="truncate">{receipt.originalFileName || "Receipt"}</span>
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -38,9 +38,9 @@ export function GroupListPanel({
       className={`border border-border/60 bg-background/40 ${isMobile ? "rounded-2xl p-4" : "rounded-xl p-3"}`}
     >
       <div className="mb-4 space-y-1">
-        <p className="text-sm font-semibold text-foreground">Admin Groups</p>
+        <p className="text-sm font-semibold text-foreground">1. Pilih Admin Group</p>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Search the available admin nickname groups, expand members, and choose the active group before updating assignments.
+          Pilih Open untuk mengurus assignment. Buka senarai ahli jika perlu.
         </p>
       </div>
       <div className="space-y-2">

@@ -9,6 +9,7 @@ import type { CollectionRecordReceipt } from "@/lib/api";
 import {
   clampReceiptPreviewZoom,
   getReceiptPreviewZoomValue,
+  getReceiptPreviewImageLayout,
   normalizeReceiptPreviewRotation,
   resolveSelectedReceipt,
   shouldShowReceiptPreviewZoomControls,
@@ -49,6 +50,7 @@ test("receipt preview dialog utils clamp zoom and resolve selected receipt", () 
   assert.equal(clampReceiptPreviewZoom(0.1), 0.5);
   assert.equal(clampReceiptPreviewZoom(3.5), 1.75);
   assert.equal(getReceiptPreviewZoomValue(1.24), "1.24");
+  assert.equal(clampReceiptPreviewZoom(Number.NaN), 1);
   assert.equal(normalizeReceiptPreviewRotation(450), 90);
   assert.equal(normalizeReceiptPreviewRotation(-90), 270);
   assert.equal(
@@ -88,4 +90,27 @@ test("receipt preview dialog utils clamp zoom and resolve selected receipt", () 
   assert.equal(resolveSelectedReceipt(receipts, "second")?.id, "second");
   assert.equal(resolveSelectedReceipt(receipts, "missing")?.id, "first");
   assert.equal(resolveSelectedReceipt([], "missing"), null);
+});
+
+test("mobile receipt zoom grows the layout past the viewport instead of capping its width", () => {
+  const options = { naturalWidth: 1200, naturalHeight: 2400, availableWidth: 294, zoom: 1, rotationDegrees: 0 };
+  const fit = getReceiptPreviewImageLayout(options);
+  const zoomed = getReceiptPreviewImageLayout({ ...options, zoom: 1.5 });
+  assert.equal(fit.imageWidth, 294);
+  assert.equal(fit.imageHeight, 588);
+  assert.equal(zoomed.imageWidth, 441);
+  assert.equal(zoomed.canvasWidth, 441);
+  assert.equal(zoomed.canvasHeight, 882);
+});
+
+test("rotated receipt canvas contains every edge at fit and zoomed sizes", () => {
+  for (const rotationDegrees of [90, 270, -90]) {
+    const layout = getReceiptPreviewImageLayout({ naturalWidth: 1200, naturalHeight: 2400, availableWidth: 294, zoom: 1.5, rotationDegrees });
+    assert.equal(layout.canvasWidth, 441);
+    assert.equal(layout.canvasHeight, 220.5);
+    assert.equal(layout.canvasWidth, layout.imageHeight);
+    assert.equal(layout.canvasHeight, layout.imageWidth);
+  }
+  const small = getReceiptPreviewImageLayout({ naturalWidth: 200, naturalHeight: 100, availableWidth: 400, zoom: 1, rotationDegrees: 0 });
+  assert.equal(small.imageWidth, 200);
 });

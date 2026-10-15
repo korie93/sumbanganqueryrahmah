@@ -183,7 +183,7 @@ export function BillingPrincipalInsights({ target, overview, disabled = false, d
       <table className="mt-2 w-full table-fixed text-xs sm:text-sm" aria-label="Daily movement TT OSP basis">
         <thead><tr className="text-muted-foreground"><th className="w-12 py-2 text-left font-medium">Aging</th><th className="py-2 pl-2 text-right font-medium">TT OSP</th><th className="py-2 pl-2 text-right font-medium">OSP for +1%</th></tr></thead>
         <tbody>{[...calendar[0].dailyMovement.rows, calendar[0].dailyMovement.all].map((row) => <tr key={row.aging} className={row.aging === "ALL" ? "border-t font-semibold" : undefined}>
-          <td className="py-2">{row.aging === "ALL" ? "TOTAL" : row.aging}</td><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.totalOsp)}</td><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.ospRequiredForOnePercent)}</td>
+          <th scope="row" className="py-2 text-left font-medium">{row.aging === "ALL" ? "TOTAL" : row.aging}</th><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.totalOsp)}</td><td className="py-2 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{formatOspCurrency(row.ospRequiredForOnePercent)}</td>
         </tr>)}</tbody>
       </table>
       <p className="my-2 text-xs text-muted-foreground">Fixed Saved Target revision basis. OSP for +1% is TT OSP ÷ 100; displayed amounts are rounded only for readability.</p>

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Download } from "lucide-react";
+import { useEffect, useId, useState } from "react";
+import { Download, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import {
@@ -43,6 +43,7 @@ export interface ReceiptPreviewDialogProps {
   onCloseAutoFocus?: (event: Event) => void;
   onSelectReceipt: (receiptId: string) => void;
   onDownload: () => void;
+  onRetry?: () => void;
   onClose: () => void;
 }
 
@@ -61,9 +62,11 @@ export function ReceiptPreviewDialog({
   onCloseAutoFocus,
   onSelectReceipt,
   onDownload,
+  onRetry,
   onClose,
 }: ReceiptPreviewDialogProps) {
   const isMobile = useIsMobile();
+  const detailsId = useId();
   const [zoom, setZoom] = useState(1);
   const [rotationDegrees, setRotationDegrees] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
@@ -98,14 +101,14 @@ export function ReceiptPreviewDialog({
         onCloseAutoFocus={onCloseAutoFocus}
         className={
           isMobile
-            ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`
-            : "flex h-[90vh] w-[96vw] max-w-6xl flex-col"
+            ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
+            : "flex h-[90vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden"
         }
       >
-        <DialogHeader className={isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : ""}>
+        <DialogHeader className={isMobile ? "shrink-0 border-b border-border/60 px-4 py-3 pr-12 text-left" : "shrink-0 pr-8"}>
           <DialogTitle>Receipt Preview</DialogTitle>
-          <DialogDescription className="break-words text-xs leading-5 sm:text-sm">
-            {fileName || selectedReceipt?.originalFileName || "Preview fail resit yang dimuat naik."}
+          <DialogDescription className="truncate text-xs leading-5 sm:text-sm" title={selectedReceipt?.originalFileName || fileName}>
+            {selectedReceipt?.originalFileName || fileName || "Preview fail resit yang dimuat naik."}
           </DialogDescription>
         </DialogHeader>
 
@@ -118,20 +121,19 @@ export function ReceiptPreviewDialog({
         />
 
         <ReceiptPreviewToolbar
-          selectedReceipt={selectedReceipt}
+          detailsId={detailsId}
           showDetails={showDetails}
           setShowDetails={setShowDetails}
-          showPdfFallback={showPdfFallback}
-          safeSource={safeSource}
+          canShowDetails={Boolean(record)}
           canZoom={canZoom}
           zoom={zoom}
           setZoom={setZoom}
-          rotationDegrees={rotationDegrees}
           setRotationDegrees={setRotationDegrees}
           isMobile={isMobile}
         />
 
         <ReceiptPreviewRecordDetails
+          id={detailsId}
           record={record}
           selectedReceipt={selectedReceipt}
           showDetails={showDetails}
@@ -150,32 +152,41 @@ export function ReceiptPreviewDialog({
           rotationDegrees={normalizeReceiptPreviewRotation(rotationDegrees)}
           fileName={fileName}
           selectedReceipt={selectedReceipt}
-          downloading={downloading}
-          onDownload={onDownload}
+          onRetry={onRetry}
         />
 
         <DialogFooter
           className={cn(
-            "gap-2 border-t border-border/60 bg-background/95 shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85",
+            "shrink-0 gap-2 border-t border-border/60 bg-background/95 sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85",
             isMobile
-              ? "sticky bottom-0 z-[var(--z-sticky-content)] flex-col-reverse px-4 py-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)]"
-              : "flex-row items-center justify-end px-0 py-0",
+              ? "flex-row flex-wrap items-center justify-end px-3 py-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)]"
+              : "mt-3 flex-row items-center justify-end pt-3",
           )}
           data-floating-ai-avoid="true"
         >
+          {kind === "pdf" && safeSource && !loading && !error ? (
+            <Button type="button" variant="default" asChild className={isMobile ? "flex-1" : ""}>
+              <a href={safeSource} target="_blank" rel="noreferrer noopener">
+                <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+                Open PDF
+              </a>
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
             onClick={onDownload}
             disabled={!record || downloading}
-            className={isMobile ? "w-full" : ""}
+            aria-busy={downloading}
+            className={isMobile ? "flex-1" : ""}
           >
-            <Download className="mr-2 h-4 w-4" />
+            {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}
             {downloading ? "Downloading..." : "Download Original"}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose} className={isMobile ? "w-full" : ""}>
+          <Button type="button" variant="secondary" onClick={onClose} className={isMobile && kind === "pdf" && safeSource ? "w-full" : ""}>
             Close
           </Button>
+          <span role="status" className="sr-only">{downloading ? "Downloading original receipt..." : ""}</span>
         </DialogFooter>
       </DialogContent>
     </Dialog>

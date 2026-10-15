@@ -59,7 +59,7 @@ export function CollectionReceiptPanel({
   onExistingDraftChange,
   onPendingDraftChange,
   uploadLabel = "Upload Receipt",
-  helperText = "Upload one receipt at a time. JPG, PNG, and PDF up to 5MB.",
+  helperText = "One receipt at a time. JPG, JPEG, PNG, WEBP or PDF, up to 5MB each.",
 }: CollectionReceiptPanelProps) {
   const inputId = useId();
   const helperTextId = `${inputId}-help`;
@@ -100,6 +100,7 @@ export function CollectionReceiptPanel({
           variant="outline"
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
+          {...(helperText ? { "aria-describedby": helperTextId } : {})}
         >
           {uploadLabel}
         </Button>
@@ -120,27 +121,29 @@ export function CollectionReceiptPanel({
         {helperText}
       </p>
       <CollectionReceiptDuplicateWarning pendingFiles={pendingFiles} />
-      <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {summary.existingCount > 0 ? (
-            <Badge variant="secondary">Existing {summary.existingCount}</Badge>
-          ) : null}
-          {summary.removedExistingCount > 0 ? (
-            <Badge variant="destructive">Will Remove {summary.removedExistingCount}</Badge>
-          ) : null}
-          {summary.pendingCount > 0 ? (
-            <Badge variant={pendingStatusCopy.badgeVariant}>
-              {pendingStatusCopy.badgeLabel} {summary.pendingCount}
-            </Badge>
-          ) : null}
-          {summary.willReplace ? (
-            <Badge variant="secondary">Replacement Pending</Badge>
-          ) : null}
+      {summary.existingCount > 0 || summary.pendingCount > 0 ? (
+        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {summary.existingCount > 0 ? (
+              <Badge variant="secondary">Existing {summary.existingCount}</Badge>
+            ) : null}
+            {summary.removedExistingCount > 0 ? (
+              <Badge variant="destructive">Will Remove {summary.removedExistingCount}</Badge>
+            ) : null}
+            {summary.pendingCount > 0 ? (
+              <Badge variant={pendingStatusCopy.badgeVariant}>
+                {pendingStatusCopy.badgeLabel} {summary.pendingCount}
+              </Badge>
+            ) : null}
+            {summary.willReplace ? (
+              <Badge variant="secondary">Replacement Pending</Badge>
+            ) : null}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {pendingStatus === "pending" ? summary.message : pendingStatusCopy.helperText}
+          </p>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {pendingStatus === "pending" ? summary.message : pendingStatusCopy.helperText}
-        </p>
-      </div>
+      ) : null}
 
       {existingReceipts.length > 0 ? (
         <div className="space-y-2">
@@ -253,26 +256,24 @@ export function CollectionReceiptPanel({
       ) : null}
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div className="space-y-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Pending Receipts
-            </p>
-            {draftPreviews.length > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Semak setiap resit satu persatu. Setiap kad menunjukkan preview, jumlah, tarikh dan reference.
+        {draftPreviews.length > 0 ? (
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Pending Receipts
               </p>
-            ) : null}
-          </div>
-          {draftPreviews.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Semak jumlah, tarikh dan reference setiap receipt.
+              </p>
+            </div>
             <Badge variant="secondary">
               {draftPreviews.length} pending
             </Badge>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
         {draftPreviews.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
-            No pending receipt selected yet.
+          <div className="rounded-md border border-dashed border-border/60 px-3 py-3 text-xs text-muted-foreground">
+            No pending receipt.
           </div>
         ) : (
           <div className="space-y-3">

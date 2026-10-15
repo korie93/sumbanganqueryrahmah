@@ -47,6 +47,7 @@ export function useCollectionReceiptPreview() {
   const [receiptPreviewMimeType, setReceiptPreviewMimeType] = useState("");
   const [receiptPreviewFileName, setReceiptPreviewFileName] = useState("");
   const [receiptPreviewError, setReceiptPreviewError] = useState("");
+  const [receiptPreviewRetryAttempt, setReceiptPreviewRetryAttempt] = useState(0);
 
   const selectedPreviewReceipt = useMemo(() => {
     if (!receiptPreviewRecord) return null;
@@ -119,6 +120,7 @@ export function useCollectionReceiptPreview() {
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       abortReceiptPreviewRequest();
@@ -234,8 +236,14 @@ export function useCollectionReceiptPreview() {
     clearReceiptPreviewObjectUrl,
     receiptPreviewOpen,
     receiptPreviewRecord,
+    receiptPreviewRetryAttempt,
     selectedPreviewReceipt,
   ]);
+
+  const retryReceiptPreview = useCallback(() => {
+    if (!receiptPreviewOpen || !receiptPreviewRecord || receiptPreviewLoading) return;
+    setReceiptPreviewRetryAttempt((attempt) => attempt + 1);
+  }, [receiptPreviewLoading, receiptPreviewOpen, receiptPreviewRecord]);
 
   const handleDownloadReceipt = useCallback(async () => {
     if (!receiptPreviewRecord || receiptPreviewDownloading) return;
@@ -317,6 +325,7 @@ export function useCollectionReceiptPreview() {
       onOpenChange: handleReceiptPreviewOpenChange,
       onSelectReceipt: setReceiptPreviewReceiptId,
       onDownload: () => void handleDownloadReceipt(),
+      onRetry: retryReceiptPreview,
       onClose: closeReceiptPreview,
     },
   };

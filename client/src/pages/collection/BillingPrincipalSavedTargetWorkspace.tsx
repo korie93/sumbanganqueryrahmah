@@ -75,7 +75,7 @@ export function BillingPrincipalSystemResultTable({
         <TableBody>
           {rendered.map((row) => (
             <TableRow key={row.aging} className={row.aging === "ALL" ? "billing-osp-table-total bg-muted/30 font-semibold" : undefined}>
-              <TableCell className="billing-osp-table-aging">{row.aging}</TableCell>
+              <th scope="row" className={`billing-osp-table-aging h-11 px-4 py-3 text-left align-middle ${row.aging === "ALL" ? "font-semibold" : "font-medium"}`}>{row.aging}</th>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(row.totalOsp)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspPercentage(row.targetPercentage)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(row.targetOsp)}</TableCell>
@@ -245,7 +245,7 @@ export function BillingPrincipalClientResultTable({
           <TableBody>
             {rows.map(({ aging, persisted, calculated }) => (
               <TableRow key={aging}>
-                <TableCell className="billing-osp-table-aging font-semibold">{aging}</TableCell>
+                <th scope="row" className="billing-osp-table-aging h-11 px-4 py-3 text-left align-middle font-semibold">{aging}</th>
                 <TableCell className="text-right tabular-nums">{formatOspCurrency(persisted?.totalOsp)}</TableCell>
                 <TableCell>{editable ? <Input aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto h-11 w-28 border-border text-right tabular-nums shadow-none md:h-9" /> : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.targetOsp)}</TableCell>
@@ -269,7 +269,7 @@ export function BillingPrincipalClientResultTable({
           </TableBody>
           <TableFooter>
             <TableRow>
-              <TableCell className="billing-osp-table-aging">ALL<span className="block text-xs font-normal text-muted-foreground">Calculated</span></TableCell>
+              <th scope="row" className="billing-osp-table-aging h-11 px-4 py-3 text-left align-middle font-medium">ALL<span className="block text-xs font-normal text-muted-foreground">Calculated</span></th>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.totalOsp)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspPercentage(preview?.all.targetPercentage)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.targetOsp)}</TableCell>

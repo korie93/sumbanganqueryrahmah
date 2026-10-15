@@ -1,16 +1,8 @@
-import {
-  LayoutGrid,
-  LayoutPanelTop,
-  List,
-  Maximize2,
-  Minimize2,
-  Rows3,
-  SquareActivity,
-  type LucideIcon,
-} from "lucide-react";
+import { useId } from "react";
 import {
   COLLECTION_DAILY_CALENDAR_VIEW_MODE_OPTIONS,
   getCollectionDailyCalendarViewModeStatusText,
+  normalizeCollectionDailyCalendarViewMode,
   type CollectionDailyCalendarViewMode,
 } from "@/pages/collection/collection-daily-calendar-view-mode-utils";
 
@@ -19,21 +11,12 @@ type CollectionDailyCalendarViewModeControlProps = {
   onChange: (mode: CollectionDailyCalendarViewMode) => void;
 };
 
-const VIEW_MODE_ICONS: Record<CollectionDailyCalendarViewMode, LucideIcon> = {
-  list: List,
-  "icon-sm": Minimize2,
-  "icon-md": Rows3,
-  "icon-lg": Maximize2,
-  tiles: LayoutGrid,
-  heatmap: SquareActivity,
-  content: LayoutPanelTop,
-};
-
 export function CollectionDailyCalendarViewModeControl({
   value,
   onChange,
 }: CollectionDailyCalendarViewModeControlProps) {
   const statusText = getCollectionDailyCalendarViewModeStatusText(value);
+  const controlId = useId();
 
   return (
     <section
@@ -42,65 +25,30 @@ export function CollectionDailyCalendarViewModeControl({
       data-testid="collection-daily-calendar-view-mode"
     >
       <div className="collection-daily-calendar-view-mode-header">
-        <div>
-          <p className="collection-daily-calendar-view-mode-title">Paparan kalendar</p>
-          <p className="collection-daily-calendar-view-mode-description">
-            Tukar rupa kalendar ikut keselesaan: list, tile, ikon kecil, sederhana atau besar.
-          </p>
-        </div>
-        <p
-          className="collection-daily-calendar-view-mode-status"
-          aria-live="polite"
-          aria-atomic="true"
+        <label className="collection-daily-calendar-view-mode-title" htmlFor={controlId}>
+          Calendar display mode
+        </label>
+        <select
+          id={controlId}
+          aria-label="Choose calendar display mode"
+          aria-describedby={`${controlId}-description`}
+          className="collection-daily-calendar-view-mode-select"
+          value={value}
+          onChange={(event) => onChange(normalizeCollectionDailyCalendarViewMode(event.target.value))}
         >
-          {statusText}
-        </p>
+          {COLLECTION_DAILY_CALENDAR_VIEW_MODE_OPTIONS.map((option) => (
+            <option key={option.id} value={option.id}>{option.label}</option>
+          ))}
+        </select>
       </div>
-      <div
-        className="collection-daily-calendar-view-mode-options"
-        role="group"
-        aria-label="Choose calendar display mode"
+      <p
+        id={`${controlId}-description`}
+        className="collection-daily-calendar-view-mode-status"
+        aria-live="polite"
+        aria-atomic="true"
       >
-        {COLLECTION_DAILY_CALENDAR_VIEW_MODE_OPTIONS.map((option) => {
-          const Icon = VIEW_MODE_ICONS[option.id];
-          const active = value === option.id;
-          const className = `collection-daily-calendar-view-mode-option ${
-            active ? "collection-daily-calendar-view-mode-option-active" : ""
-          }`;
-          const buttonContent = (
-            <>
-              <Icon aria-hidden="true" className="h-4 w-4" />
-              <span>{option.label}</span>
-            </>
-          );
-
-          return active ? (
-            <button
-              key={option.id}
-              type="button"
-              className={className}
-              aria-pressed="true"
-              aria-label={`${option.label}. ${option.description}`}
-              title={option.description}
-              onClick={() => onChange(option.id)}
-            >
-              {buttonContent}
-            </button>
-          ) : (
-            <button
-              key={option.id}
-              type="button"
-              className={className}
-              aria-pressed="false"
-              aria-label={`${option.label}. ${option.description}`}
-              title={option.description}
-              onClick={() => onChange(option.id)}
-            >
-              {buttonContent}
-            </button>
-          );
-        })}
-      </div>
+        {statusText}
+      </p>
     </section>
   );
 }

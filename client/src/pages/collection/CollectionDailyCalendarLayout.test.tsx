@@ -91,6 +91,7 @@ test("CollectionDailyDesktopCalendarGrid keeps day cards compact with a separate
   assert.match(markup, /Company Closed/);
   assert.match(markup, /Company closed/);
   assert.match(markup, /aria-pressed="true"/);
+  assert.equal((markup.match(/aria-haspopup="dialog"/g) || []).length, 4);
   assert.match(markup, /collection-daily-day-card-filter-muted/);
   assert.match(markup, /collection-daily-desktop-grid-mode-content/);
   assert.doesNotMatch(markup, /Status day 1/);

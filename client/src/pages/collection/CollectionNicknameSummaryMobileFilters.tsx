@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/sheet";
 import { CollectionNicknameMultiSelect } from "@/pages/collection-report/CollectionNicknameMultiSelect";
 import type { CollectionNicknameSummaryData } from "./collection-nickname-summary-page-shared";
+import { hasCollectionNicknameSummaryDraftChanges } from "./collection-nickname-summary-page-utils";
+import { CollectionNicknameSummaryFilterStatus } from "./CollectionNicknameSummaryFilterStatus";
 
 type CollectionNicknameSummaryMobileFiltersProps = {
   summaryData: CollectionNicknameSummaryData;
@@ -36,6 +38,7 @@ export function CollectionNicknameSummaryMobileFilters({
 }: CollectionNicknameSummaryMobileFiltersProps) {
   const fromDateButtonId = "collection-nickname-summary-mobile-from-date-button";
   const toDateButtonId = "collection-nickname-summary-mobile-to-date-button";
+  const hasDraftChanges = hasCollectionNicknameSummaryDraftChanges(summaryData);
 
   return (
     <>
@@ -61,6 +64,7 @@ export function CollectionNicknameSummaryMobileFilters({
             <Button
               type="button"
               className="h-11 w-full justify-center rounded-2xl"
+              aria-haspopup="dialog"
               onClick={() => setMobileFiltersOpen(true)}
             >
               <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -87,7 +91,7 @@ export function CollectionNicknameSummaryMobileFilters({
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
-                  Current Selection
+                  Draft selection
                 </p>
                 <p className="text-sm font-medium text-foreground">
                   {summaryData.selectedNicknames.length > 0
@@ -95,10 +99,12 @@ export function CollectionNicknameSummaryMobileFilters({
                     : "Choose staff nicknames to build a grouped collection summary."}
                 </p>
               </div>
-              <Badge variant={summaryData.hasApplied ? "default" : "secondary"} className="rounded-full">
-                {summaryData.hasApplied ? "Applied" : "Pending"}
+              <Badge variant={summaryData.hasApplied && !hasDraftChanges ? "default" : "secondary"} className="rounded-full">
+                {hasDraftChanges ? "Unapplied changes" : summaryData.hasApplied ? "Applied" : "Pending"}
               </Badge>
             </div>
+
+            <CollectionNicknameSummaryFilterStatus selection={summaryData} />
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">

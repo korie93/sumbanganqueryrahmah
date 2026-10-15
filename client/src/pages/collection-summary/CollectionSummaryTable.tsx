@@ -10,6 +10,7 @@ export interface CollectionSummaryTableProps {
   summaryRows: CollectionMonthlySummary[];
   selectedMonth: number | null;
   onSelectMonth: (month: number) => void;
+  currentMonth?: number | undefined;
 }
 
 export function CollectionSummaryTable({
@@ -17,6 +18,7 @@ export function CollectionSummaryTable({
   summaryRows,
   selectedMonth,
   onSelectMonth,
+  currentMonth,
 }: CollectionSummaryTableProps) {
   if (loading) {
     return (
@@ -47,15 +49,17 @@ export function CollectionSummaryTable({
         {summaryRows.map((row) => {
           const active = selectedMonth === row.month;
           return (
-            <TableRow key={row.month} data-state={active ? "selected" : undefined} {...getAriaSelectedProps(active)}>
+            <TableRow key={row.month} data-state={active ? "selected" : undefined} {...getAriaSelectedProps(active)}
+              className={currentMonth === row.month ? "bg-primary/5" : undefined}>
               <TableCell className="p-0">
                 <Button type="button" variant="ghost" className="h-11 w-full justify-start rounded-none px-3 font-medium"
                   aria-haspopup="dialog" onClick={() => onSelectMonth(row.month)}>
                   {row.monthName}
+                  {currentMonth === row.month ? <span className="ml-2 text-xs font-normal text-muted-foreground">Current month</span> : null}
                 </Button>
               </TableCell>
-              <TableCell className="px-3 py-2 text-right">{row.totalRecords}</TableCell>
-              <TableCell className="px-3 py-2 text-right font-medium">{formatAmountRM(row.totalAmount)}</TableCell>
+              <TableCell className="px-3 py-2 text-right tabular-nums">{row.totalRecords}</TableCell>
+              <TableCell className="px-3 py-2 text-right font-medium tabular-nums">{formatAmountRM(row.totalAmount)}</TableCell>
             </TableRow>
           );
         })}

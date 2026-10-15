@@ -54,19 +54,25 @@ export function CollectionDailyTargetControlsSection({
   );
 
   return (
-    <Suspense fallback={fallback}>
-      <CollectionDailyTargetControls
-        monthlyTargetInput={monthlyTargetInput}
-        onMonthlyTargetInputChange={onMonthlyTargetInputChange}
-        canEditTarget={canEditTarget}
-        canEditCalendar={canEditCalendar}
-        savingTarget={savingTarget}
-        onSaveTarget={onSaveTarget}
-        savingCalendar={savingCalendar}
-        onSaveCalendar={onSaveCalendar}
-        calendarDays={calendarDays}
-        dirtyCalendarDaysCount={dirtyCalendarDaysCount}
-      />
-    </Suspense>
+    <details className="collection-daily-disclosure">
+      <summary>
+        Target and calendar management
+        {dirtyCalendarDaysCount > 0 ? ` · ${dirtyCalendarDaysCount} unsaved day(s)` : ""}
+      </summary>
+      <Suspense fallback={fallback}>
+        <CollectionDailyTargetControls
+          monthlyTargetInput={monthlyTargetInput}
+          onMonthlyTargetInputChange={onMonthlyTargetInputChange}
+          canEditTarget={canEditTarget}
+          canEditCalendar={canEditCalendar}
+          savingTarget={savingTarget}
+          onSaveTarget={onSaveTarget}
+          savingCalendar={savingCalendar}
+          onSaveCalendar={onSaveCalendar}
+          calendarDays={calendarDays}
+          dirtyCalendarDaysCount={dirtyCalendarDaysCount}
+        />
+      </Suspense>
+    </details>
   );
 }

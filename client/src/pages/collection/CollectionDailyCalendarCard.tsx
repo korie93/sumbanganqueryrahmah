@@ -189,13 +189,6 @@ export function CollectionDailyCalendarCard({
               dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
             />
 
-            <details className="collection-daily-disclosure">
-              <summary>Monthly status and collection breakdown</summary>
-              <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
-            </details>
-
-            <CollectionDailyCalendarRoleModeNotice canEditCalendar={canManage} />
-
             <CollectionDailyCalendarQuickFilter
               days={overview.days}
               dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
@@ -209,34 +202,47 @@ export function CollectionDailyCalendarCard({
               onChange={setViewMode}
             />
 
-            {canManage ? (
-              <details className="collection-daily-disclosure">
-                <summary>Bulk daily status update · {bulkSelectedDayNumbers.size} selected</summary>
-                <CollectionDailyCalendarBulkToolbar
-                  days={overview.days}
-                  selectedDayNumbers={bulkSelectedDayNumbers}
-                  onSelectDays={handleBulkSelectDays}
-                  onClearSelection={handleBulkClearSelection}
-                  onApply={handleBulkApply}
-                />
-              </details>
-            ) : null}
+            <details className="collection-daily-disclosure" data-testid="collection-daily-status-tools">
+              <summary>
+                {canManage ? "Calendar status and bulk tools" : "Calendar status guidance"}
+                {bulkSelectedDayNumbers.size > 0 ? ` · ${bulkSelectedDayNumbers.size} selected` : ""}
+              </summary>
+              <div className="space-y-3 pb-3">
+                <CollectionDailyCalendarRoleModeNotice canEditCalendar={canManage} />
+                <details className="collection-daily-disclosure">
+                  <summary>Monthly status and collection breakdown</summary>
+                  <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
+                </details>
+                {canManage ? (
+                  <details className="collection-daily-disclosure">
+                    <summary>Bulk daily status update · {bulkSelectedDayNumbers.size} selected</summary>
+                    <CollectionDailyCalendarBulkToolbar
+                      days={overview.days}
+                      selectedDayNumbers={bulkSelectedDayNumbers}
+                      onSelectDays={handleBulkSelectDays}
+                      onClearSelection={handleBulkClearSelection}
+                      onApply={handleBulkApply}
+                    />
+                  </details>
+                ) : null}
+
+                {canManage ? (
+                  <div className="collection-daily-edit-helper" aria-live="polite" aria-atomic="true">
+                    <span className="collection-daily-edit-helper-dot" aria-hidden="true" />
+                    <span>
+                      Klik <strong>Edit status</strong> pada mana-mana tarikh untuk buka popup editor.
+                      Perubahan hanya update tarikh dan nickname yang dipilih.
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </details>
 
             <CollectionDailyCalendarConflictReport
               days={overview.days}
               editableCalendarByDay={editableCalendarByDay}
               dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
             />
-
-            {canManage ? (
-              <div className="collection-daily-edit-helper" aria-live="polite" aria-atomic="true">
-                <span className="collection-daily-edit-helper-dot" aria-hidden="true" />
-                <span>
-                  Klik <strong>Edit status</strong> pada mana-mana tarikh untuk buka popup editor.
-                  Perubahan hanya update tarikh dan nickname yang dipilih.
-                </span>
-              </div>
-            ) : null}
 
             {canManage ? (
               <CollectionDailyCalendarChangeReview

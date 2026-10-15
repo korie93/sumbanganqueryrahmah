@@ -197,7 +197,8 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
 
       <CollectionSummaryTotals {...viewModels.totals} />
 
-      <CollectionSummaryTable {...viewModels.table} />
+      <CollectionSummaryTable {...viewModels.table}
+        currentMonth={Number(summaryData.selectedYear) === summaryData.currentYear ? new Date().getMonth() + 1 : undefined} />
 
       {viewModels.monthDialog?.open ? (
         <Suspense fallback={<LazyDialogFallback label="Loading collection month details dialog..." />}>

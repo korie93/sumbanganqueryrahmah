@@ -190,6 +190,7 @@ export function CollectionDailyCalendarEditPanel({
             type="button"
             variant="outline"
             className="h-10 rounded-xl"
+            aria-haspopup="dialog"
             onClick={() => onViewDetails(day.date)}
           >
             <Eye className="mr-2 h-4 w-4" aria-hidden="true" />

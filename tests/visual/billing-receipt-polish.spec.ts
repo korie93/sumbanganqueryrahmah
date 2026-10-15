@@ -151,8 +151,8 @@ async function assertOneTableScroller(table: Locator) {
   const scrollBox = await bounds(scroll);
   for (const cell of [
     table.getByRole("columnheader", { name: "Aging", exact: true }),
-    table.getByRole("cell", { name: "D3", exact: true }),
-    table.getByRole("cell", { name: /^ALL/ }),
+    table.getByRole("rowheader", { name: "D3", exact: true }),
+    table.getByRole("rowheader", { name: /^ALL\b/ }),
   ]) {
     await expect(cell).toHaveCSS("position", "sticky");
     expect(Math.abs((await bounds(cell)).x - scrollBox.x)).toBeLessThan(3);

@@ -1,173 +1,105 @@
 import type { Dispatch, SetStateAction } from "react";
-import { ExternalLink, RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Info, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
-import type { CollectionRecordReceipt } from "@/lib/api";
 import {
+  clampReceiptPreviewZoom,
   MAX_RECEIPT_IMAGE_PREVIEW_ZOOM,
   MIN_RECEIPT_PREVIEW_ZOOM,
   RECEIPT_PREVIEW_ROTATION_STEP_DEGREES,
 } from "@/pages/collection-records/receipt-preview-dialog-utils";
 
 type ReceiptPreviewToolbarProps = {
-  selectedReceipt: CollectionRecordReceipt | null;
+  detailsId: string;
   showDetails: boolean;
   setShowDetails: Dispatch<SetStateAction<boolean>>;
-  showPdfFallback: boolean;
-  safeSource: string | null;
+  canShowDetails: boolean;
   canZoom: boolean;
   zoom: number;
   setZoom: Dispatch<SetStateAction<number>>;
-  rotationDegrees: number;
   setRotationDegrees: Dispatch<SetStateAction<number>>;
   isMobile: boolean;
 };
 
 export function ReceiptPreviewToolbar({
-  selectedReceipt,
+  detailsId,
   showDetails,
   setShowDetails,
-  showPdfFallback,
-  safeSource,
+  canShowDetails,
   canZoom,
   zoom,
   setZoom,
-  rotationDegrees,
   setRotationDegrees,
   isMobile,
 }: ReceiptPreviewToolbarProps) {
-  const receiptDetailsId = selectedReceipt ? `receipt-preview-details-${selectedReceipt.id}` : undefined;
-
   return (
     <div
       className={cn(
-        "rounded-md border border-border/60 bg-background/40",
-        isMobile ? "mx-3 mt-3 space-y-3 px-3 py-3" : "mt-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2",
+        "flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2",
+        isMobile ? "mx-3 mt-2" : "mt-2",
       )}
       data-floating-ai-avoid="true"
     >
-      <div
-        id={receiptDetailsId}
-        className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
-      >
-        {showDetails && selectedReceipt ? (
-          <>
-            <Badge variant="secondary">{selectedReceipt.originalMimeType}</Badge>
-            <span className="break-all">{selectedReceipt.originalFileName}</span>
-          </>
-        ) : (
-          <span>Receipt info hidden. Click Show more to view details.</span>
-        )}
-      </div>
-      <div className={cn(isMobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2")}>
-        {showDetails ? (
+      {canZoom ? (
+        <div className="flex items-center gap-1" role="group" aria-label="Image controls">
+          <Button type="button" size="sm" variant="outline" onClick={() => setZoom(1)} aria-label="Fit receipt to viewer width">
+            Fit
+          </Button>
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            onClick={() => setShowDetails(false)}
-            aria-expanded="true"
-            aria-controls={receiptDetailsId}
-            className={isMobile ? "col-span-2 w-full" : ""}
+            variant="ghost"
+            onClick={() => setZoom((previous) => clampReceiptPreviewZoom(previous - 0.1))}
+            disabled={zoom <= MIN_RECEIPT_PREVIEW_ZOOM}
+            aria-label="Zoom out"
+            title="Zoom out"
+            className="w-9 px-0"
           >
-            Show less
+            <ZoomOut className="h-4 w-4" aria-hidden="true" />
           </Button>
-        ) : (
+          <span className="min-w-[4.5rem] text-center text-xs tabular-nums text-muted-foreground" aria-live="polite" aria-atomic="true">
+            {Math.round(zoom * 100)}% fit
+          </span>
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            onClick={() => setShowDetails(true)}
-            aria-expanded="false"
-            aria-controls={receiptDetailsId}
-            className={isMobile ? "col-span-2 w-full" : ""}
+            variant="ghost"
+            onClick={() => setZoom((previous) => clampReceiptPreviewZoom(previous + 0.1))}
+            disabled={zoom >= MAX_RECEIPT_IMAGE_PREVIEW_ZOOM}
+            aria-label="Zoom in"
+            title="Zoom in"
+            className="w-9 px-0"
           >
-            Show more
+            <ZoomIn className="h-4 w-4" aria-hidden="true" />
           </Button>
-        )}
-        {showPdfFallback ? (
           <Button
+            type="button"
             size="sm"
-            variant="outline"
-            asChild
-            className={isMobile ? "col-span-2 w-full" : ""}
+            variant="ghost"
+            onClick={() => setRotationDegrees((previous) => (previous + RECEIPT_PREVIEW_ROTATION_STEP_DEGREES) % 360)}
+            aria-label="Rotate receipt clockwise"
+            title="Rotate clockwise"
+            className="w-9 px-0"
           >
-            <a href={safeSource || undefined} target="_blank" rel="noreferrer noopener">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Open PDF
-            </a>
+            <RotateCw className="h-4 w-4" aria-hidden="true" />
           </Button>
-        ) : null}
-        {canZoom ? (
-          <>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                setZoom((previous) =>
-                  Math.max(
-                    MIN_RECEIPT_PREVIEW_ZOOM,
-                    Number((previous - 0.1).toFixed(2)),
-                  ),
-                )
-              }
-              disabled={zoom <= MIN_RECEIPT_PREVIEW_ZOOM}
-              className={isMobile ? "w-full" : ""}
-            >
-              <ZoomOut className="mr-2 h-4 w-4" />
-              {isMobile ? "Zoom -" : "Zoom Out"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setZoom(1);
-                setRotationDegrees(0);
-              }}
-              disabled={zoom === 1 && rotationDegrees === 0}
-              className={isMobile ? "w-full" : ""}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Reset
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                setRotationDegrees((previous) =>
-                  (previous + RECEIPT_PREVIEW_ROTATION_STEP_DEGREES) % 360,
-                )
-              }
-              className={isMobile ? "w-full" : ""}
-            >
-              <RotateCw className="mr-2 h-4 w-4" />
-              Rotate
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                setZoom((previous) =>
-                  Math.min(
-                    MAX_RECEIPT_IMAGE_PREVIEW_ZOOM,
-                    Number((previous + 0.1).toFixed(2)),
-                  ),
-                )
-              }
-              disabled={zoom >= MAX_RECEIPT_IMAGE_PREVIEW_ZOOM}
-              className={isMobile ? "w-full" : ""}
-            >
-              <ZoomIn className="mr-2 h-4 w-4" />
-              {isMobile ? "Zoom +" : "Zoom In"}
-            </Button>
-          </>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
+      {canShowDetails ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowDetails((previous) => !previous)}
+          {...getAriaExpandedProps(showDetails)}
+          aria-controls={detailsId}
+          className="ml-auto"
+        >
+          <Info className="mr-2 h-4 w-4" aria-hidden="true" />
+          {showDetails ? "Hide details" : "Details"}
+        </Button>
+      ) : null}
     </div>
   );
 }

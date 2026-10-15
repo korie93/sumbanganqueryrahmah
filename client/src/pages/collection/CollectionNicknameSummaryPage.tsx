@@ -49,11 +49,11 @@ function CollectionNicknameSummaryPage({ role }: CollectionNicknameSummaryPagePr
   );
   const chartResetKey = useMemo(
     () => buildCollectionNicknameSummaryChartResetKey({
-      selectedNicknames: summaryData.selectedNicknames,
-      fromDate: summaryData.fromDate,
-      toDate: summaryData.toDate,
+      selectedNicknames: summaryData.appliedNicknames,
+      fromDate: summaryData.appliedFromDate,
+      toDate: summaryData.appliedToDate,
     }),
-    [summaryData.fromDate, summaryData.selectedNicknames, summaryData.toDate],
+    [summaryData.appliedFromDate, summaryData.appliedNicknames, summaryData.appliedToDate],
   );
 
   if (!canAccess) {

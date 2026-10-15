@@ -320,7 +320,7 @@ function SaveCollectionPage({
           </p>
         ) : null}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 sm:col-span-2">
         <Label htmlFor={amountInputId}>Amount (RM) {requiredMarker}</Label>
         <Input
           id={amountInputId}
@@ -356,8 +356,8 @@ function SaveCollectionPage({
       onPendingDraftChange={state.handlePendingDraftChange}
       onRemovePending={state.handleRemoveReceipt}
       onClearPending={state.handleClearPendingReceipts}
-      uploadLabel="Upload Receipt One by One"
-      helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
+      uploadLabel="Upload Receipt"
+      helperText="Tambah satu receipt pada satu masa. JPG, JPEG, PNG, WEBP atau PDF, maksimum 5MB setiap fail."
     />
   );
   const customerSection = (
@@ -371,7 +371,8 @@ function SaveCollectionPage({
   const paymentSection = (
     <SaveCollectionFormSection
       title="Payment Details"
-      description="Semak account atau card, batch, payment date, dan amount sebelum upload receipt."
+      description="Isi account atau card, batch, tarikh bayaran dan jumlah."
+      contentClassName="sm:grid-cols-2"
     >
       {paymentFields}
     </SaveCollectionFormSection>
@@ -379,7 +380,7 @@ function SaveCollectionPage({
   const receiptSection = (
     <SaveCollectionFormSection
       title="Receipt Upload"
-      description="Tambah receipt satu demi satu. Preview resit, jumlah, tarikh dan reference dipaparkan dengan lebih jelas sebelum save."
+      description="Semak preview dan butiran receipt sebelum simpan."
       className="col-span-full"
     >
       {receiptPanel}
@@ -398,7 +399,7 @@ function SaveCollectionPage({
   };
 
   return (
-    <section aria-labelledby="save-collection-form-title" className="min-w-0 space-y-4">
+    <section aria-labelledby="save-collection-form-title" className="mx-auto min-w-0 max-w-6xl space-y-5">
       <header className="space-y-2">
         <h2 id="save-collection-form-title" className="sr-only">Simpan Collection Individual</h2>
         <div className="space-y-1 text-xs leading-5 text-muted-foreground">
@@ -446,7 +447,7 @@ function SaveCollectionPage({
           visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
         />
         <fieldset disabled={accessSuspended} className="contents">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-x-6 gap-y-5">
           {customerSection}
           {paymentSection}
           {receiptSection}
@@ -461,6 +462,7 @@ function SaveCollectionPage({
           cardNumberVisibilityDisabled={state.submitting}
           onToggleCardNumberVisibility={state.toggleCardNumberReviewVisibility}
           correctionDisabled={state.submitting || accessSuspended || state.resetConfirmOpen}
+          showValidationDetails={Boolean(state.submitFailure) || Object.values(state.fieldErrors).some(Boolean)}
           onCorrectField={(field) => {
             if (!state.submitting && !accessSuspended && !state.resetConfirmOpen) {
               focusSaveCollectionField(field);

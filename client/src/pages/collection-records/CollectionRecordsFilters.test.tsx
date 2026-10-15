@@ -123,3 +123,32 @@ test("CollectionRecordsFilters preserves permission gates and disabled actions i
   ].map((id) => markup.indexOf(id));
   assert.ok(fieldOrder.every((position, index) => position >= 0 && (index === 0 || position > fieldOrder[index - 1])));
 });
+
+test("CollectionRecordsFilters explains an inverted date range at both visible date controls", () => {
+  const markup = renderFilters({ fromDate: "2026-05-16", toDate: "2026-05-15" });
+  const errorId = "collection-records-date-range-error-desktop";
+  assert.match(markup, new RegExp(`id="${errorId}"[^>]*role="alert"`));
+  assert.match(markup, /From Date mesti pada atau sebelum To Date\./);
+  for (const id of ["collection-records-from-date-button", "collection-records-to-date-button"]) {
+    const button = markup.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0];
+    assert.ok(button);
+    assert.match(button, /aria-invalid="true"/);
+    assert.match(button, new RegExp(`aria-describedby="${errorId}"`));
+  }
+  assert.equal((markup.match(/role="alert"/g) ?? []).length, 1);
+  const actions = markup.match(/<div\b[^>]*data-testid="collection-records-filter-actions"[^>]*>(.*?)<\/div>/)?.[1];
+  assert.ok(actions);
+  assert.doesNotMatch(actions, /disabled=/, "the existing apply handler still owns validation behavior");
+});
+
+test("CollectionRecordsFilters clears the date error for valid, equal and open ranges", () => {
+  for (const range of [
+    { fromDate: "2026-05-01", toDate: "2026-05-15" },
+    { fromDate: "2026-05-15", toDate: "2026-05-15" },
+    { fromDate: "", toDate: "2026-05-15" },
+    { fromDate: "2026-05-15", toDate: "" },
+  ]) {
+    const markup = renderFilters(range);
+    assert.doesNotMatch(markup, /aria-invalid="true"|collection-records-date-range-error/);
+  }
+});

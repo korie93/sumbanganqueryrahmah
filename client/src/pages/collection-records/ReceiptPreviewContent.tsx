@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Download, ExternalLink, FileText } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { FileText, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getPdfPreviewIframeProps,
@@ -7,6 +7,7 @@ import {
 } from "@/lib/iframe-preview";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
+import { getReceiptPreviewImageLayout } from "@/pages/collection-records/receipt-preview-dialog-utils";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 
 type ReceiptPreviewContentProps = {
@@ -21,24 +22,48 @@ type ReceiptPreviewContentProps = {
   rotationDegrees: number;
   fileName: string;
   selectedReceipt: CollectionRecordReceipt | null;
-  downloading: boolean;
-  onDownload: () => void;
+  onRetry?: (() => void) | undefined;
 };
+
+function ReceiptPreviewMessage({ message, error = false, onRetry }: { message: string; error?: boolean; onRetry?: (() => void) | undefined }) {
+  return (
+    <div className="h-full overflow-y-auto px-4 py-3 text-center text-sm text-muted-foreground">
+      <div className="flex min-h-full flex-col items-center justify-center gap-3">
+        <p role={error ? "alert" : "status"}>{message}</p>
+        {error && onRetry ? (
+          <Button type="button" size="sm" variant="outline" onClick={onRetry} className="shrink-0">
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            Retry preview
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ReceiptPreviewLoading({ message = "Loading preview..." }: { message?: string }) {
+  return (
+    <div role="status" className="flex h-full min-h-0 items-center justify-center gap-2 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      {message}
+    </div>
+  );
+}
 
 type ReceiptPdfPreviewFrameProps = {
   source: string;
   iframePreviewProps: ReturnType<typeof getPdfPreviewIframeProps>;
+  onRetry?: (() => void) | undefined;
 };
 
-function ReceiptPdfPreviewFrame({
-  source,
-  iframePreviewProps,
-}: ReceiptPdfPreviewFrameProps) {
+function ReceiptPdfPreviewFrame({ source, iframePreviewProps, onRetry }: ReceiptPdfPreviewFrameProps) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const frame = frameRef.current;
-
+    // Strict Mode replays setup after cleanup against the same DOM element.
+    frame?.setAttribute("src", source);
     return () => {
       if (frame) {
         frame.removeAttribute("src");
@@ -47,88 +72,131 @@ function ReceiptPdfPreviewFrame({
     };
   }, [source]);
 
+  if (failed) {
+    return <ReceiptPreviewMessage error message="The PDF could not be displayed. Retry or open the original PDF below." onRetry={onRetry} />;
+  }
+
+  // Native PDF viewers do not consistently emit iframe load events. The
+  // authenticated fetch already has a loading state; do not cover a ready file
+  // with an overlay that could remain indefinitely. Open PDF stays available.
   return (
-    <iframe
-      key={source}
-      ref={frameRef}
-      src={source}
-      title="Receipt PDF Preview"
-      className="h-full w-full rounded-sm border-0 bg-white"
-      loading="lazy"
-      {...iframePreviewProps}
-    />
+    <div className="relative h-full min-h-0">
+      <iframe
+        key={source}
+        ref={frameRef}
+        src={source}
+        title="Receipt PDF Preview"
+        className="h-full w-full rounded-sm border-0 bg-white"
+        loading="lazy"
+        onError={() => setFailed(true)}
+        {...iframePreviewProps}
+      />
+    </div>
   );
 }
 
 type ReceiptImagePreviewProps = {
   source: string;
   alt: string;
-  className: string;
   zoomValue: string;
   rotationDegrees: number;
+  onRetry?: (() => void) | undefined;
 };
 
 const RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX = 960;
 const RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX = 1_280;
-const RECEIPT_IMAGE_MAX_DISPLAY_WIDTH_PX = 1_520;
 
-export function cleanupReceiptImagePreviewElement(
-  image: Pick<HTMLImageElement, "removeAttribute">,
-): void {
+export function cleanupReceiptImagePreviewElement(image: Pick<HTMLImageElement, "removeAttribute">): void {
   image.removeAttribute("src");
 }
 
-function ReceiptImagePreview({
-  source,
-  alt,
-  className,
-  zoomValue,
-  rotationDegrees,
-}: ReceiptImagePreviewProps) {
+function ReceiptImagePreview({ source, alt, zoomValue, rotationDegrees, onRetry }: ReceiptImagePreviewProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [naturalSize, setNaturalSize] = useState({ width: RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX, height: RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX });
 
   useEffect(() => {
     const image = imageRef.current;
-    if (!image) {
-      return;
-    }
+    const scroller = scrollerRef.current;
+    const canvas = canvasRef.current;
+    if (!image || !scroller || !canvas) return;
 
-    const zoom = Number(zoomValue);
-    const displayWidth = Number.isFinite(zoom)
-      ? Math.min(
-          RECEIPT_IMAGE_MAX_DISPLAY_WIDTH_PX,
-          Math.round(RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX * zoom),
-        )
-      : RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX;
-
-    image.style.setProperty("--receipt-preview-display-width", `${displayWidth}px`);
-    image.style.setProperty("--receipt-preview-rotation", `${rotationDegrees}deg`);
-    image.dataset.rotation = String(rotationDegrees);
-  }, [rotationDegrees, zoomValue]);
+    const updateLayout = () => {
+      const padding = getComputedStyle(scroller);
+      const availableWidth = scroller.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight);
+      const layout = getReceiptPreviewImageLayout({
+        naturalWidth: naturalSize.width,
+        naturalHeight: naturalSize.height,
+        availableWidth,
+        zoom: Number(zoomValue),
+        rotationDegrees,
+      });
+      canvas.style.setProperty("--receipt-preview-canvas-width", `${layout.canvasWidth}px`);
+      canvas.style.setProperty("--receipt-preview-canvas-height", `${layout.canvasHeight}px`);
+      image.style.setProperty("--receipt-preview-display-width", `${layout.imageWidth}px`);
+      image.style.setProperty("--receipt-preview-display-height", `${layout.imageHeight}px`);
+      image.style.setProperty("--receipt-preview-rotation", `${rotationDegrees}deg`);
+    };
+    updateLayout();
+    const observer = new ResizeObserver(updateLayout);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [naturalSize, rotationDegrees, status, zoomValue]);
 
   useEffect(() => {
     const image = imageRef.current;
-
+    image?.setAttribute("src", source);
     return () => {
-      if (image) {
-        cleanupReceiptImagePreviewElement(image);
-      }
+      if (image) cleanupReceiptImagePreviewElement(image);
     };
   }, [source]);
 
+  useEffect(() => {
+    if (scrollerRef.current) {
+      scrollerRef.current.scrollLeft = 0;
+      scrollerRef.current.scrollTop = 0;
+    }
+  }, [rotationDegrees, zoomValue]);
+
+  if (status === "error") {
+    return <ReceiptPreviewMessage error message="The receipt image could not be displayed. Retry or download the original below." onRetry={onRetry} />;
+  }
+
   return (
-    <img
-      key={source}
-      ref={imageRef}
-      src={source}
-      alt={alt}
-      width={RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX}
-      height={RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX}
-      className={className}
-      decoding="async"
-      draggable={false}
-      loading="lazy"
-    />
+    <div className="relative h-full min-h-0" aria-busy={status === "loading"}>
+      {status === "loading" ? <div className="absolute inset-0"><ReceiptPreviewLoading message="Loading receipt image..." /></div> : null}
+      <div
+        ref={scrollerRef}
+        className={cn("receipt-preview-image-scroller h-full overflow-auto rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", status === "loading" && "invisible")}
+        role="region"
+        aria-label="Receipt image viewer. Scroll to inspect the receipt."
+        tabIndex={0}
+      >
+        <div className="receipt-preview-image-stage">
+          <div ref={canvasRef} className="receipt-preview-image-canvas">
+            <img
+              ref={imageRef}
+              src={source}
+              alt={alt}
+              width={RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX}
+              height={RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX}
+              className="receipt-preview-image block rounded-sm object-contain"
+              decoding="async"
+              draggable={false}
+              loading="eager"
+              onLoad={(event) => {
+                const image = event.currentTarget;
+                setNaturalSize({ width: image.naturalWidth, height: image.naturalHeight });
+                setStatus("ready");
+              }}
+              onError={() => setStatus("error")}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -144,110 +212,36 @@ export function ReceiptPreviewContent({
   rotationDegrees,
   fileName,
   selectedReceipt,
-  downloading,
-  onDownload,
+  onRetry,
 }: ReceiptPreviewContentProps) {
-  const safeInlinePdfSource =
-    kind === "pdf"
-      ? resolveSafeInlineIframePreviewUrl(safeSource, { allowBlob: true })
-      : null;
-  const pdfIframePreviewProps = getPdfPreviewIframeProps(safeInlinePdfSource, {
-    trustedBlobSource: Boolean(safeInlinePdfSource),
-  });
+  const safeInlinePdfSource = kind === "pdf" ? resolveSafeInlineIframePreviewUrl(safeSource, { allowBlob: true }) : null;
+  const pdfIframePreviewProps = getPdfPreviewIframeProps(safeInlinePdfSource, { trustedBlobSource: Boolean(safeInlinePdfSource) });
 
   return (
     <div
-      className={cn(
-        "min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3",
-        isMobile ? "mx-3 my-3" : "mt-3",
-      )}
+      className={cn("min-h-0 flex-1 overflow-hidden rounded-md border border-border/60 bg-background/40", isMobile ? "mx-3 my-2" : "mt-2")}
+      aria-busy={loading}
     >
-      {loading ? (
-        <div className="flex h-full min-h-[240px] items-center justify-center text-sm text-muted-foreground">
-          Loading preview...
-        </div>
-      ) : error ? (
-        <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
-          {error}
-        </div>
+      {loading ? <ReceiptPreviewLoading /> : error ? (
+        <ReceiptPreviewMessage error message={error} onRetry={onRetry} />
       ) : !safeSource ? (
-        <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
-          {hasUnsafeSource
-            ? "Preview URL was blocked for safety."
-            : kind === "pdf"
-              ? "PDF preview is unavailable. You can still download the file."
-              : "Preview not available for this file type."}
-        </div>
+        <ReceiptPreviewMessage message={hasUnsafeSource ? "Preview URL was blocked for safety." : "Preview is unavailable. Download the original file below."} />
       ) : showPdfFallback ? (
-        <div className="flex h-full min-h-[280px] items-center justify-center">
-          <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-background px-4 py-5 text-center shadow-sm">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <FileText className="h-6 w-6" aria-hidden="true" />
-            </div>
-            <div className="mt-4 space-y-2">
-              <p className="text-sm font-semibold text-foreground">PDF preview is limited on this device</p>
-              <p className="text-sm leading-6 text-muted-foreground">
-                Open the original PDF in your browser viewer or download it to inspect the receipt safely.
-              </p>
-              <p className="break-all text-xs text-muted-foreground">
-                {fileName || selectedReceipt?.originalFileName || "receipt.pdf"}
-              </p>
-            </div>
-            <div className="mt-4 flex flex-col gap-2">
-              <Button className="w-full" asChild>
-                <a href={safeSource} target="_blank" rel="noreferrer noopener">
-                  <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Open PDF in Browser
-                </a>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onDownload}
-                disabled={downloading}
-                className="w-full"
-              >
-                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                {downloading ? "Downloading..." : "Download Original"}
-              </Button>
-            </div>
+        <div className="h-full overflow-y-auto p-4">
+          <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-3 text-center">
+            <FileText className="mx-auto h-9 w-9 shrink-0 text-primary" aria-hidden="true" />
+            <p className="text-sm font-semibold">PDF ready to open</p>
+            <p role="status" className="text-sm leading-6 text-muted-foreground">Use Open PDF below to view this receipt in your browser, or download the original.</p>
+            <p className="break-all text-xs text-muted-foreground">{fileName || selectedReceipt?.originalFileName || "receipt.pdf"}</p>
           </div>
         </div>
       ) : kind === "pdf" ? (
-        <div className="h-full overflow-auto">
-          <div
-            className={cn("mx-auto h-full w-full", isMobile ? "" : "min-h-[360px]")}
-          >
-            {safeInlinePdfSource ? (
-              <ReceiptPdfPreviewFrame
-                source={safeInlinePdfSource}
-                iframePreviewProps={pdfIframePreviewProps}
-              />
-            ) : (
-              <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
-                Inline PDF preview is limited to trusted local receipt sources. Use the download action to inspect the original file.
-              </div>
-            )}
-          </div>
-        </div>
+        safeInlinePdfSource ? (
+          <ReceiptPdfPreviewFrame key={safeInlinePdfSource} source={safeInlinePdfSource} iframePreviewProps={pdfIframePreviewProps} onRetry={onRetry} />
+        ) : <ReceiptPreviewMessage message="Inline PDF preview is limited to trusted local receipt sources. Open or download the original below." />
       ) : kind === "image" ? (
-        <div className="receipt-preview-image-scroller flex h-full items-start justify-center overflow-auto">
-          <ReceiptImagePreview
-            source={safeSource}
-            alt={fileName || "Receipt preview"}
-            zoomValue={zoomValue}
-            rotationDegrees={rotationDegrees}
-            className={cn(
-              "receipt-preview-image block rounded-sm object-contain",
-              isMobile ? "receipt-preview-image--mobile" : "",
-            )}
-          />
-        </div>
-      ) : (
-        <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
-          Preview not available for this file type.
-        </div>
-      )}
+        <ReceiptImagePreview key={safeSource} source={safeSource} alt={fileName || "Receipt preview"} zoomValue={zoomValue} rotationDegrees={rotationDegrees} onRetry={onRetry} />
+      ) : <ReceiptPreviewMessage message="Preview is unavailable for this file type. Download the original below." />}
     </div>
   );
 }

@@ -76,52 +76,9 @@ function ManageCollectionNicknamesPage({
 
   return (
     <>
-      {isMobile ? (
-        <section
-          className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-background/80 px-4 py-4 shadow-sm"
-          data-floating-ai-avoid="true"
-        >
-          <div className="absolute inset-x-0 top-0 h-24 bg-linear-to-br/srgb from-primary/12 via-primary/6 to-transparent" />
-          <div className="relative space-y-4">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
-                Collection
-              </p>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Manage Nickname</h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Manage admin nickname groups, member assignments, and password recovery actions from a calmer mobile workspace.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">
-                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
-                  Total Nickname
-                </p>
-                <p className="text-lg font-semibold text-foreground">{nicknameData.nicknames.length}</p>
-              </div>
-              <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">
-                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
-                  Active Available
-                </p>
-                <p className="text-lg font-semibold text-foreground">{nicknameData.activeAvailable}</p>
-              </div>
-              <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">
-                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
-                  Current Staff
-                </p>
-                <p className="truncate text-sm font-medium text-foreground">
-                  {currentNickname || "No current staff nickname"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       <Card className={`border-border/60 bg-background/70 ${isMobile ? "rounded-[1.75rem]" : ""}`}>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xl">Manage Nickname</CardTitle>
+        <CardHeader className="space-y-2 p-4 pb-3 sm:p-5 sm:pb-4">
+          <h2 className="text-lg font-semibold tracking-tight">Manage Nickname</h2>
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs text-muted-foreground">{viewModels.summaryText}</p>
             {isMobile ? (
@@ -133,7 +90,7 @@ function ManageCollectionNicknamesPage({
           </div>
         </CardHeader>
         <CardContent
-          className={isMobile ? "space-y-4" : "grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]"}
+          className="grid min-w-0 gap-4 px-4 pb-4 sm:px-5 sm:pb-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]"
         >
           <GroupListPanel {...viewModels.groupList} />
 

@@ -9,10 +9,11 @@ import { buildBillingPrincipalVisualExportSections } from "./billing-principal-v
 test("calendar card renders canonical daily aging and weighted total, separate from cumulative context", () => {
   const day = createBillingPrincipalVisualExportFixture().calendar[0]!;
   const html = renderToStaticMarkup(createElement(BillingPrincipalCalendarDayCard, { day, asOf: day.date, selected: true, onSelect() {} }));
-  for (const text of ["D3", "D4", "D5", "D6", "TOTAL", "Movement %", "OSP closed", "+80.00%", "80.00%", "Cumulative", "System As Of", "percentage points", "TT OSP"]) assert.ok(html.includes(text), text);
+  for (const text of ["D3", "D4", "D5", "D6", "TOTAL", "Movement (pp)", "OSP closed", "+80.00%", "80.00%", "Cumulative", "System As Of", "percentage points", "TT OSP"]) assert.ok(html.includes(text), text);
   assert.match(html, /aria-current="date"/);
   assert.match(html, /aria-pressed="true"/);
   assert.match(html, /type="button"/);
+  assert.match(html, /aria-haspopup="dialog"/);
   assert.doesNotMatch(html, /Private|Client result/);
   assert.doesNotMatch(html, /160\.00%/);
 });

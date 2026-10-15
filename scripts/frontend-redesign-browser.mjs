@@ -438,7 +438,7 @@ async function prepareCollectionSummary(page, width) {
   await page.keyboard.press("Escape");
   if (mobile) await page.getByRole("dialog", { name: "Collection Summary Filters", exact: true }).getByRole("button", { name: "Done", exact: true }).click();
   const september = page.getByRole("table", { name: "Monthly collection totals", exact: true })
-    .getByRole("row").filter({ has: page.getByRole("button", { name: "September", exact: true }) });
+    .getByRole("row").filter({ has: page.getByRole("button", { name: /^September(?:\s+Current month)?$/ }) });
   await september.getByRole("cell", { name: "59", exact: true }).waitFor();
 }
 
@@ -472,9 +472,9 @@ async function preparePopulatedBilling(page, fixture) {
   const tableB = page.getByRole("table", { name: "Table B Client Billing Principal result", exact: true });
   await tableA.waitFor();
   await tableB.waitFor();
-  const allA = tableA.getByRole("row").filter({ has: page.getByRole("cell", { name: "ALL", exact: true }) });
-  const allB = tableB.getByRole("row").filter({ has: page.getByRole("cell", { name: "ALL", exact: true }) });
-  const numberAt = async (row, index) => Number((await row.getByRole("cell").nth(index).innerText()).replace(/[^\d.-]/g, ""));
+  const allA = tableA.getByRole("row").filter({ has: page.getByRole("rowheader", { name: /^ALL\b/ }) });
+  const allB = tableB.getByRole("row").filter({ has: page.getByRole("rowheader", { name: /^ALL\b/ }) });
+  const numberAt = async (row, index) => Number((await row.locator("th, td").nth(index).innerText()).replace(/[^\d.-]/g, ""));
   assert.equal(await numberAt(allA, 1), 10500, "Table A displays the two-source TT OSP baseline");
   assert.equal(await numberAt(allA, 5), 10000, "Table A displays actual system closed OSP");
   assert.equal(await numberAt(allA, 6), 4, "Table A counts four closed synthetic accounts");
@@ -613,15 +613,25 @@ async function verifyDaily(page, { baseUrl, width, billingFixture, captureSectio
     assert.equal(await control.evaluate((element) => element.closest("details") === null), true, "Daily filter and display controls remain directly available");
     await captureSection(id, control, width);
   }
+  const displayMode = page.getByRole("combobox", { name: "Choose calendar display mode", exact: true });
+  await displayMode.waitFor();
+  assert.equal(await displayMode.locator("option").count(), 7, "Daily display selector retains all seven modes");
+  const statusTools = page.getByTestId("collection-daily-status-tools");
+  const statusToolsToggle = statusTools.locator(":scope > summary");
   const disclosureCases = [
     { id: "daily-supporting-expanded", label: "Supporting Indicators", ready: () => page.getByText("Base Daily Target", { exact: true }) },
     { id: "daily-legend-expanded", label: "Calendar legend and status codes", ready: () => page.getByTestId("collection-daily-legend") },
-    { id: "daily-breakdown-expanded", label: "Monthly status and collection breakdown", ready: () => page.getByRole("region", { name: "Monthly status and collection breakdown", exact: true }) },
-    { id: "daily-bulk-expanded", label: "Bulk daily status update · 0 selected", ready: () => page.getByRole("combobox", { name: "Bulk daily status", exact: true }) },
+    { id: "daily-breakdown-expanded", label: "Monthly status and collection breakdown", requiresStatusTools: true, ready: () => page.getByRole("region", { name: "Monthly status and collection breakdown", exact: true }) },
+    { id: "daily-bulk-expanded", label: "Bulk daily status update · 0 selected", requiresStatusTools: true, ready: () => page.getByRole("combobox", { name: "Bulk daily status", exact: true }) },
   ];
   for (const item of disclosureCases) {
+    if (item.requiresStatusTools && !(await statusTools.evaluate((element) => element.open))) {
+      await statusToolsToggle.focus();
+      await statusToolsToggle.press("Enter");
+      assert.equal(await statusTools.evaluate((element) => element.open), true, "Calendar tools open before their nested disclosures");
+    }
     const toggle = page.locator("summary").filter({ hasText: item.label });
-    const disclosure = page.locator("details.collection-daily-disclosure").filter({ has: toggle });
+    const disclosure = toggle.locator("..");
     assert.equal(await disclosure.evaluate((element) => element.open), false, `${item.label} starts collapsed`);
     await toggle.focus();
     await toggle.press("Enter");
@@ -652,10 +662,18 @@ async function verifyDaily(page, { baseUrl, width, billingFixture, captureSectio
     assert.equal(await disclosure.evaluate((element) => element.open), false, `${item.label} closes through the keyboard`);
     await assertFocus(page, toggle, `${item.label} retains keyboard focus`);
   }
+  if (await statusTools.evaluate((element) => element.open)) {
+    await statusToolsToggle.focus();
+    await statusToolsToggle.press("Enter");
+  }
   const day = page.getByTestId("collection-daily-day-20");
   const dayCard = page.locator(width < 768 ? ".collection-daily-mobile-day-card" : ".collection-daily-desktop-day").filter({ has: day });
   await captureSection("daily-populated-day-20", dayCard, width);
+  const targetControlsToggle = page.locator("summary").filter({ hasText: "Target and calendar management" });
+  await targetControlsToggle.focus();
+  await targetControlsToggle.press("Enter");
   assert.equal(await page.getByRole("button", { name: "Save Changed Days", exact: true }).isDisabled(), true, "Read-only disclosures do not create calendar changes");
+  await targetControlsToggle.press("Enter");
   await attention.getByText("0 belum save", { exact: true }).waitFor();
 }
 

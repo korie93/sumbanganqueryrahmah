@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import type {
   CollectionSourceConfig,
   CollectionStaffNickname,
@@ -220,6 +221,17 @@ export function CollectionRecordsFilters({
   const mobileToDateButtonId = "collection-records-to-date-mobile-button";
   const desktopFromDateButtonId = "collection-records-from-date-button";
   const desktopToDateButtonId = "collection-records-to-date-button";
+  const dateRangeInvalid = Boolean(fromDate && toDate && fromDate > toDate);
+  const dateRangeErrorId = `collection-records-date-range-error-${isMobile ? "mobile" : "desktop"}`;
+  const dateRangeValidationProps = {
+    ...getAriaInvalidProps(dateRangeInvalid),
+    ...(dateRangeInvalid ? { "aria-describedby": dateRangeErrorId } : {}),
+  };
+  const dateRangeError = dateRangeInvalid ? (
+    <p id={dateRangeErrorId} className="text-xs text-destructive" role="alert">
+      From Date mesti pada atau sebelum To Date.
+    </p>
+  ) : null;
   const nicknameOptionsList = useMemo(
     () =>
       nicknameOptions
@@ -241,6 +253,7 @@ export function CollectionRecordsFilters({
             placeholder="Select from date..."
             ariaLabel="From Date"
             buttonTestId="collection-records-from-date"
+            {...dateRangeValidationProps}
             className="h-11 rounded-md"
           />
         </div>
@@ -254,9 +267,12 @@ export function CollectionRecordsFilters({
             placeholder="Select to date..."
             ariaLabel="To Date"
             buttonTestId="collection-records-to-date"
+            {...dateRangeValidationProps}
             className="h-11 rounded-md"
           />
         </div>
+
+        {dateRangeError}
 
         {canUseNicknameFilter ? (
           <CollectionNicknameSingleSelect
@@ -330,6 +346,7 @@ export function CollectionRecordsFilters({
             placeholder="Select from date..."
             ariaLabel="From Date"
             buttonTestId="collection-records-from-date"
+            {...dateRangeValidationProps}
             className="h-9 rounded-md bg-background"
           />
         </div>
@@ -342,6 +359,7 @@ export function CollectionRecordsFilters({
             placeholder="Select to date..."
             ariaLabel="To Date"
             buttonTestId="collection-records-to-date"
+            {...dateRangeValidationProps}
             className="h-9 rounded-md bg-background"
           />
         </div>
@@ -379,6 +397,7 @@ export function CollectionRecordsFilters({
           </Button>
         </div>
       </div>
+      {dateRangeError}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,160px),1fr))] gap-4">
         <CollectionRecordsAdvancedFilters
           canUseTeamLeaderFilter={canUseTeamLeaderFilter}

@@ -55,3 +55,22 @@ export function buildCollectionNicknameSummaryChartResetKey(params: {
     nicknames,
   });
 }
+
+export type CollectionNicknameSummaryFilterSelection = {
+  hasApplied: boolean;
+  selectedNicknames: string[];
+  fromDate: string;
+  toDate: string;
+  appliedNicknames: string[];
+  appliedFromDate: string;
+  appliedToDate: string;
+};
+
+export function hasCollectionNicknameSummaryDraftChanges(selection: CollectionNicknameSummaryFilterSelection): boolean {
+  return selection.hasApplied && buildCollectionNicknameSummaryChartResetKey(selection) !==
+    buildCollectionNicknameSummaryChartResetKey({
+      selectedNicknames: selection.appliedNicknames,
+      fromDate: selection.appliedFromDate,
+      toDate: selection.appliedToDate,
+    });
+}

@@ -38,6 +38,18 @@ test("collection summary loading uses a labelled table-sized skeleton", () => {
   assert.doesNotMatch(markup, /<button/);
 });
 
+test("collection summary softly marks the current month and aligns numeric totals", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionSummaryTable, {
+    loading: false,
+    summaryRows: [{ month: 9, monthName: "September", totalRecords: 59, totalAmount: 144 }],
+    selectedMonth: null, currentMonth: 9, onSelectMonth: () => undefined,
+  }));
+  assert.match(markup, /bg-primary\/5/);
+  assert.equal((markup.match(/>Current month<\/span>/g) || []).length, 1);
+  assert.match(markup, /text-right tabular-nums[^>]*>59/);
+  assert.match(markup, /text-right font-medium tabular-nums/);
+});
+
 test("collection summary totals retain amounts in two compact columns", () => {
   const markup = renderToStaticMarkup(createElement(CollectionSummaryTotals, {
     grandTotal: { totalRecords: 59, totalAmount: 144 },
@@ -86,4 +98,11 @@ test("monthly comparison shows the trend before secondary diagnostics and retain
   assert.match(setup, /onClick=\{onExportCsv\}/);
   assert.match(setup, /disabled=\{loading \|\| monthlyTargetLoading \|\| !data\}/);
   assert.ok(setup.indexOf("Target unavailable:") > setup.indexOf("</details>"), "Target failures remain visible outside collapsed details");
+  assert.match(panel, /<details[^>]*data-testid="collection-monthly-same-day-analysis"/);
+  assert.match(panel, /<summary>Same-day pace analysis<\/summary>/);
+  assert.match(panel, /<details[^>]*data-testid="collection-monthly-detailed-analysis"/);
+  assert.match(panel, /<summary>Benchmarks, projections and data quality<\/summary>/);
+  const css = readFileSync(new URL("./CollectionMonthlyComparisonPanel.css", import.meta.url), "utf8");
+  assert.match(css, /@media print[\s\S]*details::details-content[\s\S]*content-visibility: visible/);
+  assert.match(css, /details > :not\(summary\)[\s\S]*display: block !important/);
 });

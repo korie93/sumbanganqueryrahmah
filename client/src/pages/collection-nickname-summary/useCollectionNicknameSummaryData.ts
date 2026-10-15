@@ -14,6 +14,7 @@ import {
   buildCollectionNicknameSummaryCacheKey,
   createCollectionNicknameSummaryCache,
 } from "@/pages/collection-nickname-summary/nickname-summary-cache";
+import { getCollectionNicknameSummaryRefreshScope } from "@/pages/collection-nickname-summary/nickname-summary-refresh";
 import {
   COLLECTION_DATA_CHANGED_EVENT,
   COLLECTION_TARGET_CHANGED_EVENT,
@@ -343,10 +344,16 @@ export function useCollectionNicknameSummaryData({
 
     const handleCollectionDataChanged = () => {
       summaryCacheRef.current.clear();
-      if (!hasApplied || !fromDate || !toDate || selectedNicknames.length === 0) {
-        return;
-      }
-      void loadSummary(fromDate, toDate, selectedNicknames);
+      const refreshScope = getCollectionNicknameSummaryRefreshScope({
+        canAccess,
+        hasApplied,
+        loadingSummary,
+        appliedNicknames,
+        appliedFromDate,
+        appliedToDate,
+      });
+      if (!refreshScope) return;
+      void loadSummary(refreshScope.from, refreshScope.to, refreshScope.nicknames);
     };
 
     const eventListenerController = new AbortController();
@@ -359,7 +366,7 @@ export function useCollectionNicknameSummaryData({
     return () => {
       eventListenerController.abort();
     };
-  }, [fromDate, hasApplied, loadSummary, selectedNicknames, toDate]);
+  }, [appliedFromDate, appliedNicknames, appliedToDate, canAccess, hasApplied, loadingSummary, loadSummary]);
 
   const reset = useCallback(() => {
     summaryRequestIdRef.current += 1;

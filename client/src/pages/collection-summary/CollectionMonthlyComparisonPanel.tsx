@@ -71,6 +71,7 @@ type CollectionMonthlyComparisonPanelProps = {
   onSameDayPaceDayRangeChange?: ((range: CollectionSameDayPaceDayRange) => void) | undefined;
   onSameDayPaceComparisonModeChange?: ((mode: CollectionSameDayPaceComparisonMode) => void) | undefined;
   chartSlot?: ReactNode | undefined;
+  sameDayPaceChartSlot?: ReactNode | undefined;
 };
 
 export function CollectionMonthlyComparisonPanel({
@@ -109,6 +110,7 @@ export function CollectionMonthlyComparisonPanel({
   onSameDayPaceDayRangeChange,
   onSameDayPaceComparisonModeChange,
   chartSlot,
+  sameDayPaceChartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
   const comparison = data?.comparison || null;
   const comparisonTone = comparison
@@ -237,28 +239,37 @@ export function CollectionMonthlyComparisonPanel({
             targetSummary={targetSummary}
           />
 
-          <CollectionSameDayPaceSection
-            comparisonMode={sameDayPaceComparisonMode}
-            errorMessage={sameDayPaceErrorMessage}
-            loading={sameDayPaceLoading}
-            maxDay={sameDayPaceMaxDay}
-            onComparisonModeChange={onSameDayPaceComparisonModeChange}
-            onDayRangeChange={onSameDayPaceDayRangeChange}
-            pace={sameDayPace}
-            selectedDayRange={sameDayPaceDayRange}
-            unavailableReason={sameDayPaceUnavailableReason}
-          />
+          <details className="collection-monthly-comparison-disclosure" data-testid="collection-monthly-same-day-analysis">
+            <summary>Same-day pace analysis</summary>
+            <div className="space-y-4 pb-4">
+              <CollectionSameDayPaceSection
+                comparisonMode={sameDayPaceComparisonMode}
+                errorMessage={sameDayPaceErrorMessage}
+                loading={sameDayPaceLoading}
+                maxDay={sameDayPaceMaxDay}
+                onComparisonModeChange={onSameDayPaceComparisonModeChange}
+                onDayRangeChange={onSameDayPaceDayRangeChange}
+                pace={sameDayPace}
+                selectedDayRange={sameDayPaceDayRange}
+                unavailableReason={sameDayPaceUnavailableReason}
+              />
+              {sameDayPaceChartSlot}
+            </div>
+          </details>
 
           {insights ? (
-            <CollectionMonthlyComparisonInsightsSection
-              benchmarks={benchmarks}
-              comparison={comparison}
-              dataQualitySummary={dataQualitySummary}
-              insights={insights}
-              projection={projection}
-              targetSummary={targetSummary}
-              trendExplanation={trendExplanation}
-            />
+            <details className="collection-monthly-comparison-disclosure" data-testid="collection-monthly-detailed-analysis">
+              <summary>Benchmarks, projections and data quality</summary>
+              <CollectionMonthlyComparisonInsightsSection
+                benchmarks={benchmarks}
+                comparison={comparison}
+                dataQualitySummary={dataQualitySummary}
+                insights={insights}
+                projection={projection}
+                targetSummary={targetSummary}
+                trendExplanation={trendExplanation}
+              />
+            </details>
           ) : null}
           {comparisonSummary ? <p className="sr-only">{comparisonSummary}</p> : null}
 

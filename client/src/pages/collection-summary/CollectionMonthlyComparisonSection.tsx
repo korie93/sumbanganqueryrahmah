@@ -146,6 +146,26 @@ function CollectionMonthlyComparisonSection({
         onMonthSelect={comparisonMonthDialog.handleSelectMonth}
         chartSlot={
           comparisonData.data ? (
+            <Suspense
+              fallback={(
+                <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-sm text-muted-foreground shadow-sm">
+                  Loading monthly comparison chart...
+                </div>
+              )}
+            >
+              <MonthlyCollectionComparisonChart
+                data={comparisonData.data}
+                monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
+                monthlyTargetsByMonth={comparisonTarget.targetsByMonth}
+                monthlyTargetLoading={comparisonTarget.loading}
+                monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
+                onMonthSelect={comparisonMonthDialog.handleSelectMonth}
+              />
+            </Suspense>
+          ) : null
+        }
+        sameDayPaceChartSlot={
+          comparisonData.data ? (
             <>
               {sameDayPace.loading ? (
                 <div
@@ -175,22 +195,6 @@ function CollectionMonthlyComparisonSection({
                   <MonthlySameDayPaceChart pace={sameDayPace.pace} />
                 </Suspense>
               ) : null}
-              <Suspense
-                fallback={(
-                  <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-sm text-muted-foreground shadow-sm">
-                    Loading monthly comparison chart...
-                  </div>
-                )}
-              >
-                <MonthlyCollectionComparisonChart
-                  data={comparisonData.data}
-                  monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
-                  monthlyTargetsByMonth={comparisonTarget.targetsByMonth}
-                  monthlyTargetLoading={comparisonTarget.loading}
-                  monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
-                  onMonthSelect={comparisonMonthDialog.handleSelectMonth}
-                />
-              </Suspense>
             </>
           ) : null
         }

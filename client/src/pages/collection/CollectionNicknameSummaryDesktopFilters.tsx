@@ -3,6 +3,7 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Label } from "@/components/ui/label";
 import { CollectionNicknameMultiSelect } from "@/pages/collection-report/CollectionNicknameMultiSelect";
 import type { CollectionNicknameSummaryData } from "./collection-nickname-summary-page-shared";
+import { CollectionNicknameSummaryFilterStatus } from "./CollectionNicknameSummaryFilterStatus";
 
 type CollectionNicknameSummaryDesktopFiltersProps = {
   summaryData: CollectionNicknameSummaryData;
@@ -15,7 +16,7 @@ export function CollectionNicknameSummaryDesktopFilters({
   const toDateButtonId = "collection-nickname-summary-to-date-button";
 
   return (
-    <div className="ops-toolbar" data-floating-ai-avoid="true">
+    <div className="ops-toolbar space-y-3" data-floating-ai-avoid="true">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto] xl:items-end">
         <CollectionNicknameMultiSelect
           label="Staff Nickname"
@@ -73,6 +74,7 @@ export function CollectionNicknameSummaryDesktopFilters({
           </Button>
         </div>
       </div>
+      <CollectionNicknameSummaryFilterStatus selection={summaryData} />
     </div>
   );
 }

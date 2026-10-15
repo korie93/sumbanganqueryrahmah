@@ -42,6 +42,34 @@ export function NicknameAssignmentTable({
   onDeleteNickname,
 }: NicknameAssignmentTableProps) {
   const isMobile = useIsMobile();
+  const renderMoreActions = (item: CollectionStaffNickname) => (
+    <MobileActionMenu
+      triggerLabel={`More actions for ${item.nickname}`}
+      contentLabel={`Nickname actions: ${item.nickname}`}
+      className="inline-flex md:inline-flex"
+      items={[
+        {
+          id: `status-${item.id}`,
+          label: item.isActive ? "Nyahaktif" : "Aktifkan",
+          onSelect: () => (item.isActive ? onDeactivateNickname(item) : onActivateNickname(item)),
+          disabled: statusBusyId === item.id,
+        },
+        {
+          id: `reset-${item.id}`,
+          label: resettingNicknameId === item.id ? "Resetting..." : "Reset Password",
+          onSelect: () => onResetNicknamePassword(item),
+          disabled: resettingNicknameId === item.id,
+        },
+        {
+          id: `delete-${item.id}`,
+          label: deletingNicknameId === item.id ? "Deleting..." : "Delete",
+          onSelect: () => onDeleteNickname(item),
+          disabled: deletingNicknameId === item.id,
+          destructive: true,
+        },
+      ]}
+    />
+  );
 
   return (
     <div
@@ -50,7 +78,7 @@ export function NicknameAssignmentTable({
       }`}
     >
       {loadingNicknames ? (
-        <div className="rounded-md border border-border/60 p-6 text-center text-sm text-muted-foreground">
+        <div role="status" className="rounded-md border border-border/60 p-6 text-center text-sm text-muted-foreground">
           Loading nickname data...
         </div>
       ) : isMobile ? (
@@ -100,41 +128,14 @@ export function NicknameAssignmentTable({
                   <Button variant="outline" className="w-full" onClick={() => onEditNickname(item)}>
                     Edit
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => (item.isActive ? onDeactivateNickname(item) : onActivateNickname(item))}
-                    disabled={statusBusyId === item.id}
-                  >
-                    {item.isActive ? "Nyahaktif" : "Aktifkan"}
-                  </Button>
-                  <div className="flex items-center justify-end">
-                    <MobileActionMenu
-                      contentLabel="Nickname actions"
-                      items={[
-                        {
-                          id: `reset-${item.id}`,
-                          label: resettingNicknameId === item.id ? "Resetting..." : "Reset Password",
-                          onSelect: () => onResetNicknamePassword(item),
-                          disabled: resettingNicknameId === item.id,
-                        },
-                        {
-                          id: `delete-${item.id}`,
-                          label: deletingNicknameId === item.id ? "Deleting..." : "Delete",
-                          onSelect: () => onDeleteNickname(item),
-                          disabled: deletingNicknameId === item.id,
-                          destructive: true,
-                        },
-                      ]}
-                    />
-                  </div>
+                  <div className="flex items-center justify-end">{renderMoreActions(item)}</div>
                 </div>
               </article>
             );
           })}
         </div>
       ) : (
-        <Table className="text-sm">
+        <Table aria-label="Nickname assignments" className="text-sm">
           <TableHeader className="bg-background">
             <TableRow>
               <TableHead className="w-[86px]">Assign</TableHead>
@@ -163,6 +164,7 @@ export function NicknameAssignmentTable({
                       <Badge variant="outline">Leader</Badge>
                     ) : (
                       <Checkbox
+                        aria-label={`Assign ${item.nickname}`}
                         checked={checked}
                         onCheckedChange={(value) => onToggleAssigned(item.id, Boolean(value))}
                         disabled={!item.isActive || !selectedGroupId}
@@ -183,41 +185,7 @@ export function NicknameAssignmentTable({
                       <Button size="sm" variant="outline" onClick={() => onEditNickname(item)}>
                         Edit
                       </Button>
-                      {item.isActive ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onDeactivateNickname(item)}
-                          disabled={statusBusyId === item.id}
-                        >
-                          Nyahaktif
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onActivateNickname(item)}
-                          disabled={statusBusyId === item.id}
-                        >
-                          Aktifkan
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onResetNicknamePassword(item)}
-                        disabled={resettingNicknameId === item.id}
-                      >
-                        Reset Password
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => onDeleteNickname(item)}
-                        disabled={deletingNicknameId === item.id}
-                      >
-                        Delete
-                      </Button>
+                      {renderMoreActions(item)}
                     </div>
                   </TableCell>
                 </TableRow>

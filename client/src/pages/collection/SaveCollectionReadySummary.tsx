@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, EyeOff, Info } from "lucide-react";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import type {
@@ -22,6 +22,7 @@ type SaveCollectionReadySummaryProps = {
   onToggleCardNumberVisibility: () => void;
   onCorrectField?: (field: SaveCollectionFieldName) => void;
   correctionDisabled?: boolean;
+  showValidationDetails?: boolean;
 };
 
 export function SaveCollectionReadySummary({
@@ -34,18 +35,23 @@ export function SaveCollectionReadySummary({
   onToggleCardNumberVisibility,
   onCorrectField,
   correctionDisabled = false,
+  showValidationDetails = false,
 }: SaveCollectionReadySummaryProps) {
   const items = buildSaveCollectionReadySummary({ values, receiptCount, readiness });
   const reviewHints = buildSaveCollectionReceiptReviewHints({ values, receiptDrafts });
   const isReady = readiness.isReady;
   const fullCardNumber = values.cardNumber.trim();
+  const showReview = isReady || showValidationDetails;
+  const ReviewContainer = showReview ? "div" : "details";
 
   return (
     <section
       className={isReady
         ? "rounded-xl border border-success/30 bg-success/5 p-3"
-        : "rounded-xl border border-warning/35 bg-warning/5 p-3"}
-      aria-label={isReady ? "Ready to save summary" : "Incomplete save summary"}
+        : showValidationDetails
+          ? "rounded-xl border border-warning/35 bg-warning/5 p-3"
+          : "rounded-xl border border-border bg-muted/10 p-3"}
+      aria-label="Field completeness summary"
       data-ready={isReady ? "true" : "false"}
       data-testid="save-collection-readiness"
     >
@@ -58,20 +64,29 @@ export function SaveCollectionReadySummary({
       >
         {isReady ? (
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
-        ) : (
+        ) : showValidationDetails ? (
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
+        ) : (
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         )}
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">
-            {isReady ? "Ready to Save" : "Belum Sedia Disimpan"}
+            {isReady ? "Medan Wajib Lengkap" : "Semakan Medan Wajib"}
           </h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {isReady
-              ? "Semak ringkasan ini sebelum klik Save Collection."
-              : `${readiness.invalidFields.length} medan perlu dilengkapkan atau diperbetulkan.`}
+              ? "Semak ringkasan ini. Status padanan Saved ditunjukkan berasingan di bawah."
+              : `${readiness.invalidFields.length} medan perlu dilengkapkan atau diperbetulkan sebelum simpan.`}
           </p>
         </div>
       </div>
+      <ReviewContainer className="group">
+        {!showReview ? (
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md text-xs font-medium text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            Lihat medan yang perlu dilengkapkan
+            <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+        ) : null}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 lg:grid-cols-4">
         {items.map((item) => {
           const correctionTarget = item.field ? getSaveCollectionFieldTarget(item.field) : undefined;
@@ -137,6 +152,7 @@ export function SaveCollectionReadySummary({
           );
         })}
       </dl>
+      </ReviewContainer>
       {reviewHints.length > 0 ? (
         <div
           className="mt-3 rounded-lg border border-warning/35 bg-warning/10 p-3"

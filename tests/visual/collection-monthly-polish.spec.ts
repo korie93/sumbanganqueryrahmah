@@ -219,6 +219,17 @@ for (const theme of ["light", "dark"] as const) {
       await page.locator("#collection-monthly-comparison-end-month").fill("2026-10");
       await panel.getByRole("button", { name: "Apply", exact: true }).click();
       await expect(panel.getByText("2 month(s) loaded", { exact: true })).toBeVisible();
+      const monthlyChart = panel.getByRole("img", { name: /^Monthly collection comparison chart/ });
+      await expect(monthlyChart).toBeVisible();
+      const paceDisclosure = panel.getByTestId("collection-monthly-same-day-analysis");
+      const insightsDisclosure = panel.getByTestId("collection-monthly-detailed-analysis");
+      await expect(paceDisclosure).not.toHaveAttribute("open");
+      await expect(insightsDisclosure).not.toHaveAttribute("open");
+      const paceToggle = paceDisclosure.locator(":scope > summary");
+      await paceToggle.focus();
+      await paceToggle.press("Enter");
+      await expect(paceDisclosure).toHaveAttribute("open", "");
+      await expect(paceToggle).toBeFocused();
       const current = panel.getByRole("progressbar", { name: "October 2026 same-day total", exact: true });
       const previous = panel.getByRole("progressbar", { name: "September 2026 same-day total", exact: true });
       const target = panel.getByRole("progressbar", { name: "Expected same-day target pace", exact: true });
@@ -253,7 +264,6 @@ for (const theme of ["light", "dark"] as const) {
       await expect(previousLine).toHaveCSS("stroke", tokens["muted-foreground"]!);
       await expect(targetLine).toHaveCSS("stroke", tokens.foreground!);
       await expect(sameDayChart.locator(".recharts-legend-item-text")).toHaveText(["October 2026", "September 2026", "Target pace"]);
-      const monthlyChart = panel.getByRole("img", { name: /^Monthly collection comparison chart/ });
       await expect(monthlyChart.locator("path.recharts-line-curve[stroke-dasharray='6 4']"))
         .toHaveCSS("stroke", tokens.foreground!);
       await expect(monthlyChart.locator(".recharts-legend-item-text").filter({ hasText: "Monthly target" })).toBeVisible();
@@ -265,6 +275,21 @@ for (const theme of ["light", "dark"] as const) {
       await testInfo.attach(`monthly-reference-bars-${theme}-${width}`, {
         body: await panel.locator(".collection-monthly-comparison-section-card--pace").screenshot(), contentType: "image/png",
       });
+      await paceToggle.focus();
+      await paceToggle.press("Enter");
+      await expect(paceDisclosure).not.toHaveAttribute("open");
+      await expect(sameDayChart).toBeHidden();
+      const insightsToggle = insightsDisclosure.locator(":scope > summary");
+      await insightsToggle.focus();
+      await insightsToggle.press("Space");
+      await expect(insightsDisclosure).toHaveAttribute("open", "");
+      await expect(insightsDisclosure.getByText("Benchmark lens", { exact: true })).toBeVisible();
+      await insightsToggle.press("Enter");
+      await expect(insightsDisclosure).not.toHaveAttribute("open");
+      await page.emulateMedia({ media: "print" });
+      await expect(current).toBeVisible();
+      await expect(insightsDisclosure.getByText("Benchmark lens", { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "screen" });
       expect(fixture.unexpected).toEqual([]);
       expect(fixture.errors).toEqual([]);
     });

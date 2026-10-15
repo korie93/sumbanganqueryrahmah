@@ -7,7 +7,8 @@
 
 .collection-daily-calendar-view-mode-header {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
@@ -27,46 +28,34 @@
 }
 
 .collection-daily-calendar-view-mode-status {
-  flex-shrink: 0;
-  max-width: 18rem;
-  text-align: right;
+  max-width: 100%;
 }
 
-.collection-daily-calendar-view-mode-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7.2rem, 1fr));
-  gap: 0.5rem;
-}
-
-.collection-daily-calendar-view-mode-option {
-  display: flex;
-  min-height: 2.55rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
+.collection-daily-calendar-view-mode-select {
+  min-height: 2.75rem;
+  max-width: 100%;
   border: 1px solid hsl(var(--border) / 0.72);
   border-radius: 0.5rem;
   background: hsl(var(--background) / 0.82);
   color: hsl(var(--foreground));
   font-size: 0.76rem;
   font-weight: 500;
-  padding: 0.5rem 0.7rem;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
     color 120ms ease;
 }
 
-.collection-daily-calendar-view-mode-option:hover,
-.collection-daily-calendar-view-mode-option:focus-visible,
-.collection-daily-calendar-view-mode-option-active {
+.collection-daily-calendar-view-mode-select:hover,
+.collection-daily-calendar-view-mode-select:focus-visible {
   border-color: hsl(var(--primary) / 0.58);
   background: hsl(var(--primary) / 0.1);
   color: hsl(var(--primary));
   outline: none;
 }
 
-.collection-daily-calendar-view-mode-option:focus-visible {
+.collection-daily-calendar-view-mode-select:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
@@ -82,13 +71,13 @@
     text-align: left;
   }
 
-  .collection-daily-calendar-view-mode-option {
+  .collection-daily-calendar-view-mode-select {
     min-height: 2.75rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .collection-daily-calendar-view-mode-option {
+  .collection-daily-calendar-view-mode-select {
     transition: none;
   }
 }

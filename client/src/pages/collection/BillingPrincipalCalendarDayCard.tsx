@@ -8,7 +8,7 @@ export function BillingPrincipalCalendarDayCard({ day, asOf, selected, onSelect 
   const active = day.dailyMovement.all.closedAccountCount > 0;
   const dateLabel = new Intl.DateTimeFormat("en-MY", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })
     .format(new Date(`${day.date}T12:00:00Z`));
-  return <button type="button" onClick={onSelect} data-testid={`billing-calendar-day-${day.date}`}
+  return <button type="button" onClick={onSelect} aria-haspopup="dialog" data-testid={`billing-calendar-day-${day.date}`}
     aria-label={`${day.date}, ${day.dailyMovement.all.closedAccountCount} accounts, new closed ${formatOspCurrency(day.dailyMovement.all.ospClosed)}, daily movement ${formatOspDailyMovement(day.dailyMovement.all.resultPercentage)} of TT OSP, in percentage points. View closed accounts.`}
     {...(day.date === asOf ? { "aria-current": "date" as const } : {})} {...getAriaPressedProps(selected)}
     className={`min-w-0 w-full rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${selected || day.date === asOf ? "border-primary" : "border-border"}`}>
@@ -17,7 +17,7 @@ export function BillingPrincipalCalendarDayCard({ day, asOf, selected, onSelect 
       <span className="text-xs text-muted-foreground">{day.date === asOf ? "System As Of" : active ? `${day.dailyMovement.all.closedAccountCount} accounts` : "No movement"}</span>
     </span>
     <span className="mt-2 grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.7fr)] gap-x-2 text-xs text-muted-foreground">
-      <span>Aging</span><span className="text-right">Movement %</span><span className="text-right">OSP closed</span>
+      <span>Aging</span><span className="text-right">Movement (pp)</span><span className="text-right">OSP closed</span>
     </span>
     {[...day.dailyMovement.rows, day.dailyMovement.all].map((row) => <span key={row.aging}
       className={`grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.7fr)] items-start gap-x-2 py-1.5 text-sm tabular-nums ${row.aging === "ALL" ? "border-t font-semibold" : ""}`}>

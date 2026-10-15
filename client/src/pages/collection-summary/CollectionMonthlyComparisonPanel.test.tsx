@@ -198,6 +198,7 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
       onPrintReport: () => undefined,
       onMonthSelect: () => undefined,
       chartSlot: createElement("div", null, "chart slot"),
+      sameDayPaceChartSlot: createElement("div", null, "same-day chart slot"),
     });
 
   assert.match(markup, /Collection increased by RM12,450\.00 \(\+17\.67%\) compared to Apr 2026\./);
@@ -248,6 +249,13 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /2\/2 active/);
   assert.match(markup, /Latest/);
   assert.match(markup, /chart slot/);
+  for (const testId of ["collection-monthly-same-day-analysis", "collection-monthly-detailed-analysis"]) {
+    const openingTag = markup.match(new RegExp(`<details[^>]*data-testid="${testId}"[^>]*>`))?.[0];
+    assert.ok(openingTag, `Native disclosure ${testId} is present`);
+    assert.doesNotMatch(openingTag, /\bopen(?:=|\s|>)/);
+  }
+  assert.ok(markup.indexOf(">chart slot</div>") < markup.indexOf("collection-monthly-same-day-analysis"));
+  assert.ok(markup.indexOf("same-day chart slot") > markup.indexOf("collection-monthly-same-day-analysis"));
 });
 
 test("CollectionMonthlyComparisonPanel highlights anomaly months for audit review", () => {

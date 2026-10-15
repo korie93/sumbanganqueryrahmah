@@ -4,6 +4,7 @@ import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type ReceiptPreviewRecordDetailsProps = {
+  id: string;
   record: CollectionRecord | null;
   selectedReceipt: CollectionRecordReceipt | null;
   showDetails: boolean;
@@ -11,17 +12,30 @@ type ReceiptPreviewRecordDetailsProps = {
 };
 
 export function ReceiptPreviewRecordDetails({
+  id,
   record,
   selectedReceipt,
   showDetails,
   isMobile,
 }: ReceiptPreviewRecordDetailsProps) {
-  if (!record || !showDetails) {
+  if (!record) {
     return null;
   }
 
   return (
-    <div className={cn("rounded-md border border-border/60 bg-background/40 px-3 py-3", isMobile ? "mx-3 mt-3" : "mt-3")}>
+    <div
+      id={id}
+      role="region"
+      aria-label="Receipt and collection details"
+      hidden={!showDetails}
+      tabIndex={0}
+      className={cn("max-h-[30vh] shrink-0 overflow-y-auto rounded-md border border-border/60 bg-background/40 px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", isMobile ? "mx-3 mt-2" : "mt-2")}
+    >
+      {selectedReceipt ? (
+        <p className="mb-3 break-all text-xs text-muted-foreground">
+          {selectedReceipt.originalFileName} · {selectedReceipt.originalMimeType}
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="break-words">
           <p className="text-2xs uppercase tracking-wide text-muted-foreground">Customer</p>

@@ -45,10 +45,11 @@ test("each Billing result table has one named keyboard-focusable scroll owner", 
 test("Aging remains pinned for column headings, aging rows and ALL totals in both tables", () => {
   for (const html of [markup.system, markup.client, markup.readonly]) {
     assert.match(html, /<th[^>]*billing-osp-table-aging[^>]*>Aging<\/th>/);
-    assert.match(html, /<td[^>]*billing-osp-table-aging[^>]*>D3<\/td>/);
-    assert.match(html, /<td[^>]*billing-osp-table-aging[^>]*>ALL/);
+    assert.match(html, /<th scope="row"[^>]*billing-osp-table-aging[^>]*>D3<\/th>/);
+    assert.match(html, /<th scope="row"[^>]*billing-osp-table-aging[^>]*>ALL/);
     assert.equal((html.match(/billing-osp-table-aging/g) ?? []).length, 3);
   }
+  assert.match(markup.system, /<th scope="row"[^>]*font-semibold[^>]*>ALL<\/th>/);
 });
 
 test("editable percentages and calculated amounts have text labels and separate input outlines", () => {
@@ -86,7 +87,8 @@ test("pinned Billing cells use opaque semantic surfaces and a local stacking con
   assert.match(css, /position: sticky;\s*left: 0/);
   assert.match(css, /box-shadow: inset -1px 0 hsl\(var\(--border\)\)/);
   assert.match(css, /background: hsl\(var\(--card\)\)/);
-  assert.match(css, /tfoot td\.billing-osp-table-aging/);
+  assert.match(css, /tfoot \.billing-osp-table-aging/);
+  assert.match(css, /thead th\.billing-osp-table-aging/);
   assert.match(css, /background: var\(--dm-table-row\)/);
   assert.match(css, /background: var\(--dm-table-row-hover\)/);
   assert.doesNotMatch(css, /overflow(?:-[xy])?\s*:/);
