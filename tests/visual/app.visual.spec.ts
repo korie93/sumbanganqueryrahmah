@@ -784,10 +784,10 @@ test.describe("Collection layout polish", () => {
         await installMockAuthenticatedSession(page, theme);
         await navigateForSnapshot(page, authenticatedRoutes[1]);
         const frame = page.locator(".collection-report-frame");
-        await expect(frame).toHaveCSS("max-width", "1120px");
+        await expect(frame).toHaveCSS("max-width", "1480px");
         await expect(frame).toHaveCSS("gap", width >= 768 && width < 1024 ? "24px" : "16px");
         const saveWidth = (await frame.boundingBox())!.width;
-        expect(saveWidth).toBeLessThanOrEqual(1120);
+        expect(saveWidth).toBeLessThanOrEqual(1480);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
         await page.locator("#save-collection-customer-name").fill("Layout Test Customer");
         await page.locator("#save-collection-customer-name").blur();
@@ -804,7 +804,7 @@ test.describe("Collection layout polish", () => {
         });
         await expect(frame).toHaveCSS("max-width", "1480px");
         expect((await frame.boundingBox())!.width).toBeLessThanOrEqual(1480);
-        if (width === 1920) expect((await frame.boundingBox())!.width).toBeGreaterThan(saveWidth);
+        expect((await frame.boundingBox())!.width).toBe(saveWidth);
         const filterToggle = page.getByTestId("collection-records-filter-toggle");
         const search = page.locator(width < 768 ? "#collection-records-search-mobile" : "#collection-records-search");
         await expect(search).toBeVisible();
@@ -861,7 +861,7 @@ test.describe("Collection layout polish", () => {
         await expect(page.locator("#save-collection-customer-name")).toHaveCount(0);
       } else {
         await expect(page.locator("#save-collection-customer-name")).toBeVisible();
-        await expect(frame).toHaveCSS("max-width", "1120px");
+        await expect(frame).toHaveCSS("max-width", "1480px");
         await page.getByRole("navigation", { name: "Collection sections", exact: true })
           .getByRole("button", { name: "View Rekod Collection", exact: true }).click();
         await expect(page.getByTestId("collection-records-page")).toBeVisible();

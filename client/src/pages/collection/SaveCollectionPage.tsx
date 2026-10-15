@@ -1,10 +1,9 @@
 import { memo } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { CreditCard, Eye, EyeOff, FileUp, RotateCcw, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import {
@@ -27,6 +26,7 @@ import { focusSaveCollectionField } from "@/pages/collection/save-collection-fie
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
 import type { CollectionBatch } from "@/lib/api";
+import "./SaveCollectionPage.css";
 
 type SaveCollectionPageProps = {
   staffNickname: string;
@@ -58,7 +58,6 @@ function SaveCollectionPage({
   onReauthenticateNickname,
 }: SaveCollectionPageProps) {
   const mutationFeedback = useMutationFeedback();
-  const keyboardOpen = useMobileKeyboardState();
   const customerNameInputId = "save-collection-customer-name";
   const customerIcNumberInputId = "save-collection-customer-ic-number";
   const customerPhoneInputId = "save-collection-customer-phone";
@@ -123,9 +122,6 @@ function SaveCollectionPage({
     accessSuspended,
     canReauthenticateNickname: Boolean(onReauthenticateNickname),
   });
-  const matchingNeedsAttention = state.sourceMatching.status === "error"
-    || state.sourceMatching.status === "no-match";
-  const useStaticActions = keyboardOpen || matchingNeedsAttention;
 
   usePageShortcuts([
     {
@@ -211,68 +207,73 @@ function SaveCollectionPage({
 
   const paymentFields = (
     <>
-      <div className="space-y-2">
-        <Label htmlFor={accountNumberInputId}>Account Number</Label>
-        <Input
-          id={accountNumberInputId}
-          name="accountNumber"
-          value={state.accountNumber}
-          onChange={(e) => state.setAccountNumber(e.target.value)}
-          onBlur={() => state.validateField("accountNumber")}
-          disabled={state.submitting}
-          autoComplete="off"
-          maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber}
-          {...accountNumberValidationProps}
-        />
-        <p id={accountCardHelpId} className="text-xs text-muted-foreground">
+      <fieldset className="save-collection-account-group sm:col-span-2" aria-describedby={accountCardHelpId}>
+        <legend className="sr-only">Account Number / Card Number</legend>
+        <p id={accountCardHelpId} className="text-xs leading-5 text-muted-foreground">
           Isi sekurang-kurangnya satu: Account Number atau Card Number.
         </p>
-        {state.fieldErrors.accountNumber ? (
-          <p id={accountNumberErrorId} className="text-xs text-destructive" role="alert">
-            {state.fieldErrors.accountNumber}
-          </p>
-        ) : null}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor={cardNumberInputId}>Card Number</Label>
-        <div className="relative">
-          <Input
-            id={cardNumberInputId}
-            name="cardNumber"
-            type={state.isCardNumberInputVisible ? "text" : "password"}
-            value={state.cardNumber}
-            onChange={(event) => state.setCardNumber(event.target.value)}
-            onBlur={() => state.validateField("cardNumber")}
-            disabled={state.submitting}
-            autoComplete="off"
-            inputMode="numeric"
-            maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber}
-            className="pr-12 tabular-nums"
-            {...cardNumberValidationProps}
-          />
-          <button
-            type="button"
-            className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-            onClick={state.toggleCardNumberInputVisibility}
-            disabled={state.submitting || !state.cardNumber}
-            aria-label={state.isCardNumberInputVisible ? "Hide card number" : "Show card number"}
-            aria-controls={cardNumberInputId}
-            data-testid="toggle-card-number-input"
-            {...getAriaPressedProps(state.isCardNumberInputVisible)}
-          >
-            {state.isCardNumberInputVisible ? (
-              <EyeOff className="h-4 w-4" aria-hidden="true" focusable="false" />
-            ) : (
-              <Eye className="h-4 w-4" aria-hidden="true" focusable="false" />
-            )}
-          </button>
+        <div className="save-collection-account-fields">
+          <div className="space-y-2">
+            <Label htmlFor={accountNumberInputId}>Account Number</Label>
+            <Input
+              id={accountNumberInputId}
+              name="accountNumber"
+              value={state.accountNumber}
+              onChange={(e) => state.setAccountNumber(e.target.value)}
+              onBlur={() => state.validateField("accountNumber")}
+              disabled={state.submitting}
+              autoComplete="off"
+              maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber}
+              {...accountNumberValidationProps}
+            />
+            {state.fieldErrors.accountNumber ? (
+              <p id={accountNumberErrorId} className="text-xs text-destructive" role="alert">
+                {state.fieldErrors.accountNumber}
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={cardNumberInputId}>Card Number</Label>
+            <div className="relative">
+              <Input
+                id={cardNumberInputId}
+                name="cardNumber"
+                type={state.isCardNumberInputVisible ? "text" : "password"}
+                value={state.cardNumber}
+                onChange={(event) => state.setCardNumber(event.target.value)}
+                onBlur={() => state.validateField("cardNumber")}
+                disabled={state.submitting}
+                autoComplete="off"
+                inputMode="numeric"
+                maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber}
+                className="pr-12 tabular-nums"
+                {...cardNumberValidationProps}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                onClick={state.toggleCardNumberInputVisibility}
+                disabled={state.submitting || !state.cardNumber}
+                aria-label={state.isCardNumberInputVisible ? "Hide card number" : "Show card number"}
+                aria-controls={cardNumberInputId}
+                data-testid="toggle-card-number-input"
+                {...getAriaPressedProps(state.isCardNumberInputVisible)}
+              >
+                {state.isCardNumberInputVisible ? (
+                  <EyeOff className="h-4 w-4" aria-hidden="true" focusable="false" />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden="true" focusable="false" />
+                )}
+              </button>
+            </div>
+            {state.fieldErrors.cardNumber ? (
+              <p id={cardNumberErrorId} className="text-xs text-destructive" role="alert">
+                {state.fieldErrors.cardNumber}
+              </p>
+            ) : null}
+          </div>
         </div>
-        {state.fieldErrors.cardNumber ? (
-          <p id={cardNumberErrorId} className="text-xs text-destructive" role="alert">
-            {state.fieldErrors.cardNumber}
-          </p>
-        ) : null}
-      </div>
+      </fieldset>
       <div className="space-y-2">
         <Label htmlFor={batchInputId}>Batch {requiredMarker}</Label>
         <select
@@ -316,6 +317,7 @@ function SaveCollectionPage({
           {...paymentDateValidationProps}
           buttonTestId="save-collection-payment-date"
           disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}
+          className="save-collection-date-trigger"
         />
         {paymentDateError ? (
           <p id={paymentDateErrorId} className="text-xs text-destructive" role="alert">
@@ -325,20 +327,24 @@ function SaveCollectionPage({
       </div>
       <div className="space-y-2 sm:col-span-2">
         <Label htmlFor={amountInputId}>Amount (RM) {requiredMarker}</Label>
-        <Input
-          id={amountInputId}
-          name="collectionAmount"
-          type="number"
-          min="0"
-          step="0.01"
-          value={state.amount}
-          onChange={(e) => state.setAmount(e.target.value)}
-          onBlur={() => state.validateField("amount")}
-          disabled={state.submitting}
-          inputMode="decimal"
-          {...requiredFieldProps}
-          {...amountValidationProps}
-        />
+        <div className="save-collection-amount-field">
+          <span className="save-collection-currency-prefix" aria-hidden="true">RM</span>
+          <Input
+            id={amountInputId}
+            name="collectionAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            value={state.amount}
+            onChange={(e) => state.setAmount(e.target.value)}
+            onBlur={() => state.validateField("amount")}
+            disabled={state.submitting}
+            inputMode="decimal"
+            className="save-collection-amount-input"
+            {...requiredFieldProps}
+            {...amountValidationProps}
+          />
+        </div>
         {state.fieldErrors.amount ? (
           <p id={amountErrorId} className="text-xs text-destructive" role="alert">
             {state.fieldErrors.amount}
@@ -350,6 +356,7 @@ function SaveCollectionPage({
 
   const receiptPanel = (
     <CollectionReceiptPanel
+      presentation="workspace"
       pendingFiles={state.receiptFiles}
       pendingReceiptDrafts={state.receiptDrafts}
       inputRef={state.fileInputRef}
@@ -358,7 +365,6 @@ function SaveCollectionPage({
       onFileChange={state.handleReceiptChange}
       onPendingDraftChange={state.handlePendingDraftChange}
       onRemovePending={state.handleRemoveReceipt}
-      onClearPending={state.handleClearPendingReceipts}
       uploadLabel="Upload Receipt"
       helperText="Tambah satu receipt pada satu masa. JPG, JPEG, PNG, WEBP atau PDF, maksimum 5MB setiap fail."
     />
@@ -367,6 +373,9 @@ function SaveCollectionPage({
     <SaveCollectionFormSection
       title="Customer Details"
       description="Isi maklumat customer untuk auto-matching terhadap Saved source yang aktif."
+      icon={UserRound}
+      accent="customer"
+      contentClassName="save-collection-customer-fields"
     >
       {customerFields}
     </SaveCollectionFormSection>
@@ -375,18 +384,11 @@ function SaveCollectionPage({
     <SaveCollectionFormSection
       title="Payment Details"
       description="Isi account atau card, batch, tarikh bayaran dan jumlah."
+      icon={CreditCard}
+      accent="payment"
       contentClassName="sm:grid-cols-2"
     >
       {paymentFields}
-    </SaveCollectionFormSection>
-  );
-  const receiptSection = (
-    <SaveCollectionFormSection
-      title="Receipt Upload"
-      description="Semak preview dan butiran receipt sebelum simpan."
-      className="col-span-full"
-    >
-      {receiptPanel}
     </SaveCollectionFormSection>
   );
   const readySummaryValues = {
@@ -400,18 +402,57 @@ function SaveCollectionPage({
     paymentDate: state.paymentDate,
     amount: state.amount,
   };
+  const receiptSection = (
+    <SaveCollectionFormSection
+      title="Receipt Upload"
+      description="Semak preview dan butiran receipt sebelum simpan."
+      icon={FileUp}
+      accent="receipt"
+      className="col-span-full"
+      actions={(
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={state.handleClearPendingReceipts}
+          disabled={state.submitting || state.receiptFiles.length === 0}
+        >
+          <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+          Clear Pending
+        </Button>
+      )}
+    >
+      {receiptPanel}
+      <SaveCollectionReadySummary
+        values={readySummaryValues}
+        readiness={state.readiness}
+        receiptCount={state.receiptFiles.length}
+        receiptDrafts={state.receiptDrafts}
+        cardNumberVisible={state.isCardNumberReviewVisible}
+        cardNumberVisibilityDisabled={state.submitting}
+        onToggleCardNumberVisibility={state.toggleCardNumberReviewVisibility}
+        correctionDisabled={state.submitting || accessSuspended || state.resetConfirmOpen}
+        showValidationDetails={Boolean(state.submitFailure)}
+        onCorrectField={(field) => {
+          if (!state.submitting && !accessSuspended && !state.resetConfirmOpen) {
+            focusSaveCollectionField(field);
+          }
+        }}
+      />
+    </SaveCollectionFormSection>
+  );
 
   return (
-    <section aria-labelledby="save-collection-form-title" className="mx-auto min-w-0 max-w-6xl space-y-5">
-      <header className="space-y-2">
+    <section aria-labelledby="save-collection-form-title" className="save-collection-workspace mx-auto w-full min-w-0 max-w-none space-y-5">
+      <header className="save-collection-form-guidance space-y-2">
         <h2 id="save-collection-form-title" className="sr-only">Simpan Collection Individual</h2>
-        <div className="space-y-1 text-xs leading-5 text-muted-foreground">
-          <p>Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.</p>
+        <div className="save-collection-privacy-guidance text-xs leading-5 text-muted-foreground">
           <p>
+            Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.
+            {" "}
             Maklumat pelanggan, nombor akaun/kad dan fail resit tidak disimpan dalam draf.
             {" "}Isi atau muat naik semula selepas reload.
           </p>
-          <p>
+          <p className="save-collection-shortcut-hint">
             Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
           </p>
         </div>
@@ -450,29 +491,16 @@ function SaveCollectionPage({
           visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
         />
         <fieldset disabled={accessSuspended} className="contents">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-x-6 gap-y-5">
+        <div className="save-collection-details-grid grid gap-x-6 gap-y-5">
           {customerSection}
           {paymentSection}
           {receiptSection}
         </div>
 
-        <SaveCollectionReadySummary
-          values={readySummaryValues}
-          readiness={state.readiness}
-          receiptCount={state.receiptFiles.length}
-          receiptDrafts={state.receiptDrafts}
-          cardNumberVisible={state.isCardNumberReviewVisible}
-          cardNumberVisibilityDisabled={state.submitting}
-          onToggleCardNumberVisibility={state.toggleCardNumberReviewVisibility}
-          correctionDisabled={state.submitting || accessSuspended || state.resetConfirmOpen}
-          showValidationDetails={Boolean(state.submitFailure)}
-          onCorrectField={(field) => {
-            if (!state.submitting && !accessSuspended && !state.resetConfirmOpen) {
-              focusSaveCollectionField(field);
-            }
-          }}
-        />
-
+        <div
+          className="save-collection-submit-workspace static"
+          data-floating-ai-avoid="true"
+        >
         <CollectionSourceMatchField
           disabled={state.submitting || accessSuspended || state.resetConfirmOpen}
           status={state.sourceMatching.status}
@@ -484,10 +512,7 @@ function SaveCollectionPage({
 
         <div
           id="save-collection-actions"
-          className={cn(
-            "flex flex-col gap-2 border-t border-border bg-background pt-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] sm:static sm:flex-row sm:flex-wrap sm:justify-end sm:pb-0",
-            useStaticActions ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
-          )}
+          className="save-collection-actions static flex flex-col gap-2 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] sm:flex-row sm:flex-wrap sm:justify-end sm:pb-0"
           data-floating-ai-avoid="true"
         >
           {actionHint ? (
@@ -526,6 +551,7 @@ function SaveCollectionPage({
                 ? "Save Collection"
                 : "Semak Medan Wajib"}
           </Button>
+        </div>
         </div>
         </fieldset>
         <SaveCollectionResetDialog

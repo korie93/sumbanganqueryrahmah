@@ -1,0 +1,232 @@
+.save-collection-workspace .save-collection-form-guidance {
+  padding-inline: 0.125rem;
+}
+
+.save-collection-workspace .save-collection-privacy-guidance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1.5rem;
+}
+
+.save-collection-workspace .save-collection-privacy-guidance > p:first-child {
+  flex: 1 1 36rem;
+}
+
+.save-collection-workspace .save-collection-details-grid {
+  /* A full-row receipt keeps auto-fit tracks occupied: size tracks to half the
+     available width so wide layouts never create an unused third column. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(24rem, calc((100% - var(--spacing-6)) / 2))), 1fr));
+}
+
+.save-collection-workspace :is(input, select, button, summary) {
+  scroll-margin-top: calc(57px + var(--spacing-4));
+}
+
+.save-collection-workspace .save-collection-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.875rem;
+  background: hsl(var(--card));
+  padding: 1rem;
+}
+
+.save-collection-workspace .save-collection-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.875rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  padding-bottom: 1rem;
+}
+
+.save-collection-workspace .save-collection-section-heading {
+  flex: 1 1 12rem;
+}
+
+.save-collection-workspace .save-collection-section-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-inline-start: auto;
+}
+
+.save-collection-workspace .save-collection-section-actions > button {
+  min-height: 2.75rem;
+}
+
+.save-collection-workspace [data-accent="receipt"] .save-collection-section-actions {
+  /* Keep the relocated action outside the unchanged floating AI launcher's
+     right-edge strip, including when this header is near the viewport bottom. */
+  margin-inline-end: 3.5rem;
+}
+
+.save-collection-workspace .save-collection-receipt-upload-zone--empty {
+  min-height: 9.5rem;
+  gap: 0.5rem;
+  padding-block: 0.75rem;
+}
+
+.save-collection-workspace .save-collection-receipt-upload-zone--empty .save-collection-receipt-upload-entry {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.save-collection-workspace .save-collection-receipt-upload-zone--empty .save-collection-receipt-upload-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.save-collection-workspace .save-collection-receipt-upload-entry > button {
+  min-height: 2.75rem;
+}
+
+.save-collection-workspace .save-collection-section-icon {
+  --save-section-accent: var(--info);
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--save-section-accent) / 0.3);
+  border-radius: 0.625rem;
+  background: hsl(var(--save-section-accent) / 0.09);
+  color: hsl(var(--save-section-accent));
+}
+
+.save-collection-workspace [data-accent="payment"] .save-collection-section-icon {
+  --save-section-accent: var(--success);
+}
+
+.save-collection-workspace [data-accent="receipt"] .save-collection-section-icon {
+  --save-section-accent: var(--chart-2);
+}
+
+.save-collection-workspace .save-collection-section-content {
+  min-width: 0;
+  align-content: start;
+  gap: 1.25rem;
+}
+
+.save-collection-workspace .save-collection-account-group {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  background: hsl(var(--background) / 0.6);
+  padding: 0.875rem;
+}
+
+.save-collection-workspace .save-collection-account-fields {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.875rem;
+  margin-top: 0.75rem;
+}
+
+.save-collection-workspace .save-collection-section :is(input, select, .save-collection-date-trigger) {
+  min-width: 0;
+  min-height: 2.75rem;
+  height: 2.75rem;
+}
+
+.save-collection-workspace .save-collection-amount-field {
+  position: relative;
+  min-width: 0;
+}
+
+.save-collection-workspace .save-collection-currency-prefix {
+  position: absolute;
+  inset-block: 1px;
+  inset-inline-start: 1px;
+  display: flex;
+  width: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  border-inline-end: 1px solid hsl(var(--border));
+  border-start-start-radius: calc(var(--radius) - 2px);
+  border-end-start-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.save-collection-workspace .save-collection-amount-input {
+  padding-inline-start: 4rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.save-collection-workspace .save-collection-submit-workspace {
+  min-width: 0;
+  margin-top: var(--spacing-5);
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.875rem;
+  background: hsl(var(--card));
+  padding: 0.875rem 1rem;
+}
+
+.save-collection-workspace .save-collection-actions {
+  background: hsl(var(--card));
+}
+
+.save-collection-workspace .save-collection-actions > button {
+  min-height: 2.75rem;
+}
+
+@media (max-width: 767px) {
+  .save-collection-workspace :is(input, select, button, summary) {
+    scroll-margin-bottom: calc(4.5rem + var(--safe-area-inset-bottom));
+  }
+
+  /* Keep the final action row above the unchanged floating AI launcher when
+     scrolled to the end, without covering the form while entering details. */
+  .save-collection-workspace .save-collection-submit-workspace {
+    padding-bottom: calc(4.5rem + var(--safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 640px) {
+  .save-collection-workspace .save-collection-section {
+    padding: 1.5rem;
+  }
+
+  .save-collection-workspace .save-collection-customer-fields {
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .save-collection-workspace .save-collection-shortcut-hint {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .save-collection-workspace .save-collection-submit-workspace {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .save-collection-workspace .save-collection-submit-workspace > #save-collection-matching-feedback {
+    flex: 1 1 0%;
+  }
+
+  .save-collection-workspace .save-collection-actions {
+    flex: 0 0 auto;
+    max-width: 26rem;
+  }
+}

@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, Eye, EyeOff, Info } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, Eye, EyeOff, Info, Minus } from "lucide-react";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import type {
@@ -11,6 +11,7 @@ import {
   buildSaveCollectionReceiptReviewHints,
 } from "@/pages/collection/save-collection-ready-summary";
 import { getSaveCollectionFieldTarget } from "@/pages/collection/save-collection-field-navigation";
+import { getSaveCollectionCompleteness } from "./save-collection-completeness";
 
 type SaveCollectionReadySummaryProps = {
   values: SaveCollectionFormValues;
@@ -42,6 +43,7 @@ export function SaveCollectionReadySummary({
   const isReady = readiness.isReady;
   const fullCardNumber = values.cardNumber.trim();
   const showReview = isReady || showValidationDetails;
+  const completeness = getSaveCollectionCompleteness(readiness);
 
   return (
     <section
@@ -68,15 +70,41 @@ export function SaveCollectionReadySummary({
         ) : (
           <Info className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-foreground">
             {isReady ? "Medan Wajib Lengkap" : "Semakan Medan Wajib"}
           </h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {isReady
               ? "Semak ringkasan ini. Status padanan Saved ditunjukkan berasingan di bawah."
-              : `${readiness.invalidFields.length} medan perlu dilengkapkan atau diperbetulkan sebelum simpan.`}
+              : completeness.nicknameError
+                ? `${completeness.nicknameError} ${completeness.remaining} kumpulan medan perlu dilengkapkan atau diperbetulkan sebelum simpan.`
+                : `${completeness.remaining} kumpulan medan perlu dilengkapkan atau diperbetulkan sebelum simpan.`}
           </p>
+        </div>
+      </div>
+      <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <ul className="flex min-w-0 flex-wrap gap-2" aria-label="Required field groups">
+          {completeness.items.map((item) => (
+            <li key={item.label} className={item.complete
+              ? "inline-flex items-center gap-1.5 rounded-md border border-success/30 bg-success/5 px-2 py-1 text-xs text-success"
+              : "inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"}>
+              {item.complete
+                ? <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
+                : <Minus className="h-3 w-3 shrink-0" aria-hidden="true" />}
+              <span>{item.label}</span>
+              <span className="sr-only">{item.complete ? ": lengkap" : ": belum lengkap"}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex shrink-0 items-center gap-3 text-xs tabular-nums text-muted-foreground">
+          <span>{completeness.completed} / {completeness.total} lengkap</span>
+          <progress
+            aria-label="Required field completeness"
+            value={completeness.completed}
+            max={completeness.total}
+            className="h-2 w-24 accent-primary"
+          />
         </div>
       </div>
       <details className="group" open={showReview ? true : undefined}>

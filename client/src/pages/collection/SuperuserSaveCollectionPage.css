@@ -1,0 +1,44 @@
+.collection-save-nickname {
+  display: grid;
+  min-width: 0;
+  gap: var(--spacing-4);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-surface);
+  background: hsl(var(--card));
+  padding: var(--spacing-4);
+}
+
+.collection-save-nickname-controls {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spacing-3);
+}
+
+.collection-save-nickname-picker { min-width: 0; flex: 1 1 12rem; }
+.collection-save-nickname-controls > button { min-height: 44px; }
+.collection-save-nickname-picker label { color: hsl(var(--muted-foreground)); }
+
+.collection-save-nickname-context {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--spacing-2);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-control);
+  background: hsl(var(--background));
+  padding: var(--spacing-3);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 1024px) {
+  .collection-save-nickname {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    padding: var(--spacing-5);
+  }
+}

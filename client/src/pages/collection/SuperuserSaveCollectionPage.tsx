@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Info, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCollectionNicknames, type CollectionStaffNickname } from "@/lib/api";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
 import SaveCollectionPage from "@/pages/collection/SaveCollectionPage";
 import { parseApiError } from "@/pages/collection/utils";
+import "./SuperuserSaveCollectionPage.css";
 
 export default function SuperuserSaveCollectionPage() {
   const [nicknames, setNicknames] = useState<CollectionStaffNickname[]>([]);
@@ -43,12 +45,13 @@ export default function SuperuserSaveCollectionPage() {
 
   return (
     <div className="space-y-4">
-      <section aria-label="Nickname Collection" className="space-y-2 border-b border-border pb-4">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-0 flex-1 sm:max-w-md">
+      <section aria-label="Nickname Collection" className="collection-save-nickname">
+          <div className="collection-save-nickname-controls">
+            <div className="collection-save-nickname-picker">
               <CollectionNicknameSingleSelect
                 label="Simpan untuk nickname"
                 triggerId="save-collection-superuser-nickname"
+                triggerClassName="min-h-11"
                 open={open}
                 onOpenChange={setOpen}
                 loading={loading}
@@ -68,13 +71,17 @@ export default function SuperuserSaveCollectionPage() {
               disabled={loading || submitting}
               onClick={() => setReload((current) => current + 1)}
             >
+              <RotateCw className="h-4 w-4 shrink-0" aria-hidden="true" />
               Muat Semula
             </Button>
           </div>
-          <p className="max-w-3xl text-xs leading-5 text-muted-foreground">
-            Pilih nickname yang menerima collection. Menukar nickname mengosongkan butiran pelanggan
-            dan receipt semasa; draf bayaran disimpan berasingan bagi setiap nickname.
-          </p>
+          <div className="collection-save-nickname-context">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <p>
+              Pilih nickname yang menerima collection. Menukar nickname mengosongkan butiran pelanggan
+              dan receipt semasa; draf bayaran disimpan berasingan bagi setiap nickname.
+            </p>
+          </div>
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
           {!loading && !error && nicknames.length === 0 ? (
             <p role="status" className="text-sm text-muted-foreground">

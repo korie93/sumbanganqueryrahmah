@@ -1,5 +1,5 @@
 import { useId, type ChangeEvent, type MutableRefObject } from "react";
-import { RotateCcw } from "lucide-react";
+import { CloudUpload, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
 } from "@/pages/collection/useCollectionReceiptDraftPreviews";
 
 interface CollectionReceiptPanelProps {
+  presentation?: "default" | "workspace";
   pendingFiles: File[];
   inputRef: MutableRefObject<HTMLInputElement | null>;
   disabled?: boolean;
@@ -42,6 +43,7 @@ interface CollectionReceiptPanelProps {
 }
 
 export function CollectionReceiptPanel({
+  presentation = "default",
   pendingFiles,
   inputRef,
   disabled = false,
@@ -61,6 +63,7 @@ export function CollectionReceiptPanel({
   uploadLabel = "Upload Receipt",
   helperText = "One receipt at a time. JPG, JPEG, PNG, WEBP or PDF, up to 5MB each.",
 }: CollectionReceiptPanelProps) {
+  const isWorkspace = presentation === "workspace";
   const inputId = useId();
   const helperTextId = `${inputId}-help`;
   const draftPreviews = useCollectionReceiptDraftPreviews(pendingFiles);
@@ -76,6 +79,28 @@ export function CollectionReceiptPanel({
     removedExistingCount: removedReceiptIds.length,
     pendingCount: pendingFiles.length,
   });
+  const uploadButton = (
+    <Button
+      type="button"
+      variant={isWorkspace ? "default" : "outline"}
+      onClick={() => inputRef.current?.click()}
+      disabled={disabled}
+      {...(helperText ? { "aria-describedby": helperTextId } : {})}
+    >
+      {uploadLabel}
+    </Button>
+  );
+  const clearPendingButton = onClearPending ? (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={onClearPending}
+      disabled={disabled || pendingFiles.length === 0}
+    >
+      <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+      Clear Pending
+    </Button>
+  ) : null;
 
   return (
     <div className="space-y-3">
@@ -94,32 +119,39 @@ export function CollectionReceiptPanel({
         {...(helperText ? { "aria-describedby": helperTextId } : {})}
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => inputRef.current?.click()}
-          disabled={disabled}
-          {...(helperText ? { "aria-describedby": helperTextId } : {})}
-        >
-          {uploadLabel}
-        </Button>
-        {onClearPending ? (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onClearPending}
-            disabled={disabled || pendingFiles.length === 0}
-          >
-            <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-            Clear Pending
-          </Button>
-        ) : null}
-      </div>
-
-      <p id={helperTextId} className="text-xs text-muted-foreground">
-        {helperText}
-      </p>
+      {isWorkspace ? (
+        <>
+          {clearPendingButton ? (
+            <div className="flex flex-wrap justify-end gap-2">{clearPendingButton}</div>
+          ) : null}
+          <div className={`save-collection-receipt-upload-zone flex min-h-44 min-w-0 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-background/60 px-4 py-5 text-center sm:py-6${pendingFiles.length === 0 ? " save-collection-receipt-upload-zone--empty" : ""}`}>
+            <div className="save-collection-receipt-upload-entry flex flex-col items-center gap-3">
+              <div className="save-collection-receipt-upload-icon flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/30 text-primary">
+                <CloudUpload className="h-5 w-5" aria-hidden="true" />
+              </div>
+              {uploadButton}
+            </div>
+            <p id={helperTextId} className="max-w-3xl text-xs leading-relaxed text-muted-foreground">
+              {helperText}
+            </p>
+            {pendingFiles.length === 0 ? (
+              <p className="rounded-full border border-border/70 bg-muted/20 px-3 py-1 text-xs text-muted-foreground">
+                No pending receipt.
+              </p>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            {uploadButton}
+            {clearPendingButton}
+          </div>
+          <p id={helperTextId} className="text-xs text-muted-foreground">
+            {helperText}
+          </p>
+        </>
+      )}
       <CollectionReceiptDuplicateWarning pendingFiles={pendingFiles} />
       {summary.existingCount > 0 || summary.pendingCount > 0 ? (
         <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
@@ -271,7 +303,7 @@ export function CollectionReceiptPanel({
             </Badge>
           </div>
         ) : null}
-        {draftPreviews.length === 0 ? (
+        {draftPreviews.length === 0 ? isWorkspace ? null : (
           <div className="rounded-md border border-dashed border-border/60 px-3 py-3 text-xs text-muted-foreground">
             No pending receipt.
           </div>

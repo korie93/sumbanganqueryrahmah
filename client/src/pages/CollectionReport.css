@@ -88,3 +88,85 @@
   .collection-section-label-full { display: none; }
   .collection-section-label-short { display: inline; }
 }
+
+/* The supplied reference applies to entry content only. Other report sections
+   retain their compact navigation and the approved global shell is untouched. */
+.collection-report-frame--save .collection-report-navigation {
+  gap: var(--spacing-4);
+}
+
+.collection-report-save-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-surface);
+  padding: var(--spacing-2) var(--spacing-3);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.collection-report-save-shortcut kbd {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-control);
+  padding: var(--spacing-1) var(--spacing-2);
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+@media (min-width: 1024px) {
+  .collection-report-frame--save .collection-report-navigation {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-4);
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .collection-report-frame--save .collection-report-context {
+    order: 0;
+    max-width: none;
+    padding: 0;
+  }
+
+  .collection-report-frame--save .collection-report-context .ops-page-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--spacing-4);
+  }
+
+  .collection-report-frame--save .collection-report-context .ops-page-heading > div:first-child {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .collection-report-frame--save .collection-report-context .ops-page-heading > div:nth-child(2) {
+    width: auto;
+    max-width: 40%;
+    flex-shrink: 0;
+  }
+
+  .collection-report-frame--save .collection-section-nav {
+    flex: none;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-surface);
+    background: hsl(var(--card));
+    padding: var(--spacing-1);
+  }
+
+  .collection-report-frame--save .collection-section-label-full { display: inline; }
+  .collection-report-frame--save .collection-section-label-short { display: none; }
+
+  .collection-report-frame--save .collection-section-link[data-active="true"] {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+}

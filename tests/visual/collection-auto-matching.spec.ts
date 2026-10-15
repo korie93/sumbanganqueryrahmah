@@ -507,8 +507,10 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   await expect(matchingStatus(page)).toHaveText(matched);
   const feedback = page.locator("#save-collection-matching-feedback");
   const actions = page.locator("#save-collection-actions");
+  const footer = page.locator(".save-collection-submit-workspace");
   const save = actions.getByRole("button", { name: "Save Collection", exact: true });
-  await expect(actions).toHaveCSS("position", viewport.width < 640 ? "sticky" : "static");
+  await expect(footer).toHaveCSS("position", "static");
+  await expect(actions).toHaveCSS("position", "static");
   await expect(page.getByRole("heading", { name: "Saved Matching & Coverage", exact: true })).toHaveCount(0);
   await expect(page.getByText("Synthetic Saved Source", { exact: true })).toHaveCount(0);
   await expect(page.getByText("TOTAL DUE", { exact: true })).toHaveCount(0);
@@ -534,8 +536,13 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   const feedbackBox = (await feedback.boundingBox())!;
   const actionBox = (await actions.boundingBox())!;
   await expect(actions).toHaveCSS("position", "static");
+  await expect(footer).toHaveCSS("position", "static");
   expect(feedbackBox.height).toBeLessThan(viewport.height / 2);
-  expect(feedbackBox.y + feedbackBox.height).toBeLessThanOrEqual(actionBox.y + 1);
+  if (viewport.width >= 1024) {
+    expect(feedbackBox.x + feedbackBox.width).toBeLessThanOrEqual(actionBox.x + 1);
+  } else {
+    expect(feedbackBox.y + feedbackBox.height).toBeLessThanOrEqual(actionBox.y + 1);
+  }
   expect((await retry(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await retry(page).evaluate((element) => {
     const box = element.getBoundingClientRect();

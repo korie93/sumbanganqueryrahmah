@@ -119,10 +119,12 @@ test("card number visibility resets when input or restored record changes", () =
 });
 
 test("save collection form grid responds to available width and text scaling", () => {
+  const gridCss = readFileSync(path.resolve(process.cwd(), "client/src/pages/collection/SaveCollectionPage.css"), "utf8");
   assert.match(
-    saveCollectionPageSource,
-    /grid-cols-\[repeat\(auto-fit,minmax\(min\(100%,24rem\),1fr\)\)\]/,
+    gridCss,
+    /grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, max\(24rem, calc\(\(100% - var\(--spacing-6\)\) \/ 2\)\)\), 1fr\)\)/,
   );
+  assert.match(saveCollectionPageSource, /save-collection-details-grid grid/);
   assert.match(saveCollectionPageSource, /className="col-span-full"/);
   assert.doesNotMatch(saveCollectionPageSource, /lg:grid-cols-2/);
   assert.doesNotMatch(saveCollectionPageSource, /lg:col-span-2/);

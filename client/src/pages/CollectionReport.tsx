@@ -54,6 +54,7 @@ export default function CollectionReport() {
     isReadOnlyManager,
     isSuperuser,
   });
+  const isSaveWorkspace = navigation.subPage === "save" && !isReadOnlyManager;
 
   const redirectToSearchTab = useCallback(() => {
     nicknameAccess.clearNicknameSession();
@@ -94,6 +95,11 @@ export default function CollectionReport() {
   const staffNicknameLabel = nicknameAccess.staffNickname.trim();
   const headerActions = isMobile ? undefined : (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      {isSaveWorkspace ? (
+        <span className="collection-report-save-shortcut">
+          Simpan pantas: <kbd>Ctrl / ⌘ S</kbd>
+        </span>
+      ) : null}
       {staffNicknameLabel ? (
         <Badge variant="secondary" title={`Staff Nickname: ${staffNicknameLabel}`} className="collection-report-staff-badge rounded-full px-3 py-1 text-2xs">
           Staff Nickname: {staffNicknameLabel}
@@ -114,8 +120,8 @@ export default function CollectionReport() {
 
   return (
     <OperationalPage
-      width={navigation.subPage === "save" && !isReadOnlyManager ? "form" : "report"}
-      className="collection-report-frame"
+      width="report"
+      className={`collection-report-frame${isSaveWorkspace ? " collection-report-frame--save" : ""}`}
     >
       <div className="collection-report-navigation">
         <OperationalPageHeader

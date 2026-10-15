@@ -12,6 +12,7 @@ export async function installFixture(page: Page, baseURL: string | undefined, op
   holdSave?: boolean; failFirst?: boolean; holdNicknameReload?: boolean;
   controlledClock?: boolean;
   additionalNickname?: string;
+  aiEnabled?: boolean;
   onMatch?: (route: Route, index: number, fields: Record<string, string>) => Promise<void>;
   onSave?: (route: Route) => Promise<void>;
 } = {}) {
@@ -85,7 +86,7 @@ export async function installFixture(page: Page, baseURL: string | undefined, op
       twoFactorPendingSetup: false, twoFactorConfiguredAt: null, activatedAt: now, passwordChangedAt: now, lastLoginAt: now,
     } });
     if (endpoint === "GET /api/app-config") return respond(route, {
-      systemName: "SQR", aiEnabled: false, aiTimeoutMs: 30_000, heartbeatIntervalMinutes: 60,
+      systemName: "SQR", aiEnabled: options.aiEnabled ?? false, aiTimeoutMs: 30_000, heartbeatIntervalMinutes: 60,
       importUploadLimitBytes: 10 * 1024 * 1024, searchResultLimit: 250, semanticSearchEnabled: false,
       sessionTimeoutMinutes: 30, viewerRowsPerPage: 100, wsIdleMinutes: 10,
     });

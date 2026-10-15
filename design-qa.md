@@ -589,3 +589,305 @@ working; source/implementation full+focused comparisons inspected; responsive
 themes reviewed; all identified blocking issues repaired and recaptured.
 
 final result: passed
+
+---
+
+## Collection Report supplied-reference integration — 2026-10-15 (active)
+
+Source visual truth: `C:/Users/Administrator/Downloads/1000317582.png`,
+3840×3760 pixels, plus `SQR_Collection_Report_Product_Design_Codex.md`.
+This is actual application content integration, not a new app shell/prototype.
+The screenshot's global topbar is explicitly excluded. Header/sidebar, tokens,
+all collection hooks/endpoints/validation and financial rules remain protected.
+
+Evidence root: `artifacts/collection-reference-20261015/`.
+Baseline: `baseline-desktop-full.png`, `baseline-mobile-full.png`, with geometry
+and91 protected-shell file hashes. Initial actual implementation:
+`firstpass-dark-1600-full.png`, CSS1600×1000, DPR1, pixels1600×1728.
+Opened full-view combined input: `firstpass-compare-full.png` (2648×1651).
+Source was normalized to1600px width, cropped to module content (42,96–1558,1473),
+then density-normalized to1312px content width, height1192. Implementation
+content crop is x264,y81,width1312,height1615 from the original full screenshot,
+not a locator screenshot that accidentally scrolls under the sticky topbar.
+No implementation UI scaling, invented data or logo editing.
+
+Initial findings, ordered by impact:
+
+- [P1] Wide desktop form leaves an empty third grid track. At1600px the old
+  auto-fit24rem grid plus full-span receipt retains three tracks; customer and
+  payment cards occupy only two-thirds of the module and account/card stack.
+  Source shows exactly two balanced cards. Fix: cap responsive grid at two
+  columns based on available content width; keep one safe column below threshold.
+- [P2] Receipt card and footer touch with no gap, unlike the source's clear
+  section rhythm. Fix: scoped20px footer separation.
+- [P2] Mobile sticky actions acquired a short containing block during wrapping.
+  Fix: move the existing conditional sticky behavior to the footer, keep keyboard
+  and matching-attention states static, and verify focus/retry is not obscured.
+
+Five-surface first review: existing system-ui/Segoe UI typography and actual copy
+are intentionally retained; neutral authenticated tokens replace the mock's
+blue-black surface. Cards, grouped payment identification, RM prefix and real
+upload target follow the reference hierarchy. Existing real draft privacy text,
+readiness disclosure, errors and receipt metadata remain despite extra height.
+Pristine incompleteness is neutral instead of amber; explicit validation uses
+semantic warning and successful completion uses text+green. Original sharp Q,
+favicon and global icon assets remain unchanged; existing Lucide icons supply
+the matching UI vocabulary. No decorative raster assets need generation.
+
+Checklist: fix three findings; rebuild and recapture matching states; compare
+full and readable focused regions again; finish responsive/interaction/console
+checks and regression runs. Initial firstpass evidence is not final acceptance.
+
+final result: blocked
+
+### Post-fix comparison — Collection Report reference, revision3
+
+Source remains `C:/Users/Administrator/Downloads/1000317582.png` (3840×3760).
+Rendered implementation is the actual app, not a picture embedded in a demo:
+`artifacts/collection-reference-20261015/final-dark-1600-full.png`,1600×1641px,
+CSS viewport1600×1000,deviceScaleFactor1. Module content crop is
+x264,y81,width1312,height1528. Source normalized to1600px width, cropped
+(42,96–1558,1473), then density-normalized to1312×1192 for equal content width.
+The protected global topbar/sidebar are intentionally excluded from fidelity.
+Source sample nickname/IC and actual fictional fixture values are not identical;
+comparison is the initial entry state (one valid Batch group, six missing groups),
+not a pixel comparison of real customer records. No dummy values enter app code.
+
+Opened combined evidence (source and implementation in the same image):
+
+- `final-compare-full.png`: composition, title/internal tabs/nickname/form/receipt/footer.
+- `final-compare-form.png`: readable paired form/field/label/identification/RM details.
+- `final-compare-receipt-actions.png`: actual upload, completeness and action hierarchy.
+
+Also opened actual final390px/768px/1024px captures and light390px full-page;
+mobile action screenshots at390×844 and740×360 show the unchanged idle launcher
+below, not over, the real action buttons. These are located under
+`browser-ai-on-results/collection-reference-layou-*/mobile-action-clearance.png`.
+Final preview `http://127.0.0.1:60624/collection/save?auditTheme=dark` was opened in
+Codex browser; actual nickname selection and rendered form verified. Temporary
+viewport override was reset and obsolete baseline tab closed; preview retained.
+Authoritative dimension evidence uses fresh ChromiumDPR1, because the user's
+67% IAB zoom affects the IAB high-level viewport override. User zoom unchanged.
+
+Resolved findings and iteration history:
+
+1. [P1] Initial1600px third grid track: scoped track minimum now uses half available
+   width, with at most two equal cards and one full-span receipt. Final1600/1920
+   geometry asserts the two cards plus24px gap fill the complete grid width.
+2. [P2] Receipt/footer touching: scoped20px margin restores section separation.
+   Final geometry checks at all six widths, and combined evidence confirms it.
+3. [P2] Short sticky containing block: first fix moved sticky to footer, but the
+   revision2 actual390px capture exposed a more important [P1] entry obstruction
+   from that entire sticky block. Revision3 uses a static footer at every width,
+   plus local4.5rem+safe-area mobile bottom clearance. This follows the brief's
+   explicit condition that sticky may be used only if content is not obscured.
+   Original Reset/submit/validation/retry/shortcut behavior is untouched. Final
+   focused-field and action five-point hit tests cover320×740,390×844,740×360.
+4. Early desktop status geometry assertions expected the old vertical layout;
+   they now verify nonoverlapping side-by-side feedback/actions on desktop and
+   vertical ordering below1024, retaining retry hit-testing and actual requests.
+   A development StrictMode test required local runner sandbox escalation for
+   esbuild, then passed; no product assertion weakened.
+5. The first new AI-clearance test run had AI disabled in the synthetic fixture,
+   so all three launcher-presence assertions correctly failed. The fixture now
+   accepts opt-in `aiEnabled:true` for these tests, default false elsewhere.
+   Corrected reference suite11/11PASS, including all three actual idle launchers;
+   no AI prompt, chat activation or external service request is permitted.
+
+Five mandatory fidelity surfaces:
+
+- Fonts/typography: existing system-ui/Segoe UI fallback and tokenized28px h1,
+  16px card headings,14px field labels,12px supporting copy retained. Reference
+  is rounder/lighter; keeping approved SQR fonts/weights is explicitly intentional
+  under the brief. Line height/long text wrapping remains legible, no typography
+  overrides leak to the shell. Labels stay associated; card values stay masked.
+- Spacing/layout:1480px bounded module, compact single internal desktop strip,
+  nickname context card, exactly two balanced desktop panels, full-width receipt,
+  real completeness and separated footer.24px column gap,20px section rhythm,
+  14px card radii,44px controls. Safe one-column mode where available width cannot
+  fit two384px tracks. The screenshot's slightly unequal columns are adapted to
+  equal production cards. Extra height (1528versus1192 normalized) is intentional:
+  actual privacy guidance, real correction/review disclosure and upload controls
+  may not be deleted to mimic the shorter mock. No form-induced horizontal scroll.
+- Colors/tokens: established neutral authenticated dark surfaces/primary token
+  retained instead of introducing the mock's blue-black global palette. Existing
+  green/warning/destructive roles include visible text and icons. Initial missing
+  fields are neutral; explicit validation is warning; completed groups are green.
+  No gradients, blur/glass, heavy shadows, animation loop or dependency added.
+  Light mode is compatibility-checked, not a new global light-theme redesign.
+- Image quality/assets: supplied reference contains ordinary interface icons;
+  reused real Lucide library icons, no custom-drawn substitute artwork. Q/favicon/
+  sidebar and brand assets unmodified. No raster generation, fake logo or customer
+  avatar introduced. Receipt original bytes/previews and multi-file metadata still
+  use the existing implementation; no screenshot is shipped as UI.
+- Copy/content: actual labels, all tabs, validation errors, server feedback,
+  receipt file types/size limits, draft privacy and shortcuts retained. Completeness
+  counts seven visual groups dynamically from authoritative readiness errors;
+  account-or-card is one group, nickname prerequisite is separately announced.
+  No fixed1/7, synthetic nickname, fake save, fake DrafSesiAktif badge or unsupported
+  drop instruction. Phone field is not rewritten into a fixed+60 transformation.
+
+Accessibility and interactions: one visible h1, semantic section headings and
+account/card fieldset, associated inputs/error IDs, decorative icons/RM hidden
+from accessibility tree, named native progress, polite status, visible required
+labels, keyboard navigation and correction focus. Tests cover long unbroken
+names/nicknames, leading-zero card input, independent show/hide in input/review,
+draft reload/scope switch, held saves, idempotent retry, Reset confirmation,
+permission-limited user/admin/superuser and read-only manager, all module tabs,
+multi-receipt edits/removal, image/PDF failure/retry/zoom/rotation/Escape.
+Reduced-motion uses unchanged global conventions. No WCAG certification or
+real-device virtual-keyboard test is claimed.
+
+Verification collected so far for final source:
+
+- Complete client2067/2067PASS; presentation55/55PASS; browser/app TypeScript,
+  full client ESLint, all equivalent sanitized production build gatesPASS.
+- Token spacing/color, breakpoint, browser storage, entry shell, bundle budgets,
+  repo hygiene, tracked/untracked secret guards and whitespace diff checksPASS.
+- Broader unchanged scripts729PASS plus1existing opt-in skip.
+- Original Save light/dark snapshots intentionally differed and were visually
+  reviewed before update. Final no-update authenticated snapshots2/2PASS.
+  Only those two PNGs changed; other six baseline PNGs byte-identical.
+- Revision3 original browser slice87passed/3fixture-configuration failures;
+  corrected focused reference rerun11/11PASS and final role/layout13/13PASS.
+  Fresh combined final run is90/90PASS (zero unexpected/flaky/skipped), followed
+  by13/13layout/rolePASS, plus2/2no-update authenticated snapshotPASS. Reports:
+  `browser-final-green-report/index.html`, `layout-final-green-report/index.html`,
+  `browser-final-report/index.html`; machine-readable JSON/logs retained beside them.
+- All91 protected shell/token/shared-primitive files byte-identical, verified
+  after final code edits (`final-protected-shell.json`). No backend/shared/API,
+  schema/calculation/package/dependency/global CSS/brand source diff.
+
+Console/safety: exact synthetic browser fixtures assert zero unexpected requests,
+zero page errors and no document overflow. The read-only source preview rejects
+all mutations and closes its intentionally unavailable WebSocket, which reports
+`WebSocket closed without opened.` in capture metadata; its incomplete dashboard
+GET fixtures are not production failures. Codex tool telemetry403 is external to
+the app. Production, real customer data, accounts, database and AI are untouched.
+No live backend/PostgreSQL run or remote CI result is claimed.
+
+No actionable visual P0/P1/P2 remains. Optional P3: ClearPending occupies its own
+retained receipt-control row rather than the reference header; preserving the
+shared receipt panel without portal/duplicate controls is an accepted trade-off.
+
+Implementation checklist: source mapping integrated; all existing behaviors kept;
+identified layout blockers fixed and recaptured; full/focused comparisons opened;
+responsive/keyboard/error/privacy states tested; final combined reports passed.
+
+final result: passed
+
+### Approved compact Collection polish — 2026-10-16, in progress
+
+Scope: the user approved suggestions1–3 from the follow-up Product Design
+review: one desktop shortcut hint, receipt ClearPending in its section heading,
+and less empty upload height. Matching status relocation (suggestion4) is not
+included. Existing matching/save/receipt rules, default editor, shell and assets
+remain protected. The completed reference integration above is the baseline.
+
+Source visual truth: `artifacts/collection-reference-20261015/final-{dark,light}-{1440,390}-content.png`
+with the three explicitly approved deltas. Original supplied source remains
+`C:/Users/Administrator/Downloads/1000317582.png`.
+First implementation captures: `compact-final-*`; same CSS viewports and DPR1.
+At1440, source/actual content are1152x1547/1152x1420px. At390 they are
+358x2785/358x2712px. No stretch/rescale was applied; pairs align by module top.
+
+Opened combined full comparisons: `compact-compare-{dark,light}-1440.png` and
+`compact-compare-dark-390.png`. Focused actual receipt/header/footer comparison:
+`compact-compare-receipt.png`. Main also opened the real source preview in
+Codex browser and selected fictional CollectorAlpha; `compact-iab-review.jpg`.
+The IAB's existing zoom differs from CSS1:1; authoritative geometry uses fresh
+approved ChromiumDPR1. No user browser zoom was changed.
+
+Iteration1 finding [P2]: the relocated receipt header action can enter the
+unchanged idle AI launcher's right-edge strip near the viewport bottom (visible
+in both desktop combined comparisons). Add local receipt-action end margin,
+then rebuild, recapture, compare and assert all five action hit-test points with
+AI enabled on desktop/mobile before accepting. Do not change global launcher.
+
+Initial static/type/lint/build guards passed. Browser94 initial run:92passed,
+2timeouts during browser context setup, before app interaction (logs retained).
+Role/layout13passed. Initial snapshots intentionally differ only in the Save
+layout; review final versions before any baseline update. No tolerance relaxed.
+
+final result: blocked
+
+### Compact polish post-fix visual acceptance — 2026-10-16
+
+Source visual truth and approved scope remain the accepted pre-polish captures
+listed above, with only suggestions1–3 applied. Post-fix actual captures are
+`artifacts/collection-reference-20261015/compact-fixed-{dark,light}-{1440,390}-content.png`.
+CSS viewports1440x1000 and390x1000,DPR1; matching source/actual content widths
+1152px and358px. Source/actual content heights1547/1420 and2785/2712px.
+The reduced height is intentional, not a density/scale change. Original global
+shell is unmodified and excluded from these content comparisons.
+
+Combined evidence opened and reviewed after the fix:
+
+- `compact-fixed-compare-dark-1440.png`: whole module, single desktop hint,
+  unchanged cards/fields, actual receipt/readiness/static footer.
+- `compact-fixed-compare-receipt.png`: readable actual receipt header, relocated
+  action, upload and completeness/footer. The action is now clear of the AI.
+- `compact-fixed-compare-{dark,light}-390.png`: mobile wrapping, retained local
+  shortcut, receipt action on its own header row when needed, reachable controls.
+- `compact-snapshot-compare-{dark,light}.png`: exact1280x720,DPR1 baseline/actual
+  pairs reviewed before update. Only duplicate shortcut removal and resulting
+  module-content reflow are visible above the fold; global shell stays identical.
+- Codex browser tab3 shows current source preview at
+  `http://127.0.0.1:64521/collection/save?auditTheme=dark`, fictional CollectorAlpha.
+  `compact-iab-final.jpg` retains browser proof; browser error/warning log empty.
+  No viewport override or user zoom changed in this follow-up.
+
+Resolved P2 iteration history: first comparison showed the new header action
+overlapping the unchanged fixed AI launcher. Local receipt-action end clearance
+now reserves3.5rem. Rebuilt source was recaptured and paired again above; actual
+five-point button hit tests and keyboard clear pass with AI active at1440/390.
+An initial mobile test expected idle AI while a customer input was still focused;
+the application intentionally hides AI during typing. The test now moves normal
+focus to ClearPending before checking idle AI, rather than altering the product
+or weakening the obstruction assertion.
+
+Required fidelity surfaces:
+
+- Typography: existing family/weights/field labels/supporting-copy scale and line
+  heights retained. Header text wraps without clipping. No new font introduced.
+- Spacing/layout: header action slot, one visible shortcut per breakpoint, empty
+  zone152px minimum with32px icon and44px upload target; tighter8px gaps/12px
+  vertical padding. Existing field44px controls, two-column cards, summary and
+  footer separation stay intact. At narrow widths the header action wraps safely.
+- Colors/tokens: existing background/border/text/primary/disabled tokens reused;
+  no palette/global CSS/animation/dependency change. Light/dark both compared.
+- Assets/image quality: existing real Lucide icons reused, decorative icons remain
+  aria-hidden. Q/favicon/sidebar/brand originals and receipt bytes are untouched.
+  No generated, redrawn or rasterized replacement UI/brand asset introduced.
+- Copy/content: real helper/file-limit/privacy text retained; duplicate desktop
+  shortcut suppressed only at>=768, mobile guidance retained. No new drop promise,
+  matching status duplication, upload rule or save validation introduced.
+
+Keyboard/behavior checks retain the existing clear callback and busy/empty
+disabled guard; one ClearPending button only in SaveCollection. Generic panel
+callers retain optional clear action and default editor layout. Clearing pending
+receipts leaves customer values untouched and empties the file input without a
+save/match request. Visual tests cover320/390/740/768/1024/1440/1600/1920 widths,
+role permissions, long values, privacy, receipt preview/PDF and original save and
+matching transitions. No production/backend/live-database or WCAG certification
+claim is made.
+
+Verification: equivalent sanitized production build, app/browser TypeScript,
+full client lint and static safety gates passed (`*-compact-polish-3.log`).
+Complete client2069/2069passed, no skip/fail; focused SSR/source19/19passed.
+Broad browser94 had92passes and two new mobile test-state expectation failures
+explained above; all15 focused reference cases passed after the test fix,
+resolving those two. All79 non-reference cases passed on final app code, plus
+all15 reference cases and13role/layout cases. Do not describe the broad run's
+exit1 as a single clean94-test run. Logs retained for honest traceability.
+Only the two reviewed Save light/dark snapshot PNGs were updated by normal
+Playwright; six others byte-identical (`compact-snapshot-reviewed-change-report.json`).
+All91 protected shell/token/shared files byte-identical (`compact-final-guard-protected-shell.json`).
+
+No actionable visual P0/P1/P2 remains. Matching status relocation is intentionally
+deferred, outside the approved1–3 scope. Checklist: compare, fix AI clearance,
+recapture, verify keyboard/mobile and unchanged behavior, review/update only two
+snapshots. Final no-update snapshots2/2passed with no retry/skip:
+`snapshots-compact-snap-final.log`. Only the two approved baselines changed.
+
+final result: passed
