@@ -1,12 +1,8 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, UserCog } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
-import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
-import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ManagedAccountActionDialogs } from "@/pages/settings/account-management/ManagedAccountActionDialogs";
 import { ManagedAccountDetailSheet } from "@/pages/settings/account-management/ManagedAccountDetailSheet";
-import { ManagedAccountsAttentionSummary } from "@/pages/settings/account-management/ManagedAccountsAttentionSummary";
 import { DeleteManagedAccountDialog } from "@/pages/settings/account-management/DeleteManagedAccountDialog";
 import { ManagedAccountsDesktopTable } from "@/pages/settings/account-management/ManagedAccountsDesktopTable";
 import { ManagedAccountsFiltersPanel } from "@/pages/settings/account-management/ManagedAccountsFiltersPanel";
@@ -46,60 +42,22 @@ export function ManagedAccountsSection({
 
   return (
     <>
-      <SideTabDataPanel
-        title="Managed Account"
-        description="Search and manage closed accounts without crowding the rest of the Security page."
-        icon={UserCog}
-        actions={
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        }
-        filters={
+      <section aria-label="Managed accounts" data-testid="managed-accounts-workspace" className="min-w-0 space-y-4">
           <ManagedAccountsFiltersPanel
             activeFilters={filterState.activeFilters}
             attentionSummary={attentionSummary}
             hasActiveFilters={filterState.hasActiveFilters}
+            loading={loading}
             roleFilter={filterState.roleFilter}
             searchQuery={filterState.searchQuery}
             statusFilter={filterState.statusFilter}
             onClearAll={filterState.clearAllFilters}
+            onRefresh={onRefresh}
             onRoleChange={filterState.onRoleChange}
             onSearchQueryChange={filterState.onSearchQueryChange}
             onStatusChange={filterState.onStatusChange}
           />
-        }
-        summary={
-          <ManagedAccountsAttentionSummary
-            activeStatus={filterState.statusFilter}
-            loading={loading}
-            summary={attentionSummary}
-            totalUsers={pagination.total}
-            onStatusChange={filterState.onStatusChange}
-          />
-        }
-        pagination={
-          <AppPaginationBar
-            disabled={loading}
-            loading={loading}
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            pageSize={pagination.pageSize}
-            totalItems={pagination.total}
-            itemLabel="users"
-            onPageChange={(page) => {
-              onQueryChange({ page });
-            }}
-            onPageSizeChange={(pageSize) => {
-              onQueryChange({
-                page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
-                pageSize,
-              });
-            }}
-          />
-        }
-      >
+        <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
         {isMobile ? (
           <ManagedAccountsMobileList
             deletingManagedUserId={deletingManagedUserId}
@@ -133,7 +91,21 @@ export function ManagedAccountsSection({
             onViewDetails={setDetailUser}
           />
         )}
-      </SideTabDataPanel>
+          <div className="border-t border-border/70 pr-16 [&>div]:rounded-none [&>div]:border-0 [&>div]:bg-transparent" data-floating-ai-avoid="true">
+            <AppPaginationBar
+              disabled={loading}
+              loading={loading}
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              pageSize={pagination.pageSize}
+              totalItems={pagination.total}
+              itemLabel="accounts"
+              onPageChange={(page) => onQueryChange({ page })}
+              onPageSizeChange={(pageSize) => onQueryChange({ page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE, pageSize })}
+            />
+          </div>
+        </div>
+      </section>
 
       <ManagedAccountDetailSheet
         deletingManagedUserId={deletingManagedUserId}

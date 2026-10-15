@@ -749,7 +749,7 @@ test("V17 auth changes preserve authenticated module shells", async ({ page }) =
     { id: "billing", path: "/collection/billing-principal", readySelector: "[data-testid='billing-principal-page'][data-state='empty']" },
     { id: "analysis", path: "/monitor?section=analysis", readySelector: "[data-testid='text-analysis-title']" },
     { id: "activity", path: "/monitor?section=activity", readySelector: "[data-testid^='activity-row-']" },
-    { id: "accounts", path: "/settings?section=account-management", readySelector: "h3:has-text('Account health summary')" },
+    { id: "accounts", path: "/settings?section=account-management", readySelector: "[data-testid='account-management-workspace'] [aria-label='Account health summary']" },
   ];
   try {
     for (const width of [390, 1280]) {

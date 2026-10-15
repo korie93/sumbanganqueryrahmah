@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
   getLocalMailOutboxEmptyState,
@@ -7,10 +7,9 @@ import {
 } from "@/pages/settings/account-management/local-mail-outbox-utils";
 import {
   ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
-  hasNormalizedSearchChanged,
   normalizeSearchValue,
-  shouldSyncNormalizedSearch,
 } from "@/pages/settings/account-management/utils";
+import { getAccountManagementSearchSync } from "./account-management-search-sync";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
 import type { DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
 
@@ -31,6 +30,10 @@ export function useLocalMailOutboxState({
 }: UseLocalMailOutboxStateArgs) {
   const [emailQuery, setEmailQuery] = useState(query.searchEmail);
   const [subjectQuery, setSubjectQuery] = useState(query.searchSubject);
+  const previousAppliedEmail = useRef(query.searchEmail);
+  const previousAppliedSubject = useRef(query.searchSubject);
+  const lastSubmittedEmail = useRef<string | null>(null);
+  const lastSubmittedSubject = useRef<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"desc" | "asc">(query.sortDirection);
   const [previewToDelete, setPreviewToDelete] = useState<DevMailOutboxPreview | null>(null);
   const [clearAllOpen, setClearAllOpen] = useState(false);
@@ -47,6 +50,25 @@ export function useLocalMailOutboxState({
     () => normalizeSearchValue(deferredSubjectQuery),
     [deferredSubjectQuery],
   );
+  const emailSync = getAccountManagementSearchSync({
+    appliedSearch: query.searchEmail,
+    previousAppliedSearch: previousAppliedEmail.current,
+    lastSubmittedSearch: lastSubmittedEmail.current,
+    draftSearch: emailQuery,
+    deferredSearch: deferredEmailQuery,
+  });
+  const subjectSync = getAccountManagementSearchSync({
+    appliedSearch: query.searchSubject,
+    previousAppliedSearch: previousAppliedSubject.current,
+    lastSubmittedSearch: lastSubmittedSubject.current,
+    draftSearch: subjectQuery,
+    deferredSearch: deferredSubjectQuery,
+  });
+  // The server query applies both fields together, so neither may publish a stale deferred draft.
+  const canPublishSearch = !emailSync.resetDraft && !subjectSync.resetDraft
+    && normalizedDeferredEmailQuery === normalizeSearchValue(emailQuery)
+    && normalizedDeferredSubjectQuery === normalizeSearchValue(subjectQuery)
+    && (emailSync.publishSearch !== null || subjectSync.publishSearch !== null);
 
   const hasSearchFilter = normalizedDeferredEmailQuery.length > 0
     || normalizedDeferredSubjectQuery.length > 0;
@@ -107,30 +129,25 @@ export function useLocalMailOutboxState({
   }, [entries, previewEntry]);
 
   useEffect(() => {
-    if (hasNormalizedSearchChanged(emailQuery, query.searchEmail)) {
-      setEmailQuery(query.searchEmail);
-    }
-  }, [emailQuery, query.searchEmail]);
+    if (previousAppliedEmail.current !== query.searchEmail) lastSubmittedEmail.current = null;
+    previousAppliedEmail.current = query.searchEmail;
+    if (emailSync.resetDraft) setEmailQuery(query.searchEmail);
+  }, [emailSync.resetDraft, query.searchEmail]);
 
   useEffect(() => {
-    if (hasNormalizedSearchChanged(subjectQuery, query.searchSubject)) {
-      setSubjectQuery(query.searchSubject);
-    }
-  }, [query.searchSubject, subjectQuery]);
+    if (previousAppliedSubject.current !== query.searchSubject) lastSubmittedSubject.current = null;
+    previousAppliedSubject.current = query.searchSubject;
+    if (subjectSync.resetDraft) setSubjectQuery(query.searchSubject);
+  }, [query.searchSubject, subjectSync.resetDraft]);
 
   useEffect(() => {
-    if (sortDirection !== query.sortDirection) {
-      setSortDirection(query.sortDirection);
-    }
-  }, [query.sortDirection, sortDirection]);
+    setSortDirection(query.sortDirection);
+  }, [query.sortDirection]);
 
   useEffect(() => {
-    if (
-      !shouldSyncNormalizedSearch(normalizedDeferredEmailQuery, query.searchEmail)
-      && !shouldSyncNormalizedSearch(normalizedDeferredSubjectQuery, query.searchSubject)
-    ) {
-      return;
-    }
+    if (!canPublishSearch) return;
+    lastSubmittedEmail.current = normalizedDeferredEmailQuery;
+    lastSubmittedSubject.current = normalizedDeferredSubjectQuery;
     onQueryChange({
       page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
       searchEmail: normalizedDeferredEmailQuery,
@@ -139,9 +156,8 @@ export function useLocalMailOutboxState({
   }, [
     normalizedDeferredEmailQuery,
     normalizedDeferredSubjectQuery,
+    canPublishSearch,
     onQueryChange,
-    query.searchEmail,
-    query.searchSubject,
   ]);
 
   const copyPreviewLink = async (previewUrl: string) => {

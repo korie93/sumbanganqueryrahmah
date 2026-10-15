@@ -30,13 +30,13 @@ export function LocalMailOutboxDesktopTable({
   onOpenPreviewDialog,
 }: LocalMailOutboxDesktopTableProps) {
   return (
-    <Table className="min-w-[920px] text-sm">
-      <TableHeader>
+    <Table className="min-w-[920px] text-sm" containerProps={{ className: "overflow-visible", tabIndex: -1 }}>
+      <TableHeader className="sticky top-0 z-10 bg-muted/70">
         <TableRow>
-          <TableHead>Recipient</TableHead>
-          <TableHead>Subject</TableHead>
-          <TableHead>Created</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead scope="col">Recipient</TableHead>
+          <TableHead scope="col">Subject</TableHead>
+          <TableHead scope="col">Created</TableHead>
+          <TableHead scope="col" className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -60,7 +60,7 @@ export function LocalMailOutboxDesktopTable({
             >
               <TableCell className="font-medium">{entry.to}</TableCell>
               <TableCell>{entry.subject}</TableCell>
-              <TableCell>{formatDateTime(entry.createdAt)}</TableCell>
+              <TableCell className="whitespace-nowrap tabular-nums">{formatDateTime(entry.createdAt)}</TableCell>
               <TableCell className="text-right">
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button

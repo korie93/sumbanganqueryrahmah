@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,6 +12,7 @@ import {
 import { ManagedAccountActionImpactList } from "@/pages/settings/account-management/ManagedAccountActionImpactList";
 import { buildManagedAccountActionImpact } from "@/pages/settings/account-management/managed-accounts-utils";
 import type { ManagedUser } from "@/pages/settings/types";
+import { managedAccountDialogFocusHandoff } from "./managed-account-dialog-focus";
 
 type DeleteManagedAccountDialogProps = {
   deletingManagedUserId: string | null;
@@ -25,6 +27,7 @@ export function DeleteManagedAccountDialog({
   onClose,
   onDeleteUser,
 }: DeleteManagedAccountDialogProps) {
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const deleteImpactItems = buildManagedAccountActionImpact("delete");
 
   return (
@@ -36,7 +39,14 @@ export function DeleteManagedAccountDialog({
         }
       }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent onOpenAutoFocus={() => {
+        returnFocusRef.current = managedAccountDialogFocusHandoff.takeForDialog(user?.id, "delete");
+      }} onCloseAutoFocus={(event) => {
+        if (returnFocusRef.current?.isConnected) {
+          event.preventDefault();
+          returnFocusRef.current.focus({ preventScroll: true });
+        }
+      }}>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Managed Account</AlertDialogTitle>
           <AlertDialogDescription>

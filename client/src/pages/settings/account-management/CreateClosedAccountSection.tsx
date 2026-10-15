@@ -1,6 +1,5 @@
-import { AlertTriangle, CheckCircle2, Info, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { cn } from "@/lib/utils";
@@ -79,22 +78,25 @@ export function CreateClosedAccountSection({
   const RoleGuidanceIcon = roleGuidance.tone === "warning" ? AlertTriangle : Info;
 
   return (
-    <Card className="border-border/60 bg-background/60">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <ShieldCheck className="h-5 w-5" />
-          Create Closed Account
-        </CardTitle>
+    <section className="max-w-3xl rounded-lg border border-border/70 bg-card" aria-labelledby="create-closed-account-title">
+      <header className="space-y-1 px-4 pt-5 sm:px-6">
+        <h2 id="create-closed-account-title" className="text-lg font-semibold">Create Closed Account</h2>
         <p className="text-sm text-muted-foreground">
-          Superuser-only onboarding for accounts that must complete activation through email before
-          first login.
+          Invite a User, Manager or Admin. Access begins only after email activation.
         </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 xl:grid-cols-2">
+      </header>
+      <form className="space-y-4 px-4 pb-4 pt-4 sm:px-6 sm:pb-5" noValidate onSubmit={(event) => {
+        event.preventDefault();
+        if (!creatingManagedUser) onCreateManagedUser();
+      }}>
+        <div className="flex gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <p>The user creates their password through email activation. No initial password is required.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <label htmlFor="create-closed-account-full-name" className="text-sm font-medium">
-              Full name
+              Full name <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <Input
               id="create-closed-account-full-name"
@@ -178,13 +180,13 @@ export function CreateClosedAccountSection({
                   nextRole === "admin" || nextRole === "manager" ? nextRole : "user",
                 );
               }}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               disabled={creatingManagedUser}
               aria-describedby={roleDescriptionId}
             >
-              <option value="user">user</option>
-              <option value="manager">manager</option>
-              <option value="admin">admin</option>
+              <option value="user">User</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
             </select>
           </div>
         </div>
@@ -192,7 +194,7 @@ export function CreateClosedAccountSection({
         <div
           id={roleDescriptionId}
           className={cn(
-            "flex gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm",
+            "flex gap-2 rounded-md px-3 py-2.5 text-sm",
             roleGuidance.tone === "warning" && "border-amber-600/40 bg-amber-500/10",
           )}
         >
@@ -203,14 +205,14 @@ export function CreateClosedAccountSection({
             )}
             aria-hidden="true"
           />
-          <div className="min-w-0 space-y-1">
-            <p className="font-medium text-foreground">{roleGuidance.label}</p>
-            <p className="text-muted-foreground">{roleGuidance.description}</p>
+          <div className="min-w-0">
+            <span className="font-medium text-foreground">{roleGuidance.label}. </span>
+            <span className="text-muted-foreground">{roleGuidance.description}</span>
           </div>
         </div>
 
         <div
-          className="grid gap-2 rounded-lg border border-dashed border-border/70 bg-background/40 p-3 text-sm sm:grid-cols-3"
+          className="flex flex-wrap gap-x-4 gap-y-2 text-xs"
           aria-label="Create account readiness"
         >
           {readinessItems.map((item) => (
@@ -231,16 +233,16 @@ export function CreateClosedAccountSection({
 
         <div
           className={cn(
-            "-mx-6 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-6 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] pt-3 shadow-lg sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:mx-0 sm:flex-row sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none sqr-sm-backdrop-blur-none",
+            "-mx-4 flex justify-end border-t border-border/70 bg-card px-4 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] pt-3 sm:static sm:-mx-6 sm:px-6 sm:pb-0",
             keyboardOpen ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
           )}
           data-floating-ai-avoid="true"
         >
-          <Button onClick={onCreateManagedUser} disabled={creatingManagedUser} className="w-full sm:w-auto">
+          <Button type="submit" disabled={creatingManagedUser} className="w-full sm:w-auto">
             {creatingManagedUser ? "Creating..." : "Create Closed Account"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </form>
+    </section>
   );
 }

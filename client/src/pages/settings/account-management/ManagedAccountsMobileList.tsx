@@ -1,11 +1,10 @@
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { MobileActionMenu } from "@/components/data/MobileActionMenu";
-import { buildManagedAccountRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
-import { ManagedAccountsEmptyState } from "@/pages/settings/account-management/ManagedAccountsEmptyState";
-import type { ManagedAccountsEmptyStateContent } from "@/pages/settings/account-management/managed-accounts-shared";
-import { buildManagedAccountNextActionHint } from "@/pages/settings/account-management/managed-accounts-utils";
-import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
+import { buildManagedAccountRowAriaLabel } from "./account-management-row-aria";
+import { ManagedAccountsEmptyState } from "./ManagedAccountsEmptyState";
+import { ManagedAccountListActions } from "./ManagedAccountListActions";
+import { ManagedAccountLoginAccess } from "./ManagedAccountLoginAccess";
+import type { ManagedAccountsEmptyStateContent } from "./managed-accounts-shared";
+import { formatDateTime } from "./utils";
 import type { ManagedUser } from "@/pages/settings/types";
 
 type ManagedAccountsMobileListProps = {
@@ -23,147 +22,29 @@ type ManagedAccountsMobileListProps = {
 };
 
 export function ManagedAccountsMobileList({
-  deletingManagedUserId,
-  emptyState,
-  loading,
-  managedUsers,
-  onBanToggle,
-  onEditUser,
-  onRequestDelete,
-  onResetPassword,
-  onResendActivation,
-  onViewDetails,
-  onClearFilters,
+  deletingManagedUserId, emptyState, loading, managedUsers,
+  onBanToggle, onEditUser, onRequestDelete, onResetPassword, onResendActivation, onViewDetails, onClearFilters,
 }: ManagedAccountsMobileListProps) {
   if (loading || managedUsers.length === 0) {
-    return (
-      <div className="space-y-3 p-3">
-        <div className="rounded-lg border border-border/60 bg-background/70">
-          <ManagedAccountsEmptyState
-            state={emptyState}
-            onClearFilters={onClearFilters}
-          />
-        </div>
-      </div>
-    );
+    return <ManagedAccountsEmptyState state={emptyState} onClearFilters={onClearFilters} />;
   }
-
   return (
-    <div className="space-y-3 p-3">
+    <div className="divide-y divide-border/70">
       {managedUsers.map((user) => {
-        const nextActionHint = buildManagedAccountNextActionHint(user);
-
+        const lastLogin = user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Never signed in";
         return (
-          <div
-            key={user.id}
-            aria-label={buildManagedAccountRowAriaLabel({
-              formattedLastLoginAt: formatDateTime(user.lastLoginAt),
-              formattedLockedAt: user.lockedAt ? formatDateTime(user.lockedAt) : null,
-              user,
-            })}
-            className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
-            role="group"
-          >
+          <article key={user.id} role="group" aria-label={buildManagedAccountRowAriaLabel({ formattedLastLoginAt: lastLogin, formattedLockedAt: user.lockedAt ? formatDateTime(user.lockedAt) : null, user })} className="min-w-0 space-y-3 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
-                <div className="break-words font-medium">{user.username}</div>
-                <div className="break-words text-xs text-muted-foreground">
-                  {user.fullName || user.email || "No profile details"}
-                </div>
+                <h3 className="break-words text-sm font-semibold [overflow-wrap:anywhere]">{user.username}</h3>
+                <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{user.fullName || user.email || "No profile details"}</p>
               </div>
-              <MobileActionMenu
-                contentLabel="Managed account actions"
-                items={[
-                  {
-                    id: `details-${user.id}`,
-                    label: "View Details",
-                    onSelect: () => onViewDetails(user),
-                  },
-                  {
-                    id: `resend-${user.id}`,
-                    label: "Resend Activation",
-                    onSelect: () => onResendActivation(user),
-                    disabled: user.status !== "pending_activation" || Boolean(user.isBanned),
-                  },
-                  {
-                    id: `ban-${user.id}`,
-                    label: user.isBanned ? "Unban" : "Ban",
-                    onSelect: () => onBanToggle(user),
-                  },
-                  {
-                    id: `delete-${user.id}`,
-                    label: deletingManagedUserId === user.id ? "Deleting..." : "Delete",
-                    onSelect: () => onRequestDelete(user),
-                    disabled: deletingManagedUserId === user.id,
-                    destructive: true,
-                  },
-                ]}
-              />
+              <Badge variant="secondary" className="shrink-0 rounded-md font-normal capitalize">{user.role}</Badge>
             </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{user.role}</Badge>
-              <Badge variant={getStatusVariant(user.status, user.isBanned)}>
-                {user.isBanned ? "banned" : user.status}
-              </Badge>
-              {user.lockedAt ? (
-                <Badge variant="destructive" title={user.lockedReason || "Account locked"}>
-                  locked
-                </Badge>
-              ) : null}
-              {user.mustChangePassword ? <Badge variant="outline">must change password</Badge> : null}
-              <Badge
-                variant={
-                  nextActionHint.tone === "danger"
-                    ? "destructive"
-                    : nextActionHint.tone === "success"
-                      ? "default"
-                      : "secondary"
-                }
-                title={nextActionHint.description}
-              >
-                Next: {nextActionHint.label}
-              </Badge>
-            </div>
-
-            <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
-              <div className="space-y-1">
-                <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Last Login</dt>
-                <dd>{formatDateTime(user.lastLoginAt)}</dd>
-              </div>
-              {user.lockedAt ? (
-                <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Locked At</dt>
-                  <dd>{formatDateTime(user.lockedAt)}</dd>
-                </div>
-              ) : null}
-            </dl>
-
-            <div className="grid gap-2 sm:flex sm:flex-row" data-floating-ai-avoid="true">
-              <Button variant="outline" className="w-full sm:w-auto" onClick={() => onViewDetails(user)}>
-                Details
-              </Button>
-              <Button variant="outline" className="w-full sm:w-auto" onClick={() => onEditUser(user)}>
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => onResetPassword(user)}
-              >
-                Send Reset Email
-              </Button>
-              {user.status === "pending_activation" && !user.isBanned ? (
-                <Button
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => onResendActivation(user)}
-                >
-                  Resend Activation
-                </Button>
-              ) : null}
-            </div>
-          </div>
+            <ManagedAccountLoginAccess user={user} />
+            <p className="text-xs tabular-nums text-muted-foreground">Last login: {lastLogin}</p>
+            <ManagedAccountListActions user={user} deletingManagedUserId={deletingManagedUserId} onBanToggle={onBanToggle} onDelete={onRequestDelete} onEdit={onEditUser} onResetPassword={onResetPassword} onResendActivation={onResendActivation} onViewDetails={onViewDetails} />
+          </article>
         );
       })}
     </div>

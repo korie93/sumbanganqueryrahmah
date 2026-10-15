@@ -1,6 +1,5 @@
-import { Inbox, RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
-import { SideTabDataPanel } from "@/components/layout/SideTabDataPanel";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LocalMailOutboxDesktopTable } from "@/pages/settings/account-management/LocalMailOutboxDesktopTable";
@@ -35,29 +34,28 @@ export function LocalMailOutboxSection({
 
   return (
     <>
-      <SideTabDataPanel
-        title="Local Mail Outbox"
-        description="Search and manage development activation or reset emails captured locally."
-        icon={Inbox}
-        actions={
+      <section className="min-w-0 space-y-4" aria-label="Local Mail Outbox">
+        <header className="space-y-1">
+          <h2 className="text-lg font-semibold">Local Mail Outbox</h2>
+          <p className="text-sm text-muted-foreground">Development email previews only. Outbox is {enabled ? "enabled" : "disabled"}; production delivery is not shown here.</p>
+        </header>
+        <LocalMailOutboxFiltersPanel
+          actions={
           <>
-            <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <Button variant="outline" onClick={onRefresh} disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
               Refresh
             </Button>
             <Button
               variant="outline"
-              size="sm"
               onClick={state.openClearAllDialog}
               disabled={clearingDevMailOutbox || loading || entries.length === 0}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
               Delete All
             </Button>
           </>
-        }
-        filters={
-          <LocalMailOutboxFiltersPanel
+          }
             activeFilters={state.activeFilters}
             emailQuery={state.emailQuery}
             hasActiveFilters={state.hasSearchFilter}
@@ -67,35 +65,11 @@ export function LocalMailOutboxSection({
             onEmailQueryChange={state.onEmailQueryChange}
             onSortDirectionChange={state.onSortDirectionChange}
             onSubjectQueryChange={state.onSubjectQueryChange}
-          />
-        }
-        summary={
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm">
-            <span className="font-medium">Total previews: {pagination.total}</span>
-            <span className="text-muted-foreground">Current page: {entries.length}</span>
-            <span className="text-muted-foreground">Dev outbox: {enabled ? "Enabled" : "Disabled"}</span>
-          </div>
-        }
-        pagination={
-          <AppPaginationBar
-            disabled={loading}
-            loading={loading}
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            pageSize={pagination.pageSize}
-            totalItems={pagination.total}
-            itemLabel="emails"
-            onPageChange={(page) => {
-              onQueryChange({ page });
-            }}
-            onPageSizeChange={(pageSize) => {
-              onQueryChange({ page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE, pageSize });
-            }}
-          />
-        }
-      >
+        />
+        <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
+          <div role="region" aria-label="Local mail preview list" tabIndex={0} className="max-h-[65vh] overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [scrollbar-gutter:stable]">
         {!enabled && pagination.total === 0 ? (
-          <div className="flex h-full min-h-[240px] items-center justify-center p-6 text-sm text-muted-foreground">
+          <div className="flex min-h-[180px] items-center justify-center p-6 text-sm text-muted-foreground">
             Local development mail outbox is disabled.
           </div>
         ) : isMobile ? (
@@ -123,7 +97,22 @@ export function LocalMailOutboxSection({
             onOpenPreviewDialog={state.openPreviewDialog}
           />
         )}
-      </SideTabDataPanel>
+          </div>
+          <div className="border-t border-border/70 p-3 pr-16 [&>div]:rounded-none [&>div]:border-0 [&>div]:bg-transparent [&>div]:p-0" data-floating-ai-avoid="true">
+            <AppPaginationBar
+              disabled={loading}
+              loading={loading}
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              pageSize={pagination.pageSize}
+              totalItems={pagination.total}
+              itemLabel="emails"
+              onPageChange={(page) => onQueryChange({ page })}
+              onPageSizeChange={(pageSize) => onQueryChange({ page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE, pageSize })}
+            />
+          </div>
+        </div>
+      </section>
 
       <LocalMailOutboxDialogs
         clearAllOpen={state.clearAllOpen}

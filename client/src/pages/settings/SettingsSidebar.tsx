@@ -11,6 +11,7 @@ import { BACKUP_SETTINGS_CATEGORY_ID } from "@/pages/settings/settings-controlle
 import type { SettingCategory } from "@/pages/settings/types";
 
 interface SettingsSidebarProps {
+  compact?: boolean;
   categories: SettingCategory[];
   categoryDirtyMap: Map<string, number>;
   mobileOpen: boolean;
@@ -22,6 +23,7 @@ interface SettingsSidebarProps {
 }
 
 export function SettingsSidebar({
+  compact = false,
   categories,
   categoryDirtyMap,
   mobileOpen,
@@ -31,6 +33,7 @@ export function SettingsSidebar({
 }: SettingsSidebarProps) {
   const isMobile = useIsMobile();
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const navigationRef = useRef<HTMLElement>(null);
   const items = useMemo(
     () =>
       categories.map((category) => ({
@@ -80,8 +83,8 @@ export function SettingsSidebar({
     );
   });
 
-  if (!isMobile) {
-    return <nav aria-label="Settings Navigation" className="flex flex-wrap gap-1 border-b border-border pb-3">{renderItems(false)}</nav>;
+  if (!isMobile && !compact) {
+    return <nav ref={navigationRef} aria-label="Settings Navigation" className="flex flex-wrap gap-1 border-b border-border pb-3">{renderItems(false)}</nav>;
   }
 
   return (
@@ -90,15 +93,16 @@ export function SettingsSidebar({
         ref={launcherRef}
         type="button"
         variant="outline"
-        className="min-h-11 w-full justify-between gap-3"
+        className={compact ? "min-h-11 h-auto w-fit justify-start gap-2 border-transparent bg-transparent px-0 py-1 text-xs shadow-none hover:bg-transparent sm:min-h-8" : "min-h-11 w-full justify-between gap-3"}
         onClick={() => onMobileOpenChange(true)}
         aria-label={`Browse Settings: ${selectedItem?.label || "Choose a section"}`}
         aria-haspopup="dialog"
         {...getAriaExpandedProps(mobileOpen)}
         data-testid="button-open-settings-sections"
       >
+        {compact ? <><span className="text-primary">Settings</span><span aria-hidden="true" className="text-muted-foreground">/</span></> : null}
         <span className="min-w-0 truncate">{selectedItem?.label || "Choose a section"}</span>
-        <span className="ml-auto text-xs text-muted-foreground">{items.length} sections</span>
+        {!compact ? <span className="ml-auto text-xs text-muted-foreground">{items.length} sections</span> : null}
         <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
       </Button>
       <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
@@ -108,6 +112,7 @@ export function SettingsSidebar({
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             if (launcherRef.current?.isConnected) launcherRef.current.focus({ preventScroll: true });
+            else navigationRef.current?.querySelector<HTMLButtonElement>('button[aria-current="page"]')?.focus({ preventScroll: true });
           }}
         >
           <SheetHeader className="pr-8 text-left">

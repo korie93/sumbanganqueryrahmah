@@ -235,13 +235,14 @@ test("special Settings deep links wait for real bootstrap and allow later catego
   const workflow = browser.slice(browser.indexOf("async function verifySettingsDeepLinks("), browser.indexOf("async function verifyMonitor("));
   assert.match(workflow, /\["backup-restore", "Backup & Restore"/);
   assert.match(workflow, /\["account-management", "Account Management"/);
-  assert.match(workflow, /getByText\("User Account Management", \{ exact: true \}\)/);
+  assert.match(workflow, /getByTestId\("account-management-workspace"\)/);
   assert.match(workflow, /getByRole\("heading", \{ level: 1, name: heading, exact: true \}\)/);
   assert.match(workflow, /error\.redesignStep \?\?= deepLinkStep/);
   assert.ok(workflow.indexOf("page.waitForResponse") < workflow.indexOf("page.goto"));
   assert.match(workflow, /await response\.finished\(\)/);
   assert.match(workflow, /payload\.categories\?\.find/);
   assert.match(workflow, /\["General", "Security"\]/);
+  assert.match(workflow, /if \(await categoryLauncher\.isVisible\(\)\) await categoryLauncher\.click\(\)/);
   assert.match(workflow, /await page\.getByTestId\("two-factor-settings"\)\.count\(\), 0/);
   assert.match(workflow, /await page\.locator\("#my-account-new-password"\)\.count\(\), 0/);
   assert.match(workflow, /Applied deep link does not pin later category navigation/);

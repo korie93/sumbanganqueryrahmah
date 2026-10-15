@@ -119,7 +119,7 @@ export default function SettingsPage({
           </>
         ) : (
           <>
-            <OperationalPageHeader
+            {!controller.isAccountManagementCategory ? <OperationalPageHeader
               title={controller.currentCategory?.name || "System Settings"}
               eyebrow="Administration"
               description={
@@ -128,10 +128,11 @@ export default function SettingsPage({
                   ? "Manage system tools and protected admin sections from one place."
                   : "Enterprise system configuration with role-based access and audit.")
               }
-            />
+            /> : null}
 
             <div className="min-w-0 space-y-4">
               <SettingsSidebar
+                compact={controller.isAccountManagementCategory}
                 categories={controller.categories}
                 categoryDirtyMap={controller.categoryDirtyMap}
                 mobileOpen={mobileSidebarOpen}

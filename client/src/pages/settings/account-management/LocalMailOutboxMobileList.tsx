@@ -31,13 +31,11 @@ export function LocalMailOutboxMobileList({
 }: LocalMailOutboxMobileListProps) {
   if (loading || entries.length === 0) {
     return (
-      <div className="space-y-3 p-3">
-        <div className="rounded-lg border border-border/60 bg-background/70">
+      <div>
           <LocalMailOutboxEmptyState
             state={emptyState}
             onClearFilters={onClearFilters}
           />
-        </div>
       </div>
     );
   }
@@ -51,7 +49,7 @@ export function LocalMailOutboxMobileList({
             entry,
             formattedCreatedAt: formatDateTime(entry.createdAt),
           })}
-          className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+          className="space-y-3 rounded-lg border border-border/70 bg-background p-3"
           role="group"
         >
           <div className="flex items-start justify-between gap-3">
@@ -78,10 +76,10 @@ export function LocalMailOutboxMobileList({
             />
           </div>
 
-          <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
+          <dl className="border-t border-border/60 pt-3 text-sm">
             <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Created</dt>
-              <dd>{formatDateTime(entry.createdAt)}</dd>
+              <dt className="text-xs text-muted-foreground">Created</dt>
+              <dd className="tabular-nums">{formatDateTime(entry.createdAt)}</dd>
             </div>
           </dl>
 
@@ -92,15 +90,6 @@ export function LocalMailOutboxMobileList({
               onClick={() => onOpenPreviewDialog(entry)}
             >
               Open
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                void onCopyPreviewLink(entry.previewUrl);
-              }}
-            >
-              Copy Link
             </Button>
           </div>
         </div>

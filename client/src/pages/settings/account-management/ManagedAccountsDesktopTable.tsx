@@ -32,14 +32,15 @@ export function ManagedAccountsDesktopTable({
   onClearFilters,
 }: ManagedAccountsDesktopTableProps) {
   return (
-    <Table className="min-w-[980px] text-sm">
+    <Table className="min-w-[800px] text-sm" containerProps={{ role: "region", "aria-label": "Managed accounts table", className: "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" }}>
+      <caption className="sr-only">Managed account identities, roles and login access</caption>
       <TableHeader>
-        <TableRow>
-          <TableHead>User</TableHead>
+        <TableRow className="bg-muted/25 hover:bg-muted/25">
+          <TableHead>Account</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Last Login</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead>Login access</TableHead>
+          <TableHead>Last login</TableHead>
+          <TableHead className="pr-20 text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

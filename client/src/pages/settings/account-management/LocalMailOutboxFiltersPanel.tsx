@@ -1,11 +1,15 @@
-import { Search } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Filter, Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import {
   LOCAL_MAIL_OUTBOX_SORT_OPTIONS,
 } from "@/pages/settings/account-management/local-mail-outbox-shared";
 
 type LocalMailOutboxFiltersPanelProps = {
+  actions?: ReactNode;
   activeFilters: ActiveFilterChip[];
   emailQuery: string;
   hasActiveFilters: boolean;
@@ -18,6 +22,7 @@ type LocalMailOutboxFiltersPanelProps = {
 };
 
 export function LocalMailOutboxFiltersPanel({
+  actions,
   activeFilters,
   emailQuery,
   hasActiveFilters,
@@ -28,14 +33,16 @@ export function LocalMailOutboxFiltersPanel({
   onSortDirectionChange,
   onSubjectQueryChange,
 }: LocalMailOutboxFiltersPanelProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 xl:grid-cols-[1fr_1fr_180px]">
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Search by email</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1 basis-64 space-y-2">
+          <label htmlFor="local-mail-outbox-email-query" className="sr-only">Search by email</label>
           <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
+              id="local-mail-outbox-email-query"
               name="localMailOutboxEmailQuery"
               type="search"
               value={emailQuery}
@@ -49,11 +56,20 @@ export function LocalMailOutboxFiltersPanel({
             />
           </div>
         </div>
+        <Button type="button" variant="outline" {...getAriaExpandedProps(filtersOpen)} aria-controls="local-mail-outbox-filters" onClick={() => setFiltersOpen((open) => !open)}>
+          <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
+          Filter
+        </Button>
+        {actions}
+      </div>
+      {filtersOpen ? (
+      <div id="local-mail-outbox-filters" className="grid gap-3 rounded-md border border-border/70 bg-muted/20 p-3 sm:grid-cols-[minmax(0,1fr)_180px]">
         <div className="space-y-2">
-          <p className="text-sm font-medium">Search by subject</p>
+          <label htmlFor="local-mail-outbox-subject-query" className="text-sm font-medium">Search by subject</label>
           <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
+              id="local-mail-outbox-subject-query"
               name="localMailOutboxSubjectQuery"
               type="search"
               value={subjectQuery}
@@ -80,7 +96,7 @@ export function LocalMailOutboxFiltersPanel({
             title="Sort by date"
             value={sortDirection}
             onChange={(event) => onSortDirectionChange(event.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {LOCAL_MAIL_OUTBOX_SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -90,6 +106,7 @@ export function LocalMailOutboxFiltersPanel({
           </select>
         </div>
       </div>
+      ) : null}
       <ActiveFilterChips
         items={activeFilters}
         onClearAll={hasActiveFilters ? onClearAll : undefined}

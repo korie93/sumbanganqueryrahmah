@@ -925,9 +925,9 @@ async function verifySettingsDeepLinks(page, { baseUrl, width, capture, diagnost
   await page.setViewportSize({ width, height: width <= 430 ? 900 : 1000 });
   for (const [section, heading, ready] of [
     ["backup-restore", "Backup & Restore", () => page.getByTestId("button-refresh-backups")],
-    // This existing CardTitle renders a div, not a heading. The page h1 is
-    // asserted independently below; do not invent semantics in the verifier.
-    ["account-management", "Account Management", () => page.getByText("User Account Management", { exact: true })],
+    // The workspace has no duplicate inner heading; its main page h1 is
+    // asserted independently below.
+    ["account-management", "Account Management", () => page.getByTestId("account-management-workspace")],
   ]) {
     // Arm the real bootstrap response before full navigation. Synthetic sidebar
     // entries can exist before server categories; both must finish before the
@@ -953,7 +953,9 @@ async function verifySettingsDeepLinks(page, { baseUrl, width, capture, diagnost
       deepLinkStep = `${section}: navigate ${categoryName}`;
       const category = payload.categories?.find((entry) => entry.name === categoryName);
       assert.ok(category?.id, `Actual Settings API includes ${categoryName}`);
-      if (width < 768) await page.getByTestId("button-open-settings-sections").click();
+      // Account Management uses the compact category launcher on desktop too.
+      const categoryLauncher = page.getByTestId("button-open-settings-sections");
+      if (await categoryLauncher.isVisible()) await categoryLauncher.click();
       const navigation = page.getByRole("navigation", { name: "Settings Navigation", exact: true });
       const item = navigation.getByRole("button", { name: new RegExp(`^${categoryName}(?:\\s|$)`) });
       await item.click();

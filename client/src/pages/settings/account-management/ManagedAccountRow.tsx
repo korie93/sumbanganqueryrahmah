@@ -1,11 +1,11 @@
 import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { buildManagedAccountRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
-import { buildManagedAccountNextActionHint } from "@/pages/settings/account-management/managed-accounts-utils";
+import { buildManagedAccountRowAriaLabel } from "./account-management-row-aria";
+import { ManagedAccountListActions } from "./ManagedAccountListActions";
+import { ManagedAccountLoginAccess } from "./ManagedAccountLoginAccess";
 import type { ManagedUser } from "@/pages/settings/types";
-import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
+import { formatDateTime } from "./utils";
 
 interface ManagedAccountRowProps {
   deletingManagedUserId: string | null;
@@ -18,104 +18,20 @@ interface ManagedAccountRowProps {
   user: ManagedUser;
 }
 
-export const ManagedAccountRow = memo(function ManagedAccountRow({
-  deletingManagedUserId,
-  onBanToggle,
-  onDelete,
-  onEdit,
-  onResetPassword,
-  onResendActivation,
-  onViewDetails,
-  user,
-}: ManagedAccountRowProps) {
-  const formattedLastLoginAt = formatDateTime(user.lastLoginAt);
-  const formattedLockedAt = user.lockedAt ? formatDateTime(user.lockedAt) : null;
-  const nextActionHint = buildManagedAccountNextActionHint(user);
-
+export const ManagedAccountRow = memo(function ManagedAccountRow({ user, ...actions }: ManagedAccountRowProps) {
+  const formattedLastLoginAt = user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Never signed in";
   return (
-    <TableRow
-      aria-label={buildManagedAccountRowAriaLabel({
-        formattedLastLoginAt,
-        formattedLockedAt,
-        user,
-      })}
-    >
-      <TableCell>
-        <div className="space-y-1">
-          <div className="font-medium">{user.username}</div>
-          <div className="text-xs text-muted-foreground">
-            {user.fullName || user.email || "No profile details"}
-          </div>
+    <TableRow className="focus-within:bg-muted/30" aria-label={buildManagedAccountRowAriaLabel({ formattedLastLoginAt, formattedLockedAt: user.lockedAt ? formatDateTime(user.lockedAt) : null, user })}>
+      <TableCell className="w-[20%] min-w-[10rem]">
+        <div className="min-w-0 space-y-1">
+          <div className="break-words font-medium [overflow-wrap:anywhere]">{user.username}</div>
+          <div className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{user.fullName || user.email || "No profile details"}</div>
         </div>
       </TableCell>
-      <TableCell>
-        <Badge variant="secondary">{user.role}</Badge>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant={getStatusVariant(user.status, user.isBanned)}>
-            {user.isBanned ? "banned" : user.status}
-          </Badge>
-          {user.lockedAt ? (
-            <Badge variant="destructive" title={user.lockedReason || "Account locked"}>
-              locked
-            </Badge>
-          ) : null}
-          {user.mustChangePassword ? <Badge variant="outline">must change password</Badge> : null}
-        </div>
-        <div className="mt-2">
-          <Badge
-            variant={
-              nextActionHint.tone === "danger"
-                ? "destructive"
-                : nextActionHint.tone === "success"
-                  ? "default"
-                  : "secondary"
-            }
-            title={nextActionHint.description}
-          >
-            Next: {nextActionHint.label}
-          </Badge>
-        </div>
-        {user.lockedAt ? (
-          <div className="mt-1 text-xs text-muted-foreground">
-            Locked {formattedLockedAt}
-          </div>
-        ) : null}
-      </TableCell>
-      <TableCell>{formattedLastLoginAt}</TableCell>
-      <TableCell className="text-right">
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => onViewDetails(user)}>
-            Details
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => onEdit(user)}>
-            Edit
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => onResetPassword(user)}>
-            Send Reset Email
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onResendActivation(user)}
-            disabled={user.status !== "pending_activation" || Boolean(user.isBanned)}
-          >
-            Resend Activation
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => onBanToggle(user)}>
-            {user.isBanned ? "Unban" : "Ban"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDelete(user)}
-            disabled={deletingManagedUserId === user.id}
-          >
-            {deletingManagedUserId === user.id ? "Deleting..." : "Delete"}
-          </Button>
-        </div>
-      </TableCell>
+      <TableCell className="w-[12%]"><Badge variant="secondary" className="rounded-md font-normal capitalize">{user.role}</Badge></TableCell>
+      <TableCell className="w-[28%] max-w-[20rem]"><ManagedAccountLoginAccess user={user} /></TableCell>
+      <TableCell className="w-[20%] text-xs tabular-nums">{formattedLastLoginAt}</TableCell>
+      <TableCell className="w-[20%] pr-20 text-right"><ManagedAccountListActions user={user} {...actions} /></TableCell>
     </TableRow>
   );
 });

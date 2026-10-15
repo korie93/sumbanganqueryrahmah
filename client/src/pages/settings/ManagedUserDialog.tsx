@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -18,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { managedAccountDialogFocusHandoff } from "@/pages/settings/account-management/managed-account-dialog-focus";
 import type { ManagedUser } from "@/pages/settings/types";
 import type { ManageableUserRole } from "@shared/user-roles";
 
@@ -72,22 +75,40 @@ export function ManagedUserDialog({
   onSaveCriticalSettings,
   saving,
 }: ManagedUserDialogProps) {
+  const fullNameInputRef = useRef<HTMLInputElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   return (
     <>
       <Dialog open={managedDialogOpen} onOpenChange={onManagedDialogOpenChange}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="flex max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:p-0" onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current = managedAccountDialogFocusHandoff.takeForDialog(managedSelectedUser?.id, "edit")
+            ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+          fullNameInputRef.current?.focus();
+        }} onCloseAutoFocus={(event) => {
+          if (returnFocusRef.current?.isConnected) {
+            event.preventDefault();
+            returnFocusRef.current.focus({ preventScroll: true });
+          }
+        }}>
+          <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-4 pr-12 text-left sm:px-6">
             <DialogTitle>Edit Managed Account</DialogTitle>
             <DialogDescription>
               Update account details for {managedSelectedUser?.username || "selected user"}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 [scrollbar-gutter:stable]">
+            <div className="flex gap-2 rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2.5 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p>Role, status and ban changes affect this account&apos;s access. An existing login lock is not removed by changing the account record.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="managed-user-full-name" className="text-sm font-medium">
                 Full Name
               </label>
               <Input
+                ref={fullNameInputRef}
                 id="managed-user-full-name"
                 name="managedUserFullName"
                 autoComplete="name"
@@ -112,7 +133,7 @@ export function ManagedUserDialog({
                 disabled={managedSaving}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <label htmlFor="managed-user-email" className="text-sm font-medium">
                 Email
               </label>
@@ -130,6 +151,7 @@ export function ManagedUserDialog({
                 disabled={managedSaving}
               />
             </div>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <label htmlFor="managed-user-role" className="text-sm font-medium">
@@ -146,17 +168,17 @@ export function ManagedUserDialog({
                         : "user",
                     )
                   }
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   disabled={managedSaving}
                 >
-                  <option value="user">user</option>
-                  <option value="manager">manager</option>
-                  <option value="admin">admin</option>
+                  <option value="user">User</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
                 </select>
               </div>
               <div className="space-y-2">
                 <label htmlFor="managed-user-status" className="text-sm font-medium">
-                  Status
+                  Account record status
                 </label>
                 <select
                   id="managed-user-status"
@@ -171,13 +193,13 @@ export function ManagedUserDialog({
                         | "disabled",
                     )
                   }
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   disabled={managedSaving}
                 >
-                  <option value="pending_activation">pending_activation</option>
-                  <option value="active">active</option>
-                  <option value="suspended">suspended</option>
-                  <option value="disabled">disabled</option>
+                  <option value="pending_activation">Pending activation</option>
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="disabled">Disabled</option>
                 </select>
               </div>
               <div className="space-y-2">
@@ -189,16 +211,16 @@ export function ManagedUserDialog({
                   name="managedUserBanned"
                   value={managedIsBanned ? "true" : "false"}
                   onChange={(event) => onManagedIsBannedChange(event.target.value === "true")}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   disabled={managedSaving}
                 >
-                  <option value="false">not banned</option>
-                  <option value="true">banned</option>
+                  <option value="false">Not banned</option>
+                  <option value="true">Banned</option>
                 </select>
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 flex-row justify-end gap-2 border-t border-border/70 px-4 py-3 sm:gap-2 sm:space-x-0 sm:px-6">
             <Button variant="outline" onClick={onCloseManagedDialog} disabled={managedSaving}>
               Cancel
             </Button>

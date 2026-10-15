@@ -1,9 +1,13 @@
-import { Search } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Filter, Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { PENDING_RESET_STATUS_OPTIONS } from "@/pages/settings/account-management/pending-reset-shared";
 
 type PendingPasswordResetFiltersPanelProps = {
+  actions?: ReactNode;
   activeFilters: ActiveFilterChip[];
   hasActiveFilters: boolean;
   searchQuery: string;
@@ -14,6 +18,7 @@ type PendingPasswordResetFiltersPanelProps = {
 };
 
 export function PendingPasswordResetFiltersPanel({
+  actions,
   activeFilters,
   hasActiveFilters,
   searchQuery,
@@ -22,14 +27,16 @@ export function PendingPasswordResetFiltersPanel({
   onSearchQueryChange,
   onStatusChange,
 }: PendingPasswordResetFiltersPanelProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Search by user</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1 basis-64 space-y-2">
+          <label htmlFor="pending-reset-search-query" className="sr-only">Search by user</label>
           <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
+              id="pending-reset-search-query"
               name="pendingResetSearchQuery"
               type="search"
               value={searchQuery}
@@ -43,7 +50,14 @@ export function PendingPasswordResetFiltersPanel({
             />
           </div>
         </div>
-        <div className="space-y-2">
+        <Button type="button" variant="outline" {...getAriaExpandedProps(filtersOpen)} aria-controls="pending-reset-filters" onClick={() => setFiltersOpen((open) => !open)}>
+          <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
+          Filter
+        </Button>
+        {actions}
+      </div>
+      {filtersOpen ? (
+        <div id="pending-reset-filters" className="max-w-sm space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
           <label htmlFor="pending-reset-status-filter" className="text-sm font-medium">
             Status
           </label>
@@ -52,7 +66,7 @@ export function PendingPasswordResetFiltersPanel({
             name="pendingResetStatusFilter"
             value={statusFilter}
             onChange={(event) => onStatusChange(event.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {PENDING_RESET_STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -61,7 +75,7 @@ export function PendingPasswordResetFiltersPanel({
             ))}
           </select>
         </div>
-      </div>
+      ) : null}
       <ActiveFilterChips
         items={activeFilters}
         onClearAll={hasActiveFilters ? onClearAll : undefined}

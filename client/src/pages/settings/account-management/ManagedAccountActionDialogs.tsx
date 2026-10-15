@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +15,7 @@ import {
   resolveManagedAccountBanAction,
 } from "@/pages/settings/account-management/managed-accounts-utils";
 import type { ManagedUser } from "@/pages/settings/types";
+import { managedAccountDialogFocusHandoff } from "./managed-account-dialog-focus";
 
 type ManagedAccountActionDialogsProps = {
   banToggleUser: ManagedUser | null;
@@ -32,6 +34,8 @@ export function ManagedAccountActionDialogs({
   onConfirmBanToggle,
   onConfirmResetPassword,
 }: ManagedAccountActionDialogsProps) {
+  const resetReturnFocusRef = useRef<HTMLElement | null>(null);
+  const banReturnFocusRef = useRef<HTMLElement | null>(null);
   const banAction = resolveManagedAccountBanAction(banToggleUser);
   const nextBanAction = banAction === "unban" ? "Unban" : "Ban";
   const resetImpactItems = buildManagedAccountActionImpact("reset-password");
@@ -47,7 +51,14 @@ export function ManagedAccountActionDialogs({
           }
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent onOpenAutoFocus={() => {
+          resetReturnFocusRef.current = managedAccountDialogFocusHandoff.takeForDialog(resetPasswordUser?.id, "reset");
+        }} onCloseAutoFocus={(event) => {
+          if (resetReturnFocusRef.current?.isConnected) {
+            event.preventDefault();
+            resetReturnFocusRef.current.focus({ preventScroll: true });
+          }
+        }}>
           <AlertDialogHeader>
             <AlertDialogTitle>Send Password Reset Email</AlertDialogTitle>
             <AlertDialogDescription>
@@ -81,7 +92,14 @@ export function ManagedAccountActionDialogs({
           }
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent onOpenAutoFocus={() => {
+          banReturnFocusRef.current = managedAccountDialogFocusHandoff.takeForDialog(banToggleUser?.id, "ban");
+        }} onCloseAutoFocus={(event) => {
+          if (banReturnFocusRef.current?.isConnected) {
+            event.preventDefault();
+            banReturnFocusRef.current.focus({ preventScroll: true });
+          }
+        }}>
           <AlertDialogHeader>
             <AlertDialogTitle>{nextBanAction} Managed Account</AlertDialogTitle>
             <AlertDialogDescription>

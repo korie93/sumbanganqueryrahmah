@@ -54,6 +54,51 @@ Prepared Playwright regression tests and an opt-in 60-second CPU 4×/6× trace h
 
 final result: passed
 
+## Account Management Option 1 production-component integration — 2026-10-15 (in progress)
+
+Source visual truth: `artifacts/account-management-option-1/polish-preview.png`
+and the accepted polished detail/edit/mobile captures in that folder. This
+integration replaces the actual Settings components, not the isolated prototype.
+Implementation: `artifacts/account-management-integration-20261015/after-desktop.png`.
+Full comparison: `compare-desktop-full.png`; focused controls and account-row
+comparisons: `compare-desktop-controls.png`, `compare-desktop-rows.png` in the
+same integration artifact folder. Both compared desktop views are CSS/pixels
+1440×1024. IAB density is 0.67; its raw backing canvas is cropped at 0,0 to the
+measured CSS viewport, without scaling UI. Fixture identity/count is fictional;
+timestamps and page-size values are actual fixture data rather than hardcoded
+reference art. The existing app shell, typography and semantic tokens are kept.
+
+Initial comparison: selected horizontal four-section navigation, one heading,
+compact neutral summary, outside search/filter/refresh, five-column directory
+and Details/Edit/More match the accepted design hierarchy. No new image assets
+or logo redraws are introduced. Existing transparent Q assets are reused.
+
+Blocking findings from first local browser run (9 pass / 7 fail):
+
+- [P2] Mobile document overflow: the absolutely positioned screen-reader badge
+  label escaped the unpositioned tab button. Fix: position each tab button;
+  retain the accessible label and actual scroll container. Recapture pending.
+- [P1] Managed and pending-reset search drafts revert before querying, from
+  existing eager draft-to-applied synchronization effects. Analogous outbox
+  effects require the same check. Fix owners are repairing draft/applied sync;
+  no API contract changes. Query tests remain unchanged.
+- [P2] Details → Edit → Escape loses focus to the original row. Fix: carry a
+  stable origin anchor across the dialog transition, without overriding focus
+  when another confirmation/editor opens. Retest pending.
+
+Five surfaces: established app font and readable table/body hierarchy retained;
+reference section rhythm and full-width content reproduced; existing semantic
+green/amber/destructive tokens used in both themes; original sharp transparent
+Q unchanged; real status/timestamp/permission copy retained without invented
+reset-request approval controls. Minor shell/icon/font differences from the
+prototype are intentional production design-system constraints, not rebranding.
+
+Implementation checklist: fix the three blocking findings; rebuild; rerun
+synthetic browser cases; capture matching desktop/mobile light/dark and dialogs;
+rerun source/lint/unit checks; append final comparison and verification results.
+
+final result: blocked
+
 ---
 
 # Collection Report — desktop hierarchy and navigation QA
@@ -430,5 +475,117 @@ backend/database/production save. The user subsequently approved commit/push for
 these fixes; remote CI must be verified on that new commit. Browser-internal
 exceptions exist only in the test fixtures; app CSP,
 safe-URL handling, backend permissions, data and receipt files are untouched.
+
+final result: passed
+
+## Account Management Option 1 — completed actual-app integration (2026-10-15)
+
+This supersedes the in-progress Account Management review earlier in this file.
+The selected design is now integrated into real React Settings components and
+existing handlers, not just the ignored prototype. No backend, database, auth
+policy, dependency, production deployment or brand asset was changed.
+
+### Evidence and normalization
+
+- Visual truth: `artifacts/account-management-option-1/polish-preview.png`,
+  `polish-dark-preview.png`, `polish-mobile-details-preview.png` and
+  `polish-mobile-edit-preview.png`.
+- Current implementation/evidence root:
+  `artifacts/account-management-integration-20261015/`.
+- Final desktop captures: `qa-1440-light.png` (also `after-desktop.png`) and
+  `qa-1440-dark.png`; source and implementation both 1440×1024 pixels/CSS, DPR1.
+- Final full comparisons: `compare-desktop-full.png`, `compare-dark-full.png`.
+  Focused readable controls and row comparisons: `compare-desktop-controls.png`,
+  `compare-desktop-rows.png`. Both artifacts are in each comparison input.
+- Mobile: `qa-390-light.png`, `qa-390-dark.png`, `qa-details-390-dark.png`,
+  `qa-edit-390-dark.png`; CSS/pixels390×844, DPR1. Reference dialog captures are
+  390×840; only the bottom4px of implementation are cropped for combined
+  `compare-mobile-details.png`/`compare-mobile-edit.png`, no UI scaling.
+- Secondary actual sections inspected in `qa-create-desktop.png`,
+  `qa-pending-desktop.png`, `qa-outbox-desktop.png`.
+- IAB actual main-app desktop/mobile captures and manual interactions are also
+  saved in this folder. IAB raw screenshots have an oversized backing canvas
+  and can offset fixed dialogs after inner-page scrolling; definitive normalized
+  comparisons therefore use the explicitly user-approved local Chromium
+  captures above. The same fictional identities and real app components are
+  used; dates/page sizes are fixture values, not reference artwork copied into UI.
+
+### Iterations and resolved findings
+
+1. Initial nine browser passes/seven failures identified actual mobile overflow,
+   typed-query reversion, and Details→Edit focus loss. Positioned nav buttons
+   contain the accessible badge label; typed drafts and external applied-query
+   snapshots now synchronize without overwriting one another; one-shot
+   account/dialog-scoped focus handoff restores the original row after Edit or
+   Reset/Ban/Delete cancellation. Query/API/payload contracts remain unchanged.
+2. Added actual idle-AI occlusion tests: desktop passed, mobile Next was partly
+   covered. Local right gutters now protect row actions and pagination without
+   enabling global idle observers or changing AI behavior. Center and four
+   inset-corner pointer checks plus actual page2 navigation now pass.
+3. Independent review found More→confirmation and desktop compact Settings-menu
+   focus-return gaps. Both use explicit connected-origin/destination fallback;
+   Cancel/Escape and category switching have additional browser assertions.
+   New category tests initially used an incomplete exact accessible name;
+   selectors were corrected to include the actual descriptive button name.
+   No product guarantee/assertion was removed or relaxed.
+4. Final post-fix targeted browser run: **21/21 passed**, no retries/skips.
+   Preserved report: `focused-21-final-report/index.html`; `browser.log`.
+   Existing Settings/profile/app/Collection regression slice: **64/64 passed**,
+   including all unchanged light/dark snapshots; `regressions.log` and
+   `regressions-final-report/index.html`. No snapshot baseline or tolerance edit.
+
+### Five-surface review and intentional production adaptations
+
+- Typography: existing system-ui/Segoe UI fallback, 28px operational heading,
+  established14px/12px UI hierarchy, weights and tabular timestamps remain
+  readable. Prototype heading is approximately30px; retained app typography is
+  intentional. Long identity/access text wraps without document overflow.
+- Layout: one h1/header, compact horizontal native-button navigation, default
+  Managed Account, one neutral count strip, outside search with folded filters,
+  five-column full-width table and attached pagination. Responsive cards retain
+  legible actions rather than shrinking a desktop table. Local AI clearance is
+  intentional. Dialog bodies scroll within viewport, footers remain reachable.
+- Colors/tokens: established neutral authenticated dark theme is retained,
+  instead of importing the prototype's blue-gray global theme. Semantic
+  green/amber/destructive access states carry text as well as color. No new
+  global palette, glass backdrop or decorative gradients.
+- Assets: original transparent Q/sidebar/favicon assets unchanged, no new raster,
+  redraw, fake glyph art or brand approximations. Existing Lucide icons match
+  the selected UI's icon vocabulary; no avatars are invented for real users.
+- Copy/content: real record versus actual login restrictions are distinguished;
+  visible-page counts are explicitly scoped. Existing Banned selector and all
+  detail actions/extra facts/timeline entries are retained for production
+  completeness (more than the prototype's simplified sample). Reset requests
+  are truthfully review-only; no nonexistent approval endpoint or activation
+  token is exposed. Outbox clearly labels development scope/disabled state.
+
+### Interaction, console and safety verification
+
+Local synthetic cases cover mobile320/390 and desktop1280 themes, actual query
+parameters/pagination, clear/filter/refresh, create validation, held-request
+duplicate guards, profile edit payload, cancelled role draft, activation
+eligibility, explicit ban/delete/reset confirmations, More/Details keyboard
+focus, compact category access, denied roles, and pointer clearance beside AI.
+IAB verified actual create/details/editor/pending/outbox navigation and editor
+Cancel returning to the original Details button. Final capture metadata
+`capture-results.json` reports no page errors or document overflow and restored
+focus at desktop1440 and mobile390 in both themes. Preview sockets are isolated
+and inert; no production server, database, email, credentials or AI call is used.
+
+No actionable P0/P1/P2 remains in the scoped design. Residual P3: the production
+detail footer has more commands than the simplified prototype; all are retained
+and keyboard-tested, with a bounded scrolling record rather than hidden data.
+
+Final source verification: app/browser TypeScript, full client lint, frontend
+production build, bundle budgets, **2056 client tests**, **729 script tests**
+(plus one existing skip), tracked/untracked secret guards and diff checks pass.
+No live backend/PostgreSQL test or remote CI run is claimed for this frontend
+integration. The preserved64-case regression run predates the final narrowly
+scoped focus-handoff fixes; the final21-case run includes those fixes and both
+Settings category navigation sizes. All original snapshots remain unchanged.
+
+Implementation checklist: actual components integrated; primary interactions
+working; source/implementation full+focused comparisons inspected; responsive
+themes reviewed; all identified blocking issues repaired and recaptured.
 
 final result: passed

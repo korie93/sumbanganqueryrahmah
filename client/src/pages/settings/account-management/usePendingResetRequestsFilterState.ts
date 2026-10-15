@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
   getPendingResetEmptyState,
@@ -7,10 +7,9 @@ import {
 } from "@/pages/settings/account-management/pending-reset-utils";
 import {
   ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
-  hasNormalizedSearchChanged,
   normalizeSearchValue,
-  shouldSyncNormalizedSearch,
 } from "@/pages/settings/account-management/utils";
+import { getAccountManagementSearchSync } from "./account-management-search-sync";
 import type { PendingResetRequestsQueryState } from "@/pages/settings/useSettingsManagedUserData";
 
 type UsePendingResetRequestsFilterStateArgs = {
@@ -27,6 +26,8 @@ export function usePendingResetRequestsFilterState({
   total,
 }: UsePendingResetRequestsFilterStateArgs) {
   const [searchQuery, setSearchQuery] = useState(query.search);
+  const previousAppliedSearch = useRef(query.search);
+  const lastSubmittedSearch = useRef<string | null>(null);
   const [statusFilter, setStatusFilter] = useState(query.status);
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -34,6 +35,13 @@ export function usePendingResetRequestsFilterState({
     () => normalizeSearchValue(deferredSearchQuery),
     [deferredSearchQuery],
   );
+  const { resetDraft, publishSearch } = getAccountManagementSearchSync({
+    appliedSearch: query.search,
+    previousAppliedSearch: previousAppliedSearch.current,
+    lastSubmittedSearch: lastSubmittedSearch.current,
+    draftSearch: searchQuery,
+    deferredSearch: deferredSearchQuery,
+  });
   const hasActiveFilters = normalizedDeferredSearch.length > 0 || statusFilter !== "all";
 
   const activeFilters = useMemo<ActiveFilterChip[]>(
@@ -67,26 +75,23 @@ export function usePendingResetRequestsFilterState({
   );
 
   useEffect(() => {
-    if (hasNormalizedSearchChanged(searchQuery, query.search)) {
-      setSearchQuery(query.search);
-    }
-  }, [query.search, searchQuery]);
+    if (previousAppliedSearch.current !== query.search) lastSubmittedSearch.current = null;
+    previousAppliedSearch.current = query.search;
+    if (resetDraft) setSearchQuery(query.search);
+  }, [query.search, resetDraft]);
 
   useEffect(() => {
-    if (statusFilter !== query.status) {
-      setStatusFilter(query.status);
-    }
-  }, [query.status, statusFilter]);
+    setStatusFilter(query.status);
+  }, [query.status]);
 
   useEffect(() => {
-    if (!shouldSyncNormalizedSearch(normalizedDeferredSearch, query.search)) {
-      return;
-    }
+    if (publishSearch === null) return;
+    lastSubmittedSearch.current = publishSearch;
     onQueryChange({
       page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
-      search: normalizedDeferredSearch,
+      search: publishSearch,
     });
-  }, [normalizedDeferredSearch, onQueryChange, query.search]);
+  }, [onQueryChange, publishSearch]);
 
   const emptyMessage = useMemo(
     () =>

@@ -1,52 +1,17 @@
-import { Users } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  buildUserAccountManagementBadgeSummary,
-  getUserAccountManagementDescription,
-} from "@/pages/settings/account-management/user-account-management-utils";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-type UserAccountManagementHeaderProps = {
-  isMobile: boolean;
-  managedUserCount: number;
-  outboxCount: number;
-  pendingResetCount: number;
-};
-
-export function UserAccountManagementHeader({
-  isMobile,
-  managedUserCount,
-  outboxCount,
-  pendingResetCount,
-}: UserAccountManagementHeaderProps) {
-  const badgeSummary = buildUserAccountManagementBadgeSummary({
-    managedUserCount,
-    outboxCount,
-    pendingResetCount,
-  });
-
+export function UserAccountManagementHeader({ onCreate }: { onCreate: () => void }) {
   return (
-    <CardHeader className={isMobile ? "space-y-4 pb-4" : ""}>
-      <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-        <Users className="h-5 w-5" />
-        User Account Management
-      </CardTitle>
-      <p className="text-sm text-muted-foreground">
-        {getUserAccountManagementDescription(isMobile)}
-      </p>
-      {isMobile ? (
-        <div className="flex flex-wrap gap-2">
-          {badgeSummary.map((badge) => (
-            <Badge
-              key={badge.label}
-              variant={badge.variant}
-              className="rounded-full px-3 py-1"
-            >
-              {badge.label} {badge.total}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </CardHeader>
+    <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 space-y-1">
+        <h1 className="ops-page-title">Account Management</h1>
+        <p className="text-sm leading-6 text-muted-foreground">Manage user lifecycle, reset requests, and local mail outbox.</p>
+      </div>
+      <Button type="button" className="min-h-11 shrink-0 self-start sm:min-h-10" onClick={onCreate}>
+        <Plus className="h-4 w-4" aria-hidden="true" />
+        Create Account
+      </Button>
+    </header>
   );
 }

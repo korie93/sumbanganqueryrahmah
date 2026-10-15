@@ -20,13 +20,13 @@ export function PendingPasswordResetDesktopTable({
   requests,
 }: PendingPasswordResetDesktopTableProps) {
   return (
-    <Table className="min-w-[860px] text-sm">
-      <TableHeader>
+    <Table className="min-w-[760px] text-sm" containerProps={{ className: "overflow-visible", tabIndex: -1 }}>
+      <TableHeader className="sticky top-0 z-10 bg-muted/70">
         <TableRow>
-          <TableHead>User</TableHead>
-          <TableHead>Requested By</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Created At</TableHead>
+          <TableHead scope="col">User</TableHead>
+          <TableHead scope="col">Requested By</TableHead>
+          <TableHead scope="col">Status</TableHead>
+          <TableHead scope="col">Created At</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -62,7 +62,7 @@ export function PendingPasswordResetDesktopTable({
                   {request.isBanned ? "banned" : request.status}
                 </Badge>
               </TableCell>
-              <TableCell>{formatDateTime(request.createdAt)}</TableCell>
+              <TableCell className="whitespace-nowrap tabular-nums">{formatDateTime(request.createdAt)}</TableCell>
             </TableRow>
           ))
         )}

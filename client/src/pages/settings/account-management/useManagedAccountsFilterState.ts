@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import {
   getManagedAccountsEmptyMessage,
@@ -12,10 +12,9 @@ import {
 } from "@/pages/settings/account-management/managed-accounts-shared";
 import {
   ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
-  hasNormalizedSearchChanged,
   normalizeSearchValue,
-  shouldSyncNormalizedSearch,
 } from "@/pages/settings/account-management/utils";
+import { getAccountManagementSearchSync } from "./account-management-search-sync";
 import type { ManagedUser } from "@/pages/settings/types";
 import type { ManagedUsersQueryState } from "@/pages/settings/useSettingsManagedUserData";
 
@@ -33,6 +32,8 @@ export function useManagedAccountsFilterState({
   total,
 }: UseManagedAccountsFilterStateArgs) {
   const [searchQuery, setSearchQuery] = useState(query.search);
+  const previousAppliedSearch = useRef(query.search);
+  const lastSubmittedSearch = useRef<string | null>(null);
   const [roleFilter, setRoleFilter] = useState(query.role);
   const [statusFilter, setStatusFilter] = useState(query.status);
   const [userToBanToggle, setUserToBanToggle] = useState<ManagedUser | null>(null);
@@ -44,6 +45,13 @@ export function useManagedAccountsFilterState({
     () => normalizeSearchValue(deferredSearchQuery),
     [deferredSearchQuery],
   );
+  const { resetDraft, publishSearch } = getAccountManagementSearchSync({
+    appliedSearch: query.search,
+    previousAppliedSearch: previousAppliedSearch.current,
+    lastSubmittedSearch: lastSubmittedSearch.current,
+    draftSearch: searchQuery,
+    deferredSearch: deferredSearchQuery,
+  });
 
   const hasActiveFilters = normalizedDeferredSearch.length > 0
     || roleFilter !== "all"
@@ -94,32 +102,27 @@ export function useManagedAccountsFilterState({
   );
 
   useEffect(() => {
-    if (hasNormalizedSearchChanged(searchQuery, query.search)) {
-      setSearchQuery(query.search);
-    }
-  }, [query.search, searchQuery]);
+    if (previousAppliedSearch.current !== query.search) lastSubmittedSearch.current = null;
+    previousAppliedSearch.current = query.search;
+    if (resetDraft) setSearchQuery(query.search);
+  }, [query.search, resetDraft]);
 
   useEffect(() => {
-    if (roleFilter !== query.role) {
-      setRoleFilter(query.role);
-    }
-  }, [query.role, roleFilter]);
+    setRoleFilter(query.role);
+  }, [query.role]);
 
   useEffect(() => {
-    if (statusFilter !== query.status) {
-      setStatusFilter(query.status);
-    }
-  }, [query.status, statusFilter]);
+    setStatusFilter(query.status);
+  }, [query.status]);
 
   useEffect(() => {
-    if (!shouldSyncNormalizedSearch(normalizedDeferredSearch, query.search)) {
-      return;
-    }
+    if (publishSearch === null) return;
+    lastSubmittedSearch.current = publishSearch;
     onQueryChange({
       page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
-      search: normalizedDeferredSearch,
+      search: publishSearch,
     });
-  }, [normalizedDeferredSearch, onQueryChange, query.search]);
+  }, [onQueryChange, publishSearch]);
 
   const emptyMessage = useMemo(
     () =>

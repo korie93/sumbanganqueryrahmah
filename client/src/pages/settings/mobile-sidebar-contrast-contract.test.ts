@@ -32,12 +32,15 @@ test("settings navigation retains semantic current state, dirty counts and acces
   assert.doesNotMatch(settingsSidebarSource, /HorizontalScrollHint|LazySideTabNavigation|rounded-\[2rem\]/);
 });
 
-test("account mobile launcher retains accessible active section pills", () => {
+test("account sections retain text, semantic active state and a scrollable compact row", () => {
   const accountNavSource = readSource("account-management/UserAccountManagementNav.tsx");
 
   for (const source of [accountNavSource]) {
-    assert.match(source, /border-primary bg-primary text-primary-foreground shadow-sm/);
-    assert.match(source, /active\s*\?\s*"bg-primary-foreground text-primary"/);
+    assert.match(source, /getAriaCurrentPageProps\(activeTab === id\)/);
+    assert.match(source, /border-primary bg-primary\/5 text-primary/);
+    assert.match(source, /HorizontalScrollHint viewportClassName="flex gap-1"/);
+    assert.match(source, /focus-visible:ring-inset focus-visible:ring-ring/);
+    assert.match(source, /min-h-11/);
     assert.doesNotMatch(source, /border-primary\/35 bg-primary\/10 text-primary/);
   }
 });

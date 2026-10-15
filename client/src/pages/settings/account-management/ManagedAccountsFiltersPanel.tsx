@@ -1,8 +1,10 @@
-import { AlertTriangle, Search } from "lucide-react";
+import { useId, useState } from "react";
+import { Filter, RefreshCw, Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { getAriaExpandedProps, getAriaPressedProps } from "@/lib/aria-state-props";
 import {
   MANAGED_ACCOUNT_ATTENTION_FILTERS,
   MANAGED_ACCOUNT_ROLE_OPTIONS,
@@ -10,153 +12,80 @@ import {
   type ManagedAccountAttentionSummary,
   type ManagedAccountsRoleFilter,
   type ManagedAccountsStatusFilter,
-} from "@/pages/settings/account-management/managed-accounts-shared";
-import { getManagedAccountAttentionCount } from "@/pages/settings/account-management/managed-accounts-utils";
+} from "./managed-accounts-shared";
+import { getManagedAccountAttentionCount } from "./managed-accounts-utils";
 
 type ManagedAccountsFiltersPanelProps = {
   activeFilters: ActiveFilterChip[];
   attentionSummary: ManagedAccountAttentionSummary;
   hasActiveFilters: boolean;
+  loading: boolean;
   roleFilter: ManagedAccountsRoleFilter;
   searchQuery: string;
   statusFilter: ManagedAccountsStatusFilter;
   onClearAll: () => void;
+  onRefresh: () => void;
   onRoleChange: (value: string) => void;
   onSearchQueryChange: (value: string) => void;
   onStatusChange: (value: string) => void;
 };
 
 export function ManagedAccountsFiltersPanel({
-  activeFilters,
-  attentionSummary,
-  hasActiveFilters,
-  roleFilter,
-  searchQuery,
-  statusFilter,
-  onClearAll,
-  onRoleChange,
-  onSearchQueryChange,
-  onStatusChange,
+  activeFilters, attentionSummary, hasActiveFilters, loading, roleFilter, searchQuery, statusFilter,
+  onClearAll, onRefresh, onRoleChange, onSearchQueryChange, onStatusChange,
 }: ManagedAccountsFiltersPanelProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterId = useId();
+  const searchId = useId();
+  const selectedFilterCount = Number(roleFilter !== "all") + Number(statusFilter !== "all");
   return (
     <div className="space-y-3">
-      <section
-        className="rounded-lg border border-border/60 bg-muted/20 p-3"
-        aria-labelledby="managed-accounts-attention-filters-title"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
-            <p id="managed-accounts-attention-filters-title" className="text-sm font-medium">
-              Needs attention
-            </p>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Jump to accounts that usually need admin action.
-          </p>
+      <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Managed account search and filters">
+        <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-0">
+          <label className="sr-only" htmlFor={searchId}>Search accounts</label>
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input id={searchId} name="managedAccountsSearchQuery" type="search" value={searchQuery} onChange={(event) => onSearchQueryChange(event.target.value)} placeholder="Search username, full name, or email" className="min-h-11 bg-card pl-9 sm:min-h-10" enterKeyHint="search" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {MANAGED_ACCOUNT_ATTENTION_FILTERS.map((option) => {
-            const isActive = statusFilter === option.value;
-            const visibleCount = getManagedAccountAttentionCount(attentionSummary, option.value);
-            const visibleCountLabel = `${visibleCount.toLocaleString()} visible`;
-
-            return (
-              <Button
-                key={option.value}
-                type="button"
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                onClick={() => onStatusChange(isActive ? "all" : option.value)}
-                className={cn(
-                  "rounded-full px-3",
-                  !isActive && option.value === "banned"
-                    ? "text-destructive hover:text-destructive"
-                    : undefined,
-                  !isActive && option.value === "locked"
-                    ? "text-amber-800 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100"
-                    : undefined,
-                )}
-                title={`${option.description} ${visibleCountLabel} on this page.`}
-                aria-label={`${option.label}: ${visibleCountLabel}; ${option.description}`}
-              >
-                <span>{option.label}</span>
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "ml-2 rounded-full border px-1.5 py-0.5 text-2xs font-semibold",
-                    isActive
-                      ? "border-primary-foreground/40 text-primary-foreground"
-                      : "border-border/70 text-muted-foreground",
-                  )}
-                >
-                  {visibleCount.toLocaleString()}
-                </span>
-              </Button>
-            );
-          })}
+        <Button type="button" variant="outline" className="min-h-11 bg-card sm:min-h-10" aria-label="Filter managed accounts" {...getAriaExpandedProps(filtersOpen)} aria-controls={filterId} onClick={() => setFiltersOpen((open) => !open)}>
+          <Filter className="h-4 w-4" aria-hidden="true" />Filter
+          {selectedFilterCount > 0 ? <span className="rounded bg-muted px-1.5 text-xs tabular-nums">{selectedFilterCount}</span> : null}
+        </Button>
+        <Button type="button" variant="outline" className="ml-auto min-h-11 bg-card sm:ml-0 sm:min-h-10" aria-label="Refresh managed accounts" onClick={onRefresh} disabled={loading}>
+          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />Refresh
+        </Button>
+      </div>
+      <section id={filterId} hidden={!filtersOpen} aria-label="Managed account filters" className="space-y-4 rounded-lg border border-border/70 bg-card p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label htmlFor="managed-accounts-role-filter" className="text-sm font-medium">Role</label>
+            <select id="managed-accounts-role-filter" name="managedAccountsRoleFilter" value={roleFilter} onChange={(event) => onRoleChange(event.target.value)} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm sm:min-h-10">
+              {MANAGED_ACCOUNT_ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="managed-accounts-status-filter" className="text-sm font-medium">Status</label>
+            <select id="managed-accounts-status-filter" name="managedAccountsStatusFilter" value={statusFilter} onChange={(event) => onStatusChange(event.target.value)} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-sm sm:min-h-10">
+              {MANAGED_ACCOUNT_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="space-y-2 border-t border-border/60 pt-3">
+          <h3 className="text-sm font-medium">Needs attention</h3>
+          <p className="text-xs text-muted-foreground">Counts reflect accounts on the visible page, not the whole directory.</p>
+          <div className="flex flex-wrap gap-2">
+            {MANAGED_ACCOUNT_ATTENTION_FILTERS.map((option) => {
+              const isActive = statusFilter === option.value;
+              const visibleCount = getManagedAccountAttentionCount(attentionSummary, option.value);
+              return (
+                <Button key={option.value} type="button" variant={isActive ? "default" : "outline"} size="sm" onClick={() => onStatusChange(isActive ? "all" : option.value)} {...getAriaPressedProps(isActive)} title={`${option.description} ${visibleCount.toLocaleString()} visible on this page.`} aria-label={`${option.label}: ${visibleCount.toLocaleString()} visible; ${option.description}`}>
+                  {option.label}<span aria-hidden="true" className="tabular-nums">{visibleCount.toLocaleString()}</span>
+                </Button>
+              );
+            })}
+          </div>
         </div>
       </section>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Search by user name</p>
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              name="managedAccountsSearchQuery"
-              type="search"
-              value={searchQuery}
-              onChange={(event) => onSearchQueryChange(event.target.value)}
-              placeholder="Search username, full name, or email"
-              className="pl-9"
-              enterKeyHint="search"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="managed-accounts-role-filter" className="text-sm font-medium">
-            Role
-          </label>
-          <select
-            id="managed-accounts-role-filter"
-            name="managedAccountsRoleFilter"
-            value={roleFilter}
-            onChange={(event) => onRoleChange(event.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {MANAGED_ACCOUNT_ROLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="managed-accounts-status-filter" className="text-sm font-medium">
-            Status
-          </label>
-          <select
-            id="managed-accounts-status-filter"
-            name="managedAccountsStatusFilter"
-            value={statusFilter}
-            onChange={(event) => onStatusChange(event.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {MANAGED_ACCOUNT_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <ActiveFilterChips
-        items={activeFilters}
-        onClearAll={hasActiveFilters ? onClearAll : undefined}
-      />
+      <ActiveFilterChips items={activeFilters} onClearAll={hasActiveFilters ? onClearAll : undefined} className="[&_button]:min-h-9 [&_button]:min-w-9" />
     </div>
   );
 }
