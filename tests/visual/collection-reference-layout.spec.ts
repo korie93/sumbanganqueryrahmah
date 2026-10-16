@@ -29,9 +29,10 @@ for (const width of [1920, 1600, 1440, 1024, 768, 390]) {
     const fixture = await installFixture(page, baseURL, { role: "superuser", theme: "dark" });
     await selectNickname(page);
     const frame = page.locator(".collection-report-frame");
-    await expect(frame).toHaveClass(/collection-report-frame--save/);
+    await expect(frame).not.toHaveClass(/collection-report-frame--save/);
     await expect(frame).toHaveCSS("max-width", "1480px");
-    await expect(frame.getByRole("heading", { name: "Collection Report", level: 1, exact: true })).toBeVisible();
+    await expect(frame.getByRole("heading", { name: "Collection Report", level: 1, exact: true })).toHaveCount(1);
+    expect((await frame.locator(".collection-report-context .ops-page-heading > div:first-child").boundingBox())!.height).toBeLessThanOrEqual(1);
     await expect(page.getByRole("heading", { name: "Collection Report", level: 1, exact: true })).toHaveCount(1);
 
     // Baseline shell geometry is intentionally independent of the redesigned
@@ -60,15 +61,9 @@ for (const width of [1920, 1600, 1440, 1024, 768, 390]) {
     await expect(receipt.getByRole("heading", { name: "Receipt Upload", exact: true })).toBeVisible();
     const shortcut = page.locator(".save-collection-shortcut-hint");
     const desktopShortcut = page.locator(".collection-report-save-shortcut");
-    if (width >= 768) {
-      await expect(desktopShortcut).toBeVisible();
-      await expect(desktopShortcut).toHaveCount(1);
-      await expect(shortcut).toBeHidden();
-    } else {
-      await expect(desktopShortcut).toHaveCount(0);
-      await expect(shortcut).toBeVisible();
-      await expect(shortcut).toHaveCount(1);
-    }
+    await expect(desktopShortcut).toHaveCount(0);
+    await expect(shortcut).toBeVisible();
+    await expect(shortcut).toHaveCount(1);
     const receiptHeader = receipt.locator(".save-collection-section-header");
     const clearPending = receiptHeader.getByRole("button", { name: "Clear Pending", exact: true });
     await expect(clearPending).toBeDisabled();

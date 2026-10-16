@@ -208,12 +208,6 @@
   }
 }
 
-@media (min-width: 768px) {
-  .save-collection-workspace .save-collection-shortcut-hint {
-    display: none;
-  }
-}
-
 @media (min-width: 1024px) {
   .save-collection-workspace .save-collection-submit-workspace {
     display: flex;

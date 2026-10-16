@@ -8,7 +8,8 @@ import {
   Settings2,
   Users,
 } from "lucide-react";
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import type {
   CollectionSidebarItem,
   CollectionSubPage,
@@ -25,17 +26,30 @@ type UseCollectionReportNavigationArgs = {
   isSuperuser: boolean;
 };
 
+export function isCollectionNavigationPath(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized === "/collection"
+    || normalized === "/collection-report"
+    || normalized.startsWith("/collection/");
+}
+
 export function useCollectionReportNavigation({
   canAccessBilling,
   canAccessNicknameSummary,
   isReadOnlyManager,
   isSuperuser,
 }: UseCollectionReportNavigationArgs) {
-  const [subPage, setSubPage] = useState<CollectionSubPage>(() => {
-    if (typeof window === "undefined") return isReadOnlyManager ? "records" : "save";
-    const resolved = getSubPageFromPath(window.location.pathname || "/collection/save");
-    return isReadOnlyManager && resolved === "save" ? "records" : resolved;
-  });
+  const [pathname, navigate] = useLocation();
+  const requestedSubPage = getSubPageFromPath(pathname || "/collection/save");
+  const defaultSubPage = isReadOnlyManager ? "records" : "save";
+  // The route owns the selected section, including browser history and deep links.
+  // Apply the existing role guards before rendering a section or its active state.
+  const subPage = (
+    (requestedSubPage === "billing-principal" && !canAccessBilling)
+    || (requestedSubPage === "save" && isReadOnlyManager)
+    || (requestedSubPage === "manage-nicknames" && !isSuperuser)
+    || (requestedSubPage === "nickname-summary" && !canAccessNicknameSummary)
+  ) ? defaultSubPage : requestedSubPage;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -103,56 +117,27 @@ export function useCollectionReportNavigation({
   );
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (subPage === "billing-principal" && !canAccessBilling) {
-      setSubPage(isReadOnlyManager ? "records" : "save");
-      return;
-    }
-    if (subPage === "save" && isReadOnlyManager) {
-      setSubPage("records");
-      return;
-    }
-    if (subPage === "manage-nicknames" && !isSuperuser) {
-      setSubPage(isReadOnlyManager ? "records" : "save");
-      return;
-    }
-    if (subPage === "nickname-summary" && !canAccessNicknameSummary) {
-      setSubPage(isReadOnlyManager ? "records" : "save");
-      return;
-    }
-
+    // Do not intercept a global navigation while this workspace is still mounted.
+    if (typeof window === "undefined" || !isCollectionNavigationPath(pathname)) return;
     const targetPath = getPathForSubPage(subPage);
-    if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
-      window.history.replaceState({}, "", targetPath);
+    if (pathname.toLowerCase() !== targetPath.toLowerCase()) {
+      navigate(targetPath, { replace: true });
     }
-  }, [canAccessBilling, canAccessNicknameSummary, isReadOnlyManager, isSuperuser, subPage]);
+  }, [navigate, pathname, subPage]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);
   }, [subPage]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const onPopState = () => {
-      const resolved = getSubPageFromPath(window.location.pathname || "/collection/save");
-      setSubPage(isReadOnlyManager && resolved === "save" ? "records" : resolved);
-    };
-
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [isReadOnlyManager]);
-
   const handleSelectSubPage = useCallback((nextSubPage: CollectionSubPage) => {
-    if (nextSubPage === "billing-principal" && !canAccessBilling) return;
-    if (isReadOnlyManager && nextSubPage === "save") {
-      return;
+    if (!sidebarItems.some((item) => item.key === nextSubPage)) return;
+    const targetPath = getPathForSubPage(nextSubPage);
+    if (pathname.toLowerCase() !== targetPath.toLowerCase()) {
+      // A deliberate section change adds a history entry; corrections above do not.
+      navigate(targetPath);
     }
-    startTransition(() => {
-      setSubPage(nextSubPage);
-    });
     setMobileSidebarOpen(false);
-  }, [canAccessBilling, isReadOnlyManager]);
+  }, [navigate, pathname, sidebarItems]);
 
   return {
     subPage,

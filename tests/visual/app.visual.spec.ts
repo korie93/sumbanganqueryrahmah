@@ -785,7 +785,7 @@ test.describe("Collection layout polish", () => {
         await navigateForSnapshot(page, authenticatedRoutes[1]);
         const frame = page.locator(".collection-report-frame");
         await expect(frame).toHaveCSS("max-width", "1480px");
-        await expect(frame).toHaveCSS("gap", width >= 768 && width < 1024 ? "24px" : "16px");
+        await expect(frame).toHaveCSS("gap", "16px");
         const saveWidth = (await frame.boundingBox())!.width;
         expect(saveWidth).toBeLessThanOrEqual(1480);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -823,6 +823,9 @@ test.describe("Collection layout polish", () => {
         }
         const clippedControls = await page.locator(width < 768 ? '[role="dialog"]' : ".collection-report-frame").evaluate((root) =>
           [...root.querySelectorAll("button, input, select")].filter((node) => {
+            // Offscreen buttons inside the intentional horizontal strip stay
+            // keyboard/scroll reachable; they must not widen the document.
+            if (node.closest(".collection-section-nav")) return false;
             const rect = node.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0 && (rect.left < -1 || rect.right > innerWidth + 1);
           }).map((node) => node.id || node.textContent?.trim()),

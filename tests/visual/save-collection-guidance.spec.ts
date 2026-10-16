@@ -159,6 +159,26 @@ test("Save guidance draft copy matches privacy-preserving reload behavior", asyn
   await checkFixture(page, fixture);
 });
 
+for (const shortcut of ["Control+s", "Meta+s"]) {
+  test(`Save guidance ${shortcut} retains explicit save payload after compact navigation`, async ({ page, baseURL }) => {
+    const fixture = await installFixture(page, baseURL, { restore: draft });
+    await openSave(page);
+    await expect(page.locator(".save-collection-shortcut-hint")).toBeVisible();
+    await fillIdentity(page);
+    await page.keyboard.press(shortcut);
+    await expect(page.getByRole("heading", { name: "Collection berjaya disimpan", exact: true })).toBeVisible();
+    expect(fixture.saves).toHaveLength(1);
+    expect(fixture.saves[0]!.fields).toMatchObject({
+      customerName: "Synthetic Customer", icNumber: "000012345678", customerPhone: "0123456789",
+      accountNumber: "000012340000", batch: "P25", paymentDate: "2026-10-04", amount: "125",
+      collectionStaffNickname: nickname,
+    });
+    expect(fixture.saves[0]!.key).not.toBe("");
+    expect(fixture.saves[0]!.fingerprint).not.toBe("");
+    await checkFixture(page, fixture);
+  });
+}
+
 test("Save guidance successful held save disables Reset and clears without confirmation", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL, { restore: draft, holdSave: true });
   await openSave(page);

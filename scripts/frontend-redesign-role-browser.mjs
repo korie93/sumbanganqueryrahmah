@@ -143,10 +143,8 @@ async function verifyNicknameScope(page, baseUrl, role, nicknames, password, wid
   if (role === "manager") {
     await page.getByTestId("collection-records-page").waitFor();
     assert.equal(await page.locator("#save-collection-customer-name").count(), 0);
-    if (width < 768) await page.getByTestId("button-open-collection-sections").click();
-    const nav = page.getByRole("navigation", { name: width < 768 ? "Collection sections mobile" : "Collection sections", exact: true });
+    const nav = page.getByRole("navigation", { name: "Collection sections", exact: true });
     assert.equal(await nav.getByRole("button", { name: "Simpan Collection Individual", exact: true }).count(), 0);
-    if (width < 768) await page.keyboard.press("Escape");
     assert.equal(await page.locator("[aria-label^='Actions for record ']").count(), 0, "Manager cannot mutate Collection rows");
     await api(page, baseUrl, "POST", "/api/collection", {}, 403);
     await capture("collection-readonly");

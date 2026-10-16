@@ -1,45 +1,55 @@
-/* Keep the heading, section navigation and content on the same page grid. */
-.ops-page-frame.collection-report-frame,
-.collection-report-frame .collection-report-navigation {
+/* All Collection routes share the Records page's compact grid and navigation. */
+.ops-page-frame.collection-report-frame {
   gap: var(--spacing-4);
 }
 
-.collection-report-navigation {
+.collection-report-frame .collection-report-navigation {
   display: flex;
   min-width: 0;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  border-bottom: 1px solid hsl(var(--border));
+  padding-bottom: var(--spacing-3);
 }
 
-.collection-section-label-short { display: none; }
-
-@media (min-width: 768px) {
-  .ops-page-frame.collection-report-frame,
-  .collection-report-frame .collection-report-navigation {
-    gap: var(--spacing-6);
-  }
+.collection-report-context {
+  order: 2;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100px;
+  padding: 0;
 }
 
-@media (min-width: 1024px) {
-  .ops-page-frame.collection-report-frame { gap: var(--spacing-4); }
+/* The global topbar identifies the module. Retain a semantic content h1
+   without repeating its banner or reserving empty space on any viewport. */
+.collection-report-context .ops-page-heading > div:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
-  .collection-report-frame .collection-report-navigation {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--spacing-3);
-    border-bottom: 1px solid hsl(var(--border));
-    padding-bottom: var(--spacing-3);
-  }
+.collection-report-context .ops-page-heading { display: block; }
+.collection-report-context .ops-page-heading > div:nth-child(2) {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.collection-report-staff-badge {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  .collection-report-context {
-    order: 2;
-    flex: 0 1 auto;
-    max-width: 180px;
-    padding: 0;
-  }
-
-  /* The topbar already identifies the module. Keep its single h1 accessible,
-     without repeating the large module banner above every section. */
-  .collection-report-context .ops-page-heading > div:first-child {
+@media (max-width: 767px) {
+  /* Keep the actual nickname visible on touch screens, not only its prefix.
+     The full text stays available to assistive technology and the tooltip. */
+  .collection-report-staff-prefix {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -47,126 +57,30 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-
-  .collection-report-context .ops-page-heading { display: block; }
-  /* Constrain the shared header's actions wrapper before truncating its badge. */
-  .collection-report-context .ops-page-heading > div:nth-child(2) {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .collection-report-staff-badge {
-    display: block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .collection-section-nav {
-    order: 1;
-    flex: 1 1 0%;
-    min-width: 0;
-    flex-wrap: nowrap;
-    gap: var(--spacing-1);
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-    border-bottom: 0;
-    padding: var(--spacing-1);
-  }
-
-  .collection-section-link {
-    flex-shrink: 0;
-    min-height: 40px;
-    gap: var(--spacing-2);
-    padding-inline: var(--spacing-3);
-    white-space: nowrap;
-  }
-
-  .collection-section-label-full { display: none; }
-  .collection-section-label-short { display: inline; }
 }
 
-/* The supplied reference applies to entry content only. Other report sections
-   retain their compact navigation and the approved global shell is untouched. */
-.collection-report-frame--save .collection-report-navigation {
-  gap: var(--spacing-4);
+.collection-section-nav {
+  order: 1;
+  flex: 1 1 0%;
+  min-width: 0;
+  flex-wrap: nowrap;
+  gap: var(--spacing-1);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  border-bottom: 0;
+  padding: var(--spacing-1);
 }
 
-.collection-report-save-shortcut {
-  display: inline-flex;
-  align-items: center;
+.collection-section-link {
+  flex-shrink: 0;
+  min-height: 44px;
   gap: var(--spacing-2);
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius-surface);
-  padding: var(--spacing-2) var(--spacing-3);
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
+  padding-inline: var(--spacing-3);
   white-space: nowrap;
 }
 
-.collection-report-save-shortcut kbd {
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius-control);
-  padding: var(--spacing-1) var(--spacing-2);
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
-  font-weight: 600;
-}
-
-@media (min-width: 1024px) {
-  .collection-report-frame--save .collection-report-navigation {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--spacing-4);
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  .collection-report-frame--save .collection-report-context {
-    order: 0;
-    max-width: none;
-    padding: 0;
-  }
-
-  .collection-report-frame--save .collection-report-context .ops-page-heading {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--spacing-4);
-  }
-
-  .collection-report-frame--save .collection-report-context .ops-page-heading > div:first-child {
-    position: static;
-    width: auto;
-    height: auto;
-    overflow: visible;
-    clip-path: none;
-    white-space: normal;
-  }
-
-  .collection-report-frame--save .collection-report-context .ops-page-heading > div:nth-child(2) {
-    width: auto;
-    max-width: 40%;
-    flex-shrink: 0;
-  }
-
-  .collection-report-frame--save .collection-section-nav {
-    flex: none;
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius-surface);
-    background: hsl(var(--card));
-    padding: var(--spacing-1);
-  }
-
-  .collection-report-frame--save .collection-section-label-full { display: inline; }
-  .collection-report-frame--save .collection-section-label-short { display: none; }
-
-  .collection-report-frame--save .collection-section-link[data-active="true"] {
-    border-color: hsl(var(--primary));
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
-  }
+@media (min-width: 768px) {
+  .collection-report-context { max-width: 180px; }
+  .collection-section-link { min-height: 40px; }
 }

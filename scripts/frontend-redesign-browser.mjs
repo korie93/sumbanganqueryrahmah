@@ -317,16 +317,14 @@ async function verifyCollection(page, { baseUrl, width, capture, diagnostics, bi
     }
     return;
   }
-  const sectionTrigger = page.getByTestId("button-open-collection-sections");
+  const sectionNav = page.getByRole("navigation", { name: "Collection sections", exact: true });
+  const sectionTrigger = sectionNav.getByRole("button", { name: "View Rekod Collection", exact: true });
   await sectionTrigger.focus();
   await page.keyboard.press("Enter");
-  const sectionDrawer = page.getByRole("dialog", { name: "Collection sections", exact: true });
-  await sectionDrawer.waitFor();
-  await assertDialogFits(sectionDrawer, "Collection section drawer", diagnostics);
+  assert.equal(await sectionTrigger.getAttribute("aria-current"), "page");
+  assert.equal(await sectionNav.evaluate((element) => getComputedStyle(element).overflowX), "auto");
   await capture("collection-sections", width);
-  await page.keyboard.press("Escape");
-  await sectionDrawer.waitFor({ state: "hidden" });
-  await assertFocus(page, sectionTrigger, "Collection sections restore launcher focus");
+  await assertFocus(page, sectionTrigger, "Collection sections retain keyboard focus");
   const mobileSearch = page.locator("#collection-records-search-mobile");
   await mobileSearch.waitFor({ state: "visible" });
   assert.equal(await mobileSearch.evaluate((element) => element.closest('[role="dialog"]') === null), true,

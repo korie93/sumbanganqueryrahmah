@@ -891,3 +891,75 @@ snapshots. Final no-update snapshots2/2passed with no retry/skip:
 `snapshots-compact-snap-final.log`. Only the two approved baselines changed.
 
 final result: passed
+
+## Collection compact navigation — 2026-10-16 (current task)
+
+Source: actual `/collection/records` compact navigation, captured in browser
+Codex before edits; baseline33d25ea9. This task supersedes the previous Save-only
+hero presentation, not its forms/receipts. No new design system/assets/dependency.
+
+Comparison confirms Save's duplicate eyebrow/title/subtitle and full labels were
+a route-only override. Source and final screenshots were opened together at
+matched1366x900/390x900 and DPR1 in both themes, full viewport/page and focused
+navigation regions. Exact source uses the five baseline UI files from33d25ea9
+in an isolated read-only preview, all other source/fixtures identical. Both
+light/dark desktop Records viewport PNGs are SHA256-identical before/after.
+
+Mandatory surfaces: typography uses existing Records short label scale/full
+accessible names; layout uses one40/44px strip with same1480px page width and16px
+content gap; colors reuse original active/focus/border tokens; icons/Q/assets are
+unchanged; only navigation presentation changes, all form/privacy/draft copy stays.
+Native buttons retain Tab/Enter/Space, full labels and aria-current. Mobile badge
+prefix is visually hidden so nickname remains visible, full accessible text kept.
+
+Initial automated review found partial mobile keyboard reveal (P2); fixed with
+strip-only focus scrolling that preserves full button and focus-ring clearance.
+Monthly's new test selector matched both legitimate headings; scoped selector
+fixed without changing product content. Old mobile-Sheet source contracts and
+Router test children type were updated; no assertions skipped or tolerances raised.
+
+Visual result: the original Records40px desktop tabs, icon size,12px inline
+padding, active surface/border/text, inactive treatment and16px content gap are
+shared by Save. Mobile uses44px targets and one horizontal strip; no page overflow
+or five-row stack. Save content moves fromY250.59 to158 (~92.6px) at1366 and
+Y267.80 to154 (~113.8px) at390. Form columns/cards/controls/notices retain their
+original geometry/content below the compact header; only the existing shortcut
+hint becomes visible on desktop. Nickname badge is optional once, full accessible
+text retained, mobile prefix visually hidden to show nickname. Global shell/Q
+and91 protected shared files remain byte-identical. No new images/fonts/icons,
+hardcoded palette, animation, new dependency or global CSS.
+
+Required fidelity passes completed: typography (existing Records scale/weights,
+no clipping or cramped labels), spacing/layout (source grid/density and deliberate
+mobile scroller), colors/tokens (same light/dark active/focus/disabled surfaces),
+assets (original Lucide/Q/receipt bytes unchanged), copy (only shortened nav
+presentation; draft/privacy/required/form/helper text retained). Native keyboard
+Tab/Enter and all-eight-section clicks, route/history/refresh and aria-current
+were verified; scroller exits focus normally. Ctrl+S and Meta+S each submit the
+original synthetic payload exactly once. Existing form and floating-action
+pointer-clearance checks pass; no new overlay was added.
+
+Final evidence: `artifacts/collection-compact-nav-20261016/final-compact-summary.json`
+and48PNGs (16 matched states). Source preview has the same missing-fictional-GET,
+blocked heartbeat/WS diagnostic patterns before and after, zero warnings/no new
+distinct errors. This is not misrepresented as a zero-error source preview.
+Actual built-fixture runtime gates pass with no unexpected APIs/page errors;
+layout tests also gate console errors. Browser Codex final DOM interaction and
+nickname selection succeeded; its later screenshot export reported zero-width,
+so final visual evidence is the approved local Playwright capture, not an invented
+IAB screenshot. Preview remains local; no production/backend/real data accessed.
+
+Verification: client2077/2077; presentation56/56; full app/browser TypeScript and
+client lint; sanitized production build/static safety gates; Collection browser
+112/112 plus layout13/13 and completion3/3; allPASS. Effective125% CSS footprint+
+DPR coverage is explicit, not a native browser zoom-UI claim. Script suites666
+Node passes/0fail/1pre-existing opt-in Viewer skip and63TS passes. Only reviewed
+Save light/dark baselines changed; final no-update snapshot2/2PASS across8images.
+Initial failed/interrupted runs are retained in logs and explained in the handoff;
+no tests/tolerances were disabled to accept a regression. `git diff --check`PASS.
+
+No actionable P0/P1/P2 remains for this bounded navigation task. Unused previous
+Sheet-state props are harmless compatibility cleanup debt; not expanded here.
+Production/CI deployment and formal WCAG certification were not performed.
+
+final result: passed

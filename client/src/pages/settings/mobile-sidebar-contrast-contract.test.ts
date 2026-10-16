@@ -15,8 +15,13 @@ test("collection section navigation keeps text and accessible current-state cues
 
   assert.match(source, /getAriaCurrentPageProps\(active\)/);
   assert.match(source, /border-primary\/30 bg-primary\/10 text-primary/);
-  assert.match(source, /min-h-11 w-full justify-between rounded-md/);
-  assert.match(source, /aria-haspopup="dialog"/);
+  assert.match(source, /aria-label=\{item\.label\}/);
+  assert.match(source, /focus-visible:ring-2 focus-visible:ring-ring/);
+  assert.match(source, /getCollectionSectionShortLabel\(item\.key, item\.label\)/);
+  const css = readSource("../CollectionReport.css");
+  assert.match(css, /\.collection-section-link[^}]*min-height: 44px/s);
+  assert.match(css, /\.collection-section-nav[^}]*overflow-x: auto/s);
+  assert.doesNotMatch(source, /<Sheet|aria-haspopup="dialog"/);
   assert.doesNotMatch(source, /border-primary\/15 bg-primary\/10 px-2 py-0\.5 text-xxs text-primary/);
   assert.doesNotMatch(source, /border-primary\/35 bg-primary\/10 text-primary/);
 });

@@ -11,7 +11,6 @@ import {
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
   getCurrentRole,
@@ -33,7 +32,6 @@ const CollectionNicknameDialog = lazy(() =>
 
 export default function CollectionReport() {
   const [, navigate] = useLocation();
-  const isMobile = useIsMobile();
   const role = useMemo(() => getCurrentRole(), []);
   const currentUsername = useMemo(() => getCurrentUsername(), []);
   const isSuperuser = role === "superuser";
@@ -54,7 +52,6 @@ export default function CollectionReport() {
     isReadOnlyManager,
     isSuperuser,
   });
-  const isSaveWorkspace = navigation.subPage === "save" && !isReadOnlyManager;
 
   const redirectToSearchTab = useCallback(() => {
     nicknameAccess.clearNicknameSession();
@@ -93,25 +90,13 @@ export default function CollectionReport() {
         ? "Signing In..."
         : "Checking...";
   const staffNicknameLabel = nicknameAccess.staffNickname.trim();
-  const headerActions = isMobile ? undefined : (
+  const headerActions = staffNicknameLabel ? (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      {isSaveWorkspace ? (
-        <span className="collection-report-save-shortcut">
-          Simpan pantas: <kbd>Ctrl / ⌘ S</kbd>
-        </span>
-      ) : null}
-      {staffNicknameLabel ? (
         <Badge variant="secondary" title={`Staff Nickname: ${staffNicknameLabel}`} className="collection-report-staff-badge rounded-full px-3 py-1 text-2xs">
-          Staff Nickname: {staffNicknameLabel}
+          <span className="collection-report-staff-prefix">Staff Nickname: </span>{staffNicknameLabel}
         </Badge>
-      ) : null}
     </div>
-  );
-  const subtitle = isMobile
-    ? staffNicknameLabel
-      ? `Staff Nickname: ${staffNicknameLabel}`
-      : "Collection workspace for entry, records, summaries, and comparisons."
-    : "Collection workspace for entry, records, summaries, and comparisons.";
+  ) : undefined;
   const shouldRenderNicknameDialog =
     navigation.subPage !== "billing-principal"
     && !nicknameAccess.checkingNicknameSession
@@ -121,15 +106,13 @@ export default function CollectionReport() {
   return (
     <OperationalPage
       width="report"
-      className={`collection-report-frame${isSaveWorkspace ? " collection-report-frame--save" : ""}`}
+      className="collection-report-frame"
     >
       <div className="collection-report-navigation">
         <OperationalPageHeader
           title="Collection Report"
-          eyebrow="Operational Workspace"
-          description={subtitle}
           actions={headerActions}
-          className={`collection-report-context ${isMobile ? "border-border/60 bg-background" : ""}`}
+          className="collection-report-context"
         />
         <CollectionSidebar
           items={navigation.sidebarItems}
