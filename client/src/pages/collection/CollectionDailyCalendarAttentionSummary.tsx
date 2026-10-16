@@ -7,12 +7,14 @@ type CollectionDailyCalendarAttentionSummaryProps = {
   days: CollectionDailyOverviewDay[];
   editableCalendarByDay: ReadonlyMap<number, EditableCalendarDay>;
   dirtyCalendarDayNumbers: ReadonlySet<number>;
+  compact?: boolean;
 };
 
 export function CollectionDailyCalendarAttentionSummary({
   days,
   editableCalendarByDay,
   dirtyCalendarDayNumbers,
+  compact = false,
 }: CollectionDailyCalendarAttentionSummaryProps) {
   const summary = buildCollectionDailyCalendarAttentionSummary({
     days,
@@ -22,23 +24,29 @@ export function CollectionDailyCalendarAttentionSummary({
   const Icon =
     summary.tone === "warning" ? AlertTriangle : summary.tone === "notice" ? Clock3 : CheckCircle2;
 
+  // Conflicts already have an actionable report, and unsaved changes their own review.
+  // Keep only the distinct working-day notice in the compact calendar workspace.
+  if (compact && (summary.holidayWithCollectionCount > 0 || summary.workingWithoutCollectionCount === 0)) {
+    return null;
+  }
+
   return (
     <section
-      className={`collection-daily-attention-summary collection-daily-attention-summary-${summary.tone}`}
+      className={`collection-daily-attention-summary collection-daily-attention-summary-${summary.tone}${compact ? " collection-daily-attention-summary-compact" : ""}`}
       aria-label="Daily calendar attention summary"
     >
       <span className="collection-daily-attention-summary-icon" aria-hidden="true">
         <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
       <div className="collection-daily-attention-summary-copy">
-        <p>{summary.title}</p>
+        {!compact ? <p>{summary.title}</p> : null}
         <span>{summary.description}</span>
       </div>
-      <div className="collection-daily-attention-summary-chips" role="group" aria-label="Attention counts">
+      {!compact ? <div className="collection-daily-attention-summary-chips" role="group" aria-label="Attention counts">
         <span>{summary.holidayWithCollectionCount} cuti ada kutipan</span>
         <span>{summary.workingWithoutCollectionCount} working tanpa kutipan</span>
         <span>{summary.unsavedChangesCount} belum save</span>
-      </div>
+      </div> : null}
     </section>
   );
 }

@@ -9,24 +9,26 @@ import {
 type CollectionDailyCalendarViewModeControlProps = {
   value: CollectionDailyCalendarViewMode;
   onChange: (mode: CollectionDailyCalendarViewMode) => void;
+  compact?: boolean;
 };
 
 export function CollectionDailyCalendarViewModeControl({
   value,
   onChange,
+  compact = false,
 }: CollectionDailyCalendarViewModeControlProps) {
   const statusText = getCollectionDailyCalendarViewModeStatusText(value);
   const controlId = useId();
 
   return (
     <section
-      className="collection-daily-calendar-view-mode"
+      className={`collection-daily-calendar-view-mode${compact ? " collection-daily-calendar-view-mode-compact" : ""}`}
       aria-label="Calendar display options"
       data-testid="collection-daily-calendar-view-mode"
     >
       <div className="collection-daily-calendar-view-mode-header">
         <label className="collection-daily-calendar-view-mode-title" htmlFor={controlId}>
-          Calendar display mode
+          {compact ? "Display" : "Calendar display mode"}
         </label>
         <select
           id={controlId}
@@ -43,7 +45,7 @@ export function CollectionDailyCalendarViewModeControl({
       </div>
       <p
         id={`${controlId}-description`}
-        className="collection-daily-calendar-view-mode-status"
+        className={compact ? "sr-only" : "collection-daily-calendar-view-mode-status"}
         aria-live="polite"
         aria-atomic="true"
       >

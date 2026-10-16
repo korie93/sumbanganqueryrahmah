@@ -12,6 +12,14 @@ export type CollectionDailyFiltersCardProps = {
   onMonthInputChange: (value: string) => void;
   onYearCommit: () => number;
   onMonthCommit: () => number;
+  onPreviousMonth?: () => void;
+  onNextMonth?: () => void;
+  onCurrentMonth?: () => void;
+  canPreviousMonth?: boolean;
+  canNextMonth?: boolean;
+  isCurrentMonth?: boolean;
+  periodNavigationDisabled?: boolean;
+  periodNavigationDisabledReason?: string | undefined;
   userPopoverOpen: boolean;
   onUserPopoverOpenChange: (open: boolean) => void;
   loadingUsers: boolean;
@@ -48,6 +56,14 @@ export type CollectionDailyPeriodFieldsProps = Pick<
   | "onMonthInputChange"
   | "onYearCommit"
   | "onMonthCommit"
+  | "onPreviousMonth"
+  | "onNextMonth"
+  | "onCurrentMonth"
+  | "canPreviousMonth"
+  | "canNextMonth"
+  | "isCurrentMonth"
+  | "periodNavigationDisabled"
+  | "periodNavigationDisabledReason"
 > & {
   isMobile: boolean;
   containerClassName?: string;

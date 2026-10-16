@@ -31,6 +31,7 @@ type CollectionDailyDesktopCalendarGridProps = {
   viewMode: CollectionDailyCalendarViewMode;
   firstWeekday: number;
   selectedDate: string | null;
+  todayDate?: string | undefined;
   editingDayNumber: number | null;
   activeFilter: CollectionDailyCalendarFilter;
   canManage: boolean;
@@ -38,7 +39,7 @@ type CollectionDailyDesktopCalendarGridProps = {
   dirtyCalendarDayNumbers: ReadonlySet<number>;
   bulkSelectedDayNumbers: ReadonlySet<number>;
   onEditDay: (day: number) => void;
-  onSelectDate: (date: string) => void;
+  onSelectDate: (date: string, trigger?: HTMLElement) => void;
   onToggleBulkDay: (day: number) => void;
 };
 
@@ -54,6 +55,7 @@ export function CollectionDailyDesktopCalendarGrid({
   viewMode,
   firstWeekday,
   selectedDate,
+  todayDate,
   editingDayNumber,
   activeFilter,
   canManage,
@@ -65,6 +67,7 @@ export function CollectionDailyDesktopCalendarGrid({
   onToggleBulkDay,
 }: CollectionDailyDesktopCalendarGridProps) {
   const iconMode = isCollectionDailyCalendarIconViewMode(viewMode);
+  const weekdayAligned = viewMode === "content" || viewMode === "heatmap";
   const showFullContent = viewMode === "content" || viewMode === "list";
   const showTileContent = viewMode === "tiles";
   const showHeatmapContent = viewMode === "heatmap";
@@ -79,12 +82,13 @@ export function CollectionDailyDesktopCalendarGrid({
       className={`collection-daily-desktop-grid collection-daily-desktop-grid-mode-${viewMode} grid gap-2`}
       data-testid="collection-daily-calendar-grid"
     >
-      {leadingBlankDays.map((blankKey) => (
+      {weekdayAligned ? leadingBlankDays.map((blankKey) => (
         <div className="collection-daily-calendar-blank" key={blankKey} />
-      ))}
+      )) : null}
       {days.map((day) => {
         const editable = editableCalendarByDay.get(day.day);
         const isSelected = selectedDate === day.date;
+        const isToday = todayDate === day.date;
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
         const isBulkSelected = bulkSelectedDayNumbers.has(day.day);
@@ -100,6 +104,7 @@ export function CollectionDailyDesktopCalendarGrid({
         return (
           <div
             key={day.date}
+            data-collection-performance={day.status}
             className={`collection-daily-desktop-day collection-daily-day-view-${viewMode} collection-daily-day-progress-band-${progressBand} rounded-xl border text-xs shadow-sm ${
               isSelected ? "ring-2 ring-ring ring-offset-1" : ""
             } ${isEditing ? "collection-daily-day-card-editing" : ""} ${
@@ -109,13 +114,21 @@ export function CollectionDailyDesktopCalendarGrid({
             <button
               type="button"
               aria-haspopup="dialog"
+              {...(isToday ? { "aria-current": "date" as const } : {})}
               className="collection-daily-day-button w-full rounded-md p-2 text-left transition-colors hover:brightness-95 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-              aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}${matchesActiveFilter ? "" : " - Not matching current quick filter"}${isSelected ? " - Selected" : ""}`}
-              onClick={() => onSelectDate(day.date)}
+              aria-label={`${formatDateDDMMYYYY(day.date)}${isToday ? " - Hari ini" : ""} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}${matchesActiveFilter ? "" : " - Not matching current quick filter"}${isSelected ? " - Selected" : ""}`}
+              onClick={(event) => onSelectDate(day.date, event.currentTarget)}
               data-testid={`collection-daily-day-${day.day}`}
+              data-collection-daily-date={day.date}
             >
               <div className="collection-daily-day-header mb-1 flex items-center justify-between">
-                <div className="collection-daily-day-number font-semibold">{day.day}</div>
+                <div className="collection-daily-day-date-label">
+                  <span className="collection-daily-day-number font-semibold">{day.day}</span>
+                  {!weekdayAligned ? <span className="collection-daily-day-weekday">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(day.date).getUTCDay()]}
+                  </span> : null}
+                  {isToday ? <span className="collection-daily-today-marker">Hari ini</span> : null}
+                </div>
                 <div className="collection-daily-day-icon-stack flex items-center gap-1.5">
                   {isDirty ? (
                     <span
@@ -132,7 +145,7 @@ export function CollectionDailyDesktopCalendarGrid({
               </div>
               {showFullContent || showTileContent || showHeatmapContent || showLargeIconContent ? (
                 <div className="collection-daily-day-amount">
-                  {showFullContent ? "Collected: " : ""}
+                  <span className="sr-only">Collected: </span>
                   {formatAmountRM(day.amount)}
                 </div>
               ) : null}
@@ -144,10 +157,10 @@ export function CollectionDailyDesktopCalendarGrid({
               {showFullContent ? (
                 <>
                   <div className="collection-daily-day-supporting-text text-xxs text-muted-foreground">
-                    Required Today: {formatAmountRM(day.target)}
+                    Target {formatAmountRM(day.target)}
                   </div>
                   <progress
-                    className="collection-daily-day-progress mt-2"
+                    className="collection-daily-day-progress"
                     max={100}
                     value={progressPercent}
                     aria-label={`Progress for day ${day.day}: ${Math.round(progressPercent)} percent of daily target`}
@@ -157,7 +170,7 @@ export function CollectionDailyDesktopCalendarGrid({
               {showFullContent || showTileContent || showHeatmapContent || showMediumIconContent ? (
                 <CollectionDailyCalendarDayBadge
                   day={day}
-                  compact={iconMode || showTileContent || showHeatmapContent}
+                  compact={iconMode || showTileContent || showHeatmapContent || viewMode === "content"}
                 />
               ) : null}
             </button>

@@ -38,8 +38,8 @@ export function CollectionDailyCalendarQuickFilter({
     >
       <div className="collection-daily-calendar-filter-header">
         <div>
-          <p className="collection-daily-calendar-filter-title">Quick filter</p>
-          <p className="collection-daily-calendar-filter-description">
+          <p className="sr-only">Quick filter</p>
+          <p className="sr-only">
             Desktop highlights matching days; mobile shows matching days only.
           </p>
         </div>

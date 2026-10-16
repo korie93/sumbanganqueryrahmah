@@ -94,23 +94,23 @@ test("Daily calendar secondary detail disclosures retain content and bulk permis
     assert.match(markup, /<summary>Monthly status and collection breakdown<\/summary>/);
     assert.match(markup, /aria-label="Daily status and leave type codes"/);
     assert.match(markup, /aria-label="Leave type totals"/);
-    assert.match(markup, /aria-label="Daily calendar attention summary"/);
-    assert.match(markup, /role="group" aria-label="Attention counts"/);
+    assert.doesNotMatch(markup, /aria-label="Daily calendar attention summary"/);
     assert.doesNotMatch(markup, /<details[^>]* open/);
     if (canManage) {
-      assert.match(markup, /<summary>Bulk daily status update · 0 selected<\/summary>/);
-      assert.match(markup, /aria-label="Bulk daily status"/);
-      assert.match(markup, /Apply to selected days/);
+      assert.match(markup, /data-testid="collection-daily-management-toggle"/);
+      assert.match(markup, /aria-pressed="false" aria-controls="collection-daily-calendar-management"/);
     } else {
-      assert.doesNotMatch(markup, /Bulk daily status update|aria-label="Bulk daily status"/);
+      assert.doesNotMatch(markup, /collection-daily-management-toggle/);
     }
+    assert.doesNotMatch(markup, /aria-label="Bulk daily status"|Apply to selected days/);
+    assert.match(markup, /id="collection-daily-calendar-management" hidden=""/);
   }
 });
 
 test("Daily conflict and unsaved-change feedback stays outside optional disclosures", () => {
   const source = readFileSync(new URL("./CollectionDailyCalendarCard.tsx", import.meta.url), "utf8");
   const disclosures = source.match(/<details\b[\s\S]*?<\/details>/g) ?? [];
-  assert.equal(disclosures.length, 3);
+  assert.equal(disclosures.length, 2);
   for (const disclosure of disclosures) {
     assert.doesNotMatch(disclosure, /CollectionDailyCalendar(?:ConflictReport|ChangeReview|AttentionSummary)/);
   }
@@ -118,4 +118,35 @@ test("Daily conflict and unsaved-change feedback stays outside optional disclosu
   assert.match(source, /<CollectionDailyCalendarChangeReview/);
   assert.match(source, /onApply=\{handleBulkApply\}/);
   assert.match(source, /onSaveCalendar=\{onSaveCalendar\}/);
+  assert.match(source, /canManage=\{calendarManagementActive\}/);
+  assert.ok(source.indexOf("<CollectionDailyCalendarChangeReview") < source.indexOf("<CollectionDailyMobileDayList"));
+});
+
+test("calendar browse mode retains actionable dirty review and only one visible conflict warning", () => {
+  const day = {
+    day: 1, date: "2026-05-01", amount: 500, target: 1000,
+    calendarStatus: "HOLIDAY" as const, leaveType: "OFF" as const, note: "Company closed",
+    isWorkingDay: false, isHoliday: true, holidayName: "OFF", customerCount: 2, status: "neutral" as const,
+  };
+  const markup = renderToStaticMarkup(createElement(CollectionDailyCalendarCard, {
+    loadingOverview: false, overview: { ...overview, days: [day] }, emptyOverviewMessage: "No daily overview",
+    firstWeekday: 5, selectedDate: null, canManage: true,
+    editableCalendarByDay: new Map([[1, { ...day, status: "HOLIDAY" as const, note: "Changed closure note" }]]),
+    dirtyCalendarDayNumbers: new Set([1]), savingCalendar: false,
+    onSaveCalendar() {}, onSelectDate() {}, onUpdateEditableDay() {}, onUpdateEditableDays() {},
+  }));
+  assert.match(markup, /1 conflict status/);
+  assert.doesNotMatch(markup, /Daily calendar attention summary/);
+  assert.match(markup, /Semakan perubahan status harian belum disimpan/);
+  assert.match(markup, /Simpan perubahan/);
+  assert.match(markup, /id="collection-daily-calendar-management" hidden=""/);
+  assert.doesNotMatch(markup, /aria-label="Bulk daily status"/);
+});
+
+test("conflict report text follows readable light and dark foreground tokens", () => {
+  const css = readFileSync(new URL("./CollectionDailyCalendarConflictReport.css", import.meta.url), "utf8");
+  assert.match(css, /\.collection-daily-conflict-report-summary\s*\{[^}]*color: hsl\(var\(--foreground\)\)/);
+  assert.doesNotMatch(css, /color: hsl\(31 92% 28%\)/);
+  const badges = readFileSync(new URL("./CollectionDailyCalendarDayBadge.css", import.meta.url), "utf8");
+  assert.match(badges, /\.dark \.collection-daily-calendar-day-badge-working \.collection-daily-calendar-day-badge-code\s*\{\s*color: hsl\(var\(--foreground\)\)/);
 });

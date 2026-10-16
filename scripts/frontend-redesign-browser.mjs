@@ -581,6 +581,8 @@ async function verifyCollectionExport(page, { baseUrl, width, capture, billingFi
 }
 
 async function verifyDaily(page, { baseUrl, width, billingFixture, captureSection }) {
+  let dailyStep = "primary summary and calendar controls";
+  try {
   assert.ok(billingFixture, "Daily disclosure workflow requires the opt-in synthetic Billing fixture");
   await page.setViewportSize({ width, height: width <= 430 ? 900 : 1000 });
   await page.goto(`${baseUrl}/collection/daily`, { waitUntil: "domcontentloaded" });
@@ -614,20 +616,23 @@ async function verifyDaily(page, { baseUrl, width, billingFixture, captureSectio
   const displayMode = page.getByRole("combobox", { name: "Choose calendar display mode", exact: true });
   await displayMode.waitFor();
   assert.equal(await displayMode.locator("option").count(), 7, "Daily display selector retains all seven modes");
-  const statusTools = page.getByTestId("collection-daily-status-tools");
-  const statusToolsToggle = statusTools.locator(":scope > summary");
+  const managementToggle = page.getByTestId("collection-daily-management-toggle");
+  const managementPanel = page.locator("#collection-daily-calendar-management");
+  const calendar = page.getByTestId("collection-daily-calendar");
+  const bulkDayCheckboxes = calendar.getByRole("checkbox", { name: /^Select .* for bulk status update$/ });
+  const editDayButtons = calendar.getByRole("button", { name: /^Edit calendar status for/ });
+  assert.equal(await managementToggle.getAttribute("aria-pressed"), "false", "Calendar starts in browse mode");
+  assert.equal(await managementToggle.getAttribute("aria-controls"), "collection-daily-calendar-management");
+  assert.equal(await managementPanel.isVisible(), false, "Browse mode hides administrative controls");
+  assert.equal(await bulkDayCheckboxes.count(), 0, "Browse mode does not clutter dates with bulk checkboxes");
+  assert.equal(await editDayButtons.count(), 0, "Browse mode does not clutter dates with edit actions");
   const disclosureCases = [
     { id: "daily-supporting-expanded", label: "Supporting Indicators", ready: () => page.getByText("Base Daily Target", { exact: true }) },
     { id: "daily-legend-expanded", label: "Calendar legend and status codes", ready: () => page.getByTestId("collection-daily-legend") },
-    { id: "daily-breakdown-expanded", label: "Monthly status and collection breakdown", requiresStatusTools: true, ready: () => page.getByRole("region", { name: "Monthly status and collection breakdown", exact: true }) },
-    { id: "daily-bulk-expanded", label: "Bulk daily status update · 0 selected", requiresStatusTools: true, ready: () => page.getByRole("combobox", { name: "Bulk daily status", exact: true }) },
+    { id: "daily-breakdown-expanded", label: "Monthly status and collection breakdown", ready: () => page.getByRole("region", { name: "Monthly status and collection breakdown", exact: true }) },
   ];
   for (const item of disclosureCases) {
-    if (item.requiresStatusTools && !(await statusTools.evaluate((element) => element.open))) {
-      await statusToolsToggle.focus();
-      await statusToolsToggle.press("Enter");
-      assert.equal(await statusTools.evaluate((element) => element.open), true, "Calendar tools open before their nested disclosures");
-    }
+    dailyStep = item.id;
     const toggle = page.locator("summary").filter({ hasText: item.label });
     const disclosure = toggle.locator("..");
     assert.equal(await disclosure.evaluate((element) => element.open), false, `${item.label} starts collapsed`);
@@ -645,14 +650,10 @@ async function verifyDaily(page, { baseUrl, width, billingFixture, captureSectio
       for (const code of ["AL", "MC", "OFF"]) await disclosure.getByText(code, { exact: true }).waitFor();
     }
     if (item.id === "daily-breakdown-expanded") {
-      await disclosure.getByText("31 hari", { exact: true }).waitFor();
-      await disclosure.getByText("Working days", { exact: true }).waitFor();
-      await disclosure.getByText("Holiday / Leave", { exact: true }).waitFor();
-    }
-    if (item.id === "daily-bulk-expanded") {
-      await disclosure.locator("#collection-daily-bulk-leave-type").waitFor();
-      await disclosure.locator("#collection-daily-bulk-note").waitFor();
-      assert.equal(await disclosure.getByRole("button", { name: "Apply to selected days", exact: true }).isDisabled(), true, "Bulk Apply remains disabled without selected days");
+      const breakdown = item.ready();
+      await breakdown.getByText("31 hari", { exact: true }).waitFor();
+      await breakdown.getByText("Working days", { exact: true }).waitFor();
+      await breakdown.getByText("Holiday / Leave", { exact: true }).waitFor();
     }
     await captureSection(item.id, disclosure, width);
     await toggle.focus();
@@ -660,19 +661,120 @@ async function verifyDaily(page, { baseUrl, width, billingFixture, captureSectio
     assert.equal(await disclosure.evaluate((element) => element.open), false, `${item.label} closes through the keyboard`);
     await assertFocus(page, toggle, `${item.label} retains keyboard focus`);
   }
-  if (await statusTools.evaluate((element) => element.open)) {
-    await statusToolsToggle.focus();
-    await statusToolsToggle.press("Enter");
+  dailyStep = "explicit calendar management";
+  await managementToggle.focus();
+  await managementToggle.press("Enter");
+  assert.equal(await managementToggle.getAttribute("aria-pressed"), "true", "Calendar management opens through the keyboard");
+  await managementPanel.waitFor();
+  const statusTools = page.getByTestId("collection-daily-status-tools");
+  await statusTools.getByRole("combobox", { name: "Bulk daily status", exact: true }).waitFor();
+  await statusTools.locator("#collection-daily-bulk-leave-type").waitFor();
+  await statusTools.locator("#collection-daily-bulk-note").waitFor();
+  assert.equal(await bulkDayCheckboxes.count(), 31, "Management mode retains every date's bulk selection");
+  assert.equal(await editDayButtons.count(), 31, "Management mode retains every date's status editor");
+  assert.equal(await statusTools.getByRole("button", { name: "Apply to selected days", exact: true }).isDisabled(), true, "Bulk Apply remains disabled without selected days");
+  await captureSection("daily-management-expanded", managementPanel, width);
+  await managementToggle.focus();
+  await managementToggle.press("Enter");
+  assert.equal(await managementToggle.getAttribute("aria-pressed"), "false", "Calendar management closes through the keyboard");
+  assert.equal(await managementPanel.isVisible(), false);
+  await assertFocus(page, managementToggle, "Closing calendar management retains its keyboard trigger");
+
+  const originalViewMode = await displayMode.inputValue();
+  dailyStep = "seven calendar display modes";
+  const modeIds = ["list", "icon-sm", "icon-md", "icon-lg", "tiles", "heatmap", "content"];
+  for (const [index, mode] of modeIds.entries()) {
+    await displayMode.focus();
+    await displayMode.press(index === 0 ? "Home" : "ArrowDown");
+    await displayMode.press("Enter");
+    assert.equal(await displayMode.inputValue(), mode, `Calendar display ${mode} remains keyboard selectable`);
+    const modeSurface = page.locator(width < 768
+      ? `.collection-daily-mobile-day-list-mode-${mode}`
+      : `.collection-daily-desktop-grid-mode-${mode}`);
+    await modeSurface.waitFor();
+    assert.equal(await modeSurface.locator("[data-testid^='collection-daily-day-']").count(), 31, `Calendar display ${mode} retains all dates`);
+    if (width >= 768) assert.equal(await calendar.locator(".collection-daily-weekday-row").count(), mode === "content" || mode === "heatmap" ? 1 : 0, `Calendar display ${mode} shows weekday headings only for aligned seven-column dates`);
   }
+  await displayMode.focus();
+  await displayMode.press("Home");
+  for (let index = 0; index < modeIds.indexOf(originalViewMode); index++) await displayMode.press("ArrowDown");
+  await displayMode.press("Enter");
+  assert.equal(await displayMode.inputValue(), originalViewMode, "Display coverage restores the selected presentation without changing calendar data");
   const day = page.getByTestId("collection-daily-day-20");
   const dayCard = page.locator(width < 768 ? ".collection-daily-mobile-day-card" : ".collection-daily-desktop-day").filter({ has: day });
   await captureSection("daily-populated-day-20", dayCard, width);
+
+  await day.focus();
+  dailyStep = "record-first popup and focus return";
+  await day.press("Enter");
+  const dialog = page.getByTestId("collection-daily-day-dialog");
+  await dialog.waitFor();
+  const firstRecord = dialog.locator(".collection-day-record-header").first();
+  await firstRecord.waitFor();
+  await assertDialogFits(dialog, "Daily record-first popup");
+  const scrollArea = dialog.getByRole("region", { name: "Collection day details scroll area", exact: true });
+  const recordVisibility = await firstRecord.evaluate((element) => {
+    const area = element.closest("[aria-label='Collection day details scroll area']");
+    if (!(area instanceof HTMLElement)) return null;
+    const record = element.getBoundingClientRect();
+    const bounds = area.getBoundingClientRect();
+    return { scrollTop: area.scrollTop, recordTop: record.top, recordBottom: record.bottom, scrollTopEdge: bounds.top, scrollBottomEdge: bounds.bottom };
+  });
+  assert.ok(recordVisibility, "Daily records belong to the one labelled scroll region");
+  assert.equal(recordVisibility.scrollTop, 0, "Daily popup opens at the beginning of its records and summary");
+  assert.ok(recordVisibility.recordTop >= recordVisibility.scrollTopEdge - 1
+    && recordVisibility.recordBottom <= recordVisibility.scrollBottomEdge + 1, "The first customer's name and amount are visible before scrolling the Daily popup");
+  assert.equal(await dialog.locator(".collection-day-financial-summary").count(), 1, "Daily popup presents one financial summary");
+  await assertAmountsFit(dialog.locator(".collection-day-financial-grid .collection-day-metric-value"));
+  assert.equal(await dialog.locator(".collection-day-financial-grid .collection-day-metric-value").count(), 3, "Daily popup retains Target, Kutipan and Baki once each");
+  const footer = dialog.getByRole("navigation", { name: "Navigasi halaman rekod kutipan harian", exact: true });
+  const previousPage = footer.getByRole("button", { name: "Sebelumnya", exact: true });
+  const nextPage = footer.getByRole("button", { name: "Seterusnya", exact: true });
+  const paginationLayout = await footer.evaluate((element) => {
+    const buttons = [...element.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
+    const bounds = element.getBoundingClientRect();
+    return { top: bounds.top, bottom: bounds.bottom, viewportHeight: innerHeight,
+      buttons: buttons.map((button) => ({ top: button.top, bottom: button.bottom, height: button.height })) };
+  });
+  assert.equal(paginationLayout.buttons.length, 2, "Daily footer keeps both pagination controls");
+  assert.ok(paginationLayout.top >= 0 && paginationLayout.bottom <= paginationLayout.viewportHeight + 1, "Daily pagination stays inside the visible popup");
+  assert.ok(Math.abs(paginationLayout.buttons[0].top - paginationLayout.buttons[1].top) <= 1, "Daily Previous and Next stay side by side on narrow screens too");
+  if (width < 768) assert.ok(paginationLayout.buttons.every((button) => button.height >= 44), "Mobile Daily pagination retains accessible touch targets");
+  assert.equal(await previousPage.isDisabled(), true, "The synthetic first Daily page cannot go backwards");
+  assert.equal(await nextPage.isDisabled(), true, "The two-record Daily fixture has only one page");
+  await captureSection("daily-record-first-popup", dialog, width);
+  await page.keyboard.press("Tab");
+  await assertFocusWithin(page, dialog, "Daily popup keeps Tab inside the modal");
+  await page.keyboard.press("Shift+Tab");
+  await assertFocusWithin(page, dialog, "Daily popup keeps reverse Tab inside the modal");
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  await assertFocus(page, day, "Daily popup Escape restores the activating calendar date");
+  const emptyDay = page.getByTestId("collection-daily-day-19");
+  dailyStep = "empty popup and focus return";
+  await emptyDay.focus();
+  await emptyDay.press("Enter");
+  await dialog.getByText("Tiada kutipan direkodkan untuk tarikh ini.", { exact: true }).waitFor();
+  assert.equal(await dialog.locator(".collection-day-record-card").count(), 0, "Empty Daily dates do not manufacture customer records");
+  await assertDialogFits(dialog, "Daily empty-date popup");
+  await captureSection("daily-empty-date-popup", dialog, width);
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  await close.focus();
+  await close.press("Enter");
+  await dialog.waitFor({ state: "hidden" });
+  await assertFocus(page, emptyDay, "Daily popup Close restores the empty date launcher");
+
   const targetControlsToggle = page.locator("summary").filter({ hasText: "Target and calendar management" });
+  dailyStep = "unchanged target and dirty-state controls";
   await targetControlsToggle.focus();
   await targetControlsToggle.press("Enter");
   assert.equal(await page.getByRole("button", { name: "Save Changed Days", exact: true }).isDisabled(), true, "Read-only disclosures do not create calendar changes");
   await targetControlsToggle.press("Enter");
-  await attention.getByText("0 belum save", { exact: true }).waitFor();
+  assert.equal(await calendar.getByRole("region", { name: "Semakan perubahan status harian belum disimpan", exact: true }).count(), 0, "Read-only Daily checks leave no unsaved calendar changes");
+  } catch (error) {
+    error.redesignStep ??= dailyStep;
+    throw error;
+  }
 }
 
 async function verifySaved(page, { baseUrl, width, capture, diagnostics }) {

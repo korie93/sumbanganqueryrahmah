@@ -4,6 +4,7 @@ import { CalendarDailyView } from "@/pages/collection/CalendarDailyView";
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
 import { CollectionDailyRoleGuide } from "@/pages/collection/CollectionDailyRoleGuide";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
+import { CollectionDailyDiscardChangesDialog } from "@/pages/collection/CollectionDailyDiscardChangesDialog";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
 import "./CollectionDailyCalendarAttentionSummary.css";
 import "./CollectionDailyCalendarAuditMeta.css";
@@ -47,6 +48,8 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
       {model.overview ? <CollectionDailySummaryCard overview={model.overview} /> : null}
 
       <CalendarDailyView {...model.calendarCardProps} />
+
+      <CollectionDailyDiscardChangesDialog {...model.discardChangesDialogProps} />
 
       {model.dayDetailsDialogProps.open ? (
         <Suspense fallback={<LazyDialogFallback label="Loading collection day details dialog..." />}>

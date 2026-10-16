@@ -4,7 +4,6 @@ import {
   OperationalSectionCard,
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
-import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
 
@@ -18,7 +17,6 @@ function clampPercent(value: number) {
 }
 
 export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryCardProps) {
-  const isMobile = useIsMobile();
   const remainingTarget = overview.summary.remainingTarget ?? overview.summary.balancedAmount;
   const requiredPerRemainingWorkingDay =
     overview.summary.requiredPerRemainingWorkingDay
@@ -55,9 +53,11 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
   return (
     <OperationalSectionCard
       title="Daily Performance Summary"
-      description={overview.freshness?.message || "Collection daily summary is using the latest available rollups."}
+      description={overview.freshness?.status !== "fresh" ? overview.freshness?.message : undefined}
       badge={<CollectionReportFreshnessBadge freshness={overview.freshness} />}
-      contentClassName="space-y-4"
+      className="collection-daily-summary-card"
+      headerClassName="collection-daily-summary-heading"
+      contentClassName="collection-daily-summary-content space-y-2"
     >
       <OperationalSummaryStrip
         className="collection-daily-summary-metrics"
@@ -73,23 +73,15 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
       </OperationalSummaryStrip>
 
       <section className="collection-daily-progress-panel" aria-label="Monthly target progress">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <h3 className="text-sm font-semibold text-foreground">Target Progress</h3>
-            <p className="text-xs leading-relaxed text-muted-foreground">{progressStatus}</p>
-          </div>
-          <p className="text-sm font-semibold text-foreground">{formatAmountRM(remainingTarget)} remaining</p>
-        </div>
+        <p className="collection-daily-progress-status text-xs text-muted-foreground">{progressStatus}</p>
         <progress
-          className="collection-daily-progress mt-3"
+          className="collection-daily-progress"
           max={100}
           value={monthlyTargetProgress}
           aria-label="Monthly target progress"
         />
-        <div className="collection-daily-progress-facts mt-3">
+        <div className="collection-daily-progress-facts">
           <span>Elapsed {overview.summary.elapsedWorkingDays}/{overview.summary.workingDays} working days</span>
-          <span>{overview.summary.completedDays} completed days</span>
-          <span>{overview.summary.remainingWorkingDays} remaining working days</span>
         </div>
       </section>
 
@@ -109,15 +101,12 @@ export function CollectionDailySummaryCard({ overview }: CollectionDailySummaryC
               />
             ))}
           </OperationalSummaryStrip>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Remaining target is capped to monthly target minus collected amount. Daily requirement is recalculated
+            from remaining target divided by remaining working days.
+          </p>
         </div>
       </details>
-
-      {!isMobile ? (
-        <p className="ops-inline-note">
-          Remaining target is always capped to monthly target minus collected amount. Daily requirement is recalculated
-          from remaining target divided by remaining working days.
-        </p>
-      ) : null}
     </OperationalSectionCard>
   );
 }

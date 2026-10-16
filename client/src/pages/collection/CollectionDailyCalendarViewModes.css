@@ -314,3 +314,131 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Dates stay chronological in auto-fit modes; weekday headings only accompany
+   the seven-column Content and Heatmap calendars. */
+.collection-daily-day-date-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Today is a temporal cue, never another collection-performance status. */
+.collection-daily-today-marker {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.35rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  padding: 0.125rem 0.25rem;
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 1.25;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.collection-daily-mobile-day-kicker:has(.collection-daily-today-marker) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.collection-daily-day-weekday {
+  color: hsl(var(--muted-foreground));
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.collection-daily-day-view-content .collection-daily-day-button {
+  gap: 0.3rem;
+  padding: 0.65rem;
+}
+
+.collection-daily-day-view-content .collection-daily-day-number {
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.5rem;
+}
+
+.collection-daily-day-view-content .collection-daily-day-icon-stack {
+  min-height: 1.5rem;
+}
+
+.collection-daily-day-view-content .collection-daily-day-amount {
+  margin-top: 0.1rem;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.collection-daily-day-view-content .collection-daily-day-status-chip {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.collection-daily-day-view-content .collection-daily-day-progress {
+  margin-top: 0.2rem;
+}
+
+.collection-daily-day-view-content .collection-daily-calendar-day-badge {
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.5rem;
+}
+
+.collection-daily-day-view-content .collection-daily-calendar-day-badge-text small {
+  display: none;
+}
+
+.collection-daily-day-view-content .collection-daily-calendar-day-badge-text span {
+  font-size: var(--font-size-xs);
+}
+
+[data-collection-performance="red"] {
+  --collection-daily-performance-color: hsl(var(--destructive));
+}
+
+[data-collection-performance="yellow"] {
+  --collection-daily-performance-color: hsl(var(--warning));
+}
+
+[data-collection-performance="green"] {
+  --collection-daily-performance-color: hsl(var(--success));
+}
+
+[data-collection-performance="neutral"] {
+  --collection-daily-performance-color: hsl(var(--muted-foreground));
+}
+
+.collection-daily-desktop-day .collection-daily-day-status-chip,
+.collection-daily-desktop-day .collection-daily-day-icon-stack > .lucide,
+.collection-daily-mobile-day-card .collection-daily-mobile-status-pill,
+.collection-daily-mobile-day-card .collection-daily-mobile-status-pill > .lucide {
+  color: var(--collection-daily-performance-color, hsl(var(--foreground)));
+}
+
+.collection-daily-mobile-day-metrics .collection-daily-day-metric strong,
+.collection-daily-mobile-day-metrics .collection-daily-day-metric p {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm [data-floating-ai-avoid] button,
+.collection-daily-mobile-day-list-mode-icon-md [data-floating-ai-avoid] button {
+  min-height: 2.75rem;
+}

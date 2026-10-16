@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarOff, StickyNote } from "lucide-react";
+import { BriefcaseBusiness, CalendarOff, ChevronDown, StickyNote } from "lucide-react";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -19,56 +19,57 @@ export function CollectionDailyDayStatusNotice({
   day,
   dayDetails,
 }: CollectionDailyDayStatusNoticeProps) {
-  if (!day) {
-    return null;
-  }
-
-  const isHoliday = day.calendarStatus === "HOLIDAY";
+  const isHoliday = day?.calendarStatus === "HOLIDAY";
+  const note = day?.note?.trim();
+  const hasImportantContext = isHoliday || Boolean(note);
 
   return (
     <section
       className={cn(
         "collection-day-status-notice",
-        isHoliday ? "collection-day-status-notice--holiday" : "collection-day-status-notice--working",
+        hasImportantContext && "collection-day-status-notice--important",
       )}
       aria-label="Daily calendar status and superuser remark"
     >
-      <div className="collection-day-status-notice-header">
-        <span className="collection-day-status-notice-icon" aria-hidden="true">
+      {hasImportantContext ? (
+        <div className="collection-day-important-context">
           {isHoliday ? (
-            <CalendarOff className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
-          )}
-        </span>
-        <div className="min-w-0">
-          <p className="collection-day-status-notice-eyebrow">Daily Calendar Status</p>
-          <h3 className="collection-day-status-notice-title">{getCollectionDailyOperationalStatusLabel(day)}</h3>
-          <p className="collection-day-status-notice-scope">{getCollectionDailyStatusScopeLabel(dayDetails)}</p>
+            <div className="collection-day-status-notice-header">
+              <CalendarOff className="h-4 w-4" aria-hidden="true" />
+              <p><strong>{getCollectionDailyLeaveTypeLabel(day)}</strong> · {getCollectionDailyWorkingDayLabel(day)}</p>
+            </div>
+          ) : null}
+          {isHoliday && dayDetails.amount > 0 ? (
+            <p className="collection-day-status-conflict">Kutipan direkodkan pada hari cuti / tidak bekerja.</p>
+          ) : null}
+          {note ? (
+            <div className="collection-day-status-remark">
+              <StickyNote className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <p><span className="collection-day-status-remark-label">Remark Superuser: </span>{note}</p>
+            </div>
+          ) : null}
         </div>
-      </div>
-
-      <div className="collection-day-status-notice-grid">
-        <div className="collection-day-status-notice-field">
-          <span>Jenis cuti</span>
-          <strong>{getCollectionDailyLeaveTypeLabel(day)}</strong>
+      ) : null}
+      <details className="collection-day-operation-details">
+        <summary>
+          <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
+          <span>Maklumat operasi &amp; audit</span>
+          <ChevronDown className="collection-day-disclosure-chevron h-3.5 w-3.5" aria-hidden="true" />
+        </summary>
+        <div className="collection-day-operation-details-content">
+          <div className="collection-day-operation-status">
+            <span>Daily Calendar Status: <strong>{getCollectionDailyOperationalStatusLabel(day)}</strong></span>
+            <span>{getCollectionDailyStatusScopeLabel(dayDetails)}</span>
+          </div>
+          {!isHoliday ? (
+            <p>Jenis cuti: {getCollectionDailyLeaveTypeLabel(day)} · {getCollectionDailyWorkingDayLabel(day)}</p>
+          ) : null}
+          {!note ? <p>{getCollectionDailySuperuserRemark(day)}</p> : null}
+          {day ? <CollectionDailyCalendarAuditMeta day={day} compact /> : null}
+          <p>{dayDetails.message}</p>
+          {dayDetails.freshness?.status === "fresh" ? <p>{dayDetails.freshness.message}</p> : null}
         </div>
-        <div className="collection-day-status-notice-field">
-          <span>Status operasi</span>
-          <strong>{getCollectionDailyWorkingDayLabel(day)}</strong>
-        </div>
-      </div>
-
-      <div className="collection-day-status-remark">
-        <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">
-          <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Remark Superuser</span>
-        </div>
-        <p>{getCollectionDailySuperuserRemark(day)}</p>
-        <div className="mt-2">
-          <CollectionDailyCalendarAuditMeta day={day} />
-        </div>
-      </div>
+      </details>
     </section>
   );
 }

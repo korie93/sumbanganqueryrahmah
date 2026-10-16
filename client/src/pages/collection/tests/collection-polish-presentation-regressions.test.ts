@@ -8,6 +8,10 @@ await import("../../collection-summary/CollectionMonthlyComparisonPanel.test");
 await import("../../collection-summary/CollectionSummaryPresentation.test");
 await import("../CollectionDailyCalendarLayout.test");
 await import("../CollectionDailyCalendarViewModeControl.test");
+await import("../CollectionDailyDayDetailsDialog.test");
+await import("../CollectionDailyDayStatusNotice.test");
+await import("../CollectionDailySummaryCard.test");
+await import("../CollectionDailyCalendarAttentionSummary.test");
 await import("../CollectionNicknameSummaryFilterStatus.test");
 await import("./save-collection-presentation.test");
 

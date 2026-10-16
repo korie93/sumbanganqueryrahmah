@@ -72,6 +72,27 @@
   white-space: nowrap;
 }
 
+.collection-daily-attention-summary-compact {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  border: 0;
+  border-inline-start: 2px solid hsl(var(--primary) / 0.45);
+  border-radius: 0;
+  background: hsl(var(--muted) / 0.15);
+  padding: 0.5rem 0.75rem;
+}
+
+.collection-daily-attention-summary-compact .collection-daily-attention-summary-icon {
+  height: 1.25rem;
+  width: 1.25rem;
+  background: transparent;
+}
+
+.collection-daily-attention-summary-compact .collection-daily-attention-summary-copy span {
+  margin-top: 0;
+  font-size: var(--font-size-xs);
+}
+
 @media (max-width: 767px) {
   .collection-daily-attention-summary {
     grid-template-columns: auto minmax(0, 1fr);

@@ -15,6 +15,7 @@ type CollectionDailyDayReceipt = CollectionDailyDayRecord["receipts"][number];
 type CollectionDailyReceiptOpenHandler = (
   record: CollectionDailyDayRecord,
   receiptId?: string,
+  trigger?: HTMLElement,
 ) => void;
 
 export function resolveTargetProgressPercent(amount: number, target: number) {
@@ -23,19 +24,6 @@ export function resolveTargetProgressPercent(amount: number, target: number) {
   }
 
   return Math.max(0, Math.min(100, Math.round((amount / target) * 100)));
-}
-
-export function getStatusPillClass(status: CollectionDayStatus) {
-  if (status === "green") {
-    return "border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-300";
-  }
-  if (status === "yellow") {
-    return "border-amber-500/35 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300";
-  }
-  if (status === "red") {
-    return "border-rose-500/35 bg-rose-50 text-rose-700 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-300";
-  }
-  return "border-slate-400/40 bg-slate-100 text-slate-700 dark:border-border/70 dark:bg-card dark:text-muted-foreground";
 }
 
 export function getProgressBarClass(status: CollectionDayStatus) {
@@ -62,30 +50,24 @@ export function CollectionDayMetric({
   label,
   tone = "default",
   value,
+  className,
 }: {
   icon: LucideIcon;
   label: string;
   tone?: CollectionDayMetricTone;
   value: string | number;
+  className?: string;
 }) {
   const valueLabel = formatMetricValueLabel(value);
 
   return (
-    <div className={cn("min-w-0 rounded-xl border px-3 py-2.5", getMetricToneClass(tone))}>
-      <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">
+    <dl className={cn("collection-day-metric", getMetricToneClass(tone), className)}>
+      <dt className="collection-day-metric-label">
         <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate" title={label} aria-label={label}>
-          {label}
-        </span>
-      </div>
-      <div
-        className="mt-1 truncate text-sm font-semibold text-foreground"
-        title={valueLabel}
-        aria-label={valueLabel}
-      >
-        {valueLabel}
-      </div>
-    </div>
+        <span>{label}</span>
+      </dt>
+      <dd className="collection-day-metric-value">{valueLabel}</dd>
+    </dl>
   );
 }
 
@@ -97,9 +79,9 @@ function CollectionRecordDetail({
   value: string;
 }) {
   return (
-    <dl className="min-w-0 rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-      <dt className="text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words font-medium text-foreground">{value}</dd>
+    <dl className="collection-day-record-detail">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </dl>
   );
 }
@@ -124,7 +106,7 @@ function CollectionRecordHeader({ record }: { record: CollectionDailyDayRecord }
     <div className="collection-day-record-header">
       <div className="min-w-0 space-y-1">
         <p className="collection-day-record-title">{record.customerName}</p>
-        <p className="collection-day-record-account">{record.accountNumber}</p>
+        <p className="collection-day-record-account"><span className="sr-only">Account: </span>{record.accountNumber}</p>
       </div>
       <span className="collection-day-record-amount">{formatAmountRM(record.amount)}</span>
     </div>
@@ -143,7 +125,7 @@ function CollectionRecordMeta({ record }: { record: CollectionDailyDayRecord }) 
 
 function CollectionRecordDetailsGrid({ record }: { record: CollectionDailyDayRecord }) {
   return (
-    <div className="grid gap-2 text-sm md:grid-cols-3">
+    <div className="collection-day-record-details-grid">
       <CollectionRecordDetail label="Reference" value={record.paymentReference} />
       <CollectionRecordDetail label="Payment Date" value={formatDateDDMMYYYY(record.paymentDate)} />
       <CollectionRecordDetail label="Created" value={formatDateTimeDDMMYYYY(record.createdAt)} />
@@ -173,7 +155,7 @@ function CollectionStoredReceipts({
 }) {
   return (
     <section className="collection-day-receipts-panel" aria-label={`Stored receipts for ${record.customerName}`}>
-      <div className="flex items-center justify-between gap-3">
+      {record.receipts.length > 0 ? <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>Stored Receipts</span>
@@ -183,7 +165,7 @@ function CollectionStoredReceipts({
             {record.receipts.length}
           </span>
         ) : null}
-      </div>
+      </div> : null}
 
       {record.receipts.length === 0 ? (
         <div className="collection-day-receipt-empty">
@@ -208,7 +190,7 @@ function CollectionStoredReceipts({
                 className="collection-day-receipt-button"
                 aria-label={`View stored receipt ${receiptFileName} for ${record.customerName}`}
                 disabled={isLoadingReceipt}
-                onClick={() => onViewReceipt(record, receipt.id)}
+                onClick={(event) => onViewReceipt(record, receipt.id, event.currentTarget)}
               >
                 <span className="collection-day-receipt-icon" aria-hidden="true">
                   {isLoadingReceipt ? (
@@ -251,7 +233,7 @@ export function CollectionDailyRecordCard({
 }) {
   return (
     <div
-      className={cn("collection-day-record-card space-y-3", isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-3.5")}
+      className={cn("collection-day-record-card", isMobile && "collection-day-record-card--mobile")}
     >
       <CollectionRecordHeader record={record} />
       <CollectionRecordMeta record={record} />

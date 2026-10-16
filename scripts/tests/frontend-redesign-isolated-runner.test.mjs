@@ -278,6 +278,39 @@ test("Daily section evidence stays bounded and checks real keyboard disclosures 
   const workflow = browser.slice(browser.indexOf("async function verifyDaily("), browser.indexOf("async function verifySaved("));
   assert.doesNotMatch(workflow, /\.fill\(|\.check\(|\.selectOption\(|\.click\(/);
   assert.match(workflow, /Apply to selected days.*isDisabled\(\), true/);
+  assert.match(workflow, /getByTestId\("collection-daily-management-toggle"\)/);
+  assert.match(workflow, /managementToggle\.getAttribute\("aria-pressed"\), "false", "Calendar starts in browse mode"/);
+  assert.match(workflow, /bulkDayCheckboxes\.count\(\), 0/);
+  assert.match(workflow, /editDayButtons\.count\(\), 0/);
+  assert.match(workflow, /await managementToggle\.press\("Enter"\)/);
+  assert.match(workflow, /bulkDayCheckboxes\.count\(\), 31/);
+  assert.match(workflow, /editDayButtons\.count\(\), 31/);
+  assert.doesNotMatch(workflow, /statusTools\.locator\(":scope > summary"\)|requiresStatusTools/);
+});
+
+test("Daily browser checks every display mode and record-first popup with real keyboard focus and readable amounts", () => {
+  const workflow = browser.slice(browser.indexOf("async function verifyDaily("), browser.indexOf("async function verifySaved("));
+  assert.match(workflow, /const modeIds = \["list", "icon-sm", "icon-md", "icon-lg", "tiles", "heatmap", "content"\]/);
+  assert.match(workflow, /displayMode\.press\(index === 0 \? "Home" : "ArrowDown"\)/);
+  assert.match(workflow, /Calendar display \$\{mode\} retains all dates/);
+  assert.match(workflow, /Display coverage restores the selected presentation without changing calendar data/);
+  assert.match(workflow, /await day\.press\("Enter"\)/);
+  assert.match(workflow, /await assertDialogFits\(dialog, "Daily record-first popup"\)/);
+  assert.match(workflow, /recordVisibility\.scrollTop, 0/);
+  assert.match(workflow, /recordVisibility\.recordBottom <= recordVisibility\.scrollBottomEdge \+ 1/);
+  assert.match(workflow, /collection-day-financial-summary"\)\.count\(\), 1/);
+  assert.match(workflow, /assertAmountsFit\(dialog\.locator\("\.collection-day-financial-grid \.collection-day-metric-value"\)\)/);
+  assert.match(workflow, /Daily popup retains Target, Kutipan and Baki once each/);
+  assert.match(workflow, /Daily Previous and Next stay side by side on narrow screens too/);
+  assert.match(workflow, /button\.height >= 44/);
+  assert.match(workflow, /Daily popup keeps Tab inside the modal/);
+  assert.match(workflow, /Daily popup keeps reverse Tab inside the modal/);
+  assert.match(workflow, /Daily popup Escape restores the activating calendar date/);
+  assert.match(workflow, /Empty Daily dates do not manufacture customer records/);
+  assert.match(workflow, /Daily popup Close restores the empty date launcher/);
+  assert.match(workflow, /captureSection\("daily-record-first-popup", dialog, width\)/);
+  assert.match(workflow, /captureSection\("daily-empty-date-popup", dialog, width\)/);
+  assert.doesNotMatch(workflow, /\.fill\(|\.check\(|\.selectOption\(|\.click\(|\bfetch\(|\.request\.(?:post|put|patch|delete)\(/);
 });
 
 test("optional accessibility inspects captured real UI and fails on every WCAG violation severity", () => {

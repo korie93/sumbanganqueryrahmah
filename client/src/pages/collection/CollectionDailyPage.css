@@ -11,6 +11,35 @@
   color: hsl(var(--primary));
 }
 
+.collection-daily-period-controls {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.collection-daily-period-navigation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.collection-daily-period-navigation > button {
+  min-height: 2.75rem;
+}
+
+.collection-daily-period-step {
+  width: 2.75rem;
+  padding-inline: 0;
+}
+
+.collection-daily-period-help {
+  grid-column: 1 / -1;
+  color: hsl(var(--muted-foreground));
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
 /* Give complete currency values room before adding another metric column. */
 .collection-daily-page .collection-daily-summary-metrics {
   display: grid;
@@ -310,16 +339,16 @@
 }
 
 .collection-daily-calendar-blank {
-  min-height: 9.75rem;
+  min-height: 0;
 }
 
 .collection-daily-desktop-day {
-  min-height: 11.5rem;
+  min-height: 9.25rem;
 }
 
 .collection-daily-desktop-day .collection-daily-day-button {
   display: flex;
-  min-height: 8.65rem;
+  min-height: 9.25rem;
   flex-direction: column;
 }
 
@@ -464,6 +493,150 @@
 
 .collection-daily-day-edit {
   color: hsl(var(--muted-foreground));
+}
+
+/* Keep the four financial figures in view without another large card header. */
+.collection-daily-summary-heading,
+.collection-daily-calendar-heading {
+  padding: 1rem 1rem 0.75rem;
+}
+
+.collection-daily-summary-heading > div:last-child {
+  width: auto;
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+
+.collection-daily-summary-heading [role="heading"],
+.collection-daily-calendar-heading [role="heading"] {
+  font-size: var(--font-size-base);
+}
+
+.collection-daily-summary-content,
+.collection-daily-calendar-content {
+  padding-inline: 1rem;
+  padding-bottom: 1rem;
+}
+
+.collection-daily-summary-content > .collection-daily-summary-metrics {
+  border-top: 0;
+  padding-top: 0;
+  padding-bottom: 0.75rem;
+  gap: 0.75rem;
+}
+
+.collection-daily-summary-metrics .ops-metric {
+  padding-inline: 0.75rem;
+}
+
+.collection-daily-summary-card .collection-daily-progress-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem 1rem;
+  border: 0;
+  padding-top: 0;
+}
+
+.collection-daily-summary-card .collection-daily-progress-status {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+
+.collection-daily-summary-card .collection-daily-progress {
+  height: 0.4rem;
+}
+
+.collection-daily-summary-card .collection-daily-supporting-panel > summary {
+  padding-block: 0.5rem;
+}
+
+.collection-daily-calendar-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem 1.25rem;
+}
+
+.collection-daily-management-toggle {
+  min-height: 2.75rem;
+  width: fit-content;
+}
+
+.collection-daily-management-panel {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-control);
+  background: hsl(var(--muted) / 0.12);
+  padding: 0.75rem;
+}
+
+.collection-daily-management-panel .collection-daily-edit-helper {
+  display: block;
+  padding-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  .collection-daily-period-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .collection-daily-period-navigation {
+    grid-template-columns: repeat(3, auto);
+  }
+
+  .collection-daily-period-current {
+    padding-inline: 0.75rem;
+  }
+
+  .collection-daily-page .collection-daily-summary-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Local report density: keep dates visible without shrinking type or targets. */
+  .collection-daily-summary-card,
+  .collection-daily-calendar-card {
+    padding-block: 1rem;
+  }
+
+  .collection-daily-summary-heading,
+  .collection-daily-calendar-heading {
+    padding: 0 1rem 0.75rem;
+  }
+
+  .collection-daily-summary-content,
+  .collection-daily-calendar-content {
+    padding: 0 1rem;
+  }
+
+  .collection-daily-summary-heading,
+  .collection-daily-calendar-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .collection-daily-calendar-heading > div + div {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .collection-daily-summary-card .collection-daily-progress-panel {
+    grid-template-columns: auto minmax(4rem, 1fr) auto;
+  }
+
+  .collection-daily-calendar-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .collection-daily-management-toggle {
+    min-height: 2.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .collection-daily-page .collection-daily-summary-metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .collection-daily-mobile-day-list-mode-tiles,

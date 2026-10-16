@@ -1,6 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Settings2 } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
+import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
 import { CollectionDailyCalendarAttentionSummary } from "@/pages/collection/CollectionDailyCalendarAttentionSummary";
@@ -28,12 +30,13 @@ export type CollectionDailyCalendarCardProps = {
   emptyOverviewMessage: string;
   firstWeekday: number;
   selectedDate: string | null;
+  todayDate?: string | undefined;
   canManage: boolean;
   editableCalendarByDay: Map<number, EditableCalendarDay>;
   dirtyCalendarDayNumbers: ReadonlySet<number>;
   savingCalendar: boolean;
   onSaveCalendar: () => void;
-  onSelectDate: (date: string) => void;
+  onSelectDate: (date: string, trigger?: HTMLElement) => void;
   onUpdateEditableDay: (day: number, patch: Partial<EditableCalendarDay>) => void;
   onUpdateEditableDays: (dayNumbers: readonly number[], patch: Partial<EditableCalendarDay>) => void;
 };
@@ -55,6 +58,7 @@ export function CollectionDailyCalendarCard({
   emptyOverviewMessage,
   firstWeekday,
   selectedDate,
+  todayDate,
   canManage,
   editableCalendarByDay,
   dirtyCalendarDayNumbers,
@@ -68,6 +72,9 @@ export function CollectionDailyCalendarCard({
   const { viewMode, setViewMode } = useCollectionDailyCalendarViewMode();
   const [editingDayNumber, setEditingDayNumber] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<CollectionDailyCalendarFilter>("all");
+  const [managementMode, setManagementMode] = useState(false);
+  const calendarManagementActive = canManage && managementMode;
+  const weekdayAligned = viewMode === "content" || viewMode === "heatmap";
   const [bulkSelectedDayNumbers, setBulkSelectedDayNumbers] = useState<Set<number>>(
     () => new Set(),
   );
@@ -80,6 +87,7 @@ export function CollectionDailyCalendarCard({
 
   useEffect(() => {
     if (!canManage || !overview?.days.length) {
+      if (managementMode) setManagementMode(false);
       if (editingDayNumber !== null) {
         setEditingDayNumber(null);
       }
@@ -105,7 +113,13 @@ export function CollectionDailyCalendarCard({
         setBulkSelectedDayNumbers(nextBulkSelectedDayNumbers);
       }
     }
-  }, [bulkSelectedDayNumbers, canManage, editingDayNumber, overview?.days]);
+  }, [bulkSelectedDayNumbers, canManage, editingDayNumber, managementMode, overview?.days]);
+
+  const handleManagementModeToggle = useCallback(() => {
+    setManagementMode((previous) => !previous);
+    setEditingDayNumber(null);
+    setBulkSelectedDayNumbers(new Set());
+  }, []);
 
   const handleEditDialogOpenChange = useCallback((open: boolean) => {
     if (!open) {
@@ -155,7 +169,7 @@ export function CollectionDailyCalendarCard({
   }, [activeFilter, dirtyCalendarDayNumbers, overview?.days]);
 
   return (
-    <div className="collection-daily-calendar" data-testid="collection-daily-calendar">
+    <div className="collection-daily-calendar" data-testid="collection-daily-calendar" data-collection-daily-calendar tabIndex={-1}>
       <OperationalSectionCard
         title="Monthly Daily Status"
         description={
@@ -164,79 +178,69 @@ export function CollectionDailyCalendarCard({
             : "Scan the month quickly, then click a day to inspect collection details."
         }
         className="collection-daily-calendar-card"
-        contentClassName="space-y-4"
+        headerClassName="collection-daily-calendar-heading"
+        contentClassName="collection-daily-calendar-content space-y-3"
+        actions={canManage && overview ? (
+          <Button
+            type="button"
+            variant={calendarManagementActive ? "secondary" : "outline"}
+            className="collection-daily-management-toggle"
+            {...{ "aria-pressed": calendarManagementActive ? "true" as const : "false" as const }}
+            aria-controls="collection-daily-calendar-management"
+            onClick={handleManagementModeToggle}
+            data-testid="collection-daily-management-toggle"
+          >
+            <Settings2 className="mr-2 h-4 w-4" aria-hidden="true" />
+            {calendarManagementActive ? "Selesai urus kalendar" : "Urus kalendar"}
+          </Button>
+        ) : null}
       >
-        <details className="collection-daily-disclosure">
-          <summary>Calendar legend and status codes</summary>
-          <div className="pb-3"><CollectionDailyCalendarLegend isMobile={isMobile} /></div>
-        </details>
-
         {loadingOverview ? (
           <CollectionDailyCalendarState loading message="Loading monthly daily status..." />
         ) : !overview ? (
           <CollectionDailyCalendarState loading={false} message={emptyOverviewMessage} />
         ) : (
           <div className="space-y-3">
-            <CollectionDailyCalendarStatusSummary
-              days={overview.days}
-              dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
-              canManage={canManage}
-            />
+            <div className="collection-daily-calendar-toolbar">
+              <CollectionDailyCalendarQuickFilter
+                days={overview.days}
+                dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+                activeFilter={activeFilter}
+                canManage={canManage}
+                onFilterChange={handleFilterChange}
+              />
+              <CollectionDailyCalendarViewModeControl
+                value={viewMode}
+                onChange={setViewMode}
+                compact
+              />
+            </div>
 
             <CollectionDailyCalendarAttentionSummary
               days={overview.days}
               editableCalendarByDay={editableCalendarByDay}
               dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+              compact
             />
 
-            <CollectionDailyCalendarQuickFilter
-              days={overview.days}
-              dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
-              activeFilter={activeFilter}
-              canManage={canManage}
-              onFilterChange={handleFilterChange}
-            />
-
-            <CollectionDailyCalendarViewModeControl
-              value={viewMode}
-              onChange={setViewMode}
-            />
-
-            <details className="collection-daily-disclosure" data-testid="collection-daily-status-tools">
-              <summary>
-                {canManage ? "Calendar status and bulk tools" : "Calendar status guidance"}
-                {bulkSelectedDayNumbers.size > 0 ? ` · ${bulkSelectedDayNumbers.size} selected` : ""}
-              </summary>
-              <div className="space-y-3 pb-3">
-                <CollectionDailyCalendarRoleModeNotice canEditCalendar={canManage} />
-                <details className="collection-daily-disclosure">
-                  <summary>Monthly status and collection breakdown</summary>
-                  <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
-                </details>
-                {canManage ? (
-                  <details className="collection-daily-disclosure">
-                    <summary>Bulk daily status update · {bulkSelectedDayNumbers.size} selected</summary>
-                    <CollectionDailyCalendarBulkToolbar
-                      days={overview.days}
-                      selectedDayNumbers={bulkSelectedDayNumbers}
-                      onSelectDays={handleBulkSelectDays}
-                      onClearSelection={handleBulkClearSelection}
-                      onApply={handleBulkApply}
-                    />
-                  </details>
-                ) : null}
-
-                {canManage ? (
-                  <div className="collection-daily-edit-helper" aria-live="polite" aria-atomic="true">
-                    <span className="collection-daily-edit-helper-dot" aria-hidden="true" />
-                    <span>
-                      Klik <strong>Edit status</strong> pada mana-mana tarikh untuk buka popup editor.
-                      Perubahan hanya update tarikh dan nickname yang dipilih.
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            </details>
+            <div id="collection-daily-calendar-management" hidden={!calendarManagementActive}>
+              {calendarManagementActive ? (
+                <div className="collection-daily-management-panel space-y-3" data-testid="collection-daily-status-tools">
+                  <CollectionDailyCalendarRoleModeNotice canEditCalendar={canManage} />
+                  <CollectionDailyCalendarBulkToolbar
+                    days={overview.days}
+                    selectedDayNumbers={bulkSelectedDayNumbers}
+                    onSelectDays={handleBulkSelectDays}
+                    onClearSelection={handleBulkClearSelection}
+                    onApply={handleBulkApply}
+                  />
+                  <p className="collection-daily-edit-helper">
+                    Klik <strong>Edit status</strong> pada tarikh atau pilih beberapa tarikh untuk bulk update.
+                    Perubahan hanya untuk nickname yang dipilih dan belum disimpan sehingga anda klik Simpan.
+                  </p>
+                </div>
+              ) : null}
+            </div>
 
             <CollectionDailyCalendarConflictReport
               days={overview.days}
@@ -260,8 +264,9 @@ export function CollectionDailyCalendarCard({
                   days={filteredMobileDays}
                   viewMode={viewMode}
                   selectedDate={selectedDate}
+                  todayDate={todayDate}
                   editingDayNumber={editingDayNumber}
-                  canManage={canManage}
+                  canManage={calendarManagementActive}
                   dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
                   bulkSelectedDayNumbers={bulkSelectedDayNumbers}
                   onSelectDate={onSelectDate}
@@ -275,7 +280,7 @@ export function CollectionDailyCalendarCard({
               )
             ) : (
               <div className="min-w-0 space-y-3">
-                <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
+                {weekdayAligned ? <div className="collection-daily-weekday-row grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground" aria-hidden="true">
                   <div>Sun</div>
                   <div>Mon</div>
                   <div>Tue</div>
@@ -283,7 +288,7 @@ export function CollectionDailyCalendarCard({
                   <div>Thu</div>
                   <div>Fri</div>
                   <div>Sat</div>
-                </div>
+                </div> : null}
                 <Suspense
                   fallback={<div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid" />}
                 >
@@ -292,9 +297,10 @@ export function CollectionDailyCalendarCard({
                     viewMode={viewMode}
                     firstWeekday={firstWeekday}
                     selectedDate={selectedDate}
+                    todayDate={todayDate}
                     editingDayNumber={editingDayNumber}
                     activeFilter={activeFilter}
-                    canManage={canManage}
+                    canManage={calendarManagementActive}
                     editableCalendarByDay={editableCalendarByDay}
                     dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
                     bulkSelectedDayNumbers={bulkSelectedDayNumbers}
@@ -305,6 +311,22 @@ export function CollectionDailyCalendarCard({
                 </Suspense>
               </div>
             )}
+
+            <details className="collection-daily-disclosure">
+              <summary>Calendar legend and status codes</summary>
+              <div className="pb-3"><CollectionDailyCalendarLegend isMobile={isMobile} /></div>
+            </details>
+            <details className="collection-daily-disclosure">
+              <summary>Monthly status and collection breakdown</summary>
+              <div className="space-y-3 pb-3">
+                <CollectionDailyCalendarStatusSummary
+                  days={overview.days}
+                  dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+                  canManage={canManage}
+                />
+                <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
+              </div>
+            </details>
 
             {editDialogOpen ? (
               <Suspense fallback={<LazyDialogFallback label="Loading daily status editor dialog..." />}>

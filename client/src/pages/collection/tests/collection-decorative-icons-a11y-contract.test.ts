@@ -34,7 +34,14 @@ test("collection mobile filter action icons are decorative only", () => {
 test("collection daily heading and loading icons are hidden from assistive technology", () => {
   assert.match(dailyFiltersCardSource, /<CalendarDays className="collection-daily-title-icon h-4 w-4" aria-hidden="true" \/>/);
   assert.match(dailyFiltersCardSource, /<Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" \/>/);
-  assert.match(dailyDayDetailsDialogSource, /<Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" \/>/);
+  // The records-only loading state stacks its icon; accessibility must not
+  // depend on the previous inline spinner's horizontal margin class.
+  const dailyLoadingIcons = dailyDayDetailsDialogSource.match(/<Loader2\b[^>]*\/>/g) ?? [];
+  assert.ok(dailyLoadingIcons.length > 0);
+  for (const icon of dailyLoadingIcons) {
+    assert.match(icon, /aria-hidden="true"/);
+    assert.match(icon, /className="[^"]*\banimate-spin\b[^"]*"/);
+  }
   assert.match(dailyDayDetailsDialogPartsSource, /<Loader2 className="h-3\.5 w-3\.5 animate-spin" aria-hidden="true" \/>/);
   assert.match(dailyDayDetailsDialogPartsSource, /<Eye className="h-3\.5 w-3\.5" aria-hidden="true" \/>/);
   assert.match(dailyConflictReportSource, /<AlertTriangle className="h-4 w-4" aria-hidden="true" \/>/);

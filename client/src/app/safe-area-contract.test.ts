@@ -48,7 +48,7 @@ test("mobile sticky and sheet surfaces use the shared safe-area token", () => {
     "../pages/general-search/GeneralSearchMobileControls.tsx",
     "../pages/general-search/GeneralSearchAdvancedControls.tsx",
     "../pages/settings/SettingsSaveBar.tsx",
-    "../pages/collection/CollectionDailyDayDetailsFooter.tsx",
+    "../pages/collection/CollectionDailyDayDetailsDialog.css",
     "../components/layout/SideTabDataPanel.tsx",
   ];
 

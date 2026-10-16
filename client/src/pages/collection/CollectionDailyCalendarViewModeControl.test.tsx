@@ -26,7 +26,7 @@ test("calendar display uses one labelled native select and preserves every saved
   assert.equal(DEFAULT_COLLECTION_DAILY_CALENDAR_VIEW_MODE, "content");
 });
 
-test("calendar administrative controls are disclosed while pending-change review remains visible", () => {
+test("calendar management is explicit and permission-gated while pending-change review remains visible", () => {
   const targets = readFileSync(new URL("./CollectionDailyTargetControlsSection.tsx", import.meta.url), "utf8");
   assert.match(targets, /<details[^>]*>[\s\S]*Target and calendar management[\s\S]*<CollectionDailyTargetControls/);
   assert.match(targets, /dirtyCalendarDaysCount > 0/);
@@ -34,6 +34,22 @@ test("calendar administrative controls are disclosed while pending-change review
   assert.match(calendar, /data-testid="collection-daily-status-tools"/);
   assert.ok(calendar.indexOf("<CollectionDailyCalendarQuickFilter") < calendar.indexOf("data-testid=\"collection-daily-status-tools\""));
   assert.ok(calendar.indexOf("<CollectionDailyCalendarViewModeControl") < calendar.indexOf("data-testid=\"collection-daily-status-tools\""));
-  assert.ok(calendar.lastIndexOf("</details>", calendar.indexOf("<CollectionDailyCalendarConflictReport")) > calendar.indexOf("data-testid=\"collection-daily-status-tools\""));
+  assert.match(calendar, /const \[managementMode, setManagementMode\] = useState\(false\)/);
+  assert.match(calendar, /const calendarManagementActive = canManage && managementMode/);
+  assert.match(calendar, /"aria-pressed": calendarManagementActive \? "true" as const : "false" as const/);
+  assert.match(calendar, /id="collection-daily-calendar-management" hidden=\{!calendarManagementActive\}/);
+  assert.ok(calendar.indexOf("<CollectionDailyCalendarConflictReport") > calendar.indexOf("data-testid=\"collection-daily-status-tools\""));
+  assert.ok(calendar.indexOf("<CollectionDailyCalendarChangeReview") > calendar.indexOf("data-testid=\"collection-daily-status-tools\""));
   assert.ok(calendar.indexOf("<CollectionDailyCalendarAttentionSummary") < calendar.indexOf("data-testid=\"collection-daily-status-tools\""));
+});
+
+test("compact display control keeps every saved mode and its accessible description", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionDailyCalendarViewModeControl, {
+    value: "tiles", onChange() {}, compact: true,
+  }));
+  assert.match(markup, /collection-daily-calendar-view-mode-compact/);
+  assert.match(markup, /<label[^>]*>Display<\/label>/);
+  assert.match(markup, /class="sr-only"[^>]*aria-live="polite"/);
+  assert.equal((markup.match(/<option\b/g) || []).length, 7);
+  assert.match(markup, /aria-describedby="[^"]+-description"/);
 });

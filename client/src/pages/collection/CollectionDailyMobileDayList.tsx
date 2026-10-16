@@ -5,7 +5,6 @@ import { formatDateDDMMYYYY } from "@/lib/date-format";
 import {
   statusCardClass,
   statusLabel,
-  statusTextClass,
 } from "@/pages/collection/CollectionDailyShared";
 import {
   CollectionDailyCalendarDayBadge,
@@ -23,11 +22,12 @@ type CollectionDailyMobileDayListProps = {
   days: CollectionDailyOverviewDay[];
   viewMode: CollectionDailyCalendarViewMode;
   selectedDate: string | null;
+  todayDate?: string | undefined;
   editingDayNumber: number | null;
   canManage: boolean;
   dirtyCalendarDayNumbers: ReadonlySet<number>;
   bulkSelectedDayNumbers: ReadonlySet<number>;
-  onSelectDate: (date: string) => void;
+  onSelectDate: (date: string, trigger?: HTMLElement) => void;
   onEditDay: (day: number) => void;
   onToggleBulkDay: (day: number) => void;
 };
@@ -36,6 +36,7 @@ export function CollectionDailyMobileDayList({
   days,
   viewMode,
   selectedDate,
+  todayDate,
   editingDayNumber,
   canManage,
   dirtyCalendarDayNumbers,
@@ -58,6 +59,7 @@ export function CollectionDailyMobileDayList({
     >
       {days.map((day) => {
         const isSelected = selectedDate === day.date;
+        const isToday = todayDate === day.date;
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
         const isBulkSelected = bulkSelectedDayNumbers.has(day.day);
@@ -67,6 +69,7 @@ export function CollectionDailyMobileDayList({
         return (
           <article
             key={day.date}
+            data-collection-performance={day.status}
             className={`collection-daily-mobile-day-card collection-daily-day-progress-band-${progressBand} rounded-2xl border shadow-sm ${statusCardClass(day.status)} ${
               isSelected ? "ring-2 ring-ring ring-offset-1" : ""
             } ${isEditing ? "collection-daily-day-card-editing" : ""}`}
@@ -76,6 +79,7 @@ export function CollectionDailyMobileDayList({
                 <div className="min-w-0 space-y-1">
                   <p className="collection-daily-mobile-day-kicker text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                     Day {day.day}
+                    {isToday ? <span className="collection-daily-today-marker">Hari ini</span> : null}
                   </p>
                   <p className="collection-daily-mobile-day-date font-semibold text-foreground">
                     {formatDateDDMMYYYY(day.date)}
@@ -118,11 +122,6 @@ export function CollectionDailyMobileDayList({
                   <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1">
                     Customers {day.customerCount}
                   </span>
-                  <span
-                    className={`rounded-full border border-border/50 bg-background/70 px-2.5 py-1 ${statusTextClass(day.status)}`}
-                  >
-                    {statusLabel(day.status)}
-                  </span>
                 </div>
               ) : null}
 
@@ -145,15 +144,17 @@ export function CollectionDailyMobileDayList({
                 </label>
               ) : null}
 
-              <div className="mt-3 grid gap-2 sm:grid-cols-2" data-floating-ai-avoid="true">
+              <div className={`collection-daily-mobile-day-actions mt-3 grid gap-2${canManage ? " grid-cols-2" : ""}`} data-floating-ai-avoid="true">
                 <Button
                   type="button"
                   variant="outline"
                   aria-haspopup="dialog"
-                  className="h-10 rounded-xl bg-background/80"
-                  aria-label={`View collection details for ${formatDateDDMMYYYY(day.date)}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}`}
-                  onClick={() => onSelectDate(day.date)}
+                  {...(isToday ? { "aria-current": "date" as const } : {})}
+                  className="min-h-11 rounded-xl bg-background/80"
+                  aria-label={`View collection details for ${formatDateDDMMYYYY(day.date)}${isToday ? " - Hari ini" : ""}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}`}
+                  onClick={(event) => onSelectDate(day.date, event.currentTarget)}
                   data-testid={`collection-daily-day-${day.day}`}
+                  data-collection-daily-date={day.date}
                 >
                   <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
                   View details
@@ -162,7 +163,7 @@ export function CollectionDailyMobileDayList({
                   <Button
                     type="button"
                     variant="default"
-                    className="h-10 rounded-xl"
+                    className="min-h-11 rounded-xl"
                     aria-pressed="true"
                     aria-haspopup="dialog"
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
@@ -176,7 +177,7 @@ export function CollectionDailyMobileDayList({
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-10 rounded-xl"
+                    className="min-h-11 rounded-xl"
                     aria-pressed="false"
                     aria-haspopup="dialog"
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}

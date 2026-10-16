@@ -55,6 +55,29 @@
   outline: none;
 }
 
+.collection-daily-calendar-view-mode-compact {
+  border: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.collection-daily-calendar-view-mode-compact .collection-daily-calendar-view-mode-header {
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: start;
+}
+
+.collection-daily-calendar-view-mode-compact .collection-daily-calendar-view-mode-title {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.collection-daily-calendar-view-mode-compact .collection-daily-calendar-view-mode-select {
+  min-height: 2.5rem;
+  font-size: var(--font-size-xs);
+  max-width: 11rem;
+}
+
 .collection-daily-calendar-view-mode-select:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
@@ -73,6 +96,16 @@
 
   .collection-daily-calendar-view-mode-select {
     min-height: 2.75rem;
+  }
+
+  .collection-daily-calendar-view-mode-compact .collection-daily-calendar-view-mode-header {
+    display: flex;
+  }
+
+  .collection-daily-calendar-view-mode-compact .collection-daily-calendar-view-mode-select {
+    min-height: 2.75rem;
+    max-width: none;
+    flex: 1 1 auto;
   }
 }
 

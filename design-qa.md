@@ -963,3 +963,307 @@ Sheet-state props are harmless compatibility cleanup debt; not expanded here.
 Production/CI deployment and formal WCAG certification were not performed.
 
 final result: passed
+
+## Collection Daily compact calendar and record-first popup — 2026-10-16
+
+Source: the accepted local audit at
+`artifacts/daily-audit-20261016-local/report.md`, unchanged frontend baseline
+`3b4c5e68ff5613cdedf68308eb4d3704effb554e`. User approved all three audit
+recommendations: compact calendar, record-first desktop popup, readable mobile
+popup/pagination/focus return. This is intentional scoped polish, not a pixel
+clone or a new visual direction. Existing SQR type, tokens, Lucide and Q remain.
+
+Comparison inputs place actual source and implementation together:
+`artifacts/daily-polish-20261016/desktop-overview-comparison.png`,
+`desktop-popup-comparison.png`, `desktop-empty-comparison.png`, and
+`mobile-popup-comparison.png`. Their HTML files retain the exact input PNGs.
+Desktop CSS1440×900: source965×603 pixels from the audited browser's0.67 export;
+implementation1440×900 atDPR1 is displayed965×603 beside it for density matching.
+Mobile source about390×843 (CSS389×843), implementation390×843 atDPR1.
+The one-pixel mobile width difference is not treated as product drift. Underlying
+page scroll/active focus differs around the modal, so compare the modal content,
+not its backdrop. The source's browser export crop/edge is not an app defect.
+No screenshot is redrawn or modified; HTML comparison only normalizes display size.
+
+Browser Codex was used for the source audit. During implementation it reported
+that local browser use was disabled in Work settings. User explicitly authorized
+local Playwright/Chromium; implementation evidence therefore comes from that
+permitted browser fallback. The GET-only loopback preview uses fictional October
+data, no dotenv/backend/real records. The second real-built-app test uses fresh
+disposable PostgreSQL and independent fictional August data. Neither uses production.
+
+### Findings and iteration history
+
+- Baseline P1: first customer's details started below the initial popup viewport;
+  repeated date/count/amount/status panels dominated the dialog. Consolidated
+  Target/Kutipan/Baki once, count context once, routine audit in a closed native
+  disclosure. Important leave, remarks and leave-with-collection notices remain
+  visible. Initial and later desktop/mobile captures show the first record header.
+- Baseline P1: mobile amount/counts clipped in three narrow summary columns.
+  Collected amount now has a full-width row, target/balance below; full numbers
+  wrap instead of ellipsizing, freshness stays fit-content. Large synthetic amounts
+  are separately verified at1440/390/320.
+- Baseline P2: date cells/preamble repeat status counts and management controls.
+  One quick-filter/display toolbar, explicit permission-gated management mode,
+  lower optional monthly breakdown and one actionable conflict disclosure. Dirty
+  review stays outside management mode. Seven modes/preferences are preserved;
+  only seven-column Content/Heatmap retain weekday headings and leading blanks.
+- Baseline P2: Escape returned to BODY. Separate day/receipt launchers now live in
+  the always-mounted page model. Removed/hidden/disabled launchers fall back to
+  the actual date or the parent scroll region; nested dialogs do not focus behind
+  the parent. Pagination does not replace the original launcher. Real browser
+  tests cover Escape, Close, nested receipt and editor→details handoff.
+- Iteration1 P2: intermediate-width monthly metrics made an uneven3+1 row at768px.
+  Evidence `iteration-1-768-light-overview.png`. Revised local CSS explicitly uses
+  two columns at768–1279 and four at1280+, without shrinking amount text.
+  Post-fix `tablet-metrics-comparison.png` was opened with both versions in one
+  input; confirms balanced2×2 at768 and unchanged typography/content. All five
+  width/theme geometry tests pass after this change.
+- Capture correction: initial empty/large-amount exports caught dialog entrance
+  animation and are rejected as visual evidence. Capture now disables finite
+  animation for stable screenshots; motion itself was not removed from the app.
+  Stable later captures were re-opened and compared; empty popup is opaque and
+  content-driven, and large values are fully readable. The synthetic large-amount
+  fixture also uses a consistent below-target status (no app calculation change).
+- First actual-built-app workflow failed because the expanded monthly breakdown
+  legitimately repeated the “Holiday / Leave” label. Scoped the locator to its
+  named breakdown region, retaining both labels and all assertions. Added bounded
+  phase diagnostics; no timeouts/tolerances or security checks were relaxed.
+- Iteration2 P2: dark conflict text inherited a light-only brown (axe2.07:1),
+  and secondary OFF/AL/NOTE code text was visually too dark. Conflict text and
+  dark code labels now use existing foreground tokens, preserving warning surfaces.
+  Post-fix `1440-dark-calendar.png` and `dark-badge-readability-comparison.png`
+  were opened together with the pre-fix badge capture. Text is clear in both
+  themes; post-fix32-state axe run reports zero violations.
+- Semantic follow-up: the compact context's generic labelled div was an axe
+  incomplete. Added explicit group role; final SSR and32-state rerun confirm the
+  new context no longer appears in incomplete findings. No visual redesign.
+
+### Five required fidelity surfaces
+
+- Typography: existing SQR family/fallback and scale, compact sentence-case
+  headings, tabular financial values; no new font or asset dependency. Full names,
+  references and values wrap; receipt filenames retain accessible full labels.
+- Layout/spacing: desktop width remains1024px with intrinsic content height and
+  viewport cap; one internal scroll region and compact fixed footer. Mobile keeps
+  fullscreen height, shared safe-area token and side-by-side44px page controls.
+  Close hit area44px is scoped to this dialog, not the generic UI primitive.
+- Color/tokens: existing light/dark surfaces, borders and focus rings; operational
+  Working/Leave badge neutral, financial success/warning remains separate.
+- Assets: original Lucide/Q/brand assets retained; no generated/drawn replacement,
+  favicon/global navigation/shared theme changes. Receipt preview implementation
+  and authorization are unchanged; synthetic image only exercises nested focus.
+- Copy: shortened popup heading/description, clear Target/Kutipan/Baki and localized
+  pagination. Audit/freshness/leave messages remain available; stale warning stays
+  visible. No-target state avoids a misleading percentage. No prompt text appears.
+
+### Verification
+
+Full client passed2112/2112 (1192+920), no failure/skip. Focused contracts/SSR/focus
+85/85 passed; final follow-up presentation/focus65/65 passed, including readable
+badge tokens and context-group semantics; script-focused43/43 passed. Clean script suite passed667 Node tests with
+one existing opt-in skip, plus63 TypeScript tests. Initial script run's seven TS
+failures were the local dotenv's unsupported LOG_FORMAT, not this UI change;
+reran with DOTENV_CONFIG_PATH=NUL and no environment-file edits. First integration
+run was not green and is retained as `daily-polish-isolated.log`. Successful
+post-fix real-built-app evidence: `artifacts/frontend-redesign/final-ZNB5Ag/manifest.json`,
+10/10 Daily workflows at1440/1024/768/390/320 light/dark,10 route accessibility
+captures with no violations, zero page errors/external requests. PostgreSQL,
+temporary app and fixture processes were cleaned by the owned runner. Final
+readability/ARIA-only follow-ups use current-source browser verification plus a
+fresh production build (`daily-polish-release-build.log`), not a stale built app.
+
+Current-source evidence: `artifacts/daily-polish-20261016/checks.json` (10 viewport/
+theme states, seven modes, modal geometry, keyboard, two-page records, complete
+amounts, management visibility and focus), `edge-checks.json` (three widths with
+nested receipt/editor return, large values, loading/error), `a11y.json` (32states,
+zero violations, no new context ARIA incomplete), and matched comparison PNGs.
+Runtime page errors are zero. Source-only preview intentionally has incomplete
+fictional non-Daily GET fixtures/blocked mutations; those are not production errors.
+
+Late CI-selector audit also found `tests/visual/collection-report-controls.spec.ts`
+still expected the old popup title and nested status-tools summaries. Updated its
+four Daily cases for the explicit management toggle and new title, preserving all
+seven modes, persistence, disabled Save checks and user-role boundaries; added
+editor→details focus handoff. Exact existing Playwright tests against the current
+built static frontend and deny-by-default synthetic HTTP fixtures PASS4/4, no
+retry/skip/baseline update (`daily-polish-report-controls-final.log`). A late
+320px edge attempt sent Escape during the editor's exiting layer; it was not a
+clean pass and is retained in `daily-polish-release-edge.log`. Waiting for the
+actual new modal to own focus/finish its finite entrance (no fixed sleep or retry)
+made the same extended suite PASS3/3 (`daily-polish-release-edge-final.log`).
+
+At1440×900, popup stays1024px wide and810px high with first record headerY396.75,
+versus baseline aboutY800 (outside its scroll viewport). Empty desktop popup is
+501.75px high. At390×843, collected amount/counts are fully visible, first record
+starts aboutY458, footer buttons are side-by-side44px. At320 the first record
+header still fits before scrolling. Focus checks cover Tab/reverse Tab, Escape,
+Close, repeated pagination, receipt inside the day dialog and editor→details.
+
+Axe incomplete results remain explicitly retained: legacy shared brand generic
+ARIA, conditional popup relationships, Radix modal-focus review and gradient/
+pseudo/partially-obscured contrast. Keyboard containment/restoration and matched
+visual review supply scoped manual evidence; these are not silently waived rule
+violations or a claim of full WCAG certification. Generic/shared UI is protected.
+
+Final checklist: source and final opened together; full-view and focused calendar,
+popup, tablet and mobile comparisons reviewed; P1/P2 fixes recaptured/recompared;
+tests/build/typing/lint complete; backend/API/permissions/calculations/shell/brand
+unchanged by file diff; no dependency or snapshot-baseline changes. No actionable
+P0/P1/P2 remains in the approved Daily scope.
+
+No commit/push/deployment. Not a formal screen-reader/WCAG certification or real
+production financial-calculation/data audit. No visual snapshot baseline changed.
+
+final result: passed
+
+## Collection Daily follow-up — 2026-10-17 — accepted final verification
+
+Scope: approved month shortcuts/current-month action, neutral today indicator,
+popup date stepper, and stable loading/pagination. Existing approved SQR code and
+the previous phase's accepted renders are the visual target; no new art direction,
+brand assets, templates or global component changes. Product Design is used for
+bounded implementation and matching source/render QA.
+
+Source truth: `artifacts/daily-navigation-20261017/baseline-source/`, copied before
+follow-up edits (not git HEAD, which lacks the accepted prior polish). Native
+source captures: `before-{1440|1024|768|390|320}-{light|dark}-{overview|popup}.png`
+in that same artifacts folder. Implementation captures use the corresponding
+`after-` filenames. Both are rendered from current real frontend source with
+fictional GET/HEAD fixtures, no backend/DB/env files/production/mutations.
+
+Implemented and reviewed: Malaysia calendar time and midnight refresh,
+atomic2000–2100 month navigation, neutral Hari ini/aria-current=date across all
+seven modes,44px popup arrows, current-date announcement, retained original
+launcher, fixed popup geometry, records-only busy/error state, no previous-date
+or staff-scope records during loading, retry/focus, date/page scroll reset, draft
+protection and explicit Refresh discard confirmation.
+
+### Evidence and normalization
+
+Codex in-app browser became available again; the original matching visual review
+and native screenshot export used that selected browser, not a separately launched
+Playwright/Chromium CLI/MCP. Subsequent explicitly authorized CLI regression is
+recorded below separately. Temporary tab-scoped Fetch interception only held or
+returned one synthetic local GET500 for deterministic loading/error/retry checks;
+interception was cleared. Device metrics/viewport overrides were restored.
+
+Ten matching viewport/theme pairs: nominal1440/1024/768 at900high and390/320 at843
+high, light/dark, overview and populated14October popup. Browser's existing67%
+zoom was preserved. Tab-scoped device metrics compensate for it; native PNG
+export normalizes to about1pixel/CSSpx, with no screenshot resizing/editing.
+Actual CSS widths:1440,1024,769,389,319; PNG widths:1440,1024,769,390,319. These
+rounding differences are recorded in `browser-checks.json`; before/after in each
+pair have matching CSS size/pixel dimensions/density. Heights900/843 match.
+
+Source and result opened TOGETHER in `generated-comparison.html`; native combined
+comparison captures are1600×1500. Full-view evidence:
+`comparison-desktop-light-popup-full.png`,
+`comparison-tablet-768-light-overview-full.png`,
+`comparison-desktop-1024-dark-overview-full.png`,
+`comparison-mobile-390-dark-popup-full.png`,
+`comparison-mobile-320-dark-popup-full.png`.
+Focused evidence: `comparison-desktop-{light|dark}-overview-focus.png` and
+`comparison-desktop-dark-popup-focus.png`. Identical CSS crops of unchanged
+source PNGs, not reconstructed UI. Reviewed full proportions, then readable
+month/date controls, metric values, first records and footer at the same scale.
+
+### Findings, correction and re-comparison
+
+- [P2, resolved] First pass had duplicate vertical spacers on the new44px date
+  toolbar, adding about66px to the header. Evidence preserved in `iteration-1/`,
+  including combined comparison PNGs and first-pass metrics. Removed component
+  top margin and slot top padding, retaining the shared header's6px spacing.
+  Restarted only the owned no-watch current preview, recaptured all10 after
+  states and reopened matching full/focused comparisons. Added header footprint
+  is now about50px; first record moves16px up. Final first-title tops:444.4px at
+  desktop,505.3px at389px and572.8px at319px; all are inside the scroll viewport.
+- No remaining actionable P0/P1/P2 in the approved follow-up. Fixed desktop popup
+  stays about1024×810; mobile remains fullscreen843px with44px close/arrows/page
+  actions. No document overflow in any final pair. Native global Collection tab
+  scrolling at narrow desktop width is unchanged from the approved source.
+
+### Required fidelity surfaces
+
+- Fonts/typography: existing SQR font family, weights and text scale retained;
+  compared heading/label/value wrapping in both themes. No new heading hierarchy,
+  truncated amounts or tiny tap labels. Long synthetic customer name still wraps.
+- Spacing/layout: compact month controls share the desktop input row and become
+  a full mobile row. Date controls add only the intended44px targets +6px gap;
+  protected metric/record styling remains aligned. Stable footer uses a reserved
+  range line area to avoid paging/loading label reflow on mobile.
+- Colors/tokens: native light/dark surfaces/focus rings/financial colors retained;
+  Hari ini uses neutral foreground/background, not another performance color.
+  New controls use existing Button tokens, with clear enabled/disabled states.
+- Images/assets: original Q/favicon/brand and Lucide icons unchanged, no generated,
+  approximate, recreated or edited assets. Comparisons display original PNGs.
+- Copy/content: clear Bulan ini, distinct date vs record-page navigation and full
+  accessible button names. New date is announced politely; pending summary shows
+  unavailable values rather than falsely carrying old-date financial numbers.
+  Real API error text remains out of record content; inline retry is localized.
+
+### Verification and scope
+
+Complete client suite PASS2135/2135 (1341+794), no failures/skips, using serial
+files on this4GB machine (`daily-navigation-client-serial-final.log`). Initial
+parallel run exhausted Node memory; first serial run caught an obsolete inline
+spinner-margin source contract. Both histories retained; corrected the contract
+to test decorative aria-hidden/animation, not obsolete spacing. Post-polish focused
+tests PASS99/99 (`daily-navigation-post-polish-tests.log`). Typecheck and client
+lint PASS with confirmed sequential command exit0; scripts PASS43/43; design
+spacing and final production/status/CSP/sourcemap build PASS
+(`daily-navigation-typecheck-confirmed.log`, `daily-navigation-lint-final.log`,
+`daily-navigation-script-contracts.log`, `daily-navigation-build-accepted.log`).
+
+`browser-checks.json`:19/19 functional checks pass;20 matched visual entries,
+including10 final after states. Checks cover record page2; adjacent date resetting
+to page1; first/last date bounds; original opener focus; held date loading, HTTP500
+and retry/focus; unchanged popup bounds; previous/current month and Malaysia today;
+all7mobile modes without overflow; year rollover and2000/2100bounds; draft lock,
+cancel focus and confirmed Refresh discard; forward/reverse Tab containment,
+Escape; held mobile page loading retaining the correct summary/footer without
+old records; date loading clearing old details; date/page scroll reset. Final
+spacing-only recheck also confirms date stepper/title live announcement/original
+focus. No source report is presented as browser runtime evidence.
+
+Playwright CI spec retains4 prior Daily cases and adds9 (13Daily/16total).
+The user subsequently explicitly authorized local Playwright/Chromium with
+synthetic data. ALL16 exact cases now PASS, one worker, zero retries/skips or
+snapshot-baseline updates, on fresh built assets with loopback deny-by-default
+fixtures. Log: `artifacts/daily-navigation-playwright-accepted.log`; HTML and9
+native screenshot attachments: `artifacts/daily-navigation-playwright-report-accepted/`.
+Machine-readable result: `artifacts/daily-navigation-playwright-accepted/.last-run.json`.
+This is local regression evidence, not a claim that remote CI has run or passed.
+
+The initial CLI run14PASS/2FAIL is retained in
+`artifacts/daily-navigation-playwright-initial.log` and its failure screenshot/trace
+directories. Both failures were the same lifecycle issue: after successful Retry,
+the original error toast's later Radix layer consumed Escape before the day dialog.
+The hook now retains/dismisses only its owned toast on superseding request/cache/
+retry, selection/scope close and unmount. History, unrelated alerts and global
+dialog/notification components are unchanged. Strengthened runtime assertions
+verify the error notification existed, was dismissed within1s of Retry (not its
+normal5s expiry), wait its finite outgoing layer, then keep the original one-Escape
+close and calendar-focus assertions. No timeout increase or skipped assertion.
+Report fixtures now explicitly reject every non-GET Collection request.
+
+Post-fix typecheck/client lint/fresh production/status/CSP/sourcemap build PASS:
+`daily-navigation-cli-{typecheck|lint|build}.log`; focused utilities/reducer/focus/
+presentation tests PASS105/105, zero skips (`daily-navigation-cli-focused-final.log`).
+The complete2135 client run above preceded this bounded notification fix; it was
+not rerun in the supplementary turn. Final desktop and mobile loading PNGs were
+opened for inspection; expected stable shell, pending values and footer retained.
+The static runner closed its owned loopback server. The existing current-source
+preview was restarted only after exact process/port ownership verification; no
+other preview processes or data were removed.
+
+No new axe/screen-reader certification claim; manual
+keyboard/ARIA/render evidence and automated source contracts are scoped to this
+work. Prior phase's unchanged receipt-nesting/large-value checks remain historical
+evidence, not a claim those scenarios were rerun this phase.
+
+No deployment, commit, push, production access, API/backend/permission/calculation
+or shared-shell/brand changes. Source and final comparison reviewed after the P2
+fix; no remaining required implementation work in the approved scope.
+
+final result: passed

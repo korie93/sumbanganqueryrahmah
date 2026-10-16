@@ -64,6 +64,11 @@
   color: hsl(158 64% 24%);
 }
 
+.dark .collection-daily-calendar-day-badge-holiday .collection-daily-calendar-day-badge-code,
+.dark .collection-daily-calendar-day-badge-working .collection-daily-calendar-day-badge-code {
+  color: hsl(var(--foreground));
+}
+
 .collection-daily-calendar-day-badge-compact {
   padding: 0.35rem 0.45rem;
 }

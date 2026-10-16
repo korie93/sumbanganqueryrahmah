@@ -1,8 +1,7 @@
-import { CalendarOff, StickyNote } from "lucide-react";
+import { CalendarOff } from "lucide-react";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import {
   getCollectionDailyOperationalStatusLabel,
-  getCollectionDailySuperuserRemark,
   getCollectionDailyWorkingDayLabel,
 } from "@/pages/collection/collection-daily-day-status-text";
 
@@ -28,11 +27,6 @@ export function CollectionDailyDayDetailsEmptyState({
             Status hari ini ialah <strong>{getCollectionDailyOperationalStatusLabel(selectedOverviewDay)}</strong>.{" "}
             {getCollectionDailyWorkingDayLabel(selectedOverviewDay)}.
           </p>
-        </div>
-
-        <div className="collection-day-empty-state-remark">
-          <StickyNote className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span>{getCollectionDailySuperuserRemark(selectedOverviewDay)}</span>
         </div>
 
         <p className="text-xs text-muted-foreground">{dayDetails.message}</p>

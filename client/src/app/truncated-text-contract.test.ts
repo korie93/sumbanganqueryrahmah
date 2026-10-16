@@ -34,14 +34,16 @@ test("data-heavy truncated rows expose title and aria-label text", () => {
   }
 });
 
-test("collection day metric truncation labels use a non-empty value fallback", () => {
+test("collection day metrics render complete non-empty values without truncation", () => {
   const source = readClientSource("../pages/collection/CollectionDailyDayDetailsDialogParts.tsx");
 
   assert.match(source, /function formatMetricValueLabel\(value: string \| number\)/);
   assert.match(source, /return normalized \|\| "No value";/);
   assert.match(source, /const valueLabel = formatMetricValueLabel\(value\);/);
-  assert.match(source, /title=\{valueLabel\}/);
-  assert.match(source, /aria-label=\{valueLabel\}/);
+  assert.match(source, /<dd className="collection-day-metric-value">\{valueLabel\}<\/dd>/);
+  const css = readClientSource("../pages/collection/CollectionDailyDayDetailsDialog.css");
+  assert.match(css, /\.collection-day-metric-value\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  assert.doesNotMatch(css, /\.collection-day-metric-value\s*\{[^}]*(?:text-overflow:\s*ellipsis|white-space:\s*nowrap)/);
   assert.doesNotMatch(source, /title=\{String\(value\)\}/);
   assert.doesNotMatch(source, /aria-label=\{String\(value\)\}/);
 });

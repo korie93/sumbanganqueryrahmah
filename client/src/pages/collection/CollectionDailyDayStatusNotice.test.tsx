@@ -62,6 +62,10 @@ test("CollectionDailyDayStatusNotice highlights leave type and superuser remark"
   assert.match(markup, /Remark Superuser/);
   assert.match(markup, /Annual leave approved by superuser/);
   assert.match(markup, /Nickname: Ali/);
+  const importantContext = markup.slice(0, markup.indexOf("<details"));
+  assert.match(importantContext, /AL - Annual Leave/);
+  assert.match(importantContext, /Annual leave approved by superuser/);
+  assert.doesNotMatch(markup, /<details[^>]*\bopen=/);
 });
 
 test("CollectionDailyDayStatusNotice keeps working days clear without fake leave data", () => {
@@ -85,4 +89,33 @@ test("CollectionDailyDayStatusNotice keeps working days clear without fake leave
   assert.match(markup, /Tidak berkaitan/);
   assert.match(markup, /Dikira sebagai working day/);
   assert.match(markup, /Tiada remark daripada superuser untuk tarikh ini/);
+  assert.match(markup, /<details class="collection-day-operation-details">/);
+  assert.doesNotMatch(markup, /collection-day-important-context|bg-emerald|bg-rose/);
+});
+
+test("working-day remarks remain visible outside the collapsed audit details", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionDailyDayStatusNotice, {
+    day: { ...holidayDay, calendarStatus: "WORKING", leaveType: null, note: "Important superuser instruction.",
+      isWorkingDay: true, isHoliday: false, holidayName: null },
+    dayDetails: baseDayDetails,
+  }));
+  assert.match(markup.slice(0, markup.indexOf("<details")), /Important superuser instruction/);
+  assert.equal((markup.match(/Important superuser instruction/g) || []).length, 1);
+});
+
+test("collection recorded on leave is explicitly highlighted without mislabelling performance as operation", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionDailyDayStatusNotice, {
+    day: holidayDay, dayDetails: { ...baseDayDetails, status: "green", amount: 100 },
+  }));
+  assert.match(markup.slice(0, markup.indexOf("<details")), /Kutipan direkodkan pada hari cuti \/ tidak bekerja/);
+  assert.doesNotMatch(markup, /Target achieved|bg-emerald|text-rose/);
+});
+
+test("missing calendar context still leaves the response explanation and audit disclosure available", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionDailyDayStatusNotice, {
+    day: null, dayDetails: baseDayDetails,
+  }));
+  assert.match(markup, /Status belum tersedia/);
+  assert.match(markup, /No collection records for this date/);
+  assert.match(markup, /Maklumat operasi &amp; audit/);
 });

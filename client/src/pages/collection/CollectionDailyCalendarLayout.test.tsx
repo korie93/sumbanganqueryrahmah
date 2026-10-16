@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { CollectionDailyOverviewDay } from "@/lib/api";
 import { CollectionDailyCalendarEditPanel } from "@/pages/collection/CollectionDailyCalendarEditPanel";
 import { CollectionDailyDesktopCalendarGrid } from "@/pages/collection/CollectionDailyDesktopCalendarGrid";
+import { CollectionDailyMobileDayList } from "@/pages/collection/CollectionDailyMobileDayList";
+import { COLLECTION_DAILY_CALENDAR_VIEW_MODES } from "./collection-daily-calendar-view-mode-utils";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 
 const overviewDays: CollectionDailyOverviewDay[] = [
@@ -145,6 +147,67 @@ test("CollectionDailyDesktopCalendarGrid supports heatmap calendar view", () => 
   assert.match(markup, /collection-daily-desktop-grid-mode-heatmap/);
   assert.match(markup, /collection-daily-day-view-heatmap/);
   assert.match(markup, /RM/);
+});
+
+test("all desktop modes retain actual date triggers and only seven-column calendars use blank offsets", () => {
+  for (const viewMode of COLLECTION_DAILY_CALENDAR_VIEW_MODES) {
+    const markup = renderToStaticMarkup(createElement(CollectionDailyDesktopCalendarGrid, {
+      days: overviewDays, viewMode, firstWeekday: 5, selectedDate: null,
+      editingDayNumber: null, activeFilter: "all", canManage: false,
+      editableCalendarByDay: editableDays, dirtyCalendarDayNumbers: new Set<number>(),
+      bulkSelectedDayNumbers: new Set<number>(), onEditDay() {}, onSelectDate() {}, onToggleBulkDay() {},
+    }));
+    assert.equal((markup.match(/data-collection-daily-date=/g) || []).length, 2, viewMode);
+    assert.equal((markup.match(/collection-daily-calendar-blank/g) || []).length,
+      viewMode === "content" || viewMode === "heatmap" ? 5 : 0, viewMode);
+    assert.doesNotMatch(markup, /Bulk select|Edit calendar status for/);
+    if (viewMode !== "content" && viewMode !== "heatmap") {
+      assert.match(markup, /collection-daily-day-weekday">Fri</);
+      assert.match(markup, /collection-daily-day-weekday">Sat</);
+    }
+  }
+});
+
+test("mobile day cards use a single performance label and keep detail actions outside management mode", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionDailyMobileDayList, {
+    days: overviewDays, viewMode: "content", selectedDate: null, editingDayNumber: null,
+    canManage: false, dirtyCalendarDayNumbers: new Set<number>(),
+    bulkSelectedDayNumbers: new Set<number>(), onSelectDate() {}, onEditDay() {}, onToggleBulkDay() {},
+  }));
+  assert.equal((markup.match(/Target achieved/g) || []).length, 1);
+  assert.equal((markup.match(/data-collection-daily-date=/g) || []).length, 2);
+  assert.equal((markup.match(/View details/g) || []).length, 2);
+  assert.doesNotMatch(markup, /Pilih untuk bulk update|Edit calendar status/);
+  assert.match(markup, /min-h-11 rounded-xl bg-background/);
+});
+
+test("all seven desktop and mobile modes identify actual today without treating the selected date as today", () => {
+  for (const viewMode of COLLECTION_DAILY_CALENDAR_VIEW_MODES) {
+    const common = {
+      days: overviewDays, viewMode, selectedDate: "2026-05-02", todayDate: "2026-05-01",
+      editingDayNumber: null, canManage: false, dirtyCalendarDayNumbers: new Set<number>(),
+      bulkSelectedDayNumbers: new Set<number>(), onSelectDate() {}, onEditDay() {}, onToggleBulkDay() {},
+    };
+    const desktop = renderToStaticMarkup(createElement(CollectionDailyDesktopCalendarGrid, {
+      ...common, firstWeekday: 5, activeFilter: "all", editableCalendarByDay: editableDays,
+    }));
+    const mobile = renderToStaticMarkup(createElement(CollectionDailyMobileDayList, common));
+    for (const markup of [desktop, mobile]) {
+      assert.equal((markup.match(/aria-current="date"/g) ?? []).length, 1, viewMode);
+      assert.equal((markup.match(/class="collection-daily-today-marker"/g) ?? []).length, 1, viewMode);
+      assert.match(markup, /aria-current="date"[^>]*data-collection-daily-date="2026-05-01"/, viewMode);
+      assert.doesNotMatch(markup, /aria-current="date"[^>]*data-collection-daily-date="2026-05-02"/, viewMode);
+    }
+  }
+});
+
+test("calendar months not containing today do not invent a current date marker", () => {
+  const markup = renderToStaticMarkup(createElement(CollectionDailyMobileDayList, {
+    days: overviewDays, viewMode: "content", selectedDate: "2026-05-01", todayDate: "2026-10-17",
+    editingDayNumber: null, canManage: false, dirtyCalendarDayNumbers: new Set<number>(),
+    bulkSelectedDayNumbers: new Set<number>(), onSelectDate() {}, onEditDay() {}, onToggleBulkDay() {},
+  }));
+  assert.doesNotMatch(markup, /aria-current|collection-daily-today-marker|Hari ini/);
 });
 
 test("CollectionDailyCalendarEditPanel renders the selected day status form and save guidance", () => {

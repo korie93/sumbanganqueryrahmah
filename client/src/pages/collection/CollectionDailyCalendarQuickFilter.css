@@ -1,14 +1,15 @@
 .collection-daily-calendar-filter {
   display: grid;
-  gap: 0.7rem;
-  padding: 0.25rem 0;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .collection-daily-calendar-filter-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-start;
+  gap: 0;
+  order: 2;
 }
 
 .collection-daily-calendar-filter-title {
@@ -26,9 +27,9 @@
 }
 
 .collection-daily-calendar-filter-status {
-  flex-shrink: 0;
-  max-width: 12rem;
-  text-align: right;
+  font-size: var(--font-size-xs);
+  max-width: 100%;
+  text-align: left;
 }
 
 .collection-daily-calendar-filter-options {
@@ -41,13 +42,13 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   border: 1px solid hsl(var(--border) / 0.7);
   border-radius: 0.5rem;
   background: hsl(var(--background) / 0.82);
   color: hsl(var(--foreground));
   padding: 0.45rem 0.7rem;
-  font-size: 0.76rem;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   transition:
     background-color 120ms ease,
