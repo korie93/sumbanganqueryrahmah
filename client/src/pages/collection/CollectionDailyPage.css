@@ -633,7 +633,7 @@
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .collection-daily-page .collection-daily-summary-metrics {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

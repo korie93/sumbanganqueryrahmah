@@ -132,6 +132,33 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   return { ...fixture, summaryRequests, overviewRequests, dayDetailsRequests };
 }
 
+for (const width of [768, 1024, 1280, 1440]) {
+  for (const theme of ["light", "dark"] as const) {
+    test(`Report controls Daily summary fits shared desktop tiers at ${width}px ${theme}`, async ({ page, baseURL }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      const fixture = await installFixture(page, baseURL, { role: "superuser", theme });
+      await page.goto("/collection/daily");
+      const summary = page.locator(".collection-daily-summary-card");
+      const primaryMetrics = summary.locator(".collection-daily-summary-content > .collection-daily-summary-metrics");
+      const values = primaryMetrics.locator(".ops-metric-value");
+      await expect(values).toHaveCount(4);
+      const layout = await primaryMetrics.evaluate((element) => ({
+        columns: getComputedStyle(element).gridTemplateColumns.split(/\s+/).length,
+        amounts: [...element.querySelectorAll<HTMLElement>(".ops-metric-value")].map((value) => ({
+          text: value.innerText, clientWidth: value.clientWidth, scrollWidth: value.scrollWidth,
+        })),
+      }));
+      expect(layout.columns).toBe(width < 1024 ? 2 : 4);
+      for (const amount of layout.amounts) {
+        expect(amount.text).toMatch(/^RM\s+[\d,.]+$/);
+        expect(amount.scrollWidth, `Complete ${amount.text} fits at ${width}px`).toBeLessThanOrEqual(amount.clientWidth + 1);
+      }
+      await testInfo.attach(`daily-summary-${theme}-${width}`, { body: await summary.screenshot(), contentType: "image/png" });
+      await checkFixture(page, fixture);
+    });
+  }
+}
+
 test("Report controls applied-scope status wraps a long unbroken nickname on mobile", async ({ page, baseURL }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 900 });
   const longNickname = "SyntheticCollectorWithAnIntentionallyLongUnbrokenNicknameForMobileWrapping";

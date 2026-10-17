@@ -1,6 +1,31 @@
 # Collection Daily polish — continuation handoff
 
-Current status (2026-10-17): FOLLOW-UP COMPLETE — implementation, final Product Design comparison and goal completion audit passed; Codex goal marked complete. Implementation was committed/pushed as470808e8. The subsequent script-only CI Smoke repair below is locally verified; the user has now requested its commit and push. Git history/upstream status are the source of truth for publication. Production remains untouched. Earlier phase evidence below remains historical.
+Current status (2026-10-17): FOLLOW-UP COMPLETE — implementation470808e8 and CI Smoke repair950be08d are committed/pushed. CI on950be08d passed remotely. The subsequent release breakpoint repair below is locally verified; the user has now requested its commit and push. Git history/upstream status are the source of truth for publication. Production remains untouched. Earlier phase evidence below remains historical.
+
+## Release breakpoint repair — 2026-10-17
+
+Remote evidence: [Release run38990883407](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/38990883407), job117272810401 on950be08d failed inside `Run release readiness verification`. The first failing command was `verify:client-breakpoint-contract`, not UI Smoke. Ordinary [CI run38988309154](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/38988309154) on the same commit passed. Sanitized release failure excerpt: `artifacts/release-readiness-38990883407-failure.log`.
+
+Local exact reproduction found `CollectionDailyPage.css` used an unsupported1280px media tier for four summary columns. The release contract permits640/767/768/1023/1024 for workspace CSS; its separate landing/auth exceptions do not apply to Daily. The allowed list and release assertions remain unchanged.
+
+Bounded repair:
+
+- Change only that CSS media threshold from1280 to the existing desktop tier1024. Tablet768 remains2 columns;1024 and larger use4. Summary/card content, amounts, APIs, permissions and backend are unchanged.
+- Add real-repository script tests that validate actual client CSS/consumers, not only a compliant fictional map; an injected1280px Daily media rule must still fail. This catches the original release-only regression during ordinary script tests without weakening the guard.
+- Add8 local synthetic Playwright cases for768/1024/1280/1440 ×light/dark: four complete primary values, expected2/4 columns, no amount or document overflow, no unexpected network/runtime errors; attach native summary screenshots. No snapshot baseline, retry or timeout changes.
+
+Verification:
+
+- Exact failing gate PASS, all80CSS files/71width queries inspected: `artifacts/release-readiness-breakpoint-fixed.log`.
+- All13 release static fast gates PASS, including breakpoint/spacing/PII/browser-storage/schema/rollback contracts: `artifacts/release-readiness-static-gates-20261017.log`. These are file inspections, not database mutations.
+- Focused breakpoint/release script tests PASS19/19; complete script suite Node670PASS/0FAIL/1existing opt-in skip +TypeScript63PASS/0FAIL (`release-readiness-breakpoint-contract-tests.log`, `release-readiness-breakpoint-all-script-tests.log`). Accepted full script run inherits OS-only support and disables dotenv; user `.env`/host settings are untouched.
+- Fresh production/status/CSP/sourcemap build PASS: `artifacts/release-readiness-breakpoint-build.log`.
+- Exact updated report controls Playwright PASS24/24 (8new +16retained), one worker, zero retries/skips: `artifacts/release-readiness-breakpoint-playwright.log`. HTML/native PNG evidence: `artifacts/daily-navigation-playwright-report-release-breakpoint/`; result: `artifacts/daily-navigation-playwright-release-breakpoint/.last-run.json`. Its owned static loopback server closed on completion, no backend/database/production used.
+- Presentation regressions PASS62/62: `artifacts/release-readiness-breakpoint-presentation-tests.log`. Native screenshot samples reviewed at768dark,1024light/dark and1280light. At1024, four ordinary fixture amounts fit inside the736px summary; the long last label wraps normally. This is not a new maximum-currency stress or accessibility-certification claim.
+
+The full monolithic release runner was not executed against the workspace defaults (it loads dotenv and can target an existing database). This bounded CSS repair was verified with the exact failed gate, all static fast gates, full scripts, fresh build and the complete affected browser spec. Do not claim the complete GitHub release workflow passed before its next actual run. No remote workflow rerun, commit, push, deployment or data deletion was performed in this repair turn.
+
+Publication: the user has now explicitly requested commit/push for the scoped CSS/test changes and this handoff/QA supplement. Consult Git for the resulting commit/upstream status. No guard exception or production setting change is needed; deployment still requires a separate request.
 
 ## CI Smoke repair — 2026-10-17
 

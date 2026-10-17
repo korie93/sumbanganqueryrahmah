@@ -1267,3 +1267,28 @@ or shared-shell/brand changes. Source and final comparison reviewed after the P2
 fix; no remaining required implementation work in the approved scope.
 
 final result: passed
+
+## Release breakpoint regression supplement — 2026-10-17
+
+Release run38990883407 on950be08d stopped at the workspace breakpoint contract:
+Daily's1280px media tier was unsupported. This follow-up changes that one threshold
+to the existing1024 desktop tier, without broadening the contract or redesigning
+the page. Previous768 tablet2-column layout remains; desktop1024+ now uses4.
+The earlier1024 before/after captures above are historical, not current-tier proof.
+
+Fresh built frontend with synthetic loopback responses: all24 report-controls
+Playwright cases passed, including8new summary checks across768/1024/1280/1440 in
+both themes. Complete ordinary fixture amounts fit without digit wrapping or
+horizontal overflow. Native summary PNGs attached in
+`artifacts/daily-navigation-playwright-report-release-breakpoint/`; sampled
+768dark,1024light/dark and1280light opened for inspection. At1024 the long final
+label wraps normally; no amount is clipped. No image edits or snapshot updates.
+
+Exact breakpoint gate and13release static fast gates passed;19focused script
+tests,670Node+63TS script tests (1existing opt-in skip),62presentation regressions
+and a fresh production/status/CSP/sourcemap build passed. Logs and explicit limits
+are in `CODEX_CONTINUATION_HANDOFF_COLLECTION_DAILY_POLISH.md`. No full new
+financial-stress/WCAG/remote-release-success claim. No production/database access,
+deployment, commit or push in this repair turn. The owned static test server closed.
+
+final result: passed (bounded release/layout regression)

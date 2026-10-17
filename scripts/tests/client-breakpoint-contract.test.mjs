@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   CLIENT_BREAKPOINT_CONTRACT_REQUIREMENTS,
   formatClientBreakpointContractReport,
+  loadClientBreakpointContractFiles,
   validateClientBreakpointContract,
 } from "../lib/client-breakpoint-contract.mjs";
 
@@ -40,6 +41,29 @@ test("client breakpoint contract accepts the shared responsive tiers and guarded
   assert.equal(validation.summary.requirementFileCount, CLIENT_BREAKPOINT_CONTRACT_REQUIREMENTS.length);
   assert.equal(validation.summary.cssFileCount, 3);
   assert.equal(validation.summary.cssBreakpointCount, 5);
+});
+
+test("actual client styles and guarded consumers satisfy the release breakpoint gate", () => {
+  const filesByPath = loadClientBreakpointContractFiles({ cwd: process.cwd() });
+  const dailyCssPath = "client/src/pages/collection/CollectionDailyPage.css";
+
+  assert.equal(typeof filesByPath[dailyCssPath], "string", "The repository scan includes Collection Daily styles");
+  const validation = validateClientBreakpointContract({ filesByPath });
+
+  assert.deepEqual(validation.failures, [], formatClientBreakpointContractReport(validation));
+});
+
+test("actual Collection Daily styles cannot introduce a separate 1280px viewport tier", () => {
+  const filesByPath = loadClientBreakpointContractFiles({ cwd: process.cwd() });
+  const dailyCssPath = "client/src/pages/collection/CollectionDailyPage.css";
+  assert.equal(typeof filesByPath[dailyCssPath], "string");
+  filesByPath[dailyCssPath] += "\n@media (min-width: 1280px) { .collection-daily-summary-metrics { display: grid; } }\n";
+
+  const validation = validateClientBreakpointContract({ filesByPath });
+
+  assert.deepEqual(validation.failures, [
+    `${dailyCssPath}: unsupported responsive breakpoint 1280px (allowed: 640, 767, 768, 1023, 1024px)`,
+  ]);
 });
 
 test("client breakpoint contract flags missing guarded files", () => {
