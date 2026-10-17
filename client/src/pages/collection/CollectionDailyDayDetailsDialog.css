@@ -1,6 +1,10 @@
 .collection-daily-day-details-dialog {
-  height: min(50.625rem, 90dvh, calc(var(--viewport-min-height-value) - 2rem));
-  max-height: min(90dvh, calc(var(--viewport-min-height-value) - 2rem));
+  height: auto;
+  max-height: min(50.625rem, 90dvh, calc(var(--viewport-min-height-value) - 2rem));
+}
+
+.collection-daily-day-details-dialog[data-mobile="false"] {
+  width: min(64rem, calc(100vw - 2rem));
 }
 
 .collection-daily-day-details-header,
@@ -30,6 +34,8 @@
 .collection-daily-day-details-body { min-height: 0; flex: 1 1 auto; }
 
 .collection-daily-day-details-scroll {
+  /* Natural content height for short days; shrink and scroll for long days. */
+  flex: 1 1 auto;
   padding: 1rem 1.5rem;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
@@ -42,7 +48,7 @@
 }
 
 .collection-day-date-navigation-slot { min-width: 0; }
-.collection-day-record-list { min-height: 12rem; }
+.collection-day-record-list { min-width: 0; }
 .collection-day-record-state { display: flex; min-height: 12rem; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; border: 1px dashed hsl(var(--border)); border-radius: 0.75rem; padding: 1.5rem 1rem; color: hsl(var(--muted-foreground)); text-align: center; font-size: 0.875rem; line-height: 1.5; }
 .collection-day-record-state svg { flex-shrink: 0; }
 .collection-day-financial-summary--pending .collection-day-metric-value { color: hsl(var(--muted-foreground)); }

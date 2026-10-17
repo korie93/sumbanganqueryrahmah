@@ -25,7 +25,7 @@ export function CollectionDailyFiltersCard({
           id="collection-daily-refresh"
           type="button"
           variant="outline"
-          className="collection-daily-refresh-button h-11 md:h-9"
+          className="collection-daily-refresh-button h-11 min-h-11 sm:min-h-11"
           onClick={onRefresh}
           disabled={loadingOverview || props.savingCalendar || props.savingTarget}
           data-testid="collection-daily-refresh"

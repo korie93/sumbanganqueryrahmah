@@ -24,10 +24,9 @@ export function CollectionDailyStaffScopeField({
   onToggleSelectedUser,
   onSelectAllUsers,
   onClearSelectedUsers,
-  isMobile,
 }: CollectionDailyStaffScopeFieldProps) {
-  const fallbackClassName = isMobile ? "h-11 rounded-md" : "h-9 rounded-md";
-  const readOnlyClassName = `${fallbackClassName} bg-background`;
+  const fallbackClassName = "h-11 rounded-md";
+  const readOnlyClassName = `${fallbackClassName} bg-background min-h-11 sm:h-11 sm:min-h-11`;
   const fieldId = "collection-daily-current-username";
   const fieldLabelId = `${fieldId}-label`;
 
@@ -37,7 +36,7 @@ export function CollectionDailyStaffScopeField({
         <>
           <span
             id={fieldLabelId}
-            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            className="block text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
           >
             Staff Nickname
           </span>
@@ -68,7 +67,7 @@ export function CollectionDailyStaffScopeField({
         </>
       ) : (
         <>
-          <Label htmlFor={fieldId}>Staff Nickname</Label>
+          <Label className="block" htmlFor={fieldId}>Staff Nickname</Label>
           <Input
             id={fieldId}
             name="collectionDailyCurrentUsername"

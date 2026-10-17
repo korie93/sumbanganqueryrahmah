@@ -24,7 +24,7 @@ export function CollectionDailyPeriodFields({
   isMobile,
   containerClassName,
 }: CollectionDailyPeriodFieldsProps) {
-  const inputClassName = isMobile ? "h-11 rounded-md bg-background" : "h-9 rounded-md bg-background";
+  const inputClassName = "h-11 rounded-md bg-background min-h-11 sm:h-11 sm:min-h-11";
   const wrapperClassName =
     containerClassName ?? `grid gap-3 ${isMobile ? "sm:grid-cols-2" : "md:grid-cols-4"}`;
   const showNavigation = Boolean(onPreviousMonth && onNextMonth && onCurrentMonth);
@@ -34,7 +34,7 @@ export function CollectionDailyPeriodFields({
     <div className="collection-daily-period-controls">
       <div className={wrapperClassName}>
         <div className="space-y-2">
-          <Label htmlFor="collection-daily-year-input">Year</Label>
+          <Label className="block" htmlFor="collection-daily-year-input">Year</Label>
           <Input
             id="collection-daily-year-input"
             name="collectionDailyYear"
@@ -56,7 +56,7 @@ export function CollectionDailyPeriodFields({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="collection-daily-month-input">Month</Label>
+          <Label className="block" htmlFor="collection-daily-month-input">Month</Label>
           <Input
             id="collection-daily-month-input"
             name="collectionDailyMonth"

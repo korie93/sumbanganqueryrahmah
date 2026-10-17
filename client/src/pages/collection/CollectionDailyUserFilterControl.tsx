@@ -81,10 +81,7 @@ export function CollectionDailyUserFilterControl({
             id={triggerId}
             type="button"
             variant="outline"
-            className={cn(
-              "w-full justify-between bg-background text-left shadow-sm",
-              isMobile ? "h-12 rounded-2xl px-4" : "h-11 rounded-xl px-4",
-            )}
+            className="h-11 min-h-11 w-full justify-between rounded-md bg-background px-4 text-left shadow-sm sm:min-h-11"
             disabled={loadingUsers}
             aria-expanded="true"
             aria-haspopup="dialog"
@@ -98,10 +95,7 @@ export function CollectionDailyUserFilterControl({
             id={triggerId}
             type="button"
             variant="outline"
-            className={cn(
-              "w-full justify-between bg-background text-left shadow-sm",
-              isMobile ? "h-12 rounded-2xl px-4" : "h-11 rounded-xl px-4",
-            )}
+            className="h-11 min-h-11 w-full justify-between rounded-md bg-background px-4 text-left shadow-sm sm:min-h-11"
             disabled={loadingUsers}
             aria-expanded="false"
             aria-haspopup="dialog"
