@@ -5,6 +5,7 @@
 
 .collection-daily-day-details-dialog[data-mobile="false"] {
   width: min(64rem, calc(100vw - 2rem));
+  height: var(--collection-day-session-height, auto);
 }
 
 .collection-daily-day-details-header,

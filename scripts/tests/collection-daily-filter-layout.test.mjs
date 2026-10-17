@@ -75,7 +75,7 @@ test("nickname loading placeholder and open/closed triggers reserve the same hei
   }
 });
 
-test("daily dialog styles preserve a capped natural height and desktop gutters without sizing mobile width", () => {
+test("daily dialog styles preserve capped natural/session heights and desktop gutters without sizing mobile width", () => {
   const css = postcss.parse(readFileSync("client/src/pages/collection/CollectionDailyDayDetailsDialog.css", "utf8"));
   const declarations = (selector) => {
     const values = {};
@@ -89,7 +89,9 @@ test("daily dialog styles preserve a capped natural height and desktop gutters w
   assert.match(dialog["max-height"], /90dvh/);
   assert.match(dialog["max-height"], /var\(--viewport-min-height-value\) - 2rem/);
   assert.equal(dialog.width, undefined);
-  assert.equal(declarations('.collection-daily-day-details-dialog[data-mobile="false"]').width, "min(64rem, calc(100vw - 2rem))");
+  const desktopDialog = declarations('.collection-daily-day-details-dialog[data-mobile="false"]');
+  assert.equal(desktopDialog.width, "min(64rem, calc(100vw - 2rem))");
+  assert.equal(desktopDialog.height, "var(--collection-day-session-height, auto)");
   assert.equal(declarations(".collection-daily-day-details-scroll").flex, "1 1 auto");
   assert.equal(declarations(".collection-day-record-list")["min-height"], undefined);
 });

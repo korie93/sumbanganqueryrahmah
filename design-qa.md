@@ -1435,3 +1435,36 @@ No commit, push, deployment, backend change or production data access. Prior wor
 remains intact. This supersedes the earlier boxed Account/Card presentation.
 
 final result: passed
+
+## CI regression: Daily dialog session sizing — 2026-10-17
+
+CI run39037887159 on ea56f624 passed build-and-test and coverage, but failed
+the desktop Daily loading shell assertion in Playwright (435/436 cases passed).
+Local reproduction confirmed the exact95.625px vertical shift: natural dialog
+height shrank when long records were replaced by a shorter loading state.
+
+The desktop dialog now captures its first successfully loaded natural height
+once per open session, after the Radix portal attaches. Pagination, date changes,
+loading, failure and retry retain that height. Closing resets it so a newly
+opened short day remains compact. CSS max-height still caps smaller viewports;
+mobile retains its existing fullscreen rules. offsetHeight deliberately ignores
+the opening scale animation. No remount, focus, API or data behavior changed.
+
+The original1px stability assertion remains unchanged. Extended browser coverage
+checks fresh compact reopening, short-to-long navigation with internal scrolling,
+viewport shrink/restore, and focus return to the actual calendar opener. No
+snapshot baseline, retry setting, timeout or comparison tolerance was loosened.
+
+Evidence: artifacts/daily-dialog-ci-20261017/. reproduction.log records the
+original desktop failure and mobile pass; before-failed-desktop.png preserves
+the failure screenshot. report-controls-regression.log records24/24 passing
+browser cases, zero retries/skips. unit-correct-runner.log records69/69 passing
+state/presentation cases using the repository's CSS-loader wrapper. A direct
+standalone .test.tsx invocation first failed because Node cannot load CSS; the
+supported wrapper run is the accepted result, not a product failure. Three
+sizing contract tests, source ESLint, typecheck, production frontend build and
+git diff --check pass. Independent read-only implementation review found no
+material issue. Full remote CI has not rerun; local results do not claim that it
+has. No commit, push, deployment or production access in this repair.
+
+final result: passed (bounded local regression verification)

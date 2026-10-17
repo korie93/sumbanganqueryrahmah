@@ -1,5 +1,5 @@
 import { AlertCircle, Loader2, Target, TrendingUp } from "lucide-react";
-import { useEffect, useRef, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import {
@@ -97,6 +97,7 @@ export function CollectionDailyDayDetailsDialog({
   dateNavigation,
 }: CollectionDailyDayDetailsDialogProps) {
   const isMobile = useIsMobile();
+  const [dialogElement, setDialogElement] = useState<HTMLDivElement | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const restoreRetryFocus = useRef(false);
   const handleRetry = () => {
@@ -121,6 +122,20 @@ export function CollectionDailyDayDetailsDialog({
     ? resolveTargetProgressPercent(visibleDetails.amount, visibleDetails.dailyTarget)
     : 0;
   const recordRangeLabel = buildDailyRecordRangeLabel(visibleDetails);
+  useLayoutEffect(() => {
+    if (!dialogElement) return;
+    const heightProperty = "--collection-day-session-height";
+    if (!open || isMobile) {
+      dialogElement.style.removeProperty(heightProperty);
+      return;
+    }
+    if (loadingDayDetails || dayDetailsError || !visibleDetails || dialogElement.style.getPropertyValue(heightProperty)) return;
+    // Start compact for short days, then keep this session's shell steady while
+    // paging, changing dates or retrying. offsetHeight ignores Radix's opening
+    // scale animation; max-height still caps the shell if the viewport shrinks.
+    const height = dialogElement.offsetHeight;
+    if (height > 0) dialogElement.style.setProperty(heightProperty, `${height}px`);
+  }, [dialogElement, open, isMobile, loadingDayDetails, dayDetailsError, visibleDetails]);
   useEffect(() => {
     // A date/page change is a new reading context, not a continuation halfway
     // through the previous date's records. Keep the modal and launcher intact.
@@ -130,6 +145,7 @@ export function CollectionDailyDayDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={setDialogElement}
         className={
           isMobile
             ? `collection-daily-day-details-dialog ${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:rounded-none sm:p-0`

@@ -300,7 +300,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       await dialog.evaluate(async (element) => {
         await Promise.all(element.getAnimations().map((animation) => animation.finished.catch(() => {})));
       });
-      const originalBounds = (await dialog.boundingBox())!;
+      let originalBounds = (await dialog.boundingBox())!;
       const summary = dialog.getByRole("region", { name: "Target, kutipan dan baki harian", exact: true });
       const originalSummary = await summary.innerText();
       const expectStableBounds = async () => {
@@ -362,6 +362,40 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       await expect(dialog).toBeHidden();
       await expect(page.getByTestId("collection-daily-day-1")).toBeFocused();
       expect(fixture.dayDetailsRequests.filter(({ date }) => date === "2026-10-03")).toHaveLength(2);
+
+      // A new open session should size naturally again rather than retaining
+      // the long first day's height. Its compact shell must also stay steady
+      // when moving back to a day with many records (not just long -> short).
+      await page.getByTestId("collection-daily-day-2").click();
+      await expect(records.getByText("Synthetic 2026-10-02 customer 1", { exact: true })).toBeVisible();
+      await dialog.evaluate(async (element) => {
+        await Promise.all(element.getAnimations().map((animation) => animation.finished.catch(() => {})));
+      });
+      const compactBounds = (await dialog.boundingBox())!;
+      if (width >= 768) expect(compactBounds.height).toBeLessThan(originalBounds.height - 50);
+      originalBounds = compactBounds;
+      await dateNavigation.getByRole("button", { name: "Tarikh sebelumnya", exact: true }).click();
+      await expect(records.getByText("Synthetic 2026-10-01 customer 1", { exact: true })).toBeVisible();
+      await expect(records.locator(".collection-day-record-card")).toHaveCount(10);
+      await expectStableBounds();
+      const scrollArea = dialog.getByRole("region", { name: "Collection day details scroll area", exact: true });
+      expect(await scrollArea.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+      await testInfo.attach(`daily-compact-session-${theme}-${width}`, { body: await dialog.screenshot(), contentType: "image/png" });
+      // The session height must not defeat viewport caps, including mobile's
+      // fullscreen rules. Restoring the viewport restores the original shell.
+      await page.setViewportSize({ width, height: 600 });
+      await expect.poll(async () => {
+        const bounds = (await dialog.boundingBox())!;
+        return bounds.y >= -1 && bounds.y + bounds.height <= 601;
+      }).toBe(true);
+      await expect(pagination).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeVisible();
+      expect(await scrollArea.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+      await page.setViewportSize({ width, height: 900 });
+      await expectStableBounds();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await expect(page.getByTestId("collection-daily-day-2")).toBeFocused();
       await checkFixture(page, fixture);
     } finally {
       pageGate.release();
