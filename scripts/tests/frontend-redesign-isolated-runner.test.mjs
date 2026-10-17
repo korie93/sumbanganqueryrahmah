@@ -20,6 +20,30 @@ test("existing smoke suite runs only in a separate verified disposable app witho
   assert.doesNotMatch(branch, /SMOKE_ARTIFACTS_DIR|\.\.\.env|\.\.\.process\.env|PG_PASSWORD/);
 });
 
+test("CI smoke verifies an empty disposable Collection scope rather than hiding missing setup with design-review seeds", () => {
+  const start = runner.indexOf("    if (smokeOnly) {", runner.indexOf("await waitUntilReady(baseUrl"));
+  const end = runner.indexOf("    // The optional supplement", start);
+  assert.ok(start > 0 && end > start);
+  const preparation = runner.slice(start, end);
+  const [emptySmoke, populatedDesign] = preparation.split("    } else {");
+  assert.match(emptySmoke, /new pg\.Client\(\{\s+host: "127\.0\.0\.1", port: databasePort, user: "sqr_fixture", password: databasePassword/);
+  assert.match(emptySmoke, /database: "sqr_collection_card_test"/);
+  assert.match(emptySmoke, /verification\.query\("BEGIN READ ONLY"\)/);
+  assert.match(emptySmoke, /verification\.query\("SHOW data_directory"\)/);
+  assert.match(emptySmoke, /assert\.equal\(await realpath\(state\.rows\[0\]\.data_directory\), await realpath\(dataDir\)\)/);
+  assert.match(emptySmoke, /SELECT current_database\(\) AS database, current_user AS username/);
+  assert.match(emptySmoke, /assert\.deepEqual\(identity\.rows\[0\], \{ database: "sqr_collection_card_test", username: "sqr_fixture" \}\)/);
+  assert.match(emptySmoke, /SELECT count\(\*\)::int AS count FROM collection_staff_nicknames/);
+  assert.match(emptySmoke, /assert\.equal\(nicknames\.rows\[0\]\.count, 0,/);
+  assert.match(emptySmoke, /SELECT count\(\*\)::int AS count FROM collection_records/);
+  assert.match(emptySmoke, /assert\.equal\(records\.rows\[0\]\.count, 0,/);
+  assert.match(emptySmoke, /finally \{ await verification\.end\(\); \}/);
+  assert.doesNotMatch(emptySmoke, /scripts\/fixtures\/|INSERT INTO|UPDATE |DELETE FROM|TRUNCATE/);
+  assert.match(populatedDesign, /scripts\/fixtures\/collection-card-no-seed\.ts/);
+  assert.match(populatedDesign, /scripts\/fixtures\/frontend-redesign-seed\.mjs/);
+  assert.match(populatedDesign, /59 synthetic Collection records ready/);
+});
+
 test("redesign fixture cannot inherit an existing application database or credential environment", () => {
   assert.doesNotMatch(runner, /import\s+["']dotenv|\.\.\.process\.env|process\.env\.(?:DATABASE_URL|PG_HOST|PG_PORT|PG_USER|PG_PASSWORD|SESSION_SECRET|SEED_SUPERUSER_PASSWORD)/);
   assert.match(runner, /const cleanEnv = Object\.fromEntries\(inheritedKeys/);

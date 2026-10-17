@@ -476,7 +476,10 @@ const checkHomeEntryPoint = async (page, tracker) => {
   tracker.clear();
 };
 
-const checkCollectionDailyPage = async (page, tracker) => {
+const checkCollectionDailyPage = async (page, context, tracker) => {
+  // A fresh CI database has accounts but no governed Collection nicknames.
+  // The calendar (including its legend) needs a selected nickname/overview.
+  await ensureCollectionSmokeNicknames(context);
   await page.setViewportSize({ width: 1440, height: 900 });
   await navigateForSmoke(page, "/collection/daily");
   await page.getByTestId("collection-daily-page").waitFor();
@@ -490,8 +493,9 @@ const checkCollectionDailyPage = async (page, tracker) => {
   await page.getByTestId("collection-daily-legend").waitFor({ state: "hidden" });
   await page.getByTestId("collection-daily-calendar").waitFor();
 
-  const summaryCount = await page.getByTestId("collection-daily-summary").count();
-  assert(summaryCount <= 1, "Collection Daily summary container should render at most once");
+  const summaryCount = await page.getByTestId("collection-daily-page")
+    .getByRole("heading", { name: "Daily Performance Summary", exact: true }).count();
+  assert(summaryCount === 1, "Collection Daily should render exactly one loaded summary");
 
   const userTriggerCount = await page.getByTestId("collection-daily-user-trigger").count();
   if (userTriggerCount > 0) {
@@ -544,7 +548,10 @@ const checkCollectionDailyPage = async (page, tracker) => {
         );
       }
 
-      await page.getByText(/Select all (users|staff nicknames)/i).click();
+      const selectAll = userPopover.getByText("Select all staff nicknames", { exact: true })
+        .locator("..").getByRole("checkbox");
+      await selectAll.check();
+      assert(await selectAll.getAttribute("aria-checked") === "true", "Collection Daily select-all should check the real aggregate control");
       await page.waitForTimeout(100);
       if (userCount > 1) {
         const selectedAllLabel = await userTrigger.innerText();
@@ -564,7 +571,9 @@ const checkCollectionDailyPage = async (page, tracker) => {
     await page.waitForTimeout(100);
   }
 
-  const firstDayCell = page.locator('[data-testid^="collection-daily-day-"]').first();
+  const firstDayCell = page.getByTestId("collection-daily-calendar")
+    .locator('button[data-collection-daily-date]').first();
+  await firstDayCell.waitFor();
   if (await firstDayCell.count()) {
     await firstDayCell.click();
     await page.getByTestId("collection-daily-day-dialog").waitFor();
@@ -3287,7 +3296,7 @@ const run = async () => {
         await runSmokePhase("theme controls", () => checkUserMenuThemeMode(page, tracker));
         await runSmokePhase("mobile navigation", () => checkMobileNavbar(page, tracker));
         await runSmokePhase("home entry point", () => checkHomeEntryPoint(page, tracker));
-        await runSmokePhase("collection daily page", () => checkCollectionDailyPage(page, tracker));
+        await runSmokePhase("collection daily page", () => checkCollectionDailyPage(page, context, tracker));
         await runSmokePhase(
           "collection mutation consistency",
           () => checkCollectionMutationConsistency(context),

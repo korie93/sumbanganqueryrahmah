@@ -1,6 +1,29 @@
 # Collection Daily polish — continuation handoff
 
-Current status (2026-10-17): FOLLOW-UP COMPLETE — implementation, final Product Design comparison and goal completion audit passed; Codex goal marked complete. Supplementary user-authorized local Playwright verification now PASS16/16 after a bounded stale-error-notification fix. The user has subsequently requested commit and push; Git history/upstream status are the source of truth for publication. Production remains untouched. The original 2026-10-16 polish phase below remains separate historical evidence.
+Current status (2026-10-17): FOLLOW-UP COMPLETE — implementation, final Product Design comparison and goal completion audit passed; Codex goal marked complete. Implementation was committed/pushed as470808e8. The subsequent script-only CI Smoke repair below is locally verified; the user has now requested its commit and push. Git history/upstream status are the source of truth for publication. Production remains untouched. Earlier phase evidence below remains historical.
+
+## CI Smoke repair — 2026-10-17
+
+Remote evidence: [CI run38982813879](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/38982813879), smoke job117248396691 on470808e8. Build-and-test, coverage, visual layout, Playwright snapshots and accessibility passed. `Run UI smoke` failed after30s at `scripts/ui-smoke.mjs:486`: focusing the calendar legend. Sanitized excerpt: `artifacts/daily-smoke-ci-failure-summary.md`.
+
+Root cause: the legend still belongs inside the calendar; its selector hierarchy was NOT wrong. It now renders only after a selected nickname loads an overview. A fresh migrated/default-account CI database has no governed Collection nicknames, and the old smoke did not create them until later phases. The earlier16-case static suite always supplied a nickname, so it did not cover this bootstrap condition. Monitoring's later409 login was secondary to the failed authenticated smoke, not a reason to weaken single-superuser security.
+
+Bounded repair (scripts/tests only; no frontend/backend/API/permission/calculation changes):
+
+- `checkCollectionDailyPage` receives the existing authenticated context and awaits `ensureCollectionSmokeNicknames` before navigation. The existing governed API fixture creates at least2 synthetic nicknames. Keyboard legend open/close assertions are retained, not skipped or moved to an invalid ancestor.
+- Summary now asserts exactly1 real `Daily Performance Summary` heading rather than allowing0 matches for a removed testid. Select-all checks the actual aggregate checkbox and its checked state. The first real calendar date button is awaited, preventing overview refresh from silently skipping the dialog check.
+- Isolated `smokeOnly` no longer receives the populated design-review seeds. A read-only transaction verifies the owned PostgreSQL data directory/database identity plus0 Collection nicknames and0 Collection records before executing the exact production smoke entrypoint. Other runner modes and strict temporary-directory shutdown/deletion guards are unchanged.
+- Regression contracts cover fixture-before-navigation order, actual current controls and the empty-scope isolation guard.
+
+Verification:
+
+- Fresh production/status/CSP/sourcemap build PASS: `artifacts/daily-smoke-ci-build.log`.
+- Focused script contracts PASS44/44, no skips: `artifacts/daily-smoke-ci-script-contracts.log`; both edited executable scripts pass `node --check`.
+- Complete `npm run test:scripts` PASS: Node668PASS/0FAIL/1pre-existing opt-in skip; TypeScript63PASS/0FAIL/0SKIP (`artifacts/daily-smoke-ci-all-script-tests-clean.log`). Initial inherited-environment run passed Node but7 TS files failed at startup on the host's unsupported `LOG_FORMAT`; that evidence is retained in `daily-smoke-ci-all-script-tests.log`. The accepted rerun used an OS-only child environment with dotenv disabled; no user environment files/settings or runtime schema were changed.
+- FULL exact `scripts/ui-smoke.mjs` PASS17/17 phases, exit0 on a real built app and disposable PostgreSQL starting with verified empty Collection tables: `artifacts/daily-smoke-ci-isolated-full.log`. Includes login/navigation/keyboard/theme/mobile, Daily, mutations/stale conflict, Manual ABORT, Billing/XLSX/PNG/PDF, receipt upload/view, backup/restore and logout. No retry/timeout increase/snapshot-baseline changes. Server log: `artifacts/frontend-redesign/final-QIb5SM/server.log`.
+- Owned app/database processes stopped and their exact temporary fixture directory removed after success. No existing database, uploads, receipts, environment files or production data were touched. Remote CI has not been rerun for the uncommitted repair; local success is not a remote-success claim.
+
+Publication: the user has explicitly requested commit/push for these five scoped files (four scripts/tests plus this handoff). Consult Git for the resulting commit/upstream status. Do not reset/reimplement the committed UI work or change security policy to fix a test fixture. Deployment still requires a separate request.
 
 ## Completed follow-up scope — 2026-10-17
 
@@ -24,7 +47,7 @@ Final verification/evidence:
 
 Handoff / safe next steps:
 
-1. Preserve all dirty/untracked changes from both phases on main, based on3b4c5e68ff5613cdedf68308eb4d3704effb554e. Do not reset or reimplement. No remaining required implementation work in the three approved follow-ups.
+1. Both implementation phases are committed on main as470808e8 (parent3b4c5e68ff5613cdedf68308eb4d3704effb554e). Preserve only the newer scoped CI repair described above as pending work; do not reset or reimplement the approved UI.
 2. If user asks commit/push, inspect status, stage only reviewed files (never env/secrets/artifacts), commit and push without claiming remote CI passed. The exact CLI test gap is now closed; preserve the initial failure evidence and accepted report instead of resetting or updating baselines.
 3. Current source preview is `http://127.0.0.1:52653/collection/daily?auditTheme=light`, owned helper PID9772 after an ownership-checked restart for the notification fix; Codex tab was previously marked deliverable. Revalidate ownership/port if restarting; no-watch transforms require an owned restart after source edits. Baseline source remains saved under `baseline-source/`. Original previous-phase52651 preview is unrelated to current cleanup and remains untouched.
 4. Temporary Fetch interception and device/viewport overrides were cleared. Baseline/comparison tabs closed; exact process/port ownership checked and baseline52652/comparison52654 helper processes stopped. Current52653 preview remains available. No files or data removed. Final preview console inspected: no error entries. Prior unchanged receipt/large-value QA remains historical; no fresh axe/screen-reader certification is claimed.

@@ -135,11 +135,25 @@ test("Daily smoke opens and closes the real calendar legend with the keyboard", 
   const end = smokeSource.indexOf("const ensureCollectionSmokeNicknames", start);
   assert.ok(start >= 0 && end > start);
   const flow = smokeSource.slice(start, end);
+  const setup = flow.indexOf("await ensureCollectionSmokeNicknames(context)");
+  const navigation = flow.indexOf('await navigateForSmoke(page, "/collection/daily")');
+  const legend = flow.indexOf("await legendDisclosure.focus()");
+  assert.ok(setup >= 0 && navigation > setup && legend > navigation,
+    "Fresh CI must provision governed nicknames before opening the overview-dependent legend");
+  assert.match(flow, /const checkCollectionDailyPage = async \(page, context, tracker\)/);
+  assert.match(smokeSource, /checkCollectionDailyPage\(page, context, tracker\)/);
   assert.match(flow, /locator\("summary"\)\.filter\(\{ hasText: "Calendar legend and status codes" \}\)/);
   assert.match(flow, /await legendDisclosure\.focus\(\);\s+await page\.keyboard\.press\("Enter"\);\s+await page\.getByTestId\("collection-daily-legend"\)\.waitFor\(\);/);
   assert.match(flow, /await legendDisclosure\.press\("Enter"\);\s+await page\.getByTestId\("collection-daily-legend"\)\.waitFor\(\{ state: "hidden" \}\)/);
   assert.match(flow, /firstDayCell\.click\(\)/);
   assert.match(flow, /collection-daily-day-dialog/);
+  assert.match(flow, /getByRole\("heading", \{ name: "Daily Performance Summary", exact: true \}\)\.count\(\)/);
+  assert.match(flow, /summaryCount === 1/);
+  assert.doesNotMatch(flow, /getByTestId\("collection-daily-summary"\)|summaryCount <= 1/);
+  assert.match(flow, /await selectAll\.check\(\)/);
+  assert.match(flow, /selectAll\.getAttribute\("aria-checked"\) === "true"/);
+  assert.match(flow, /locator\('button\[data-collection-daily-date\]'\)/);
+  assert.match(flow, /await firstDayCell\.waitFor\(\)/);
 });
 
 test("collection receipt smoke configures a governed source before automatic matching", () => {

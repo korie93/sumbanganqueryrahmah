@@ -150,12 +150,35 @@ async function main() {
     child.stdout.pipe(serverLog, { end: false });
     child.stderr.pipe(serverLog, { end: false });
     await waitUntilReady(baseUrl, child, () => Boolean(spawnFailure));
-    await run(process.execPath, ["--import", pathToFileURL(path.join(repoRoot, "node_modules/tsx/dist/loader.mjs")).href,
-      path.join(repoRoot, "scripts/fixtures/collection-card-no-seed.ts")], appDir,
-    { ...env, SQR_COLLECTION_CARD_ISOLATED_CLUSTER: "1", SQR_COLLECTION_CARD_DATA_DIR: dataDir, COLLECTION_CARD_EXPECT_MISSING: "1" });
-    await run(process.execPath, [path.join(repoRoot, "scripts/fixtures/frontend-redesign-seed.mjs")], appDir,
-      { ...env, SQR_REDESIGN_ISOLATED_CLUSTER: "1", SQR_REDESIGN_DATA_DIR: dataDir });
-    console.log("Fresh PostgreSQL, real built app, and 59 synthetic Collection records ready.");
+    if (smokeOnly) {
+      // Match CI's migrated app and default account seed, not the populated
+      // design-review fixture. The smoke suite must provision its own data.
+      const verification = new pg.Client({
+        host: "127.0.0.1", port: databasePort, user: "sqr_fixture", password: databasePassword,
+        database: "sqr_collection_card_test", ssl: false, connectionTimeoutMillis: 3_000,
+      });
+      try {
+        await verification.connect();
+        await verification.query("BEGIN READ ONLY");
+        const state = await verification.query("SHOW data_directory");
+        assert.equal(await realpath(state.rows[0].data_directory), await realpath(dataDir));
+        const identity = await verification.query("SELECT current_database() AS database, current_user AS username");
+        assert.deepEqual(identity.rows[0], { database: "sqr_collection_card_test", username: "sqr_fixture" });
+        const nicknames = await verification.query("SELECT count(*)::int AS count FROM collection_staff_nicknames");
+        assert.equal(nicknames.rows[0].count, 0, "CI smoke starts without preseeded Collection nicknames");
+        const records = await verification.query("SELECT count(*)::int AS count FROM collection_records");
+        assert.equal(records.rows[0].count, 0, "CI smoke starts without preseeded Collection records");
+        await verification.query("COMMIT");
+      } finally { await verification.end(); }
+      console.log("Fresh PostgreSQL and real built app ready; verified empty Collection nickname and record tables for CI smoke.");
+    } else {
+      await run(process.execPath, ["--import", pathToFileURL(path.join(repoRoot, "node_modules/tsx/dist/loader.mjs")).href,
+        path.join(repoRoot, "scripts/fixtures/collection-card-no-seed.ts")], appDir,
+      { ...env, SQR_COLLECTION_CARD_ISOLATED_CLUSTER: "1", SQR_COLLECTION_CARD_DATA_DIR: dataDir, COLLECTION_CARD_EXPECT_MISSING: "1" });
+      await run(process.execPath, [path.join(repoRoot, "scripts/fixtures/frontend-redesign-seed.mjs")], appDir,
+        { ...env, SQR_REDESIGN_ISOLATED_CLUSTER: "1", SQR_REDESIGN_DATA_DIR: dataDir });
+      console.log("Fresh PostgreSQL, real built app, and 59 synthetic Collection records ready.");
+    }
     // The optional supplement receives only this fresh cluster's narrow identity.
     // Its private environment never enters browser options, logs or the manifest.
     const prepareBillingFixture = billingFixtureEnabled ? (page) => prepareRedesignBillingFixture({ page, baseUrl, env: {
