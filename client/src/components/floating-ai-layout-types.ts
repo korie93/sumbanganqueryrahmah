@@ -19,6 +19,7 @@ export type FloatingAiLayoutInput = {
   hasDensePage: boolean;
   preferCompactPanel: boolean;
   avoidRects: ReadonlyArray<RectLike>;
+  allowAdaptiveTriggerOffsets?: boolean;
 };
 
 export type FloatingAiLayout = {

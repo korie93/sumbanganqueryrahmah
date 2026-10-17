@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   FLOATING_AI_AVOID_SELECTOR,
   FLOATING_AI_DIALOG_SELECTOR,
+  FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR,
+  FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR,
   collectFloatingAiDomSnapshot,
   queryFloatingAiObstacleElements,
   resolveFloatingAiHasDensePage,
@@ -37,6 +39,32 @@ test("queryFloatingAiObstacleElements collects avoid, dialog, and observed eleme
   assert.deepEqual(result.avoidElements, [avoidElement]);
   assert.deepEqual(result.dialogElements, [dialogElement]);
   assert.deepEqual(result.observedElements, [avoidElement, dialogElement]);
+});
+
+test("save collection obstacle queries opt into interactive controls without treating whole cards as obstacles", () => {
+  const field = { id: "customer-name" };
+  const nickname = { id: "save-nickname" };
+  const workspace = { id: "save-workspace" };
+  const selectors: string[] = [];
+  const documentStub = {
+    querySelectorAll(selector: string) {
+      selectors.push(selector);
+      if (selector === FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR) return [workspace];
+      return selector.includes(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR) ? [field, nickname] : [];
+    },
+  } as unknown as Document;
+  const snapshot = queryFloatingAiObstacleElements(documentStub, true);
+  assert.deepEqual(snapshot.avoidElements, [field, nickname]);
+  assert.deepEqual(snapshot.observedElements, [field, nickname, workspace]);
+  assert.deepEqual(selectors, [
+    `${FLOATING_AI_AVOID_SELECTOR}, ${FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR}`,
+    FLOATING_AI_DIALOG_SELECTOR,
+    FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR,
+  ]);
+  assert.match(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, /\.save-collection-workspace :is\(input:not\(\[type='hidden'\]\)/);
+  assert.match(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, /\.collection-save-nickname-controls :is\(button,/);
+  assert.match(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, /button, summary,/);
+  assert.doesNotMatch(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, /\.save-collection-section(?:,|$)/);
 });
 
 test("collectFloatingAiDomSnapshot reuses queried elements to derive visible rects and dialog state", () => {

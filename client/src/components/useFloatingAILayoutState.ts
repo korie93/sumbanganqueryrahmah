@@ -6,7 +6,7 @@ import {
   type FloatingAiLayout,
 } from "@/components/floating-ai-layout";
 import { applyFloatingAiScrollLock } from "@/components/floating-ai-scroll-lock";
-import { shouldTrackFloatingAiDom } from "@/components/floating-ai-visibility";
+import { isFloatingAiSaveCollectionRoute, shouldTrackFloatingAiDom } from "@/components/floating-ai-visibility";
 import {
   collectFloatingAiDomSnapshot,
   isEditableElement,
@@ -66,10 +66,12 @@ export function useFloatingAILayoutState({
   const floatingRootRef = useRef<HTMLDivElement | null>(null);
   const focusListenerCleanupRef = useRef<(() => void) | null>(null);
   const layoutListenerCleanupRef = useRef<(() => void) | null>(null);
+  const saveCollectionRoute = isFloatingAiSaveCollectionRoute(activePage, location);
   const shouldTrackObstacleLayout = shouldTrackFloatingAiDom({
     isOpen,
     isThinking,
     aiStatus,
+    saveCollectionRoute,
   });
   const hasDensePage = useMemo(
     () => resolveFloatingAiHasDensePage(activePage, location),
@@ -86,6 +88,7 @@ export function useFloatingAILayoutState({
     isMobile,
     isOpen,
     shouldTrackObstacleLayout,
+    saveCollectionRoute,
     keyboardOpen,
     mobileViewportHeight,
     hasFocusedAiEditable,
@@ -99,6 +102,7 @@ export function useFloatingAILayoutState({
     isMobile,
     isOpen,
     shouldTrackObstacleLayout,
+    saveCollectionRoute,
     keyboardOpen,
     mobileViewportHeight,
     hasFocusedAiEditable,
@@ -170,7 +174,7 @@ export function useFloatingAILayoutState({
         ? state.mobileViewportHeight
         : window.innerHeight;
     const domSnapshot = state.shouldTrackObstacleLayout
-      ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements())
+      ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements(document, state.saveCollectionRoute))
       : {
           avoidRects: [],
           hasBlockingDialog: false,
@@ -188,6 +192,7 @@ export function useFloatingAILayoutState({
       hasDensePage: state.hasDensePage,
       preferCompactPanel: state.preferCompactPanel,
       avoidRects: domSnapshot.avoidRects,
+      allowAdaptiveTriggerOffsets: state.saveCollectionRoute,
     });
 
     setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
@@ -206,6 +211,7 @@ export function useFloatingAILayoutState({
     mobileViewportHeight,
     preferCompactPanel,
     shouldTrackObstacleLayout,
+    saveCollectionRoute,
     syncLayout,
     viewportBottomInset,
   ]);
@@ -250,7 +256,7 @@ export function useFloatingAILayoutState({
         frame = null;
         scheduled = false;
         if (!mounted || !observedRoot.isConnected) return;
-        const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements() : null;
+        const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements(document, saveCollectionRoute) : null;
         syncObservedElements(obstacleQuery);
         syncLayout(obstacleQuery);
       });
@@ -265,6 +271,12 @@ export function useFloatingAILayoutState({
         resizeDebounceHandle = null;
         scheduleSync();
       }, FLOATING_AI_LAYOUT_RESIZE_DEBOUNCE_MS);
+    };
+
+    const scheduleSaveCollectionToggleSync = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest(".save-collection-workspace")) {
+        scheduleSync();
+      }
     };
 
     scheduleSync();
@@ -286,6 +298,9 @@ export function useFloatingAILayoutState({
     if (shouldTrackObstacleLayout) {
       window.addEventListener("scroll", scheduleSync, { passive: true });
     }
+    if (saveCollectionRoute) {
+      document.addEventListener("toggle", scheduleSaveCollectionToggleSync, true);
+    }
 
     const cleanupLayoutListeners = () => {
       mounted = false;
@@ -294,6 +309,9 @@ export function useFloatingAILayoutState({
       window.removeEventListener("resize", scheduleResizeSync);
       if (shouldTrackObstacleLayout) {
         window.removeEventListener("scroll", scheduleSync);
+      }
+      if (saveCollectionRoute) {
+        document.removeEventListener("toggle", scheduleSaveCollectionToggleSync, true);
       }
       if (resizeDebounceHandle !== null) {
         window.clearTimeout(resizeDebounceHandle);
@@ -312,7 +330,7 @@ export function useFloatingAILayoutState({
         layoutListenerCleanupRef.current = null;
       }
     };
-  }, [hiddenForAiPage, shouldTrackObstacleLayout, syncLayout]);
+  }, [hiddenForAiPage, saveCollectionRoute, shouldTrackObstacleLayout, syncLayout]);
 
   return {
     floatingRootRef,

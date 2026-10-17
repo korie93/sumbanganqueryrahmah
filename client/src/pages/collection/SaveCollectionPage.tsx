@@ -63,7 +63,6 @@ function SaveCollectionPage({
   const customerPhoneInputId = "save-collection-customer-phone";
   const accountNumberInputId = "save-collection-account-number";
   const cardNumberInputId = "save-collection-card-number";
-  const accountCardHelpId = "save-collection-account-card-help";
   const batchInputId = "save-collection-batch";
   const paymentDateButtonId = "save-collection-payment-date-button";
   const amountInputId = "save-collection-amount";
@@ -100,12 +99,10 @@ function SaveCollectionPage({
   const accountNumberValidationProps = getInvalidFieldProps(
     state.fieldErrors.accountNumber,
     accountNumberErrorId,
-    accountCardHelpId,
   );
   const cardNumberValidationProps = getInvalidFieldProps(
     state.fieldErrors.cardNumber,
     cardNumberErrorId,
-    accountCardHelpId,
   );
   const batchValidationProps = getInvalidFieldProps(state.fieldErrors.batch, batchErrorId);
   const paymentDateValidationProps = getInvalidFieldProps(
@@ -207,73 +204,69 @@ function SaveCollectionPage({
 
   const paymentFields = (
     <>
-      <fieldset className="save-collection-account-group sm:col-span-2" aria-describedby={accountCardHelpId}>
-        <legend className="sr-only">Account Number / Card Number</legend>
-        <p id={accountCardHelpId} className="text-xs leading-5 text-muted-foreground">
-          Isi sekurang-kurangnya satu: Account Number atau Card Number.
-        </p>
-        <div className="save-collection-account-fields">
-          <div className="space-y-2">
-            <Label htmlFor={accountNumberInputId}>Account Number</Label>
-            <Input
-              id={accountNumberInputId}
-              name="accountNumber"
-              value={state.accountNumber}
-              onChange={(e) => state.setAccountNumber(e.target.value)}
-              onBlur={() => state.validateField("accountNumber")}
-              disabled={state.submitting}
-              autoComplete="off"
-              maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber}
-              {...accountNumberValidationProps}
-            />
-            {state.fieldErrors.accountNumber ? (
-              <p id={accountNumberErrorId} className="text-xs text-destructive" role="alert">
-                {state.fieldErrors.accountNumber}
-              </p>
-            ) : null}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={cardNumberInputId}>Card Number</Label>
-            <div className="relative">
-              <Input
-                id={cardNumberInputId}
-                name="cardNumber"
-                type={state.isCardNumberInputVisible ? "text" : "password"}
-                value={state.cardNumber}
-                onChange={(event) => state.setCardNumber(event.target.value)}
-                onBlur={() => state.validateField("cardNumber")}
-                disabled={state.submitting}
-                autoComplete="off"
-                inputMode="numeric"
-                maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber}
-                className="pr-12 tabular-nums"
-                {...cardNumberValidationProps}
-              />
-              <button
-                type="button"
-                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-                onClick={state.toggleCardNumberInputVisibility}
-                disabled={state.submitting || !state.cardNumber}
-                aria-label={state.isCardNumberInputVisible ? "Hide card number" : "Show card number"}
-                aria-controls={cardNumberInputId}
-                data-testid="toggle-card-number-input"
-                {...getAriaPressedProps(state.isCardNumberInputVisible)}
-              >
-                {state.isCardNumberInputVisible ? (
-                  <EyeOff className="h-4 w-4" aria-hidden="true" focusable="false" />
-                ) : (
-                  <Eye className="h-4 w-4" aria-hidden="true" focusable="false" />
-                )}
-              </button>
-            </div>
-            {state.fieldErrors.cardNumber ? (
-              <p id={cardNumberErrorId} className="text-xs text-destructive" role="alert">
-                {state.fieldErrors.cardNumber}
-              </p>
-            ) : null}
-          </div>
+      <div className="space-y-2">
+        <Label htmlFor={accountNumberInputId}>Account Number</Label>
+        <Input
+          id={accountNumberInputId}
+          name="accountNumber"
+          value={state.accountNumber}
+          onChange={(e) => state.setAccountNumber(e.target.value)}
+          onBlur={() => {
+            if (state.accountNumber.trim() || state.cardNumber.trim()) state.validateField("accountNumber");
+          }}
+          disabled={state.submitting}
+          autoComplete="off"
+          maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.accountNumber}
+          {...accountNumberValidationProps}
+        />
+        {state.fieldErrors.accountNumber ? (
+          <p id={accountNumberErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.accountNumber}
+          </p>
+        ) : null}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={cardNumberInputId}>Card Number</Label>
+        <div className="relative">
+          <Input
+            id={cardNumberInputId}
+            name="cardNumber"
+            type={state.isCardNumberInputVisible ? "text" : "password"}
+            value={state.cardNumber}
+            onChange={(event) => state.setCardNumber(event.target.value)}
+            onBlur={() => {
+              if (state.accountNumber.trim() || state.cardNumber.trim()) state.validateField("cardNumber");
+            }}
+            disabled={state.submitting}
+            autoComplete="off"
+            inputMode="numeric"
+            maxLength={SAVE_COLLECTION_IDENTITY_FIELD_LIMITS.cardNumber}
+            className="pr-12 tabular-nums"
+            {...cardNumberValidationProps}
+          />
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            onClick={state.toggleCardNumberInputVisibility}
+            disabled={state.submitting || !state.cardNumber}
+            aria-label={state.isCardNumberInputVisible ? "Hide card number" : "Show card number"}
+            aria-controls={cardNumberInputId}
+            data-testid="toggle-card-number-input"
+            {...getAriaPressedProps(state.isCardNumberInputVisible)}
+          >
+            {state.isCardNumberInputVisible ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" focusable="false" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" focusable="false" />
+            )}
+          </button>
         </div>
-      </fieldset>
+        {state.fieldErrors.cardNumber ? (
+          <p id={cardNumberErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.cardNumber}
+          </p>
+        ) : null}
+      </div>
       <div className="space-y-2">
         <Label htmlFor={batchInputId}>Batch {requiredMarker}</Label>
         <select
@@ -317,7 +310,7 @@ function SaveCollectionPage({
           {...paymentDateValidationProps}
           buttonTestId="save-collection-payment-date"
           disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}
-          className="save-collection-date-trigger"
+          className="save-collection-date-trigger rounded-md border-input bg-background shadow-none"
         />
         {paymentDateError ? (
           <p id={paymentDateErrorId} className="text-xs text-destructive" role="alert">
@@ -372,7 +365,7 @@ function SaveCollectionPage({
   const customerSection = (
     <SaveCollectionFormSection
       title="Customer Details"
-      description="Isi maklumat customer untuk auto-matching terhadap Saved source yang aktif."
+      description="Maklumat pelanggan untuk padanan automatik."
       icon={UserRound}
       accent="customer"
       contentClassName="save-collection-customer-fields"
@@ -383,10 +376,10 @@ function SaveCollectionPage({
   const paymentSection = (
     <SaveCollectionFormSection
       title="Payment Details"
-      description="Isi account atau card, batch, tarikh bayaran dan jumlah."
+      description="Akaun/kad, batch, tarikh dan jumlah bayaran."
       icon={CreditCard}
       accent="payment"
-      contentClassName="sm:grid-cols-2"
+      contentClassName="save-collection-payment-fields sm:grid-cols-2"
     >
       {paymentFields}
     </SaveCollectionFormSection>
@@ -446,18 +439,21 @@ function SaveCollectionPage({
       <header className="save-collection-form-guidance space-y-2">
         <h2 id="save-collection-form-title" className="sr-only">Simpan Collection Individual</h2>
         <div className="save-collection-privacy-guidance text-xs leading-5 text-muted-foreground">
-          <p>
-            Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.
-            {" "}
-            Maklumat pelanggan, nombor akaun/kad dan fail resit tidak disimpan dalam draf.
-            {" "}Isi atau muat naik semula selepas reload.
-          </p>
+          <details className="save-collection-draft-details">
+            <summary>Draf: batch, tarikh bayaran dan jumlah sahaja.</summary>
+            <p>
+              Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.
+              {" "}
+              Maklumat pelanggan, nombor akaun/kad dan fail resit tidak disimpan dalam draf.
+              {" "}Isi atau muat naik semula selepas reload.
+            </p>
+          </details>
           <p className="save-collection-shortcut-hint">
             Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
           </p>
         </div>
         <p className="text-xs leading-5 text-muted-foreground">
-          Medan bertanda (wajib) mesti dilengkapkan. Isi sekurang-kurangnya satu: Account Number atau Card Number.
+          Medan bertanda (wajib) mesti dilengkapkan.
         </p>
         {state.draftRestoreNotice ? (
           <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">

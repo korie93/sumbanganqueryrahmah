@@ -33,7 +33,7 @@ test("save collection fields use explicit invalid props for Edge a11y inspection
   assert.match(saveCollectionPageSource, /aria-label=\{state\.isCardNumberInputVisible \? "Hide card number" : "Show card number"\}/);
   assert.match(saveCollectionPageSource, /aria-controls=\{cardNumberInputId\}/);
   assert.match(saveCollectionPageSource, /getAriaPressedProps\(state\.isCardNumberInputVisible\)/);
-  assert.match(saveCollectionPageSource, /Isi sekurang-kurangnya satu: Account Number atau Card Number\./);
+  assert.doesNotMatch(saveCollectionPageSource, /save-collection-account-card-help|Isi sekurang-kurangnya satu/);
   assert.match(saveCollectionPageSource, /const batchValidationProps = getInvalidFieldProps/);
   assert.match(saveCollectionPageSource, /const paymentDateValidationProps = getInvalidFieldProps/);
   assert.match(saveCollectionPageSource, /<select[\s\S]*\{\.\.\.requiredFieldProps\}[\s\S]*\{\.\.\.batchValidationProps\}/);

@@ -1,4 +1,5 @@
-import type { ReactNode, Ref } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
+import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 
 type FloatingRootContainerProps = {
   rootRef: Ref<HTMLDivElement>;
@@ -48,6 +49,7 @@ type FloatingTriggerShellProps = {
   className: string;
   hidden: boolean;
   children: ReactNode;
+  placement?: FloatingAiLayout["trigger"] | undefined;
 };
 
 /**
@@ -57,9 +59,15 @@ export function FloatingTriggerShell({
   className,
   hidden,
   children,
+  placement,
 }: FloatingTriggerShellProps) {
+  const placementStyle = placement ? {
+    "--floating-ai-trigger-left": placement.left === null ? "auto" : `${placement.left}px`,
+    "--floating-ai-trigger-right": placement.right === null ? "auto" : `${placement.right}px`,
+    "--floating-ai-trigger-bottom": `${placement.bottom}px`,
+  } as CSSProperties : undefined;
   return (
-    <div className={className} hidden={hidden}>
+    <div className={className} hidden={hidden} style={placementStyle}>
       {children}
     </div>
   );

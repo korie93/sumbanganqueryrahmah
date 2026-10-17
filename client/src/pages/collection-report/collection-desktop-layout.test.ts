@@ -106,7 +106,7 @@ test("the Records compact context and strip apply to every route and viewport", 
   const page = readSource("../CollectionReport.tsx");
   assert.doesNotMatch(page, /eyebrow=|description=|collection-report-save-shortcut|collection-report-frame--save/);
   const saveCss = readSource("../collection/SaveCollectionPage.css");
-  assert.doesNotMatch(saveCss, /\.save-collection-shortcut-hint[^}]*display:\s*none/s);
+  assert.match(saveCss, /@media \(max-width: 767px\)\s*\{[\s\S]*?\.save-collection-shortcut-hint\s*\{\s*display:\s*none;/);
 });
 
 test("the desktop staff badge constrains its actions wrapper and preserves the complete nickname tooltip", () => {

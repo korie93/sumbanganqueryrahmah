@@ -64,6 +64,9 @@ function resolveDesktopPanelPreferredHeight(viewportHeight: number, hasDensePage
 export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingAiLayout {
   const viewportWidth = Math.max(input.viewportWidth, 320);
   const viewportHeight = Math.max(input.viewportHeight, 480);
+  const triggerViewportHeight = input.allowAdaptiveTriggerOffsets
+    ? Math.max(input.viewportHeight, 1)
+    : viewportHeight;
   const viewportBottomInset = Math.max(0, input.viewportBottomInset);
   const avoidRects = input.avoidRects.map(normalizeRect);
 
@@ -74,16 +77,26 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
   const shouldAutoMinimize =
     input.hasBlockingDialog || (input.isMobile && input.hasFocusedEditable);
 
-  const mobileTriggerBottomOffsets = buildOffsetCandidates(
+  const baseTriggerBottomOffsets = buildOffsetCandidates(
     gutterY,
-    Math.max(gutterY, viewportHeight - topInset - triggerSize),
+    Math.max(gutterY, triggerViewportHeight - topInset - triggerSize),
     [0, 72, 144, 216],
   );
+  const triggerBottomOffsets = input.allowAdaptiveTriggerOffsets
+    ? Array.from(new Set([
+        ...baseTriggerBottomOffsets,
+        ...avoidRects.filter((rect) => rect.bottom > 0 && rect.top < triggerViewportHeight)
+          .flatMap((rect) => [
+            triggerViewportHeight - rect.top + 8,
+            triggerViewportHeight - rect.bottom - triggerSize - 8,
+          ]).map((bottom) => clamp(bottom, gutterY, Math.max(gutterY, triggerViewportHeight - topInset - triggerSize))),
+      ]))
+    : baseTriggerBottomOffsets;
   const mobileTriggerCandidates: TriggerCandidate[] = (["right", "left"] as const).flatMap((anchor) =>
-    mobileTriggerBottomOffsets.map((bottom) => {
+    triggerBottomOffsets.map((bottom) => {
       const isLeftAnchor = anchor === "left";
       const left = isLeftAnchor ? gutterX : viewportWidth - gutterX - triggerSize;
-      const top = viewportHeight - bottom - triggerSize;
+      const top = triggerViewportHeight - bottom - triggerSize;
       const rect = buildRect(left, top, triggerSize, triggerSize);
       const preferredBias = isLeftAnchor ? 0 : -80;
 
@@ -93,7 +106,7 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
         left: isLeftAnchor ? gutterX : null,
         right: isLeftAnchor ? null : gutterX,
         score:
-          overlapScore(rect, avoidRects, viewportHeight)
+          overlapScore(rect, avoidRects, triggerViewportHeight)
           + (bottom - gutterY) * 2.1
           + preferredBias,
       };
@@ -105,15 +118,10 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
     Math.max(gutterX, viewportWidth - triggerSize - 16),
     [0, 72, 144, 216],
   );
-  const desktopTriggerBottomOffsets = buildOffsetCandidates(
-    gutterY,
-    Math.max(gutterY, viewportHeight - topInset - triggerSize),
-    [0, 72, 144, 216],
-  );
   const desktopTriggerCandidates: TriggerCandidate[] = desktopTriggerRightOffsets.flatMap((right) =>
-    desktopTriggerBottomOffsets.map((bottom) => {
+    triggerBottomOffsets.map((bottom) => {
       const left = viewportWidth - right - triggerSize;
-      const top = viewportHeight - bottom - triggerSize;
+      const top = triggerViewportHeight - bottom - triggerSize;
       const rect = buildRect(left, top, triggerSize, triggerSize);
       return {
         anchor: "right" as const,
@@ -121,7 +129,7 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
         left: null,
         right,
         score:
-          overlapScore(rect, avoidRects, viewportHeight)
+          overlapScore(rect, avoidRects, triggerViewportHeight)
           + (right - gutterX) * 2.4
           + (bottom - gutterY) * 2.9
           - 120,

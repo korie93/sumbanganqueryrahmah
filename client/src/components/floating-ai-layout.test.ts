@@ -350,3 +350,52 @@ test("resolveFloatingAiLayout nudges the desktop panel without shrinking it into
   assert.ok(layout.panel.height >= 380);
   assert.ok(layout.panel.right !== null && layout.panel.right >= 24);
 });
+
+test("save collection can place the idle launcher above dense footer controls between the fixed offsets", () => {
+  const avoidRects = [
+    { left: 45, right: 345, top: 534, bottom: 578 },
+    { left: 33, right: 358, top: 632, bottom: 814 },
+    { left: 45, right: 345, top: 698, bottom: 742 },
+    { left: 45, right: 345, top: 750, bottom: 794 },
+  ];
+  const input = {
+    viewportWidth: 391, viewportHeight: 845, viewportBottomInset: 0,
+    isMobile: true, isOpen: false, hasBlockingDialog: false, keyboardOpen: false,
+    hasFocusedEditable: false, hasDensePage: true, preferCompactPanel: true, avoidRects,
+  };
+  const overlapsControls = (layout: ReturnType<typeof resolveFloatingAiLayout>) => {
+    const { trigger } = layout;
+    const left = trigger.left ?? input.viewportWidth - (trigger.right ?? 0) - trigger.size;
+    const top = input.viewportHeight - trigger.bottom - trigger.size;
+    return avoidRects.some((rect) => Math.min(left + trigger.size, rect.right) > Math.max(left, rect.left)
+      && Math.min(top + trigger.size, rect.bottom) > Math.max(top, rect.top));
+  };
+  assert.equal(overlapsControls(resolveFloatingAiLayout(input)), true);
+  const adapted = resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: true });
+  assert.equal(overlapsControls(adapted), false);
+  assert.ok(adapted.trigger.bottom > 232);
+  assert.equal(adapted.rootHidden, false);
+  assert.equal(adapted.triggerHidden, false);
+});
+
+test("adaptive Save launcher scores landscape obstacles against the real short viewport", () => {
+  const avoidRects = [
+    { left: 33, right: 707, top: 250, bottom: 344 },
+    { left: 45, right: 695, top: 180, bottom: 224 },
+  ];
+  const input = {
+    viewportWidth: 740, viewportHeight: 360, viewportBottomInset: 0,
+    isMobile: true, isOpen: false, hasBlockingDialog: false, keyboardOpen: false,
+    hasFocusedEditable: false, hasDensePage: true, preferCompactPanel: true,
+    allowAdaptiveTriggerOffsets: true, avoidRects,
+  };
+  const layout = resolveFloatingAiLayout(input);
+  const left = layout.trigger.left ?? input.viewportWidth - (layout.trigger.right ?? 0) - layout.trigger.size;
+  const top = input.viewportHeight - layout.trigger.bottom - layout.trigger.size;
+  assert.ok(top >= 72);
+  assert.ok(top + layout.trigger.size <= input.viewportHeight);
+  assert.equal(avoidRects.some((rect) => Math.min(left + layout.trigger.size, rect.right) > Math.max(left, rect.left)
+    && Math.min(top + layout.trigger.size, rect.bottom) > Math.max(top, rect.top)), false);
+  const legacy = resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: false });
+  assert.deepEqual(layout.panel, legacy.panel);
+});

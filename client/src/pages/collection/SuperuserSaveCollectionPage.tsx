@@ -68,18 +68,20 @@ export default function SuperuserSaveCollectionPage() {
             <Button
               type="button"
               variant="outline"
+              aria-label="Muat Semula"
+              title="Muat Semula"
               disabled={loading || submitting}
               onClick={() => setReload((current) => current + 1)}
             >
               <RotateCw className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Muat Semula
+              <span className="hidden sm:inline">Muat Semula</span>
             </Button>
           </div>
           <div className="collection-save-nickname-context">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             <p>
-              Pilih nickname yang menerima collection. Menukar nickname mengosongkan butiran pelanggan
-              dan receipt semasa; draf bayaran disimpan berasingan bagi setiap nickname.
+              Menukar nickname mengosongkan butiran pelanggan dan resit semasa.
+              {" "}Draf bayaran disimpan berasingan bagi setiap nickname.
             </p>
           </div>
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}

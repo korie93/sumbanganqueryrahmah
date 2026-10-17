@@ -1292,3 +1292,146 @@ financial-stress/WCAG/remote-release-success claim. No production/database acces
 deployment, commit or push in this repair turn. The owned static test server closed.
 
 final result: passed (bounded release/layout regression)
+
+## Simpan Collection layout repair — 2026-10-17
+
+Approved scope: implement the local audit findings for control sizing, date-field
+appearance, mobile guidance density, receipt action spacing and floating AI
+clearance. The existing form screenshots are the visual source, with these
+specific corrections accepted by the user. This is a bounded production frontend
+repair, not a new prototype or a replacement design system.
+
+### Visual evidence and normalization
+
+Evidence root: `artifacts/save-collection-polish-20261017/`.
+
+- Source: `before-mobile-dark.png` and `before-desktop-dark.png`; actual Codex
+  browser captures at effective CSS391x845 and1440x1000, Collector Alpha selected,
+  empty form, dark theme, draf disclosure not yet present.
+- Final implementation: `after-mobile-dark.png` (391x2489 full-page),
+  `after-desktop-dark.png` (1440x1458 full-page), `after-tablet-light.png`,
+  `after-mobile-light.png` and `after-landscape-dark.png`.
+- Final native Playwright captures use deviceScaleFactor1. Source in-app captures
+  had devicePixelRatio0.67 and extra screenshot canvas:549x4033 and2115x2172.
+  The comparison script removes only canvas beyond the measured CSS content
+  width; it does not stretch the UI. Therefore these are qualitative layout
+  comparisons, not a claim of identical rasterization across browser densities.
+- Opened combined source/implementation evidence: `comparison-mobile-top.png`,
+  `comparison-desktop.png`; readable focused mobile evidence:
+  `top-mobile-dark.png`. `footer-landscape-dark.png` shows the repaired short
+  viewport launcher clearance.
+- Exact same-density CI comparisons: `comparison-snapshot-light.png` and
+  `comparison-snapshot-dark.png`, each pairing the previous1280x720 baseline with
+  the rendered1280x720 implementation. Only the two reviewed sumbangan-form
+  baselines were regenerated; dashboard/settings baselines remain unchanged.
+
+### Findings, fixes and iteration history
+
+1. P2 — nickname trigger was about37px while its adjacent refresh and form fields
+   were44px. Scoped nickname CSS now sets both controls to2.75rem; narrow screens
+   use an accessible44px refresh icon beside the picker, with its label retained.
+2. P2 — date trigger had different radius, border, shadow and dark background.
+   Local classes align its radius/border/shadow; the existing dark input token
+   supplies its background. Runtime assertions compare computed input/date styles.
+3. P2 — mobile guidance pushed Customer Name low down the viewport. Native details
+   retains the full privacy explanation and opens by keyboard. Mobile keyboard
+   shortcut copy is hidden; the required/either-account-or-card instruction stays
+   visible. Nickname-change warning remains visible and concise.
+4. P2 — idle AI ignored form controls, and computed launcher positions were not
+   wired into its shell. Save-route-only tracking and CSS coordinates now avoid
+   visible controls, including nickname and native disclosure triggers. Other
+   routes retain their existing idle behavior. Scroll work is frame-coalesced;
+   container ResizeObserver and native toggle cleanup are covered.
+5. P2 — the first mobile footer recheck exposed a collision from the old fixed
+   offset candidates. Save-only candidates now include obstacle boundaries with
+   8px clearance. The subsequent740x360 browser test exposed a second issue: the
+   geometry used a480px floor while CSS positioned in360px. Adaptive launcher
+   calculations now use actual height, preserving existing panel calculations.
+   Both exact geometry cases have regression tests; final portrait/landscape
+   browser checks pass with zero visible-control intersections.
+6. Receipt Clear Pending no longer needs the3.5rem right inset, and the mobile
+   footer no longer needs4.5rem of compensatory blank space. Both remain reachable
+   after scrolling and via keyboard.
+
+### Required fidelity surfaces
+
+- Typography: existing family, weights, sizes and hierarchy retained; long
+  nickname/customer values remain contained. Full privacy copy remains readable
+  when expanded.
+- Layout/spacing: equal desktop card tracks retained;44px controls, consistent
+  date shape, compact mobile nickname row and normal footer spacing verified.
+- Colors/tokens: existing light/dark semantic colors retained; date background
+  now matches the existing input token. Validation/focus behavior is preserved.
+- Assets: existing Q branding and Lucide icons retained; no raster redraw,
+  substitute logo or added decorative asset.
+- Copy: shorter nickname context and draft summary intentionally differ from the
+  old screenshot; privacy boundaries and required-field instructions are intact.
+
+### Verification and boundary
+
+`browser-tests-accepted.log`:36/36 targeted Playwright cases pass on the freshly
+built frontend, one worker, zero retries/skips. Includes desktop1920/1600/1440/
+1024/768/390, effective125% zoom,320px mobile,740x360 landscape, masked long card
+values, receipt clear, native disclosure keyboard, AI idle scroll/focus/open/
+minimize, reset/draft/retry and synthetic save shortcut payloads for supported
+roles. `unit-accepted.log`:58/58 focused tests pass. Typecheck, affected source
+ESLint, production client build, breakpoint and spacing guards pass.
+
+`snapshot-accepted.log`: both authenticated light/dark snapshot tests pass again
+without snapshot-update mode after regenerating only the two reviewed form PNGs.
+Together with the36 functional/layout cases,38 final Playwright cases pass.
+
+Final5-view screenshot capture reports no document overflow, no page exceptions
+and zero initial/footer control collisions (`capture-metrics.json`). Codex browser
+became disabled in Work settings during final QA; previously authorized local
+Playwright supplied final runtime evidence. No claim of an open Codex tab or of
+remote CI success. Snapshot verification uses the unchanged tolerance and masks.
+
+No production/backend/database access, commit, push or deployment. Pre-existing
+Collection Daily edits were preserved. Full accessibility certification, physical
+device virtual keyboards and all remote release checks are outside this bounded
+pass. No actionable P0/P1/P2 issue remains in the approved repair.
+
+final result: passed
+
+## Flat Payment Details follow-up — 2026-10-17
+
+User approved removing the persistent Account/Card rule text and inner box so
+Payment Details follows Customer Details' spacing. Both identifiers now render
+as direct payment-grid children; desktop rows are Account/Card, Batch/Date, and
+Amount. Removed the old group surface/padding and both repeated rule paragraphs.
+Customer/payment rows share the same gap. Shorter descriptions prevent the
+customer heading from wrapping while payment remains one line at1280px; no fixed
+heading height was introduced.
+
+Evidence root: `artifacts/save-payment-flat-20261017/`. Source visual truth:
+`before-desktop-dark.png`1440x1458 and `before-mobile-dark.png`391x2489, from the
+immediately preceding repair. Implementation: `after-desktop-dark.png`1440x1404
+and `after-mobile-dark.png`391x2353. Both use matching CSS widths, dark theme,
+empty Collector Alpha state and deviceScaleFactor1. Opened combined comparison:
+`comparison-desktop.png` and `comparison-mobile-top.png`. Canvas padding is not
+product whitespace. Readable focused evidence: `payment-details-preview.png`.
+Additional tablet/mobile-light/landscape captures and `capture-metrics.json`
+confirm no document overflow, page exceptions or initial/footer control collisions
+across five views.
+
+Typography, semantic palette, existing icon/brand assets and44px controls remain
+consistent. Copy changes above are intentional. Account/Card retain individual
+labels, the masked-card visibility control and error IDs. Tabbing through the
+empty pair no longer creates inline errors. Explicit validation still rejects
+both empty, associates each error via aria-describedby, and clears both when
+either identifier changes. Shared validation and payload rules are unchanged.
+
+Final23 targeted browser cases pass, including1920/1600/1440/1280/1024/768/390
+layout, actual first-row y-alignment,320px/mobile landscape, AI scrolling, receipt
+actions, card-only matching and empty-pair errors. Focused unit23/23, typecheck,
+source lint and production client build pass. The first added browser assertion
+counted hidden completeness messages as inline errors; corrected it to inspect
+the two actual field-error IDs. No product validation or test tolerance was
+weakened. Only the reviewed light/dark form snapshots were regenerated and are
+verified again in normal non-update mode.
+
+No commit, push, deployment, backend change or production data access. Prior work
+remains intact. This supersedes the earlier boxed Account/Card presentation.
+
+final result: passed

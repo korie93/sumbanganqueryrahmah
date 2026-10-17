@@ -2,6 +2,9 @@ import type { RectLike } from "@/components/floating-ai-layout";
 
 export const FLOATING_AI_AVOID_SELECTOR = "[data-floating-ai-avoid='true']";
 export const FLOATING_AI_DIALOG_SELECTOR = "[role='dialog'], [data-radix-dialog-content]";
+export const FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR =
+  ".save-collection-workspace :is(input:not([type='hidden']), textarea, select, button, summary, [role='combobox']), .collection-save-nickname-controls :is(button, [role='combobox'])";
+export const FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR = ".save-collection-workspace, .collection-save-nickname-controls";
 
 export type FloatingAiObstacleQueryResult = {
   avoidElements: Element[];
@@ -58,14 +61,21 @@ export function resolveFloatingAiHasDensePage(activePage: string, location: stri
 
 export function queryFloatingAiObstacleElements(
   documentObject: Document = document,
+  includeSaveCollectionControls = false,
 ): FloatingAiObstacleQueryResult {
-  const avoidElements = Array.from(documentObject.querySelectorAll(FLOATING_AI_AVOID_SELECTOR));
+  const avoidSelector = includeSaveCollectionControls
+    ? `${FLOATING_AI_AVOID_SELECTOR}, ${FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR}`
+    : FLOATING_AI_AVOID_SELECTOR;
+  const avoidElements = Array.from(documentObject.querySelectorAll(avoidSelector));
   const dialogElements = Array.from(documentObject.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR));
+  const layoutElements = includeSaveCollectionControls
+    ? Array.from(documentObject.querySelectorAll(FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR))
+    : [];
 
   return {
     avoidElements,
     dialogElements,
-    observedElements: [...avoidElements, ...dialogElements],
+    observedElements: [...new Set([...avoidElements, ...dialogElements, ...layoutElements])],
   };
 }
 

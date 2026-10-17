@@ -20,6 +20,7 @@ type FloatingAITriggerProps = {
   panelId: string;
   triggerButtonRef: Ref<HTMLButtonElement>;
   unreadCount: number;
+  applyLayoutPlacement?: boolean | undefined;
 };
 
 /**
@@ -38,6 +39,7 @@ export function FloatingAITrigger({
   panelId,
   triggerButtonRef,
   unreadCount,
+  applyLayoutPlacement = false,
 }: FloatingAITriggerProps) {
   const triggerHidden =
     layoutState.triggerHidden
@@ -53,6 +55,7 @@ export function FloatingAITrigger({
         triggerHidden ? "translate-y-2 opacity-0" : "opacity-100",
       )}
       hidden={triggerHidden}
+      placement={applyLayoutPlacement ? layoutState.trigger : undefined}
     >
       {showMinimizedStatus ? (
         <div

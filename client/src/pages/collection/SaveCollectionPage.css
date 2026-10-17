@@ -10,8 +10,27 @@
   gap: 0.25rem 1.5rem;
 }
 
-.save-collection-workspace .save-collection-privacy-guidance > p:first-child {
+.save-collection-workspace .save-collection-draft-details {
   flex: 1 1 36rem;
+  min-width: 0;
+}
+
+.save-collection-workspace .save-collection-draft-details > summary {
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+  padding-block: 0.375rem;
+}
+
+.save-collection-workspace .save-collection-draft-details > summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.save-collection-workspace .save-collection-draft-details > p {
+  max-width: 80ch;
+  padding-block: 0.25rem;
 }
 
 .save-collection-workspace .save-collection-details-grid {
@@ -60,12 +79,6 @@
 
 .save-collection-workspace .save-collection-section-actions > button {
   min-height: 2.75rem;
-}
-
-.save-collection-workspace [data-accent="receipt"] .save-collection-section-actions {
-  /* Keep the relocated action outside the unchanged floating AI launcher's
-     right-edge strip, including when this header is near the viewport bottom. */
-  margin-inline-end: 3.5rem;
 }
 
 .save-collection-workspace .save-collection-receipt-upload-zone--empty {
@@ -117,27 +130,14 @@
   gap: 1.25rem;
 }
 
-.save-collection-workspace .save-collection-account-group {
-  min-width: 0;
-  margin: 0;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.75rem;
-  background: hsl(var(--background) / 0.6);
-  padding: 0.875rem;
-}
-
-.save-collection-workspace .save-collection-account-fields {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: 0.875rem;
-  margin-top: 0.75rem;
-}
-
 .save-collection-workspace .save-collection-section :is(input, select, .save-collection-date-trigger) {
   min-width: 0;
   min-height: 2.75rem;
   height: 2.75rem;
+}
+
+.dark .save-collection-workspace .save-collection-date-trigger {
+  background-color: var(--dm-input-bg);
 }
 
 .save-collection-workspace .save-collection-amount-field {
@@ -191,10 +191,13 @@
     scroll-margin-bottom: calc(4.5rem + var(--safe-area-inset-bottom));
   }
 
-  /* Keep the final action row above the unchanged floating AI launcher when
-     scrolled to the end, without covering the form while entering details. */
-  .save-collection-workspace .save-collection-submit-workspace {
-    padding-bottom: calc(4.5rem + var(--safe-area-inset-bottom));
+  .save-collection-workspace .save-collection-shortcut-hint {
+    display: none;
+  }
+
+  .save-collection-workspace .save-collection-draft-details > summary {
+    min-height: 2.75rem;
+    align-content: center;
   }
 }
 
@@ -203,7 +206,7 @@
     padding: 1.5rem;
   }
 
-  .save-collection-workspace .save-collection-customer-fields {
+  .save-collection-workspace :is(.save-collection-customer-fields, .save-collection-payment-fields) {
     gap: 1.5rem;
   }
 }

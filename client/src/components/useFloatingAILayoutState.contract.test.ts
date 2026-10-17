@@ -36,6 +36,12 @@ test("useFloatingAILayoutState keeps obstacle scroll tracking opt-in and removab
   assert.match(source, /if \(shouldTrackObstacleLayout\) \{\s*window\.removeEventListener\("scroll", scheduleSync\);/);
 });
 
+test("save form disclosure toggles resync moved obstacles without observing the entire document", () => {
+  assert.match(source, /event\.target\.closest\("\.save-collection-workspace"\)/);
+  assert.match(source, /if \(saveCollectionRoute\) \{\s*document\.addEventListener\("toggle", scheduleSaveCollectionToggleSync, true\);/);
+  assert.match(source, /if \(saveCollectionRoute\) \{\s*document\.removeEventListener\("toggle", scheduleSaveCollectionToggleSync, true\);/);
+});
+
 test("useFloatingAILayoutState scopes mutation observation to the floating AI root", () => {
   assert.match(source, /const observedRoot = floatingRootRef\.current;/);
   assert.match(source, /if \(!observedRoot\) return;/);

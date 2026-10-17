@@ -140,6 +140,10 @@ for (const viewport of [{ width: 320, height: 844 }, { width: 740, height: 360 }
 test("Save guidance draft copy matches privacy-preserving reload behavior", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL, { restore: draft });
   await openSave(page);
+  const draftDetails = page.locator(".save-collection-draft-details");
+  await expect(draftDetails).not.toHaveAttribute("open");
+  await draftDetails.locator("summary").click();
+  await expect(draftDetails).toHaveAttribute("open");
   await expect(page.getByText("Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.")).toBeVisible();
   await expect(page.getByText(/Maklumat pelanggan, nombor akaun\/kad dan fail resit tidak disimpan dalam draf/)).toBeVisible();
   await fillIdentity(page);

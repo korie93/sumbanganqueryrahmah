@@ -28,7 +28,8 @@ for (const physicalWidth of [1366, 1024, 390]) {
       await expectOneRow(page, width);
       await expectCompactContext(page);
       await expectStaffBadge(page, width);
-      await expect(page.locator(".save-collection-shortcut-hint")).toBeVisible();
+      if (width < 768) await expect(page.locator(".save-collection-shortcut-hint")).toBeHidden();
+      else await expect(page.locator(".save-collection-shortcut-hint")).toBeVisible();
       const records = sections(page).getByRole("button", { name: "View Rekod Collection", exact: true });
       await records.focus();
       await records.press("Enter");

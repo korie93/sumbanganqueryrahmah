@@ -23,7 +23,7 @@ async function expectContained(element: Locator, container: Locator) {
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(parent.x + parent.width + 1);
 }
 
-for (const width of [1920, 1600, 1440, 1024, 768, 390]) {
+for (const width of [1920, 1600, 1440, 1280, 1024, 768, 390]) {
   test(`Collection reference layout preserves shell and responsive entry groups at ${width}px`, async ({ page, baseURL }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     const fixture = await installFixture(page, baseURL, { role: "superuser", theme: "dark" });
@@ -62,8 +62,29 @@ for (const width of [1920, 1600, 1440, 1024, 768, 390]) {
     const shortcut = page.locator(".save-collection-shortcut-hint");
     const desktopShortcut = page.locator(".collection-report-save-shortcut");
     await expect(desktopShortcut).toHaveCount(0);
-    await expect(shortcut).toBeVisible();
+    if (width < 768) await expect(shortcut).toBeHidden();
+    else await expect(shortcut).toBeVisible();
     await expect(shortcut).toHaveCount(1);
+    const nicknameTrigger = page.locator("#save-collection-superuser-nickname");
+    await expect(nicknameTrigger).toHaveCSS("height", "44px");
+    await expect(page.getByRole("button", { name: "Muat Semula", exact: true })).toHaveCSS("height", "44px");
+    const dateTrigger = page.getByTestId("save-collection-payment-date");
+    const inputStyle = await page.locator("#save-collection-account-number").evaluate((input) => {
+      const style = getComputedStyle(input);
+      return { radius: style.borderRadius, border: style.borderColor, background: style.backgroundColor };
+    });
+    await expect(dateTrigger).toHaveCSS("height", "44px");
+    await expect(dateTrigger).toHaveCSS("border-radius", inputStyle.radius);
+    await expect(dateTrigger).toHaveCSS("border-color", inputStyle.border);
+    await expect(dateTrigger).toHaveCSS("background-color", inputStyle.background);
+    const draftDetails = page.locator(".save-collection-draft-details");
+    await expect(draftDetails).not.toHaveAttribute("open");
+    await draftDetails.locator("summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(draftDetails).toHaveAttribute("open");
+    await expect(draftDetails).toContainText("Maklumat pelanggan, nombor akaun/kad dan fail resit tidak disimpan dalam draf.");
+    await page.keyboard.press("Enter");
+    await expect(draftDetails).not.toHaveAttribute("open");
     const receiptHeader = receipt.locator(".save-collection-section-header");
     const clearPending = receiptHeader.getByRole("button", { name: "Clear Pending", exact: true });
     await expect(clearPending).toBeDisabled();
@@ -91,6 +112,9 @@ for (const width of [1920, 1600, 1440, 1024, 768, 390]) {
       expect(Math.abs(customerBox.width - paymentBox.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(customerBox.width + paymentBox.width + layout.gap - gridBox.width)).toBeLessThanOrEqual(1);
       expect(paymentBox.x).toBeGreaterThanOrEqual(customerBox.x + customerBox.width + layout.gap - 1);
+      const customerInput = (await page.locator("#save-collection-customer-name").boundingBox())!;
+      const accountInput = (await page.locator("#save-collection-account-number").boundingBox())!;
+      expect(Math.abs(customerInput.y - accountInput.y)).toBeLessThanOrEqual(1);
     } else {
       expect(paymentBox.y).toBeGreaterThanOrEqual(customerBox.y + customerBox.height);
       expect(Math.abs(customerBox.x - paymentBox.x)).toBeLessThanOrEqual(1);
@@ -111,9 +135,16 @@ for (const width of [1920, 1600, 1440, 1024, 768, 390]) {
     await expect(footer).toHaveCSS("position", "static");
     expect((await footer.boundingBox())!.y).toBeGreaterThanOrEqual(receiptBox.y + receiptBox.height + 19);
 
-    const accountGroup = payment.getByRole("group", { name: "Account Number / Card Number", exact: true });
-    await expect(accountGroup.locator("#save-collection-account-number")).toBeVisible();
-    await expect(accountGroup.locator("#save-collection-card-number")).toHaveAttribute("type", "password");
+    await expect(payment.locator("#save-collection-account-number")).toBeVisible();
+    await expect(payment.locator("#save-collection-card-number")).toHaveAttribute("type", "password");
+    await expect(payment.locator("fieldset")).toHaveCount(0);
+    await expect(page.getByText("Isi sekurang-kurangnya satu: Account Number atau Card Number.", { exact: true })).toHaveCount(0);
+    const paymentGrid = payment.locator(".save-collection-payment-fields");
+    for (const field of ["account-number", "card-number", "batch", "payment-date-button", "amount"]) {
+      const fieldRow = paymentGrid.locator(`:scope > div:has(#save-collection-${field})`);
+      await expect(fieldRow).toHaveCount(1);
+      await expectContained(page.locator(`#save-collection-${field}`), paymentGrid);
+    }
     await expect(payment.locator(".save-collection-currency-prefix")).toHaveAttribute("aria-hidden", "true");
     await expect(payment.locator("#save-collection-amount")).toHaveAccessibleName("Amount (RM)");
     const fileInput = receipt.locator('input[name="collectionReceiptUpload"]');
@@ -201,7 +232,7 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
 
     await page.getByRole("button", { name: "Reset Form", exact: true }).focus();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    // The existing launcher remains visible and unchanged. Verify pointer
+    // The launcher avoids the save form controls. Verify pointer
     // clearance at every action corner, not just Playwright's center click.
     await expect(page.getByTestId("floating-ai-toggle")).toBeVisible();
     for (const name of ["Reset Form", "Semak Medan Wajib"]) {
@@ -259,6 +290,66 @@ for (const width of [1440, 390]) {
     await expect(readiness).not.toContainText(card);
     await expect(page.locator("#save-collection-card-number")).toHaveValue(card);
     await expect(page.locator("#save-collection-amount")).toHaveValue("1234567.89");
+    expect(fixture.saves).toHaveLength(0);
+    expect(fixture.matches).toBe(0);
+    await checkFixture(page, fixture);
+  });
+}
+
+for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 740, height: 360 }, { width: 1440, height: 1000 }]) {
+  test(`Save collection idle AI avoids visible controls while scrolling at ${viewport.width}x${viewport.height}`, async ({ page, baseURL }) => {
+    await page.setViewportSize(viewport);
+    const fixture = await installFixture(page, baseURL, { role: "superuser", theme: "dark", aiEnabled: true });
+    await selectNickname(page);
+    const launcher = page.getByTestId("floating-ai-toggle");
+    const customerName = page.locator("#save-collection-customer-name");
+    const assertLauncherClearance = async () => {
+      await expect(launcher).toBeVisible();
+      await expect(launcher).toHaveCSS("pointer-events", "auto");
+      await expect.poll(async () => page.evaluate(() => {
+        const trigger = document.querySelector('[data-testid="floating-ai-toggle"]')!.getBoundingClientRect();
+        return Array.from(document.querySelectorAll<HTMLElement>(
+          ".save-collection-workspace :is(input:not([type='hidden']), textarea, select, button, summary, [role='combobox']), .collection-save-nickname-controls :is(button, [role='combobox'])",
+        )).flatMap((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          if (rect.width === 0 || rect.height === 0 || style.visibility === "hidden" || style.display === "none") return [];
+          const visibleWidth = Math.max(0, Math.min(rect.right, innerWidth) - Math.max(rect.left, 0));
+          const visibleHeight = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 57));
+          if (visibleWidth === 0 || visibleHeight === 0) return [];
+          const overlap = Math.max(0, Math.min(rect.right, trigger.right) - Math.max(rect.left, trigger.left))
+            * Math.max(0, Math.min(rect.bottom, trigger.bottom) - Math.max(rect.top, trigger.top));
+          return overlap > 1 ? [element.id || element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName] : [];
+        });
+      }), { message: "Idle launcher must leave visible Save Collection controls unobstructed" }).toEqual([]);
+    };
+
+    await assertLauncherClearance();
+    await customerName.focus();
+    if (viewport.width < 768) await expect(launcher).toHaveCSS("pointer-events", "none");
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+    await assertLauncherClearance();
+
+    for (const target of [
+      page.locator(".save-collection-draft-details summary"),
+      customerName,
+      page.locator("#save-collection-customer-phone"),
+      page.locator("#save-collection-account-number"),
+      page.getByTestId("save-collection-payment-date"),
+      page.locator("#save-collection-amount"),
+      section(page, "receipt").getByRole("button", { name: "Upload Receipt", exact: true }),
+      page.getByRole("button", { name: "Reset Form", exact: true }),
+    ]) {
+      await target.scrollIntoViewIfNeeded();
+      await assertLauncherClearance();
+    }
+
+    await launcher.click();
+    const dialog = page.getByRole("dialog", { name: "AI SQR", exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Kecilkan panel AI SQR", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await assertLauncherClearance();
     expect(fixture.saves).toHaveLength(0);
     expect(fixture.matches).toBe(0);
     await checkFixture(page, fixture);

@@ -9,15 +9,19 @@
 }
 
 .collection-save-nickname-controls {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: var(--spacing-3);
 }
 
-.collection-save-nickname-picker { min-width: 0; flex: 1 1 12rem; }
-.collection-save-nickname-controls > button { min-height: 44px; }
+.collection-save-nickname-picker { min-width: 0; }
+.collection-save-nickname-controls > button,
+.collection-save-nickname-picker #save-collection-superuser-nickname {
+  min-height: 2.75rem;
+  height: 2.75rem;
+}
 .collection-save-nickname-picker label { color: hsl(var(--muted-foreground)); }
 
 .collection-save-nickname-context {
@@ -33,6 +37,18 @@
   font-size: 0.75rem;
   line-height: 1.6;
   overflow-wrap: anywhere;
+}
+
+.collection-save-nickname-controls > button {
+  width: 2.75rem;
+  padding-inline: 0;
+}
+
+@media (min-width: 640px) {
+  .collection-save-nickname-controls > button {
+    width: auto;
+    padding-inline: var(--spacing-4);
+  }
 }
 
 @media (min-width: 1024px) {
