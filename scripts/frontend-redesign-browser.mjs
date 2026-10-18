@@ -455,7 +455,10 @@ async function prepareCollectionMonthly(page) {
   const payload = await response.json();
   assert.equal(payload.nickname, "Fixture Collector");
   assert.equal(payload.months.find((month) => month.month === "2026-09")?.recordCount, 59, "Monthly comparison contains all synthetic September records");
-  await page.getByText("2 month(s) loaded", { exact: true }).waitFor();
+  const ledger = page.getByRole("table", { name: "Monthly collection performance", exact: true });
+  await ledger.waitFor();
+  assert.equal(await ledger.locator(".monthly-comparison-ledger-row").count(), 2, "Monthly ledger contains both loaded months");
+  await page.getByTestId("monthly-comparison-export-context").filter({ hasText: "2026-08 to 2026-09" }).waitFor();
 }
 
 async function preparePopulatedBilling(page, fixture) {

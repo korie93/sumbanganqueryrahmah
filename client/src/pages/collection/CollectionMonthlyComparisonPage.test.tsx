@@ -13,8 +13,8 @@ test("CollectionMonthlyComparisonPage renders a dedicated monthly comparison wor
   );
 
   assert.match(markup, /Monthly Collection Comparison/);
-  assert.match(markup, /Compare one staff nickname across the first and last months/);
-  assert.match(markup, /24 months max/);
-  assert.match(markup, /Empty months stay visible/);
+  assert.match(markup, /Compare the trend and exact amounts in one view/);
+  assert.match(markup, /Loading visible nickname options/);
+  assert.equal((markup.match(/id="collection-monthly-comparison-title"/g) || []).length, 1);
   assert.doesNotMatch(markup, /shadow-sm|rounded-2xl/);
 });

@@ -35,7 +35,7 @@ export function CollectionMonthlyComparisonBreakdownSection({
   const latestMonthInsight = insights?.monthInsights[insights.monthInsights.length - 1] || null;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)] xl:items-start">
+    <div className="monthly-comparison-breakdown-layout">
       {chartSlot ? (
         <div className="space-y-3">
           {chartSlot}

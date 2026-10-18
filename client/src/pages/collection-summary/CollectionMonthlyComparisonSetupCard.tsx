@@ -20,6 +20,7 @@ type CollectionMonthlyComparisonSetupCardProps = {
   canFilterByNickname: boolean;
   data: CollectionMonthlyComparisonResponse | null;
   endMonth: string;
+  exportContextId?: string;
   hasAvailableNickname: boolean;
   loading: boolean;
   monthlyTargetAmount?: number | null | undefined;
@@ -37,6 +38,7 @@ type CollectionMonthlyComparisonSetupCardProps = {
   onStartMonthChange: (value: string) => void;
   rangePresets: CollectionMonthlyComparisonPresetRange[];
   selectedNickname: string;
+  showExportActions?: boolean;
   startMonth: string;
   targetSummary: CollectionMonthlyComparisonTargetSummary | null;
 };
@@ -46,6 +48,7 @@ export function CollectionMonthlyComparisonSetupCard({
   canFilterByNickname,
   data,
   endMonth,
+  exportContextId: providedExportContextId,
   hasAvailableNickname,
   loading,
   monthlyTargetAmount = null,
@@ -63,11 +66,16 @@ export function CollectionMonthlyComparisonSetupCard({
   onStartMonthChange,
   rangePresets,
   selectedNickname,
+  showExportActions = true,
   startMonth,
   targetSummary,
 }: CollectionMonthlyComparisonSetupCardProps) {
   const [nicknameSelectOpen, setNicknameSelectOpen] = useState(false);
-  const exportContextId = useId();
+  const generatedExportContextId = useId();
+  const exportContextId = providedExportContextId || generatedExportContextId;
+  const activeRangePreset = rangePresets.find(
+    (preset) => preset.startMonth === startMonth && preset.endMonth === endMonth,
+  );
   const exportDisabledReason = loading
     ? "Wait for the monthly comparison to finish loading before exporting or printing."
     : monthlyTargetLoading
@@ -111,23 +119,9 @@ export function CollectionMonthlyComparisonSetupCard({
     : null;
 
   return (
-    <div className="collection-monthly-comparison-filter-card rounded-xl border border-border p-3 sm:p-4">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
-            Comparison setup
-          </p>
-          <p className="mt-1 text-sm text-foreground">
-            {startMonth} to {endMonth}
-            {selectedNickname ? ` - ${selectedNickname}` : ""}
-          </p>
-        </div>
-        <span className="collection-monthly-comparison-chip rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          {data ? `${data.months.length} month(s) loaded` : "Ready to apply"}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-[minmax(0,1fr)_10rem_10rem_auto_auto] xl:items-end">
-        <div className="col-span-2 space-y-1 xl:col-span-1">
+    <div className="collection-monthly-comparison-filter-card monthly-comparison-toolbar rounded-xl border border-border p-3 sm:p-4">
+      <div className="monthly-comparison-toolbar-grid grid grid-cols-2 items-end gap-3">
+        <div className="monthly-comparison-toolbar-nickname min-w-0 space-y-1">
           {canFilterByNickname ? (
             <CollectionNicknameSingleSelect
               label="Staff nickname"
@@ -159,6 +153,27 @@ export function CollectionMonthlyComparisonSetupCard({
               />
             </div>
           )}
+        </div>
+
+        <div className="monthly-comparison-toolbar-presets min-w-0 space-y-1">
+          <label htmlFor="collection-monthly-comparison-quick-range" className="text-sm font-medium text-foreground">
+            Quick range
+          </label>
+          <select
+            id="collection-monthly-comparison-quick-range"
+            className="collection-monthly-comparison-control h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground md:h-9"
+            value={activeRangePreset?.id || ""}
+            onChange={(event) => {
+              const preset = rangePresets.find((range) => range.id === event.target.value);
+              if (preset) onRangePresetApply(preset);
+            }}
+            disabled={loading || !hasAvailableNickname}
+          >
+            <option value="" disabled>Custom range</option>
+            {rangePresets.map((preset) => (
+              <option key={preset.id} value={preset.id}>{preset.label}</option>
+            ))}
+          </select>
         </div>
 
         <CollectionMonthField
@@ -193,52 +208,11 @@ export function CollectionMonthlyComparisonSetupCard({
           Reset
         </Button>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>
-          Single nickname only
-        </span>
-        <span>
-          First month = base
-        </span>
-        <span>
-          Last month = target
-        </span>
-      </div>
-      <div
-        className="mt-3 flex flex-wrap items-center gap-2"
-        role="group"
-        aria-label="Quick monthly comparison ranges"
-      >
-        <span className="text-xs font-medium text-muted-foreground">Quick range</span>
-        {rangePresets.map((preset) => {
-          const active = preset.startMonth === startMonth && preset.endMonth === endMonth;
-          const pressedProps = active
-            ? { "aria-pressed": "true" as const }
-            : { "aria-pressed": "false" as const };
-          return (
-            <Button
-              key={preset.id}
-              type="button"
-              aria-label={`Apply quick range ${preset.label}`}
-              {...pressedProps}
-              variant="outline"
-              className={
-                active
-                  ? "h-11 border-primary bg-primary/10 px-3 text-xs text-primary md:h-9"
-                  : "h-11 px-3 text-xs md:h-9"
-              }
-              onClick={() => onRangePresetApply(preset)}
-              disabled={loading || !hasAvailableNickname}
-            >
-              {preset.label}
-            </Button>
-          );
-        })}
-      </div>
-      <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className={`monthly-comparison-toolbar-footer mt-2 flex flex-col gap-2 border-t border-border pt-2 lg:flex-row lg:items-start lg:justify-between${!showExportActions ? " monthly-comparison-toolbar-footer--compact" : ""}`}>
         <details className="min-w-0 flex-1">
-          <summary className="min-h-11 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-            Monthly target: {targetDisplayLabel}
+          <summary className="min-h-11 cursor-pointer rounded-md py-2 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
+            aria-label={`Monthly target details: ${targetDisplayLabel}`}>
+            Target details
           </summary>
           <div className="space-y-2 pt-1">
           <p className="text-xs text-muted-foreground">
@@ -272,7 +246,7 @@ export function CollectionMonthlyComparisonSetupCard({
           />
           </div>
         </details>
-        {onPrintReport || onExportCsv ? (
+        {showExportActions && (onPrintReport || onExportCsv) ? (
           <div className="min-w-0 space-y-2 lg:max-w-sm">
             <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
               {onPrintReport ? (
@@ -302,15 +276,21 @@ export function CollectionMonthlyComparisonSetupCard({
                 </Button>
               ) : null}
             </div>
-            <div id={exportContextId} data-testid="monthly-comparison-export-context" className="space-y-1 break-words text-xs leading-5 text-muted-foreground">
-              {data ? (
-                <p>Export / print scope: {data.startMonth} to {data.endMonth} · {data.nickname}.</p>
-              ) : null}
-              {hasUnappliedFilters ? (
-                <p>Uses the last loaded report. Apply changed filters to update the export.</p>
-              ) : null}
-              {exportDisabledReason ? <p role="status">{exportDisabledReason}</p> : null}
-            </div>
+          </div>
+        ) : null}
+        {onPrintReport || onExportCsv || providedExportContextId ? (
+          <div
+            id={exportContextId}
+            data-testid="monthly-comparison-export-context"
+            className="monthly-comparison-export-context min-w-0 space-y-1 break-words text-xs leading-5 text-muted-foreground"
+          >
+            {data ? (
+              <p>Export / print scope: {data.startMonth} to {data.endMonth} · {data.nickname}.</p>
+            ) : null}
+            {hasUnappliedFilters ? (
+              <p>Uses the last loaded report. Apply changed filters to update the export.</p>
+            ) : null}
+            {exportDisabledReason ? <p role="status">{exportDisabledReason}</p> : null}
           </div>
         ) : null}
       </div>

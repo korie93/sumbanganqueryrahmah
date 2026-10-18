@@ -118,10 +118,10 @@ export function CollectionSameDayPaceSection({
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
+      <div className="monthly-comparison-pace-layout mt-4">
         <div className="space-y-3">
           <p className="text-sm leading-6 text-foreground">{pace.summary}</p>
-          <div className="grid gap-2 sm:grid-cols-4">
+          <div className="monthly-comparison-metric-grid">
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
               <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Current
@@ -164,7 +164,7 @@ export function CollectionSameDayPaceSection({
 
           <div className="space-y-2 rounded-xl border border-border/50 bg-muted/20 px-3 py-3">
             <div className="space-y-1">
-              <div className="flex justify-between gap-3 text-xs">
+              <div className="monthly-comparison-pace-amount-line text-xs">
                 <span className="font-medium text-foreground">{pace.currentLabel}</span>
                 <span className="text-muted-foreground">{formatAmountRM(pace.currentTotal)}</span>
               </div>
@@ -176,7 +176,7 @@ export function CollectionSameDayPaceSection({
               />
             </div>
             <div className="space-y-1">
-              <div className="flex justify-between gap-3 text-xs">
+              <div className="monthly-comparison-pace-amount-line text-xs">
                 <span className="font-medium text-foreground">{pace.previousLabel}</span>
                 <span className="text-muted-foreground">{formatAmountRM(pace.previousTotal)}</span>
               </div>
@@ -189,7 +189,7 @@ export function CollectionSameDayPaceSection({
             </div>
             {pace.target ? (
               <div className="space-y-1">
-                <div className="flex justify-between gap-3 text-xs">
+                <div className="monthly-comparison-pace-amount-line text-xs">
                   <span className="font-medium text-foreground">Expected range target pace</span>
                   <span className="text-muted-foreground">{formatAmountRM(pace.target.expectedByToday)}</span>
                 </div>

@@ -30,7 +30,8 @@ type TooltipEntry = {
 };
 
 const SAME_DAY_CHART_MARGIN = { top: 10, right: 8, left: -8, bottom: 0 };
-const SAME_DAY_TOOLTIP_WRAPPER_STYLE = { outline: "none" };
+const SAME_DAY_TOOLTIP_WRAPPER_STYLE = { outline: "none", maxWidth: "100%" };
+const SAME_DAY_TOOLTIP_POSITION = { x: 0, y: 0 };
 const SAME_DAY_LEGEND_WRAPPER_STYLE = { fontSize: 12, paddingBottom: 8 };
 const SAME_DAY_CURRENT_DOT = { r: 2.5 };
 const SAME_DAY_CURRENT_ACTIVE_DOT = { r: 5 };
@@ -54,7 +55,7 @@ function MonthlySameDayPaceTooltip({
   }
 
   return (
-    <div className="min-w-[230px] rounded-lg border border-border/60 bg-background px-3 py-2 text-xs shadow-lg">
+    <div className="monthly-comparison-chart-tooltip rounded-lg border border-border/60 bg-background px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold text-foreground">Day {point.day}</p>
       <p className="mt-0.5 text-2xs text-muted-foreground">
         {formatCollectionSameDayPaceDisplayDate(point.currentDate)} vs{" "}
@@ -156,7 +157,7 @@ export function SameDayPointDetailPanel({
         </span>
       </div>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-3">
+      <div className="monthly-comparison-point-grid mt-3">
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
           <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             {formatCollectionSameDayPaceDisplayDate(point.previousDate)}
@@ -286,6 +287,7 @@ export function MonthlySameDayPaceChartCanvas({
           <Tooltip
             content={(props) => <MonthlySameDayPaceTooltip {...props} />}
             wrapperStyle={SAME_DAY_TOOLTIP_WRAPPER_STYLE}
+            position={SAME_DAY_TOOLTIP_POSITION}
           />
           <Legend
             verticalAlign="top"

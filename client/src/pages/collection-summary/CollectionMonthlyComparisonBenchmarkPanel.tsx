@@ -99,7 +99,7 @@ export function CollectionMonthlyComparisonBenchmarkPanel({
           );
         })}
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="monthly-comparison-metric-grid mt-3">
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
           <p className="text-2xs text-muted-foreground">Reference</p>
           <p className="text-sm font-semibold text-foreground">

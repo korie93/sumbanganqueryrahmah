@@ -40,6 +40,7 @@ export function useCollectionMonthlyComparisonMonthDialog({
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const monthRecordsCacheRef = useRef(createCollectionMonthDialogCache());
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const [open, setOpen] = useState(false);
   const [activeMonthKey, setActiveMonthKey] = useState<string | null>(null);
@@ -237,10 +238,13 @@ export function useCollectionMonthlyComparisonMonthDialog({
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
 
-  const handleSelectMonth = useCallback((monthKey: string) => {
+  const handleSelectMonth = useCallback((monthKey: string, returnFocusTarget?: HTMLElement | null) => {
     if (!parseCollectionMonthKey(monthKey)) {
       return;
     }
+    returnFocusRef.current = returnFocusTarget?.isConnected
+      ? returnFocusTarget
+      : document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setActiveMonthKey(monthKey);
     setPage(1);
     setOpen(true);
@@ -262,6 +266,14 @@ export function useCollectionMonthlyComparisonMonthDialog({
         resetDialog();
       } else {
         setOpen(true);
+      }
+    },
+    onCloseAutoFocus: (event: Event) => {
+      // This controlled lazy dialog has no Radix DialogTrigger. Restore the
+      // invoking month only if it still belongs to the applied report.
+      if (returnFocusRef.current?.isConnected) {
+        event.preventDefault();
+        returnFocusRef.current.focus({ preventScroll: true });
       }
     },
     onPageChange: setPage,

@@ -7,6 +7,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
@@ -52,6 +53,7 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
   }, []);
 
   return (
+    <Dialog open={fullViewOpen} onOpenChange={setFullViewOpen}>
     <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="space-y-1">
@@ -76,21 +78,22 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
               ))}
             </select>
           </label>
+          <DialogTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="h-8 gap-1 rounded-full px-3 text-xs"
-            onClick={() => setFullViewOpen(true)}
             aria-haspopup="dialog"
           >
             <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
             View Full
           </Button>
+          </DialogTrigger>
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="monthly-comparison-metric-grid mt-3">
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
           <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Current range
@@ -126,7 +129,6 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
         </div>
       ) : null}
 
-      <Dialog open={fullViewOpen} onOpenChange={setFullViewOpen}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl gap-3 p-4 sm:p-5">
           <DialogHeader className="pr-8">
             <DialogTitle>Same-day pace trend</DialogTitle>
@@ -146,7 +148,7 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
             <SameDayPointDetailPanel pace={pace} point={selectedPoint} />
           ) : null}
         </DialogContent>
-      </Dialog>
     </div>
+    </Dialog>
   );
 }

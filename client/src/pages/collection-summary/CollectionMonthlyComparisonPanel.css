@@ -1,5 +1,560 @@
 .collection-monthly-comparison-panel {
   --collection-monthly-comparison-muted-surface: hsl(var(--muted));
+  min-width: 0;
+}
+
+.monthly-comparison-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.monthly-comparison-header--compact {
+  justify-content: end;
+}
+
+.monthly-comparison-header--compact:has(.monthly-comparison-header-actions:empty),
+.monthly-comparison-header--compact:not(:has(.monthly-comparison-header-actions)) {
+  display: none;
+}
+
+.monthly-comparison-title {
+  color: hsl(var(--foreground));
+  font-size: 1.5rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.monthly-comparison-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.monthly-comparison-header-actions > button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  gap: 0.5rem;
+}
+
+.monthly-comparison-toolbar-grid > * {
+  min-width: 0;
+}
+
+.monthly-comparison-toolbar-grid {
+  align-items: start;
+}
+
+.monthly-comparison-toolbar-grid label {
+  display: block;
+  line-height: 1.25rem;
+}
+
+.monthly-comparison-toolbar {
+  container: monthly-filters / inline-size;
+  padding: 0.75rem;
+}
+
+.monthly-comparison-toolbar-footer {
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-toolbar-footer > details > summary {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.monthly-comparison-toolbar-footer--compact {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+}
+
+.monthly-comparison-toolbar-footer--compact > details[open] {
+  grid-column: 1 / -1;
+}
+
+.monthly-comparison-toolbar-footer--compact > details[open] ~ .monthly-comparison-export-context {
+  grid-column: 1 / -1;
+}
+
+.monthly-comparison-toolbar-footer--compact .monthly-comparison-export-context {
+  justify-self: end;
+  max-width: 37rem;
+  text-align: right;
+}
+
+.monthly-comparison-report {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.monthly-comparison-export-context {
+  min-width: 0;
+  align-self: center;
+}
+
+.monthly-comparison-headline {
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-surface);
+  background: hsl(var(--card));
+}
+
+.monthly-comparison-headline-label {
+  margin-bottom: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.monthly-comparison-headline-values {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthly-comparison-headline-group {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-headline-group + .monthly-comparison-headline-group {
+  padding-inline-start: 1rem;
+  border-inline-start: 1px solid hsl(var(--border));
+}
+
+.monthly-comparison-headline-group strong {
+  font-weight: 600;
+}
+
+.monthly-comparison-headline-amounts-line,
+.monthly-comparison-headline-change > strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.125rem 0.5rem;
+}
+
+.monthly-comparison-headline-amounts-line > span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-headline-change > strong {
+  font-size: 1.125rem;
+}
+
+.monthly-comparison-headline-percentage {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.monthly-comparison-positive {
+  color: hsl(var(--success));
+}
+
+.monthly-comparison-negative {
+  color: hsl(var(--destructive));
+}
+
+.monthly-comparison-ledger {
+  min-width: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.monthly-comparison-ledger-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.monthly-comparison-ledger-heading h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.monthly-comparison-ledger-heading p,
+.monthly-comparison-ledger-description,
+.monthly-comparison-ledger-hint {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.monthly-comparison-ledger-target {
+  padding-top: 0.25rem;
+}
+
+.monthly-comparison-ledger-description {
+  margin-block: 0.375rem 0.75rem;
+}
+
+.monthly-comparison-ledger-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-control);
+}
+
+.monthly-comparison-ledger-scroll:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.monthly-comparison-ledger table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthly-comparison-ledger th,
+.monthly-comparison-ledger td {
+  padding: 0.1875rem 0.75rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.monthly-comparison-ledger thead {
+  background: hsl(var(--muted) / 0.45);
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.monthly-comparison-ledger th {
+  font-weight: 500;
+}
+
+.monthly-comparison-ledger thead th {
+  padding-block: 0.625rem;
+}
+
+.monthly-comparison-ledger table tbody th.monthly-comparison-ledger-month {
+  /* Override the global dark theme's important background on every th. */
+  background: transparent !important;
+}
+
+.monthly-comparison-ledger .monthly-comparison-ledger-amount,
+.monthly-comparison-ledger .monthly-comparison-ledger-records,
+.monthly-comparison-ledger .monthly-comparison-ledger-change {
+  text-align: right;
+}
+
+.monthly-comparison-ledger-amount {
+  width: 10.5rem;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.monthly-comparison-ledger-records {
+  width: 5rem;
+}
+
+.monthly-comparison-ledger-change {
+  width: 8rem;
+  font-weight: 500;
+}
+
+.monthly-comparison-ledger-month {
+  width: 8rem;
+}
+
+.monthly-comparison-ledger-month-button {
+  min-height: 2.25rem;
+  padding-block: 0.25rem;
+  border-radius: var(--radius-control);
+  color: hsl(var(--primary));
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  transition: color 160ms ease;
+}
+
+.monthly-comparison-ledger-month-button:hover {
+  color: hsl(var(--foreground));
+}
+
+.monthly-comparison-ledger-month-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+.monthly-comparison-ledger .monthly-comparison-ledger-bar {
+  min-width: 4rem;
+  height: 1.25rem;
+  border-radius: 0.125rem;
+}
+
+.monthly-comparison-ledger .monthly-comparison-ledger-mobile-bar {
+  display: none;
+}
+
+.monthly-comparison-ledger-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthly-comparison-ledger .monthly-comparison-ledger-bar::-webkit-progress-bar,
+.monthly-comparison-ledger .monthly-comparison-ledger-bar::-webkit-progress-value,
+.monthly-comparison-ledger .monthly-comparison-ledger-bar::-moz-progress-bar {
+  border-radius: 0.125rem;
+}
+
+.monthly-comparison-ledger-row--last {
+  background: hsl(var(--primary) / 0.07);
+}
+
+.monthly-comparison-ledger tbody tr:hover,
+.monthly-comparison-ledger tbody tr:focus-within {
+  background: hsl(var(--primary) / 0.06);
+}
+
+.monthly-comparison-ledger tfoot {
+  background: hsl(var(--muted) / 0.45);
+  font-weight: 600;
+}
+
+.monthly-comparison-ledger tfoot th,
+.monthly-comparison-ledger tfoot td {
+  padding-block: 0.75rem;
+  font-weight: 600;
+}
+
+.monthly-comparison-ledger-zero-base {
+  display: block;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.monthly-comparison-ledger-hint {
+  margin-top: 0.5rem;
+}
+
+/* Use the available report width, not the viewport/sidebar breakpoint. */
+@container monthly-filters (min-width: 36rem) {
+  .monthly-comparison-toolbar-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .monthly-comparison-toolbar-nickname,
+  .monthly-comparison-toolbar-presets {
+    grid-column: span 2;
+  }
+
+  .monthly-comparison-toolbar-grid > .collection-monthly-comparison-primary-action,
+  .monthly-comparison-toolbar-grid > .collection-monthly-comparison-secondary-action {
+    margin-block-start: 1.5rem;
+  }
+}
+
+@container monthly-filters (min-width: 52rem) {
+  .monthly-comparison-toolbar-grid {
+    grid-template-columns: minmax(11rem, 1fr) minmax(9rem, 0.75fr) minmax(7rem, 0.6fr) minmax(7rem, 0.6fr) auto auto;
+    gap: 0.75rem;
+  }
+
+  .monthly-comparison-toolbar-nickname,
+  .monthly-comparison-toolbar-presets {
+    grid-column: auto;
+  }
+
+  .monthly-comparison-toolbar-footer {
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+  }
+
+  .monthly-comparison-toolbar-footer > details > summary {
+    min-height: 1.75rem;
+    padding-block: 0.25rem;
+  }
+}
+
+/* Nested analysis cards must reflow with their own available width. */
+.monthly-comparison-pace-layout,
+.monthly-comparison-breakdown-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+}
+
+.monthly-comparison-breakdown-layout {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+}
+
+.monthly-comparison-pace-layout > *,
+.monthly-comparison-breakdown-layout > *,
+.monthly-comparison-insights-layout > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-metric-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+}
+
+.monthly-comparison-metric-grid > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-pace-amount-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+.monthly-comparison-pace-amount-line > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-point-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.monthly-comparison-point-grid > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-point-grid dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+.monthly-comparison-point-grid dd {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-chart-tooltip {
+  width: 18rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.monthly-comparison-chart-tooltip dl > div {
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+
+.monthly-comparison-chart-tooltip dd {
+  max-width: 100%;
+  margin-inline-start: auto;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .monthly-comparison-header {
+    flex-direction: column;
+  }
+
+  .monthly-comparison-title {
+    font-size: 1.25rem;
+  }
+
+  .monthly-comparison-header-actions {
+    width: 100%;
+  }
+
+  .monthly-comparison-header-actions > button {
+    flex: 1;
+    height: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .monthly-comparison-headline-values {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .monthly-comparison-headline-range {
+    grid-column: 1 / -1;
+  }
+
+  .monthly-comparison-headline-group + .monthly-comparison-headline-group {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  .monthly-comparison-headline-group.monthly-comparison-headline-change {
+    padding-inline-start: 0.75rem;
+    border-inline-start: 1px solid hsl(var(--border));
+  }
+
+  .monthly-comparison-headline-change > strong {
+    flex-direction: column;
+    gap: 0.125rem;
+    font-size: 1rem;
+  }
+
+  .monthly-comparison-headline-amounts-line {
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .monthly-comparison-ledger table {
+    min-width: 18rem;
+    font-size: 0.75rem;
+  }
+
+  .monthly-comparison-ledger-month-button {
+    min-height: 2.75rem;
+  }
+
+  .monthly-comparison-ledger th,
+  .monthly-comparison-ledger td {
+    padding: 0.5rem 0.375rem;
+  }
+
+  .monthly-comparison-ledger-bar-cell,
+  .monthly-comparison-ledger-scale {
+    display: none;
+  }
+
+  .monthly-comparison-ledger .monthly-comparison-ledger-mobile-bar {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 0.25rem;
+    margin-top: 0.375rem;
+  }
+
+  .monthly-comparison-ledger-month,
+  .monthly-comparison-ledger-amount,
+  .monthly-comparison-ledger-records,
+  .monthly-comparison-ledger-change {
+    width: auto;
+  }
+
+  .monthly-comparison-ledger .monthly-comparison-ledger-amount {
+    white-space: normal;
+  }
 }
 
 .collection-monthly-comparison-disclosure {

@@ -1,9 +1,7 @@
 import type { ReactNode } from "react";
-import { useMemo } from "react";
-import {
-  OperationalMetric,
-  OperationalSummaryStrip,
-} from "@/components/layout/OperationalPage";
+import { useId, useMemo } from "react";
+import { Download, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type {
   CollectionMonthlyComparisonResponse,
 } from "@/lib/api";
@@ -12,6 +10,7 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { CollectionMonthlyComparisonBreakdownSection } from "./CollectionMonthlyComparisonBreakdownSection";
 import { CollectionMonthlyComparisonHeader } from "./CollectionMonthlyComparisonHeader";
 import { CollectionMonthlyComparisonInsightsSection } from "./CollectionMonthlyComparisonInsightsSection";
+import { CollectionMonthlyComparisonLedger } from "./CollectionMonthlyComparisonLedger";
 import { CollectionMonthlyComparisonSetupCard } from "./CollectionMonthlyComparisonSetupCard";
 import { CollectionMonthlyComparisonStateMessages } from "./CollectionMonthlyComparisonStateMessages";
 import { CollectionSameDayPaceSection } from "./CollectionSameDayPaceSection";
@@ -26,7 +25,6 @@ import {
   buildCollectionMonthlyComparisonTrendExplanation,
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonPercentage,
-  resolveCollectionMonthlyComparisonTone,
   type CollectionMonthlyComparisonPresetRange,
   type CollectionMonthlyComparisonTargetLookup,
   type CollectionSameDayPaceComparison,
@@ -112,10 +110,8 @@ export function CollectionMonthlyComparisonPanel({
   chartSlot,
   sameDayPaceChartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
+  const exportContextId = useId();
   const comparison = data?.comparison || null;
-  const comparisonTone = comparison
-    ? resolveCollectionMonthlyComparisonTone(comparison.direction)
-    : "default";
   const comparisonSummary = data
     ? buildCollectionMonthlyComparisonAccessibleSummary(data)
     : null;
@@ -142,12 +138,6 @@ export function CollectionMonthlyComparisonPanel({
     () => (data ? buildCollectionMonthlyComparisonBenchmarks(data) : []),
     [data],
   );
-  const baseMonthRecordCount = comparison?.baseMonth
-    ? data?.months.find((entry) => entry.month === comparison.baseMonth)?.recordCount || 0
-    : 0;
-  const targetMonthRecordCount = comparison
-    ? data?.months.find((entry) => entry.month === comparison.targetMonth)?.recordCount || 0
-    : 0;
   const rangePresets = useMemo(
     () => buildCollectionMonthlyComparisonPresetRanges(),
     [],
@@ -162,7 +152,24 @@ export function CollectionMonthlyComparisonPanel({
       )}
       data-floating-ai-avoid="true"
     >
-      <CollectionMonthlyComparisonHeader showHeader={showHeader} />
+      <CollectionMonthlyComparisonHeader showHeader={showHeader} actions={
+        onPrintReport || onExportCsv ? (
+          <div className="monthly-comparison-header-actions">
+            {onPrintReport ? (
+              <Button type="button" variant="outline" onClick={onPrintReport}
+                disabled={loading || monthlyTargetLoading || !data} aria-describedby={exportContextId}>
+                <Printer className="h-4 w-4" aria-hidden="true" />Print report
+              </Button>
+            ) : null}
+            {onExportCsv ? (
+              <Button type="button" variant="outline" onClick={onExportCsv}
+                disabled={loading || monthlyTargetLoading || !data} aria-describedby={exportContextId}>
+                <Download className="h-4 w-4" aria-hidden="true" />Export CSV
+              </Button>
+            ) : null}
+          </div>
+        ) : null
+      } />
 
       <CollectionMonthlyComparisonSetupCard
         availableNicknames={availableNicknames}
@@ -188,6 +195,8 @@ export function CollectionMonthlyComparisonPanel({
         selectedNickname={selectedNickname}
         startMonth={startMonth}
         targetSummary={targetSummary}
+        exportContextId={exportContextId}
+        showExportActions={false}
       />
 
       <CollectionMonthlyComparisonStateMessages
@@ -197,46 +206,43 @@ export function CollectionMonthlyComparisonPanel({
       />
 
       {!loading && !errorMessage && data ? (
-        <div className="space-y-4">
-          <OperationalSummaryStrip className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <OperationalMetric
-              label={comparison?.baseLabel ? `${comparison.baseLabel} Total` : "Base month total"}
-              value={
-                !comparison || comparison.baseTotal === null
-                  ? "No previous month"
-                  : formatAmountRM(comparison.baseTotal)
-              }
-              supporting={
-                comparison?.baseLabel
-                  ? `${baseMonthRecordCount} record(s)`
-                  : "Select at least two months to compare"
-              }
-            />
-            <OperationalMetric
-              label={`${comparison?.targetLabel || "Target month"} Total`}
-              value={formatAmountRM(comparison?.targetTotal || 0)}
-              supporting={`${targetMonthRecordCount} record(s)`}
-            />
-            <OperationalMetric
-              label="Difference"
-              value={formatCollectionMonthlyComparisonDifference(comparison?.difference ?? null)}
-              tone={comparisonTone}
-              supporting={comparison?.direction === "no_previous_data" ? "No previous month to compare" : undefined}
-            />
-            <OperationalMetric
-              label="Percentage Change"
-              value={formatCollectionMonthlyComparisonPercentage(comparison?.percentageChange ?? null)}
-              tone={comparisonTone}
-            />
-          </OperationalSummaryStrip>
+        <div className="monthly-comparison-report">
+          <div className="monthly-comparison-headline" aria-label="First to last month comparison">
+            <div className="monthly-comparison-headline-values">
+              <div className="monthly-comparison-headline-group monthly-comparison-headline-range">
+                <p className="monthly-comparison-headline-label">Comparison range</p>
+                <strong>{comparison?.baseLabel || comparison?.targetLabel} {comparison?.baseLabel ? `→ ${comparison.targetLabel}` : ""}</strong>
+              </div>
+              <div className="monthly-comparison-headline-group monthly-comparison-headline-amounts">
+                <p className="monthly-comparison-headline-label">First month → last month</p>
+                <div className="monthly-comparison-headline-amounts-line">
+                  {comparison?.baseTotal !== null && comparison?.baseTotal !== undefined ? (
+                    <><span>{formatAmountRM(comparison.baseTotal)}</span>{" "}<span>→ {formatAmountRM(comparison.targetTotal)}</span></>
+                  ) : <span>{formatAmountRM(comparison?.targetTotal || 0)}</span>}
+                </div>
+              </div>
+              <div className="monthly-comparison-headline-group monthly-comparison-headline-change">
+                <p className="monthly-comparison-headline-label">Change across range</p>
+                {comparison?.baseMonth ? (
+                  <strong className={cn(
+                    comparison.direction === "increase" && "monthly-comparison-positive",
+                    comparison.direction === "decrease" && "monthly-comparison-negative",
+                  )}>
+                    <span className="sr-only">Difference </span><span>{formatCollectionMonthlyComparisonDifference(comparison.difference)}</span>{" "}
+                    <span className="monthly-comparison-headline-percentage">{comparison.percentageChange === null ? "N/A · RM0 base" : formatCollectionMonthlyComparisonPercentage(comparison.percentageChange)}</span>
+                  </strong>
+                ) : <span className="text-muted-foreground">Select at least two months to compare</span>}
+              </div>
+            </div>
+          </div>
 
-          <CollectionMonthlyComparisonBreakdownSection
-            chartSlot={chartSlot}
-            insights={insights}
-            monthCount={data.months.length}
+          <CollectionMonthlyComparisonLedger
+            data={data}
+            monthlyTargetAmount={monthlyTargetAmount}
             monthlyTargetsByMonth={monthlyTargetsByMonth}
+            monthlyTargetLoading={monthlyTargetLoading}
+            monthlyTargetSourceLabel={monthlyTargetSourceLabel}
             onMonthSelect={onMonthSelect}
-            targetSummary={targetSummary}
           />
 
           <details className="collection-monthly-comparison-disclosure" data-testid="collection-monthly-same-day-analysis">
@@ -260,6 +266,14 @@ export function CollectionMonthlyComparisonPanel({
           {insights ? (
             <details className="collection-monthly-comparison-disclosure" data-testid="collection-monthly-detailed-analysis">
               <summary>Benchmarks, projections and data quality</summary>
+              <CollectionMonthlyComparisonBreakdownSection
+                chartSlot={chartSlot}
+                insights={insights}
+                monthCount={data.months.length}
+                monthlyTargetsByMonth={monthlyTargetsByMonth}
+                onMonthSelect={onMonthSelect}
+                targetSummary={targetSummary}
+              />
               <CollectionMonthlyComparisonInsightsSection
                 benchmarks={benchmarks}
                 comparison={comparison}

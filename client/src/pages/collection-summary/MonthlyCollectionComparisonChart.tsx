@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { useCallback, useId, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +9,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
@@ -29,7 +30,7 @@ type MonthlyCollectionComparisonChartProps = {
   monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
   monthlyTargetLoading?: boolean | undefined;
   monthlyTargetSourceLabel?: string | null | undefined;
-  onMonthSelect?: ((monthKey: string) => void) | undefined;
+  onMonthSelect?: ((monthKey: string, returnFocusTarget?: HTMLElement | null) => void) | undefined;
 };
 
 export function MonthlyCollectionComparisonChart({
@@ -43,6 +44,7 @@ export function MonthlyCollectionComparisonChart({
   const [expanded, setExpanded] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [fullViewOpen, setFullViewOpen] = useState(false);
+  const fullViewTriggerRef = useRef<HTMLButtonElement>(null);
   const chartRegionId = useId();
   const insights = useMemo(() => buildCollectionMonthlyComparisonInsights(data), [data]);
   const targetInput = monthlyTargetsByMonth ?? monthlyTargetAmount;
@@ -58,21 +60,23 @@ export function MonthlyCollectionComparisonChart({
   ), [insights.monthInsights, targetInput]);
   const handleMonthSelect = useCallback((monthKey: string) => {
     setFullViewOpen(false);
-    onMonthSelect?.(monthKey);
-  }, [onMonthSelect]);
+    // The full-chart portal is removed before the records dialog closes.
+    // Save its stable trigger rather than a control inside that portal.
+    onMonthSelect?.(monthKey, fullViewOpen ? fullViewTriggerRef.current : undefined);
+  }, [fullViewOpen, onMonthSelect]);
   const handleInspectMonthChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
     const monthKey = event.target.value;
     if (monthKey) {
       handleMonthSelect(monthKey);
     }
   }, [handleMonthSelect]);
-  const summaryGridClass = targetSummary || monthlyTargetLoading ? "sm:grid-cols-5" : "sm:grid-cols-4";
   const chartLabel = useMemo(
     () => `Monthly collection comparison chart for ${data.nickname}. Range total ${formatAmountRM(insights.rangeTotal)}${targetSummary ? " with configured month-specific targets" : ""}.`,
     [data.nickname, insights.rangeTotal, targetSummary],
   );
 
   return (
+    <Dialog open={fullViewOpen} onOpenChange={setFullViewOpen}>
     <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="space-y-1">
@@ -162,22 +166,24 @@ export function MonthlyCollectionComparisonChart({
             )
           ) : null}
           {!collapsed ? (
+            <DialogTrigger asChild>
             <Button
+              ref={fullViewTriggerRef}
               type="button"
               variant="ghost"
               size="sm"
               className="h-8 gap-1 rounded-full px-3 text-xs"
-              onClick={() => setFullViewOpen(true)}
               aria-haspopup="dialog"
             >
               <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
               View Full
             </Button>
+            </DialogTrigger>
           ) : null}
         </div>
       </div>
 
-      <div className={`mt-3 grid gap-2 ${summaryGridClass}`}>
+      <div className="monthly-comparison-metric-grid mt-3">
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
           <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Range total
@@ -256,7 +262,6 @@ export function MonthlyCollectionComparisonChart({
         </p>
       )}
 
-      <Dialog open={fullViewOpen} onOpenChange={setFullViewOpen}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl gap-3 p-4 sm:p-5">
           <DialogHeader className="pr-8">
             <DialogTitle>Monthly performance trend</DialogTitle>
@@ -276,7 +281,7 @@ export function MonthlyCollectionComparisonChart({
             onMonthSelect={onMonthSelect ? handleMonthSelect : undefined}
           />
         </DialogContent>
-      </Dialog>
     </div>
+    </Dialog>
   );
 }

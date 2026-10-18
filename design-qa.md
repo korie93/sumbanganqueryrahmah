@@ -1468,3 +1468,132 @@ material issue. Full remote CI has not rerun; local results do not claim that it
 has. No commit, push, deployment or production access in this repair.
 
 final result: passed (bounded local regression verification)
+
+---
+
+# Monthly Comparison — selected visual ledger
+
+Date: 2026-10-18. Product Design image-to-code / design-qa.
+
+## Source, scope and normalization
+
+- User selected the third displayed image in the latest ideation set: `C:/Users/Administrator/.codex/generated_images/01a06af3-0962-71b1-b172-6ca2dba63123/exec-82b611b0-9f51-459b-b2cb-2d9eedd5a750.png`.
+- Source pixels: 1487 × 1058; normalized proportionally to the intended 1440 × 1024 desktop viewport. Implementation: 1440 × 1024 CSS/pixels, deviceScaleFactor 1. No browser/device frame in either artifact. Normalization is for QA only; no brand assets were edited.
+- Existing application, roles, API contracts, nickname scope, month drill-down, targets, CSV and print are preserved. The real shell stays 240px/57px, rather than changing the shared shell to the mock's proportions. Only Monthly Comparison content is redesigned.
+- State: dark mode, DEMO.COLLECTOR, April–September 2026, synthetic complete-month totals 32,400 / 36,000 / 33,600 / 42,000 / 45,000 / 48,600; records 54 / 60 / 56 / 70 / 75 / 81; configured targets RM50,000. No production/backend/database/credentials accessed.
+- Browser evidence: Codex in-app browser local synthetic preview, plus authorized local Playwright/Chromium responsive and interaction checks.
+- Full comparison evidence: `artifacts/monthly-ledger-preview/comparison-iteration-1-dark-1440.png` (opened). Focused ledger comparison: `artifacts/monthly-ledger-preview/focus-iteration-1-dark-1440.png` (opened). Both contain source and implementation together, not independent screenshots presented as a comparison.
+
+## Iteration one findings
+
+- [P2] Ledger row density pushes range total and both secondary disclosures below the 1024px target viewport. Evidence: first implementation ends at September, while the source includes the footer and secondary rows. Fix: reduce desktop-only row padding and month-button minimum to 36px, preserving 44px mobile targets; compact toolbar footer and report gaps.
+- [P2] Bars render as 8px pills instead of the selected substantial 20px bars. Existing generic progress rules win in the CSS cascade. Fix: scope the ledger progress selector more specifically, preserving the same native data-driven progress elements and blue token.
+- [P2] Native printing initially omitted charts because closed disclosure children were conditionally unmounted. Fix: retain mounted content under native closed details, allowing the existing print CSS to expose it. Dedicated sanitized Print report output remains unchanged.
+- [P2] Month dialog did not restore keyboard focus after Escape. Confirmed for admin and user in regression tests. Fix: capture the invoking element in the monthly dialog hook; restore it on close autofocus only while it remains connected. Both focus regression tests passed after the fix.
+
+## Fidelity surfaces / intentional product constraints
+
+- Typography: existing SQR font stack, 24px title, 14px ledger text, 12px metadata; tabular numeric alignment. English labels remain consistent with the application rather than copying mixed-language mock text verbatim.
+- Spacing/layout: one compact toolbar, one first-to-last comparison band, one chronological ledger. Secondary analysis remains closed by default. Desktop density/bar findings are resolved in iteration two below. The small target/export-scope footer is intentionally retained for data provenance; it adds height versus the generated mock. The main six-month report and range total fit the 1024px desktop viewport; secondary disclosure content uses ordinary page scrolling. No persistent control is clipped or covered.
+- Colors/tokens: existing light/dark background, card, primary, border, foreground, success and destructive tokens. Positive/negative changes retain explicit signs; target configuration is a neutral reference, not failure red.
+- Image/assets: original transparent Q+dots PNG and existing icon library; no logo redraw, box, rasterized UI or handcrafted icon substitutions. Bars are native semantic data visualization, not decorative image approximations.
+- Copy/content: headline compares FIRST versus LAST applied month; row percentages compare preceding month in the range. Zero baseline is N/A, not invented growth. Shared amount scale never implies month-specific target achievement. Misleading aggregate bar from the generated mock is intentionally omitted; exact range amount and record totals remain.
+
+## Iteration two / final verification
+
+- Revised full-view comparison `artifacts/monthly-ledger-preview/comparison-implementation-dark-1440.png` and focused comparison `artifacts/monthly-ledger-preview/focus-implementation-dark-1440.png` were opened and inspected together with the same source/state. Row rhythm now follows the selected compact ledger, native bars are 20px, values align, and the total is visible without a misleading aggregate bar. Earlier visual P2 findings are resolved; no new actionable P0/P1/P2 visual mismatch remains within the preserved-shell scope.
+- Final implementation screenshots: `artifacts/monthly-ledger-preview/implementation-{dark,light}-{1440,390}.png`. Desktop is 1440 × 1024; phone is 390 × 844 CSS with full-page capture at deviceScaleFactor 1. Light/dark screenshots were opened; both themes remain legible, month labels wrap safely on phones, and the decorative bar column is omitted on phones without removing amounts, records or changes.
+- Final automated responsive/a11y check: all four theme/width combinations have zero page errors, zero axe violations in the Monthly panel, and no document overflow. `capture.mjs` runs against a loopback-only synthetic frontend, not an application backend.
+- Final `npm run build`, TypeScript and source ESLint: passed. Unit/SSR/contract tests: **52/52 passed**, including real component rendering with a CSS-only Node loader; no product code is stubbed. Evidence: `artifacts/monthly-ledger-preview/{build,typecheck,lint,unit}.log`.
+- Updated only the four intentional Monthly visual baselines, then reran without update mode: **17/17 Playwright tests passed**, zero retries/skips. Coverage includes responsive themes, stable snapshots, native quick ranges, loaded/unapplied export scope, loading explanations, first/last versus row movement, same-day chart references, untouched closed disclosures under native print, admin/user keyboard drill-down and focus restoration. Evidence: `artifacts/monthly-ledger-preview/playwright-final.log`.
+- Codex browser final preview remains open on the real built Monthly Comparison frontend with synthetic data. `git diff --check` passes. Existing unrelated Save Collection work remains preserved. No commit, push, deployment or remote CI run was performed by this task.
+
+## Follow-up polish / residual gaps
+
+- P3: the original English labels and existing shared shell are intentionally retained rather than replacing navigation or theme tokens globally. The generated mock's percent labels inside bars are omitted because different configured targets would make their meaning ambiguous; exact MoM percentages remain in their own column.
+- Automated a11y is not a substitute for a manual screen-reader review; none is claimed. Full backend/remote CI suites were not rerun because this task changes presentation and scoped dialog focus only.
+
+Implementation checklist: compact controls, first/last summary, unified ledger, targets/permissions/drill-down preserved, mobile/theme QA, print/focus fixes, snapshots and local tests — complete.
+
+final result: passed
+
+---
+
+# Monthly Comparison — follow-up polish
+
+Date: 2026-10-18. User requested further polish of the already selected third visual, not another design direction. Shared shell, APIs, roles and workflows remain unchanged.
+
+## Evidence and review
+
+- Visual truth remains the selected third ImageGen frame listed above. Latest source/implementation comparisons: `artifacts/monthly-ledger-preview/comparison-implementation-dark-1440.png` and `focus-implementation-dark-1440.png`, both opened at full and readable focused scale.
+- Same-state before/after evidence: `artifacts/monthly-ledger-preview/polish-comparison-{1440,390}.png`. The 390px comparison was opened: original full-page 390 × 1596 versus revised 390 × 1493, no scaling or squeezing of content. Desktop captures are 1440 × 1024 CSS/pixels at DPR1, normalized source 1487 × 1058 → 1440 × 1024. Mobile is 390 × 844 CSS at DPR1 with full-page capture.
+- Prior screenshots are preserved as `before-polish-{dark,light}-1440.png` and `before-polish-dark-390.png`. Current implementation screenshots retain `implementation-{dark,light}-{1440,390}.png` names for the latest revision.
+
+## Findings and fixes
+
+- Mobile filters previously placed nickname and quick range on separate full-width rows, making the report unnecessarily tall. Now native DOM/Tab order is nickname → quick range → start → end → Apply → Reset, paired into three rows on mobile without CSS-only visual reordering. Touch targets remain at least 44px. Desktop retains a single compact toolbar.
+- Target amount repeated in the toolbar and performance header. The toolbar now has a short native Target details disclosure with full amount in its accessible name; configured target amount remains visible once in the ledger. Expanded details and export scope span the grid safely, including 320px.
+- Headline previously gave range, values and change similar weight. Three aligned groups now distinguish range, first→last values and overall change; change has stronger type, not another card. Mobile uses a full-width range with two aligned amount/change groups.
+- Desktop bars previously lacked visible scale endpoints; 0 and the shared maximum are now aligned above them. Exact amounts remain alongside. The long explanation is reduced visually, retaining precise screen-reader description. No target-attainment percentage is invented.
+- Mobile previously removed the bar completely. A 4px native amount bar is now retained within each amount cell, using the exact same common scale as desktop. It is aria-hidden to avoid duplicate announcements; actual values/records/MoM remain semantic table content. No aggregate bar is added.
+
+## Five fidelity surfaces
+
+- Typography: existing SQR font stack and 14px desktop ledger retained; 12px mobile table and metadata, readable figure grouping and 18px desktop change. No font downloads or substitutions.
+- Spacing/layout: filter footprint reduced, paired mobile fields, consistent action heights per breakpoint, clearer summary alignment, exact value columns and responsive scale. No document overflow in 320/390/768/1024px responsive tests.
+- Colors/tokens: same existing light/dark semantic tokens and neutral target treatment. Positive/negative deltas include signs; color is not the only cue. Reduced-motion behavior remains inherited from the native progress styles.
+- Images/assets: original Q+dots and existing icon library untouched. No new raster artwork, logo redraw or decorative effects.
+- Copy/content: first→last range change remains distinct from row MoM; zero baseline remains N/A; loaded export scope and unapplied-filter warning remain visible. No sample amounts are added to production code.
+
+## Validation and acceptance
+
+- Independent screenshot/source QA accepted the polish with no P0/P1/P2 blocker. P3: a long mobile nickname truncates inside its trigger, while the full applied nickname remains in visible export scope and accessible labels; this is intentional rather than shrinking the text.
+- Production build passed. Unit/SSR/contract tests 54/54 passed. Final Playwright 21/21 passed without update mode, retries or skips, including open target details, keyboard order, responsive bars, export loading/scope, print and focus restoration. Evidence: `artifacts/monthly-ledger-preview/{build-polish,unit-polish,playwright-polish-final}.log`.
+- Final TypeScript and source ESLint passed (`typecheck-polish.log`, `lint-polish.log`); `git diff --check` passed. Refreshed synthetic capture at dark/light × 1440/390px returned zero page errors, zero axe violations within the Monthly panel, and no document overflow in every combination. Measured filter height: 124px desktop, 293px phone. The actual Codex browser was reloaded and the April–September report applied and visually checked; its preview remains open.
+- No remaining actionable P0/P1/P2 finding. Original brand assets, shared navigation and existing unrelated Save Collection work remain untouched by this polish. No production access, commit, push, deployment or remote CI result is claimed.
+
+final result: passed
+
+---
+
+# Monthly Comparison — responsive layout hardening
+
+Date: 2026-10-18. Follow-up Product Design audit, scoped implementation and design QA. The user requested further polish of layout, width, height, CSS and padding; this is not a new design direction.
+
+## Scope, source and fresh evidence
+
+- Source visual truth: `C:/Users/Administrator/.codex/generated_images/01a06af3-0962-71b1-b172-6ca2dba63123/exec-82b611b0-9f51-459b-b2cb-2d9eedd5a750.png`, the already selected third option. Source 1487 × 1058 normalized to 1440 × 1024 for comparison. Actual desktop captures are 1440 × 1024 CSS/pixels, DPR1. No browser/device frame is included. The original shared shell and role-dependent navigation remain intentional constraints.
+- Fresh current-run before captures: `artifacts/monthly-ledger-hardening/before-{320,768,1024,1200,1366,1440}-{default,expanded}.png`; invalid-input capture `before-1366-invalid.png`. Codex in-app browser was also opened, the April–September range applied, and the actual rendered screen inspected before changes.
+- Same-state visual review: `comparison-before.png`, `comparison-after.png` and focused `focus-after.png` in that folder were opened. Source and implementation are together in each comparison input. State: dark, synthetic DEMO.COLLECTOR, April–September 2026, six totals RM32,400 / 36,000 / 33,600 / 42,000 / 45,000 / 48,600, target RM50,000; no backend or production data.
+- Final same-state screenshots: `after-1440-default.png`, `implementation-{dark,light}-{1440,390}.png`. Phone CSS viewport 390 × 844, DPR1, full-page capture. Both themes were opened and inspected; the Codex browser preview remains open.
+
+## Audit findings, iterations and fixes
+
+- [P2, resolved] Invalid month guidance raised only its input by 42px and pushed neighboring controls downward. Evidence: `invalid-before-detail.png` versus `invalid-after-detail.png`, opened at native pixel scale. Fix: top-aligned grid, consistent label line-height, and matching action offset. Validation remains visible below the field, with the original blur/Enter recovery and loaded-report scope preserved.
+- [P2, resolved] Nested viewport-based four/five-column metric grids clipped exact large RM values when analysis was expanded at 1024/1200/1280px. The initial stress run failed three expanded-analysis cases. Fix: intrinsic available-width grids for pace, monthly trend, benchmarks, projections and day-detail cards; zero minimum sizes and wrapping amount/detail lines. The first correction exposed three remaining benchmark/projection values at 1280px; these grids were then corrected too. Final stress cases pass with a long unbroken nickname and RM3b/RM1.875b totals; no truncation or decimal loss was introduced.
+- [P2, resolved] Global dark `th` background made body month cells look like a separate gray column, inconsistent with selected/hover rows. Confirmed in fresh browser screenshots. Fix: a narrowly scoped transparent body-month-header reset that wins the existing important theme rule. Header/footer theme styles remain unchanged.
+- [P2, resolved] A large monthly tooltip could extend outside its chart after a phone fullscreen popup closed (document width 402px at a 390px viewport). Fix: bounded, wrapping tooltip content and a stable origin within its own chart. No `overflow:hidden` workaround, removed information or relaxed assertion was used.
+- [P2, resolved] Fullscreen chart dialogs had no registered trigger, and fullscreen-chart → selected-month-records could retain a disconnected focus target. Fix: standard DialogTrigger for ordinary Escape return; pass the stable fullscreen trigger to the existing records-dialog hook during drill-down. Phone popup tests and the desktop October-bar → October-records → Escape test now pass with focus restored.
+- [P3, completed] Toolbar previously used three rows at intermediate widths and abruptly one row at 1200px. It now uses two/four/six tracks based on its own available width, not the viewport/sidebar breakpoint. At 768/1024px filter height is 211px rather than 261px; at 1199px it is 123px rather than 261px. Phone controls stay 44px and desktop controls 36px. No visual-only reordering of Tab sequence was introduced.
+
+## Five required fidelity surfaces
+
+- Fonts/typography: existing SQR font stack, title hierarchy, tabular numeric columns, 14px desktop/12px phone ledger remain. Large amounts wrap in analysis cards; the exact ledger amounts remain available in a deliberately bounded scroll region. Headline first→last change and row MoM retain separate meaning.
+- Spacing/layout: compact selected ledger retained; consistent label/input/action alignment; intrinsic card tracks grow vertically rather than leaking horizontally. Full-view and readable ledger/detail comparisons show the resolved cell-background and validation alignment issues. Page max width, shared shell, mobile navigation and existing Save Collection work are unchanged.
+- Colors/tokens: existing light/dark primary, foreground, muted, success, destructive and border tokens; no new palette. Positive/negative signs and explicit values supplement color. Target remains a neutral reference. Body month headers now inherit the same row surface as adjacent cells.
+- Images/assets: original transparent Q+dots and existing icon library are unchanged. No generated replacement logo, boxed icon, handcrafted illustration or rasterized UI was added.
+- Copy/content: no business text or formula was rewritten for this hardening. Target provenance, applied-versus-draft export scope, range totals, records, zero-base N/A, same-day analysis and existing print/export workflows remain. Fixed tooltips contain the same information; they no longer chase a pointer beyond the report bounds.
+
+## Final verification and limits
+
+- Production build and sourcemap gate pass (`build.log`, zero production maps). TypeScript and changed-source ESLint pass (`typecheck.log`, `lint.log`, zero lint warnings). Unit/SSR/contracts: 54/54 passed (`unit.log`).
+- Final Playwright run without snapshot updates: **28/28 passed**, no retries or skips (`playwright-final.log`). Seven added stress/workflow cases cover long nickname, large exact amounts, expanded analyses, invalid-month alignment, 200% root text at a real 720px reflow viewport, both phone fullscreen dialogs, and fullscreen-to-record drill-down. This is text enlargement/reflow testing, not a claim of OS/browser zoom or screen-reader certification.
+- Four intentional Monthly baselines were refreshed. One initial rerun exposed hover-dependent screenshot noise; the visual fixture now parks the pointer outside content before capture. Snapshot tolerance was not loosened, no region masked, and the subsequent full run passed without update mode.
+- Fresh default and expanded sweep at 320, 767, 768, 1023, 1024, 1199, 1200, 1280, 1366, 1440 and 1920px reports no document/panel overflow, uncontained elements or page errors (`sweep-after.log`). Invalid-input state was checked separately at 1366px. Narrow tables retain their explicit horizontal-scroll affordance rather than hiding data.
+- Fresh light/dark × 1440/390 captures have zero page errors, zero axe violations within the Monthly panel and no document overflow (`capture-final.log`). Codex in-app browser separately verified both themes on the real built frontend with synthetic data.
+- Independent read-only source review plus runtime checks found no remaining actionable P0/P1/P2 issue in this bounded scope. Full remote CI, manual screen-reader review and cross-engine browser coverage were not run; no blanket absence-of-all-bugs or full WCAG certification is claimed.
+- Local synthetic preview only: no credentials, database, production records, receipts, server access, commit, push or deployment. Existing unrelated work was preserved.
+
+Implementation checklist: fresh audit evidence, available-width grid, validation alignment, exact amount wrapping, dark row surfaces, tooltip containment, popup/drill-down focus, themes, breakpoints, snapshots, unit checks and QA comparison — complete.
+
+final result: passed

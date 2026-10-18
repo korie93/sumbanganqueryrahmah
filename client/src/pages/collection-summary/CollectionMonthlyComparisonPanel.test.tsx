@@ -115,16 +115,27 @@ test("CollectionMonthlyComparisonPanel renders accessible controls and action bu
   assert.match(markup, /type="text"/);
   assert.match(markup, /placeholder="YYYY-MM"/);
   assert.match(markup, /Use YYYY-MM format/);
-  assert.match(markup, /Comparison setup/);
-  assert.match(markup, /Same-day pacing ready/);
+  assert.match(markup, /Quick range/);
+  assert.match(markup, /<select\b/);
   assert.match(markup, />Apply</);
   assert.match(markup, />Reset</);
   assert.match(markup, /Last 3 months/);
   assert.match(markup, /Year to date/);
   assert.match(markup, /Monthly target/);
   assert.match(markup, /No target configured/);
+  assert.match(markup, /aria-label="Monthly target details: No target configured"/);
+  assert.match(markup, /<summary[^>]*>Target details<\/summary>/);
   assert.match(markup, /type="button"/);
-  assert.match(markup, /Single nickname only/);
+  const orderedControls = [
+    'id="collection-monthly-comparison-nickname"',
+    'id="collection-monthly-comparison-quick-range"',
+    'id="collection-monthly-comparison-start-month"',
+    'id="collection-monthly-comparison-end-month"',
+    '>Apply</',
+    '>Reset</',
+  ].map((control) => markup.indexOf(control));
+  assert.ok(orderedControls.every((position) => position >= 0));
+  assert.ok(orderedControls.every((position, index) => index === 0 || position > orderedControls[index - 1]!));
 });
 
 test("CollectionMonthlyComparisonPanel announces loading, errors, and empty nickname availability clearly", () => {
@@ -202,8 +213,9 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
     });
 
   assert.match(markup, /Collection increased by RM12,450\.00 \(\+17\.67%\) compared to Apr 2026\./);
-  assert.match(markup, /Apr 2026 Total/);
-  assert.match(markup, /May 2026 Total/);
+  assert.match(markup, /monthly-comparison-headline/);
+  assert.match(markup, /Apr 2026/);
+  assert.match(markup, /May 2026/);
   assert.match(markup, /\+RM(?:&nbsp;|\u00a0| )12,450\.00/);
   assert.match(markup, /\+17\.67%/);
   assert.match(markup, /Range total/);
@@ -238,24 +250,54 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /Range avg/);
   assert.match(markup, /Target gap/);
   assert.match(markup, /Configured for May 2026/);
+  assert.match(markup, /aria-label="Monthly target details: RM(?:&nbsp;|\u00a0| )80,000\.00"/);
   assert.match(markup, /Superuser target active/);
   assert.match(markup, /1 month\(s\) at target/);
   assert.match(markup, /Data quality/);
   assert.match(markup, /Print report/);
   assert.match(markup, /Export CSV/);
   assert.match(markup, /month\(s\) up/);
-  assert.match(markup, /Monthly breakdown/);
-  assert.match(markup, /Expand/);
-  assert.match(markup, /2\/2 active/);
-  assert.match(markup, /Latest/);
-  assert.match(markup, /chart slot/);
+  assert.match(markup, /<caption[^>]*>Monthly collection performance<\/caption>/);
+  assert.equal((markup.match(/class="[^"]*monthly-comparison-ledger-row\b/g) || []).length, 2);
+  assert.match(markup, /aria-label="View collection records for Apr 2026"/);
+  assert.match(markup, /aria-label="View collection records for May 2026"/);
+  assert.match(markup, />chart slot<\/div>/);
+  assert.match(markup, />same-day chart slot<\/div>/);
   for (const testId of ["collection-monthly-same-day-analysis", "collection-monthly-detailed-analysis"]) {
     const openingTag = markup.match(new RegExp(`<details[^>]*data-testid="${testId}"[^>]*>`))?.[0];
     assert.ok(openingTag, `Native disclosure ${testId} is present`);
     assert.doesNotMatch(openingTag, /\bopen(?:=|\s|>)/);
   }
-  assert.ok(markup.indexOf(">chart slot</div>") < markup.indexOf("collection-monthly-same-day-analysis"));
-  assert.ok(markup.indexOf("same-day chart slot") > markup.indexOf("collection-monthly-same-day-analysis"));
+  assert.ok(markup.indexOf("Monthly collection performance") < markup.indexOf("collection-monthly-same-day-analysis"));
+  assert.ok(markup.indexOf(">chart slot</div>") > markup.indexOf("collection-monthly-detailed-analysis"));
+  assert.ok(markup.indexOf(">same-day chart slot</div>") > markup.indexOf("collection-monthly-same-day-analysis"));
+  assert.ok(markup.indexOf(">same-day chart slot</div>") < markup.indexOf("collection-monthly-detailed-analysis"));
+});
+
+test("Monthly comparison keeps long staff names and export scope intact without exposing HTML", () => {
+  const nickname = 'Synthetic Collector with a deliberately long staff nickname <script>safe</script>';
+  const markup = renderPanel({
+    canFilterByNickname: false,
+    availableNicknames: [],
+    selectedNickname: nickname,
+    startMonth: "2026-04",
+    endMonth: "2026-05",
+    loading: false,
+    errorMessage: null,
+    data: { ...comparisonPayload, nickname },
+    hasAvailableNickname: true,
+    onSelectedNicknameChange: () => undefined,
+    onStartMonthChange: () => undefined,
+    onEndMonthChange: () => undefined,
+    onApply: () => undefined,
+    onRangePresetApply: () => undefined,
+    onReset: () => undefined,
+    onExportCsv: () => undefined,
+  });
+  assert.match(markup, /Synthetic Collector with a deliberately long staff nickname &lt;script&gt;safe&lt;\/script&gt;/);
+  assert.match(markup, /Export \/ print scope: 2026-04 to 2026-05/);
+  assert.match(markup, /aria-readonly="true"/);
+  assert.doesNotMatch(markup, /<script>|Infinity|NaN|undefined/);
 });
 
 test("CollectionMonthlyComparisonPanel highlights anomaly months for audit review", () => {
@@ -280,7 +322,6 @@ test("CollectionMonthlyComparisonPanel highlights anomaly months for audit revie
 
   assert.match(markup, /1 anomaly month\(s\)/);
   assert.match(markup, /Unusual jump \+34\.85% vs previous month/);
-  assert.match(markup, /1 flagged/);
 });
 
 test("monthly review badge uses accessible semantic warning colors while preserving the review count", () => {
@@ -289,7 +330,7 @@ test("monthly review badge uses accessible semantic warning colors while preserv
       dataQualitySummary: { statusTone: "warning", statusLabel: "2 items need review", warningCount: 2, signals: [] },
     }),
   }));
-  assert.match(markup, /bg-warning\/10[^\"]*text-warning/);
+  assert.match(markup, /bg-warning\/10[^"]*text-warning/);
   assert.match(markup, /2 review/);
   assert.match(markup, /2 items need review/);
   assert.doesNotMatch(markup, /text-amber-700|bg-amber-500/);

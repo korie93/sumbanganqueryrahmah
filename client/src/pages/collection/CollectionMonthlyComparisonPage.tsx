@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from "react";
 import { getCollectionNicknames, type CollectionStaffNickname } from "@/lib/api";
 import { parseApiError } from "@/pages/collection/utils";
 import { CollectionMonthlyComparisonSection } from "@/pages/collection-summary/CollectionMonthlyComparisonSection";
+import { CollectionMonthlyComparisonHeader } from "@/pages/collection-summary/CollectionMonthlyComparisonHeader";
 
 type CollectionMonthlyComparisonPageProps = {
   role: string;
@@ -62,11 +63,7 @@ function CollectionMonthlyComparisonPage({
 
   return (
     <section className="min-w-0 space-y-4" aria-label="Monthly Collection Comparison workspace">
-      <header className="space-y-1">
-        <h2 className="text-lg font-semibold">Monthly Collection Comparison</h2>
-        <p className="text-sm text-muted-foreground">Compare one staff nickname across the first and last months in your range.</p>
-        <p className="text-xs text-muted-foreground">24 months max · Empty months stay visible</p>
-      </header>
+      {nicknameOptionsLoading ? <CollectionMonthlyComparisonHeader showHeader /> : null}
 
       {nicknameOptionsLoading ? (
         <div
@@ -92,7 +89,7 @@ function CollectionMonthlyComparisonPage({
           canFilterByNickname={canFilterByNickname}
           currentNickname={staffNickname}
           nicknameOptions={nicknameOptions}
-          showHeader={false}
+          showHeader
           standalone
         />
       ) : null}

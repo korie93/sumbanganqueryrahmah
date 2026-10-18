@@ -32,7 +32,8 @@ type TooltipEntry = {
 };
 
 const MONTHLY_COMPARISON_CHART_MARGIN = { top: 8, right: 8, left: -8, bottom: 0 };
-const MONTHLY_COMPARISON_TOOLTIP_WRAPPER_STYLE = { outline: "none" };
+const MONTHLY_COMPARISON_TOOLTIP_WRAPPER_STYLE = { outline: "none", maxWidth: "100%" };
+const MONTHLY_COMPARISON_TOOLTIP_POSITION = { x: 0, y: 0 };
 const MONTHLY_COMPARISON_LEGEND_WRAPPER_STYLE = { fontSize: 12, paddingBottom: 8 };
 const MONTHLY_AVERAGE_DOT = { r: 3 };
 const MONTHLY_AVERAGE_ACTIVE_DOT = { r: 5 };
@@ -66,7 +67,7 @@ function MonthlyCollectionComparisonTooltip({
 
   const point = payload[0]?.payload;
   return (
-    <div className="min-w-[220px] rounded-lg border border-border/60 bg-background px-3 py-2 text-xs shadow-lg">
+    <div className="monthly-comparison-chart-tooltip rounded-lg border border-border/60 bg-background px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold text-foreground">{label}</p>
       <dl className="mt-2 grid gap-1 text-muted-foreground">
         <div className="flex justify-between gap-3">
@@ -186,6 +187,7 @@ export function MonthlyCollectionComparisonChartCanvas({
           <Tooltip
             content={(props) => <MonthlyCollectionComparisonTooltip {...props} />}
             wrapperStyle={MONTHLY_COMPARISON_TOOLTIP_WRAPPER_STYLE}
+            position={MONTHLY_COMPARISON_TOOLTIP_POSITION}
           />
           <Legend
             verticalAlign="top"

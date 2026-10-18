@@ -1,31 +1,36 @@
+import type { ReactNode } from "react";
+
 type CollectionMonthlyComparisonHeaderProps = {
   showHeader: boolean;
+  actions?: ReactNode;
 };
 
 export function CollectionMonthlyComparisonHeader({
   showHeader,
+  actions,
 }: CollectionMonthlyComparisonHeaderProps) {
   if (!showHeader) {
     return (
-      <h2 id="collection-monthly-comparison-title" className="sr-only">
-        Monthly Collection Comparison
-      </h2>
+      <div className="monthly-comparison-header monthly-comparison-header--compact">
+        <h2 id="collection-monthly-comparison-title" className="sr-only">
+          Monthly Collection Comparison
+        </h2>
+        {actions}
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <header className="monthly-comparison-header">
       <div className="min-w-0 space-y-1">
-        <h2 id="collection-monthly-comparison-title" className="text-lg font-semibold text-foreground">
+        <h2 id="collection-monthly-comparison-title" className="monthly-comparison-title">
           Monthly Collection Comparison
         </h2>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Compare monthly totals, same-day pacing, target progress, and audit movement for one staff nickname.
+          Compare the trend and exact amounts in one view.
         </p>
       </div>
-      <span className="collection-monthly-comparison-chip rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-        Same-day pacing ready
-      </span>
-    </div>
+      {actions}
+    </header>
   );
 }

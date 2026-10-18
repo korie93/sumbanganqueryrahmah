@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ComponentPropsWithoutRef } from "react";
 import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
@@ -22,6 +22,7 @@ export type CollectionMonthDetailsDialogProps = {
   pageSize: number;
   totalPages: number;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: ComponentPropsWithoutRef<typeof DialogContent>["onCloseAutoFocus"];
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   toDisplayDate: (value: string) => string;
@@ -54,6 +55,7 @@ export function CollectionMonthDetailsDialog({
   pageSize,
   totalPages,
   onOpenChange,
+  onCloseAutoFocus,
   onPageChange,
   onPageSizeChange,
   toDisplayDate,
@@ -66,6 +68,7 @@ export function CollectionMonthDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
         className={
           isMobile
             ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`

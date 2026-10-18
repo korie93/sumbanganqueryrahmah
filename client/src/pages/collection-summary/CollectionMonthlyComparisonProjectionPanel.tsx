@@ -59,7 +59,7 @@ export function CollectionMonthlyComparisonProjectionPanel({
             : projection.status === "behind" ? "Behind target" : "No target"}
         </span>
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="monthly-comparison-metric-grid mt-3">
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
           <p className="text-2xs text-muted-foreground">Current total</p>
           <p className="text-sm font-semibold text-foreground">{formatAmountRM(projection.currentTotal)}</p>

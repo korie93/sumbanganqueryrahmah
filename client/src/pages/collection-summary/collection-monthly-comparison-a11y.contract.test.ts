@@ -27,14 +27,17 @@ test("login password visibility control has stable accessible names and pressed 
   assert.match(loginSource, /<Eye size=\{18\} aria-hidden="true" \/>/);
 });
 
-test("monthly comparison quick range controls expose group and pressed semantics", () => {
-  assert.match(setupCardSource, /role="group"\s*aria-label="Quick monthly comparison ranges"/s);
-  assert.match(setupCardSource, /aria-label=\{`Apply quick range \$\{preset\.label\}`\}/);
-  assert.match(setupCardSource, /const pressedProps = active/);
-  assert.match(setupCardSource, /"aria-pressed": "true" as const/);
-  assert.match(setupCardSource, /"aria-pressed": "false" as const/);
-  assert.match(setupCardSource, /\{\.\.\.pressedProps\}/);
-  assert.doesNotMatch(setupCardSource, /aria-pressed=\{active\}/);
+test("monthly comparison native quick range select keeps its visible label, selected value and disabled gate", () => {
+  assert.match(setupCardSource, /htmlFor="collection-monthly-comparison-quick-range"/);
+  assert.match(setupCardSource, /Quick range/);
+  const select = setupCardSource.match(/<select\b[\s\S]*?<\/select>/)?.[0];
+  assert.ok(select, "Quick ranges retain native keyboard and screen-reader select semantics");
+  assert.match(select, /id="collection-monthly-comparison-quick-range"/);
+  assert.match(select, /value=\{activeRangePreset\?\.id \|\| ""\}/);
+  assert.match(select, /onRangePresetApply\(preset\)/);
+  assert.match(select, /disabled=\{loading \|\| !hasAvailableNickname\}/);
+  assert.match(select, /<option key=\{preset\.id\} value=\{preset\.id\}>\{preset\.label\}<\/option>/);
+  assert.doesNotMatch(select, /aria-pressed/);
 });
 
 test("collection month field keeps its label and format hint associated with input", () => {

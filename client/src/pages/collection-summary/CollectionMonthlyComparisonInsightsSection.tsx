@@ -32,7 +32,7 @@ export function CollectionMonthlyComparisonInsightsSection({
   trendExplanation,
 }: CollectionMonthlyComparisonInsightsSectionProps) {
   return (
-    <div className="grid gap-4 border-t border-border pt-4 xl:grid-cols-2">
+    <div className="monthly-comparison-insights-layout grid gap-4 border-t border-border pt-4 xl:grid-cols-2">
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-medium text-foreground">Comparison summary</p>
