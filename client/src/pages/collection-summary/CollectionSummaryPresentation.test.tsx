@@ -86,14 +86,31 @@ test("summary removes duplicate heading and restores mobile filter focus", () =>
   assert.match(source, /mobileFiltersTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
 });
 
-test("monthly comparison shows the trend before secondary diagnostics and retains target details", () => {
+test("monthly comparison shows the ledger before closed secondary diagnostics and retains target details", () => {
   const panel = readFileSync(new URL("./CollectionMonthlyComparisonPanel.tsx", import.meta.url), "utf8");
   const setup = readFileSync(new URL("./CollectionMonthlyComparisonSetupCard.tsx", import.meta.url), "utf8");
-  assert.ok(panel.indexOf("<CollectionMonthlyComparisonBreakdownSection") < panel.indexOf("<CollectionSameDayPaceSection"));
-  assert.ok(panel.indexOf("<CollectionMonthlyComparisonBreakdownSection") < panel.indexOf("<CollectionMonthlyComparisonInsightsSection"));
-  assert.match(setup, /<details/);
-  assert.match(setup, /<summary[^>]*>[\s\S]*Monthly target: \{targetDisplayLabel\}/);
-  assert.match(setup, /<CollectionComparisonTargetCards/);
+  const ledgerPosition = panel.indexOf("<CollectionMonthlyComparisonLedger");
+  assert.ok(ledgerPosition >= 0, "The primary visual ledger is present");
+  for (const [testId, components] of [
+    ["collection-monthly-same-day-analysis", ["<CollectionSameDayPaceSection", "{sameDayPaceChartSlot}"]],
+    ["collection-monthly-detailed-analysis", ["<CollectionMonthlyComparisonBreakdownSection", "chartSlot={chartSlot}", "<CollectionMonthlyComparisonInsightsSection"]],
+  ] as const) {
+    const disclosure = panel.match(new RegExp(`<details\\b[^>]*data-testid="${testId}"[^>]*>[\\s\\S]*?<\\/details>`))?.[0];
+    assert.ok(disclosure, `Native disclosure ${testId} is present`);
+    assert.ok(ledgerPosition < panel.indexOf(disclosure), "The ledger precedes secondary diagnostics");
+    const openingTag = disclosure.slice(0, disclosure.indexOf(">") + 1);
+    assert.doesNotMatch(openingTag, /\bopen(?:=|\s|>)/, "Secondary diagnostics remain closed by default");
+    for (const component of components) {
+      assert.ok(disclosure.includes(component), `${component} stays mounted inside ${testId}`);
+    }
+    assert.ok(disclosure.indexOf(components[0]) < disclosure.indexOf(components[components.length - 1]!),
+      "The primary analysis precedes its supplementary content");
+  }
+  const targetDetails = setup.match(/<details\b[^>]*>[\s\S]*?<\/details>/)?.[0];
+  assert.ok(targetDetails, "Target details remain available");
+  assert.doesNotMatch(targetDetails.slice(0, targetDetails.indexOf(">") + 1), /\bopen(?:=|\s|>)/);
+  assert.match(targetDetails, /<summary[^>]*aria-label=\{`Monthly target details: \$\{targetDisplayLabel\}`\}>\s*Target details\s*<\/summary>/);
+  assert.match(targetDetails, /<CollectionComparisonTargetCards/);
   assert.match(setup, /onClick=\{onPrintReport\}/);
   assert.match(setup, /onClick=\{onExportCsv\}/);
   assert.match(setup, /disabled=\{loading \|\| monthlyTargetLoading \|\| !data\}/);
