@@ -19,6 +19,10 @@ const formStateSource = readFileSync(
   path.resolve(process.cwd(), "client/src/pages/collection/useSaveCollectionFormState.ts"),
   "utf8",
 );
+const superuserSaveCollectionPageSource = readFileSync(
+  path.resolve(process.cwd(), "client/src/pages/collection/SuperuserSaveCollectionPage.tsx"),
+  "utf8",
+);
 
 test("save collection fields use explicit invalid props for Edge a11y inspection", () => {
   assert.match(saveCollectionPageSource, /function getInvalidFieldProps/);
@@ -157,14 +161,21 @@ test("visible required markers follow existing required fields without changing 
   }
 });
 
-test("draft guidance states privacy limits and correction/reset are scoped to the current form", () => {
-  assert.match(saveCollectionPageSource, /Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah\./);
-  assert.match(saveCollectionPageSource, /Maklumat pelanggan, nombor akaun\/kad dan fail resit tidak disimpan dalam draf\./);
-  assert.match(saveCollectionPageSource, /Isi atau muat naik semula selepas reload\./);
+test("compact guidance omits draft explanations while correction/reset remain scoped to the current form", () => {
+  assert.doesNotMatch(saveCollectionPageSource, /save-collection-draft-details|Draf sesi hanya|Draf: batch/);
+  assert.doesNotMatch(saveCollectionPageSource, /Maklumat pelanggan, nombor akaun\/kad dan fail resit tidak disimpan dalam draf\./);
+  assert.match(saveCollectionPageSource, /save-collection-form-hints/);
   assert.doesNotMatch(saveCollectionPageSource, /Draft auto-saves in this browser session\./);
   assert.match(saveCollectionPageSource, /correctionDisabled=\{state\.submitting \|\| accessSuspended \|\| state\.resetConfirmOpen\}/);
   assert.match(saveCollectionPageSource, /if \(!state\.submitting && !accessSuspended && !state\.resetConfirmOpen\) \{\s+focusSaveCollectionField\(field\)/);
   assert.match(saveCollectionPageSource, /id="save-collection-reset-form"/);
   assert.match(saveCollectionPageSource, /<\/fieldset>\s+<SaveCollectionResetDialog/);
   assert.match(saveCollectionPageSource, /onConfirm=\{state\.confirmReset\}/);
+});
+
+test("nickname selection omits explanatory content without changing isolated forms", () => {
+  assert.doesNotMatch(superuserSaveCollectionPageSource, /collection-save-nickname-context|Menukar nickname|Draf bayaran disimpan berasingan/);
+  assert.match(superuserSaveCollectionPageSource, /triggerId="save-collection-superuser-nickname"/);
+  assert.match(superuserSaveCollectionPageSource, /key=\{`\$\{selected\.id\}:\$\{selected\.nickname\}`\}/);
+  assert.match(superuserSaveCollectionPageSource, /if \(submittingRef\.current\) return/);
 });

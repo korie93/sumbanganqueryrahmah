@@ -438,23 +438,12 @@ function SaveCollectionPage({
     <section aria-labelledby="save-collection-form-title" className="save-collection-workspace mx-auto w-full min-w-0 max-w-none space-y-5">
       <header className="save-collection-form-guidance space-y-2">
         <h2 id="save-collection-form-title" className="sr-only">Simpan Collection Individual</h2>
-        <div className="save-collection-privacy-guidance text-xs leading-5 text-muted-foreground">
-          <details className="save-collection-draft-details">
-            <summary>Draf: batch, tarikh bayaran dan jumlah sahaja.</summary>
-            <p>
-              Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.
-              {" "}
-              Maklumat pelanggan, nombor akaun/kad dan fail resit tidak disimpan dalam draf.
-              {" "}Isi atau muat naik semula selepas reload.
-            </p>
-          </details>
+        <div className="save-collection-form-hints text-xs leading-5 text-muted-foreground">
+          <p>Medan bertanda (wajib) mesti dilengkapkan.</p>
           <p className="save-collection-shortcut-hint">
             Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
           </p>
         </div>
-        <p className="text-xs leading-5 text-muted-foreground">
-          Medan bertanda (wajib) mesti dilengkapkan.
-        </p>
         {state.draftRestoreNotice ? (
           <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Draft restored.</span>

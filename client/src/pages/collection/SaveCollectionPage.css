@@ -2,35 +2,12 @@
   padding-inline: 0.125rem;
 }
 
-.save-collection-workspace .save-collection-privacy-guidance {
+.save-collection-workspace .save-collection-form-hints {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.25rem 1.5rem;
-}
-
-.save-collection-workspace .save-collection-draft-details {
-  flex: 1 1 36rem;
-  min-width: 0;
-}
-
-.save-collection-workspace .save-collection-draft-details > summary {
-  width: fit-content;
-  max-width: 100%;
-  cursor: pointer;
-  border-radius: var(--radius-control);
-  padding-block: 0.375rem;
-}
-
-.save-collection-workspace .save-collection-draft-details > summary:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}
-
-.save-collection-workspace .save-collection-draft-details > p {
-  max-width: 80ch;
-  padding-block: 0.25rem;
 }
 
 .save-collection-workspace .save-collection-details-grid {
@@ -193,11 +170,6 @@
 
   .save-collection-workspace .save-collection-shortcut-hint {
     display: none;
-  }
-
-  .save-collection-workspace .save-collection-draft-details > summary {
-    min-height: 2.75rem;
-    align-content: center;
   }
 }
 

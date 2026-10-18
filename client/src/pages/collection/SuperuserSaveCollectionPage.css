@@ -24,21 +24,6 @@
 }
 .collection-save-nickname-picker label { color: hsl(var(--muted-foreground)); }
 
-.collection-save-nickname-context {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: var(--spacing-2);
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius-control);
-  background: hsl(var(--background));
-  padding: var(--spacing-3);
-  color: hsl(var(--muted-foreground));
-  font-size: 0.75rem;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-
 .collection-save-nickname-controls > button {
   width: 2.75rem;
   padding-inline: 0;
@@ -53,7 +38,6 @@
 
 @media (min-width: 1024px) {
   .collection-save-nickname {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: center;
     padding: var(--spacing-5);
   }

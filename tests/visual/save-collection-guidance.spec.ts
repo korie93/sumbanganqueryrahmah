@@ -137,15 +137,11 @@ for (const viewport of [{ width: 320, height: 844 }, { width: 740, height: 360 }
   await checkFixture(page, fixture);
 });
 
-test("Save guidance draft copy matches privacy-preserving reload behavior", async ({ page, baseURL }) => {
+test("Save guidance stays compact and preserves private draft reload behavior", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL, { restore: draft });
   await openSave(page);
-  const draftDetails = page.locator(".save-collection-draft-details");
-  await expect(draftDetails).not.toHaveAttribute("open");
-  await draftDetails.locator("summary").click();
-  await expect(draftDetails).toHaveAttribute("open");
-  await expect(page.getByText("Draf sesi hanya merangkumi batch, tarikh bayaran dan jumlah.")).toBeVisible();
-  await expect(page.getByText(/Maklumat pelanggan, nombor akaun\/kad dan fail resit tidak disimpan dalam draf/)).toBeVisible();
+  await expect(page.locator(".save-collection-draft-details")).toHaveCount(0);
+  await expect(page.getByText(/^Draf: batch/)).toHaveCount(0);
   await fillIdentity(page);
   await page.locator("#save-collection-card-number").fill("00009007199254740993");
   await addReceipt(page);
@@ -228,6 +224,8 @@ test("Save guidance cancelled Reset preserves failed mutation idempotency for re
 test("Save guidance superuser selection and suspended access preserve local work", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL, { role: "superuser", holdNicknameReload: true });
   await page.goto("/collection/save");
+  await expect(page.locator(".collection-save-nickname-context")).toHaveCount(0);
+  await expect(page.getByText(/Menukar nickname|Draf bayaran disimpan berasingan/)).toHaveCount(0);
   await page.locator("#save-collection-superuser-nickname").click();
   await page.getByRole("button", { name: nickname, exact: true }).click();
   await page.locator("#save-collection-customer-name").fill("Synthetic Superuser Draft");

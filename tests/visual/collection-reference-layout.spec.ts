@@ -77,14 +77,8 @@ for (const width of [1920, 1600, 1440, 1280, 1024, 768, 390]) {
     await expect(dateTrigger).toHaveCSS("border-radius", inputStyle.radius);
     await expect(dateTrigger).toHaveCSS("border-color", inputStyle.border);
     await expect(dateTrigger).toHaveCSS("background-color", inputStyle.background);
-    const draftDetails = page.locator(".save-collection-draft-details");
-    await expect(draftDetails).not.toHaveAttribute("open");
-    await draftDetails.locator("summary").focus();
-    await page.keyboard.press("Enter");
-    await expect(draftDetails).toHaveAttribute("open");
-    await expect(draftDetails).toContainText("Maklumat pelanggan, nombor akaun/kad dan fail resit tidak disimpan dalam draf.");
-    await page.keyboard.press("Enter");
-    await expect(draftDetails).not.toHaveAttribute("open");
+    await expect(page.locator(".save-collection-draft-details")).toHaveCount(0);
+    await expect(page.locator(".collection-save-nickname-context")).toHaveCount(0);
     const receiptHeader = receipt.locator(".save-collection-section-header");
     const clearPending = receiptHeader.getByRole("button", { name: "Clear Pending", exact: true });
     await expect(clearPending).toBeDisabled();
@@ -331,7 +325,6 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
     await assertLauncherClearance();
 
     for (const target of [
-      page.locator(".save-collection-draft-details summary"),
       customerName,
       page.locator("#save-collection-customer-phone"),
       page.locator("#save-collection-account-number"),

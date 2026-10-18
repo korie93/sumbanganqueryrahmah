@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Info, RotateCw } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCollectionNicknames, type CollectionStaffNickname } from "@/lib/api";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
@@ -76,13 +76,6 @@ export default function SuperuserSaveCollectionPage() {
               <RotateCw className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="hidden sm:inline">Muat Semula</span>
             </Button>
-          </div>
-          <div className="collection-save-nickname-context">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            <p>
-              Menukar nickname mengosongkan butiran pelanggan dan resit semasa.
-              {" "}Draf bayaran disimpan berasingan bagi setiap nickname.
-            </p>
           </div>
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
           {!loading && !error && nicknames.length === 0 ? (
