@@ -11,6 +11,7 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
   loading?: "comparison" | "target";
   role?: "admin" | "user";
   stress?: boolean;
+  strictStyleCsp?: boolean;
 } = {}) {
   expect(baseURL, "Run through npm run test:visual:built").toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -45,6 +46,16 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
       return route.abort();
     }
     if (!url.pathname.startsWith("/api/")) {
+      if (options.strictStyleCsp && request.isNavigationRequest() && request.resourceType() === "document") {
+        const response = await route.fetch();
+        const headers = response.headers();
+        // Add a restrictive policy even on the static preview. Multiple CSPs
+        // intersect; any existing production policy remains enforced too.
+        headers["content-security-policy"] = [headers["content-security-policy"],
+          "style-src 'self'; style-src-elem 'self'; style-src-attr 'none'"]
+          .filter(Boolean).join(", ");
+        return route.fulfill({ response, headers });
+      }
       if (["GET", "HEAD"].includes(request.method())) return route.continue();
       fixture.unexpected.push(`${request.method()} ${url.pathname}`);
       return route.abort();
@@ -358,11 +369,15 @@ test("Monthly invalid month guidance keeps peer controls aligned and does not ch
 test("Monthly text at 200 percent reflows at a 720px viewport without clipping report controls", async ({ page, baseURL }, testInfo) => {
   // A real reflow viewport plus doubled root text, not pinch zoom or a scaled screenshot.
   await page.setViewportSize({ width: 720, height: 1000 });
-  const fixture = await installFixture(page, baseURL, "light", { stress: true, role: "user" });
-  await page.goto("/collection/monthly-comparison");
+  const fixture = await installFixture(page, baseURL, "light", { stress: true, role: "user", strictStyleCsp: true });
+  const documentResponse = await page.goto("/collection/monthly-comparison");
+  expect(documentResponse?.headers()["content-security-policy"]).toContain("style-src-elem 'self'");
   const panel = page.locator(".collection-monthly-comparison-panel");
   await expect(panel.getByRole("button", { name: "Export CSV", exact: true })).toBeEnabled();
-  await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+  // CSSOM mirrors user text resizing without injecting a forbidden style tag
+  // or bypassing the application's Content Security Policy.
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await expect(page.locator("html")).toHaveCSS("font-size", "32px");
   await expect(panel.getByLabel("Staff nickname", { exact: true })).toHaveAttribute("readonly", "");
   await panel.locator('summary[aria-label^="Monthly target details:"]').click();
   await expectContainedMonthlyLayout(page, panel);
@@ -418,12 +433,31 @@ for (const theme of ["light", "dark"] as const) {
       expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       // Keep screenshots independent of hover caused by the preceding Apply
       // click or the element screenshot's automatic scroll into view.
+      await page.locator("html.app-ready").waitFor({ state: "attached" });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await page.evaluate(() => document.fonts.ready);
       await page.mouse.move(0, 0);
+      if (width === 390) {
+        // Normalize the scrollable strip's state, not its appearance. The
+        // active tab stays fully visible; no navigation content is masked.
+        await page.getByRole("navigation", { name: "Collection sections", exact: true }).evaluate((nav) => {
+          const active = nav.querySelector<HTMLElement>('[data-active="true"]');
+          if (!active) throw new Error("The Monthly navigation tab must be active");
+          const target = active.getBoundingClientRect(), viewport = nav.getBoundingClientRect();
+          nav.scrollTo({ left: nav.scrollLeft + target.right - viewport.right + 4, behavior: "instant" });
+        });
+      }
       await testInfo.attach(`monthly-visual-ledger-${theme}-${width}`, {
         body: await panel.screenshot(), contentType: "image/png",
       });
       await page.evaluate(() => window.scrollTo(0, 0));
-      await expect(page).toHaveScreenshot(`monthly-visual-ledger-${theme}-${width}.png`, { fullPage: true });
+      // Native system fonts wrap differently on Windows and Linux phones.
+      // Keep full-page coverage without masking text or widening tolerance.
+      if (width === 390) {
+        expect(["win32", "linux"], "Phone snapshots require a reviewed native-platform baseline").toContain(process.platform);
+      }
+      const platformSuffix = width === 390 ? `-${process.platform}` : "";
+      await expect(page).toHaveScreenshot(`monthly-visual-ledger-${theme}-${width}${platformSuffix}.png`, { fullPage: true });
       expect(fixture.unexpected).toEqual([]);
       expect(fixture.errors).toEqual([]);
     });
