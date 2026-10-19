@@ -15,6 +15,21 @@ test("expanded auth screenshots remain loopback-only mocked component evidence",
   assert.match(fixture, /view === "forgot"[\s\S]*<ForgotPassword onBackToLogin=/);
 });
 
+test("auth fixture seeds a sanitized theme preference before mounting recovery pages", () => {
+  assert.match(fixture, /const fixtureTheme = parameters\.get\("theme"\) === "dark" \? "dark" : "light"/);
+  assert.match(fixture, /localStorage\.setItem\("theme", fixtureTheme\)/);
+  assert.match(fixture, /document\.documentElement\.classList\.toggle\("dark", fixtureTheme === "dark"\)/);
+  const preferenceIndex = fixture.indexOf('localStorage.setItem("theme", fixtureTheme)');
+  const renderIndex = fixture.indexOf("async function renderHarness()");
+  const mountIndex = fixture.indexOf('const root = createRoot(document.getElementById("root"))');
+  assert.ok(preferenceIndex >= 0 && renderIndex > preferenceIndex && mountIndex > preferenceIndex,
+    "The real useTheme hook must observe the fixture preference on first mount.");
+  assert.doesNotMatch(fixture, /localStorage\.setItem\("theme", parameters\.get\("theme"\)\)/,
+    "Unvalidated query values cannot become stored theme preferences.");
+  assert.match(source, /await expect\.poll\(\(\) => page\.evaluate\(\(\) => document\.documentElement\.classList\.contains\("dark"\)\), \{ timeout: 5_000 \}\)\.toBe\(theme === "dark"\)/,
+    "Every navigation must verify the requested theme rather than silently testing light twice.");
+});
+
 test("expanded screenshots mask credential and manual key values while retaining visible labels", () => {
   assert.match(source, /mask: \[page\.locator\('input\[type="password"\], #my-account-two-factor-secret, #my-account-two-factor-code, #login-two-factor-code'\)\]/);
   for (const state of [

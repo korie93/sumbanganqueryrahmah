@@ -116,3 +116,8 @@ test("recovery context, toolbar and form use coordinated alignment rails", () =>
   assert.match(css, /padding: 24px max\(16px, calc\(\(100vw - 440px\) \/ 2\)\)/);
   assert.doesNotMatch(css, /100vw - 480px/);
 });
+
+test("compact strength feedback retains a two-line layout reserve for fallback fonts", () => {
+  const css = readFileSync(new URL("./CredentialRecoveryLayout.css", import.meta.url), "utf8");
+  assert.match(css, /\.credential-recovery \.credential-recovery-requirements > div:last-child > div:first-child \{ min-height: 40px/);
+});

@@ -85,7 +85,11 @@ function TwoFactorSetupHarness() {
 
 const parameters = new URLSearchParams(location.search);
 const view = parameters.get("view");
-document.documentElement.classList.toggle("dark", parameters.get("theme") === "dark");
+// Recovery pages resolve the same stored preference as the real app. Seed only
+// this disposable fixture's sanitized presentation setting before React mounts.
+const fixtureTheme = parameters.get("theme") === "dark" ? "dark" : "light";
+localStorage.setItem("theme", fixtureTheme);
+document.documentElement.classList.toggle("dark", fixtureTheme === "dark");
 
 async function renderHarness() {
   // Match main.tsx: public password/login pages receive only the public CSS.

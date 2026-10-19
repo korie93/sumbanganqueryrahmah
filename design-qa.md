@@ -1700,3 +1700,27 @@ Date: 2026-10-19. Scoped Product Design response to the user's observation that 
 Implementation checklist: fresh before evidence, shared stacked rails, desktop heading offset, form-aligned control row, preserved content/workflow, unit and rendered geometry regressions, responsive/theme/locale matrix and post-fix comparison — complete. No commit, push or deployment performed.
 
 final result: passed
+
+---
+
+# CI follow-up — wrapping strength labels and authentic theme coverage
+
+Date: 2026-10-19. CI run `39187167459` on `9e49a026db03ed7959509f70be00b930d5bc7d6b` failed job `smoke-ui`, step 21, “Verify password and authenticator browser feedback”; build-and-test and coverage-gate passed. Public GitHub job metadata confirmed the failing step. Raw job-log download returned HTTP403, so diagnosis uses the exact local CI command, not a claim to have read the restricted log.
+
+## Confirmed regression and fix
+
+- Local `npm run test:auth:browser` reproduced an assertion failure before the first PASS marker (`artifacts/auth-feedback-ci-repro.log`). The existing runner deliberately forces a wrapping monospace fallback-font strength label at 360px; the prior compact recovery CSS had reduced the row reserve from 40px to 22px. This was a real layout-stability regression, not a reason to remove or relax the assertion.
+- Controlled synthetic before/after probe: `artifacts/auth-feedback-ci-height-probe.json`. The old reservation produced a 19px checklist height spread in both reset and activation; restoring the two-line 40px reserve reduced that spread to within the existing 1px tolerance. No password or OTP was submitted by the probe. The source CSS now reserves the original two-line footprint, and a persistent recovery-layout test protects it.
+- The isolated fixture previously toggled the root dark class without seeding the presentation preference consumed by the new `useTheme()` shell. It now sanitizes its theme query to light/dark and seeds only that disposable fixture's theme preference before React mounts. Every runner navigation explicitly checks the requested root theme with a bounded assertion, preventing a dark case from silently running light. Production theme storage behavior is unchanged.
+- Added credential-safe phase labels and numeric-only geometry diagnostics for future layout failures. Raw assertion details remain suppressed; masking, policy, confirmation, mutation guards, OTP rejection/replay, stale setup response handling and accessibility assertions are retained. No retry, tolerance, timeout or contrast rule was weakened.
+
+## Verification evidence and limits
+
+- Recovery component/policy tests: 8/8 passed (`auth-feedback-ci-unit.log`). Auth fixture/capture/focus contracts: 9/9 passed (`auth-feedback-ci-contracts-final.log`). Scoped configured-source ESLint and whitespace checks passed. The JSX fixture is compiled and exercised by its real-browser runner rather than an unsupported ESLint configuration.
+- First broad local rerun passed both forced-wrap regressions, password workflows, OTP and guided 2FA, then its Vite fixture became blank during a concurrent host-native out-of-memory event. The simultaneous build also failed native allocation. This is recorded as an environmental interruption, not counted as a passing run or hidden by retries. Subsequent verification is run serially.
+- Serial production build passed (`auth-feedback-ci-build-serial.log`), including status assets, CSP hashes and zero production sourcemaps. The exact full CI command `npm run test:auth:browser` passed serially with exit0 and the final “PASS all isolated UI contracts” marker (`auth-feedback-ci-verified.log`). This includes forced-wrap stability, all password visibility/confirmation workflows, policy/backend-rejection feedback, invalid/expired/used links, OTP rejection/replay and restart autofocus, guided 2FA and stale-response cleanup, six-width public light/dark accessibility/contrast, and expanded forgot/change/OTP/2FA state captures at 390/1280px in both themes. No assertion was skipped or weakened.
+- Independent read-only review found no security/lifecycle assertion weakened. Local synthetic fixtures only: no production, database, real account, mail delivery, credentials or environment-file changes. No commit, push, remote workflow rerun or deployment performed for this follow-up.
+
+Acceptance complete for the locally reproduced failing gate. Remote GitHub CI has not yet run this uncommitted patch; no remote-green or live backend E2E claim is made.
+
+final result: passed

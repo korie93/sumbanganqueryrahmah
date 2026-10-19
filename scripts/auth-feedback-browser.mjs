@@ -80,8 +80,9 @@ async function visibleText(locator, text) {
 }
 
 async function go(view, token = "fixture-link", theme = "light", extra = {}) {
-  phase = `${view}: fixture navigation`;
+  phase = `${view}/${page.viewportSize().width}/${theme}: fixture navigation`;
   await page.goto(`${origin}/?${new URLSearchParams({ view, token, theme, ...extra })}`, { waitUntil: "networkidle" });
+  await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")), { timeout: 5_000 }).toBe(theme === "dark");
 }
 
 async function captureAuthState(name, theme) {
@@ -284,6 +285,7 @@ async function submitPasswordAndCheckPending(submit, fieldIds) {
 }
 
 async function checkLiveRequirements(view, password, meter, submit) {
+  markPhase(`${view}: stable live password requirements`);
   const before = { ...counts };
   const requirements = meter.locator("[data-password-requirement]");
   assert.deepEqual(await requirements.evaluateAll((elements) => elements.map((element) => element.dataset.passwordRequirement)), ["length", "lowercase", "uppercase", "number", "symbol"], "Checklist must expose every actual policy requirement in a stable order.");
@@ -296,6 +298,7 @@ async function checkLiveRequirements(view, password, meter, submit) {
     assert.equal((await meter.innerText()).includes("Kata laluan sah"), expected.every(Boolean), "Strength must never override a failed mandatory requirement.");
     assert.equal(await requirements.locator("svg").count(), 5, "Requirement states use icons as well as text/color.");
     const height = (await meter.boundingBox()).height;
+    if (Math.abs(height - initialHeight) > 1) console.error(`[auth-feedback-browser] LAYOUT ${view}/${page.viewportSize().width}: checklist height ${initialHeight}px -> ${height}px`);
     assert.ok(Math.abs(height - initialHeight) <= 1,
       `${view} ${page.viewportSize().width}px: checklist height changed from ${initialHeight}px to ${height}px at ${candidate.length} characters. Checklist and meter reserve stable space as rules change.`);
   }
@@ -314,7 +317,8 @@ async function checkLiveRequirements(view, password, meter, submit) {
 async function checkWrappedStrengthLayout(view) {
   await page.setViewportSize({ width: 360, height: 960 });
   await go(view);
-  // Different OS fallback fonts can wrap a strength label in the 6rem column.
+  markPhase(`${view}: wrapping fallback-font strength label`);
+  // Different OS fallback fonts can wrap a strength label in its narrow column.
   // Exercise that condition on every runner, not only where it occurs by default.
   await page.addStyleTag({ content: "[data-password-strength-label] { font-family: monospace; letter-spacing: 0.08em; }" });
   const prefix = view === "reset" ? "reset-password" : "activate-account";
