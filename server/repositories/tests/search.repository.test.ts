@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { db, dbRead } from "../../db-postgres";
 import { encryptCollectionPiiWithSecret } from "../../lib/collection-pii-encryption-crypto";
 import { normalizeSearchJsonPayload } from "../search-repository-shared";
@@ -7,6 +9,10 @@ import {
   MAX_SEARCH_OFFSET,
   SearchRepository,
 } from "../search.repository";
+import {
+  MAX_SEARCH_COLLECTION_STATUS_CANDIDATES,
+  type SearchCollectionStatusCandidate,
+} from "../search-repository-types";
 import {
   collectBoundValues,
   collectSqlLiteralText,
@@ -258,6 +264,59 @@ test("SearchRepository.findCollectionStatusesForRows uses one parameterized boun
       purgedBy: null,
       matchBasis: "source_and_identifier",
     }]);
+  } finally {
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.findCollectionStatusesForRows bounds the candidate plan to the serialized count", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = dbRead.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = (async (query: Parameters<typeof dbRead.execute>[0]) => {
+    rawQueries.push(query);
+    return { rows: [] };
+  }) as unknown as typeof dbRead.execute;
+
+  const makeCandidates = (count: number): SearchCollectionStatusCandidate[] => Array.from(
+    { length: count },
+    (_, index) => ({
+      rowId: `candidate-row-${index}`,
+      sourceImportId: "candidate-import",
+      icHash: null,
+      icValue: null,
+      phoneHash: null,
+      phoneValue: null,
+      accountHashes: [],
+      accountValues: [`PRIVATE-ACCOUNT-${index}`],
+    }),
+  );
+
+  try {
+    for (const count of [1, 3, MAX_SEARCH_COLLECTION_STATUS_CANDIDATES + 5]) {
+      rawQueries.length = 0;
+      await repository.findCollectionStatusesForRows(makeCandidates(count), { kind: "all" });
+      assert.equal(rawQueries.length, 1);
+      const compiled = new PgDialect().sqlToQuery(rawQueries[0] as SQL);
+      const candidateLimit = compiled.sql.match(
+        /WITH candidates AS\s*\([\s\S]*?LIMIT\s+\$(\d+)\s*\),\s*collection_status_records AS/i,
+      );
+      assert.ok(candidateLimit, "The candidates CTE must have a parameterized row bound");
+      const expectedCount = Math.min(count, MAX_SEARCH_COLLECTION_STATUS_CANDIDATES);
+      assert.equal(compiled.params[Number(candidateLimit[1]) - 1], expectedCount);
+      const serializedCandidates = compiled.params.find((value) =>
+        typeof value === "string" && value.startsWith('[{"row_id":'));
+      assert.equal(typeof serializedCandidates, "string");
+      const parsedCandidates = JSON.parse(serializedCandidates as string) as Array<{ row_id: string }>;
+      assert.equal(parsedCandidates.length, expectedCount);
+      assert.equal(parsedCandidates[parsedCandidates.length - 1]?.row_id, `candidate-row-${expectedCount - 1}`);
+      assert.equal(compiled.sql.includes("PRIVATE-ACCOUNT-"), false);
+    }
+
+    rawQueries.length = 0;
+    assert.deepEqual(await repository.findCollectionStatusesForRows([], { kind: "all" }), []);
+    assert.deepEqual(await repository.findCollectionStatusesForRows(makeCandidates(1), { kind: "none" }), []);
+    assert.equal(rawQueries.length, 0, "Empty or unauthorized candidates must not issue SQL");
   } finally {
     (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalExecute;
   }

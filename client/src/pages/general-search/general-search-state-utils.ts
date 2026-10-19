@@ -3,6 +3,13 @@ import type { FilterRow, SearchResultRow } from "@/pages/general-search/types";
 export const GENERAL_SEARCH_DEFAULT_PAGE_SIZE = 50;
 export const GENERAL_SEARCH_LOW_SPEC_DEFAULT_PAGE_SIZE = 40;
 
+export function shouldAutomaticallyRefreshGeneralSearch(
+  searched: boolean,
+  previouslySearched: boolean,
+) {
+  return searched && previouslySearched;
+}
+
 type SearchResponsePayload = {
   results?: SearchResultRow[];
   rows?: SearchResultRow[];

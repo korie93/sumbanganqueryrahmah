@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   buildGeneralSearchPageSizeOptions,
@@ -7,7 +8,45 @@ import {
   normalizeGeneralSearchResponse,
   resolveDefaultGeneralSearchPageSize,
   resolveConfiguredSearchResultLimit,
+  shouldAutomaticallyRefreshGeneralSearch,
 } from "@/pages/general-search/general-search-state-utils";
+
+test("first explicit submit is not automatically aborted and resubmitted", () => {
+  assert.equal(shouldAutomaticallyRefreshGeneralSearch(false, false), false);
+  assert.equal(shouldAutomaticallyRefreshGeneralSearch(true, false), false);
+});
+
+test("later input, mode, filter and page-size refreshes remain enabled", () => {
+  assert.equal(shouldAutomaticallyRefreshGeneralSearch(true, true), true);
+});
+
+test("reset or empty query disables refresh and rearms a single next submit", () => {
+  let previouslySearched = false;
+  const refreshes = [false, true, true, false, false, true, true].map((searched) => {
+    const refresh = shouldAutomaticallyRefreshGeneralSearch(searched, previouslySearched);
+    previouslySearched = searched;
+    return refresh;
+  });
+  assert.deepEqual(refreshes, [false, false, true, false, false, false, true]);
+});
+
+test("the hook guards the first submit but preserves live refresh and cancellation cleanup", () => {
+  const source = readFileSync(new URL("./useGeneralSearchDataState.ts", import.meta.url), "utf8");
+  assert.match(source, /const previouslySearchedRef = useRef\(false\)/);
+  assert.match(source, /const previouslySearched = previouslySearchedRef\.current;\s+previouslySearchedRef\.current = searched;/);
+  assert.match(source, /if \(!shouldAutomaticallyRefreshGeneralSearch\(searched, previouslySearched\)\) return;/);
+  assert.match(source, /\[advancedMode, handleAdvancedSearch, handleSimpleSearch, resultsPerPage, searched\]/);
+  assert.match(source, /void handleAdvancedSearch\(1\)/);
+  assert.match(source, /void handleSimpleSearch\(1\)/);
+  const clearQuery = source.slice(source.indexOf("const handleQueryChange"), source.indexOf("const resetSearchState"));
+  const reset = source.slice(source.indexOf("const resetSearchState"), source.indexOf("const handleResultsPerPageChange"));
+  for (const cancel of [clearQuery, reset]) {
+    assert.match(cancel, /searchRequestIdRef\.current \+= 1/);
+    assert.match(cancel, /searchAbortControllerRef\.current\?\.abort\(\)/);
+    assert.match(cancel, /setLoading\(false\)/);
+    assert.match(cancel, /setSearched\(false\)/);
+  }
+});
 
 test("resolveConfiguredSearchResultLimit clamps invalid and out-of-range inputs", () => {
   assert.equal(resolveConfiguredSearchResultLimit(undefined), 200);

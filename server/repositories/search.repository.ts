@@ -237,6 +237,8 @@ export class SearchRepository {
       account_hashes: candidate.accountHashes,
       account_values: candidate.accountValues,
     })));
+    // Cap PostgreSQL's default JSON row estimate at the actual input length;
+    // an inflated estimate can trigger costly JIT for a one-row lookup.
     const result = await dbRead.execute(sql`
       WITH candidates AS (
         SELECT *
@@ -250,6 +252,7 @@ export class SearchRepository {
           account_hashes jsonb,
           account_values jsonb
         )
+        LIMIT ${boundedCandidates.length}
       ),
       collection_status_records AS (
         SELECT

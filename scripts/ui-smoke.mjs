@@ -872,14 +872,52 @@ const checkBillingPrincipalV9UiFlow = async (page, context, tracker) => {
       .catch((error) => recordBestEffortFailure("cleanup Billing V3 source", error));
   }
 };
+const submitCollectionSmokeGeneralSearch = async (page, accountNumber, expectedState) => {
+  assert(
+    expectedState === "recorded" || expectedState === "not_recorded",
+    "General Search smoke requires a supported Collection status.",
+  );
+  const query = String(accountNumber || "").trim();
+  assert(query, "General Search smoke requires a fixture account.");
+  // Arm before filling: the response must belong to this search, not an earlier
+  // page/query or a stale badge that remains visible while the new search loads.
+  const [response] = await Promise.all([
+    page.waitForResponse((candidate) => {
+      const url = new URL(candidate.url());
+      return candidate.request().method() === "GET"
+        && url.origin === new URL(baseUrl).origin
+        && url.pathname === "/api/search/global"
+        && url.searchParams.get("q") === query
+        && url.searchParams.get("page") === "1";
+    }, { timeout: 15_000 }),
+    (async () => {
+      await page.getByTestId("input-search").fill(query);
+      await page.getByTestId("button-search").click();
+    })(),
+  ]);
+  assertSmokeResponseStatus(response, 200, "Search Collection fixture in General Search");
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error("General Search returned an invalid JSON payload.");
+  }
+  assert(Array.isArray(payload?.rows), "General Search must return result rows.");
+  const fixtureRow = payload.rows.find((row) => row?.["Account No"] === query);
+  assert(fixtureRow, "General Search must return the exact fixture account.");
+  assert(
+    fixtureRow._collectionStatus?.state === expectedState,
+    `General Search fixture must have Collection status ${expectedState}.`,
+  );
+  return fixtureRow;
+};
+
 const verifyCollectionSmokeGeneralSearch = async (page, values) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await navigateForSmoke(page, "/general-search");
   await page.getByRole("heading", { name: "Data Search" }).waitFor({ timeout: 15_000 });
 
-  const queryInput = page.getByTestId("input-search");
-  await queryInput.fill(values.accountNumber);
-  await page.getByTestId("button-search").click();
+  await submitCollectionSmokeGeneralSearch(page, values.accountNumber, "recorded");
   await page.getByText("Collection direkodkan", { exact: true }).first().waitFor({ timeout: 15_000 });
 
   const historyRequests = [];
@@ -934,8 +972,7 @@ const verifyCollectionSmokeGeneralSearch = async (page, values) => {
     page.off("request", trackHistoryRequest);
   }
 
-  await queryInput.fill(values.noRecordAccountNumber);
-  await page.getByTestId("button-search").click();
+  await submitCollectionSmokeGeneralSearch(page, values.noRecordAccountNumber, "not_recorded");
   await page.getByText("Tiada rekod collection", { exact: true }).first().waitFor({ timeout: 15_000 });
 };
 
@@ -1587,9 +1624,7 @@ const checkCollectionManualSettlementV9UiFlow = async (page, context, tracker) =
     await editDialog.waitFor({ state: "hidden", timeout: 15_000 });
 
     await navigateForSmoke(page, "/general-search");
-    const queryInput = page.getByTestId("input-search");
-    await queryInput.fill(accountNumber);
-    await page.getByTestId("button-search").click();
+    await submitCollectionSmokeGeneralSearch(page, accountNumber, "recorded");
     await page.getByText("Collection direkodkan", { exact: true }).first().waitFor({ timeout: 15_000 });
     await page.getByTestId("button-view-0").click();
     const recordDialog = page.getByRole("dialog").filter({

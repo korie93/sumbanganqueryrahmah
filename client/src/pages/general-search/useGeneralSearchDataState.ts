@@ -15,6 +15,7 @@ import {
   getValidGeneralSearchFilters,
   normalizeGeneralSearchResponse,
   resolveDefaultGeneralSearchPageSize,
+  shouldAutomaticallyRefreshGeneralSearch,
 } from "@/pages/general-search/general-search-state-utils";
 import { collectSearchHeaders } from "@/pages/general-search/utils";
 
@@ -38,6 +39,7 @@ export function useGeneralSearchDataState({
   const isMountedRef = useRef(true);
   const searchRequestIdRef = useRef(0);
   const columnsRequestIdRef = useRef(0);
+  const previouslySearchedRef = useRef(false);
   const searchAbortControllerRef = useRef<AbortController | null>(null);
   const columnsAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -255,7 +257,11 @@ export function useGeneralSearchDataState({
   );
 
   useEffect(() => {
-    if (!searched) return;
+    const previouslySearched = previouslySearchedRef.current;
+    previouslySearchedRef.current = searched;
+    // The first explicit submit already owns its request. Only later changes
+    // to search inputs should refresh it, not the searched=false→true update.
+    if (!shouldAutomaticallyRefreshGeneralSearch(searched, previouslySearched)) return;
     if (advancedMode) {
       void handleAdvancedSearch(1);
       return;
@@ -294,6 +300,7 @@ export function useGeneralSearchDataState({
       searchRequestIdRef.current += 1;
       searchAbortControllerRef.current?.abort();
       searchAbortControllerRef.current = null;
+      setLoading(false);
       setResults([]);
       setHeaders([]);
       setSearched(false);
@@ -308,6 +315,7 @@ export function useGeneralSearchDataState({
     searchRequestIdRef.current += 1;
     searchAbortControllerRef.current?.abort();
     searchAbortControllerRef.current = null;
+    setLoading(false);
     setQuery("");
     setResults([]);
     setHeaders([]);

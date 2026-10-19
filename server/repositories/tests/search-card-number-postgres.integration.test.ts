@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { SearchCollectionStatusCandidate, SearchCollectionViewerScope } from "../search-repository-types";
 
 const isolated = process.env.SQR_SEARCH_CARD_ISOLATED_CLUSTER === "1";
@@ -97,6 +99,29 @@ test("General Search Card SQL on disposable PostgreSQL", { skip: !isolated }, as
       repository.findCollectionHistoryForRow({ candidate, sourceObligationKey: obligation,
         viewerScope, includeManualAuditDetails: false, includeSourceDetails: false, page, pageSize });
 
+    await t.test("candidate plan cardinality remains bounded before table statistics exist", async (t) => {
+      const originalExecute = runtime.dbRead.execute.bind(runtime.dbRead);
+      const queries: Array<{ sql: string; params: unknown[] }> = [];
+      const executeMock = t.mock.method(runtime.dbRead, "execute", (query: Parameters<typeof runtime.dbRead.execute>[0]) => {
+        const compiled = new PgDialect().sqlToQuery(query as SQL);
+        if (compiled.sql.includes("collection_status_records AS")) queries.push(compiled);
+        return originalExecute(query);
+      });
+      try {
+        for (const candidates of [[candidate], [candidate, { ...candidate, rowId: "row-b", sourceImportId: "import-b" }]]) {
+          queries.length = 0;
+          const matches = await repository.findCollectionStatusesForRows(candidates, { kind: "all" });
+          assert.equal(matches.length, candidates.length);
+          assert.equal(queries.length, 1);
+          const explanation = await pool.query(`EXPLAIN (FORMAT JSON) ${queries[0].sql}`, queries[0].params);
+          const planRows = Number(explanation.rows[0]?.["QUERY PLAN"]?.[0]?.Plan?.["Plan Rows"]);
+          assert.ok(Number.isFinite(planRows) && planRows <= candidates.length,
+            "PostgreSQL must not estimate more candidate result rows than were supplied");
+        }
+      } finally {
+        executeMock.mock.restore();
+      }
+    });
     await t.test("latest status uses selected Collection card, not searched source card", async () => {
       const matches = await repository.findCollectionStatusesForRows([candidate], { kind: "all" });
       assert.equal(matches.length, 1);
