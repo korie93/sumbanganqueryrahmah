@@ -7,6 +7,7 @@ type PasswordStrengthMeterProps = {
   id?: string;
   password: string;
   variant?: "default" | "checklist";
+  density?: "comfortable" | "compact";
   interacted?: boolean;
   locale?: "ms" | "en";
 };
@@ -35,11 +36,12 @@ export function PasswordStrengthMeter({
   id = "password-strength",
   password,
   variant = "default",
+  density = "comfortable",
   interacted = false,
   locale = "ms",
 }: PasswordStrengthMeterProps) {
   if (variant === "checklist") {
-    return <PasswordRequirementsChecklist id={id} password={password} className={className} interacted={interacted} locale={locale} />;
+    return <PasswordRequirementsChecklist id={id} password={password} className={className} interacted={interacted} locale={locale} density={density} />;
   }
   const evaluation = evaluatePasswordStrength(password);
   const issues = getCredentialPasswordValidationIssues(password, locale);

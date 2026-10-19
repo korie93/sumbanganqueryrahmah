@@ -289,7 +289,7 @@ try {
   };
   const switchLanguage = async (locale) => {
     await page.getByRole("button", { name: locale === "en" ? "English" : "Bahasa Melayu", exact: true }).click();
-    await expect(page.locator(".auth-v17")).toHaveAttribute("lang", locale);
+    await expect(page.locator("main.auth-v17, main.credential-recovery")).toHaveAttribute("lang", locale);
   };
   const startMfa = async () => {
     fixture.state.login = "mfa";

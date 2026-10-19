@@ -8,6 +8,8 @@ export const SQR_BRAND_ASSETS = {
     light: "/brand/sqr-q-mark-light.png",
     dark: "/brand/sqr-q-mark-dark.png",
   },
+  /** Original transparent Q + dots, without the older boxed icon treatment. */
+  transparentIcon: "/brand/sidebar-q-static.png",
   favicon: {
     svg: "/brand/favicon.svg",
     ico: "/brand/favicon.ico",

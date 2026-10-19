@@ -1,6 +1,7 @@
 import { CheckCircle2, Circle, CircleX } from "lucide-react";
 import { evaluatePasswordStrength } from "@/lib/password-strength";
 import { getPasswordRequirements } from "@/lib/password-requirements";
+import { CREDENTIAL_PASSWORD_MAX_LENGTH, CREDENTIAL_PASSWORD_MIN_LENGTH } from "@shared/password-policy";
 
 type PasswordRequirementsChecklistProps = {
   id: string;
@@ -8,6 +9,7 @@ type PasswordRequirementsChecklistProps = {
   className?: string;
   interacted?: boolean;
   locale?: "ms" | "en";
+  density?: "comfortable" | "compact";
 };
 
 const STRENGTH_SEGMENT_CLASSES = [
@@ -27,12 +29,19 @@ const STRENGTH_LABEL_CLASSES = [
 ] as const;
 
 /** Stable checklist from the shared password policy, with a separate strength estimate. */
-export function PasswordRequirementsChecklist({ id, password, className = "", interacted = false, locale = "ms" }: PasswordRequirementsChecklistProps) {
+export function PasswordRequirementsChecklist({ id, password, className = "", interacted = false, locale = "ms", density = "comfortable" }: PasswordRequirementsChecklistProps) {
   const { valid, requirements, satisfiedCount } = getPasswordRequirements(password, locale);
   const english = locale === "en";
   const evaluated = interacted || password.length > 0;
   const strength = evaluatePasswordStrength(password);
   const filledSegments = password ? strength.level + 1 : 0;
+  const compactLabels: Record<string, string> = {
+    length: `${CREDENTIAL_PASSWORD_MIN_LENGTH}–${CREDENTIAL_PASSWORD_MAX_LENGTH} ${english ? "characters" : "aksara"}`,
+    lowercase: english ? "Lowercase" : "Huruf kecil",
+    uppercase: english ? "Uppercase" : "Huruf besar",
+    number: english ? "Number" : "Nombor",
+    symbol: english ? "Symbol" : "Simbol",
+  };
   const policyMessage = valid
     ? english ? "Password is valid. All requirements are met." : "Kata laluan sah. Semua syarat dipenuhi."
     : english ? "Meet all requirements before continuing." : "Lengkapkan semua syarat sebelum meneruskan.";
@@ -41,13 +50,14 @@ export function PasswordRequirementsChecklist({ id, password, className = "", in
     <section
       id={id}
       aria-labelledby={`${id}-heading`}
+      data-password-requirements-density={density}
       className={`rounded-xl border border-border bg-background p-3 text-sm text-foreground ${className}`}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 id={`${id}-heading`} className="text-sm font-semibold">{english ? "Password requirements" : "Keperluan kata laluan"}</h2>
-        <span data-password-requirement-count className={`text-xs ${valid ? "text-green-700 dark:text-green-200" : "text-muted-foreground"}`}>{satisfiedCount}/{requirements.length} {english ? "met" : "dipenuhi"}</span>
+        <span data-password-requirement-count aria-live={density === "compact" ? "polite" : undefined} aria-atomic={density === "compact" ? "true" : undefined} className={`text-xs ${valid ? "text-green-700 dark:text-green-200" : "text-muted-foreground"}`}>{satisfiedCount}/{requirements.length} {english ? "met" : "dipenuhi"}</span>
       </div>
-      <ul className="mt-3 space-y-2" aria-label={english ? "Password rules" : "Syarat kata laluan"}>
+      <ul className={density === "compact" ? "mt-3" : "mt-3 space-y-2"} aria-label={english ? "Password rules" : "Syarat kata laluan"}>
         {requirements.map(({ id: requirementId, label, satisfied }) => {
           const state = satisfied ? "success" : evaluated ? "error" : "neutral";
           const Icon = satisfied ? CheckCircle2 : evaluated ? CircleX : Circle;
@@ -60,7 +70,7 @@ export function PasswordRequirementsChecklist({ id, password, className = "", in
               className={`flex items-start gap-2 leading-5 ${satisfied ? "text-green-700 dark:text-green-200" : evaluated ? "text-red-700 dark:text-red-200" : "text-muted-foreground"}`}
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" focusable="false" />
-              <span><span className="sr-only">{english ? satisfied ? "Met: " : evaluated ? "Not met: " : "Not assessed: " : satisfied ? "Dipenuhi: " : evaluated ? "Belum dipenuhi: " : "Belum dinilai: "}</span>{label}</span>
+              <span><span className="sr-only">{english ? satisfied ? "Met: " : evaluated ? "Not met: " : "Not assessed: " : satisfied ? "Dipenuhi: " : evaluated ? "Belum dipenuhi: " : "Belum dinilai: "}</span>{density === "compact" ? compactLabels[requirementId] ?? label : label}</span>
             </li>
           );
         })}

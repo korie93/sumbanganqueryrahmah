@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PasswordConfirmationFeedback } from "@/components/PasswordConfirmationFeedback";
 import { PasswordInput } from "@/components/PasswordInput";
 import { PublicAuthButton } from "@/components/PublicAuthControls";
-import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
+import { CredentialRecoveryLayout } from "@/components/auth/CredentialRecoveryLayout";
 import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import {
   resetPasswordWithToken,
@@ -26,7 +26,6 @@ import {
   localizePasswordFeedback,
 } from "@/pages/password-creation-feedback";
 import {
-  formatPublicAuthExpiry,
   getPublicAuthTokenFromLocation,
   isPublicAuthAbortError,
 } from "@/pages/public-auth-runtime-utils";
@@ -231,22 +230,12 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
   };
 
   return (
-    <AuthV17Layout
-      badge={t("auth.v17Recovery.resetBadge")}
+    <CredentialRecoveryLayout
+      intent="reset"
+      account={phase === "ready" ? reset : null}
       title={t(phase === "success" ? "auth.v17Recovery.resetSuccessTitle" : phase === "invalid" ? "auth.v17Recovery.invalidTitle" : "auth.v17Recovery.resetTitle")}
-      description={t("auth.v17Recovery.resetDescription")}
+      description={locale === "en" ? "Enter a new password for your SQR account." : "Masukkan kata laluan baharu untuk akaun SQR anda."}
       contentBusy={loading || phase === "validating"}
-      visualMode="minimal"
-      className="password-creation-layout"
-      icon={
-        phase === "invalid" ? (
-          <ShieldAlert className="h-7 w-7" aria-hidden="true" focusable="false" />
-        ) : phase === "success" ? (
-          <BadgeCheck className="h-7 w-7" aria-hidden="true" focusable="false" />
-        ) : (
-          <KeyRound className="h-7 w-7" aria-hidden="true" focusable="false" />
-        )
-      }
       {...layoutBackProps}
     >
       {phase === "validating" ? (
@@ -276,20 +265,6 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             void handleResetPassword();
           }}
         >
-          <dl className="public-auth-account-summary">
-            <div className="public-auth-account-summary__row">
-              <dt>{t("auth.v17Recovery.username")}</dt>
-              <dd>{reset.username}</dd>
-            </div>
-            <div className="public-auth-account-summary__row">
-              <dt>{t("auth.v17Recovery.role")}</dt>
-              <dd>{reset.role}</dd>
-            </div>
-            <div className="public-auth-account-summary__row">
-              <dt>{t("auth.v17Recovery.expires")}</dt>
-              <dd>{formatPublicAuthExpiry(reset.expiresAt)}</dd>
-            </div>
-          </dl>
           <div className="space-y-2">
             <label htmlFor="reset-password-new-password" className="public-auth-field-label">
               {t("auth.v17Recovery.newPassword")}
@@ -322,6 +297,8 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
             id="reset-password-strength"
             password={newPassword}
             variant="checklist"
+            density="compact"
+            className="credential-recovery-requirements"
             interacted={newPasswordInteracted}
             locale={locale}
           />
@@ -394,6 +371,6 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
         <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
         {t("auth.v17Recovery.backToLogin")}
       </PublicAuthButton>
-    </AuthV17Layout>
+    </CredentialRecoveryLayout>
   );
 }

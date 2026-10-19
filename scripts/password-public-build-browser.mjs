@@ -102,8 +102,33 @@ async function checkChecklist(page, spec, candidate, expectedLevel, { neutral = 
   const field = page.locator(`#${spec.prefix}-new-password`);
   const meter = page.locator(`#${spec.meter}`);
   if (!neutral) await field.fill(candidate);
+  if (neutral) {
+    const rails = await page.locator("main.credential-recovery").evaluate((root) => {
+      const box = (selector) => {
+        const element = root.querySelector(selector);
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top };
+      };
+      const context = root.querySelector(".credential-recovery__context");
+      return { width: innerWidth, context: box(".credential-recovery__context"), heading: box("#credential-recovery-context-title"), title: box("h1"), form: box(".credential-recovery__form-wrap"), controls: box(".credential-recovery__controls"), contextPaddingRight: parseFloat(getComputedStyle(context).paddingRight) };
+    });
+    assert.ok(Math.abs(rails.controls.left - rails.form.left) <= 1 && Math.abs(rails.controls.right - rails.form.right) <= 1, "Recovery controls and form share the same content rails.");
+    if (rails.width < 768) {
+      assert.ok(Math.abs(rails.heading.left - rails.title.left) <= 1, "Stacked account and password headings share the same left rail.");
+      assert.ok(Math.abs(rails.context.right - rails.contextPaddingRight - rails.form.right) <= 1, "Stacked account and password content share the same right rail.");
+    } else {
+      assert.ok(Math.abs(rails.heading.top - rails.title.top) <= 1, "Desktop account and password headings share the same top rail.");
+    }
+  }
   const expected = [candidate.length >= 14 && candidate.length <= 256, /[a-z]/.test(candidate), /[A-Z]/.test(candidate), /\d/.test(candidate), /[^A-Za-z0-9]/.test(candidate)];
   const requirements = meter.locator("[data-password-requirement]");
+  const layout = await requirements.evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element);
+    return { top: element.getBoundingClientRect().top, marginTop: style.marginTop, marginBottom: style.marginBottom };
+  }));
+  assert.ok(layout.every((item) => item.marginTop === "0px" && item.marginBottom === "0px"), "Compact requirements use flex gap, not vertical-list margins.");
+  assert.ok(Math.abs(layout[0].top - layout[1].top) <= 1, "Requirements sharing the first row must align at the top.");
+  assert.equal(await requirements.first().evaluate((element) => getComputedStyle(element.parentElement).rowGap), "6px", "Wrapped compact rows keep one consistent gap.");
   assert.deepEqual(await requirements.evaluateAll((elements) => elements.map((element) => element.dataset.passwordRequirement)), ["length", "lowercase", "uppercase", "number", "symbol"]);
   assert.deepEqual(await requirements.evaluateAll((elements) => elements.map((element) => element.dataset.satisfied === "true")), expected);
   assert.deepEqual(await requirements.evaluateAll((elements) => elements.map((element) => element.dataset.state)), expected.map((satisfied) => neutral ? "neutral" : satisfied ? "success" : "error"));

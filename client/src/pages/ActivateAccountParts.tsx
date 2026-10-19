@@ -7,7 +7,6 @@ import { PublicAuthButton } from "@/components/PublicAuthControls";
 import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import { localizeAuthFeedback } from "@/lib/auth-flow-feedback";
 import type { ActivationTokenValidationPayload } from "@/lib/api/auth";
-import { formatPublicAuthExpiry } from "@/pages/public-auth-runtime-utils";
 import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import {
   getPasswordCreationSubmitHint,
@@ -84,6 +83,9 @@ export function ActivationStatusCard({ error, phase }: ActivationStatusCardProps
     return (
       <div className="public-auth-status-card public-auth-status-card--error" role="alert">
         {localizeAuthFeedback(error, locale) || t("auth.v17Recovery.activationInvalid")}
+        <p className="credential-recovery__invalid-help">{locale === "en"
+          ? "Ask your administrator to resend activation if this link has expired. If your account is already activated, sign in."
+          : "Minta pentadbir menghantar semula pengaktifan jika pautan tamat tempoh. Jika akaun sudah aktif, log masuk."}</p>
       </div>
     );
   }
@@ -100,7 +102,6 @@ export function ActivationStatusCard({ error, phase }: ActivationStatusCardProps
 }
 
 export function ActivationPasswordForm({
-  activation,
   confirmPassword,
   confirmPasswordError,
   confirmPasswordInvalidProps,
@@ -137,20 +138,6 @@ export function ActivationPasswordForm({
         onActivate();
       }}
     >
-      <dl className="public-auth-account-summary">
-        <div className="public-auth-account-summary__row">
-          <dt>{t("auth.v17Recovery.username")}</dt>
-          <dd>{activation.username}</dd>
-        </div>
-        <div className="public-auth-account-summary__row">
-          <dt>{t("auth.v17Recovery.role")}</dt>
-          <dd>{activation.role}</dd>
-        </div>
-        <div className="public-auth-account-summary__row">
-          <dt>{t("auth.v17Recovery.expires")}</dt>
-          <dd>{formatPublicAuthExpiry(activation.expiresAt)}</dd>
-        </div>
-      </dl>
       <div className="space-y-2">
         <label htmlFor="activate-account-new-password" className="public-auth-field-label">
           {t("auth.v17Recovery.newPassword")}
@@ -184,6 +171,8 @@ export function ActivationPasswordForm({
         id="activate-password-strength"
         password={newPassword}
         variant="checklist"
+        density="compact"
+        className="credential-recovery-requirements"
         interacted={newPasswordInteracted}
         locale={locale}
       />

@@ -33,17 +33,18 @@ test("public auth recovery pages expose labels and decorative icons correctly", 
   const forgotSource = readPageSource("ForgotPassword.tsx");
   const activateSource = `${readPageSource("ActivateAccount.tsx")}\n${readPageSource("ActivateAccountParts.tsx")}`;
   const resetSource = readPageSource("ResetPassword.tsx");
+  const recoveryLayout = readPageSource("../components/auth/CredentialRecoveryLayout.tsx");
 
   assert.match(forgotSource, /<label htmlFor="forgot-password-identifier" className="public-auth-field-label">/);
   assert.match(forgotSource, /<AuthV17Layout/);
   assert.match(activateSource, /<label htmlFor="activate-account-new-password" className="public-auth-field-label">/);
-  assert.match(activateSource, /<dl className="public-auth-account-summary">/);
-  assert.match(activateSource, /visualMode="minimal"/);
-  assert.match(activateSource, /<AuthV17Layout/);
+  assert.match(recoveryLayout, /<dl className="public-auth-account-summary">/);
+  assert.match(activateSource, /account=\{phase === "ready" \? activation : null\}/);
+  assert.match(activateSource, /<CredentialRecoveryLayout/);
   assert.match(resetSource, /<label htmlFor="reset-password-new-password" className="public-auth-field-label">/);
-  assert.match(resetSource, /<dl className="public-auth-account-summary">/);
-  assert.match(resetSource, /visualMode="minimal"/);
-  assert.match(resetSource, /<AuthV17Layout/);
+  assert.match(resetSource, /account=\{phase === "ready" \? reset : null\}/);
+  assert.match(resetSource, /<CredentialRecoveryLayout/);
+  assert.doesNotMatch(resetSource + readPageSource("ActivateAccountParts.tsx"), /<dl className="public-auth-account-summary">/);
   assert.match(forgotSource, /aria-hidden="true" focusable="false"/);
   assert.match(activateSource, /aria-hidden="true" focusable="false"/);
   assert.match(resetSource, /aria-hidden="true" focusable="false"/);

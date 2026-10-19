@@ -1,4 +1,4 @@
-import { escapeEmailHtmlContent, escapeEmailUrl, normalizeEmailUrl } from "./email-html-utils";
+import { buildCredentialEmailHtml, normalizeCredentialEmailActionUrl } from "./credential-email-layout";
 import { getCredentialPasswordPolicyMessage } from "../../shared/password-policy";
 
 type BuildAccountActivationEmailInput = {
@@ -24,12 +24,9 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
   const expiryLine = `This activation link expires on ${expiresAtText}.`;
   const policyLine = getCredentialPasswordPolicyMessage();
   const linkHelp = "Enter the same new password in both fields. This link works once; use the newest activation email. If it expires, ask the administrator to resend activation. If your account is already activated, sign in. Never share this link or your password.";
-  const activationUrl = normalizeEmailUrl(input.activationUrl);
+  const activationUrl = normalizeCredentialEmailActionUrl(input.activationUrl);
   const activationUrlText = activationUrl ?? "Activation link unavailable. Contact the system administrator.";
-  const safeActivationUrl = escapeEmailUrl(input.activationUrl);
-  const safeExpiryLine = escapeEmailHtmlContent(expiryLine);
-  const safeIntro = escapeEmailHtmlContent(intro);
-  const safeUsernameLine = escapeEmailHtmlContent(usernameLine);
+  const securityNotice = "If you did not expect this account, please contact the system administrator.";
 
   const text = [
     intro,
@@ -43,30 +40,25 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
     policyLine,
     linkHelp,
     "",
-    "If you did not expect this account, please contact the system administrator.",
+    securityNotice,
   ].join("\n");
 
-  const html = `
-    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
-      <p>${safeIntro}</p>
-      <p><strong>${safeUsernameLine}</strong></p>
-      <p>Click the button below to activate your account and create your password.</p>
-      <p>
-        <a
-          href="${safeActivationUrl}"
-          style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
-        >
-          Activate Account
-        </a>
-      </p>
-      <p>If the button does not work, copy and paste this link into your browser:</p>
-      <p><a href="${safeActivationUrl}">${safeActivationUrl}</a></p>
-      <p>${safeExpiryLine}</p>
-      <p>${escapeEmailHtmlContent(policyLine)}</p>
-      <p>${escapeEmailHtmlContent(linkHelp)}</p>
-      <p>If you did not expect this account, please contact the system administrator.</p>
-    </div>
-  `.trim();
+  const html = buildCredentialEmailHtml({
+    actionLabel: "Activate Account",
+    actionUrl: activationUrl,
+    expiresAt: input.expiresAt,
+    heading: `Welcome to ${systemName}`,
+    intro,
+    linkHelp,
+    policy: policyLine,
+    preheader: input.resent
+      ? "Use your newest activation link to create your password. Earlier activation links no longer work."
+      : `Your ${systemName} account is ready to activate. Create your password using this one-time link.`,
+    securityNotice,
+    systemName,
+    unavailableMessage: "Activation link unavailable. Contact the system administrator.",
+    username: input.username,
+  });
 
   return {
     subject,

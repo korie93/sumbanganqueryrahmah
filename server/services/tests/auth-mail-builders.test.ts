@@ -10,6 +10,8 @@ import {
 } from "../../mail/email-html-utils";
 import { buildPasswordResetEmail } from "../../mail/password-reset-email";
 import { getCredentialPasswordPolicyMessage } from "../../../shared/password-policy";
+import { SQR_BRAND_ASSETS } from "../../../shared/brand-assets";
+import { normalizeCredentialEmailActionUrl } from "../../mail/credential-email-layout";
 
 const expiresAt = new Date("2026-04-26T10:00:00.000Z");
 
@@ -26,7 +28,6 @@ test("activation and reset emails describe the shared manual policy and safe one
     for (const content of [email.text, email.html]) {
       assert.ok(content.includes(policy));
       assert.ok(content.includes(actionUrl));
-      assert.ok(content.includes(expiresAt.toUTCString()));
       assert.match(content, /same new password in both fields/i);
       assert.match(content, /link works once; use the newest/i);
       assert.match(content, /If it expires, ask the administrator/i);
@@ -34,6 +35,8 @@ test("activation and reset emails describe the shared manual policy and safe one
       assert.doesNotMatch(content, /(?:temporary|new|permanent) password\s*:/i);
       assert.doesNotMatch(content, /exactly 8|at least 8|minimum 8/i);
     }
+    assert.ok(email.text.includes(expiresAt.toUTCString()));
+    assert.match(email.html, /26 Apr 2026, 6:00 pm \(MYT\)/);
   }
 });
 
@@ -119,9 +122,100 @@ test("email builders replace unsafe action URLs with safe fallbacks", () => {
   });
 
   assert.doesNotMatch(activationEmail.html, /javascript:/i);
-  assert.match(activationEmail.html, /href="#"/);
+  assert.doesNotMatch(activationEmail.html, /<a\b|<img\b/i);
+  assert.match(activationEmail.html, /Activation link unavailable/);
   assert.match(activationEmail.text, /Activation link unavailable/);
   assert.doesNotMatch(resetEmail.html, /data:text\/html/i);
-  assert.match(resetEmail.html, /href="#"/);
+  assert.doesNotMatch(resetEmail.html, /<a\b|<img\b/i);
+  assert.match(resetEmail.html, /Reset link unavailable/);
   assert.match(resetEmail.text, /Reset link unavailable/);
+});
+
+test("credential email actions accept only browser URLs without embedded credentials", () => {
+  assert.equal(normalizeCredentialEmailActionUrl("https://sqr.example.com/reset-password?token=fixture"), "https://sqr.example.com/reset-password?token=fixture");
+  assert.equal(normalizeCredentialEmailActionUrl("http://localhost:5000/activate-account?token=fixture"), "http://localhost:5000/activate-account?token=fixture");
+
+  for (const actionUrl of [
+    "mailto:support@sqr.example.com",
+    "javascript:alert(1)",
+    "data:text/html,<svg onload=alert(1)>",
+    "https://username:password@sqr.example.com/reset-password?token=fixture",
+    "//sqr.example.com/reset-password?token=fixture",
+    "not a URL",
+    "",
+  ]) {
+    assert.equal(normalizeCredentialEmailActionUrl(actionUrl), null);
+    const emails = [
+      buildAccountActivationEmail({ activationUrl: actionUrl, expiresAt, username: "managed.user" }),
+      buildPasswordResetEmail({ resetUrl: actionUrl, expiresAt, username: "managed.user" }),
+    ];
+    for (const email of emails) {
+      assert.doesNotMatch(email.html, /<a\b|<img\b/i);
+      assert.match(email.html, /link unavailable\. Contact the system administrator\./);
+      assert.match(email.text, /link unavailable\. Contact the system administrator\./);
+      assert.doesNotMatch(email.html, /src=|href=|javascript:|data:text|username:password@/i);
+    }
+  }
+});
+
+test("credential emails use the approved same-origin Q asset with a visible text fallback and no trackers", () => {
+  const actionUrl = "https://sqr.example.com/reset-password?token=synthetic-secret&next=%2Fhome";
+  const emails = [
+    buildPasswordResetEmail({ resetUrl: actionUrl, expiresAt, username: "managed.user" }),
+    buildAccountActivationEmail({ activationUrl: actionUrl, expiresAt, username: "managed.user" }),
+  ];
+
+  for (const email of emails) {
+    assert.match(email.html, /<html lang="en">/);
+    assert.match(email.html, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
+    assert.match(email.html, /max-width:600px/);
+    assert.match(email.html, /<table role="presentation"/);
+    const imageSources = [...email.html.matchAll(/<img\b[^>]*src="([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(imageSources, [`https://sqr.example.com${SQR_BRAND_ASSETS.transparentIcon}`]);
+    assert.ok(email.html.includes("SQR System</td>"), "the brand name remains visible when remote images are blocked");
+    assert.match(email.html, /width="36" height="36" alt=""/);
+    assert.match(email.html, /\(MYT\)/);
+    assert.ok(email.text.includes(expiresAt.toUTCString()));
+    assert.ok(!email.html.includes(expiresAt.toUTCString()), "HTML shows the expiry once, in MYT");
+    assert.match(email.html, /26 Apr 2026, 6:00 pm \(MYT\)/);
+    assert.equal([...email.html.matchAll(/<a\b/g)].length, 2, "one primary CTA and one copyable fallback link");
+    assert.doesNotMatch(email.html, /<script\b|<iframe\b|<form\b|<link\b|<svg\b|<style\b|url\(|on(?:load|error|click)\s*=/i);
+    assert.doesNotMatch(email.html, /https?:\/\/(?!sqr\.example\.com(?:\/|&|"))/i);
+    assert.doesNotMatch(email.text, /<table|<img|<!doctype/i);
+    assert.ok(email.text.includes(actionUrl));
+  }
+});
+
+test("long usernames and tokens stay complete in both alternatives and have explicit wrapping", () => {
+  const username = `long.${"name".repeat(50)}&<managed>`;
+  const actionUrl = `https://sqr.example.com/reset-password?token=${"a".repeat(512)}&scope=account`;
+  const emails = [
+    buildPasswordResetEmail({ resetUrl: actionUrl, expiresAt, username }),
+    buildAccountActivationEmail({ activationUrl: actionUrl, expiresAt, username }),
+  ];
+
+  for (const email of emails) {
+    assert.ok(email.text.includes(username));
+    assert.ok(email.text.includes(actionUrl));
+    assert.ok(email.html.includes(escapeEmailHtmlContent(username)));
+    assert.ok(email.html.includes(escapeEmailHtmlContent(actionUrl)));
+    assert.match(email.html, /word-break:break-all;overflow-wrap:anywhere/);
+    assert.match(email.html, /table-layout:fixed/);
+    assert.doesNotMatch(email.html, /text-overflow:ellipsis|white-space:nowrap/);
+  }
+});
+
+test("custom system labels are escaped throughout the shared credential layout", () => {
+  const label = `Research & <Test> "Group" 'SQR'`;
+  const emails = [
+    buildAccountActivationEmail({ activationUrl: "https://sqr.example.com/activate-account?token=fixture", expiresAt, username: "demo", systemName: label }),
+    buildPasswordResetEmail({ resetUrl: "https://sqr.example.com/reset-password?token=fixture", expiresAt, username: "demo", systemName: label }),
+  ];
+
+  for (const email of emails) {
+    assert.ok(email.subject.includes(label));
+    assert.ok(email.text.includes(label));
+    assert.ok(email.html.includes(escapeEmailHtmlContent(label)));
+    assert.doesNotMatch(email.html, /<Test>/);
+  }
 });

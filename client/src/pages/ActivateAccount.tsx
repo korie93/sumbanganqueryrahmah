@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
+import { CredentialRecoveryLayout } from "@/components/auth/CredentialRecoveryLayout";
 import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import {
   activateAccount,
@@ -20,7 +20,6 @@ import {
   isPublicAuthAbortError,
 } from "@/pages/public-auth-runtime-utils";
 import {
-  ActivateAccountIcon,
   ActivationActions,
   ActivationPasswordForm,
   ActivationStatusCard,
@@ -35,7 +34,7 @@ type ActivateAccountPageProps = {
 
 export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPageProps) {
   const [, navigate] = useLocation();
-  const { t } = useAuthLocale();
+  const { locale, t } = useAuthLocale();
   const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [activation, setActivation] = useState<ActivationTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ActivationPhase>(token ? "validating" : "invalid");
@@ -262,14 +261,12 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
         : t("auth.v17Recovery.activationTitle");
 
   return (
-    <AuthV17Layout
-      badge={t("auth.v17Recovery.activationBadge")}
+    <CredentialRecoveryLayout
+      intent="activation"
+      account={phase === "ready" ? activation : null}
       title={title}
-      description={t("auth.v17Recovery.activationDescription")}
+      description={locale === "en" ? "Set a password to activate your account." : "Tetapkan kata laluan untuk mengaktifkan akaun anda."}
       contentBusy={loading || phase === "validating"}
-      visualMode="minimal"
-      className="password-creation-layout"
-      icon={<ActivateAccountIcon phase={phase} />}
     >
       <ActivationStatusCard error={error} phase={phase} />
 
@@ -304,6 +301,6 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
         phase={phase}
         onBackToLogin={navigateToLogin}
       />
-    </AuthV17Layout>
+    </CredentialRecoveryLayout>
   );
 }
