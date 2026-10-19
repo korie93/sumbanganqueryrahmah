@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import {
@@ -18,6 +18,10 @@ import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
+import { SQR_BRAND_ASSETS } from "@shared/brand-assets";
+
+// Public routes must not download the protected app or this authenticated gate.
+const SingleActiveTabGate = lazy(() => import("@/components/auth/SingleActiveTabGate"));
 
 function markAppReadyAndRemoveBootShell() {
   document.documentElement.classList.add("app-ready");
@@ -63,8 +67,41 @@ function AppContent() {
     monitorSection,
     systemName,
     handlePublicNavigate,
+    handleVerifiedAccountChanged,
+    handleVerifiedSession,
+    handleRejectedTabSession,
     user,
   } = usePublicAppState();
+  const lastActivatedAccountScope = useRef("");
+
+  const validateBeforeActivation = useCallback(async (signal: AbortSignal) => {
+    const { validateTabSession } = await import("@/app/single-tab-session-validation");
+    if (signal.aborted) return false;
+    const result = await validateTabSession(signal);
+    if (signal.aborted) return false;
+    if (result.status === "unauthenticated") {
+      handleRejectedTabSession(result.banned);
+      return false;
+    }
+    if (result.status !== "verified") return false;
+    if (!user?.id || result.user.id !== user.id) {
+      handleVerifiedAccountChanged(result.user);
+      return false;
+    }
+    const accountScope = JSON.stringify([result.user.id, result.user.role]);
+    if (lastActivatedAccountScope.current && lastActivatedAccountScope.current !== accountScope) {
+      // This document may previously have owned another account before a
+      // pagehide/rebind/logout. Never reuse its in-memory protected queries.
+      // Only import the protected cache after owning the new, verified ID.
+      const { queryClient } = await import("@/lib/queryClient");
+      if (signal.aborted) return false;
+      queryClient.clear();
+    }
+    lastActivatedAccountScope.current = accountScope;
+    // Pass the fresh role/profile to the protected tree as well as the ID.
+    handleVerifiedSession(result.user);
+    return true;
+  }, [handleRejectedTabSession, handleVerifiedAccountChanged, handleVerifiedSession, user?.id]);
 
   useEffect(() => {
     applyDocumentMetadata(
@@ -238,21 +275,30 @@ function AppContent() {
   return (
     <>
       {readySignal}
-      <AppRouteErrorBoundary
-        routeKey={`authenticated-entry:${currentPage}:${monitorSection}`}
-        routeLabel={currentPage}
-        fullscreen
-        onNavigateHome={handleAuthenticatedNavigateHome}
-      >
-        <Suspense fallback={<PageSpinner fullscreen />}>
-          <AuthenticatedAppEntry
-            initialUser={user}
-            initialPage={currentPage}
-            initialMonitorSection={monitorSection}
-            onLoggedOut={handleAuthenticatedLogout}
-          />
-        </Suspense>
-      </AppRouteErrorBoundary>
+      <Suspense fallback={<PageSpinner fullscreen />}>
+        <SingleActiveTabGate
+          accountId={user.id ?? ""}
+          logoSrc={SQR_BRAND_ASSETS.transparentIcon}
+          onBeforeActivate={validateBeforeActivation}
+        >
+          <AppRouteErrorBoundary
+            routeKey={`authenticated-entry:${currentPage}:${monitorSection}`}
+            routeLabel={currentPage}
+            fullscreen
+            onNavigateHome={handleAuthenticatedNavigateHome}
+          >
+            <Suspense fallback={<PageSpinner fullscreen />}>
+              <AuthenticatedAppEntry
+                initialUser={user}
+                initialPage={currentPage}
+                initialMonitorSection={monitorSection}
+                onLoggedOut={handleAuthenticatedLogout}
+                onAccountChanged={handleVerifiedAccountChanged}
+              />
+            </Suspense>
+          </AppRouteErrorBoundary>
+        </SingleActiveTabGate>
+      </Suspense>
     </>
   );
 }

@@ -22,6 +22,7 @@ import {
   isBannedSessionFlagSet,
   persistAuthenticatedUser,
   setBannedSessionFlag,
+  subscribeForcedLogout,
 } from "@/lib/auth-session";
 import { shouldRedirectForMaintenance } from "@/app/maintenance-client-policy";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
@@ -167,6 +168,36 @@ export function usePublicAppState() {
     replaceHistory(buildPathForPage(isBannedSession ? "banned" : "home"));
   }, []);
 
+  const handleRejectedTabSession = useCallback((banned: boolean) => {
+    if (banned) setBannedSessionFlag(true);
+    handleAuthenticatedLogout();
+  }, [handleAuthenticatedLogout]);
+
+  const handleVerifiedAccountChanged = useCallback((verifiedUser: User) => {
+    // Only authoritative /api/me data enters here. Re-key the ownership gate;
+    // never change a shared cookie or revoke the session in another tab.
+    persistAuthenticatedUser(verifiedUser);
+    setUser(verifiedUser);
+    const page = verifiedUser.mustChangePassword
+      ? "change-password" : resolveAuthenticatedRoleHomePage(verifiedUser.role);
+    setCurrentPage(page);
+    setMonitorSection("monitor");
+    replaceHistory(buildPathForPage(page));
+  }, []);
+
+  const handleVerifiedSession = useCallback((verifiedUser: User) => {
+    persistAuthenticatedUser(verifiedUser);
+    setUser(verifiedUser);
+  }, []);
+
+  useEffect(() => {
+    // Blocked tabs have no AuthenticatedAppEntry/AuthEvents mounted. They may
+    // receive the existing session-revocation signal, but must not rebroadcast
+    // it, POST logout, or clear the shared cookie themselves.
+    if (!user) return;
+    return subscribeForcedLogout(handleAuthenticatedLogout);
+  }, [handleAuthenticatedLogout, user]);
+
   const handleBannedSessionDetected = useCallback(() => {
     clearAuthenticatedUserStorage();
     setBannedSessionFlag(true);
@@ -253,25 +284,33 @@ export function usePublicAppState() {
     }
 
     let cancelled = false;
+    const restoreController = new AbortController();
     const savedUser = getStoredAuthenticatedUser();
     const forcePasswordChange = getStoredForcePasswordChange();
     const hasAuthHintCookie = hasAuthSessionHintCookie();
 
     if (savedUser && !hasAuthHintCookie) {
-      clearAuthenticatedUserStorage();
       setIsInitialized(true);
       return () => {
         cancelled = true;
+        restoreController.abort();
       };
     }
 
     const restoreAuthenticatedSession = async () => {
       try {
-        const { getMe } = await import("@/lib/api/auth");
-        const me = await getMe();
-        if (cancelled) {
+        const { validateTabSession } = await import("@/app/single-tab-session-validation");
+        if (cancelled) return;
+        const result = await validateTabSession(restoreController.signal);
+        if (cancelled || restoreController.signal.aborted) {
           return;
         }
+        if (result.status === "unauthenticated") {
+          handleRejectedTabSession(result.banned);
+          return;
+        }
+        if (result.status !== "verified") return;
+        const me = result.user;
 
         const username = String(me?.username || "").trim();
         const role = String(me?.role || "").trim();
@@ -309,9 +348,8 @@ export function usePublicAppState() {
           replaceHistory(buildPathForPage(nextState.currentPage));
         }
       } catch {
-        if (!cancelled) {
-          clearAuthenticatedUserStorage();
-        }
+        // A blocked/pending bootstrap must never clear shared cookies or send
+        // logout signals because an identity read failed or was superseded.
       } finally {
         if (!cancelled) {
           setIsInitialized(true);
@@ -323,8 +361,9 @@ export function usePublicAppState() {
 
     return () => {
       cancelled = true;
+      restoreController.abort();
     };
-  }, [bootstrap.resolvedRoute, bootstrap.shouldRestoreSession]);
+  }, [bootstrap.resolvedRoute, bootstrap.shouldRestoreSession, handleRejectedTabSession]);
 
   useEffect(() => {
     if (typeof window === "undefined" || user) {
@@ -345,6 +384,9 @@ export function usePublicAppState() {
     handleBannedSessionDetected,
     handleLoginSuccess,
     handlePublicNavigate,
+    handleVerifiedAccountChanged,
+    handleVerifiedSession,
+    handleRejectedTabSession,
     isInitialized,
     monitorSection,
     systemName: DEFAULT_SYSTEM_NAME,

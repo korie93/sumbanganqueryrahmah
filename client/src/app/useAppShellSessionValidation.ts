@@ -9,12 +9,14 @@ import type { User } from "@/app/types";
 import { getMe } from "@/lib/api";
 import { persistAuthenticatedUser } from "@/lib/auth-session";
 import { createSessionValidationProfileGuard } from "@/app/session-validation-profile-guard";
+import { resolveSessionValidationAccount } from "@/app/session-validation-account-guard";
 
 type UseAppShellSessionValidationArgs = {
   applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
   setCurrentPage: Dispatch<SetStateAction<string>>;
   setUser: Dispatch<SetStateAction<User | null>>;
   user: User | null;
+  onAccountChanged?: ((user: User) => void) | undefined;
 };
 
 export function useAppShellSessionValidation({
@@ -22,6 +24,7 @@ export function useAppShellSessionValidation({
   setCurrentPage,
   setUser,
   user,
+  onAccountChanged,
 }: UseAppShellSessionValidationArgs) {
   const userSessionKey = user ? `${user.id ?? ""}:${user.username}:${user.role}:${user.sessionExpiresAt ?? ""}` : "";
   const userRef = useRef(user);
@@ -68,6 +71,24 @@ export function useAppShellSessionValidation({
           sessionExpiresAt: me.sessionExpiresAt ?? null,
         });
 
+        const accountResolution = resolveSessionValidationAccount(actor, nextUser);
+        if (accountResolution !== "same-account") {
+          // Shared browser cookies may now belong to another account. Re-enter
+          // the ownership boundary instead of mounting that account's effects
+          // under this runtime's lock. This local fallback must not clear the
+          // shared cookie, revoke sessions or broadcast a logout to other tabs.
+          if (accountResolution === "rebind-account" && onAccountChanged) {
+            try {
+              onAccountChanged(nextUser);
+            } catch {
+              setUser(null);
+            }
+          } else {
+            setUser(null);
+          }
+          return;
+        }
+
         persistAuthenticatedUser(nextUser);
         setUser(nextUser);
         if (nextUser.mustChangePassword) {
@@ -90,5 +111,5 @@ export function useAppShellSessionValidation({
       readPending = false;
       window.removeEventListener("profile-updated", onProfileUpdated);
     };
-  }, [applyLoggedOutClientState, setCurrentPage, setUser, userSessionKey]);
+  }, [applyLoggedOutClientState, onAccountChanged, setCurrentPage, setUser, userSessionKey]);
 }

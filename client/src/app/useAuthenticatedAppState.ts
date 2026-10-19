@@ -19,12 +19,14 @@ type UseAuthenticatedAppStateArgs = {
   initialMonitorSection: MonitorSection;
   initialPage: string;
   initialUser: User;
+  onAccountChanged?: ((user: User) => void) | undefined;
 };
 
 export function useAuthenticatedAppState({
   initialMonitorSection,
   initialPage,
   initialUser,
+  onAccountChanged,
 }: UseAuthenticatedAppStateArgs) {
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [monitorSection, setMonitorSection] = useState<MonitorSection>(initialMonitorSection);
@@ -54,6 +56,7 @@ export function useAuthenticatedAppState({
     setCurrentPage,
     setUser,
     user,
+    onAccountChanged,
   });
 
   const { runtimeConfig, systemName } = useAppShellRuntimeState({ user });

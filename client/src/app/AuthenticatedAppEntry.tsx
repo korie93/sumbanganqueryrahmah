@@ -3,12 +3,11 @@ import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { AppProviders } from "@/app/AppProviders";
 import { PageSpinner } from "@/app/PageSpinner";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
-import { MaintenanceRoutePage, SingleTabBlockedPage } from "@/app/lazy-pages";
+import { MaintenanceRoutePage } from "@/app/lazy-pages";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { MonitorSection, User } from "@/app/types";
 import { initializeTrustedTypesRuntime } from "@/lib/trusted-types-runtime";
 import { useAuthenticatedAppState } from "@/app/useAuthenticatedAppState";
-import { useSingleTabSession } from "@/app/useSingleTabSession";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 import "../index.css";
 
@@ -23,6 +22,7 @@ type AuthenticatedAppEntryProps = {
   initialPage: string;
   initialUser: User;
   onLoggedOut: () => void;
+  onAccountChanged: (user: User) => void;
 };
 
 export default function AuthenticatedAppEntry({
@@ -30,6 +30,7 @@ export default function AuthenticatedAppEntry({
   initialPage,
   initialUser,
   onLoggedOut,
+  onAccountChanged,
 }: AuthenticatedAppEntryProps) {
   const {
     currentPage,
@@ -51,6 +52,7 @@ export default function AuthenticatedAppEntry({
     initialMonitorSection,
     initialPage,
     initialUser,
+    onAccountChanged,
   });
 
   useEffect(() => {
@@ -79,12 +81,6 @@ export default function AuthenticatedAppEntry({
     handleNavigate(resolveAuthenticatedRoleHomePage(user.role));
   };
 
-  const {
-    isBlocked: isSingleTabBlocked,
-    isReady: isSingleTabReady,
-    retryNow: retrySingleTabLock,
-  } = useSingleTabSession(user?.username);
-
   const renderRoutePage = (routeKey: string, node: ReactNode, fullscreen = true) => (
     <AppRouteErrorBoundary
       routeKey={routeKey}
@@ -100,21 +96,6 @@ export default function AuthenticatedAppEntry({
 
   if (!user) {
     return null;
-  }
-
-  if (!isSingleTabReady) {
-    return <PageSpinner fullscreen />;
-  }
-
-  if (isSingleTabBlocked) {
-    return (
-      <AppProviders>
-        {renderRoutePage(
-          "single-tab-blocked",
-          <SingleTabBlockedPage onRetry={retrySingleTabLock} />,
-        )}
-      </AppProviders>
-    );
   }
 
   if (currentPage === "maintenance" && user.role === "user") {

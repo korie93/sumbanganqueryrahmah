@@ -99,6 +99,7 @@
     "test:auth": "tsx --test server/auth/tests/*.test.ts",
     "test:auth:postgres": "node scripts/test-auth-recovery-isolated.mjs",
     "test:auth:browser": "node scripts/auth-feedback-browser.mjs",
+    "test:auth:single-tab-browser": "node scripts/single-active-tab-browser.mjs",
     "test:auth:public-build": "node scripts/password-public-build-browser.mjs",
     "test:auth:v17": "node scripts/auth-v17-built-browser.mjs",
     "test:auth:two-factor-browser": "node scripts/test-two-factor-isolated.mjs",

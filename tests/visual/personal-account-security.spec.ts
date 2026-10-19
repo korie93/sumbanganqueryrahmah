@@ -11,6 +11,9 @@ const fixturePassword = "Synthetic-current-password-123!";
 const nextPassword = "Synthetic-new-password-456!";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==", "base64");
 const avatarUrl = "/api/me/avatar?v=1234567890abcdef12345678";
+// Bootstrap and atomic-tab activation each verify identity before the protected
+// session hook starts. Hold that third read to exercise profile-update races.
+const protectedSessionValidationRead = 3;
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 const viewports = [
   { width: 1366, height: 768 }, { width: 1024, height: 768 }, { width: 768, height: 1024 },
@@ -98,11 +101,11 @@ async function installPersonalFixture(page: Page, baseURL: string | undefined, o
       // Capture the authoritative response when the request starts, not after
       // the gate releases: an old request must remain stale after avatar save.
       const snapshot = { ...user };
-      if (fixture.meCalls === 2 && options.sessionValidationTwoFactorEnabled) {
+      if (fixture.meCalls === protectedSessionValidationRead && options.sessionValidationTwoFactorEnabled) {
         snapshot.twoFactorEnabled = true;
         snapshot.twoFactorConfiguredAt = now;
       }
-      if (options.holdSessionValidation && fixture.meCalls === 2) {
+      if (options.holdSessionValidation && fixture.meCalls === protectedSessionValidationRead) {
         await sessionValidationGate;
         await respond(route, { ok: true, user: snapshot, sessionExpiresAt: "2036-01-01T00:00:00.000Z" });
         fixture.sessionValidationReleased = true;
@@ -596,7 +599,7 @@ test("Personal avatar removal locks duplicate writes and survives stale session 
   });
   try {
     await openPage(page, "/account", "Account");
-    await expect.poll(() => fixture.meCalls).toBe(2);
+    await expect.poll(() => fixture.meCalls).toBe(protectedSessionValidationRead);
     await page.getByRole("button", { name: "Remove photo", exact: true }).click();
     const dialog = await containedDialog(page, "Remove profile photo?", "alertdialog");
     const confirm = dialog.getByRole("button", { name: /^(Remove photo|Removing…)$/ });
@@ -621,7 +624,7 @@ test("Personal avatar survives an older in-flight session validation response", 
   const fixture = await installPersonalFixture(page, baseURL, { role: "user", holdSessionValidation: true });
   try {
     await openPage(page, "/account", "Account");
-    await expect.poll(() => fixture.meCalls).toBe(2);
+    await expect.poll(() => fixture.meCalls).toBe(protectedSessionValidationRead);
     await page.getByTestId("avatar-input").setInputFiles({ name: "portrait.png", mimeType: "image/png", buffer: png });
     await page.getByTestId("avatar-save").click();
     await expect(page.locator("main [role=status]")).toHaveText("Profile picture updated.");
@@ -644,7 +647,7 @@ for (const order of ["session-first", "avatar-first"] as const) test(`Personal a
   });
   try {
     await openPage(page, "/account", "Account");
-    await expect.poll(() => fixture.meCalls).toBe(2);
+    await expect.poll(() => fixture.meCalls).toBe(protectedSessionValidationRead);
     await page.getByTestId("avatar-input").setInputFiles({ name: "portrait.png", mimeType: "image/png", buffer: png });
     await page.getByTestId("avatar-save").click();
     await expect.poll(() => fixture.avatarCalls).toBe(1);

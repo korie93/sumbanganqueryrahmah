@@ -292,6 +292,10 @@ jobs:
         timeout-minutes: 5
         run: npm run test:auth:v17
 
+      - name: Verify atomic single active tab on actual built frontend
+        timeout-minutes: 5
+        run: npm run test:auth:single-tab-browser
+
       - name: Verify actual built public landing page
         timeout-minutes: 5
         run: npm run test:landing:built
@@ -435,6 +439,7 @@ jobs:
             artifacts/auth-feedback-browser
             artifacts/password-public-build-browser
             artifacts/auth-v17-browser
+            artifacts/single-active-tab-browser
             artifacts/landing-v21-browser
             artifacts/two-factor
             artifacts/smoke-ui

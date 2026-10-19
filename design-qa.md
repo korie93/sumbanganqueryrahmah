@@ -1724,3 +1724,149 @@ Date: 2026-10-19. CI run `39187167459` on `9e49a026db03ed7959509f70be00b930d5bc7
 Acceptance complete for the locally reproduced failing gate. Remote GitHub CI has not yet run this uncommitted patch; no remote-green or live backend E2E claim is made.
 
 final result: passed
+
+---
+
+# SQR Single Active Tab — supplied package integration QA
+
+Date: 2026-10-20 (Asia/Singapore). Target: user-supplied
+`SQR_Single_Active_Tab_FINAL.zip`, preserving its selected white/corporate-blue,
+gray and soft-gold blocked-page design and BM copy. No new design direction was
+invented. This QA result covers the frontend feature, not a production release.
+
+## Source and comparison evidence
+
+- Inspected the complete package and its implementation/test instructions before
+  integration. Rendered the original React/CSS in an isolated reference server,
+  supplying the existing project transparent Q asset through `logoSrc`.
+- Primary visual review used the Codex browser, not production. Captured source
+  and actual built implementation in the same browser viewport/state; both full
+  captures are 3207×2227 pixels. The common-crop side-by-side comparison was
+  opened and inspected: `artifacts/single-active-tab/source-vs-implementation.png`.
+  Original captures: `source-desktop.png`, `implemented-desktop.png` in that folder.
+- Final exact-viewport implementation evidence from approved Playwright runs:
+  `artifacts/single-active-tab-browser/blocked-light-1440.png` and
+  `blocked-dark-320.png`, plus 390/768px and both theme-setting captures.
+  Root inspected desktop and full-height 320px screenshots, not only metrics.
+
+## Findings, fixes and design acceptance
+
+1. **Ownership boundary, critical:** the legacy username/localStorage check ran
+   after authenticated hooks had already started. The new atomic Web Locks gate
+   precedes the lazy protected entry, its API effects and native WebSocket.
+   Waiting, blocked, unsupported and failed states never render protected children.
+2. **Identity/lifecycle, critical:** keyed per backend ID; fresh abortable identity
+   checks precede activation, recheck and persisted-page restore. Pre-gate restore
+   no longer uses frontend forced-logout broadcast/shared-cookie cleanup on failed
+   or stale reads. Account changes re-enter the ownership boundary. StrictMode
+   discarded setup is cancelled before issuing its initial browser lock request.
+3. **Real assets and icons:** retained the original SQR transparent Q and dots,
+   including the illustration's miniature brand. Replaced the package's fake Q
+   fallback and emoji/custom icon substitutions with that asset and existing Lucide
+   icons. No new icon library or generated brand asset. Existing source CSS browser
+   illustration is retained because it is the supplied target, not a replacement
+   for missing imagery. Decoration is hidden from assistive technology.
+4. **Fidelity:** compared the two-column frame, heading weight/line breaks,
+   paragraph width, card radii/border/shadow, action alignment, gold status and
+   benefit-strip spacing. Intent and hierarchy match the supplied package; minor
+   icon geometry changes are deliberate existing-library consistency. No lost
+   assets, clipped text, unintended global styles or overlapping controls found.
+5. **Responsive spacing:** adapted package-specific media queries to repository
+   640/767/1023px tiers, without weakening the breakpoint contract. At 320px the
+   actions stack with 48px targets, all text wraps and the illustration stays within
+   its surface. Desktop/tablet retain the selected composition. The page intentionally
+   keeps its approved light palette under a stored dark theme, rather than inventing
+   an unapproved dark variant.
+6. **Motion and accessibility:** no continuous decorative float; only temporary
+   checking spinner, disabled by reduced motion. Semantic main/heading/buttons,
+   polite status feedback, focus-visible outlines and manual-close fallback. Keyboard
+   retry/Tab-to-close passed. Axe WCAG A/AA at 320/1440px under light/dark preferences
+   reported zero violations; no horizontal overflow at 320/390/768/1440px.
+
+## Functional and regression evidence
+
+- `npm run test:auth:single-tab-browser`: 17/17 passed with real browser Web Locks
+  and actual built frontend. Blocked pages recorded zero protected API requests,
+  WebSockets and transient protected mounts. Owner workflows, close/recheck,
+  concurrent refresh, deep links/hydration, identity changes, login/logout, idle,
+  kick and ban are covered. A populated protected query cache is discarded before
+  reactivating a previously active document as another verified account; the new
+  dashboard refetch is asserted. Persisted lifecycle tests use synthetic events, not a
+  claim that every browser engine admits the document to native BFCache.
+- Codex browser independently exercised two tabs, protected network isolation,
+  owner Search/Viewer/Import/Activity/Collection navigation, concurrent refresh,
+  close/recheck, keyboard, narrow layout, kick, login and idle feedback.
+- Client tests 2,198/2,198; fixture Node contracts 8/8; affected existing personal
+  avatar/profile race browser tests 4/4. Build, typecheck, full lint, bundle,
+  breakpoint, safe JSON, public entry and secret-scan checks passed.
+- Full backend green is **not** claimed: an existing unrelated 100,000-account
+  PostgreSQL OSP performance test reached its 120-second timeout. Its implementation
+  and assertions were not modified. Exact scope/counts and remaining release checks
+  are in `docs/single-active-tab.md` and the continuation handoff.
+- No production deployment, environment file, migration, receipts/uploads, app
+  database, dependency or existing business-rule change. Atomic cross-browser or
+  cross-device enforcement needs a separately designed backend lease and remains
+  unimplemented. Remote CI has not yet run this uncommitted patch.
+
+final result: passed
+
+## Single Active Tab — requested alignment and typography polish (2026-10-20)
+
+### Target and evidence
+
+Kept the approved package's visual direction and real transparent Q; no new
+concept or production operation. Captured the current local blocked page before
+editing, then recaptured the same 722x1391 viewport/state after the final build.
+Inspected each capture and the combined `polish-before-after-722.png` directly.
+Only the oversized empty IAB capture canvas beyond the measured viewport is
+cropped in the comparison; rendered content is neither redrawn nor rescaled.
+Also inspected desktop, tablet and exact-viewport 320px screenshots.
+
+### Findings and fixes
+
+- **Typography:** reduced the overly heavy/condensed headline from 800/49px max
+  to 700/44px max with gentler tracking. Added explicit supporting line heights
+  and consistent weights. Required BM wording, status hierarchy and real logo
+  remain unchanged; readable wrapping instead of truncated copy.
+- **Spacing/layout:** one shared copy/action edge, consistent 16/20/24px rhythm,
+  equal 156x48px desktop actions, equal-width mobile actions, aligned outer
+  header/card/two-benefit strip. At 722px the main card is approximately 74px
+  shorter, without hiding instructions or shrinking touch targets.
+- **Responsive:** the 768–1023px split was too narrow and wrapped the actions.
+  Stack through 1023px; retain the original split from 1024px upward. Phone
+  actions stack when two readable targets cannot fit; both benefit items remain.
+- **Illustration/assets:** retained supplied browser composition and original Q.
+  The old 280px phone stage was shorter than its foreground browser card. The
+  new 304px stage, 196px foreground minimum and caption spacing leave at least
+  10px measured clearance after rotation. First-window branding stays visible.
+- **Colors/tokens:** existing white/corporate blue/gray/soft gold retained, no
+  global CSS overrides or unapproved dark redesign. Axe contrast checks pass.
+- **Copy:** no new feature claims, demo controls, removed benefit or extra help
+  paragraph. Mandatory message and button labels preserved exactly.
+
+### Final verification
+
+Actual built browser suite **17/17 passed**. Its responsive phase now covers
+320/390/640/641/722/767/768/1023/1024/1440px under light and dark preferences,
+asserting aligned edges, equal action dimensions, two balanced benefit columns,
+stacking and non-overlapping caption. No horizontal overflow. Keyboard retry and
+close focus, reduced motion, real asset loading and ownership/data isolation still
+pass. Axe WCAG A/AA at 320 and 1440px in both preferences: zero violations.
+
+The first extended run exposed a test timing race with the pre-existing public
+boot-shell h1's next-frame cleanup. Replaced instantaneous semantic counts with
+retrying expectations for the same one-main/one-h1 contract; protected mount/API/
+WebSocket checks remain unchanged. Final reruns pass without bypasses.
+
+Gate contracts **6/6**, production build, targeted ESLint, JS syntax, standardized
+breakpoint contract and diff whitespace checks passed. Full client/backend runs
+were not repeated for this scoped CSS follow-up; the earlier unrelated PostgreSQL
+performance timeout remains documented, not declared fixed.
+
+Evidence: `artifacts/single-active-tab/polish-final.png`,
+`polish-before-after-722.png`, `polish-build.log`, `polish-browser.log` and
+`artifacts/single-active-tab-browser/report.json`. Preview retained in Codex IAB,
+temporary viewport override reset. No production/DB access, commit/push/deploy,
+new dependency or auth/session/lock behavior change.
+
+Final visual result: passed; no outstanding P0/P1/P2 findings in this polish scope.
