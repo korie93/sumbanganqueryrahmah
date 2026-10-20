@@ -2,14 +2,150 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  buildGeneralSearchInputKey,
   buildGeneralSearchPageSizeOptions,
   clampGeneralSearchResultsPageSize,
   getValidGeneralSearchFilters,
   normalizeGeneralSearchResponse,
   resolveDefaultGeneralSearchPageSize,
   resolveConfiguredSearchResultLimit,
+  resolveGeneralSearchResultState,
   shouldAutomaticallyRefreshGeneralSearch,
 } from "@/pages/general-search/general-search-state-utils";
+
+test("simple search identity uses the submitted trimmed query and rejects invalid inputs", () => {
+  assert.equal(buildGeneralSearchInputKey({ mode: "simple", query: "" }), null);
+  assert.equal(buildGeneralSearchInputKey({ mode: "simple", query: " a " }), null);
+  assert.equal(
+    buildGeneralSearchInputKey({ mode: "simple", query: "  Synthetic Customer  " }),
+    buildGeneralSearchInputKey({ mode: "simple", query: "Synthetic Customer" }),
+  );
+  assert.notEqual(
+    buildGeneralSearchInputKey({ mode: "simple", query: "Synthetic Customer" }),
+    buildGeneralSearchInputKey({ mode: "simple", query: "Synthetic  Customer" }),
+  );
+});
+
+const validIdentityFilter = { id: "filter-one", field: "Customer Name", operator: "contains", value: "Synthetic" };
+
+test("advanced identity ignores transient IDs and incomplete filters without changing submitted values", () => {
+  const expected = buildGeneralSearchInputKey({ mode: "advanced", filters: [validIdentityFilter], logic: "AND" });
+  assert.equal(buildGeneralSearchInputKey({ mode: "advanced", filters: [], logic: "AND" }), null);
+  assert.equal(buildGeneralSearchInputKey({ mode: "advanced", filters: [
+    { ...validIdentityFilter, id: "different-id" },
+    { id: "empty", field: "", operator: "contains", value: "Synthetic" },
+    { id: "blank", field: "Customer Name", operator: "contains", value: "  " },
+  ], logic: "AND" }), expected);
+  assert.notEqual(buildGeneralSearchInputKey({ mode: "advanced", filters: [
+    { ...validIdentityFilter, value: " Synthetic " },
+  ], logic: "AND" }), expected);
+  assert.notEqual(buildGeneralSearchInputKey({ mode: "advanced", filters: [validIdentityFilter], logic: "OR" }), expected);
+  for (const changes of [{ field: "IC Number" }, { operator: "equals" }, { value: "Different" }]) {
+    assert.notEqual(buildGeneralSearchInputKey({ mode: "advanced", filters: [
+      { ...validIdentityFilter, ...changes },
+    ], logic: "AND" }), expected);
+  }
+});
+
+test("advanced identity preserves filter order and supports operators with no value", () => {
+  const emptyFilter = { id: "filter-two", field: "Phone Number", operator: "isEmpty", value: "" };
+  const input = { mode: "advanced" as const, filters: [validIdentityFilter, emptyFilter], logic: "OR" as const };
+  assert.equal(buildGeneralSearchInputKey(input), buildGeneralSearchInputKey({ ...input, filters: [...input.filters] }));
+  assert.notEqual(buildGeneralSearchInputKey(input), buildGeneralSearchInputKey({ ...input, filters: [...input.filters].reverse() }));
+  assert.notEqual(buildGeneralSearchInputKey({ mode: "advanced", filters: [emptyFilter], logic: "AND" }), null);
+  assert.notEqual(
+    buildGeneralSearchInputKey({ mode: "simple", query: "Synthetic" }),
+    buildGeneralSearchInputKey({ mode: "advanced", filters: [validIdentityFilter], logic: "AND" }),
+  );
+});
+
+const successfulEmptyInput = {
+  currentInputKey: buildGeneralSearchInputKey({ mode: "simple", query: "Synthetic" }),
+  successfulInputKey: buildGeneralSearchInputKey({ mode: "simple", query: "Synthetic" }),
+  searched: true,
+  loading: false,
+  error: "",
+  resultCount: 0,
+  totalResults: 0,
+};
+
+test("only an accepted current successful zero result enables the premium empty state", () => {
+  assert.deepEqual(resolveGeneralSearchResultState(successfulEmptyInput), {
+    hasCurrentSuccessfulSearch: true, showEmptyState: true,
+  });
+  for (const changes of [
+    { searched: false }, { loading: true }, { error: "Search failed" },
+    { successfulInputKey: null }, { currentInputKey: null, successfulInputKey: null },
+    { currentInputKey: buildGeneralSearchInputKey({ mode: "simple", query: "Edited keyword" }) },
+    { currentInputKey: buildGeneralSearchInputKey({ mode: "advanced", filters: [validIdentityFilter], logic: "AND" }) },
+  ]) {
+    assert.deepEqual(resolveGeneralSearchResultState({ ...successfulEmptyInput, ...changes }), {
+      hasCurrentSuccessfulSearch: false, showEmptyState: false,
+    });
+  }
+});
+
+test("populated results and a positive total with an empty page are not a globally empty search", () => {
+  for (const counts of [
+    { resultCount: 1, totalResults: 1 },
+    { resultCount: 0, totalResults: 20 },
+    { resultCount: 1, totalResults: 0 },
+  ]) {
+    assert.deepEqual(resolveGeneralSearchResultState({ ...successfulEmptyInput, ...counts }), {
+      hasCurrentSuccessfulSearch: true, showEmptyState: false,
+    });
+  }
+});
+
+test("export feedback does not remove an accepted populated result table", () => {
+  const populatedWithFeedback = {
+    ...successfulEmptyInput, resultCount: 2, totalResults: 2,
+    error: "Failed to export PDF: Synthetic download failure",
+  };
+  assert.deepEqual(resolveGeneralSearchResultState(populatedWithFeedback), {
+    hasCurrentSuccessfulSearch: true, showEmptyState: false,
+  });
+  // A failed search is not an export error: starting the request clears the
+  // accepted key before awaiting it, even if previous rows were still present.
+  assert.deepEqual(resolveGeneralSearchResultState({ ...populatedWithFeedback, successfulInputKey: null }), {
+    hasCurrentSuccessfulSearch: false, showEmptyState: false,
+  });
+  assert.deepEqual(resolveGeneralSearchResultState({ ...populatedWithFeedback, resultCount: 0, totalResults: 0 }), {
+    hasCurrentSuccessfulSearch: false, showEmptyState: false,
+  });
+});
+
+test("edited advanced filters and logic cannot inherit the prior accepted empty result", () => {
+  const successfulInputKey = buildGeneralSearchInputKey({ mode: "advanced", filters: [validIdentityFilter], logic: "AND" });
+  for (const currentInputKey of [
+    buildGeneralSearchInputKey({ mode: "advanced", filters: [], logic: "AND" }),
+    buildGeneralSearchInputKey({ mode: "advanced", filters: [validIdentityFilter], logic: "OR" }),
+    buildGeneralSearchInputKey({ mode: "advanced", filters: [{ ...validIdentityFilter, value: "Edited" }], logic: "AND" }),
+  ]) {
+    assert.deepEqual(resolveGeneralSearchResultState({ ...successfulEmptyInput, currentInputKey, successfulInputKey }), {
+      hasCurrentSuccessfulSearch: false, showEmptyState: false,
+    });
+  }
+});
+
+test("empty state identity is captured before request and published only after stale-response acceptance", () => {
+  const source = readFileSync(new URL("./useGeneralSearchDataState.ts", import.meta.url), "utf8");
+  const simple = source.slice(source.indexOf("const handleSimpleSearch"), source.indexOf("const handleAdvancedSearch"));
+  const advanced = source.slice(source.indexOf("const handleAdvancedSearch"), source.indexOf("const previouslySearched ="));
+  for (const request of [simple, advanced]) {
+    const capture = request.indexOf("const requestInputKey = buildGeneralSearchInputKey");
+    const fetch = request.indexOf("const response = await");
+    const acceptance = request.indexOf("if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;", fetch);
+    const success = request.indexOf("setSuccessfulInputKey(requestInputKey)");
+    assert.ok(capture >= 0 && capture < fetch);
+    assert.ok(acceptance > fetch && success > acceptance && success < request.indexOf("} catch"));
+    assert.match(request, /setSuccessfulInputKey\(null\)/);
+    assert.doesNotMatch(request, /deferredQuery/);
+  }
+  const clearQuery = source.slice(source.indexOf("const handleQueryChange"), source.indexOf("const resetSearchState"));
+  const reset = source.slice(source.indexOf("const resetSearchState"), source.indexOf("const handleResultsPerPageChange"));
+  for (const cancel of [clearQuery, reset]) assert.match(cancel, /setSuccessfulInputKey\(null\)/);
+});
 
 test("first explicit submit is not automatically aborted and resubmitted", () => {
   assert.equal(shouldAutomaticallyRefreshGeneralSearch(false, false), false);

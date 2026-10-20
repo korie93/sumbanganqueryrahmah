@@ -10,11 +10,13 @@ import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import type { FilterRow, SearchResultRow } from "@/pages/general-search/types";
 import {
+  buildGeneralSearchInputKey,
   buildGeneralSearchPageSizeOptions,
   clampGeneralSearchResultsPageSize,
   getValidGeneralSearchFilters,
   normalizeGeneralSearchResponse,
   resolveDefaultGeneralSearchPageSize,
+  resolveGeneralSearchResultState,
   shouldAutomaticallyRefreshGeneralSearch,
 } from "@/pages/general-search/general-search-state-utils";
 import { collectSearchHeaders } from "@/pages/general-search/utils";
@@ -50,6 +52,7 @@ export function useGeneralSearchDataState({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
+  const [successfulInputKey, setSuccessfulInputKey] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
   const [totalResultsIsApproximate, setTotalResultsIsApproximate] = useState(false);
@@ -64,6 +67,12 @@ export function useGeneralSearchDataState({
   const [resultsPerPage, setResultsPerPage] = useState(defaultResultsPerPage);
   const [columns, setColumns] = useState<string[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
+  const currentInputKey = useMemo(
+    () => buildGeneralSearchInputKey(advancedMode
+      ? { mode: "advanced", filters, logic }
+      : { mode: "simple", query }),
+    [advancedMode, filters, logic, query],
+  );
 
   const pageSizeOptions = useMemo(
     () =>
@@ -146,6 +155,7 @@ export function useGeneralSearchDataState({
         setError("Please enter at least 2 characters.");
         return;
       }
+      const requestInputKey = buildGeneralSearchInputKey({ mode: "simple", query: trimmedQuery });
 
       const effectiveLimit = clampGeneralSearchResultsPageSize(
         limitOverride ?? resultsPerPage,
@@ -159,6 +169,7 @@ export function useGeneralSearchDataState({
       setLoading(true);
       setError("");
       setSearched(true);
+      setSuccessfulInputKey(null);
 
       try {
         const response = await searchData(trimmedQuery, pageNumber, effectiveLimit, {
@@ -170,6 +181,7 @@ export function useGeneralSearchDataState({
           configuredSearchResultLimit,
         );
         updateSearchResults(nextResults, cappedTotal, totalIsApproximate, pageNumber, effectiveLimit);
+        setSuccessfulInputKey(requestInputKey);
       } catch (searchError) {
         if (searchError instanceof DOMException && searchError.name === "AbortError") {
           return;
@@ -203,6 +215,7 @@ export function useGeneralSearchDataState({
         setError("Please add at least one valid filter.");
         return;
       }
+      const requestInputKey = buildGeneralSearchInputKey({ mode: "advanced", filters: validFilters, logic });
 
       const effectiveLimit = clampGeneralSearchResultsPageSize(
         limitOverride ?? resultsPerPage,
@@ -216,6 +229,7 @@ export function useGeneralSearchDataState({
       setLoading(true);
       setError("");
       setSearched(true);
+      setSuccessfulInputKey(null);
 
       try {
         const response = await advancedSearchData(
@@ -231,6 +245,7 @@ export function useGeneralSearchDataState({
           configuredSearchResultLimit,
         );
         updateSearchResults(nextResults, cappedTotal, totalIsApproximate, pageNumber, effectiveLimit);
+        setSuccessfulInputKey(requestInputKey);
       } catch (searchError) {
         if (searchError instanceof DOMException && searchError.name === "AbortError") {
           return;
@@ -304,6 +319,7 @@ export function useGeneralSearchDataState({
       setResults([]);
       setHeaders([]);
       setSearched(false);
+      setSuccessfulInputKey(null);
       setError("");
       setTotalResults(0);
       setTotalResultsIsApproximate(false);
@@ -321,6 +337,7 @@ export function useGeneralSearchDataState({
     setHeaders([]);
     setError("");
     setSearched(false);
+    setSuccessfulInputKey(null);
     setTotalResults(0);
     setTotalResultsIsApproximate(false);
     setCurrentPage(1);
@@ -331,6 +348,16 @@ export function useGeneralSearchDataState({
     setCurrentPage(1);
   }, []);
 
+  const { hasCurrentSuccessfulSearch, showEmptyState } = resolveGeneralSearchResultState({
+    currentInputKey,
+    successfulInputKey,
+    searched,
+    loading,
+    error,
+    resultCount: results.length,
+    totalResults,
+  });
+
   return {
     state: {
       columns,
@@ -338,6 +365,7 @@ export function useGeneralSearchDataState({
       displayQuery: deferredQuery,
       error,
       headers,
+      hasCurrentSuccessfulSearch,
       loading,
       loadingColumns,
       pageSizeOptions,
@@ -345,6 +373,7 @@ export function useGeneralSearchDataState({
       results,
       resultsPerPage,
       searched,
+      showEmptyState,
       totalResults,
       totalResultsIsApproximate,
     },

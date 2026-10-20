@@ -1870,3 +1870,164 @@ temporary viewport override reset. No production/DB access, commit/push/deploy,
 new dependency or auth/session/lock behavior change.
 
 Final visual result: passed; no outstanding P0/P1/P2 findings in this polish scope.
+
+## 2026-10-20 — General Search Enterprise FINAL empty state
+
+### Target and scope
+
+Source truth: user ZIP `SQR_Enterprise_FINAL_Premium_Implementation.zip`, its
+Light/Dark desktop and 390px screenshots, and the original empty-state HTML/CSS
+preserved in `docs/design/general-search-enterprise-final/`. ZIP SHA256 is recorded
+in that directory's README and the continuation handoff. This is a component
+integration into the actual General Search route, not the supplied demo shell or
+a replacement search workflow. Product Design image-to-code and design-QA guided
+faithful asset reuse and the matched-source visual review.
+
+Implementation: actual production build at a loopback-only synthetic API boundary.
+No application preview switch, mock route, auth bypass, backend change or production
+data access. Primary visual inspection was performed in Codex IAB. The user also
+approved local Playwright/Chromium for deterministic responsive/state regression.
+
+### Captures and normalization
+
+Source and implementation were captured by the same Chromium process, at
+deviceScaleFactor 1, viewport height 960px, each Light/Dark theme, identical
+keyword `123456789012`, and reduced-motion state to freeze the same original
+illustration pose. Original motion was checked separately in normal/low-spec mode.
+Source reference was constrained to the measured in-app panel width; existing
+sidebar, page header and controls are intentionally outside the component target.
+
+| CSS viewport width | Source AND implementation panel PNG size, both themes |
+| --- | --- |
+| 320px | 288 × 477px |
+| 390px | 358 × 499px |
+| 768px | 736 × 367px |
+| 1024px | 736 × 378px |
+| 1440px | 1152 × 378px |
+
+Fractional CSS heights are rounded only by screenshot rasterization. Images are
+not rescaled, redrawn or retouched. Same-size source and implementation are placed
+side-by-side with a 24px neutral gap and labels; source is left. All ten combined
+inputs were opened and visually inspected, not inferred from separate captures.
+
+Full component comparisons:
+`artifacts/enterprise-empty/visual/{light,dark}-{320,390,768,1024,1440}-comparison.png`.
+Their corresponding `*-source.png`, `*-implementation.png` and contextual
+`*-app.png` files remain beside `evidence.json` (measured bounds, density, theme
+and browser errors). The narrow 320/390px comparisons also serve as readable
+focused typography/icon/copy/asset-detail comparisons; all details are legible
+without additional enlargement. Desktop comparisons check composition and crop.
+Additional primary-browser evidence is in `artifacts/enterprise-empty/iab/`.
+IAB's zoom/oversized capture-canvas quirk is not used for pixel-size assertions;
+the exact-viewport pairs above are the normalized comparison evidence.
+
+### Fidelity review and comparison history
+
+First matched visual comparison: **no actionable P0/P1/P2 visual mismatch**.
+No visual fix was made in response, so a second visual iteration was not required.
+
+- **Fonts/typography:** retained the exact supplied font stack, size, weights,
+  line heights, tracking and optical-size settings. Same browser/system fallback
+  on source and implementation; no remote font request or new font dependency.
+  Titles, badge, monospace keyword and tip wrap consistently at every measured
+  viewport. Long adversarial keywords truncate inside their capsule, not the page;
+  the complete literal text remains available in its title.
+- **Spacing/layout rhythm:** exact scoped source CSS retains the 17px radius,
+  panel padding, meta/title/lead/query/tip spacing and seamless art. Source and
+  implementation bounds agree. Text and illustration are side-by-side on desktop,
+  stacked on phones, with no secondary card/divider or horizontal overflow.
+  The original 365/760/980px responsive rules have an exact-path exception only;
+  every adjacent/unrelated stylesheet remains subject to shared workspace tiers.
+- **Colors/tokens:** original dark surface `#151b20`, light white surface, muted
+  type, blue badge, warm lighting, lagoon gradients, opacity and soft masking are
+  unchanged. Existing `html[data-theme]` selects the palette. Workspace styling
+  outside the panel is preserved rather than restyled to the demo.
+- **Asset quality/fidelity:** reused the original SVG, mechanically converted to
+  JSX. Automated SSR comparison verifies every one of 146 elements, nine unique
+  IDs, attributes, geometry, paint and order. The stylesheet and all eleven
+  keyframes match the canonical source. No generated/redrawn illustration or logo,
+  raster enlargement, compression halo or substituted icon. Original fish story
+  remains 10 seconds in normal AND low-spec modes; reduced motion disables it.
+- **Copy/content:** required original BM title, description, count and tip are
+  exact. Real submitted keyword replaces the demo value as escaped React text.
+  Advanced mode uses `Kriteria carian` and the actual effective filter summaries.
+  No extra empty-panel actions or demo labels. Existing form/navigation copy stays
+  unchanged, as required by scope.
+
+Independent code review found and fixed a non-visual P2 before final handoff:
+shared PDF-export feedback initially hid accepted populated results. The final
+guard distinguishes accepted positive data from a new/failed search, while any
+error still excludes the premium empty state. The final rebuilt browser suite
+explicitly fails the lazy PDF export chunk and verifies the table, retry/export
+controls, record dialog and restored focus remain available. This was a functional
+regression fix, not a claimed visual comparison iteration.
+
+### Interactions, accessibility and security
+
+Final actual-built browser run: **34/34 passed** (26 new empty-state checks and
+8 existing General Search layout regressions), without snapshot baseline updates.
+Evidence: `artifacts/enterprise-empty/final-browser.log`.
+
+Covered initial idle, pending/invalid input, successful zero, populated results,
+positive-total/empty-page fallback, server500, network failure, timeout,401 and
+malformed200 responses. Held old responses are released and settled before stale
+keyword/mode/filter/logic/reset assertions. Simple/advanced controls, Enter submit,
+reset, selected record detail, dialog focus restoration, three role permissions,
+desktop height/width, low-spec virtualization and mobile cards remain functional.
+
+Scoped axe WCAG A/AA/2.1 checks at 320 and 1440px in both themes: zero violations.
+Named region/title, BM language, explicit completion status, hidden decorative
+artwork, keyboard order and active search-input focus are preserved. No added
+interactive elements or reduced-motion bypass. Normal/low-spec native animation
+timelines are checked for 10,000ms/infinite and reduced-motion yields zero running
+subtree animations.
+
+Ten separate same-state visual runs also pass strict production-like CSP,
+`style-src-attr 'none'` and Trusted Types, without policy relaxation or app code
+replacement. No page/JS/CSP/TrustedHTML errors; all traffic is local. Long markup
+keywords remain literal text, create no image/script nodes, execute no payload and
+cause no overflow. No keyword logging or persistence was added.
+
+### Verification and remaining scope
+
+Production build, final typecheck, full client/server lint, all 2,212 client tests,
+771 script tests (one pre-existing Viewer baseline reproducer skipped), exact
+SVG/CSS/state tests, DOM-injection guard, breakpoint contract/tests, bundle budgets,
+hygiene and secret scan have passed. The new source-fidelity test initially used
+Array.at, which is outside this project's ES2020 type library; replaced it with
+ordinary array indexing and reran typecheck/client tests successfully without
+widening the compiler target. Existing build has an upstream PostCSS `from` warning;
+the build completes and source-map/bundle gates pass. No dependency change.
+
+Backend suites and live production deployment are outside this frontend-only
+verification. No claim is made that remote GitHub CI or deployment has run. At the
+time of this QA report, commit, push and deployment had not yet been requested.
+The user later authorized commit/push on 2026-10-20; deployment remains separate.
+
+Final result: passed
+
+No outstanding actionable P0/P1/P2 visual or interaction findings in this scope.
+Continuation file: `CODEX_CONTINUATION_HANDOFF_GENERAL_SEARCH_ENTERPRISE_EMPTY.md`.
+
+### Preview motion follow-up — 2026-10-20
+
+User reported that the local preview did not move. Read the live rendered tab
+before changing anything: `matchMedia('(prefers-reduced-motion: reduce)').matches`
+was true, fish animation-name was `none`, duration `0s`, static transform at268/152.
+The previous handoff had cleared the screenshot's media override, which restored
+Codex IAB's own reduced-motion default. This was a preview environment issue,
+not a missing keyframe or a production runtime regression.
+
+Set `prefers-reduced-motion: no-preference` in the EXISTING preview tab's CDP media
+emulation only. The visible fish now uses `se-fish`, duration10s, with transforms
+changing from approximately429.883/177.992 to143.823/257.483. Native animation
+timelines report running with advancing currentTime; all original motion remains.
+Saved live preview evidence: `artifacts/enterprise-empty/iab/animation-live.png`.
+
+No component, asset, CSS, build, production setting or OS preference was changed.
+Production reduced-motion behavior stays intact. The prior matched-source visual
+comparisons remain valid; no visual source or layout changed in this follow-up.
+The tab-local motion override is deliberately retained so the user can inspect
+the animation, and must be disclosed at handoff. Chat PNG screenshots are static.
+
+Final result: passed

@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { GeneralSearchControls } from "@/pages/general-search/GeneralSearchControls";
+import { GeneralSearchEmptyState } from "@/pages/general-search/GeneralSearchEmptyState";
 import { useGeneralSearchController } from "@/pages/general-search/useGeneralSearchController";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import "@/pages/general-search/general-search-layout.css";
@@ -29,7 +30,7 @@ export default function GeneralSearch({
 }: GeneralSearchProps) {
   const controller = useGeneralSearchController({ userRole, searchResultLimit });
   const { actions, canExport, canSeeSourceFile, isLowSpecMode, state } = controller;
-  const shouldShowResults = state.searched && !state.loading;
+  const shouldShowResults = state.hasCurrentSuccessfulSearch;
   const shouldShowRecordDialog = state.selectedRecord !== null;
   const recordTriggerRef = useRef<HTMLElement | null>(null);
   const selectResultRecord = useCallback((record: SearchResultRow) => {
@@ -80,7 +81,12 @@ export default function GeneralSearch({
           onUpdateFilter={actions.updateFilter}
         />
 
-        {shouldShowResults ? (
+        {state.showEmptyState ? (
+          <GeneralSearchEmptyState
+            advancedMode={state.advancedMode}
+            query={state.advancedMode ? state.activeFilterSummaries.join(" · ") : state.query.trim()}
+          />
+        ) : shouldShowResults ? (
           <Suspense
             fallback={
               <div className="rounded-lg border border-border bg-card p-6" role="status" aria-live="polite">

@@ -66,6 +66,57 @@ export function getValidGeneralSearchFilters(filters: FilterRow[]) {
   );
 }
 
+type GeneralSearchInput =
+  | { mode: "simple"; query: string }
+  | { mode: "advanced"; filters: FilterRow[]; logic: "AND" | "OR" };
+
+// This identity is only held in React memory. It describes the effective search
+// inputs, not a deferred draft, transient filter IDs, or a backend/cache key.
+export function buildGeneralSearchInputKey(input: GeneralSearchInput): string | null {
+  if (input.mode === "simple") {
+    const query = input.query.trim();
+    return query.length >= 2 ? JSON.stringify(["simple", query]) : null;
+  }
+
+  const filters = getValidGeneralSearchFilters(input.filters);
+  if (filters.length === 0) return null;
+  return JSON.stringify([
+    "advanced",
+    input.logic,
+    filters.map(({ field, operator, value }) => [field, operator, value]),
+  ]);
+}
+
+interface GeneralSearchResultStateInput {
+  currentInputKey: string | null;
+  successfulInputKey: string | null;
+  searched: boolean;
+  loading: boolean;
+  error: string;
+  resultCount: number;
+  totalResults: number;
+}
+
+export function resolveGeneralSearchResultState({
+  currentInputKey,
+  successfulInputKey,
+  searched,
+  loading,
+  error,
+  resultCount,
+  totalResults,
+}: GeneralSearchResultStateInput) {
+  // The shared feedback also reports export failures. Keep accepted populated
+  // results available in that case; a new/failed search already clears its key.
+  const hasCurrentSuccessfulSearch = searched && !loading
+    && currentInputKey !== null && successfulInputKey === currentInputKey
+    && (!error || resultCount > 0);
+  return {
+    hasCurrentSuccessfulSearch,
+    showEmptyState: hasCurrentSuccessfulSearch && !error && resultCount === 0 && totalResults === 0,
+  };
+}
+
 export function normalizeGeneralSearchResponse(
   response: SearchResponsePayload,
   configuredSearchResultLimit: number,

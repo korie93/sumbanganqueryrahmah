@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ALLOWED_CLIENT_BREAKPOINT_WIDTHS,
   CLIENT_BREAKPOINT_CONTRACT_REQUIREMENTS,
   formatClientBreakpointContractReport,
   loadClientBreakpointContractFiles,
@@ -113,6 +114,8 @@ test("client breakpoint contract report summarizes successful checks", () => {
 
   assert.match(report, /inspected 10\/10 targeted files, 25\/25 contract markers, and 7 CSS files/i);
   assert.match(report, /standardized around 640\/767\/768\/1023\/1024/i);
+  assert.match(report, /Enterprise FINAL General Search empty-state CSS \(365\/760\/980px\)/);
+  assert.match(report, /exact source-reference stylesheet paths only/);
 });
 
 test("only the isolated V17 auth stylesheet may retain the canonical reference breakpoints", () => {
@@ -130,4 +133,35 @@ test("only the isolated V17 auth stylesheet may retain the canonical reference b
 
   filesByPath[authPath] = "@media (max-width: 999px) {}";
   assert.equal(validateClientBreakpointContract({ filesByPath }).failures.length, 1);
+});
+
+test("only the exact Enterprise FINAL empty-state stylesheet retains its supplied reference breakpoints", () => {
+  const filesByPath = buildCompliantFilesByPath();
+  const emptyStatePath = "client/src/pages/general-search/general-search-empty.css";
+  const widths = [365, 760, 980];
+  filesByPath[emptyStatePath] = widths
+    .map((width) => `@media (max-width: ${width}px) { .sqr-empty__main { display: block; } }`)
+    .join("\n");
+
+  assert.deepEqual(ALLOWED_CLIENT_BREAKPOINT_WIDTHS, [640, 767, 768, 1023, 1024]);
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, []);
+
+  // The approved artwork must not create new tiers for adjacent or unrelated UI.
+  for (const otherPath of [
+    "client/src/pages/general-search/general-search-layout.css",
+    "client/src/pages/general-search/general-search-empty.module.css",
+    "client/src/components/general-search-empty.css",
+    "client/src/app/AuthenticatedAppShell.css",
+  ]) {
+    const copy = { ...filesByPath, [otherPath]: filesByPath[emptyStatePath] };
+    const validation = validateClientBreakpointContract({ filesByPath: copy });
+    assert.deepEqual(validation.failures, widths.map((width) =>
+      `${otherPath}: unsupported responsive breakpoint ${width}px (allowed: 640, 767, 768, 1023, 1024px)`,
+    ));
+  }
+
+  filesByPath[emptyStatePath] += "\n@media (max-width: 999px) {}";
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, [
+    `${emptyStatePath}: unsupported responsive breakpoint 999px (allowed: 640, 767, 768, 1023, 1024px)`,
+  ]);
 });
