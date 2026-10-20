@@ -1131,6 +1131,7 @@ export const collectionMonthlySummaryRowSchema = z.object({
 });
 
 export const collectionDashboardSummarySchema = z.object({
+  scopeStatus: z.enum(["ready", "link_required"]).optional(),
   month: z.number().int().min(1).max(12),
   scopeLabel: nonEmptyStringSchema,
   canViewLeaderBreakdown: z.boolean(),

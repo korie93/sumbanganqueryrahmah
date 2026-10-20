@@ -256,6 +256,10 @@ jobs:
         timeout-minutes: 5
         run: SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" npm run test:auth:postgres
 
+      - name: Verify isolated Dashboard Collection ownership
+        timeout-minutes: 5
+        run: SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" npm run test:collection:dashboard-postgres
+
       - name: Verify role permissions with PostgreSQL
         env:
           ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1"

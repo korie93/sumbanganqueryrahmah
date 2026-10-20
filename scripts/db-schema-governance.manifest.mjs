@@ -190,6 +190,10 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Auditable Billing Principal target settings are governed by reviewed schema and additive runtime bootstrap.",
     ),
+    collection_dashboard_accounts: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Stable account-to-nickname links scope Dashboard aggregates only, established by verified nickname login or superuser assignment.",
+    ),
     collection_staff_nicknames: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Collection staff nickname access now has a reviewed Drizzle migration while runtime bootstrap remains additive for cleanup and seeding compatibility.",

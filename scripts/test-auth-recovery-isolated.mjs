@@ -15,6 +15,11 @@ const executable = (name) => pgBin
 const inheritedKeys = ["PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "HOME"];
 const cleanEnv = Object.fromEntries(inheritedKeys.filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
 const tempParent = await realpath(os.tmpdir());
+const dashboard = process.argv.includes("--collection-dashboard");
+const testDatabase = dashboard ? "sqr_dashboard_scope_test" : "sqr_auth_recovery_test";
+const testFile = dashboard
+  ? "server/repositories/tests/collection-dashboard-account.postgres.test.ts"
+  : "server/repositories/tests/auth-recovery-postgres.integration.test.ts";
 function run(command, args, env = cleanEnv) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { env, stdio: "inherit", windowsHide: true });
@@ -47,12 +52,12 @@ try {
   const admin = new pg.Client({ host: "127.0.0.1", port, user: "sqr_fixture", database: "postgres", connectionTimeoutMillis: 3_000 });
   try {
     await admin.connect();
-    await admin.query("CREATE DATABASE sqr_auth_recovery_test");
+    await admin.query(`CREATE DATABASE ${testDatabase}`);
   } finally { await admin.end(); }
-  await run(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", "server/repositories/tests/auth-recovery-postgres.integration.test.ts"], {
+  await run(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", testFile], {
     ...cleanEnv,
     NODE_ENV: "test", HOST: "127.0.0.1", PUBLIC_APP_URL: "http://127.0.0.1:5000",
-    PG_HOST: "127.0.0.1", PG_PORT: String(port), PG_USER: "sqr_fixture", PG_PASSWORD: "", PG_DATABASE: "sqr_auth_recovery_test",
+    PG_HOST: "127.0.0.1", PG_PORT: String(port), PG_USER: "sqr_fixture", PG_PASSWORD: "", PG_DATABASE: testDatabase,
     SQR_AUTH_ISOLATED_CLUSTER: "1",
   });
 } catch (error) {

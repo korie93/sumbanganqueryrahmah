@@ -1,4 +1,5 @@
 import { db } from "../db-postgres";
+import { rememberDashboardAccount } from "./collection-dashboard-account-repository";
 import type {
   CollectionNicknameAuthProfile,
   CollectionNicknameSession,
@@ -35,7 +36,10 @@ export async function setCollectionNicknameSessionRepository(params: {
   nickname: string;
   verifiedAt?: Date;
 }): Promise<void> {
-  return setCollectionNicknameSessionValue(db, params);
+  return db.transaction(async (tx) => {
+    await setCollectionNicknameSessionValue(tx, params);
+    await rememberDashboardAccount(tx, params.activityId);
+  });
 }
 
 export async function getCollectionNicknameSessionByActivityRepository(

@@ -90,7 +90,11 @@ import {
 } from "./collection-osp-v7-repository-utils";
 import { listCollectionOspTargetOptionsRepository, previewCollectionOspSourceScopeRepository } from "./collection-osp-source-scope-repository-utils";
 
+import { getCollectionDashboardAccount, setCollectionDashboardAccount } from "./collection-dashboard-account-repository";
+
 export class CollectionRepository {
+  readonly getCollectionDashboardAccount = getCollectionDashboardAccount;
+  readonly setCollectionDashboardAccount = setCollectionDashboardAccount;
   readonly getCollectionOspTargetOptions = listCollectionOspTargetOptionsRepository;
   readonly previewCollectionOspSourceScope = previewCollectionOspSourceScopeRepository;
   readonly backfillLegacyCollectionRecordsForSource = backfillLegacyCollectionRecordsForSource;

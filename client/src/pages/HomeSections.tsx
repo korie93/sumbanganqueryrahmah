@@ -29,6 +29,9 @@ function HomeCollectionOverview({ date }: { date: BusinessDate }) {
           </div> : state.status === "error" ? <div className="home-error" role="alert">
             <strong>Collection summary is unavailable</strong><p>We could not load the latest totals. Please try again.</p>
             <button type="button" className="home-small-button" onClick={retry} aria-label="Retry Collection"><RefreshCw size={14} aria-hidden="true" />Retry</button>
+          </div> : dashboard?.scopeStatus === "link_required" ? <div role="status" className="home-muted">
+            <strong>Nickname Collection belum dipautkan</strong>
+            <p>Minta superuser tetapkan nickname akaun anda di Account Management untuk melihat kutipan di Dashboard.</p>
           </div> : <>
             <div className="home-collection-amount" data-testid="collection-amount">{formatHomeAmount(amount)}</div>
             {state.status === "empty" ? <p className="home-muted">No Collection records for this month yet.</p> : null}

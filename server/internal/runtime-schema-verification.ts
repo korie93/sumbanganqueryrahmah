@@ -20,6 +20,7 @@ export const RUNTIME_REQUIRED_SCHEMA_TABLES = [
   "collection_daily_calendar",
   "collection_daily_calendar_audit",
   "collection_daily_targets",
+  "collection_dashboard_accounts",
   "collection_nickname_sessions",
   "collection_record_daily_rollup_refresh_queue",
   "collection_record_daily_rollups",

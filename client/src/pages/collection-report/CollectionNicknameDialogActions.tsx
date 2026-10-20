@@ -5,7 +5,7 @@ export interface CollectionNicknameDialogActionsProps {
   dialogStep: NicknameDialogStep;
   onPrimaryAction: () => void;
   onResetTemporaryValues: () => void;
-  onReturnToSearch: () => void;
+  onReturnToDashboard: () => void;
   onStepChange: (step: NicknameDialogStep) => void;
   primaryLabel: string;
   primaryLoadingLabel: string;
@@ -17,7 +17,7 @@ export function CollectionNicknameDialogActions({
   dialogStep,
   onPrimaryAction,
   onResetTemporaryValues,
-  onReturnToSearch,
+  onReturnToDashboard,
   onStepChange,
   primaryLabel,
   primaryLoadingLabel,
@@ -25,9 +25,9 @@ export function CollectionNicknameDialogActions({
   submittingNicknameAuth,
 }: CollectionNicknameDialogActionsProps) {
   return (
-    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-      <Button variant="outline" onClick={onReturnToSearch} disabled={submittingNicknameAuth}>
-        Close
+    <div className="flex w-full min-w-0 flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+      <Button type="button" variant="outline" onClick={onReturnToDashboard}>
+        Kembali ke Dashboard
       </Button>
       {dialogStep !== "nickname" ? (
         <Button

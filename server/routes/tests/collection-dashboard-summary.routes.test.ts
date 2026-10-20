@@ -43,3 +43,34 @@ test("dashboard summary opt-in retains auth/tab guards and restricted rows never
     }
   } finally { await stopTestServer(server); }
 });
+
+test("Dashboard ignores forged account/group identity and takes scope from authenticated stable user ID", async () => {
+  const lookups: string[] = [];
+  const filters: unknown[] = [];
+  const storage = {
+    getCollectionDashboardAccount: async (id: string) => {
+      lookups.push(id);
+      return { nicknameId: "nickname", nickname: "OWN", accountRole: "user", isActive: true };
+    },
+    getCollectionMonthlySummary: async (input: unknown) => {
+      filters.push(input);
+      return [{ month: 10, monthName: "October", totalAmount: 123, totalRecords: 2 }];
+    },
+    getCollectionNicknameSessionByActivity: async () => { throw new Error("Transient session is not Dashboard ownership"); },
+  } as unknown as PostgresStorage;
+  const app = createJsonTestApp();
+  registerCollectionRoutes(app, { storage, authenticateToken: createTestAuthenticateToken(), requireRole: createTestRequireRole(), requireTabAccess: createTestRequireTabAccess() });
+  const { server, baseUrl } = await startTestServer(app);
+  const endpoint = `${baseUrl}/api/collection/summary?year=2026&month=10&includeDashboard=1`;
+  const headers = { "x-test-role": "user", "x-test-username": "viewer", "x-test-userid": "actual-id" };
+  try {
+    const response = await fetch(`${endpoint}&userId=other&username=other&leaderId=other&scope=all`, { headers });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).summary[0].totalAmount, 123);
+    assert.deepEqual(lookups, ["actual-id"]);
+    assert.deepEqual(filters, [{ year: 2026, nicknames: ["OWN"] }]);
+    assert.equal((await fetch(`${endpoint}&nicknames=OTHER`, { headers })).status, 400);
+    assert.deepEqual(lookups, ["actual-id"]);
+    assert.deepEqual(filters, [{ year: 2026, nicknames: ["OWN"] }]);
+  } finally { await stopTestServer(server); }
+});

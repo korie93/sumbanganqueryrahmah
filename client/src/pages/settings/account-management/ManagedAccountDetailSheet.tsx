@@ -16,6 +16,7 @@ import {
 import { ManagedAccountLoginAccess } from "@/pages/settings/account-management/ManagedAccountLoginAccess";
 import { managedAccountDialogFocusHandoff, type ManagedAccountDialogKind } from "@/pages/settings/account-management/managed-account-dialog-focus";
 import type { ManagedUser } from "@/pages/settings/types";
+import { ManagedAccountCollectionScope } from "./ManagedAccountCollectionScope";
 
 type ManagedAccountDetailSheetProps = {
   deletingManagedUserId: string | null;
@@ -99,6 +100,9 @@ export function ManagedAccountDetailSheet({
                 </dl>
               </section>
 
+              {(user.role === "user" || user.role === "admin") && user.status !== "deleted" ? (
+                <ManagedAccountCollectionScope key={user.id} userId={user.id} role={user.role} />
+              ) : null}
               <section className="space-y-2 border-t border-border/70 pt-4">
                 <h3 className="text-sm font-semibold">Account timeline</h3>
                 <ol className="divide-y divide-border/60" aria-label={`Account timeline for ${user.username}`}>

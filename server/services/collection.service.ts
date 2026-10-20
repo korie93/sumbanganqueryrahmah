@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from "../auth/guards";
 import { CollectionAdminService } from "./collection/collection-admin.service";
+import { CollectionDashboardAccountService } from "./collection/collection-dashboard-account-service";
 import { CollectionNicknameService } from "./collection/collection-nickname.service";
 import { CollectionRecordService } from "./collection/collection-record.service";
 import type {
@@ -12,11 +13,21 @@ export class CollectionService {
   private readonly adminService: CollectionAdminService;
   private readonly nicknameService: CollectionNicknameService;
   private readonly recordService: CollectionRecordService;
+  private readonly dashboardAccountService: CollectionDashboardAccountService;
 
   constructor(storage: CollectionStoragePort) {
     this.adminService = new CollectionAdminService(storage);
     this.nicknameService = new CollectionNicknameService(storage);
     this.recordService = new CollectionRecordService(storage);
+    this.dashboardAccountService = new CollectionDashboardAccountService(storage);
+  }
+
+  getDashboardAccountLink(user: AuthenticatedUser | undefined, userId: string) {
+    return this.dashboardAccountService.getLink(user, userId);
+  }
+
+  setDashboardAccountLink(user: AuthenticatedUser | undefined, userId: string, body: unknown) {
+    return this.dashboardAccountService.setLink(user, userId, body);
   }
 
   listNicknames(user: AuthenticatedUser | undefined, includeInactiveRaw: unknown) {

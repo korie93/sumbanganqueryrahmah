@@ -98,6 +98,7 @@
     "test:db-integration": "tsx --test server/http/tests/bootstrap-migration.integration.test.ts",
     "test:auth": "tsx --test server/auth/tests/*.test.ts",
     "test:auth:postgres": "node scripts/test-auth-recovery-isolated.mjs",
+    "test:collection:dashboard-postgres": "node scripts/test-auth-recovery-isolated.mjs --collection-dashboard",
     "test:auth:browser": "node scripts/auth-feedback-browser.mjs",
     "test:auth:single-tab-browser": "node scripts/single-active-tab-browser.mjs",
     "test:auth:public-build": "node scripts/password-public-build-browser.mjs",

@@ -9,9 +9,7 @@ import {
   OperationalPageHeader,
 } from "@/components/layout/OperationalPage";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
-import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
-import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
   getCurrentRole,
   getCurrentUsername,
@@ -30,8 +28,7 @@ const CollectionNicknameDialog = lazy(() =>
   })),
 );
 
-export default function CollectionReport() {
-  const [, navigate] = useLocation();
+export default function CollectionReport({ onNavigate }: { onNavigate: (page: string) => void }) {
   const role = useMemo(() => getCurrentRole(), []);
   const currentUsername = useMemo(() => getCurrentUsername(), []);
   const isSuperuser = role === "superuser";
@@ -53,13 +50,11 @@ export default function CollectionReport() {
     isSuperuser,
   });
 
-  const redirectToSearchTab = useCallback(() => {
+  const returnToDashboard = useCallback(() => {
     nicknameAccess.clearNicknameSession();
-    const storage = getBrowserLocalStorage();
-    safeSetStorageItem(storage, "activeTab", "general-search");
-    safeSetStorageItem(storage, "lastPage", "general-search");
-    navigate("/");
-  }, [navigate, nicknameAccess]);
+    nicknameAccess.setNicknameDialogOpen(false);
+    onNavigate("home");
+  }, [onNavigate, nicknameAccess]);
 
   const handleDialogOpenChange = (open: boolean) => {
     if (open) {
@@ -67,7 +62,7 @@ export default function CollectionReport() {
       return;
     }
     if (!bypassesNicknameAccess && !nicknameAccess.canAccessCollection) {
-      redirectToSearchTab();
+      returnToDashboard();
       return;
     }
     nicknameAccess.setNicknameDialogOpen(false);
@@ -169,7 +164,7 @@ export default function CollectionReport() {
               nicknameAccess.setShowSetupPassword(false);
               nicknameAccess.setShowSetupConfirmPassword(false);
             }}
-            onReturnToSearch={redirectToSearchTab}
+            onReturnToDashboard={returnToDashboard}
             onStepChange={nicknameAccess.setDialogStep}
             onToggleLoginPassword={() =>
               nicknameAccess.setShowLoginPassword(!nicknameAccess.showLoginPassword)

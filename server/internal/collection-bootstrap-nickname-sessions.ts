@@ -3,6 +3,17 @@ import { db } from "../db-postgres";
 
 export async function ensureCollectionNicknameSessionsTable(): Promise<void> {
   await db.execute(sql`SET search_path TO public`);
+  // Local/disposable runtime-bootstrap compatibility. Production uses 0064;
+  // historical ownership backfill remains an explicit migration operation.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS public.collection_dashboard_accounts (
+      user_id text PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      nickname_id uuid REFERENCES public.collection_staff_nicknames(id) ON DELETE SET NULL ON UPDATE CASCADE,
+      account_role text NOT NULL CHECK (account_role IN ('user', 'admin')),
+      source text NOT NULL CHECK (source IN ('verified_login', 'superuser')),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS public.collection_nickname_sessions (
       activity_id text PRIMARY KEY,

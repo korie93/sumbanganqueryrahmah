@@ -343,7 +343,7 @@ export class PostgresStorageCore {
 
   protected async ensureCollectionNicknameSessionsTable() {
     await this.verifyProductionTablesOrBootstrap(
-      ["collection_nickname_sessions"],
+      ["collection_nickname_sessions", "collection_dashboard_accounts"],
       () => this.collectionBootstrap.ensureNicknameSessionsTable(),
     );
   }

@@ -102,6 +102,7 @@ export {
   adminGroupMembers,
   collectionNicknameSessions,
   adminVisibleNicknames,
+  collectionDashboardAccounts,
   collectionDailyTargets,
   collectionDailyCalendar,
 } from "./schema-postgres-collection";

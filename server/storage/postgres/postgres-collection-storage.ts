@@ -37,6 +37,14 @@ import type { CollectionAmountMyrNumber } from "../../../shared/collection-amoun
 import { PostgresSettingsStorage } from "./postgres-settings-storage";
 
 export class PostgresCollectionStorage extends PostgresSettingsStorage {
+  getCollectionDashboardAccount(userId: string) {
+    return this.collectionRepository.getCollectionDashboardAccount(userId);
+  }
+
+  setCollectionDashboardAccount(input: Parameters<typeof this.collectionRepository.setCollectionDashboardAccount>[0]) {
+    return this.collectionRepository.setCollectionDashboardAccount(input);
+  }
+
   async backfillLegacyCollectionRecordsForSource(
     sourceImportId: string,
   ): Promise<CollectionLegacyBackfillStats> {

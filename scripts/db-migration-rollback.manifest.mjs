@@ -80,6 +80,7 @@ const MIGRATION_TAGS = Object.freeze([
   "0061_collection_v9_history_lookup_indexes",
   "0062_collection_osp_private_client_ownership",
   "0063_account_terminal_deletion",
+  "0064_collection_dashboard_accounts",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(

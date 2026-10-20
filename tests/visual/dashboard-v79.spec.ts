@@ -45,6 +45,8 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   storedPage?: string;
   twoFactorLogin?: boolean;
   forcedPasswordChange?: boolean;
+  nicknameSetup?: boolean;
+  unlinkedCollection?: boolean;
 } = {}) {
   expect(baseURL, "Use npm run test:visual:built; no live backend is required").toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -128,6 +130,17 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     });
     if (endpoint === "GET /api/settings/tab-visibility") return respond(route, { role,
       tabs: { ...fixture.tabs, canViewSystemPerformance: false } });
+    if (endpoint === "GET /api/collection/nickname-auth/session") {
+      return respond(route, { ok: true, nickname: null });
+    }
+    if (endpoint === "POST /api/collection/nickname-auth/check") {
+      return respond(route, { ok: true, nickname: {
+        id: "dashboard-nickname-fixture", nickname: "STAFF.FIXTURE",
+        mustChangePassword: false, passwordResetBySuperuser: false,
+        requiresPasswordSetup: options.nicknameSetup ?? false,
+        requiresPasswordLogin: !options.nicknameSetup, requiresForcedPasswordChange: false,
+      } });
+    }
     if (endpoint === "GET /api/imports") return respond(route, { imports: [], pagination: {
       page: 1, pageSize: 20, limit: 20, mode: "offset", offset: 0,
       total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false,
@@ -140,6 +153,11 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
       if (fixture.collectionState === "loading") await collectionGate;
       if (fixture.collectionState === "error") return respond(route, { ok: false,
         message: "Synthetic Collection service unavailable" }, 503);
+      if (options.unlinkedCollection) return respond(route, {
+        ok: true, year: 2026, summary: [],
+        dashboard: { month: 10, scopeStatus: "link_required", scopeLabel: "Your Collection nickname",
+          canViewLeaderBreakdown: false, leaders: [], unassignedAmount: 0 },
+      });
       const empty = fixture.collectionState === "empty";
       const total = empty ? 0 : options.total ?? 128640;
       const count = empty ? 0 : options.leaderCount ?? 3;
@@ -147,7 +165,8 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
       const leaderAmount = count ? Math.floor(total * (options.mismatchedLeaders ? 2 : 0.9) / count * 100) / 100 : 0;
       return respond(route, { ok: true, year: 2026,
         summary: [{ month: 10, monthName: "October", totalRecords: empty ? 0 : 72, totalAmount: total }],
-        dashboard: { month: 10, scopeLabel: canViewLeaderBreakdown ? "All Collection records" : "Your authorized Collection scope",
+        dashboard: { month: 10, scopeStatus: "ready",
+          scopeLabel: canViewLeaderBreakdown ? "All Collection records" : role === "admin" ? "Your Collection team" : "Your Collection nickname",
           canViewLeaderBreakdown,
           leaders: canViewLeaderBreakdown ? Array.from({ length: count }, (_, index) => ({
             id: `fixture-leader-${index + 1}`, name: options.longNames && index === 0 ? longLeaderName : `Leader ${String(index + 1).padStart(2, "0")}`,
@@ -247,7 +266,7 @@ async function assertScopedUserHome(page: Page, fixture: Awaited<ReturnType<type
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByTestId("home-dashboard")).toBeVisible();
   await expect(page.getByTestId("collection-amount")).toContainText("128,640");
-  await expect(page.getByTestId("collection-overview")).toContainText("Your authorized Collection scope");
+  await expect(page.getByTestId("collection-overview")).toContainText("Your Collection nickname");
   await expect(page.getByTestId("collection-leader")).toHaveCount(0);
   await expect(page.getByTestId("collection-unassigned")).toHaveCount(0);
   await expect(page.getByTestId("card-general-search")).toBeVisible();
@@ -273,6 +292,135 @@ function assertFixtureClean(fixture: Awaited<ReturnType<typeof installFixture>>)
   expect(fixture.errors).toEqual([]);
   expect(fixture.consoleErrors, "No unexpected browser console errors").toEqual([]);
 }
+
+for (const role of ["user", "admin", "manager", "superuser"] as const) {
+  test(`Dashboard scope ${role} shows monthly totals without nickname login`, async ({ page, baseURL }) => {
+    const fixture = await installFixture(page, baseURL, { role });
+    await openWorkspace(page);
+    await expect(page.getByTestId("collection-amount")).toContainText("128,640");
+    await expect(page.getByTestId("collection-overview")).toContainText(
+      role === "user" ? "Your Collection nickname" : role === "admin" ? "Your Collection team" : "All Collection records",
+    );
+    await expect(page.getByTestId("collection-leader")).toHaveCount(role === "manager" || role === "superuser" ? 3 : 0);
+    expect(fixture.requests.filter((entry) => entry.includes("nickname-auth"))).toEqual([]);
+    assertFixtureClean(fixture);
+  });
+}
+
+for (const width of [320, 1366]) {
+  test(`Dashboard scope missing link explains setup instead of showing a false zero at ${width}px`, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const fixture = await installFixture(page, baseURL, { role: "user", unlinkedCollection: true });
+    await openWorkspace(page);
+    await expect(page.getByTestId("collection-overview")).toContainText("Nickname Collection belum dipautkan");
+    await expect(page.getByTestId("collection-amount")).toHaveCount(0);
+    await expect(page.getByTestId("collection-overview")).not.toContainText("No Collection records");
+    await page.getByRole("button", { name: "Refresh Collection summary" }).click();
+    await expect.poll(() => fixture.collectionCalls).toBe(2);
+    await expect(page.getByTestId("collection-overview")).toContainText("Nickname Collection belum dipautkan");
+    await assertLayout(page);
+    await page.screenshot({ path: test.info().outputPath(`dashboard-link-required-${width}.png`) });
+    assertFixtureClean(fixture);
+  });
+}
+
+for (const role of ["user", "admin"] as const) {
+  for (const width of [320, 1366]) {
+    test(`Collection exit ${role} at ${width} returns from nickname and password steps without refresh`, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width, height: 844 });
+      const fixture = await installFixture(page, baseURL, { role });
+      await openWorkspace(page);
+      let documentNavigations = 0;
+      page.on("request", (request) => { if (request.isNavigationRequest()) documentNavigations++; });
+      for (const closeWith of ["dashboard", "close", "escape"] as const) {
+        await page.getByTestId("card-collection-report").click();
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.getByRole("heading", { name: "Masukkan Nama Staff Collection" })).toBeVisible();
+        if (closeWith !== "dashboard") {
+          await dialog.getByLabel("Staff Nickname", { exact: true }).fill("STAFF.FIXTURE");
+          await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+          await expect(dialog.getByRole("heading", { name: "Login Nickname Collection" })).toBeVisible();
+        }
+        const bounds = await dialog.boundingBox();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+        for (const button of await dialog.getByRole("button").all()) {
+          const box = await button.boundingBox();
+          expect(box!.x).toBeGreaterThanOrEqual(bounds!.x);
+          expect(box!.x + box!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+        }
+        if (role === "user" && closeWith === "close") {
+          await page.screenshot({ path: test.info().outputPath(`collection-login-exit-${width}.png`) });
+        }
+        if (closeWith === "dashboard") await dialog.getByRole("button", { name: "Kembali ke Dashboard", exact: true }).click();
+        else if (closeWith === "close") await dialog.getByRole("button", { name: "Close", exact: true }).click();
+        else await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+        await expect(page).toHaveURL(/\/$/);
+        await expect(page.getByTestId("home-dashboard")).toBeVisible();
+        await expect(page.getByTestId("collection-amount")).toContainText("128,640");
+        await expect.poll(() => page.evaluate(() => localStorage.getItem("activeTab"))).toBe("home");
+        await expect.poll(() => page.locator("body").evaluate((body) => getComputedStyle(body).pointerEvents)).not.toBe("none");
+      }
+      expect(documentNavigations, "The shell updates without a full browser refresh").toBe(0);
+      expect(fixture.loggedOut).toBe(false);
+      expect(fixture.requests.filter((endpoint) => endpoint === "POST /api/collection/nickname-auth/login")).toEqual([]);
+      assertFixtureClean(fixture);
+    });
+  }
+}
+
+test("Collection exit works from password setup and a deep link with no prior Home visit", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { role: "user", nicknameSetup: true });
+  await page.goto("/collection/records");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Staff Nickname", { exact: true }).fill("STAFF.FIXTURE");
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Simpan Password Nickname" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Kembali ke Dashboard", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("home-dashboard")).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  expect(fixture.loggedOut).toBe(false);
+  assertFixtureClean(fixture);
+});
+
+test("Collection exit ignores a late nickname login response after returning Home", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { role: "user" });
+  let resolveLogin = () => {};
+  const loginGate = new Promise<void>((resolve) => { resolveLogin = resolve; });
+  let loginStarted = false;
+  let loginDelivered = false;
+  await page.route("**/api/collection/nickname-auth/login", async (route) => {
+    loginStarted = true;
+    await loginGate;
+    await route.fulfill({ json: { ok: true, nickname: {
+      id: "dashboard-nickname-fixture", nickname: "STAFF.FIXTURE",
+      mustChangePassword: false, passwordResetBySuperuser: false, requiresForcedPasswordChange: false,
+    } } });
+    loginDelivered = true;
+  });
+  try {
+    await page.goto("/collection/records");
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Staff Nickname", { exact: true }).fill("STAFF.FIXTURE");
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+    await dialog.getByLabel("Password", { exact: true }).fill("Fixture-password-only-123!");
+    await dialog.getByRole("button", { name: "Login Nickname", exact: true }).click();
+    await expect.poll(() => loginStarted).toBe(true);
+    await expect(dialog.getByRole("button", { name: "Kembali ke Dashboard", exact: true })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Kembali ke Dashboard", exact: true }).click();
+    await expect(page.getByTestId("home-dashboard")).toBeVisible();
+    resolveLogin();
+    await expect.poll(() => loginDelivered).toBe(true);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(page.getByText("Nickname Login Berjaya", { exact: true })).toHaveCount(0);
+    const nicknameKeys = await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.includes("collection_staff_nickname")));
+    expect(nicknameKeys).toEqual([]);
+    await expect(page.getByTestId("home-dashboard")).toBeVisible();
+    assertFixtureClean(fixture);
+  } finally { resolveLogin(); }
+});
 
 for (const width of [1366, 390]) {
   test(`V7.9 user login lands on Home at ${width} despite a legacy disabled Home and saved Search page`, async ({ page, baseURL }) => {

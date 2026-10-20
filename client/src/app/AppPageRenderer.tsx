@@ -95,7 +95,7 @@ function AppPageRendererImpl({
     case "backup":
       return <SettingsRoutePage tabVisibility={tabVisibility} initialSectionId="backup-restore" />;
     case "collection-report":
-      return <CollectionReportPage />;
+      return <CollectionReportPage onNavigate={onNavigate} />;
     case "ai":
       if (!runtimeConfig.aiEnabled) {
         return (

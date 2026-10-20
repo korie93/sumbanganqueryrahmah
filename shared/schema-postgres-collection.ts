@@ -1309,6 +1309,17 @@ export const adminGroupMembers = pgTable("admin_group_members", {
   groupIdx: index("idx_admin_group_members_group").on(table.adminGroupId),
 }));
 
+export const collectionDashboardAccounts = pgTable("collection_dashboard_accounts", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  nicknameId: uuid("nickname_id").references(() => collectionStaffNicknames.id, { onDelete: "set null", onUpdate: "cascade" }),
+  accountRole: text("account_role").notNull(),
+  source: text("source").notNull(),
+  updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  roleCheck: check("collection_dashboard_accounts_account_role_check", sql`${table.accountRole} IN ('user', 'admin')`),
+  sourceCheck: check("collection_dashboard_accounts_source_check", sql`${table.source} IN ('verified_login', 'superuser')`),
+}));
+
 export const collectionNicknameSessions = pgTable("collection_nickname_sessions", {
   activityId: text("activity_id")
     .primaryKey()

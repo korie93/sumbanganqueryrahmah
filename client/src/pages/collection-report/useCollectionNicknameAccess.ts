@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   checkCollectionNicknameAuth,
@@ -34,6 +34,10 @@ export function useCollectionNicknameAccess({
   role,
 }: UseCollectionNicknameAccessOptions) {
   const { toast } = useToast();
+  // A response from a dialog that has been left must not restore browser state
+  // or show an authentication toast on the Dashboard (or another account).
+  const authGeneration = useRef(0);
+  useEffect(() => () => { authGeneration.current += 1; }, [currentUsername, role]);
   const [staffNickname, setStaffNickname] = useState(() => {
     if (typeof window === "undefined" || bypassesNicknameAccess) return "";
     return getStoredCollectionNickname();
@@ -74,6 +78,7 @@ export function useCollectionNicknameAccess({
   }, [staffNickname]);
 
   const clearNicknameSession = useCallback(() => {
+    authGeneration.current += 1;
     clearCollectionNicknameSessionStorage();
     setStaffNickname("");
     setNicknameSessionVerified(false);
@@ -174,8 +179,10 @@ export function useCollectionNicknameAccess({
     }
 
     setSubmittingNicknameAuth(true);
+    const generation = authGeneration.current;
     try {
       const response = await checkCollectionNicknameAuth(normalized);
+      if (generation !== authGeneration.current) return;
       const nextNickname = String(response?.nickname?.nickname || normalized).trim();
       setResolvedNickname(nextNickname);
       setNicknameInput(nextNickname);
@@ -193,6 +200,7 @@ export function useCollectionNicknameAccess({
         setDialogStep("login");
       }
     } catch (error: unknown) {
+      if (generation !== authGeneration.current) return;
       const errorMessage = parseApiError(error);
       toast({
         title: "Nickname Tidak Sah",
@@ -202,7 +210,7 @@ export function useCollectionNicknameAccess({
         variant: "destructive",
       });
     } finally {
-      setSubmittingNicknameAuth(false);
+      if (generation === authGeneration.current) setSubmittingNicknameAuth(false);
     }
   }, [nicknameInput, toast]);
 
@@ -248,6 +256,7 @@ export function useCollectionNicknameAccess({
     }
 
     setSubmittingNicknameAuth(true);
+    const generation = authGeneration.current;
     try {
       const response = await setupCollectionNicknamePassword({
         nickname,
@@ -255,6 +264,7 @@ export function useCollectionNicknameAccess({
         newPassword: nicknamePassword,
         confirmPassword: confirmNicknamePassword,
       });
+      if (generation !== authGeneration.current) return;
       const activeNickname = String(response?.nickname?.nickname || nickname).trim();
       applyNicknameSession(activeNickname);
       resetDialogFields(activeNickname);
@@ -263,13 +273,14 @@ export function useCollectionNicknameAccess({
         description: "Password baharu berjaya disimpan. Anda kini boleh gunakan Collection Report.",
       });
     } catch (error: unknown) {
+      if (generation !== authGeneration.current) return;
       toast({
         title: "Gagal Simpan Password",
         description: parseApiError(error),
         variant: "destructive",
       });
     } finally {
-      setSubmittingNicknameAuth(false);
+      if (generation === authGeneration.current) setSubmittingNicknameAuth(false);
     }
   }, [
     applyNicknameSession,
@@ -296,8 +307,10 @@ export function useCollectionNicknameAccess({
     }
 
     setSubmittingNicknameAuth(true);
+    const generation = authGeneration.current;
     try {
       const response = await loginCollectionNickname({ nickname, password: nicknamePassword });
+      if (generation !== authGeneration.current) return;
 
       if (response?.nickname?.requiresForcedPasswordChange) {
         setSetupMode("forced-change");
@@ -320,13 +333,14 @@ export function useCollectionNicknameAccess({
         description: `Nama staff collection: ${activeNickname}`,
       });
     } catch (error: unknown) {
+      if (generation !== authGeneration.current) return;
       toast({
         title: "Password Tidak Sah",
         description: parseApiError(error),
         variant: "destructive",
       });
     } finally {
-      setSubmittingNicknameAuth(false);
+      if (generation === authGeneration.current) setSubmittingNicknameAuth(false);
     }
   }, [applyNicknameSession, nicknameInput, nicknamePassword, resetDialogFields, resolvedNickname, toast]);
 

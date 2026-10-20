@@ -14,7 +14,7 @@ export interface CollectionNicknameDialogProps {
   onNicknameInputChange: (value: string) => void;
   onNicknamePasswordChange: (value: string) => void;
   onPrimaryAction: () => void;
-  onReturnToSearch: () => void;
+  onReturnToDashboard: () => void;
   onStepChange: (step: NicknameDialogStep) => void;
   onToggleLoginPassword: () => void;
   onToggleSetupConfirmPassword: () => void;
@@ -43,7 +43,7 @@ export function CollectionNicknameDialog({
   onNicknamePasswordChange,
   onPrimaryAction,
   onResetTemporaryValues,
-  onReturnToSearch,
+  onReturnToDashboard,
   onStepChange,
   onToggleLoginPassword,
   onToggleSetupConfirmPassword,
@@ -107,7 +107,7 @@ export function CollectionNicknameDialog({
             dialogStep={dialogStep}
             onPrimaryAction={onPrimaryAction}
             onResetTemporaryValues={onResetTemporaryValues}
-            onReturnToSearch={onReturnToSearch}
+            onReturnToDashboard={onReturnToDashboard}
             onStepChange={onStepChange}
             primaryLabel={primaryLabel}
             primaryLoadingLabel={primaryLoadingLabel}

@@ -25,6 +25,8 @@ export type CollectionStoragePort = Pick<
   | "deleteCollectionStaffNickname"
   | "deleteCollectionSource"
   | "getCollectionAdminAssignedNicknameIds"
+  | "getCollectionDashboardAccount"
+  | "setCollectionDashboardAccount"
   | "getCollectionAdminGroupVisibleNicknameValuesByLeader"
   | "getCollectionAdminGroups"
   | "getCollectionAdminUserById"

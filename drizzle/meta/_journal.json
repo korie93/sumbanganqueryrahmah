@@ -442,6 +442,13 @@
       "when": 1788791715000,
       "tag": "0063_account_terminal_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792504800000,
+      "tag": "0064_collection_dashboard_accounts",
+      "breakpoints": true
     }
   ]
 }

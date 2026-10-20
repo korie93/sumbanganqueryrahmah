@@ -47,6 +47,8 @@ import type {
 } from "../shared/collection-daily-status";
 
 export interface CollectionStorageContract {
+  getCollectionDashboardAccount(userId: string): Promise<import("./repositories/collection-dashboard-account-repository").DashboardAccountLink | null>;
+  setCollectionDashboardAccount(input: import("./repositories/collection-dashboard-account-repository").SetDashboardAccountInput): Promise<import("./repositories/collection-dashboard-account-repository").DashboardAccountLink | null>;
   backfillLegacyCollectionRecordsForSource(sourceImportId: string): Promise<CollectionLegacyBackfillStats>;
   configureCollectionSource(input: ConfigureCollectionSourceInput): Promise<CollectionSourceConfig>;
   deleteCollectionSource(sourceImportId: string): Promise<boolean>;

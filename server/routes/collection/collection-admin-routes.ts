@@ -10,6 +10,13 @@ export function registerCollectionAdminRoutes(context: CollectionRouteContext) {
     jsonRoute,
   } = context;
 
+  app.get("/api/collection/dashboard-accounts/:userId", ...superuserReportAccess,
+    jsonRoute("Failed to load Dashboard nickname link.", (req) =>
+      collectionService.getDashboardAccountLink(req.user, readRouteParam(req.params.userId, "account id"))));
+  app.put("/api/collection/dashboard-accounts/:userId", ...superuserReportAccess,
+    jsonRoute("Failed to save Dashboard nickname link.", (req) =>
+      collectionService.setDashboardAccountLink(req.user, readRouteParam(req.params.userId, "account id"), req.body)));
+
   app.get(
     "/api/collection/teams",
     ...teamReportAccess,
