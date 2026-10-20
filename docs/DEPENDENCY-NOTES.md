@@ -8,6 +8,43 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-10-21 Vite editor security patches
+
+The dependency gate reproduced a high-severity finding in locked `vite@8.0.16`.
+The advisory feed identifies three issues in its bundled development-server
+editor launcher:
+
+- [GHSA-698v-4r3x-3vcv](https://github.com/vitejs/launch-editor/security/advisories/GHSA-698v-4r3x-3vcv):
+  Windows command argument percent escaping.
+- [GHSA-r825-w8mm-5pxw](https://github.com/vitejs/launch-editor/security/advisories/GHSA-r825-w8mm-5pxw):
+  editor CLI argument interpretation.
+- [GHSA-587h-7wmj-h5pm](https://github.com/vitejs/launch-editor/security/advisories/GHSA-587h-7wmj-h5pm):
+  Windows executable existence-check bypass (high severity).
+
+Pin Vite to `8.1.6`, the first patched release for the affected `8.0.0`–`8.1.5`
+line. This is a same-major build-tool update; the lockfile also updates its
+Rolldown/native-binding dependency family. The version supports the project's
+Node 24 runtime and remains shared with `@vitejs/plugin-react@6.0.2`.
+No audit threshold, override or lifecycle permission changes are needed.
+Installation uses `npm install --ignore-scripts --no-audit --no-fund` after the
+manifest update. A clean-install check, the audit gate, Vite/config/CSS and audit
+regressions, production build, bundle budgets and built browser checks verify
+compatibility before publishing.
+
+Full and production dependency audits both report zero findings after the
+update. Rolling back the manifest/lockfile restores the affected Vite version;
+it is a compatibility recovery option, not a security fix.
+
+Local verification on 2026-10-21: `npm ci --ignore-scripts --no-audit --no-fund`,
+the full audit gate, production audit, typecheck, production build, sourcemap
+and bundle-budget gates, secret scan and repository hygiene passed. Script
+suites passed 771 tests (one existing optional Viewer baseline diagnostic
+skipped). All 25 selected built-app Chromium cases passed, covering login/Home,
+Collection exit, account nickname assignment and Account Management across
+desktop/mobile and light/dark themes. Only dev dependency entries changed;
+runtime package metadata is unchanged. These are local results; the GitHub
+workflow needs the updated manifest and lockfile published before rerunning.
+
 ## 2026-10-07 security patches and fail-closed audit
 
 The production post-deployment audit for `7e99b17a` identified 11 runtime
