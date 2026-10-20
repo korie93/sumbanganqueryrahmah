@@ -83,6 +83,10 @@ async function main() {
   const visualFlag = process.env.SQR_REDESIGN_VISUAL_ONLY;
   assert.ok(visualFlag === undefined || visualFlag === "" || visualFlag === "0" || visualFlag === "1", "SQR_REDESIGN_VISUAL_ONLY accepts only 0 or 1");
   const visualOnly = visualFlag === "1";
+  const a11yFlag = process.env.SQR_REDESIGN_A11Y_ONLY;
+  assert.ok(a11yFlag === undefined || a11yFlag === "" || a11yFlag === "0" || a11yFlag === "1", "SQR_REDESIGN_A11Y_ONLY accepts only 0 or 1");
+  const a11yOnly = a11yFlag === "1";
+  assert.ok(!a11yOnly || (!visualOnly && !smokeOnly && !importChecksEnabled && !roleChecksEnabled && !realtimeChecksEnabled && !billingFixtureEnabled), "Accessibility contracts run in their own fresh fixture");
   assert.ok(!visualOnly || (!smokeOnly && !importChecksEnabled && !roleChecksEnabled && !realtimeChecksEnabled && !billingFixtureEnabled), "Visual contracts run in their own fresh fixture");
   assert.ok(!smokeOnly || (!importChecksEnabled && !roleChecksEnabled && !billingFixtureEnabled), "Smoke runs in its own fresh fixture");
   assert.ok(!importChecksEnabled || (!roleChecksEnabled && !billingFixtureEnabled), "Import checks run separately from role and Billing fixtures");
@@ -239,6 +243,18 @@ async function main() {
         PG_HOST: "127.0.0.1", PG_PORT: "1", PG_USER: "sqr_visual_no_database_access", PG_DATABASE: "sqr_visual_no_database_access",
       });
       console.log("Existing test:e2e:visual entrypoint passed every public, authenticated, Dashboard and operational stress contract.");
+    } else if (a11yOnly) {
+      // Run the unchanged CI accessibility entrypoint on the real migrated app
+      // and synthetic seed, not a mock page or a relaxed subset of assertions.
+      // Its shared auth helper must never read repo dotenv or an existing DB.
+      const disabledDotenvPath = path.join(appDir, "no-a11y-dotenv.env");
+      await assert.rejects(access(disabledDotenvPath), { code: "ENOENT" });
+      await run(process.execPath, [path.join(repoRoot, "scripts/ui-accessibility-contract.mjs")], appDir, {
+        ...cleanEnv, NODE_ENV: "test", DOTENV_CONFIG_PATH: disabledDotenvPath,
+        A11Y_BASE_URL: baseUrl, A11Y_TEST_USERNAME: username, A11Y_TEST_PASSWORD: password,
+        PG_HOST: "127.0.0.1", PG_PORT: "1", PG_USER: "sqr_a11y_no_database_access", PG_DATABASE: "sqr_a11y_no_database_access",
+      });
+      console.log("Existing test:e2e:a11y entrypoint passed every public, authenticated, axe and keyboard accessibility contract.");
     } else {
       await runFrontendRedesignBrowser({ baseUrl, username, password, artifactsDir, final: process.argv.includes("--final"), options: captureOptions, prepareBillingFixture });
     }

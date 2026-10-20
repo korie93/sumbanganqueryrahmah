@@ -158,6 +158,29 @@ test("MFA contract fills the six-digit code before waiting for the gated submit 
   assert.match(challenge, /lastVerifyResponse\.ok\(\)/);
 });
 
+test("every protected visual/a11y navigation waits for owned route content before scanning the DOM", () => {
+  for (const [source, name, summary] of [
+    [accessibilityContractSource, "verifyRouteAccessibility", "readAccessibilitySummary"],
+    [visualContractSource, "verifyRouteLayout", "readLayoutSummary"],
+  ]) {
+    const verifier = source.slice(source.indexOf(`async function ${name}(`));
+    const navigation = verifier.search(/await navigateFor(?:Accessibility|Visual)Contract\(page, routeSpec.path\)/);
+    const readiness = verifier.indexOf("await waitForProtectedContractContent(page)");
+    const content = verifier.indexOf("await page.locator(routeSpec.contentSelector)");
+    const scan = verifier.indexOf(`await ${summary}(page, routeSpec)`);
+    assert.ok(navigation >= 0 && navigation < readiness && readiness < content && content < scan,
+      `${name} must not accept the session gate's main landmark as an authenticated page`);
+    assert.match(verifier, /if \(authenticatedRouteSpecs\.includes\(routeSpec\)\) \{\s+await waitForProtectedContractContent\(page\);\s+\}/);
+    assert.match(source, /import \{ waitForProtectedContractContent \} from "\.\/lib\/ui-protected-route-readiness\.mjs"/);
+  }
+  // The race fix must not hide actual a11y failures or remove route coverage.
+  assert.match(accessibilityContractSource, /summary\.headingCount >= 1/);
+  assert.match(accessibilityContractSource, /summary\.focusableCount >= 1/);
+  assert.match(accessibilityContractSource, /summary\.missingAccessibleNames\.length === 0/);
+  assert.match(accessibilityContractSource, /summary\.duplicateIds\.length === 0/);
+  assert.match(accessibilityContractSource, /await verifyAxeAccessibility\(page, label\)/);
+});
+
 test("accessibility contract covers core authenticated work surfaces", () => {
   assert.match(accessibilityContractSource, /id: "dashboard"[\s\S]*path: "\/dashboard"/);
   assert.match(accessibilityContractSource, /id: "dashboard"[\s\S]*contentSelector: '\[data-testid="text-dashboard-title"\]'/);

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { resolveRedesignBillingFixtureEnabled, resolveRedesignCaptureOptions } from "../frontend-redesign-browser.mjs";
 import { validateRedesignSeedEnvironment } from "../fixtures/frontend-redesign-seed.mjs";
 
@@ -68,6 +69,43 @@ test("existing CI visual contracts are strictly opt-in, exclusive and isolated f
   assert.match(branch, /VISUAL_ARTIFACTS_DIR: path\.join\(artifactsDir, "ci-visual"\)/);
   assert.match(branch, /PG_HOST: "127\.0\.0\.1", PG_PORT: "1"/);
   assert.doesNotMatch(branch, /\.\.\.env|\.\.\.process\.env|PG_PASSWORD|TWO_FACTOR_ENCRYPTION_KEY|storageState|recordHar|tracing/);
+});
+
+test("CI accessibility mode accepts only bounded flags and rejects every competing fixture mode before initialization", () => {
+  const flagChecks = runner.slice(runner.indexOf("  const smokeFlag ="), runner.indexOf("  const builtServer ="));
+  const resolveModes = (value, options = {}) => runInNewContext(`${flagChecks}\n({ smokeOnly, visualOnly, a11yOnly });`, {
+    assert, process: { env: { SQR_REDESIGN_A11Y_ONLY: value, ...options.env } },
+    importChecksEnabled: false, roleChecksEnabled: false, realtimeChecksEnabled: false, billingFixtureEnabled: false,
+    ...options.checks,
+  });
+  for (const value of [undefined, "", "0"]) assert.equal(resolveModes(value).a11yOnly, false);
+  assert.equal(resolveModes("1").a11yOnly, true);
+  for (const value of [true, 1, "true", "yes", " 1", "2"]) {
+    assert.throws(() => resolveModes(value), /SQR_REDESIGN_A11Y_ONLY accepts only 0 or 1/);
+  }
+  for (const options of [
+    { env: { SQR_REDESIGN_SMOKE_ONLY: "1" } },
+    { env: { SQR_REDESIGN_VISUAL_ONLY: "1" } },
+    { checks: { importChecksEnabled: true } },
+    { checks: { roleChecksEnabled: true, billingFixtureEnabled: true } },
+    { checks: { realtimeChecksEnabled: true } },
+    { checks: { billingFixtureEnabled: true } },
+  ]) assert.throws(() => resolveModes("1", options), /Accessibility contracts run in their own fresh fixture/);
+  assert.ok(runner.indexOf("Accessibility contracts run in their own fresh fixture") < runner.indexOf("const fixtureRoot = await mkdtemp"));
+});
+
+test("existing CI accessibility suite uses only synthetic credentials and cannot load dotenv or access an existing database", () => {
+  const branch = runner.slice(runner.indexOf("} else if (a11yOnly) {"), runner.indexOf("await runFrontendRedesignBrowser"));
+  assert.match(branch, /scripts\/ui-accessibility-contract\.mjs/);
+  assert.match(branch, /\], appDir, \{/);
+  assert.match(branch, /path\.join\(appDir, "no-a11y-dotenv\.env"\)/);
+  assert.match(branch, /await assert\.rejects\(access\(disabledDotenvPath\), \{ code: "ENOENT" \}\)/);
+  assert.match(branch, /\.\.\.cleanEnv, NODE_ENV: "test", DOTENV_CONFIG_PATH: disabledDotenvPath/);
+  assert.match(branch, /A11Y_BASE_URL: baseUrl, A11Y_TEST_USERNAME: username, A11Y_TEST_PASSWORD: password/);
+  assert.match(branch, /PG_HOST: "127\.0\.0\.1", PG_PORT: "1"/);
+  assert.match(branch, /PG_USER: "sqr_a11y_no_database_access", PG_DATABASE: "sqr_a11y_no_database_access"/);
+  assert.doesNotMatch(branch, /\.\.\.env|\.\.\.process\.env|PG_PASSWORD|TWO_FACTOR_ENCRYPTION_KEY|storageState|recordHar|tracing|route\.fulfill/);
+  assert.ok(runner.indexOf("scripts/fixtures/frontend-redesign-seed.mjs") < runner.indexOf("} else if (a11yOnly) {"));
 });
 
 test("redesign fixture migrates only its verified fresh database before starting and seeding the real app", () => {

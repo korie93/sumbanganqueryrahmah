@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium, expect } from "@playwright/test";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
+import { waitForProtectedContractContent } from "./lib/ui-protected-route-readiness.mjs";
 import { singleTabFixturePassword, singleTabFixtureUser, startSingleActiveTabFixture } from "./lib/single-active-tab-fixture.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -238,6 +239,46 @@ export async function runSingleActiveTabBrowser() {
       await closeContext(next);
     }
 
+    // Reproduce CI: the tab-checking main is not the Collection page to scan.
+    {
+      const next = await context();
+      const pending = await page(next);
+      let meCalls = 0;
+      let release;
+      const activation = new Promise((resolve) => { release = resolve; });
+      await pending.page.route(`${fixture.origin}/api/me`, async (route) => {
+        if (++meCalls === 2) await activation;
+        await route.continue();
+      });
+      try {
+        await pending.page.goto(`${fixture.origin}/collection/save`, { waitUntil: "domcontentloaded" });
+        await expect(pending.page.locator('[data-single-tab-status="checking"]')).toBeVisible();
+        await expect.poll(() => meCalls).toBe(2);
+        await pending.page.locator("#boot-shell").waitFor({ state: "hidden" });
+        await expect(pending.page.locator("main#main-content")).toHaveCount(1);
+        await expect(pending.page.locator("h1,h2,h3,h4,h5,h6,[role='heading']")).toHaveCount(0);
+        let ready = false;
+        const readiness = waitForProtectedContractContent(pending.page).then(() => { ready = true; });
+        void readiness.catch(() => {});
+        // This deliberate controlled hold detects accepting the generic gate
+        // main; it is not a sleep used to make production route readiness pass.
+        await pending.page.waitForTimeout(100);
+        assert.equal(ready, false, "Visual/a11y scanning must not start on the transient no-heading tab gate");
+        assert.deepEqual(sensitive(pending.tracker.requests), []);
+        assert.deepEqual(pending.tracker.sockets, []);
+        release();
+        await readiness;
+        await expect(pending.page.locator(".collection-section-nav")).toBeVisible();
+        assert.ok(await pending.page.locator("h1,h2,h3,h4,h5,h6,[role='heading']").count() > 0);
+        const blocked = await page(next);
+        await blocked.page.goto(`${fixture.origin}/collection/save`);
+        await expectBlocked(blocked.page, blocked.tracker);
+        await assert.rejects(waitForProtectedContractContent(blocked.page, 100), /Timeout/);
+        pass("visual/a11y readiness ignores a no-heading tab-checking main, waits for real Collection content and rejects blocked tabs");
+      } finally { release(); }
+      await closeContext(next);
+    }
+
     // A missing API capability must not silently fall back to storage.
     {
       const next = await context({ viewport: { width: 320, height: 760 } });
@@ -249,6 +290,7 @@ export async function runSingleActiveTabBrowser() {
       assert.deepEqual(unsupported.tracker.sockets, []);
       assert.equal(await unsupported.page.evaluate(() => window.__singleTabProtectedMounted), false);
       await expect(unsupported.page.getByRole("button", { name: "Semak Semula", exact: true })).toBeDisabled();
+      await assert.rejects(waitForProtectedContractContent(unsupported.page, 100), /Timeout/);
       assert.equal(await unsupported.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
       await unsupported.page.screenshot({ path: path.join(directory, "unsupported-320.png"), fullPage: true });
       pass("unsupported Web Locks fail closed at 320px without a localStorage fallback or protected traffic");

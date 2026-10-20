@@ -205,3 +205,45 @@ Visual evidence inspected individually and side-by-side:
 `artifacts/single-active-tab/polish-final.png` and the 10-width browser screenshots.
 Latest reports: `artifacts/single-active-tab/polish-browser.log`,
 `artifacts/single-active-tab-browser/report.json` and `polish-build.log`.
+
+### CI accessibility readiness follow-up — 2026-10-20
+
+CI run `39343538985` on `9ac9f71e` failed in **Run accessibility contracts**:
+`collection-save/desktop: page is missing a heading`. The contract accepted the
+temporary tab-checking `main#main-content` and captured its heading count before
+the protected Collection route mounted. This was a test-readiness race, not a
+missing Collection heading or a reason to bypass tab ownership.
+
+`scripts/lib/ui-protected-route-readiness.mjs` now waits for the visible
+`.sqr-workspace main#main-content` before authenticated accessibility/layout
+scans. Both contract entrypoints use it after every protected navigation; public
+pages retain their existing readiness checks. Existing route-specific selectors,
+heading/control/name/duplicate-ID assertions, axe rules and keyboard checks are
+unchanged. No frontend, auth/session/lock logic or timeout increase is involved.
+
+Regression evidence:
+
+- The actual built browser suite adds a controlled delayed second `/api/me`
+  response on `/collection/save`: the checking main exists without any heading,
+  but contract readiness stays pending and no protected API/WS starts. Releasing
+  validation allows the real Collection page. Blocked and unsupported gates
+  cannot satisfy contract readiness. Suite: **18/18 passed**.
+- Exact CI accessibility entrypoint passed all public/authenticated routes,
+  desktop/mobile, axe, keyboard and screen-reader scenarios against the real
+  built app and a fresh disposable PostgreSQL cluster with synthetic accounts
+  and 59 Collection records. Owned app/cluster stopped and temporary data removed.
+- Exact CI visual-layout entrypoint also passed public/authenticated pages,
+  Dashboard detail/focus checks and operational stress viewports in a separate
+  fresh cluster. Its owned app/cluster and temporary data were cleaned up.
+- Repeat by setting `SQR_REDESIGN_A11Y_ONLY=1` for the process running
+  `node scripts/test-frontend-redesign-isolated.mjs`. The mode is exclusive with
+  other QA modes. It never loads repo dotenv or connects to an existing DB;
+  the browser child receives synthetic credentials and a fail-closed DB endpoint.
+- `npm run test:scripts`: **770 passed, 1 existing skip, 0 failures**. Targeted
+  ESLint and syntax checks passed. No production/environment/dependency changes.
+
+Evidence: `artifacts/single-active-tab/ci-a11y-isolated.log`,
+`ci-a11y-visual-regression.log`, `ci-a11y-tab-regression.log`,
+`ci-a11y-script-tests.log` and the existing built browser report.
+This follow-up remains uncommitted/unpushed until requested;
+remote CI success is not claimed from the local verification.

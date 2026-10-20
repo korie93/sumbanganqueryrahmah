@@ -3,6 +3,7 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
+import { waitForProtectedContractContent } from "./lib/ui-protected-route-readiness.mjs";
 import {
   operationalContractRouteSpecs,
   operationalStressViewportSpecs,
@@ -243,6 +244,9 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
     height: viewportSpec.height,
   });
   await navigateForVisualContract(page, routeSpec.path);
+  if (authenticatedRouteSpecs.includes(routeSpec)) {
+    await waitForProtectedContractContent(page);
+  }
 
   if (viewportSpec.rootFontSizePx) {
     await page.evaluate((rootFontSizePx) => {

@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 import { operationalContractRouteSpecs } from "./lib/ui-operational-contract-matrix.mjs";
+import { waitForProtectedContractContent } from "./lib/ui-protected-route-readiness.mjs";
 import {
   completeTwoFactorLoginIfNeeded,
   ensureLoginPageVisible,
@@ -378,6 +379,9 @@ async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
     height: viewportSpec.height,
   });
   await navigateForAccessibilityContract(page, routeSpec.path);
+  if (authenticatedRouteSpecs.includes(routeSpec)) {
+    await waitForProtectedContractContent(page);
+  }
   await page.locator(routeSpec.contentSelector).first().waitFor();
   if (routeSpec.readySelector) {
     await page.locator(routeSpec.readySelector).first().waitFor({ timeout: 15_000 });

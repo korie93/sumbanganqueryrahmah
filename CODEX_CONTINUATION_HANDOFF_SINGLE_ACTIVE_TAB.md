@@ -162,3 +162,29 @@ Never confuse this synthetic preview with the production SQR server.
 - Codex IAB preview remains local/synthetic at `/collection/records` on port5198;
   a hidden owner tab keeps the visible second tab blocked. Viewport override reset.
   Nothing committed, pushed or deployed; wait for explicit user release request.
+
+## CI accessibility fix after feature commit — 2026-10-20
+
+- Feature/polish committed and pushed as `9ac9f71e` on main. CI `39343538985`
+  failed at Run accessibility contracts with `collection-save/desktop: page is
+  missing a heading`. The scanner captured the transient checking gate's main,
+  not the Collection route. Build/unit/coverage jobs were successful in that run.
+- New dependency-free `scripts/lib/ui-protected-route-readiness.mjs` waits for
+  the actual visible protected workspace main. Both a11y and visual entrypoints
+  call it after each authenticated navigation, before their unchanged scans.
+  No frontend/security/ownership behavior or axe assertion was weakened.
+- Added delayed-activation actual-built regression: generic checking main with
+  zero headings must not start scanning; released ownership mounts real
+  Collection; blocked/unsupported gates fail readiness. Browser suite **18/18**.
+- Added safe `SQR_REDESIGN_A11Y_ONLY=1` mode to the existing fresh-cluster fixture.
+  Exact CI a11y entrypoint **passed** with real built app, synthetic accounts and
+  59 records; owned app/cluster stopped and temporary data removed afterward.
+- Exact CI visual-layout entrypoint also **passed** in a separate fresh cluster,
+  including Dashboard detail/focus and operational stress viewports. Cleanup
+  confirmed; log `artifacts/single-active-tab/ci-a11y-visual-regression.log`.
+- Script tests **770 passed /1 existing skip /0 failures**; targeted ESLint and
+  syntax passed. Evidence: `artifacts/single-active-tab/ci-a11y-isolated.log`,
+  `ci-a11y-tab-regression.log`, `ci-a11y-script-tests.log`.
+- This CI follow-up is not committed/pushed or deployed. Preserve its changed
+  scripts/helper/tests/docs; wait for explicit user release authorization. Remote
+  CI has not yet run the follow-up patch. Previous release caveats remain above.
