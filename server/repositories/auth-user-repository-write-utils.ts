@@ -7,6 +7,9 @@ import type {
 import { users } from "../../shared/schema-postgres";
 import { hashPassword } from "../auth/passwords";
 import { db } from "../db-postgres";
+import { z } from "zod";
+import { badRequest } from "../http/errors";
+import { setCollectionDashboardAccountInTransaction } from "./collection-dashboard-account-repository";
 import {
   buildLegacyUserInsertRecord,
   buildManagedUserInsertRecord,
@@ -42,6 +45,22 @@ export async function createManagedAuthUserAccount(
 ): Promise<User> {
   const id = crypto.randomUUID();
   const now = new Date();
+  const dashboardNicknameId = params.dashboardNicknameId;
+
+  if (dashboardNicknameId !== undefined && dashboardNicknameId !== null) {
+    if (!z.string().uuid().safeParse(dashboardNicknameId).success || (params.role !== "user" && params.role !== "admin")) {
+      throw badRequest("Choose a valid Dashboard nickname for a User or Admin account.");
+    }
+    // The nickname is revalidated/locked inside the same transaction as the
+    // account insert and mapping audit. Any failure rolls back all three.
+    return db.transaction(async (tx) => {
+      const [user] = await tx.insert(users).values(buildManagedUserInsertRecord({ account: params, id, now })).returning();
+      await setCollectionDashboardAccountInTransaction(tx, {
+        userId: id, nicknameId: dashboardNicknameId, actor: params.createdBy,
+      });
+      return user!;
+    });
+  }
 
   await db.insert(users).values(buildManagedUserInsertRecord({
     account: params,

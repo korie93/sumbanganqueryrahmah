@@ -14,6 +14,7 @@ import type {
 import type { ManageableUserRole } from "../../../shared/user-roles";
 import { PostgresStorageCore } from "./postgres-storage-core";
 import type { CompleteAccountRecoveryParams, PrepareDeliveredPasswordResetParams } from "../../repositories/auth-recovery-repository-utils";
+import type { CreateManagedUserAccountParams } from "../../repositories/auth-user-repository-types";
 
 export class PostgresAuthAccountStorage extends PostgresStorageCore {
   async prepareDeliveredPasswordReset(params: PrepareDeliveredPasswordResetParams) {
@@ -40,19 +41,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     return this.authRepository.createUser(user);
   }
 
-  async createManagedUserAccount(params: {
-    username: string;
-    fullName?: string | null;
-    email?: string | null;
-    role: ManageableUserRole;
-    passwordHash: string;
-    status?: "pending_activation" | "active" | "suspended" | "disabled";
-    mustChangePassword?: boolean;
-    passwordResetBySuperuser?: boolean;
-    createdBy: string;
-    activatedAt?: Date | null;
-    passwordChangedAt?: Date | null;
-  }): Promise<User> {
+  async createManagedUserAccount(params: CreateManagedUserAccountParams): Promise<User> {
     return this.authRepository.createManagedUserAccount(params);
   }
 

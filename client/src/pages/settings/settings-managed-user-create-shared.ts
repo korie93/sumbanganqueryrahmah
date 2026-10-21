@@ -9,6 +9,7 @@ export type ManagedUserCreateDraft = {
   createFullNameInput: string;
   createRoleInput: ManagedUserCreateRole;
   createUsernameInput: string;
+  createDashboardNicknameId?: string;
 };
 
 export type ManagedUserCreateRoleGuidance = {

@@ -15,6 +15,17 @@ export function registerAuthAdminReadRoutes(context: AuthRouteContext) {
   } = context;
 
   app.get(
+    "/api/admin/users/dashboard-nicknames",
+    authenticateToken,
+    requireRole("superuser"),
+    rateLimiters.adminAction,
+    jsonRoute(async (req) => ({
+      ok: true,
+      ...await authAccountService.getManagedUserDashboardNicknames(req.user, readQueryObject(req.query)),
+    })),
+  );
+
+  app.get(
     "/api/admin/users",
     authenticateToken,
     requireRole("superuser"),

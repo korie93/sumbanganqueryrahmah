@@ -10,6 +10,8 @@ export type CreateManagedUserAccountParams = {
   mustChangePassword?: boolean;
   passwordResetBySuperuser?: boolean;
   createdBy: string;
+  /** Optional, summary-only nickname assignment committed with the new account. */
+  dashboardNicknameId?: string | null;
   activatedAt?: Date | null;
   passwordChangedAt?: Date | null;
 };

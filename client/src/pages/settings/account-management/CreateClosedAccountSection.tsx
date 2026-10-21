@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { cn } from "@/lib/utils";
+import { CreateAccountDashboardNickname } from "./CreateAccountDashboardNickname";
 import {
   buildManagedUserCreateReadiness,
   getManagedUserCreateRoleGuidance,
@@ -16,6 +17,7 @@ interface CreateClosedAccountSectionProps {
   createFullNameInput: string;
   createRoleInput: ManagedUserCreateRole;
   createUsernameInput: string;
+  createDashboardNicknameId?: string;
   creatingManagedUser: boolean;
   onCreateEmailInputChange: (value: string) => void;
   onCreateFieldBlur: (field: keyof ManagedUserCreateFieldErrors) => void;
@@ -23,6 +25,7 @@ interface CreateClosedAccountSectionProps {
   onCreateManagedUser: () => void;
   onCreateRoleInputChange: (value: ManagedUserCreateRole) => void;
   onCreateUsernameInputChange: (value: string) => void;
+  onCreateDashboardNicknameIdChange?: (value: string) => void;
 }
 
 function getInvalidFieldProps(errorMessage: string | undefined, errorId: string) {
@@ -40,6 +43,7 @@ export function CreateClosedAccountSection({
   createFullNameInput,
   createRoleInput,
   createUsernameInput,
+  createDashboardNicknameId = "",
   creatingManagedUser,
   onCreateEmailInputChange,
   onCreateFieldBlur,
@@ -47,6 +51,7 @@ export function CreateClosedAccountSection({
   onCreateManagedUser,
   onCreateRoleInputChange,
   onCreateUsernameInputChange,
+  onCreateDashboardNicknameIdChange,
 }: CreateClosedAccountSectionProps) {
   const keyboardOpen = useMobileKeyboardState();
   const usernameErrorId = "create-closed-account-username-error";
@@ -210,6 +215,14 @@ export function CreateClosedAccountSection({
             <span className="text-muted-foreground">{roleGuidance.description}</span>
           </div>
         </div>
+
+        {onCreateDashboardNicknameIdChange ? <CreateAccountDashboardNickname
+          key={createRoleInput}
+          role={createRoleInput}
+          selectedId={createDashboardNicknameId}
+          disabled={creatingManagedUser}
+          onChange={onCreateDashboardNicknameIdChange}
+        /> : null}
 
         <div
           className="flex flex-wrap gap-x-4 gap-y-2 text-xs"

@@ -4,6 +4,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CreateClosedAccountSection } from "./CreateClosedAccountSection";
+import { CreateAccountDashboardNickname } from "./CreateAccountDashboardNickname";
 import { LocalMailOutboxDesktopTable } from "./LocalMailOutboxDesktopTable";
 import { LocalMailOutboxFiltersPanel } from "./LocalMailOutboxFiltersPanel";
 import { PendingPasswordResetDesktopTable } from "./PendingPasswordResetDesktopTable";
@@ -12,6 +13,22 @@ import type { DevMailOutboxPreview, PendingPasswordResetRequest } from "../types
 
 const noop = () => undefined;
 const emptyState = { title: "No results", description: "Try another search." };
+
+test("create-account Dashboard nickname is optional, folded on first render and unnecessary for manager", () => {
+  const markup = renderToStaticMarkup(createElement(CreateAccountDashboardNickname, {
+    role: "user", selectedId: "", disabled: false, onChange: noop,
+  }));
+  assert.match(markup, /Kutipan Dashboard/);
+  assert.match(markup, /\(pilihan\)/);
+  assert.match(markup, /aria-expanded="false"/);
+  assert.match(markup, /Tetapkan nickname sekarang/);
+  assert.doesNotMatch(markup, /<select/);
+  const manager = renderToStaticMarkup(createElement(CreateAccountDashboardNickname, {
+    role: "manager", selectedId: "", disabled: false, onChange: noop,
+  }));
+  assert.match(manager, /nickname tidak diperlukan/);
+  assert.doesNotMatch(manager, /<select|<button/);
+});
 
 test("create account keeps labeled production fields, inline errors and native submit without a password field", () => {
   const markup = renderToStaticMarkup(createElement(CreateClosedAccountSection, {

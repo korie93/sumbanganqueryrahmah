@@ -59,6 +59,7 @@ export type AuthAccountStorage = Pick<
   | "getActiveActivitiesByUsername"
   | "getBooleanSystemSetting"
   | "getAccounts"
+  | "getCollectionStaffNicknames"
   | "getManagedUsers"
   | "getPasswordResetTokenRecordByHash"
   | "getUser"

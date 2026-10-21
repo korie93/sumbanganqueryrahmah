@@ -34,6 +34,10 @@ export class AuthAccountManagedOperations {
     return this.lifecycleOperations.getAccounts(authUser);
   }
 
+  async getManagedUserDashboardNicknames(authUser: AuthenticatedUser | undefined, query: Record<string, unknown>) {
+    return this.lifecycleOperations.getManagedUserDashboardNicknames(authUser, query);
+  }
+
   async deleteManagedUser(authUser: AuthenticatedUser | undefined, targetUserId: string) {
     return this.lifecycleOperations.deleteManagedUser(authUser, targetUserId);
   }

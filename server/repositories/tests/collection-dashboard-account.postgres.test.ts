@@ -20,6 +20,7 @@ test("Dashboard account scope on disposable PostgreSQL", { skip: !isolated }, as
   const runtime = await import("../../db-postgres");
   runtime.stopPgPoolBackgroundTasks();
   const repo = await import("../collection-dashboard-account-repository");
+  const { createManagedAuthUserAccount } = await import("../auth-user-repository-write-utils");
   const nicknameRepo = await import("../collection-repository-nickname-operations");
   const migrations = readMigrationFiles({ migrationsFolder: "./drizzle" });
   const scopeMigration = migrations.find((entry) => entry.sql.some((sql) => sql.includes("CREATE TABLE IF NOT EXISTS public.collection_dashboard_accounts")));
@@ -81,6 +82,47 @@ test("Dashboard account scope on disposable PostgreSQL", { skip: !isolated }, as
       assert.equal((await repo.getCollectionDashboardAccount(valid.id))?.nicknameId, validNick.id);
       for (const user of [ambiguous, invalid, stale]) assert.equal(await repo.getCollectionDashboardAccount(user.id), null);
       assert.equal((await pool.query("SELECT count(*)::int AS count FROM collection_dashboard_accounts")).rows[0].count, 1);
+    });
+    await t.test("managed account creation optionally links an eligible nickname in the same transaction", async () => {
+      for (const [role, nicknameRole] of [["user", "user"], ["admin", "admin"], ["user", "both"]] as const) {
+        const nick = await nickname(nicknameRole);
+        const user = await createManagedAuthUserAccount({ username: `created_${randomUUID().replace(/-/g, "")}`, role,
+          passwordHash: "synthetic-placeholder", createdBy: "fixture.operator", dashboardNicknameId: nick.id });
+        assert.equal(user.status, "pending_activation");
+        assert.deepEqual(await repo.getCollectionDashboardAccount(user.id), { nicknameId: nick.id, nickname: nick.name, accountRole: role, isActive: true });
+        const audit = (await pool.query("SELECT performed_by,details FROM audit_logs WHERE target_user=$1 AND action='COLLECTION_DASHBOARD_ACCOUNT_LINK_UPDATED'", [user.id])).rows;
+        assert.equal(audit.length, 1); assert.equal(audit[0].performed_by, "fixture.operator");
+        assert.equal(JSON.parse(audit[0].details).nicknameId, nick.id);
+      }
+      for (const skipped of [{}, { dashboardNicknameId: null }]) {
+        const user = await createManagedAuthUserAccount({ username: `skipped_${randomUUID().replace(/-/g, "")}`, role: "user",
+          passwordHash: "synthetic-placeholder", createdBy: "fixture.operator", ...skipped });
+        assert.equal(await repo.getCollectionDashboardAccount(user.id), null, "Skip creates no revocation tombstone");
+      }
+    });
+    await t.test("invalid or unavailable create-time nicknames roll back the new account and create no mapping", async () => {
+      const inactive = await nickname();
+      await pool.query("UPDATE collection_staff_nicknames SET is_active=false WHERE id=$1", [inactive.id]);
+      const admin = await nickname("admin");
+      for (const [nicknameId, role] of [["invalid", "user"], [randomUUID(), "user"], [inactive.id, "user"], [admin.id, "user"], [admin.id, "manager"]] as const) {
+        const username = `rejected_${randomUUID().replace(/-/g, "")}`;
+        await assert.rejects(createManagedAuthUserAccount({ username, role, passwordHash: "synthetic-placeholder",
+          createdBy: "fixture.operator", dashboardNicknameId: nicknameId }));
+        assert.equal((await pool.query("SELECT count(*)::int AS n FROM users WHERE username=$1", [username])).rows[0].n, 0);
+      }
+    });
+    await t.test("failed mapping audit rolls back create-time account and nickname assignment together", async () => {
+      const nick = await nickname();
+      const username = `audit_rejected_${randomUUID().replace(/-/g, "")}`;
+      const before = (await pool.query("SELECT count(*)::int AS n FROM collection_dashboard_accounts")).rows[0].n;
+      await pool.query("CREATE FUNCTION fixture_reject_create_link_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='COLLECTION_DASHBOARD_ACCOUNT_LINK_UPDATED' THEN RAISE EXCEPTION 'fixture audit rejection'; END IF; RETURN NEW; END $$");
+      await pool.query("CREATE TRIGGER fixture_reject_create_link_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION fixture_reject_create_link_audit()");
+      try {
+        await assert.rejects(createManagedAuthUserAccount({ username, role: "user", passwordHash: "synthetic-placeholder",
+          createdBy: "fixture.operator", dashboardNicknameId: nick.id }));
+        assert.equal((await pool.query("SELECT count(*)::int AS n FROM users WHERE username=$1", [username])).rows[0].n, 0);
+        assert.equal((await pool.query("SELECT count(*)::int AS n FROM collection_dashboard_accounts")).rows[0].n, before);
+      } finally { await pool.query("DROP TRIGGER fixture_reject_create_link_audit ON audit_logs; DROP FUNCTION fixture_reject_create_link_audit()"); }
     });
     await t.test("real nickname session transaction remembers first login, persists logout and never changes to another nickname", async () => {
       const user = await account();

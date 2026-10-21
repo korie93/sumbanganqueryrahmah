@@ -10,6 +10,7 @@ const managedUserBodySchema = z.object({
   fullName: nullableString.transform((value) => (typeof value === "string" ? value : null)),
   email: nullableString.transform((value) => (typeof value === "string" ? value : null)),
   role: z.enum(MANAGEABLE_USER_ROLES).default("user"),
+  dashboardNicknameId: z.string().uuid().nullable().optional(),
 });
 
 const managedUserPatchBodySchema = z.object({

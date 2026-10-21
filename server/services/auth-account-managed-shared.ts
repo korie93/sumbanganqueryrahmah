@@ -12,6 +12,7 @@ export type CreateManagedUserInput = {
   fullName?: string | null | undefined;
   email?: string | null | undefined;
   role: string;
+  dashboardNicknameId?: string | null | undefined;
 };
 
 export type UpdateManagedUserInput = {
@@ -39,6 +40,7 @@ export type AuthAccountManagedStorage = Pick<
   | "clearBannedSessionsForUsername"
   | "deleteManagedUserAccount"
   | "getAccounts"
+  | "getCollectionStaffNicknames"
   | "getManagedUsers"
   | "invalidateUnusedPasswordResetTokens"
   | "listManagedUsersPage"

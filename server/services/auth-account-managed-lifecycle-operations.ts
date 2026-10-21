@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from "../auth/guards";
+import { z } from "zod";
 import {
   normalizeAccountStatus,
   normalizeManageableUserRole,
@@ -46,6 +47,14 @@ export class AuthAccountManagedLifecycleOperations {
     return this.deps.storage.getAccounts();
   }
 
+  async getManagedUserDashboardNicknames(authUser: AuthenticatedUser | undefined, query: Record<string, unknown>) {
+    await this.deps.requireSuperuser(authUser);
+    const parsed = z.object({ role: z.enum(["user", "admin"]) }).strict().safeParse(query);
+    if (!parsed.success) throw new AuthAccountError(400, ERROR_CODES.REQUEST_BODY_INVALID, "Choose a User or Admin role for Dashboard nickname options.");
+    const nicknames = await this.deps.storage.getCollectionStaffNicknames({ activeOnly: true, allowedRole: parsed.data.role });
+    return { nicknames: nicknames.map(({ id, nickname }) => ({ id, nickname })) };
+  }
+
   async deleteManagedUser(authUser: AuthenticatedUser | undefined, targetUserId: string) {
     const actor = await this.deps.requireSuperuser(authUser);
     const target = await this.deps.requireManageableTarget(targetUserId);
@@ -85,6 +94,10 @@ export class AuthAccountManagedLifecycleOperations {
     const email = normalizeEmailInput(input.email);
     const fullName = String(input.fullName || "").trim() || null;
     const role = normalizeManageableUserRole(input.role, "user");
+    const nickname = z.string().uuid().nullable().optional().safeParse(input.dashboardNicknameId);
+    if (!nickname.success || (nickname.data != null && input.role !== "user" && input.role !== "admin")) {
+      throw new AuthAccountError(400, ERROR_CODES.REQUEST_BODY_INVALID, "Choose a valid Dashboard nickname for a User or Admin account, or skip this optional setting.");
+    }
 
     this.deps.validateUsername(username);
     const requiredEmail = this.deps.requireManagedEmail(
@@ -104,6 +117,7 @@ export class AuthAccountManagedLifecycleOperations {
       mustChangePassword: false,
       passwordResetBySuperuser: false,
       createdBy: actor.username,
+      ...(nickname.data != null ? { dashboardNicknameId: nickname.data } : {}),
     });
 
     const activation = await this.deps.sendActivationEmail({

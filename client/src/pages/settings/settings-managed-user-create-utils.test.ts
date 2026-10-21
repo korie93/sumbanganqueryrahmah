@@ -129,3 +129,16 @@ test("findDuplicateManagedUser matches by username or email", () => {
 
   assert.equal(duplicate?.id, "user-1");
 });
+
+test("optional Dashboard nickname is carried only for user/admin and omitted when skipped", () => {
+  const base = {
+    createEmailInput: "synthetic@example.test", createFullNameInput: "Synthetic Account",
+    createUsernameInput: "synthetic.user", createDashboardNicknameId: "11111111-1111-4111-8111-111111111111",
+  };
+  for (const role of ["user", "admin"] as const) {
+    assert.equal(normalizeManagedUserCreateDraft({ ...base, createRoleInput: role }).dashboardNicknameId, base.createDashboardNicknameId);
+    assert.equal("dashboardNicknameId" in normalizeManagedUserCreateDraft({ ...base, createRoleInput: role, createDashboardNicknameId: "" }), false);
+  }
+  assert.equal("dashboardNicknameId" in normalizeManagedUserCreateDraft({ ...base, createRoleInput: "manager" }), false);
+  assert.equal(validateManagedUserCreateDraft({ ...base, createRoleInput: "user", createDashboardNicknameId: "" }), null);
+});

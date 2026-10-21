@@ -24,6 +24,9 @@ export function normalizeManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
     normalizedFullName: normalizeCredentialFullName(draft.createFullNameInput),
     normalizedUsername: normalizeCredentialUsername(draft.createUsernameInput),
     role: draft.createRoleInput,
+    ...(draft.createRoleInput !== "manager" && draft.createDashboardNicknameId
+      ? { dashboardNicknameId: draft.createDashboardNicknameId }
+      : {}),
   };
 }
 

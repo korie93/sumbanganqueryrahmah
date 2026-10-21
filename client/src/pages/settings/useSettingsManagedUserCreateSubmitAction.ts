@@ -71,6 +71,7 @@ export function useSettingsManagedUserCreateSubmitAction({
         fullName: normalizedDraft.normalizedFullName || null,
         role: normalizedDraft.role,
         username: normalizedDraft.normalizedUsername,
+        ...(normalizedDraft.dashboardNicknameId ? { dashboardNicknameId: normalizedDraft.dashboardNicknameId } : {}),
       });
       const activation = response.activation;
       const recipientEmail = resolveManagedUserDeliveryRecipient(

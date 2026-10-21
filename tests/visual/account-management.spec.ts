@@ -132,6 +132,10 @@ test("More keyboard menu restores focus and cancellation never writes", async ({
     await expect(dialog).toBeHidden();
     await expect(more).toBeFocused();
     await chooseMore(page, action!);
+    // The menu selection can finish before the deferred confirmation mounts
+    // and receives keyboard focus. Wait for the same readiness as Cancel above.
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(more).toBeFocused();

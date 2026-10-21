@@ -12,8 +12,14 @@ export function useSettingsManagedUserCreateFormState() {
   const [createFullNameInput, setCreateFullNameInput] = useState("");
   const [createUsernameInput, setCreateUsernameInputState] = useState("");
   const [createEmailInput, setCreateEmailInputState] = useState("");
-  const [createRoleInput, setCreateRoleInput] = useState<ManagedUserCreateRole>("user");
+  const [createRoleInput, setCreateRoleInputState] = useState<ManagedUserCreateRole>("user");
+  const [createDashboardNicknameId, setCreateDashboardNicknameId] = useState("");
   const [createFieldErrors, setCreateFieldErrors] = useState<ManagedUserCreateFieldErrors>({});
+
+  const setCreateRoleInput = useCallback((role: ManagedUserCreateRole) => {
+    setCreateRoleInputState(role);
+    setCreateDashboardNicknameId("");
+  }, []);
 
   const setCreateUsernameInput = useCallback((value: string) => {
     setCreateUsernameInputState(value);
@@ -37,7 +43,8 @@ export function useSettingsManagedUserCreateFormState() {
     setCreateFullNameInput("");
     setCreateUsernameInputState("");
     setCreateEmailInputState("");
-    setCreateRoleInput("user");
+    setCreateRoleInputState("user");
+    setCreateDashboardNicknameId("");
     setCreateFieldErrors({});
   }, []);
 
@@ -46,6 +53,7 @@ export function useSettingsManagedUserCreateFormState() {
     createFullNameInput,
     createRoleInput,
     createUsernameInput,
+    createDashboardNicknameId,
   };
 
   const applyCreateFieldErrors = useCallback((errors: ManagedUserCreateFieldErrors) => {
@@ -81,10 +89,12 @@ export function useSettingsManagedUserCreateFormState() {
     createRoleInput,
     createUsernameInput,
     draft,
+    createDashboardNicknameId,
     resetCreateManagedUserForm,
     setCreateEmailInput,
     setCreateFullNameInput,
     setCreateRoleInput,
+    setCreateDashboardNicknameId,
     setCreateUsernameInput,
     validateCreateField,
   };

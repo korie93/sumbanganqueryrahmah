@@ -16,6 +16,7 @@ export function UserAccountManagementSection({
   createFullNameInput,
   createRoleInput,
   createUsernameInput,
+  createDashboardNicknameId,
   creatingManagedUser,
   deletingDevMailOutboxId,
   deletingManagedUserId,
@@ -36,6 +37,7 @@ export function UserAccountManagementSection({
   onCreateManagedUser,
   onCreateRoleInputChange,
   onCreateUsernameInputChange,
+  onCreateDashboardNicknameIdChange,
   onDeleteDevMailOutboxEntry,
   onDeleteManagedUser,
   onDevMailOutboxRefresh,
@@ -87,6 +89,7 @@ export function UserAccountManagementSection({
             createFullNameInput={createFullNameInput}
             createRoleInput={createRoleInput}
             createUsernameInput={createUsernameInput}
+            {...(createDashboardNicknameId !== undefined ? { createDashboardNicknameId } : {})}
             creatingManagedUser={creatingManagedUser}
             deletingDevMailOutboxId={deletingDevMailOutboxId}
             deletingManagedUserId={deletingManagedUserId}
@@ -107,6 +110,7 @@ export function UserAccountManagementSection({
             onCreateManagedUser={onCreateManagedUser}
             onCreateRoleInputChange={onCreateRoleInputChange}
             onCreateUsernameInputChange={onCreateUsernameInputChange}
+            {...(onCreateDashboardNicknameIdChange ? { onCreateDashboardNicknameIdChange } : {})}
             onDeleteDevMailOutboxEntry={onDeleteDevMailOutboxEntry}
             onDeleteManagedUser={onDeleteManagedUser}
             onDevMailOutboxQueryChange={onDevMailOutboxQueryChange}

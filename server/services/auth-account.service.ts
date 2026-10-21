@@ -136,6 +136,10 @@ export class AuthAccountService {
     return this.managedOperations.getAccounts(authUser);
   }
 
+  async getManagedUserDashboardNicknames(authUser: AuthenticatedUser | undefined, query: Record<string, unknown>) {
+    return this.managedOperations.getManagedUserDashboardNicknames(authUser, query);
+  }
+
   async getDevMailPreviewHtml(previewId: string) {
     return this.devMailOperations.getDevMailPreviewHtml(previewId);
   }

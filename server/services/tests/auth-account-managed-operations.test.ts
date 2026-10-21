@@ -208,6 +208,7 @@ function createManagedStorage(
     createPasswordResetRequest: async (params) => buildPasswordResetRequest(params),
     deleteManagedUserAccount: async () => ({ deleted: true, closedSessionIds: [] }),
     getAccounts: async () => [],
+    getCollectionStaffNicknames: async () => [],
     getManagedUsers: async () => [],
     invalidateUnusedPasswordResetTokens: async () => undefined,
     listManagedUsersPage: async () => ({

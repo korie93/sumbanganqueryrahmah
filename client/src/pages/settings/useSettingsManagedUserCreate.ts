@@ -27,11 +27,13 @@ export function useSettingsManagedUserCreate({
     createFullNameInput: formState.createFullNameInput,
     createRoleInput: formState.createRoleInput,
     createUsernameInput: formState.createUsernameInput,
+    createDashboardNicknameId: formState.createDashboardNicknameId,
     creatingManagedUser: submitAction.creatingManagedUser,
     handleCreateManagedUser: submitAction.handleCreateManagedUser,
     setCreateEmailInput: formState.setCreateEmailInput,
     setCreateFullNameInput: formState.setCreateFullNameInput,
     setCreateRoleInput: formState.setCreateRoleInput,
+    setCreateDashboardNicknameId: formState.setCreateDashboardNicknameId,
     setCreateUsernameInput: formState.setCreateUsernameInput,
     validateCreateField: formState.validateCreateField,
   };

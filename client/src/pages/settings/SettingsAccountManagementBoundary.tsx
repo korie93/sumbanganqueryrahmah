@@ -83,6 +83,7 @@ export function SettingsAccountManagementBoundary({
         createFullNameInput={accountManagement.createFullNameInput}
         createRoleInput={accountManagement.createRoleInput}
         createUsernameInput={accountManagement.createUsernameInput}
+        createDashboardNicknameId={accountManagement.createDashboardNicknameId}
         creatingManagedUser={accountManagement.creatingManagedUser}
         deletingDevMailOutboxId={accountManagement.deletingDevMailOutboxId}
         deletingManagedUserId={accountManagement.deletingManagedUserId}
@@ -103,6 +104,7 @@ export function SettingsAccountManagementBoundary({
         onCreateManagedUser={() => void accountManagement.handleCreateManagedUser()}
         onCreateRoleInputChange={accountManagement.setCreateRoleInput}
         onCreateUsernameInputChange={accountManagement.setCreateUsernameInput}
+        onCreateDashboardNicknameIdChange={accountManagement.setCreateDashboardNicknameId}
         onDeleteDevMailOutboxEntry={(previewId) =>
           void accountManagement.handleDeleteDevMailOutboxEntry(previewId)
         }

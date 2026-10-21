@@ -24,6 +24,7 @@ export interface UserAccountManagementSectionProps {
   createFullNameInput: string;
   createRoleInput: ManagedUserCreateRole;
   createUsernameInput: string;
+  createDashboardNicknameId?: string;
   creatingManagedUser: boolean;
   deletingDevMailOutboxId: string | null;
   deletingManagedUserId: string | null;
@@ -44,6 +45,7 @@ export interface UserAccountManagementSectionProps {
   onCreateManagedUser: () => void;
   onCreateRoleInputChange: (value: ManagedUserCreateRole) => void;
   onCreateUsernameInputChange: (value: string) => void;
+  onCreateDashboardNicknameIdChange?: (value: string) => void;
   onDeleteDevMailOutboxEntry: (previewId: string) => void;
   onDeleteManagedUser: (user: ManagedUser) => void;
   onDevMailOutboxRefresh: () => void;

@@ -43,6 +43,7 @@ export async function createManagedUserAccount(payload: {
   fullName?: string | null;
   email?: string | null;
   role: ManageableUserRole;
+  dashboardNicknameId?: string;
 }) {
   const response = await apiRequest("POST", "/api/admin/users", payload);
   return parseApiJson(

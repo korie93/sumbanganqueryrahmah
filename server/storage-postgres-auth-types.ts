@@ -14,6 +14,7 @@ import type {
 import type { ManageableUserRole } from "../shared/user-roles";
 import type { ManagedUserDeletionResult } from "./repositories/auth-repository-types";
 import type { CompleteAccountRecoveryParams, PrepareDeliveredPasswordResetParams } from "./repositories/auth-recovery-repository-utils";
+import type { CreateManagedUserAccountParams } from "./repositories/auth-user-repository-types";
 
 export type ManagedUserAccount = ManagedUserRecord;
 export type PendingPasswordResetRequestSummary = PendingPasswordResetRequestRecord;
@@ -27,19 +28,7 @@ export interface AuthStorageContract {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  createManagedUserAccount(params: {
-    username: string;
-    fullName?: string | null;
-    email?: string | null;
-    role: ManageableUserRole;
-    passwordHash: string;
-    status?: "pending_activation" | "active" | "suspended" | "disabled";
-    mustChangePassword?: boolean;
-    passwordResetBySuperuser?: boolean;
-    createdBy: string;
-    activatedAt?: Date | null;
-    passwordChangedAt?: Date | null;
-  }): Promise<User>;
+  createManagedUserAccount(params: CreateManagedUserAccountParams): Promise<User>;
   updateUserCredentials(params: {
     userId: string;
     newUsername?: string;

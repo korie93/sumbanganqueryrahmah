@@ -61,26 +61,29 @@ export type SetDashboardAccountInput = {
 };
 
 export function setCollectionDashboardAccount(input: SetDashboardAccountInput) {
-  return db.transaction(async (tx) => {
-    // Serialize role/deletion changes with assignment. A deliberate unlink is a
-    // retained null row, so a subsequent nickname login cannot undo revocation.
-    const target = await tx.execute(sql`SELECT role FROM public.users
-      WHERE id = ${input.userId} AND status <> 'deleted' FOR UPDATE`);
-    const role = (target.rows[0] as { role?: string } | undefined)?.role;
-    if (!role) throw notFound("Account not found.");
-    if (role !== "user" && role !== "admin") throw badRequest("This role already sees all Collection totals.");
-    if (input.nicknameId !== null) {
-      const profile = await tx.execute(sql`SELECT id FROM public.collection_staff_nicknames
-        WHERE id = ${input.nicknameId}::uuid AND is_active = true AND role_scope IN (${role}, 'both') FOR SHARE`);
-      if (!profile.rows.length) throw badRequest("Choose an active nickname allowed for this account role.");
-    }
-    await tx.execute(sql`INSERT INTO public.collection_dashboard_accounts
-      (user_id, nickname_id, account_role, source) VALUES (${input.userId}, ${input.nicknameId}::uuid, ${role}, 'superuser')
-      ON CONFLICT (user_id) DO UPDATE SET nickname_id = EXCLUDED.nickname_id,
-        account_role = EXCLUDED.account_role, source = 'superuser', updated_at = now()`);
-    await tx.execute(sql`INSERT INTO public.audit_logs (id, action, performed_by, target_user, details)
-      VALUES (${randomUUID()}, 'COLLECTION_DASHBOARD_ACCOUNT_LINK_UPDATED', ${input.actor}, ${input.userId},
-        ${JSON.stringify({ nicknameId: input.nicknameId, role })})`);
-    return readDashboardAccountLink(tx, input.userId);
-  });
+  return db.transaction((tx) => setCollectionDashboardAccountInTransaction(tx, input));
+}
+
+/** Reuse only inside an existing transaction, including managed-account creation. */
+export async function setCollectionDashboardAccountInTransaction(tx: CollectionStaffNicknameExecutor, input: SetDashboardAccountInput) {
+  // Serialize role/deletion changes with assignment. A deliberate unlink is a
+  // retained null row, so a subsequent nickname login cannot undo revocation.
+  const target = await tx.execute(sql`SELECT role FROM public.users
+    WHERE id = ${input.userId} AND status <> 'deleted' FOR UPDATE`);
+  const role = (target.rows?.[0] as { role?: string } | undefined)?.role;
+  if (!role) throw notFound("Account not found.");
+  if (role !== "user" && role !== "admin") throw badRequest("This role already sees all Collection totals.");
+  if (input.nicknameId !== null) {
+    const profile = await tx.execute(sql`SELECT id FROM public.collection_staff_nicknames
+      WHERE id = ${input.nicknameId}::uuid AND is_active = true AND role_scope IN (${role}, 'both') FOR SHARE`);
+    if (!profile.rows?.length) throw badRequest("Choose an active nickname allowed for this account role.");
+  }
+  await tx.execute(sql`INSERT INTO public.collection_dashboard_accounts
+    (user_id, nickname_id, account_role, source) VALUES (${input.userId}, ${input.nicknameId}::uuid, ${role}, 'superuser')
+    ON CONFLICT (user_id) DO UPDATE SET nickname_id = EXCLUDED.nickname_id,
+      account_role = EXCLUDED.account_role, source = 'superuser', updated_at = now()`);
+  await tx.execute(sql`INSERT INTO public.audit_logs (id, action, performed_by, target_user, details)
+    VALUES (${randomUUID()}, 'COLLECTION_DASHBOARD_ACCOUNT_LINK_UPDATED', ${input.actor}, ${input.userId},
+      ${JSON.stringify({ nicknameId: input.nicknameId, role })})`);
+  return readDashboardAccountLink(tx, input.userId);
 }

@@ -5,6 +5,10 @@ import type { ManagedUser } from "../../../client/src/pages/settings/types";
 // loopback origin. No backend, database, real session, mail or account is used.
 export type AccountFixtureRole = "superuser" | "admin" | "manager" | "user";
 export const accountFixtureNow = "2026-10-15T08:00:00.000Z";
+export const accountDashboardNicknames = {
+  user: [{ id: "11111111-1111-4111-8111-111111111111", nickname: "STAFF.SYNTHETIC" }],
+  admin: [{ id: "22222222-2222-4222-8222-222222222222", nickname: "LEADER.SYNTHETIC" }],
+};
 const expiry = "2036-01-01T00:00:00.000Z";
 
 function makeAccount(index: number): ManagedUser {
@@ -63,6 +67,7 @@ export async function installAccountManagementFixture(page: Page, baseURL: strin
   }));
   const held = new Map<string, Promise<void>>();
   const releases = new Set<() => void>();
+  const dashboardLinks = new Map<string, { nicknameId: string; nickname: string; accountRole: string; isActive: boolean }>();
   const fixture = {
     users, resets, requests: [] as string[], reads: [] as Array<{ path: string; query: Record<string, string> }>,
     writes: [] as Array<{ method: string; path: string; payload: unknown }>,
@@ -134,6 +139,14 @@ export async function installAccountManagementFixture(page: Page, baseURL: strin
       twoFactor: { enabled: false, pendingSetup: false, configuredAt: null } });
     if (endpoint === "POST /api/activity/heartbeat") return respond(route, { ok: true, status: "ONLINE", lastActivityTime: accountFixtureNow });
     if (["POST /api/telemetry/client-errors", "POST /api/telemetry/web-vitals"].includes(endpoint)) return respond(route, { ok: true });
+    const dashboardAccount = /^\/api\/collection\/dashboard-accounts\/([^/]+)$/.exec(url.pathname);
+    if (dashboardAccount && method === "GET" && role === "superuser") {
+      const account = users.find((entry) => entry.id === decodeURIComponent(dashboardAccount[1]!));
+      expect(account, "Dashboard link target must be a known fictional account").toBeTruthy();
+      expect(["user", "admin"]).toContain(account!.role);
+      expect([...url.searchParams.keys()]).toEqual([]);
+      return respond(route, { ok: true, link: dashboardLinks.get(account!.id) ?? null, nicknames: [] });
+    }
     if (url.pathname.startsWith("/api/admin/")) {
       // Role-denied tests must never reach these client APIs, even if a fixture
       // grants the broader Settings tab to a lower role.
@@ -143,6 +156,12 @@ export async function installAccountManagementFixture(page: Page, baseURL: strin
       }
       if (method === "GET") {
         fixture.reads.push({ path: url.pathname, query: Object.fromEntries(url.searchParams) });
+        if (url.pathname === "/api/admin/users/dashboard-nicknames") {
+          expect([...url.searchParams.keys()]).toEqual(["role"]);
+          const targetRole = url.searchParams.get("role");
+          expect(["user", "admin"]).toContain(targetRole);
+          return respond(route, { ok: true, nicknames: accountDashboardNicknames[targetRole as "user" | "admin"] });
+        }
         const search = (url.searchParams.get("search") || "").toLowerCase();
         const status = url.searchParams.get("status") || "all";
         const matchesStatus = (user: ManagedUser) => status === "all" || (status === "banned" ? user.isBanned
@@ -176,10 +195,20 @@ export async function installAccountManagementFixture(page: Page, baseURL: strin
           const gate = held.get(endpoint);
           if (gate) await gate;
           if (endpoint === "POST /api/admin/users") {
-            expect(Object.keys(payload).sort()).toEqual(["email", "fullName", "role", "username"]);
+            const keys = ["email", "fullName", "role", "username"];
+            const hasDashboardNickname = Object.prototype.hasOwnProperty.call(payload, "dashboardNicknameId");
+            if (hasDashboardNickname) keys.push("dashboardNicknameId");
+            expect(Object.keys(payload).sort()).toEqual(keys.sort());
             expect(["user", "manager", "admin"]).toContain(payload.role);
+            const nickname = payload.dashboardNicknameId ? accountDashboardNicknames[payload.role as "user" | "admin"]
+              ?.find((entry) => entry.id === payload.dashboardNicknameId) : undefined;
+            if (hasDashboardNickname) {
+              expect(["user", "admin"]).toContain(payload.role);
+              expect(nickname, "Only an explicitly selected role-compatible synthetic nickname may be linked").toBeTruthy();
+            }
             const user = { ...makeAccount(users.length + 1), ...payload, status: "pending_activation", activatedAt: null, lastLoginAt: null } as ManagedUser;
             users.push(user);
+            if (nickname) dashboardLinks.set(user.id, { nicknameId: nickname.id, nickname: nickname.nickname, accountRole: user.role, isActive: true });
             return respond(route, { ok: true, user: currentUser(user), activation: delivery(user.email!) });
           }
           const user = users.find((item) => item.id === decodeURIComponent(target![1]!));
