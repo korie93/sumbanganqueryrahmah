@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { managedAccountDialogFocusHandoff } from "@/pages/settings/account-management/managed-account-dialog-focus";
 import { getManagedUserEditState } from "@/pages/settings/managed-user-edit-state";
 import type { ManagedUser, ManagedUserSaveError } from "@/pages/settings/types";
@@ -151,7 +152,7 @@ export function ManagedUserDialog({
                 autoCorrect="off"
                 spellCheck={false}
                 value={managedUsernameInput}
-                aria-invalid={Boolean(editState.errors.username)}
+                {...getAriaInvalidProps(Boolean(editState.errors.username))}
                 aria-describedby={editState.errors.username ? "managed-user-username-error" : undefined}
                 onChange={(event) => onManagedUsernameInputChange(event.target.value)}
                 disabled={managedSaving}
@@ -175,7 +176,7 @@ export function ManagedUserDialog({
                 autoCorrect="off"
                 spellCheck={false}
                 value={managedEmailInput}
-                aria-invalid={Boolean(editState.errors.email)}
+                {...getAriaInvalidProps(Boolean(editState.errors.email))}
                 aria-describedby={editState.errors.email ? "managed-user-email-error" : undefined}
                 onChange={(event) => onManagedEmailInputChange(event.target.value)}
                 disabled={managedSaving}

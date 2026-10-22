@@ -284,8 +284,8 @@ test("Managed account editor associates inline username and email errors without
   await page.screenshot({ path: test.info().outputPath("managed-account-editor-inline-errors-320-dark.png"), animations: "disabled" });
   await username.fill("maya.synthetic");
   await email.fill("maya.synthetic@example.test");
-  await expect(username).toHaveAttribute("aria-invalid", "false");
-  await expect(email).toHaveAttribute("aria-invalid", "false");
+  await expect(username).not.toHaveAttribute("aria-invalid");
+  await expect(email).not.toHaveAttribute("aria-invalid");
   expect(await username.getAttribute("aria-describedby")).toBeNull();
   expect(await email.getAttribute("aria-describedby")).toBeNull();
   await expect(edit.locator("#managed-user-username-error, #managed-user-email-error")).toHaveCount(0);
@@ -304,7 +304,7 @@ test("Managed account editor clears optional active-account name and email with 
   const edit = editor(page);
   await edit.getByLabel("Full Name", { exact: true }).fill("");
   await edit.getByLabel("Email", { exact: true }).fill("");
-  await expect(edit.getByLabel("Email", { exact: true })).toHaveAttribute("aria-invalid", "false");
+  await expect(edit.getByLabel("Email", { exact: true })).not.toHaveAttribute("aria-invalid");
   await expect(edit.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   await edit.getByRole("button", { name: "Save", exact: true }).click();
   await expect(edit).toBeHidden();
@@ -333,7 +333,7 @@ test("Managed account editor prevents changed pending-activation email from bein
   await save.dispatchEvent("click");
   expect(fixture.writes).toEqual([]);
   await email.fill("daniel.synthetic@example.test");
-  await expect(email).toHaveAttribute("aria-invalid", "false");
+  await expect(email).not.toHaveAttribute("aria-invalid");
   await expect(save).toBeEnabled();
   await edit.getByLabel("Account record status", { exact: true }).selectOption("pending_activation");
   await expect(save).toBeDisabled();
@@ -352,8 +352,8 @@ test("Managed account editor keeps untouched invalid legacy identity out of a ro
   await openEditor(page, username);
   const edit = editor(page);
   await expect(edit.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-  await expect(edit.getByLabel("Username", { exact: true })).toHaveAttribute("aria-invalid", "false");
-  await expect(edit.getByLabel("Email", { exact: true })).toHaveAttribute("aria-invalid", "false");
+  await expect(edit.getByLabel("Username", { exact: true })).not.toHaveAttribute("aria-invalid");
+  await expect(edit.getByLabel("Email", { exact: true })).not.toHaveAttribute("aria-invalid");
   await edit.getByLabel("Username", { exact: true }).fill("  LEGACY USER!  ");
   await edit.getByLabel("Role", { exact: true }).selectOption("manager");
   await expect(edit.getByRole("button", { name: "Save", exact: true })).toBeEnabled();

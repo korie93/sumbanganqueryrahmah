@@ -63,7 +63,8 @@ test("managed account editor keeps bounded internal scrolling and locally sized 
 test("managed account editor exposes inline identity errors and reuses shared save readiness in its mutation hook", () => {
   for (const field of ["username", "email"]) {
     const control = controlSource(field);
-    assert.match(control, new RegExp(`aria-invalid=\\{Boolean\\(editState\\.errors\\.${field}\\)\\}`));
+    assert.match(control, new RegExp(`\\{\\.\\.\\.getAriaInvalidProps\\(Boolean\\(editState\\.errors\\.${field}\\)\\)\\}`));
+    assert.doesNotMatch(control, /aria-invalid=\{/);
     assert.match(control, new RegExp(`aria-describedby=\\{editState\\.errors\\.${field} \\? "managed-user-${field}-error" : undefined\\}`));
     assert.match(source, new RegExp(`id="managed-user-${field}-error"`));
   }
