@@ -32,6 +32,7 @@ export function useSettingsManagedDialogViewModels({
         managedIsBanned: accountManagement.managedIsBanned,
         managedRoleInput: accountManagement.managedRoleInput,
         managedSaving: accountManagement.managedSaving,
+        managedSaveError: accountManagement.managedSaveError,
         managedSelectedUser: accountManagement.managedSelectedUser,
         managedStatusInput: accountManagement.managedStatusInput,
         managedUsernameInput: accountManagement.managedUsernameInput,

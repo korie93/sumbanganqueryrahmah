@@ -98,14 +98,15 @@ export function CreateClosedAccountSection({
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <p>The user creates their password through email activation. No initial password is required.</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label htmlFor="create-closed-account-full-name" className="text-sm font-medium">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+          <div className="min-w-0 space-y-2">
+            <label htmlFor="create-closed-account-full-name" className="block min-w-0 text-sm font-medium leading-5">
               Full name <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <Input
               id="create-closed-account-full-name"
               name="closedAccountFullName"
+              className="h-11 min-h-11 min-w-0 sm:h-11 sm:min-h-11"
               value={createFullNameInput}
               onChange={(event) => onCreateFullNameInputChange(event.target.value)}
               placeholder="Full name"
@@ -113,13 +114,14 @@ export function CreateClosedAccountSection({
               autoComplete="name"
             />
           </div>
-          <div className="space-y-2">
-            <label htmlFor="create-closed-account-username" className="text-sm font-medium">
+          <div className="min-w-0 space-y-2">
+            <label htmlFor="create-closed-account-username" className="block min-w-0 text-sm font-medium leading-5">
               Username
             </label>
             <Input
               id="create-closed-account-username"
               name="closedAccountUsername"
+              className="h-11 min-h-11 min-w-0 sm:h-11 sm:min-h-11"
               value={createUsernameInput}
               onChange={(event) => onCreateUsernameInputChange(event.target.value)}
               onBlur={() => onCreateFieldBlur("createUsernameInput")}
@@ -132,22 +134,23 @@ export function CreateClosedAccountSection({
               aria-describedby={usernameDescription}
               {...usernameValidationProps}
             />
-            <p id={usernameHelpId} className="text-xs text-muted-foreground">
+            <p id={usernameHelpId} className="break-words text-xs leading-5 text-muted-foreground">
               3-32 characters: letters, numbers, dot, underscore, or hyphen.
             </p>
             {createFieldErrors.createUsernameInput ? (
-              <p id={usernameErrorId} className="text-xs text-destructive" role="alert">
+              <p id={usernameErrorId} className="break-words text-xs leading-5 text-destructive" role="alert">
                 {createFieldErrors.createUsernameInput}
               </p>
             ) : null}
           </div>
-          <div className="space-y-2">
-            <label htmlFor="create-closed-account-email" className="text-sm font-medium">
+          <div className="min-w-0 space-y-2">
+            <label htmlFor="create-closed-account-email" className="block min-w-0 text-sm font-medium leading-5">
               Email
             </label>
             <Input
               id="create-closed-account-email"
               name="closedAccountEmail"
+              className="h-11 min-h-11 min-w-0 sm:h-11 sm:min-h-11"
               type="email"
               value={createEmailInput}
               onChange={(event) => onCreateEmailInputChange(event.target.value)}
@@ -162,17 +165,17 @@ export function CreateClosedAccountSection({
               aria-describedby={emailDescription}
               {...emailValidationProps}
             />
-            <p id={emailHelpId} className="text-xs text-muted-foreground">
+            <p id={emailHelpId} className="break-words text-xs leading-5 text-muted-foreground">
               Activation email is required before first login.
             </p>
             {createFieldErrors.createEmailInput ? (
-              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
+              <p id={emailErrorId} className="break-words text-xs leading-5 text-destructive" role="alert">
                 {createFieldErrors.createEmailInput}
               </p>
             ) : null}
           </div>
-          <div className="space-y-2">
-            <label htmlFor="create-closed-account-role" className="text-sm font-medium">
+          <div className="min-w-0 space-y-2">
+            <label htmlFor="create-closed-account-role" className="block min-w-0 text-sm font-medium leading-5">
               Role
             </label>
             <select
@@ -185,7 +188,7 @@ export function CreateClosedAccountSection({
                   nextRole === "admin" || nextRole === "manager" ? nextRole : "user",
                 );
               }}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="h-11 min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               disabled={creatingManagedUser}
               aria-describedby={roleDescriptionId}
             >
@@ -251,7 +254,7 @@ export function CreateClosedAccountSection({
           )}
           data-floating-ai-avoid="true"
         >
-          <Button type="submit" disabled={creatingManagedUser} className="w-full sm:w-auto">
+          <Button type="submit" disabled={creatingManagedUser} className="h-11 min-h-11 w-full sm:min-h-11 sm:w-auto">
             {creatingManagedUser ? "Creating..." : "Create Closed Account"}
           </Button>
         </div>

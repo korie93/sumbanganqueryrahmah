@@ -6,6 +6,7 @@ import {
   buildSettingsSidebarCategories,
   canAccessBackupCategory,
   findSettingsDisplayCategory,
+  getSettingsCategoryLabel,
   resolveNextSelectedSettingsCategory,
 } from "@/pages/settings/settings-controller-utils";
 import type { SettingCategory } from "@/pages/settings/types";
@@ -18,6 +19,16 @@ function createCategory(id: string, name: string): SettingCategory {
     settings: [],
   };
 }
+
+test("Settings category labels distinguish backup policy and operations without changing IDs or other names", () => {
+  const policy = createCategory("server-backup-category", "Backup & Restore");
+  assert.equal(getSettingsCategoryLabel(policy), "Backup Settings");
+  assert.equal(policy.id, "server-backup-category");
+  assert.equal(policy.name, "Backup & Restore");
+  assert.equal(getSettingsCategoryLabel(createCategory(BACKUP_SETTINGS_CATEGORY_ID, "Backup & Restore")), "Backup & Restore");
+  assert.equal(getSettingsCategoryLabel(createCategory("general", "General")), "General");
+  assert.equal(getSettingsCategoryLabel(createCategory("custom", "Custom settings")), "Custom settings");
+});
 
 test("canAccessBackupCategory allows superuser even when tab visibility disables backup", () => {
   assert.equal(

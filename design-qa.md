@@ -2031,3 +2031,742 @@ The tab-local motion override is deliberately retained so the user can inspect
 the animation, and must be disclosed at handoff. Chat PNG screenshots are static.
 
 Final result: passed
+
+## Settings primary navigation and consistent account fields — 2026-10-21
+
+### Scope and visual truth
+
+Approved scope: proposal 3 (consistent Create Closed Account field sizing) and
+the primary Settings header/page chooser, not the nested Account Management
+tabs. Existing proposal 1/2 nickname/status changes in the working tree are
+preserved and included in the regression run. No backend, permission rule,
+category ID, route, global CSS, dependency or brand asset is changed.
+
+Fresh source visual truth: `artifacts/qa-settings-header/before/` captured from
+the existing local build before this scope's edits. Final rendered evidence:
+`artifacts/qa-settings-header/verified/`, built from the revised source. These
+are browser-rendered real components with strictly intercepted synthetic data,
+not generated mockups. Codex browser initialization was blocked; the user
+explicitly approved local Playwright/Chromium as the fallback.
+
+Both capture sets use the same fictional superuser, routes, content, interaction
+state, browser, reduced-motion preference and light/dark themes. CSS viewports
+and source/implementation PNG dimensions are 1366x900, 768x900 and 320x900,
+deviceScaleFactor 1. No density scaling, browser chrome or image normalization
+is needed. The extra browser regression uses height1000; its Backup failure
+and corrected captures must be compared at320x1000, not against the900px set.
+
+### Three-step experience review
+
+1. General Settings: primary category navigation now precedes the page heading,
+   consistently with Account Management. Existing text/current-page cues are
+   retained. The extra Administration eyebrow is removed; there remains one h1.
+2. Account Management: the primary Settings chooser has a bounded44px surface;
+   the existing inner tabs, category access, Sheet workflow, Escape and return
+   focus are preserved. Backup configuration and operations remain separate.
+3. Create Closed Account: Full name, Username, Email, Role and optional Nickname
+   are44px, with8px label gaps and16px field-grid gaps. Labels, help and errors
+   retain their associations and wrap within the form. No payload or validation
+   rules change.
+
+### Comparison evidence and history
+
+Source and rendered implementation were opened together in the same comparison
+input, rather than judged from paths or separate image views:
+
+- `before/01-general-1366-light.png` versus `final/01-general-1366-light.png`:
+  full desktop hierarchy, intended navigation-first order, typography and tokens.
+- `before/02-account-320-dark.png` versus `final/02-account-320-dark.png`:
+  compact chooser alignment, readable label and unchanged nested account flow.
+- `before/04-create-1366-light.png` versus `final/04-create-1366-light.png` and
+  the focused `final/05-fields-1366-light.png`: equal-height controls and labels.
+- `before/03-menu-320-dark.png` versus `final/03-menu-320-dark.png`:
+  all nine destinations remain readable; Close has a44px hit target. Descriptions
+  wrap without changing access or focus behavior.
+- `before/01-general-768-dark.png` versus `final/01-general-768-dark.png`, and
+  `before/04-create-320-light.png` versus `final/04-create-320-light.png`:
+  two-row tablet navigation, mobile single-column fields and retained submit.
+- The final post-fix build was recaptured in `verified/`. Matched comparisons
+  additionally opened `before/01-general-1366-dark.png` with its `verified/`
+  counterpart, and `before/01-general-768-light.png` with its counterpart.
+  Final focused `verified/05-fields-1366-light.png`,
+  `verified/05-fields-320-light.png` and `verified/06-nickname-320-light.png`
+  were opened together with the source create screenshot. Native element crops
+  make field text/borders legible; these are region comparisons, not whole-frame
+  pixel equality. These crops are 718x217, 254x413 and 228x45 PNG pixels respectively
+  at DPR1 (fractional element edges round to whole screenshot pixels; computed
+  nickname height remains 44 CSS pixels). Focused capture scrolls the region to
+  the viewport center so
+  the real sticky submit footer does not obscure its bottom. Earlier `final/`
+  mobile field crop was occluded by that footer and is not acceptance evidence.
+
+Before capture audit: source text inputs measured36px on desktop/tablet, Role40px
+and Nickname44px. At320px text inputs were44px but Role remained40px. Final
+`verified/capture-report.json` records all five controls at44px in all six
+viewport/theme combinations. Browser tests also require8px native-label gaps,
+16px mobile/14px desktop field text, without weakening legacy write assertions.
+
+Read-only peer review found a configuration heading still named Backup & Restore
+and a14px mobile nickname select. Both were corrected before visual acceptance:
+the shared display-label helper now gives navigation, heading and error boundary
+the same label; the nickname uses `text-base md:text-sm`. Category IDs and the
+operational Backup & Restore label are unchanged.
+
+First full browser run:43/45 passed. Both320px navigation cases found a P2
+horizontal overflow in operational Backup & Restore. Preserved visual evidence:
+`artifacts/qa-settings-header/backup-before-320-light.png` and
+`backup-before-320-dark.png` (320x1000 each). Search & Filters inherited Button's
+`whitespace-nowrap`; its description visibly extended past the card/viewport.
+Local fix: `min-w-0 max-w-full whitespace-normal` on that trigger, non-shrinking
+chevron. No global overflow hiding, backup operation or filter handler changed.
+The regression still requires no document overflow and additionally exercises
+the filter's Enter/Space expand/collapse state and bounded content at 320px.
+Post-fix paired comparison opened `backup-before-320-light.png` and
+`backup-verified-320-light.png` together, then the dark counterparts together.
+All four are 320x1000 pixels at DPR1, same viewport, route, synthetic data and
+collapsed filter state. The entire description now wraps inside its card in
+two lines; the chevron and surrounding controls remain visible. The modest
+extra card height is the intended consequence of retaining readable copy.
+The revised browser run passed all 45 cases with the original overflow guard
+and new open/close assertions intact. No actionable P0/P1/P2 issue remains in
+the inspected scope; this closes the earlier responsive finding.
+
+### Required fidelity surfaces
+
+- Fonts/typography: existing system-ui/Segoe UI stack and heading scale retained;
+  no new font/fallback. Primary navigation intentionally moves12px to14px for
+  readability. Labels align on20px line-height; help/error copy has20px leading.
+  Native controls match16px mobile and14px medium-and-up. No visible clipping,
+  artificial lettering or inappropriate new display weights in reviewed states.
+- Spacing/layout: existing page width, sidebar, account tabs and card grid kept.
+  Navigation surface uses existing radius/border tokens; it wraps rather than
+  shrinking text. Equal44px controls,8px labels and16px grid gaps are intentional
+  departures from the inconsistent source. No extra rail, hero or duplicate h1.
+- Colors/tokens: existing background, muted, border, primary and semantic status
+  tokens retained in both themes. Active text/current-page semantics accompany
+  color. No new palette, gradients, shadows or animation library.
+- Image quality/assets/icons: original Q logo/transparent asset and existing
+  Lucide icons remain unchanged; no SVG/CSS approximation or generated imagery.
+  Captures show the same asset scale/sharpness, with no new crop/halo artifacts.
+- Copy/content: existing product copy is retained except removing Administration,
+  adding the Settings context in the chooser and consistently distinguishing
+  Backup Settings from Backup & Restore. No demo/preview control is introduced.
+
+### Verification and limits
+
+- Focused initial contracts30/30 passed. Expanded Settings and Backup unit/SSR
+  suite232/232 passed, including category selection/hydration, permission guards,
+  create payloads, semantic status, unsaved changes and backup filter wrapping.
+- Full TypeScript check passed again after the final local filter class/test
+  addition (`npm run typecheck`, exit0).
+- Final production build passed; status artifacts, CSP hashes and no-production-
+  sourcemap gates passed. Existing upstream PostCSS `from` warning remains.
+- Final browser rerun: 45/45 passed (one worker, production-built frontend).
+  Covers all nine primary destinations, one heading, 44px category/Close targets,
+  strict role restrictions, dirty values/badges, reload, keyboard/focus, create
+  choices/payloads, retries, long names, stale responses and no unauthorized writes.
+- Changed client files lint: zero errors, one pre-existing exhaustive-deps warning
+  on `generation.current` in ManagedAccountCollectionScope cleanup. That cleanup
+  is unchanged by this UI work.
+- Bundle budgets, client breakpoints, spacing/color contracts, secret scan and
+  repository hygiene passed. No dependency additions or baseline updates.
+
+No real accounts, database, SMTP, production request or Socket connection used.
+No full WCAG compliance, screen-reader assistive-tech run, Safari/iOS device,
+remote CI or production deployment is claimed. Browser tests inspect runtime
+console/page errors through the strict synthetic fixture. No snapshot baseline
+or tolerance has been relaxed. No commit, push or deployment requested yet.
+
+### Implementation checklist
+
+- [x] Preserve workflows, permission boundaries and previous nickname/status work.
+- [x] Align primary Settings navigation and single heading; preserve inner tabs.
+- [x] Standardize scoped create fields and accessible labels/help/errors.
+- [x] Capture matched source/rendered views and inspect focused field regions.
+- [x] Fix the discovered320px backup filter overflow without global CSS changes.
+- [x] Complete post-fix browser comparison and all 45 browser regression cases.
+- [x] Pass lint/error, bundle, token, secret and hygiene checks.
+- [x] Finish final post-addition TypeScript check.
+
+Final result: passed
+
+No outstanding actionable P0/P1/P2 findings in this scoped implementation.
+The working tree remains uncommitted; commit, push and deployment are separate.
+
+## Edit Managed Account field consistency — 2026-10-22
+
+### Approved scope and source
+
+Implement suggestion1 only: bring the existing Edit Managed Account fields into
+line with Create Closed Account. The fresh existing code render is the source,
+not a new mockup or visual redesign. Product Design audit informed the local
+44px controls, block labels, preserved grids and a long-username wrapping fix.
+
+Current-run audit/report: `artifacts/qa-managed-editor/AUDIT.md`.
+Source: `artifacts/qa-managed-editor/source/`.
+Implementation: `artifacts/qa-managed-editor/after/`.
+Both use strictly intercepted fictional account data on a static loopback server.
+Codex browser initialization failed; local Playwright was already approved for
+this Settings workflow. No production, database, credentials, mail or real
+account was used. The first capture attempt had an invalid relative URL due to
+missing baseURL, produced no accepted screenshot, and is not audit evidence.
+
+### Experience audit and fixes
+
+1. Entry from Managed accounts — healthy. Real Edit/Details controls and list
+   context remain. Source `01-entry-1366-light.png` was inspected before editing.
+   Initial Full Name focus and the direct/Details opener handoff are preserved.
+2. Profile fields — source was inconsistent: Full Name/Username/Email measured
+   36px at768/1366px, while Role/status/Banned were40px. Mobile inputs were44px/
+   16px text but selects40px/14px. All six inline labels measured10px gaps. The
+   revised editor uses44px fields, block labels/20px leading,8px gaps and16px
+   grid spacing, with16px mobile/14px medium-up text, matching Create.
+3. Access fields and dismissal/save — existing warning, role/status/ban meanings,
+   bounded scroll body and separate header/footer are retained. A valid unbroken
+   32-character username was clipped in the header (P2). Description wrapping
+   now preserves the whole text and reserves room for Close at both breakpoints.
+   Local Close/Cancel/Save hit areas are at least44px. No new submit-on-Enter,
+   pending Escape/Close guard, write request, role option or confirmation flow.
+
+Only application source changed for this scope: `ManagedUserDialog.tsx`, styles
+only. Global Dialog/Input, view-models, save handlers, endpoints and permissions
+remain unchanged. Tests and the scoped account-management documentation are
+added alongside it; all earlier dirty Settings/nickname changes are preserved.
+
+### Matched visual comparison
+
+Full frames:320x900,768x900,1366x900 CSS and PNG pixels, deviceScaleFactor1.
+Same Chromium, light/dark theme, fictional user, route, initial Full Name focus,
+reduced-motion preference, content and scroll state in source and after captures.
+No browser chrome, density resampling or screenshot editing is involved.
+
+The following source/implementation images were opened together in the same
+comparison input before judging, not read separately from memory:
+
+- `source/02-editor-1366-light.png` and `after/02-editor-1366-light.png`.
+- `source/02-editor-320-light.png` and `after/02-editor-320-light.png`.
+- `source/06-long-username-320-light.png` and its `after/` counterpart.
+- `source/02-editor-768-dark.png` and `after/02-editor-768-dark.png`.
+- Remaining full-view counterparts at1366-dark,768-light and320-dark.
+
+Focused comparisons make field text and geometry readable:
+
+- `source/03-fields-1-1366-light.png` (607x152 pixels) and
+  `after/03-fields-1-1366-light.png` (607x160). Local native region captures
+  intentionally differ in height because the text controls grow36px to44px.
+- `source/03-fields-2-768-dark.png` and its `after/` counterpart (607x72 each).
+  Labels now have a20px line box/8px gap; selects grow40px to44px.
+- `source/05-create-reference-1366-light.png` was opened with the editor source
+  as the approved44px rhythm reference. It is a different form/width; no claim
+  of whole-frame equality is made between Create and Edit.
+
+`source/measurements.json` and `after/measurements.json` record all six fields
+in all six width/theme states. An independent assertion checked all36 final
+fields: exactly44px height,8px native-label gap, block label display and correct
+responsive font size. Metrics supplement, rather than replace, visual review.
+
+### Required fidelity surfaces and comparison history
+
+- Fonts: computed system-ui/-apple-system/BlinkMacSystemFont/Segoe UI/sans-serif
+  stack is identical. Existing title, body weight and letter spacing remain.
+  Native mobile selects now match16px inputs instead of14px. Block labels align
+  their left edge with controls; text remains readable without truncation.
+- Spacing/layout: maximum dialog width and two-/three-column desktop grids are
+  unchanged. The small intentional height increase accommodates44px fields and
+  footer buttons. On mobile the fields stay single-column; internal scrolling
+  keeps header/actions available. No additional card, rail or illustration.
+- Colors/tokens: original background/input/border/ring/primary and amber warning
+  tokens remain in both themes. No new palette, shadow or animation introduced.
+  Visible focus ring and explicit Role/status/Banned text accompany state cues.
+- Assets/icons: existing Q branding, Lucide warning and native close icon are
+  untouched. No image, SVG or CSS-art replacement, altered crop or new halo.
+- Copy/content: all product labels, warning, account identity and actions remain.
+  Long usernames wrap without being omitted or rewritten. No demo/preview text.
+
+The current-run source audit found the sizing/typography mismatch and P2 header
+clipping above. After applying local styles, the first matched implementation
+comparison found the full username visible, equal-height controls and no further
+actionable P0/P1/P2 issue in these states. No visual fix was made after that
+comparison. This is an audit-to-fix pass, not a claimed pixel-perfect clone.
+
+### Verification
+
+- Settings/Backup unit and source contracts:236/236 passed, including4 new
+  editor contracts. Portaled Radix content is tested in the browser, not claimed
+  as server-rendered UI from the source contracts.
+- Full `npm run typecheck`: passed. Both changed client files lint:0 errors and
+  0 warnings. Production build/status/CSP/no-source-map gates passed; the known
+  upstream PostCSS `from` warning remains, with no dependency change.
+- Bundle budgets, breakpoints, color/spacing tokens, secret scan and repository
+  hygiene passed. Diff whitespace check passed; no snapshot/tolerance update.
+- Browser regression:22/22 passed (one worker, production-built frontend).
+  Includes11 new editor cases, six existing workspace checks, Details/Edit and
+  confirmation focus checks, and three restricted-role cases. Measures field
+  geometry, keyboard trap/dismissal/focus, cancellation without writes and exact
+  separate changed-only profile/role/status+ban PATCH contracts with held saves.
+  Runtime page/console errors and unexpected requests are checked by the strict
+  synthetic fixture. No snapshot baseline or error tolerance was relaxed.
+- Additional short-height evidence: `artifacts/qa-managed-editor/after/07-short-height-320-light.png`
+  (320x480 PNG/CSS pixels, DPR1), opened and inspected after the passing test.
+  Header/Close and Cancel/Save remain visible while the inner body is scrolled
+  to Banned. This is an additional functional viewport check, not a false
+  same-frame comparison against the900px source.
+
+Evidence limits: synthetic Chromium only, not live production or remote CI.
+Screenshots do not establish full WCAG or assistive-technology compliance.
+Physical mobile keyboard, Safari/iOS and text-zoom device testing are not claimed.
+Existing Close/Escape while a save is pending remains allowed; this work does
+not add cancellation or rollback of a request already accepted by a server.
+
+### Checklist
+
+- [x] Capture and inspect fresh source before changing application code.
+- [x] Keep changes local and preserve all handlers, permission and focus guards.
+- [x] Compare full views and focused regions at matched density/state.
+- [x] Verify236 unit/source tests, typecheck, build, lint and safety contracts.
+- [x] Finish all22 browser cases and inspect short-height evidence.
+
+Final result: passed
+
+No outstanding actionable P0/P1/P2 finding in the approved Edit sizing scope.
+No commit, push or deployment performed; the working tree remains reviewable.
+
+## Account confirmation consistency — 2026-10-22
+
+### Scope, fresh audit and visual truth
+
+Approved: frontend-only polish of Reset Password, Ban/Unban and Delete Account
+confirmations. Preserve the existing navigation, account targets, impact copy,
+colors, handlers, permission checks and request/dismissal semantics. Product
+Design audit guided the local alignment,44px actions and bounded scroll layout.
+No global AlertDialog/Button, mutation hook, backend or dependency is changed.
+All previous Settings/nickname/editor work remains intact in the working tree.
+
+Audit: `artifacts/qa-account-confirmations/AUDIT.md`.
+Source visual truth: `artifacts/qa-account-confirmations/source/`.
+Final rendered implementation: `artifacts/qa-account-confirmations/verified/`.
+Fresh captures use real components on the strict synthetic static loopback
+runner. Codex browser initialization again failed; local Playwright was already
+approved for Settings QA. No real account, database, SMTP or production access.
+
+### Numbered experience findings and corrections
+
+1. Reset — clear target and impact copy; safe Cancel autofocus already healthy.
+   Source desktop actions measured38px, mobile44px. Standardise both actions to
+   44px locally, keep native Cancel focus and exact reset-email dispatch.
+2. Ban/Unban — impact rows correctly explain restrictions and reversibility.
+   Mobile headings/description were centered while impacts were left aligned.
+   Use left alignment, consistent16/24px responsive padding and readable24px
+   description leading without replacing copy, icons or semantic tokens.
+3. Delete/short screens — source P2: an unbroken valid32-character username
+   stretched/clipped the grid at320x480 and left Cancel outside the visible
+   viewport. Use bounded flex Content, min-width-safe wrapping and a scrollable
+   details body with footer outside it. Retain all three impact rows and mobile
+   action-before-Cancel visual order. The smaller footer gap is now8px, not the
+   accumulated default gap plus Cancel margin.
+
+The details body contains static text. Peer review identified that moving
+Cancel into a sibling footer could leave keyboard scrolling browser-dependent.
+Before final QA, each body received a named region, tabIndex0 and an inset focus
+indicator. Shift+Tab from the initially focused Cancel reaches that region;
+PageDown must actually scroll it. Three narrowly scoped lint exceptions explain
+this intentional non-widget focus target. No interactive role is fabricated and
+no lint configuration is relaxed.
+
+### Matched comparison evidence
+
+Source and final PNGs share CSS viewport, pixel size, DPR1, Chromium version,
+route, synthetic data, theme, reduced-motion preference, opener and Cancel focus.
+Full views are1366x900,768x900,320x900. Short views are320x480. No image editing,
+resampling, browser frame or device-density mismatch is involved.
+
+Each pair below was opened together in the same image comparison input:
+
+- `source/01-reset-1366-light.png` and `verified/01-reset-1366-light.png`.
+- `source/02-ban-320-light.png` and `verified/02-ban-320-light.png`.
+- `source/03-unban-768-dark.png` and `verified/03-unban-768-dark.png`.
+- `source/04-delete-320-dark.png` and `verified/04-delete-320-dark.png`.
+- `source/05-short-reset-320-light.png` and its `verified/` counterpart.
+- `source/05-short-delete-320-dark.png` and its `verified/` counterpart.
+- Desktop-dark Delete, tablet-light Ban and mobile-dark Reset counterparts.
+
+These comparisons cover all four action states and all six width/theme tiers,
+plus short-screen P2 evidence. Captures contain24 normal states and six short
+states per phase. No claim is made that every screenshot is a separate redesign.
+The320px native views act as readable focused dialog comparisons: the304px
+dialog fills almost the entire frame width, and all14px body text,18px headings,
+icons, borders, buttons and wrapping can be inspected at1:1. A further cropped
+image is unnecessary for this small single-surface dialog; the desktop full
+views establish its proportions within the app shell.
+
+`source/measurements.json` and `verified/measurements.json` supplement visual
+review. A separate assertion checked all24 final normal states:48 actions are
+44px high, dialog width stays bounded by the viewport and dialog content has
+no horizontal overflow. Native32-character names remain complete and wrap;
+the short-screen footer shows both actions, with the static body scrolling.
+
+`after/` is an intermediate capture before the explicit keyboard-scroll region
+attributes; it is not final acceptance evidence. `verified/` was rebuilt and
+recaptured after that change. The first final matched visual comparison found
+the source clipping corrected and no remaining actionable P0/P1/P2 mismatch.
+No visual fix was made after this comparison. Keyboard/runtime checks remain
+separate from visual-fidelity evidence.
+
+### Required fidelity surfaces
+
+- Fonts/typography: existing system-ui/Segoe UI stack,18px heading and14px body
+  size retained. Description leading is intentionally24px; left alignment and
+  wrapping improve scanning. No new typeface, letter spacing or display scale.
+- Spacing/layout: original maximum512px width retained; mobile dialog304px at
+  a320px viewport. Use16px mobile/24px wider horizontal padding,16px body vertical
+  padding,12px footer vertical padding and8px action gaps. The existing project
+  scrollbar-gutter pattern is used locally; its reserved width is intentional. No
+  duplicate heading, hero, new card hierarchy or hidden impact explanation.
+- Colors/tokens: original primary actions, background, borders, warning/danger/
+  success impact tones and overlay unchanged. A token-based footer divider and
+  focus ring clarify regions; no new palette, gradients or decorative shadows.
+- Images/icons: original Q branding and Lucide impact icons remain untouched.
+  No generated image, inline SVG substitute, CSS art, altered crop or fake asset.
+- Copy/content: usernames, titles, action captions and all impact explanations
+  remain verbatim. Named details-region labels are accessibility metadata only;
+  no demo, preview control or extra visible instructions were introduced.
+
+### Verification and scope limits
+
+- Settings/Backup unit/source suite240/240 passed, including4 new confirmation
+  source contracts. Actual portaled dialog rendering is verified in the browser,
+  not misrepresented as SSR output.
+- Full typecheck and production build passed; status/CSP/no-source-map gates
+  passed. The existing upstream PostCSS `from` warning remains.
+- Changed files lint: zero errors/warnings after the three documented, local
+  focusable-scroll-region exceptions. No global lint rule was changed.
+- Bundle budgets, breakpoint/color/spacing contracts, secret scan and repository
+  hygiene passed. No dependency, snapshot baseline or tolerance changes.
+- Final browser regression20/20 passed, one worker on the production-built
+  frontend:13 new confirmation cases, six existing Account Management keyboard/
+  callback/role regressions and one neighboring Collection confirmed-reset case
+  matched by the command. Covers all four confirmation types, focus/dismissal,
+  long names, real keyboard scroll, reset/delete deduplication and exact separate
+  POST/PATCH/DELETE contracts. Ban has no existing pending lock; this UI pass
+  does not add or claim one. Strict fixtures check page/console errors and
+  unexpected/off-origin requests.
+- Runtime keyboard evidence was opened and inspected:
+  `verified/06-keyboard-reset-320-light.png` and
+  `verified/06-keyboard-delete-320-dark.png` (both320x480,DPR1). The focused named
+  body has a visible inset ring; its bottom impact items can be read while
+  both footer buttons remain visible. These are additional scrolled-state
+  evidence, not falsely compared to the initial unscrolled source state.
+
+Source callbacks still dispatch synchronously and native AlertDialog Action
+closes immediately. Reset/Delete locks and Delete disabled guards remain where
+they were. No new awaiting, preventDefault, pending state, rollback or server-side
+authorization behavior is introduced. Broad security assurance, full WCAG/AT
+certification, real Safari/iOS behavior, remote CI and deployment are not claimed.
+
+### Checklist
+
+- [x] Capture and inspect the current flow before editing app code.
+- [x] Preserve all business callbacks, native safe focus and existing guards.
+- [x] Compare source/final states at matched density and check typography/copy.
+- [x] Pass240 unit/source tests, typecheck/build, lint and safety contracts.
+- [x] Finish all20 browser regressions and inspect keyboard-scroll evidence.
+
+Final result: passed
+
+No outstanding actionable P0/P1/P2 finding in this approved confirmation scope.
+No commit, push or deployment performed.
+
+## Edit Managed Account save readiness and inline feedback — 2026-10-22
+
+### Scope and source truth
+
+Approved continuation: Save enabled only for meaningful valid changes, adjacent
+Username/Email format errors and retained drafts on save failure. Existing code
+and a fresh rendered source capture are the visual target, not a new redesign.
+Product Design audit → scoped implementation → paired design QA was followed.
+
+- Source: `artifacts/qa-managed-editor-feedback/source/`.
+- Implementation: `artifacts/qa-managed-editor-feedback/verified/`.
+- Local audit/capture: `artifacts/qa-managed-editor-feedback/AUDIT.md` and
+  `capture.mts`. Codex browser initialization failed on missing kernel assets;
+  the already-approved local Playwright fallback captured the actual built app
+  using strict synthetic fixtures and a loopback-only static server. No real
+  backend, database, mail, credentials or production records were accessed.
+- Viewports/pixels:320x900,768x900,1366x900, DPR1 in light/dark, reduced motion,
+  fixed synthetic time/content and the same Edit dialog interaction sequence.
+  Full views are unscaled PNGs equal to the CSS viewport dimensions. No device
+  frame or browser chrome is present. No density normalization is needed.
+- Numbered views in both directories: `01-unchanged-<width>-<theme>.png`,
+  `02-invalid-<width>-<theme>.png`, `03-profile-<width>-<theme>.png`.
+  The latter is an element capture607px wide at desktop/tablet and255px at
+  mobile; natural height grows with error text. This intentional content-height
+  difference is not a density/geometry mismatch.
+  Exact crop pixels: desktop/tablet607x160 source→607x236 final; mobile255x248
+  source→255x344 final, both themes, unscaled DPR1. Supplemental failed-request
+  captures `verified/04-retained-draft-http-500.png`/`409.png` are1280x720;
+  scrolled error-state captures `05-errors-short-320-light.png`/`dark.png` are
+  320x480. These additional states were opened and inspected, not falsely paired
+  with a source state that did not capture a server error or short-screen error.
+
+### Findings, fixes and comparison history
+
+1. [P2, source] An unchanged draft has active Save. The old handler could close
+   with a success toast even when no account PATCH was needed. Evidence:
+   `source/01-unchanged-1366-light.png` and the matching320px view. Fix:
+   `managed-user-edit-state.ts` derives normalized changed-only profile data,
+   access-change flags and save readiness. Both dialog and handler use it.
+   The same final views show disabled Save and a visible reason.
+2. [P2, source] Invalid Username and Email have no inline explanation or invalid
+   state before save. Evidence: `source/02-invalid-1366-light.png` and focused
+   `source/03-profile-320-dark.png`. Fix: apply the existing changed-username
+   rule and backend email-format rule; use local invalid borders, associated
+   `aria-invalid`/`aria-describedby` messages and a polite footer status.
+   Matching `verified/02-invalid-*` and `03-profile-*` show readable errors,
+   unchanged44px controls and no horizontal overflow.
+3. [Preserved behavior] Existing catch already retained entered values. No
+   replacement persistence layer, auto-retry, new uniqueness lookup or request
+   endpoint is introduced. HTTP500/409 tests exercise deliberate manual retries.
+
+After implementation, all18 matched source/final pairs were opened together in
+the same comparison tool inputs: twelve full views (unchanged/invalid in six
+viewport/theme contexts), plus six focused profile crops. No actionable P0/P1/P2
+was found in those comparisons. New footer explanation and inline error rows
+intentionally add intrinsic height; original field sizes/grid breakpoints,
+header/footer separation, internal body scrolling and maximum width remain.
+The source defects above were fixed and recaptured before final review; no
+additional visual repair iteration was needed.
+
+### Required fidelity surfaces
+
+- Fonts/typography: measured `system-ui, -apple-system, BlinkMacSystemFont,
+  "Segoe UI", sans-serif` family/fallback, weights, hierarchy and line
+  heights retained. Fields remain16px mobile/14px at medium-and-up. Error and
+  status text uses readable14px/20px leading, wraps instead of clipping, and
+  does not reflow the label/input relationship. Paired crops expose these details.
+- Spacing/layout:44px fields/actions and8px label gaps preserved; grids stay16px.
+  Footer feedback has its own8px gap above right-aligned actions and stays outside
+  the scroll body. No global dialog geometry or breakpoint changes. Existing
+  short-screen scrolling, keyboard dismissal and focus return are regression-tested.
+- Colors/tokens: existing backgrounds, borders, amber access warning and primary
+  actions retained. New inline errors use semantic destructive tokens and text,
+  not color alone. Readiness copy uses muted foreground; disabled Save is a real
+  disabled button with an explanation, not merely a dimmed appearance.
+- Image/asset fidelity: original project logo and icon assets remain unchanged;
+  no drawings, generated raster, custom SVG approximations or new dependencies.
+- Copy/content: existing title, six labels, access warning and action names kept.
+  New copy distinguishes no changes, invalid fields, ready changes and pending
+  save; format errors state the required correction. It does not promise backend
+  acceptance or expose secrets. Server uniqueness/permission errors retain their
+  existing error toast, not invented frontend uniqueness validation.
+
+### Behavior boundaries
+
+Canonical trim/case-only changes are no-ops. Username validation applies only
+when that identity field will be patched, preserving unrelated role/status
+edits on untouched legacy identities. Full Name and non-pending Email remain
+optional and changed empty values become null. An originally pending account's
+changed Email cannot be cleared; unchanged legacy blank email remains omitted.
+Backend authorization, uniqueness and lifecycle rules remain authoritative.
+
+Explicit Save behavior is retained (no new Enter/form submission). Fields and
+Cancel disable while saving; Close/Escape semantics are unchanged. Separate
+profile→role→status calls are still sequential, not transactional: an eventual
+failure can follow an already-applied earlier update. This frontend pass does
+not claim atomic rollback or change these existing business semantics.
+
+### Verification
+
+- Settings/Backup unit/source suite:253/253 passed, including12 new pure helper
+  cases and updated inline-feedback/readiness contracts.
+- First built browser run:24/24 passed with `--grep "Managed account" --workers=1`
+  (existing editor/workspace matrices plus exact separate PATCH/pending guards,
+  no-op/revert, error ARIA, nullable clears, pending/legacy rules,500/409 retry).
+- Follow-up built browser run:9/9 passed: two additional320x480 error-state
+  light/dark cases, two500/409 re-runs with retained-draft captures, More/Details
+  keyboard dismissal and three denied-role API guards (admin/manager/user).
+  Combined31 distinct browser cases/33 executions; no forced successful clicks.
+- Full typecheck, production build, changed client lint, bundle budgets,
+  breakpoint/color/spacing contracts, secret scan, hygiene and whitespace passed.
+- Full typecheck was repeated successfully after all new client tests existed.
+  Browser fixtures reject off-origin/unexpected APIs and collect page/console
+  errors. The two intentionally failed HTTP responses are narrowly asserted;
+  unrelated application/resource errors are not allowed.
+
+No screenshot baselines/tolerances were changed. No remote CI, production,
+real Safari/iOS keyboard, screen reader or full WCAG certification is claimed.
+The existing upstream PostCSS `from` warning remains; build succeeded.
+
+### Residual polish and limits
+
+P3 existing shared-toast placement: at1280x720 a transient error toast overlaps
+the dialog action area (`verified/04-retained-draft-http-500.png` and409). It has
+auto/manual dismissal and draft retention; the tested unforced retry proves
+eventual recovery, not immediate Save clickability while the toast is visible.
+No global toast CSS or brittle per-dialog offsets were introduced in this
+bounded continuation. A separate modal-aware notification pass can address it.
+Do not infer a general "no overlap" or bug-free claim from this scoped result.
+
+### Checklist and result
+
+- [x] Capture/inspect the current unchanged and invalid states before app edits.
+- [x] Share semantic dirty/validation decisions between UI and save handler.
+- [x] Preserve optional/legacy identity and backend permission semantics.
+- [x] Compare full views and focused crops at matched CSS size/DPR.
+- [x] Pass253 unit/source tests,31 distinct browser cases, repeated typecheck,
+  production build, lint and listed safety contracts.
+
+Final result: passed
+
+No actionable P0/P1/P2 remains in the approved edit-feedback scope; the known
+P3 shared-toast follow-up above is explicitly retained, not silently hidden.
+No commit, push or deployment performed for this UI continuation.
+
+## Edit Managed Account inline server errors — 2026-10-22
+
+### Approved outcome and fresh source
+
+Replace overlapping/duplicate server-error notifications with one error inside
+the active Edit Account dialog, retaining drafts and deliberate retries. This
+is the approved follow-up to the P3 noted above, not a global toast redesign.
+Product Design source capture/audit preceded application edits.
+
+- Source truth: `artifacts/qa-managed-inline-error/source/`.
+- Initial implementation: `artifacts/qa-managed-inline-error/verified/`.
+- Final implementation target: `artifacts/qa-managed-inline-error/final/`.
+- Audit/capture: `artifacts/qa-managed-inline-error/AUDIT.md`, `capture.mts`.
+- Codex browser initialization again failed on missing kernel assets. Capture
+  uses the previously approved local Playwright fallback, strict synthetic
+  account fixtures and an isolated loopback-only static built server. No real
+  backend, credentials, database, mail or production records are accessed.
+- Eight contexts:1280x720,768x900,320x780,320x480, each light/dark, DPR1,
+  reduced motion, fixed synthetic time/data and identical action sequence.
+  `01-open-*` and `02-failed-*` are full PNGs at those exact CSS/pixel dimensions;
+  `03-footer-*` are native element captures for readable typography/actions.
+  No frames, resizing or density normalization are involved.
+
+### Source findings and repair history
+
+1. Existing P3: the shared error toast temporarily obscures actions at1280x720
+   (`source/02-failed-1280x720-light.png`) and the heading at320x480
+   (`source/02-failed-320x480-dark.png`). Auto/manual dismissal makes recovery
+   possible, but the user approved removing this overlap from the active editor.
+   Source footer readiness also continues saying “Changes ready to save” while
+   the failure is elsewhere. Fix: replace that status with a single inline alert
+   directly above actions, suppressing only this active editor's duplicate toast.
+2. P2 found in first browser iteration: four role/status/profile failure cases
+   lost Save focus after its pending disabled state (24/28 passed). Evidence:
+   `iteration-1-focus/status-error-context.md` and `status-failed-focus.png` under
+   the audit directory; `verified/` is pre-repair, not final acceptance evidence.
+   Fix: when an open editor's failed save completes and focus is on document
+   body, restore Save with `preventScroll`. Do not override focus on Close,
+   the error region or another actual control. Keep the original focus assertions
+   and add a held-response test for deliberately focused Close.
+3. A source test that expected toast-only update errors failed after the intended
+   presentation change. Its mounted guard remains required; it now also requires
+   normalized inline publication plus the closed/replaced-editor fallback rather
+   than weakening the unmount safety contract.
+
+### Implementation boundaries
+
+- `useSettingsManagedDialogs` owns the error and synchronous editor-session
+  counter. Every open/close clears error and advances the session, including
+  closing/reopening the same account. `publishError` rejects stale sessions.
+- `useSettingsManagedUserUpdate` clears current feedback at deliberate retry,
+  publishes normalized message/reference for the originating active editor,
+  and otherwise retains one notification fallback naming the original target.
+  An old success cannot close a replacement editor. Existing list refresh,
+  success notification, pending state and API requests remain intact.
+- `ManagedUserDialog` replaces readiness with a named `role="alert"` region,
+  keyboard focus/scroll access, a real Lucide icon, plain escaped text and an
+  optional already-normalized support reference. Save describes the inner error
+  text, not merely the outer generic ARIA label. No automatic retry or new
+  business validation is introduced.
+- Error height is bounded by `min(10rem,25dvh)` with internal scrolling. The body
+  remains independently scrollable; header/actions remain outside those scroll
+  areas. One local accessibility lint exception documents the focusable static
+  alert; no global lint/CSS/Toast/Input/Dialog rules change.
+- Existing profile→role→status PATCHes remain sequential, not transactional.
+  Copy says “Unable to complete this update”, not “Nothing was saved”, because
+  a later failure can follow an applied earlier update. Drafts are not cleared
+  on failure; normal explicit Close/Cancel still discards edits as before.
+
+### Required fidelity review
+
+- Typography: existing system-ui/Segoe UI fallback stack, label hierarchy and
+  mobile16px/medium14px fields stay. Alert uses14px/20px copy and a compact
+  semibold heading; long messages/references wrap without truncating content.
+- Spacing/layout:44px fields/actions,8px label gaps,16px grids and existing
+  modal maximum width stay. Inline feedback adds only intrinsic footer height,
+  with8px separation from the action row. The rest of the dialog is not restyled.
+- Color/tokens: existing primary actions, neutral surfaces and amber access
+  warning stay. Alert uses semantic destructive border/tint with readable body
+  text, explicit wording and an icon rather than color alone.
+- Assets: project Q logo and other assets unchanged. No ImageGen, handcrafted
+  artwork, inline-SVG substitutes, new library, dependency or backend migration.
+- Copy: original labels/actions/permissions stay; error message/support reference
+  reuse existing normalization. Active-editor failure is announced once instead
+  of duplicated inline+toast announcements. Closed-editor fallback is deliberate.
+
+### Checks and evidence limits
+
+Final typecheck and production build passed after the focus repair, including
+status/CSP and production sourcemap checks. Changed client lint and budget,
+breakpoint/color/spacing, secrets, hygiene and whitespace gates passed. The
+upstream PostCSS `from` warning remains; no new build failure is introduced.
+
+Fixtures reject off-origin/unexpected API calls and collect page/console errors;
+deliberate500/409 resource failures are narrowly asserted. Snapshot tolerances
+are unchanged. Full WCAG/assistive technology, physical iOS keyboard, remote CI,
+production deployment and broad security certification are not claimed.
+
+### Post-repair evidence and result
+
+The final built app was recaptured in `final/` after the focus repair. All eight
+`01-open-*` PNGs are byte-identical to their source counterparts, confirming no
+unrelated normal-state restyling. Representative desktop-light/mobile-short-dark
+open pairs and all sixteen failed full-view/footer pairs were opened together
+in the same comparison inputs. No actionable P0/P1/P2 visual finding remains.
+Header/Close and action labels stay readable, regular messages do not obscure
+actions, and footer padding/icon/text alignment is consistent across both themes.
+
+Exact focused pixels (both themes, DPR1): desktop1280 and tablet768 footer
+670x97 source→670x143 final; mobile320 (both heights)302x97→302x163. This is
+intentional intrinsic error-copy height, not a density mismatch. Full-frame
+pixels remain equal to the listed CSS viewports. `final/states.json` measures
+all48 fields at44px and records the actual dialog ARIA tree/font metrics.
+
+Additional keyboard-stress evidence was captured and opened:
+`long-error-keyboard-light.png` and `long-error-keyboard-dark.png` in the audit
+directory (320x480). A visible inset ring identifies the scrollable error area;
+PageDown advances long unbroken text while header/actions remain fixed. These
+synthetic untrusted-message stress states are additional QA evidence, not a
+production visual target or a source state that was never captured.
+
+- Settings/Backup source/unit suite:256/256 passed after updating the intended
+  feedback contract and adding focus-restoration coverage.
+- Final built-browser run:41/41 passed with one worker using
+  `Managed account|Late account update|Long untrusted account|cannot load Account|More keyboard|Details confirmation`.
+  Covers exact profile/role/status PATCHes and pending guards, current-editor
+  500/409 inline-only failures, immediate explicit retries, normalized nullable
+  fields, old failures/successes after close/switch/same-account reopen,
+  Close-focus preservation, Save-focus recovery, error-description ARIA,
+  long literal HTML-like messages, normalized/rejected support references,
+  actual keyboard scrolling and role-denied API access.
+- Full typecheck/build passed after the repair; changed client files/tests lint
+  clean. Bundle/secret/hygiene/whitespace gates passed again on the final build.
+  Earlier breakpoint/color/spacing contracts also passed; no shared token edit
+  was made afterward. No snapshot baselines or thresholds were changed.
+
+The previous P3 is resolved for a failure in its still-active originating editor.
+Success notifications and the deliberate closed/replaced-editor fallback still
+use the existing shared notification system; this is not a claim that every
+notification in SQR has been redesigned or can never overlap another surface.
+
+Checklist: fresh source capture, scoped implementation, P2 focus repair,
+matched full/focused comparison, escaped untrusted text/reference checks and
+all listed tests completed. No new API, permission, database or dependency work.
+
+Final result: passed
+
+No actionable P0/P1/P2 remains in this approved inline-error scope. No commit,
+push or deployment performed for this scoped continuation.

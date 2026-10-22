@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { CircleAlert, Link2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { getDashboardAccountLink, setDashboardAccountLink, type DashboardAccountOptions } from "@/lib/api/collection-dashboard-account";
 import { getAriaExpandedProps } from "@/lib/aria-state-props";
+import { ManagedAccountDashboardStatus } from "./ManagedAccountDashboardStatus";
 
 export function ManagedAccountCollectionScope({ userId, role }: { userId: string; role: string }) {
   const [open, setOpen] = useState(false);
@@ -56,10 +57,6 @@ export function ManagedAccountCollectionScope({ userId, role }: { userId: string
   const canSave = Boolean(options && selectedNickname && selected !== savedId && !saving);
   const hasLink = Boolean(options?.link?.nicknameId);
   const needsReview = hasLink && !options?.link?.isActive;
-  const status = !options ? loadError ? "Status tidak tersedia" : "Memuatkan status…"
-    : needsReview ? "Perlu semakan"
-    : options.link?.isActive ? `Dipautkan: ${options.link.nickname ?? "Nickname Collection"}`
-    : options.link ? "Tiada pautan" : "Belum ditetapkan";
 
   const save = async (nicknameId: string | null) => {
     if (!options || mutationPending.current || (nicknameId === null ? !hasLink : !canSave || nicknameId !== selected)) return;
@@ -88,11 +85,16 @@ export function ManagedAccountCollectionScope({ userId, role }: { userId: string
   return <section aria-label="Kutipan Dashboard" className="min-w-0 space-y-3 border-t border-border/70 pt-4">
     <div className="min-w-0 space-y-1.5">
       <h3 className="text-sm font-semibold">Kutipan Dashboard</h3>
-      <p aria-live="polite" aria-atomic="true" className="flex min-w-0 items-start gap-2 text-sm font-medium">
-        {needsReview ? <CircleAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          : <Link2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
-        <span className="min-w-0 break-words">{status}</span>
-      </p>
+      <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 max-w-full sm:flex-1">
+          <ManagedAccountDashboardStatus link={options?.link} loadError={Boolean(loadError)} />
+        </div>
+        <Button ref={toggleRef} type="button" variant="outline" size="sm" disabled={saving}
+          {...getAriaExpandedProps(open)} aria-controls={panelId} onClick={() => setOpen(!open)}
+          className="max-w-full shrink-0 whitespace-normal text-left">
+          {open ? "Tutup tetapan nickname" : hasLink ? "Ubah nickname Dashboard" : "Tetapkan nickname Dashboard"}
+        </Button>
+      </div>
       <p className="text-sm text-muted-foreground">{role === "admin"
         ? "Pautkan nickname ketua untuk ringkasan kutipan kumpulan tanpa login Collection."
         : "Pautkan nickname untuk ringkasan kutipan sendiri tanpa login Collection."}</p>
@@ -101,11 +103,6 @@ export function ManagedAccountCollectionScope({ userId, role }: { userId: string
       <p role="alert" className="text-sm text-destructive">{loadError}</p>
       <Button type="button" variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>Cuba semula</Button>
     </div> : null}
-    <Button ref={toggleRef} type="button" variant="outline" size="sm" disabled={saving}
-      {...getAriaExpandedProps(open)} aria-controls={panelId} onClick={() => setOpen(!open)}
-      className="max-w-full whitespace-normal text-left">
-      {open ? "Tutup tetapan nickname" : "Tetapkan nickname Dashboard"}
-    </Button>
     <div id={panelId} hidden={!open} className="min-w-0 space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
       {!options && !loadError ? <p role="status" className="text-sm text-muted-foreground">Memuatkan nickname…</p> : null}
       {options ? <>

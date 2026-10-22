@@ -9,6 +9,7 @@ const endpoint = "/api/admin/users/dashboard-nicknames";
 const usersEndpoint = "/api/admin/users";
 const createRegion = (page: Page) => page.getByRole("region", { name: "Create Closed Account", exact: true });
 const nicknameRegion = (page: Page) => createRegion(page).getByRole("region", { name: "Kutipan Dashboard ketika cipta akaun", exact: true });
+const nicknameToggle = (page: Page) => nicknameRegion(page).getByRole("button", { name: /^Kutipan Dashboard Pilihan(?:\s|$)/ });
 const nicknameSelect = (page: Page) => nicknameRegion(page).getByRole("combobox", { name: "Nickname Dashboard", exact: true });
 const nicknameReads = (fixture: Awaited<ReturnType<typeof installAccountManagementFixture>>) => fixture.reads.filter((entry) => entry.path === endpoint);
 
@@ -22,9 +23,10 @@ async function fillAccount(page: Page, username: string) {
   await createRegion(page).getByLabel("Email", { exact: true }).fill(`${username}@example.test`);
 }
 async function expandNicknames(page: Page) {
-  const collapsed = nicknameRegion(page).getByRole("button", { name: "Tetapkan nickname sekarang", exact: true });
-  if (await collapsed.count()) await collapsed.press("Enter");
-  await expect(nicknameRegion(page).getByRole("button", { name: "Sembunyikan pilihan nickname", exact: true })).toBeVisible();
+  const toggle = nicknameToggle(page);
+  if (await toggle.getAttribute("aria-expanded") === "false") await toggle.press("Enter");
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 }
 
 for (const theme of ["light", "dark"] as const) {
@@ -36,6 +38,8 @@ for (const theme of ["light", "dark"] as const) {
       const nickname = accountDashboardNicknames[role][0]!;
       const username = `synthetic.create.${role}`;
       await openCreate(page);
+      await expect(nicknameToggle(page)).toHaveAttribute("aria-expanded", "false");
+      await expect(nicknameRegion(page).getByRole("button")).toHaveCount(1);
       expect(nicknameReads(fixture)).toEqual([]);
       await fillAccount(page, username);
       await createRegion(page).getByRole("combobox", { name: "Role", exact: true }).selectOption(role);
@@ -43,6 +47,22 @@ for (const theme of ["light", "dark"] as const) {
       await expect.poll(() => nicknameReads(fixture)).toEqual([{ path: endpoint, query: { role } }]);
       await expect(nicknameSelect(page)).toHaveValue("");
       await expect(nicknameSelect(page).locator("option")).toHaveText(["Tetapkan kemudian", nickname.nickname]);
+      const fields = [
+        createRegion(page).getByLabel("Full name", { exact: false }),
+        createRegion(page).getByLabel("Username", { exact: true }),
+        createRegion(page).getByLabel("Email", { exact: true }),
+        createRegion(page).getByRole("combobox", { name: "Role", exact: true }),
+        nicknameSelect(page),
+      ];
+      for (const field of fields) {
+        await expect(field).toHaveCSS("height", "44px");
+        await expect(field).toHaveCSS("font-size", width < 768 ? "16px" : "14px");
+        const labelGap = await field.evaluate((element) => {
+          const label = (element as HTMLInputElement | HTMLSelectElement).labels?.[0];
+          return label ? element.getBoundingClientRect().top - label.getBoundingClientRect().bottom : null;
+        });
+        expect(labelGap).toBe(8);
+      }
       await nicknameSelect(page).selectOption(nickname.id);
       await expect(nicknameRegion(page)).toContainText(role === "admin"
         ? "Ringkasan kutipan ketua dan ahli kumpulan aktif." : "Ringkasan kutipan sendiri sahaja.");
@@ -59,6 +79,8 @@ for (const theme of ["light", "dark"] as const) {
         await createRegion(page).getByRole("button", { name: "Create Closed Account", exact: true }).click();
         await expect.poll(() => fixture.writes.length).toBe(1);
         await expect(nicknameSelect(page)).toBeDisabled();
+        await expect(nicknameToggle(page)).toBeDisabled();
+        await expect(nicknameRegion(page).getByRole("button", { name: "Tetapkan kemudian", exact: true })).toBeDisabled();
         const creating = createRegion(page).getByRole("button", { name: "Creating...", exact: true });
         await expect(creating).toBeDisabled();
         await creating.dispatchEvent("click");
@@ -99,12 +121,19 @@ test("Create account Dashboard nickname remains explicit when collapsed and can 
   await expandNicknames(page);
   const nickname = accountDashboardNicknames.user[0]!;
   await nicknameSelect(page).selectOption(nickname.id);
-  await nicknameRegion(page).getByRole("button", { name: "Sembunyikan pilihan nickname", exact: true }).click();
+  await nicknameToggle(page).click();
+  await expect(nicknameToggle(page)).toHaveAttribute("aria-expanded", "false");
   await expect(nicknameSelect(page)).toHaveCount(0);
-  await expect(nicknameRegion(page)).toContainText(`Dipilih: ${nickname.nickname}`);
+  await expect(nicknameToggle(page)).toContainText(`Dipilih: ${nickname.nickname}`);
+  await expect(nicknameRegion(page).getByRole("button")).toHaveCount(1);
+  await expect(nicknameRegion(page).getByRole("button", { name: "Tetapkan kemudian", exact: true })).toHaveCount(0);
+  await expandNicknames(page);
+  await expect(nicknameSelect(page)).toHaveValue(nickname.id);
   const reads = nicknameReads(fixture).length;
   await nicknameRegion(page).getByRole("button", { name: "Tetapkan kemudian", exact: true }).press("Enter");
-  await expect(nicknameRegion(page).getByText(`Dipilih: ${nickname.nickname}`, { exact: true })).toHaveCount(0);
+  await expect(nicknameToggle(page)).not.toContainText(`Dipilih: ${nickname.nickname}`);
+  await expect(nicknameToggle(page)).toBeFocused();
+  await expect(nicknameSelect(page)).toHaveValue("");
   expect(nicknameReads(fixture)).toHaveLength(reads);
   await createRegion(page).getByRole("button", { name: "Create Closed Account", exact: true }).click();
   await expect(createRegion(page).getByLabel("Username", { exact: true })).toHaveValue("");
@@ -113,6 +142,66 @@ test("Create account Dashboard nickname remains explicit when collapsed and can 
   } }]);
   await assertAccountFixtureClean(page, fixture);
 });
+
+test("Create account Dashboard nickname compact disclosure supports keyboard without submitting or eager reads", async ({ page, baseURL }) => {
+  const fixture = await installAccountManagementFixture(page, baseURL);
+  await openCreate(page);
+  await fillAccount(page, "synthetic.disclosure.keyboard");
+  const toggle = nicknameToggle(page);
+  await expect(toggle).toHaveAttribute("type", "button");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  const panelId = await toggle.getAttribute("aria-controls");
+  expect(panelId).toBeTruthy();
+  const panel = nicknameRegion(page).locator(`[id="${panelId}"]`);
+  await expect(panel).toBeHidden();
+  expect(nicknameReads(fixture)).toEqual([]);
+  await toggle.focus();
+  await toggle.press("Space");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(panel).toBeVisible();
+  await expect(nicknameSelect(page)).toBeVisible();
+  await expect.poll(() => nicknameReads(fixture)).toEqual([{ path: endpoint, query: { role: "user" } }]);
+  await expect(toggle).toBeFocused();
+  await toggle.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(panel).toBeHidden();
+  await expect(nicknameSelect(page)).toHaveCount(0);
+  await expect(createRegion(page).getByLabel("Username", { exact: true })).toHaveValue("synthetic.disclosure.keyboard");
+  expect(fixture.writes).toEqual([]);
+  await assertAccountFixtureClean(page, fixture);
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Create account Dashboard nickname compact selected row wraps long names at 320px ${theme}`, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    const fixture = await installAccountManagementFixture(page, baseURL, { theme });
+    const nickname = { ...accountDashboardNicknames.user[0]!, nickname: `STAFF.${"SYNTHETICLONGNAME".repeat(5)}` };
+    await page.route(`**${endpoint}?role=user`, (route) => route.fulfill({ json: { ok: true, nicknames: [nickname] } }));
+    await openCreate(page);
+    const toggle = nicknameToggle(page);
+    await toggle.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath(`create-dashboard-nickname-compact-empty-320-${theme}.png`) });
+    await expandNicknames(page);
+    await nicknameSelect(page).selectOption(nickname.id);
+    await toggle.press("Space");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toContainText(`Dipilih: ${nickname.nickname}`);
+    await expect(nicknameSelect(page)).toHaveCount(0);
+    for (const region of [toggle, nicknameRegion(page), createRegion(page)]) {
+      expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    const chevron = toggle.locator("svg");
+    await expect(chevron).toHaveCount(1);
+    await expect(chevron).toHaveAttribute("aria-hidden", "true");
+    const chevronSize = await chevron.boundingBox();
+    expect(chevronSize!.width).toBeGreaterThanOrEqual(16);
+    await toggle.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath(`create-dashboard-nickname-compact-selected-320-${theme}.png`) });
+    expect(fixture.writes).toEqual([]);
+    await assertAccountFixtureClean(page, fixture);
+  });
+}
 
 test("Create account Dashboard nickname clears a selected user choice when switching through manager to admin", async ({ page, baseURL }) => {
   const fixture = await installAccountManagementFixture(page, baseURL);

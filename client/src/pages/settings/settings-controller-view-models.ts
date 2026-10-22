@@ -1,6 +1,6 @@
 import type { ManagedSecretDialogProps } from "@/pages/settings/ManagedSecretDialog";
 import type { ManagedUserDialogProps } from "@/pages/settings/ManagedUserDialog";
-import type { ManagedUser } from "@/pages/settings/types";
+import type { ManagedUser, ManagedUserSaveError } from "@/pages/settings/types";
 import type { ManageableUserRole } from "@shared/user-roles";
 
 type ManagedDialogViewModelArgs = {
@@ -11,6 +11,7 @@ type ManagedDialogViewModelArgs = {
   managedIsBanned: boolean;
   managedRoleInput: ManageableUserRole;
   managedSaving: boolean;
+  managedSaveError: ManagedUserSaveError | null;
   managedSelectedUser: ManagedUser | null;
   managedStatusInput: "pending_activation" | "active" | "suspended" | "disabled";
   managedUsernameInput: string;
@@ -41,6 +42,7 @@ export function buildManagedDialogViewModel(
     managedIsBanned: args.managedIsBanned,
     managedRoleInput: args.managedRoleInput,
     managedSaving: args.managedSaving,
+    managedSaveError: args.managedSaveError,
     managedSelectedUser: args.managedSelectedUser,
     managedStatusInput: args.managedStatusInput,
     managedUsernameInput: args.managedUsernameInput,

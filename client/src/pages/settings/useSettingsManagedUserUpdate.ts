@@ -7,6 +7,7 @@ import {
 import type { ManagedUser } from "@/pages/settings/types";
 import type {
   ManagedAccountStatus,
+  ManagedEditorFeedback,
   ToastFn,
 } from "@/pages/settings/useSettingsManagedUserMutationShared";
 import {
@@ -15,12 +16,7 @@ import {
 import {
   buildSettingsMutationErrorToast,
 } from "@/pages/settings/utils";
-import {
-  normalizeCredentialEmail,
-  normalizeCredentialFullName,
-  normalizeCredentialUsername,
-  validateCredentialUsername,
-} from "@/pages/settings/settings-credential-validation";
+import { getManagedUserEditState } from "@/pages/settings/managed-user-edit-state";
 import type { ManageableUserRole } from "@shared/user-roles";
 
 type UseSettingsManagedUserUpdateArgs = {
@@ -28,6 +24,7 @@ type UseSettingsManagedUserUpdateArgs = {
   loadManagedUsers: () => Promise<ManagedUser[] | undefined>;
   loadPendingResetRequests: () => Promise<unknown>;
   managedEmailInput: string;
+  managedEditorFeedback: ManagedEditorFeedback;
   managedFullNameInput: string;
   managedIsBanned: boolean;
   managedRoleInput: ManageableUserRole;
@@ -45,6 +42,7 @@ export function useSettingsManagedUserUpdate({
   loadManagedUsers,
   loadPendingResetRequests,
   managedEmailInput,
+  managedEditorFeedback,
   managedFullNameInput,
   managedIsBanned,
   managedRoleInput,
@@ -59,32 +57,24 @@ export function useSettingsManagedUserUpdate({
   const handleSaveManagedUser = useCallback(async () => {
     if (!managedSelectedUser || managedSaving) return;
 
-    const normalizedUsername = normalizeCredentialUsername(managedUsernameInput);
-    const normalizedEmail = normalizeCredentialEmail(managedEmailInput);
-    const normalizedFullName = normalizeCredentialFullName(managedFullNameInput);
-    const payload: { username?: string; fullName?: string | null; email?: string | null } = {};
-
-    if (normalizedFullName !== (managedSelectedUser.fullName || "")) {
-      payload.fullName = normalizedFullName || null;
-    }
-
-    if (normalizedUsername !== managedSelectedUser.username) {
-      const usernameValidationError = validateCredentialUsername(normalizedUsername);
-      if (usernameValidationError) {
+    const editState = getManagedUserEditState(managedSelectedUser, {
+      fullName: managedFullNameInput, username: managedUsernameInput, email: managedEmailInput,
+      role: managedRoleInput, status: managedStatusInput, isBanned: managedIsBanned,
+    });
+    if (!editState.canSave) {
+      const validationError = editState.errors.username || editState.errors.email;
+      if (validationError) {
         toast({
           title: "Validation Error",
-          description: usernameValidationError,
+          description: validationError,
           variant: "destructive",
         });
-        return;
       }
-      payload.username = normalizedUsername;
+      return;
     }
-
-    if (normalizedEmail !== (managedSelectedUser.email || "").toLowerCase()) {
-      payload.email = normalizedEmail || null;
-    }
-
+    const payload = editState.profilePayload;
+    const editorSession = managedEditorFeedback.sessionRef.current;
+    managedEditorFeedback.publishError(editorSession, null);
     setManagedSaving(true);
     try {
       if (
@@ -95,14 +85,11 @@ export function useSettingsManagedUserUpdate({
         await updateManagedUserAccount(managedSelectedUser.id, payload);
       }
 
-      if (managedRoleInput !== managedSelectedUser.role) {
+      if (editState.roleChanged) {
         await updateManagedUserRole(managedSelectedUser.id, managedRoleInput);
       }
 
-      if (
-        managedStatusInput !== managedSelectedUser.status
-        || managedIsBanned !== Boolean(managedSelectedUser.isBanned)
-      ) {
+      if (editState.statusChanged) {
         await updateManagedUserStatus(managedSelectedUser.id, {
           status: managedStatusInput,
           isBanned: managedIsBanned,
@@ -114,11 +101,20 @@ export function useSettingsManagedUserUpdate({
         title: "Account Updated",
         description: `Updated account settings for ${managedSelectedUser.username}.`,
       }));
-      onManagedDialogOpenChange(false);
+      if (managedEditorFeedback.sessionRef.current === editorSession) {
+        onManagedDialogOpenChange(false);
+      }
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
       if (isMountedRef.current) {
-        toast(buildSettingsMutationErrorToast(error, "Update Failed"));
+        const feedback = buildSettingsMutationErrorToast(error, "Update Failed");
+        const published = managedEditorFeedback.publishError(editorSession, {
+          message: feedback.description,
+          ...(feedback.requestId ? { requestId: feedback.requestId } : {}),
+        });
+        // A closed/replaced editor must not silently swallow a failed request or
+        // put its message into the next account's dialog. Keep the old fallback.
+        if (!published) toast({ ...feedback, description: `${managedSelectedUser.username}: ${feedback.description}` });
       }
     } finally {
       if (isMountedRef.current) {
@@ -130,6 +126,7 @@ export function useSettingsManagedUserUpdate({
     loadManagedUsers,
     loadPendingResetRequests,
     managedEmailInput,
+    managedEditorFeedback,
     managedFullNameInput,
     managedIsBanned,
     managedRoleInput,

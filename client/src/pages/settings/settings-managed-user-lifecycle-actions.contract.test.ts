@@ -84,8 +84,10 @@ test("managed user update skips mutation feedback after unmount", () => {
   );
   assert.match(
     updateSource,
-    /catch \(error: unknown\) \{\s*if \(isMountedRef\.current\) \{\s*toast\(buildSettingsMutationErrorToast\(error, "Update Failed"\)\);/s,
+    /catch \(error: unknown\) \{\s*if \(isMountedRef\.current\) \{\s*const feedback = buildSettingsMutationErrorToast\(error, "Update Failed"\);\s*const published = managedEditorFeedback\.publishError\(editorSession,/s,
   );
+  assert.match(updateSource, /message: feedback\.description/);
+  assert.match(updateSource, /if \(!published\) toast\(\{ \.\.\.feedback,/);
 });
 
 test("managed user create skips mutation feedback and duplicate dialogs after unmount", () => {

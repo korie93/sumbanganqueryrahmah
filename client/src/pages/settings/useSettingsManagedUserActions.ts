@@ -4,6 +4,7 @@ import type { ManageableUserRole } from "@shared/user-roles";
 import { useSettingsManagedUserLifecycleActions } from "@/pages/settings/useSettingsManagedUserLifecycleActions";
 import type {
   ManagedAccountStatus,
+  ManagedEditorFeedback,
   ManagedSecretDialogParams,
   ToastFn,
 } from "@/pages/settings/useSettingsManagedUserMutationShared";
@@ -15,6 +16,7 @@ type UseSettingsManagedUserActionsArgs = {
   loadManagedUsers: () => Promise<ManagedUser[] | undefined>;
   loadPendingResetRequests: () => Promise<unknown>;
   managedEmailInput: string;
+  managedEditorFeedback: ManagedEditorFeedback;
   managedFullNameInput: string;
   managedIsBanned: boolean;
   managedRoleInput: ManageableUserRole;
@@ -34,6 +36,7 @@ export function useSettingsManagedUserActions({
   loadManagedUsers,
   loadPendingResetRequests,
   managedEmailInput,
+  managedEditorFeedback,
   managedFullNameInput,
   managedIsBanned,
   managedRoleInput,
@@ -51,6 +54,7 @@ export function useSettingsManagedUserActions({
     loadManagedUsers,
     loadPendingResetRequests,
     managedEmailInput,
+    managedEditorFeedback,
     managedFullNameInput,
     managedIsBanned,
     managedRoleInput,

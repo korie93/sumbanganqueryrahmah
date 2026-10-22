@@ -53,7 +53,7 @@ export function BackupFiltersPanel({
             <CollapsibleTrigger asChild>
               <Button
                 variant="ghost"
-                className="h-auto w-full justify-between gap-3 rounded-2xl px-0 py-0 text-left sm:w-auto sm:justify-start"
+                className="h-auto w-full min-w-0 max-w-full justify-between gap-3 whitespace-normal rounded-2xl px-0 py-0 text-left sm:w-auto sm:justify-start"
                 data-testid="button-toggle-backup-filters"
               >
                 <div className="flex min-w-0 items-center gap-2">
@@ -67,7 +67,7 @@ export function BackupFiltersPanel({
                     </p>
                   </div>
                 </div>
-                <ChevronDown className={`h-4 w-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
               </Button>
             </CollapsibleTrigger>
             {hasActiveFilters ? (

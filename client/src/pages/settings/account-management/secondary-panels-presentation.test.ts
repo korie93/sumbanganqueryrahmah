@@ -14,20 +14,36 @@ import type { DevMailOutboxPreview, PendingPasswordResetRequest } from "../types
 const noop = () => undefined;
 const emptyState = { title: "No results", description: "Try another search." };
 
-test("create-account Dashboard nickname is optional, folded on first render and unnecessary for manager", () => {
+test("create-account Dashboard nickname has one compact optional disclosure and is unnecessary for manager", () => {
   const markup = renderToStaticMarkup(createElement(CreateAccountDashboardNickname, {
     role: "user", selectedId: "", disabled: false, onChange: noop,
   }));
   assert.match(markup, /Kutipan Dashboard/);
-  assert.match(markup, /\(pilihan\)/);
+  assert.match(markup, />Pilihan<\/span>/);
+  assert.match(markup, /<h3[^>]*><button[^>]*type="button"/);
+  assert.match(markup, /<button[^>]*class="[^"]*w-full/);
+  assert.equal((markup.match(/<button\b/g) || []).length, 1);
   assert.match(markup, /aria-expanded="false"/);
-  assert.match(markup, /Tetapkan nickname sekarang/);
+  const panelId = markup.match(/aria-controls="([^"]+)"/)?.[1];
+  assert.ok(panelId);
+  assert.ok(markup.includes(`id="${panelId}" hidden=""`));
+  assert.match(markup, /<svg[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(markup, /Tetapkan nickname sekarang|Sembunyikan pilihan nickname/);
   assert.doesNotMatch(markup, /<select/);
   const manager = renderToStaticMarkup(createElement(CreateAccountDashboardNickname, {
     role: "manager", selectedId: "", disabled: false, onChange: noop,
   }));
   assert.match(manager, /nickname tidak diperlukan/);
   assert.doesNotMatch(manager, /<select|<button/);
+});
+
+test("create-account Dashboard disclosure remains a non-submit button while creating", () => {
+  const markup = renderToStaticMarkup(createElement(CreateAccountDashboardNickname, {
+    role: "admin", selectedId: "", disabled: true, onChange: noop,
+  }));
+  assert.match(markup, /<button[^>]*type="button"[^>]*disabled=""/);
+  assert.match(markup, /aria-expanded="false"/);
+  assert.doesNotMatch(markup, /<select/);
 });
 
 test("create account keeps labeled production fields, inline errors and native submit without a password field", () => {
@@ -55,6 +71,50 @@ test("create account keeps labeled production fields, inline errors and native s
   assert.match(markup, /id="create-closed-account-email-error"[^>]*role="alert"/);
   assert.match(markup, /Administrative access/);
   assert.doesNotMatch(markup, /type="password"/);
+});
+
+test("create account aligns scoped 44px controls and block labels without narrowing help or error text", () => {
+  const markup = renderToStaticMarkup(createElement(CreateClosedAccountSection, {
+    createEmailInput: "",
+    createFieldErrors: {
+      createUsernameInput: "Choose a different username.",
+      createEmailInput: "Activation email is required.",
+    },
+    createFullNameInput: "",
+    createRoleInput: "user",
+    createUsernameInput: "",
+    creatingManagedUser: false,
+    onCreateEmailInputChange: noop,
+    onCreateFieldBlur: noop,
+    onCreateFullNameInputChange: noop,
+    onCreateManagedUser: noop,
+    onCreateRoleInputChange: noop,
+    onCreateUsernameInputChange: noop,
+  }));
+  assert.match(markup, /class="grid min-w-0 gap-4 sm:grid-cols-2"/);
+  for (const field of ["full-name", "username", "email", "role"]) {
+    const control = markup.match(new RegExp(`<(?:input|select)[^>]*id="create-closed-account-${field}"[^>]*>`))?.[0];
+    assert.ok(control, `${field} must retain its production control`);
+    const classes = new Set(control.match(/class="([^"]+)"/)?.[1].split(/\s+/));
+    for (const className of ["h-11", "min-h-11", "w-full", "min-w-0", "text-base", "md:text-sm"]) {
+      assert.ok(classes.has(className), `${field} should have ${className}`);
+    }
+    if (field !== "role") {
+      assert.ok(classes.has("sm:h-11"));
+      assert.ok(classes.has("sm:min-h-11"));
+      assert.ok(!classes.has("sm:h-9"));
+      assert.ok(!classes.has("sm:min-h-9"));
+    }
+    assert.match(markup, new RegExp(`<div class="min-w-0 space-y-2"><label for="create-closed-account-${field}" class="block min-w-0 text-sm font-medium leading-5"`));
+  }
+  for (const field of ["username", "email"]) {
+    for (const kind of ["help", "error"]) {
+      assert.match(markup, new RegExp(`id="create-closed-account-${field}-${kind}" class="break-words text-xs leading-5 `));
+    }
+  }
+  const submit = markup.match(/<button[^>]*type="submit"[^>]*>/)?.[0];
+  assert.ok(submit);
+  assert.match(submit, /class="[^"]*h-11 min-h-11 w-full sm:min-h-11 sm:w-auto"/);
 });
 
 test("secondary search inputs remain outside collapsed accessible filters", () => {

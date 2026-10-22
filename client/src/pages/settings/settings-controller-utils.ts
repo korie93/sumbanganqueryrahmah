@@ -5,6 +5,13 @@ import { canAccessRoleFeature } from "@shared/role-feature-access";
 export const ACCOUNT_MANAGEMENT_CATEGORY_ID = "account-management";
 export const BACKUP_SETTINGS_CATEGORY_ID = "backup-restore";
 
+/** Keep the backup configuration label distinct from the operational workspace. */
+export function getSettingsCategoryLabel(category: Pick<SettingCategory, "id" | "name">) {
+  return category.name === "Backup & Restore" && category.id !== BACKUP_SETTINGS_CATEGORY_ID
+    ? "Backup Settings"
+    : category.name;
+}
+
 export function canAccessBackupCategory(
   role: string | undefined,
   tabVisibility: TabVisibility | undefined,

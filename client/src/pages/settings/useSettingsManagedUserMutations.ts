@@ -5,6 +5,7 @@ import { useSettingsManagedUserActions } from "@/pages/settings/useSettingsManag
 import { useSettingsManagedUserCreate } from "@/pages/settings/useSettingsManagedUserCreate";
 import type {
   ManagedAccountStatus,
+  ManagedEditorFeedback,
   ManagedSecretDialogParams,
   ToastFn,
 } from "@/pages/settings/useSettingsManagedUserMutationShared";
@@ -16,6 +17,7 @@ type UseSettingsManagedUserMutationsArgs = {
   loadManagedUsers: () => Promise<ManagedUser[] | undefined>;
   loadPendingResetRequests: () => Promise<unknown>;
   managedEmailInput: string;
+  managedEditorFeedback: ManagedEditorFeedback;
   managedFullNameInput: string;
   managedIsBanned: boolean;
   managedRoleInput: ManageableUserRole;
@@ -35,6 +37,7 @@ export function useSettingsManagedUserMutations({
   loadManagedUsers,
   loadPendingResetRequests,
   managedEmailInput,
+  managedEditorFeedback,
   managedFullNameInput,
   managedIsBanned,
   managedRoleInput,
@@ -60,6 +63,7 @@ export function useSettingsManagedUserMutations({
     loadManagedUsers,
     loadPendingResetRequests,
     managedEmailInput,
+    managedEditorFeedback,
     managedFullNameInput,
     managedIsBanned,
     managedRoleInput,

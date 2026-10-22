@@ -51,7 +51,7 @@ export function ManagedAccountActionDialogs({
           }
         }}
       >
-        <AlertDialogContent onOpenAutoFocus={() => {
+        <AlertDialogContent className="flex min-w-0 flex-col gap-0 overflow-hidden p-0 sm:p-0" onOpenAutoFocus={() => {
           resetReturnFocusRef.current = managedAccountDialogFocusHandoff.takeForDialog(resetPasswordUser?.id, "reset");
         }} onCloseAutoFocus={(event) => {
           if (resetReturnFocusRef.current?.isConnected) {
@@ -59,18 +59,22 @@ export function ManagedAccountActionDialogs({
             resetReturnFocusRef.current.focus({ preventScroll: true });
           }
         }}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Send Password Reset Email</AlertDialogTitle>
-            <AlertDialogDescription>
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- A named, visibly focused scroll region needs keyboard access to its static details. */}
+          <div role="region" aria-label="Password reset action details" tabIndex={0} className="min-h-0 min-w-0 overflow-y-auto px-4 py-4 sm:px-6 [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+          <AlertDialogHeader className="min-w-0 text-left">
+            <AlertDialogTitle className="min-w-0 break-words">Send Password Reset Email</AlertDialogTitle>
+            <AlertDialogDescription className="min-w-0 break-words leading-6">
               Send a password reset email to{" "}
               <span className="font-medium">{resetPasswordUser?.username || "this user"}</span>?
               The user will need to follow the reset link before choosing a new password.
             </AlertDialogDescription>
             <ManagedAccountActionImpactList items={resetImpactItems} />
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </div>
+          <AlertDialogFooter className="shrink-0 gap-2 border-t border-border/70 px-4 py-3 sm:gap-2 sm:space-x-0 sm:px-6">
+            <AlertDialogCancel className="mt-0 h-11 min-h-11 sm:min-h-11">Cancel</AlertDialogCancel>
             <AlertDialogAction
+              className="h-11 min-h-11 sm:min-h-11"
               disabled={!resetPasswordUser}
               onClick={() => {
                 if (resetPasswordUser) {
@@ -92,7 +96,7 @@ export function ManagedAccountActionDialogs({
           }
         }}
       >
-        <AlertDialogContent onOpenAutoFocus={() => {
+        <AlertDialogContent className="flex min-w-0 flex-col gap-0 overflow-hidden p-0 sm:p-0" onOpenAutoFocus={() => {
           banReturnFocusRef.current = managedAccountDialogFocusHandoff.takeForDialog(banToggleUser?.id, "ban");
         }} onCloseAutoFocus={(event) => {
           if (banReturnFocusRef.current?.isConnected) {
@@ -100,9 +104,11 @@ export function ManagedAccountActionDialogs({
             banReturnFocusRef.current.focus({ preventScroll: true });
           }
         }}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{nextBanAction} Managed Account</AlertDialogTitle>
-            <AlertDialogDescription>
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- A named, visibly focused scroll region needs keyboard access to its static details. */}
+          <div role="region" aria-label={`${nextBanAction} account action details`} tabIndex={0} className="min-h-0 min-w-0 overflow-y-auto px-4 py-4 sm:px-6 [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+          <AlertDialogHeader className="min-w-0 text-left">
+            <AlertDialogTitle className="min-w-0 break-words">{nextBanAction} Managed Account</AlertDialogTitle>
+            <AlertDialogDescription className="min-w-0 break-words leading-6">
               {nextBanAction}{" "}
               <span className="font-medium">{banToggleUser?.username || "this user"}</span>?
               {banToggleUser?.isBanned
@@ -111,9 +117,11 @@ export function ManagedAccountActionDialogs({
             </AlertDialogDescription>
             <ManagedAccountActionImpactList items={banImpactItems} />
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </div>
+          <AlertDialogFooter className="shrink-0 gap-2 border-t border-border/70 px-4 py-3 sm:gap-2 sm:space-x-0 sm:px-6">
+            <AlertDialogCancel className="mt-0 h-11 min-h-11 sm:min-h-11">Cancel</AlertDialogCancel>
             <AlertDialogAction
+              className="h-11 min-h-11 sm:min-h-11"
               disabled={!banToggleUser}
               onClick={() => {
                 if (banToggleUser) {

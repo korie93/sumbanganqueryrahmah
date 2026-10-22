@@ -16,6 +16,7 @@ import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
 import { SettingsCriticalSaveDialog } from "@/pages/settings/SettingsCriticalSaveDialog";
 import { MaintenanceSettingsNotice } from "@/pages/settings/MaintenanceSettingsNotice";
 import { useSettingsController } from "@/pages/settings/useSettingsController";
+import { getSettingsCategoryLabel } from "@/pages/settings/settings-controller-utils";
 
 type SettingsPageProps = {
   tabVisibility?: TabVisibility;
@@ -87,6 +88,10 @@ export default function SettingsPage({
     setMobileSidebarOpen(false);
   }, [controller.selectedCategory]);
 
+  const categoryLabel = controller.currentCategory
+    ? getSettingsCategoryLabel(controller.currentCategory)
+    : "System Settings";
+
   if (
     controller.loadingState.profileLoading ||
     ((controller.canEditSystemSettings || controller.canAccessBackupSection) && controller.loadingState.loading)
@@ -119,17 +124,6 @@ export default function SettingsPage({
           </>
         ) : (
           <>
-            {!controller.isAccountManagementCategory ? <OperationalPageHeader
-              title={controller.currentCategory?.name || "System Settings"}
-              eyebrow="Administration"
-              description={
-                controller.currentCategory?.description ||
-                (isMobile
-                  ? "Manage system tools and protected admin sections from one place."
-                  : "Enterprise system configuration with role-based access and audit.")
-              }
-            /> : null}
-
             <div className="min-w-0 space-y-4">
               <SettingsSidebar
                 compact={controller.isAccountManagementCategory}
@@ -144,6 +138,15 @@ export default function SettingsPage({
               />
 
               <div className="min-w-0 flex-1 space-y-4">
+                {!controller.isAccountManagementCategory ? <OperationalPageHeader
+                  title={categoryLabel}
+                  description={
+                    controller.currentCategory?.description ||
+                    (isMobile
+                      ? "Manage system tools and protected admin sections from one place."
+                      : "Enterprise system configuration with role-based access and audit.")
+                  }
+                /> : null}
                 {controller.maintenanceSettingsSummary ? (
                   <MaintenanceSettingsNotice
                     summary={controller.maintenanceSettingsSummary}
@@ -153,7 +156,7 @@ export default function SettingsPage({
 
                 <AppRouteErrorBoundary
                   routeKey={`settings:${controller.selectedCategory}`}
-                  routeLabel={controller.currentCategory?.name || "settings"}
+                  routeLabel={categoryLabel}
                   fullscreen={false}
                 >
                   {controller.isBackupCategory ? (

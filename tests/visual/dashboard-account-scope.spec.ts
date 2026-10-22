@@ -19,8 +19,27 @@ async function openDetails(page: Page, username = "maya.synthetic") {
   await expect(detailsDialog(page)).toBeVisible();
 }
 async function openEditor(page: Page) {
-  await collectionScope(page).getByRole("button", { name: "Tetapkan nickname Dashboard", exact: true }).press("Enter");
+  await collectionScope(page).getByRole("button", { name: /^(?:Tetapkan|Ubah) nickname Dashboard$/ }).press("Enter");
   await expect(collectionScope(page).getByRole("combobox", { name: "Nickname Collection", exact: true })).toBeVisible();
+}
+async function expectStatus(page: Page, label: string, tone: "success" | "warning" | "neutral") {
+  const badge = collectionScope(page).getByTestId("dashboard-nickname-status");
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveText(label);
+  await expect(badge).toHaveAttribute("aria-live", "polite");
+  await expect(badge).toHaveAttribute("aria-atomic", "true");
+  await expect(badge.locator("svg")).toHaveCount(1);
+  await expect(badge.locator("svg")).toHaveAttribute("aria-hidden", "true");
+  if (tone === "neutral") {
+    await expect(badge).toHaveClass(/(?:^|\s)border-border(?:\s|$)/);
+    await expect(badge).toHaveClass(/(?:^|\s)bg-muted(?:\s|$)/);
+    await expect(badge).toHaveClass(/(?:^|\s)text-muted-foreground(?:\s|$)/);
+    await expect(badge).not.toHaveClass(/(?:bg|text)-(?:success|warning)(?:[\s/]|$)/);
+  } else {
+    for (const token of [`text-${tone}`, `border-${tone}/20`, `bg-${tone}/10`]) {
+      expect((await badge.getAttribute("class"))?.split(/\s+/)).toContain(token);
+    }
+  }
 }
 
 for (const theme of ["light", "dark"] as const) {
@@ -51,6 +70,20 @@ for (const theme of ["light", "dark"] as const) {
       const save = scope.getByRole("button", { name: "Simpan pautan Dashboard", exact: true });
       const select = scope.getByRole("combobox", { name: "Nickname Collection", exact: true });
       await expect(scope.getByText("Belum ditetapkan", { exact: true })).toBeVisible();
+      await expectStatus(page, "Belum ditetapkan", "neutral");
+      const assign = scope.getByRole("button", { name: "Tetapkan nickname Dashboard", exact: true });
+      await expect(assign).toHaveAttribute("aria-expanded", "false");
+      await expect(scope.getByRole("button", { name: "Ubah nickname Dashboard", exact: true })).toHaveCount(0);
+      const badgeBox = await scope.getByTestId("dashboard-nickname-status").boundingBox();
+      const actionBox = await assign.boundingBox();
+      expect(badgeBox).toBeTruthy();
+      expect(actionBox).toBeTruthy();
+      if (width === 320) {
+        expect(actionBox!.y).toBeGreaterThanOrEqual(badgeBox!.y + badgeBox!.height - 1);
+      } else {
+        expect(actionBox!.x).toBeGreaterThanOrEqual(badgeBox!.x + badgeBox!.width);
+        expect(Math.max(actionBox!.y, badgeBox!.y)).toBeLessThan(Math.min(actionBox!.y + actionBox!.height, badgeBox!.y + badgeBox!.height));
+      }
       await expect.poll(() => reads).toBe(1);
       await expect(select).toBeHidden();
       await openEditor(page);
@@ -64,10 +97,14 @@ for (const theme of ["light", "dark"] as const) {
       await expect(scope.getByText("Pautan Dashboard disimpan.", { exact: true })).toBeVisible();
       await expect(save).toBeDisabled();
       await expect(scope).toContainText("Dipautkan: LEADER.SYNTHETIC");
+      await expectStatus(page, "Dipautkan: LEADER.SYNTHETIC", "success");
       expect(writes).toEqual([{ nicknameId }]);
       await scope.getByRole("button", { name: "Tutup tetapan nickname", exact: true }).click();
       await expect(select).toBeHidden();
       await expect(scope).toContainText("Dipautkan: LEADER.SYNTHETIC");
+      await expect(scope.getByRole("button", { name: "Ubah nickname Dashboard", exact: true })).toHaveAttribute("aria-expanded", "false");
+      await expect(scope.getByRole("button", { name: "Tetapkan nickname Dashboard", exact: true })).toHaveCount(0);
+      await scope.screenshot({ path: test.info().outputPath(`dashboard-account-active-${width}-${theme}.png`) });
       await openEditor(page);
       await expect(select).toHaveValue(nicknameId);
       await expect(save).toBeDisabled();
@@ -101,6 +138,7 @@ for (const theme of ["light", "dark"] as const) {
       await confirmation.getByRole("button", { name: "Ya, buang pautan", exact: true }).click();
       await expect(confirmation).toBeHidden();
       await expect(scope.getByText(/^(?:Belum ditetapkan|Tiada pautan)$/)).toBeVisible();
+      await expectStatus(page, "Tiada pautan", "neutral");
       await expect(select).toHaveValue("");
       await expect(save).toBeDisabled();
       await expect(remove).toHaveCount(0);
@@ -108,6 +146,9 @@ for (const theme of ["light", "dark"] as const) {
       expect(await detailsDialog(page).evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       await select.scrollIntoViewIfNeeded();
       await page.screenshot({ path: test.info().outputPath(`dashboard-account-link-${width}-${theme}.png`) });
+      await scope.getByRole("button", { name: "Tutup tetapan nickname", exact: true }).click();
+      await expect(scope.getByRole("button", { name: "Tetapkan nickname Dashboard", exact: true })).toHaveAttribute("aria-expanded", "false");
+      expect(writes).toEqual([{ nicknameId }, { nicknameId: null }]);
       await assertAccountFixtureClean(page, fixture);
     });
   }
@@ -122,6 +163,10 @@ test("Dashboard nickname user scope and inactive mapping are explicit before edi
   await openDetails(page, "synthetic.user.03");
   const scope = collectionScope(page);
   await expect(scope.getByText("Perlu semakan", { exact: true })).toBeVisible();
+  await expectStatus(page, "Perlu semakan", "warning");
+  await expect(scope.getByRole("button", { name: "Ubah nickname Dashboard", exact: true })).toBeVisible();
+  await expect(scope.getByRole("button", { name: "Tetapkan nickname Dashboard", exact: true })).toHaveCount(0);
+  await scope.screenshot({ path: test.info().outputPath("dashboard-account-review-light.png") });
   await openEditor(page);
   const select = scope.getByRole("combobox", { name: "Nickname Collection", exact: true });
   await expect(select).toHaveValue("");
@@ -134,6 +179,52 @@ test("Dashboard nickname user scope and inactive mapping are explicit before edi
   expect(fixture.writes).toEqual([]);
   await assertAccountFixtureClean(page, fixture);
 });
+
+for (const width of [320, 768]) {
+  for (const theme of ["light", "dark"] as const) {
+    test(`Dashboard nickname long linked status wraps with an available action at ${width}px ${theme}`, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const fixture = await installAccountManagementFixture(page, baseURL, { theme });
+      const nickname = `LEADER.${"SYNTHETIC".repeat(18)}`;
+      let reads = 0;
+      await page.route("**/api/collection/dashboard-accounts/synthetic-managed-1", async (route) => {
+        expect(route.request().method()).toBe("GET");
+        reads++;
+        return route.fulfill({ json: {
+          ok: true, link: { nicknameId, nickname, accountRole: "admin", isActive: true },
+          nicknames: [{ id: nicknameId, nickname }],
+        } });
+      });
+      await openAccountManagement(page);
+      await openDetails(page);
+      const scope = collectionScope(page);
+      await expectStatus(page, `Dipautkan: ${nickname}`, "success");
+      const badge = scope.getByTestId("dashboard-nickname-status");
+      const action = scope.getByRole("button", { name: "Ubah nickname Dashboard", exact: true });
+      await badge.scrollIntoViewIfNeeded();
+      await expect(action).toBeVisible();
+      for (const element of [badge, scope, detailsDialog(page)]) {
+        expect(await element.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: test.info().outputPath(`dashboard-account-long-status-${width}-${theme}.png`) });
+      await action.press("Enter");
+      const select = scope.getByRole("combobox", { name: "Nickname Collection", exact: true });
+      await expect(select).toBeVisible();
+      await expect(select).toHaveValue(nicknameId);
+      await expect(scope.getByRole("button", { name: "Simpan pautan Dashboard", exact: true })).toBeDisabled();
+      expect(await scope.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      await page.screenshot({ path: test.info().outputPath(`dashboard-account-long-editor-${width}-${theme}.png`) });
+      await scope.getByRole("button", { name: "Tutup tetapan nickname", exact: true }).press("Enter");
+      await expect(select).toBeHidden();
+      await expect(action).toBeFocused();
+      await expectStatus(page, `Dipautkan: ${nickname}`, "success");
+      expect(reads).toBe(1);
+      expect(fixture.writes).toEqual([]);
+      await assertAccountFixtureClean(page, fixture);
+    });
+  }
+}
 
 test("Dashboard nickname failed save retains the selection and permits a deliberate retry", async ({ page, baseURL }) => {
   const fixture = await installAccountManagementFixture(page, baseURL);
@@ -228,6 +319,8 @@ test("Dashboard nickname status discards stale account responses and can retry a
   try {
     await openDetails(page);
     await expect(collectionScope(page)).toContainText(/Memuatkan/);
+    await expectStatus(page, "Memuatkan status…", "neutral");
+    await expect(collectionScope(page).getByText("Belum ditetapkan", { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await openDetails(page, "synthetic.user.03");
     await expect(collectionScope(page).getByText("Belum ditetapkan", { exact: true })).toBeVisible();
@@ -242,6 +335,8 @@ test("Dashboard nickname status discards stale account responses and can retry a
     await page.keyboard.press("Escape");
     await openDetails(page);
     await expect(collectionScope(page).getByRole("alert")).toContainText("Tetapan tidak dapat dimuatkan");
+    await expectStatus(page, "Status tidak tersedia", "neutral");
+    await expect(collectionScope(page).getByText("Belum ditetapkan", { exact: true })).toHaveCount(0);
     await collectionScope(page).getByRole("button", { name: "Cuba semula", exact: true }).click();
     await expect(collectionScope(page)).toContainText("Dipautkan: LEADER.SYNTHETIC");
     await expect(collectionScope(page).getByRole("alert")).toHaveCount(0);

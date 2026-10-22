@@ -1,8 +1,14 @@
 import type { ActivationDeliveryPayload } from "@/lib/api";
 import type { ToastFunction } from "@/hooks/use-toast";
 import { formatOperationalDateTime } from "@/lib/date-format";
+import type { ManagedUserSaveError } from "@/pages/settings/types";
 
 export type ToastFn = ToastFunction;
+
+export type ManagedEditorFeedback = {
+  sessionRef: { readonly current: number };
+  publishError: (session: number, error: ManagedUserSaveError | null) => boolean;
+};
 
 export type ManagedAccountStatus = "pending_activation" | "active" | "suspended" | "disabled";
 

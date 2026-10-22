@@ -67,6 +67,11 @@ export type ManagedUser = {
   lockedBySystem: boolean;
 };
 
+export type ManagedUserSaveError = {
+  message: string;
+  requestId?: string;
+};
+
 export type PendingPasswordResetRequest = {
   id: string;
   userId: string;

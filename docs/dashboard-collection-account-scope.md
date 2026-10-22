@@ -54,9 +54,18 @@ only active, role-eligible nickname IDs/names, not passwords or customer data.
 Changing the target role clears the selection and ignores stale choices. A
 failed choices request can be retried or skipped without blocking account
 creation. A failed create keeps the entered fields and selection.
-The selected nickname remains visible when the choices panel is folded, with a
-separate **Tetapkan kemudian** action that clears the selection without another
-network request.
+The optional section uses a single full-width **Kutipan Dashboard · Pilihan**
+disclosure row. Its selected nickname remains visible when the choices panel is
+folded; explanatory copy and fields appear only when expanded. The native button
+supports Enter/Space, exposes its expanded state and controlled panel, and has a
+decorative chevron with reduced-motion support. Inside the expanded panel, a
+separate **Tetapkan kemudian** action clears the selection without another
+network request and returns focus to the disclosure.
+
+Create Closed Account uses local 44px text/select controls and submit target,
+8px label-to-control gaps and 16px field-grid gaps. Input text is 16px on mobile
+and 14px from the existing medium breakpoint, including the optional nickname.
+Shared Input styling, validation, activation and role behaviour are unchanged.
 
 The existing `POST /api/admin/users` accepts optional `dashboardNicknameId`.
 An omitted/null value skips assignment; a non-null value must be a UUID and is
@@ -77,6 +86,15 @@ Opening one account's Details loads its current Dashboard link, showing
 without expanding the editor. No link requests are made for every account row.
 Failed status requests show an explicit retry, not a guessed unlinked state.
 
+The status uses a compact semantic badge: success tokens for an active link,
+warning tokens for a link needing review, and neutral tokens for unset, removed,
+loading or unavailable states. Each state retains explicit text and a decorative
+icon; colour is not its only cue. The nearby closed action reads **Tetapkan
+nickname Dashboard** for an unset/removed link and **Ubah nickname Dashboard**
+when a nickname is already linked. Status/action share a row on wider screens and
+stack on narrow screens; long nickname text wraps inside the badge. Existing
+polite live announcements and save/remove protections remain unchanged.
+
 The editor explains the selected nickname's own/team summary scope. Saving is
 enabled only for an eligible non-empty selection different from the saved link;
 failed writes retain the selection for a deliberate retry. Existing backend
@@ -92,6 +110,57 @@ Responses arriving after the account/role changes or Details close are ignored.
 Closing the UI does not cancel a write already accepted by the server. Concurrent
 edits by different superusers retain the existing last-write-wins behavior;
 this frontend polish does not add optimistic version enforcement.
+
+The primary Settings category navigation precedes the page heading consistently.
+Account Management keeps its compact Settings chooser and its existing inner
+tabs; other categories retain the wrapped desktop category row and mobile Sheet.
+Category controls and the Sheet Close target are at least 44px. Selection,
+unsaved-change badges, URL/storage persistence and role-filtered access remain
+unchanged. A shared display label distinguishes **Backup Settings** (server
+configuration) from **Backup & Restore** (operational tools), without merging or
+renaming their IDs.
+
+Edit Managed Account uses the same local44px field rhythm as account creation:
+six native text/select controls, block labels with8px gaps,16px grid spacing and
+16px mobile/14px medium-and-up field text. Its original maximum width, internal
+scroll body and separate header/footer remain. Long usernames wrap within the
+description; local Close/Cancel/Save targets are at least44px. This is not a
+global Dialog/Input change. Save remains an explicit button, with the same
+changed-only profile/role/status PATCH calls and saving guards. Existing
+Close/Escape dismissal semantics are unchanged, including during a pending save.
+
+Edit-account Save is enabled only for a semantically changed draft with valid
+changed Username/Email fields. The dialog and save handler share
+`getManagedUserEditState`: trim/case-only identity edits are no-ops; actual
+profile updates retain changed-only normalized payloads. Inline errors are
+associated with their inputs through `aria-invalid` and `aria-describedby`;
+a polite footer status explains unchanged, invalid, ready and saving states.
+Untouched legacy identity fields do not block unrelated access changes.
+Full Name and non-pending Email can still be cleared to null; an originally
+pending account's email cannot be cleared when that field is changed.
+Uniqueness, authorization and account lifecycle validation remain server-side.
+Failed requests retain the draft for explicit retry. The active editor shows a
+single inline server-error alert above Save/Cancel rather than a duplicate toast.
+It reuses normalized text/support references and keeps long messages in a named,
+keyboard-scrollable bounded region; Save describes the actual error copy.
+Open/close/retry clear feedback. A synchronous editor-session counter prevents a
+late error from leaking into another account or a same-account reopen, and a
+late success cannot close that replacement editor. A closed/replaced editor
+keeps the existing notification fallback naming the original target. Save focus
+is restored after failure only when disabling it dropped focus to the document
+body; focus deliberately moved to Close or another control is left alone.
+The existing profile/role/status requests remain sequential, not an atomic
+transaction; a later failure can follow an already-saved earlier update.
+
+Reset Password, Ban/Unban and Delete confirmations retain their existing named
+AlertDialog, target username, impact explanations and safe initial Cancel focus.
+Their local layout uses44px actions, left-aligned wrapped copy and an internally
+scrollable details region separate from the footer. The named region is keyboard
+reachable (Shift+Tab from Cancel, then PageDown), with a visible inset focus ring;
+both actions remain reachable at320x480. Existing mobile action/Cancel order,
+on-close focus handoff, immediate confirmation dismissal and request contracts
+are unchanged. Confirmation presentation does not modify the shared AlertDialog
+or its existing mutation hooks.
 
 ## Deployment and recovery
 
@@ -125,7 +194,30 @@ for the database backup containing account ownership mappings.
   `npm run test:visual:built -- --grep "Create account Dashboard nickname" --workers=1`
   covers explicit user/admin selection, unchanged skip payloads, role resets,
   slow/failed choices, failed create retry, folded selected-choice visibility,
-  and single-request duplicate protection at 320/1366px in light/dark mode.
+  single-request duplicate protection and measured 44px controls/8px label gaps
+  at 320/1366px in light/dark mode.
+- Primary Settings navigation:
+  `npm run test:visual:built -- --grep "Settings primary navigation|Settings dirty badge|Settings header" --workers=1`
+  covers all nine synthetic categories, backup label distinction, a single
+  heading, 44px controls, Escape/focus/reload, retained dirty values and role
+  restrictions at 320/768/1366px in light/dark mode. No settings are saved.
+- Edit account: `managed-account-editor.spec.ts` measures all six fields and
+  label gaps at320/768/1366px in light/dark mode, checks keyboard/focus/cancel,
+  maximum-length usernames, a320x480 viewport, and exact separate profile,
+  role and status/ban PATCH contracts with pending duplicate guards. Fixtures
+  never call a real backend or mutate production accounts.
+  Feedback cases also cover canonical no-ops/reverts, inline error associations,
+  optional null clears, pending/legacy identity rules and deliberate HTTP500/409
+  failures followed by explicit retries with the retained draft.
+  `managed-account-editor-errors.spec.ts` additionally covers role/status error
+  retries, closed/switched/reopened editor races, long untrusted literal text,
+  normalized support references and bounded keyboard scrolling at320x480.
+- Confirmation dialogs: `account-confirmation-layout.spec.ts` covers all four
+  action states at320/768/1366px in both themes, safe Cancel focus, keyboard
+  dismissal/focus return, long usernames, real keyboard scrolling at320x480,
+  fixed footer actions and exact resetPOST, ban/unbanPATCH and deleteDELETE
+  contracts. Existing reset/delete deduplication is tested; no new ban lock is
+  introduced by this presentation-only work.
 - Collection exit uses shell navigation to Home (button, X or Escape), without
   a browser reload or account logout. The exit button remains available during
   a pending authentication request. Late dialog responses cannot restore local

@@ -29,7 +29,9 @@ function renderNavigation(items = categories) {
 test("Settings desktop navigation exposes authorized categories, current section and dirty count without a second rail", () => {
   const markup = renderNavigation();
   assert.match(markup, /<nav aria-label="Settings Navigation"/);
-  assert.match(markup, /flex flex-wrap/);
+  assert.match(markup, /flex min-w-0 flex-wrap/);
+  assert.match(markup, /rounded-lg border border-border\/70 bg-muted\/20/);
+  assert.match(markup, /h-auto min-h-11 max-w-full/);
   assert.match(markup, /aria-current="page"/);
   assert.match(markup, /Roles &amp; Permissions/);
   assert.match(markup, /aria-label="2 unsaved changes"/);
@@ -62,11 +64,49 @@ test("Settings mobile has one named section launcher and no clipped duplicate na
     assert.match(markup, /aria-haspopup="dialog"/);
     assert.match(markup, /aria-expanded="false"/);
     assert.match(markup, /2 sections/);
+    assert.match(markup, /min-h-11 max-w-full/);
+    assert.match(markup, /hidden shrink-0 text-xs text-muted-foreground sm:inline/);
+    assert.match(markup, />Settings<\/span>/);
     assert.doesNotMatch(markup, /Swipe sections|Settings Sections|<nav/);
   } finally {
     if (descriptor) Object.defineProperty(globalThis, "window", descriptor);
     else Reflect.deleteProperty(globalThis, "window");
   }
+});
+
+test("Settings account launcher keeps one bounded section chooser instead of a duplicate desktop strip", () => {
+  const markup = renderToStaticMarkup(createElement(SettingsSidebar, {
+    compact: true,
+    categories,
+    categoryDirtyMap: new Map([["permissions", 2]]),
+    mobileOpen: false,
+    onMobileOpenChange: noop,
+    onSelectCategory: noop,
+    onSidebarCollapsedChange: noop,
+    selectedCategory: "permissions",
+    sidebarCollapsed: false,
+  }));
+  assert.equal((markup.match(/<button\b/g) ?? []).length, 1);
+  assert.match(markup, /data-testid="button-open-settings-sections"/);
+  assert.match(markup, /aria-label="Browse Settings: Roles &amp; Permissions"/);
+  assert.match(markup, /aria-haspopup="dialog"/);
+  assert.match(markup, /aria-expanded="false"/);
+  assert.match(markup, /h-auto min-h-11 max-w-full/);
+  assert.match(markup, /w-full justify-start sm:w-fit/);
+  assert.match(markup, /break-words text-foreground/);
+  assert.doesNotMatch(markup, /<h1|<nav|\d sections/);
+});
+
+test("Settings primary navigation precedes its single category heading without changing account workspace headings", () => {
+  const source = readFileSync(new URL("../Settings.tsx", import.meta.url), "utf8");
+  assert.ok(source.indexOf("<SettingsSidebar") < source.indexOf("<OperationalPageHeader"));
+  assert.match(source, /!controller\.isAccountManagementCategory \? <OperationalPageHeader/);
+  assert.match(source, /title=\{categoryLabel\}/);
+  assert.match(source, /getSettingsCategoryLabel\(controller\.currentCategory\)/);
+  assert.doesNotMatch(source, /eyebrow="Administration"/);
+  const accountHeader = readFileSync(new URL("./account-management/UserAccountManagementHeader.tsx", import.meta.url), "utf8");
+  assert.equal((accountHeader.match(/<h1\b/g) ?? []).length, 1);
+  assert.match(accountHeader, /<h1[^>]*>Account Management<\/h1>/);
 });
 
 test("Settings save keeps dirty and saving guards, semantic status and keyboard-safe sticky behavior", () => {
