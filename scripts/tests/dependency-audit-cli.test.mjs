@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { analyzeSecurityCriticalDependencyPins, DEPENDENCY_AUDIT_MAX_BUFFER } from "../lib/dependency-audit.mjs";
+import { analyzeSecurityCriticalDependencyPins, DEPENDENCY_AUDIT_FETCH_TIMEOUT_MS, DEPENDENCY_AUDIT_MAX_BUFFER } from "../lib/dependency-audit.mjs";
 
 const auditScript = fileURLToPath(new URL("../audit-dependencies.mjs", import.meta.url));
 
@@ -43,10 +43,15 @@ test("audit CLI fails closed using offline npm stubs", async (t) => {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "sqr-audit-cli-"));
   t.after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
   const npmStub = path.join(fixtureRoot, "npm-stub.mjs");
+  const attemptsPath = path.join(fixtureRoot, "attempts.txt");
   writeFileSync(npmStub, `
     import assert from "node:assert/strict";
-    assert.deepEqual(process.argv.slice(2), ["audit", "--json"]);
-    const result = JSON.parse(process.env.AUDIT_STUB_RESULT);
+    import { readFileSync, writeFileSync } from "node:fs";
+    assert.deepEqual(process.argv.slice(2), ["audit", "--json", "--fetch-timeout=${DEPENDENCY_AUDIT_FETCH_TIMEOUT_MS}", "--fetch-retries=0"]);
+    const attempt = Number(readFileSync(process.env.AUDIT_STUB_ATTEMPTS, "utf8"));
+    writeFileSync(process.env.AUDIT_STUB_ATTEMPTS, String(attempt + 1));
+    const configured = JSON.parse(process.env.AUDIT_STUB_RESULT);
+    const result = configured.sequence ? configured.sequence[Math.min(attempt, configured.sequence.length - 1)] : configured;
     process.stdout.write(result.repeat ? "x".repeat(result.repeat) : result.stdout);
     process.stderr.write(result.stderr || "");
     process.exitCode = result.status;
@@ -57,13 +62,17 @@ test("audit CLI fails closed using offline npm stubs", async (t) => {
   }));
   writeFileSync(path.join(fixtureRoot, "package-lock.json"), JSON.stringify({ lockfileVersion: 3, packages: {} }));
 
-  const run = (result, npmExecPath = npmStub) => spawnSync(process.execPath, [auditScript], {
-    cwd: fixtureRoot,
-    env: { ...process.env, npm_execpath: npmExecPath, AUDIT_STUB_RESULT: JSON.stringify(result) },
-    encoding: "utf8",
-    timeout: 15_000,
-    windowsHide: true,
-  });
+  const run = (result, npmExecPath = npmStub) => {
+    writeFileSync(attemptsPath, "0");
+    return spawnSync(process.execPath, [auditScript], {
+      cwd: fixtureRoot,
+      env: { ...process.env, npm_execpath: npmExecPath, AUDIT_STUB_RESULT: JSON.stringify(result), AUDIT_STUB_ATTEMPTS: attemptsPath },
+      encoding: "utf8",
+      timeout: 15_000,
+      windowsHide: true,
+    });
+  };
+  const attempts = () => Number(readFileSync(attemptsPath, "utf8"));
   const clean = JSON.stringify(createReport());
   const invalidEntry = createReport("low");
   invalidEntry.vulnerabilities.example.nodes = [];
@@ -109,6 +118,7 @@ test("audit CLI fails closed using offline npm stubs", async (t) => {
       const result = run({ stdout: JSON.stringify(createReport(severity)), status: 1 });
       assert.equal(result.error, undefined);
       assert.equal(result.status, 1);
+      assert.equal(attempts(), 1);
       assert.match(result.stderr, new RegExp(`example \\[${severity}\\]`));
       assert.doesNotMatch(result.stdout + result.stderr, /Dependency audit passed/);
     });
@@ -147,6 +157,7 @@ test("audit CLI fails closed using offline npm stubs", async (t) => {
       assert.equal(result.error, undefined);
       assert.equal(result.status, 1);
       assert.match(result.stderr, expected);
+      assert.equal(attempts(), 1);
       assert.doesNotMatch(result.stdout + result.stderr, /Dependency audit passed|secret|private|::error::|\u001b/u);
       assert.ok(result.stderr.length < 500);
     });
@@ -166,5 +177,44 @@ test("audit CLI fails closed using offline npm stubs", async (t) => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /output buffer limit/);
     assert.ok(result.stderr.length < 500);
+  });
+
+  const transient = { stdout: JSON.stringify({ error: { code: "ECONNRESET", message: sensitive } }), status: 1, stderr: sensitive };
+  await t.test("recognizes the real npm uncoded timeout wrapper and sanitizes its diagnostics", () => {
+    const wrappedTimeout = { stdout: JSON.stringify({
+      message: `network timeout at: ${sensitive}`,
+      error: { summary: "", detail: "audit endpoint returned an error" },
+      body: sensitive, uri: sensitive,
+    }), status: 1, stderr: sensitive };
+    const result = run({ sequence: [wrappedTimeout, { stdout: clean, status: 0 }] });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(attempts(), 2);
+    assert.match(result.stdout, /Dependency audit passed/);
+    assert.doesNotMatch(result.stdout + result.stderr, /secret|private|::error::|\u001b/u);
+  });
+  for (const severity of [undefined, "high"]) {
+    await t.test(`retries a transient failure but preserves the next ${severity || "clean"} report`, () => {
+      const result = run({ sequence: [transient, { stdout: JSON.stringify(createReport(severity)), status: severity ? 1 : 0 }] });
+      assert.equal(result.error, undefined);
+      assert.equal(attempts(), 2);
+      assert.equal(result.status, severity ? 1 : 0, result.stderr);
+      assert.match(result.stderr, /temporary transport failure; retrying \(2\/2\)/);
+      if (severity) {
+        assert.match(result.stderr, /example \[high\]/);
+        assert.doesNotMatch(result.stdout, /Dependency audit passed/);
+      } else {
+        assert.match(result.stdout, /Dependency audit passed/);
+      }
+      assert.doesNotMatch(result.stdout + result.stderr, /secret|private|::error::|\u001b/u);
+    });
+  }
+  await t.test("fails closed after both transient attempts without logging registry diagnostics", () => {
+    const result = run(transient);
+    assert.equal(result.error, undefined);
+    assert.equal(attempts(), 2);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /reported an error/);
+    assert.doesNotMatch(result.stdout + result.stderr, /Dependency audit passed|secret|private|::error::|\u001b/u);
   });
 });

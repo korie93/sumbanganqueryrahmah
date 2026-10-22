@@ -5,25 +5,32 @@ import {
   analyzePackageLockSources,
   analyzePackageOverrides,
   analyzeSecurityCriticalDependencyPins,
+  DEPENDENCY_AUDIT_FETCH_TIMEOUT_MS,
   DEPENDENCY_AUDIT_MAX_BUFFER,
   DEPENDENCY_AUDIT_TIMEOUT_MS,
+  runDependencyAuditWithRetry,
 } from "./lib/dependency-audit.mjs";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const npmArgs = ["audit", "--json"];
+// Keep npm's HTTP budget below our process cap. Its default HTTP timeout is
+// longer than that cap; outer retries below are bounded and fail closed.
+const npmArgs = ["audit", "--json", `--fetch-timeout=${DEPENDENCY_AUDIT_FETCH_TIMEOUT_MS}`, "--fetch-retries=0"];
 const npmExecPath = process.env.npm_execpath;
 const spawnOptions = {
   encoding: "utf8",
   timeout: DEPENDENCY_AUDIT_TIMEOUT_MS,
   maxBuffer: DEPENDENCY_AUDIT_MAX_BUFFER,
+  killSignal: "SIGKILL",
   windowsHide: true,
 };
-const result = npmExecPath
+const result = await runDependencyAuditWithRetry(() => npmExecPath
   ? spawnSync(process.execPath, [npmExecPath, ...npmArgs], spawnOptions)
   : spawnSync(npmCommand, npmArgs, {
       ...spawnOptions,
       shell: process.platform === "win32",
-    });
+    }), {
+  onRetry: (attempt, maximum) => console.warn(`Dependency audit temporary transport failure; retrying (${attempt}/${maximum}).`),
+});
 
 const { allowed, failures } = analyzeDependencyAuditExecution(result);
 let packageSourceResult = { allowed: [], failures: [] };

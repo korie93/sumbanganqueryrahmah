@@ -8,6 +8,54 @@ const severityRank = new Map([
 
 export const DEPENDENCY_AUDIT_TIMEOUT_MS = 120_000;
 export const DEPENDENCY_AUDIT_MAX_BUFFER = 16 * 1024 * 1024;
+export const DEPENDENCY_AUDIT_FETCH_TIMEOUT_MS = 30_000;
+export const DEPENDENCY_AUDIT_MAX_ATTEMPTS = 2;
+export const DEPENDENCY_AUDIT_RETRY_DELAY_MS = 1_500;
+
+const transientAuditErrorCodes = new Set([
+  "ETIMEDOUT", "ESOCKETTIMEDOUT", "ECONNRESET", "EAI_AGAIN",
+  "E429", "E500", "E502", "E503", "E504",
+]);
+const transientAuditHttpStatuses = new Set([429, 500, 502, 503, 504]);
+
+export function isRetryableDependencyAuditExecution(result) {
+  if (!isRecord(result)) return false;
+  if (typeof result.stdout === "string" && Buffer.byteLength(result.stdout, "utf8") > DEPENDENCY_AUDIT_MAX_BUFFER) return false;
+  let report;
+  if (typeof result.stdout === "string") {
+    try {
+      report = JSON.parse(result.stdout);
+    } catch {
+      // A killed process may have partial output; only its timeout can retry.
+    }
+  }
+  // Never retry away a finding or an invalid audit report, even when another
+  // process/registry error accompanies it. Only transport-only failures retry.
+  if (isRecord(report) && ["auditReportVersion", "vulnerabilities", "metadata"].some((key) => Object.hasOwn(report, key))) {
+    return false;
+  }
+  if (result.error) return result.error.code === "ETIMEDOUT";
+  if (result.signal != null || ![0, 1].includes(result.status)) return false;
+  if (!isRecord(report) || !isRecord(report.error) || [401, 403].includes(report.statusCode)) return false;
+  if (Object.hasOwn(report.error, "code")) return transientAuditErrorCodes.has(report.error.code);
+  // npm's audit-endpoint wrapper may retain the HTTP status without a code.
+  if (Object.hasOwn(report, "statusCode")) return transientAuditHttpStatuses.has(report.statusCode);
+  // minipass-fetch's timeout loses its code in npm's endpoint wrapper. Match
+  // only its known message prefix; never inspect or echo URI/body diagnostics.
+  return typeof report.message === "string" && report.message.startsWith("network timeout at: ");
+}
+
+export async function runDependencyAuditWithRetry(runAttempt, {
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  onRetry = () => {},
+} = {}) {
+  for (let attempt = 1; attempt <= DEPENDENCY_AUDIT_MAX_ATTEMPTS; attempt += 1) {
+    const result = runAttempt();
+    if (attempt === DEPENDENCY_AUDIT_MAX_ATTEMPTS || !isRetryableDependencyAuditExecution(result)) return result;
+    onRetry(attempt + 1, DEPENDENCY_AUDIT_MAX_ATTEMPTS);
+    await wait(DEPENDENCY_AUDIT_RETRY_DELAY_MS);
+  }
+}
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);

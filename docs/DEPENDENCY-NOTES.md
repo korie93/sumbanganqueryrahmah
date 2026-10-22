@@ -8,6 +8,41 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-10-22 bounded audit transport recovery
+
+[CI run 39711452342](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/39711452342)
+failed because the audit child exceeded its 120-second process limit, not because
+it returned an advisory. The same timeout reproduced locally. No dependency
+version, lockfile, severity threshold or exception changes are needed for this
+transport failure.
+
+The audit child now receives `--fetch-timeout=30000 --fetch-retries=0`, keeping
+HTTP waits below the existing 120-second process cap rather than npm's longer
+[default network budget](https://docs.npmjs.com/cli/v11/using-npm/config/#fetch-timeout).
+The wrapper permits at most two attempts, separated by 1.5 seconds, only for a
+process timeout or an explicit transient network/HTTP 429/500/502/503/504 error.
+These flags apply only to the audit child; user/global npm configuration is not
+changed. A timed-out child is killed rather than left running.
+
+A complete report, including any finding, is never retried away. Invalid or
+truncated reports without a process timeout, auth/config errors, buffer overflow
+and non-timeout signals still fail immediately. Exhausted transport retries also
+fail closed; success still requires the existing complete-report validation and
+all package metadata checks. Retry messages never print raw npm diagnostics,
+registry URLs, response bodies or credentials. Offline runner and CLI-stub tests
+cover timeout recovery, exhaustion, findings after retry and error sanitization.
+
+Local verification: the complete script suite passed 821 checks with one existing
+optional baseline diagnostic skipped. It ran with dotenv disabled and synthetic
+test settings; local `.env` files were not changed. Syntax, repository hygiene,
+diff whitespace and changed-file secret guards passed. The live npm endpoint
+continued to time out, including a separate one-package advisory probe while its
+GET ping returned HTTP 200. The hardened gate recognized the real npm timeout
+wrapper, exhausted its two attempts and correctly failed closed. This is not a
+clean advisory result: obtain a fresh complete audit after endpoint recovery
+before claiming CI/release readiness. Application code and package manifests
+remain unchanged.
+
 ## 2026-10-21 Vite editor security patches
 
 The dependency gate reproduced a high-severity finding in locked `vite@8.0.16`.

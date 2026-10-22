@@ -14,6 +14,13 @@ external tarball sources. Any allowlist entry must include a reason in
 Audit process errors and malformed/incomplete npm audit reports also fail closed;
 an unavailable advisory service must never be reported as a clean dependency graph.
 
+Audit transport uses a 30-second per-request timeout with npm's internal retries
+disabled, an unchanged 120-second process cap, and at most one outer retry after
+1.5 seconds for explicit transient transport failures. Complete reports and
+security findings are never retried away. Both attempts failing still blocks CI;
+no stale or cached report is substituted. See the 2026-10-22 entry in
+`docs/DEPENDENCY-NOTES.md` for the failure evidence and recovery boundaries.
+
 Final-polish dependency decisions, including the `compression@1.8.2` DoS
 mitigation verification and package override removal criteria, are documented in
 `docs/DEPENDENCY-NOTES.md`.
