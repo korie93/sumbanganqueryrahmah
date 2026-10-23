@@ -8,6 +8,7 @@ import type { AxeResults, RunOptions } from "axe-core";
 test.use({ serviceWorkers: "block" });
 const fullLogoPath = "/brand/sqr-full-logo-light.svg";
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
+const strictScriptPolicy = "script-src 'self'; require-trusted-types-for 'script'";
 
 async function installPublicFixture(page: Page, baseURL: string | undefined) {
   expect(baseURL, "Run against the isolated built frontend").toBeTruthy();
@@ -44,6 +45,15 @@ async function installPublicFixture(page: Page, baseURL: string | undefined) {
     if (url.pathname.startsWith("/api/") || !["GET", "HEAD"].includes(request.method())) {
       unexpected.push(`${request.method()} ${url.pathname}`);
       return route.abort();
+    }
+    if (request.isNavigationRequest() && request.resourceType() === "document") {
+      const response = await route.fetch();
+      const headers = response.headers();
+      // Match CI's script restrictions even with the isolated static server.
+      // Append rather than replace any policy supplied by the real app server.
+      headers["content-security-policy"] = [headers["content-security-policy"], strictScriptPolicy]
+        .filter(Boolean).join(", ");
+      return route.fulfill({ response, headers });
     }
     if (url.pathname === fullLogoPath) {
       heldLogoRequests++;
@@ -83,8 +93,10 @@ for (const width of [1440, 390]) {
       // Enable before navigation: DevTools reports this issue during the first
       // layout, not necessarily after a later DOM inspection of the image.
       await cdp.send("Audits.enable");
-      await page.goto("/", { waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("heading", { name: /Operational data, structured/ })).toBeVisible();
+      const navigation = await page.goto("/", { waitUntil: "domcontentloaded" });
+      expect(await navigation?.headerValue("content-security-policy")).toContain(strictScriptPolicy);
+      await page.locator("html.app-ready").waitFor({ state: "attached" });
+      await expect(page.locator(".sqr-landing").getByRole("heading", { name: /Operational data, structured/ })).toBeVisible();
       await expect.poll(fixture.heldLogoRequests).toBeGreaterThan(0);
       await page.evaluate(() => document.fonts.ready);
 
@@ -133,7 +145,8 @@ for (const width of [1440, 390]) {
       await expect(strengths).toHaveCount(1);
       await expect(strengths).toHaveClass("hero-proof");
       await expect(strengths).toHaveAttribute("role", "group");
-      await page.addScriptTag({ content: axeSource });
+      // Run the audit through the automation context, not a DOM script sink.
+      await page.evaluate(axeSource);
       const violations = await strengths.evaluate(async (element) => {
         const axe = (window as typeof window & {
           axe: { run: (root: Element, options: RunOptions) => Promise<AxeResults> };

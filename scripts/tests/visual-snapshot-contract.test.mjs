@@ -5,6 +5,7 @@ import test from "node:test";
 const source = readFileSync(new URL("../../tests/visual/app.visual.spec.ts", import.meta.url), "utf8");
 const stabilizer = readFileSync(new URL("../../tests/visual/visual-regression.css", import.meta.url), "utf8");
 const monthlySource = readFileSync(new URL("../../tests/visual/collection-monthly-polish.spec.ts", import.meta.url), "utf8");
+const landingImageSource = readFileSync(new URL("../../tests/visual/landing-image-a11y.spec.ts", import.meta.url), "utf8");
 
 function sourceSection(content, start, end) {
   const startMatch = content.match(start);
@@ -118,6 +119,28 @@ test("Monthly text reflow actually doubles root text without bypassing productio
   assert.ok(originGuardIndex >= 0, "The synthetic fixture must reject off-origin requests");
   assert.ok(originGuardIndex < monthlySource.indexOf(documentFixture),
     "The off-origin guard must run before the document fetch fixture");
+});
+
+test("landing accessibility auditing preserves strict script CSP on static and application previews", () => {
+  assert.match(landingImageSource, /await\s+page\.evaluate\(axeSource\)/);
+  assert.match(landingImageSource, /await\s+page\.locator\("html\.app-ready"\)\.waitFor\(\{\s*state:\s*"attached"\s*\}\)/);
+  assert.match(landingImageSource, /page\.locator\("\.sqr-landing"\)\.getByRole\("heading"/);
+  assert.doesNotMatch(landingImageSource, /\baddScriptTag\s*\(|\bbypassCSP\s*:|unsafe-inline|unsafe-eval/);
+  const fixture = sourceSection(landingImageSource,
+    /async\s+function\s+installPublicFixture\b/, /async\s+function\s+imageGeometry\b/);
+  const documentFixture = sourceSection(fixture,
+    /if\s*\(\s*request\.isNavigationRequest\(\)\s*&&\s*request\.resourceType\(\)\s*===\s*["']document["']\s*\)/,
+    /return\s+route\.fulfill\(/);
+  assert.match(documentFixture, /const\s+response\s*=\s*await\s+route\.fetch\(\)/);
+  assert.match(documentFixture, /const\s+headers\s*=\s*response\.headers\(\)/);
+  assert.match(landingImageSource, /const\s+strictScriptPolicy\s*=\s*"script-src 'self'; require-trusted-types-for 'script'"/);
+  assert.match(documentFixture, /headers\["content-security-policy"\]\s*=\s*\[\s*headers\["content-security-policy"\],\s*strictScriptPolicy\s*\]/);
+  assert.match(documentFixture, /\.filter\(Boolean\)\.join\(", "\)/);
+  assert.match(fixture, /return\s+route\.fulfill\(\{\s*response,\s*headers\s*\}\)/);
+  const originGuardIndex = fixture.indexOf("if (url.origin !== origin)");
+  assert.ok(originGuardIndex >= 0, "The landing fixture must reject off-origin requests");
+  assert.ok(originGuardIndex < fixture.indexOf(documentFixture),
+    "The origin guard must run before fetching a navigation document");
 });
 
 test("Monthly captures await app, theme and font readiness before taking full-page snapshots", () => {
