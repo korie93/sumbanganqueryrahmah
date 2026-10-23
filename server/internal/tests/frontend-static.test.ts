@@ -6,11 +6,84 @@ import test from "node:test";
 import { createJsonTestApp, startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { buildRobotsTxt, registerFrontendStatic } from "../frontend-static";
 
+const minimalRobotsPolicy = [
+  "User-agent: *",
+  "Disallow: /",
+  "Allow: /$",
+  "Allow: /assets/",
+  "Allow: /brand/",
+  "Allow: /boot-shell.js$",
+  "Allow: /boot-shell.css$",
+  "Allow: /site.webmanifest$",
+  "Allow: /sitemap.xml$",
+].join("\n") + "\n";
+
+// This single-agent fixture needs only prefix rules, wildcards, end anchors,
+// longest-match precedence and the Allow tie-break; it is not a general parser.
+function robotsAllowsPath(robots: string, requestPath: string) {
+  let best = { specificity: -1, allowed: true };
+  for (const line of robots.split(/\r?\n/)) {
+    const rule = line.match(/^(Allow|Disallow):\s*(\S+)$/);
+    if (!rule) continue;
+    const [, directive, pattern] = rule;
+    const exact = pattern.endsWith("$");
+    const prefix = exact ? pattern.slice(0, -1) : pattern;
+    const escaped = prefix.split("*").map((part) => part.replace(/[.*+?^$(){}|[\]\\]/g, "\\$&")).join(".*");
+    if (!new RegExp("^" + escaped + (exact ? "$" : "")).test(requestPath)) continue;
+    const specificity = Buffer.byteLength(prefix.replace(/\*/g, ""), "utf8");
+    const allowed = directive === "Allow";
+    if (specificity > best.specificity || (specificity === best.specificity && allowed)) {
+      best = { specificity, allowed };
+    }
+  }
+  return best.allowed;
+}
+
+test("production robots uses one exact nonenumerating policy in dynamic and checked-in files", async () => {
+  const expected = minimalRobotsPolicy + "Sitemap: https://sqr-system.com/sitemap.xml\n";
+  assert.equal(buildRobotsTxt("https://sqr-system.com"), expected);
+  const checkedInRobots = await fs.readFile(new URL("../../../client/public/robots.txt", import.meta.url), "utf8");
+  assert.equal(checkedInRobots.replace(/\r\n/g, "\n"), expected);
+  const checkedInSitemap = await fs.readFile(new URL("../../../client/public/sitemap.xml", import.meta.url), "utf8");
+  assert.deepEqual([...checkedInSitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]), [
+    "https://sqr-system.com/",
+  ]);
+});
+
+test("robots permits the exact landing and rendering resources while blocking deep and future routes", () => {
+  const robots = buildRobotsTxt("https://sqr-system.com");
+  for (const requestPath of [
+    "/", "/assets/app-ABC12345.js", "/assets/fonts/interface.woff2?v=1",
+    "/brand/sqr-full-logo-light.svg", "/boot-shell.js", "/boot-shell.css",
+    "/site.webmanifest", "/sitemap.xml",
+  ]) {
+    assert.equal(robotsAllowsPath(robots, requestPath), true, requestPath);
+  }
+  for (const requestPath of [
+    "/login", "/dashboard", "/collection/monthly-comparison", "/settings?section=backup",
+    "/api/health", "/internal/metrics", "/ws", "/socket.io/",
+    "/new-unlisted-module", "/new-unlisted-module/deep-link", "/index.html", "/?preview=1",
+    "/assets", "/brand", "/boot-shell.js.map", "/boot-shell.css/extra",
+    "/site.webmanifest/extra", "/sitemap.xml.backup",
+  ]) {
+    assert.equal(robotsAllowsPath(robots, requestPath), false, requestPath);
+  }
+});
+
+test("robots sitemap stays origin-rooted and is omitted for missing or invalid public URLs", () => {
+  for (const publicAppUrl of [undefined, null, "", "not-a-valid-url"]) {
+    assert.equal(buildRobotsTxt(publicAppUrl), minimalRobotsPolicy);
+  }
+  assert.equal(buildRobotsTxt("https://example.test/app/?view=public#landing"),
+    minimalRobotsPolicy + "Sitemap: https://example.test/sitemap.xml\n");
+});
+
 test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallback for routes only", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-frontend-static-"));
   const publicDir = path.join(tempRoot, "public");
   const assetsDir = path.join(publicDir, "assets");
   const robotsBody = buildRobotsTxt("https://example.test/app");
+  const staleRobotsBody = "User-agent: *\nAllow: /\nDisallow: /legacy-private-module\n";
   const sitemapBody = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -25,7 +98,7 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
   await fs.mkdir(publicDir, { recursive: true });
   await fs.mkdir(assetsDir, { recursive: true });
   await fs.writeFile(path.join(publicDir, "index.html"), "<!doctype html><html><body><div id=\"root\"></div></body></html>");
-  await fs.writeFile(path.join(publicDir, "robots.txt"), "User-agent: *\nDisallow: /\n", "utf8");
+  await fs.writeFile(path.join(publicDir, "robots.txt"), staleRobotsBody, "utf8");
   await fs.writeFile(path.join(publicDir, "sitemap.xml"), sitemapBody, "utf8");
   await fs.writeFile(path.join(assetsDir, "app-ABC12345.js"), immutableAssetBody, "utf8");
 
@@ -38,19 +111,28 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
 
   const { server, baseUrl } = await startTestServer(app);
   try {
-  const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
+    const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
     assert.equal(robotsResponse.status, 200);
     assert.match(String(robotsResponse.headers.get("content-type") || ""), /^text\/plain\b/i);
     assert.equal(await robotsResponse.text(), robotsBody);
-    assert.match(robotsBody, /User-agent: \*\nAllow: \/\n/);
-    assert.match(robotsBody, /Disallow: \/login\n/);
-    assert.match(robotsBody, /Disallow: \/api\/\n/);
-    assert.doesNotMatch(robotsBody, /^Disallow: \/$/m);
+    assert.equal(robotsBody, minimalRobotsPolicy + "Sitemap: https://example.test/sitemap.xml\n");
+    assert.notEqual(robotsBody, staleRobotsBody, "Runtime policy overrides stale static module listings");
+    assert.equal(robotsResponse.headers.get("cache-control"), "public, max-age=300");
+    const robotsHeadResponse = await fetch(`${baseUrl}/robots.txt`, { method: "HEAD" });
+    assert.equal(robotsHeadResponse.status, 200);
+    assert.equal(robotsHeadResponse.headers.get("content-type"), robotsResponse.headers.get("content-type"));
+    assert.equal(robotsHeadResponse.headers.get("cache-control"), "public, max-age=300");
+    assert.equal(robotsHeadResponse.headers.get("content-length"), String(Buffer.byteLength(robotsBody, "utf8")));
+    assert.equal(await robotsHeadResponse.text(), "");
 
     const sitemapResponse = await fetch(`${baseUrl}/sitemap.xml`);
     assert.equal(sitemapResponse.status, 200);
     assert.match(String(sitemapResponse.headers.get("content-type") || ""), /(?:text|application)\/xml\b/i);
     assert.equal(await sitemapResponse.text(), sitemapBody);
+    const sitemapHeadResponse = await fetch(`${baseUrl}/sitemap.xml`, { method: "HEAD" });
+    assert.equal(sitemapHeadResponse.status, 200);
+    assert.equal(sitemapHeadResponse.headers.get("content-type"), sitemapResponse.headers.get("content-type"));
+    assert.equal(await sitemapHeadResponse.text(), "");
 
     const routeResponse = await fetch(`${baseUrl}/viewer`);
     assert.equal(routeResponse.status, 200);

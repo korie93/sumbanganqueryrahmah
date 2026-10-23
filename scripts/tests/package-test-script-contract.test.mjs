@@ -52,3 +52,8 @@ test("HTTP CI gate includes schema-dependent background startup regression tests
   const scripts = readPackageScripts();
   assert.ok(scripts["test:http"].includes("server/internal/tests/background-service-health.test.ts"));
 });
+
+test("HTTP CI gate includes public robots, sitemap and document-serving regression tests", () => {
+  const scripts = readPackageScripts();
+  assert.ok(scripts["test:http"].includes("server/internal/tests/frontend-static.test.ts"));
+});

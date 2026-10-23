@@ -105,7 +105,7 @@
     "test:auth:public-build": "node scripts/password-public-build-browser.mjs",
     "test:auth:v17": "node scripts/auth-v17-built-browser.mjs",
     "test:auth:two-factor-browser": "node scripts/test-two-factor-isolated.mjs",
-    "test:http": "tsx --test server/http/tests/*.test.ts server/internal/tests/background-service-health.test.ts",
+    "test:http": "tsx --test server/http/tests/*.test.ts server/internal/tests/background-service-health.test.ts server/internal/tests/frontend-static.test.ts",
     "test:services": "tsx --test server/lib/*.test.ts server/lib/tests/*.test.ts server/services/tests/*.test.ts",
     "test:repositories": "tsx --test server/repositories/tests/*.test.ts",
     "test:routes": "tsx --test server/routes/tests/*.test.ts",
