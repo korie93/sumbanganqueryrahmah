@@ -68,6 +68,19 @@ test("rate-limit IP keys preserve IPv4 identity and normal IPv6 subnet grouping"
   assert.equal(ipKeyGenerator("2001:db8:abcd:1201::1", false), "2001:db8:abcd:1201::1");
 });
 
+test("IPv6 zone parsing rejects bounded repeated-percent inputs with line terminators", () => {
+  // Cover the zone-parser input shape using just 64 characters, without a
+  // resource-exhaustion workload or a timing-sensitive performance assertion.
+  for (const terminator of ["\n", "\r", "\u2028", "\u2029"]) {
+    const invalid = `%${"%".repeat(63)}${terminator}`;
+    assert.equal(Address6.isValid(invalid), false);
+    assert.throws(() => new Address6(invalid));
+  }
+  const scoped = new Address6("fe80::1%eth0");
+  assert.equal(scoped.zone, "%eth0");
+  assert.equal(scoped.correctForm(), "fe80::1");
+});
+
 test("brace expansion keeps ordinary glob alternatives and padded sequences compatible", () => {
   assert.deepEqual(expand("src/{client,server}/file{01..02}.ts"), [
     "src/client/file01.ts",

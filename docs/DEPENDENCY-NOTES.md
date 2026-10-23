@@ -8,6 +8,71 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-10-23 DOMPurify and IPv6 zone-parser security patches
+
+[CI run 39888068031](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/39888068031)
+on `dcdaed52` stopped at Audit dependencies, reporting `dompurify` (critical)
+and `ip-address` (moderate). The same two findings reproduced locally. This is
+an advisory failure, not another registry timeout or a Viewer/Saved UI failure.
+
+Only two resolved packages change:
+
+- `dompurify`: exact direct pin `3.4.16` to `3.4.17`, deduplicated for `jspdf` too.
+  This closes the shadow-root/template bypass
+  [GHSA-cg2g-xh64-v4q7](https://github.com/advisories/GHSA-cg2g-xh64-v4q7),
+  detached-subtree handling
+  [GHSA-mrv2-3pqr-j5jr](https://github.com/advisories/GHSA-mrv2-3pqr-j5jr),
+  and the XHTML SMIL guard issue
+  [GHSA-c6gr-qvv4-5v3f](https://github.com/advisories/GHSA-c6gr-qvv4-5v3f).
+  See the [3.4.17 release notes](https://github.com/cure53/DOMPurify/releases/tag/3.4.17).
+- `ip-address`: existing override floor `^10.7.2` to `^10.7.4`, locked to `10.7.4`.
+  This closes the quadratic IPv6 zone-identifier parsing issue
+  [GHSA-rxp7-6hxx-x8q5](https://github.com/advisories/GHSA-rxp7-6hxx-x8q5).
+  Existing IPv4/IPv6 subnet keys and shared-office NAT policies remain unchanged.
+
+`npm update dompurify ip-address --ignore-scripts --no-audit --no-fund` updates
+the manifest/lock/install without executing dependency lifecycle scripts. No
+audit severity, retries, exceptions, package-source policy, runtime sanitizer
+allowlist, CSP or install-script permissions are relaxed. No force-wide upgrade.
+
+Verification on 2026-10-23:
+
+- Live `npm run audit:dependencies`: PASS, no moderate-or-higher findings.
+- `npm ls dompurify ip-address --all`: one patched DOMPurify shared with jsPDF,
+  and patched `ip-address` under `express-rate-limit`.
+- `npm ci --ignore-scripts --dry-run --no-audit --no-fund`: PASS manifest/lock
+  consistency; this is not a claim of a fresh CI installation.
+- Dependency audit/retry/IP/glob tests: 143 PASS. The added zone regression uses
+  only 64 percent characters plus each line terminator, not a denial-of-service
+  payload or a flaky timing threshold; valid scoped IPv6 remains supported.
+- Sanitizer/Trusted Types/monthly-report unit contracts: 22 PASS. Actual local
+  Chromium confirms supported DOMPurify, unsafe markup removal, plain AI text,
+  and preserved report title/style/table/SVG/Print content, not just Node fallbacks.
+- Targeted rate-limit/runtime/API-protection tests: 62 PASS in a clean child
+  environment with dotenv disabled, including shared-NAT and strict brute-force
+  isolation checks. No production endpoint, account, database or email was used.
+- Production build and zero-sourcemap gate, full typecheck and client lint pass.
+
+Browser QA boundary: an additional strict Trusted Types probe found the existing
+custom bridge returns empty trusted HTML with `require-trusted-types-for 'script'`.
+A four-case A/B test using unchanged application sources against both old
+`3.4.16` and patched `3.4.17` reproduced identical empty strict-mode results;
+ordinary HTML, AI and report outputs remain identical. This is a preexisting
+bridge limitation, not a regression introduced by this dependency patch, and is
+recorded separately from the dependency upgrade. The user subsequently approved
+fixing it: `trusted-types.ts` now shares DOMPurify's native module policy with
+the AI and report sanitizers instead of using the string-only bridge and a
+private instance. Existing sanitizer allowlists and CSP remain unchanged.
+The permanent `npm run test:trusted-types:browser` regression verifies the fix
+with real native Trusted Types; see the sanitizer ownership section in
+`docs/CONTENT_SECURITY_POLICY.md`. The original A/B evidence records the
+pre-fix baseline and should not be mistaken for current post-fix results.
+Evidence is in ignored `artifacts/dependency-dompurify-ab-20261023/` and
+`artifacts/dependency-audit-20261023-*` logs; current browser regression results
+are in `artifacts/trusted-types-browser/`. Rebuild from the final committed
+lockfile and run the normal GitHub gates before deployment; local results do not
+claim a green remote rerun, production exposure, or production deployment.
+
 ## 2026-10-22 bounded audit transport recovery
 
 [CI run 39711452342](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/39711452342)

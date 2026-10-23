@@ -52,6 +52,42 @@ npx tsx --test server/http/tests/local-http-pipeline.test.ts
 npx tsx --test server/routes/tests/telemetry.routes.integration.test.ts
 ```
 
+## Trusted Types Sanitizer Ownership
+
+`client/src/lib/trusted-types.ts`, the AI plain-text sanitizer and the monthly
+report sanitizer share the default DOMPurify module instance. DOMPurify owns
+its internal native `dompurify` policy; SQR's `default` and `sqr-ui` policies
+only return sanitized output. Keep `RETURN_TRUSTED_TYPE: false` when returning
+HTML from SQR policy callbacks, which the browser wraps as `TrustedHTML`.
+See [DOMPurify's Trusted Types guidance](https://github.com/cure53/DOMPurify#what-about-dompurify-and-trusted-types).
+
+Do not pass a string-returning imitation of a Trusted Types policy to DOMPurify.
+Its internal parser needs native trusted values under enforcement; plain strings
+can re-enter SQR's default sanitizer and turn legitimate HTML into empty content.
+Do not create another DOMPurify instance for these consumers: the existing CSP
+allows one policy per name, so a second instance risks a duplicate-policy error.
+Do not solve either issue with `allow-duplicates`, a pass-through default policy,
+new policy names, or a relaxed CSP. Keep per-call sanitizer configurations; do not
+introduce global `setConfig` or hooks that weaken another consumer's allowlist.
+
+Run `npm run test:trusted-types:browser` for the real Chromium regression. It
+bundles the application sanitizer modules in memory, serves synthetic fixtures
+on ephemeral loopback and tests native enforcing Trusted Types, initialization
+order, repeated configuration switching and safe DOM sinks. It uses no backend,
+database, credentials or production traffic. CI runs it in the Chrome-enabled
+job and uploads `artifacts/trusted-types-browser/` on success or failure.
+Report sanitizer output checks are not a claim of end-to-end popup/print testing.
+
+2026-10-23 local verification: all 10 native Chromium sanitizer cases pass,
+including an explicit trusted sink before default-policy initialization and a
+same-origin iframe default policy. The actual built V17 authentication browser
+suite also passes all 38 checks, including login/recovery/reset under strict
+script/style CSP and Trusted Types. Targeted HTTP CSP/telemetry/script-URL tests
+pass (47 tests); the full client suite passes all 2,293 tests in two command
+batches, including the 22 sanitizer/runtime/report unit contracts. Typecheck,
+client lint and production build pass, including zero production sourcemaps.
+These are local synthetic results, not a claim of a remote CI or production run.
+
 ## Style Hash Maintenance
 
 Radix scroll-lock styles are allowed through

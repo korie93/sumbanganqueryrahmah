@@ -281,6 +281,10 @@ jobs:
       - name: Install Playwright Chromium dependencies
         run: npx playwright install-deps chromium
 
+      - name: Verify sanitizers under strict Trusted Types
+        timeout-minutes: 5
+        run: npm run test:trusted-types:browser
+
       - name: Verify password and authenticator browser feedback
         timeout-minutes: 5
         run: npm run test:auth:browser
@@ -441,6 +445,7 @@ jobs:
           path: |
             server.log
             artifacts/auth-feedback-browser
+            artifacts/trusted-types-browser
             artifacts/password-public-build-browser
             artifacts/auth-v17-browser
             artifacts/single-active-tab-browser
