@@ -4,6 +4,7 @@ import { buildViewerVisibleFieldsSummary } from "@/pages/viewer/viewer-table-uti
 type ViewerRowAriaOptions = {
   row: DataRowWithId;
   visibleHeaders: string[];
+  shownFieldsCount?: number;
 };
 
 export function formatViewerCellValue(value: unknown) {
@@ -22,6 +23,7 @@ function normalizeViewerCellValue(value: unknown) {
 export function buildViewerRowAriaLabel({
   row,
   visibleHeaders,
+  shownFieldsCount = 4,
 }: ViewerRowAriaOptions) {
   const previewFields = visibleHeaders.slice(0, 3);
   const details = [`Viewer row ${row.__rowId + 1}`];
@@ -30,6 +32,6 @@ export function buildViewerRowAriaLabel({
     details.push(`${header} ${normalizeViewerCellValue(row[header])}`);
   }
 
-  details.push(buildViewerVisibleFieldsSummary(visibleHeaders.length));
+  details.push(buildViewerVisibleFieldsSummary(visibleHeaders.length, shownFieldsCount));
   return details.join(", ");
 }

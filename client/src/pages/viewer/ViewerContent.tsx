@@ -1,16 +1,13 @@
-import { memo, type RefObject } from "react";
+import { memo, type ReactNode, type RefObject } from "react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
 import type { ColumnFilter, DataRowWithId, ViewerFilterMutableField } from "@/pages/viewer/types";
 import { ViewerContentDatasetSection } from "@/pages/viewer/ViewerContentDatasetSection";
-import { ViewerContentEmptyState } from "@/pages/viewer/ViewerContentEmptyState";
-import { ViewerContentErrorBanner } from "@/pages/viewer/ViewerContentErrorBanner";
 import { ViewerContentFiltersSection } from "@/pages/viewer/ViewerContentFiltersSection";
-import { ViewerContentSummaryStrip } from "@/pages/viewer/ViewerContentSummaryStrip";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 
 type ViewerContentProps = {
+  toolbarActions?: ReactNode;
   filterTriggerRef: RefObject<HTMLButtonElement>;
   rows: DataRowWithId[];
   headers: string[];
@@ -60,6 +57,7 @@ type ViewerContentProps = {
 };
 
 function ViewerContentImpl({
+  toolbarActions,
   filterTriggerRef,
   rows,
   headers,
@@ -108,84 +106,64 @@ function ViewerContentImpl({
   onShowFiltersChange,
 }: ViewerContentProps) {
   const isMobile = useIsMobile();
-  const hasRows = rows.length > 0;
 
   return (
-    <>
-      {hasRows ? (
-        <ViewerContentSummaryStrip
-          rowsCount={rows.length}
-          totalRows={totalRows}
-          pageStart={pageStart}
-          pageEnd={pageEnd}
-          visibleHeadersCount={visibleHeaders.length}
-          headersCount={headers.length}
-          selectedRowCount={selectedRowIds.size}
-        />
-      ) : null}
-
-      <ViewerContentFiltersSection
-        filterTriggerRef={filterTriggerRef}
-        hasRows={hasRows}
-        isMobile={isMobile}
-        showFilters={showFilters}
-        headers={headers}
-        columnFilters={columnFilters}
-        onAddFilter={onAddFilter}
-        onClearAllFilters={onClearAllFilters}
-        onUpdateFilter={onUpdateFilter}
-        onRemoveFilter={onRemoveFilter}
-        onShowFiltersChange={onShowFiltersChange}
-      />
-
-      {error ? <ViewerContentErrorBanner error={error} onBackToSaved={onBackToSaved} /> : null}
-
-      {loading ? (
-        <ViewerLoadingSkeleton />
-      ) : !hasRows && !error ? (
-        <ViewerContentEmptyState
-          emptyHint={emptyHint}
-          isSearchBelowMinLength={isSearchBelowMinLength}
-          minSearchLength={minSearchLength}
-        />
-      ) : (
-        <ViewerContentDatasetSection
-          rows={rows}
-          filteredRows={filteredRows}
-          visibleHeaders={visibleHeaders}
-          search={search}
-          showResultsSummary={showResultsSummary}
-          activeFilters={activeFilters}
-          searchInputRef={searchInputRef}
-          minSearchLength={minSearchLength}
-          debouncedSearch={debouncedSearch}
-          enableVirtualRows={enableVirtualRows}
-          gridTemplateColumns={gridTemplateColumns}
-          tableDensity={tableDensity}
-          rowHeightPx={rowHeightPx}
-          selectedRowIds={selectedRowIds}
-          selectAllFiltered={selectAllFiltered}
-          virtualTableMinWidth={virtualTableMinWidth}
-          viewportHeightPx={viewportHeightPx}
-          totalRows={totalRows}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          pageStart={pageStart}
-          pageEnd={pageEnd}
-          hasPageFilterSubset={hasPageFilterSubset}
-          hasNextPage={hasNextPage}
-          hasPreviousPage={hasPreviousPage}
-          loadingMore={loadingMore}
+    <ViewerContentDatasetSection
+      toolbarActions={toolbarActions}
+      allHeaders={headers}
+      loading={loading}
+      error={error}
+      emptyHint={emptyHint}
+      isSearchBelowMinLength={isSearchBelowMinLength}
+      onBackToSaved={onBackToSaved}
+      filterPanel={(
+        <ViewerContentFiltersSection
+          filterTriggerRef={filterTriggerRef}
+          isMobile={isMobile}
+          showFilters={showFilters}
+          headers={headers}
+          columnFilters={columnFilters}
+          onAddFilter={onAddFilter}
           onClearAllFilters={onClearAllFilters}
-          onSearchChange={onSearchChange}
-          onToggleRowSelection={onToggleRowSelection}
-          onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-          onClearSelection={onClearSelection}
-          onPrevPage={onPrevPage}
-          onNextPage={onNextPage}
+          onUpdateFilter={onUpdateFilter}
+          onRemoveFilter={onRemoveFilter}
+          onShowFiltersChange={onShowFiltersChange}
         />
       )}
-    </>
+      rows={rows}
+      filteredRows={filteredRows}
+      visibleHeaders={visibleHeaders}
+      search={search}
+      showResultsSummary={showResultsSummary}
+      activeFilters={activeFilters}
+      searchInputRef={searchInputRef}
+      minSearchLength={minSearchLength}
+      debouncedSearch={debouncedSearch}
+      enableVirtualRows={enableVirtualRows}
+      gridTemplateColumns={gridTemplateColumns}
+      tableDensity={tableDensity}
+      rowHeightPx={rowHeightPx}
+      selectedRowIds={selectedRowIds}
+      selectAllFiltered={selectAllFiltered}
+      virtualTableMinWidth={virtualTableMinWidth}
+      viewportHeightPx={viewportHeightPx}
+      totalRows={totalRows}
+      currentPage={currentPage}
+      totalPages={totalPages}
+      pageStart={pageStart}
+      pageEnd={pageEnd}
+      hasPageFilterSubset={hasPageFilterSubset}
+      hasNextPage={hasNextPage}
+      hasPreviousPage={hasPreviousPage}
+      loadingMore={loadingMore}
+      onClearAllFilters={onClearAllFilters}
+      onSearchChange={onSearchChange}
+      onToggleRowSelection={onToggleRowSelection}
+      onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+      onClearSelection={onClearSelection}
+      onPrevPage={onPrevPage}
+      onNextPage={onNextPage}
+    />
   );
 }
 

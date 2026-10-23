@@ -5,6 +5,7 @@ import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerVirtualizedRow } from "@/pages/viewer/ViewerVirtualizedRow";
 import { ViewerGridShell } from "@/pages/viewer/viewer-grid-shell";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
+import { getViewerColumnPresentation } from "@/pages/viewer/viewer-column-presentation";
 
 interface ViewerVirtualizedTableProps {
   filteredRows: DataRowWithId[];
@@ -55,10 +56,12 @@ function ViewerVirtualizedTableImpl({
               className="truncate whitespace-nowrap px-3 font-medium text-muted-foreground"
               title={header}
               aria-label={header}
+              data-align={getViewerColumnPresentation(header, density).align}
             >
               {header}
             </div>
           ))}
+          <div className="px-2"><span className="sr-only">Record details</span></div>
         </ViewerGridShell>
       </div>
       <FixedSizeList

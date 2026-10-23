@@ -59,9 +59,15 @@ function ViewerColumnSelectorImpl({
 
   const trigger = useMemo(
     () => (
-      <Button variant="outline" data-testid="button-column-selector" className="w-full sm:w-auto">
-        <Columns className="w-4 h-4 mr-2" />
-        {buildViewerColumnSelectorLabel(selectedColumns.size, headers.length)}
+      <Button
+        variant="outline"
+        data-testid="button-column-selector"
+        className="w-full sm:w-auto"
+        aria-label={buildViewerColumnSelectorLabel(selectedColumns.size, headers.length)}
+      >
+        <Columns className="h-4 w-4" aria-hidden="true" />
+        <span className="viewer-column-label">{buildViewerColumnSelectorLabel(selectedColumns.size, headers.length)}</span>
+        <span className="viewer-column-short-label" aria-hidden="true">Columns</span>
       </Button>
     ),
     [headers.length, selectedColumns.size],

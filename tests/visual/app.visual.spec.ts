@@ -168,6 +168,383 @@ function jsonResponse(route: Route, body: unknown, status = 200) {
   });
 }
 
+function savedShellResponse(empty = false) {
+  return {
+    imports: empty ? [] : [{
+      id: "visual-import-1", name: "Baseline Import", filename: "baseline-import.csv",
+      createdAt: "2026-01-15T08:00:00.000Z", createdBy: visualUser.username,
+      rowCount: 24, sourceSizeBytes: 2048, isDeleted: false,
+    }],
+    pagination: {
+      hasNextPage: false, hasPreviousPage: false, limit: 20, mode: "offset",
+      offset: 0, page: 1, pageSize: 20, total: empty ? 0 : 1, totalPages: 1,
+    },
+  };
+}
+
+function collectSavedRuntimeErrors(page: Page) {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  return errors;
+}
+
+async function expectSavedControlsFit(page: Page, width: number) {
+  expect(await page.evaluate(() => window.innerWidth)).toBe(width);
+  await expectViewerDesign3DocumentFits(page);
+  for (const id of ["input-search-saved", "button-refresh", "button-date-filter", "button-toggle-saved-advanced-filters", "select-saved-workspace-view"]) {
+    const control = page.getByTestId(id);
+    const box = await control.boundingBox();
+    expect(box, `${id} has layout bounds`).not.toBeNull();
+    expect(box!.x, `${id} left bound`).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width, `${id} right bound`).toBeLessThanOrEqual(width + 1);
+    expect(box!.height, `${id} target height`).toBeGreaterThanOrEqual(width < 768 ? 44 : 36);
+  }
+}
+
+for (const theme of visualThemes) {
+  for (const width of [320, 390, 722, 1440]) {
+    test(`saved compact shell ${theme} ${width}px retains search through loading and empty results`, async ({ page }, testInfo) => {
+      const runtimeErrors = collectSavedRuntimeErrors(page);
+      await page.setViewportSize({ width, height: 900 });
+      await installMockAuthenticatedSession(page, theme);
+      let releaseSearch = () => {};
+      const searchGate = new Promise<void>((resolve) => { releaseSearch = resolve; });
+      let markSearchStarted = () => {};
+      const searchStarted = new Promise<void>((resolve) => { markSearchStarted = resolve; });
+      const requestedViews = new Set<string>();
+      await page.route((url) => url.pathname === "/api/imports", async (route) => {
+        expect(route.request().method()).toBe("GET");
+        const params = new URL(route.request().url()).searchParams;
+        requestedViews.add(params.get("view") || "all");
+        if (params.get("search") === "no-match") {
+          markSearchStarted();
+          await searchGate;
+        }
+        return jsonResponse(route, savedShellResponse(Boolean(params.get("search") === "no-match"
+          || params.get("createdBy") || params.get("view") === "duplicates")));
+      });
+      try {
+        await page.goto("/saved", { waitUntil: "domcontentloaded" });
+        const search = page.getByTestId("input-search-saved");
+        await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+        await expect(page.getByTestId("text-import-count")).toHaveText("1 file");
+        await expectSavedControlsFit(page, width);
+        const categoryBox = (await page.getByTestId("select-saved-workspace-view").boundingBox())!;
+        const totalsBox = (await page.getByRole("group", { name: "Loaded page totals", exact: true }).boundingBox())!;
+        expect(Math.abs(categoryBox.y + categoryBox.height / 2 - totalsBox.y - totalsBox.height / 2)).toBeLessThan(1);
+        await page.screenshot({ path: testInfo.outputPath("saved-initial-shell.png") });
+        await page.getByTestId("button-toggle-saved-advanced-filters").click();
+        const originalInput = await search.elementHandle();
+        await search.fill("no-match");
+        await searchStarted;
+        await expect(page.getByTestId("saved-loading-skeleton")).toBeVisible();
+        await expect(search).toBeVisible();
+        await expect(search).toBeFocused();
+        await expect(page.getByTestId("text-import-count")).toHaveCount(0);
+        await expect(page.getByTestId("input-saved-uploader")).toBeVisible();
+        await expectSavedControlsFit(page, width);
+        expect(await originalInput!.evaluate((element) => element.isConnected)).toBe(true);
+        releaseSearch();
+        await expect(page.getByText("No matching files", { exact: true })).toBeVisible();
+        await expect(search).toBeFocused();
+        await expect(search).toHaveValue("no-match");
+        await expect(page.getByTestId("text-import-count")).toHaveText("0 matching");
+        expect(await originalInput!.evaluate((element) => element.isConnected)).toBe(true);
+        await expectSavedControlsFit(page, width);
+        await expectNoSeriousAccessibilityViolations(page, "Saved empty search controls");
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+        await page.screenshot({ path: testInfo.outputPath("saved-zero-results.png") });
+        await page.getByTestId("button-clear-filters-empty").click();
+        await expect(search).toBeFocused();
+        await expect(search).toHaveValue("");
+        await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+        const uploader = page.getByTestId("input-saved-uploader");
+        await uploader.fill("missing-uploader");
+        await expect(page.getByText("No matching files", { exact: true })).toBeVisible();
+        await expect(uploader).toBeFocused();
+        await expect(page.getByTestId("button-toggle-saved-advanced-filters")).toHaveAttribute("aria-expanded", "true");
+        await page.getByTestId("button-clear-filters-empty").click();
+        await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+        const workspaceView = page.getByRole("combobox", { name: "Saved workspace views", exact: true });
+        await workspaceView.selectOption("duplicates");
+        await expect(workspaceView).toHaveValue("duplicates");
+        await expect(page.getByText("No files in this view", { exact: true })).toBeVisible();
+        await expect(page.getByText("No saved data yet", { exact: true })).toHaveCount(0);
+        await expect(search).toBeVisible();
+        await page.getByTestId("button-show-all-saved").click();
+        await expect(workspaceView).toHaveValue("all");
+        await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+        for (const view of ["recent", "large", "review", "all"]) {
+          await workspaceView.selectOption(view);
+          await expect(workspaceView).toHaveValue(view);
+          await expect.poll(() => requestedViews.has(view)).toBe(true);
+          await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+        }
+        await workspaceView.focus();
+        await expect(workspaceView).toBeFocused();
+        await page.getByTestId("button-toggle-saved-advanced-filters").click();
+        await expectViewerDesign3DocumentFits(page);
+        await expectNoSeriousAccessibilityViolations(page, "Saved compact controls");
+        expect(runtimeErrors).toEqual([]);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+        await page.screenshot({ path: testInfo.outputPath("saved-compact-shell.png") });
+      } finally {
+        releaseSearch();
+        await logoutVisualSession(page);
+      }
+    });
+  }
+}
+
+test("saved compact shell recovers initial empty, failed and superseded requests", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await installMockAuthenticatedSession(page, "light");
+  let initialEmpty = true;
+  let releaseOlder = () => {};
+  const olderGate = new Promise<void>((resolve) => { releaseOlder = resolve; });
+  let markOlderStarted = () => {};
+  const olderStarted = new Promise<void>((resolve) => { markOlderStarted = resolve; });
+  let markOlderSettled = () => {};
+  const olderSettled = new Promise<void>((resolve) => { markOlderSettled = resolve; });
+  await page.route((url) => url.pathname === "/api/imports", async (route) => {
+    const search = new URL(route.request().url()).searchParams.get("search");
+    if (search === "older") {
+      markOlderStarted();
+      await olderGate;
+      try {
+        return await jsonResponse(route, savedShellResponse(true));
+      } finally {
+        markOlderSettled();
+      }
+    }
+    if (search === "failed") return jsonResponse(route, { message: "Synthetic imports unavailable" }, 500);
+    return jsonResponse(route, savedShellResponse(initialEmpty));
+  });
+  try {
+    await page.goto("/saved", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("button-import-new")).toBeVisible();
+    const search = page.getByTestId("input-search-saved");
+    await expect(search).toBeVisible();
+    initialEmpty = false;
+    await page.getByTestId("button-refresh").click();
+    await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+    await search.fill("failed");
+    await expect(page.getByRole("alert")).toContainText("Synthetic imports unavailable");
+    await expect(page.getByText("No saved data yet", { exact: true })).toHaveCount(0);
+    await expect(search).toBeFocused();
+    await search.fill("older");
+    await olderStarted;
+    await expect(page.getByTestId("saved-loading-skeleton")).toBeVisible();
+    const olderAborted = page.waitForEvent("requestfailed", {
+      predicate: (request) => new URL(request.url()).searchParams.get("search") === "older",
+    });
+    await search.fill("latest");
+    expect((await olderAborted).failure()?.errorText).toContain("ERR_ABORTED");
+    await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+    releaseOlder();
+    await olderSettled;
+    // Let any already-scheduled browser/React work run after the older route
+    // settles before asserting the newer result cannot be overwritten.
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+    await expect(page.getByTestId("text-import-count")).toHaveText("1 matching");
+    await expect(search).toHaveValue("latest");
+    await expect(search).toBeFocused();
+    await expect(page.getByText("No matching files", { exact: true })).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    releaseOlder();
+    await logoutVisualSession(page);
+  }
+});
+
+for (const role of ["admin", "user"] as const) {
+  test(`saved compact shell preserves ${role} search access without superuser controls`, async ({ page }) => {
+    const runtimeErrors = collectSavedRuntimeErrors(page);
+    await installMockAuthenticatedSession(page, "light", role);
+    await page.route("**/api/settings/tab-visibility", (route) => jsonResponse(route, {
+      role, tabs: { home: true, saved: true, viewer: true },
+    }));
+    await page.route((url) => url.pathname === "/api/imports", (route) => jsonResponse(route, savedShellResponse()));
+    try {
+      await page.goto("/saved", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+      await expect(page.getByTestId("input-search-saved")).toBeVisible();
+      await expect(page.getByRole("checkbox", { name: "Select Baseline Import", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("checkbox", { name: "Select all visible imports", exact: true })).toHaveCount(0);
+      await expect(page.getByTestId("button-bulk-delete")).toHaveCount(0);
+      await expect(page.getByTestId("button-configure-source-visual-import-1")).toHaveCount(0);
+      await page.getByTestId("button-import-actions-visual-import-1").click();
+      await expect(page.getByTestId("button-inspect-visual-import-1")).toBeVisible();
+      await expect(page.getByTestId("button-analysis-visual-import-1")).toBeVisible();
+      await expect(page.getByTestId("button-rename-visual-import-1")).toHaveCount(0);
+      await expect(page.getByTestId("button-delete-visual-import-1")).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("button-import-actions-visual-import-1")).toBeFocused();
+      expect(runtimeErrors).toEqual([]);
+    } finally {
+      await logoutVisualSession(page);
+    }
+  });
+}
+
+test("saved compact shell preserves large page totals without widening 320px layout", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await installMockAuthenticatedSession(page, "light");
+  const response = savedShellResponse();
+  await page.route((url) => url.pathname === "/api/imports", (route) => jsonResponse(route, {
+    ...response,
+    imports: [{ ...response.imports[0], rowCount: Number.MAX_SAFE_INTEGER, sourceSizeBytes: Number.MAX_SAFE_INTEGER }],
+  }));
+  try {
+    await page.goto("/saved", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+    await expect(page.getByRole("group", { name: "Loaded page totals", exact: true }))
+      .toContainText(Number.MAX_SAFE_INTEGER.toLocaleString());
+    await expectSavedControlsFit(page, 320);
+    await expectNoSeriousAccessibilityViolations(page, "Saved compact selector with large totals");
+  } finally {
+    await logoutVisualSession(page);
+  }
+});
+
+for (const theme of visualThemes) {
+  for (const width of [320, 390, 722, 1440]) {
+    test(`saved mobile actions ${theme} ${width}px keep live AI clear of pagination`, async ({ page }, testInfo) => {
+      const runtimeErrors = collectSavedRuntimeErrors(page);
+      await page.setViewportSize({ width, height: 900 });
+      await installMockAuthenticatedSession(page, theme, "superuser", true);
+      let releaseImports = () => {};
+      const importsGate = new Promise<void>((resolve) => { releaseImports = resolve; });
+      await page.route((url) => url.pathname === "/api/imports", async (route) => {
+        expect(route.request().method()).toBe("GET");
+        await importsGate;
+        const params = new URL(route.request().url()).searchParams;
+        if (params.get("search")) return jsonResponse(route, savedShellResponse(true));
+        const currentPage = Number(params.get("page") || 1);
+        const response = savedShellResponse();
+        return jsonResponse(route, {
+          ...response,
+          pagination: { ...response.pagination, page: currentPage, offset: (currentPage - 1) * 20,
+            total: 40, totalPages: 2, hasNextPage: currentPage < 2, hasPreviousPage: currentPage > 1 },
+        });
+      });
+      await page.route("**/api/imports/visual-import-1/summary", (route) => jsonResponse(route, {
+        import: savedShellResponse().imports[0], columns: ["Customer Name"], columnCount: 1,
+      }));
+      const trigger = page.getByTestId("floating-ai-toggle");
+      const assertClear = async () => {
+        await expect(trigger).toBeVisible();
+        await expect.poll(() => trigger.evaluate((button) => {
+          const a = button.getBoundingClientRect();
+          return Array.from(document.querySelectorAll(
+            ".saved-workspace [data-floating-ai-avoid='true'], .saved-workspace [data-saved-ai-avoid='true'], .saved-workspace button",
+          )).every((element) => {
+            const b = element.getBoundingClientRect();
+            return Math.min(a.right, b.right) <= Math.max(a.left, b.left)
+              || Math.min(a.bottom, b.bottom) <= Math.max(a.top, b.top);
+          });
+        })).toBe(true);
+      };
+      try {
+        await page.goto("/saved", { waitUntil: "domcontentloaded" });
+        // AI mounts while imports are still pending: the stable Saved root must
+        // resync newly rendered pagination without a body-wide observer.
+        await expect(trigger).toBeVisible();
+        releaseImports();
+        const view = page.getByTestId("button-view-visual-import-1");
+        const source = page.getByTestId("button-configure-source-visual-import-1");
+        await expect(view).toBeVisible();
+        await expect(source).toBeEnabled();
+        if (width < 768) {
+          const sourceBox = (await source.boundingBox())!;
+          const viewBox = (await view.boundingBox())!;
+          const sourceCell = (await source.locator("xpath=ancestor::td").boundingBox())!;
+          const actionsCell = (await view.locator("xpath=ancestor::td").boundingBox())!;
+          const moreBox = (await page.getByTestId("button-import-actions-visual-import-1").boundingBox())!;
+          expect(sourceBox.y + sourceBox.height).toBeLessThanOrEqual(viewBox.y);
+          expect(sourceCell.width).toBeGreaterThan(200);
+          expect(Math.abs(sourceCell.width - actionsCell.width)).toBeLessThan(1);
+          expect(viewBox.width).toBeGreaterThan(140);
+          expect(moreBox.height).toBeGreaterThanOrEqual(44);
+          expect(moreBox.width).toBeGreaterThanOrEqual(44);
+          expect(Math.abs(moreBox.y - viewBox.y)).toBeLessThan(1);
+          await assertClear();
+          const selectFile = page.getByRole("checkbox", { name: "Select Baseline Import", exact: true });
+          const checkDetailsFocus = async () => {
+            // Selection survives closing Details. Re-select deliberately rather
+            // than expecting an uncheck to reopen the sheet.
+            if (await selectFile.getAttribute("aria-checked") === "true") {
+              await selectFile.click();
+              await expect(selectFile).toHaveAttribute("aria-checked", "false");
+            }
+            await selectFile.click();
+            const drawer = page.getByTestId("saved-import-detail-drawer");
+            await expect(drawer).toBeVisible();
+            await expect(drawer.getByText("Customer Name", { exact: true })).toBeVisible();
+            await expect(trigger).toBeHidden();
+            await page.keyboard.press("Escape");
+            await expect(drawer).toHaveCount(0);
+            await expect(selectFile).toBeFocused();
+            await assertClear();
+          };
+          // Also covers a portal opening before any scroll or AI-panel activity.
+          await checkDetailsFocus();
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          await assertClear();
+          const next = page.getByRole("button", { name: "Next", exact: true });
+          await next.focus();
+          await assertClear();
+          await page.keyboard.press("Enter");
+          await expect(page.getByText("Page 2 / 2", { exact: true })).toBeVisible();
+          await assertClear();
+          await page.getByRole("button", { name: "Prev", exact: true }).click();
+          await expect(page.getByText("Page 1 / 2", { exact: true })).toBeVisible();
+          await page.getByTestId("button-toggle-files").click();
+          await assertClear();
+          await page.getByTestId("button-toggle-files").click();
+          await expect(view).toBeVisible();
+          await assertClear();
+          await page.getByTestId("button-toggle-saved-advanced-filters").click();
+          await assertClear();
+          await page.getByTestId("button-toggle-saved-advanced-filters").click();
+          await trigger.click();
+          const aiDialog = page.locator("[data-floating-ai-dialog='true']");
+          await expect(aiDialog).toBeVisible();
+          await expect(aiDialog).toHaveAttribute("aria-modal", "true");
+          await aiDialog.getByRole("button", { name: "Kecilkan panel AI SQR Visual Baseline", exact: true }).click();
+          await expect(aiDialog).toHaveCount(0);
+          await assertClear();
+          // The Details sheet is portalled and may not resize the Saved root.
+          // Its focus lifecycle must still hide and restore the idle launcher.
+          await checkDetailsFocus();
+        } else {
+          const sourceBox = (await source.boundingBox())!;
+          const viewBox = (await view.boundingBox())!;
+          expect(Math.abs(sourceBox.y - viewBox.y)).toBeLessThan(8);
+          expect(await trigger.evaluate((element) => element.parentElement?.style.getPropertyValue("--floating-ai-trigger-bottom"))).toBe("");
+        }
+        await expectViewerDesign3DocumentFits(page);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        if (width < 768) await assertClear();
+        await page.screenshot({ path: testInfo.outputPath("saved-live-ai.png"), fullPage: true });
+        await expectNoSeriousAccessibilityViolations(page, "Saved with live AI launcher");
+        expect(runtimeErrors).toEqual([]);
+      } finally {
+        releaseImports();
+        await logoutVisualSession(page);
+      }
+    });
+  }
+}
+
 async function installMockPublicApi(page: Page) {
   // Public snapshots never need a live session or backend state.
   await page.route("**/api/**", (route) => {
@@ -567,10 +944,10 @@ async function installMockAuthenticatedApi(page: Page, role: VisualRole = "super
   });
 }
 
-async function installMockAuthenticatedSession(page: Page, theme: VisualTheme, role: VisualRole = "superuser") {
+async function installMockAuthenticatedSession(page: Page, theme: VisualTheme, role: VisualRole = "superuser", keepFloatingAi = false) {
   await installTheme(page, theme);
   await installMockAuthenticatedApi(page, role);
-  await page.addInitScript(({ nextTheme, user }) => {
+  await page.addInitScript(({ nextTheme, user, keepFloatingAi }) => {
     const now = Date.now();
     const expiresAt = now + 60 * 60 * 1000;
     localStorage.setItem("activeTab", "home");
@@ -587,6 +964,7 @@ async function installMockAuthenticatedSession(page: Page, theme: VisualTheme, r
     sessionStorage.setItem("collection_staff_nickname_auth", "1");
     localStorage.setItem("theme", nextTheme);
     document.cookie = "sqr_auth_hint=1; path=/; SameSite=Lax";
+    if (keepFloatingAi) return;
     document.addEventListener("DOMContentLoaded", () => {
       const hideFloatingAi = () => {
         document
@@ -605,7 +983,7 @@ async function installMockAuthenticatedSession(page: Page, theme: VisualTheme, r
       window.addEventListener("pagehide", () => observer.disconnect(), { once: true });
       hideFloatingAi();
     }, { once: true });
-  }, { nextTheme: theme, user: { ...visualUser, role } });
+  }, { nextTheme: theme, user: { ...visualUser, role }, keepFloatingAi });
 }
 
 async function navigateForSnapshot(page: Page, route: VisualRouteSpec) {
@@ -1227,3 +1605,554 @@ test("landing header keeps its brand readable on narrow and enlarged-text viewpo
     );
   }
 });
+
+// Viewer design 3 fixtures are deliberately local, read-only and independent of
+// the existing baseline datasets. They exercise the real Saved -> Viewer flow.
+const viewerDesign3Headers = [
+  "Customer Name", "Reference", "Account Number", "Card Number", "Phone",
+  "Email", "Region", "Amount (RM)", "Payment Date", "Notes",
+] as const;
+const viewerDesign3Account = "00001234567890123456";
+const viewerDesign3Card = "00009007199254740993";
+const viewerDesign3Note = "  First line\nSecond <script>example only</script> line  ";
+
+async function installViewerDesign3Fixture(page: Page, rowCount = 24, role: VisualRole = "superuser") {
+  const rows = Array.from({ length: rowCount }, (_, index) => ({
+    id: `viewer-design3-row-${index + 1}`,
+    importId: "visual-import-1",
+    jsonDataJsonb: {
+      "Customer Name": `Synthetic Customer ${String(index + 1).padStart(2, "0")}`,
+      Reference: `SYN-${String(index + 1).padStart(5, "0")}`,
+      "Account Number": index === 0 ? viewerDesign3Account : `00001234567890${String(index).padStart(6, "0")}`,
+      "Card Number": index === 0 ? viewerDesign3Card : `00009007199254${String(index).padStart(6, "0")}`,
+      Phone: "0123456789",
+      Email: `synthetic.${index + 1}@example.test`,
+      Region: index % 2 === 0 ? "Central" : "Northern",
+      "Amount (RM)": index === 0 ? "00005000.00" : `${index + 1}.00`,
+      "Payment Date": "2026-01-15",
+      Notes: index === 0 ? viewerDesign3Note : `Synthetic record ${index + 1} — no production data`,
+    },
+  }));
+
+  if (role !== "superuser") {
+    // Only grant configurable access to roles that already support Viewer;
+    // manager remains excluded by the shared role contract.
+    expect(["admin", "user"]).toContain(role);
+    await page.route("**/api/settings/tab-visibility", (route) => jsonResponse(route, {
+      role, tabs: { home: true, saved: true, viewer: true, "collection-report": true },
+    }));
+  }
+
+  if (rowCount > 100) {
+    await page.route("**/api/app-config", (route) => jsonResponse(route, {
+      aiEnabled: true,
+      aiTimeoutMs: 30_000,
+      heartbeatIntervalMinutes: 1,
+      importUploadLimitBytes: 10 * 1024 * 1024,
+      searchResultLimit: 250,
+      semanticSearchEnabled: true,
+      sessionTimeoutMinutes: 30,
+      systemName: "SQR Visual Baseline",
+      viewerRowsPerPage: 200,
+      wsIdleMinutes: 10,
+    }));
+  }
+
+  await page.route((url) => url.pathname === "/api/imports", (route) => jsonResponse(route, {
+    imports: [{
+      createdAt: "2026-01-15T08:00:00.000Z", createdBy: visualUser.username,
+      filename: "baseline-import.csv", id: "visual-import-1", isDeleted: false,
+      name: "Baseline Import", rowCount,
+    }],
+    pagination: {
+      hasNextPage: false, hasPreviousPage: false, limit: 20, mode: "offset",
+      offset: 0, page: 1, pageSize: 20, total: 1, totalPages: 1,
+    },
+  }));
+
+  await page.route("**/api/imports/visual-import-1/data*", (route) => {
+    expect(route.request().method()).toBe("GET");
+    const url = new URL(route.request().url());
+    const query = (url.searchParams.get("search") ?? "").trim().toLowerCase();
+    let filters: Array<{ column: string; operator: string; value: string }> = [];
+    try {
+      const candidate: unknown = JSON.parse(url.searchParams.get("columnFilters") ?? "[]");
+      if (Array.isArray(candidate)) filters = candidate.filter((filter): filter is { column: string; operator: string; value: string } =>
+        Boolean(filter) && typeof filter === "object" && typeof filter.column === "string"
+        && typeof filter.operator === "string" && typeof filter.value === "string");
+    } catch {
+      return jsonResponse(route, { ok: false, message: "Invalid synthetic filter" }, 400);
+    }
+    const matches = rows.filter((row) => {
+      const values: Record<string, string> = row.jsonDataJsonb;
+      if (query && !Object.values(values).some((value) => value.toLowerCase().includes(query))) return false;
+      return filters.every((filter) => {
+        const value = String(values[filter.column] ?? "").toLowerCase();
+        const expected = filter.value.toLowerCase();
+        if (filter.operator === "equals") return value === expected;
+        if (filter.operator === "startsWith") return value.startsWith(expected);
+        if (filter.operator === "endsWith") return value.endsWith(expected);
+        if (filter.operator === "notEquals") return value !== expected;
+        return value.includes(expected);
+      });
+    });
+    const pageSize = Math.min(500, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") ?? "100", 10) || 100));
+    const currentPage = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+    const cursorOffset = Number.parseInt((url.searchParams.get("cursor") ?? "").replace(/^viewer-design3:/, ""), 10);
+    const offset = Number.isFinite(cursorOffset) && cursorOffset >= 0 ? cursorOffset : (currentPage - 1) * pageSize;
+    const pageRows = matches.slice(offset, offset + pageSize);
+    const hasNextPage = offset + pageRows.length < matches.length;
+    const nextCursor = hasNextPage ? `viewer-design3:${offset + pageRows.length}` : null;
+    return jsonResponse(route, {
+      headers: viewerDesign3Headers, rows: pageRows, total: matches.length,
+      page: currentPage, pageSize, limit: pageSize, offset, nextCursor,
+      pagination: {
+        hasNextPage, hasPreviousPage: currentPage > 1, limit: pageSize, mode: "hybrid",
+        nextCursor, offset, page: currentPage, pageSize, total: matches.length,
+        totalPages: Math.max(1, Math.ceil(matches.length / pageSize)),
+      },
+    });
+  });
+}
+
+async function openViewerDesign3(page: Page) {
+  await page.goto("/saved", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("button-view-visual-import-1").click();
+  await expect(page).toHaveURL(/\/viewer(?:[?#]|$)/);
+  await expect(page.getByRole("heading", { name: "Baseline Import", exact: true })).toHaveCount(1);
+  await expect(page.getByTestId("input-search-viewer")).toBeVisible();
+  await expect(page.getByTestId("button-viewer-row-details-0")).toBeVisible();
+}
+
+async function expectViewerDesign3DocumentFits(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth,
+    viewport: document.documentElement.clientWidth,
+  }));
+  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport + 1);
+}
+
+for (const theme of visualThemes) {
+  for (const width of [320, 390, 768, 1440]) {
+    test(`viewer design3 ${theme} ${width}px keeps search recovery, independent details and responsive controls`, async ({ page }) => {
+      test.setTimeout(90_000);
+      await page.setViewportSize({ width, height: 900 });
+      await installMockAuthenticatedSession(page, theme);
+      await installViewerDesign3Fixture(page);
+      try {
+        await openViewerDesign3(page);
+        await expect(page.getByRole("heading", { name: "Dataset rows", exact: true })).toHaveCount(0);
+        await expectViewerDesign3DocumentFits(page);
+        const search = page.getByRole("searchbox", { name: "Search all rows", exact: true });
+        const searchElement = await search.elementHandle();
+        expect(searchElement).not.toBeNull();
+
+        await search.fill("zzznomatch");
+        await expect(page.getByTestId("viewer-empty-state")).toContainText("Tiada hasil carian");
+        await expect(page.getByTestId("viewer-empty-state")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+        await expect(page.getByTestId("viewer-empty-state")).toHaveCSS("background-image", "none");
+        await expect(search).toBeFocused();
+        expect(await searchElement!.evaluate((element) => element.isConnected)).toBe(true);
+        await expect(page.getByTestId("button-toggle-filters")).toBeVisible();
+        await expect(page.getByTestId("button-column-selector")).toBeVisible();
+        await expect(page.locator(".viewer-search-controls [role='status']")).toContainText("0 hasil");
+        await page.getByRole("button", { name: "Kosongkan carian dan filter", exact: true }).click();
+        await expect(search).toBeFocused();
+        await expect(search).toHaveValue("");
+        await expect(page.getByTestId("button-viewer-row-details-0")).toBeVisible();
+        await expect(page.locator(".viewer-search-controls [role='status']")).toContainText("24 hasil");
+
+        await search.fill("z");
+        await expect(page.getByTestId("viewer-empty-state")).toContainText("Teruskan menaip");
+        await expect(page.getByTestId("viewer-empty-state")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+        await expect(search).toBeFocused();
+        expect(await searchElement!.evaluate((element) => element.isConnected)).toBe(true);
+        await page.getByRole("button", { name: "Clear search", exact: true }).click();
+        await expect(search).toBeFocused();
+        await expect(page.getByTestId("button-viewer-row-details-0")).toBeVisible();
+
+        const columns = page.getByTestId("button-column-selector");
+        await columns.click();
+        if (width < 768) await expect(page.getByRole("dialog", { name: "Select Columns", exact: true })).toBeVisible();
+        await page.getByTestId("checkbox-column-Notes").click();
+        await page.keyboard.press("Escape");
+        await expect(columns).toBeFocused();
+
+        const selection = page.getByRole("checkbox", { name: "Select row 1", exact: true });
+        await selection.click();
+        await expect(selection).toHaveAttribute("aria-checked", "true");
+        const detailsButton = page.getByTestId("button-viewer-row-details-0");
+        await detailsButton.focus();
+        await page.keyboard.press("Enter");
+        const details = page.getByRole("dialog", { name: "Synthetic Customer 01", exact: true });
+        await expect(details).toBeVisible();
+        await expect(details.getByText(viewerDesign3Account, { exact: true })).toBeVisible();
+        await expect(details.getByText(viewerDesign3Card, { exact: true })).toBeVisible();
+        await expect(details.getByText("00005000.00", { exact: true })).toBeVisible();
+        expect(await details.locator("dd").filter({ hasText: "<script>example only</script>" }).textContent()).toBe(viewerDesign3Note);
+        await expect(details.locator("script")).toHaveCount(0);
+        await expect(details.getByRole("button", { name: /edit|delete|save/i })).toHaveCount(0);
+        await expectViewerDesign3DocumentFits(page);
+        await expectNoSeriousAccessibilityViolations(page, `Viewer design3 ${theme} ${width}px details`);
+        await page.keyboard.press("Escape");
+        await expect(details).toHaveCount(0);
+        await expect(detailsButton).toBeFocused();
+        await expect(selection).toHaveAttribute("aria-checked", "true");
+        await expect(page.getByTestId("button-clear-selection")).toBeVisible();
+        await expectViewerDesign3DocumentFits(page);
+      } finally {
+        await logoutVisualSession(page);
+      }
+    });
+  }
+}
+
+test("viewer design3 column-filter zero results retain live search and recover all rows", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installMockAuthenticatedSession(page, "light");
+  await installViewerDesign3Fixture(page);
+  try {
+    await openViewerDesign3(page);
+    await page.getByTestId("button-toggle-filters").click();
+    await page.getByTestId("button-add-filter").click();
+    await page.getByTestId("input-filter-value-0").fill("zzznomatch");
+    await expect(page.getByTestId("viewer-empty-state")).toContainText("Tiada hasil carian");
+    await expect(page.getByTestId("input-search-viewer")).toBeVisible();
+    await expect(page.getByTestId("button-toggle-filters")).toBeVisible();
+    await page.getByRole("button", { name: "Kosongkan carian dan filter", exact: true }).click();
+    await expect(page.getByTestId("input-search-viewer")).toBeFocused();
+    await expect(page.getByTestId("input-filter-value-0")).toHaveCount(0);
+    await expect(page.locator(".viewer-search-controls [role='status']")).toContainText("24 hasil");
+    await expect(page.getByTestId("button-viewer-row-details-0")).toBeVisible();
+  } finally {
+    await logoutVisualSession(page);
+  }
+});
+
+for (const role of ["superuser", "admin", "user"] as const) {
+  test(`viewer design3 ${role} More menu preserves export permission and keyboard focus`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await installMockAuthenticatedSession(page, "light", role);
+    await installViewerDesign3Fixture(page, 24, role);
+    try {
+      await openViewerDesign3(page);
+      const more = page.getByTestId("button-viewer-more-actions");
+      await more.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByTestId("button-clear-all")).toBeVisible();
+      const exporter = page.getByTestId("button-export-menu");
+      if (role === "superuser") {
+        await expect(exporter).toBeVisible();
+        await exporter.focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(page.getByTestId("button-export-csv-all")).toBeVisible();
+        await page.keyboard.press("Escape");
+      } else {
+        await expect(exporter).toHaveCount(0);
+        await expect(page.locator('[data-testid^="button-export-"]')).toHaveCount(0);
+      }
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("menu")).toHaveCount(0);
+      await expect(more).toBeFocused();
+      await expect(page.getByTestId("button-viewer-row-details-0")).toBeVisible();
+    } finally {
+      await logoutVisualSession(page);
+    }
+  });
+}
+
+test("viewer design3 virtualized 150-row dataset keeps details, exact values and independent selection", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await installMockAuthenticatedSession(page, "dark");
+  await installViewerDesign3Fixture(page, 150);
+  try {
+    await openViewerDesign3(page);
+    await expect(page.locator(".viewer-search-controls [role='status']")).toContainText("150 hasil");
+    const scrollport = page.getByRole("region", { name: "Viewer data columns", exact: true });
+    await expect(scrollport.locator("table")).toHaveCount(0);
+    const renderedRows = await scrollport.locator('[aria-label^="Viewer row "]').count();
+    expect(renderedRows).toBeGreaterThan(0);
+    expect(renderedRows).toBeLessThan(150);
+    await expect(page.getByRole("checkbox", { name: "Select row 150", exact: true })).toHaveCount(0);
+
+    const firstDetails = page.getByTestId("button-viewer-row-details-0");
+    await firstDetails.click();
+    const firstDialog = page.getByRole("dialog", { name: "Synthetic Customer 01", exact: true });
+    await expect(firstDialog.getByText(viewerDesign3Account, { exact: true })).toBeVisible();
+    await expect(firstDialog.getByText(viewerDesign3Card, { exact: true })).toBeVisible();
+    expect(await firstDialog.locator("dd").filter({ hasText: "<script>example only</script>" }).textContent()).toBe(viewerDesign3Note);
+    await page.keyboard.press("Escape");
+    await expect(firstDetails).toBeFocused();
+    await expect(page.getByRole("checkbox", { name: "Select row 1", exact: true })).toHaveAttribute("aria-checked", "false");
+
+    const windowedViewport = scrollport.locator(".ops-data-table > div").last();
+    await windowedViewport.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    const lastSelection = page.getByRole("checkbox", { name: "Select row 150", exact: true });
+    await expect(lastSelection).toBeVisible();
+    await lastSelection.click();
+    await expect(lastSelection).toHaveAttribute("aria-checked", "true");
+    const lastDetails = page.getByTestId("button-viewer-row-details-149");
+    await lastDetails.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Synthetic Customer 150", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(lastDetails).toBeFocused();
+    await expect(lastSelection).toHaveAttribute("aria-checked", "true");
+    await expectViewerDesign3DocumentFits(page);
+    await expectNoSeriousAccessibilityViolations(page, "Viewer design3 virtualized table");
+  } finally {
+    await logoutVisualSession(page);
+  }
+});
+
+test("viewer design3 delayed refinement announces loading without losing the search or existing rows", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installMockAuthenticatedSession(page, "light");
+  await installViewerDesign3Fixture(page);
+  let releaseResponse: () => void = () => undefined;
+  const responseReleased = new Promise<void>((resolve) => { releaseResponse = resolve; });
+  let requestHeld = false;
+  let heldRouteWork = Promise.resolve();
+  const routePattern = "**/api/imports/visual-import-1/data*";
+  const delayedSearchRoute = async (route: Route) => {
+    if (new URL(route.request().url()).searchParams.get("search") !== "delayed-demo") {
+      await route.fallback();
+      return;
+    }
+    requestHeld = true;
+    heldRouteWork = (async () => {
+      await responseReleased;
+      await route.fallback();
+    })();
+    await heldRouteWork;
+  };
+  await page.route(routePattern, delayedSearchRoute);
+  try {
+    await openViewerDesign3(page);
+    const search = page.getByRole("searchbox", { name: "Search all rows", exact: true });
+    const status = page.locator(".viewer-search-controls [role='status']");
+    await expect(status).toContainText("24 hasil");
+    await search.fill("delayed-demo");
+    await expect.poll(() => requestHeld).toBe(true);
+    await expect(status).toHaveText("Mencari rekod...");
+    await expect(page.locator(".viewer-results")).toHaveAttribute("aria-busy", "true");
+    await expect(page.getByTestId("button-viewer-row-details-0")).toBeVisible();
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("delayed-demo");
+
+    releaseResponse();
+    await expect(page.getByTestId("viewer-empty-state")).toContainText("Tiada hasil carian");
+    await expect(status).toContainText("0 hasil");
+    await expect(page.locator(".viewer-results")).toHaveAttribute("aria-busy", "false");
+    await expect(search).toBeVisible();
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("delayed-demo");
+  } finally {
+    // Release even when an assertion fails, so a pending route cannot stall
+    // page teardown or the synthetic logout cleanup.
+    releaseResponse();
+    try {
+      await heldRouteWork;
+    } finally {
+      await page.unroute(routePattern, delayedSearchRoute);
+      await logoutVisualSession(page);
+    }
+  }
+});
+
+test.describe("viewer design3 touch menus", () => {
+  test.use({ hasTouch: true, isMobile: true });
+
+  for (const width of [320, 390]) {
+    test(`${width}px More and export sheet remain tappable, bounded and restore focus`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await installMockAuthenticatedSession(page, "dark");
+      await installViewerDesign3Fixture(page);
+      let downloadCount = 0;
+      page.on("download", () => { downloadCount += 1; });
+      try {
+        await openViewerDesign3(page);
+        expect(await page.evaluate(() => navigator.maxTouchPoints)).toBeGreaterThan(0);
+        const more = page.getByTestId("button-viewer-more-actions");
+        await more.tap();
+        await expect(page.getByTestId("button-clear-all")).toBeVisible();
+        const exporter = page.getByTestId("button-export-menu");
+        await exporter.tap();
+        const exportSheet = page.getByRole("dialog", { name: "Export Dataset", exact: true });
+        await expect(exportSheet).toBeVisible();
+        await expect(page.getByRole("menu")).toHaveCount(0);
+        const csvOption = exportSheet.getByTestId("button-export-csv-all");
+        await expect(csvOption).toBeVisible();
+        await expect.poll(() => exportSheet.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+        const bounds = await exportSheet.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.x).toBeGreaterThanOrEqual(-1);
+        expect(bounds!.y).toBeGreaterThanOrEqual(-1);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+        expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(901);
+        await expectViewerDesign3DocumentFits(page);
+        await page.screenshot({ path: testInfo.outputPath("viewer-mobile-export-sheet.png") });
+
+        // Inspecting the menu must not start an export or change the dataset.
+        await page.keyboard.press("Escape");
+        await expect(exportSheet).toHaveCount(0);
+        await expect(page.getByRole("menu")).toHaveCount(0);
+        await expect(more).toBeFocused();
+        await expect(page.getByTestId("button-viewer-row-details-0")).toBeVisible();
+        expect(downloadCount).toBe(0);
+      } finally {
+        await logoutVisualSession(page);
+      }
+    });
+  }
+});
+
+const viewerCompactCardHeaders = [
+  "Customer Name", "Reference", "Account Number", "Region", "Card Number",
+  "Phone", "Email", "Amount (RM)", "Payment Date", "Notes",
+] as const;
+const viewerCompactCardLongName = "Synthetic Customer Nurul Afiqah binti Abdullah — East Coast Collection Operations Department / ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const viewerCompactCardUnlistedValue = "SYNTHETIC_UNLISTED_FIELD_MUST_NOT_RENDER";
+
+async function installViewerCompactCardFixture(page: Page) {
+  await installViewerDesign3Fixture(page, 2);
+  await page.route("**/api/imports/visual-import-1/data*", (route) => {
+    expect(route.request().method()).toBe("GET");
+    return jsonResponse(route, {
+      headers: viewerCompactCardHeaders,
+      rows: [viewerCompactCardLongName, "Synthetic Customer 02"].map((name, index) => ({
+        id: `viewer-compact-card-${index + 1}`,
+        importId: "visual-import-1",
+        jsonDataJsonb: {
+          "Customer Name": name,
+          Reference: `SYN-${String(index + 1).padStart(5, "0")}`,
+          "Account Number": index === 0 ? viewerDesign3Account : "00001234567890123457",
+          Region: index === 0 ? "Central" : "Northern",
+          "Card Number": index === 0 ? viewerDesign3Card : "00009007199254740994",
+          Phone: "0123456789",
+          Email: `synthetic.compact.${index + 1}@example.test`,
+          "Amount (RM)": "00005000.00",
+          "Payment Date": "2026-01-15",
+          Notes: viewerDesign3Note,
+          Unlisted: viewerCompactCardUnlistedValue,
+        },
+      })),
+      total: 2, page: 1, pageSize: 100, limit: 100, offset: 0, nextCursor: null,
+      pagination: {
+        hasNextPage: false, hasPreviousPage: false, limit: 100, mode: "hybrid",
+        nextCursor: null, offset: 0, page: 1, pageSize: 100, total: 2, totalPages: 1,
+      },
+    });
+  });
+}
+
+for (const theme of visualThemes) {
+  for (const width of [320, 390, 700]) {
+    test(`viewer compact mobile cards ${theme} ${width}px preserve unique identity, preview budget and independent actions`, async ({ page }, testInfo) => {
+      test.setTimeout(90_000);
+      await page.setViewportSize({ width, height: 900 });
+      await installMockAuthenticatedSession(page, theme);
+      await installViewerCompactCardFixture(page);
+      try {
+        await openViewerDesign3(page);
+        const detailsButton = page.getByTestId("button-viewer-row-details-0");
+        const firstCard = page.locator("article").filter({ has: detailsButton });
+        await expect(firstCard).toHaveCount(1);
+        await expect.poll(async () => ((await firstCard.textContent()) ?? "").split(viewerCompactCardLongName).length - 1).toBe(1);
+        await expect(firstCard.locator("dt").filter({ hasText: /^Customer Name$/ })).toHaveCount(0);
+        await expect(firstCard.locator("dt:visible")).toHaveText(["Reference", "Account Number", "Region"]);
+        await expect(firstCard.getByText("SYN-00001", { exact: true })).toBeVisible();
+        await expect(firstCard.getByText(viewerDesign3Account, { exact: true })).toBeVisible();
+        await expect(firstCard.getByText("Central", { exact: true })).toBeVisible();
+        await expect(firstCard.locator("dt").filter({ hasText: /^Card Number$/ })).not.toBeVisible();
+        await expect(firstCard.getByText(viewerDesign3Card, { exact: true })).not.toBeVisible();
+        await expect(firstCard.getByText("0123456789", { exact: true })).not.toBeVisible();
+        await expect(page.getByText(viewerCompactCardUnlistedValue, { exact: true })).toHaveCount(0);
+        const disclosure = firstCard.locator("details > summary");
+        await expect(disclosure).toHaveText("Show 6 more fields");
+        const detailsBounds = await detailsButton.boundingBox();
+        expect(detailsBounds).not.toBeNull();
+        expect(detailsBounds!.width).toBeGreaterThanOrEqual(44);
+        expect(detailsBounds!.height).toBeGreaterThanOrEqual(44);
+        const fit = await firstCard.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return {
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            left: bounds.left,
+            right: bounds.right,
+            viewportWidth: document.documentElement.clientWidth,
+          };
+        });
+        expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth + 1);
+        expect(fit.left).toBeGreaterThanOrEqual(-1);
+        expect(fit.right).toBeLessThanOrEqual(fit.viewportWidth + 1);
+        await expectViewerDesign3DocumentFits(page);
+        await page.screenshot({ path: testInfo.outputPath("viewer-compact-mobile-card.png") });
+
+        await disclosure.focus();
+        await page.keyboard.press("Enter");
+        await expect(firstCard.locator("details")).toHaveAttribute("open", "");
+        await expect(firstCard.locator("dt:visible")).toHaveText([
+          "Reference", "Account Number", "Region", "Card Number", "Phone", "Email", "Amount (RM)", "Payment Date", "Notes",
+        ]);
+        await expect(firstCard.getByText(viewerDesign3Card, { exact: true })).toBeVisible();
+        await expect.poll(async () => ((await firstCard.textContent()) ?? "").split(viewerCompactCardLongName).length - 1).toBe(1);
+
+        // Hiding an overflow column must not backfill it into the preview or
+        // expose an unlisted field when the disclosure is expanded again.
+        const columns = page.getByTestId("button-column-selector");
+        await columns.click();
+        await expect(page.getByRole("dialog", { name: "Select Columns", exact: true })).toBeVisible();
+        await page.getByTestId("checkbox-column-Card Number").click();
+        await page.keyboard.press("Escape");
+        await expect(columns).toBeFocused();
+        await expect(firstCard.locator("dt").filter({ hasText: /^Card Number$/ })).toHaveCount(0);
+        await expect(disclosure).toHaveText("Show 5 more fields");
+        if (await firstCard.locator("details").getAttribute("open") !== null) {
+          await disclosure.click();
+        }
+        await expect(firstCard.locator("dt:visible")).toHaveText(["Reference", "Account Number", "Region"]);
+        await expect(firstCard.getByText("0123456789", { exact: true })).not.toBeVisible();
+        await disclosure.click();
+        await expect(firstCard.locator("dt:visible")).toHaveText([
+          "Reference", "Account Number", "Region", "Phone", "Email", "Amount (RM)", "Payment Date", "Notes",
+        ]);
+        await expect(page.getByText(viewerCompactCardUnlistedValue, { exact: true })).toHaveCount(0);
+
+        const selection = firstCard.getByRole("checkbox", { name: "Select row 1", exact: true });
+        await expect(selection).toHaveAttribute("aria-checked", "false");
+        await detailsButton.focus();
+        await page.keyboard.press("Enter");
+        const details = page.getByRole("dialog", { name: viewerCompactCardLongName, exact: true });
+        await expect(details).toBeVisible();
+        await expect(details.getByText(viewerDesign3Account, { exact: true })).toBeVisible();
+        // Column visibility is a layout choice, not a permission boundary: the
+        // existing read-only dialog still includes all authorized loaded fields.
+        await expect(details.getByText(viewerDesign3Card, { exact: true })).toBeVisible();
+        await expect(details.getByText(viewerCompactCardUnlistedValue, { exact: true })).toHaveCount(0);
+        await expect(details.getByRole("button", { name: "Close details", exact: true })).toBeFocused();
+        await page.keyboard.press("Escape");
+        await expect(details).toHaveCount(0);
+        await expect(detailsButton).toBeFocused();
+        await expect(selection).toHaveAttribute("aria-checked", "false");
+
+        await selection.click();
+        await expect(selection).toHaveAttribute("aria-checked", "true");
+        await detailsButton.focus();
+        await page.keyboard.press("Enter");
+        await expect(details).toBeVisible();
+        await expect(details.getByRole("button", { name: "Close details", exact: true })).toBeFocused();
+        await page.keyboard.press("Escape");
+        await expect(details).toHaveCount(0);
+        await expect(detailsButton).toBeFocused();
+        await expect(selection).toHaveAttribute("aria-checked", "true");
+        await expect(page.getByRole("checkbox", { name: "Select row 2", exact: true })).toHaveAttribute("aria-checked", "false");
+        await expectViewerDesign3DocumentFits(page);
+      } finally {
+        await logoutVisualSession(page);
+      }
+    });
+  }
+}

@@ -18,5 +18,6 @@ export interface ViewerVirtualRowData {
   visibleHeaders: string[];
   selectedRowIds: Set<number>;
   onToggleRowSelection: (rowId: number) => void;
+  onInspectRow?: ((row: DataRowWithId) => void) | undefined;
   gridTemplateColumns: string;
 }

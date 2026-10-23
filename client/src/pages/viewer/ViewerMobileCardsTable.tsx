@@ -6,6 +6,7 @@ import type { DataRowWithId } from "@/pages/viewer/types";
 interface ViewerMobileCardsTableProps {
   filteredRows: DataRowWithId[];
   onToggleRowSelection: (rowId: number) => void;
+  onInspectRow?: ((row: DataRowWithId) => void) | undefined;
   onToggleSelectAllFiltered: () => void;
   selectedRowIds: Set<number>;
   selectAllFiltered: boolean;
@@ -15,6 +16,7 @@ interface ViewerMobileCardsTableProps {
 function ViewerMobileCardsTableImpl({
   filteredRows,
   onToggleRowSelection,
+  onInspectRow,
   onToggleSelectAllFiltered,
   selectedRowIds,
   selectAllFiltered,
@@ -46,6 +48,7 @@ function ViewerMobileCardsTableImpl({
           selected={selectedRowIds.has(row.__rowId)}
           visibleHeaders={visibleHeaders}
           onToggleRowSelection={onToggleRowSelection}
+          onInspectRow={onInspectRow}
         />
       ))}
     </div>

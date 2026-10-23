@@ -17,7 +17,6 @@ const ViewerFiltersPanel = lazy(() =>
 
 type ViewerContentFiltersSectionProps = {
   filterTriggerRef: RefObject<HTMLButtonElement>;
-  hasRows: boolean;
   isMobile: boolean;
   showFilters: boolean;
   headers: string[];
@@ -31,7 +30,6 @@ type ViewerContentFiltersSectionProps = {
 
 export function ViewerContentFiltersSection({
   filterTriggerRef,
-  hasRows,
   isMobile,
   showFilters,
   headers,
@@ -42,7 +40,7 @@ export function ViewerContentFiltersSection({
   onRemoveFilter,
   onShowFiltersChange,
 }: ViewerContentFiltersSectionProps) {
-  if (!hasRows) {
+  if (headers.length === 0) {
     return null;
   }
 

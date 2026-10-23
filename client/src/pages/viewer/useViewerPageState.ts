@@ -8,6 +8,8 @@ import {
 import { buildViewerActiveFilterChips } from "@/pages/viewer/page-utils";
 import { useViewerDataState } from "@/pages/viewer/useViewerDataState";
 import { useViewerExportState } from "@/pages/viewer/useViewerExportState";
+import { getViewerTableLayout } from "@/pages/viewer/viewer-column-presentation";
+import { getViewerViewportHeight } from "@/pages/viewer/viewer-viewport-utils";
 import { filterViewerRows } from "@/pages/viewer/utils";
 import {
   buildViewerHeadersSignature,
@@ -17,10 +19,8 @@ import {
 } from "@/pages/viewer/viewer-column-preferences";
 import {
   deselectViewerColumns,
-  getViewerGridTemplateColumns,
   getViewerPageMetrics,
   getViewerSelectAllFilteredRowIds,
-  getViewerVirtualTableMinWidth,
   getViewerVisibleHeaders,
   pruneViewerSelectedRowIds,
   toggleViewerColumnSelection,
@@ -134,7 +134,7 @@ export function useViewerPageState({
   usePageShortcuts([
     {
       key: "/",
-      enabled: data.rows.length > 0 && !data.loading,
+      enabled: data.headers.length > 0,
       handler: () => {
         data.searchInputRef.current?.focus();
         data.searchInputRef.current?.select();
@@ -173,14 +173,17 @@ export function useViewerPageState({
   const hasPageFilterSubset = filteredRows.length !== data.rows.length;
   const enableVirtualRows = filteredRows.length > (isLowSpecMode ? 60 : 120);
   const rowHeightPx = tableDensity.density === "compact" ? 40 : 48;
-  const viewportHeightPx = 520;
-  const virtualTableMinWidth = useMemo(
-    () => getViewerVirtualTableMinWidth(visibleHeaders.length),
-    [visibleHeaders.length],
+  const [viewportHeightPx, setViewportHeightPx] = useState(() =>
+    getViewerViewportHeight(typeof window === "undefined" ? 900 : window.innerHeight),
   );
-  const gridTemplateColumns = useMemo(
-    () => getViewerGridTemplateColumns(visibleHeaders.length),
-    [visibleHeaders.length],
+  useEffect(() => {
+    const updateViewport = () => setViewportHeightPx(getViewerViewportHeight(window.innerHeight));
+    window.addEventListener("resize", updateViewport, { passive: true });
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
+  const { minWidth: virtualTableMinWidth, gridTemplateColumns } = useMemo(
+    () => getViewerTableLayout(visibleHeaders, tableDensity.density),
+    [tableDensity.density, visibleHeaders],
   );
   const { totalPages, pageStart, pageEnd, hasPreviousPage, hasNextPage } = useMemo(
     () =>

@@ -78,7 +78,7 @@ export function SavedImportCard({
       role="row"
       {...getAriaSelectedProps(isSelected || isActive)}
     >
-      <TableCell className="col-span-2 block h-auto min-w-0 p-0 md:table-cell md:px-3">
+      <TableCell className="col-span-2 block h-auto min-w-0 p-0 md:table-cell md:px-3" data-saved-ai-avoid="true">
           <div className="flex min-w-0 items-start gap-3">
             {isSuperuser ? (
               <Checkbox
@@ -129,12 +129,12 @@ export function SavedImportCard({
         </span>
       </TableCell>
       {isSuperuser ? (
-        <TableCell className="block h-auto min-w-0 p-0 md:table-cell md:px-1">
+        <TableCell className="col-span-2 block h-auto min-w-0 p-0 md:table-cell md:px-1" data-saved-ai-avoid="true">
           <span className="sr-only">Collection source: </span>
           <SavedSourceConfigCardControl compact disabled={actionsDisabled} item={item} />
         </TableCell>
       ) : null}
-      <TableCell className={cn("block h-auto p-0 md:table-cell md:px-3", !isSuperuser && "col-span-2")}>
+      <TableCell className="col-span-2 block h-auto p-0 md:table-cell md:px-3" data-saved-ai-avoid="true">
         <SavedImportActions
           actionsDisabled={actionsDisabled}
           isActive={isActive}

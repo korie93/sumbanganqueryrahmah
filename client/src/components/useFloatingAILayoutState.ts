@@ -6,7 +6,7 @@ import {
   type FloatingAiLayout,
 } from "@/components/floating-ai-layout";
 import { applyFloatingAiScrollLock } from "@/components/floating-ai-scroll-lock";
-import { isFloatingAiSaveCollectionRoute, shouldTrackFloatingAiDom } from "@/components/floating-ai-visibility";
+import { isFloatingAiSaveCollectionRoute, isFloatingAiSavedMobileRoute, shouldTrackFloatingAiDom } from "@/components/floating-ai-visibility";
 import {
   collectFloatingAiDomSnapshot,
   isEditableElement,
@@ -67,11 +67,13 @@ export function useFloatingAILayoutState({
   const focusListenerCleanupRef = useRef<(() => void) | null>(null);
   const layoutListenerCleanupRef = useRef<(() => void) | null>(null);
   const saveCollectionRoute = isFloatingAiSaveCollectionRoute(activePage, location);
+  const savedMobileRoute = isFloatingAiSavedMobileRoute(activePage, location, isMobile);
   const shouldTrackObstacleLayout = shouldTrackFloatingAiDom({
     isOpen,
     isThinking,
     aiStatus,
     saveCollectionRoute,
+    savedMobileRoute,
   });
   const hasDensePage = useMemo(
     () => resolveFloatingAiHasDensePage(activePage, location),
@@ -89,6 +91,7 @@ export function useFloatingAILayoutState({
     isOpen,
     shouldTrackObstacleLayout,
     saveCollectionRoute,
+    savedMobileRoute,
     keyboardOpen,
     mobileViewportHeight,
     hasFocusedAiEditable,
@@ -103,6 +106,7 @@ export function useFloatingAILayoutState({
     isOpen,
     shouldTrackObstacleLayout,
     saveCollectionRoute,
+    savedMobileRoute,
     keyboardOpen,
     mobileViewportHeight,
     hasFocusedAiEditable,
@@ -174,7 +178,7 @@ export function useFloatingAILayoutState({
         ? state.mobileViewportHeight
         : window.innerHeight;
     const domSnapshot = state.shouldTrackObstacleLayout
-      ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements(document, state.saveCollectionRoute))
+      ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements(document, state.saveCollectionRoute, state.savedMobileRoute))
       : {
           avoidRects: [],
           hasBlockingDialog: false,
@@ -192,7 +196,7 @@ export function useFloatingAILayoutState({
       hasDensePage: state.hasDensePage,
       preferCompactPanel: state.preferCompactPanel,
       avoidRects: domSnapshot.avoidRects,
-      allowAdaptiveTriggerOffsets: state.saveCollectionRoute,
+      allowAdaptiveTriggerOffsets: state.saveCollectionRoute || state.savedMobileRoute,
     });
 
     setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
@@ -212,6 +216,7 @@ export function useFloatingAILayoutState({
     preferCompactPanel,
     shouldTrackObstacleLayout,
     saveCollectionRoute,
+    savedMobileRoute,
     syncLayout,
     viewportBottomInset,
   ]);
@@ -228,9 +233,27 @@ export function useFloatingAILayoutState({
     let scheduled = false;
     let mounted = true;
     let resizeObserver: ResizeObserver | null = null;
+    let savedWorkspaceObserver: MutationObserver | null = null;
+    let observedSavedWorkspace: Element | null = null;
     const observedElements = new Set<Element>();
 
     const syncObservedElements = (obstacleQuery?: FloatingAiObstacleQueryResult | null) => {
+      const nextSavedWorkspace = savedMobileRoute ? document.querySelector(".saved-workspace") : null;
+      if (nextSavedWorkspace !== observedSavedWorkspace) {
+        savedWorkspaceObserver?.disconnect();
+        observedSavedWorkspace = nextSavedWorkspace;
+        if (nextSavedWorkspace) {
+          // Same-height page swaps need a fresh obstacle query too. Observe only
+          // Saved content/control changes, never the entire application/body.
+          savedWorkspaceObserver = new MutationObserver(scheduleSync);
+          savedWorkspaceObserver.observe(nextSavedWorkspace, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["aria-busy", "aria-expanded", "disabled"],
+          });
+        }
+      }
       if (!resizeObserver) return;
       const nextElements = new Set<Element>(obstacleQuery?.observedElements ?? []);
 
@@ -256,7 +279,7 @@ export function useFloatingAILayoutState({
         frame = null;
         scheduled = false;
         if (!mounted || !observedRoot.isConnected) return;
-        const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements(document, saveCollectionRoute) : null;
+        const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements(document, saveCollectionRoute, savedMobileRoute) : null;
         syncObservedElements(obstacleQuery);
         syncLayout(obstacleQuery);
       });
@@ -301,10 +324,18 @@ export function useFloatingAILayoutState({
     if (saveCollectionRoute) {
       document.addEventListener("toggle", scheduleSaveCollectionToggleSync, true);
     }
+    if (savedMobileRoute) {
+      // Portalled Saved sheets can open without resizing the workspace. Recheck
+      // on their focus lifecycle as well, using the same coalesced layout pass.
+      document.addEventListener("focusin", scheduleSync);
+      document.addEventListener("focusout", scheduleSync);
+      document.addEventListener("sqr:saved-workspace-ready", scheduleSync);
+    }
 
     const cleanupLayoutListeners = () => {
       mounted = false;
       observer?.disconnect();
+      savedWorkspaceObserver?.disconnect();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleResizeSync);
       if (shouldTrackObstacleLayout) {
@@ -312,6 +343,11 @@ export function useFloatingAILayoutState({
       }
       if (saveCollectionRoute) {
         document.removeEventListener("toggle", scheduleSaveCollectionToggleSync, true);
+      }
+      if (savedMobileRoute) {
+        document.removeEventListener("focusin", scheduleSync);
+        document.removeEventListener("focusout", scheduleSync);
+        document.removeEventListener("sqr:saved-workspace-ready", scheduleSync);
       }
       if (resizeDebounceHandle !== null) {
         window.clearTimeout(resizeDebounceHandle);
@@ -330,7 +366,7 @@ export function useFloatingAILayoutState({
         layoutListenerCleanupRef.current = null;
       }
     };
-  }, [hiddenForAiPage, saveCollectionRoute, shouldTrackObstacleLayout, syncLayout]);
+  }, [hiddenForAiPage, saveCollectionRoute, savedMobileRoute, shouldTrackObstacleLayout, syncLayout]);
 
   return {
     floatingRootRef,

@@ -1,16 +1,16 @@
-import { useMemo, useRef } from "react";
-import { AlertCircle, BookMarked, RefreshCw, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
+import { AlertCircle, BookMarked, Search } from "lucide-react";
 import {
   OperationalPage,
-  OperationalPageHeader,
   OperationalSectionCard,
 } from "@/components/layout/OperationalPage";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SavedDialogs } from "@/pages/saved/SavedDialogs";
 import { SavedFiltersBar } from "@/pages/saved/SavedFiltersBar";
 import { SavedImportsWorkspace } from "@/pages/saved/SavedImportsWorkspace";
 import { SavedLoadingSkeleton } from "@/pages/saved/SavedLoadingSkeleton";
+import { SavedPageHeader } from "@/pages/saved/SavedPageHeader";
+import { SavedWorkspacePanel } from "@/pages/saved/SavedWorkspacePanel";
 import { SavedSourceConfigProvider } from "@/pages/saved/SavedSourceConfigProvider";
 import { useSavedPageState } from "@/pages/saved/useSavedPageState";
 import { SavedOverlayFocusContext } from "@/pages/saved/SavedOverlayFocusContext";
@@ -27,70 +27,30 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
     [searchInputRef],
   );
 
+  useEffect(() => {
+    // The lazy route may mount after the assistant has queried its obstacles.
+    document.dispatchEvent(new Event("sqr:saved-workspace-ready"));
+  }, []);
+
   return (
     <SavedOverlayFocusContext.Provider value={overlayFocus}>
-    <OperationalPage width="wide">
-      <OperationalPageHeader
-        title="Saved Imports"
-        eyebrow="Imported Data"
-        description={
-          <>
-            <span className="sm:hidden">
-              Reopen Viewer or Analysis quickly and keep imported files tidy.
-            </span>
-            <span className="hidden sm:inline">
-              Review imported files, reopen Viewer or Analysis quickly, and keep operational datasets organized.
-            </span>
-          </>
-        }
-        badge={
-          !state.loading && state.totalImports > 0 ? (
-            <Badge
-              variant="secondary"
-              className="rounded-full px-2.5 py-1 text-xs font-medium"
-              data-testid="text-import-count"
-            >
-              {state.hasActiveFilters
-                ? `${state.visibleImports.length} of ${state.totalImports}`
-                : state.importSummaryLabel}
-            </Badge>
-          ) : null
-        }
-        actions={
-          <>
-            {state.isSuperuser && state.selectedImportIds.size > 0 ? (
-              <Button
-                variant="destructive"
-                className="h-9 px-3 sm:h-10 sm:px-4"
-                onClick={(event) => {
-                  overlayFocus.remember("bulk-delete", event.currentTarget);
-                  state.setBulkDeleteDialogOpen(true);
-                }}
-                disabled={state.adminActionsDisabled}
-                data-testid="button-bulk-delete"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                <span className="sm:hidden">Delete ({state.selectedImportIds.size})</span>
-                <span className="hidden sm:inline">Delete Selected ({state.selectedImportIds.size})</span>
-              </Button>
-            ) : null}
-            <Button
-              ref={fallbackFocusRef}
-              variant="outline"
-              className="h-9 px-3 sm:h-10 sm:px-4"
-              onClick={state.handleRefresh}
-              disabled={state.adminActionsDisabled}
-              data-testid="button-refresh"
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${state.loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </>
-        }
+    <OperationalPage width="wide" className="saved-workspace">
+      <SavedPageHeader
+        loading={state.loading}
+        error={Boolean(state.error)}
+        totalImports={state.totalImports}
+        filtered={state.hasActiveFilters || state.workspaceView !== "all"}
+        selectedCount={state.isSuperuser ? state.selectedImportIds.size : 0}
+        actionsDisabled={state.adminActionsDisabled}
+        refreshRef={fallbackFocusRef}
+        onRefresh={state.handleRefresh}
+        onBulkDelete={(trigger) => {
+          overlayFocus.remember("bulk-delete", trigger);
+          state.setBulkDeleteDialogOpen(true);
+        }}
       />
 
-      {!state.loading && state.totalImports > 0 ? (
-        <section aria-label="Search and Filter">
+        <section className="min-w-0 space-y-3" aria-label="Search and Filter" data-saved-ai-avoid="true">
           <SavedFiltersBar
             searchTerm={state.searchTerm}
             uploaderFilter={state.uploaderFilter}
@@ -106,8 +66,17 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             onMaxRowsFilterChange={state.setMaxRowsFilter}
             onClearFilters={state.clearFilters}
           />
+          <SavedWorkspacePanel
+            activeView={state.workspaceView}
+            summary={state.loading || state.error ? undefined : state.workspaceSummary}
+            onViewChange={state.setWorkspaceView}
+          />
+          <p className="sr-only" role="status" aria-atomic="true">
+            {state.loading ? "" : state.error
+              ? "Saved imports could not be loaded. Try Refresh."
+              : `${state.totalImports.toLocaleString()} matching saved files.`}
+          </p>
         </section>
-      ) : null}
 
       {state.error ? (
         <OperationalSectionCard
@@ -115,14 +84,14 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
           contentClassName="flex items-center gap-2 text-destructive"
         >
           <AlertCircle className="w-5 h-5" />
-          <span>{state.error}</span>
+          <span role="alert">{state.error}</span>
         </OperationalSectionCard>
       ) : null}
 
       <SavedSourceConfigProvider enabled={state.isSuperuser}>
-        {state.loading ? (
+        {state.error ? null : state.loading ? (
           <SavedLoadingSkeleton />
-        ) : !state.hasActiveFilters && state.totalImports === 0 ? (
+        ) : !state.hasActiveFilters && state.workspaceView === "all" && state.totalImports === 0 ? (
           <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
               <BookMarked className="w-8 h-8 text-muted-foreground" />
@@ -135,7 +104,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               Import Data
             </Button>
           </OperationalSectionCard>
-        ) : state.loadedImportCount === 0 ? (
+        ) : state.loadedImportCount === 0 && state.hasActiveFilters ? (
           <OperationalSectionCard contentClassName="ops-empty-state">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted sm:h-16 sm:w-16">
               <Search className="w-8 h-8 text-muted-foreground" />
@@ -173,8 +142,6 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               totalImports={state.totalImports}
               totalPages={state.totalPages}
               workspaceResultLabel={state.workspaceResultLabel}
-              workspaceSummary={state.workspaceSummary}
-              workspaceView={state.workspaceView}
               onAnalysis={state.handleAnalysis}
               onCloseDetails={state.handleCloseImportDetails}
               onCompare={state.handleCompare}

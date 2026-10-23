@@ -1,13 +1,8 @@
 import { Suspense, lazy, memo, type RefObject } from "react";
-import { Filter, MoreHorizontal, Trash2 } from "lucide-react";
+import { Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAriaExpandedProps } from "@/lib/aria-state-props";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ViewerMoreActions } from "@/pages/viewer/ViewerMoreActions";
 import { TableDensityControl } from "@/components/data/TableDensityControl";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import { buildViewerFiltersButtonLabel } from "@/pages/viewer/page-header-utils";
@@ -15,11 +10,6 @@ import { buildViewerFiltersButtonLabel } from "@/pages/viewer/page-header-utils"
 const ViewerColumnSelector = lazy(() =>
   import("@/pages/viewer/ViewerColumnSelector").then((module) => ({
     default: module.ViewerColumnSelector,
-  })),
-);
-const ViewerExportMenu = lazy(() =>
-  import("@/pages/viewer/ViewerExportMenu").then((module) => ({
-    default: module.ViewerExportMenu,
   })),
 );
 
@@ -93,14 +83,18 @@ function ViewerPageHeaderActionsImpl({
 }: ViewerPageHeaderActionsProps) {
   return (
     <div className="viewer-action-toolbar" role="group" aria-label="Dataset controls">
-      {rowsCount > 0 ? (
+      {headers.length > 0 ? (
         <>
-          <TableDensityControl
-            ariaLabel="Viewer row density"
-            testIdPrefix="viewer"
-            value={densityPreference}
-            onChange={onDensityChange}
-          />
+          <Button
+            ref={filterTriggerRef}
+            variant={showFilters ? "default" : "outline"}
+            onClick={onToggleFilters}
+            data-testid="button-toggle-filters"
+            {...getAriaExpandedProps(showFilters)}
+          >
+            <Filter className="h-4 w-4" aria-hidden="true" />
+            {buildViewerFiltersButtonLabel(filterCount)}
+          </Button>
           <Suspense fallback={<ViewerHeaderButtonFallback label="Columns" />}>
             <ViewerColumnSelector
               open={showColumnSelector}
@@ -115,60 +109,29 @@ function ViewerPageHeaderActionsImpl({
             />
           </Suspense>
 
-          <Button
-            ref={filterTriggerRef}
-            variant={showFilters ? "default" : "outline"}
-            onClick={onToggleFilters}
-            data-testid="button-toggle-filters"
-            className="w-full sm:w-auto"
-            {...getAriaExpandedProps(showFilters)}
-          >
-            <Filter className="mr-2 h-4 w-4" />
-            {buildViewerFiltersButtonLabel(filterCount)}
-          </Button>
+          <TableDensityControl
+            ariaLabel="Viewer row density"
+            testIdPrefix="viewer"
+            value={densityPreference}
+            onChange={onDensityChange}
+          />
         </>
       ) : null}
 
-      {isSuperuser && rowsCount > 0 ? (
-        <Suspense fallback={<ViewerHeaderButtonFallback label="Export" />}>
-          <ViewerExportMenu
+      {headers.length > 0 ? (
+          <ViewerMoreActions
+            isSuperuser={isSuperuser}
+            rowsCount={rowsCount}
             exportBusy={exportBusy}
             totalRows={totalRows}
             filteredRowsCount={filteredRowsCount}
             selectedRowCount={selectedRowCount}
-            selectedColumnsCount={selectedColumns.size}
-            headersCount={headers.length}
             hasFilteredSubset={hasFilteredSubset}
             onExportCsv={onExportCsv}
             onExportPdf={onExportPdf}
             onExportExcel={onExportExcel}
+            onClearAllData={onClearAllData}
           />
-        </Suspense>
-      ) : null}
-      {rowsCount > 0 ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              data-testid="button-viewer-more-actions"
-              aria-label="More dataset actions"
-            >
-              <MoreHorizontal className="mr-2 h-4 w-4" aria-hidden="true" />
-              More
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={onClearAllData}
-              data-testid="button-clear-all"
-              className="min-h-11 text-destructive focus:text-destructive sm:min-h-8"
-            >
-              <Trash2 aria-hidden="true" />
-              Clear viewer
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       ) : null}
     </div>
   );

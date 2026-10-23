@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
@@ -21,6 +21,9 @@ const ViewerVirtualizedTable = lazy(() =>
     default: module.ViewerVirtualizedTable,
   })),
 );
+const ViewerRowDetails = lazy(() =>
+  import("@/pages/viewer/ViewerRowDetails").then((module) => ({ default: module.ViewerRowDetails })),
+);
 
 const VIEWER_MOBILE_CARD_FALLBACK_KEYS = [
   "first-card",
@@ -29,6 +32,7 @@ const VIEWER_MOBILE_CARD_FALLBACK_KEYS = [
 ] as const;
 
 interface ViewerDataTableProps {
+  allHeaders?: string[] | undefined;
   debouncedSearch: string;
   enableVirtualRows: boolean;
   filteredRows: DataRowWithId[];
@@ -46,6 +50,7 @@ interface ViewerDataTableProps {
 }
 
 function ViewerDataTableImpl({
+  allHeaders,
   debouncedSearch,
   enableVirtualRows,
   filteredRows,
@@ -63,13 +68,37 @@ function ViewerDataTableImpl({
 }: ViewerDataTableProps) {
   const isMobile = useIsMobile();
   const desktopTableWidthRef = useRef<HTMLDivElement | null>(null);
+  const detailsTriggerRef = useRef<HTMLElement | null>(null);
+  const [inspectedRow, setInspectedRow] = useState<DataRowWithId | null>(null);
+  const handleInspectRow = useCallback((row: DataRowWithId) => {
+    detailsTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setInspectedRow(row);
+  }, []);
+  const handleDetailsOpenChange = useCallback((open: boolean) => {
+    if (!open) setInspectedRow(null);
+  }, []);
+  const handleDetailsCloseAutoFocus = useCallback((event: Event) => {
+    if (detailsTriggerRef.current?.isConnected) {
+      event.preventDefault();
+      detailsTriggerRef.current.focus({ preventScroll: true });
+    }
+  }, []);
+
+  useEffect(() => {
+    // A search/page change must not leave an old record open in the new result set.
+    setInspectedRow(null);
+  }, [filteredRows]);
 
   useLayoutEffect(() => {
     desktopTableWidthRef.current?.style.setProperty(
       "--viewer-table-min-width",
       `${virtualTableMinWidth}px`,
     );
-  }, [virtualTableMinWidth]);
+    desktopTableWidthRef.current?.style.setProperty(
+      "--viewer-table-viewport-height",
+      `${viewportHeightPx}px`,
+    );
+  }, [viewportHeightPx, virtualTableMinWidth]);
 
   const virtualRowData = useMemo<ViewerVirtualRowData>(
     () => ({
@@ -78,9 +107,10 @@ function ViewerDataTableImpl({
       visibleHeaders,
       selectedRowIds,
       onToggleRowSelection,
+      onInspectRow: handleInspectRow,
       gridTemplateColumns,
     }),
-    [filteredRows, gridTemplateColumns, onToggleRowSelection, selectedRowIds, tableDensity, visibleHeaders],
+    [filteredRows, gridTemplateColumns, handleInspectRow, onToggleRowSelection, selectedRowIds, tableDensity, visibleHeaders],
   );
 
   const desktopTableFallback = useMemo(
@@ -121,6 +151,7 @@ function ViewerDataTableImpl({
             <ViewerMobileCardsTable
               filteredRows={filteredRows}
               onToggleRowSelection={onToggleRowSelection}
+              onInspectRow={handleInspectRow}
               onToggleSelectAllFiltered={onToggleSelectAllFiltered}
               selectedRowIds={selectedRowIds}
               selectAllFiltered={selectAllFiltered}
@@ -150,6 +181,7 @@ function ViewerDataTableImpl({
                 <ViewerStandardTable
                   filteredRows={filteredRows}
                   density={tableDensity}
+                  onInspectRow={handleInspectRow}
                   onToggleRowSelection={onToggleRowSelection}
                   onToggleSelectAllFiltered={onToggleSelectAllFiltered}
                   selectedRowIds={selectedRowIds}
@@ -167,6 +199,16 @@ function ViewerDataTableImpl({
         filteredRowsCount={filteredRows.length}
         minSearchLength={minSearchLength}
       />
+      {inspectedRow ? (
+        <Suspense fallback={<p role="status" className="sr-only">Membuka butiran rekod…</p>}>
+          <ViewerRowDetails
+            row={inspectedRow}
+            headers={allHeaders ?? visibleHeaders}
+            onOpenChange={handleDetailsOpenChange}
+            onCloseAutoFocus={handleDetailsCloseAutoFocus}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

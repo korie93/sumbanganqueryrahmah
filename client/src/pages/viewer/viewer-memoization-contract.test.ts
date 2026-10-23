@@ -46,8 +46,9 @@ test("viewer mobile cards memoize per-card computed fields and callbacks", () =>
   const cardSource = readViewerSource("ViewerMobileCard.tsx");
   const tableSource = readViewerSource("ViewerMobileCardsTable.tsx");
 
-  assert.match(cardSource, /const previewHeaders = useMemo\(\(\) => visibleHeaders\.slice\(0, 4\)/);
-  assert.match(cardSource, /const overflowHeaders = useMemo\(\(\) => visibleHeaders\.slice\(4\)/);
+  assert.match(cardSource, /previewHeaders, overflowHeaders, shownFieldsCount \} = useMemo\(/);
+  assert.match(cardSource, /getViewerMobileCardPresentation\(row, visibleHeaders\)/);
+  assert.match(cardSource, /\[row, visibleHeaders\]/);
   assert.match(cardSource, /const handleToggleRow = useCallback\(/);
   assert.match(cardSource, /export const ViewerMobileCard = memo\(ViewerMobileCardImpl\)/);
   assert.match(tableSource, /export const ViewerMobileCardsTable = memo\(ViewerMobileCardsTableImpl\)/);

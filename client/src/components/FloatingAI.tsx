@@ -10,6 +10,7 @@ import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-statu
 import {
   shouldKeepFloatingAiPanelMounted,
   isFloatingAiSaveCollectionRoute,
+  isFloatingAiSavedMobileRoute,
 } from "@/components/floating-ai-visibility";
 import { useFloatingAIBehaviorState } from "@/components/useFloatingAIBehaviorState";
 import { useFloatingAIFocusManagement } from "@/components/useFloatingAIFocusManagement";
@@ -176,7 +177,7 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAI
         timeoutMs={timeoutMs}
       />
       <FloatingAITrigger
-        applyLayoutPlacement={isFloatingAiSaveCollectionRoute(activePage, location)}
+        applyLayoutPlacement={isFloatingAiSaveCollectionRoute(activePage, location) || isFloatingAiSavedMobileRoute(activePage, location, isMobile)}
         assistantLabel={assistantLabel}
         handleTriggerToggleClick={handleTriggerToggleClick}
         hideForFocusedEditable={hideForFocusedEditable}

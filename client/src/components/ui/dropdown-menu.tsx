@@ -19,8 +19,14 @@ const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
  */
 const DropdownMenuGroup = DropdownMenuPrimitive.Group
 
+/**
+ * Portals menu surfaces outside their trigger's clipping containers.
+ */
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal
 
+/**
+ * Groups the trigger and content for a keyboard-accessible nested menu.
+ */
 const DropdownMenuSub = DropdownMenuPrimitive.Sub
 
 /**
@@ -28,6 +34,9 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub
  */
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 
+/**
+ * Opens a nested menu with the shared SQR menu styling and direction cue.
+ */
 const DropdownMenuSubTrigger = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
@@ -50,6 +59,9 @@ const DropdownMenuSubTrigger = React.forwardRef<
 DropdownMenuSubTrigger.displayName =
   DropdownMenuPrimitive.SubTrigger.displayName
 
+/**
+ * Renders a nested menu surface with shared layering and motion behavior.
+ */
 const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>

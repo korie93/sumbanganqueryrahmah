@@ -22,6 +22,9 @@ const DialogTrigger = DialogPrimitive.Trigger
  */
 const DialogPortal = DialogPrimitive.Portal
 
+/**
+ * Closes the companion dialog while retaining Radix focus-restoration behavior.
+ */
 const DialogClose = DialogPrimitive.Close
 
 /**

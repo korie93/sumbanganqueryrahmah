@@ -4,6 +4,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ViewerDataFieldCard } from "@/pages/viewer/ViewerDataFieldCard";
 import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
 import type { DataRowWithId } from "@/pages/viewer/types";
+import { getViewerMobileCardPresentation } from "@/pages/viewer/viewer-column-presentation";
+import { ViewerRowDetailsButton } from "@/pages/viewer/ViewerRowDetailsButton";
 import {
   buildViewerOverflowFieldsLabel,
   buildViewerVisibleFieldsSummary,
@@ -14,6 +16,7 @@ interface ViewerMobileCardProps {
   selected: boolean;
   visibleHeaders: string[];
   onToggleRowSelection: (rowId: number) => void;
+  onInspectRow?: ((row: DataRowWithId) => void) | undefined;
 }
 
 function ViewerMobileCardImpl({
@@ -21,16 +24,19 @@ function ViewerMobileCardImpl({
   selected,
   visibleHeaders,
   onToggleRowSelection,
+  onInspectRow,
 }: ViewerMobileCardProps) {
-  const previewHeaders = useMemo(() => visibleHeaders.slice(0, 4), [visibleHeaders]);
-  const overflowHeaders = useMemo(() => visibleHeaders.slice(4), [visibleHeaders]);
-  const rowAriaLabel = useMemo(
-    () => buildViewerRowAriaLabel({ row, visibleHeaders }),
+  const { identityHeader, identity: rowIdentity, previewHeaders, overflowHeaders, shownFieldsCount } = useMemo(
+    () => getViewerMobileCardPresentation(row, visibleHeaders),
     [row, visibleHeaders],
   );
+  const rowAriaLabel = useMemo(
+    () => buildViewerRowAriaLabel({ row, visibleHeaders, shownFieldsCount }),
+    [row, shownFieldsCount, visibleHeaders],
+  );
   const visibleFieldsSummary = useMemo(
-    () => buildViewerVisibleFieldsSummary(visibleHeaders.length),
-    [visibleHeaders.length],
+    () => buildViewerVisibleFieldsSummary(visibleHeaders.length, shownFieldsCount),
+    [shownFieldsCount, visibleHeaders.length],
   );
   const overflowFieldsLabel = useMemo(
     () => buildViewerOverflowFieldsLabel(overflowHeaders.length),
@@ -43,41 +49,46 @@ function ViewerMobileCardImpl({
   return (
     <article
       aria-label={rowAriaLabel}
-      className={`rounded-xl border p-3 ${selected ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+      className={`viewer-mobile-card rounded-xl border p-3 ${selected ? "border-primary bg-primary/5" : "border-border bg-card"}`}
       role="group"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium text-foreground">
-            Row {row.__rowId + 1}
+          <p className="break-words text-sm font-semibold leading-5 text-foreground [overflow-wrap:anywhere]">
+            {identityHeader !== undefined ? <span className="sr-only">{identityHeader}: </span> : null}
+            {rowIdentity}
           </p>
           <p className="text-xs text-muted-foreground">
-            {visibleFieldsSummary}
+            {identityHeader !== undefined ? `Row ${row.__rowId + 1} · ` : ""}{visibleFieldsSummary}
           </p>
         </div>
-        <label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-end">
-          <Checkbox
-            checked={selected}
-            onCheckedChange={handleToggleRow}
-            aria-label={`Select row ${row.__rowId + 1}`}
-          />
-        </label>
+        <div className="viewer-mobile-card-actions flex shrink-0 items-center gap-1">
+          <label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={handleToggleRow}
+              aria-label={`Select row ${row.__rowId + 1}`}
+            />
+          </label>
+          <ViewerRowDetailsButton row={row} onInspectRow={onInspectRow} />
+        </div>
       </div>
 
       {previewHeaders.length > 0 ? (
-        <dl className="mt-2 divide-y divide-border">
+        <dl className="mt-1 divide-y divide-border">
           {previewHeaders.map((header) => (
             <ViewerDataFieldCard
               key={`${row.__rowId}-${header}`}
               header={header}
               value={row[header]}
+              compact
             />
           ))}
         </dl>
       ) : null}
 
       {overflowHeaders.length > 0 ? (
-        <details className="group mt-2 border-t border-border">
+        <details className="group mt-1 border-t border-border">
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-2 text-sm font-medium text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             {overflowFieldsLabel}
             <ChevronDown className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden="true" />

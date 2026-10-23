@@ -1,19 +1,30 @@
-import { Filter } from "lucide-react";
 import { buildViewerSearchResultsSummary } from "@/pages/viewer/search-bar-utils";
 
 interface ViewerSearchSummaryProps {
   filteredRowsCount: number;
   rowsCount: number;
+  totalRows?: number | undefined;
+  message?: string | undefined;
+  visible?: boolean | undefined;
 }
 
 export function ViewerSearchSummary({
   filteredRowsCount,
   rowsCount,
+  totalRows,
+  message,
+  visible = true,
 }: ViewerSearchSummaryProps) {
   return (
-    <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/80 px-3 py-2 text-sm text-muted-foreground">
-      <Filter className="h-4 w-4" />
-      <span>{buildViewerSearchResultsSummary(filteredRowsCount, rowsCount)}</span>
-    </div>
+    <p
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className={visible ? "text-xs text-muted-foreground" : "sr-only"}
+    >
+      {message ?? (totalRows === undefined
+        ? buildViewerSearchResultsSummary(filteredRowsCount, rowsCount)
+        : `${totalRows} hasil · ${filteredRowsCount} dipaparkan`)}
+    </p>
   );
 }

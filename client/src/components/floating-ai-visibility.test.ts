@@ -5,6 +5,7 @@ import {
   shouldKeepFloatingAiPanelMounted,
   shouldTrackFloatingAiDom,
   isFloatingAiSaveCollectionRoute,
+  isFloatingAiSavedMobileRoute,
 } from "@/components/floating-ai-visibility";
 
 test("shouldKeepFloatingAiPanelMounted stays mounted while the panel is open", () => {
@@ -84,4 +85,34 @@ test("idle obstacle tracking is enabled for save collection routes without widen
     assert.equal(shouldTrackFloatingAiDom({ isOpen: false, isThinking: false, aiStatus: "IDLE", saveCollectionRoute }), false);
   }
   assert.equal(isFloatingAiSaveCollectionRoute("settings", "/collection/save"), false);
+});
+
+test("idle Saved obstacle tracking is restricted to the exact mobile route", () => {
+  const idle = { isOpen: false, isThinking: false, aiStatus: "IDLE" as const };
+  for (const location of ["/saved", "/saved/", "/saved///", "/SAVED?search=fixture#files"]) {
+    const savedMobileRoute = isFloatingAiSavedMobileRoute("saved", location, true);
+    assert.equal(savedMobileRoute, true, location);
+    assert.equal(shouldTrackFloatingAiDom({ ...idle, savedMobileRoute }), true, location);
+  }
+  for (const location of ["/saved-other", "/saved/123", "/settings/saved", "/viewer", "/"]) {
+    const savedMobileRoute = isFloatingAiSavedMobileRoute("saved", location, true);
+    assert.equal(savedMobileRoute, false, location);
+    assert.equal(shouldTrackFloatingAiDom({ ...idle, savedMobileRoute }), false, location);
+  }
+});
+
+test("Saved mobile tracking does not change desktop or unrelated active pages", () => {
+  const idle = { isOpen: false, isThinking: false, aiStatus: "IDLE" as const };
+  for (const [activePage, location, isMobile] of [
+    ["saved", "/saved", false],
+    ["saved", "/saved?search=fixture", false],
+    ["settings", "/saved", true],
+    ["viewer", "/saved", true],
+  ] as const) {
+    const savedMobileRoute = isFloatingAiSavedMobileRoute(activePage, location, isMobile);
+    assert.equal(savedMobileRoute, false, `${activePage}:${location}:${isMobile}`);
+    assert.equal(shouldTrackFloatingAiDom({ ...idle, savedMobileRoute }), false);
+    assert.equal(shouldTrackFloatingAiDom({ ...idle, savedMobileRoute, isOpen: true }), true);
+  }
+  assert.equal(shouldTrackFloatingAiDom(idle), false);
 });

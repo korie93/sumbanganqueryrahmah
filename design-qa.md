@@ -2770,3 +2770,561 @@ Final result: passed
 
 No actionable P0/P1/P2 remains in this approved inline-error scope. No commit,
 push or deployment performed for this scoped continuation.
+
+---
+
+## 2026-10-22 — Viewer concept 3 production-frontend integration
+
+### Scope, source and comparison normalization
+
+The user selected the third displayed Viewer concept and approved local
+Playwright/Chromium QA with synthetic data. This integrates that selected
+direction into the existing Viewer, not a new application or a backend redesign.
+Production credentials, databases and servers were not used.
+
+Source visual truth (1672x941 presentation board):
+`C:/Users/Administrator/.codex/generated_images/01a06af3-0962-71b1-b172-6ca2dba63123/exec-7b37e64f-7f23-4585-9ba7-3faeec886d07.png`.
+Desktop frame crop: (25,20)-(1321,897), 1296x877 pixels. Mobile crop:
+(1342,20)-(1651,895), 309x875 pixels. The generated board is not an exact
+1440x1024/390x844 CSS specification: its two panels have different framing and
+proportions. Comparison sheets preserve each image's aspect ratio and letterbox
+to equal panel sizes; no distortion or pixel-perfect fidelity claim is made.
+
+Final built-frontend captures are under `artifacts/viewer-design-3/visual/`:
+
+- `1440-light-rows.png` and `1440-dark-rows.png`: 1440x1024 CSS/pixels, DPR1.
+- `1440-light-details.png` and `1440-dark-details.png`: same viewport, open detail.
+- `390-dark-empty.png`: 390x844 CSS/pixels, focused search, zero results.
+- `390-dark-export-sheet.png`: 390x844, mobile export panel open.
+- `320-{light,dark}-{rows,empty}.png`: 320x780 CSS/pixels.
+- `390-light-{rows,empty}.png`, `390-dark-rows.png`: 390x844.
+- `768-{light,dark}-{rows,empty}.png`: 768x900 CSS/pixels.
+
+Full-view comparison inputs opened with source and implementation together:
+`comparison-desktop-full.png` (2340x884) and `comparison-mobile-full.png`
+(816x964). Focused, readable comparisons also opened:
+`comparison-desktop-toolbar.png` (2684x364) and
+`comparison-mobile-empty.png` (836x744). The source is cropped before
+proportional scaling; source and implementation densities are recorded above.
+The final regenerated comparison inputs use the final build's captures.
+
+The existing app was also opened through Saved -> View in the Codex in-app
+browser at `http://127.0.0.1:64675/saved`, with six columns selected through real
+controls and compact density. The preview is an ignored, GET/HEAD-only loopback
+fixture using built assets, synthetic identity/rows and closed sockets. No
+preview controls, fixture identity, auth bypass or fake API enters production
+source. Refreshing Viewer without an in-memory selected import retains the
+existing instruction to open a file from Saved; the preview link starts there.
+
+### Findings and repair history
+
+- [P2, resolved] Narrow controls originally overflowed at320px. The local
+  Columns trigger now shows a short visible label below768px, retains the full
+  count in its accessible name, and shares a bounded three-column toolbar with
+  Filter/More. Final320px captures and browser bounds checks pass in both themes.
+- [P2, resolved] During refinement, the status initially announced the previous
+  count while `loadingMore` was pending. It now announces `Mencari rekod...`
+  while retaining existing rows and the focused search. A held-route browser
+  test verifies the state before and after releasing the response.
+- [P2, resolved] A first local transparent style did not override the global
+  dark `.ops-empty-state` rule's `!important` surface. Final Viewer empty states
+  no longer carry that global class and instead use namespaced spacing/color.
+  New SSR coverage plus computed-style browser assertions verify a transparent
+  background in all eight viewport/theme cases. Post-fix full/focused mobile
+  comparison inputs show the flat empty state without the unwanted square card.
+- [P2, resolved] Additional touch QA found the adjacent export submenu at x=-171
+  on320px and x=-101 on390px. Desktop keeps its submenu; mobile now opens the
+  existing accessible bottom Sheet pattern, with identical export scopes and
+  busy/role guards. Strict bounds, focus-within, Escape -> More and no-download
+  tests pass at both widths. Post-fix evidence: `390-dark-export-sheet.png` and
+  `../mobile-export-sheet-320.png` / `../mobile-export-sheet-390.png` relative to
+  the visual directory. Both touch screenshots were opened and inspected.
+
+No actionable P0/P1/P2 remains after these repairs and recaptures.
+
+### Required fidelity surfaces and deliberate product constraints
+
+- Fonts/typography: existing system-ui/Segoe UI/sans-serif family is retained,
+  confirmed from the rendered DOM. A single semibold responsive dataset heading,
+  quiet record/column context and consistent small table labels replace the
+  duplicate summary hierarchy. Long values wrap in the detail dialog; table
+  ellipsis is intentional and full values remain readable there. Generated
+  mock lettering is not an authoritative font file or exact CSS-size reference.
+- Spacing/layout: full-width workspace, one consolidated toolbar, aligned table
+  columns, bounded height, quiet in-flow pagination, and independent detail
+  actions follow concept3. Mobile keeps cards and all preview/expand behavior;
+  tablet retains scoped horizontal scrolling and keyboard scroll controls.
+  Final metrics record17 screenshots, zero document/control/dialog overflows,
+  and restored search/detail/export focus. Responsive menus do not clip.
+- Colors/tokens: existing light/dark semantic surfaces, borders, focus rings,
+  muted text and selection tokens are preserved rather than adding a competing
+  palette. The flat empty result follows the source intent. The existing active
+  filter/density treatments are more neutral than the mock's pale blue; this is
+  an intentional shared-design-system constraint, not a new theme migration.
+- Assets/icons: the real transparent Q-and-dots project asset remains sharp and
+  unchanged. Existing Lucide controls supply consistent functional icons. No
+  handcrafted logo, CSS illustration, replacement raster, extra icon library
+  or generated decorative asset was added to the app.
+- Copy/content: search and empty-state BM copy is concise and truthful. The
+  recovery action says it clears search AND filters because that is its actual
+  effect. Existing English navigation/control labels and footer remain intact.
+  Actual filtered counts (8 desktop matches /0 empty results) replace the mock's
+  static24; the production Viewer is generic imported data, not a Collection-only
+  financial table. All authorized columns remain available by default and saved
+  column/density/sidebar preferences are honored. Six columns in screenshots
+  are a normal user-selected presentation, not a forced default.
+
+The row-detail affordance opens only already-loaded fields from authorized
+headers. It adds no request, edit, delete or permission expansion. Leading
+zeros, literal HTML-like text and multiline values remain exact/escaped.
+Selection is independent from opening/closing details. Export remains limited
+to its existing superuser condition; this client UI is not a replacement for
+backend authorization. Existing modules, roles, endpoints and business logic
+were not changed. Shared Dialog/Dropdown source edits are documentation only.
+
+### Test evidence and limits
+
+- Full client suite:2270/2270 passed in475 test files with serial concurrency
+  (`artifacts/viewer-design-3/client-tests-serial-final.log`), before the final
+  refinement-status regression test was added. Final affected presentation and
+  search-shell tests:15/15 passed after the mobile-sheet repair, including that
+  additional test and transparent-state assertions. No full2271 rerun is claimed.
+- Script suites with isolated environment/no developer dotenv:758 passed and
+  one existing skip in the759 Node tests;63/63 TSX tests passed.
+- Built-browser suite: initial15/15 included existing dashboard/table scaling.
+  Final focused `viewer design3` run:16/16 passed after repairs; touch evidence
+  rerun2/2 passed. Coverage includes both themes at320/390/768/1440, no-result and
+  short-search recovery, column filters, dialog keyboard/focus, role-gated More,
+ 150-row virtualization, exact values, delayed responses and touch export bounds.
+- Final17 screenshots/metrics: no page errors and no failed layout/focus checks.
+  Non-GET and off-origin requests were blocked in screenshot contexts. The
+  preview also rejects mutations; fixture misses do not access any real backend.
+- Final typecheck and production build passed. Changed-client lint has0 errors;
+  four warnings remain for existing label-wrapper/callback patterns. Bundle,
+  breakpoint, color/spacing, secrets, hygiene, CSP, sourcemap and whitespace gates
+  passed; no snapshot tolerance/baseline was weakened. Existing upstream PostCSS
+  `from` warning remains. The bundle budgets pass but shell/authenticated CSS
+  have little remaining headroom; no global CSS expansion was attempted.
+
+This is local synthetic frontend/regression evidence, not a full remote CI run,
+live export-file audit, real production session/database test, full WCAG or
+assistive-technology certification, physical-device guarantee or security audit.
+No commit, push, production deployment or external design-file publication was
+performed in this task. The scoped source is ready for the user's local review.
+
+Checklist: selected source implemented; persistent recovery tested; standard and
+virtualized rows verified; mobile bounds repaired; full/focused comparisons
+opened; final build/typecheck and listed gates passed; local preview available.
+
+final result: passed
+
+---
+
+## 2026-10-23 — Selected compact mobile record card, displayed option 1
+
+### Source and approved scope
+
+The user selected the FIRST displayed image from the latest three mockups:
+`C:/Users/Administrator/.codex/generated_images/01a06af3-0962-71b1-b172-6ca2dba63123/exec-dca50fa5-f2cc-4082-99c9-e2e768bcd7e4.png`.
+This is the standalone rounded card with aligned label/value rows and the
+customer identity shown once. It is NOT either stacked-label or ledger option.
+The scope is the existing responsive web Viewer's mobile cards, not a new mobile
+app, a new theme, toolbar redesign, Copy action or search highlighting.
+
+### Visual evidence and normalization
+
+Source pixels:853x1844, a generated concept intended for390x844. It has no
+device bezel. Full-view comparison proportionally scales it to390px width with
+letterboxing, never stretches it. The first record's source crop is
+(31,514)-(823,843),792x329 pixels. Source density is illustrative, not a reliable
+CSS/DPR specification. Production keeps readable14px values/20px line-height
+and44px touch targets; the normalized mock's smaller text/density is not copied
+literally. Unchanged surrounding app chrome remains the existing product.
+
+Final implementation evidence in `artifacts/viewer-compact-card-20261023/visual/`:
+
+- `390-light-rows.png`:390x844 CSS/pixels,DPR1, same sample dataset/column choice.
+- `390-light-first-card.png`:358x221 pixels, a rendered first-card element capture.
+- `320-{light,dark}-first-card.png`:288px-wide card captures with safe wrapping.
+- Full themed rows/empty/details captures at320x780,390x844,768x900 and1440x1024;
+ 17 full-frame captures plus4 focused mobile-card captures.
+- `comparison-full.png`:816x908, source+final in the same full-view comparison.
+- `comparison-card.png`:1468x604, source+final first card proportionally padded
+  into equal comparison panels. Both comparison files were opened and inspected.
+
+Codex in-app browser also opened the actual built app through Saved -> View,
+confirmed the identity/body field structure, opened row1 details, closed them,
+and confirmed focus returned to the same row's action without selecting it.
+`codex-browser-compact-final.png` records that browser review. The browser's
+zoom/density differs from the DPR1 regression capture; it is not used for exact
+390px comparison. Temporary viewport overrides were reset after review.
+
+### Findings, repairs and final fidelity review
+
+- [P2, resolved] First comparison found residual loose field spacing. The first
+  pass's358x241 card is preserved in `before-spacing-first-card.png`, together
+  with `comparison-card-before-spacing.png`. Compact preview-row padding and4px
+  surrounding gaps now produce358x221 for the same card, without reducing font
+  sizes or44px touch controls. Final full/focused comparisons were recaptured
+  and opened after the repair. Exact source-height matching is intentionally
+  constrained by the production type/touch sizes, not achieved by scaling text.
+- Identity is removed only by its exact selected header, from the original
+  preview/overflow partition. No fifth field is pulled forward to fill a slot.
+  Equal-looking values in different columns remain. Blank/hidden names retain
+  the Row N fallback. An identity outside the first four remains the existing
+  title, is not repeated in disclosure, and actual visible/overflow counts and
+  row ARIA summary are truthful. A screen-reader-only header prefix retains its
+  field meaning. Original imported values and complete detail data are unchanged.
+- Typography: existing system-ui/Segoe UI stack,14px semibold identity,12px muted
+  labels/metadata and14px values retained. Long names and20digit identifiers wrap
+  without collisions. This is a readability-preserving interpretation of the
+  chosen card, not a claim of a pixel-perfect full-page raster clone.
+- Spacing/layout:12px outer padding, aligned2:3 label/value tracks, light row
+  dividers, compact vertical spacing and existing disclosure structure match
+  the selected direction. Header actions remain independent and>=44px, including
+  the640–767px card layout. Existing desktop/virtual table layout is unchanged.
+- Colors/tokens: current neutral surfaces/borders, muted labels, primary action
+  and selected tint stay; dark mode uses existing theme tokens. No global palette
+  or other page styling changed.
+- Assets/icons: existing project Q and library chevrons/checkboxes remain; no
+  generated raster, handcrafted replacement, new dependency or decorative art
+  is introduced into product code.
+- Copy/content: labels, record order, field values and action copy stay. The name
+  appears once visually in the card; all selected fields remain represented by
+  title, preview or disclosure. Full read-only details still include original
+  headers/values. Mock-only extra synthetic rows/values are not copied to data.
+
+No actionable P0/P1/P2 remains in this scoped card implementation. No shared
+header, authentication, permission, API, database or export behavior was changed.
+
+### Verification and limits
+
+- Viewer unit/source tests:95/95 passed on the final compact spacing, including
+  seven new cases for deduplication, exact labels, no backfill, overflow identity,
+  empty/hidden names, actual names matching Row N, zero, escaping and leading zeros.
+  Log:`artifacts/viewer-compact-card-20261023/viewer-unit.log`.
+- Final built-browser run:22/22 passed, one worker, grep
+  `viewer compact mobile cards|viewer design3`. Six new320/390/700px light/dark
+  cases cover original preview/overflow order, hidden/unlisted fields, long names,
+  leading zeros,44px detail actions, independent selection, disclosure, modal
+  keyboard/focus and accessible labels. Existing16 Viewer regressions also pass.
+  Inspected stress evidence:`artifacts/viewer-design-3/compact-card-browser-light-320.png`
+  and `compact-card-browser-dark-700.png` in the same directory.
+- Screenshot runner metrics have zero failures/page errors. It allows only
+  loopback GET/HEAD, blocks off-origin requests and sockets, and uses synthetic
+  rows/account only. No production session, receipt, customer data or database.
+- Full typecheck and final build passed; final build log is in the compact-card
+  artifact directory. Scoped lint, breakpoint, spacing/color, secret/hygiene,
+  bundle and whitespace gates passed. Existing upstream PostCSS warning remains.
+  No snapshot baselines or tolerance were changed. This is not a new full CI,
+  production security audit, physical-device or full screen-reader certification.
+
+The earlier broad Viewer work in this dirty tree is preserved. No commit, push,
+deployment or external design-file publication performed in this continuation.
+Local synthetic preview remains at `http://127.0.0.1:64675/saved`; click View.
+
+Checklist: correct displayed option resolved; scoped implementation;95 unit and22
+browser checks; post-spacing recapture; full/focused source comparisons; normal
+browser viewport restored; preview kept available for review.
+
+final result: passed
+
+## Saved compact header and persistent search — 2026-10-23
+
+### Scope and source truth
+
+User approved the recommended compact upper workspace and persistent search
+controls. Checkbox-to-Details behavior, navigation, permissions, mutation APIs,
+source configuration and backend fetching remain unchanged. Existing uncommitted
+Viewer work is preserved. No commit, push or deployment performed.
+
+Source captures from the local audit:
+`artifacts/saved-audit-20261023/01-overview.png` and `02-no-matches.png`.
+Both are 700 × 1348 pixel browser-surface captures at the default 722 × 1391
+CSS viewport (DPR 1.34). Implementation captures use the same browser-surface
+method, viewport and 700 × 1348 pixels:
+`artifacts/saved-polish-20261023/01-compact-light.png` and
+`02-zero-results-light.png`. Do not use the earlier full-page captures for
+pixel comparisons: that capture path included differently scaled blank canvas.
+
+Full-view comparison opened and reviewed together:
+`artifacts/saved-polish-20261023/saved-before-after.png`.
+Focused same-scale comparisons opened and reviewed:
+`saved-header-comparison.png` and `saved-empty-comparison.png` in that folder.
+The full comparison uses equal-width 460px normalization; focused comparisons
+retain the native 700px width. They are actual screenshots, not new mockups.
+
+### Findings, fixes and post-fix evidence
+
+- [P1, resolved] Search previously unmounted during loading and disappeared on
+  zero matches. Search, advanced filters and category controls now remain outside
+  the conditional result branch. Real delayed synthetic requests confirmed the
+  input remains focused during loading and after zero results; expanded advanced
+  controls and uploader focus also survive. Clear Filters returns focus to search.
+- [P2, resolved] The upper workspace repeated file counts across multiple rows.
+  Title, settled total and Refresh are grouped compactly, with one short support
+  line. Per-page Rows/Storage stay explicitly scoped to the loaded page. The file
+  section only repeats its useful page count, not the query total.
+- [P2, resolved] A successful empty category could be mislabelled as an entirely
+  empty library. Persistent categories and Show All now provide a recovery path.
+  Failed fetches display their error without also claiming the library is empty.
+- [P2, resolved in approved Playwright continuation] At 722px the shared Input's
+  `sm:h-9` overrode Saved's base height: search was 36px while adjacent controls
+  were 44px. Scoped `sm:h-11 md:h-9` classes now keep all four Saved inputs at
+  44px through 640–767px without changing the shared Input or desktop density.
+  The first strengthened run recorded two failures (light/dark 722px); after
+  rebuilding, all 11 cases passed twice, including exact control bounds/heights.
+  Same-state 722 × 900px source/post-fix evidence:
+  `artifacts/saved-polish-20261023/08-tablet-before-height-fix.png` and
+  `09-tablet-after-height-fix.png`. Full and focused same-density comparisons
+  `saved-tablet-height-comparison.png` and `saved-tablet-controls-comparison.png`
+  were opened together and reviewed. They confirm the intended 8px input-height
+  correction, preserved typography/tokens/assets/copy, and no new layout drift.
+- The original source status error/unknown size in the audit was incomplete
+  fixture data. The local helper now has a complete empty source-config response
+  and synthetic size/hash. This is not a production source-config fix or claim.
+
+### Required fidelity surfaces
+
+- Typography: existing font family and tokens retained; smaller page title and
+  concise support copy improve hierarchy. No new fonts or arbitrary text sizes.
+- Spacing/layout: fewer header layers; responsive wrapping rather than fixed
+  widths/heights; mobile controls retain 44px targets. No global CSS added.
+- Colors/tokens: existing foreground, muted, primary, border and destructive
+  tokens retained. Both light and dark views visually checked in Codex browser.
+- Assets/icons: real existing SQR branding and Lucide icons retained. No artwork,
+  handcrafted logo or asset replacement. Refresh spin respects reduced motion.
+- Copy/content: singular/plural and filtered totals are truthful; partial-page
+  metadata is labelled; no production preview/test controls were introduced.
+
+### Verification and limits
+
+- All Saved unit/source tests: 50/50 passed, including eight new compact header,
+  readiness, permission, stable shell, empty/error/category and keyboard contracts.
+- Full `npm run test:client`, full typecheck, final production build, scoped lint,
+  whitespace, six operational matrix tests, breakpoint, spacing/color, entry-shell,
+  browser-storage and bundle-budget gates passed. Existing PostCSS warning remains.
+- User explicitly approved local Playwright/Chromium with synthetic data. Final
+  built-browser run: 11/11 passed, one worker, grep `saved compact shell`.
+  Log: `artifacts/saved-polish-20261023/playwright-saved.log`. Covers retained
+  input identity/focus during delayed loading, zero results, advanced filters,
+  category reset, initial-empty and failed-fetch recovery, cancelled older
+  requests, admin/user privilege-control absence, menu focus restoration,
+  control bounds and 44px mobile/tablet targets, and serious/critical axe checks
+  in populated and zero-result views. No unexpected page/console errors in normal
+  cases; the deliberate HTTP 500 is excluded only from console assertions in the
+  error-recovery test (page errors are still checked).
+- The first fixture run lacked required `isDeleted`; the fixture was corrected,
+  not the product schema. The older-response test explicitly observes
+  `ERR_ABORTED`, awaits old route settlement and two browser frames before final
+  assertions, avoiding a stale-response false positive. Screenshots are visual
+  evidence, NOT new pixel-baseline comparisons; no baselines/tolerances changed.
+- Final full typecheck, build, Saved presentation tests, scoped lint, test-file
+  TypeScript check and breakpoint contract passed after the height correction.
+- Codex browser UI checks: delayed loading, zero matches, advanced filters,
+  Clear Filters focus, empty Duplicates → Show All, injected fetch failure and
+  recovery. A fresh final reload has no console errors. Fixture-only GET/HEAD
+  access on loopback; no production credentials, database or data used.
+- Playwright verified actual 320/390/722/1440 CSS-pixel viewports in light/dark,
+  without document overflow or out-of-bounds primary controls. Final evidence
+  inspected: `11-mobile-light-final.png` (320 × 900),
+  `09-tablet-after-height-fix.png` (722 × 900), and
+  `10-desktop-dark-final.png` (1440 × 900), in the Saved polish artifact folder.
+  Capture scroll was normalized to avoid full-page sticky-header artifacts.
+  `04-mobile-320-light.png` remains an earlier misnamed attempted-size capture,
+  NOT the new 320px evidence. No physical-device, full-screen-reader, backend
+  authorization or complete WCAG/CI certification is claimed.
+
+No actionable P0/P1/P2 remains in the compared states. Full and focused evidence
+were reviewed after the tablet correction. Exact 320px and scoped automatic
+browser coverage are now complete. Earlier temporary Codex viewport/device
+overrides were cleared and light mode restored. Codex browser was subsequently
+disabled in Work settings; this continuation used the explicitly approved local
+Playwright screenshots for final QA. The static preview helper remains separate
+from production at `http://127.0.0.1:64675/saved`; it was not reopened in Codex.
+
+Checklist: scoped compact header; persistent controls; empty/error recovery;
+50 Saved tests; full client tests/build/typecheck; same-density comparisons;
+11/11 final built-browser cases; no production access, commit, push or deployment.
+
+final result: passed
+
+## Saved mobile source/actions, category selector and live AI clearance — 2026-10-23
+
+### Approved scope and visual evidence
+
+User approved item 2 of the follow-up audit: give Collection source and file
+actions separate mobile rows, and stop the floating AI launcher covering Saved
+pagination. The user then explicitly asked to save the space taken by All,
+Recent, Large, Duplicates and Review; these are now one controlled native selector
+at every width. Desktop table density, checkbox-to-Details, Details content, permissions,
+backend APIs and navigation stay unchanged. Earlier uncommitted Viewer/Saved work
+is preserved. No commit, push, deployment or production access in this work.
+
+Source visual truth:
+`artifacts/saved-next-audit-20261023/02-mobile-list.png` and
+`01-desktop-list.png`. These are actual browser-rendered local synthetic captures,
+not newly invented mockups. Source CSS viewport was 320 × 900 at DPR 1, but its
+full-page file is 333 × 927 because that capture included an extra right-hand
+overflow strip. The comparison crops only the extra 13px, retaining native
+320px viewport density without resampling typography. Source desktop: 1440 × 900.
+
+Final implementation captures, same fixture/route/theme/density:
+`artifacts/saved-mobile-actions-20261023/02-mobile-light.png` (320 × 901 full page),
+`03-mobile-dark.png` (320 × 957), `04-tablet-dark.png` (722 × 957),
+`01-desktop-light.png` (1440 × 901), `05-desktop-dark.png` (1440 × 957).
+All use 900 CSS-pixel-high viewports, DPR 1, no horizontal document overflow.
+`06-mobile-light-pagination.png` and `06-mobile-dark-pagination.png` are exact
+320 × 900 viewport captures at end-scroll, not full-page sticky-header composites.
+The light source and final state both show the same single synthetic import,
+unconfigured source, all-files category, collapsed advanced filters and idle AI.
+Mobile source/actions intentionally gain a row while the category selector removes
+wrapped toolbar rows. The net page is shorter than the source. Capture heights
+are document extents, not different device density or rescaled typography.
+
+Combined inputs opened and reviewed after the final action-size build:
+
+- `saved-mobile-before-after.png`: same-density full-view mobile comparison.
+- `saved-actions-pagination-comparison.png`: native-size source/action/footer detail.
+- `saved-categories-comparison.png`: the same 197–446px viewport crop, showing
+  five wrapped buttons replaced by one labelled category selector. The action
+  comparison separately aligns the first file content after this intentional
+  72px mobile toolbar shift (source crop starts at 550px, final at 478px).
+- `saved-toolbar-polish-comparison.png`: native 320px comparison against the first
+  dropdown version (`selector-v1-mobile-light.png`), showing the final compact
+  category/totals row and the untruncated Date placeholder.
+- `saved-desktop-before-after.png`: both 1440 × 900 content regions downsampled
+  equally to 720 × 450 for overall desktop composition; source/action geometry
+  was additionally inspected in native screenshots and measured in-browser.
+
+All comparison files are in `artifacts/saved-mobile-actions-20261023/`.
+
+### Findings and iteration history
+
+- [P1, resolved] Idle AI covered Next in the source mobile screenshot. Saved
+  mobile now opts into the existing adaptive obstacle engine while AI is closed.
+  Pagination already had its avoidance marker. Saved header/search/identity/source/actions
+  use a new Saved-specific marker, queried only on the exact mobile Saved route.
+  Desktop and other routes do not consume these new markers. The stable Saved
+  root is observed for layout but is not a whole-page obstacle. Resize tracking
+  covers geometry changes; a Saved-mobile-only subtree observer covers same-height
+  content replacements and just aria-busy/aria-expanded/disabled control attributes.
+  It reconnects on root replacement and disconnects during route/breakpoint cleanup.
+  No new dependency, polling, global CSS or body-wide observer was added.
+- [P2, resolved] Source status and actions competed for the same narrow row:
+  “Not configured” and “Configure source” wrapped into four cramped lines. Both
+  mobile cells now span the full card width, with source above View/More. The
+  focused comparison shows readable two-line status and an independent action row.
+  Desktop still uses the original table cells and original 36px action geometry.
+- [P2, resolved on the final comparison] The first post-row capture placed AI
+  slightly against the long filename's lower edge. The file identity cell now
+  participates in the same Saved-only avoidance. The final native-size full-view
+  comparison shows AI in the blank area beside Select all, clear of file identity.
+  Browser and capture assertions additionally check all Saved buttons for actual
+  rectangle intersection, not only the annotated source/action/footer containers.
+- [P2, resolved] Visual review at 722px found More was 36px while View was 44px,
+  because shared icon-button `sm:` sizing overrode the base Saved size. A scoped
+  `sm:h-11 sm:w-11 md:h-9 md:w-9` correction aligns the action pair through 767px
+  without changing the shared Button or desktop. Final tablet capture inspected.
+- [P2, resolved] Strengthened live-AI tests reproduced stale launcher visibility
+  when opening portalled Details without a workspace resize at 722px in both
+  themes. Saved-mobile-only focusin/focusout listeners now schedule the existing
+  coalesced animation-frame pass, with matching cleanup on route/breakpoint change
+  and unmount. No global dialog behavior changed. No-scroll open/close and focus
+  restoration remain in the browser regression matrix.
+- Initial new test runs also exposed two test assumptions, not product defects:
+  a 139px content-sized source button need not itself fill a full-width cell;
+  and unchecking a selected file must not reopen Details. Assertions now measure
+  full-width cells, and repeated Details tests deliberately re-select the file.
+  The selection workflow was not changed to make tests pass. Earlier failed logs
+  are retained in the Saved polish/mobile-action artifact directories.
+
+### Required fidelity surfaces
+
+- Fonts/typography: existing family, sizes, weight and hierarchy retained. Status
+  wrapping is corrected by available width, not reduced text size or ellipsis.
+  Long synthetic file names remain readable/wrappable without widening the page.
+- Spacing/layout: same page margins, radii, borders and compact desktop table;
+  mobile source/actions now have distinct rows and matching 44px action targets.
+  AI clears the controls rather than permanently adding a large empty footer.
+- Colors/tokens: existing foreground, muted, primary, status, input and surface
+  tokens retained. Light/dark status, disabled paging and action boundaries checked.
+- Assets/icons: existing SQR Q/logo, Lucide icons and AI launcher retained; no
+  generated artwork, replacement SVG, CSS drawing or new asset dependency.
+- Copy/content: existing status, actions and file metadata preserved. No preview
+  controls or implementation instructions added to product UI. No unrelated
+  checkbox/Details redesign included.
+
+### Additional findings from the final request and regression pass
+
+- [P2, resolved following the user's additional request] The five categories
+  wrapped onto two rows at 320px. `SavedWorkspacePanel` now uses one native select
+  with all five original values, an accessible label, current label/icon, 44px
+  mobile/tablet height and 36px desktop height. Existing controlled onViewChange
+  and server filtering are retained; arbitrary unexpected values are ignored.
+  Page totals stay separate and category choices remain available through loading,
+  empty results and errors. No new dropdown library or custom keyboard model.
+- [P2, resolved in the requested polish continuation] The first dropdown still
+  left totals on a separate mobile row and the date placeholder truncated. The
+  final version uses the clearer “All files” value, a screen-reader label rather
+  than a space-consuming external label, and a compact right-aligned per-page
+  summary beside the selector. Rows/storage remain labelled to assistive tools;
+  full numeric values never truncate, and long totals may wrap the group rather
+  than widening the page. The visible Date placeholder now fits at 320px while
+  retaining the original full Filter by date accessible name and selected-date
+  behavior. Final full/focused and first-dropdown comparisons were reopened.
+- [P2, resolved during the stronger test iteration] A dark 390px page-2 case
+  exposed stale placement when results changed without changing overall height.
+  The narrowly scoped workspace observer above now re-queries result/control
+  changes. A one-time `sqr:saved-workspace-ready` mount event also handles a Saved
+  lazy-route root appearing after AI setup; its listener exists only for mobile
+  Saved and uses the same coalesced frame with balanced cleanup. The earlier
+  no-body-wide-observer and desktop isolation constraints are preserved.
+
+### Verification and limits
+
+Final production frontend build and sourcemap gate passed. Full typecheck,
+test-file TypeScript check, scoped lint, 43 related AI geometry/visibility/DOM/hook
+tests, 50 Saved tests, breakpoint, spacing/color, browser-storage, entry-shell,
+bundle and whitespace gates passed. Independent read-only review found balanced
+observer/listener/frame cleanup and no desktop scope leak. Existing upstream
+PostCSS/plugin-timing build warnings are not new functional failures.
+
+Final scoped browser matrix: 20/20 passed on the final polish build; log
+`artifacts/saved-mobile-actions-20261023/playwright-final-polish.log`. Full client
+suite passed 2,293/2,293 (two batches, 1,216 + 1,077) before the last markup-only
+toolbar polish; final Saved tests passed 50/50 after that polish. Logs:
+`client-compact-view.log` and `saved-tests-final-polish.log` in the same folder.
+The Node script-test half passed 758 with one explicit skip. Its normal TS half
+hit an existing local environment validation error for unsupported LOG_FORMAT,
+not a frontend failure. All 63 TS script tests passed when rerun with a clean
+child environment and dotenv disabled (`script-ts-isolated.log`); neither local
+dotenv nor backend validation was edited. A normal unisolated `npm run test:scripts`
+is therefore NOT claimed to pass in this local environment.
+
+Browser matrix
+uses the actual live launcher (unlike the older visual fixture which removes AI),
+320/390/722/1440 widths and light/dark themes. It checks delayed imports, full-width
+source/action rows, aligned 44px mobile actions, Next/Prev keyboard paging,
+collapse/expand, advanced filters, AI modal/minimize, Details open/close before
+scroll and after AI, focus restoration, control collisions, document bounds,
+runtime errors and serious/critical axe results. All five category values are
+exercised through the real control and observed API requests. Selector/totals
+vertical alignment is checked at each width, and a separate 320px max-safe-integer
+row/size case confirms long totals remain complete without document overflow.
+Existing compact search/empty/
+error and admin/user UI-permission regressions run alongside it.
+
+Codex browser remains disabled in Work settings. QA used the user's explicitly
+approved local Playwright/Chromium alternative and actual screenshots. Only
+loopback synthetic fixtures, GET/HEAD read-only capture, and blocked external
+requests/sockets were used; no production credentials, database or customer data.
+This is not a physical-device, full screen-reader, backend-security or full-CI
+certification. Screenshot evidence does not create or relax pixel baselines.
+
+Checklist: separate mobile source/actions; scoped live-AI clearance; stable delayed
+layout observation; Details focus lifecycle; matched tablet targets; native/full
+comparisons; compact category/totals row; clear Date placeholder; 20 final browser
+cases and 50 final Saved tests passed; desktop table preserved; no commit/push/deploy.
+
+final result: passed

@@ -7,6 +7,8 @@ import {
   formatViewerCellValue,
 } from "@/pages/viewer/viewer-row-aria";
 import type { ViewerVirtualRowData } from "@/pages/viewer/types";
+import { getViewerColumnPresentation } from "@/pages/viewer/viewer-column-presentation";
+import { ViewerRowDetailsButton } from "@/pages/viewer/ViewerRowDetailsButton";
 
 function ViewerVirtualizedRowImpl({
   index,
@@ -47,11 +49,15 @@ function ViewerVirtualizedRowImpl({
               className="truncate whitespace-nowrap px-3 text-foreground"
               title={cellText}
               aria-label={cellText}
+              data-align={getViewerColumnPresentation(header, data.density).align}
             >
               {cellText}
             </div>
           );
         })}
+        <div className="flex justify-center px-2">
+          <ViewerRowDetailsButton row={row} onInspectRow={data.onInspectRow} />
+        </div>
       </ViewerGridShell>
     </PositionedRowShell>
   );

@@ -3,8 +3,7 @@ import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { SavedImportDetailDrawer } from "@/pages/saved/SavedImportDetailDrawer";
 import { SavedImportsList } from "@/pages/saved/SavedImportsList";
-import { SavedWorkspacePanel } from "@/pages/saved/SavedWorkspacePanel";
-import type { SavedWorkspaceSummary, SavedWorkspaceView } from "@/pages/saved/saved-workspace";
+import type { SavedWorkspaceView } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
 
 type SavedImportsWorkspaceProps = {
@@ -26,8 +25,6 @@ type SavedImportsWorkspaceProps = {
   totalImports: number;
   totalPages: number;
   workspaceResultLabel: string;
-  workspaceSummary: SavedWorkspaceSummary;
-  workspaceView: SavedWorkspaceView;
   onAnalysis: (item: ImportItem) => void;
   onCloseDetails: () => void;
   onCompare: (item: ImportItem) => void;
@@ -77,18 +74,11 @@ export function SavedImportsWorkspace({
   totalImports,
   totalPages,
   workspaceResultLabel,
-  workspaceSummary,
-  workspaceView,
 }: SavedImportsWorkspaceProps) {
-  const hasNoWorkspaceResults = imports.length === 0 && totalImports > 0;
+  const hasNoWorkspaceResults = imports.length === 0;
 
   return (
     <div className="min-w-0 space-y-4">
-        <SavedWorkspacePanel
-          activeView={workspaceView}
-          summary={workspaceSummary}
-          onViewChange={onWorkspaceViewChange}
-        />
       <div className="min-w-0 space-y-4">
         {hasNoWorkspaceResults ? (
           <div className="ops-empty-state rounded-xl border border-border/70 bg-background/80">

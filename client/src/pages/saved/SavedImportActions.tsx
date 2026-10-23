@@ -62,7 +62,7 @@ export function SavedImportActions({
             type="button"
             variant="outline"
             size="icon"
-            className="h-11 w-11 shrink-0 md:h-9 md:w-9"
+            className="h-11 w-11 shrink-0 sm:h-11 sm:w-11 md:h-9 md:w-9"
             aria-label={`More actions for ${item.name}`}
             data-testid={`button-import-actions-${item.id}`}
           >

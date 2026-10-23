@@ -62,14 +62,21 @@ export function resolveFloatingAiHasDensePage(activePage: string, location: stri
 export function queryFloatingAiObstacleElements(
   documentObject: Document = document,
   includeSaveCollectionControls = false,
+  includeSavedLayout = false,
 ): FloatingAiObstacleQueryResult {
-  const avoidSelector = includeSaveCollectionControls
-    ? `${FLOATING_AI_AVOID_SELECTOR}, ${FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR}`
-    : FLOATING_AI_AVOID_SELECTOR;
+  const avoidSelector = [
+    FLOATING_AI_AVOID_SELECTOR,
+    ...(includeSaveCollectionControls ? [FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR] : []),
+    ...(includeSavedLayout ? ["[data-saved-ai-avoid='true']"] : []),
+  ].join(", ");
   const avoidElements = Array.from(documentObject.querySelectorAll(avoidSelector));
   const dialogElements = Array.from(documentObject.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR));
-  const layoutElements = includeSaveCollectionControls
-    ? Array.from(documentObject.querySelectorAll(FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR))
+  const layoutSelectors = [
+    ...(includeSaveCollectionControls ? [FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR] : []),
+    ...(includeSavedLayout ? [".saved-workspace"] : []),
+  ];
+  const layoutElements = layoutSelectors.length > 0
+    ? Array.from(documentObject.querySelectorAll(layoutSelectors.join(", ")))
     : [];
 
   return {

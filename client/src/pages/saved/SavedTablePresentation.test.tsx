@@ -47,6 +47,8 @@ test("Saved row selection and mobile layout preserve the superuser boundary and 
   assert.match(markup, /Collection source:/);
   assert.match(markup, /md:table-row/);
   assert.match(markup, /overflow-wrap:anywhere/);
+  assert.equal((markup.match(/<td[^>]*class="[^"]*col-span-2 block[^>]*data-saved-ai-avoid="true"/g) || []).length, 3,
+    "file identity, source status and actions each use a full mobile row and participate in AI avoidance");
 });
 
 test("Saved rows only omit a redundant filename while keeping distinct filenames", () => {
@@ -75,18 +77,24 @@ test("Saved imports use a named semantic table and role-gated source column", ()
   assert.match(privileged, /Select all visible imports/);
 });
 
-test("Saved workspace categories wrap without a second rail and retain all summary values", () => {
+test("Saved workspace categories share one compact selector and retain page totals", () => {
   const markup = renderToStaticMarkup(createElement(SavedWorkspacePanel, {
     activeView: "review", onViewChange: noop,
     summary: { loadedFiles: 9, totalFiles: 60, loadedRows: 12345, loadedSizeBytes: 2048,
       recentCount: 3, largeCount: 2, duplicateCount: 1, reviewCount: 1, hasPartialLoad: true },
   }));
   for (const view of ["all", "recent", "large", "duplicates", "review"]) {
-    assert.match(markup, new RegExp(`data-testid="button-saved-view-${view}"`));
+    assert.match(markup, new RegExp(`<option[^>]*value="${view}"`));
   }
-  assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1);
+  assert.equal((markup.match(/<select\b/g) || []).length, 1);
+  assert.match(markup, /<option[^>]*value="review"[^>]*selected=""/);
+  assert.equal((markup.match(/<option\b/g) || []).length, 5);
+  assert.doesNotMatch(markup, /<button\b|aria-pressed/);
+  assert.match(markup, /<label[^>]*for="saved-workspace-view"/);
   assert.match(markup, /flex-wrap/);
-  assert.match(markup, /9 on page · 60 matching/);
+  assert.match(markup, /aria-label="Loaded page totals"/);
+  assert.match(markup, /On this page:/);
+  assert.doesNotMatch(markup, /9 on page|60 matching/);
   assert.match(markup, /12,345/);
   assert.match(markup, /2\.0 KB/);
   assert.doesNotMatch(markup, /<aside|grid-cols-1/);
@@ -103,6 +111,8 @@ test("Saved filter search has an accessible label and retains advanced filters",
     assert.match(markup, new RegExp(`data-testid="${control}"`));
   }
   assert.match(markup, /aria-expanded="true"/);
+  assert.equal((markup.match(/<input[^>]*class="[^"]*sm:h-11/g) || []).length, 4,
+    "search and advanced inputs retain the 44px height through the tablet breakpoint");
 });
 
 test("compact source status still launches existing configuration and preserves detailed index information", () => {

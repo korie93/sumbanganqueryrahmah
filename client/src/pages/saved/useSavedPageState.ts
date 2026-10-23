@@ -44,7 +44,6 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
   usePageShortcuts([
     {
       key: "/",
-      enabled: !data.loading,
       handler: () => {
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -55,6 +54,11 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
   const clearSelectedImports = useCallback(() => {
     setSelectedImportIds((previous) => (previous.size === 0 ? previous : new Set<string>()));
   }, []);
+
+  const clearFilters = useCallback(() => {
+    data.clearFilters();
+    searchInputRef.current?.focus();
+  }, [data.clearFilters]);
 
   const pruneDeletedImportSelection = useCallback((importId: string) => {
     setSelectedImportIds((previous) => {
@@ -92,8 +96,8 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     [data.hasMoreImports, data.totalImports, loadedImports.length],
   );
   const workspaceResultLabel = useMemo(
-    () => `${visibleImports.length} on this page · ${data.totalImports} matching`,
-    [data.totalImports, visibleImports.length],
+    () => `${visibleImports.length.toLocaleString()} on this page`,
+    [visibleImports.length],
   );
   const adminActionsDisabled =
     data.loading || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
@@ -190,7 +194,7 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     setMaxRowsFilter: data.setMaxRowsFilter,
     setPage: data.setPage,
     setPageSize: data.setPageSize,
-    clearFilters: data.clearFilters,
+    clearFilters,
     handleRefresh,
     handleView,
     handleAnalysis,

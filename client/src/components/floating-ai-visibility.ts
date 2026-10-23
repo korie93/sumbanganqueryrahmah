@@ -24,6 +24,7 @@ type FloatingAiDomTrackingInput = {
   isThinking: boolean;
   aiStatus: AIChatStatus;
   saveCollectionRoute?: boolean;
+  savedMobileRoute?: boolean;
 };
 
 export function isFloatingAiSaveCollectionRoute(activePage: string, location: string) {
@@ -32,13 +33,20 @@ export function isFloatingAiSaveCollectionRoute(activePage: string, location: st
   return pathname === "/collection/save" || pathname === "/collection" || pathname === "/collection-report";
 }
 
+export function isFloatingAiSavedMobileRoute(activePage: string, location: string, isMobile: boolean) {
+  if (!isMobile || activePage !== "saved") return false;
+  const pathname = location.split(/[?#]/, 1)[0]?.replace(/\/+$/, "").toLowerCase();
+  return pathname === "/saved";
+}
+
 export function shouldTrackFloatingAiDom({
   isOpen,
   isThinking,
   aiStatus,
   saveCollectionRoute = false,
+  savedMobileRoute = false,
 }: FloatingAiDomTrackingInput) {
-  if (saveCollectionRoute) return true;
+  if (saveCollectionRoute || savedMobileRoute) return true;
   if (isOpen) return true;
   if (isThinking) return true;
   return aiStatus !== "IDLE";

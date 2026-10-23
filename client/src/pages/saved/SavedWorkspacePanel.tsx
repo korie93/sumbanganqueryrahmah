@@ -1,6 +1,4 @@
-import { AlertTriangle, BookMarked, Clock3, Copy, HardDrive } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { AlertTriangle, BookMarked, ChevronDown, Clock3, Copy, HardDrive } from "lucide-react";
 import {
   formatSavedFileSize,
   type SavedWorkspaceSummary,
@@ -9,12 +7,12 @@ import {
 
 type SavedWorkspacePanelProps = {
   activeView: SavedWorkspaceView;
-  summary: SavedWorkspaceSummary;
+  summary?: SavedWorkspaceSummary | undefined;
   onViewChange: (view: SavedWorkspaceView) => void;
 };
 
 const workspaceItems = [
-  { id: "all", label: "All", icon: BookMarked },
+  { id: "all", label: "All files", icon: BookMarked },
   { id: "recent", label: "Recent", icon: Clock3 },
   { id: "large", label: "Large", icon: HardDrive },
   { id: "duplicates", label: "Duplicates", icon: Copy },
@@ -30,49 +28,43 @@ export function SavedWorkspacePanel({
   summary,
   onViewChange,
 }: SavedWorkspacePanelProps) {
+  const activeItem = workspaceItems.find((item) => item.id === activeView) ?? workspaceItems[0];
+  const ActiveIcon = activeItem.icon;
   return (
     <section
-      className="min-w-0 space-y-2"
+      className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2"
       aria-label="Saved workspace filters"
     >
-      <div
-        className="flex flex-wrap gap-1"
-        role="group"
-        aria-label="Saved workspace views"
-      >
-        {workspaceItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeView === item.id;
-          const pressedProps = isActive
-            ? { "aria-pressed": "true" as const }
-            : { "aria-pressed": "false" as const };
-          return (
-            <Button
-              key={item.id}
-              type="button"
-              variant="ghost"
-              {...pressedProps}
-              className={cn(
-                "h-11 justify-start gap-2 rounded-md border px-3 text-left md:h-9",
-                isActive
-                  ? "border-primary/45 bg-primary/10 text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-              onClick={() => onViewChange(item.id)}
-              data-testid={`button-saved-view-${item.id}`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="text-sm font-medium">{item.label}</span>
-            </Button>
-          );
-        })}
+      <div className="flex max-w-full items-center gap-2">
+        <label htmlFor="saved-workspace-view" className="sr-only">Saved workspace views</label>
+        <div className="relative w-40 min-w-0 max-w-full">
+          <ActiveIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <select
+            id="saved-workspace-view"
+            value={activeView}
+            onChange={(event) => {
+              const nextView = workspaceItems.find((item) => item.id === event.target.value);
+              if (nextView) onViewChange(nextView.id);
+            }}
+            aria-label="Saved workspace views"
+            className="h-11 w-full appearance-none rounded-md border border-input bg-background pl-9 pr-8 text-sm font-medium text-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:h-9"
+            data-testid="select-saved-workspace-view"
+          >
+            {workspaceItems.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <p>{summary.loadedFiles.toLocaleString()} on page · {summary.totalFiles.toLocaleString()} matching</p>
-        <p>Rows <span className="font-medium tabular-nums text-foreground">{summary.loadedRows.toLocaleString()}</span></p>
-        <p>Storage <span className="font-medium text-foreground">{formatSavedFileSize(summary.loadedSizeBytes)}</span></p>
-      </div>
+      {summary && summary.loadedFiles > 0 ? (
+        <div className="ml-auto min-w-max max-w-full text-right text-xs text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-3" role="group" aria-label="Loaded page totals">
+          <span className="block">On this page:</span>
+          <div className="mt-0.5 flex flex-wrap justify-end gap-x-2 gap-y-1 sm:mt-0 sm:gap-x-3">
+            <p className="whitespace-nowrap"><span className="hidden sm:inline">Rows </span><span className="font-medium tabular-nums text-foreground">{summary.loadedRows.toLocaleString()}</span><span className="sm:hidden"> rows</span></p>
+            <p className="whitespace-nowrap"><span className="sr-only sm:not-sr-only">Storage </span><span className="font-medium text-foreground">{formatSavedFileSize(summary.loadedSizeBytes)}</span></p>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

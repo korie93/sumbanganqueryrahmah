@@ -10,16 +10,6 @@ const SAVED_SKELETON_ROW_KEYS = [
 export function SavedLoadingSkeleton() {
   return (
     <div className="space-y-4" data-testid="saved-loading-skeleton" role="status" aria-label="Loading saved imports">
-      <div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <Skeleton className="h-10 w-full sm:max-w-sm" />
-          <div className="grid grid-cols-1 gap-2 sm:flex sm:gap-3">
-            <Skeleton className="h-10 w-full sm:w-40" />
-            <Skeleton className="h-10 w-full sm:w-28" />
-          </div>
-        </div>
-      </div>
-
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div>
           <div className="flex items-center justify-between gap-3 border-b border-border p-3">

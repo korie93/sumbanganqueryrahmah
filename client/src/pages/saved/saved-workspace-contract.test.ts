@@ -4,6 +4,7 @@ import test from "node:test";
 
 const savedModuleFiles = [
   "../Saved.tsx",
+  "SavedPageHeader.tsx",
   "SavedImportsList.tsx",
   "SavedImportCard.tsx",
   "SavedImportActions.tsx",
@@ -49,7 +50,7 @@ test("saved page wires server pagination and a compact detail drawer", async () 
   const workspaceState = await readSavedSource("saved-workspace.ts");
 
   assert.match(savedPage, /SavedImportsWorkspace/);
-  assert.match(workspace, /SavedWorkspacePanel/);
+  assert.match(savedPage, /SavedWorkspacePanel/);
   assert.match(workspace, /SavedImportDetailDrawer/);
   assert.match(workspace, /AppPaginationBar/);
   assert.match(workspace, /onWorkspaceViewChange/);
@@ -69,7 +70,7 @@ test("saved files use the wide page and a viewport-sized desktop scroll region",
   const importsList = await readSavedSource("SavedImportsList.tsx");
   const importCard = await readSavedSource("SavedImportCard.tsx");
 
-  assert.match(savedPage, /<OperationalPage width="wide">/);
+  assert.match(savedPage, /<OperationalPage width="wide" className="saved-workspace">/);
   assert.doesNotMatch(workspace, /grid-cols-\[15rem_minmax\(0,1fr\)\]/);
   assert.match(importsList, /saved-files-scroll-region/);
   assert.match(importsList, /md:max-h-\[clamp\(32rem,calc\(100dvh-20rem\),52rem\)\]/);

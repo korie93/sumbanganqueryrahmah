@@ -1,30 +1,27 @@
-import { Suspense, lazy } from "react";
-import { ViewerEmptyStateFallback } from "@/pages/viewer/ViewerContentFallbacks";
-
-const ViewerEmptyState = lazy(() =>
-  import("@/pages/viewer/ViewerEmptyState").then((module) => ({
-    default: module.ViewerEmptyState,
-  })),
-);
+import { ViewerEmptyState } from "@/pages/viewer/ViewerEmptyState";
 
 type ViewerContentEmptyStateProps = {
   emptyHint: string;
   isSearchBelowMinLength: boolean;
   minSearchLength: number;
+  hasActiveRefinement?: boolean | undefined;
+  onClearRefinements?: (() => void) | undefined;
 };
 
 export function ViewerContentEmptyState({
   emptyHint,
   isSearchBelowMinLength,
   minSearchLength,
+  hasActiveRefinement,
+  onClearRefinements,
 }: ViewerContentEmptyStateProps) {
   return (
-    <Suspense fallback={<ViewerEmptyStateFallback />}>
-      <ViewerEmptyState
-        emptyHint={emptyHint}
-        isSearchBelowMinLength={isSearchBelowMinLength}
-        minSearchLength={minSearchLength}
-      />
-    </Suspense>
+    <ViewerEmptyState
+      emptyHint={emptyHint}
+      isSearchBelowMinLength={isSearchBelowMinLength}
+      minSearchLength={minSearchLength}
+      hasActiveRefinement={hasActiveRefinement}
+      onClearRefinements={onClearRefinements}
+    />
   );
 }

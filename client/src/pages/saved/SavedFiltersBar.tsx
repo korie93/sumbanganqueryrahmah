@@ -101,7 +101,7 @@ export function SavedFiltersBar({
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="h-11 pl-9 md:h-9"
+            className="h-11 pl-9 sm:h-11 md:h-9"
             data-testid="input-search-saved"
           />
         </div>
@@ -122,7 +122,7 @@ export function SavedFiltersBar({
 
               onDateFilterChange(new Date(year, month - 1, day, 12, 0, 0));
             }}
-            placeholder="Filter by date"
+            placeholder="Date"
             buttonTestId="button-date-filter"
             ariaLabel={dateFilter ? `Filter by date, selected ${formatSavedFilterDate(dateFilter)}` : "Filter by date"}
             className="h-11 w-full min-w-0 md:h-9 sm:min-w-[210px]"
@@ -130,7 +130,7 @@ export function SavedFiltersBar({
           <Button
             type="button"
             variant="outline"
-            className="h-11 md:h-9"
+            className="h-11 sm:h-11 md:h-9"
             aria-controls="saved-advanced-filters"
             {...getAriaExpandedProps(advancedOpen)}
             onClick={() => setAdvancedOpen((open) => !open)}
@@ -165,7 +165,7 @@ export function SavedFiltersBar({
             placeholder="Uploader"
             aria-label="Filter saved imports by uploader"
             autoComplete="off"
-            className="h-11 md:h-9"
+            className="h-11 sm:h-11 md:h-9"
             data-testid="input-saved-uploader"
           />
           <Input
@@ -181,7 +181,7 @@ export function SavedFiltersBar({
             }}
             placeholder="Minimum rows"
             aria-label="Minimum saved import row count"
-            className="h-11 md:h-9"
+            className="h-11 sm:h-11 md:h-9"
             data-testid="input-saved-min-rows"
           />
           <Input
@@ -197,7 +197,7 @@ export function SavedFiltersBar({
             }}
             placeholder="Maximum rows"
             aria-label="Maximum saved import row count"
-            className="h-11 md:h-9"
+            className="h-11 sm:h-11 md:h-9"
             data-testid="input-saved-max-rows"
           />
         </div>

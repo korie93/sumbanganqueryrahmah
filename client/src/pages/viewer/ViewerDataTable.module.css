@@ -3,6 +3,11 @@
   grid-template-columns: var(--viewer-grid-template-columns, minmax(0, 1fr));
 }
 
+.viewerGrid > [data-align="right"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .desktopTableWidth {
   min-width: max(100%, var(--viewer-table-min-width, 0px));
 }

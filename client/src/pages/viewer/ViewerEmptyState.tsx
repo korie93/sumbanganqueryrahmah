@@ -1,27 +1,44 @@
-import { Eye } from "lucide-react";
+import { Eye, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ViewerEmptyStateProps {
   emptyHint: string;
   isSearchBelowMinLength: boolean;
   minSearchLength: number;
+  hasActiveRefinement?: boolean | undefined;
+  onClearRefinements?: (() => void) | undefined;
 }
 
 export function ViewerEmptyState({
   emptyHint,
   isSearchBelowMinLength,
   minSearchLength,
+  hasActiveRefinement = false,
+  onClearRefinements,
 }: ViewerEmptyStateProps) {
+  const Icon = hasActiveRefinement ? Search : Eye;
+
   return (
-    <div className="ops-empty-state">
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-        <Eye className="h-8 w-8 text-muted-foreground" />
+    <div className="viewer-empty-state" data-testid="viewer-empty-state">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <Icon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
       </div>
-      <p className="font-medium text-foreground">No data</p>
-      {emptyHint ? <p className="mt-2 text-sm text-muted-foreground">{emptyHint}</p> : null}
+      <p className="font-medium text-foreground">
+        {isSearchBelowMinLength ? "Teruskan menaip untuk carian" : hasActiveRefinement ? "Tiada hasil carian" : "Tiada data"}
+      </p>
+      {!hasActiveRefinement && emptyHint ? <p className="mt-2 text-sm text-muted-foreground">{emptyHint}</p> : null}
       {isSearchBelowMinLength ? (
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter at least {minSearchLength} characters to search large datasets.
+          Masukkan sekurang-kurangnya {minSearchLength} aksara untuk carian.
         </p>
+      ) : null}
+      {hasActiveRefinement && !isSearchBelowMinLength ? (
+        <p className="mt-2 text-sm text-muted-foreground">Cuba kata kunci lain atau kosongkan carian dan filter.</p>
+      ) : null}
+      {hasActiveRefinement && onClearRefinements ? (
+        <Button type="button" variant="outline" className="mt-4" onClick={onClearRefinements}>
+          Kosongkan carian dan filter
+        </Button>
       ) : null}
     </div>
   );

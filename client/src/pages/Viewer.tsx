@@ -18,6 +18,12 @@ const ViewerContent = lazy(() =>
   })),
 );
 
+const ViewerPageHeaderActions = lazy(() =>
+  import("@/pages/viewer/ViewerPageHeaderActions").then((module) => ({
+    default: module.ViewerPageHeaderActions,
+  })),
+);
+
 interface ViewerProps {
   onNavigate: (page: string) => void;
   importId?: string | undefined;
@@ -51,44 +57,51 @@ export default function Viewer({
   }, []);
 
   return (
-    <OperationalPage width="content">
+    <OperationalPage width="wide" className="viewer-page-frame">
       <Suspense fallback={<ViewerPageHeaderFallback />}>
         <ViewerPageHeader
-          filterTriggerRef={filterTriggerRef}
           importName={viewer.importName}
-          rowsCount={viewer.rows.length}
           totalRows={viewer.totalRows}
-          currentPage={viewer.currentPage}
-          totalPages={viewer.totalPages}
-          headers={viewer.headers}
-          densityPreference={viewer.tableDensityPreference}
-          selectedColumns={viewer.selectedColumns}
-          showColumnSelector={viewer.showColumnSelector}
-          showFilters={viewer.showFilters}
-          filterCount={viewer.columnFilters.length}
-          isSuperuser={viewer.isSuperuser}
-          exportBusy={viewer.exportingPdf || viewer.exportingExcel}
-          filteredRowsCount={viewer.filteredRows.length}
-          selectedRowCount={viewer.selectedRowIds.size}
-          hasFilteredSubset={viewer.hasFilteredSubset}
+          headersCount={viewer.headers.length}
+          loading={viewer.loading}
           onBack={viewer.handleBackToSaved}
-          onShowColumnSelectorChange={viewer.setShowColumnSelector}
-          onToggleColumn={viewer.toggleColumn}
-          onMoveColumn={viewer.moveColumn}
-          onResetColumns={viewer.resetColumns}
-          onSelectAllColumns={viewer.selectAllColumns}
-          onDeselectAllColumns={viewer.deselectAllColumns}
-          onDensityChange={viewer.setTableDensityPreference}
-          onToggleFilters={viewer.handleToggleFilters}
-          onClearAllData={viewer.clearAllData}
-          onExportCsv={viewer.handleExportCsv}
-          onExportPdf={viewer.handleExportPdf}
-          onExportExcel={viewer.handleExportExcel}
         />
       </Suspense>
 
       <Suspense fallback={<ViewerContentFallback />}>
         <ViewerContent
+          toolbarActions={
+            <Suspense fallback={<div className="viewer-actions-fallback" aria-hidden="true" />}>
+              <ViewerPageHeaderActions
+                filterTriggerRef={filterTriggerRef}
+                exportBusy={viewer.exportingPdf || viewer.exportingExcel}
+                filteredRowsCount={viewer.filteredRows.length}
+                filterCount={viewer.columnFilters.length}
+                hasFilteredSubset={viewer.hasFilteredSubset}
+                headers={viewer.headers}
+                densityPreference={viewer.tableDensityPreference}
+                isSuperuser={viewer.isSuperuser}
+                onClearAllData={viewer.clearAllData}
+                onDeselectAllColumns={viewer.deselectAllColumns}
+                onDensityChange={viewer.setTableDensityPreference}
+                onExportCsv={viewer.handleExportCsv}
+                onExportExcel={viewer.handleExportExcel}
+                onExportPdf={viewer.handleExportPdf}
+                onSelectAllColumns={viewer.selectAllColumns}
+                onShowColumnSelectorChange={viewer.setShowColumnSelector}
+                onToggleColumn={viewer.toggleColumn}
+                onMoveColumn={viewer.moveColumn}
+                onResetColumns={viewer.resetColumns}
+                onToggleFilters={viewer.handleToggleFilters}
+                rowsCount={viewer.rows.length}
+                selectedColumns={viewer.selectedColumns}
+                selectedRowCount={viewer.selectedRowIds.size}
+                showColumnSelector={viewer.showColumnSelector}
+                showFilters={viewer.showFilters}
+                totalRows={viewer.totalRows}
+              />
+            </Suspense>
+          }
           filterTriggerRef={filterTriggerRef}
           rows={viewer.rows}
           headers={viewer.headers}
