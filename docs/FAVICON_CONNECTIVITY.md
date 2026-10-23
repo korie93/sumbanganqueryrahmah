@@ -24,6 +24,11 @@ changes; metadata updates no longer write tab icons. HMR disposes the controller
 - The client requires `204`, the exact marker, a `no-store` directive and no
   redirect. HTML fallback, login redirect, missing marker, cacheable lookalike,
   other status codes, DNS/TLS/network failures and timeout cannot establish online.
+- Successful empty `204` responses are consumed with `response.text()` inside
+  the original timeout before publishing success. Headers-only handling can
+  produce Chromium `ERR_ABORTED` diagnostics despite receiving the valid `204`;
+  completing the empty response avoids this without changing the endpoint,
+  cache policy or validation. Arbitrary HTML/error response bodies are not read.
 - Visible tabs check immediately and every 20 seconds after the previous check
   finishes. Each request has a 5-second timeout. One failed check is confirmed
   after 2 seconds before showing grey; a device `offline` event shows grey
@@ -31,6 +36,10 @@ changes; metadata updates no longer write tab icons. HMR disposes the controller
 - Hidden tabs and `pagehide` cancel pending requests and suspend polling;
   visibility return and `pageshow` resume with a fresh check. Late responses from
   cancelled requests cannot overwrite the current state. Timers do not overlap.
+- Initial `pageshow` does not restart the startup probe or its polling timer;
+  only a preceding `pagehide` requires resuming. Online/visible notifications
+  reuse a pending probe without aborting it or extending its timeout. Real
+  hidden/offline/pagehide transitions and disposal still cancel stale work.
 - The 32px offline PNG is embedded in the initial JavaScript bundle using Vite's
   `?inline` asset import. The grey icon requires no image request after failure.
   Original online URLs, MIME types and sizes are restored on recovery. No new
@@ -58,6 +67,39 @@ It does not promise database, upstream-provider or collection mutation success.
 Dynamic status applies to an already loaded page with JavaScript running; this
 feature does not add an offline shell or a new service worker. Browsers may delay
 painting a tab icon, especially while a tab is suspended.
+
+## Browser console diagnostics
+
+Chrome's optional **Console settings → Log XMLHttpRequests** logs each fetch,
+including successful health checks and the normal visible-tab polling described
+above. Disable that option to stop informational request tracing; leave network
+errors and warnings enabled. This is a local DevTools preference, not a server
+or application logging setting. See the [Chrome Console reference](https://developer.chrome.com/docs/devtools/console/reference#log-xhr-and-fetch-requests).
+
+Do not suppress `console.error`, hide all network messages, remove connectivity
+checks or weaken timeout/response validation to make the console appear clean.
+For a failed probe, inspect its Network status: lifecycle cancellation differs
+from HTTP 429/503, DNS/TLS failure or the genuine 5-second timeout. The startup
+regression test holds the first response through initial page load and verifies
+one uncancelled, completed probe followed by normal polling. Intentional cancellation when
+leaving/hiding a page remains expected; zero failed requests is not promised
+during real outages or lifecycle teardown.
+
+### 23 October 2026 compatibility verification
+
+- The new slow-startup browser regression reproduced two startup requests with
+  the previous built controller. The corrected production build passes all five
+  favicon browser scenarios, including no failed healthy startup/poll requests.
+- A separate native HTTP control (no response interception) reproduced the
+  headers-only `204` diagnostic in bundled Chromium 148.0.7778.96 and installed
+  Chrome 155.0.8059.85. Reading the empty response removed it in both versions.
+  The final built SQR client also completed exactly one startup probe and one
+  normal poll with two `requestfinished` events and no `requestfailed` events in
+  each browser, against synthetic loopback APIs.
+- All 2,301 client tests (including 25 focused lifecycle/asset tests), TypeScript,
+  targeted ESLint, the production build, sourcemap gate and bundle budgets passed. The endpoint,
+  cache/security policy and original icon exports are unchanged. These are local
+  checks, not evidence that the uncommitted patch is deployed to production.
 
 ## Verification and manual QA
 

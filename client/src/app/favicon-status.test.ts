@@ -162,6 +162,60 @@ test("favicon marks online only after the explicit uncached endpoint succeeds an
   assert.equal(f.requests.length, 2, "Polling cannot overlap the pending request.");
 });
 
+test("successful empty connectivity responses are consumed before marking the favicon online", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  const response = connected();
+  const readEmptyBody = response.text.bind(response);
+  let reads = 0;
+  response.text = () => { reads++; return readEmptyBody(); };
+  f.requests[0].resolve(response);
+  await flush();
+  assert.equal(reads, 1, "Finishing the empty response avoids Chromium's headers-only ERR_ABORTED diagnostic.");
+  assert.deepEqual(f.state(), ["online", "online"]);
+  assert.equal(f.requests.length, 1);
+});
+
+test("empty response completion stays inside the original timeout and cannot publish a late success", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  const response = connected();
+  let finish!: (body: string) => void;
+  response.text = () => new Promise<string>(resolve => { finish = resolve; });
+  f.requests[0].resolve(response);
+  await flush();
+  assert.deepEqual(f.state(), ["unknown", "unknown"]);
+  await f.advance(FAVICON_TIMEOUT_MS);
+  assert.equal(f.requests[0].init.signal?.aborted, true);
+  await f.advance(FAVICON_CONFIRM_MS);
+  assert.equal(f.requests.length, 2);
+  finish("");
+  await flush();
+  assert.deepEqual(f.state(), ["unknown", "unknown"], "A timed-out response cannot publish success.");
+  f.requests[1].resolve(connected());
+  await flush();
+  assert.deepEqual(f.state(), ["online", "online"]);
+});
+
+test("failed empty response completion is confirmed normally without consuming error bodies", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  const response = connected();
+  response.text = () => Promise.reject(new TypeError("Response completion failed"));
+  f.requests[0].resolve(response);
+  await flush();
+  assert.deepEqual(f.state(), ["unknown", "unknown"]);
+  await f.advance(FAVICON_CONFIRM_MS);
+  assert.equal(f.requests.length, 2);
+  const unavailable = new Response("Synthetic error body", { status: 503 });
+  let errorBodyReads = 0;
+  unavailable.text = async () => { errorBodyReads++; return "Synthetic error body"; };
+  f.requests[1].resolve(unavailable);
+  await flush();
+  assert.equal(errorBodyReads, 0, "Connectivity checks never read arbitrary non-204 response bodies.");
+  assert.deepEqual(f.state(), ["offline", "offline"]);
+});
+
 const invalidResponses: Array<[string, () => Response]> = [
   ["HTTP 200 HTML from a captive portal or SPA fallback", () => new Response("<html>Login required</html>", {
     status: 200, headers: { "X-SQR-Connectivity": "ok", "Cache-Control": "no-store", "Content-Type": "text/html" },
@@ -323,6 +377,99 @@ test("pagehide suspends polling and pageshow resumes after discarding the suspen
   assert.equal(f.requests.length, 1);
   f.event("pageshow");
   assert.equal(f.requests.length, 2);
+  f.requests[1].resolve(connected());
+  await flush();
+  assert.deepEqual(f.state(), ["online", "online"]);
+});
+
+test("initial pageshow preserves the pending startup probe and its original timeout", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  const startup = f.requests[0];
+  await f.advance(FAVICON_TIMEOUT_MS - 1);
+  f.event("pageshow");
+  assert.equal(f.requests.length, 1, "Initial pageshow must not replace the startup request.");
+  assert.equal(startup.init.signal?.aborted, false);
+  await f.advance(1);
+  assert.equal(startup.init.signal?.aborted, true, "Keeping the request must not extend its timeout.");
+  await f.advance(FAVICON_CONFIRM_MS);
+  assert.equal(f.requests.length, 2, "A genuine timeout still gets a confirmation probe.");
+});
+
+test("initial pageshow after a successful startup leaves the normal polling schedule intact", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  f.requests[0].resolve(connected());
+  await flush();
+  await f.advance(FAVICON_POLL_MS - 1);
+  f.event("pageshow");
+  assert.equal(f.requests.length, 1, "Initial pageshow does not add a second successful startup check.");
+  await f.advance(1);
+  assert.equal(f.requests.length, 2);
+  assert.deepEqual(f.state(), ["online", "online"]);
+});
+
+test("repeated visible and online events reuse an active probe without resetting its timeout", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  const startup = f.requests[0];
+  await f.advance(FAVICON_TIMEOUT_MS - 1);
+  for (let index = 0; index < 3; index++) {
+    f.visibility(false);
+    f.event("online");
+  }
+  assert.equal(f.requests.length, 1);
+  assert.equal(startup.init.signal?.aborted, false);
+  assert.equal(f.timers.size, 1);
+  await f.advance(1);
+  assert.equal(startup.init.signal?.aborted, true);
+  await f.advance(FAVICON_CONFIRM_MS);
+  assert.equal(f.requests.length, 2);
+  f.requests[1].resolve(connected());
+  await flush();
+  assert.deepEqual(f.state(), ["online", "online"]);
+});
+
+test("restoring a suspended page starts one probe despite overlapping lifecycle events", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  const interrupted = f.requests[0];
+  f.event("pagehide");
+  f.visibility(false);
+  f.event("online");
+  assert.equal(f.requests.length, 1, "Visibility and connectivity cannot resume a suspended page.");
+  assert.equal(f.timers.size, 0);
+  f.event("pageshow");
+  f.visibility(false);
+  f.event("online");
+  f.event("pageshow");
+  assert.equal(f.requests.length, 2, "Only the real resume creates a new request.");
+  assert.equal(f.requests[1].init.signal?.aborted, false);
+  interrupted.reject(new DOMException("Aborted", "AbortError"));
+  await flush();
+  assert.deepEqual(f.state(), ["unknown", "unknown"]);
+  f.requests[1].resolve(connected());
+  await flush();
+  assert.deepEqual(f.state(), ["online", "online"]);
+  assert.equal(f.timers.size, 1);
+});
+
+test("pageshow while hidden waits for visibility before checking an offline-to-online recovery", async (t) => {
+  const f = fixture();
+  t.after(f.stop);
+  f.visibility(true);
+  f.event("pagehide");
+  f.navigatorTarget.onLine = false;
+  f.event("offline");
+  assert.deepEqual(f.state(), ["offline", "offline"]);
+  f.navigatorTarget.onLine = true;
+  f.event("online");
+  f.event("pageshow");
+  assert.equal(f.requests.length, 1, "Neither recovery nor pageshow polls a hidden tab.");
+  assert.equal(f.timers.size, 0);
+  f.visibility(false);
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.activeRequests(), 1);
   f.requests[1].resolve(connected());
   await flush();
   assert.deepEqual(f.state(), ["online", "online"]);

@@ -72,6 +72,12 @@ export function startFaviconStatus(offlinePng: string, environment?: FaviconEnvi
         env.fetch(FAVICON_CONNECTIVITY_URL, {
           method: "GET", credentials: "omit", cache: "no-store", redirect: "error",
           signal: request.controller.signal,
+        }).then(async (response) => {
+          // Complete the empty 204 response too. Chromium may report ERR_ABORTED
+          // for a headers-only fetch even though the verified endpoint succeeded.
+          // Keep completion inside the same timeout; never read arbitrary error bodies.
+          if (response.status === 204) await response.text();
+          return response;
         }),
         new Promise<never>((_resolve, reject) => {
           request.timeout = env.window.setTimeout(() => {
@@ -100,11 +106,23 @@ export function startFaviconStatus(offlinePng: string, environment?: FaviconEnvi
       }
     }
   }
+  function resume() {
+    if (stopped || suspended || env.document.hidden || active) return;
+    if (scheduled !== null) env.window.clearTimeout(scheduled);
+    scheduled = null;
+    void check();
+  }
   const offline = () => { cancel(); failures = 2; show("offline"); schedule(FAVICON_POLL_MS); };
-  const online = () => { cancel(); void check(); };
-  const visibility = () => { cancel(); if (!env.document.hidden) void check(); };
+  const online = () => { resume(); };
+  const visibility = () => { if (env.document.hidden) cancel(); else resume(); };
   const pagehide = () => { suspended = true; cancel(); };
-  const pageshow = () => { suspended = false; cancel(); void check(); };
+  const pageshow = () => {
+    // Initial pageshow follows startup too: only a previously suspended page needs resuming.
+    // Otherwise a slow, healthy startup probe would be needlessly aborted and replaced.
+    if (!suspended) return;
+    suspended = false;
+    resume();
+  };
   const stop = () => {
     if (stopped) return;
     stopped = true;

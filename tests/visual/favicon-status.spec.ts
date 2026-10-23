@@ -7,14 +7,19 @@ const onlineIco = "/brand/favicon-online-v2.ico";
 const offlinePng = "data:image/png;base64," + readFileSync("client/src/assets/favicon-status/offline-32.png").toString("base64");
 type ResponseMode = "ok" | "503" | "html" | "marker" | "cache" | "redirect" | "network";
 
-async function fixture(page: Page, baseURL: string) {
+async function fixture(page: Page, baseURL: string, holdInitialProbe = false) {
   expect(new URL(baseURL).hostname).toBe("127.0.0.1");
   let mode: ResponseMode = "ok";
   let probes = 0;
+  let releaseInitialProbe!: () => void;
+  const initialProbe = new Promise<void>(resolve => { releaseInitialProbe = resolve; });
   const unexpected: string[] = [];
   await page.clock.install();
+  // This scenario tests lifecycle ownership, not machine speed during app startup.
+  // Keep a deliberately held response from reaching the real 5-second timeout on CI.
+  if (holdInitialProbe) await page.clock.pauseAt(new Date(Date.now() + 1_000));
   await page.context().routeWebSocket("**/*", socket => socket.close());
-  await page.route("**/*", route => {
+  await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== new URL(baseURL).origin) { unexpected.push("off-origin"); return route.abort(); }
     if (url.pathname === "/api/health/connectivity") {
@@ -22,6 +27,7 @@ async function fixture(page: Page, baseURL: string) {
       expect(request.method()).toBe("GET");
       expect(request.headers()["cookie"]).toBeUndefined();
       expect(request.headers()["authorization"]).toBeUndefined();
+      if (holdInitialProbe && probes === 1) await initialProbe;
       if (mode === "network") return route.abort("failed");
       if (mode === "redirect") return route.fulfill({ status: 302, headers: { location: "/login" } });
       if (mode === "html") return route.fulfill({ status: 200, contentType: "text/html", body: "<html>SPA fallback</html>" });
@@ -50,8 +56,8 @@ async function fixture(page: Page, baseURL: string) {
   });
   await page.goto("/login");
   await expect(page.getByTestId("input-username")).toBeVisible();
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("data-sqr-connectivity", "online");
-  return { mode: (next: ResponseMode) => { mode = next; }, probes: () => probes, unexpected };
+  if (!holdInitialProbe) await expect(page.locator('link[rel="icon"]')).toHaveAttribute("data-sqr-connectivity", "online");
+  return { mode: (next: ResponseMode) => { mode = next; }, probes: () => probes, unexpected, releaseInitialProbe };
 }
 async function checkLinks(page: Page, state: "online" | "offline") {
   const icon = page.locator('link[rel="icon"]'), shortcut = page.locator('link[rel="shortcut icon"]');
@@ -76,6 +82,36 @@ async function confirmFailure(page: Page, probes: () => number) {
   await expect.poll(probes).toBe(before + 2);
   await checkLinks(page, "offline");
 }
+
+test("favicon status keeps one slow startup probe through pageshow without canceled requests", async ({ page, baseURL }) => {
+  const failedProbes: string[] = [];
+  page.on("requestfailed", request => {
+    if (new URL(request.url()).pathname === "/api/health/connectivity") {
+      failedProbes.push(request.failure()?.errorText ?? "unknown failure");
+    }
+  });
+  const f = await fixture(page, baseURL!, true);
+  try {
+    // goto waited for load/pageshow while the initial fetch deliberately remains pending.
+    expect(f.probes()).toBe(1);
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("pageshow"));
+      window.dispatchEvent(new Event("online"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(f.probes()).toBe(1);
+    expect(failedProbes).toEqual([]);
+  } finally {
+    f.releaseInitialProbe();
+  }
+  await checkLinks(page, "online");
+  const before = f.probes();
+  await page.clock.fastForward(20_100);
+  await expect.poll(f.probes).toBe(before + 1);
+  await checkLinks(page, "online");
+  expect(failedProbes).toEqual([]);
+  expect(f.unexpected).toEqual([]);
+});
 
 test("favicon status handles backend failures, false positives and repeated recovery without duplicate links", async ({ page, baseURL }) => {
   const f = await fixture(page, baseURL!);
