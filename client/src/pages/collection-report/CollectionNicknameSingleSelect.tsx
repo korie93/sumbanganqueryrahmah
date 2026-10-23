@@ -82,6 +82,7 @@ export function CollectionNicknameSingleSelect({
         </PopoverTrigger>
         <PopoverContent
           align="start"
+          aria-label={`${label} selection`}
           className={cn(
             "w-[min(340px,calc(100vw-2rem))] border-border/70 bg-popover p-2 text-popover-foreground shadow-lg",
             popoverClassName,

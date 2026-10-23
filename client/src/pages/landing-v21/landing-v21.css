@@ -2653,6 +2653,7 @@
 
 .sqr-landing .footer-brand .landing-brand-image {
   height: 64px;
+  aspect-ratio: 665 / 310;
 }
 
 .sqr-landing .footer-copy {

@@ -71,7 +71,7 @@ export function HeroIntro() {
       <div className="micro">
         Lightweight · Responsive · Built for structured daily operations
       </div>
-      <div className="hero-proof" aria-label="Platform strengths">
+      <div className="hero-proof" role="group" aria-label="Platform strengths">
         <div className="hero-proof-item">
           <span>
             01

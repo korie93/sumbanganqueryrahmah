@@ -207,7 +207,7 @@ export function CollectionMonthlyComparisonPanel({
 
       {!loading && !errorMessage && data ? (
         <div className="monthly-comparison-report">
-          <div className="monthly-comparison-headline" aria-label="First to last month comparison">
+          <div className="monthly-comparison-headline" role="group" aria-label="First to last month comparison">
             <div className="monthly-comparison-headline-values">
               <div className="monthly-comparison-headline-group monthly-comparison-headline-range">
                 <p className="monthly-comparison-headline-label">Comparison range</p>

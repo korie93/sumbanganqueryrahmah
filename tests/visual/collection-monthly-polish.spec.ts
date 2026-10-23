@@ -1,4 +1,7 @@
-import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { expect, test, type CDPSession, type Locator, type Page, type Route } from "@playwright/test";
+import type { AxeResults, RunOptions } from "axe-core";
 
 // Production-built React/CSS, synthetic responses only. Unknown API requests and
 // every off-origin request fail closed; no backend, real accounts or database.
@@ -6,6 +9,7 @@ test.use({ serviceWorkers: "block" });
 const nickname = "Monthly Synthetic Collector";
 const stressNickname = `MONTHLY.${"UNBROKEN-COLLECTOR-".repeat(6)}END`;
 const now = "2026-10-15T08:00:00.000Z";
+const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 
 async function installFixture(page: Page, baseURL: string | undefined, theme: "light" | "dark", options: {
   loading?: "comparison" | "target";
@@ -162,6 +166,155 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: "l
   });
   page.on("pageerror", (error) => fixture.errors.push(error.message));
   return fixture;
+}
+
+async function expectAccessibleMonthlyRegion(region: Locator) {
+  const violations = await region.evaluate(async (element) => {
+    const axe = (window as typeof window & {
+      axe: { run: (root: Element, options: RunOptions) => Promise<AxeResults> };
+    }).axe;
+    const result = await axe.run(element, {
+      // aria-dialog-name is a best-practice rule, outside the WCAG-only tags.
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] },
+      resultTypes: ["violations"],
+    });
+    return result.violations.map(({ id, nodes }) => ({
+      id, nodes: nodes.map(({ target, failureSummary }) => ({ target, failureSummary })),
+    }));
+  });
+  expect(violations, "The Monthly region satisfies scoped WCAG and best-practice checks").toEqual([]);
+}
+
+async function expectIdentifiedMonthlyFormFields(page: Page, audit: CDPSession) {
+  const identities = await page.evaluate(() => {
+    const fields = [...document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>([
+      ".collection-monthly-comparison-panel input", ".collection-monthly-comparison-panel select",
+      ".collection-monthly-comparison-panel textarea", '[role="dialog"] input', '[role="dialog"] select',
+      '[role="dialog"] textarea',
+    ].join(","))];
+    const documentIds = [...document.querySelectorAll("[id]")].map((element) => element.id);
+    return {
+      anonymous: fields.filter((field) => !field.id.trim() && !field.name.trim()).map((field) => field.outerHTML),
+      duplicateIds: [...new Set(fields.map((field) => field.id).filter((id) => id
+        && documentIds.filter((documentId) => documentId === id).length > 1))],
+    };
+  });
+  expect(identities.anonymous, "Monthly form fields need an id or name, including closed disclosures and portals").toEqual([]);
+  expect(identities.duplicateIds, "Mounted inline charts and portals must not duplicate form IDs").toEqual([]);
+  const { formIssues } = await audit.send("Audits.checkFormsIssues");
+  expect(formIssues.filter(({ errorType }) => errorType === "FormEmptyIdAndNameAttributesForInputError"),
+    "Chrome must not report a form field with neither id nor name").toEqual([]);
+}
+
+for (const width of [1440, 390]) {
+  test(`Monthly Inspect fields retain form identities and drill-down at ${width}px`, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    const fixture = await installFixture(page, baseURL, "light");
+    const audit = await page.context().newCDPSession(page);
+    await audit.send("Audits.enable");
+    await page.goto("/collection/monthly-comparison");
+    const panel = page.locator(".collection-monthly-comparison-panel");
+    await expect(panel.getByRole("button", { name: "Export CSV", exact: true })).toBeEnabled();
+    await expectIdentifiedMonthlyFormFields(page, audit);
+    const pace = panel.getByTestId("collection-monthly-same-day-analysis");
+    const detailed = panel.getByTestId("collection-monthly-detailed-analysis");
+    for (const disclosure of [pace, detailed]) {
+      await disclosure.locator(":scope > summary").click();
+      await expect(disclosure).toHaveAttribute("open", "");
+    }
+    const inspectDay = pace.getByRole("combobox", { name: "Inspect same-day comparison point", exact: true });
+    const inspectMonth = detailed.getByRole("combobox", { name: "Open monthly drill-down records", exact: true });
+    await expect(inspectDay).toBeVisible();
+    await expect(inspectMonth).toBeVisible();
+    await expect(inspectDay).toHaveAttribute("id", /\S+/);
+    await expect(inspectMonth).toHaveAttribute("id", /\S+/);
+    const dayId = await inspectDay.getAttribute("id");
+    const monthId = await inspectMonth.getAttribute("id");
+    expect(dayId).not.toBe(monthId);
+    await inspectDay.selectOption("10");
+    await expect(inspectDay).toHaveValue("10");
+    await expect(pace.getByRole("complementary", { name: "Detailed same-day comparison for day 10", exact: true })).toBeVisible();
+    await expect(inspectDay).toHaveAttribute("id", dayId!);
+    await expectIdentifiedMonthlyFormFields(page, audit);
+
+    for (const [disclosure, title] of [[pace, "Same-day pace trend"], [detailed, "Monthly performance trend"]] as const) {
+      const viewFull = disclosure.getByRole("button", { name: "View Full", exact: true });
+      await viewFull.focus();
+      await viewFull.press("Enter");
+      const dialog = page.getByRole("dialog", { name: title, exact: true });
+      await expect(dialog).toBeVisible();
+      await expectIdentifiedMonthlyFormFields(page, audit);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await expect(viewFull).toBeFocused();
+    }
+
+    await inspectMonth.focus();
+    await inspectMonth.selectOption("2026-10");
+    const records = page.getByRole("dialog", { name: "October 2026", exact: true });
+    await expect(records).toBeVisible();
+    await expect.poll(() => fixture.recordRequests.length).toBe(1);
+    const query = new URLSearchParams(fixture.recordRequests[0]);
+    expect(query.get("nickname")).toBe(nickname);
+    expect(query.get("from")).toBe("2026-10-01");
+    expect(query.get("to")).toBe("2026-10-31");
+    await expectIdentifiedMonthlyFormFields(page, audit);
+    await page.keyboard.press("Escape");
+    await expect(records).toBeHidden();
+    await expect(inspectMonth).toBeFocused();
+    await expect(inspectMonth).toHaveAttribute("id", monthId!);
+    await expectIdentifiedMonthlyFormFields(page, audit);
+    await audit.detach();
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`Monthly named groups and nickname popup preserve keyboard focus at ${width}px`, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    const ariaWarnings: string[] = [];
+    page.on("console", (message) => {
+      if (["warning", "error"].includes(message.type()) && /\baria\b|aria-/i.test(message.text())) {
+        ariaWarnings.push(message.text());
+      }
+    });
+    const fixture = await installFixture(page, baseURL, "light");
+    await page.goto("/collection/monthly-comparison");
+    const panel = page.locator(".collection-monthly-comparison-panel");
+    await expect(panel.getByRole("button", { name: "Export CSV", exact: true })).toBeEnabled();
+    await page.evaluate(axeSource);
+    const headline = panel.getByRole("group", { name: "First to last month comparison", exact: true });
+    await expect(headline).toBeVisible();
+    await expectAccessibleMonthlyRegion(headline);
+
+    const nicknameTrigger = panel.getByRole("button", { name: "Staff nickname", exact: true });
+    await nicknameTrigger.focus();
+    await nicknameTrigger.press("Enter");
+    const popup = page.getByRole("dialog", { name: "Staff nickname selection", exact: true });
+    await expect(popup).toBeVisible();
+    const search = popup.getByRole("textbox", { name: "Staff nickname search", exact: true });
+    await expect(search).toBeFocused();
+    await expectAccessibleMonthlyRegion(popup);
+    await search.press("Escape");
+    await expect(popup).toBeHidden();
+    await expect(nicknameTrigger).toBeFocused();
+
+    await nicknameTrigger.press("Enter");
+    await expect(popup).toBeVisible();
+    await expect(search).toBeFocused();
+    await search.fill(nickname);
+    await search.press("Tab");
+    const nicknameOption = popup.getByRole("button", { name: nickname, exact: true });
+    await expect(nicknameOption).toBeFocused();
+    await nicknameOption.press("Enter");
+    await expect(popup).toBeHidden();
+    await expect(nicknameTrigger).toBeFocused();
+    await expect(nicknameTrigger).toHaveText(nickname);
+    expect(ariaWarnings, "The nickname popup flow must not emit ARIA console warnings").toEqual([]);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
 }
 
 async function expectContainedMonthlyLayout(page: Page, panel: Locator) {

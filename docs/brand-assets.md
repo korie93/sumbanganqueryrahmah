@@ -84,3 +84,21 @@ transparent blue Q for both themes, avoiding the navy-backed dark icon. Its
 collapsed Q uses mechanically exported original layers for lightweight motion;
 see [desktop sidebar Q](sidebar-animated-q.md). Other logo consumers and favicon
 connectivity assets remain unchanged.
+
+## Landing footer lazy-image sizing
+
+The full footer logo keeps its intrinsic 665×310 HTML dimensions, lazy loading,
+responsive auto width and 64px CSS height. Its footer-only image rule also sets
+`aspect-ratio: 665 / 310` explicitly. Chromium's lazy-image sizing diagnostic can
+flag an automatic width with the HTML-derived `auto 665 / 310` ratio even when
+the image already reserves space. Do not apply this non-square ratio to the
+shared Q image class or change the original artwork to address the diagnostic.
+
+The browser regression holds image delivery, verifies a nonzero footer image
+box before decoding, compares the loaded box, and observes CDP `LazyLoadImageIssue`
+events on desktop and phone. This checks the actual browser warning rather than
+only looking for width/height attributes after load. The Platform strengths
+container is a named group, not a labelled generic div. Monthly Comparison uses
+the same named-group semantics for its headline and separately names the Staff
+nickname popup; no global focus handling, permissions or backend logic changes
+are required for these corrections.
