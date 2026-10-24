@@ -8,6 +8,31 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-10-24 browser validation under strict CSP
+
+[CI run 40103466286](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/40103466286)
+on `d60d72c3` passed dependency audit, build, typecheck and unit tests, but its
+V17 authentication browser check reported three Trusted Types violations. Zod 4
+probes `Function` when constructing object schemas; catching the blocked probe
+does not prevent the browser from reporting a CSP violation.
+
+Vite now resolves the exact bare `zod` import through a browser-only shim that
+sets `jitless: true` before consumers construct schemas. The shim and shared
+contracts stay in the same validation chunk, preserving initialization order.
+Its `zod/v4` import does not recurse through the alias. Backend validation keeps
+its existing configuration; no CSP directive, Trusted Types policy, dependency
+pin or browser assertion is relaxed.
+
+The client regression intercepts `Function` before importing validation, checks
+zero attempts, and exercises nested/default/transformed schemas plus valid and
+invalid reset contracts. Local sandbox verification passed 94 contract/session
+tests and an emitted schema/session bundle using the actual Vite aliases and
+chunk groups: zero dynamic-code attempts with the fix, one caught probe when
+the alias was deliberately removed. TypeScript and lint also passed for the new
+shim/test and reachable contract types. A full frontend typecheck exceeded local
+memory/time limits. These scoped checks do not replace the complete browser
+smoke job; that still needs a fresh CI run.
+
 ## 2026-10-24 parser, mail and validation security updates
 
 [CI run 40090798066](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/40090798066)

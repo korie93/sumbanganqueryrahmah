@@ -94,6 +94,7 @@ export default defineConfig({
                 normalizedId.includes("node_modules/zod")
                 || normalizedId.includes("shared/api-contracts.ts")
                 || normalizedId.includes("client/src/lib/api/contract.ts")
+                || normalizedId.includes("client/src/lib/zod-browser.ts")
               ) {
                 return "validation";
               }
@@ -151,9 +152,11 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "client/src"),
-      "@shared": path.resolve(__dirname, "shared"),
-    },
+    alias: [
+      // Match only the package root: the shim imports zod/v4 without recursing.
+      { find: /^zod$/, replacement: path.resolve(__dirname, "client/src/lib/zod-browser.ts") },
+      { find: "@", replacement: path.resolve(__dirname, "client/src") },
+      { find: "@shared", replacement: path.resolve(__dirname, "shared") },
+    ],
   },
 });
