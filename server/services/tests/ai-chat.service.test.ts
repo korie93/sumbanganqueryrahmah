@@ -34,6 +34,7 @@ function createAiChatHarness(options?: {
 
   const storage = {
     createConversation: async () => "conv-1",
+    assertConversationOwner: async () => undefined,
     getConversationMessages: async () => [],
     searchGlobalDataRows: async (params: Record<string, unknown>) => {
       searchCalls.push(params);
@@ -53,7 +54,7 @@ function createAiChatHarness(options?: {
         total: 1,
       };
     },
-    saveConversationMessage: async (conversationId: string, role: string, content: string) => {
+    saveConversationMessage: async (conversationId: string, _ownerUserId: string, role: string, content: string) => {
       savedMessages.push({ conversationId, role, content });
       return {
         id: `${role}-${savedMessages.length}`,
@@ -107,6 +108,7 @@ test("AiChatService persists count-summary replies without calling Ollama", asyn
 
   const result = await service.handleChat({
     message: "berapa kerajaan",
+    userId: "user-1",
     username: "user.one",
     aiTimeoutMs: 6000,
   });
@@ -149,6 +151,7 @@ test("AiChatService falls back to quick replies on AbortError and persists the r
 
   const result = await service.handleChat({
     message: "123456789012 Ali",
+    userId: "user-1",
     username: "user.one",
     aiTimeoutMs: 6000,
   });
@@ -183,6 +186,7 @@ test("AiChatService returns 503 when the AI circuit is open", async () => {
 
   const result = await service.handleChat({
     message: "hello",
+    userId: "user-1",
     username: "user.one",
     aiTimeoutMs: 6000,
   });

@@ -15,6 +15,7 @@ import type { ManageableUserRole } from "../shared/user-roles";
 import type { ManagedUserDeletionResult } from "./repositories/auth-repository-types";
 import type { CompleteAccountRecoveryParams, PrepareDeliveredPasswordResetParams } from "./repositories/auth-recovery-repository-utils";
 import type { CreateManagedUserAccountParams } from "./repositories/auth-user-repository-types";
+import type { CreateActivationTokenParams, CreatePasswordResetRequestParams, UpdatePasswordResetRequestParams } from "./repositories/auth-token-repository-types";
 
 export type ManagedUserAccount = ManagedUserRecord;
 export type PendingPasswordResetRequestSummary = PendingPasswordResetRequestRecord;
@@ -107,12 +108,7 @@ export interface AuthStorageContract {
   updateActivitiesUsername(oldUsername: string, newUsername: string): Promise<void>;
   updateUserBan(username: string, isBanned: boolean): Promise<User | undefined>;
   touchLastLogin(userId: string, timestamp?: Date): Promise<void>;
-  createActivationToken(params: {
-    userId: string;
-    tokenHash: string;
-    expiresAt: Date;
-    createdBy: string;
-  }): Promise<AccountActivationToken>;
+  createActivationToken(params: CreateActivationTokenParams): Promise<AccountActivationToken>;
   invalidateUnusedActivationTokens(userId: string): Promise<void>;
   getActivationTokenRecordByHash(
     tokenHash: string,
@@ -121,23 +117,8 @@ export interface AuthStorageContract {
     tokenId: string;
     now?: Date;
   }): Promise<boolean>;
-  createPasswordResetRequest(params: {
-    userId: string;
-    requestedByUser: string | null;
-    approvedBy?: string | null;
-    resetType?: string;
-    tokenHash?: string | null;
-    expiresAt?: Date | null;
-    usedAt?: Date | null;
-  }): Promise<PasswordResetRequest>;
-  updatePasswordResetRequest(params: {
-    requestId: string;
-    approvedBy?: string | null;
-    resetType?: string;
-    usedAt?: Date | null;
-    tokenHash?: string | null;
-    expiresAt?: Date | null;
-  }): Promise<void>;
+  createPasswordResetRequest(params: CreatePasswordResetRequestParams): Promise<PasswordResetRequest>;
+  updatePasswordResetRequest(params: UpdatePasswordResetRequestParams): Promise<void>;
   resolvePendingPasswordResetRequestsForUser(params: {
     userId: string;
     approvedBy: string;

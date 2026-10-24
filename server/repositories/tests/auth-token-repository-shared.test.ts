@@ -26,6 +26,7 @@ test("auth token repository shared builds activation and password reset records"
   const activation = buildActivationTokenInsertRecord(
     {
       userId: "user-1",
+      expectedRecipientEmail: "user-1@example.test",
       tokenHash: "hash-1",
       expiresAt: new Date("2026-04-07T12:00:00.000Z"),
       createdBy: "admin-1",
@@ -35,6 +36,7 @@ test("auth token repository shared builds activation and password reset records"
   const reset = buildPasswordResetRequestInsertRecord(
     {
       userId: "user-2",
+      expectedRecipientEmail: "user-2@example.test",
       requestedByUser: "user-2",
       approvedBy: undefined,
       resetType: undefined,

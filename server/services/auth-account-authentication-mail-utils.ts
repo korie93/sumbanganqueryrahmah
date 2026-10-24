@@ -20,6 +20,7 @@ export async function issueActivationToken(
   params: {
     createdBy: string;
     userId: string;
+    expectedRecipientEmail: string;
   },
 ) {
   const activation = createActivationTokenPayload();
@@ -27,6 +28,7 @@ export async function issueActivationToken(
   // Issuance replaces earlier links atomically inside the repository.
   await storage.createActivationToken({
     userId: params.userId,
+    expectedRecipientEmail: params.expectedRecipientEmail,
     tokenHash: activation.tokenHash,
     expiresAt: activation.expiresAt,
     createdBy: params.createdBy,
@@ -55,6 +57,7 @@ export async function sendActivationEmailOperation(params: {
   );
   const activation = await issueActivationToken(params.storage, {
     userId: params.user.id,
+    expectedRecipientEmail: recipientEmail,
     createdBy: params.actorUsername,
   });
   const activationUrl = buildActivationUrl(activation.token);

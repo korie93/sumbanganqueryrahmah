@@ -243,6 +243,7 @@ test("AiInteractionService chat respects disabled AI runtime settings", async ()
 
   const result = await service.chat({
     message: "hello",
+    userId: "user-1",
     username: "user.one",
   });
 
@@ -258,6 +259,7 @@ test("AiInteractionService chat rejects overlong messages before service executi
 
   const result = await service.chat({
     message: "x".repeat(AI_REQUEST_MAX_CHARACTERS + 1),
+    userId: "user-1",
     username: "user.one",
   });
 
@@ -274,6 +276,7 @@ test("AiInteractionService chat normalizes conversation ids before delegating", 
   const result = await service.chat({
     message: "hello",
     conversationId: 123,
+    userId: "user-1",
     username: "user.one",
   });
 
@@ -284,8 +287,19 @@ test("AiInteractionService chat normalizes conversation ids before delegating", 
   });
   assert.deepEqual(chatCalls, [{
     message: "hello",
+    userId: "user-1",
     username: "user.one",
     existingConversationId: "123",
     aiTimeoutMs: 6000,
   }]);
+});
+
+test("AiInteractionService chat rejects missing account identity without delegating", async () => {
+  const { service, chatCalls, countSummaryCalls } = createAiInteractionHarness();
+  const result = await service.chat({
+    userId: undefined as unknown as string, username: "user.one", message: "hello",
+  });
+  assert.equal(result.statusCode, 401);
+  assert.deepEqual(chatCalls, []);
+  assert.deepEqual(countSummaryCalls, []);
 });

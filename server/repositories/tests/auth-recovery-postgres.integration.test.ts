@@ -24,7 +24,7 @@ test("authentication recovery transactions on disposable PostgreSQL", { skip: !i
   const { ensureCoreUserActivityTable } = await import("../../internal/core-schema-bootstrap-activity");
   const { completeAccountRecovery, prepareDeliveredPasswordReset } = await import("../auth-recovery-repository-utils");
   const { createActivationToken } = await import("../auth-activation-token-repository-utils");
-  const { createPasswordResetRequest } = await import("../auth-password-reset-repository-utils");
+  const { createPasswordResetRequest, updatePasswordResetRequest } = await import("../auth-password-reset-repository-utils");
   const { updateAuthUserAccount } = await import("../auth-user-repository-write-utils");
   const { createActivity } = await import("../activity-repository-session-operations");
   const { buildTwoFactorCredentialState } = await import("../../auth/two-factor");
@@ -33,21 +33,29 @@ test("authentication recovery transactions on disposable PostgreSQL", { skip: !i
     await ensureCoreUserActivityTable(database);
     async function fixture(kind: "activation" | "password_reset" = "password_reset", extra = {}) {
       const userId = randomUUID();
-      await pool.query("INSERT INTO users(id,username,password_hash,role,status,locked_at,locked_by_system,failed_login_attempts) VALUES($1,$2,$3,'admin',$4,now(),true,5)",
-        [userId, `fixture_${userId.replace(/-/g, "")}`, "original-hash", kind === "activation" ? "pending_activation" : "active"]);
+      const email = `${userId}@example.test`;
+      await pool.query("INSERT INTO users(id,username,password_hash,role,status,email,locked_at,locked_by_system,failed_login_attempts) VALUES($1,$2,$3,'admin',$4,$5,now(),true,5)",
+        [userId, `fixture_${userId.replace(/-/g, "")}`, "original-hash", kind === "activation" ? "pending_activation" : "active", email]);
       const activityId = randomUUID();
       await pool.query("INSERT INTO user_activity(id,user_id,username,role,is_active,login_time,last_activity_time) SELECT $2,id,username,role,true,now(),now() FROM users WHERE id=$1", [userId, activityId]);
       const tokenHash = randomUUID().replace(/-/g, "");
       const expiresAt = new Date(Date.now() + 60_000);
       const token = kind === "activation"
-        ? await createActivationToken({ userId, tokenHash, expiresAt, createdBy: "fixture-admin", ...extra }, database)
-        : await createPasswordResetRequest({ userId, tokenHash, expiresAt, requestedByUser: null, approvedBy: "fixture-admin", ...extra }, database);
+        ? await createActivationToken({ userId, expectedRecipientEmail: email, tokenHash, expiresAt, createdBy: "fixture-admin", ...extra }, database)
+        : await createPasswordResetRequest({ userId, expectedRecipientEmail: email, tokenHash, expiresAt, requestedByUser: null, approvedBy: "fixture-admin", ...extra }, database);
       const params = { kind, userId, tokenId: token.id, tokenHash, passwordHash: "chosen-new-hash" };
-      return { params, token, userId, activityId, table: kind === "activation" ? "account_activation_tokens" : "password_reset_requests" };
+      return { params, token, userId, email, activityId, table: kind === "activation" ? "account_activation_tokens" : "password_reset_requests" };
     }
     const userState = async (userId: string) => (await pool.query("SELECT password_hash,status,must_change_password,password_reset_by_superuser,locked_at FROM users WHERE id=$1", [userId])).rows[0];
     const sessionActive = async (userId: string) => (await pool.query("SELECT is_active FROM user_activity WHERE user_id=$1", [userId])).rows[0].is_active;
     const tokenUsed = async (f: Awaited<ReturnType<typeof fixture>>) => (await pool.query(`SELECT used_at FROM ${f.table} WHERE id=$1`, [f.token.id])).rows[0].used_at;
+    const issueForRecipient = (kind: "activation" | "password_reset", userId: string, expectedRecipientEmail: string) => {
+      const tokenHash = randomUUID();
+      const expiresAt = new Date(Date.now() + 60_000);
+      return kind === "activation"
+        ? createActivationToken({ userId, expectedRecipientEmail, tokenHash, expiresAt, createdBy: "fixture-admin" }, database)
+        : createPasswordResetRequest({ userId, expectedRecipientEmail, tokenHash, expiresAt, requestedByUser: null, approvedBy: "fixture-admin" }, database);
+    };
 
     for (const kind of ["activation", "password_reset"] as const) {
       await t.test(`${kind}: success changes hash, consumes once and revokes sessions atomically`, async () => {
@@ -76,14 +84,118 @@ test("authentication recovery transactions on disposable PostgreSQL", { skip: !i
       await t.test(`${kind}: concurrent resends leave exactly one unused link`, async () => {
         const f = await fixture(kind);
         const issue = (tokenHash: string) => kind === "activation"
-          ? createActivationToken({ userId: f.userId, tokenHash, expiresAt: new Date(Date.now() + 60_000), createdBy: "fixture-admin" }, database)
-          : createPasswordResetRequest({ userId: f.userId, tokenHash, expiresAt: new Date(Date.now() + 60_000), requestedByUser: null, approvedBy: "fixture-admin" }, database);
+          ? createActivationToken({ userId: f.userId, expectedRecipientEmail: f.email, tokenHash, expiresAt: new Date(Date.now() + 60_000), createdBy: "fixture-admin" }, database)
+          : createPasswordResetRequest({ userId: f.userId, expectedRecipientEmail: f.email, tokenHash, expiresAt: new Date(Date.now() + 60_000), requestedByUser: null, approvedBy: "fixture-admin" }, database);
         await Promise.all([issue("resend-one"), issue("resend-two")]);
         assert.equal((await pool.query(`SELECT count(*)::int AS count FROM ${f.table} WHERE user_id=$1 AND used_at IS NULL`, [f.userId])).rows[0].count, 1);
         assert.equal(await completeAccountRecovery(f.params, database), undefined);
         assert.equal((await userState(f.userId)).password_hash, "original-hash");
       });
+      await t.test(`${kind}: correcting email cancels both link families and a fresh recipient can recover`, async () => {
+        const f = await fixture(kind);
+        const unrelated = await fixture(kind);
+        const otherKind = kind === "activation" ? "password_reset" : "activation";
+        const otherTable = kind === "activation" ? "password_reset_requests" : "account_activation_tokens";
+        const sibling = await issueForRecipient(otherKind, f.userId, f.email);
+        const correctedEmail = `corrected-${f.email}`;
+        assert.ok(await updateAuthUserAccount({ userId: f.userId, email: correctedEmail }, database));
+        assert.ok(await tokenUsed(f));
+        assert.ok((await pool.query(`SELECT used_at FROM ${otherTable} WHERE id=$1`, [sibling.id])).rows[0].used_at);
+        assert.equal(await tokenUsed(unrelated), null, "Another account's links must stay usable.");
+        assert.equal(await completeAccountRecovery(f.params, database), undefined);
+        assert.equal((await userState(f.userId)).password_hash, "original-hash");
+        const fresh = await issueForRecipient(kind, f.userId, correctedEmail);
+        assert.ok(await completeAccountRecovery({ ...f.params, tokenId: fresh.id, tokenHash: fresh.tokenHash!, passwordHash: "corrected-recipient-hash" }, database));
+      });
+      await t.test(`${kind}: formatting the same recipient or editing another field preserves links`, async () => {
+        const f = await fixture(kind);
+        await updateAuthUserAccount({ userId: f.userId, fullName: "Updated display name" }, database);
+        await updateAuthUserAccount({ userId: f.userId, email: `  ${f.email.toUpperCase()}  ` }, database);
+        assert.equal(await tokenUsed(f), null);
+        assert.ok(await completeAccountRecovery(f.params, database));
+      });
+      await t.test(`${kind}: stale or omitted issuance snapshots cannot replace the corrected recipient's link`, async () => {
+        const f = await fixture(kind);
+        const correctedEmail = `corrected-${f.email}`;
+        await updateAuthUserAccount({ userId: f.userId, email: correctedEmail }, database);
+        const fresh = await issueForRecipient(kind, f.userId, correctedEmail);
+        await assert.rejects(issueForRecipient(kind, f.userId, f.email), { code: "CONFLICT" });
+        // Exercise callers compiled before the new required recipient field.
+        await assert.rejects(issueForRecipient(kind, f.userId, undefined as unknown as string), { code: "CONFLICT" });
+        assert.equal((await pool.query(`SELECT used_at FROM ${f.table} WHERE id=$1`, [fresh.id])).rows[0].used_at, null);
+        assert.equal((await pool.query(`SELECT count(*)::int AS count FROM ${f.table} WHERE user_id=$1 AND used_at IS NULL`, [f.userId])).rows[0].count, 1);
+      });
+      await t.test(`${kind}: issuance and final consumption wait for email correction and reject the old link`, async () => {
+        const f = await fixture(kind);
+        let enter!: () => void;
+        let release!: () => void;
+        const entered = new Promise<void>((resolve) => { enter = resolve; });
+        const released = new Promise<void>((resolve) => { release = resolve; });
+        const holdingDatabase = new Proxy(database, {
+          get(target, property, receiver) {
+            if (property !== "transaction") return Reflect.get(target, property, receiver);
+            return (run: Parameters<typeof database.transaction>[0]) => database.transaction(async (tx) => {
+              const result = await run(tx);
+              enter();
+              await released;
+              return result;
+            });
+          },
+        });
+        const correction = updateAuthUserAccount({ userId: f.userId, email: `corrected-${f.email}` }, holdingDatabase);
+        try {
+          await entered;
+          let issuanceSettled = false;
+          const issuance = issueForRecipient(kind, f.userId, f.email);
+          void issuance.then(() => { issuanceSettled = true; }, () => { issuanceSettled = true; });
+          const rejected = assert.rejects(issuance, { code: "CONFLICT" });
+          const consumption = completeAccountRecovery(f.params, database);
+          await delay(40);
+          assert.equal(issuanceSettled, false, "Issuance must take the correction transaction's user lock.");
+          release();
+          await correction;
+          await rejected;
+          assert.equal(await consumption, undefined);
+          assert.equal((await userState(f.userId)).password_hash, "original-hash");
+        } finally { release(); await correction; }
+      });
     }
+    await t.test("clearing email cancels links without cancelling tokenless approval requests", async () => {
+      const f = await fixture();
+      const activation = await issueForRecipient("activation", f.userId, f.email);
+      const approval = await createPasswordResetRequest({ userId: f.userId, requestedByUser: f.userId }, database);
+      await updateAuthUserAccount({ userId: f.userId, email: null }, database);
+      assert.ok(await tokenUsed(f));
+      assert.ok((await pool.query("SELECT used_at FROM account_activation_tokens WHERE id=$1", [activation.id])).rows[0].used_at);
+      assert.equal((await pool.query("SELECT used_at FROM password_reset_requests WHERE id=$1", [approval.id])).rows[0].used_at, null);
+      await assert.rejects(issueForRecipient("password_reset", f.userId, f.email), { code: "CONFLICT" });
+    });
+    await t.test("email correction and both link invalidations roll back together", async () => {
+      const f = await fixture();
+      const activation = await issueForRecipient("activation", f.userId, f.email);
+      await pool.query("CREATE FUNCTION fixture_reject_recipient_cancel() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture cancellation rejection'; END $$");
+      await pool.query("CREATE TRIGGER fixture_reject_recipient_cancel BEFORE UPDATE ON password_reset_requests FOR EACH ROW EXECUTE FUNCTION fixture_reject_recipient_cancel()");
+      try {
+        await assert.rejects(updateAuthUserAccount({ userId: f.userId, email: `corrected-${f.email}` }, database));
+        assert.equal((await pool.query("SELECT email FROM users WHERE id=$1", [f.userId])).rows[0].email, f.email);
+        assert.equal(await tokenUsed(f), null);
+        assert.equal((await pool.query("SELECT used_at FROM account_activation_tokens WHERE id=$1", [activation.id])).rows[0].used_at, null);
+      } finally { await pool.query("DROP TRIGGER fixture_reject_recipient_cancel ON password_reset_requests; DROP FUNCTION fixture_reject_recipient_cancel()"); }
+    });
+    await t.test("stale reset-request updates and SMTP completion cannot revive a corrected recipient's link", async () => {
+      const f = await fixture();
+      await updateAuthUserAccount({ userId: f.userId, email: `corrected-${f.email}` }, database);
+      await assert.rejects(updatePasswordResetRequest({
+        requestId: f.token.id, tokenHash: f.params.tokenHash, expectedRecipientEmail: f.email,
+        expiresAt: new Date(Date.now() + 60_000), usedAt: null,
+      }, database), { code: "CONFLICT" });
+      assert.equal(await prepareDeliveredPasswordReset({
+        userId: f.userId, requestId: f.token.id, tokenHash: f.params.tokenHash,
+        expectedPasswordHash: "original-hash", passwordHash: "temporary-placeholder", approvedBy: "fixture-admin",
+      }, database), undefined);
+      assert.ok(await tokenUsed(f));
+      assert.equal((await userState(f.userId)).password_hash, "original-hash");
+    });
     await t.test("password update trigger failure rolls back consumed token and preserves session", async () => {
       const f = await fixture();
       await pool.query("CREATE FUNCTION fixture_reject_password() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.password_hash='fail-trigger-hash' THEN RAISE EXCEPTION 'fixture rejection'; END IF; RETURN NEW; END $$");
@@ -164,7 +276,7 @@ test("authentication recovery transactions on disposable PostgreSQL", { skip: !i
       const prepare = { userId: f.userId, requestId: f.token.id, tokenHash: f.params.tokenHash,
         expectedPasswordHash: "original-hash", passwordHash: "temporary-placeholder", approvedBy: "fixture-admin" };
       assert.equal(await prepareDeliveredPasswordReset({ ...prepare, expectedPasswordHash: "stale-hash" }, database), undefined);
-      await createPasswordResetRequest({ userId: f.userId, requestedByUser: null, approvedBy: "fixture-admin", tokenHash: "newer-token", expiresAt: new Date(Date.now() + 60_000) }, database);
+      await createPasswordResetRequest({ userId: f.userId, expectedRecipientEmail: f.email, requestedByUser: null, approvedBy: "fixture-admin", tokenHash: "newer-token", expiresAt: new Date(Date.now() + 60_000) }, database);
       assert.equal(await prepareDeliveredPasswordReset(prepare, database), undefined);
       assert.equal((await userState(f.userId)).password_hash, "original-hash");
       assert.equal(await sessionActive(f.userId), true);

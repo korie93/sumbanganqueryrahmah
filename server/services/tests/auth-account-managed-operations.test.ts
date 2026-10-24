@@ -343,6 +343,7 @@ test("AuthAccountManagedRecoveryOperations.resetManagedUserPassword completes ap
   assert.equal(result.reset.sent, true);
   assert.equal(invalidatedTokens.length, 0, "Issuance owns replacement in its transaction.");
   assert.equal(createdRequests.length, 1);
+  assert.equal(createdRequests[0].expectedRecipientEmail, target.email);
   assert.equal(preparations.length, 1);
   assert.equal(preparations[0].requestId, "reset-request-1");
   assert.equal(preparations[0].expectedPasswordHash, target.passwordHash);

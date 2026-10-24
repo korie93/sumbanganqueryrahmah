@@ -9,23 +9,29 @@ type CategoryRule = {
 };
 
 export class PostgresAiStorage extends PostgresActivityStorage {
-  async createConversation(createdBy: string): Promise<string> {
-    return this.aiRepository.createConversation(createdBy);
+  async createConversation(ownerUserId: string): Promise<string> {
+    return this.aiRepository.createConversation(ownerUserId);
+  }
+
+  async assertConversationOwner(conversationId: string, ownerUserId: string): Promise<void> {
+    return this.aiRepository.assertConversationOwner(conversationId, ownerUserId);
   }
 
   async saveConversationMessage(
     conversationId: string,
+    ownerUserId: string,
     role: "user" | "assistant" | "system",
     content: string,
   ): Promise<void> {
-    return this.aiRepository.saveConversationMessage(conversationId, role, content);
+    return this.aiRepository.saveConversationMessage(conversationId, ownerUserId, role, content);
   }
 
   async getConversationMessages(
     conversationId: string,
+    ownerUserId: string,
     limit: number = 20,
   ): Promise<Array<{ role: string; content: string }>> {
-    return this.aiRepository.getConversationMessages(conversationId, limit);
+    return this.aiRepository.getConversationMessages(conversationId, ownerUserId, limit);
   }
 
   async saveEmbedding(params: {

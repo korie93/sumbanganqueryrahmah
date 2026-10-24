@@ -546,7 +546,10 @@ export class ImportsRepository {
       const chunk = await db
         .select()
         .from(dataRows)
-        .where(eq(dataRows.importId, importId))
+        .where(and(eq(dataRows.importId, importId), sql`EXISTS (
+          SELECT 1 FROM public.imports active_import
+          WHERE active_import.id = ${dataRows.importId} AND active_import.is_deleted = false
+        )`))
         .limit(QUERY_PAGE_LIMIT)
         .offset(offset);
 
@@ -565,6 +568,10 @@ export class ImportsRepository {
       FROM public.data_rows dr
       CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
       WHERE dr.import_id = ${importId}
+        AND EXISTS (
+          SELECT 1 FROM public.imports active_import
+          WHERE active_import.id = dr.import_id AND active_import.is_deleted = false
+        )
         AND jsonb_typeof(dr.json_data::jsonb) = 'object'
       ORDER BY key
       LIMIT ${IMPORT_COLUMN_KEYS_MAX_LIMIT}
@@ -579,7 +586,10 @@ export class ImportsRepository {
     return db
       .select()
       .from(dataRows)
-      .where(eq(dataRows.importId, importId))
+      .where(and(eq(dataRows.importId, importId), sql`EXISTS (
+        SELECT 1 FROM public.imports active_import
+        WHERE active_import.id = ${dataRows.importId} AND active_import.is_deleted = false
+      )`))
       .limit(Math.max(1, limit))
       .offset(Math.max(0, offset));
   }
@@ -589,7 +599,10 @@ export class ImportsRepository {
     limit: number,
     afterRowId: string | null = null,
   ): Promise<DataRow[]> {
-    const conditions = [eq(dataRows.importId, importId)];
+    const conditions = [eq(dataRows.importId, importId), sql`EXISTS (
+      SELECT 1 FROM public.imports active_import
+      WHERE active_import.id = ${dataRows.importId} AND active_import.is_deleted = false
+    )`];
     if (afterRowId) {
       conditions.push(gt(dataRows.id, afterRowId));
     }
@@ -606,7 +619,10 @@ export class ImportsRepository {
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)` })
       .from(dataRows)
-      .where(eq(dataRows.importId, importId));
+      .where(and(eq(dataRows.importId, importId), sql`EXISTS (
+        SELECT 1 FROM public.imports active_import
+        WHERE active_import.id = ${dataRows.importId} AND active_import.is_deleted = false
+      )`));
 
     return Number(count);
   }

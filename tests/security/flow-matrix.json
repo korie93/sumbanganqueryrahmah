@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "sourceRef": "117523395a9cd94f9014c121fac9ded465e0f019",
+  "executionStatus": "not_run_requires_os_sandbox",
+  "note": "A test inventory is not a coverage percentage or proof that every workflow is secure. Existing tests were located, not executed in this audit.",
+  "flows": [
+    {
+      "id": "public-documents",
+      "assertions": ["Unknown and protected routes do not become public static files", "API errors do not fall back to SPA HTML", "Private data is not included in public sitemap/robots responses"],
+      "tests": ["server/internal/tests/frontend-static.test.ts", "server/http/tests/response-sanitizer.test.ts"],
+      "runtimeGap": "Actual ingress cache/header attachment needs owner observation; no production probe."
+    },
+    {
+      "id": "login-session",
+      "assertions": ["Malformed or challenge-purpose claims cannot authenticate", "Current DB account and role override stale signed state", "Revoked, expired, idle, kicked or banned sessions are denied"],
+      "tests": ["tests/security/identity-boundaries.test.ts", "server/auth/tests/guards.test.ts", "server/auth/tests/session-jwt.test.ts", "server/auth/tests/session-cookie.test.ts", "server/auth/tests/redis-session-revocation-recovery.test.ts"],
+      "runtimeGap": "Real HTTP cookie, Redis failure/recovery and simultaneous refresh need isolated services."
+    },
+    {
+      "id": "recovery-activation-mfa",
+      "assertions": ["Expired/used/wrong-action recovery tokens fail", "Concurrent recovery consumes once", "MFA challenge is principal/credential-state-bound and replay-protected", "Password and authenticator changes revoke old authority"],
+      "tests": ["server/auth/tests/passwords.test.ts", "server/auth/tests/two-factor.test.ts", "server/auth/tests/two-factor-replay-cache.test.ts", "server/services/tests/auth-account-password-reset-operations.test.ts", "server/routes/tests/auth-two-factor-http.test.ts"],
+      "runtimeGap": "Transactional token races need disposable PostgreSQL and browser delivery/redirect fixtures."
+    },
+    {
+      "id": "account-admin-role-permissions",
+      "assertions": ["Non-superusers cannot manage accounts/roles", "Superuser cannot be created by writable managed-role input", "Role/status updates invalidate active permissions/sessions"],
+      "tests": ["tests/security/identity-boundaries.test.ts", "server/services/tests/auth-account-managed-operations.test.ts", "server/routes/tests/permission-matrix.integration.test.ts", "server/auth/tests/guard-tab-visibility.test.ts"],
+      "runtimeGap": "Role cache invalidation across workers and in-flight requests needs isolated concurrency checks."
+    },
+    {
+      "id": "dashboard-collection-scope",
+      "assertions": ["User sees only assigned own totals", "Admin sees its group", "Manager/superuser see all authorized monthly totals", "Missing mapping never becomes unrestricted scope"],
+      "tests": ["server/routes/tests/collection-dashboard-summary.routes.test.ts", "server/routes/tests/collection-dashboard-account.routes.test.ts", "server/routes/tests/collection-team-filter.integration.test.ts"],
+      "runtimeGap": "End-to-end account switching/mapping changes need disposable DB fixtures."
+    },
+    {
+      "id": "collection-nickname-save",
+      "assertions": ["Nickname proof is bound to activity, account and role", "Stale credentials and forged actor fields are denied", "Managers cannot mutate records", "Idempotency does not replay data across scopes"],
+      "tests": ["server/services/tests/collection-nickname-write-access.test.ts", "server/routes/tests/collection-save-access.integration.test.ts", "server/routes/tests/collection.routes.integration.test.ts"],
+      "runtimeGap": "Authorization/mutation races and replay after role or team changes need deterministic isolated schedules."
+    },
+    {
+      "id": "receipt-upload-view-download",
+      "assertions": ["All six aliases enforce record access", "Receipt IDs must belong to the authorized record", "Client paths cannot attach arbitrary files", "Realpath and document/image checks reject traversal and active content"],
+      "tests": ["tests/security/path-boundaries.test.ts", "tests/security/browser-input-boundaries.test.ts", "tests/security/route-denial-boundaries.test.ts", "server/routes/tests/path-security.test.ts", "server/routes/tests/collection-save-access.integration.test.ts", "server/routes/tests/collection-multipart-receipt-route.test.ts", "server/tests/collection-receipt-format-security.test.ts", "server/tests/collection-receipt-image-security.test.ts"],
+      "runtimeGap": "External scanner, MIME/browser handling, symlink races and filesystem ACL need isolated fixtures; no production receipts."
+    },
+    {
+      "id": "collection-reports-calendar",
+      "assertions": ["Summary/monthly/daily/detail/export use consistent nickname/team scope", "Direct record lookups cannot broaden report access", "Target/calendar writes require intended role"],
+      "tests": ["server/routes/tests/collection.routes.integration.test.ts", "server/routes/tests/collection-team-filter.integration.test.ts", "server/services/tests/collection-daily-overview-operations.test.ts", "server/services/tests/collection-daily-management-operations.test.ts"],
+      "runtimeGap": "Every filter/export combination and account lifecycle requires a browser plus disposable DB matrix."
+    },
+    {
+      "id": "billing-osp-source-target-private",
+      "assertions": ["Saved target ACL and revisions are checked", "Private client results use current viewer identity", "Source/export selection cannot broaden allowed scope"],
+      "tests": ["server/routes/tests/collection-billing-principal-v7-routes.integration.test.ts", "server/services/tests/collection-osp-v7-operations.test.ts", "server/repositories/tests/backups-collection-osp-private-utils.test.ts"],
+      "runtimeGap": "Multi-source target edits, export and backup/restore privacy need transactional fixtures."
+    },
+    {
+      "id": "imports-parsers-jobs",
+      "assertions": ["JSON/multipart/parser paths share size and row budgets", "Archive expansion and executable disguised files are rejected", "Background status/cancel/resume binds requestedBy", "Queued import does not escape staged-file namespace"],
+      "tests": ["tests/security/path-boundaries.test.ts", "server/services/tests/import-upload-parser.test.ts", "server/routes/tests/imports-upload-quota.test.ts", "server/routes/tests/imports-multipart-route.test.ts", "server/services/tests/import-background-job.service.test.ts", "server/services/tests/imports-service-mutation-operations.test.ts"],
+      "runtimeGap": "Worker resource enforcement, cancel/retry and distributed quotas need isolated Redis/DB and scratch filesystem."
+    },
+    {
+      "id": "saved-viewer-search-export",
+      "assertions": ["Shared datasets still require the appropriate module", "SQL values/column identifiers are constrained", "Deleted imports do not leak through alternate row/detail paths", "Client preview URLs and exported cells are safe"],
+      "tests": ["tests/security/browser-input-boundaries.test.ts", "server/routes/tests/search.routes.integration.test.ts", "server/routes/tests/imports.routes.integration.test.ts", "server/repositories/tests/search-v9-history-security.test.ts", "server/services/tests/imports-service-read-operations.test.ts"],
+      "runtimeGap": "Deleted-import row/read behavior remains a source-review lead; existing tests alone are not proof of tombstone enforcement."
+    },
+    {
+      "id": "ai-chat-search-index",
+      "assertions": ["Conversation history and writes bind the caller", "AI aliases respect module and mutation authority", "Feature-disabled state cannot invoke provider or branch mutations", "Retrieval/model output cannot gain unauthorized data or actions"],
+      "tests": ["server/services/tests/ai-chat.service.test.ts", "server/services/tests/ai-interaction.service.test.ts", "server/services/tests/ai-index-operations.service.test.ts", "server/services/tests/ai-search.service.test.ts", "server/routes/tests/permission-matrix.integration.test.ts"],
+      "runtimeGap": "Conversation ownership and alternate-route policy need independent candidate validation and new denial regressions, not just existing success tests."
+    },
+    {
+      "id": "settings-activity-audit-backup",
+      "assertions": ["Settings/moderation/debug/backup operations require intended authority", "Audit/activity responses avoid secret fields", "Backup integrity and encryption fail closed", "Restore does not resurrect unauthorized credentials or private state"],
+      "tests": ["server/routes/tests/settings.routes.integration.test.ts", "server/routes/tests/operations.routes.integration.test.ts", "server/services/tests/activity-moderation-operations.test.ts", "server/services/tests/backup-operations.service.test.ts", "server/repositories/tests/backups-repository-encryption.test.ts", "server/repositories/tests/backups-restore-user-access.test.ts"],
+      "runtimeGap": "Atomic restore, current-session revocation and failure rollback need isolated PostgreSQL and filesystem fixtures."
+    },
+    {
+      "id": "websocket-queue-telemetry",
+      "assertions": ["WS cookie handshake requires exact origin and current activity", "Revoked/expired sockets cannot retain privileged subscriptions", "Message/connection/queue limits bound shared work", "Telemetry is bounded, schema-checked and provenance-checked"],
+      "tests": ["server/ws/tests/session-auth.test.ts", "server/ws/tests/runtime-manager.test.ts", "server/ws/tests/message-rate-limit.test.ts", "server/ws/tests/runtime-shared-bus.test.ts", "server/routes/tests/telemetry.routes.integration.test.ts"],
+      "runtimeGap": "Shared Redis producer ACL, socket expiry/role-change and job delivery guarantees require isolated transports."
+    },
+    {
+      "id": "browser-single-tab-cache-lifecycle",
+      "assertions": ["Blocked tab mounts no protected data tree", "Web Locks, not heartbeat, grants ownership", "Logout/account switch clears protected cache/state", "Unsafe messages/navigation cannot change authority"],
+      "tests": ["client/src/lib/singleTabLock.test.ts", "client/src/app/tests/logout-flow.test.ts", "client/src/lib/safe-url.test.ts", "scripts/tests/browser-storage-safety.test.mjs"],
+      "runtimeGap": "Two-tab ownership, simultaneous refresh, opener/CSP and receipt PDF behavior need sandboxed Chromium."
+    },
+    {
+      "id": "perimeter-release-deployment",
+      "assertions": ["Cookie mutations enforce CSRF/CORS/no-store", "Secrets and production source maps are not released", "Promotion binds tested immutable artifact identity", "Production configuration fails closed on unsafe topology"],
+      "tests": ["tests/security/http-provenance-boundaries.test.ts", "server/http/tests/csrf.test.ts", "server/http/tests/cors.test.ts", "server/config/tests/validate-env.test.ts", "server/config/tests/runtime-config-safety-utils.test.ts", "scripts/tests/dependency-security-regressions.test.mjs", "scripts/tests/ci-smoke-workflow-contract.test.mjs"],
+      "runtimeGap": "Live branch protections, approval reviewers, ingress/firewall/ACL/key configuration and current CVE advisory data were not inspected."
+    }
+  ]
+}

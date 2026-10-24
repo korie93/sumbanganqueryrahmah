@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { requireAiConversationOwnerId } from "../auth/ai-conversation-owner";
 import { ensureObject, readRouteParam } from "../http/validation";
 import type { AiIndexOperationsService } from "../services/ai-index-operations.service";
 import type { AiInteractionService } from "../services/ai-interaction.service";
@@ -56,10 +57,12 @@ export function createAiController(deps: CreateAiControllerDeps) {
   };
 
   const chat = async (req: AuthenticatedRequest, res: Response) => {
+    const userId = requireAiConversationOwnerId(req.user?.userId);
     const body = ensureObject(req.body) || {};
     const result = await aiInteractionService.chat({
       message: body.message,
       conversationId: body.conversationId,
+      userId,
       username: req.user!.username,
     });
     return res.status(result.statusCode).json(result.body);

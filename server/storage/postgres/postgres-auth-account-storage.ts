@@ -15,6 +15,7 @@ import type { ManageableUserRole } from "../../../shared/user-roles";
 import { PostgresStorageCore } from "./postgres-storage-core";
 import type { CompleteAccountRecoveryParams, PrepareDeliveredPasswordResetParams } from "../../repositories/auth-recovery-repository-utils";
 import type { CreateManagedUserAccountParams } from "../../repositories/auth-user-repository-types";
+import type { CreateActivationTokenParams, CreatePasswordResetRequestParams, UpdatePasswordResetRequestParams } from "../../repositories/auth-token-repository-types";
 
 export class PostgresAuthAccountStorage extends PostgresStorageCore {
   async prepareDeliveredPasswordReset(params: PrepareDeliveredPasswordResetParams) {
@@ -147,12 +148,7 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     return this.authRepository.touchLastLogin(userId, timestamp);
   }
 
-  async createActivationToken(params: {
-    userId: string;
-    tokenHash: string;
-    expiresAt: Date;
-    createdBy: string;
-  }): Promise<AccountActivationToken> {
+  async createActivationToken(params: CreateActivationTokenParams): Promise<AccountActivationToken> {
     return this.authRepository.createActivationToken(params);
   }
 
@@ -170,26 +166,11 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
     return this.authRepository.consumeActivationTokenById(params);
   }
 
-  async createPasswordResetRequest(params: {
-    userId: string;
-    requestedByUser: string | null;
-    approvedBy?: string | null;
-    resetType?: string;
-    tokenHash?: string | null;
-    expiresAt?: Date | null;
-    usedAt?: Date | null;
-  }): Promise<PasswordResetRequest> {
+  async createPasswordResetRequest(params: CreatePasswordResetRequestParams): Promise<PasswordResetRequest> {
     return this.authRepository.createPasswordResetRequest(params);
   }
 
-  async updatePasswordResetRequest(params: {
-    requestId: string;
-    approvedBy?: string | null;
-    resetType?: string;
-    usedAt?: Date | null;
-    tokenHash?: string | null;
-    expiresAt?: Date | null;
-  }): Promise<void> {
+  async updatePasswordResetRequest(params: UpdatePasswordResetRequestParams): Promise<void> {
     return this.authRepository.updatePasswordResetRequest(params);
   }
 

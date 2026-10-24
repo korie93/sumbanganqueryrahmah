@@ -1,4 +1,5 @@
 import type { User, UserActivity, InsertUserActivity } from "../shared/schema-postgres";
+import type { ActivityAdmissionExpectation } from "./auth/session-admission";
 import type {
   ActivityPageParams,
   ActivityPageResult,
@@ -17,7 +18,7 @@ import type {
 } from "./config/system-settings";
 
 export interface ActivitySettingsStorageContract {
-  createActivity(data: InsertUserActivity): Promise<UserActivity>;
+  createActivity(data: InsertUserActivity, expectedAdmission?: ActivityAdmissionExpectation): Promise<UserActivity>;
   getActiveActivitiesByUsername(username: string): Promise<UserActivity[]>;
   touchAuthenticatedActivity(activityId: string): Promise<UserActivity | undefined>;
   updateActivity(

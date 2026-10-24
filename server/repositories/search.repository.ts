@@ -1058,7 +1058,7 @@ export class SearchRepository {
   }
 
   private async getImportSearchTotal(whereClause: SQL): Promise<number> {
-    const totalResult = await dbRead.execute(sql`
+    const totalResult = await db.execute(sql`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       WHERE ${whereClause}
@@ -1068,11 +1068,15 @@ export class SearchRepository {
   }
 
   private async getImportColumnNames(importId: string): Promise<Set<string>> {
-    const result = await dbRead.execute(sql`
+    const result = await db.execute(sql`
       SELECT DISTINCT key AS column_name
       FROM public.data_rows dr
       CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
       WHERE dr.import_id = ${importId}
+        AND EXISTS (
+          SELECT 1 FROM public.imports active_import
+          WHERE active_import.id = dr.import_id AND active_import.is_deleted = false
+        )
         AND jsonb_typeof(dr.json_data::jsonb) = 'object'
       ORDER BY key
       LIMIT ${MAX_SEARCH_COLUMN_KEYS}
@@ -1187,7 +1191,12 @@ export class SearchRepository {
     if (trimmedSearch && trimmedSearch.length < 2) {
       return { rows: [], total: 0, nextCursorRowId: null };
     }
-    const conditions: SQL[] = [sql`dr.import_id = ${importId}`];
+    // Query-time lifecycle authorization also protects retained cursors/counts.
+    // Read the primary so replica lag cannot revive a just-deleted import.
+    const conditions: SQL[] = [sql`dr.import_id = ${importId}`, sql`EXISTS (
+      SELECT 1 FROM public.imports active_import
+      WHERE active_import.id = dr.import_id AND active_import.is_deleted = false
+    )`];
 
     if (trimmedSearch) {
       conditions.push(buildJsonTextContainsCondition(trimmedSearch));
@@ -1213,7 +1222,7 @@ export class SearchRepository {
       };
     }
 
-    const rowsResult = await dbRead.execute(sql`
+    const rowsResult = await db.execute(sql`
       SELECT
         dr.id,
         dr.import_id as "importId",

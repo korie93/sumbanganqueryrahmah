@@ -4,6 +4,7 @@ import type {
   User,
 } from "../../shared/schema-postgres";
 import { completeAccountRecovery, prepareDeliveredPasswordReset, type CompleteAccountRecoveryParams, type PrepareDeliveredPasswordResetParams } from "./auth-recovery-repository-utils";
+import type { CreateActivationTokenParams, CreatePasswordResetRequestParams, UpdatePasswordResetRequestParams } from "./auth-token-repository-types";
 import {
   deleteManagedUserAccount,
   getAccounts,
@@ -134,12 +135,7 @@ export class AuthRepository {
     return touchLastLogin(userId, timestamp);
   }
 
-  async createActivationToken(params: {
-    userId: string;
-    tokenHash: string;
-    expiresAt: Date;
-    createdBy: string;
-  }) {
+  async createActivationToken(params: CreateActivationTokenParams) {
     return createActivationToken(params);
   }
 
@@ -160,26 +156,11 @@ export class AuthRepository {
     return consumeActivationTokenById(params);
   }
 
-  async createPasswordResetRequest(params: {
-    userId: string;
-    requestedByUser: string | null;
-    approvedBy?: string | null;
-    resetType?: string;
-    tokenHash?: string | null;
-    expiresAt?: Date | null;
-    usedAt?: Date | null;
-  }) {
+  async createPasswordResetRequest(params: CreatePasswordResetRequestParams) {
     return createPasswordResetRequest(params);
   }
 
-  async updatePasswordResetRequest(params: {
-    requestId: string;
-    approvedBy?: string | null;
-    resetType?: string;
-    usedAt?: Date | null;
-    tokenHash?: string | null;
-    expiresAt?: Date | null;
-  }): Promise<void> {
+  async updatePasswordResetRequest(params: UpdatePasswordResetRequestParams): Promise<void> {
     return updatePasswordResetRequest(params);
   }
 

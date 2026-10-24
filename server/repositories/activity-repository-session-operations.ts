@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
 import { auditLogs, collectionNicknameSessions, userActivity, users } from "../../shared/schema-postgres";
-import { buildTwoFactorCredentialState, type TwoFactorSessionExpectation } from "../auth/two-factor";
+import { buildTwoFactorCredentialState } from "../auth/two-factor";
+import type { ActivityAdmissionExpectation } from "../auth/session-admission";
 import { getAccountAccessBlockReason } from "../auth/account-lifecycle";
 import { AuthAccountError } from "../services/auth-account-types";
 import { ERROR_CODES } from "../../shared/error-codes";
@@ -52,18 +53,25 @@ async function loadActivityPages(whereCondition?: SQL): Promise<UserActivity[]> 
 
 export async function createActivity(
   data: InsertUserActivity,
-  expectedTwoFactor?: TwoFactorSessionExpectation,
+  expectedAdmission?: ActivityAdmissionExpectation,
   database: typeof db = db,
 ): Promise<UserActivity> {
-  if (expectedTwoFactor) {
-    // Serialize final 2FA admission with password resets and authenticator
+  if (expectedAdmission) {
+    // Serialize final admission with password resets and authenticator
     // changes. A reread before INSERT would still leave a TOCTOU gap.
     return database.transaction(async (tx) => {
       const [user] = await tx.select().from(users).where(eq(users.id, data.userId)).for("update");
-      if (!user || getAccountAccessBlockReason(user) || !user.twoFactorEnabled
+      const passwordOnly = "kind" in expectedAdmission && expectedAdmission.kind === "password";
+      if (!user || getAccountAccessBlockReason(user)
         || user.username !== data.username || user.role !== data.role
-        || expectedTwoFactor.expiresAtMs <= Date.now()
-        || expectedTwoFactor.credentialState !== buildTwoFactorCredentialState(user)) {
+        || expectedAdmission.credentialState !== buildTwoFactorCredentialState(user)
+        || (passwordOnly ? user.twoFactorEnabled === true
+          : !user.twoFactorEnabled || !("expiresAtMs" in expectedAdmission)
+            || expectedAdmission.expiresAtMs <= Date.now())) {
+        if (passwordOnly) {
+          throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS,
+            "Account credentials changed. Please sign in again.");
+        }
         throw new AuthAccountError(401, ERROR_CODES.TWO_FACTOR_CHALLENGE_EXPIRED,
           "2FA session expired or account credentials changed. Please sign in again.");
       }

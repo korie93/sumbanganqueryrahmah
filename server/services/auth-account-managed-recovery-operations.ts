@@ -77,6 +77,7 @@ export class AuthAccountManagedRecoveryOperations {
     const resetUrl = buildPasswordResetUrl(reset.token);
     const resetRequest = await this.deps.storage.createPasswordResetRequest({
       userId: target.id,
+      expectedRecipientEmail: recipientEmail,
       requestedByUser: null,
       approvedBy: actor.username,
       resetType: "email_link",

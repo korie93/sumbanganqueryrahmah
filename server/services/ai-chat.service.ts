@@ -2,6 +2,7 @@ import { type OllamaMessage } from "../ai-ollama";
 import type { CategoryStatsService } from "./category-stats.service";
 import { CircuitOpenError } from "../internal/circuitBreaker";
 import type { PostgresStorage } from "../storage-postgres";
+import { requireAiConversationOwnerId } from "../auth/ai-conversation-owner";
 import {
   buildAiChatContextBlock,
   buildAiChatQuickReply,
@@ -36,13 +37,17 @@ export class AiChatService {
 
   async handleChat(params: {
     message: string;
+    userId: string;
     username: string;
     existingConversationId?: string | null;
     aiTimeoutMs: number;
   }): Promise<AiChatResult> {
+    const ownerUserId = requireAiConversationOwnerId(params.userId);
     const conversationId =
-      params.existingConversationId || await this.options.storage.createConversation(params.username);
-    const history = await this.options.storage.getConversationMessages(conversationId, 3);
+      params.existingConversationId || await this.options.storage.createConversation(ownerUserId);
+    // Conversation history is private to its creator, including for elevated roles.
+    await this.options.storage.assertConversationOwner(conversationId, ownerUserId);
+    const history = await this.options.storage.getConversationMessages(conversationId, ownerUserId, 3);
 
     const countSummary = await this.options.categoryStatsService.resolveCountSummary(
       params.message,
@@ -50,7 +55,7 @@ export class AiChatService {
     );
     if (countSummary) {
       const reply = countSummary.summary;
-      await this.persistConversation(conversationId, params.username, params.message, reply);
+      await this.persistConversation(conversationId, ownerUserId, params.username, params.message, reply);
       return {
         statusCode: 200,
         body: {
@@ -109,7 +114,7 @@ export class AiChatService {
       }
     }
 
-    await this.persistConversation(conversationId, params.username, params.message, reply);
+    await this.persistConversation(conversationId, ownerUserId, params.username, params.message, reply);
     return {
       statusCode: 200,
       body: {
@@ -121,12 +126,13 @@ export class AiChatService {
 
   private async persistConversation(
     conversationId: string,
+    ownerUserId: string,
     username: string,
     message: string,
     reply: string,
   ) {
-    await this.options.storage.saveConversationMessage(conversationId, "user", message);
-    await this.options.storage.saveConversationMessage(conversationId, "assistant", reply);
+    await this.options.storage.saveConversationMessage(conversationId, ownerUserId, "user", message);
+    await this.options.storage.saveConversationMessage(conversationId, ownerUserId, "assistant", reply);
     await this.options.storage.createAuditLog({
       action: "AI_CHAT",
       performedBy: username,

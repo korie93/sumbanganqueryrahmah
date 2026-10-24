@@ -17,9 +17,14 @@ const cleanEnv = Object.fromEntries(inheritedKeys.filter((key) => process.env[ke
 const tempParent = await realpath(os.tmpdir());
 const dashboard = process.argv.includes("--collection-dashboard");
 const testDatabase = dashboard ? "sqr_dashboard_scope_test" : "sqr_auth_recovery_test";
-const testFile = dashboard
-  ? "server/repositories/tests/collection-dashboard-account.postgres.test.ts"
-  : "server/repositories/tests/auth-recovery-postgres.integration.test.ts";
+const testFiles = dashboard
+  ? ["server/repositories/tests/collection-dashboard-account.postgres.test.ts"]
+  : [
+      "server/repositories/tests/auth-recovery-postgres.integration.test.ts",
+      "server/repositories/tests/auth-session-admission-postgres.integration.test.ts",
+      "server/repositories/tests/ai-conversation-owner-postgres.integration.test.ts",
+      "server/repositories/tests/viewer-import-lifecycle.postgres.test.ts",
+    ];
 function run(command, args, env = cleanEnv) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { env, stdio: "inherit", windowsHide: true });
@@ -54,7 +59,7 @@ try {
     await admin.connect();
     await admin.query(`CREATE DATABASE ${testDatabase}`);
   } finally { await admin.end(); }
-  await run(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", testFile], {
+  await run(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", ...testFiles], {
     ...cleanEnv,
     NODE_ENV: "test", HOST: "127.0.0.1", PUBLIC_APP_URL: "http://127.0.0.1:5000",
     PG_HOST: "127.0.0.1", PG_PORT: String(port), PG_USER: "sqr_fixture", PG_PASSWORD: "", PG_DATABASE: testDatabase,

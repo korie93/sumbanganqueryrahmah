@@ -75,14 +75,17 @@ export interface ImportAiStorageContract {
   ): Promise<{ rows: DataRow[]; total: number }>;
   getAllColumnNames(): Promise<string[]>;
 
-  createConversation(createdBy: string): Promise<string>;
+  createConversation(ownerUserId: string): Promise<string>;
+  assertConversationOwner(conversationId: string, ownerUserId: string): Promise<void>;
   saveConversationMessage(
     conversationId: string,
+    ownerUserId: string,
     role: "user" | "assistant" | "system",
     content: string,
   ): Promise<void>;
   getConversationMessages(
     conversationId: string,
+    ownerUserId: string,
     limit?: number,
   ): Promise<Array<{ role: string; content: string }>>;
   saveEmbedding(params: {

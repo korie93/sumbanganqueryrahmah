@@ -2,6 +2,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { accountActivationTokens, users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import type { ActivationTokenRecord } from "./auth-repository-types";
+import { assertAuthTokenRecipient } from "./auth-token-recipient-utils";
 import {
   asUtcTimestamp,
   buildActivationTokenInsertRecord,
@@ -17,7 +18,9 @@ export async function createActivationToken(
 ) {
   const record = buildActivationTokenInsertRecord(params);
   await database.transaction(async (tx) => {
-    await tx.select({ id: users.id }).from(users).where(eq(users.id, params.userId)).for("update");
+    const [target] = await tx.select({ email: users.email, status: users.status })
+      .from(users).where(eq(users.id, params.userId)).for("update");
+    assertAuthTokenRecipient(target, params.expectedRecipientEmail);
     await tx.update(accountActivationTokens).set({ usedAt: new Date() }).where(and(
       eq(accountActivationTokens.userId, params.userId), isNull(accountActivationTokens.usedAt),
     ));

@@ -5,6 +5,7 @@ import {
   getPostcodeLatLngValue,
 } from "./ai-branch-lookup-utils";
 import {
+  assertAiConversationOwner,
   createAiConversation,
   getAiConversationMessages,
   saveAiConversationMessage,
@@ -34,23 +35,29 @@ import type {
 export class AiRepository {
   constructor(private readonly options: AiRepositoryOptions) {}
 
-  async createConversation(createdBy: string): Promise<string> {
-    return createAiConversation(createdBy);
+  async createConversation(ownerUserId: string): Promise<string> {
+    return createAiConversation(ownerUserId);
+  }
+
+  async assertConversationOwner(conversationId: string, ownerUserId: string): Promise<void> {
+    return assertAiConversationOwner(conversationId, ownerUserId);
   }
 
   async saveConversationMessage(
     conversationId: string,
+    ownerUserId: string,
     role: "user" | "assistant" | "system",
     content: string,
   ): Promise<void> {
-    return saveAiConversationMessage(conversationId, role, content);
+    return saveAiConversationMessage(conversationId, ownerUserId, role, content);
   }
 
   async getConversationMessages(
     conversationId: string,
+    ownerUserId: string,
     limit = 20,
   ): Promise<AiConversationMessage[]> {
-    return getAiConversationMessages(conversationId, limit);
+    return getAiConversationMessages(conversationId, ownerUserId, limit);
   }
 
   async saveEmbedding(params: {

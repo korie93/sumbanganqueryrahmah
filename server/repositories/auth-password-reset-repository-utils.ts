@@ -2,6 +2,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { passwordResetRequests, users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import type { PasswordResetTokenRecord } from "./auth-repository-types";
+import { assertAuthTokenRecipient } from "./auth-token-recipient-utils";
 import {
   asUtcTimestamp,
   buildPasswordResetRequestInsertRecord,
@@ -20,9 +21,11 @@ export async function createPasswordResetRequest(
 ) {
   const record = buildPasswordResetRequestInsertRecord(params);
   await database.transaction(async (tx) => {
-    await tx.select({ id: users.id }).from(users).where(eq(users.id, params.userId)).for("update");
+    const [target] = await tx.select({ email: users.email, status: users.status })
+      .from(users).where(eq(users.id, params.userId)).for("update");
     // A request without a token is only a request for approval, not a resend.
-    if (record.tokenHash) {
+    if (record.tokenHash !== null) {
+      assertAuthTokenRecipient(target, params.expectedRecipientEmail);
       await tx.update(passwordResetRequests).set({ usedAt: new Date() }).where(and(
         eq(passwordResetRequests.userId, params.userId), isNull(passwordResetRequests.usedAt),
         sql`${passwordResetRequests.tokenHash} IS NOT NULL`,
@@ -35,10 +38,26 @@ export async function createPasswordResetRequest(
 
 export async function updatePasswordResetRequest(
   params: UpdatePasswordResetRequestParams,
+  database: typeof db = db,
 ): Promise<void> {
-  await db
+  const record = buildPasswordResetRequestUpdateRecord(params);
+  if (record.tokenHash !== null) {
+    await database.transaction(async (tx) => {
+      const [request] = await tx.select({ userId: passwordResetRequests.userId })
+        .from(passwordResetRequests).where(eq(passwordResetRequests.id, params.requestId));
+      if (!request) return;
+      const [target] = await tx.select({ email: users.email, status: users.status })
+        .from(users).where(eq(users.id, request.userId)).for("update");
+      assertAuthTokenRecipient(target, params.expectedRecipientEmail);
+      await tx.update(passwordResetRequests).set(record).where(and(
+        eq(passwordResetRequests.id, params.requestId), eq(passwordResetRequests.userId, request.userId),
+      ));
+    });
+    return;
+  }
+  await database
     .update(passwordResetRequests)
-    .set(buildPasswordResetRequestUpdateRecord(params))
+    .set(record)
     .where(eq(passwordResetRequests.id, params.requestId));
 }
 

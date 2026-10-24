@@ -1,15 +1,16 @@
 import crypto from "crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type {
   InsertUser,
   User,
 } from "../../shared/schema-postgres";
-import { users } from "../../shared/schema-postgres";
+import { accountActivationTokens, passwordResetRequests, users } from "../../shared/schema-postgres";
 import { hashPassword } from "../auth/passwords";
 import { db } from "../db-postgres";
 import { z } from "zod";
 import { badRequest } from "../http/errors";
 import { setCollectionDashboardAccountInTransaction } from "./collection-dashboard-account-repository";
+import { normalizeOptionalAuthEmail } from "./auth-user-repository-normalize";
 import {
   buildLegacyUserInsertRecord,
   buildManagedUserInsertRecord,
@@ -87,19 +88,43 @@ export async function updateAuthUserAccount(
   database: typeof db = db,
 ): Promise<User | undefined> {
   const expected = params.expectedTwoFactorState;
-  const updated = await database
-    .update(users)
-    .set(buildUserAccountUpdateRecord(params))
-    .where(and(
-      eq(users.id, params.userId),
-      sql`${users.status} <> 'deleted'`,
-      params.expectedPasswordHash !== undefined ? eq(users.passwordHash, params.expectedPasswordHash) : undefined,
-      expected ? sql`coalesce(${users.twoFactorEnabled}, false) = ${expected.enabled}` : undefined,
-      expected ? sql`${users.twoFactorSecretEncrypted} is not distinct from ${expected.encryptedSecret}` : undefined,
-      expected ? eq(users.passwordHash, expected.passwordHash) : undefined,
-    ))
-    .returning();
-  return updated[0];
+  const update = async (executor: Pick<typeof database, "update">) => {
+    const updated = await executor
+      .update(users)
+      .set(buildUserAccountUpdateRecord(params))
+      .where(and(
+        eq(users.id, params.userId),
+        sql`${users.status} <> 'deleted'`,
+        params.expectedPasswordHash !== undefined ? eq(users.passwordHash, params.expectedPasswordHash) : undefined,
+        expected ? sql`coalesce(${users.twoFactorEnabled}, false) = ${expected.enabled}` : undefined,
+        expected ? sql`${users.twoFactorSecretEncrypted} is not distinct from ${expected.encryptedSecret}` : undefined,
+        expected ? eq(users.passwordHash, expected.passwordHash) : undefined,
+      ))
+      .returning();
+    return updated[0];
+  };
+  if (params.email === undefined) return update(database);
+
+  // Issuers and final consumers also lock this user first. Changing the
+  // recipient and cancelling both kinds of old links must commit together.
+  return database.transaction(async (tx) => {
+    const [current] = await tx.select({ email: users.email }).from(users)
+      .where(and(eq(users.id, params.userId), sql`${users.status} <> 'deleted'`)).for("update");
+    if (!current) return undefined;
+    const updated = await update(tx);
+    if (!updated) return undefined;
+    if (normalizeOptionalAuthEmail(current.email) !== normalizeOptionalAuthEmail(updated.email)) {
+      const now = new Date();
+      await tx.update(accountActivationTokens).set({ usedAt: now }).where(and(
+        eq(accountActivationTokens.userId, params.userId), isNull(accountActivationTokens.usedAt),
+      ));
+      await tx.update(passwordResetRequests).set({ usedAt: now }).where(and(
+        eq(passwordResetRequests.userId, params.userId), isNull(passwordResetRequests.usedAt),
+        sql`${passwordResetRequests.tokenHash} IS NOT NULL`,
+      ));
+    }
+    return updated;
+  });
 }
 
 export async function recordAuthFailedLoginAttempt(

@@ -4,6 +4,8 @@ import {
   isAiRequestTextTooLong,
 } from "../../shared/ai-limits";
 import { logger } from "../lib/logger";
+import { HttpError } from "../http/errors";
+import { requireAiConversationOwnerId } from "../auth/ai-conversation-owner";
 import type { AiChatService } from "./ai-chat.service";
 import type { AiSearchService } from "./ai-search.service";
 import type { CategoryStatsService } from "./category-stats.service";
@@ -129,9 +131,11 @@ export class AiInteractionService {
   async chat(params: {
     message?: unknown;
     conversationId?: unknown;
+    userId: string;
     username: string;
   }): Promise<AiInteractionResponse> {
     try {
+      const userId = requireAiConversationOwnerId(params.userId);
       const message = String(params.message || "").trim();
       if (!message) {
         return {
@@ -156,6 +160,7 @@ export class AiInteractionService {
 
       const result = await this.deps.aiChatService.handleChat({
         message,
+        userId,
         username: params.username,
         existingConversationId: params.conversationId ? String(params.conversationId) : null,
         aiTimeoutMs: runtimeSettings.aiTimeoutMs,
@@ -168,7 +173,7 @@ export class AiInteractionService {
     } catch (error) {
       logger.error("AI chat request failed", { error });
       return {
-        statusCode: 500,
+        statusCode: error instanceof HttpError ? error.statusCode : 500,
         body: { message: this.getErrorMessage(error) },
       };
     }

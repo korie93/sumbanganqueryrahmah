@@ -40,6 +40,7 @@ import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 import { buildLoginFailureAuditDetails } from "../lib/login-audit";
 import { t } from "../i18n/server";
 import { buildTwoFactorCredentialState } from "../auth/two-factor";
+import type { SessionAdmissionExpectation } from "../auth/session-admission";
 import { consumeTwoFactorReplayCode } from "../auth/two-factor-replay-cache";
 
 type AuthAccountAuthenticationDeps = {
@@ -203,7 +204,18 @@ export class AuthAccountAuthenticationOperations {
       });
     }
 
+    // Clearing failed attempts may return a newer row after a concurrent reset.
+    // Never let that row substitute for the credentials actually verified.
+    const expectedAdmission: SessionAdmissionExpectation = {
+      kind: "password",
+      credentialState: buildTwoFactorCredentialState(activeUser),
+    };
     const unlockedUser = await clearFailedLoginState(this.deps.storage, activeUser);
+    if (expectedAdmission.credentialState !== buildTwoFactorCredentialState(unlockedUser)
+      || requiresTwoFactor(activeUser) !== requiresTwoFactor(unlockedUser)) {
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS,
+        "Account credentials changed. Please sign in again.");
+    }
 
     await assertLoginAllowedDuringMaintenance({
       getMaintenanceState: this.deps.getMaintenanceState,
@@ -240,6 +252,7 @@ export class AuthAccountAuthenticationOperations {
 
     const sessionResult = await createAuthenticatedSession({
       details: `Login from ${input.browserName}`,
+      expectedAdmission,
       input,
       storage: this.deps.storage,
       user: unlockedUser,
@@ -397,9 +410,10 @@ export class AuthAccountAuthenticationOperations {
 
     const sessionResult = await createAuthenticatedSession({
       details: `Login with 2FA from ${input.browserName}`,
-      expectedTwoFactor: input.challenge ?? {
-        credentialState: buildTwoFactorCredentialState(activeUser),
-        expiresAtMs: Date.now() + 30_000,
+      expectedAdmission: {
+        kind: "two_factor",
+        credentialState: input.challenge?.credentialState ?? buildTwoFactorCredentialState(activeUser),
+        expiresAtMs: input.challenge?.expiresAtMs ?? Date.now() + 30_000,
       },
       input: {
         fingerprint: input.fingerprint,
