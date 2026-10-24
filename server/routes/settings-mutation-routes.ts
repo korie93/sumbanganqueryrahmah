@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maxUtf16Length } from "../lib/zod-string-limits";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
 import { parseRequestBody } from "../http/validation";
@@ -10,7 +11,7 @@ const settingsPatchBodySchema = z.object({
   confirmCritical: z.boolean().optional(),
 });
 const rolePermissionsPatchBodySchema = z.object({
-  updates: z.array(z.object({ key: z.string().trim().min(1).max(100), value: z.boolean() }).strict()).min(1).max(50),
+  updates: z.array(z.object({ key: z.string().trim().min(1).superRefine(maxUtf16Length(100)), value: z.boolean() }).strict()).min(1).max(50),
   confirmCritical: z.boolean().optional(),
 }).strict();
 

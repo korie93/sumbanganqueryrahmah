@@ -95,7 +95,7 @@
     "test:e2e:a11y": "node scripts/ui-accessibility-contract.mjs",
     "test:a11y": "npm run test:e2e:a11y",
     "test:e2e:ci-local": "node scripts/smoke-ci-local.mjs",
-    "test:contracts": "tsx --test server/routes/tests/imports.routes.integration.test.ts server/routes/tests/settings.routes.integration.test.ts client/src/lib/api/tests/api-contracts.test.ts",
+    "test:contracts": "tsx --test server/routes/tests/imports.routes.integration.test.ts server/routes/tests/settings.routes.integration.test.ts client/src/lib/api/tests/api-contracts.test.ts shared/json-schema.test.ts shared/validation-contracts.test.ts",
     "test:scripts": "node --test scripts/tests/*.test.mjs && tsx --test scripts/*.test.ts",
     "test:db-integration": "tsx --test server/http/tests/bootstrap-migration.integration.test.ts",
     "test:auth": "tsx --test server/auth/tests/*.test.ts",
@@ -190,7 +190,7 @@
     "dompurify": "3.4.17",
     "dotenv": "16.6.1",
     "drizzle-orm": "0.45.2",
-    "drizzle-zod": "0.7.1",
+    "drizzle-zod": "0.8.3",
     "embla-carousel-react": "^8.6.0",
     "express": "5.2.1",
     "express-rate-limit": "8.6.1",
@@ -204,7 +204,7 @@
     "lru-cache": "11.5.1",
     "lucide-react": "^0.453.0",
     "malaysia-postcodes": "3.0.0",
-    "nodemailer": "10.0.13",
+    "nodemailer": "10.1.7",
     "pg": "8.20.0",
     "pino": "10.3.1",
     "qrcode.react": "4.2.0",
@@ -223,8 +223,8 @@
     "wouter": "^3.3.5",
     "ws": "8.21.0",
     "xlsx": "file:vendor/sheetjs/xlsx-0.20.2.tgz",
-    "zod": "3.25.76",
-    "zod-validation-error": "3.5.4"
+    "zod": "4.6.7",
+    "zod-validation-error": "4.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

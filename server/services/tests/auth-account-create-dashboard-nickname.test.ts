@@ -80,6 +80,14 @@ test("direct managed creation rejects malformed nickname IDs and unsupported rol
   assert.deepEqual(f.created, []); assert.deepEqual(f.audit, []); assert.equal(f.emails(), 0);
 });
 
+test("managed creation retains existing UUID-shaped nickname IDs without RFC variant restrictions", async () => {
+  const f = fixture();
+  const legacyNicknameId = "11111111-1111-1111-1111-111111111111";
+  await f.service.createManagedUser(undefined, { ...input, dashboardNicknameId: legacyNicknameId });
+  assert.equal(f.created[0]?.dashboardNicknameId, legacyNicknameId);
+  assert.equal(f.emails(), 1);
+});
+
 test("Dashboard nickname options are superuser-only, role-scoped and strip password metadata", async () => {
   const f = fixture();
   for (const role of ["user", "admin"]) {

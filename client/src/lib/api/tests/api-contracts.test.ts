@@ -147,6 +147,7 @@ import {
   validatePasswordResetToken,
 } from "@/lib/api/auth";
 import { cleanupAuditLogs, getAuditLogStats, getAuditLogs } from "@/lib/api/audit";
+import { getCollectionManualSettlementHistory } from "@/lib/api/collection-records";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
   getSettings,
@@ -155,7 +156,7 @@ import {
   getTabVisibility,
   updateSetting,
 } from "@/lib/api/settings";
-import { parseApiJson, readApiJsonPayload } from "@/lib/api/contract";
+import { parseApiJson, parseApiPayload, readApiJsonPayload } from "@/lib/api/contract";
 
 function createEmptyAnalysisContract() {
   return {
@@ -227,12 +228,33 @@ test("parseApiJson includes concise Zod issue details without echoing raw payloa
     (error: unknown) => {
       assert.ok(error instanceof Error);
       assert.match(error.message, /API contract mismatch for \/api\/example/);
-      assert.match(error.message, /items\[0\]\.id: Expected string, received number/);
-      assert.match(error.message, /items\[0\]\.secretValue: Expected number, received string/);
+      assert.match(error.message, /items\[0\]\.id: Invalid input: expected string, received number/);
+      assert.match(error.message, /items\[0\]\.secretValue: Invalid input: expected number, received string/);
       assert.doesNotMatch(error.message, /super-secret-token/);
       return true;
     },
   );
+});
+
+test("API parsers return defaulted and transformed output independently of wire input", async () => {
+  const schema = z.object({
+    count: z.string().transform((value) => Number(value)),
+    labels: z.array(z.string()).default([]),
+  });
+  const direct: { count: number; labels: string[] } = parseApiPayload({ count: "3" }, schema, "/api/example");
+  const fromJson: { count: number; labels: string[] } = await parseApiJson(
+    jsonResponse({ count: "4" }), schema, "/api/example",
+  );
+  assert.deepEqual(direct, { count: 3, labels: [] });
+  assert.deepEqual(fromJson, { count: 4, labels: [] });
+});
+
+test("API mismatch diagnostics handle symbol paths without hiding the validation error", () => {
+  const schema = z.unknown().superRefine((_value, context) => {
+    context.addIssue({ code: "custom", path: [Symbol("field")], message: "Invalid field" });
+  });
+  assert.throws(() => parseApiPayload({}, schema, "/api/example"),
+    /API contract mismatch for \/api\/example.*Symbol\(field\): Invalid field/);
 });
 
 test("parseApiJson rejects malformed API JSON before schema validation", async () => {
@@ -1770,6 +1792,52 @@ test("backup API wrappers reject malformed management payloads", async () => {
       () => deleteBackupApi("backup-1"),
       /API contract mismatch for \/api\/backups\/backup-1/,
     );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("backup job results preserve nested JSON dictionaries and empty objects", async () => {
+  const result = { imports: { inserted: 2, warnings: [] }, flags: [true, null, "done"], empty: {} };
+  const restoreFetch = withMockFetch((async (input) => {
+    assert.equal(String(input), "/api/backups/jobs/job-json");
+    return jsonResponse({
+      id: "job-json", type: "restore", status: "completed", requestedBy: "superuser",
+      requestedAt: "2026-06-29T05:30:00.000Z", startedAt: null, finishedAt: null,
+      backupId: "backup-1", backupName: null, queuePosition: 0, result, error: null,
+    });
+  }) as typeof fetch);
+  try {
+    assert.deepEqual((await getBackupJob("job-json")).result, result);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("manual settlement history accepts sparse audit snapshots and rejects array snapshots", async () => {
+  const snapshots = [null, {}, { classification: "ABORT_CP", reviewed: true, details: { reason: "verified" } }];
+  let oldValue: unknown = null;
+  let newValue: unknown = null;
+  const restoreFetch = withMockFetch((async () => jsonResponse({
+    ok: true,
+    history: [{
+      id: "history-1", action: "UPDATED", actor: "operator", actorRole: "admin",
+      timestamp: "2026-06-29T05:30:00.000Z", requestId: null, oldValue, newValue,
+    }],
+  })) as typeof fetch);
+  try {
+    for (const snapshot of snapshots) {
+      oldValue = snapshot;
+      newValue = snapshot;
+      const response = await getCollectionManualSettlementHistory("record-1");
+      assert.deepEqual(response.history[0].oldValue, snapshot);
+      assert.deepEqual(response.history[0].newValue, snapshot);
+    }
+    oldValue = [];
+    await assert.rejects(() => getCollectionManualSettlementHistory("record-1"), /API contract mismatch/);
+    oldValue = null;
+    newValue = [];
+    await assert.rejects(() => getCollectionManualSettlementHistory("record-1"), /API contract mismatch/);
   } finally {
     restoreFetch();
   }
@@ -3381,6 +3449,28 @@ test("audit stats and cleanup wrappers reject malformed operational payloads", a
       () => cleanupAuditLogs(30),
       /API contract mismatch for \/api\/audit-logs\/cleanup/,
     );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("audit stats preserve defaults for sparse action dictionaries and reject invalid counts", async () => {
+  let actionBreakdown: Record<string, unknown> = {};
+  const restoreFetch = withMockFetch((async () => jsonResponse({
+    totalLogs: 1, todayLogs: 0, actionBreakdown,
+  })) as typeof fetch);
+  try {
+    const expected = {
+      total: 1, olderThan30Days: 0, olderThan60Days: 0, olderThan90Days: 0,
+      olderThan180Days: 0, olderThan365Days: 0, oldestLogDate: null,
+    };
+    assert.deepEqual(await getAuditLogStats(), expected);
+    actionBreakdown = { CUSTOM_ACTION: 1 };
+    assert.deepEqual(await getAuditLogStats(), expected);
+    for (const value of [-1, "1"]) {
+      actionBreakdown = { CUSTOM_ACTION: value };
+      await assert.rejects(() => getAuditLogStats(), /API contract mismatch/);
+    }
   } finally {
     restoreFetch();
   }

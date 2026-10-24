@@ -49,7 +49,7 @@ export async function createManagedAuthUserAccount(
   const dashboardNicknameId = params.dashboardNicknameId;
 
   if (dashboardNicknameId !== undefined && dashboardNicknameId !== null) {
-    if (!z.string().uuid().safeParse(dashboardNicknameId).success || (params.role !== "user" && params.role !== "admin")) {
+    if (!z.guid().safeParse(dashboardNicknameId).success || (params.role !== "user" && params.role !== "admin")) {
       throw badRequest("Choose a valid Dashboard nickname for a User or Admin account.");
     }
     // The nickname is revalidated/locked inside the same transaction as the

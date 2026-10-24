@@ -12,13 +12,13 @@ function isDevApiContractDiagnosticsEnabled() {
   return Boolean(import.meta.env?.DEV);
 }
 
-function formatIssuePath(path: Array<string | number>) {
+function formatIssuePath(path: PropertyKey[]) {
   if (path.length === 0) {
     return "<root>";
   }
 
   return path
-    .map((segment) => (typeof segment === "number" ? `[${segment}]` : segment))
+    .map((segment) => (typeof segment === "number" ? `[${segment}]` : String(segment)))
     .join(".")
     .replace(/\.\[/g, "[");
 }
@@ -43,11 +43,11 @@ function buildApiContractMismatchMessage(endpoint: string, error: z.ZodError) {
   return `API contract mismatch for ${endpoint} (${messageParts.join("; ")})`;
 }
 
-export function parseApiPayload<TSchema extends z.ZodTypeAny>(
+export function parseApiPayload<TOutput, TInput>(
   payload: unknown,
-  schema: TSchema,
+  schema: z.ZodType<TOutput, TInput>,
   endpoint: string,
-): z.infer<TSchema> {
+): TOutput {
   const parsed = schema.safeParse(payload);
 
   if (parsed.success) {
@@ -57,11 +57,11 @@ export function parseApiPayload<TSchema extends z.ZodTypeAny>(
   throw new Error(buildApiContractMismatchMessage(endpoint, parsed.error));
 }
 
-export async function parseApiJson<TSchema extends z.ZodTypeAny>(
+export async function parseApiJson<TOutput, TInput>(
   response: Response,
-  schema: TSchema,
+  schema: z.ZodType<TOutput, TInput>,
   endpoint: string,
-): Promise<z.infer<TSchema>> {
+): Promise<TOutput> {
   return parseApiPayload(await readApiJsonPayload(response, endpoint), schema, endpoint);
 }
 

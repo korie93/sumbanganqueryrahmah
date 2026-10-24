@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { z } from "zod";
 import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "../../../shared/pagination-contracts";
 import { HttpError } from "../../http/errors";
 import {
   parseStrictInteger,
+  parseRequestBody,
   readBooleanFlag,
   readDate,
   readInteger,
@@ -12,6 +14,44 @@ import {
   readRouteParam,
   readStringList,
 } from "../../http/validation";
+
+test("request parsing preserves transformed output, defaults and explicit validation messages", () => {
+  const schema = z.object({
+    count: z.string().transform((value) => Number(value)).default(7),
+    label: z.string({ error: "A label is required." }),
+  });
+  const parsed: { count: number; label: string } = parseRequestBody(schema, { label: "fixture" });
+  assert.deepEqual(parsed, { count: 7, label: "fixture" });
+  assert.deepEqual(parseRequestBody(schema, { count: "12", label: "fixture" }), { count: 12, label: "fixture" });
+  assert.throws(() => parseRequestBody(schema, { label: 123 }), (error: unknown) => {
+    assert.ok(error instanceof HttpError);
+    assert.equal(error.message, "A label is required.");
+    assert.deepEqual(error.details, [{ code: "invalid_type", message: "A label is required.", path: "label" }]);
+    return true;
+  });
+});
+
+test("request parsing keeps type-error wording and safely renders symbol issue paths", () => {
+  assert.throws(() => parseRequestBody(z.object({ username: z.string() }), { username: 123 }), (error: unknown) => {
+    assert.ok(error instanceof HttpError);
+    assert.equal(error.code, "REQUEST_BODY_INVALID");
+    assert.equal(error.message, "Expected string, received number");
+    return true;
+  });
+  assert.throws(() => parseRequestBody(z.object({ username: z.string() }), {}), (error: unknown) => {
+    assert.ok(error instanceof HttpError);
+    assert.equal(error.message, "Required");
+    return true;
+  });
+  const symbolPath = z.string().superRefine((_value, ctx) => {
+    ctx.addIssue({ code: "custom", path: [Symbol("metadata"), 0], message: "Invalid metadata." });
+  });
+  assert.throws(() => parseRequestBody(symbolPath, "fixture"), (error: unknown) => {
+    assert.ok(error instanceof HttpError);
+    assert.deepEqual(error.details, [{ code: "custom", message: "Invalid metadata.", path: "Symbol(metadata).0" }]);
+    return true;
+  });
+});
 
 test("readBooleanFlag accepts explicit truthy and falsy literals", () => {
   assert.equal(readBooleanFlag(true), true);

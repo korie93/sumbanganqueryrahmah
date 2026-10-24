@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import { z } from "zod";
+import { maxUtf16Length } from "../lib/zod-string-limits";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest, conflict, HttpError, notFound } from "../http/errors";
 import { runWithRequestDeadline } from "../http/request-deadline";
@@ -42,9 +43,9 @@ type CreateImportsControllerDeps = {
 export type ImportsController = ReturnType<typeof createImportsController>;
 
 const viewerColumnFilterSchema = z.object({
-  column: z.string().trim().min(1).max(120),
+  column: z.string().trim().min(1).superRefine(maxUtf16Length(120)),
   operator: z.enum(["contains", "equals", "startsWith", "endsWith", "notEquals"]),
-  value: z.string().trim().min(1).max(500),
+  value: z.string().trim().min(1).superRefine(maxUtf16Length(500)),
 });
 
 const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
@@ -52,10 +53,10 @@ const savedWorkspaceViewSchema = z.enum(["all", "recent", "large", "duplicates",
 const savedPageSchema = z.coerce.number().int().min(1).max(1_000_000);
 const savedRowCountSchema = z.coerce.number().int().min(0).max(2_147_483_647);
 const importComparisonRequestSchema = z.object({
-  baselineId: z.string().trim().min(1).max(200),
-  currentId: z.string().trim().min(1).max(200),
+  baselineId: z.string().trim().min(1).superRefine(maxUtf16Length(200)),
+  currentId: z.string().trim().min(1).superRefine(maxUtf16Length(200)),
   category: importComparisonCategorySchema.default("all"),
-  search: z.string().trim().max(120).default(""),
+  search: z.string().trim().superRefine(maxUtf16Length(120)).default(""),
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(25),
 }).strict();

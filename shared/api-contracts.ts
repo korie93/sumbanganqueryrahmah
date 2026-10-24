@@ -289,7 +289,7 @@ export const importAnalysisColumnProfileSchema = z.object({
   uniqueCount: nonNegativeIntSchema,
   uniqueCountIsApproximate: z.boolean(),
   duplicateCount: nonNegativeIntSchema,
-  typeDistribution: z.record(importAnalysisProfiledTypeSchema, nonNegativeIntSchema),
+  typeDistribution: z.partialRecord(importAnalysisProfiledTypeSchema, nonNegativeIntSchema),
 });
 
 export const importAnalysisQualitySchema = z.object({
@@ -414,7 +414,7 @@ export const apiErrorPayloadSchema = z.object({
   startTime: nullishStringSchema,
   endTime: nullishStringSchema,
   requiresConfirmation: z.boolean().optional(),
-  fieldErrors: z.record(jsonValueSchema).optional(),
+  fieldErrors: z.record(z.string(), jsonValueSchema).optional(),
 }).strict();
 
 export const deleteImportResponseSchema = z.object({
@@ -466,7 +466,7 @@ export const settingsUpdateResponseSchema = z.object({
 
 export const tabVisibilityResponseSchema = z.object({
   role: nonEmptyStringSchema,
-  tabs: z.record(z.boolean()),
+  tabs: z.record(z.string(), z.boolean()),
 });
 
 export const appConfigResponseSchema = z.object({

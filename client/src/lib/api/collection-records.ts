@@ -47,8 +47,8 @@ const collectionManualSettlementHistoryResponseSchema = z.object({
     actorRole: z.string().min(1),
     timestamp: z.string().datetime({ offset: true }),
     requestId: z.string().nullable(),
-    oldValue: z.record(z.unknown()).nullable(),
-    newValue: z.record(z.unknown()).nullable(),
+    oldValue: z.record(z.string(), z.unknown()).nullable(),
+    newValue: z.record(z.string(), z.unknown()).nullable(),
   })).max(100),
 });
 

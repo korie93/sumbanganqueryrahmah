@@ -79,3 +79,32 @@ test("analysis Viewer handoff restores previous selection when storage fails", (
   assert.equal(local.getItem("selectedImportName"), "Previous Import");
   assert.equal(session.has(VIEWER_ANALYSIS_HANDOFF_STORAGE_KEY), false);
 });
+
+test("analysis Viewer handoff preserves UTF-16 length bounds for astral text", () => {
+  const local = createStorage();
+  const session = createStorage();
+  for (const handoff of [
+    { search: "😀" },
+    { search: "😀".repeat(100) },
+    { focusColumn: "😀".repeat(60) },
+  ]) {
+    assert.equal(storeViewerAnalysisSelection(local, session, {
+      importId: "import-1", importName: "June Import", ...handoff,
+    }), true);
+    assert.deepEqual(consumeViewerAnalysisHandoff(session), handoff);
+  }
+  for (const handoff of [
+    { search: "a" },
+    { search: "😀".repeat(101) },
+    { focusColumn: "😀".repeat(61) },
+  ]) {
+    assert.equal(storeViewerAnalysisSelection(local, session, {
+      importId: "import-rejected", importName: "Rejected Import", ...handoff,
+    }), false);
+    assert.equal(local.getItem("selectedImportId"), "import-1");
+    // A handoff persisted before the upgrade must obey the same bounds on read.
+    session.setItem(VIEWER_ANALYSIS_HANDOFF_STORAGE_KEY, JSON.stringify(handoff));
+    assert.equal(consumeViewerAnalysisHandoff(session), null);
+    assert.equal(session.has(VIEWER_ANALYSIS_HANDOFF_STORAGE_KEY), false);
+  }
+});

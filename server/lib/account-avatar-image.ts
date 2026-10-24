@@ -1,6 +1,7 @@
 import path from "node:path";
 import { crc32, inflateSync } from "node:zlib";
 import { z } from "zod";
+import { maxUtf16Length } from "./zod-string-limits";
 import {
   ACCOUNT_AVATAR_MAX_BASE64_LENGTH,
   ACCOUNT_AVATAR_MAX_BYTES,
@@ -17,9 +18,9 @@ import {
 } from "./collection-receipt-security";
 
 const avatarBodySchema = z.object({
-  fileName: z.string().min(1).max(160),
+  fileName: z.string().min(1).superRefine(maxUtf16Length(160)),
   mimeType: z.enum(ACCOUNT_AVATAR_MIME_TYPES),
-  contentBase64: z.string().min(4).max(ACCOUNT_AVATAR_MAX_BASE64_LENGTH),
+  contentBase64: z.string().min(4).superRefine(maxUtf16Length(ACCOUNT_AVATAR_MAX_BASE64_LENGTH)),
 }).strict();
 
 const imageTypes = {

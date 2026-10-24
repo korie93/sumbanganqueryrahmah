@@ -66,6 +66,27 @@ test("runtime env schema rejects malformed boolean flags", () => {
   );
 });
 
+test("runtime env schema retains explicit type diagnostics without echoing invalid values", () => {
+  const invalid = {
+    HOST: 123,
+    PG_MAX_CONNECTIONS: false,
+    BACKUP_FEATURE_ENABLED: { privateValue: "synthetic-must-not-appear" },
+  } as unknown as Record<string, string | undefined>;
+  assert.throws(() => validateRuntimeEnvironmentSchema(invalid), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /HOST: HOST must be a string\./);
+    assert.match(error.message, /PG_MAX_CONNECTIONS: PG_MAX_CONNECTIONS must be an integer\./);
+    assert.match(error.message, /BACKUP_FEATURE_ENABLED: BACKUP_FEATURE_ENABLED must be a boolean flag\./);
+    assert.doesNotMatch(error.message, /synthetic-must-not-appear|privateValue/);
+    return true;
+  });
+});
+
+test("runtime string bounds continue to count UTF-16 code units", () => {
+  assert.doesNotThrow(() => validateRuntimeEnvironmentSchema({ HOST: "😀".repeat(127) }));
+  assert.throws(() => validateRuntimeEnvironmentSchema({ HOST: "😀".repeat(128) }), /HOST must be 255 characters or fewer/);
+});
+
 test("runtime env schema validates the legacy unencrypted backup read override", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({
@@ -141,6 +162,15 @@ test("runtime env schema validates the legacy HS256 migration deadline", () => {
     }),
     /SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL.*timezone/i,
   );
+});
+
+test("runtime timestamps retain minute precision and compact timezone offsets", () => {
+  for (const timestamp of ["2026-07-12T00:00Z", "2026-07-12T08:00+0800", "2026-07-12T08:00:00.123+08:00"]) {
+    assert.doesNotThrow(() => validateRuntimeEnvironmentSchema({ SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL: timestamp }));
+  }
+  for (const timestamp of ["2026-02-30T00:00Z", "2026-07-12T24:00Z", "2026-07-12T00:00"]) {
+    assert.throws(() => validateRuntimeEnvironmentSchema({ SESSION_JWT_LEGACY_HS256_VERIFY_UNTIL: timestamp }), /timezone/);
+  }
 });
 
 test("runtime env schema rejects integer values outside configured bounds", () => {

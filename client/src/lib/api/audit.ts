@@ -42,7 +42,7 @@ const auditLogStatsLegacyResponseSchema = z.object({
 const auditLogStatsWireResponseSchema = z.object({
   totalLogs: nonNegativeIntegerSchema,
   todayLogs: nonNegativeIntegerSchema,
-  actionBreakdown: z.record(nonNegativeIntegerSchema),
+  actionBreakdown: z.record(z.string(), nonNegativeIntegerSchema),
   olderThan30Days: nonNegativeIntegerSchema.optional().default(0),
   olderThan60Days: nonNegativeIntegerSchema.optional().default(0),
   olderThan90Days: nonNegativeIntegerSchema.optional().default(0),

@@ -23,7 +23,7 @@ export class CollectionDashboardAccountService extends CollectionServiceSupport 
 
   async setLink(actor: AuthenticatedUser | undefined, userId: string, body: unknown) {
     const target = await this.target(actor, userId);
-    const parsed = z.object({ nicknameId: z.string().uuid().nullable() }).strict().safeParse(body);
+    const parsed = z.object({ nicknameId: z.guid().nullable() }).strict().safeParse(body);
     if (!parsed.success) throw badRequest("Choose a valid nickname or remove the link.");
     const link = await this.storage.setCollectionDashboardAccount({
       userId: target.id, nicknameId: parsed.data.nicknameId, actor: this.requireUser(actor).username,

@@ -63,7 +63,7 @@ const jsonValueShapeSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
     jsonPrimitiveSchema,
     z.array(jsonValueShapeSchema),
-    z.record(jsonValueShapeSchema),
+    z.record(z.string(), jsonValueShapeSchema),
   ]),
 );
 
@@ -75,4 +75,4 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.preprocess((value) => {
 export const jsonObjectSchema: z.ZodType<JsonObject> = z.preprocess((value) => {
   assertJsonValueDepth(value);
   return value;
-}, z.record(jsonValueShapeSchema)) as z.ZodType<JsonObject>;
+}, z.record(z.string(), jsonValueShapeSchema)) as z.ZodType<JsonObject>;

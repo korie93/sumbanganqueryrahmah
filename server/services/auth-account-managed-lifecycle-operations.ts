@@ -94,7 +94,7 @@ export class AuthAccountManagedLifecycleOperations {
     const email = normalizeEmailInput(input.email);
     const fullName = String(input.fullName || "").trim() || null;
     const role = normalizeManageableUserRole(input.role, "user");
-    const nickname = z.string().uuid().nullable().optional().safeParse(input.dashboardNicknameId);
+    const nickname = z.guid().nullable().optional().safeParse(input.dashboardNicknameId);
     if (!nickname.success || (nickname.data != null && input.role !== "user" && input.role !== "admin")) {
       throw new AuthAccountError(400, ERROR_CODES.REQUEST_BODY_INVALID, "Choose a valid Dashboard nickname for a User or Admin account, or skip this optional setting.");
     }

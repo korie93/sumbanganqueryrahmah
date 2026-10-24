@@ -1,11 +1,13 @@
 import { z } from "zod";
+import { maxUtf16Length } from "../../lib/zod-string-limits";
 import { parseRequestBody } from "../../http/validation";
 
 function nullableBoundedString(max: number) {
-  return z.union([z.string().max(max), z.null(), z.undefined()])
-    .transform((value) => (typeof value === "string" ? value.trim() || null : null));
+  return z.union([z.string().superRefine(maxUtf16Length(max)), z.null(), z.undefined()]).optional()
+    .transform((value) => (typeof value === "string" ? value.trim() || null : null))
+    .default(null);
 }
-const optionalString = z.union([z.string(), z.undefined()]);
+const optionalString = z.union([z.string(), z.undefined()]).optional();
 
 const loginBodySchema = z.object({
   username: z.string().default(""),
@@ -16,7 +18,7 @@ const loginBodySchema = z.object({
 });
 
 const activationBodySchema = z.object({
-  username: optionalString.transform((value) => (typeof value === "string" ? value : undefined)),
+  username: optionalString,
   token: z.string().default(""),
   newPassword: z.string().default(""),
   confirmPassword: z.string().default(""),

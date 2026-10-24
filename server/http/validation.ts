@@ -32,11 +32,23 @@ function buildRequestValidationIssues(error: z.ZodError): RequestValidationIssue
   }));
 }
 
-export function parseRequestBody<TSchema extends z.ZodTypeAny>(
-  schema: TSchema,
+export function parseRequestBody<Output>(
+  schema: z.ZodType<Output>,
   value: unknown,
-): z.infer<TSchema> {
-  const parsed = schema.safeParse(value);
+): Output {
+  const parsed = schema.safeParse(value, {
+    // Keep the existing HTTP validation wording while using Zod 4's error API.
+    // Schema-specific messages continue to take precedence over this fallback.
+    error: (issue) => {
+      if (issue.code !== "invalid_type") return undefined;
+      if (issue.input === undefined) return "Required";
+      const received = issue.input === null ? "null"
+        : Array.isArray(issue.input) ? "array"
+          : typeof issue.input === "number" && Number.isNaN(issue.input) ? "nan"
+            : typeof issue.input;
+      return `Expected ${issue.expected}, received ${received}`;
+    },
+  });
   if (parsed.success) {
     return parsed.data;
   }

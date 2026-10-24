@@ -59,3 +59,23 @@ test("assertJsonValueDepth rejects cyclic malicious payloads before recursive va
     /must not contain circular references/i,
   );
 });
+
+test("JSON records preserve arbitrary string keys and recursive JSON values", () => {
+  const value = {
+    "column with spaces": [null, true, 12.5, "text", { nested: [] }],
+    "": { "123": false },
+    "customer.email": "customer@example.test",
+  };
+  assert.deepEqual(jsonValueSchema.parse(value), value);
+  assert.deepEqual(jsonObjectSchema.parse(value), value);
+  assert.deepEqual(jsonObjectSchema.parse({}), {});
+});
+
+test("JSON records still reject non-JSON leaves and object entry points reject primitives", () => {
+  for (const invalid of [undefined, Number.NaN, Number.POSITIVE_INFINITY, () => undefined, 1n]) {
+    assert.equal(jsonValueSchema.safeParse({ nested: [invalid] }).success, false);
+  }
+  for (const primitive of [null, false, 12, "text", []]) {
+    assert.equal(jsonObjectSchema.safeParse(primitive).success, false);
+  }
+});

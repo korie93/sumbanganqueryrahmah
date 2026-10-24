@@ -9,8 +9,12 @@ import { safeJsonParseResult } from "@/lib/utils/safe-json";
 export const VIEWER_ANALYSIS_HANDOFF_STORAGE_KEY = "viewerAnalysisHandoff";
 
 const viewerAnalysisHandoffSchema = z.object({
-  focusColumn: z.string().trim().min(1).max(120).optional(),
-  search: z.string().trim().min(2).max(200).optional(),
+  // Preserve the existing UTF-16 bounds used by Viewer inputs and stored handoffs.
+  focusColumn: z.string().trim().min(1)
+    .refine((value) => value.length <= 120, "Column must contain at most 120 UTF-16 code units.").optional(),
+  search: z.string().trim()
+    .refine((value) => value.length >= 2 && value.length <= 200,
+      "Search must contain between 2 and 200 UTF-16 code units.").optional(),
 }).strict().refine(
   (value) => Boolean(value.focusColumn || value.search),
   "A Viewer analysis handoff requires a column or search value.",

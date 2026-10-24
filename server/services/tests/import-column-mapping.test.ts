@@ -37,6 +37,14 @@ test("column mapping accepts JSON string payloads", () => {
   ]);
 });
 
+test("column mapping retains the UTF-16 source and target name boundaries", () => {
+  const atLimit = "😀".repeat(60);
+  assert.deepEqual(parseImportColumnMapping([{ source: atLimit, target: atLimit }]), [{ source: atLimit, target: atLimit }]);
+  for (const entry of [{ source: `${atLimit}😀`, target: "safe" }, { source: "safe", target: `${atLimit}😀` }]) {
+    assert.throws(() => parseImportColumnMapping([entry]), /invalid source or target columns/);
+  }
+});
+
 test("column mapping rejects malformed JSON string payloads", () => {
   assert.throws(
     () => parseImportColumnMapping("[{\"source\":\"Name\","),

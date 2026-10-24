@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseRequestBody } from "../../http/validation";
 
-const optionalString = z.union([z.string(), z.undefined()]);
+const optionalString = z.union([z.string(), z.undefined()]).optional();
 
 const passwordChangeBodySchema = z.object({
   currentPassword: z.string().default(""),

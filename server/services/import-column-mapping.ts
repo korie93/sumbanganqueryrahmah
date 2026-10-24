@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maxUtf16Length } from "../lib/zod-string-limits";
 import { ImportUploadValidationError } from "./import-upload-file-utils";
 import { ERROR_CODES } from "../../shared/error-codes";
 import type { ImportRow } from "./import-upload-types";
@@ -10,8 +11,8 @@ const MAX_COLUMN_MAPPINGS = 300;
 const MAX_COLUMN_MAPPING_JSON_BYTES = 64 * 1024;
 
 export const importColumnMappingEntrySchema = z.object({
-  source: z.string().trim().min(1).max(MAX_COLUMN_NAME_LENGTH),
-  target: z.string().trim().min(1).max(MAX_COLUMN_NAME_LENGTH).nullable(),
+  source: z.string().trim().min(1).superRefine(maxUtf16Length(MAX_COLUMN_NAME_LENGTH)),
+  target: z.string().trim().min(1).superRefine(maxUtf16Length(MAX_COLUMN_NAME_LENGTH)).nullable(),
 }).strict();
 
 export const importColumnMappingSchema = z.array(importColumnMappingEntrySchema)

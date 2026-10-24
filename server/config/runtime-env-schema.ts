@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maxUtf16Length } from "../lib/zod-string-limits";
 import {
   COLLECTION_PII_RETIRED_FIELD_LIST_LABEL,
   isAllowedCollectionPiiRetiredField,
@@ -16,6 +17,10 @@ const DB_BOOTSTRAP_MODE_VALUES = new Set(["runtime", "migration"]);
 const RATE_LIMIT_STORE_VALUES = new Set(["memory", "redis"]);
 const WS_SHARED_BUS_VALUES = new Set(["memory", "redis"]);
 const TWO_FACTOR_TOTP_ALGORITHM_VALUES = new Set(["sha1", "sha256"]);
+// Retain the existing ISO grammar, including minute precision and compact
+// offsets. Zod 4's datetime format now requires seconds for zoned values.
+const ISO_DATE_SOURCE = "((\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|(02)-(0[1-9]|1\\d|2[0-8])))";
+const ISO_TIMESTAMP_WITH_TIMEZONE = new RegExp(`^${ISO_DATE_SOURCE}T([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?(Z|[+-]\\d{2}:?\\d{2})$`);
 export const MIN_SESSION_TIMEOUT_MINUTES = 1;
 export const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
 
@@ -35,8 +40,8 @@ function optionalEnvString(name: string, maxLength = DEFAULT_STRING_MAX_LENGTH) 
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: `${name} must be a string.` })
-      .max(maxLength, `${name} must be ${maxLength} characters or fewer.`)
+      .string({ error: `${name} must be a string.` })
+      .superRefine(maxUtf16Length(maxLength, `${name} must be ${maxLength} characters or fewer.`))
       .optional(),
   );
 }
@@ -45,11 +50,8 @@ function optionalIsoTimestampEnv(name: string) {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: `${name} must be an ISO 8601 timestamp.` })
-      .datetime({
-        offset: true,
-        message: `${name} must be an ISO 8601 timestamp with a timezone.`,
-      })
+      .string({ error: `${name} must be an ISO 8601 timestamp.` })
+      .regex(ISO_TIMESTAMP_WITH_TIMEZONE, `${name} must be an ISO 8601 timestamp with a timezone.`)
       .optional(),
   );
 }
@@ -58,7 +60,7 @@ function optionalBooleanEnv(name: string) {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: `${name} must be a boolean flag.` })
+      .string({ error: `${name} must be a boolean flag.` })
       .transform((value) => value.toLowerCase())
       .refine(
         (value) => BOOLEAN_ENV_VALUES.has(value),
@@ -72,7 +74,7 @@ function optionalAuthCookieSecureEnv() {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: "AUTH_COOKIE_SECURE must be a string." })
+      .string({ error: "AUTH_COOKIE_SECURE must be a string." })
       .transform((value) => value.toLowerCase())
       .refine(
         (value) => AUTH_COOKIE_SECURE_VALUES.has(value),
@@ -86,7 +88,7 @@ function optionalSessionCookieSameSiteEnv() {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: "SESSION_COOKIE_SAMESITE must be a string." })
+      .string({ error: "SESSION_COOKIE_SAMESITE must be a string." })
       .transform((value) => value.toLowerCase())
       .refine(
         (value) => SESSION_COOKIE_SAMESITE_VALUES.has(value),
@@ -111,7 +113,7 @@ function optionalDbBootstrapModeEnv() {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: "SQR_DB_BOOTSTRAP_MODE must be a string." })
+      .string({ error: "SQR_DB_BOOTSTRAP_MODE must be a string." })
       .transform((value) => value.toLowerCase())
       .refine(
         (value) => DB_BOOTSTRAP_MODE_VALUES.has(value),
@@ -125,7 +127,7 @@ function optionalRateLimitStoreEnv() {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: "SQR_RATE_LIMIT_STORE must be a string." })
+      .string({ error: "SQR_RATE_LIMIT_STORE must be a string." })
       .transform((value) => value.toLowerCase())
       .refine(
         (value) => RATE_LIMIT_STORE_VALUES.has(value),
@@ -139,7 +141,7 @@ function optionalWsSharedBusEnv() {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: "SQR_WS_SHARED_BUS must be a string." })
+      .string({ error: "SQR_WS_SHARED_BUS must be a string." })
       .transform((value) => value.toLowerCase())
       .refine(
         (value) => WS_SHARED_BUS_VALUES.has(value),
@@ -153,7 +155,7 @@ function optionalTwoFactorTotpAlgorithmEnv() {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: "TWO_FACTOR_TOTP_ALGORITHM must be a string." })
+      .string({ error: "TWO_FACTOR_TOTP_ALGORITHM must be a string." })
       .transform((value) => value.toLowerCase())
       .refine(
         (value) => TWO_FACTOR_TOTP_ALGORITHM_VALUES.has(value),
@@ -167,7 +169,7 @@ function optionalIntEnv(name: string, options: { min?: number; max?: number } = 
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: `${name} must be an integer.` })
+      .string({ error: `${name} must be an integer.` })
       .regex(/^-?\d+$/, `${name} must be an integer.`)
       .transform((value) => Number.parseInt(value, 10))
       .refine(
@@ -190,7 +192,7 @@ function optionalCollectionPiiRetiredFieldsEnv(name: string) {
   return z.preprocess(
     normalizeOptionalEnvString,
     z
-      .string({ invalid_type_error: `${name} must be a comma-separated string.` })
+      .string({ error: `${name} must be a comma-separated string.` })
       .refine((value) => {
         const fields = value
           .split(",")
@@ -503,8 +505,11 @@ function selectRuntimeEnvironmentForValidation(env: RuntimeEnvironmentSource) {
 }
 
 function formatRuntimeEnvIssue(issue: z.ZodIssue) {
-  const envName = issue.path.join(".") || "runtime environment";
-  return `${envName}: ${issue.message}`;
+  const envName = issue.path.map(String).join(".") || "runtime environment";
+  const message = issue.code === "unrecognized_keys"
+    ? `Unrecognized key(s) in object: ${issue.keys.map((key) => `'${key}'`).join(", ")}`
+    : issue.message;
+  return `${envName}: ${message}`;
 }
 
 export function validateRuntimeEnvironmentSchema(env: RuntimeEnvironmentSource = process.env) {

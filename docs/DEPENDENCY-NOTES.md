@@ -8,6 +8,76 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-10-24 parser, mail and validation security updates
+
+[CI run 40090798066](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/40090798066)
+on `72a80840` failed Audit dependencies for `body-parser` (high), `nodemailer`
+(moderate), `zod` (high), and the inherited `zod-validation-error` finding.
+These are complete advisory results, not registry transport errors.
+
+The manifest/lock update changes eight resolved packages only:
+
+- `body-parser` 2.3.0 to 2.4.0 for
+  [GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828),
+  with its required `qs` 6.16.1, `iconv-lite` 0.7.3 and nested `content-type` 2.1.0.
+  Express remains pinned to 5.2.1 and continues to resolve a compatible 2.x parser.
+- `nodemailer` 10.0.13 to 10.1.7 for the quoted local-part, group delimiter and
+  nested-comment recipient-parser corrections: [GHSA-85x2-q946-cp5h](https://github.com/advisories/GHSA-85x2-q946-cp5h),
+  [GHSA-m943-m63m-w62w](https://github.com/advisories/GHSA-m943-m63m-w62w), and
+  [GHSA-8c8m-p3m8-cjg8](https://github.com/advisories/GHSA-8c8m-p3m8-cjg8).
+- `zod` 3.25.76 to 4.6.7 for
+  [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+  No patched 3.x release exists in the registry. `drizzle-zod` moves to 0.8.3 and
+  `zod-validation-error` to 4.0.2 for supported Zod 4 integration.
+
+The major validation update includes required source compatibility changes rather
+than using the legacy `zod/v3` entrypoint: string-key records are explicit, enum-key
+counts remain sparse via `partialRecord`, parser output types and issue paths
+remain safe, and existing UUID-shaped nickname IDs remain accepted with `guid`.
+Runtime environment diagnostics and accepted timestamp formats are preserved.
+Regression cases cover these behaviors, generated Drizzle inserts, bounded
+collections, recipient parsing and compressed JSON handling. Shared contract tests
+are included in the existing `test:contracts` command used by CI.
+
+No audit threshold, exception, retry, override or lifecycle-script allowlist is
+relaxed. Registry metadata provides exact tarball integrity; only the eight
+reviewed lock entries change. The owner approved downloading official packages for
+sandbox-only verification. All patched tarballs matched their registry SHA-512
+integrity; no dependency lifecycle scripts or production operations ran.
+
+Local verification on 2026-10-24:
+
+- A fresh npm bulk-advisory query for the final lock graph returned no findings.
+  Actual `npm audit` and the unchanged project gate then passed inside the sandbox
+  against a loopback replay of that captured response. The target process had no
+  external network access; this was not a deployed-server probe.
+- `npm ci --dry-run --ignore-scripts --no-audit` passed manifest/lock resolution
+  using only reviewed registry metadata served on isolated loopback. This verifies
+  resolution consistency, not a fresh complete install.
+- Dependency/security regressions: 175 passed; API/shared/Drizzle contracts: 140
+  passed; final auth/runtime validation and Viewer handoff: 113 passed; existing
+  auth/AI/Viewer service regressions: 114 passed; actual disposable PostgreSQL
+  regressions: 42 passed. Every listed run had zero failed or skipped tests.
+- TypeScript passed for backend/shared and frontend/shared as separate scopes with
+  the project compiler options. The external frontend config explicitly included
+  the installed Node types so its relocated config retained test type discovery.
+- Backend/shared and frontend lint passed; these scoped results do not establish
+  a full CI pass.
+- Full combined TypeScript exceeded its bounded resource profile. Additional
+  production build and bundle verification could not start because the host disk
+  filled during disposable build-snapshot preparation. Temporary agent-created
+  source copies were removed; no application data or user files were cleaned.
+  Full build, browser smoke, bundle budgets and the complete CI remain unverified.
+
+Zod 4 optional properties differ from union schemas containing `undefined`.
+Explicit outer optional/default handling preserves omitted, undefined and null
+normalization, while original union alternatives retain auth error codes/messages.
+UTF-16 field and Viewer handoff limits remain unchanged for astral Unicode.
+
+Rollback: revert this dependency update and its Zod compatibility changes together;
+do not pair Zod 3 with the Zod 4 schema code. A rollback restores the known advisory
+findings, so review remediation before deployment. No database migration is needed.
+
 ## 2026-10-23 DOMPurify and IPv6 zone-parser security patches
 
 [CI run 39888068031](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/39888068031)
