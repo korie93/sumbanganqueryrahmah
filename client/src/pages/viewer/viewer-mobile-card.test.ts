@@ -32,9 +32,23 @@ test("compact mobile card represents identity once and never backfills its previ
   assert.match(markup, /Row 5 · 4 fields shown/);
   assert.match(markup, /Show 2 more fields/);
   const detailsStart = markup.indexOf("<details");
-  assert.ok(markup.indexOf("00175.50") > detailsStart);
+  assert.ok(detailsStart >= 0);
+  assert.doesNotMatch(markup.slice(detailsStart), /<dl|<dt|<dd|00175\.50|Line1/);
   assert.ok(markup.indexOf("000012340000") < detailsStart);
   assert.doesNotMatch(markup, /Not selected/);
+});
+
+test("wide rows defer all overflow field markup without changing the input data", () => {
+  const headers = ["Customer Name", ...Array.from({ length: 42 }, (_, index) => `Field ${index + 1}`)];
+  const values: DataRowWithId = { __rowId: 0, "Customer Name": "Synthetic Wide Row" };
+  for (let index = 1; index <= 42; index++) values[`Field ${index}`] = `Value ${index}`;
+  const before = JSON.stringify({ values, headers });
+  const markup = render(headers, values);
+  assert.match(markup, /Show 39 more fields/);
+  assert.equal((markup.match(/<dt\b/g) ?? []).length, 3);
+  assert.equal((markup.match(/<dd\b/g) ?? []).length, 3);
+  assert.doesNotMatch(markup, /<dt[^>]*>Field (?:4|42)<\/dt>|Value 42/);
+  assert.equal(JSON.stringify({ values, headers }), before);
 });
 
 test("identity outside the first four is represented by title and excluded from overflow counts", () => {

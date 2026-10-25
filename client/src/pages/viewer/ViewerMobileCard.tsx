@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ViewerDataFieldCard } from "@/pages/viewer/ViewerDataFieldCard";
@@ -19,6 +19,33 @@ interface ViewerMobileCardProps {
   onInspectRow?: ((row: DataRowWithId) => void) | undefined;
 }
 
+function ViewerMobileOverflowFields({ row, headers }: { row: DataRowWithId; headers: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  // Let native details own pointer/keyboard toggling. Read its actual state:
+  // rapid native toggle events may be coalesced into a single notification.
+  return (
+    <details className="group mt-1 border-t border-border"
+      onToggle={(event) => setExpanded(event.currentTarget.open)}>
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-2 text-sm font-medium text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+        {buildViewerOverflowFieldsLabel(headers.length)}
+        <ChevronDown className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      {expanded ? (
+        <dl className="divide-y divide-border border-t border-border">
+          {headers.map((header) => (
+            <ViewerDataFieldCard
+              key={`${row.__rowId}-${header}-extra`}
+              header={header}
+              value={row[header]}
+              compact
+            />
+          ))}
+        </dl>
+      ) : null}
+    </details>
+  );
+}
+
 function ViewerMobileCardImpl({
   row,
   selected,
@@ -37,10 +64,6 @@ function ViewerMobileCardImpl({
   const visibleFieldsSummary = useMemo(
     () => buildViewerVisibleFieldsSummary(visibleHeaders.length, shownFieldsCount),
     [shownFieldsCount, visibleHeaders.length],
-  );
-  const overflowFieldsLabel = useMemo(
-    () => buildViewerOverflowFieldsLabel(overflowHeaders.length),
-    [overflowHeaders.length],
   );
   const handleToggleRow = useCallback(() => {
     onToggleRowSelection(row.__rowId);
@@ -88,22 +111,7 @@ function ViewerMobileCardImpl({
       ) : null}
 
       {overflowHeaders.length > 0 ? (
-        <details className="group mt-1 border-t border-border">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-2 text-sm font-medium text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-            {overflowFieldsLabel}
-            <ChevronDown className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
-          </summary>
-          <dl className="divide-y divide-border border-t border-border">
-            {overflowHeaders.map((header) => (
-              <ViewerDataFieldCard
-                key={`${row.__rowId}-${header}-extra`}
-                header={header}
-                value={row[header]}
-                compact
-              />
-            ))}
-          </dl>
-        </details>
+        <ViewerMobileOverflowFields row={row} headers={overflowHeaders} />
       ) : null}
     </article>
   );

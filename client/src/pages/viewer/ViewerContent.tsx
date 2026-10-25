@@ -42,6 +42,9 @@ type ViewerContentProps = {
   hasNextPage: boolean;
   hasPreviousPage: boolean;
   loadingMore: boolean;
+  rowsPerPage: number;
+  pageSizeDisabled: boolean;
+  onRowsPerPageChange: (size: number) => void;
   onBackToSaved: () => void;
   onAddFilter: () => void;
   onClearAllFilters: () => void;
@@ -92,6 +95,9 @@ function ViewerContentImpl({
   hasNextPage,
   hasPreviousPage,
   loadingMore,
+  rowsPerPage,
+  pageSizeDisabled,
+  onRowsPerPageChange,
   onBackToSaved,
   onAddFilter,
   onClearAllFilters,
@@ -156,6 +162,9 @@ function ViewerContentImpl({
       hasNextPage={hasNextPage}
       hasPreviousPage={hasPreviousPage}
       loadingMore={loadingMore}
+      rowsPerPage={rowsPerPage}
+      pageSizeDisabled={pageSizeDisabled}
+      onRowsPerPageChange={onRowsPerPageChange}
       onClearAllFilters={onClearAllFilters}
       onSearchChange={onSearchChange}
       onToggleRowSelection={onToggleRowSelection}

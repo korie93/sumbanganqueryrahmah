@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBrowserSessionStorage } from "@/lib/browser-storage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { usePersistentTableDensity } from "@/hooks/usePersistentTableDensity";
+import { resolveIsMobileViewport } from "@/hooks/use-mobile";
+import { isViewerPageSizeChoice, resolveInitialViewerPageSize } from "@/pages/viewer/viewer-page-size";
 import {
   consumeViewerAnalysisHandoff,
 } from "@/pages/viewer/analysis-handoff";
@@ -44,11 +46,13 @@ export function useViewerPageState({
     () => typeof document !== "undefined" && document.documentElement.classList.contains("low-spec"),
     [],
   );
-  const rowsPerPage = useMemo(() => {
-    const parsed = Number(viewerRowsPerPage);
-    if (!Number.isFinite(parsed)) return isLowSpecMode ? 40 : 100;
-    return Math.min(500, Math.max(10, Math.floor(parsed)));
-  }, [isLowSpecMode, viewerRowsPerPage]);
+  // Capture layout only when Viewer opens. Desktop config can arrive later;
+  // respect it until an explicit choice, without making size depend on resize.
+  const [initialCardLayout] = useState(() =>
+    resolveIsMobileViewport(typeof window === "undefined" ? undefined : window),
+  );
+  const [pageSizeOverride, setRowsPerPage] = useState<number | null>(null);
+  const rowsPerPage = pageSizeOverride ?? resolveInitialViewerPageSize(viewerRowsPerPage, initialCardLayout, isLowSpecMode);
   const isSuperuser = userRole === "superuser";
   const tableDensity = usePersistentTableDensity("viewer");
 
@@ -250,7 +254,9 @@ export function useViewerPageState({
   }, [filteredRows, selectAllFiltered]);
 
   const exportState = useViewerExportState({
-    rowsPerPage,
+    // Keep the existing export batch size instead of multiplying server reads
+    // when the person chooses fewer cards per page.
+    rowsPerPage: resolveInitialViewerPageSize(viewerRowsPerPage, false, isLowSpecMode),
     importId,
     importName: data.importName,
     rows: data.rows,
@@ -261,6 +267,13 @@ export function useViewerPageState({
     debouncedSearch: data.debouncedSearch,
     debouncedColumnFilters: data.debouncedColumnFilters,
   });
+
+  const pageSizeDisabled = data.loading || data.loadingMore || exportState.exportingExcel || exportState.exportingPdf;
+  const handleRowsPerPageChange = useCallback((nextSize: number) => {
+    if (pageSizeDisabled || nextSize === rowsPerPage || !isViewerPageSizeChoice(nextSize)) return;
+    clearSelectionState();
+    setRowsPerPage(nextSize);
+  }, [clearSelectionState, pageSizeDisabled, rowsPerPage]);
 
   const clearAllData = useCallback(() => {
     exportState.cancelActiveExport();
@@ -291,6 +304,9 @@ export function useViewerPageState({
     totalRows: data.totalRows,
     currentPage: data.currentPage,
     totalPages,
+    rowsPerPage,
+    pageSizeDisabled,
+    handleRowsPerPageChange,
     selectedColumns,
     showColumnSelector,
     setShowColumnSelector,

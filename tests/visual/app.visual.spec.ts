@@ -653,22 +653,23 @@ async function installMockAuthenticatedApi(page: Page, role: VisualRole = "super
     }
 
     if (pathname === "/api/imports/visual-import-1/data") {
+      const pageSize = Math.min(500, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") ?? "100", 10) || 100));
       return jsonResponse(route, {
         headers: visualViewerHeaders,
-        limit: 100,
+        limit: pageSize,
         nextCursor: null,
         offset: 0,
         page: 1,
-        pageSize: 100,
+        pageSize,
         pagination: {
           hasNextPage: false,
           hasPreviousPage: false,
-          limit: 100,
+          limit: pageSize,
           mode: "hybrid",
           nextCursor: null,
           offset: 0,
           page: 1,
-          pageSize: 100,
+          pageSize,
           total: 3,
           totalPages: 1,
         },
@@ -2019,6 +2020,7 @@ async function installViewerCompactCardFixture(page: Page) {
   await installViewerDesign3Fixture(page, 2);
   await page.route("**/api/imports/visual-import-1/data*", (route) => {
     expect(route.request().method()).toBe("GET");
+    const pageSize = Math.min(500, Math.max(10, Number.parseInt(new URL(route.request().url()).searchParams.get("pageSize") ?? "100", 10) || 100));
     return jsonResponse(route, {
       headers: viewerCompactCardHeaders,
       rows: [viewerCompactCardLongName, "Synthetic Customer 02"].map((name, index) => ({
@@ -2038,10 +2040,10 @@ async function installViewerCompactCardFixture(page: Page) {
           Unlisted: viewerCompactCardUnlistedValue,
         },
       })),
-      total: 2, page: 1, pageSize: 100, limit: 100, offset: 0, nextCursor: null,
+      total: 2, page: 1, pageSize, limit: pageSize, offset: 0, nextCursor: null,
       pagination: {
-        hasNextPage: false, hasPreviousPage: false, limit: 100, mode: "hybrid",
-        nextCursor: null, offset: 0, page: 1, pageSize: 100, total: 2, totalPages: 1,
+        hasNextPage: false, hasPreviousPage: false, limit: pageSize, mode: "hybrid",
+        nextCursor: null, offset: 0, page: 1, pageSize, total: 2, totalPages: 1,
       },
     });
   });

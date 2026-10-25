@@ -16,6 +16,9 @@ interface ViewerFooterProps {
   hasNextPage: boolean;
   hasPreviousPage: boolean;
   loadingMore: boolean;
+  rowsPerPage: number;
+  pageSizeDisabled: boolean;
+  onRowsPerPageChange: (size: number) => void;
   onClearSelection: () => void;
   onPrevPage: () => void;
   onNextPage: () => void;
@@ -34,6 +37,9 @@ function ViewerFooterImpl({
   hasNextPage,
   hasPreviousPage,
   loadingMore,
+  rowsPerPage,
+  pageSizeDisabled,
+  onRowsPerPageChange,
   onClearSelection,
   onPrevPage,
   onNextPage,
@@ -65,6 +71,9 @@ function ViewerFooterImpl({
         hasNextPage={hasNextPage}
         hasPreviousPage={hasPreviousPage}
         loadingMore={loadingMore}
+        rowsPerPage={rowsPerPage}
+        pageSizeDisabled={pageSizeDisabled}
+        onRowsPerPageChange={onRowsPerPageChange}
         onClearSelection={onClearSelection}
         onPrevPage={onPrevPage}
         onNextPage={onNextPage}

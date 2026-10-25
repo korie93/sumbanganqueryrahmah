@@ -61,6 +61,7 @@ export function useViewerDataState({
   const fetchAbortControllerRef = useRef<AbortController | null>(null);
   const headersLockedRef = useRef(headersLocked);
   const pageCursorHistoryRef = useRef<Array<string | null>>([null]);
+  const initializedImportRef = useRef<{ id: string | undefined } | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -203,6 +204,10 @@ export function useViewerDataState({
   ]);
 
   useEffect(() => {
+    // Only changing the import resets headers/columns. A page-size change is
+    // handled by the page-one fetch below and must preserve search and filters.
+    if (initializedImportRef.current?.id === importId && initializedImportRef.current !== null) return;
+    initializedImportRef.current = { id: importId };
     if (importId) {
       cancelActiveFetch();
       applyViewerStatePatch(

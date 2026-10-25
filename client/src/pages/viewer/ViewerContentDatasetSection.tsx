@@ -56,6 +56,9 @@ type ViewerContentDatasetSectionProps = {
   hasNextPage: boolean;
   hasPreviousPage: boolean;
   loadingMore: boolean;
+  rowsPerPage: number;
+  pageSizeDisabled: boolean;
+  onRowsPerPageChange: (size: number) => void;
   onClearAllFilters: () => void;
   onSearchChange: (value: string) => void;
   onToggleRowSelection: (rowId: number) => void;
@@ -100,6 +103,9 @@ function ViewerContentDatasetSectionImpl({
   hasNextPage,
   hasPreviousPage,
   loadingMore,
+  rowsPerPage,
+  pageSizeDisabled,
+  onRowsPerPageChange,
   onClearAllFilters,
   onSearchChange,
   onToggleRowSelection,
@@ -186,6 +192,9 @@ function ViewerContentDatasetSectionImpl({
             hasNextPage={hasNextPage}
             hasPreviousPage={hasPreviousPage}
             loadingMore={loadingMore}
+            rowsPerPage={rowsPerPage}
+            pageSizeDisabled={pageSizeDisabled}
+            onRowsPerPageChange={onRowsPerPageChange}
             onClearSelection={onClearSelection}
             onPrevPage={onPrevPage}
             onNextPage={onNextPage}

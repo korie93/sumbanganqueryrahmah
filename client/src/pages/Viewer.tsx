@@ -136,6 +136,9 @@ export default function Viewer({
           hasNextPage={viewer.hasNextPage}
           hasPreviousPage={viewer.hasPreviousPage}
           loadingMore={viewer.loadingMore}
+          rowsPerPage={viewer.rowsPerPage}
+          pageSizeDisabled={viewer.pageSizeDisabled}
+          onRowsPerPageChange={viewer.handleRowsPerPageChange}
           onBackToSaved={viewer.handleBackToSaved}
           onAddFilter={viewer.addFilter}
           onClearAllFilters={viewer.clearAllFilters}

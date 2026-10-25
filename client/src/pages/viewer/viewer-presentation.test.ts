@@ -27,7 +27,7 @@ test("viewer mobile fields preserve identifier strings, escaping and definition 
   assert.doesNotMatch(markup, /role="group"|aria-label=/, "A dl child wrapper stays a neutral div so dt/dd retain list semantics");
 });
 
-test("mobile rows retain selection, four preview fields and all overflow values", () => {
+test("mobile rows retain selection and preview fields while deferring closed overflow values", () => {
   const row: DataRowWithId = {
     __rowId: 70,
     Account: "00001234567890123456",
@@ -50,12 +50,11 @@ test("mobile rows retain selection, four preview fields and all overflow values"
   assert.doesNotMatch(markup, /<details[^>]*\sopen(?:=|\s|>)/);
   assert.match(markup, /Show 2 more fields/);
   const extraFields = markup.slice(markup.indexOf("<details"));
-  assert.match(extraFields, /001122334455/);
-  assert.match(extraFields, /Additional record information/);
+  assert.doesNotMatch(extraFields, /<dl|<dt|<dd|001122334455|Additional record information/);
   assert.doesNotMatch(extraFields, /00009007199254740993/);
   assert.match(markup, /00001234567890123456/);
   const lists = [...markup.matchAll(/<dl\b[^>]*>([\s\S]*?)<\/dl>/g)];
-  assert.equal(lists.length, 2);
+  assert.equal(lists.length, 1);
   for (const list of lists) {
     assert.doesNotMatch(list[1]!, /role="group"|aria-label=/);
     assert.equal((list[1]!.match(/<dt\b/g) ?? []).length, (list[1]!.match(/<dd\b/g) ?? []).length);
@@ -71,6 +70,9 @@ test("compact pagination preserves disabled states, loading and selected-row act
       hasPreviousPage: false,
       hasNextPage: true,
       loadingMore,
+      rowsPerPage: 25,
+      pageSizeDisabled: loadingMore,
+      onRowsPerPageChange: noop,
       onClearSelection: noop,
       onPrevPage: noop,
       onNextPage: noop,
@@ -88,6 +90,21 @@ test("compact pagination preserves disabled states, loading and selected-row act
   assert.match(busyMarkup, /Loading\.\.\./);
   assert.match(busyMarkup, /button-clear-selection/);
   assert.match(busyMarkup.match(/<button[^>]*data-testid="button-viewer-next-page"[^>]*>/)?.[0] ?? "", / disabled=/);
+});
+
+test("pagination exposes a labelled native page-size control and retains custom desktop values", () => {
+  const render = (size: number, busy: boolean) => renderToStaticMarkup(createElement(ViewerFooterActions, {
+    currentPage: 1, totalPages: 3, selectedRowCount: 0, hasPreviousPage: false, hasNextPage: true,
+    loadingMore: busy, rowsPerPage: size, pageSizeDisabled: busy, onRowsPerPageChange: noop,
+    onClearSelection: noop, onPrevPage: noop, onNextPage: noop,
+  }));
+  const markup = render(200, false);
+  assert.match(markup, /<label[^>]*for="viewer-page-size"[^>]*>Rows per page<\/label>/);
+  assert.match(markup, /<select[^>]*id="viewer-page-size"[^>]*name="viewerPageSize"/);
+  assert.match(markup, /<option value="200" selected="">200<\/option>/);
+  for (const size of [25, 50, 100]) assert.match(markup, new RegExp(`<option value="${size}">${size}</option>`));
+  assert.doesNotMatch(markup.match(/<select[^>]*>/)?.[0] ?? "", / disabled=/);
+  assert.match(render(25, true).match(/<select[^>]*>/)?.[0] ?? "", /disabled=""/);
 });
 
 test("Viewer footer stays in document flow and mobile toolbar reserves a compact More action", () => {
