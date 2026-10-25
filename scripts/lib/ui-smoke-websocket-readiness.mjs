@@ -9,6 +9,7 @@ export async function attachSmokeWebSocketReadiness({ context, page, baseUrl, ti
   const waiters = new Set();
   let generation = 0;
   let current = null;
+  let hardFailure = null;
   let disposed = false;
   const failure = (reason) => new Error(`SQR smoke /ws ${reason}.`);
   const settle = (error) => {
@@ -22,8 +23,8 @@ export async function attachSmokeWebSocketReadiness({ context, page, baseUrl, ti
   const matchesCurrent = (event) => !disposed && current?.generation === generation && current.id === event.requestId;
   const failCurrent = (reason) => {
     current.state = "failed";
-    current.reason = reason;
-    settle(failure(reason));
+    hardFailure ??= failure(reason);
+    settle(hardFailure);
   };
   const handlers = {
     "Network.webSocketCreated": (event) => {
@@ -32,8 +33,9 @@ export async function attachSmokeWebSocketReadiness({ context, page, baseUrl, ti
       }
     },
     "Network.webSocketHandshakeResponseReceived": (event) => {
-      if (!matchesCurrent(event) || current.state !== "connecting") return;
+      if (!matchesCurrent(event) || hardFailure) return;
       if (event.response?.status !== 101) return failCurrent("handshake did not return status 101");
+      if (current.state !== "connecting") return;
       current.state = "open";
       settle();
     },
@@ -41,7 +43,10 @@ export async function attachSmokeWebSocketReadiness({ context, page, baseUrl, ti
       if (matchesCurrent(event)) failCurrent("transport reported a socket error");
     },
     "Network.webSocketClosed": (event) => {
-      if (matchesCurrent(event)) failCurrent("socket closed before navigation readiness");
+      if (!matchesCurrent(event) || hardFailure) return;
+      // The app owns reconnect/replacement. A clean close invalidates readiness
+      // but does not reset any waiter's original deadline or hide hard errors.
+      current.state = "closed";
     },
     "Page.frameNavigated": ({ frame }) => {
       if (disposed || !frame || frame.parentId) return;
@@ -49,6 +54,7 @@ export async function attachSmokeWebSocketReadiness({ context, page, baseUrl, ti
       // and Page.navigatedWithinDocument (SPA/history changes) do not reset it.
       generation += 1;
       current = null;
+      hardFailure = null;
       settle(failure("document changed before socket readiness"));
     },
   };
@@ -71,8 +77,8 @@ export async function attachSmokeWebSocketReadiness({ context, page, baseUrl, ti
   return {
     waitForOpen() {
       if (disposed) return Promise.reject(failure("readiness observer was disposed"));
+      if (hardFailure) return Promise.reject(hardFailure);
       if (current?.state === "open") return Promise.resolve();
-      if (current?.state === "failed") return Promise.reject(failure(current.reason));
       return new Promise((resolve, reject) => {
         const waiter = { resolve, reject, timer: null };
         waiter.timer = setTimeout(() => {

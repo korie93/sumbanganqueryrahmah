@@ -115,7 +115,6 @@ test("subframe commits and same-document SPA navigation keep the active handshak
 for (const [label, event, fields, expected] of [
   ["non-101 handshake", "Network.webSocketHandshakeResponseReceived", { response: { status: 403, headers: { private: "not-retained" } } }, "handshake did not return status 101"],
   ["native frame error", "Network.webSocketFrameError", { errorMessage: "private upstream details must not be recorded" }, "transport reported a socket error"],
-  ["close before handshake", "Network.webSocketClosed", {}, "socket closed before navigation readiness"],
 ]) {
   test(`${label} rejects readiness without recording remote payloads`, async (context) => {
     const state = await harness(context);
@@ -128,17 +127,81 @@ for (const [label, event, fields, expected] of [
     await assert.rejects(state.waitForOpen());
     state.created("reconnected");
     state.handshake("reconnected");
+    await assert.rejects(state.waitForOpen(), (error) => error.message === `SQR smoke /ws ${expected}.`,
+      "A new socket cannot hide a hard failure in the same document");
+    state.session.emit("Page.navigatedWithinDocument", { frameId: "main", url: "http://127.0.0.1:5000/collection/daily" });
+    state.navigate({ id: "receipt-frame", parentId: "main" });
+    await assert.rejects(state.waitForOpen(), (error) => error.message === `SQR smoke /ws ${expected}.`);
+    state.navigate();
+    state.handshake("reconnected");
+    state.created("new-document");
+    state.handshake("new-document");
     await state.waitForOpen();
   });
 }
 
-test("an opened socket that closes cannot make a later navigation appear ready", async (context) => {
+test("a clean close before 101 waits for a replacement without accepting the closed socket's late handshake", async (context) => {
+  const state = await harness(context);
+  state.created("initial");
+  let opened = false;
+  const waiting = state.waitForOpen().then(() => { opened = true; });
+  state.session.emit("Network.webSocketClosed", { requestId: "initial" });
+  state.handshake("initial");
+  await Promise.resolve();
+  assert.equal(opened, false, "A closed socket cannot become ready again through a late 101");
+  state.created("replacement");
+  state.session.emit("Network.webSocketFrameError", { requestId: "initial", errorMessage: "stale socket" });
+  state.session.emit("Network.webSocketClosed", { requestId: "initial" });
+  state.handshake("replacement");
+  await waiting;
+});
+
+test("an opened socket that closes waits for a live replacement before allowing navigation", async (context) => {
   const state = await harness(context);
   state.created("owned");
   state.handshake("owned");
   await state.waitForOpen();
   state.session.emit("Network.webSocketClosed", { requestId: "owned" });
-  await assert.rejects(state.waitForOpen(), /socket closed before navigation readiness/);
+  let navigations = 0;
+  const waiting = state.waitForOpen().then(() => { navigations += 1; });
+  state.handshake("owned");
+  await Promise.resolve();
+  assert.equal(navigations, 0, "Previously opened but now closed is not navigation readiness");
+  state.created("replacement");
+  state.handshake("replacement");
+  await waiting;
+  assert.equal(navigations, 1);
+});
+
+test("a permanent clean closure fails at the bounded readiness deadline", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const state = await harness(context, { timeoutMs: 25 });
+  state.created("closed");
+  state.session.emit("Network.webSocketClosed", { requestId: "closed" });
+  const rejected = assert.rejects(state.waitForOpen(), /handshake readiness timed out/);
+  context.mock.timers.tick(25);
+  await rejected;
+});
+
+test("repeated clean closures and replacements cannot restart an existing waiter's deadline", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const state = await harness(context, { timeoutMs: 30 });
+  let timedOut = false;
+  const rejected = assert.rejects(state.waitForOpen(), /handshake readiness timed out/).then(() => { timedOut = true; });
+  for (const id of ["initial", "retry-one", "retry-two"]) {
+    state.created(id);
+    context.mock.timers.tick(9);
+    state.session.emit("Network.webSocketClosed", { requestId: id });
+    state.handshake(id);
+  }
+  state.created("retry-three");
+  await Promise.resolve();
+  assert.equal(timedOut, false);
+  context.mock.timers.tick(3);
+  await rejected;
+  assert.equal(timedOut, true, "The first wait ends at its original 30ms deadline");
+  state.handshake("retry-three");
+  await state.waitForOpen();
 });
 
 test("handshake waits have an explicit bounded timeout", async (context) => {
