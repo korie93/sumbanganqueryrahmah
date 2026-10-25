@@ -1,9 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
-import {
-  prefetchNavigationTargetWithDiagnostics,
-  resolvePredictivePrefetchTargets,
-} from "@/app/navigation-prefetch";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import MaintenanceModeBanner from "@/app/MaintenanceModeBanner";
 import { PageSpinner } from "@/app/PageSpinner";
@@ -21,7 +17,6 @@ import { LazySuspenseFallback } from "@/components/LazySuspenseFallback";
 import Navbar from "@/components/Navbar";
 import { NavbarUserMenuDropdown } from "@/components/NavbarParts";
 import { AIProvider } from "@/context/AIContext";
-import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import "@/components/GlassWrapper.css";
 import "./AuthenticatedAppShell.css";
 import "./workspace-navigation.css";
@@ -29,7 +24,6 @@ import "./workspace-navigation.css";
 const FloatingAI = lazy(() => import("@/components/FloatingAI"));
 const FLOATING_AI_FALLBACK_READY_DELAY_MS = 1_200;
 const FLOATING_AI_IDLE_READY_TIMEOUT_MS = 1_500;
-const NAVIGATION_PREFETCH_IDLE_DELAY_MS = 900;
 
 type AuthenticatedAppShellProps = {
   user: User;
@@ -103,39 +97,6 @@ export default function AuthenticatedAppShell({
       }
     };
   }, [floatingAiReady, runtimeConfig.aiEnabled]);
-
-  useEffect(() => {
-    const targets = resolvePredictivePrefetchTargets({
-      currentPage,
-      featureLockdown,
-      monitorSection,
-      tabVisibility,
-      tabVisibilityLoaded,
-      mustChangePassword: user.mustChangePassword,
-      userRole: user.role,
-    });
-    if (targets.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-    const cancelIdlePreload = scheduleIdlePreload(async () => {
-      for (const target of targets) {
-        if (cancelled) {
-          return;
-        }
-        await prefetchNavigationTargetWithDiagnostics(target, {
-          source: "predictive-prefetch",
-          currentPage,
-        });
-      }
-    }, NAVIGATION_PREFETCH_IDLE_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      cancelIdlePreload();
-    };
-  }, [currentPage, featureLockdown, monitorSection, tabVisibility, tabVisibilityLoaded, user.mustChangePassword, user.role]);
 
   if (user.mustChangePassword) {
     return (

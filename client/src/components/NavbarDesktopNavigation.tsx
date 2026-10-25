@@ -81,8 +81,6 @@ function NavbarDesktopNavigationImpl({
                             keyboardOpening.current = true;
                           }
                         }}
-                        onMouseEnter={() => group.items.forEach((item) => onPrefetch(item.id))}
-                        onFocus={() => group.items.forEach((item) => onPrefetch(item.id))}
                         className={`nav-pill${active ? " nav-pill-active" : ""}${open ? " nav-parent-open" : ""}`}
                         data-testid={`nav-group-${group.id}`}>
                         <span className="nav-pill-icon"><Icon className="sidebar-menu-icon-motion h-4 w-4" data-sidebar-icon-motion={getSidebarIconMotion(group.id)} aria-hidden="true" /></span>
@@ -118,7 +116,8 @@ function NavbarDesktopNavigationImpl({
                       return (
                         <button key={item.id} type="button" className={`workspace-flyout-item${activeItem ? " is-active" : ""}`}
                           data-testid={`flyout-nav-${item.id}`} {...getAriaCurrentPageProps(activeItem)}
-                          onClick={() => onNavigate(item.id)} onFocus={() => onPrefetch(item.id)}>
+                          onClick={() => onNavigate(item.id)}
+                          onMouseEnter={() => onPrefetch(item.id)} onFocus={() => onPrefetch(item.id)}>
                           <ItemIcon className="sidebar-menu-icon-motion h-4 w-4 shrink-0" data-sidebar-icon-motion={getSidebarIconMotion(item.id)} aria-hidden="true" />
                           <span><strong>{item.title || item.label}{badge ? ` (${badge})` : ""}</strong><small>{item.description}</small></span>
                         </button>

@@ -11,7 +11,6 @@ import {
 } from "@/app/lazy-pages";
 import {
   normalizeNavigationPrefetchTarget,
-  resolvePredictivePrefetchTargets,
   type NavigationPrefetchTarget,
 } from "@/app/navigation-prefetch-utils";
 import { logClientWarning } from "@/lib/client-logger";
@@ -197,4 +196,4 @@ export async function prefetchNavigationTargetWithDiagnostics(
   }
 }
 
-export { normalizeNavigationPrefetchTarget, resolvePredictivePrefetchTargets };
+export { normalizeNavigationPrefetchTarget };

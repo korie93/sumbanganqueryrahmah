@@ -48,7 +48,7 @@ async function installFixture(page: Page, baseURL: string | undefined, role: Rol
     if (route.request().method() !== "GET") return route.fallback();
     return route.fulfill({ status: 200, json: ["Customer Name", "Card No"], headers: { "Cache-Control": "no-store" } });
   });
-  // The unchanged superuser Settings hover prefetches its permitted Backup list.
+  // Hover/focus on the superuser Backup item prefetches its permitted list.
   // Fulfill that real read contract, not arbitrary APIs or mutation requests.
   await page.context().route(`${new URL(baseURL!).origin}/api/backups**`, (route) => {
     if (role !== "superuser" || route.request().method() !== "GET"

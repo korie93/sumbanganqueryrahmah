@@ -1,16 +1,4 @@
-import { getVisibleHomeItems, getVisibleNavItems, resolveNavigationTarget } from "@/app/navigation";
 import { parseMonitorSectionFromPageInput } from "@/app/routing";
-import type { MonitorSection, TabVisibility } from "@/app/types";
-
-type PredictivePrefetchArgs = {
-  currentPage: string;
-  featureLockdown: boolean;
-  monitorSection?: MonitorSection | null | undefined;
-  tabVisibility: TabVisibility;
-  tabVisibilityLoaded: boolean;
-  mustChangePassword?: boolean | undefined;
-  userRole: string;
-};
 
 export type NavigationPrefetchTarget =
   | "home"
@@ -27,61 +15,6 @@ export type NavigationPrefetchTarget =
   | "settings"
   | "backup"
   | "ai";
-
-const NAVIGATION_PREFETCH_PRIORITY: NavigationPrefetchTarget[] = [
-  "general-search",
-  "collection-report",
-  "viewer",
-  "saved",
-  "dashboard",
-  "settings",
-  "backup",
-  "import",
-  "activity",
-  "monitor",
-  "analysis",
-  "audit-logs",
-  "ai",
-];
-
-const MAX_PREDICTIVE_PREFETCH_TARGETS = 4;
-
-function dedupeTargets(targets: Array<NavigationPrefetchTarget | null>): NavigationPrefetchTarget[] {
-  const seen = new Set<NavigationPrefetchTarget>();
-  return targets.filter((target): target is NavigationPrefetchTarget => {
-    if (!target || seen.has(target)) {
-      return false;
-    }
-    seen.add(target);
-    return true;
-  });
-}
-
-function getNavigationPriority(target: NavigationPrefetchTarget) {
-  const index = NAVIGATION_PREFETCH_PRIORITY.indexOf(target);
-  return index === -1 ? NAVIGATION_PREFETCH_PRIORITY.length : index;
-}
-
-function resolveCurrentNavigationTarget(
-  currentPage: string,
-  monitorSection?: MonitorSection | null | undefined,
-): NavigationPrefetchTarget | null {
-  if (currentPage === "monitor") {
-    if (monitorSection === "audit") {
-      return "audit-logs";
-    }
-    if (
-      monitorSection === "dashboard" ||
-      monitorSection === "activity" ||
-      monitorSection === "monitor" ||
-      monitorSection === "analysis"
-    ) {
-      return monitorSection;
-    }
-  }
-
-  return normalizeNavigationPrefetchTarget(currentPage);
-}
 
 export function normalizeNavigationPrefetchTarget(target: string): NavigationPrefetchTarget | null {
   const normalizedTarget = String(target || "").trim();
@@ -137,32 +70,4 @@ export function normalizeNavigationPrefetchTarget(target: string): NavigationPre
   }
 
   return null;
-}
-
-export function resolvePredictivePrefetchTargets({
-  currentPage,
-  featureLockdown,
-  monitorSection,
-  tabVisibility,
-  tabVisibilityLoaded,
-  mustChangePassword,
-  userRole,
-}: PredictivePrefetchArgs): NavigationPrefetchTarget[] {
-  if (!tabVisibilityLoaded || mustChangePassword) return [];
-
-  const prioritizedSourceIds = currentPage === "home" && !featureLockdown
-    ? getVisibleHomeItems(userRole, tabVisibility).map((item) => item.id)
-    : getVisibleNavItems(userRole, tabVisibility, featureLockdown)
-      .map((item) => item.id)
-      .filter((itemId) => itemId !== "home");
-
-  // Priorities order authorized destinations; they must never add permissions.
-  const normalizedCandidates = dedupeTargets(prioritizedSourceIds.map((itemId) =>
-    normalizeNavigationPrefetchTarget(resolveNavigationTarget(itemId))));
-  const currentTarget = resolveCurrentNavigationTarget(currentPage, monitorSection);
-
-  return normalizedCandidates
-    .filter((target) => target !== currentTarget)
-    .sort((left, right) => getNavigationPriority(left) - getNavigationPriority(right))
-    .slice(0, MAX_PREDICTIVE_PREFETCH_TARGETS);
 }
