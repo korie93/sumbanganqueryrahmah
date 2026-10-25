@@ -4,6 +4,10 @@ import {
   formatCspHashArray,
   generateReactRemoveScrollBarStyleHashes,
 } from "./lib/react-remove-scroll-csp-hashes.mjs";
+import {
+  extractRadixViewportStyleHashes,
+  generateRadixViewportStyleHashes,
+} from "./lib/radix-viewport-csp-hashes.mjs";
 
 const sourcePath = path.resolve(process.cwd(), "server", "internal", "local-http-security.ts");
 const writeMode = process.argv.includes("--write");
@@ -27,6 +31,13 @@ function extractExistingHashes(source) {
 }
 
 const source = await readFile(sourcePath, "utf8");
+const approvedViewportHashes = extractRadixViewportStyleHashes(source);
+const viewportStyles = generateRadixViewportStyleHashes();
+if (JSON.stringify(approvedViewportHashes) !== JSON.stringify(viewportStyles.hashes)) {
+  console.error("Radix viewport CSP hashes differ from the installed styles. Review their exact bytes before updating the allowlist.");
+  process.exit(1);
+}
+
 const existing = extractExistingHashes(source);
 const generated = generateReactRemoveScrollBarStyleHashes();
 

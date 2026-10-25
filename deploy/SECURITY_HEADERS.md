@@ -25,6 +25,13 @@ policy.
 | `Cross-Origin-Resource-Policy` | `same-origin` | Express/Helmet | Restricts cross-origin resource embedding. |
 | `Report-To` / `Reporting-Endpoints` | `/api/csp-report` | Express app | Receives CSP violation reports. |
 
+Radix Select and ScrollArea inject fixed viewport CSS to hide native scrollbars.
+`RADIX_VIEWPORT_STYLE_HASHES` approves only those two exact styles, alongside the
+existing scroll-lock hashes. `npm run verify:csp-hashes` verifies their installed
+dependency bytes; changed viewport CSS requires explicit review. `--write` updates
+only the existing scroll-lock list and cannot approve a new viewport style.
+Script restrictions, `style-src-attr 'none'`, and Trusted Types stay in effect.
+
 ## Nginx Responsibilities
 
 - Preserve upstream security headers without overriding them.

@@ -24,7 +24,9 @@ export function sanitizeWebVitalTelemetryPath(pathname: string) {
 export const webVitalTelemetrySchema = z.object({
   name: z.enum(WEB_VITAL_NAMES),
   value: z.number().finite().min(0).max(120_000),
-  delta: z.number().finite().min(0).max(120_000),
+  // INP's percentile estimate can improve between reports, producing a negative
+  // difference from its previous value. Keep both directions finite and bounded.
+  delta: z.number().finite().min(-120_000).max(120_000),
   rating: z.enum(WEB_VITAL_RATINGS),
   id: z.string().trim().min(1).max(160),
   path: z.string().trim().min(1).max(512).regex(/^\//, "Path must start with '/'."),

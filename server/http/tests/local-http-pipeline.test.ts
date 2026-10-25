@@ -107,6 +107,9 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(csp, /style-src 'self'/i);
     assert.match(csp, /style-src-elem 'self'/i);
     assert.match(csp, /style-src-elem[^;]*sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n\/auuOAhh2t92YvuXo=/i);
+    const styleElements = csp.split(";").find((directive) => directive.trim().startsWith("style-src-elem ")) || "";
+    assert.ok(styleElements.includes("'sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='"));
+    assert.ok(styleElements.includes("'sha256-vGQdhYJbTuF+M8iCn1IZCHpdkiICocWHDq4qnQF4Rjw='"));
     assert.match(csp, /style-src-attr 'none'/i);
     assert.match(csp, /require-trusted-types-for 'script'/i);
     assert.match(csp, new RegExp(`trusted-types ${SQR_ALLOWED_TRUSTED_TYPES_POLICY_NAMES.join(" ")}`, "i"));

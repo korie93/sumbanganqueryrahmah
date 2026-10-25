@@ -46,6 +46,13 @@ export const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [
   "'sha256-gxdR88Pf6XnTPKFwHTuQk3EIoquqtZWGvJ9PhLdJg20='",
 ];
 
+// Radix Select.Viewport and ScrollArea.Viewport emit these fixed scrollbar
+// styles. Verify their exact dependency bytes alongside the scroll-lock hashes.
+export const RADIX_VIEWPORT_STYLE_HASHES = [
+  "'sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='",
+  "'sha256-vGQdhYJbTuF+M8iCn1IZCHpdkiICocWHDq4qnQF4Rjw='",
+];
+
 const PERMISSIONS_POLICY_HEADER = [
   "accelerometer=()",
   "camera=()",
@@ -90,10 +97,9 @@ export function registerLocalHttpSecurityHeaders(app: Express) {
         scriptSrc: ["'self'"],
         scriptSrcAttr: ["'none'"],
         styleSrc: ["'self'"],
-        // Radix modal/dropdown primitives use react-remove-scroll-bar to
-        // inject deterministic scroll-lock CSS. Keep CSP strict by allowing
-        // only those hashes instead of reopening style-src-elem unsafe-inline.
-        styleSrcElem: ["'self'", ...REACT_REMOVE_SCROLL_BAR_STYLE_HASHES],
+        // Radix primitives emit deterministic scroll-lock and viewport CSS.
+        // Approve only their verified bytes; keep arbitrary inline CSS blocked.
+        styleSrcElem: ["'self'", ...REACT_REMOVE_SCROLL_BAR_STYLE_HASHES, ...RADIX_VIEWPORT_STYLE_HASHES],
         styleSrcAttr: ["'none'"],
         trustedTypes: [...SQR_ALLOWED_TRUSTED_TYPES_POLICY_NAMES],
         "require-trusted-types-for": ["'script'"],

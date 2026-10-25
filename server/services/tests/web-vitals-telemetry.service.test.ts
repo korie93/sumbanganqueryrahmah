@@ -79,6 +79,38 @@ test("WebVitalsTelemetryService builds page summaries with p75 ratings", (t) => 
   assert.equal(authenticatedInp?.p75Rating, "good");
 });
 
+test("WebVitalsTelemetryService preserves signed INP deltas while summarizing the measured value", (t) => {
+  const nowMs = Date.parse("2026-10-25T08:00:00.000Z");
+  t.mock.method(Date, "now", () => nowMs);
+  const infoLogs: unknown[] = [];
+  const service = new WebVitalsTelemetryService({
+    logger: {
+      info(_message, meta) { infoLogs.push(meta); },
+      warn() {},
+    },
+  });
+
+  service.record({
+    name: "INP",
+    value: 184,
+    delta: -96,
+    rating: "good",
+    id: "inp-correction",
+    path: "/login",
+    pageType: "public",
+    ts: new Date(nowMs).toISOString(),
+  });
+
+  const overview = service.getOverview(nowMs);
+  const inp = overview.pageSummaries.find((summary) => summary.pageType === "public")
+    ?.metrics.find((metric) => metric.name === "INP");
+  assert.equal(overview.totalSamples, 1);
+  assert.equal(inp?.latestValue, 184);
+  assert.equal(inp?.p75, 184);
+  assert.equal(inp?.p75Rating, "good");
+  assert.equal((infoLogs[0] as { delta?: number } | undefined)?.delta, -96);
+});
+
 test("WebVitalsTelemetryService prunes stale samples outside the retention window", (t) => {
   const overviewNowMs = Date.parse("2026-04-04T09:01:30.000Z");
   t.mock.method(Date, "now", () => overviewNowMs);

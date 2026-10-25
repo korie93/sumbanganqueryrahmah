@@ -27,6 +27,7 @@ import {
 } from "./http-test-utils";
 import type { Request, Response } from "express";
 import { createTelemetryBucketStore } from "../telemetry-drop-buckets";
+import { buildWebVitalPayload } from "../../../client/src/lib/web-vitals";
 
 function createTelemetryRouteHarness(options: {
   clientErrorDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["clientErrorDropGuard"];
@@ -475,6 +476,63 @@ test("POST /api/telemetry/web-vitals accepts a valid web vitals payload", async 
     assert.equal(recordedPayloads.length, 1);
     assert.equal(recordedPayloads[0]?.name, "LCP");
     assert.equal(recordedPayloads[0]?.path, "/login");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/telemetry/web-vitals accepts a browser INP improvement without clamping its negative delta", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  const browserPayload = buildWebVitalPayload({
+    name: "INP",
+    value: 184,
+    delta: -96,
+    rating: "good",
+    id: "inp-correction",
+    navigationType: "navigate",
+  }, {
+    pathname: "/login?token=not-telemetry",
+    visibilityState: "hidden",
+    capturedAt: "2026-10-25T08:00:00.000Z",
+  });
+
+  try {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(browserPayload),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(await response.text(), "");
+    assert.deepEqual(recordedPayloads, [browserPayload]);
+    assert.equal(recordedPayloads[0]?.value, 184);
+    assert.equal(recordedPayloads[0]?.delta, -96);
+    assert.equal(recordedPayloads[0]?.path, "/login");
+    assert.equal(JSON.stringify(recordedPayloads).includes("not-telemetry"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/telemetry/web-vitals keeps signed deltas bounded and metric values nonnegative", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (const invalid of [{ delta: -120_000.1 }, { delta: 120_000.1 }, { value: -0.1 }]) {
+      const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createValidWebVitalsPayload({ name: "INP", ...invalid })),
+      });
+
+      assert.equal(response.status, 400, JSON.stringify(invalid));
+      const payload = await response.json();
+      assert.equal(payload.error.code, "REQUEST_BODY_INVALID");
+    }
+    assert.equal(recordedPayloads.length, 0);
   } finally {
     await stopTestServer(server);
   }

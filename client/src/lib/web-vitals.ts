@@ -1,6 +1,7 @@
 import type { Metric } from "web-vitals";
 import {
   sanitizeWebVitalTelemetryPath,
+  webVitalTelemetrySchema,
   type WebVitalTelemetryPayload,
 } from "@shared/web-vitals";
 import { createClientRandomId } from "@/lib/secure-id";
@@ -76,8 +77,12 @@ export function buildWebVitalPayload(
   };
 }
 
-function sendWebVitalPayload(payload: WebVitalTelemetryPayload) {
-  const body = JSON.stringify(payload);
+export function sendWebVitalPayload(payload: WebVitalTelemetryPayload) {
+  // Browser measurements can exceed our bounded telemetry contract. Drop them
+  // before either transport, without clamping or changing the reported value.
+  const parsed = webVitalTelemetrySchema.safeParse(payload);
+  if (!parsed.success) return;
+  const body = JSON.stringify(parsed.data);
 
   try {
     if (typeof navigator.sendBeacon === "function") {
