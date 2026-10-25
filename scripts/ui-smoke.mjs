@@ -4,6 +4,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 import { closeKeyboardMenu, openKeyboardMenu } from "./lib/ui-keyboard-menu.mjs";
+import { attachSmokeWebSocketReadiness } from "./lib/ui-smoke-websocket-readiness.mjs";
+import { cleanupSmokeSession } from "./lib/ui-smoke-session-cleanup.mjs";
 
 const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const username = process.env.SMOKE_TEST_USERNAME || "";
@@ -20,6 +22,7 @@ const SMOKE_PHASE_TIMEOUT_MS = Number(process.env.SMOKE_PHASE_TIMEOUT_MS || 60_0
 const SMOKE_CLEANUP_TIMEOUT_MS = Number(process.env.SMOKE_CLEANUP_TIMEOUT_MS || 15_000);
 const SMOKE_TIMEOUT_EXIT_CODE = 124;
 let activeSmokePhase = "browser startup";
+const socketReadinessByPage = new WeakMap();
 
 class SmokeTimeoutError extends Error {
   constructor(message) {
@@ -146,23 +149,38 @@ const waitForSmokeDocumentReady = async (page) => {
   }).catch(() => undefined);
 };
 
+const waitForSmokeSocketReady = async (page) => {
+  const cookieNames = await readCookieNames(page.context());
+  if (cookieNames.has("sqr_auth")) {
+    const readiness = socketReadinessByPage.get(page);
+    assert(readiness, "Authenticated smoke navigation requires WebSocket observation.");
+    await readiness.waitForOpen();
+  }
+};
+
 const navigateForSmoke = async (page, routeOrUrl) => {
   const targetUrl = String(routeOrUrl).startsWith("http")
     ? String(routeOrUrl)
     : `${baseUrl}${routeOrUrl}`;
+  // pagehide must tear down protected subscriptions before releasing tab ownership.
+  // Do not deliberately unload that shell while its /ws handshake is pending.
+  await waitForSmokeSocketReady(page);
   await page.goto(targetUrl, {
     timeout: SMOKE_NAVIGATION_TIMEOUT_MS,
     waitUntil: "domcontentloaded",
   });
   await waitForSmokeDocumentReady(page);
+  await waitForSmokeSocketReady(page);
 };
 
 const reloadForSmoke = async (page) => {
+  await waitForSmokeSocketReady(page);
   await page.reload({
     timeout: SMOKE_NAVIGATION_TIMEOUT_MS,
     waitUntil: "domcontentloaded",
   });
   await waitForSmokeDocumentReady(page);
+  await waitForSmokeSocketReady(page);
 };
 
 const ensureArtifactsDir = async () => {
@@ -3225,6 +3243,8 @@ const run = async () => {
   let traceStarted = false;
   let shouldSaveTrace = false;
   let smokeTimedOut = false;
+  let smokeFailed = false;
+  let socketReadiness = null;
 
   try {
     await withTimeout(async () => {
@@ -3240,6 +3260,8 @@ const run = async () => {
         context = await browser.newContext();
         page = await context.newPage();
         tracker.attach(page);
+        socketReadiness = await attachSmokeWebSocketReadiness({ context, page, baseUrl });
+        socketReadinessByPage.set(page, socketReadiness);
 
         if (artifactsDir) {
           await ensureArtifactsDir();
@@ -3322,6 +3344,7 @@ const run = async () => {
             !(await loginUsernameInput.isVisible().catch(() => false)),
             "login page should be replaced after successful login",
           );
+          await waitForSmokeSocketReady(page);
           tracker.assertClean("login");
           tracker.clear();
         });
@@ -3365,6 +3388,7 @@ const run = async () => {
       }
     }, smokeTotalTimeoutMs, "UI smoke run");
   } catch (error) {
+    smokeFailed = true;
     smokeTimedOut = error instanceof SmokeTimeoutError;
     shouldSaveTrace = Boolean(artifactsDir);
     await withTimeout(
@@ -3380,6 +3404,12 @@ const run = async () => {
     ));
     throw error;
   } finally {
+    // A closed browser leaves its activity session active by design. End only
+    // this smoke context's session so follow-up CI checks can log in normally.
+    if (smokeFailed && context) {
+      await cleanupSmokeSession({ context, baseUrl, timeoutMs: smokeCleanupTimeoutMs })
+        .catch((error) => recordBestEffortFailure("end failed smoke session", error));
+    }
     if (traceStarted && context) {
       if (shouldSaveTrace && artifactsDir) {
         const tracePath = path.join(artifactsDir, "trace.zip");
@@ -3399,6 +3429,14 @@ const run = async () => {
           recordBestEffortFailure("stop smoke trace", error)
         ));
       }
+    }
+    if (socketReadiness) {
+      await withTimeout(
+        () => socketReadiness.dispose(),
+        smokeCleanupTimeoutMs,
+        "detach smoke WebSocket observation",
+      )
+        .catch((error) => recordBestEffortFailure("detach smoke WebSocket observation", error));
     }
     if (browser) {
       await withTimeout(

@@ -17,6 +17,34 @@ test("UI smoke navigation avoids networkidle for authenticated SPA routes", () =
   assert.doesNotMatch(smokeSource, /networkidle/);
 });
 
+test("authenticated document navigation waits for the observed WebSocket handshake", () => {
+  for (const [start, end, operation] of [
+    ["const navigateForSmoke =", "const reloadForSmoke =", "await page.goto("],
+    ["const reloadForSmoke =", "const ensureArtifactsDir =", "await page.reload("],
+  ]) {
+    const flow = smokeSource.slice(smokeSource.indexOf(start), smokeSource.indexOf(end));
+    const navigate = flow.indexOf(operation);
+    assert.ok(navigate > flow.indexOf("await waitForSmokeSocketReady(page)"));
+    assert.ok(flow.lastIndexOf("await waitForSmokeSocketReady(page)") > navigate);
+  }
+  assert.match(smokeSource, /cookieNames\.has\("sqr_auth"\)[\s\S]*?await readiness\.waitForOpen\(\)/);
+  assert.ok(smokeSource.indexOf("await attachSmokeWebSocketReadiness(") < smokeSource.indexOf('runSmokePhase("public login bootstrap"'));
+  const tracker = smokeSource.slice(smokeSource.indexOf("const createTracker ="), smokeSource.indexOf("const checkRoute ="));
+  assert.doesNotMatch(tracker, /WebSocket|CONNECTING|handshake/,
+    "WebSocket warnings must still fail the strict console tracker");
+});
+
+test("failed smoke ends only its own session after evidence capture and before browser close", () => {
+  const run = smokeSource.slice(smokeSource.indexOf("const run = async"));
+  const capture = run.indexOf("captureFailureArtifacts({");
+  const cleanup = run.indexOf("await cleanupSmokeSession({");
+  assert.ok(capture >= 0 && cleanup > capture);
+  assert.ok(run.indexOf("() => browser.close()", cleanup) > cleanup);
+  assert.match(run, /if \(smokeFailed && context\)/);
+  assert.match(run, /smokeFailed = true/);
+  assert.match(run, /end failed smoke session/);
+});
+
 test("desktop smoke verifies the destination heading rather than the hidden mobile breadcrumb", () => {
   const flow = smokeSource.slice(smokeSource.indexOf("const checkDesktopNavbar"), smokeSource.indexOf("const checkKeyboardMenuAccess"));
   assert.match(flow, /locator\("#main-content"\)\.getByRole\("heading", \{ name: "Backup & Restore", exact: true \}\)/);
