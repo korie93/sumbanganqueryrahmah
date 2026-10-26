@@ -107,23 +107,84 @@ test("cleanup reports non-success responses and transport failures without expos
   });
 });
 
-test("cleanup bounds a hanging request and supplies the remaining total deadline to Playwright", { timeout: 5_000 }, async () => {
+test("cleanup bounds a hanging request and supplies the remaining total deadline to Playwright", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  context.mock.method(Date, "now", () => 1_700_000_000_000);
   const harness = createHarness();
   harness.context.request.fetch = async (url, options) => {
     harness.requests.push({ url, options });
     return new Promise(() => {});
   };
-  await assert.rejects(cleanupSmokeSession({ context: harness.context, baseUrl, timeoutMs: 20 }), /timed out/);
+  const rejected = assert.rejects(cleanupSmokeSession({ context: harness.context, baseUrl, timeoutMs: 20 }), /timed out/);
+  await Promise.resolve();
   assert.equal(harness.requests.length, 1);
   assert.ok(harness.requests[0].options.timeout > 0 && harness.requests[0].options.timeout <= 20);
+  context.mock.timers.tick(20);
+  await rejected;
 });
 
-test("a cookie read resolving after the total deadline cannot trigger a delayed logout", { timeout: 5_000 }, async () => {
+test("a cookie read resolving after timeout cannot trigger logout even before the wall-clock deadline", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  context.mock.method(Date, "now", () => 1_700_000_000_000);
   const harness = createHarness();
   let resolveCookies;
   harness.context.cookies = () => new Promise((resolve) => { resolveCookies = resolve; });
-  await assert.rejects(cleanupSmokeSession({ context: harness.context, baseUrl, timeoutMs: 20 }), /timed out/);
+  const rejected = assert.rejects(cleanupSmokeSession({ context: harness.context, baseUrl, timeoutMs: 20 }), /timed out/);
+  context.mock.timers.tick(20);
+  await rejected;
   resolveCookies(activeCookies());
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(harness.requests.length, 0);
+});
+
+test("cookie reads past the deadline cannot log out while the timeout callback is still pending", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 1_700_000_000_000;
+  context.mock.method(Date, "now", () => now);
+  const harness = createHarness();
+  let resolveCookies;
+  harness.context.cookies = () => new Promise((resolve) => { resolveCookies = resolve; });
+  const rejected = assert.rejects(cleanupSmokeSession({ context: harness.context, baseUrl, timeoutMs: 20 }), /timed out/);
+  now += 20;
+  resolveCookies(activeCookies());
+  await rejected;
+  assert.equal(harness.requests.length, 0);
+});
+
+test("an asynchronous cookie read within the deadline retains the remaining request budget", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 1_700_000_000_000;
+  context.mock.method(Date, "now", () => now);
+  const harness = createHarness();
+  let resolveCookies;
+  harness.context.cookies = () => new Promise((resolve) => { resolveCookies = resolve; });
+  const cleanup = cleanupSmokeSession({ context: harness.context, baseUrl, timeoutMs: 20 });
+  now += 7;
+  resolveCookies(activeCookies());
+  assert.deepEqual(await cleanup, { status: "logged-out" });
+  assert.equal(harness.requests.length, 1);
+  assert.equal(harness.requests[0].options.timeout, 13);
+  context.mock.timers.tick(20);
+  assert.equal(harness.requests.length, 1);
+});
+
+test("a successful response arriving after timeout cannot resume the closed cleanup lifecycle", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  context.mock.method(Date, "now", () => 1_700_000_000_000);
+  const harness = createHarness();
+  let resolveResponse;
+  let statusReads = 0;
+  harness.context.request.fetch = (url, options) => {
+    harness.requests.push({ url, options });
+    return new Promise((resolve) => { resolveResponse = resolve; });
+  };
+  const rejected = assert.rejects(cleanupSmokeSession({ context: harness.context, baseUrl, timeoutMs: 20 }), /timed out/);
+  await Promise.resolve();
+  assert.equal(harness.requests.length, 1);
+  context.mock.timers.tick(20);
+  await rejected;
+  resolveResponse({ status() { statusReads += 1; return 200; } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(statusReads, 0);
+  assert.equal(harness.requests.length, 1);
 });

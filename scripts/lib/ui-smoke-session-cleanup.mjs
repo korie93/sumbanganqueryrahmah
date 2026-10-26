@@ -33,6 +33,8 @@ export async function cleanupSmokeSession({ context, baseUrl, timeoutMs = 5_000 
   const deadline = Date.now() + totalTimeoutMs;
   const logoutUrl = `${origin}/api/activity/logout`;
   let deadlineTimer;
+  let cleanupClosed = false;
+  const deadlineExpired = () => cleanupClosed || Date.now() >= deadline;
 
   const cleanup = async () => {
     let cookies;
@@ -41,7 +43,7 @@ export async function cleanupSmokeSession({ context, baseUrl, timeoutMs = 5_000 
     } catch {
       throw new Error("Smoke session cleanup could not read its browser cookies.");
     }
-    if (Date.now() >= deadline) throw cleanupTimeout();
+    if (deadlineExpired()) throw cleanupTimeout();
     const authCookie = cookies.find((cookie) => cookie.name === "sqr_auth" && isLiveCookie(cookie));
     if (!authCookie) return { status: "skipped", reason: "no-auth-cookie" };
 
@@ -53,7 +55,7 @@ export async function cleanupSmokeSession({ context, baseUrl, timeoutMs = 5_000 
     let response;
     try {
       const remainingMs = deadline - Date.now();
-      if (remainingMs <= 0) throw cleanupTimeout();
+      if (cleanupClosed || remainingMs <= 0) throw cleanupTimeout();
       response = await context.request.fetch(logoutUrl, {
         method: "POST",
         headers: {
@@ -68,12 +70,12 @@ export async function cleanupSmokeSession({ context, baseUrl, timeoutMs = 5_000 
         timeout: remainingMs,
       });
     } catch (error) {
-      if (Date.now() >= deadline || error?.name === "TimeoutError") throw cleanupTimeout();
+      if (deadlineExpired() || error?.name === "TimeoutError") throw cleanupTimeout();
       // API errors can contain URLs, tokens or response bodies. Keep the
       // diagnostic static and let the caller retain the original smoke failure.
       throw new Error("Smoke session cleanup request failed.");
     }
-    if (Date.now() >= deadline) throw cleanupTimeout();
+    if (deadlineExpired()) throw cleanupTimeout();
 
     const status = response.status();
     if (status === 401) return { status: "skipped", reason: "unauthenticated" };
@@ -90,10 +92,16 @@ export async function cleanupSmokeSession({ context, baseUrl, timeoutMs = 5_000 
     return await Promise.race([
       cleanup(),
       new Promise((_, reject) => {
-        deadlineTimer = setTimeout(() => reject(cleanupTimeout()), totalTimeoutMs);
+        deadlineTimer = setTimeout(() => {
+          // A timer can fire before the wall clock reaches the deadline. Close
+          // the lifecycle before rejecting so late cookie reads cannot log out.
+          cleanupClosed = true;
+          reject(cleanupTimeout());
+        }, totalTimeoutMs);
       }),
     ]);
   } finally {
+    cleanupClosed = true;
     clearTimeout(deadlineTimer);
   }
 }
