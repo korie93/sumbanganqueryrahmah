@@ -5,6 +5,24 @@ import {
   resolveViewerImmediateExportRows,
 } from "@/pages/viewer/viewer-export-loader";
 
+test("loadViewerPagedExportRows rejects a late final response after cancellation", async () => {
+  const controller = new AbortController();
+  let reads = 0;
+  await assert.rejects(loadViewerPagedExportRows({
+    pageSize: 2,
+    search: "",
+    columnFilters: [],
+    signal: controller.signal,
+    getPage: async () => {
+      reads += 1;
+      controller.abort();
+      // A response can finish even when its transport ignores cancellation.
+      return { rows: [{ jsonDataJsonb: { name: "Late row" } }], page: 1, pageSize: 2, nextCursor: null };
+    },
+  }), { name: "AbortError" });
+  assert.equal(reads, 1);
+});
+
 test("resolveViewerImmediateExportRows prefers selected rows when requested", () => {
   const rows = [
     { __rowId: 0, name: "Alpha" },

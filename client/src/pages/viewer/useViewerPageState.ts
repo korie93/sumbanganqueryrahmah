@@ -268,7 +268,7 @@ export function useViewerPageState({
     debouncedColumnFilters: data.debouncedColumnFilters,
   });
 
-  const pageSizeDisabled = data.loading || data.loadingMore || exportState.exportingExcel || exportState.exportingPdf;
+  const pageSizeDisabled = data.loading || data.loadingMore || exportState.exportBusy;
   const handleRowsPerPageChange = useCallback((nextSize: number) => {
     if (pageSizeDisabled || nextSize === rowsPerPage || !isViewerPageSizeChoice(nextSize)) return;
     clearSelectionState();
@@ -314,6 +314,8 @@ export function useViewerPageState({
     columnFilters: data.columnFilters,
     exportingExcel: exportState.exportingExcel,
     exportingPdf: exportState.exportingPdf,
+    exportBusy: exportState.exportBusy,
+    cancelActiveExport: exportState.cancelActiveExport,
     filteredRows,
     selectedRowIds,
     hasFilteredSubset,

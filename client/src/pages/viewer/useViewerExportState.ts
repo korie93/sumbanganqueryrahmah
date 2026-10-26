@@ -10,6 +10,11 @@ import {
   loadViewerPagedExportRows,
   resolveViewerImmediateExportRows,
 } from "@/pages/viewer/viewer-export-loader";
+import {
+  createViewerExportLifecycle,
+  type ViewerExportKind,
+  type ViewerExportOwner,
+} from "@/pages/viewer/viewer-export-lifecycle";
 
 type UseViewerExportStateOptions = {
   rowsPerPage: number;
@@ -36,37 +41,32 @@ export function useViewerExportState({
   debouncedSearch,
   debouncedColumnFilters,
 }: UseViewerExportStateOptions) {
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
-  const exportInFlightRef = useRef<"excel" | "pdf" | null>(null);
-  const exportAbortControllerRef = useRef<AbortController | null>(null);
+  const [exportingKind, setExportingKind] = useState<ViewerExportKind | null>(null);
+  const [lifecycle] = useState(createViewerExportLifecycle);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      exportAbortControllerRef.current?.abort();
-      exportAbortControllerRef.current = null;
-      exportInFlightRef.current = null;
+      lifecycle.cancel();
     };
-  }, []);
-
-  const resetExportState = useCallback(() => {
-    exportInFlightRef.current = null;
-    if (mountedRef.current) {
-      setExportingExcel(false);
-      setExportingPdf(false);
-    }
-  }, []);
+  }, [lifecycle]);
 
   const cancelActiveExport = useCallback(() => {
-    exportAbortControllerRef.current?.abort();
-    exportAbortControllerRef.current = null;
-    resetExportState();
-  }, [resetExportState]);
+    lifecycle.cancel();
+    if (mountedRef.current) setExportingKind(null);
+  }, [lifecycle]);
 
-  const loadRowsForExport = useCallback(async (exportFiltered = false, exportSelected = false) => {
+  // A new dataset must not inherit an export owned by the previous dataset.
+  useEffect(() => cancelActiveExport, [cancelActiveExport, importId]);
+
+  const loadRowsForExport = useCallback(async (
+    exportFiltered: boolean,
+    exportSelected: boolean,
+    signal: AbortSignal,
+  ) => {
+    if (signal.aborted) throw new DOMException("The operation was aborted.", "AbortError");
     const immediateRows = resolveViewerImmediateExportRows({
       rows,
       filteredRows,
@@ -75,36 +75,22 @@ export function useViewerExportState({
       exportSelected,
     });
 
-    if (exportSelected || exportFiltered) {
+    if (exportSelected || exportFiltered || !importId || totalRows <= rows.length) {
       return immediateRows;
     }
 
-    if (!importId || totalRows <= rows.length) {
-      return immediateRows;
-    }
-
-    exportAbortControllerRef.current?.abort();
-    const controller = new AbortController();
-    exportAbortControllerRef.current = controller;
-
-    try {
-      return await loadViewerPagedExportRows({
-        pageSize: rowsPerPage,
-        search: debouncedSearch,
-        columnFilters: debouncedColumnFilters,
-        signal: controller.signal,
-        getPage: ({ page, cursor, signal, search, columnFilters }) =>
-          getImportData(importId, page, rowsPerPage, search, {
-            signal,
-            cursor,
-            columnFilters,
-          }),
-      });
-    } finally {
-      if (exportAbortControllerRef.current === controller) {
-        exportAbortControllerRef.current = null;
-      }
-    }
+    return loadViewerPagedExportRows({
+      pageSize: rowsPerPage,
+      search: debouncedSearch,
+      columnFilters: debouncedColumnFilters,
+      signal,
+      getPage: ({ page, cursor, signal: pageSignal, search, columnFilters }) =>
+        getImportData(importId, page, rowsPerPage, search, {
+          signal: pageSignal,
+          cursor,
+          columnFilters,
+        }),
+    });
   }, [
     debouncedColumnFilters,
     debouncedSearch,
@@ -116,40 +102,15 @@ export function useViewerExportState({
     totalRows,
   ]);
 
-  const startPdfExport = useCallback(() => {
-    exportInFlightRef.current = "pdf";
-    if (mountedRef.current) {
-      setExportingPdf(true);
-    }
-  }, []);
-
-  const finishPdfExport = useCallback(() => {
-    if (exportInFlightRef.current === "pdf") {
-      exportInFlightRef.current = null;
-      if (mountedRef.current) {
-        setExportingPdf(false);
-      }
-    }
-  }, []);
-
-  const startExcelExport = useCallback(() => {
-    exportInFlightRef.current = "excel";
-    if (mountedRef.current) {
-      setExportingExcel(true);
-    }
-  }, []);
-
-  const finishExcelExport = useCallback(() => {
-    if (exportInFlightRef.current === "excel") {
-      exportInFlightRef.current = null;
-      if (mountedRef.current) {
-        setExportingExcel(false);
-      }
-    }
-  }, []);
-
-  const exportToCSV = useCallback(async (exportFiltered = false, exportSelected = false) => {
-    await runViewerCsvExport({
+  const runExport = useCallback(async (
+    kind: ViewerExportKind,
+    exportFiltered = false,
+    exportSelected = false,
+  ) => {
+    if (!mountedRef.current) return;
+    let owner: ViewerExportOwner | null = null;
+    const shouldContinue = () => mountedRef.current && owner !== null && lifecycle.isCurrent(owner);
+    const exportOptions = {
       headers: visibleHeaders,
       importName,
       exportFiltered,
@@ -157,95 +118,54 @@ export function useViewerExportState({
       totalRows,
       filteredRowsLength: filteredRows.length,
       selectedRowsLength: selectedRowIds.size,
-      exportingExcel,
-      exportingPdf,
-      isAnotherExportInFlight: exportInFlightRef.current !== null,
-      loadRows: loadRowsForExport,
-    });
+      exportingExcel: exportingKind === "excel",
+      exportingPdf: exportingKind === "pdf",
+      isAnotherExportInFlight: lifecycle.isBusy(),
+      beforeRun: () => {
+        owner = lifecycle.start(kind);
+        if (!owner) return false;
+        setExportingKind(kind);
+        return true;
+      },
+      afterRun: () => {
+        if (owner && lifecycle.finish(owner) && mountedRef.current) setExportingKind(null);
+      },
+      shouldContinue,
+      loadRows: () => {
+        if (!owner || !shouldContinue()) {
+          return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+        }
+        return loadRowsForExport(exportFiltered, exportSelected, owner.controller.signal);
+      },
+    };
+    const exportAction = kind === "csv" ? runViewerCsvExport
+      : kind === "pdf" ? runViewerPdfExport : runViewerExcelExport;
+    await exportAction(exportOptions);
   }, [
-    exportingExcel,
-    exportingPdf,
+    exportingKind,
     filteredRows.length,
     importName,
+    lifecycle,
     loadRowsForExport,
     selectedRowIds.size,
-    totalRows,
-    visibleHeaders,
-  ]);
-
-  const exportToPDF = useCallback(async (exportFiltered = false, exportSelected = false) => {
-    await runViewerPdfExport({
-      headers: visibleHeaders,
-      importName,
-      exportFiltered,
-      exportSelected,
-      totalRows,
-      filteredRowsLength: filteredRows.length,
-      selectedRowsLength: selectedRowIds.size,
-      exportingExcel,
-      exportingPdf,
-      isAnotherExportInFlight: exportInFlightRef.current !== null,
-      beforeRun: startPdfExport,
-      afterRun: finishPdfExport,
-      loadRows: loadRowsForExport,
-    });
-  }, [
-    exportingExcel,
-    exportingPdf,
-    filteredRows.length,
-    finishPdfExport,
-    importName,
-    loadRowsForExport,
-    selectedRowIds.size,
-    startPdfExport,
-    totalRows,
-    visibleHeaders,
-  ]);
-
-  const exportToExcel = useCallback(async (exportFiltered = false, exportSelected = false) => {
-    await runViewerExcelExport({
-      headers: visibleHeaders,
-      importName,
-      exportFiltered,
-      exportSelected,
-      totalRows,
-      filteredRowsLength: filteredRows.length,
-      selectedRowsLength: selectedRowIds.size,
-      exportingExcel,
-      exportingPdf,
-      isAnotherExportInFlight: exportInFlightRef.current !== null,
-      beforeRun: startExcelExport,
-      afterRun: finishExcelExport,
-      loadRows: loadRowsForExport,
-    });
-  }, [
-    exportingExcel,
-    exportingPdf,
-    filteredRows.length,
-    finishExcelExport,
-    importName,
-    loadRowsForExport,
-    selectedRowIds.size,
-    startExcelExport,
     totalRows,
     visibleHeaders,
   ]);
 
   const handleExportCsv = useCallback((exportFiltered = false, exportSelected = false) => {
-    void exportToCSV(exportFiltered, exportSelected);
-  }, [exportToCSV]);
-
+    void runExport("csv", exportFiltered, exportSelected);
+  }, [runExport]);
   const handleExportPdf = useCallback((exportFiltered = false, exportSelected = false) => {
-    void exportToPDF(exportFiltered, exportSelected);
-  }, [exportToPDF]);
-
+    void runExport("pdf", exportFiltered, exportSelected);
+  }, [runExport]);
   const handleExportExcel = useCallback((exportFiltered = false, exportSelected = false) => {
-    void exportToExcel(exportFiltered, exportSelected);
-  }, [exportToExcel]);
+    void runExport("excel", exportFiltered, exportSelected);
+  }, [runExport]);
 
   return {
-    exportingExcel,
-    exportingPdf,
+    exportBusy: exportingKind !== null,
+    exportingExcel: exportingKind === "excel",
+    exportingPdf: exportingKind === "pdf",
     cancelActiveExport,
     handleExportCsv,
     handleExportPdf,

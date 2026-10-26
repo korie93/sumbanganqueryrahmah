@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatestRef } from "@/hooks/use-latest-ref";
+import { logClientWarning } from "@/lib/client-logger";
 import {
   resolveUseSystemMetricsOptions,
   type UseSystemMetricsOptions,
@@ -94,6 +95,7 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
     [],
   );
   const mountedRef = useRef(true);
+  const lifecycleRef = useRef(0);
   const inFlightRef = useRef(false);
   const pendingPollRef = useRef<SystemMetricsPendingPoll | null>(null);
   const pollControllerRef = useRef<AbortController | null>(null);
@@ -156,6 +158,7 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      lifecycleRef.current += 1;
       inFlightRef.current = false;
       pendingPollRef.current = null;
       if (scheduledPollRef.current !== null) {
@@ -186,75 +189,90 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
         return;
       }
 
+      clearScheduledPoll();
+      const lifecycle = lifecycleRef.current;
       let nextForceDetailed = forceDetailed;
 
-      while (mountedRef.current) {
-        inFlightRef.current = true;
-        const controller = new AbortController();
-        pollControllerRef.current = controller;
-        const currentState = pollingStateRef.current;
-        const currentOptions = optionsRef.current;
-        const pollCount = pollCycleRef.current;
-        pollCycleRef.current += 1;
+      try {
+        while (mountedRef.current && lifecycleRef.current === lifecycle) {
+          inFlightRef.current = true;
+          const controller = new AbortController();
+          pollControllerRef.current = controller;
+          const currentState = pollingStateRef.current;
+          const currentOptions = optionsRef.current;
+          const pollCount = pollCycleRef.current;
+          pollCycleRef.current += 1;
 
-        try {
-          const result = await pollSystemMetricsOnce(
-            currentState,
-            {
-              hidden: visibilityHiddenRef.current,
-              forceDetailed: nextForceDetailed,
-              pollCount,
-              ...currentOptions,
-            },
-            controller.signal,
-          );
+          try {
+            const result = await pollSystemMetricsOnce(
+              currentState,
+              {
+                hidden: visibilityHiddenRef.current,
+                forceDetailed: nextForceDetailed,
+                pollCount,
+                ...currentOptions,
+              },
+              controller.signal,
+            );
 
-          if (controller.signal.aborted || !mountedRef.current) {
+            if (controller.signal.aborted || !mountedRef.current || lifecycleRef.current !== lifecycle) {
+              return;
+            }
+
+            const { nextState } = result;
+            setSnapshot(nextState.snapshot);
+            setHistory(nextState.history);
+            setAlerts(nextState.alerts);
+            setAlertsPagination(nextState.alertsPagination);
+            setAlertHistory(nextState.alertHistory);
+            setAlertHistoryPagination(nextState.alertHistoryPagination);
+            setIntelligence(nextState.intelligence);
+            setWebVitalsOverview(nextState.webVitalsOverview);
+            setEndpointState(nextState.endpointState);
+
+            if (result.lastUpdated !== null) {
+              setLastUpdated((previous) =>
+                previous === result.lastUpdated ? previous : result.lastUpdated,
+              );
+            }
+          } finally {
+            if (pollControllerRef.current === controller) {
+              pollControllerRef.current = null;
+              inFlightRef.current = false;
+              if (mountedRef.current && lifecycleRef.current === lifecycle) {
+                setIsLoading(false);
+              }
+            }
+          }
+
+          const pendingPoll = pendingPollRef.current;
+          pendingPollRef.current = null;
+          if (!pendingPoll) {
             return;
           }
 
-          const { nextState } = result;
-          setSnapshot(nextState.snapshot);
-          setHistory(nextState.history);
-          setAlerts(nextState.alerts);
-          setAlertsPagination(nextState.alertsPagination);
-          setAlertHistory(nextState.alertHistory);
-          setAlertHistoryPagination(nextState.alertHistoryPagination);
-          setIntelligence(nextState.intelligence);
-          setWebVitalsOverview(nextState.webVitalsOverview);
-          setEndpointState(nextState.endpointState);
-
-          if (result.lastUpdated !== null) {
-            setLastUpdated((previous) =>
-              previous === result.lastUpdated ? previous : result.lastUpdated,
-            );
-          }
-        } finally {
-          if (pollControllerRef.current === controller) {
-            pollControllerRef.current = null;
-          }
-          inFlightRef.current = false;
-          if (mountedRef.current) {
-            setIsLoading(false);
-          }
+          nextForceDetailed = pendingPoll.forceDetailed;
         }
-
-        const pendingPoll = pendingPollRef.current;
-        pendingPollRef.current = null;
-        if (!pendingPoll) {
-          return;
+      } catch (error) {
+        if (mountedRef.current && lifecycleRef.current === lifecycle) {
+          pendingPollRef.current = null;
+          logClientWarning("System metrics poll failed", error, { event: "system_metrics_poll_failed" });
         }
-
-        nextForceDetailed = pendingPoll.forceDetailed;
+      } finally {
+        // The owner arms one timer only after its request and queued refreshes
+        // settle. Queued callers and disposed StrictMode owners must not arm it.
+        if (mountedRef.current && lifecycleRef.current === lifecycle) {
+          scheduleNextPollRef.current?.();
+        }
       }
     },
-    [optionsRef, pollingStateRef],
+    [clearScheduledPoll, optionsRef, pollingStateRef],
   );
 
   useEffect(() => {
     const scheduleNextPoll = () => {
       clearScheduledPoll();
-      if (!mountedRef.current) {
+      if (!mountedRef.current || inFlightRef.current) {
         return;
       }
 
@@ -264,20 +282,12 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
       });
 
       scheduledPollRef.current = window.setTimeout(() => {
+        scheduledPollRef.current = null;
         void pollMetrics();
       }, delay);
     };
 
     scheduleNextPollRef.current = scheduleNextPoll;
-
-    const runPoll = async (forceDetailed = false) => {
-      await pollMetrics({ forceDetailed });
-      if (!mountedRef.current) {
-        return;
-      }
-
-      scheduleNextPoll();
-    };
 
     const handleVisibilityChange = () => {
       visibilityHiddenRef.current = document.visibilityState === "hidden";
@@ -288,10 +298,10 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
         return;
       }
 
-      void runPoll(true);
+      void pollMetrics({ forceDetailed: true });
     };
 
-    void runPoll(true);
+    void pollMetrics({ forceDetailed: true });
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibilityChange);
     }
@@ -308,7 +318,6 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
   const refreshNow = useCallback(async () => {
     clearScheduledPoll();
     await pollMetrics({ forceDetailed: true });
-    scheduleNextPollRef.current?.();
   }, [clearScheduledPoll, pollMetrics]);
 
   useEffect(() => {

@@ -26,8 +26,9 @@ type ExecuteViewerExportOptions = {
   isAnotherExportInFlight: boolean;
   loadRows: (exportFiltered?: boolean, exportSelected?: boolean) => Promise<DataRowWithId[]>;
   performExport: (rows: DataRowWithId[]) => Promise<void> | void;
-  beforeRun?: () => void;
+  beforeRun?: () => void | boolean;
   afterRun?: () => void;
+  shouldContinue?: () => boolean;
 };
 
 type RunViewerNamedExportOptions = {
@@ -42,10 +43,11 @@ type RunViewerNamedExportOptions = {
   loadRows: (exportFiltered?: boolean, exportSelected?: boolean) => Promise<DataRowWithId[]>;
   exportFiltered?: boolean;
   exportSelected?: boolean;
+  shouldContinue?: () => boolean;
 };
 
 type RunViewerManagedExportOptions = RunViewerNamedExportOptions & {
-  beforeRun: () => void;
+  beforeRun: () => void | boolean;
   afterRun: () => void;
 };
 
@@ -63,6 +65,7 @@ export async function executeViewerExport({
   performExport,
   beforeRun,
   afterRun,
+  shouldContinue = () => true,
 }: ExecuteViewerExportOptions) {
   const blockReason = resolveViewerExportBlockReason({
     totalRows,
@@ -76,15 +79,15 @@ export async function executeViewerExport({
   if (blockReason === "busy" || isAnotherExportInFlight) return;
   if (blockReason === "no_data") return;
 
-  beforeRun?.();
+  if (beforeRun?.() === false) return;
 
   try {
     const dataToExport = await loadRows(exportFiltered, exportSelected);
-    if (dataToExport.length === 0) return;
+    if (!shouldContinue() || dataToExport.length === 0) return;
 
     await performExport(dataToExport);
   } catch (exportError) {
-    if (isAbortError(exportError)) {
+    if (!shouldContinue() || isAbortError(exportError)) {
       return;
     }
 
@@ -111,7 +114,10 @@ export async function runViewerCsvExport({
   loadRows,
   exportFiltered = false,
   exportSelected = false,
-}: RunViewerNamedExportOptions) {
+  beforeRun,
+  afterRun,
+  shouldContinue = () => true,
+}: RunViewerManagedExportOptions) {
   await executeViewerExport({
     kind: "CSV",
     exportFiltered,
@@ -122,9 +128,13 @@ export async function runViewerCsvExport({
     exportingExcel,
     exportingPdf,
     isAnotherExportInFlight,
+    beforeRun,
+    afterRun,
+    shouldContinue,
     loadRows,
     performExport: async (rowsToExport) => {
       const { exportViewerRowsToCsv } = await loadViewerExportModule();
+      if (!shouldContinue()) return;
       exportViewerRowsToCsv({
         headers,
         rows: rowsToExport,
@@ -148,6 +158,7 @@ export async function runViewerPdfExport({
   loadRows,
   beforeRun,
   afterRun,
+  shouldContinue = () => true,
   exportFiltered = false,
   exportSelected = false,
 }: RunViewerManagedExportOptions) {
@@ -163,15 +174,18 @@ export async function runViewerPdfExport({
     isAnotherExportInFlight,
     beforeRun,
     afterRun,
+    shouldContinue,
     loadRows,
     performExport: async (rowsToExport) => {
       const { exportViewerRowsToPdf } = await loadViewerExportModule();
+      if (!shouldContinue()) return;
       return exportViewerRowsToPdf({
         headers,
         rows: rowsToExport,
         importName,
         exportFiltered,
         exportSelected,
+        shouldContinue,
       });
     },
   });
@@ -189,6 +203,7 @@ export async function runViewerExcelExport({
   loadRows,
   beforeRun,
   afterRun,
+  shouldContinue = () => true,
   exportFiltered = false,
   exportSelected = false,
 }: RunViewerManagedExportOptions) {
@@ -204,15 +219,18 @@ export async function runViewerExcelExport({
     isAnotherExportInFlight,
     beforeRun,
     afterRun,
+    shouldContinue,
     loadRows,
     performExport: async (rowsToExport) => {
       const { exportViewerRowsToExcel } = await loadViewerExportModule();
+      if (!shouldContinue()) return;
       return exportViewerRowsToExcel({
         headers,
         rows: rowsToExport,
         importName,
         exportFiltered,
         exportSelected,
+        shouldContinue,
       });
     },
   });

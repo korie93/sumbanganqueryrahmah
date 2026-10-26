@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FileText, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,6 +105,7 @@ type ReceiptImagePreviewProps = {
 
 const RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX = 960;
 const RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX = 1_280;
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function cleanupReceiptImagePreviewElement(image: Pick<HTMLImageElement, "removeAttribute">): void {
   image.removeAttribute("src");
@@ -145,7 +146,9 @@ function ReceiptImagePreview({ source, alt, zoomValue, rotationDegrees, onRetry 
     return () => observer.disconnect();
   }, [naturalSize, rotationDegrees, status, zoomValue]);
 
-  useEffect(() => {
+  // Clear the source before React removes the image from the document, while
+  // keeping setup symmetric so StrictMode replay restores the active source.
+  useClientLayoutEffect(() => {
     const image = imageRef.current;
     image?.setAttribute("src", source);
     return () => {

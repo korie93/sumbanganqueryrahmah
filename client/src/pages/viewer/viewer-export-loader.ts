@@ -68,6 +68,7 @@ export async function loadViewerPagedExportRows({
       search,
       columnFilters,
     });
+    if (signal.aborted) throw createAbortError();
     const normalizedPage = normalizeViewerPageResult(response ?? {}, pageToLoad, pageSize);
 
     if (normalizedPage.rows.length === 0) {

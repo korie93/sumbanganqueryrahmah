@@ -11,27 +11,29 @@ test("viewer export state cancels and resets active exports", () => {
   assert.match(source, /const mountedRef = useRef\(true\);/);
   assert.match(
     source,
-    /return \(\) => \{\s*mountedRef\.current = false;\s*exportAbortControllerRef\.current\?\.abort\(\);\s*exportAbortControllerRef\.current = null;\s*exportInFlightRef\.current = null;\s*\};/s,
+    /return \(\) => \{\s*mountedRef\.current = false;\s*lifecycle\.cancel\(\);\s*\};/s,
   );
   assert.match(
     source,
-    /const resetExportState = useCallback\(\(\) => \{\s*exportInFlightRef\.current = null;\s*if \(mountedRef\.current\) \{\s*setExportingExcel\(false\);\s*setExportingPdf\(false\);/s,
+    /const cancelActiveExport = useCallback\(\(\) => \{\s*lifecycle\.cancel\(\);\s*if \(mountedRef\.current\) setExportingKind\(null\);/s,
   );
   assert.match(
     source,
-    /const cancelActiveExport = useCallback\(\(\) => \{\s*exportAbortControllerRef\.current\?\.abort\(\);\s*exportAbortControllerRef\.current = null;\s*resetExportState\(\);/s,
+    /useEffect\(\(\) => cancelActiveExport, \[cancelActiveExport, importId\]\);/,
   );
 });
 
 test("viewer export finalizers only close the matching active export", () => {
   assert.match(
     source,
-    /const finishPdfExport = useCallback\(\(\) => \{\s*if \(exportInFlightRef\.current === "pdf"\) \{\s*exportInFlightRef\.current = null;\s*if \(mountedRef\.current\) \{\s*setExportingPdf\(false\);/s,
+    /beforeRun: \(\) => \{\s*owner = lifecycle\.start\(kind\);\s*if \(!owner\) return false;/s,
   );
   assert.match(
     source,
-    /const finishExcelExport = useCallback\(\(\) => \{\s*if \(exportInFlightRef\.current === "excel"\) \{\s*exportInFlightRef\.current = null;\s*if \(mountedRef\.current\) \{\s*setExportingExcel\(false\);/s,
+    /afterRun: \(\) => \{\s*if \(owner && lifecycle\.finish\(owner\) && mountedRef\.current\) setExportingKind\(null\);/s,
   );
-  assert.doesNotMatch(source, /const finishPdfExport = useCallback\(\(\) => \{\s*exportInFlightRef\.current = null;\s*setExportingPdf\(false\);/s);
-  assert.doesNotMatch(source, /const finishExcelExport = useCallback\(\(\) => \{\s*exportInFlightRef\.current = null;\s*setExportingExcel\(false\);/s);
+  assert.match(
+    source,
+    /const shouldContinue = \(\) => mountedRef\.current && owner !== null && lifecycle\.isCurrent\(owner\);/,
+  );
 });

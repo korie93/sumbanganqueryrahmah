@@ -19,6 +19,7 @@ interface ViewerExportParams {
   importName: string;
   exportFiltered?: boolean;
   exportSelected?: boolean;
+  shouldContinue?: () => boolean;
 }
 
 type WorksheetCell = {
@@ -54,10 +55,12 @@ export async function exportViewerRowsToPdf({
   importName,
   exportFiltered,
   exportSelected,
+  shouldContinue = () => true,
 }: ViewerExportParams) {
   if (rows.length === 0 || headers.length === 0) return;
 
   const { default: jsPDF } = await loadViewerJsPdfModule();
+  if (!shouldContinue()) return;
   const isDark = document.documentElement.classList.contains("dark");
   const useLandscape = headers.length > 4;
   const pdf = new jsPDF({
@@ -221,7 +224,7 @@ export async function exportViewerRowsToPdf({
     drawFooter();
   });
 
-  pdf.save(buildViewerExportFilename(importName, "pdf", exportFiltered, exportSelected));
+  if (shouldContinue()) pdf.save(buildViewerExportFilename(importName, "pdf", exportFiltered, exportSelected));
 }
 
 export async function exportViewerRowsToExcel({
@@ -230,13 +233,14 @@ export async function exportViewerRowsToExcel({
   importName,
   exportFiltered,
   exportSelected,
+  shouldContinue = () => true,
 }: ViewerExportParams) {
   if (rows.length === 0) return;
 
+  const XLSX = await loadViewerXlsxModule();
+  if (!shouldContinue()) return;
   const potentialIcColumns = resolveViewerPotentialIcColumns(headers);
   const worksheetData = buildViewerWorksheetData(headers, rows, potentialIcColumns);
-
-  const XLSX = await loadViewerXlsxModule();
   const worksheet = XLSX.utils.json_to_sheet(worksheetData);
   const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
 
@@ -261,6 +265,7 @@ export async function exportViewerRowsToExcel({
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+  if (!shouldContinue()) return;
   XLSX.writeFile(
     workbook,
     buildViewerExportFilename(importName, "xlsx", exportFiltered, exportSelected),

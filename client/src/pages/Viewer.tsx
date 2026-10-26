@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef } from "react";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import { ViewerContentFallback, ViewerPageHeaderFallback } from "@/pages/viewer/ViewerPageFallbacks";
 import { useViewerPageState } from "@/pages/viewer/useViewerPageState";
+import { Button } from "@/components/ui/button";
 import "@/pages/viewer/ViewerPage.css";
 
 const VIEWER_SCROLL_PADDING_CLASS = "viewer-page-scroll-padding";
@@ -68,13 +69,24 @@ export default function Viewer({
         />
       </Suspense>
 
+      {viewer.exportBusy ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <p role="status" aria-live="polite" data-testid="viewer-export-status" className="text-sm text-muted-foreground">
+            Sedang menyediakan fail…
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={viewer.cancelActiveExport} data-testid="button-cancel-viewer-export">
+            Batal eksport
+          </Button>
+        </div>
+      ) : null}
+
       <Suspense fallback={<ViewerContentFallback />}>
         <ViewerContent
           toolbarActions={
             <Suspense fallback={<div className="viewer-actions-fallback" aria-hidden="true" />}>
               <ViewerPageHeaderActions
                 filterTriggerRef={filterTriggerRef}
-                exportBusy={viewer.exportingPdf || viewer.exportingExcel}
+                exportBusy={viewer.exportBusy}
                 filteredRowsCount={viewer.filteredRows.length}
                 filterCount={viewer.columnFilters.length}
                 hasFilteredSubset={viewer.hasFilteredSubset}
