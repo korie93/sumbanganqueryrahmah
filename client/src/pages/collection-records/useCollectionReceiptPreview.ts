@@ -6,22 +6,11 @@ import {
   useState,
 } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { downloadBlob } from "@/lib/download";
-import {
-  fetchCollectionReceiptBlob,
-  type CollectionRecord,
-} from "@/lib/api";
-import {
-  RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
-  RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
-  optimizeImageBlobForPreview,
-} from "@/pages/collection-records/preview";
+import type { CollectionRecord } from "@/lib/api";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
-import {
-  inferReceiptMimeTypeFromName,
-  resolveReceiptPreviewKind,
-} from "@/pages/collection-records/utils";
+import { resolveReceiptPreviewKind } from "@/pages/collection-records/utils";
 import { parseApiError } from "@/pages/collection/utils";
+import { resolveReceiptImagePreviewProfile } from "./receipt-preview-image-policy";
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException
@@ -35,6 +24,8 @@ export function useCollectionReceiptPreview() {
   const receiptPreviewRequestIdRef = useRef(0);
   const receiptPreviewAbortControllerRef = useRef<AbortController | null>(null);
   const receiptDownloadAbortControllerRef = useRef<AbortController | null>(null);
+  const receiptDetailAbortControllerRef = useRef<AbortController | null>(null);
+  const detailReadyRef = useRef(true);
   const isMountedRef = useRef(true);
 
   const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
@@ -48,6 +39,8 @@ export function useCollectionReceiptPreview() {
   const [receiptPreviewFileName, setReceiptPreviewFileName] = useState("");
   const [receiptPreviewError, setReceiptPreviewError] = useState("");
   const [receiptPreviewRetryAttempt, setReceiptPreviewRetryAttempt] = useState(0);
+  const [receiptPreviewRefining, setReceiptPreviewRefining] = useState(false);
+  const [receiptPreviewRefinementError, setReceiptPreviewRefinementError] = useState("");
 
   const selectedPreviewReceipt = useMemo(() => {
     if (!receiptPreviewRecord) return null;
@@ -96,11 +89,24 @@ export function useCollectionReceiptPreview() {
     }
   }, []);
 
-  const closeReceiptPreview = useCallback(() => {
+  const abortReceiptDetailRequest = useCallback(() => {
+    receiptDetailAbortControllerRef.current?.abort();
+    receiptDetailAbortControllerRef.current = null;
+  }, []);
+
+  const invalidateReceiptPreview = useCallback(() => {
     receiptPreviewRequestIdRef.current += 1;
     abortReceiptPreviewRequest();
-    abortReceiptDownloadRequest();
+    abortReceiptDetailRequest();
     clearReceiptPreviewObjectUrl();
+    detailReadyRef.current = true;
+    setReceiptPreviewRefining(false);
+    setReceiptPreviewRefinementError("");
+  }, [abortReceiptDetailRequest, abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
+
+  const closeReceiptPreview = useCallback(() => {
+    invalidateReceiptPreview();
+    abortReceiptDownloadRequest();
     setReceiptPreviewOpen(false);
     setReceiptPreviewRecord(null);
     setReceiptPreviewReceiptId(null);
@@ -110,24 +116,37 @@ export function useCollectionReceiptPreview() {
     setReceiptPreviewMimeType("");
     setReceiptPreviewFileName("");
     setReceiptPreviewError("");
-  }, [abortReceiptDownloadRequest, abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
+  }, [abortReceiptDownloadRequest, invalidateReceiptPreview]);
 
   const handleViewReceipt = useCallback((record: CollectionRecord, receiptId?: string) => {
     const nextReceiptId = receiptId || record.receipts?.[0]?.id || null;
+    invalidateReceiptPreview();
+    setReceiptPreviewSource("");
+    setReceiptPreviewLoading(true);
     setReceiptPreviewRecord(record);
     setReceiptPreviewReceiptId(nextReceiptId);
+    setReceiptPreviewRetryAttempt((attempt) => attempt + 1);
     setReceiptPreviewOpen(true);
-  }, []);
+  }, [invalidateReceiptPreview]);
+
+  const handleSelectReceipt = useCallback((receiptId: string) => {
+    if (!receiptPreviewRecord || receiptId === selectedPreviewReceipt?.id || !receiptPreviewRecord.receipts?.some((receipt) => receipt.id === receiptId)) return;
+    invalidateReceiptPreview();
+    setReceiptPreviewSource("");
+    setReceiptPreviewLoading(true);
+    setReceiptPreviewReceiptId(receiptId);
+  }, [invalidateReceiptPreview, receiptPreviewRecord, selectedPreviewReceipt?.id]);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       abortReceiptPreviewRequest();
+      abortReceiptDetailRequest();
       abortReceiptDownloadRequest();
       clearReceiptPreviewObjectUrl();
     };
-  }, [abortReceiptDownloadRequest, abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
+  }, [abortReceiptDetailRequest, abortReceiptDownloadRequest, abortReceiptPreviewRequest, clearReceiptPreviewObjectUrl]);
 
   useEffect(() => {
     if (!receiptPreviewOpen || !receiptPreviewRecord) return;
@@ -135,103 +154,65 @@ export function useCollectionReceiptPreview() {
     const activeRequestId = ++receiptPreviewRequestIdRef.current;
     const selectedReceiptId = selectedPreviewReceipt?.id || null;
     abortReceiptPreviewRequest();
+    abortReceiptDetailRequest();
+    const profile = resolveReceiptImagePreviewProfile(typeof window === "undefined" ? 0 : window.innerWidth);
+    detailReadyRef.current = !profile.compact;
+    setReceiptPreviewRefining(false);
+    setReceiptPreviewRefinementError("");
     const controller = new AbortController();
     receiptPreviewAbortControllerRef.current = controller;
+    const isCurrent = () => !controller.signal.aborted && isMountedRef.current &&
+      activeRequestId === receiptPreviewRequestIdRef.current;
 
     const loadPreview = async () => {
       setReceiptPreviewLoading(true);
       setReceiptPreviewError("");
       setReceiptPreviewSource("");
       clearReceiptPreviewObjectUrl();
+      setReceiptPreviewMimeType(selectedPreviewReceipt?.originalMimeType || "");
+      setReceiptPreviewFileName(selectedPreviewReceipt?.originalFileName || "");
 
       try {
-        const { blob, mimeType, fileName } = await fetchCollectionReceiptBlob(
-          receiptPreviewRecord.id,
-          "view",
-          selectedReceiptId,
-          { signal: controller.signal },
-        );
-        if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          activeRequestId !== receiptPreviewRequestIdRef.current
-        ) {
-          return;
-        }
+        const { prepareReceiptPreview } = await import("./receipt-preview-image-detail");
+        if (!isCurrent()) return;
+        const preview = await prepareReceiptPreview({
+          recordId: receiptPreviewRecord.id, receiptId: selectedReceiptId,
+          signal: controller.signal, isCurrent, profile,
+          fallbackMimeType: selectedPreviewReceipt?.originalMimeType || "",
+          fallbackFileName: selectedPreviewReceipt?.originalFileName || "",
+        });
+        if (!preview || !isCurrent()) return;
 
-        const effectiveMimeType =
-          mimeType ||
-          selectedPreviewReceipt?.originalMimeType ||
-          inferReceiptMimeTypeFromName(fileName || "");
-        const previewBlob =
-          effectiveMimeType.startsWith("image/")
-            ? await optimizeImageBlobForPreview(blob, {
-                signal: controller.signal,
-                maxEdge: RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
-                maxPixels: RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
-              })
-            : blob;
-        if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          activeRequestId !== receiptPreviewRequestIdRef.current
-        ) {
-          return;
-        }
-
-        const objectUrl = URL.createObjectURL(previewBlob);
-        if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          activeRequestId !== receiptPreviewRequestIdRef.current
-        ) {
+        const objectUrl = URL.createObjectURL(preview.blob);
+        if (!isCurrent()) {
           URL.revokeObjectURL(objectUrl);
           return;
         }
         receiptPreviewUrlRef.current = objectUrl;
         setReceiptPreviewSource(objectUrl);
-        setReceiptPreviewMimeType(
-          previewBlob.type || effectiveMimeType || "application/octet-stream",
-        );
-        setReceiptPreviewFileName(
-          fileName ||
-            selectedPreviewReceipt?.originalFileName ||
-            "",
-        );
+        setReceiptPreviewMimeType(preview.mimeType);
+        setReceiptPreviewFileName(preview.fileName);
       } catch (error: unknown) {
-        if (
-          controller.signal.aborted ||
-          isAbortError(error) ||
-          !isMountedRef.current ||
-          activeRequestId !== receiptPreviewRequestIdRef.current
-        ) {
-          return;
-        }
-        setReceiptPreviewSource("");
-        setReceiptPreviewMimeType(
-          selectedPreviewReceipt?.originalMimeType ||
-            inferReceiptMimeTypeFromName(selectedPreviewReceipt?.originalFileName || ""),
-        );
-        setReceiptPreviewFileName(
-          selectedPreviewReceipt?.originalFileName || "",
-        );
+        if (!isCurrent() || isAbortError(error)) return;
         setReceiptPreviewError(parseApiError(error));
       } finally {
         if (receiptPreviewAbortControllerRef.current === controller) {
           receiptPreviewAbortControllerRef.current = null;
         }
-        if (
-          !controller.signal.aborted &&
-          isMountedRef.current &&
-          activeRequestId === receiptPreviewRequestIdRef.current
-        ) {
+        if (isCurrent()) {
           setReceiptPreviewLoading(false);
         }
       }
     };
 
     void loadPreview();
+    return () => {
+      controller.abort();
+      if (receiptPreviewAbortControllerRef.current === controller) receiptPreviewAbortControllerRef.current = null;
+      if (receiptPreviewRequestIdRef.current === activeRequestId) abortReceiptDetailRequest();
+    };
   }, [
+    abortReceiptDetailRequest,
     abortReceiptPreviewRequest,
     clearReceiptPreviewObjectUrl,
     receiptPreviewOpen,
@@ -239,6 +220,44 @@ export function useCollectionReceiptPreview() {
     receiptPreviewRetryAttempt,
     selectedPreviewReceipt,
   ]);
+
+  const refineReceiptImage = useCallback(async () => {
+    if (!receiptPreviewOpen || !receiptPreviewRecord || receiptPreviewKind !== "image" ||
+      !receiptPreviewSource || detailReadyRef.current || receiptDetailAbortControllerRef.current) return;
+    const requestId = receiptPreviewRequestIdRef.current;
+    const controller = new AbortController();
+    receiptDetailAbortControllerRef.current = controller;
+    const isCurrent = () => !controller.signal.aborted && isMountedRef.current &&
+      receiptDetailAbortControllerRef.current === controller && receiptPreviewRequestIdRef.current === requestId;
+    setReceiptPreviewRefining(true);
+    setReceiptPreviewRefinementError("");
+    try {
+      const { prepareReceiptImageDetail } = await import("./receipt-preview-image-detail");
+      if (!isCurrent()) return;
+      await prepareReceiptImageDetail({
+        recordId: receiptPreviewRecord.id, receiptId: selectedPreviewReceipt?.id,
+        signal: controller.signal, isCurrent,
+        publish: (nextUrl) => {
+          const previousUrl = receiptPreviewUrlRef.current;
+          receiptPreviewUrlRef.current = nextUrl;
+          detailReadyRef.current = true;
+          setReceiptPreviewSource(nextUrl);
+          if (previousUrl) URL.revokeObjectURL(previousUrl);
+        },
+      });
+    } catch (error: unknown) {
+      if (isCurrent() && !isAbortError(error)) setReceiptPreviewRefinementError("Clearer preview is unavailable. The current receipt remains visible.");
+    } finally {
+      if (isCurrent()) {
+        receiptDetailAbortControllerRef.current = null;
+        setReceiptPreviewRefining(false);
+      }
+    }
+  }, [receiptPreviewKind, receiptPreviewOpen, receiptPreviewRecord, receiptPreviewSource, selectedPreviewReceipt?.id]);
+
+  const handleReceiptImageZoom = useCallback((zoom: number) => {
+    if (Number.isFinite(zoom) && zoom > 1) void refineReceiptImage();
+  }, [refineReceiptImage]);
 
   const retryReceiptPreview = useCallback(() => {
     if (!receiptPreviewOpen || !receiptPreviewRecord || receiptPreviewLoading) return;
@@ -250,46 +269,26 @@ export function useCollectionReceiptPreview() {
     abortReceiptDownloadRequest();
     const controller = new AbortController();
     receiptDownloadAbortControllerRef.current = controller;
+    const isCurrent = () => !controller.signal.aborted && isMountedRef.current && receiptDownloadAbortControllerRef.current === controller;
     setReceiptPreviewDownloading(true);
     try {
-      const { blob, fileName } = await fetchCollectionReceiptBlob(
-        receiptPreviewRecord.id,
-        "download",
-        selectedPreviewReceipt?.id,
-        { signal: controller.signal },
-      );
-      if (
-        controller.signal.aborted ||
-        !isMountedRef.current ||
-        receiptDownloadAbortControllerRef.current !== controller
-      ) {
-        return;
-      }
-      downloadBlob(
-        blob,
-        fileName ||
-          selectedPreviewReceipt?.originalFileName ||
-          "receipt",
-      );
+      const { downloadReceiptOriginal } = await import("./receipt-preview-image-detail");
+      if (!isCurrent()) return;
+      await downloadReceiptOriginal({
+        recordId: receiptPreviewRecord.id, receiptId: selectedPreviewReceipt?.id,
+        signal: controller.signal, isCurrent,
+        fallbackFileName: selectedPreviewReceipt?.originalFileName || "",
+      });
     } catch (error: unknown) {
-      if (
-        isAbortError(error) ||
-        !isMountedRef.current ||
-        receiptDownloadAbortControllerRef.current !== controller
-      ) {
-        return;
-      }
+      if (isAbortError(error) || !isCurrent()) return;
       toast({
         title: "Download Failed",
         description: parseApiError(error),
         variant: "destructive",
       });
     } finally {
-      const isCurrentDownload = receiptDownloadAbortControllerRef.current === controller;
-      if (isCurrentDownload) {
+      if (isCurrent()) {
         receiptDownloadAbortControllerRef.current = null;
-      }
-      if (isMountedRef.current && isCurrentDownload) {
         setReceiptPreviewDownloading(false);
       }
     }
@@ -322,8 +321,12 @@ export function useCollectionReceiptPreview() {
       fileName: receiptPreviewFileName,
       error: receiptPreviewError,
       kind: receiptPreviewKind,
+      refining: receiptPreviewRefining,
+      refinementError: receiptPreviewRefinementError,
+      onImageZoom: handleReceiptImageZoom,
+      onRetryRefinement: () => void refineReceiptImage(),
       onOpenChange: handleReceiptPreviewOpenChange,
-      onSelectReceipt: setReceiptPreviewReceiptId,
+      onSelectReceipt: handleSelectReceipt,
       onDownload: () => void handleDownloadReceipt(),
       onRetry: retryReceiptPreview,
       onClose: closeReceiptPreview,

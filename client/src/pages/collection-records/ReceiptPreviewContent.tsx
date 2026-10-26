@@ -21,6 +21,7 @@ type ReceiptPreviewContentProps = {
   zoomValue: string;
   rotationDegrees: number;
   fileName: string;
+  imageIdentity?: string;
   selectedReceipt: CollectionRecordReceipt | null;
   onRetry?: (() => void) | undefined;
 };
@@ -113,6 +114,8 @@ export function cleanupReceiptImagePreviewElement(image: Pick<HTMLImageElement, 
 
 function ReceiptImagePreview({ source, alt, zoomValue, rotationDegrees, onRetry }: ReceiptImagePreviewProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const latestSourceRef = useRef(source);
+  latestSourceRef.current = source;
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -150,11 +153,11 @@ function ReceiptImagePreview({ source, alt, zoomValue, rotationDegrees, onRetry 
   // keeping setup symmetric so StrictMode replay restores the active source.
   useClientLayoutEffect(() => {
     const image = imageRef.current;
-    image?.setAttribute("src", source);
+    image?.setAttribute("src", latestSourceRef.current);
     return () => {
       if (image) cleanupReceiptImagePreviewElement(image);
     };
-  }, [source]);
+  }, []);
 
   useEffect(() => {
     if (scrollerRef.current) {
@@ -214,6 +217,7 @@ export function ReceiptPreviewContent({
   zoomValue,
   rotationDegrees,
   fileName,
+  imageIdentity,
   selectedReceipt,
   onRetry,
 }: ReceiptPreviewContentProps) {
@@ -243,7 +247,7 @@ export function ReceiptPreviewContent({
           <ReceiptPdfPreviewFrame key={safeInlinePdfSource} source={safeInlinePdfSource} iframePreviewProps={pdfIframePreviewProps} onRetry={onRetry} />
         ) : <ReceiptPreviewMessage message="Inline PDF preview is limited to trusted local receipt sources. Open or download the original below." />
       ) : kind === "image" ? (
-        <ReceiptImagePreview key={safeSource} source={safeSource} alt={fileName || "Receipt preview"} zoomValue={zoomValue} rotationDegrees={rotationDegrees} onRetry={onRetry} />
+        <ReceiptImagePreview key={imageIdentity ?? safeSource} source={safeSource} alt={fileName || "Receipt preview"} zoomValue={zoomValue} rotationDegrees={rotationDegrees} onRetry={onRetry} />
       ) : <ReceiptPreviewMessage message="Preview is unavailable for this file type. Download the original below." />}
     </div>
   );

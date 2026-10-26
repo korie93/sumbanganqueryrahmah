@@ -4,7 +4,7 @@ import type { CollectionRecordsTableProps } from "@/pages/collection-records/Col
 import type { DeleteCollectionRecordDialogProps } from "@/pages/collection-records/DeleteCollectionRecordDialog";
 import type { EditCollectionRecordDialogProps } from "@/pages/collection-records/EditCollectionRecordDialog";
 import type { PurgeCollectionRecordsDialogProps } from "@/pages/collection-records/PurgeCollectionRecordsDialog";
-import type { ReceiptPreviewDialogProps } from "@/pages/collection-records/ReceiptPreviewDialog";
+import type { ReceiptPreviewSessionProps } from "@/pages/collection-records/ReceiptPreviewSession";
 import { toCollectionDisplayDate } from "@/pages/collection-records/utils";
 import type { ViewAllRecordsDialogProps } from "@/pages/collection-records/ViewAllRecordsDialog";
 import type { CollectionRecordsControllerValue } from "@/pages/collection-records/useCollectionRecordsController";
@@ -13,7 +13,9 @@ type CollectionRecordsPageViewModel = {
   filters: CollectionRecordsFiltersProps;
   toolbar: CollectionRecordsToolbarProps;
   table: CollectionRecordsTableProps;
-  receiptPreview: ReceiptPreviewDialogProps;
+  receiptPreview: Omit<ReceiptPreviewSessionProps, "request" | "onCloseAutoFocus"> & {
+    request: ReceiptPreviewSessionProps["request"] | null;
+  };
   editDialog: EditCollectionRecordDialogProps;
   deleteDialog: DeleteCollectionRecordDialogProps;
   purgeDialog: PurgeCollectionRecordsDialogProps;

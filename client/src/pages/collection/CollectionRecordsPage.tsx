@@ -33,9 +33,9 @@ const CollectionRecordsToolbar = lazy(() =>
     default: module.CollectionRecordsToolbar,
   })),
 );
-const ReceiptPreviewDialog = lazy(() =>
-  import("@/pages/collection-records/ReceiptPreviewDialog").then((module) => ({
-    default: module.ReceiptPreviewDialog,
+const ReceiptPreviewSession = lazy(() =>
+  import("@/pages/collection-records/ReceiptPreviewSession").then((module) => ({
+    default: module.ReceiptPreviewSession,
   })),
 );
 const EditCollectionRecordDialog = lazy(() =>
@@ -304,10 +304,11 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         </Sheet>
       ) : null}
 
-      {viewModel.receiptPreview.open ? (
+      {viewModel.receiptPreview.request ? (
         <Suspense fallback={<LazyDialogFallback label="Loading receipt preview dialog..." />}>
-          <ReceiptPreviewDialog
+          <ReceiptPreviewSession
             {...viewModel.receiptPreview}
+            request={viewModel.receiptPreview.request}
             onCloseAutoFocus={(event) => overlayFocus.restore("receipt", event)}
           />
         </Suspense>

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type SetStateAction } from "react";
 import { Download, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
@@ -45,6 +45,10 @@ export interface ReceiptPreviewDialogProps {
   onDownload: () => void;
   onRetry?: () => void;
   onClose: () => void;
+  refining?: boolean;
+  refinementError?: string;
+  onImageZoom?: (zoom: number) => void;
+  onRetryRefinement?: () => void;
 }
 
 export function ReceiptPreviewDialog({
@@ -64,6 +68,10 @@ export function ReceiptPreviewDialog({
   onDownload,
   onRetry,
   onClose,
+  refining = false,
+  refinementError = "",
+  onImageZoom,
+  onRetryRefinement,
 }: ReceiptPreviewDialogProps) {
   const isMobile = useIsMobile();
   const detailsId = useId();
@@ -83,7 +91,13 @@ export function ReceiptPreviewDialog({
       setZoom(1);
       setRotationDegrees(0);
     }
-  }, [fileName, open, selectedReceiptId, source]);
+  }, [open, record?.id, selectedReceiptId]);
+
+  const changeZoom = (update: SetStateAction<number>) => {
+    const nextZoom = typeof update === "function" ? update(zoom) : update;
+    setZoom(nextZoom);
+    onImageZoom?.(nextZoom);
+  };
 
   useEffect(() => {
     if (!open) {
@@ -127,10 +141,17 @@ export function ReceiptPreviewDialog({
           canShowDetails={Boolean(record)}
           canZoom={canZoom}
           zoom={zoom}
-          setZoom={setZoom}
+          setZoom={changeZoom}
           setRotationDegrees={setRotationDegrees}
           isMobile={isMobile}
         />
+
+        {refining ? <p role="status" className={cn("text-xs text-muted-foreground", isMobile ? "mx-3 mt-2" : "mt-2")}>
+          Preparing a clearer preview…
+        </p> : refinementError ? <div className={cn("flex flex-wrap items-center gap-2 text-xs text-muted-foreground", isMobile ? "mx-3 mt-2" : "mt-2")}>
+          <p role="status">{refinementError}</p>
+          {onRetryRefinement ? <Button type="button" size="sm" variant="ghost" onClick={onRetryRefinement}>Retry clearer preview</Button> : null}
+        </div> : null}
 
         <ReceiptPreviewRecordDetails
           id={detailsId}
@@ -151,6 +172,7 @@ export function ReceiptPreviewDialog({
           zoomValue={zoomValue}
           rotationDegrees={normalizeReceiptPreviewRotation(rotationDegrees)}
           fileName={fileName}
+          imageIdentity={JSON.stringify([record?.id || "", selectedReceiptId || ""])}
           selectedReceipt={selectedReceipt}
           onRetry={onRetry}
         />

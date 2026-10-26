@@ -297,3 +297,94 @@ test("optimizeImageBlobForPreview respects abort signals before preview work sta
       && error.name === "AbortError",
   );
 });
+
+test("optimizeImageBlobForPreview closes a bitmap decoded after cancellation", async () => {
+  const controller = new AbortController();
+  let resolveBitmap!: (bitmap: ImageBitmap) => void;
+  const pendingBitmap = new Promise<ImageBitmap>((resolve) => {
+    resolveBitmap = resolve;
+  });
+  let closeCount = 0;
+  let canvasCount = 0;
+  const bitmap = {
+    width: 5_000,
+    height: 4_000,
+    close() {
+      closeCount += 1;
+    },
+  } as ImageBitmap;
+
+  await withPatchedPreviewGlobals(
+    {
+      createImageBitmap: () => pendingBitmap,
+      document: {
+        createElement() {
+          canvasCount += 1;
+          return createCanvasSpy().canvas;
+        },
+      } as unknown as Document,
+    },
+    async () => {
+      const pendingPreview = optimizeImageBlobForPreview(
+        new Blob(["image"], { type: "image/png" }),
+        { signal: controller.signal },
+      );
+      const rejectedPreview = assert.rejects(
+        pendingPreview,
+        (error: unknown) => error instanceof Error && error.name === "AbortError",
+      );
+
+      controller.abort();
+      assert.equal(closeCount, 0);
+      resolveBitmap(bitmap);
+      await rejectedPreview;
+    },
+  );
+
+  assert.equal(closeCount, 1);
+  assert.equal(canvasCount, 0);
+});
+
+test("optimizeImageBlobForPreview can reject decode failures while preserving the default fallback", async () => {
+  const originalBlob = new Blob(["invalid image bytes"], { type: "image/png" });
+  let clearedImageCount = 0;
+  const revokedUrls: string[] = [];
+
+  class UndecodableImage {
+    onerror: (() => void) | null = null;
+    onload: (() => void) | null = null;
+
+    set src(value: string) {
+      if (!value) {
+        clearedImageCount += 1;
+        return;
+      }
+      queueMicrotask(() => this.onerror?.());
+    }
+  }
+
+  await withPatchedPreviewGlobals(
+    {
+      createImageBitmap: async () => {
+        throw new Error("Bitmap decode failed.");
+      },
+      document: {} as unknown as Document,
+      Image: UndecodableImage as unknown as typeof Image,
+      urlCreateObjectUrl: () => "blob:http://127.0.0.1/undecodable-preview",
+      urlRevokeObjectUrl: (url) => revokedUrls.push(url),
+    },
+    async () => {
+      assert.equal(await optimizeImageBlobForPreview(originalBlob), originalBlob);
+      await assert.rejects(
+        optimizeImageBlobForPreview(originalBlob, { throwOnError: true }),
+        /Failed to decode receipt image/,
+      );
+    },
+  );
+
+  assert.equal(clearedImageCount, 2);
+  assert.deepEqual(revokedUrls, [
+    "blob:http://127.0.0.1/undecodable-preview",
+    "blob:http://127.0.0.1/undecodable-preview",
+  ]);
+});

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useMemo,
+  useState,
 } from "react";
 import {
   getCollectionRecords,
@@ -13,7 +14,7 @@ import {
 import { useCollectionRecordsActions } from "@/pages/collection-records/useCollectionRecordsActions";
 import { useCollectionRecordEdit } from "@/pages/collection-records/useCollectionRecordEdit";
 import { useCollectionRecordsData } from "@/pages/collection-records/useCollectionRecordsData";
-import { useCollectionReceiptPreview } from "@/pages/collection-records/useCollectionReceiptPreview";
+import type { ReceiptPreviewRequest } from "@/pages/collection-records/ReceiptPreviewSession";
 import { useCollectionViewAllRecords } from "@/pages/collection-records/useCollectionViewAllRecords";
 import { canMutateCollectionRecords } from "@shared/user-roles";
 
@@ -80,7 +81,15 @@ export function useCollectionRecordsController({
     handlePageSizeChange,
     getAppliedFilters,
   } = useCollectionRecordsData({ canUseNicknameFilter, canUseTeamLeaderFilter });
-  const { handleViewReceipt, receiptPreview } = useCollectionReceiptPreview();
+  const [receiptPreviewRequest, setReceiptPreviewRequest] = useState<ReceiptPreviewRequest | null>(null);
+  const handleViewReceipt = useCallback((record: CollectionRecord, receiptId?: string) => {
+    setReceiptPreviewRequest(receiptId ? { record, receiptId } : { record });
+  }, []);
+  const closeReceiptPreview = useCallback(() => setReceiptPreviewRequest(null), []);
+  const receiptPreview = useMemo(() => ({
+    request: receiptPreviewRequest,
+    onClose: closeReceiptPreview,
+  }), [closeReceiptPreview, receiptPreviewRequest]);
 
   const visibleRecords = records;
   const summary = useMemo(
@@ -264,9 +273,7 @@ export function useCollectionRecordsController({
     },
     table,
     toolbar,
-    receiptPreview: {
-      ...receiptPreview,
-    },
+    receiptPreview,
     editDialog: {
       ...editDialog,
     },

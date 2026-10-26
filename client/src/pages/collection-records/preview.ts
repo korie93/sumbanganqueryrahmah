@@ -2,13 +2,13 @@ const DEFAULT_MAX_PREVIEW_EDGE = 2_048;
 const DEFAULT_MAX_PREVIEW_PIXELS = 4_194_304;
 const PREVIEW_WEBP_QUALITY = 0.82;
 
-export const RECEIPT_IMAGE_PREVIEW_MAX_EDGE = 1_600;
-export const RECEIPT_IMAGE_PREVIEW_MAX_PIXELS = 1_800_000;
+export { RECEIPT_IMAGE_PREVIEW_MAX_EDGE, RECEIPT_IMAGE_PREVIEW_MAX_PIXELS } from "./receipt-preview-image-policy";
 
 type OptimizeImageBlobForPreviewOptions = {
   signal?: AbortSignal;
   maxEdge?: number;
   maxPixels?: number;
+  throwOnError?: boolean;
 };
 
 type PreviewDrawable = HTMLImageElement | ImageBitmap;
@@ -176,7 +176,10 @@ async function loadPreviewDrawable(
   if (typeof createImageBitmap === "function") {
     try {
       const bitmap = await createImageBitmap(blob);
-      assertPreviewSignalOpen(signal);
+      if (signal?.aborted) {
+        bitmap.close();
+        throw createAbortError();
+      }
       return bitmap;
     } catch (error) {
       if (isAbortError(error)) {
@@ -224,6 +227,7 @@ export async function optimizeImageBlobForPreview(
     signal,
     maxEdge = DEFAULT_MAX_PREVIEW_EDGE,
     maxPixels = DEFAULT_MAX_PREVIEW_PIXELS,
+    throwOnError = false,
   }: OptimizeImageBlobForPreviewOptions = {},
 ): Promise<Blob> {
   if (!blob.type.startsWith("image/") || typeof document === "undefined") {
@@ -268,7 +272,7 @@ export async function optimizeImageBlobForPreview(
 
     return previewBlob || blob;
   } catch (error) {
-    if (isAbortError(error)) {
+    if (isAbortError(error) || throwOnError) {
       throw error;
     }
 
