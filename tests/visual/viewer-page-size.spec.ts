@@ -128,6 +128,12 @@ test("Viewer page size: cards start at 25, resize preserves page and selection, 
   await page.getByTestId("button-viewer-next-page").click();
   await expect(pagination(page)).toContainText("Showing 26-50 of 237 rows");
   await expect.poll(() => requests[requests.length - 1]).toMatchObject({ page: 2, pageSize: 25, cursor: "viewer-size:25:25" });
+  // The initial empty-filter debounce must not publish an equivalent query
+  // after Next and reset an already loaded second page.
+  const afterNext = requests.length;
+  await page.waitForTimeout(650);
+  await expect(pagination(page)).toContainText("Showing 26-50 of 237 rows");
+  expect(requests.length).toBe(afterNext);
   const selection = page.getByRole("checkbox", { name: "Select row 26", exact: true });
   await selection.check();
   await expect(selection).toHaveAttribute("aria-checked", "true");

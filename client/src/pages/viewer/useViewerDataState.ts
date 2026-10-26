@@ -17,6 +17,7 @@ import {
   createViewerImportResetState,
   createViewerSearchTooShortState,
   getViewerActiveColumnFilters,
+  reconcileViewerColumnFilters,
   type ViewerStatePatch,
 } from "@/pages/viewer/viewer-state-utils";
 
@@ -234,7 +235,7 @@ export function useViewerDataState({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedColumnFilters(activeColumnFilters);
+      setDebouncedColumnFilters((previous) => reconcileViewerColumnFilters(previous, activeColumnFilters));
     }, VIEWER_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);

@@ -202,6 +202,7 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
 ]) test(`Receipt viewer ${theme} ${viewport.width}px zoom rotation fit selection and Escape remain usable`, async ({ page, baseURL }) => {
   await page.setViewportSize(viewport);
   const fixture = await installFixture(page, baseURL, { theme });
+  const expectedPortraitViews = viewport.width < 768 ? ["portrait", "portrait"] : ["portrait"];
   const { launcher, dialog } = await openPreview(page);
   let image = await expectImage(dialog);
   const fitWidth = (await image.boundingBox())!.width;
@@ -212,6 +213,7 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   await expect(landscape).toHaveAttribute("aria-pressed", "false");
   await dialog.getByRole("button", { name: "Zoom in", exact: true }).click();
   await expect(dialog.getByText("110% fit", { exact: true })).toBeVisible();
+  await expect.poll(() => fixture.views).toEqual(expectedPortraitViews);
   await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(fitWidth * 1.08);
   for (let step = 0; step < 7; step++) await dialog.getByRole("button", { name: "Zoom in", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Zoom in", exact: true })).toBeDisabled();
@@ -250,7 +252,7 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   await expect(dialog).toHaveCount(0);
   await expect(launcher).toBeFocused();
   await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
-  expect(fixture.views).toEqual(["portrait", "landscape"]);
+  expect(fixture.views).toEqual([...expectedPortraitViews, "landscape"]);
   expect(fixture.errors).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });

@@ -26,6 +26,19 @@ export function getViewerActiveColumnFilters(columnFilters: ColumnFilter[]) {
   });
 }
 
+export function reconcileViewerColumnFilters(previous: ColumnFilter[], next: ColumnFilter[]): ColumnFilter[] {
+  // UI filter IDs and recreated arrays do not change the server query. Keep
+  // its identity stable so a no-op debounce cannot reset an in-flight page.
+  const unchanged = previous.length === next.length && previous.every((filter, index) => {
+    const candidate = next[index];
+    return candidate !== undefined
+      && filter.column === candidate.column
+      && filter.operator === candidate.operator
+      && filter.value === candidate.value;
+  });
+  return unchanged ? previous : next;
+}
+
 export function createViewerPaginationResetState(rowsPerPage: number): ViewerStatePatch {
   return {
     currentPage: 1,

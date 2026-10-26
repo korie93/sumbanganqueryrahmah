@@ -13,9 +13,11 @@ import {
   getViewerVirtualTableMinWidth,
   getViewerVisibleHeaders,
   pruneViewerSelectedRowIds,
+  reconcileViewerColumnFilters,
   toggleViewerColumnSelection,
   toggleViewerRowSelection,
 } from "@/pages/viewer/viewer-state-utils";
+import type { ColumnFilter } from "@/pages/viewer/types";
 
 test("getViewerActiveColumnFilters ignores incomplete filters", () => {
   const result = getViewerActiveColumnFilters([
@@ -25,6 +27,37 @@ test("getViewerActiveColumnFilters ignores incomplete filters", () => {
   ]);
 
   assert.deepEqual(result, [{ column: "name", operator: "contains", value: "ali" }]);
+});
+
+test("filter debounce retains query identity for initial empty and UI-only changes", () => {
+  const initial: ColumnFilter[] = [];
+  assert.equal(reconcileViewerColumnFilters(initial, []), initial);
+  assert.equal(reconcileViewerColumnFilters(initial, getViewerActiveColumnFilters([
+    { id: "new-ui-filter", column: "name", operator: "contains", value: "" },
+  ])), initial);
+
+  const previous: ColumnFilter[] = [{ id: "old-ui-filter", column: "name", operator: "contains", value: "Ali" }];
+  const recreated: ColumnFilter[] = [{ id: "new-ui-filter", column: "name", operator: "contains", value: "Ali" }];
+  assert.equal(reconcileViewerColumnFilters(previous, recreated), previous);
+});
+
+test("filter debounce publishes every effective query change", () => {
+  const previous: ColumnFilter[] = [{ column: "name", operator: "contains", value: "Ali" }];
+  for (const next of [
+    [],
+    [{ column: "account", operator: "contains", value: "Ali" }],
+    [{ column: "name", operator: "equals", value: "Ali" }],
+    [{ column: "name", operator: "contains", value: "Abu" }],
+    [...previous, { column: "status", operator: "equals", value: "active" }],
+  ] satisfies ColumnFilter[][]) {
+    assert.equal(reconcileViewerColumnFilters(previous, next), next);
+  }
+  const ordered: ColumnFilter[] = [
+    { column: "name", operator: "contains", value: "Ali" },
+    { column: "status", operator: "equals", value: "active" },
+  ];
+  const reordered = [...ordered].reverse();
+  assert.equal(reconcileViewerColumnFilters(ordered, reordered), reordered);
 });
 
 test("viewer header and layout helpers derive stable presentation values", () => {
