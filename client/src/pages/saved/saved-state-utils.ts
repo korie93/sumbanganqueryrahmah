@@ -64,6 +64,12 @@ export function toggleSavedImportSelection(previous: Set<string>, id: string, ch
   return next;
 }
 
+export function removeSavedSelectedImportIds(previous: Set<string>, removedIds: readonly string[]) {
+  const removed = new Set(removedIds);
+  if (![...previous].some((id) => removed.has(id))) return previous;
+  return new Set([...previous].filter((id) => !removed.has(id)));
+}
+
 export function toggleSavedVisibleImportSelection(
   previous: Set<string>,
   imports: ImportItem[],

@@ -1,5 +1,5 @@
 import type { MouseEventHandler, Ref } from "react";
-import { Bot } from "lucide-react";
+import { Bot, LoaderCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingTriggerShell } from "@/components/FloatingAIShell";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
@@ -21,6 +21,7 @@ type FloatingAITriggerProps = {
   triggerButtonRef: Ref<HTMLButtonElement>;
   unreadCount: number;
   applyLayoutPlacement?: boolean | undefined;
+  isLoading?: boolean | undefined;
 };
 
 /**
@@ -40,6 +41,7 @@ export function FloatingAITrigger({
   triggerButtonRef,
   unreadCount,
   applyLayoutPlacement = false,
+  isLoading = false,
 }: FloatingAITriggerProps) {
   const triggerHidden =
     layoutState.triggerHidden
@@ -74,6 +76,8 @@ export function FloatingAITrigger({
         aria-controls={panelId}
         aria-describedby={showMinimizedStatus ? minimizedStatusId : undefined}
         aria-haspopup="dialog"
+        aria-busy={isLoading || undefined}
+        title={isLoading ? "Memuatkan bantuan AI." : undefined}
         aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}
         {...getAriaExpandedProps(isOpen)}
         className={cn(
@@ -86,7 +90,9 @@ export function FloatingAITrigger({
         )}
         data-testid="floating-ai-toggle"
       >
-        <Bot className="h-6 w-6" aria-hidden="true" />
+        {isLoading
+          ? <LoaderCircle className="h-6 w-6 motion-safe:animate-spin" aria-hidden="true" />
+          : <Bot className="h-6 w-6" aria-hidden="true" />}
         {!isOpen && unreadCount > 0 ? (
           <Badge
             className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-xxs text-destructive-foreground"

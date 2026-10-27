@@ -10,6 +10,19 @@ function readBehaviorHookSource() {
   return readFileSync(path.resolve(__dirname, "useFloatingAIBehaviorState.ts"), "utf8");
 }
 
+test("first launcher activation seeds the open panel and only a changed route closes it", () => {
+  const source = readBehaviorHookSource();
+  const componentSource = readFileSync(path.resolve(__dirname, "FloatingAI.tsx"), "utf8");
+
+  assert.match(source, /initiallyOpen = false/);
+  assert.match(source, /const \[isOpen, setIsOpen\] = useState\(initiallyOpen\);/);
+  assert.match(source, /const \[hasActivated, setHasActivated\] = useState\(initiallyOpen\);/);
+  assert.match(source, /const previousRouteRef = useRef\(\{ activePage, location \}\);/);
+  assert.match(source, /const previousRoute = previousRouteRef\.current;\s*if \(previousRoute\.activePage === activePage && previousRoute\.location === location\) \{\s*return;\s*\}\s*previousRouteRef\.current = \{ activePage, location \};\s*setIsOpenIfMounted\(false\);/);
+  assert.match(componentSource, /export type FloatingAIProps = \{/);
+  assert.match(componentSource, /useFloatingAIBehaviorState\(\{\s*activePage,\s*location,\s*initiallyOpen,\s*\}\)/);
+});
+
 test("useFloatingAIBehaviorState updates assistant count snapshots before unread state changes", () => {
   const source = readBehaviorHookSource();
   const snapshotIndex = source.indexOf("const assistantCountSnapshot = assistantCount;");

@@ -18,11 +18,12 @@ import { useFloatingAILayoutState } from "@/components/useFloatingAILayoutState"
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
 
-type FloatingAIProps = {
+export type FloatingAIProps = {
   timeoutMs: number;
   aiEnabled: boolean;
   activePage: string;
   systemName?: string | undefined;
+  initiallyOpen?: boolean | undefined;
 };
 
 const DEFAULT_FLOATING_AI_SYSTEM_NAME = "SQR";
@@ -31,7 +32,7 @@ function resolveFloatingAiSystemName(systemName: string | undefined) {
   return systemName?.trim() || DEFAULT_FLOATING_AI_SYSTEM_NAME;
 }
 
-function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAIProps) {
+function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName, initiallyOpen = false }: FloatingAIProps) {
   const isMobile = useIsMobile();
   const [location] = useLocation();
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
@@ -53,6 +54,7 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAI
   } = useFloatingAIBehaviorState({
     activePage,
     location,
+    initiallyOpen,
   });
   const {
     floatingRootRef,

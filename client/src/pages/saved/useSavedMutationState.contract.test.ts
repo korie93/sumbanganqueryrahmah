@@ -19,8 +19,17 @@ test("saved mutation state only finalizes the active mutation request", async ()
   );
   assert.match(
     source,
-    /const results = await Promise\.allSettled\(ids\.map\(\(id\) => deleteImport\(id, \{ signal: controller\.signal \}\)\)\);\s*if \(!isActiveMutationRequest\(controller, requestId, bulkDeleteAbortControllerRef\)\) \{\s*return;\s*\}/s,
+    /const \{ deletedIds, failedIds \} = await deleteSavedImports\(ids, \{\s*signal: controller\.signal,\s*deleteOne: deleteImport,\s*\}\);\s*if \(!isActiveMutationRequest\(controller, requestId, bulkDeleteAbortControllerRef\)\) \{\s*return;\s*\}/s,
   );
+});
+
+test("bulk mutations retain failed selections and synchronously guard duplicate confirmation", async () => {
+  const source = await readFile(new URL("./useSavedMutationState.ts", import.meta.url), "utf8");
+  assert.match(source, /if \(deletedIds\.length > 0\) \{\s*onImportsRemoved\(deletedIds\);\s*onBulkDeleteSelectionRemoved\(deletedIds\);/);
+  assert.doesNotMatch(source, /onBulkDeleteSelectionCleared|Promise\.allSettled\(ids\.map/);
+  assert.match(source, /mountedRef\.current = true;\s*return \(\) =>/);
+  assert.match(source, /const isMutationPending = useCallback/);
+  assert.equal((source.match(/\|\| isMutationPending\(\)/g) ?? []).length, 3);
 });
 
 test("saved mutation finally blocks do not close dialogs from stale requests", async () => {

@@ -12,6 +12,7 @@ import {
   buildSavedImportSummaryLabel,
   countSavedSelectedVisibleImports,
   pruneSavedSelectedImportIds,
+  removeSavedSelectedImportIds,
   toggleSavedImportSelection,
   toggleSavedVisibleImportSelection,
 } from "@/pages/saved/saved-state-utils";
@@ -51,8 +52,8 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     },
   ]);
 
-  const clearSelectedImports = useCallback(() => {
-    setSelectedImportIds((previous) => (previous.size === 0 ? previous : new Set<string>()));
+  const removeBulkDeletedImportSelection = useCallback((importIds: string[]) => {
+    setSelectedImportIds((previous) => removeSavedSelectedImportIds(previous, importIds));
   }, []);
 
   const clearFilters = useCallback(() => {
@@ -76,7 +77,7 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     onImportRenamed: data.replaceImportName,
     onImportsRemoved: data.removeImports,
     onSingleImportSelectionRemoved: pruneDeletedImportSelection,
-    onBulkDeleteSelectionCleared: clearSelectedImports,
+    onBulkDeleteSelectionRemoved: removeBulkDeletedImportSelection,
     toast,
   });
 

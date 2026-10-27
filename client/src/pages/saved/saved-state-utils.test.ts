@@ -6,6 +6,7 @@ import {
   countSavedSelectedVisibleImports,
   pruneSavedSelectedImportIds,
   readSavedErrorMessage,
+  removeSavedSelectedImportIds,
   toggleSavedImportSelection,
   toggleSavedVisibleImportSelection,
 } from "@/pages/saved/saved-state-utils";
@@ -66,4 +67,13 @@ test("readSavedErrorMessage handles unknown error shapes", () => {
   assert.equal(readSavedErrorMessage({ message: "Rename failed" }, "Fallback"), "Rename failed");
   assert.equal(readSavedErrorMessage({ message: "" }, "Fallback"), "Fallback");
   assert.equal(readSavedErrorMessage(null, "Fallback"), "Fallback");
+});
+
+test("bulk removal clears successful IDs while retaining failed and newly selected imports", () => {
+  const selected = new Set(["deleted", "failed", "selected-during-request"]);
+  assert.deepEqual([...removeSavedSelectedImportIds(selected, ["deleted", "deleted", "unknown"])], ["failed", "selected-during-request"]);
+  assert.deepEqual([...selected], ["deleted", "failed", "selected-during-request"]);
+  assert.equal(removeSavedSelectedImportIds(selected, []), selected);
+  assert.equal(removeSavedSelectedImportIds(selected, ["unknown"]), selected);
+  assert.deepEqual([...removeSavedSelectedImportIds(selected, [...selected])], []);
 });

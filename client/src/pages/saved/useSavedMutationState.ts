@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { deleteImport, renameImport } from "@/lib/api";
 import type { ImportItem } from "@/pages/saved/types";
 import { isSavedAbortError, readSavedErrorMessage } from "@/pages/saved/saved-state-utils";
+import { deleteSavedImports } from "@/pages/saved/saved-bulk-delete";
 
 type SavedToast = (options: {
   title: string;
@@ -14,7 +15,7 @@ type SavedMutationStateOptions = {
   onImportRenamed: (importId: string, nextName: string) => void;
   onImportsRemoved: (importIds: string[]) => void;
   onSingleImportSelectionRemoved: (importId: string) => void;
-  onBulkDeleteSelectionCleared: () => void;
+  onBulkDeleteSelectionRemoved: (importIds: string[]) => void;
   toast: SavedToast;
 };
 
@@ -23,7 +24,7 @@ export function useSavedMutationState({
   onImportRenamed,
   onImportsRemoved,
   onSingleImportSelectionRemoved,
-  onBulkDeleteSelectionCleared,
+  onBulkDeleteSelectionRemoved,
   toast,
 }: SavedMutationStateOptions) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -40,6 +41,11 @@ export function useSavedMutationState({
   const deleteAbortControllerRef = useRef<AbortController | null>(null);
   const bulkDeleteAbortControllerRef = useRef<AbortController | null>(null);
   const mutationRequestIdRef = useRef(0);
+  const isMutationPending = useCallback(() => Boolean(
+    renameAbortControllerRef.current
+    || deleteAbortControllerRef.current
+    || bulkDeleteAbortControllerRef.current
+  ), []);
 
   const isActiveMutationRequest = useCallback((
     controller: AbortController,
@@ -53,6 +59,7 @@ export function useSavedMutationState({
   ), []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       renameAbortControllerRef.current?.abort();
@@ -74,7 +81,7 @@ export function useSavedMutationState({
   }, []);
 
   const runRenameConfirm = useCallback(async () => {
-    if (!selectedImport || !newName.trim() || renaming || deleting || bulkDeleting) {
+    if (!selectedImport || !newName.trim() || renaming || deleting || bulkDeleting || isMutationPending()) {
       return;
     }
 
@@ -126,6 +133,7 @@ export function useSavedMutationState({
     bulkDeleting,
     deleting,
     isActiveMutationRequest,
+    isMutationPending,
     newName,
     onImportRenamed,
     renaming,
@@ -138,7 +146,7 @@ export function useSavedMutationState({
   }, [runRenameConfirm]);
 
   const runDeleteConfirm = useCallback(async () => {
-    if (!selectedImport || deleting || renaming || bulkDeleting) {
+    if (!selectedImport || deleting || renaming || bulkDeleting || isMutationPending()) {
       return;
     }
 
@@ -190,6 +198,7 @@ export function useSavedMutationState({
     bulkDeleting,
     deleting,
     isActiveMutationRequest,
+    isMutationPending,
     onImportsRemoved,
     onSingleImportSelectionRemoved,
     renaming,
@@ -203,7 +212,7 @@ export function useSavedMutationState({
 
   const runBulkDeleteConfirm = useCallback(async () => {
     const ids = Array.from(selectedImportIds);
-    if (ids.length === 0 || bulkDeleting || deleting || renaming) {
+    if (ids.length === 0 || bulkDeleting || deleting || renaming || isMutationPending()) {
       return;
     }
 
@@ -214,26 +223,20 @@ export function useSavedMutationState({
     const requestId = ++mutationRequestIdRef.current;
 
     try {
-      const results = await Promise.allSettled(ids.map((id) => deleteImport(id, { signal: controller.signal })));
+      const { deletedIds, failedIds } = await deleteSavedImports(ids, {
+        signal: controller.signal,
+        deleteOne: deleteImport,
+      });
       if (!isActiveMutationRequest(controller, requestId, bulkDeleteAbortControllerRef)) {
         return;
       }
 
-      const deletedIds: string[] = [];
-      let failedCount = 0;
-
-      results.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          deletedIds.push(ids[index]);
-          return;
-        }
-        failedCount += 1;
-      });
+      const failedCount = failedIds.length;
 
       if (deletedIds.length > 0) {
         onImportsRemoved(deletedIds);
+        onBulkDeleteSelectionRemoved(deletedIds);
       }
-      onBulkDeleteSelectionCleared();
 
       if (deletedIds.length > 0 && failedCount === 0) {
         toast({
@@ -243,13 +246,13 @@ export function useSavedMutationState({
       } else if (deletedIds.length > 0) {
         toast({
           title: "Partial Success",
-          description: `${deletedIds.length} deleted, ${failedCount} failed.`,
+          description: `${deletedIds.length} deleted, ${failedCount} failed. Failed files remain selected; you can try again.`,
           variant: "destructive",
         });
       } else {
         toast({
           title: "Failed",
-          description: "No selected files were deleted.",
+          description: "No selected files were deleted. Files remain selected; you can try again.",
           variant: "destructive",
         });
       }
@@ -281,7 +284,8 @@ export function useSavedMutationState({
     bulkDeleting,
     deleting,
     isActiveMutationRequest,
-    onBulkDeleteSelectionCleared,
+    isMutationPending,
+    onBulkDeleteSelectionRemoved,
     onImportsRemoved,
     renaming,
     selectedImportIds,

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import MaintenanceModeBanner from "@/app/MaintenanceModeBanner";
@@ -13,17 +13,13 @@ import type {
   User,
 } from "@/app/types";
 import AutoLogout from "@/components/AutoLogout";
-import { LazySuspenseFallback } from "@/components/LazySuspenseFallback";
+import FloatingAILauncher from "@/components/FloatingAILauncher";
 import Navbar from "@/components/Navbar";
 import { NavbarUserMenuDropdown } from "@/components/NavbarParts";
 import { AIProvider } from "@/context/AIContext";
 import "@/components/GlassWrapper.css";
 import "./AuthenticatedAppShell.css";
 import "./workspace-navigation.css";
-
-const FloatingAI = lazy(() => import("@/components/FloatingAI"));
-const FLOATING_AI_FALLBACK_READY_DELAY_MS = 1_200;
-const FLOATING_AI_IDLE_READY_TIMEOUT_MS = 1_500;
 
 type AuthenticatedAppShellProps = {
   user: User;
@@ -62,41 +58,9 @@ export default function AuthenticatedAppShell({
   onClientLogout,
   onNavigateHome,
 }: AuthenticatedAppShellProps) {
-  const [floatingAiReady, setFloatingAiReady] = useState(false);
   const { sidebarCollapsed, setSidebarCollapsed } = useDesktopSidebarPreference(user);
   const [passwordProfileOpen, setPasswordProfileOpen] = useState(false);
   const passwordProfileRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!runtimeConfig.aiEnabled || floatingAiReady) return;
-
-    let cancelled = false;
-    let fallbackTimeoutId: number | null = null;
-    let idleCallbackId: number | null = null;
-
-    const markReady = () => {
-      if (cancelled) return;
-      setFloatingAiReady(true);
-    };
-
-    fallbackTimeoutId = window.setTimeout(markReady, FLOATING_AI_FALLBACK_READY_DELAY_MS);
-
-    if (typeof window.requestIdleCallback === "function") {
-      idleCallbackId = window.requestIdleCallback(markReady, {
-        timeout: FLOATING_AI_IDLE_READY_TIMEOUT_MS,
-      });
-    }
-
-    return () => {
-      cancelled = true;
-      if (fallbackTimeoutId !== null) {
-        window.clearTimeout(fallbackTimeoutId);
-      }
-      if (idleCallbackId !== null && typeof window.cancelIdleCallback === "function") {
-        window.cancelIdleCallback(idleCallbackId);
-      }
-    };
-  }, [floatingAiReady, runtimeConfig.aiEnabled]);
 
   if (user.mustChangePassword) {
     return (
@@ -181,15 +145,13 @@ export default function AuthenticatedAppShell({
             </main>
           </Suspense>
         </AppRouteErrorBoundary>
-        {runtimeConfig.aiEnabled && currentPage !== "ai" && floatingAiReady ? (
-          <Suspense fallback={<LazySuspenseFallback label="Loading AI assistant..." />}>
-            <FloatingAI
-              timeoutMs={runtimeConfig.aiTimeoutMs}
-              aiEnabled={runtimeConfig.aiEnabled}
-              activePage={currentPage}
-              systemName={systemName}
-            />
-          </Suspense>
+        {runtimeConfig.aiEnabled && currentPage !== "ai" ? (
+          <FloatingAILauncher
+            timeoutMs={runtimeConfig.aiTimeoutMs}
+            aiEnabled={runtimeConfig.aiEnabled}
+            activePage={currentPage}
+            systemName={systemName}
+          />
         ) : null}
       </div>
     </AIProvider>

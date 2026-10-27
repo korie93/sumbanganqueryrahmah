@@ -68,14 +68,6 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
     cleanupPatterns: [/window\.clearTimeout\(timeoutHandle\)/],
   },
   {
-    filePath: "../app/AuthenticatedAppShell.tsx",
-    setupPattern: /fallbackTimeoutId = window\.setTimeout\(markReady,\s*FLOATING_AI_FALLBACK_READY_DELAY_MS\)/,
-    cleanupPatterns: [
-      /window\.clearTimeout\(fallbackTimeoutId\)/,
-      /window\.cancelIdleCallback\(idleCallbackId\)/,
-    ],
-  },
-  {
     filePath: "../app/useSingleTabSession.ts",
     setupPattern: /const heartbeatId = window\.setInterval\(syncLockState,\s*SINGLE_TAB_LOCK_HEARTBEAT_MS\)/,
     cleanupPatterns: [

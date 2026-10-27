@@ -7,17 +7,20 @@ const AI_RESET_EVENT = "ai-chat-reset";
 type UseFloatingAIBehaviorStateParams = {
   activePage: string;
   location: string;
+  initiallyOpen?: boolean | undefined;
 };
 
 export function useFloatingAIBehaviorState({
   activePage,
   location,
+  initiallyOpen = false,
 }: UseFloatingAIBehaviorStateParams) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [hasActivated, setHasActivated] = useState(false);
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
+  const [hasActivated, setHasActivated] = useState(initiallyOpen);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
   const cancelAISearchRef = useRef<(() => void) | null>(null);
   const isMountedRef = useRef(true);
+  const previousRouteRef = useRef({ activePage, location });
   const {
     messages,
     isThinking,
@@ -57,6 +60,12 @@ export function useFloatingAIBehaviorState({
   }, []);
 
   useEffect(() => {
+    const previousRoute = previousRouteRef.current;
+    if (previousRoute.activePage === activePage && previousRoute.location === location) {
+      return;
+    }
+
+    previousRouteRef.current = { activePage, location };
     setIsOpenIfMounted(false);
   }, [activePage, location, setIsOpenIfMounted]);
 
