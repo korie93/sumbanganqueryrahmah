@@ -22,6 +22,7 @@ type FloatingAIIdleViewProps = FloatingAIIdleProps & {
   applyLayoutPlacement?: boolean | undefined;
 };
 
+/** Renders the lightweight AI trigger and accessible loading or retry feedback. */
 export function FloatingAIIdleView({
   systemName,
   isLoading,

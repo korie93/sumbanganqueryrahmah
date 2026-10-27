@@ -10,6 +10,7 @@ type LoadedRuntime = {
   activatedOnRoute: string;
 };
 
+/** Loads chat on explicit activation and rejects stale route or permission completions. */
 export default function FloatingAILauncher(props: FloatingAILauncherProps) {
   const [location] = useLocation();
   const routeKey = `${props.activePage}:${location}`;

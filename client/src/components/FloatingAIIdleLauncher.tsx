@@ -1,6 +1,7 @@
 import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { FloatingAIIdleView, type FloatingAIIdleProps } from "@/components/FloatingAIIdleView";
+import { LazySuspenseFallback } from "@/components/LazySuspenseFallback";
 import { isEditableElement } from "@/components/floating-ai-dom-utils";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 import { isFloatingAiSaveCollectionRoute, isFloatingAiSavedMobileRoute } from "@/components/floating-ai-visibility";
@@ -56,7 +57,7 @@ function CollisionAwareIdleLauncher(props: FloatingAIIdleProps & { location: str
       key={placement.attempt}
       onRetry={() => setPlacement((previous) => ({ attempt: previous.attempt + 1, Component: createIdlePlacement(true) }))}
     >
-      <Suspense fallback={null}>
+      <Suspense fallback={<LazySuspenseFallback label="Menyiapkan bantuan AI." />}>
         <Placement {...props} />
       </Suspense>
     </IdlePlacementBoundary>
@@ -97,6 +98,7 @@ function PlainIdleLauncher(props: FloatingAIIdleProps & { isMobile: boolean }) {
   return <FloatingAIIdleView {...props} hasFocusedEditable={hasFocusedEditable} layoutState={idleLayout} />;
 }
 
+/** Renders the idle AI trigger, deferring collision placement on sensitive routes. */
 export default function FloatingAIIdleLauncher(props: FloatingAIIdleProps) {
   const [location] = useLocation();
   const isMobile = useIsMobile();

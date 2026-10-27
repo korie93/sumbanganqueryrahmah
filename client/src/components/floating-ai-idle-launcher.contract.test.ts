@@ -13,7 +13,8 @@ test("ordinary idle launchers defer placement and full panel dependencies", () =
   assert.doesNotMatch(launcher, /import \{[^}]*useFloatingAILayoutState|useFloatingAIFocusManagement|FloatingAIPanel|requestIdleCallback|setTimeout/);
   assert.match(launcher, /isFloatingAiSaveCollectionRoute\(props\.activePage, location\)/);
   assert.match(launcher, /isFloatingAiSavedMobileRoute\(props\.activePage, location, isMobile\)/);
-  assert.match(launcher, /<Suspense fallback=\{null\}>/);
+  assert.match(launcher, /<Suspense fallback=\{<LazySuspenseFallback label="Menyiapkan bantuan AI\." \/>\}>/);
+  assert.doesNotMatch(launcher, /fallback=\{null\}|fallback=\{<FloatingAIIdleView/);
   assert.doesNotMatch(view, /FloatingAIPanel|useFloatingAILayoutState|useFloatingAIFocusManagement/);
 });
 

@@ -8,6 +8,7 @@ type FloatingAIIdlePlacementProps = FloatingAIIdleProps & {
 
 const keepIdleClosed = () => {};
 
+/** Positions the idle AI trigger without opening chat or covering workspace controls. */
 export default function FloatingAIIdlePlacement(props: FloatingAIIdlePlacementProps) {
   const { floatingRootRef, hasFocusedEditable, layoutState } = useFloatingAILayoutState({
     activePage: props.activePage,
