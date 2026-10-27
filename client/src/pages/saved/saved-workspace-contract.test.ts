@@ -13,6 +13,7 @@ const savedModuleFiles = [
   "SavedListDensityControl.tsx",
   "SavedWorkspacePanel.tsx",
   "useSavedDataState.ts",
+  "useSavedImportPage.ts",
   "useSavedImportDetailState.ts",
   "saved-workspace.ts",
 ] as const;
@@ -100,12 +101,15 @@ test("saved file density is user-persisted and comfortable on mobile", async () 
 
 test("saved data state keeps one server page and aborts stale requests", async () => {
   const dataState = await readSavedSource("useSavedDataState.ts");
+  const importPage = await readSavedSource("useSavedImportPage.ts");
   const detailState = await readSavedSource("useSavedImportDetailState.ts");
 
   assert.match(dataState, /page,\s*pageSize/);
-  assert.match(dataState, /pagination\.mode !== "offset"/);
+  assert.match(importPage, /pagination\.mode !== "offset"/);
   assert.doesNotMatch(dataState, /mergeSavedImportPages/);
-  assert.match(dataState, /mountedRef\.current = true/);
-  assert.match(dataState, /fetchAbortControllerRef\.current\?\.abort\(\)/);
+  assert.match(importPage, /mountedRef\.current = true/);
+  assert.match(importPage, /requestRef\.current\?\.controller\.abort\(\)/);
+  assert.match(importPage, /requestRef\.current === request/);
+  assert.match(importPage, /currentQueryRef\.current\.key === request\.key/);
   assert.match(detailState, /controller\.abort\(\)/);
 });

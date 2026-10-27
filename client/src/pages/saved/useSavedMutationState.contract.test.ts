@@ -30,6 +30,7 @@ test("bulk mutations retain failed selections and synchronously guard duplicate 
   assert.match(source, /mountedRef\.current = true;\s*return \(\) =>/);
   assert.match(source, /const isMutationPending = useCallback/);
   assert.equal((source.match(/\|\| isMutationPending\(\)/g) ?? []).length, 3);
+  assert.equal((source.match(/\|\| !canMutate\(\)/g) ?? []).length, 3);
 });
 
 test("saved mutation finally blocks do not close dialogs from stale requests", async () => {

@@ -10,6 +10,7 @@ import { SavedFiltersBar } from "@/pages/saved/SavedFiltersBar";
 import { SavedImportsWorkspace } from "@/pages/saved/SavedImportsWorkspace";
 import { SavedLoadingSkeleton } from "@/pages/saved/SavedLoadingSkeleton";
 import { SavedPageHeader } from "@/pages/saved/SavedPageHeader";
+import { SavedRefreshNotice } from "@/pages/saved/SavedRefreshNotice";
 import { SavedWorkspacePanel } from "@/pages/saved/SavedWorkspacePanel";
 import { SavedSourceConfigProvider } from "@/pages/saved/SavedSourceConfigProvider";
 import { useSavedPageState } from "@/pages/saved/useSavedPageState";
@@ -37,11 +38,12 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
     <OperationalPage width="wide" className="saved-workspace">
       <SavedPageHeader
         loading={state.loading}
-        error={Boolean(state.error)}
+        hasPage={state.hasPage}
         totalImports={state.totalImports}
         filtered={state.hasActiveFilters || state.workspaceView !== "all"}
         selectedCount={state.isSuperuser ? state.selectedImportIds.size : 0}
         actionsDisabled={state.adminActionsDisabled}
+        refreshDisabled={state.refreshDisabled}
         refreshRef={fallbackFocusRef}
         onRefresh={state.handleRefresh}
         onBulkDelete={(trigger) => {
@@ -68,17 +70,23 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
           />
           <SavedWorkspacePanel
             activeView={state.workspaceView}
-            summary={state.loading || state.error ? undefined : state.workspaceSummary}
+            summary={state.hasPage ? state.workspaceSummary : undefined}
             onViewChange={state.setWorkspaceView}
           />
           <p className="sr-only" role="status" aria-atomic="true">
-            {state.loading ? "" : state.error
-              ? "Saved imports could not be loaded. Try Refresh."
-              : `${state.totalImports.toLocaleString()} matching saved files.`}
+            {!state.hasPage || state.loading || state.isStale || state.error
+              ? "" : `${state.totalImports.toLocaleString()} matching saved files.`}
           </p>
         </section>
 
-      {state.error ? (
+      <SavedRefreshNotice
+        refreshing={state.refreshing}
+        isStale={state.isStale}
+        refreshDisabled={state.refreshDisabled}
+        onRefresh={state.handleRefresh}
+      />
+
+      {state.error && !state.hasPage ? (
         <OperationalSectionCard
           className="border-destructive/35 bg-destructive/5"
           contentClassName="flex items-center gap-2 text-destructive"
@@ -89,7 +97,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
       ) : null}
 
       <SavedSourceConfigProvider enabled={state.isSuperuser}>
-        {state.error ? null : state.loading ? (
+        {state.error && !state.hasPage ? null : state.loading && !state.hasPage ? (
           <SavedLoadingSkeleton />
         ) : !state.hasActiveFilters && state.workspaceView === "all" && state.totalImports === 0 ? (
           <OperationalSectionCard contentClassName="ops-empty-state">

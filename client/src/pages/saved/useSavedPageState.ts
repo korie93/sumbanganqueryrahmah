@@ -73,6 +73,7 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
   }, []);
 
   const mutation = useSavedMutationState({
+    canMutate: data.canMutate,
     selectedImportIds,
     onImportRenamed: data.replaceImportName,
     onImportsRemoved: data.removeImports,
@@ -100,8 +101,8 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     () => `${visibleImports.length.toLocaleString()} on this page`,
     [visibleImports.length],
   );
-  const adminActionsDisabled =
-    data.loading || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
+  const refreshDisabled = data.loading || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
+  const adminActionsDisabled = refreshDisabled || data.isStale || Boolean(data.error);
 
   const handleView = useCallback(
     (importItem: { id: string; name: string }) => {
@@ -161,6 +162,10 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     hasMoreImports: data.hasMoreImports,
     loading: data.loading,
     error: data.error,
+    hasPage: data.hasPage,
+    refreshing: data.refreshing,
+    isStale: data.isStale,
+    refreshDisabled,
     page: data.page,
     pageSize: data.pageSize,
     totalPages: data.totalPages,

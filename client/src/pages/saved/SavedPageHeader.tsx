@@ -5,18 +5,20 @@ import { Button } from "@/components/ui/button";
 
 type SavedPageHeaderProps = {
   loading: boolean;
-  error: boolean;
+  hasPage: boolean;
   totalImports: number;
   filtered: boolean;
   selectedCount: number;
   actionsDisabled: boolean;
+  refreshDisabled: boolean;
   refreshRef: RefObject<HTMLButtonElement>;
   onRefresh: () => void;
   onBulkDelete: (trigger: HTMLButtonElement) => void;
 };
 
+/** Keeps the last confirmed file count visible while a Saved page is refreshed. */
 export function SavedPageHeader({
-  loading, error, totalImports, filtered, selectedCount, actionsDisabled,
+  loading, hasPage, totalImports, filtered, selectedCount, actionsDisabled, refreshDisabled,
   refreshRef, onRefresh, onBulkDelete,
 }: SavedPageHeaderProps) {
   return (
@@ -24,7 +26,7 @@ export function SavedPageHeader({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Saved Imports</h1>
-          {!loading && !error ? (
+          {hasPage ? (
             <Badge variant="secondary" className="max-w-full rounded-full text-xs tabular-nums" data-testid="text-import-count">
               {totalImports.toLocaleString()} {filtered ? "matching" : totalImports === 1 ? "file" : "files"}
             </Badge>
@@ -50,7 +52,7 @@ export function SavedPageHeader({
           variant="outline"
           className="h-11 px-3 md:h-9"
           onClick={onRefresh}
-          disabled={actionsDisabled}
+          disabled={refreshDisabled}
           data-testid="button-refresh"
         >
           <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" />

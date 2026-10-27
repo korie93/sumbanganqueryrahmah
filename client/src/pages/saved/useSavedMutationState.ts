@@ -11,6 +11,7 @@ type SavedToast = (options: {
 }) => void;
 
 type SavedMutationStateOptions = {
+  canMutate: () => boolean;
   selectedImportIds: Set<string>;
   onImportRenamed: (importId: string, nextName: string) => void;
   onImportsRemoved: (importIds: string[]) => void;
@@ -20,6 +21,7 @@ type SavedMutationStateOptions = {
 };
 
 export function useSavedMutationState({
+  canMutate,
   selectedImportIds,
   onImportRenamed,
   onImportsRemoved,
@@ -81,7 +83,7 @@ export function useSavedMutationState({
   }, []);
 
   const runRenameConfirm = useCallback(async () => {
-    if (!selectedImport || !newName.trim() || renaming || deleting || bulkDeleting || isMutationPending()) {
+    if (!selectedImport || !newName.trim() || renaming || deleting || bulkDeleting || isMutationPending() || !canMutate()) {
       return;
     }
 
@@ -131,6 +133,7 @@ export function useSavedMutationState({
     }
   }, [
     bulkDeleting,
+    canMutate,
     deleting,
     isActiveMutationRequest,
     isMutationPending,
@@ -146,7 +149,7 @@ export function useSavedMutationState({
   }, [runRenameConfirm]);
 
   const runDeleteConfirm = useCallback(async () => {
-    if (!selectedImport || deleting || renaming || bulkDeleting || isMutationPending()) {
+    if (!selectedImport || deleting || renaming || bulkDeleting || isMutationPending() || !canMutate()) {
       return;
     }
 
@@ -196,6 +199,7 @@ export function useSavedMutationState({
     }
   }, [
     bulkDeleting,
+    canMutate,
     deleting,
     isActiveMutationRequest,
     isMutationPending,
@@ -212,7 +216,7 @@ export function useSavedMutationState({
 
   const runBulkDeleteConfirm = useCallback(async () => {
     const ids = Array.from(selectedImportIds);
-    if (ids.length === 0 || bulkDeleting || deleting || renaming || isMutationPending()) {
+    if (ids.length === 0 || bulkDeleting || deleting || renaming || isMutationPending() || !canMutate()) {
       return;
     }
 
@@ -282,6 +286,7 @@ export function useSavedMutationState({
     }
   }, [
     bulkDeleting,
+    canMutate,
     deleting,
     isActiveMutationRequest,
     isMutationPending,

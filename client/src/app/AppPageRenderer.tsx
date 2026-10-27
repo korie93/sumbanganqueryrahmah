@@ -75,7 +75,7 @@ function AppPageRendererImpl({
     case "import":
       return <ImportPage onNavigate={onNavigate} importUploadLimitBytes={runtimeConfig.importUploadLimitBytes} />;
     case "saved":
-      return <SavedPage onNavigate={onNavigate} userRole={user.role} />;
+      return <SavedPage key={JSON.stringify([user.id ?? user.username, user.role])} onNavigate={onNavigate} userRole={user.role} />;
     case "viewer":
       return (
         <ViewerPage
