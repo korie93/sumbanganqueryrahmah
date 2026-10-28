@@ -8,7 +8,7 @@ test("Saved text requests debounce with cleanup and publish the latest complete 
   const query = read("./useSavedSearchQuery.ts");
   assert.match(query, /SAVED_SEARCH_DEBOUNCE_MS = 300/);
   assert.match(query, /window\.clearTimeout\(timerRef\.current\)/);
-  assert.match(query, /return cancelTimer;\s*\}, \[cancelTimer, composing, flush, submitted, text\]\)/);
+  assert.match(query, /return clearDebounceTimer;\s*\}, \[clearDebounceTimer, composing, flush, submitted, text\]\)/);
   assert.match(query, /submittedRef\.current = textRef\.current;\s*setSubmitted\(textRef\.current\)/);
   assert.match(query, /if \(!value\.trim\(\)\) flush\(\)/);
   assert.match(query, /if \(composingRef\.current\.searchTerm \|\| composingRef\.current\.uploaderFilter\) return false/);
