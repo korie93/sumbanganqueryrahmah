@@ -2,12 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ApiCircuitOpenError } from "@/lib/api-client-retry";
 import { shouldRetainSavedPage } from "@/pages/saved/saved-refresh-policy";
+import { ReadDeadlineError, READ_DEADLINE_MESSAGE } from "@/lib/read-deadline";
 
 const SAME_PAGE = {
   loadedKey: "account-a:all:page-2:search-batch",
   requestKey: "account-a:all:page-2:search-batch",
   currentKey: "account-a:all:page-2:search-batch",
 };
+
+test("Saved retains a matching last-good page on a real read deadline, never spoofed text or denial", () => {
+  const error = new ReadDeadlineError();
+  assert.equal(shouldRetainSavedPage({ ...SAME_PAGE, error }), true);
+  assert.equal(shouldRetainSavedPage({ ...SAME_PAGE, loadedKey: null, error }), false);
+  assert.equal(shouldRetainSavedPage({ ...SAME_PAGE, currentKey: "different-query", error }), false);
+  assert.equal(shouldRetainSavedPage({ ...SAME_PAGE, error: new Error(READ_DEADLINE_MESSAGE) }), false);
+  error.message = "403: denied";
+  assert.equal(shouldRetainSavedPage({ ...SAME_PAGE, error }), false);
+});
 
 test("Saved can retain the last-good page for allowlisted temporary HTTP failures", () => {
   for (const status of [408, 429, 500, 502, 503, 504]) {

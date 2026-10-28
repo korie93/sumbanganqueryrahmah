@@ -147,7 +147,7 @@ function ViewerExportMenuImpl({
           <SheetHeader className="pr-8 text-left">
             <SheetTitle>Export Dataset</SheetTitle>
             <SheetDescription>
-              Export all rows, filtered rows, or selected rows without leaving the viewer.
+              Pilih skop eksport mengikut bilangan rekod yang dipaparkan.
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4">

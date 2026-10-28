@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { useState, type KeyboardEvent, type RefObject } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,16 @@ interface SavedFiltersBarProps {
   searchInputRef?: RefObject<HTMLInputElement> | undefined;
   onSearchTermChange: (value: string) => void;
   onUploaderFilterChange: (value: string) => void;
+  onSubmitSearch: () => void;
+  onSearchCompositionChange: (composing: boolean) => void;
+  onUploaderCompositionChange: (composing: boolean) => void;
   onDateFilterChange: (date?: Date) => void;
   onMinRowsFilterChange: (value: string) => void;
   onMaxRowsFilterChange: (value: string) => void;
   onClearFilters: () => void;
 }
 
+/** Keeps Saved search controls available while committing only completed text input. */
 export function SavedFiltersBar({
   searchTerm,
   uploaderFilter,
@@ -33,6 +37,9 @@ export function SavedFiltersBar({
   searchInputRef,
   onSearchTermChange,
   onUploaderFilterChange,
+  onSubmitSearch,
+  onSearchCompositionChange,
+  onUploaderCompositionChange,
   onDateFilterChange,
   onMinRowsFilterChange,
   onMaxRowsFilterChange,
@@ -41,6 +48,11 @@ export function SavedFiltersBar({
   const [advancedOpen, setAdvancedOpen] = useState(
     uploaderFilter.trim() !== "" || minRowsFilter.trim() !== "" || maxRowsFilter.trim() !== "",
   );
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+    event.preventDefault();
+    onSubmitSearch();
+  };
   const activeFilters = [
     searchTerm.trim()
       ? {
@@ -95,6 +107,12 @@ export function SavedFiltersBar({
             type="search"
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            onCompositionStart={() => onSearchCompositionChange(true)}
+            onCompositionEnd={(event) => {
+              onSearchTermChange(event.currentTarget.value);
+              onSearchCompositionChange(false);
+            }}
             placeholder="Search name, filename, or uploader..."
             aria-label="Search saved imports by name, filename, or uploader"
             autoComplete="off"
@@ -162,6 +180,12 @@ export function SavedFiltersBar({
             type="search"
             value={uploaderFilter}
             onChange={(event) => onUploaderFilterChange(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            onCompositionStart={() => onUploaderCompositionChange(true)}
+            onCompositionEnd={(event) => {
+              onUploaderFilterChange(event.currentTarget.value);
+              onUploaderCompositionChange(false);
+            }}
             placeholder="Uploader"
             aria-label="Filter saved imports by uploader"
             autoComplete="off"

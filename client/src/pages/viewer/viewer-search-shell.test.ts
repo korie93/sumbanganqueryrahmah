@@ -8,6 +8,7 @@ import { ViewerContentFiltersSection } from "./ViewerContentFiltersSection";
 import { ViewerEmptyState } from "./ViewerEmptyState";
 import { ViewerSearchBar } from "./ViewerSearchBar";
 import { ViewerSearchSummary } from "./ViewerSearchSummary";
+import { ViewerContentErrorBanner } from "./ViewerContentErrorBanner";
 
 const noop = () => undefined;
 const source = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
@@ -17,6 +18,9 @@ const fixture: ComponentProps<typeof ViewerContentDatasetSection> = {
   allHeaders: ["Name", "Account"],
   loading: false,
   error: "",
+  canRetry: false,
+  retrying: false,
+  onRetry: noop,
   emptyHint: "",
   isSearchBelowMinLength: false,
   onBackToSaved: noop,
@@ -57,6 +61,22 @@ const fixture: ComponentProps<typeof ViewerContentDatasetSection> = {
   onPrevPage: noop,
   onNextPage: noop,
 };
+
+test("Viewer retry keeps a separate error alert and a disabled busy control with a working return", () => {
+  for (const [canRetry, retrying, disabled] of [[true, false, false], [false, false, true], [true, true, true]] as const) {
+    const markup = renderToStaticMarkup(createElement(ViewerContentErrorBanner, {
+      error: "Synthetic temporary failure", canRetry, retrying, onRetry: noop, onBackToSaved: noop,
+    }));
+    assert.match(markup, /role="alert">Synthetic temporary failure<\/p>/);
+    const retry = markup.match(/<button[^>]*data-testid="button-retry-viewer"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+    assert.match(retry, retrying ? /Memuat semula…/ : /Cuba Semula/);
+    assert.equal(/disabled=""/.test(retry), disabled);
+    assert.doesNotMatch(retry, /role="alert"/);
+    const back = markup.match(/<button[^>]*>Back to Saved Imports<\/button>/)?.[0] ?? "";
+    assert.ok(back);
+    assert.doesNotMatch(back, /\sdisabled(?:=|[\s>])/);
+  }
+});
 
 test("Viewer search, refinement chips and actions remain available in every non-table state", () => {
   const states = [

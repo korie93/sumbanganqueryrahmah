@@ -1,4 +1,5 @@
 import { ApiCircuitOpenError } from "@/lib/api-client-retry";
+import { isReadDeadlineError } from "@/lib/read-deadline";
 
 type SavedRefreshPolicyOptions = {
   error: unknown;
@@ -23,6 +24,11 @@ export function shouldRetainSavedPage({
   if (loadedKey === null || loadedKey !== requestKey || requestKey !== currentKey) {
     return false;
   }
+  return isSavedRetryableReadError(error);
+}
+
+/** Recognizes temporary Saved read failures without retrying denials or invalid responses. */
+export function isSavedRetryableReadError(error: unknown): boolean {
   if (!(error instanceof Error) || error.name === "AbortError") {
     return false;
   }
@@ -33,6 +39,7 @@ export function shouldRetainSavedPage({
   if (httpStatus) {
     return TRANSIENT_HTTP_STATUSES.has(Number(httpStatus[1]));
   }
+  if (isReadDeadlineError(error)) return true;
   if (
     error instanceof ApiCircuitOpenError
     || (error.name === "ApiCircuitOpenError" && CIRCUIT_OPEN_MESSAGE.test(message))

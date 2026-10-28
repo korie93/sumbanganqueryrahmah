@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { SavedReturnNavigationContext } from "@/app/SavedReturnProvider";
+import { READ_DEADLINE_MESSAGE } from "@/lib/read-deadline";
 import { AlertCircle, BookMarked, Search } from "lucide-react";
 import {
   OperationalPage,
@@ -14,14 +16,18 @@ import { SavedRefreshNotice } from "@/pages/saved/SavedRefreshNotice";
 import { SavedWorkspacePanel } from "@/pages/saved/SavedWorkspacePanel";
 import { SavedSourceConfigProvider } from "@/pages/saved/SavedSourceConfigProvider";
 import { useSavedPageState } from "@/pages/saved/useSavedPageState";
+import { useSavedReturnPosition } from "@/pages/saved/useSavedReturnPosition";
 import { SavedOverlayFocusContext } from "@/pages/saved/SavedOverlayFocusContext";
 import { createSavedOverlayFocus } from "@/pages/saved/saved-overlay-focus";
 import { formatSavedImportDate } from "@/pages/saved/utils";
 import type { SavedProps } from "@/pages/saved/types";
 
 export default function Saved({ onNavigate, userRole }: SavedProps) {
-  const state = useSavedPageState({ onNavigate, userRole });
+  const navigation = useContext(SavedReturnNavigationContext);
+  const [initialContext] = useState(() => navigation?.snapshot ?? null);
+  const state = useSavedPageState({ onNavigate, userRole, initialQuery: initialContext?.query });
   const { searchInputRef } = state;
+  const handleView = useSavedReturnPosition({ initialContext, navigation, state, searchInputRef });
   const fallbackFocusRef = useRef<HTMLButtonElement>(null);
   const overlayFocus = useMemo(
     () => createSavedOverlayFocus(() => searchInputRef.current ?? fallbackFocusRef.current),
@@ -63,6 +69,9 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
             searchInputRef={state.searchInputRef}
             onSearchTermChange={state.setSearchTerm}
             onUploaderFilterChange={state.setUploaderFilter}
+            onSubmitSearch={state.submitSearch}
+            onSearchCompositionChange={state.setSearchComposing}
+            onUploaderCompositionChange={state.setUploaderComposing}
             onDateFilterChange={state.setDateFilter}
             onMinRowsFilterChange={state.setMinRowsFilter}
             onMaxRowsFilterChange={state.setMaxRowsFilter}
@@ -84,6 +93,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         isStale={state.isStale}
         refreshDisabled={state.refreshDisabled}
         onRefresh={state.handleRefresh}
+        timedOut={state.error === READ_DEADLINE_MESSAGE}
       />
 
       {state.error && !state.hasPage ? (
@@ -162,7 +172,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
               onRename={state.handleRenameClick}
               onToggleSelected={state.handleToggleSelected}
               onToggleSelectAllVisible={state.handleToggleSelectAllVisible}
-              onView={state.handleView}
+              onView={handleView}
               onWorkspaceViewChange={state.setWorkspaceView}
             />
         )}
@@ -178,6 +188,7 @@ export default function Saved({ onNavigate, userRole }: SavedProps) {
         bulkDeleteCount={state.selectedImportIds.size}
         selectedImport={state.selectedImport}
         newName={state.newName}
+        renameError={state.renameError}
         onDeleteDialogOpenChange={state.setDeleteDialogOpen}
         onRenameDialogOpenChange={state.setRenameDialogOpen}
         onBulkDeleteDialogOpenChange={state.setBulkDeleteDialogOpen}

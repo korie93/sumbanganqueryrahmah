@@ -1,6 +1,8 @@
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { SavedWorkspaceView } from "@/pages/saved/saved-workspace";
 import { useSavedImportPage } from "@/pages/saved/useSavedImportPage";
+import { useSavedSearchQuery } from "@/pages/saved/useSavedSearchQuery";
+import { parseSavedReturnDate, type SavedReturnQuery } from "@/pages/saved/saved-return-context";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -13,18 +15,16 @@ function parseOptionalRowCount(value: string) {
   return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
-export function useSavedDataState() {
-  const [page, setPageState] = useState(1);
-  const [pageSize, setPageSizeState] = useState(DEFAULT_PAGE_SIZE);
-  const [searchTerm, setSearchTermState] = useState("");
-  const [uploaderFilter, setUploaderFilterState] = useState("");
-  const [dateFilter, setDateFilterState] = useState<Date | undefined>(undefined);
-  const [minRowsFilter, setMinRowsFilterState] = useState("");
-  const [maxRowsFilter, setMaxRowsFilterState] = useState("");
-  const [workspaceView, setWorkspaceViewState] = useState<SavedWorkspaceView>("all");
-
-  const deferredSearchTerm = useDeferredValue(searchTerm);
-  const deferredUploaderFilter = useDeferredValue(uploaderFilter);
+export function useSavedDataState(initialQuery?: SavedReturnQuery) {
+  const [page, setPageState] = useState(initialQuery?.page ?? 1);
+  const [pageSize, setPageSizeState] = useState(initialQuery?.pageSize ?? DEFAULT_PAGE_SIZE);
+  const query = useSavedSearchQuery(initialQuery);
+  const { searchTerm, uploaderFilter, setSearchTerm: updateSearch, setUploaderFilter: updateUploader,
+    flush, reset: resetSearch } = query;
+  const [dateFilter, setDateFilterState] = useState(() => parseSavedReturnDate(initialQuery?.createdOn));
+  const [minRowsFilter, setMinRowsFilterState] = useState(initialQuery?.minRowsFilter ?? "");
+  const [maxRowsFilter, setMaxRowsFilterState] = useState(initialQuery?.maxRowsFilter ?? "");
+  const [workspaceView, setWorkspaceViewState] = useState<SavedWorkspaceView>(initialQuery?.workspaceView ?? "all");
 
   const activeCreatedOn = useMemo(() => {
     if (!dateFilter) return undefined;
@@ -48,8 +48,8 @@ export function useSavedDataState() {
     minRowsFilter, maxRowsFilter, workspaceView,
   ]);
   const data = useSavedImportPage({
-    contextKey, queryReady: deferredSearchTerm === searchTerm && deferredUploaderFilter === uploaderFilter,
-    page, pageSize, search: deferredSearchTerm, createdBy: deferredUploaderFilter,
+    contextKey, queryReady: query.queryReady,
+    page, pageSize, search: query.submitted.searchTerm, createdBy: query.submitted.uploaderFilter,
     createdOn: activeCreatedOn, minRows, maxRows, view: workspaceView,
     onPageResolved: setPageState,
   });
@@ -57,47 +57,62 @@ export function useSavedDataState() {
   const resetPage = useCallback(() => setPageState(1), []);
   const setSearchTerm = useCallback((value: string) => {
     resetPage();
-    setSearchTermState(value);
-  }, [resetPage]);
+    updateSearch(value);
+  }, [resetPage, updateSearch]);
   const setUploaderFilter = useCallback((value: string) => {
     resetPage();
-    setUploaderFilterState(value);
-  }, [resetPage]);
+    updateUploader(value);
+  }, [resetPage, updateUploader]);
   const setDateFilter = useCallback((value?: Date) => {
     resetPage();
+    flush();
     setDateFilterState(value);
-  }, [resetPage]);
+  }, [flush, resetPage]);
   const setMinRowsFilter = useCallback((value: string) => {
     resetPage();
+    flush();
     setMinRowsFilterState(value);
-  }, [resetPage]);
+  }, [flush, resetPage]);
   const setMaxRowsFilter = useCallback((value: string) => {
     resetPage();
+    flush();
     setMaxRowsFilterState(value);
-  }, [resetPage]);
+  }, [flush, resetPage]);
   const setWorkspaceView = useCallback((value: SavedWorkspaceView) => {
     resetPage();
+    flush();
     setWorkspaceViewState(value);
-  }, [resetPage]);
+  }, [flush, resetPage]);
   const setPage = useCallback((value: number) => {
+    flush();
     setPageState(Math.max(1, Math.trunc(value)));
-  }, []);
+  }, [flush]);
   const setPageSize = useCallback((value: number) => {
+    flush();
     setPageState(1);
     setPageSizeState(Math.max(1, Math.trunc(value)));
-  }, []);
+  }, [flush]);
 
   const clearFilters = useCallback(() => {
     setPageState(1);
-    setSearchTermState("");
-    setUploaderFilterState("");
+    resetSearch();
     setDateFilterState(undefined);
     setMinRowsFilterState("");
     setMaxRowsFilterState("");
-  }, []);
+  }, [resetSearch]);
+
+  const refresh = useCallback(() => {
+    if (flush()) void data.refresh();
+  }, [data.refresh, flush]);
 
   return {
     ...data,
+    refresh,
+    searchPending: !query.queryReady,
+    searchComposing: query.composing,
+    submitSearch: flush,
+    setSearchComposing: query.setSearchComposing,
+    setUploaderComposing: query.setUploaderComposing,
     page,
     pageSize,
     hasMoreImports: page < data.totalPages,

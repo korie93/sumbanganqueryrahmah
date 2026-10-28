@@ -254,6 +254,7 @@ export function useViewerPageState({
   }, [filteredRows, selectAllFiltered]);
 
   const exportState = useViewerExportState({
+    canExport: data.canExport,
     // Keep the existing export batch size instead of multiplying server reads
     // when the person chooses fewer cards per page.
     rowsPerPage: resolveInitialViewerPageSize(viewerRowsPerPage, false, isLowSpecMode),
@@ -315,6 +316,7 @@ export function useViewerPageState({
     exportingExcel: exportState.exportingExcel,
     exportingPdf: exportState.exportingPdf,
     exportBusy: exportState.exportBusy,
+    exportStatus: exportState.exportStatus,
     cancelActiveExport: exportState.cancelActiveExport,
     filteredRows,
     selectedRowIds,
@@ -329,6 +331,10 @@ export function useViewerPageState({
     pageStart,
     pageEnd,
     error: data.error,
+    canRetry: data.canRetry,
+    retrying: data.retrying,
+    handleRetry: data.handleRetry,
+    exportReady: data.exportReady,
     loading: data.loading,
     emptyHint: data.emptyHint,
     isSearchBelowMinLength,

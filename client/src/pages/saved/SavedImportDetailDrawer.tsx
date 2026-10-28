@@ -11,7 +11,6 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,9 +104,17 @@ export function SavedImportDetailDrawer({
             </SheetHeader>
 
             {detail.error ? (
-              <Alert variant="destructive">
-                <AlertDescription>{detail.error}</AlertDescription>
-              </Alert>
+              <div className="space-y-3 rounded-lg border border-destructive/50 p-3" data-testid="saved-detail-error">
+                <p role="alert" className="text-sm text-destructive">{detail.error}</p>
+                {detail.canRetry || detail.retrying ? (
+                  <Button
+                    type="button" variant="outline" className="h-11 w-full sm:w-auto"
+                    disabled={detail.retrying} onClick={detail.retry} data-testid="button-retry-saved-detail"
+                  >
+                    {detail.retrying ? "Memuat semula…" : "Cuba Semula"}
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
 
             <section className="grid gap-4 rounded-lg border border-border/70 bg-muted/25 p-4 sm:grid-cols-2">
@@ -119,7 +126,7 @@ export function SavedImportDetailDrawer({
               <DetailRow
                 icon={Columns3}
                 label="Columns"
-                value={detail.loading ? "Loading..." : String(detail.summary?.columnCount ?? "Unknown")}
+                value={detail.loading ? "Loading..." : detail.summary ? String(detail.summary.columnCount) : "Unavailable"}
               />
               <DetailRow
                 icon={HardDrive}
@@ -143,13 +150,13 @@ export function SavedImportDetailDrawer({
               />
             </section>
 
-            <section className="space-y-2">
+            <section className="space-y-2" data-testid="saved-detail-columns">
               <div className="flex items-center gap-2">
                 <Columns3 className="h-4 w-4 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-foreground">Columns</h3>
               </div>
               {detail.loading ? (
-                <p className="text-sm text-muted-foreground">Loading column summary...</p>
+                <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Loading column summary...</p>
               ) : columns.length > 0 ? (
                 <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
                   {columns.map((column) => (
@@ -158,8 +165,10 @@ export function SavedImportDetailDrawer({
                     </Badge>
                   ))}
                 </div>
-              ) : (
+              ) : detail.summary ? (
                 <p className="text-sm text-muted-foreground">No columns were detected.</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Butiran lajur belum tersedia.</p>
               )}
             </section>
 

@@ -71,8 +71,8 @@ export default function Viewer({
 
       {viewer.exportBusy ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <p role="status" aria-live="polite" data-testid="viewer-export-status" className="text-sm text-muted-foreground">
-            Sedang menyediakan fail…
+          <p role="status" aria-live="polite" aria-atomic="true" data-testid="viewer-export-status" className="text-sm text-muted-foreground">
+            {viewer.exportStatus}
           </p>
           <Button type="button" variant="outline" size="sm" onClick={viewer.cancelActiveExport} data-testid="button-cancel-viewer-export">
             Batal eksport
@@ -105,7 +105,7 @@ export default function Viewer({
                 onMoveColumn={viewer.moveColumn}
                 onResetColumns={viewer.resetColumns}
                 onToggleFilters={viewer.handleToggleFilters}
-                rowsCount={viewer.rows.length}
+                rowsCount={viewer.exportReady ? viewer.rows.length : 0}
                 selectedColumns={viewer.selectedColumns}
                 selectedRowCount={viewer.selectedRowIds.size}
                 showColumnSelector={viewer.showColumnSelector}
@@ -127,6 +127,9 @@ export default function Viewer({
           showFilters={viewer.showFilters}
           columnFilters={viewer.columnFilters}
           error={viewer.error}
+          canRetry={viewer.canRetry}
+          retrying={viewer.retrying}
+          onRetry={viewer.handleRetry}
           loading={viewer.loading}
           emptyHint={viewer.emptyHint}
           isSearchBelowMinLength={viewer.isSearchBelowMinLength}

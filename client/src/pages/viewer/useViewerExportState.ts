@@ -15,8 +15,13 @@ import {
   type ViewerExportKind,
   type ViewerExportOwner,
 } from "@/pages/viewer/viewer-export-lifecycle";
+import {
+  formatViewerExportProgress,
+  type ViewerExportProgress,
+} from "@/pages/viewer/viewer-export-progress";
 
 type UseViewerExportStateOptions = {
+  canExport?: (() => boolean) | undefined;
   rowsPerPage: number;
   importId?: string | undefined;
   importName: string;
@@ -30,6 +35,7 @@ type UseViewerExportStateOptions = {
 };
 
 export function useViewerExportState({
+  canExport,
   rowsPerPage,
   importId,
   importName,
@@ -41,7 +47,8 @@ export function useViewerExportState({
   debouncedSearch,
   debouncedColumnFilters,
 }: UseViewerExportStateOptions) {
-  const [exportingKind, setExportingKind] = useState<ViewerExportKind | null>(null);
+  const [exportProgress, setExportProgress] = useState<ViewerExportProgress | null>(null);
+  const exportingKind = exportProgress?.kind ?? null;
   const [lifecycle] = useState(createViewerExportLifecycle);
   const mountedRef = useRef(true);
 
@@ -55,16 +62,17 @@ export function useViewerExportState({
 
   const cancelActiveExport = useCallback(() => {
     lifecycle.cancel();
-    if (mountedRef.current) setExportingKind(null);
+    if (mountedRef.current) setExportProgress(null);
   }, [lifecycle]);
 
-  // A new dataset must not inherit an export owned by the previous dataset.
-  useEffect(() => cancelActiveExport, [cancelActiveExport, importId]);
+  // A different dataset or query must not inherit the previous export's progress.
+  useEffect(() => cancelActiveExport, [cancelActiveExport, importId, debouncedSearch, debouncedColumnFilters]);
 
   const loadRowsForExport = useCallback(async (
     exportFiltered: boolean,
     exportSelected: boolean,
     signal: AbortSignal,
+    onProgress: (receivedRows: number) => void,
   ) => {
     if (signal.aborted) throw new DOMException("The operation was aborted.", "AbortError");
     const immediateRows = resolveViewerImmediateExportRows({
@@ -84,6 +92,7 @@ export function useViewerExportState({
       search: debouncedSearch,
       columnFilters: debouncedColumnFilters,
       signal,
+      onProgress,
       getPage: ({ page, cursor, signal: pageSignal, search, columnFilters }) =>
         getImportData(importId, page, rowsPerPage, search, {
           signal: pageSignal,
@@ -107,9 +116,11 @@ export function useViewerExportState({
     exportFiltered = false,
     exportSelected = false,
   ) => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || (canExport && !canExport())) return;
     let owner: ViewerExportOwner | null = null;
-    const shouldContinue = () => mountedRef.current && owner !== null && lifecycle.isCurrent(owner);
+    const shouldContinue = () => mountedRef.current && owner !== null && lifecycle.isCurrent(owner)
+      && (!canExport || canExport());
+    const needsPagedRows = !exportSelected && !exportFiltered && Boolean(importId) && totalRows > rows.length;
     const exportOptions = {
       headers: visibleHeaders,
       importName,
@@ -122,31 +133,41 @@ export function useViewerExportState({
       exportingPdf: exportingKind === "pdf",
       isAnotherExportInFlight: lifecycle.isBusy(),
       beforeRun: () => {
+        if (canExport && !canExport()) return false;
         owner = lifecycle.start(kind);
         if (!owner) return false;
-        setExportingKind(kind);
+        setExportProgress(needsPagedRows
+          ? { kind, phase: "loading", receivedRows: 0, expectedRows: totalRows }
+          : { kind, phase: "preparing" });
         return true;
       },
       afterRun: () => {
-        if (owner && lifecycle.finish(owner) && mountedRef.current) setExportingKind(null);
+        if (owner && lifecycle.finish(owner) && mountedRef.current) setExportProgress(null);
       },
       shouldContinue,
-      loadRows: () => {
+      loadRows: async () => {
         if (!owner || !shouldContinue()) {
           return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
         }
-        return loadRowsForExport(exportFiltered, exportSelected, owner.controller.signal);
+        const exportRows = await loadRowsForExport(exportFiltered, exportSelected, owner.controller.signal, (receivedRows) => {
+          if (shouldContinue()) setExportProgress({ kind, phase: "loading", receivedRows, expectedRows: totalRows });
+        });
+        if (shouldContinue() && exportRows.length > 0) setExportProgress({ kind, phase: "preparing" });
+        return exportRows;
       },
     };
     const exportAction = kind === "csv" ? runViewerCsvExport
       : kind === "pdf" ? runViewerPdfExport : runViewerExcelExport;
     await exportAction(exportOptions);
   }, [
+    canExport,
     exportingKind,
     filteredRows.length,
     importName,
+    importId,
     lifecycle,
     loadRowsForExport,
+    rows.length,
     selectedRowIds.size,
     totalRows,
     visibleHeaders,
@@ -164,6 +185,7 @@ export function useViewerExportState({
 
   return {
     exportBusy: exportingKind !== null,
+    exportStatus: exportProgress ? formatViewerExportProgress(exportProgress) : null,
     exportingExcel: exportingKind === "excel",
     exportingPdf: exportingKind === "pdf",
     cancelActiveExport,

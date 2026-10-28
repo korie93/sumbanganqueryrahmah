@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { deleteImport, renameImport } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import type { ImportItem } from "@/pages/saved/types";
 import { isSavedAbortError, readSavedErrorMessage } from "@/pages/saved/saved-state-utils";
 import { deleteSavedImports } from "@/pages/saved/saved-bulk-delete";
@@ -34,6 +35,7 @@ export function useSavedMutationState({
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [selectedImport, setSelectedImport] = useState<ImportItem | null>(null);
   const [newName, setNewName] = useState("");
+  const [renameError, setRenameError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -77,9 +79,28 @@ export function useSavedMutationState({
   }, []);
 
   const handleRenameClick = useCallback((importItem: ImportItem) => {
+    if (isMutationPending()) return;
     setSelectedImport(importItem);
     setNewName(importItem.name);
+    setRenameError("");
     setRenameDialogOpen(true);
+  }, [isMutationPending]);
+
+  const handleRenameDialogOpenChange = useCallback((open: boolean) => {
+    // The ref also covers dismissal before the pending render has committed.
+    if (renameAbortControllerRef.current) return;
+    setRenameDialogOpen(open);
+    if (!open) {
+      setRenameError("");
+      setNewName("");
+      setSelectedImport(null);
+    }
+  }, []);
+
+  const handleNewNameChange = useCallback((value: string) => {
+    if (renameAbortControllerRef.current) return;
+    setNewName(value);
+    setRenameError("");
   }, []);
 
   const runRenameConfirm = useCallback(async () => {
@@ -88,6 +109,7 @@ export function useSavedMutationState({
     }
 
     setRenaming(true);
+    setRenameError("");
     renameAbortControllerRef.current?.abort();
     const controller = new AbortController();
     renameAbortControllerRef.current = controller;
@@ -105,16 +127,15 @@ export function useSavedMutationState({
         description: `Name has been updated to "${trimmedName}".`,
       });
       onImportRenamed(selectedImport.id, trimmedName);
+      setRenameDialogOpen(false);
+      setSelectedImport(null);
+      setNewName("");
     } catch (error: unknown) {
       if (isSavedAbortError(error) || !isActiveMutationRequest(controller, requestId, renameAbortControllerRef)) {
         return;
       }
 
-      toast({
-        title: "Failed",
-        description: readSavedErrorMessage(error, "Failed to update name."),
-        variant: "destructive",
-      });
+      setRenameError(getApiErrorMessage(error, "Failed to update name. Please try again."));
     } finally {
       const shouldFinalizeRename = isActiveMutationRequest(
         controller,
@@ -126,9 +147,6 @@ export function useSavedMutationState({
       }
       if (shouldFinalizeRename) {
         setRenaming(false);
-        setRenameDialogOpen(false);
-        setSelectedImport(null);
-        setNewName("");
       }
     }
   }, [
@@ -310,10 +328,11 @@ export function useSavedMutationState({
     renaming,
     selectedImport,
     newName,
+    renameError,
     setDeleteDialogOpen,
     setBulkDeleteDialogOpen,
-    setRenameDialogOpen,
-    setNewName,
+    setRenameDialogOpen: handleRenameDialogOpenChange,
+    setNewName: handleNewNameChange,
     handleDeleteClick,
     handleRenameClick,
     handleDeleteConfirm,

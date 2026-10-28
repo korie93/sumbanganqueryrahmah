@@ -21,6 +21,9 @@ type ViewerContentProps = {
   showFilters: boolean;
   columnFilters: ColumnFilter[];
   error: string;
+  canRetry: boolean;
+  retrying: boolean;
+  onRetry: () => void;
   loading: boolean;
   emptyHint: string;
   isSearchBelowMinLength: boolean;
@@ -74,6 +77,9 @@ function ViewerContentImpl({
   showFilters,
   columnFilters,
   error,
+  canRetry,
+  retrying,
+  onRetry,
   loading,
   emptyHint,
   isSearchBelowMinLength,
@@ -119,6 +125,9 @@ function ViewerContentImpl({
       allHeaders={headers}
       loading={loading}
       error={error}
+      canRetry={canRetry}
+      retrying={retrying}
+      onRetry={onRetry}
       emptyHint={emptyHint}
       isSearchBelowMinLength={isSearchBelowMinLength}
       onBackToSaved={onBackToSaved}

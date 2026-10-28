@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useId, useMemo, useRef, useState } from "react";
 import { Download, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -15,7 +15,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { buildViewerExportMenuSections } from "@/pages/viewer/export-menu-utils";
+import { buildViewerExportMenuSections, VIEWER_EXPORT_PAGE_HINT } from "@/pages/viewer/export-menu-utils";
 
 type ViewerMoreActionsProps = {
   isSuperuser: boolean;
@@ -47,6 +47,7 @@ function ViewerMoreActionsImpl({
   const isMobile = useIsMobile();
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const [mobileExportOpen, setMobileExportOpen] = useState(false);
+  const exportScopeHintId = useId();
   const sections = useMemo(() => buildViewerExportMenuSections({
     exportBusy, totalRows, filteredRowsCount, selectedRowCount, hasFilteredSubset,
   }), [exportBusy, filteredRowsCount, hasFilteredSubset, selectedRowCount, totalRows]);
@@ -103,7 +104,8 @@ function ViewerMoreActionsImpl({
                           key={option.id}
                           disabled={exportBusy || option.disabled}
                           data-testid={`button-export-${option.id}`}
-                          className="min-h-11 sm:min-h-9"
+                          className="min-h-11 whitespace-normal break-words py-2 leading-snug sm:min-h-9"
+                          aria-describedby={option.exportFiltered && !option.exportSelected ? `${exportScopeHintId}-desktop` : undefined}
                           onSelect={() => {
                             const runExport = option.kind === "csv" ? onExportCsv
                               : option.kind === "pdf" ? onExportPdf : onExportExcel;
@@ -115,6 +117,7 @@ function ViewerMoreActionsImpl({
                       ))}
                     </div>
                   ))}
+                  {hasFilteredSubset ? <p id={`${exportScopeHintId}-desktop`} className="px-2 py-2 text-xs leading-relaxed text-muted-foreground">{VIEWER_EXPORT_PAGE_HINT}</p> : null}
                 </DropdownMenuSubContent>
               </DropdownMenuPortal>
             </DropdownMenuSub>
@@ -144,7 +147,7 @@ function ViewerMoreActionsImpl({
         >
           <SheetHeader className="pr-8 text-left">
             <SheetTitle>Export Dataset</SheetTitle>
-            <SheetDescription>Export all rows, filtered rows, or selected rows without leaving the viewer.</SheetDescription>
+            <SheetDescription>Pilih skop eksport mengikut bilangan rekod yang dipaparkan.</SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-4">
             {sections.map((section) => (
@@ -158,7 +161,8 @@ function ViewerMoreActionsImpl({
                       variant="outline"
                       disabled={exportBusy || option.disabled}
                       data-testid={`button-export-${option.id}`}
-                      className="h-auto min-h-11 justify-start whitespace-normal text-left"
+                      className="h-auto min-h-11 justify-start whitespace-normal break-words text-left leading-snug"
+                      aria-describedby={option.exportFiltered && !option.exportSelected ? `${exportScopeHintId}-mobile` : undefined}
                       onClick={() => {
                         const runExport = option.kind === "csv" ? onExportCsv
                           : option.kind === "pdf" ? onExportPdf : onExportExcel;
@@ -172,6 +176,7 @@ function ViewerMoreActionsImpl({
                 </div>
               </section>
             ))}
+            {hasFilteredSubset ? <p id={`${exportScopeHintId}-mobile`} className="text-xs leading-relaxed text-muted-foreground">{VIEWER_EXPORT_PAGE_HINT}</p> : null}
           </div>
         </SheetContent>
       </Sheet>

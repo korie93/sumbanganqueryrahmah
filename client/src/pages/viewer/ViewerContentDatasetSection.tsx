@@ -27,6 +27,9 @@ type ViewerContentDatasetSectionProps = {
   allHeaders?: string[] | undefined;
   loading: boolean;
   error: string;
+  canRetry: boolean;
+  retrying: boolean;
+  onRetry: () => void;
   emptyHint: string;
   isSearchBelowMinLength: boolean;
   onBackToSaved: () => void;
@@ -74,6 +77,9 @@ function ViewerContentDatasetSectionImpl({
   allHeaders,
   loading,
   error,
+  canRetry,
+  retrying,
+  onRetry,
   emptyHint,
   isSearchBelowMinLength,
   onBackToSaved,
@@ -143,7 +149,11 @@ function ViewerContentDatasetSectionImpl({
 
       <div aria-busy={loading || loadingMore} className="viewer-results min-w-0">
         {error ? (
-          <ViewerContentErrorBanner error={error} onBackToSaved={onBackToSaved} />
+          <ViewerContentErrorBanner
+            error={error} canRetry={canRetry} retrying={retrying}
+            onRetry={onRetry}
+            onBackToSaved={onBackToSaved}
+          />
         ) : loading ? (
           <ViewerDataTableFallback />
         ) : !hasResults || isSearchBelowMinLength ? (

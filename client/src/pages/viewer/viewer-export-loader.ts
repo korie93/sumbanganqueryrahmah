@@ -14,6 +14,7 @@ type LoadViewerPagedExportRowsOptions = {
   search: string;
   columnFilters: ColumnFilter[];
   signal: AbortSignal;
+  onProgress?: (receivedRows: number) => void;
   getPage: (params: {
     page: number;
     cursor?: string | undefined;
@@ -50,6 +51,7 @@ export async function loadViewerPagedExportRows({
   search,
   columnFilters,
   signal,
+  onProgress,
   getPage,
 }: LoadViewerPagedExportRowsOptions) {
   const exportRows: DataRowWithId[] = [];
@@ -76,6 +78,8 @@ export async function loadViewerPagedExportRows({
     }
 
     exportRows.push(...normalizedPage.rows);
+    onProgress?.(exportRows.length);
+    if (signal.aborted) throw createAbortError();
 
     if (!normalizedPage.nextCursor) {
       break;

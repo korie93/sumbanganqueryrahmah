@@ -1,15 +1,17 @@
 import { Button } from "@/components/ui/button";
+import { READ_DEADLINE_MESSAGE } from "@/lib/read-deadline";
 
 type SavedRefreshNoticeProps = {
   refreshing: boolean;
   isStale: boolean;
   refreshDisabled: boolean;
+  timedOut?: boolean | undefined;
   onRefresh: () => void;
 };
 
 /** Explains a retained Saved page without replacing its rows or exposing request errors. */
 export function SavedRefreshNotice({
-  refreshing, isStale, refreshDisabled, onRefresh,
+  refreshing, isStale, refreshDisabled, onRefresh, timedOut = false,
 }: SavedRefreshNoticeProps) {
   if (!refreshing && !isStale) return null;
 
@@ -21,7 +23,7 @@ export function SavedRefreshNotice({
     >
       <div className="min-w-0 text-sm" role="status" aria-live="polite" aria-atomic="true">
         <p className="font-medium text-foreground">
-          {refreshing ? "Mengemas kini senarai…" : "Senarai belum dapat dikemas kini."}
+          {refreshing ? "Mengemas kini senarai…" : timedOut ? READ_DEADLINE_MESSAGE : "Senarai belum dapat dikemas kini."}
         </p>
         <p className="mt-1 text-muted-foreground">
           {refreshing

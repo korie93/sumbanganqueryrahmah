@@ -19,15 +19,16 @@ import {
 import { useSavedDataState } from "@/pages/saved/useSavedDataState";
 import { useSavedMutationState } from "@/pages/saved/useSavedMutationState";
 import { useSavedWorkspaceState } from "@/pages/saved/useSavedWorkspaceState";
+import type { SavedReturnQuery } from "@/pages/saved/saved-return-context";
 
-export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
+export function useSavedPageState({ onNavigate, userRole, initialQuery }: SavedProps & { initialQuery?: SavedReturnQuery | undefined }) {
   const isSuperuser = userRole === "superuser";
   const [filesOpen, setFilesOpen] = useState(true);
   const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
 
-  const data = useSavedDataState();
+  const data = useSavedDataState(initialQuery);
   const loadedImports = data.imports;
   const workspace = useSavedWorkspaceState({
     hasMoreImports: data.hasMoreImports,
@@ -101,8 +102,9 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     () => `${visibleImports.length.toLocaleString()} on this page`,
     [visibleImports.length],
   );
-  const refreshDisabled = data.loading || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
-  const adminActionsDisabled = refreshDisabled || data.isStale || Boolean(data.error);
+  const refreshDisabled = (data.loading && !data.searchPending) || data.searchComposing
+    || mutation.deleting || mutation.bulkDeleting || mutation.renaming;
+  const adminActionsDisabled = refreshDisabled || data.searchPending || data.isStale || Boolean(data.error);
 
   const handleView = useCallback(
     (importItem: { id: string; name: string }) => {
@@ -164,6 +166,7 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     error: data.error,
     hasPage: data.hasPage,
     refreshing: data.refreshing,
+    searchPending: data.searchPending,
     isStale: data.isStale,
     refreshDisabled,
     page: data.page,
@@ -195,6 +198,9 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     setRenameDialogOpen: mutation.setRenameDialogOpen,
     setSearchTerm: data.setSearchTerm,
     setUploaderFilter: data.setUploaderFilter,
+    submitSearch: data.submitSearch,
+    setSearchComposing: data.setSearchComposing,
+    setUploaderComposing: data.setUploaderComposing,
     setDateFilter: data.setDateFilter,
     setMinRowsFilter: data.setMinRowsFilter,
     setMaxRowsFilter: data.setMaxRowsFilter,
@@ -219,6 +225,7 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
     bulkDeleting: mutation.bulkDeleting,
     selectedImport: mutation.selectedImport,
     newName: mutation.newName,
+    renameError: mutation.renameError,
     setNewName: mutation.setNewName,
     handleDeleteConfirm: mutation.handleDeleteConfirm,
     handleRenameConfirm: mutation.handleRenameConfirm,

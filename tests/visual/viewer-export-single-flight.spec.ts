@@ -204,7 +204,7 @@ async function expectBusy(page: Page) {
   await expect(status).toBeVisible();
   await expect(status).toHaveAttribute("role", "status");
   await expect(status).toHaveAttribute("aria-live", "polite");
-  await expect(status).toContainText("Sedang menyediakan fail");
+  await expect(status).toHaveText(/^(?:Mengambil rekod: [\d,]+(?: daripada [\d,]+| rekod)|Menyediakan fail (?:CSV|Excel|PDF)…)$/);
   checkpoint("busy-visible");
   await expect(page.getByTestId("button-cancel-viewer-export")).toBeEnabled();
   await expect(page.getByTestId("select-viewer-page-size")).toBeDisabled();

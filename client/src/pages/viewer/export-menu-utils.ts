@@ -1,4 +1,5 @@
 export type ViewerExportActionKind = "csv" | "pdf" | "excel";
+export const VIEWER_EXPORT_PAGE_HINT = "Paparan halaman ini hanya mengeksport rekod yang sedang ditunjukkan.";
 
 export interface ViewerExportMenuOption {
   id: string;
@@ -36,7 +37,7 @@ function buildSectionOptions(
     {
       id: `${kind}-all`,
       kind,
-      label: `All Data (${totalRows} rows)`,
+      label: `${hasFilteredSubset ? "Semua keputusan carian" : "Semua data"} — ${totalRows.toLocaleString("en-MY")} rekod`,
       exportFiltered: false,
       exportSelected: false,
       disabled,
@@ -47,7 +48,7 @@ function buildSectionOptions(
     options.push({
       id: `${kind}-filtered`,
       kind,
-      label: `Filtered View (${filteredRowsCount} shown)`,
+      label: `Paparan halaman ini — ${filteredRowsCount.toLocaleString("en-MY")} rekod`,
       exportFiltered: true,
       exportSelected: false,
       disabled,
@@ -58,7 +59,7 @@ function buildSectionOptions(
     options.push({
       id: `${kind}-selected`,
       kind,
-      label: `Selected (${selectedRowCount} rows)`,
+      label: `Rekod dipilih — ${selectedRowCount.toLocaleString("en-MY")} rekod`,
       exportFiltered: true,
       exportSelected: true,
       disabled,

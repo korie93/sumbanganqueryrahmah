@@ -104,6 +104,7 @@ test("Saved filter search has an accessible label and retains advanced filters",
   const markup = renderToStaticMarkup(createElement(SavedFiltersBar, {
     searchTerm: "", uploaderFilter: "staff", minRowsFilter: "0", maxRowsFilter: "5000", hasActiveFilters: true,
     onSearchTermChange: noop, onUploaderFilterChange: noop, onDateFilterChange: noop,
+    onSubmitSearch: noop, onSearchCompositionChange: noop, onUploaderCompositionChange: noop,
     onMinRowsFilterChange: noop, onMaxRowsFilterChange: noop, onClearFilters: noop,
   }));
   assert.match(markup, /aria-label="Search saved imports by name, filename, or uploader"/);

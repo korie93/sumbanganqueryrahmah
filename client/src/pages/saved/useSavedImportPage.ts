@@ -3,6 +3,7 @@ import { getImports } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { isSavedAbortError } from "@/pages/saved/saved-state-utils";
 import { shouldRetainSavedPage } from "@/pages/saved/saved-refresh-policy";
+import { withReadDeadline } from "@/lib/read-deadline";
 import type { SavedWorkspaceView } from "@/pages/saved/saved-workspace";
 import type { ImportItem } from "@/pages/saved/types";
 
@@ -39,7 +40,7 @@ export function useSavedImportPage({
   stateRef.current = state;
 
   const fetchPage = useCallback(async (force = false) => {
-    if (!mountedRef.current || !queryReady || currentQueryRef.current.key !== contextKey) return;
+    if (!mountedRef.current || !queryReady || !currentQueryRef.current.ready || currentQueryRef.current.key !== contextKey) return;
     if (!force && requestRef.current?.key === contextKey && !requestRef.current.controller.signal.aborted) return;
     requestRef.current?.controller.abort();
     const request = { key: contextKey, controller: new AbortController() };
@@ -52,10 +53,10 @@ export function useSavedImportPage({
       loading: true, error: "", isStale: false,
     }));
     try {
-      const data = await getImports({
+      const data = await withReadDeadline((signal) => getImports({
         page, pageSize, search, createdBy, createdOn, minRows, maxRows, view,
-        signal: request.controller.signal,
-      });
+        signal,
+      }), request.controller.signal);
       if (!ownsRequest()) return;
       if (data.pagination.mode !== "offset") {
         throw new Error("Saved imports returned an unsupported pagination mode.");

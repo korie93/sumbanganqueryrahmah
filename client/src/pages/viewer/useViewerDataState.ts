@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getImportData } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { withReadDeadline } from "@/lib/read-deadline";
+import { buildViewerQueryKey, isViewerRetryableError } from "@/pages/viewer/viewer-retry-policy";
 import {
   appendViewerFilter,
   ensureViewerFilterIds,
@@ -23,6 +26,11 @@ import {
 
 export const VIEWER_MIN_SEARCH_LENGTH = 2;
 const VIEWER_SEARCH_DEBOUNCE_MS = 300;
+
+type ViewerReadRequest = {
+  key: string; importId: string; page: number; cursor: string | null;
+  pageSize: number; search: string; columnFilters: ColumnFilter[];
+};
 
 type UseViewerDataStateOptions = {
   importId?: string | undefined;
@@ -54,6 +62,13 @@ export function useViewerDataState({
   const [currentPageSize, setCurrentPageSize] = useState(rowsPerPage);
   const [totalRows, setTotalRows] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [failedRequest, setFailedRequest] = useState<ViewerReadRequest | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  const contextKey = buildViewerQueryKey(importId, rowsPerPage, search, columnFilters, isCleared);
+  const requestKey = buildViewerQueryKey(importId, rowsPerPage, debouncedSearch, debouncedColumnFilters, isCleared);
+  const queryReady = !isCleared && Boolean(importId) && contextKey === requestKey
+    && (search.trim().length === 0 || search.trim().length >= VIEWER_MIN_SEARCH_LENGTH);
 
   const mountedRef = useRef(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +78,11 @@ export function useViewerDataState({
   const headersLockedRef = useRef(headersLocked);
   const pageCursorHistoryRef = useRef<Array<string | null>>([null]);
   const initializedImportRef = useRef<{ id: string | undefined } | null>(null);
+  const currentQueryRef = useRef({ key: contextKey, ready: queryReady });
+  const activeRequestContextRef = useRef("");
+  const failedRequestRef = useRef<ViewerReadRequest | null>(null);
+  const loadedQueryKeyRef = useRef<string | null>(null);
+  currentQueryRef.current = { key: contextKey, ready: queryReady };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -71,6 +91,7 @@ export function useViewerDataState({
       activeRequestIdRef.current += 1;
       fetchAbortControllerRef.current?.abort();
       fetchAbortControllerRef.current = null;
+      failedRequestRef.current = null;
     };
   }, []);
 
@@ -103,7 +124,17 @@ export function useViewerDataState({
     && !controller.signal.aborted
     && fetchAbortControllerRef.current === controller
     && requestId === activeRequestIdRef.current
+    && activeRequestContextRef.current === currentQueryRef.current.key
+    && currentQueryRef.current.ready
   ), []);
+
+  useEffect(() => {
+    failedRequestRef.current = null;
+    setFailedRequest(null);
+    setError("");
+    setRetrying(false);
+    return cancelActiveFetch;
+  }, [cancelActiveFetch, contextKey]);
 
   const applyViewerStatePatch = useCallback((patch: ViewerStatePatch) => {
     if (patch.rows !== undefined) setRows(patch.rows);
@@ -131,16 +162,28 @@ export function useViewerDataState({
     options?: {
       page?: number;
       cursor?: string | null;
+      retryRequest?: ViewerReadRequest;
     },
   ) => {
-    if (!id) return;
+    if (!id || !mountedRef.current || !currentQueryRef.current.ready
+      || requestKey !== currentQueryRef.current.key) return;
     const targetPage = Math.max(1, options?.page ?? 1);
     const requestCursor = options?.cursor ?? null;
+    const read = options?.retryRequest ?? {
+      key: requestKey, importId: id, page: targetPage, cursor: requestCursor,
+      pageSize: rowsPerPage, search: debouncedSearch,
+      columnFilters: debouncedColumnFilters.map((filter) => ({ ...filter })),
+    };
+    if (read.key !== currentQueryRef.current.key || read.importId !== id) return;
 
     cancelActiveFetch();
     const requestId = ++activeRequestIdRef.current;
     const controller = new AbortController();
     fetchAbortControllerRef.current = controller;
+    activeRequestContextRef.current = requestKey;
+    failedRequestRef.current = null;
+    setFailedRequest(null);
+    setRetrying(Boolean(options?.retryRequest));
 
     if (targetPage === 1 && rowsRef.current.length === 0) {
       setLoading(true);
@@ -148,19 +191,19 @@ export function useViewerDataState({
       setLoadingMore(true);
     }
 
-    setError("");
+    if (!options?.retryRequest) setError("");
 
     try {
-      const response = await getImportData(id, targetPage, rowsPerPage, debouncedSearch, {
-        signal: controller.signal,
+      const response = await withReadDeadline((signal) => getImportData(id, targetPage, read.pageSize, read.search, {
+        signal,
         cursor: requestCursor || undefined,
-        columnFilters: debouncedColumnFilters,
-      });
+        columnFilters: read.columnFilters,
+      }), controller.signal);
       if (!isActiveViewerFetchRequest(controller, requestId)) {
         return;
       }
 
-      const normalizedPage = normalizeViewerPageResult(response ?? {}, targetPage, rowsPerPage);
+      const normalizedPage = normalizeViewerPageResult(response ?? {}, targetPage, read.pageSize);
 
       if (normalizedPage.page === 1 && !headersLockedRef.current) {
         const detectedHeaders = resolveViewerPageHeaders(response ?? {}, normalizedPage.rows);
@@ -172,6 +215,8 @@ export function useViewerDataState({
       }
 
       setRows(normalizedPage.rows);
+      loadedQueryKeyRef.current = requestKey;
+      setError("");
       setCurrentPage(normalizedPage.page);
       setCurrentPageSize(normalizedPage.limit);
       setTotalRows(normalizedPage.total);
@@ -185,7 +230,14 @@ export function useViewerDataState({
         return;
       }
 
-      setError(fetchError instanceof Error ? fetchError.message : "Failed to fetch data");
+      // Never offer export/download of rows from a read that has failed.
+      setRows([]);
+      setTotalRows(0);
+      loadedQueryKeyRef.current = null;
+      const failed = isViewerRetryableError(fetchError) ? read : null;
+      failedRequestRef.current = failed;
+      setFailedRequest(failed);
+      setError(getApiErrorMessage(fetchError, "Failed to fetch data."));
     } finally {
       const shouldFinalizeRequest = isActiveViewerFetchRequest(controller, requestId);
       if (fetchAbortControllerRef.current === controller) {
@@ -194,6 +246,7 @@ export function useViewerDataState({
       if (shouldFinalizeRequest) {
         setLoading(false);
         setLoadingMore(false);
+        setRetrying(false);
       }
     }
   }, [
@@ -202,7 +255,20 @@ export function useViewerDataState({
     debouncedSearch,
     isActiveViewerFetchRequest,
     rowsPerPage,
+    requestKey,
   ]);
+
+  const handleRetry = useCallback(() => {
+    const failed = failedRequestRef.current;
+    if (!mountedRef.current || !failed || fetchAbortControllerRef.current
+      || !currentQueryRef.current.ready || failed.key !== currentQueryRef.current.key) return;
+    onSelectionReset();
+    void fetchData(failed.importId, { page: failed.page, cursor: failed.cursor, retryRequest: failed });
+  }, [fetchData, onSelectionReset]);
+
+  const canExport = useCallback(() => mountedRef.current && currentQueryRef.current.ready
+    && loadedQueryKeyRef.current === currentQueryRef.current.key
+    && !fetchAbortControllerRef.current && !failedRequestRef.current, []);
 
   useEffect(() => {
     // Only changing the import resets headers/columns. A page-size change is
@@ -219,6 +285,11 @@ export function useViewerDataState({
     }
 
     cancelActiveFetch();
+    failedRequestRef.current = null;
+    setFailedRequest(null);
+    setError("");
+    setRetrying(false);
+    loadedQueryKeyRef.current = null;
     activeRequestIdRef.current += 1;
     onSelectionReset();
     applyViewerStatePatch(createViewerClearedState(rowsPerPage));
@@ -257,6 +328,8 @@ export function useViewerDataState({
       return;
     }
 
+    if (!queryReady) return;
+
     setNextCursor(null);
     pageCursorHistoryRef.current = [null];
     void fetchData(importId, { page: 1, cursor: null });
@@ -270,6 +343,7 @@ export function useViewerDataState({
     isCleared,
     onSelectionReset,
     rowsPerPage,
+    queryReady,
   ]);
 
   const handlePrevPage = useCallback(() => {
@@ -305,6 +379,11 @@ export function useViewerDataState({
 
   const clearAllData = useCallback(() => {
     cancelActiveFetch();
+    failedRequestRef.current = null;
+    setFailedRequest(null);
+    setError("");
+    setRetrying(false);
+    loadedQueryKeyRef.current = null;
     activeRequestIdRef.current += 1;
     onSelectionReset();
     applyViewerStatePatch(createViewerClearedState(rowsPerPage));
@@ -321,6 +400,11 @@ export function useViewerDataState({
     columnFilters,
     activeColumnFilters,
     error,
+    canRetry: queryReady && failedRequest?.key === contextKey && !loading && !loadingMore,
+    retrying,
+    handleRetry,
+    canExport,
+    exportReady: queryReady && loadedQueryKeyRef.current === contextKey && !loading && !loadingMore && !error,
     importName,
     search,
     debouncedSearch,

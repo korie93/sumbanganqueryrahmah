@@ -19,6 +19,7 @@ import { isPageEnabled } from "@/app/monitorAccess";
 import { isPersonalPage } from "@/app/personal-routes";
 import { PageSpinner } from "@/app/PageSpinner";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
+import { SavedReturnProvider } from "@/app/SavedReturnProvider";
 import type {
   AppRuntimeConfig,
   MonitorSection,
@@ -79,6 +80,7 @@ function AppPageRendererImpl({
     case "viewer":
       return (
         <ViewerPage
+          key={JSON.stringify([user.id ?? user.username, user.role])}
           onNavigate={onNavigate}
           importId={selectedImportId}
           userRole={user.role}
@@ -150,4 +152,13 @@ function AppPageRendererImpl({
   }
 }
 
-export const AppPageRenderer = memo(AppPageRendererImpl);
+function AccountOwnedPageRenderer(props: AppPageRendererProps) {
+  return (
+    <SavedReturnProvider key={JSON.stringify([props.user.id ?? props.user.username, props.user.role])}
+      currentPage={props.currentPage} selectedImportId={props.selectedImportId}>
+      <AppPageRendererImpl {...props} />
+    </SavedReturnProvider>
+  );
+}
+
+export const AppPageRenderer = memo(AccountOwnedPageRenderer);

@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +33,7 @@ interface SavedDialogsProps {
   bulkDeleteCount: number;
   selectedImport: ImportItem | null;
   newName: string;
+  renameError: string;
   onDeleteDialogOpenChange: (open: boolean) => void;
   onRenameDialogOpenChange: (open: boolean) => void;
   onBulkDeleteDialogOpenChange: (open: boolean) => void;
@@ -50,6 +53,7 @@ export function SavedDialogs({
   bulkDeleteCount,
   selectedImport,
   newName,
+  renameError,
   onDeleteDialogOpenChange,
   onRenameDialogOpenChange,
   onBulkDeleteDialogOpenChange,
@@ -126,7 +130,12 @@ export function SavedDialogs({
       </AlertDialog>
 
       <Dialog open={renameDialogOpen} onOpenChange={onRenameDialogOpenChange}>
-        <DialogContent className="gap-5 sm:max-w-md" onCloseAutoFocus={(event) => overlayFocus?.restore("rename", event)}>
+        <DialogContent
+          className="gap-5 sm:max-w-md"
+          closeButtonDisabled={renaming}
+          aria-busy={renaming}
+          onCloseAutoFocus={(event) => overlayFocus?.restore("rename", event)}
+        >
           <DialogHeader>
             <DialogTitle>Rename Import</DialogTitle>
             <DialogDescription>
@@ -147,16 +156,27 @@ export function SavedDialogs({
                 </p>
               ) : null}
             </div>
-            <Input
-              id="saved-import-rename"
-              name="savedImportName"
-              value={newName}
-              onChange={(event) => onNewNameChange(event.target.value)}
-              placeholder="New name"
-              autoComplete="off"
-              className="h-11"
-              data-testid="input-rename"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="saved-import-rename">New name</Label>
+              <Input
+                id="saved-import-rename"
+                name="savedImportName"
+                value={newName}
+                onChange={(event) => onNewNameChange(event.target.value)}
+                placeholder="New name"
+                autoComplete="off"
+                disabled={renaming}
+                {...getAriaInvalidProps(Boolean(renameError))}
+                aria-describedby={renameError ? "saved-import-rename-error" : undefined}
+                className="h-11"
+                data-testid="input-rename"
+              />
+              {renameError ? (
+                <p id="saved-import-rename-error" role="alert" className="break-words text-sm text-destructive" data-testid="saved-rename-error">
+                  {renameError}
+                </p>
+              ) : null}
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button
