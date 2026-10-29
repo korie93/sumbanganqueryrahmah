@@ -21,9 +21,32 @@ function assertPlaywrightUsesSystemChrome(workflowPath) {
   assert.doesNotMatch(workflow, /require\("playwright"\)\.chromium\.executablePath\(\)/);
 }
 
-test("CI workflows use system Chrome instead of downloading Playwright Chromium", () => {
+test("application smoke and release workflows retain system Chrome", () => {
   assertPlaywrightUsesSystemChrome(".github/workflows/ci.yml");
   assertPlaywrightUsesSystemChrome(".github/workflows/release-verification.yml");
+});
+
+test("only the sanitizer regression uses the lockfile-paired Chromium", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const steps = workflow.split(/(?=^      - name: )/m);
+  const installIndex = steps.findIndex(step => step.includes("name: Install locked Chromium for sanitizer regression"));
+  const probeIndex = steps.findIndex(step => step.includes("name: Verify sanitizers under strict Trusted Types"));
+  assert.ok(installIndex > 0 && installIndex < probeIndex, "Install the paired browser before running the sanitizer probe");
+  assert.match(steps[installIndex], /run: npx --no-install playwright install --only-shell chromium/);
+  assert.match(steps[probeIndex], /PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ""/);
+  assert.match(steps[probeIndex], /CHROME_PATH: ""/);
+  assert.match(steps[probeIndex], /run: npm run test:trusted-types:browser/);
+  for (const [index, step] of steps.entries()) {
+    if (index === probeIndex) continue;
+    assert.doesNotMatch(step, /(?:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH|CHROME_PATH): ""/, "Other smoke steps must keep the system browser");
+  }
+});
+
+test("empty step-scoped browser overrides select Playwright's paired browser", () => {
+  assert.deepEqual(
+    resolvePlaywrightLaunchOptions({ env: { PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: "", CHROME_PATH: "" } }),
+    { headless: true },
+  );
 });
 
 test("resolvePlaywrightLaunchOptions uses an explicit absolute Chrome executable", () => {

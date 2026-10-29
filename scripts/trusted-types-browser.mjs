@@ -206,6 +206,7 @@ async function runCase({ strict, firstConsumer, initializeBefore, scenario = "ma
         ...window.__sqrTrustedTypesDiagnostics.violations,
         ...(window.__sqrIframeDiagnostics?.violations ?? []),
       ]);
+      Object.assign(entry, { version: result.version, nativeTrustedTypes: result.nativeTrustedTypes, policyCounts: result.policyCounts, violations });
       assert.deepEqual(result.allowedPolicies, allowedPolicies, "Probe CSP must match the application's policy allowlist.");
       if (result.nativeTrustedTypes) {
         assert.deepEqual(result.policyCounts, { dompurify: 1, default: 1, "sqr-ui": 1 }, "All consumers must share one real DOMPurify policy without duplicate attempts.");
@@ -244,6 +245,8 @@ try {
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch(resolvePlaywrightLaunchOptions());
+  report.browserVersion = browser.version();
+  console.log(`[trusted-types-browser] Chromium ${report.browserVersion}`);
   for (const strict of [false, true]) {
     for (const firstConsumer of ["trusted", "monthly"]) {
       for (const initializeBefore of [true, false]) await runCase({ strict, firstConsumer, initializeBefore });
