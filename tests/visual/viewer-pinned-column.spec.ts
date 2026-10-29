@@ -183,6 +183,12 @@ async function expectAlignedPin(page: Page, stuck: boolean, header = pinnedHeade
     return Math.max(Math.abs(current.header.x - current.body.x), Math.abs(current.header.width - current.body.width),
       Math.abs(current.header.x - expectedX));
   }, { message: "Pinned header and body must align horizontally" }).toBeLessThanOrEqual(1);
+  // react-window temporarily disables row pointer events while scrolling.
+  // Wait for interaction to settle as well as layout before testing stacking.
+  await expect.poll(async () => {
+    const { headerHit, bodyHit } = await geometry(page, header);
+    return { headerHit, bodyHit };
+  }, { message: "Pinned cells must receive pointer hits after scrolling settles" }).toEqual({ headerHit: true, bodyHit: true });
   const current = await geometry(page, header);
   const expectedX = current.viewport.x + current.inset + (stuck ? 0 : 100);
   expect(Math.abs(current.header.x - expectedX), "Pin must reach the viewport edge after the leading controls scroll away")

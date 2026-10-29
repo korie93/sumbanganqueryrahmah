@@ -190,17 +190,22 @@ test("AI launcher: failed idle placement leaves Save Collection usable and retri
   const fixture = await installFixture(page, baseURL);
   const placementChunk = /^\/assets\/FloatingAIIdlePlacement\d*-[A-Za-z0-9_-]+\.js$/;
   const placementRequests: string[] = [];
+  let failedPlacementUrl: string | undefined;
   await page.context().route((url) => url.origin === fixture.origin && placementChunk.test(url.pathname), async (route) => {
     const url = new URL(route.request().url());
-    placementRequests.push(url.pathname + url.search);
-    if (placementRequests.length === 1) return route.abort("failed");
+    const moduleUrl = url.pathname + url.search;
+    placementRequests.push(moduleUrl);
+    failedPlacementUrl ??= moduleUrl;
+    // Chromium may retry a failed preload at the same URL. Model an unavailable
+    // chunk until the explicit recovery imports its distinct build-owned URL.
+    if (moduleUrl === failedPlacementUrl) return route.abort("failed");
     return route.continue();
   });
 
   await page.goto("/collection/save", { waitUntil: "domcontentloaded" });
   const loadError = page.getByRole("alert").filter({ hasText: "Bantuan AI tidak dapat dimuatkan." });
   await expect(loadError).toBeVisible();
-  expect(placementRequests).toHaveLength(1);
+  expect(new Set(placementRequests).size, "The original module URL remains unavailable on browser retries").toBe(1);
   await expect(page.getByTestId("floating-ai-toggle")).toHaveCount(0);
   expect(fixture.runtimeRequests, "Failed placement must not load the panel runtime").toEqual([]);
 
@@ -216,8 +221,8 @@ test("AI launcher: failed idle placement leaves Save Collection usable and retri
   const trigger = page.getByTestId("floating-ai-toggle");
   await expect(trigger).toBeVisible();
   await expect(loadError).toHaveCount(0);
-  expect(placementRequests).toHaveLength(2);
   expect(new Set(placementRequests).size, "The retry must escape the failed native module URL").toBe(2);
+  expect(placementRequests[placementRequests.length - 1]).not.toBe(failedPlacementUrl);
   expect(fixture.runtimeRequests, "Recovered placement remains independent of the panel runtime").toEqual([]);
   expect(fixture.state.searches).toBe(0);
   await trigger.click();
