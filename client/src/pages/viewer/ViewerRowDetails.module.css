@@ -1,0 +1,99 @@
+.dialog {
+  --viewer-detail-gutter: 1rem;
+  --viewer-detail-header-padding: 1rem;
+  --viewer-detail-controls-padding: 1rem;
+  --viewer-detail-footer-padding: 1rem;
+  --viewer-detail-header-gap: 0.375rem;
+  --viewer-detail-controls-gap: 0.375rem;
+  --viewer-detail-secondary-display: block;
+  --viewer-detail-title-lines: 2;
+  height: min(44rem, calc(var(--viewer-detail-available-height, var(--viewport-min-height-value)) - var(--viewer-detail-gutter)));
+  max-height: calc(var(--viewer-detail-available-height, var(--viewport-min-height-value)) - var(--viewer-detail-gutter));
+  top: var(--viewer-detail-center, 50%);
+}
+
+.header {
+  gap: var(--viewer-detail-header-gap);
+  padding-block: var(--viewer-detail-header-padding);
+}
+
+.context,
+.description {
+  display: var(--viewer-detail-secondary-display);
+}
+
+.title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--viewer-detail-title-lines);
+  overflow: hidden;
+}
+
+.controls {
+  gap: var(--viewer-detail-controls-gap);
+  padding-block: var(--viewer-detail-controls-padding);
+}
+
+.footer {
+  padding-top: var(--viewer-detail-footer-padding);
+  padding-bottom: max(var(--viewer-detail-footer-padding), var(--safe-area-inset-bottom));
+}
+
+.dialog[data-compact="true"] {
+  --viewer-detail-header-padding: 0.5rem;
+  --viewer-detail-controls-padding: 0.5rem;
+  --viewer-detail-footer-padding: 0.5rem;
+  --viewer-detail-header-gap: 0;
+  --viewer-detail-controls-gap: 0.25rem;
+  --viewer-detail-secondary-display: none;
+  --viewer-detail-title-lines: 1;
+}
+
+@media (min-width: 640px) {
+  .dialog {
+    --viewer-detail-gutter: 2rem;
+  }
+}
+
+@media (max-height: 540px) {
+  .dialog {
+    --viewer-detail-header-padding: 0.5rem;
+    --viewer-detail-controls-padding: 0.5rem;
+    --viewer-detail-footer-padding: 0.5rem;
+    --viewer-detail-header-gap: 0;
+    --viewer-detail-controls-gap: 0.25rem;
+    --viewer-detail-secondary-display: none;
+    --viewer-detail-title-lines: 1;
+  }
+}
+
+/* At exceptionally short heights, keep every control reachable by outer scroll. */
+.dialog[data-very-short="true"] {
+  overflow-y: auto;
+}
+
+.dialog[data-very-short="true"] .fields {
+  flex: none;
+  overflow: visible;
+}
+
+.dialog[data-very-short="true"] .scroller {
+  flex: none;
+  min-height: 6rem;
+  max-height: 12rem;
+}
+
+@media (max-height: 320px) {
+  .dialog {
+    overflow-y: auto;
+  }
+  .fields {
+    flex: none;
+    overflow: visible;
+  }
+  .scroller {
+    flex: none;
+    min-height: 6rem;
+    max-height: 12rem;
+  }
+}

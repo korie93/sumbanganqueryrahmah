@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,7 +10,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { DataRowWithId } from "@/pages/viewer/types";
-import { getViewerDetailFields, getViewerDetailHeaders, getViewerRowIdentity } from "@/pages/viewer/viewer-column-presentation";
+import { getViewerDetailHeaders, getViewerRowIdentity } from "@/pages/viewer/viewer-column-presentation";
+import { ViewerDetailFields } from "@/pages/viewer/ViewerDetailFields";
+import { useMobileViewportState } from "@/hooks/use-mobile-viewport-state";
+import styles from "./ViewerRowDetails.module.css";
+
+type DetailViewportStyle = CSSProperties & {
+  "--viewer-detail-available-height": string;
+  "--viewer-detail-center": string;
+};
 
 interface ViewerRowDetailsProps {
   row: DataRowWithId | null;
@@ -22,26 +30,37 @@ interface ViewerRowDetailsProps {
 /** Read-only inspection of the authorized row already loaded in the Viewer. */
 export function ViewerRowDetails({ row, headers, onOpenChange, onCloseAutoFocus }: ViewerRowDetailsProps) {
   const detailHeaders = useMemo(() => getViewerDetailHeaders(headers), [headers]);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const identity = row ? getViewerRowIdentity(row, detailHeaders) : "Record details";
+  const { viewportHeight, bottomInset } = useMobileViewportState({ trackAllWidths: true });
+  const viewportStyle: DetailViewportStyle | undefined = viewportHeight > 0 && typeof window !== "undefined" ? {
+    "--viewer-detail-available-height": `${viewportHeight}px`,
+    "--viewer-detail-center": `${Math.max(0, window.innerHeight - bottomInset - viewportHeight) + viewportHeight / 2}px`,
+  } : undefined;
 
   return (
     <Dialog open={row !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl gap-0 p-0 sm:p-0" onCloseAutoFocus={onCloseAutoFocus}>
-        <DialogHeader className="border-b border-border px-5 py-5 pr-12 text-left sm:px-6">
-          <p className="text-xs font-medium text-muted-foreground">Record details · Row {row ? row.__rowId + 1 : ""}</p>
-          <DialogTitle className="break-words leading-6 [overflow-wrap:anywhere]">
-            {row ? getViewerRowIdentity(row, detailHeaders) : "Record details"}
+      <DialogContent className={`flex min-h-0 max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:p-0 ${styles.dialog}`}
+        style={viewportStyle} data-compact={viewportHeight > 0 && viewportHeight < 540 ? true : undefined}
+        data-very-short={viewportHeight > 0 && viewportHeight <= 320 ? true : undefined}
+        data-testid="viewer-record-details" onCloseAutoFocus={onCloseAutoFocus}
+        onOpenAutoFocus={(event) => {
+          // Focus the record heading so opening details does not summon a mobile keyboard.
+          event.preventDefault();
+          titleRef.current?.focus({ preventScroll: true });
+        }}>
+        <DialogHeader data-testid="viewer-record-details-header"
+          className={`shrink-0 space-y-0 border-b border-border px-5 pr-12 text-left sm:px-6 ${styles.header}`}>
+          <p className={`text-xs font-medium text-muted-foreground ${styles.context}`}>Record details · Row {row ? row.__rowId + 1 : ""}</p>
+          <DialogTitle ref={titleRef} tabIndex={-1} title={identity}
+            className={`break-words leading-6 [overflow-wrap:anywhere] ${styles.title}`}>
+            {identity}
           </DialogTitle>
-          <DialogDescription>Read-only view of the fields loaded on this page.</DialogDescription>
+          <DialogDescription className={styles.description}>Read-only view of the fields loaded on this page.</DialogDescription>
         </DialogHeader>
-        <dl className="min-w-0 divide-y divide-border px-5 sm:px-6">
-          {row ? getViewerDetailFields(row, detailHeaders).map(({ header, value }) => (
-              <div key={header} className="grid min-w-0 gap-1.5 py-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-6">
-                <dt className="break-words text-xs font-medium leading-5 text-muted-foreground [overflow-wrap:anywhere]">{header}</dt>
-                <dd className="min-w-0 whitespace-pre-wrap break-words text-sm leading-6 text-foreground [overflow-wrap:anywhere]">{value}</dd>
-              </div>
-          )) : null}
-        </dl>
-        <DialogFooter className="border-t border-border px-5 py-4 sm:px-6">
+        {row ? <ViewerDetailFields key={row.__rowId} row={row} headers={detailHeaders} /> : null}
+        <DialogFooter data-testid="viewer-record-details-footer"
+          className={`shrink-0 border-t border-border px-5 sm:px-6 ${styles.footer}`}>
           <DialogClose asChild><Button variant="outline" type="button">Close details</Button></DialogClose>
         </DialogFooter>
       </DialogContent>

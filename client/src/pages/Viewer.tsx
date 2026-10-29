@@ -104,9 +104,13 @@ export default function Viewer({
                 onToggleColumn={viewer.toggleColumn}
                 onMoveColumn={viewer.moveColumn}
                 onResetColumns={viewer.resetColumns}
+                canUndoColumnReset={viewer.canUndoColumnReset}
+                onUndoColumnReset={viewer.undoColumnReset}
                 onToggleFilters={viewer.handleToggleFilters}
                 rowsCount={viewer.exportReady ? viewer.rows.length : 0}
                 selectedColumns={viewer.selectedColumns}
+                pinnedColumn={viewer.pinnedColumn}
+                onPinColumn={viewer.togglePinnedColumn}
                 selectedRowCount={viewer.selectedRowIds.size}
                 showColumnSelector={viewer.showColumnSelector}
                 showFilters={viewer.showFilters}
@@ -118,6 +122,7 @@ export default function Viewer({
           rows={viewer.rows}
           headers={viewer.headers}
           visibleHeaders={viewer.visibleHeaders}
+          pinnedColumn={viewer.pinnedColumn}
           selectedRowIds={viewer.selectedRowIds}
           totalRows={viewer.totalRows}
           currentPage={viewer.currentPage}

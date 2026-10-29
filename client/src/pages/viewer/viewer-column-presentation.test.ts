@@ -5,6 +5,8 @@ import {
   getViewerColumnPresentation,
   getViewerDetailFields,
   getViewerDetailHeaders,
+  filterViewerDetailFields,
+  isViewerDetailValueEmpty,
   getViewerRowIdentity,
   getViewerTableLayout,
 } from "./viewer-column-presentation";
@@ -66,4 +68,40 @@ test("Viewer mobile identity follows visible names and falls back safely without
   assert.equal(getViewerRowIdentity(row, ["Account Number", "Customer Name"]), "Synthetic Customer");
   assert.equal(getViewerRowIdentity(row, ["Account Number"]), "Row 5");
   assert.equal(getViewerRowIdentity(row, ["Other Name"]), "Row 5");
+});
+
+test("Viewer detail search matches literal trimmed header names without searching values", () => {
+  const fields = [
+    { header: "Account Number", value: "0000123456" },
+    { header: "Notes [A.*]", value: "Synthetic value only" },
+    { header: "客户姓名", value: "Another synthetic value" },
+  ];
+  assert.deepEqual(filterViewerDetailFields(fields, "  NUMBER  "), [fields[0]]);
+  assert.deepEqual(filterViewerDetailFields(fields, "[a.*]"), [fields[1]]);
+  assert.deepEqual(filterViewerDetailFields(fields, "客户"), [fields[2]]);
+  assert.deepEqual(filterViewerDetailFields(fields, "^Account"), []);
+  assert.deepEqual(filterViewerDetailFields(fields, "value only"), []);
+  assert.deepEqual(filterViewerDetailFields(fields, "0000123456"), []);
+});
+
+test("Viewer detail search retains original ordering and unchanged display values", () => {
+  const fields = Object.freeze([
+    Object.freeze({ header: "Second Account", value: "  000001\nSecond line  " }),
+    Object.freeze({ header: "Empty", value: "-" }),
+    Object.freeze({ header: "First Account", value: "000002" }),
+  ]);
+  const snapshot = JSON.stringify(fields);
+  assert.deepEqual(filterViewerDetailFields(fields, "account"), [fields[0], fields[2]]);
+  assert.deepEqual(filterViewerDetailFields(fields, "  "), fields);
+  assert.deepEqual(filterViewerDetailFields([], "account"), []);
+  assert.equal(JSON.stringify(fields), snapshot);
+});
+
+test("Viewer empty-field detection uses raw blank values and retains zero, false and literal dashes", () => {
+  for (const value of [undefined, null, "", " \n\t ", "\u00a0", []]) {
+    assert.equal(isViewerDetailValueEmpty(value), true);
+  }
+  for (const value of [0, false, "0", "false", "-", "—", " 00001234 ", " First\nSecond ", "null", {}]) {
+    assert.equal(isViewerDetailValueEmpty(value), false);
+  }
 });

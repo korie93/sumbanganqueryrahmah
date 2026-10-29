@@ -9,6 +9,7 @@ import {
 import type { ViewerVirtualRowData } from "@/pages/viewer/types";
 import { getViewerColumnPresentation } from "@/pages/viewer/viewer-column-presentation";
 import { ViewerRowDetailsButton } from "@/pages/viewer/ViewerRowDetailsButton";
+import styles from "./ViewerDataTable.module.css";
 
 function ViewerVirtualizedRowImpl({
   index,
@@ -26,7 +27,7 @@ function ViewerVirtualizedRowImpl({
           visibleHeaders: data.visibleHeaders,
         })}
         gridTemplateColumns={data.gridTemplateColumns}
-        className={`h-full items-center border-t border-border px-0 hover:bg-muted/50 ${
+        className={`${styles.dataRow} ${selected ? styles.selectedRow : ""} h-full items-center border-t border-border px-0 hover:bg-muted/50 ${
           selected ? "bg-primary/10" : ""
         }`}
       >
@@ -46,12 +47,14 @@ function ViewerVirtualizedRowImpl({
           return (
             <div
               key={`${row.__rowId}-${header}`}
-              className="truncate whitespace-nowrap px-3 text-foreground"
+              className={`${header === data.pinnedColumn ? styles.pinnedCell : ""} truncate whitespace-nowrap px-3 text-foreground`}
               title={cellText}
               aria-label={cellText}
               data-align={getViewerColumnPresentation(header, data.density).align}
+              data-viewer-column={header}
+              data-viewer-pinned={header === data.pinnedColumn ? "true" : undefined}
             >
-              {cellText}
+              <span className={styles.gridCellText}>{cellText}</span>
             </div>
           );
         })}

@@ -1,9 +1,11 @@
-import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerDataTableFeedback } from "@/pages/viewer/ViewerDataTableFeedback";
+import { getViewerTableLayout } from "@/pages/viewer/viewer-column-presentation";
+import { getViewerDesktopHeaders, resolveViewerPinnedColumn } from "@/pages/viewer/viewer-pinned-column";
 import styles from "./ViewerDataTable.module.css";
 
 const ViewerMobileCardsTable = lazy(() =>
@@ -47,6 +49,7 @@ interface ViewerDataTableProps {
   virtualTableMinWidth: number;
   viewportHeightPx: number;
   visibleHeaders: string[];
+  pinnedColumn?: string | null | undefined;
 }
 
 function ViewerDataTableImpl({
@@ -65,9 +68,29 @@ function ViewerDataTableImpl({
   virtualTableMinWidth,
   viewportHeightPx,
   visibleHeaders,
+  pinnedColumn,
 }: ViewerDataTableProps) {
   const isMobile = useIsMobile();
   const desktopTableWidthRef = useRef<HTMLDivElement | null>(null);
+  const horizontalViewportRef = useRef<HTMLDivElement>(null);
+  const desktopPinnedColumn = isMobile ? null : resolveViewerPinnedColumn(pinnedColumn, visibleHeaders);
+  const desktopHeaders = useMemo(
+    () => getViewerDesktopHeaders(visibleHeaders, desktopPinnedColumn),
+    [desktopPinnedColumn, visibleHeaders],
+  );
+  const desktopLayout = useMemo(
+    () => desktopPinnedColumn !== null
+      ? getViewerTableLayout(desktopHeaders, tableDensity)
+      : { gridTemplateColumns, minWidth: virtualTableMinWidth },
+    [desktopHeaders, desktopPinnedColumn, gridTemplateColumns, tableDensity, virtualTableMinWidth],
+  );
+  const handleHorizontalScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    if (desktopPinnedColumn === null) return;
+    desktopTableWidthRef.current?.style.setProperty(
+      "--viewer-pinned-scroll-left",
+      `${Math.max(0, event.currentTarget.scrollLeft)}px`,
+    );
+  }, [desktopPinnedColumn]);
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
   const [inspectedRow, setInspectedRow] = useState<DataRowWithId | null>(null);
   const handleInspectRow = useCallback((row: DataRowWithId) => {
@@ -90,27 +113,57 @@ function ViewerDataTableImpl({
   }, [filteredRows]);
 
   useLayoutEffect(() => {
-    desktopTableWidthRef.current?.style.setProperty(
+    const tableNode = desktopTableWidthRef.current;
+    if (!tableNode) return;
+    tableNode.style.setProperty(
       "--viewer-table-min-width",
-      `${virtualTableMinWidth}px`,
+      `${desktopLayout.minWidth}px`,
     );
-    desktopTableWidthRef.current?.style.setProperty(
+    tableNode.style.setProperty(
       "--viewer-table-viewport-height",
       `${viewportHeightPx}px`,
     );
-  }, [viewportHeightPx, virtualTableMinWidth]);
+    const viewportNode = horizontalViewportRef.current;
+    if (desktopPinnedColumn === null || !viewportNode) {
+      tableNode.style.removeProperty("--viewer-pinned-scroll-left");
+      return;
+    }
+
+    // The vertical scrollers are nested inside this viewport. Share its offset with
+    // every pinned cell without a scroll subscription or React state per row.
+    const updatePinnedOffset = () => {
+      tableNode.style.setProperty(
+        "--viewer-pinned-scroll-left",
+        `${Math.max(0, viewportNode.scrollLeft)}px`,
+      );
+    };
+    updatePinnedOffset();
+    const resizeObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(updatePinnedOffset)
+      : null;
+    resizeObserver?.observe(viewportNode);
+    resizeObserver?.observe(tableNode);
+    window.addEventListener("resize", updatePinnedOffset);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updatePinnedOffset);
+      tableNode.style.removeProperty("--viewer-pinned-scroll-left");
+    };
+  }, [desktopLayout.minWidth, desktopPinnedColumn, enableVirtualRows, isMobile, viewportHeightPx]);
 
   const virtualRowData = useMemo<ViewerVirtualRowData>(
     () => ({
       density: tableDensity,
       rows: filteredRows,
-      visibleHeaders,
+      visibleHeaders: desktopHeaders,
+      pinnedColumn: desktopPinnedColumn,
       selectedRowIds,
       onToggleRowSelection,
       onInspectRow: handleInspectRow,
-      gridTemplateColumns,
+      gridTemplateColumns: desktopLayout.gridTemplateColumns,
     }),
-    [filteredRows, gridTemplateColumns, handleInspectRow, onToggleRowSelection, selectedRowIds, tableDensity, visibleHeaders],
+    [desktopHeaders, desktopLayout.gridTemplateColumns, desktopPinnedColumn, filteredRows, handleInspectRow, onToggleRowSelection, selectedRowIds, tableDensity],
   );
 
   const desktopTableFallback = useMemo(
@@ -145,6 +198,8 @@ function ViewerDataTableImpl({
         showNavigationControls
         showScrollbar
         viewportClassName="overscroll-x-contain pb-2"
+        viewportRef={horizontalViewportRef}
+        onScroll={handleHorizontalScroll}
       >
         {isMobile ? (
           <Suspense fallback={mobileTableFallback}>
@@ -164,7 +219,7 @@ function ViewerDataTableImpl({
               <Suspense fallback={desktopTableFallback}>
                 <ViewerVirtualizedTable
                   filteredRows={filteredRows}
-                  gridTemplateColumns={gridTemplateColumns}
+                  gridTemplateColumns={desktopLayout.gridTemplateColumns}
                   density={tableDensity}
                   onToggleRowSelection={onToggleRowSelection}
                   onToggleSelectAllFiltered={onToggleSelectAllFiltered}
@@ -173,7 +228,8 @@ function ViewerDataTableImpl({
                   selectAllFiltered={selectAllFiltered}
                   virtualRowData={virtualRowData}
                   viewportHeightPx={viewportHeightPx}
-                  visibleHeaders={visibleHeaders}
+                  visibleHeaders={desktopHeaders}
+                  pinnedColumn={desktopPinnedColumn}
                 />
               </Suspense>
             ) : (
@@ -186,7 +242,8 @@ function ViewerDataTableImpl({
                   onToggleSelectAllFiltered={onToggleSelectAllFiltered}
                   selectedRowIds={selectedRowIds}
                   selectAllFiltered={selectAllFiltered}
-                  visibleHeaders={visibleHeaders}
+                  visibleHeaders={desktopHeaders}
+                  pinnedColumn={desktopPinnedColumn}
                 />
               </Suspense>
             )}

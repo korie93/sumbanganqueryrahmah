@@ -12,6 +12,12 @@ import { useViewerDataState } from "@/pages/viewer/useViewerDataState";
 import { useViewerExportState } from "@/pages/viewer/useViewerExportState";
 import { getViewerTableLayout } from "@/pages/viewer/viewer-column-presentation";
 import { getViewerViewportHeight } from "@/pages/viewer/viewer-viewport-utils";
+import { resolveViewerPinnedColumn } from "@/pages/viewer/viewer-pinned-column";
+import {
+  createViewerColumnResetUndo,
+  restoreViewerColumnResetUndo,
+  type ViewerColumnResetUndoSnapshot,
+} from "@/pages/viewer/viewer-column-reset-undo";
 import { filterViewerRows } from "@/pages/viewer/utils";
 import {
   buildViewerHeadersSignature,
@@ -58,6 +64,9 @@ export function useViewerPageState({
 
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  // Pinning is a desktop presentation choice for the open dataset, not stored data/order.
+  const [pinnedColumnChoice, setPinnedColumnChoice] = useState<{ key: string; column: string } | null>(null);
+  const [columnResetUndo, setColumnResetUndo] = useState<{ key: string; snapshot: ViewerColumnResetUndoSnapshot } | null>(null);
   const [columnPreferencesReady, setColumnPreferencesReady] = useState(false);
   const [columnPreferencesDirty, setColumnPreferencesDirty] = useState(false);
   const initializedColumnPreferenceKeyRef = useRef("");
@@ -90,6 +99,8 @@ export function useViewerPageState({
     if (data.headers.length === 0) {
       setSelectedColumns((previous) => (previous.size === 0 ? previous : new Set<string>()));
       setColumnOrder((previous) => (previous.length === 0 ? previous : []));
+      setPinnedColumnChoice(null);
+      setColumnResetUndo(null);
       setColumnPreferencesReady(false);
       setColumnPreferencesDirty(false);
       initializedColumnPreferenceKeyRef.current = "";
@@ -102,6 +113,8 @@ export function useViewerPageState({
 
     const preference = readViewerColumnPreference(importId, data.headers);
     initializedColumnPreferenceKeyRef.current = columnPreferenceKey;
+    setPinnedColumnChoice(null);
+    setColumnResetUndo(null);
     setColumnOrder(preference.order);
     setSelectedColumns(
       analysisHandoff?.focusColumn && data.headers.includes(analysisHandoff.focusColumn)
@@ -163,6 +176,19 @@ export function useViewerPageState({
     () => getViewerVisibleHeaders(orderedHeaders, selectedColumns),
     [orderedHeaders, selectedColumns],
   );
+  const pinnedColumn = pinnedColumnChoice?.key === columnPreferenceKey
+    ? resolveViewerPinnedColumn(pinnedColumnChoice.column, visibleHeaders)
+    : null;
+  useEffect(() => {
+    // A hidden or removed column must not silently become pinned when shown again.
+    if (pinnedColumnChoice && pinnedColumn === null) setPinnedColumnChoice(null);
+  }, [pinnedColumn, pinnedColumnChoice]);
+  const togglePinnedColumn = useCallback((column: string) => {
+    if (!data.headers.includes(column) || resolveViewerPinnedColumn(column, visibleHeaders) === null) return;
+    setColumnResetUndo(null);
+    setPinnedColumnChoice((previous) => previous?.key === columnPreferenceKey && previous.column === column
+      ? null : { key: columnPreferenceKey, column });
+  }, [columnPreferenceKey, data.headers, visibleHeaders]);
   const isSearchBelowMinLength =
     data.debouncedSearch.length > 0 && data.debouncedSearch.length < data.minSearchLength;
   const isServerSearchActive = data.debouncedSearch.length >= data.minSearchLength;
@@ -212,30 +238,60 @@ export function useViewerPageState({
   }, []);
 
   const toggleColumn = useCallback((column: string) => {
+    if (!data.headers.includes(column) || (selectedColumns.has(column) && selectedColumns.size === 1)) return;
+    setColumnResetUndo(null);
     setSelectedColumns((previous) => toggleViewerColumnSelection(previous, column));
     setColumnPreferencesDirty(true);
-  }, []);
+  }, [data.headers, selectedColumns]);
 
   const selectAllColumns = useCallback(() => {
+    if (selectedColumns.size === data.headers.length && data.headers.every((column) => selectedColumns.has(column))) return;
+    setColumnResetUndo(null);
     setSelectedColumns(new Set(data.headers));
     setColumnPreferencesDirty(true);
-  }, [data.headers]);
+  }, [data.headers, selectedColumns]);
 
   const deselectAllColumns = useCallback(() => {
-    setSelectedColumns(deselectViewerColumns(orderedHeaders));
+    const nextColumns = deselectViewerColumns(orderedHeaders);
+    if (pinnedColumn === null && nextColumns.size === selectedColumns.size
+      && [...nextColumns].every((column) => selectedColumns.has(column))) return;
+    setColumnResetUndo(null);
+    setPinnedColumnChoice(null);
+    setSelectedColumns(nextColumns);
+    setColumnPreferencesDirty(true);
+  }, [orderedHeaders, pinnedColumn, selectedColumns]);
+
+  const moveColumn = useCallback((column: string, direction: -1 | 1) => {
+    const nextOrder = moveViewerColumn(orderedHeaders, column, direction);
+    if (nextOrder === orderedHeaders) return;
+    setColumnResetUndo(null);
+    setColumnOrder(nextOrder);
     setColumnPreferencesDirty(true);
   }, [orderedHeaders]);
 
-  const moveColumn = useCallback((column: string, direction: -1 | 1) => {
-    setColumnOrder((previous) => moveViewerColumn(previous, column, direction));
-    setColumnPreferencesDirty(true);
-  }, []);
-
   const resetColumns = useCallback(() => {
+    const snapshot = createViewerColumnResetUndo(data.headers, orderedHeaders, selectedColumns, pinnedColumn);
+    // Repeated Reset must retain the useful restore point instead of capturing defaults.
+    if (!snapshot) return;
+    setColumnResetUndo({ key: columnPreferenceKey, snapshot });
+    setPinnedColumnChoice(null);
     setColumnOrder([...data.headers]);
     setSelectedColumns(new Set(data.headers));
     setColumnPreferencesDirty(true);
-  }, [data.headers]);
+  }, [columnPreferenceKey, data.headers, orderedHeaders, pinnedColumn, selectedColumns]);
+
+  const canUndoColumnReset = columnResetUndo?.key === columnPreferenceKey && data.headers.length > 0;
+  const undoColumnReset = useCallback(() => {
+    if (!columnResetUndo || columnResetUndo.key !== columnPreferenceKey) return;
+    const restored = restoreViewerColumnResetUndo(columnResetUndo.snapshot, data.headers);
+    setColumnResetUndo(null);
+    if (!restored) return;
+    setColumnOrder(restored.order);
+    setSelectedColumns(new Set(restored.visible));
+    setPinnedColumnChoice(restored.pinnedColumn === null ? null
+      : { key: columnPreferenceKey, column: restored.pinnedColumn });
+    setColumnPreferencesDirty(true);
+  }, [columnPreferenceKey, columnResetUndo, data.headers]);
 
   const toggleRowSelection = useCallback((rowId: number) => {
     setSelectedRowIds((previous) => toggleViewerRowSelection(previous, rowId));
@@ -279,7 +335,9 @@ export function useViewerPageState({
   const clearAllData = useCallback(() => {
     exportState.cancelActiveExport();
     data.clearAllData();
+    setColumnResetUndo(null);
     setSelectedColumns(new Set<string>());
+    setPinnedColumnChoice(null);
   }, [data.clearAllData, exportState.cancelActiveExport]);
 
   const handleClearSearchFilter = useCallback(() => {
@@ -309,6 +367,10 @@ export function useViewerPageState({
     pageSizeDisabled,
     handleRowsPerPageChange,
     selectedColumns,
+    pinnedColumn,
+    togglePinnedColumn,
+    canUndoColumnReset,
+    undoColumnReset,
     showColumnSelector,
     setShowColumnSelector,
     showFilters,

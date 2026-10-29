@@ -36,6 +36,7 @@ type ViewerContentDatasetSectionProps = {
   rows: DataRowWithId[];
   filteredRows: DataRowWithId[];
   visibleHeaders: string[];
+  pinnedColumn?: string | null | undefined;
   search: string;
   showResultsSummary: boolean;
   activeFilters: ActiveFilterChip[];
@@ -86,6 +87,7 @@ function ViewerContentDatasetSectionImpl({
   rows,
   filteredRows,
   visibleHeaders,
+  pinnedColumn,
   search,
   showResultsSummary,
   activeFilters,
@@ -182,6 +184,7 @@ function ViewerContentDatasetSectionImpl({
               virtualTableMinWidth={virtualTableMinWidth}
               viewportHeightPx={viewportHeightPx}
               visibleHeaders={visibleHeaders}
+              pinnedColumn={pinnedColumn}
             />
           </Suspense>
         )}

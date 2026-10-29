@@ -11,3 +11,57 @@
 .desktopTableWidth {
   min-width: max(100%, var(--viewer-table-min-width, 0px));
 }
+
+.dataRow {
+  --viewer-pinned-row-tint: transparent;
+}
+
+.selectedRow {
+  --viewer-pinned-row-tint: hsl(var(--primary) / 0.1);
+}
+
+@media (hover: hover) {
+  .dataRow:hover {
+    --viewer-pinned-row-tint: hsl(var(--muted) / 0.5);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .standardRow:hover {
+    --viewer-pinned-row-tint: hsl(var(--accent) / 0.45);
+  }
+}
+
+.pinnedCell {
+  position: relative;
+  z-index: 1;
+  /* The 44px checkbox and 56px row index scroll away before the field freezes. */
+  transform: translateX(max(0px, calc(var(--viewer-pinned-scroll-left, 0px) - 100px)));
+  background:
+    linear-gradient(var(--viewer-pinned-row-tint, transparent), var(--viewer-pinned-row-tint, transparent)),
+    hsl(var(--card));
+  box-shadow: 1px 0 0 hsl(var(--border)), 4px 0 6px -5px hsl(var(--foreground) / 0.3);
+}
+
+.pinnedHeader {
+  z-index: 2;
+  background: hsl(var(--muted));
+}
+
+.viewerGrid > .pinnedCell {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.gridCellText {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerGrid > .pinnedCell > .gridCellText {
+  flex: 1;
+}

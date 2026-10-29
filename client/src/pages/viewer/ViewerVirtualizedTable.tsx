@@ -6,6 +6,7 @@ import { ViewerVirtualizedRow } from "@/pages/viewer/ViewerVirtualizedRow";
 import { ViewerGridShell } from "@/pages/viewer/viewer-grid-shell";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import { getViewerColumnPresentation } from "@/pages/viewer/viewer-column-presentation";
+import styles from "./ViewerDataTable.module.css";
 
 interface ViewerVirtualizedTableProps {
   filteredRows: DataRowWithId[];
@@ -19,6 +20,7 @@ interface ViewerVirtualizedTableProps {
   virtualRowData: ViewerVirtualRowData;
   viewportHeightPx: number;
   visibleHeaders: string[];
+  pinnedColumn?: string | null | undefined;
 }
 
 function ViewerVirtualizedTableImpl({
@@ -31,6 +33,7 @@ function ViewerVirtualizedTableImpl({
   virtualRowData,
   viewportHeightPx,
   visibleHeaders,
+  pinnedColumn,
 }: ViewerVirtualizedTableProps) {
   return (
     <div className="ops-data-table text-sm">
@@ -53,12 +56,14 @@ function ViewerVirtualizedTableImpl({
           {visibleHeaders.map((header) => (
             <div
               key={header}
-              className="truncate whitespace-nowrap px-3 font-medium text-muted-foreground"
+              className={`${header === pinnedColumn ? `${styles.pinnedCell} ${styles.pinnedHeader}` : ""} truncate whitespace-nowrap px-3 font-medium text-muted-foreground`}
               title={header}
               aria-label={header}
               data-align={getViewerColumnPresentation(header, density).align}
+              data-viewer-column={header}
+              data-viewer-pinned={header === pinnedColumn ? "true" : undefined}
             >
-              {header}
+              <span className={styles.gridCellText}>{header}</span>
             </div>
           ))}
           <div className="px-2"><span className="sr-only">Record details</span></div>

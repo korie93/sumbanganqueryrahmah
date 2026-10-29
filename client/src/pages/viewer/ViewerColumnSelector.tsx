@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useMemo } from "react";
+import { Suspense, lazy, memo, useCallback, useMemo, useRef } from "react";
 import { Columns } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,10 +36,14 @@ interface ViewerColumnSelectorProps {
   open: boolean;
   headers: string[];
   selectedColumns: Set<string>;
+  pinnedColumn?: string | null | undefined;
+  onPinColumn?: ((column: string) => void) | undefined;
   onOpenChange: (open: boolean) => void;
   onToggleColumn: (column: string) => void;
   onMoveColumn: (column: string, direction: -1 | 1) => void;
   onResetColumns: () => void;
+  canUndoColumnReset?: boolean | undefined;
+  onUndoColumnReset?: (() => void) | undefined;
   onSelectAllColumns: () => void;
   onDeselectAllColumns: () => void;
 }
@@ -48,14 +52,25 @@ function ViewerColumnSelectorImpl({
   open,
   headers,
   selectedColumns,
+  pinnedColumn,
+  onPinColumn,
   onOpenChange,
   onToggleColumn,
   onMoveColumn,
   onResetColumns,
+  canUndoColumnReset = false,
+  onUndoColumnReset,
   onSelectAllColumns,
   onDeselectAllColumns,
 }: ViewerColumnSelectorProps) {
   const isMobile = useIsMobile();
+  const showResetUndo = canUndoColumnReset && onUndoColumnReset !== undefined;
+  const resetButtonRef = useRef<HTMLButtonElement>(null);
+  const handleUndoColumnReset = useCallback(() => {
+    onUndoColumnReset?.();
+    // Undo removes its own button; keep keyboard focus inside the open picker.
+    resetButtonRef.current?.focus({ preventScroll: true });
+  }, [onUndoColumnReset]);
 
   const trigger = useMemo(
     () => (
@@ -97,6 +112,7 @@ function ViewerColumnSelectorImpl({
               variant="ghost"
               size="sm"
               onClick={onSelectAllColumns}
+              title="Select all dataset columns"
               data-testid="button-select-all-columns"
             >
               All
@@ -105,25 +121,43 @@ function ViewerColumnSelectorImpl({
               variant="ghost"
               size="sm"
               onClick={onDeselectAllColumns}
+              title="Keep only the first dataset column"
               data-testid="button-deselect-columns"
             >
               Min
             </Button>
             <Button
+              ref={resetButtonRef}
               variant="ghost"
               size="sm"
               onClick={onResetColumns}
+              title="Reset all dataset columns"
               data-testid="button-reset-columns"
             >
               Reset
             </Button>
           </div>
         </div>
+          <div data-testid={showResetUndo ? "viewer-column-reset-notice" : undefined}
+            className={showResetUndo
+              ? "flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5"
+              : "sr-only"}>
+            <p role="status" aria-live="polite" aria-atomic="true" data-testid="viewer-column-reset-status"
+              className="min-w-0 text-xs text-muted-foreground">
+              {showResetUndo ? "Column layout reset." : ""}
+            </p>
+            {showResetUndo ? <Button type="button" variant="ghost" size="sm" onClick={handleUndoColumnReset}
+              aria-label="Undo column reset" data-testid="button-undo-viewer-column-reset">
+              Undo
+            </Button> : null}
+          </div>
         {open ? (
           <Suspense fallback={selectorListFallback}>
             <ViewerColumnSelectorList
               headers={headers}
               selectedColumns={selectedColumns}
+              pinnedColumn={pinnedColumn}
+              onPinColumn={isMobile ? undefined : onPinColumn}
               onToggleColumn={onToggleColumn}
               onMoveColumn={onMoveColumn}
             />
@@ -138,6 +172,13 @@ function ViewerColumnSelectorImpl({
       onToggleColumn,
       onMoveColumn,
       onResetColumns,
+      canUndoColumnReset,
+      showResetUndo,
+      onUndoColumnReset,
+      handleUndoColumnReset,
+      onPinColumn,
+      pinnedColumn,
+      isMobile,
       open,
       selectedColumns,
       selectorListFallback,
@@ -168,7 +209,7 @@ function ViewerColumnSelectorImpl({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent className="w-72" align="end">
+      <PopoverContent className={onPinColumn ? "w-80" : "w-72"} align="end" aria-label="Select Columns">
         {selectorContent}
       </PopoverContent>
     </Popover>

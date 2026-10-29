@@ -33,9 +33,13 @@ interface ViewerPageHeaderActionsProps {
   onToggleColumn: (column: string) => void;
   onMoveColumn: (column: string, direction: -1 | 1) => void;
   onResetColumns: () => void;
+  canUndoColumnReset?: boolean | undefined;
+  onUndoColumnReset?: (() => void) | undefined;
   onToggleFilters: () => void;
   rowsCount: number;
   selectedColumns: Set<string>;
+  pinnedColumn?: string | null | undefined;
+  onPinColumn?: ((column: string) => void) | undefined;
   selectedRowCount: number;
   showColumnSelector: boolean;
   showFilters: boolean;
@@ -73,9 +77,13 @@ function ViewerPageHeaderActionsImpl({
   onToggleColumn,
   onMoveColumn,
   onResetColumns,
+  canUndoColumnReset,
+  onUndoColumnReset,
   onToggleFilters,
   rowsCount,
   selectedColumns,
+  pinnedColumn,
+  onPinColumn,
   selectedRowCount,
   showColumnSelector,
   showFilters,
@@ -100,10 +108,14 @@ function ViewerPageHeaderActionsImpl({
               open={showColumnSelector}
               headers={headers}
               selectedColumns={selectedColumns}
+              pinnedColumn={pinnedColumn}
+              onPinColumn={onPinColumn}
               onOpenChange={onShowColumnSelectorChange}
               onToggleColumn={onToggleColumn}
               onMoveColumn={onMoveColumn}
               onResetColumns={onResetColumns}
+              canUndoColumnReset={canUndoColumnReset}
+              onUndoColumnReset={onUndoColumnReset}
               onSelectAllColumns={onSelectAllColumns}
               onDeselectAllColumns={onDeselectAllColumns}
             />

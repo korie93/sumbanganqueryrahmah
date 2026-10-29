@@ -1790,7 +1790,7 @@ for (const theme of visualThemes) {
         await expect(details.getByText(viewerDesign3Account, { exact: true })).toBeVisible();
         await expect(details.getByText(viewerDesign3Card, { exact: true })).toBeVisible();
         await expect(details.getByText("00005000.00", { exact: true })).toBeVisible();
-        expect(await details.locator("dd").filter({ hasText: "<script>example only</script>" }).textContent()).toBe(viewerDesign3Note);
+        expect(await details.locator("[data-viewer-detail-value]").filter({ hasText: "<script>example only</script>" }).textContent()).toBe(viewerDesign3Note);
         await expect(details.locator("script")).toHaveCount(0);
         await expect(details.getByRole("button", { name: /edit|delete|save/i })).toHaveCount(0);
         await expectViewerDesign3DocumentFits(page);
@@ -1882,7 +1882,7 @@ test("viewer design3 virtualized 150-row dataset keeps details, exact values and
     const firstDialog = page.getByRole("dialog", { name: "Synthetic Customer 01", exact: true });
     await expect(firstDialog.getByText(viewerDesign3Account, { exact: true })).toBeVisible();
     await expect(firstDialog.getByText(viewerDesign3Card, { exact: true })).toBeVisible();
-    expect(await firstDialog.locator("dd").filter({ hasText: "<script>example only</script>" }).textContent()).toBe(viewerDesign3Note);
+    expect(await firstDialog.locator("[data-viewer-detail-value]").filter({ hasText: "<script>example only</script>" }).textContent()).toBe(viewerDesign3Note);
     await page.keyboard.press("Escape");
     await expect(firstDetails).toBeFocused();
     await expect(page.getByRole("checkbox", { name: "Select row 1", exact: true })).toHaveAttribute("aria-checked", "false");
@@ -2134,7 +2134,7 @@ for (const theme of visualThemes) {
         // existing read-only dialog still includes all authorized loaded fields.
         await expect(details.getByText(viewerDesign3Card, { exact: true })).toBeVisible();
         await expect(details.getByText(viewerCompactCardUnlistedValue, { exact: true })).toHaveCount(0);
-        await expect(details.getByRole("button", { name: "Close details", exact: true })).toBeFocused();
+        await expect(details.getByRole("heading", { name: viewerCompactCardLongName, exact: true })).toBeFocused();
         await page.keyboard.press("Escape");
         await expect(details).toHaveCount(0);
         await expect(detailsButton).toBeFocused();
@@ -2145,7 +2145,7 @@ for (const theme of visualThemes) {
         await detailsButton.focus();
         await page.keyboard.press("Enter");
         await expect(details).toBeVisible();
-        await expect(details.getByRole("button", { name: "Close details", exact: true })).toBeFocused();
+        await expect(details.getByRole("heading", { name: viewerCompactCardLongName, exact: true })).toBeFocused();
         await page.keyboard.press("Escape");
         await expect(details).toHaveCount(0);
         await expect(detailsButton).toBeFocused();

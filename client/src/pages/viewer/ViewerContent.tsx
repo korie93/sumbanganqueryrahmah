@@ -12,6 +12,7 @@ type ViewerContentProps = {
   rows: DataRowWithId[];
   headers: string[];
   visibleHeaders: string[];
+  pinnedColumn?: string | null | undefined;
   selectedRowIds: Set<number>;
   totalRows: number;
   currentPage: number;
@@ -68,6 +69,7 @@ function ViewerContentImpl({
   rows,
   headers,
   visibleHeaders,
+  pinnedColumn,
   selectedRowIds,
   totalRows,
   currentPage,
@@ -148,6 +150,7 @@ function ViewerContentImpl({
       rows={rows}
       filteredRows={filteredRows}
       visibleHeaders={visibleHeaders}
+      pinnedColumn={pinnedColumn}
       search={search}
       showResultsSummary={showResultsSummary}
       activeFilters={activeFilters}

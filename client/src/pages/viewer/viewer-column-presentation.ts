@@ -48,6 +48,17 @@ export function getViewerDetailFields(row: DataRowWithId, headers: string[]) {
   });
 }
 
+/** Match the existing blank-display rules without confusing a literal dash with missing data. */
+export function isViewerDetailValueEmpty(value: unknown) {
+  return String(value ?? "").trim() === "";
+}
+
+/** Search field names only; preserve the supplied order and exact displayed values. */
+export function filterViewerDetailFields(fields: readonly { header: string; value: string }[], search: string) {
+  const query = search.trim().toLowerCase();
+  return fields.filter(({ header }) => !query || header.toLowerCase().includes(query));
+}
+
 /** Resolve only a nonblank identity field in the currently visible columns. */
 export function getViewerRowIdentityHeader(row: DataRowWithId, headers: string[]) {
   return headers.find((header) => getViewerColumnKind(header) === "name" && String(row[header] ?? "").trim() !== "");

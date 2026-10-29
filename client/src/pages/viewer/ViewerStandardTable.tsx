@@ -8,6 +8,7 @@ import type { DataRowWithId } from "@/pages/viewer/types";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
 import { getViewerColumnPresentation, getViewerTableLayout } from "@/pages/viewer/viewer-column-presentation";
 import { ViewerRowDetailsButton } from "@/pages/viewer/ViewerRowDetailsButton";
+import styles from "./ViewerDataTable.module.css";
 
 interface ViewerStandardTableProps {
   filteredRows: DataRowWithId[];
@@ -18,6 +19,7 @@ interface ViewerStandardTableProps {
   selectedRowIds: Set<number>;
   selectAllFiltered: boolean;
   visibleHeaders: string[];
+  pinnedColumn?: string | null | undefined;
 }
 
 interface ViewerStandardTableRowProps {
@@ -25,14 +27,15 @@ interface ViewerStandardTableRowProps {
   density: TableDensity;
   selected: boolean;
   visibleHeaders: string[];
+  pinnedColumn?: string | null | undefined;
   onToggleRowSelection: (rowId: number) => void;
   onInspectRow?: ((row: DataRowWithId) => void) | undefined;
 }
 
-function ViewerTableColumn({ width }: { width: number }) {
+function ViewerTableColumn({ width }: { width: number | string }) {
   const columnRef = useRef<HTMLTableColElement>(null);
   useLayoutEffect(() => {
-    columnRef.current?.style.setProperty("width", `${width}px`);
+    columnRef.current?.style.setProperty("width", typeof width === "number" ? `${width}px` : width);
   }, [width]);
   return <col ref={columnRef} />;
 }
@@ -42,6 +45,7 @@ const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
   density,
   selected,
   visibleHeaders,
+  pinnedColumn,
   onToggleRowSelection,
   onInspectRow,
 }: ViewerStandardTableRowProps) {
@@ -56,7 +60,7 @@ const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
   return (
     <tr
       aria-label={rowAriaLabel}
-      className={`${density === "compact" ? "h-10" : "h-12"} border-t border-border hover:bg-muted/50 ${
+      className={`${styles.dataRow} ${styles.standardRow} ${selected ? styles.selectedRow : ""} ${density === "compact" ? "h-10" : "h-12"} border-t border-border hover:bg-muted/50 ${
         selected ? "bg-primary/10" : ""
       }`}
       data-density={density}
@@ -78,11 +82,13 @@ const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
         return (
           <td
             key={header}
-            className={`truncate whitespace-nowrap text-foreground ${presentation.align === "right" ? "text-right tabular-nums" : "text-left"} ${
+            className={`${header === pinnedColumn ? styles.pinnedCell : ""} truncate whitespace-nowrap text-foreground ${presentation.align === "right" ? "text-right tabular-nums" : "text-left"} ${
               density === "compact" ? "p-2" : "p-3"
             }`}
             title={cellText}
             data-column-kind={presentation.kind}
+            data-viewer-column={header}
+            data-viewer-pinned={header === pinnedColumn ? "true" : undefined}
           >
             {cellText}
           </td>
@@ -104,8 +110,21 @@ function ViewerStandardTableImpl({
   selectedRowIds,
   selectAllFiltered,
   visibleHeaders,
+  pinnedColumn,
 }: ViewerStandardTableProps) {
   const layout = useMemo(() => getViewerTableLayout(visibleHeaders, density), [density, visibleHeaders]);
+  const dataColumnWidths = useMemo(() => {
+    if (pinnedColumn === null || pinnedColumn === undefined || !visibleHeaders.includes(pinnedColumn)) {
+      return layout.columns.map((column) => column.minWidth);
+    }
+    const totalDataWidth = layout.columns.reduce((total, column) => total + column.minWidth, 0);
+    // Allocate surplus width only to data fields: the pin's fixed 100px starting
+    // position must not grow when the table is wider than its minimum widths.
+    return layout.columns.map((column) => {
+      const ratio = column.minWidth / totalDataWidth;
+      return `calc(${ratio * 100}% - ${148 * ratio}px)`;
+    });
+  }, [layout, pinnedColumn, visibleHeaders]);
 
   return (
     <div className="max-h-[var(--viewer-table-viewport-height,560px)] overflow-y-auto overscroll-y-contain">
@@ -114,7 +133,7 @@ function ViewerStandardTableImpl({
         <colgroup>
           <ViewerTableColumn width={44} />
           <ViewerTableColumn width={56} />
-          {visibleHeaders.map((header, index) => <ViewerTableColumn key={header} width={layout.columns[index].minWidth} />)}
+          {visibleHeaders.map((header, index) => <ViewerTableColumn key={header} width={dataColumnWidths[index]} />)}
           <ViewerTableColumn width={48} />
         </colgroup>
         <thead className="sticky top-0 z-[var(--z-sticky-header)] bg-muted">
@@ -144,10 +163,12 @@ function ViewerStandardTableImpl({
               <th
                 key={header}
                 scope="col"
-                className={`truncate whitespace-nowrap font-medium text-muted-foreground ${getViewerColumnPresentation(header, density).align === "right" ? "text-right tabular-nums" : "text-left"} ${
+                className={`${header === pinnedColumn ? `${styles.pinnedCell} ${styles.pinnedHeader}` : ""} truncate whitespace-nowrap font-medium text-muted-foreground ${getViewerColumnPresentation(header, density).align === "right" ? "text-right tabular-nums" : "text-left"} ${
                   density === "compact" ? "p-2" : "p-3"
                 }`}
                 title={header}
+                data-viewer-column={header}
+                data-viewer-pinned={header === pinnedColumn ? "true" : undefined}
               >
                 {header}
               </th>
@@ -163,6 +184,7 @@ function ViewerStandardTableImpl({
               density={density}
               selected={selectedRowIds.has(row.__rowId)}
               visibleHeaders={visibleHeaders}
+              pinnedColumn={pinnedColumn}
               onToggleRowSelection={onToggleRowSelection}
               onInspectRow={onInspectRow}
             />

@@ -31,8 +31,10 @@ export function resolveMobileViewportState(
   };
 }
 
-export function useMobileViewportState() {
+/** Track the visible viewport; dialogs can opt in on wider screens. */
+export function useMobileViewportState({ trackAllWidths = false }: { trackAllWidths?: boolean } = {}) {
   const isMobile = useIsMobile();
+  const shouldTrack = isMobile || trackAllWidths;
   const [state, setState] = React.useState<MobileViewportState>({
     keyboardOpen: false,
     bottomInset: 0,
@@ -40,7 +42,7 @@ export function useMobileViewportState() {
   });
 
   React.useEffect(() => {
-    if (!isMobile || typeof window === "undefined" || !window.visualViewport) {
+    if (!shouldTrack || typeof window === "undefined" || !window.visualViewport) {
       setState((previous) =>
         previous.keyboardOpen === false && previous.bottomInset === 0 && previous.viewportHeight === 0
           ? previous
@@ -91,7 +93,7 @@ export function useMobileViewportState() {
         window.cancelAnimationFrame(frame);
       }
     };
-  }, [isMobile]);
+  }, [shouldTrack]);
 
   return state;
 }

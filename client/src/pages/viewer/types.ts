@@ -16,6 +16,7 @@ export interface ViewerVirtualRowData {
   density: import("@/hooks/usePersistentTableDensity").TableDensity;
   rows: DataRowWithId[];
   visibleHeaders: string[];
+  pinnedColumn?: string | null | undefined;
   selectedRowIds: Set<number>;
   onToggleRowSelection: (rowId: number) => void;
   onInspectRow?: ((row: DataRowWithId) => void) | undefined;
