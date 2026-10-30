@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="mark" viewBox="0 0 400 400" aria-hidden="true"><style><![CDATA[svg{--blue-on-black:#5b8cff;--blue-paper:#5b8cff;--gc:#5b8cff;--spring:cubic-bezier(.34,1.56,.64,1);--mono:ui-monospace,monospace}.ring{fill:none;stroke:var(--blue-on-black);stroke-width:5;stroke-linecap:round;stroke-dasharray:1;animation:draw 2.2s cubic-bezier(.6,0,.2,1) both}
+.ring-glow{fill:none;stroke:var(--blue-on-black);stroke-width:11;stroke-linecap:round;opacity:.16;filter:blur(6px);stroke-dasharray:1;animation:draw 2.2s cubic-bezier(.6,0,.2,1) both}
+.faint{fill:none;stroke:#fff;stroke-width:1;opacity:.16}
+.ring-glow,.beat-glow{display:none}
+.faint-dash{fill:none;stroke:#5b8cff;stroke-width:1.2;stroke-dasharray:4 8;opacity:.32;transform-origin:200px 200px;animation:spin 64s linear infinite}
+.faint-inner{fill:none;stroke:#fff;stroke-width:1;stroke-dasharray:2 10;opacity:.18;transform-origin:200px 200px;animation:spin 45s linear infinite reverse}
+.ticks{fill:none;stroke:#fff;stroke-width:8;stroke-dasharray:1.2 8.1;opacity:.22;transform-origin:200px 200px;animation:spin 120s linear infinite reverse}
+.orbit{transform-origin:200px 200px;animation:spin 24s linear infinite}
+.orbit-inner{transform-origin:200px 200px;animation:spin 15s linear infinite reverse}
+.radar-beam{transform-origin:200px 200px;animation:spin 9s linear infinite}
+.reticle{stroke:#5b8cff;stroke-width:1;opacity:.28;transform-origin:200px 200px;animation:pulseReticle 4s ease-in-out infinite}
+.deg-txt{fill:#5b8cff;font:600 7px/1 var(--mono);letter-spacing:.12em;opacity:.42}
+.core-dot{fill:#5b8cff;opacity:.55;transform-origin:200px 200px;animation:pulseReticle 2.8s ease-in-out infinite}
+.blip{fill:#5b8cff;transform-origin:265px 118px;animation:blipPulse 9s linear infinite}
+.blip-ring{fill:none;stroke:#5b8cff;stroke-width:1.2;transform-origin:265px 118px;animation:blipRing 9s linear infinite}
+.blip2{fill:#5b8cff;transform-origin:128px 268px;animation:blipPulse 9s 4.5s linear infinite backwards}
+.blip-ring2{fill:none;stroke:#5b8cff;stroke-width:1.2;transform-origin:128px 268px;animation:blipRing 9s 4.5s linear infinite backwards}
+@keyframes blipPulse{0%,6%{opacity:1;transform:scale(1.3)}18%,88%{opacity:.15;transform:scale(.85)}96%,100%{opacity:1;transform:scale(1.3)}}
+@keyframes blipRing{0%{opacity:.85;transform:scale(.8)}18%{opacity:0;transform:scale(3.4)}100%{opacity:0;transform:scale(3.4)}}
+@keyframes pulseReticle{0%,100%{opacity:.18;transform:scale(.96)}50%{opacity:.48;transform:scale(1.04)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+svg.glyph{width:100%;height:100%;--gc:#5b8cff}*{animation:none!important;transition:none!important}.beat,.beat-glow,.ping,.ping2,.sweep,.sweep-line,.radar-beam,.scan-bar,.lens-scan{display:none}]]></style>
+      <defs>
+        <linearGradient id="radarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#5b8cff" stop-opacity=".3"/>
+          <stop offset="60%" stop-color="#2a63f0" stop-opacity=".05"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <g class="reticle">
+        <line x1="200" y1="20" x2="200" y2="56"/>
+        <line x1="200" y1="344" x2="200" y2="380"/>
+        <line x1="20" y1="200" x2="56" y2="200"/>
+        <line x1="344" y1="200" x2="380" y2="200"/>
+        <line x1="193" y1="200" x2="207" y2="200"/>
+        <line x1="200" y1="193" x2="200" y2="207"/>
+      </g>
+      <text class="deg-txt" x="205" y="34">000°</text>
+      <text class="deg-txt" x="352" y="196">090°</text>
+      <text class="deg-txt" x="205" y="372">180°</text>
+      <text class="deg-txt" x="24" y="196">270°</text>
+      <circle class="core-dot" cx="200" cy="200" r="3"/>
+      <circle class="ticks" cx="200" cy="200" r="178"/>
+      <circle class="faint" cx="200" cy="200" r="190"/>
+      <circle class="faint" cx="200" cy="200" r="160"/>
+      <circle class="faint-dash" cx="200" cy="200" r="96"/>
+      <circle class="faint-inner" cx="200" cy="200" r="64"/>
+      <g class="radar-beam">
+        <path d="M200 200 L200 10 A190 190 0 0 1 354 88 Z" fill="url(#radarGrad)"/>
+      </g>
+      <circle class="blip-ring" cx="265" cy="118" r="4"/>
+      <circle class="blip" cx="265" cy="118" r="3.2"/>
+      <circle class="blip-ring2" cx="128" cy="268" r="4"/>
+      <circle class="blip2" cx="128" cy="268" r="2.8"/>
+      <g class="orbit"><circle cx="200" cy="10" r="5" fill="#5b8cff"/><circle cx="200" cy="390" r="3" fill="#fff" opacity=".45"/></g>
+      <g class="orbit-inner"><circle cx="200" cy="40" r="3.5" fill="#5b8cff" opacity=".8"/></g>
+      <circle class="ring-glow" pathLength="1" cx="200" cy="200" r="130" transform="rotate(-90 200 200)"/>
+      <circle class="ring" pathLength="1" cx="200" cy="200" r="130" transform="rotate(-90 200 200)"/>
+      <path class="ring-glow" pathLength="1" d="M296 296 L372 372"/>
+      <path class="ring" pathLength="1" d="M296 296 L372 372"/>
+    </svg>

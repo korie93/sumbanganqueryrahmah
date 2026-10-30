@@ -835,6 +835,14 @@ test("V7.9 collapsed navigation waits for expanded geometry and switches layers 
 });
 
 test("V7.9 Account and Security use canonical personal routes and sign out ends the session", async ({ page, baseURL }) => {
+  // Make the public destination deterministic while preserving the authenticated
+  // fixture and the actual account/security/logout workflow.
+  await page.addInitScript(() => {
+    localStorage.setItem("perf_mode", "high");
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    Object.defineProperty(navigator, "hardwareConcurrency", { get: () => 8 });
+    Object.defineProperty(navigator, "deviceMemory", { get: () => 8 });
+  });
   const fixture = await installFixture(page, baseURL);
   await openWorkspace(page);
   for (const action of ["Account", "Security"]) {
@@ -853,7 +861,7 @@ test("V7.9 Account and Security use canonical personal routes and sign out ends 
   }
   await page.getByTestId("button-user-menu").click();
   await page.getByTestId("button-logout").click();
-  await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Sign In", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Log in", exact: true })).toBeVisible();
   expect(fixture.loggedOut).toBe(true);
   expect(await page.evaluate(() => sessionStorage.getItem("user"))).toBeNull();
   await expect(page.getByTestId("home-dashboard")).toHaveCount(0);

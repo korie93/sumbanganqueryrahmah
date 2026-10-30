@@ -8,6 +8,11 @@ export const ALLOWED_CLIENT_BREAKPOINT_WIDTHS = [640, 767, 768, 1023, 1024];
 const LANDING_V21_BREAKPOINT_WIDTHS = [390, 900, 1040];
 const LANDING_V21_CSS_PATH = "client/src/pages/landing-v21/landing-v21.css";
 
+// The new supplied landing keeps its own native responsive composition. This
+// exception never applies to the unchanged low-spec V21 page or shared styles.
+const LANDING_NEXT_BREAKPOINT_WIDTHS = [480, 560, 700, 720, 860, 1320];
+const LANDING_NEXT_CSS_PATH = "client/src/pages/landing-next/landing-next.css";
+
 // The supplied canonical V17 authentication reference keeps its own split-panel
 // transitions. This exception applies only to its isolated, .auth-v17-scoped CSS;
 // authenticated workspace and other authentication styles retain shared tiers.
@@ -256,6 +261,7 @@ export function validateClientBreakpointContract(params = {}) {
       const width = Number(match[1]);
       if (ALLOWED_CLIENT_BREAKPOINT_WIDTHS.includes(width)
         || (filePath === LANDING_V21_CSS_PATH && LANDING_V21_BREAKPOINT_WIDTHS.includes(width))
+        || (filePath === LANDING_NEXT_CSS_PATH && LANDING_NEXT_BREAKPOINT_WIDTHS.includes(width))
         || (filePath === AUTH_V17_CSS_PATH && AUTH_V17_BREAKPOINT_WIDTHS.includes(width))
         || (filePath === GENERAL_SEARCH_EMPTY_FINAL_CSS_PATH && GENERAL_SEARCH_EMPTY_FINAL_BREAKPOINT_WIDTHS.includes(width))) {
         continue;
@@ -289,7 +295,7 @@ export function formatClientBreakpointContractReport(validation) {
   const inspected = `Client breakpoint contract inspected ${summary.checkedRequirementFileCount || 0}/${summary.requirementFileCount || 0} targeted files, ${summary.checkedRequirementCount || 0}/${summary.requirementCount || 0} contract markers, and ${summary.cssFileCount || 0} CSS files (${summary.cssBreakpointCount || 0} width media queries).`;
 
   if (failures.length === 0) {
-    return `${inspected}\nBreakpoint tiers remain standardized around 640/767/768/1023/1024 across the guarded client viewport paths. Only isolated V21 landing CSS (390/900/1040px), V17 authentication CSS (380/699/700/980/981/1200px), and Enterprise FINAL General Search empty-state CSS (365/760/980px) retain their approved reference breakpoints; these exceptions apply to their exact source-reference stylesheet paths only.`;
+    return `${inspected}\nBreakpoint tiers remain standardized around 640/767/768/1023/1024 across the guarded client viewport paths. Only isolated V21 landing CSS (390/900/1040px), normal-profile landing CSS (480/560/700/720/860/1320px), V17 authentication CSS (380/699/700/980/981/1200px), and Enterprise FINAL General Search empty-state CSS (365/760/980px) retain their approved reference breakpoints; these exceptions apply to their exact source-reference stylesheet paths only.`;
   }
 
   return [

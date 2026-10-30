@@ -123,7 +123,13 @@ test("landing components do not import application auth, API clients or addition
         }
       }
       if (ts.isCallExpression(node)) {
-        assert.notEqual(node.expression.kind, ts.SyntaxKind.ImportKeyword, "Landing must not dynamically load auth or API modules");
+        if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+          const target = node.arguments[0];
+          assert.ok(source.fileName === path.resolve(directory, "../Landing.tsx")
+            && node.arguments.length === 1 && target && ts.isStringLiteral(target)
+            && target.text === "@/pages/landing-next/LandingNext",
+          "Only the normal-profile landing entry may be loaded lazily; auth, API and other runtimes remain forbidden");
+        }
         assert.ok(!["fetch", "sendBeacon", "require"].includes(methodName(node.expression) ?? ""), `${source.fileName}: public preview must not load live data`);
       }
       if (ts.isNewExpression(node)) {

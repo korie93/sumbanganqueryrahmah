@@ -1,3 +1,71 @@
+# SQR new landing — visual QA
+
+Date:30 October2026. Product Design image-to-code/design-qa workflow. **Current landing visual result: passed.** This report covers implementation and local QA; full CI remains pending as explicitly agreed with the user.
+
+## Source and rendered evidence
+
+Source of visual truth: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/landing-gpt6-20261030/reference/landing-reference.html`, safely extracted from `SQR_Landing_Page_Codex_GPT6.zip`. The other supplied HTML was only a preview shell and was not shipped. Actual official project Q/favicons remain authoritative.
+
+Dossier: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/landing-gpt6-20261030/`. Actual production frontend build:source10, manifest `de359bf736ef70e5ba4e8b53ad7d915a5e9736a111ac9b64612060393432c3b4`. Test-only source11 has identical application inputs (`11-dashboard-build-compatibility.json`). Native Chromium rendered the real compiled app with synthetic anonymous/auth fixtures, no production accounts or data.
+
+All comparisons below were composed source-left/app-right and actually opened together. Pixels equal CSS viewport, deviceScaleFactor1; no density resampling. Combined files add only a28px label strip. Panel captures align the section top80px below the viewport top and settle visibility before capture.
+
+| State | Source image | Actual application image | Combined comparison |
+|---|---|---|---|
+| Hero light1440×900 | `reference/reference-desktop-light.png` | `captures/10-browser-capture-desktop-final/app-desktop-light.png` | `comparisons/10-desktop-light.png` |
+| Hero dark1440×900 | `reference/reference-desktop-dark.png` | `captures/10-browser-capture-desktop-final/app-desktop-dark.png` | `comparisons/10-desktop-dark.png` |
+| Hero light390×844 | `reference/reference-mobile-light.png` | `captures/10-browser-capture-mobile-final/app-mobile-light.png` | `comparisons/10-mobile-light.png` |
+| Hero dark320×740 | `reference/reference-mobile-dark.png` | `captures/10-browser-capture-mobile-final/app-mobile-dark.png` | `comparisons/10-mobile-dark.png` |
+| About light/dark1440×900 | `captures/07-browser-reference-panels/reference-about-{light,dark}.png` | `captures/10-browser-capture-sections-final/app-about-{light,dark}.png` | `comparisons/10-about-{light,dark}.png` |
+| Search light/dark1440×900 | `captures/07-browser-reference-panels/reference-search-{light,dark}.png` | `captures/10-browser-capture-search/app-search-{light,dark}.png` | `comparisons/10-search-{light,dark}.png` |
+
+Focused region: `comparisons/10-search-instrument-detail.png` uses the same400×420 crop at x950/y260 from both source and implementation Search light screenshots. It visibly confirms the original vector shape, scale, line weights, blue tones, frame and small HUD copy after the XML repair. Full-view About/hero comparisons expose typography, navigation and facts at readable scales; the focused crop closes the previously missed image defect.
+
+## Findings and completed iterations
+
+1. **[P2 resolved]320px/200%text overflow.** Initial header/title/facts could clip under root overflow suppression. Scoped wrapping, minimum widths, facts stacking and menu viewport scrolling fix it. Final native navigation test measures actual child bounds/scroll widths and verifies the last menu action is in view; it passed.
+2. **[P1 resolved]Broken instrument artwork.** `comparisons/05-search-light.png` showed an undecoded image. A raw ampersand inside CSS copied from HTML was invalid XML. CDATA now encloses the exact original CSS; no geometry or illustration was redrawn. All32variants parse and decode; removing only CDATA reproduces the original extracted SHA256 for every file (`final-svg-preservation.json`). Revised full/focused `10-search-*` images were opened and pass.
+3. **[P2 resolved]List margin drift.** Equal-anchor `07-search-light.png` exposed copy/spec group vertical drift while the figure already aligned. Restored the source list bottom margin after the app's preflight reset. Recaptured source10 Search light/dark shows aligned headline, lead and specs; no actionable spacing difference remains.
+4. **[P2 resolved]Dark high-contrast tokens.** The supplied high-contrast override reused a light foreground token. New scoped dark foreground/border values preserve readability without modifying shared theme tokens.
+
+Engineering fixture issues were tracked separately: Chromium's measured SIGXFSZ temporary-file limit, an unawaited CSP-response route during test teardown and loopback navigator.onLine state. These are not substitutes for visual iterations. The final fixtures use bounded native execution, await route completion and preserve the actual app controls/assertions.
+
+## Required fidelity surfaces
+
+- **Typography:** Same allowed system fallback as the offline source; no forced Archivo download.800weight uppercase display hierarchy, line-height, negative tracking, lead size and wrapping match the hero and panels. Body and monospace HUD/spec copy remain readable.200%text intentionally reflows rather than shrinking or clipping.
+- **Spacing/layout rhythm:**1200pxmaximum container, approximately64pxsticky header, three-line hero, radar crop, mobile full-width CTAs, panel grid tracks, source borders/corners and facts spacing match. Search margin repair removes the observed baseline drift. Header/menu can grow only when enlarged text needs it.320/360/390/430/768/1366/1440 layouts passed.
+- **Colors/tokens:** Black, blue#2a63f0, blue-on-black#5b8cff, paper white and dark#0e0f12 match the source. Theme follows OS until manual choice and uses an independent persistence key. Light/dark axe scans have no serious/critical violations. Shared safe-area tokens are reused.
+- **Image quality/assets:** Supplied radar and five instrument geometries retained in same-origin SVG images; correct aspect ratio, dimensions, crispness and transparency confirmed in captures/decoding tests. All32variants pass. Official transparent Q intentionally replaces the reference's illustrative Q. Existing logo/favicons were not altered. Standard existing Lucide arrows/theme/menu icons are an acceptable small implementation adaptation.
+- **Copy/content:** Hero, Import→Search→Analyse→Monitor workflow, About, Search, Analyse, Import, Monitor, Security, Get started and footer retain source content/order. Four actual `/login` CTAs use the original callback; no fake metrics, registration, demo controls or preview iframe shipped.
+
+Accepted minor differences: official Q/standard icon strokes; correct current-section state instead of the source capture's stale Security underline after its scroll walkthrough; faint dark watermark follows the explicit dark-theme rule rather than the reference's OS-only CSS omission. These are expected integration corrections, not actionable P0/P1/P2 drift.
+
+## Interaction, preservation and console verification
+
+Final evidence records22native browser cases:19new landing cases,2preserved low-spec image/a11y cases and1real Account/Security/logout-to-landing flow. Desktop/mobile/phone touch, keyboard/Escape, responsive menu, anchors/focus/aria-current/back-to-top, direct hash refresh, OS/manual theme isolation, all4login CTAs/Home return, observer fallback, hidden/reduced/offscreen motion, replay/pointer cleanup and every supplied image decode are covered. Passing fixtures have no page/CSP errors, rejected assets, unexpected protected or external requests. CSS is scoped; production-like `script-src 'self'`, Trusted Types and `style-src-attr 'none'` were retained.
+
+`FINAL_LOW_SPEC_PROOF.json`: desktop1440×900 and phone390×844 final PNG hashes and normalized DOM/geometry are identical to commit44f3 baseline, with no new landing module/CSS/art requested. Original low-spec JSX suffix plus18protected source hashes pass. Auth, roles, routes, sessions, backend, brand and boot files remain unchanged.
+
+## Engineering scope and remaining CI gates
+
+Actual frontend production build, bundle/sourcemap gates,160affected contracts, changed-file lint, strict changed-root TypeScript and full client/server/shared lint passed. All501canonical client test files/2495cases passed in exhaustive serial batches before the final affected checks. Root TypeScript still requires CI because the full2926root graph exhausted local memory; no narrower check is claimed as a full-project pass. Four native-esbuild script files and other script checks affected by incomplete/stale local dependencies require CI with `npm ci` (772/791executed script cases passed,19environment-limited failures documented). Full legacy monolithic screenshot command/full smoke/release pipeline were not certified locally. The user explicitly approved the full typecheck/native dependency checks in CI; no dependency download was performed.
+
+The user chose preserving existing JavaScript-only boot/low-spec behavior over adding global noscript HTML. In-app browser initialization failed; the user's authorized native Playwright/Chromium fallback supplied visual proof. No physical-device or full screen-reader certification and no production test/deployment is claimed. No live browser preview remains running; retained screenshots are the preview artifacts.
+
+## Completion checklist
+
+- Source and built implementation opened in combined, equal-state comparisons; full-view and focused evidence saved.
+- All actionable visual P0/P1/P2 findings fixed and rechecked.
+- Scoped responsive design, source artwork, genuine login/navigation and low-spec preservation verified.
+- Accepted full CI checks clearly separated from passing local evidence; no baselines weakened or fabricated passes.
+- Continuation/evidence inventory saved in `CODEX_CONTINUATION_HANDOFF_LANDING_GPT6.md` and external `FINAL_VALIDATION.json`.
+- No commit, push or deploy performed.
+
+final result: passed
+
+---
+# Previous QA history (preserved)
+
 # Desktop sidebar Q — visual QA
 
 Date: 2026-10-13. Product Design image-to-code and design-qa workflow.

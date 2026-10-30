@@ -43,7 +43,7 @@ test("visual contract keeps the login page reachability helper aligned with the 
   assert.match(visualContractSource, /if \(routeSpec\.path === "\/login"\) {\s+await ensureLoginPageVisible\(page, `\$\{routeSpec\.id\}\/\$\{viewportSpec\.id\}`\);\s+}/);
   assert.match(authContractUtilsSource, /Selamat kembali/);
   assert.match(authContractUtilsSource, /Welcome back/);
-  assert.match(authContractUtilsSource, /getByRole\("link", \{ name: \/\^Sign In\$\/ \}\)/);
+  assert.match(authContractUtilsSource, /getByRole\("link", \{ name: \/\^\(Log in\|Sign In\)\$\/ \}\)/);
   assert.match(authContractUtilsSource, /getByTestId\("input-username"\)/);
   assert.match(authContractUtilsSource, /await usernameInput\.waitFor\(\{ state: "visible", timeout: 10_000 \}\)/);
   assert.match(loginPageSource, /data-testid="input-username"/);

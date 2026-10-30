@@ -128,7 +128,7 @@ export const ensureLoginPageVisible = async (page, contextLabel = "Authenticated
     return;
   }
 
-  const publicLoginButton = page.getByRole("link", { name: /^Sign In$/ }).first();
+  const publicLoginButton = page.getByRole("link", { name: /^(Log in|Sign In)$/ }).first();
   if (await waitForVisible(publicLoginButton, 2_000)) {
     await publicLoginButton.click();
     await page.waitForLoadState("networkidle");

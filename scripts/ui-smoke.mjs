@@ -3171,7 +3171,7 @@ const ensureLoginPageVisible = async (page) => {
     return;
   }
 
-  const publicLoginButton = page.getByRole("link", { name: /^Sign In$/ }).first();
+  const publicLoginButton = page.getByRole("link", { name: /^(Log in|Sign In)$/ }).first();
   if (await waitForVisible(publicLoginButton, 2_000)) {
     try {
       await publicLoginButton.click({ force: true, timeout: 5_000 });

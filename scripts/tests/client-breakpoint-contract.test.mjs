@@ -54,6 +54,19 @@ test("actual client styles and guarded consumers satisfy the release breakpoint 
   assert.deepEqual(validation.failures, [], formatClientBreakpointContractReport(validation));
 });
 
+test("actual normal-profile landing stylesheet satisfies its scoped release breakpoint gate", () => {
+  const actualFiles = loadClientBreakpointContractFiles({ cwd: process.cwd() });
+  const landingPath = "client/src/pages/landing-next/landing-next.css";
+  assert.equal(typeof actualFiles[landingPath], "string", "The repository scan includes the new landing stylesheet");
+  assert.match(actualFiles[landingPath], /\.sqr-landing-next/);
+  const filesByPath = Object.fromEntries([
+    ...CLIENT_BREAKPOINT_CONTRACT_REQUIREMENTS.map(({ filePath }) => [filePath, actualFiles[filePath]]),
+    [landingPath, actualFiles[landingPath]],
+  ]);
+  const validation = validateClientBreakpointContract({ filesByPath });
+  assert.deepEqual(validation.failures, [], formatClientBreakpointContractReport(validation));
+});
+
 test("actual Collection Daily styles cannot introduce a separate 1280px viewport tier", () => {
   const filesByPath = loadClientBreakpointContractFiles({ cwd: process.cwd() });
   const dailyCssPath = "client/src/pages/collection/CollectionDailyPage.css";
@@ -99,6 +112,32 @@ test("only the namespaced V21 stylesheet may retain approved reference breakpoin
   assert.equal(validateClientBreakpointContract({ filesByPath }).failures.length, 1);
 });
 
+test("normal-profile landing reference breakpoints stay exclusive to its exact stylesheet", () => {
+  const filesByPath = buildCompliantFilesByPath();
+  const landingPath = "client/src/pages/landing-next/landing-next.css";
+  const widths = [480, 560, 700, 720, 860, 1320];
+  const referenceCss = widths.map(width => `@media (max-width: ${width}px) { .sqr-landing-next .wrap { display: block; } }`).join("\n");
+  filesByPath[landingPath] = referenceCss;
+  assert.deepEqual(ALLOWED_CLIENT_BREAKPOINT_WIDTHS, [640, 767, 768, 1023, 1024]);
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, []);
+
+  for (const otherPath of [
+    "client/src/pages/landing-next/other.css",
+    "client/src/pages/landing-next/landing-next.module.css",
+    "client/src/pages/landing-v21/landing-v21.css",
+    "client/src/pages/Login.css",
+    "client/src/app/AuthenticatedAppShell.css",
+  ]) {
+    const copy = { ...filesByPath, [otherPath]: referenceCss };
+    assert.deepEqual(validateClientBreakpointContract({ filesByPath: copy }).failures,
+      widths.map(width => `${otherPath}: unsupported responsive breakpoint ${width}px (allowed: 640, 767, 768, 1023, 1024px)`));
+  }
+  filesByPath[landingPath] += "\n@media (max-width: 999px) {}";
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, [
+    `${landingPath}: unsupported responsive breakpoint 999px (allowed: 640, 767, 768, 1023, 1024px)`,
+  ]);
+});
+
 test("client breakpoint contract report summarizes successful checks", () => {
   const report = formatClientBreakpointContractReport({
     failures: [],
@@ -114,6 +153,7 @@ test("client breakpoint contract report summarizes successful checks", () => {
 
   assert.match(report, /inspected 10\/10 targeted files, 25\/25 contract markers, and 7 CSS files/i);
   assert.match(report, /standardized around 640\/767\/768\/1023\/1024/i);
+  assert.match(report, /normal-profile landing CSS \(480\/560\/700\/720\/860\/1320px\)/);
   assert.match(report, /Enterprise FINAL General Search empty-state CSS \(365\/760\/980px\)/);
   assert.match(report, /exact source-reference stylesheet paths only/);
 });

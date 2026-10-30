@@ -1560,9 +1560,16 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
   }
 });
 
-test("landing header keeps its brand readable on narrow and enlarged-text viewports", async ({ page }) => {
+test("low-spec landing header keeps its brand readable on narrow and enlarged-text viewports", async ({ page }) => {
   await installTheme(page, "light");
   await installMockPublicApi(page);
+  // This regression covers the preserved legacy low-spec UI. Normal landing
+  // typography, responsive navigation and login are tested independently.
+  await page.addInitScript(() => {
+    localStorage.setItem("perf_mode", "low");
+    Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => 2 });
+    Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => 2 });
+  });
 
   for (const viewport of [
     { fontSize: 16, height: 568, width: 320 },
@@ -1573,6 +1580,8 @@ test("landing header keeps its brand readable on narrow and enlarged-text viewpo
     await page.evaluate((fontSize) => {
       document.documentElement.style.fontSize = `${fontSize}px`;
     }, viewport.fontSize);
+    await expect(page.locator(".sqr-landing")).toHaveClass(/low-spec/);
+    await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
 
     const brand = page.getByTestId("landing-brand-title");
     await expect(brand).toBeVisible();

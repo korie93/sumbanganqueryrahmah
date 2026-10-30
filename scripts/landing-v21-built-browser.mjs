@@ -6,7 +6,9 @@ import {chromium, expect} from '@playwright/test';
 import {startVisualBuiltServer} from './test-visual-built.mjs';
 import {resolvePlaywrightLaunchOptions} from './lib/playwright-chrome.mjs';
 
-// A static loopback build and synthetic API only: no backend, dotenv, DB or credentials.
+// Preserve the existing low-spec landing through a static loopback build and
+// synthetic API only. The separate landing-next Playwright suite covers normal
+// profiles; no backend, dotenv, database or credentials are used here.
 const require=createRequire(import.meta.url);
 const widths=[320,360,375,390,412,430,768,1440];
 const artifacts=path.resolve('artifacts/landing-v21-browser');
@@ -40,6 +42,7 @@ try {
    window.addEventListener('pagehide',()=>observer.disconnect(),{once:true});
    const theme=sessionStorage.getItem('landing-test-theme') || 'light';
    localStorage.setItem('theme',theme);
+   localStorage.setItem('perf_mode','low');
    const applyTheme=()=>{
     document.documentElement.classList.toggle('dark',theme==='dark');
     document.documentElement.dataset.theme=theme;
@@ -47,7 +50,7 @@ try {
    };
    if(document.documentElement)applyTheme();
    document.addEventListener('DOMContentLoaded',applyTheme,{once:true});
-   Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>Number(sessionStorage.getItem('landing-test-cores') || 8)});
+   Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>Number(sessionStorage.getItem('landing-test-cores') || 2)});
    Object.defineProperty(navigator,'deviceMemory',{get:()=>8});
  });
  await context.route('**/*',fixtureRoute);
@@ -95,7 +98,8 @@ try {
  }
  pass('anonymous root starts reusable landing resource hints before React rendering');
  await page.emulateMedia({reducedMotion:'no-preference'});
- await expect(page.locator('.sqr-landing')).not.toHaveClass(/(?:low-spec|motion-paused)/);
+ await expect(page.locator('.sqr-landing')).toHaveClass(/low-spec/);
+ await expect(page.locator('.sqr-landing-next')).toHaveCount(0);
  const firstFrameText=await page.locator('.sqr-landing .hero h1, .sqr-landing .hero > div > p').evaluateAll(elements=>elements.map(element=>{
   const animations=element.getAnimations();
   for(const animation of animations){animation.pause();animation.currentTime=0;}
@@ -106,11 +110,11 @@ try {
  }));
  assert.equal(firstFrameText.length,2);
  for(const text of firstFrameText){
-  assert.equal(text.opacity,'1','Normal-motion hero copy must be visible at animation time zero');
+  assert.equal(text.opacity,'1','Low-spec hero copy must remain visible at animation time zero');
   assert.notEqual(text.visibility,'hidden');assert.notEqual(text.display,'none');assert.ok(text.height>0);
  }
  await page.emulateMedia({reducedMotion:'reduce'});
- pass('normal-motion hero heading and description paint without an entrance delay');
+ pass('preserved low-spec hero heading and description paint without an entrance delay');
  const schema=await page.locator('#sqr-application-schema').textContent();
  assert.equal(JSON.parse(schema)['@type'],'SoftwareApplication');
  await expect(page).toHaveTitle('SQR — Sumbangan Query Rahmah');
@@ -208,7 +212,8 @@ try {
  await page.locator('#product-preview').scrollIntoViewIfNeeded();
  await page.mouse.move(0,0);
  await page.locator('.nav-actions a[href="/login"]').focus();
- await expect(page.locator('#product-preview')).toHaveClass(/preview-running/);
+ await expect(page.locator('#product-preview')).toHaveClass(/is-idle/);
+ await expect(page.locator('#product-preview')).not.toHaveClass(/preview-running/);
  await page.locator('.preview-pause-toggle').click();
  await expect(page.locator('.preview-pause-toggle')).toHaveAttribute('aria-pressed','true');
  const pausedTab=await page.locator('[role="tab"][aria-selected="true"]').getAttribute('id');
@@ -218,13 +223,16 @@ try {
  await page.waitForTimeout(5800);
  await expect(page.locator(`#${pausedTab}`)).toHaveAttribute('aria-selected','true');
  await page.locator('.preview-pause-toggle').click();
+ await expect(page.locator('.preview-pause-toggle')).toHaveAttribute('aria-pressed','false');
  await page.mouse.move(0,0);await page.locator('.nav-actions a[href="/login"]').focus();
  const nextTab={"tab-overview":"tab-search","tab-search":"tab-analysis","tab-analysis":"tab-overview"}[pausedTab];
- await expect(page.locator(`#${nextTab}`)).toHaveAttribute('aria-selected','true',{timeout:10000});
+ await expect(page.locator(`#${pausedTab}`)).toHaveAttribute('aria-selected','true');
+ await page.locator(`#${nextTab}`).click();
+ await expect(page.locator(`#${nextTab}`)).toHaveAttribute('aria-selected','true');
  await page.locator('footer').scrollIntoViewIfNeeded();
  await expect(page.locator('#product-preview')).toHaveClass(/is-idle/);
  await page.locator('#product-preview').scrollIntoViewIfNeeded();
- await expect(page.locator('#product-preview')).toHaveClass(/preview-running/);
+ await expect(page.locator('#product-preview')).toHaveClass(/is-idle/);
  await page.evaluate(()=>{
   Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
   document.dispatchEvent(new Event('visibilitychange'));
@@ -234,10 +242,10 @@ try {
   delete document.hidden;
   document.dispatchEvent(new Event('visibilitychange'));
  });
- await expect(page.locator('#product-preview')).toHaveClass(/preview-running/);
+ await expect(page.locator('#product-preview')).toHaveClass(/is-idle/);
  await page.emulateMedia({reducedMotion:'reduce'});
  await expect(page.locator('#product-preview')).toHaveClass(/is-idle/);
- pass('persistent pause, automatic rotation, offscreen/visibility events and reduced-motion preference');
+ pass('low-spec manual preview and pause controls remain usable while automatic rotation stays disabled across visibility and motion changes');
  await page.emulateMedia({reducedMotion:'no-preference'});
  await page.evaluate(()=>sessionStorage.setItem('landing-test-cores','2'));
  await page.reload();
@@ -289,6 +297,11 @@ try {
  await strictPage.close();
  pass('strict script/style CSP and Trusted Types across preview and login round-trip');
  const touchContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce',serviceWorkers:'block'});
+ await touchContext.addInitScript(()=>{
+  localStorage.setItem('perf_mode','low');
+  Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>2});
+  Object.defineProperty(navigator,'deviceMemory',{get:()=>2});
+ });
  await touchContext.route('**/*',fixtureRoute);
  await touchContext.routeWebSocket('**/*',socket=>socket.close());
  const touchPage=await touchContext.newPage();

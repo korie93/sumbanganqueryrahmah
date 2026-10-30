@@ -16,6 +16,13 @@ async function installPublicFixture(page: Page, baseURL: string | undefined) {
   expect(new URL(origin).hostname).toBe("127.0.0.1");
   expect(new URL(origin).protocol).toBe("http:");
   expect(new URL(origin).port).not.toBe("");
+  // Preserve this existing artwork/layout contract for the unchanged low-spec
+  // landing. The normal-profile redesign has its own browser coverage.
+  await page.addInitScript(() => {
+    localStorage.setItem("perf_mode", "low");
+    Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => 2 });
+    Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => 2 });
+  });
   const unexpected: string[] = [];
   let releaseLogo!: () => void;
   let heldLogoRequests = 0;
@@ -96,6 +103,8 @@ for (const width of [1440, 390]) {
       const navigation = await page.goto("/", { waitUntil: "domcontentloaded" });
       expect(await navigation?.headerValue("content-security-policy")).toContain(strictScriptPolicy);
       await page.locator("html.app-ready").waitFor({ state: "attached" });
+      await expect(page.locator(".sqr-landing")).toHaveClass(/low-spec/);
+      await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
       await expect(page.locator(".sqr-landing").getByRole("heading", { name: /Operational data, structured/ })).toBeVisible();
       await expect.poll(fixture.heldLogoRequests).toBeGreaterThan(0);
       await page.evaluate(() => document.fonts.ready);
