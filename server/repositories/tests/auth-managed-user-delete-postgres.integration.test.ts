@@ -15,6 +15,7 @@ import { ensureCollectionAdminGroupsTables } from "../../internal/collection-boo
 import { ensureCollectionStaffNicknamesTable } from "../../internal/collection-bootstrap-staff-nicknames";
 import { ensureCoreAuditLogsTable, ensureCoreBannedSessionsTable, ensureCoreUserActivityTable } from "../../internal/core-schema-bootstrap-activity";
 import { ensureCoreDataRowsTable, ensureCoreImportsTable } from "../../internal/core-schema-bootstrap-imports";
+import { ensureViewerFilterPresetsTable } from "../../internal/viewer-filter-presets-schema";
 import { createAuthGuards } from "../../auth/guards";
 import { signSessionJwtWithSecret } from "../../auth/session-jwt";
 import { runWithRequestContext } from "../../lib/request-context";
@@ -66,6 +67,7 @@ async function withFixture(run: (pool: pg.Pool) => Promise<void>) {
       await ensureCollectionRecordBaseSchema(fixtureDatabase);
       await pool.query(collectionRestriction);
       await ensureCoreImportsTable(fixtureDatabase);
+      await ensureViewerFilterPresetsTable(fixtureDatabase);
       await ensureCoreDataRowsTable(fixtureDatabase);
       for (const migration of supportingMigrations) await pool.query(migration);
       const replacements = ["execute", "transaction", "select", "insert", "update", "delete"] as const;
@@ -193,6 +195,10 @@ test("PostgreSQL delete: history-linked account succeeds without 409 and preserv
     const actor = await seedUser(pool, "superuser");
     const target = await seedUser(pool, "manager");
     await seedAuth(pool, target);
+    const presetImportId = randomUUID();
+    await pool.query("INSERT INTO imports (id, name, filename) VALUES ($1, 'Synthetic preset file', 'preset.csv')", [presetImportId]);
+    await pool.query("INSERT INTO viewer_filter_presets (owner_user_id, import_id, name, column_filters) VALUES ($1, $2, 'Private filter', $3::jsonb)",
+      [target.id, presetImportId, JSON.stringify([{ column: "Amount", operator: "greaterThan", value: "1" }])]);
     await pool.query("INSERT INTO collection_records (id, batch, payment_date, amount, created_by_login, collection_staff_nickname, staff_username) VALUES ($1, 'fixture', '2026-09-07', 100, $2, 'Fixture Nickname', 'Fixture Nickname')", [randomUUID(), target.username]);
     await withHttp(actor, async ({ request, errors, tokenFor }) => {
       // Warm the actor's activity heartbeat before the transaction-only snapshot.
@@ -206,6 +212,7 @@ test("PostgreSQL delete: history-linked account succeeds without 409 and preserv
       assert.equal(errors.length, 0);
       assert.deepEqual((await captureState(pool)).collection_records, before.collection_records);
       assert.equal((await pool.query("SELECT status FROM users WHERE id = $1", [target.id])).rows[0].status, "deleted");
+      assert.equal((await pool.query("SELECT count(*)::int AS count FROM viewer_filter_presets WHERE owner_user_id = $1", [target.id])).rows[0].count, 0);
       assert.equal((await request("/fixture/authenticated", { headers: { Authorization: `Bearer ${tokenFor(target)}` } })).status, 401);
     });
   });

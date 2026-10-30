@@ -7,6 +7,11 @@ import {
 } from "../lib/saved-collection-link-utils";
 import { resolveCollectionPiiFieldValueFailClosed } from "../lib/collection-pii-encryption";
 import { logger } from "../lib/logger";
+import { isDateImportFilterOperator, isImportFilterRangeOperator, isNumericImportFilterOperator } from "../../shared/common/import-data-filters";
+import { isImportDataNumericSort, type ImportDataNumericSort } from "../../shared/common/import-data-sort";
+import { buildViewerNumericFilterCondition, buildViewerNumericValue } from "./viewer-numeric-filter";
+import { buildViewerNumericCursorCondition, buildViewerNumericOrder } from "./viewer-numeric-sort";
+import { buildViewerDateFilterCondition } from "./viewer-date-filter";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import { hydrateCollectionRecordSourceAccounts } from "./collection-record-source-account-utils";
 import {
@@ -50,6 +55,7 @@ export type {
 } from "./search-repository-types";
 
 const ADVANCED_SEARCH_COLUMN_CACHE_TTL_MS = 60_000;
+const VIEWER_ALLOWED_OPERATORS = new Set([...SEARCH_ALLOWED_OPERATORS, "between", "dateBefore", "dateAfter", "dateBetween"]);
 
 // Display-only enrichment of already authorized, selected/paged records. Reuse
 // Collection's exact Saved link + immutable obligation/index verification; never
@@ -1162,6 +1168,7 @@ export class SearchRepository {
     offset: number;
     columnFilters?: SearchColumnFilter[];
     cursor?: string | null;
+    numericSort?: ImportDataNumericSort | undefined;
   }): Promise<{ rows: SearchDataRow[]; total: number; nextCursorRowId: string | null }> {
     const { importId, search, limit, offset } = params;
     const trimmedSearch = search && search.trim() ? search.trim() : null;
@@ -1170,20 +1177,37 @@ export class SearchRepository {
     const cursor = String(params.cursor || "").trim() || null;
     const requestedColumnFilters = Array.isArray(params.columnFilters)
       ? params.columnFilters
-          .map((filter) => ({
-            column: String(filter?.column ?? "").trim(),
-            operator: String(filter?.operator ?? "").trim(),
-            value: String(filter?.value ?? "").trim(),
-          }))
+          .map((filter) => {
+            const operator = String(filter?.operator ?? "").trim();
+            const value = String(filter?.value ?? "");
+            return {
+              column: String(filter?.column ?? "").trim(),
+              operator,
+              value: isNumericImportFilterOperator(operator) || isDateImportFilterOperator(operator) ? value : value.trim(),
+              ...(isImportFilterRangeOperator(operator) && typeof filter.valueTo === "string"
+                ? { valueTo: filter.valueTo }
+                : {}),
+            };
+          })
           .filter((filter) =>
             filter.column !== ""
-            && filter.value !== ""
-            && SEARCH_ALLOWED_OPERATORS.has(filter.operator),
+            && (filter.value !== "" || isNumericImportFilterOperator(filter.operator) || isDateImportFilterOperator(filter.operator))
+            && VIEWER_ALLOWED_OPERATORS.has(filter.operator),
           )
       : [];
-    const allowedColumns = requestedColumnFilters.length > 0
+    if (params.numericSort !== undefined && !isImportDataNumericSort(params.numericSort)) {
+      return { rows: [], total: 0, nextCursorRowId: null };
+    }
+    const numericSort = params.numericSort;
+    const allowedColumns = requestedColumnFilters.length > 0 || numericSort
       ? await this.getImportColumnNames(importId)
       : null;
+    if (numericSort && !allowedColumns?.has(numericSort.column)) {
+      return { rows: [], total: 0, nextCursorRowId: null };
+    }
+    if (requestedColumnFilters.some(filter => isDateImportFilterOperator(filter.operator) && !allowedColumns?.has(filter.column))) {
+      return { rows: [], total: 0, nextCursorRowId: null };
+    }
     const safeColumnFilters = allowedColumns
       ? requestedColumnFilters.filter((filter) => allowedColumns.has(filter.column))
       : [];
@@ -1203,11 +1227,20 @@ export class SearchRepository {
     }
 
     for (const filter of safeColumnFilters) {
-      conditions.push(buildSearchFieldCondition(filter.column, filter.operator, filter.value));
+      conditions.push(isNumericImportFilterOperator(filter.operator)
+        ? buildViewerNumericFilterCondition(filter.column, filter.operator, filter.value, filter.valueTo)
+        : isDateImportFilterOperator(filter.operator)
+          ? buildViewerDateFilterCondition(filter.column, filter.operator, filter.value, filter.valueTo)
+        : buildSearchFieldCondition(filter.column, filter.operator, filter.value));
     }
 
+    // A cursor narrows the row window, but the pager still needs the total
+    // across the entire matching import, including rows before the cursor.
+    const totalWhereClause = sql.join(conditions, sql` AND `);
     if (cursor) {
-      conditions.push(sql`dr.id > ${cursor}`);
+      conditions.push(numericSort
+        ? buildViewerNumericCursorCondition(numericSort, cursor)
+        : sql`dr.id > ${cursor}`);
     }
 
     const whereClause = conditions.length === 1
@@ -1223,14 +1256,20 @@ export class SearchRepository {
     }
 
     const rowsResult = await db.execute(sql`
+      ${numericSort && cursor ? sql`WITH viewer_sort_anchor AS (
+        SELECT ${buildViewerNumericValue(numericSort.column)} AS value
+        FROM public.data_rows dr
+        WHERE ${totalWhereClause} AND dr.id = ${cursor}
+      )` : sql``}
       SELECT
         dr.id,
         dr.import_id as "importId",
         dr.json_data as "jsonDataJsonb",
         COUNT(*) OVER()::int AS total
       FROM public.data_rows dr
+      ${numericSort && cursor ? sql`CROSS JOIN viewer_sort_anchor` : sql``}
       WHERE ${whereClause}
-      ORDER BY dr.id
+      ORDER BY ${numericSort ? buildViewerNumericOrder(numericSort) : sql`dr.id`}
       LIMIT ${safeLimit + 1}
       ${cursor ? sql`` : sql`OFFSET ${safeOffset}`}
     `);
@@ -1240,7 +1279,9 @@ export class SearchRepository {
     );
     const hasMore = rawRows.length > safeLimit;
     const items = hasMore ? rawRows.slice(0, safeLimit) : rawRows;
-    const total = rawRows.length > 0
+    const total = cursor
+      ? await this.getImportSearchTotal(totalWhereClause)
+      : rawRows.length > 0
       ? getSearchTotalFromRows(rowsResult.rows || [])
       : !cursor && safeOffset > 0
         ? await this.getImportSearchTotal(whereClause)

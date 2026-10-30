@@ -8,6 +8,7 @@ import {
   ensureCoreDataRowsTable,
   ensureCoreImportsTable,
 } from "./core-schema-bootstrap-imports";
+import { ensureViewerFilterPresetsTable } from "./viewer-filter-presets-schema";
 import {
   ensureCoreMonitorAlertHistoryTable,
   ensureCoreMutationIdempotencyTable,
@@ -42,7 +43,10 @@ export class CoreSchemaBootstrap {
     await this.runTask(
       this.importsState,
       "Failed to ensure imports table",
-      ensureCoreImportsTable,
+      async database => {
+        await ensureCoreImportsTable(database);
+        await ensureViewerFilterPresetsTable(database);
+      },
     );
   }
 

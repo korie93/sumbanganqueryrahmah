@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getImportData } from "@/lib/api";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
 import {
   runViewerCsvExport,
   runViewerExcelExport,
@@ -32,6 +33,7 @@ type UseViewerExportStateOptions = {
   totalRows: number;
   debouncedSearch: string;
   debouncedColumnFilters: ColumnFilter[];
+  numericSort?: ImportDataNumericSort | null | undefined;
 };
 
 export function useViewerExportState({
@@ -46,6 +48,7 @@ export function useViewerExportState({
   totalRows,
   debouncedSearch,
   debouncedColumnFilters,
+  numericSort,
 }: UseViewerExportStateOptions) {
   const [exportProgress, setExportProgress] = useState<ViewerExportProgress | null>(null);
   const exportingKind = exportProgress?.kind ?? null;
@@ -66,7 +69,7 @@ export function useViewerExportState({
   }, [lifecycle]);
 
   // A different dataset or query must not inherit the previous export's progress.
-  useEffect(() => cancelActiveExport, [cancelActiveExport, importId, debouncedSearch, debouncedColumnFilters]);
+  useEffect(() => cancelActiveExport, [cancelActiveExport, importId, debouncedSearch, debouncedColumnFilters, numericSort]);
 
   const loadRowsForExport = useCallback(async (
     exportFiltered: boolean,
@@ -91,18 +94,21 @@ export function useViewerExportState({
       pageSize: rowsPerPage,
       search: debouncedSearch,
       columnFilters: debouncedColumnFilters,
+      numericSort,
       signal,
       onProgress,
-      getPage: ({ page, cursor, signal: pageSignal, search, columnFilters }) =>
+      getPage: ({ page, cursor, signal: pageSignal, search, columnFilters, numericSort: pageSort }) =>
         getImportData(importId, page, rowsPerPage, search, {
           signal: pageSignal,
           cursor,
           columnFilters,
+          numericSort: pageSort,
         }),
     });
   }, [
     debouncedColumnFilters,
     debouncedSearch,
+    numericSort,
     filteredRows,
     importId,
     rows,

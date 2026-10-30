@@ -85,11 +85,18 @@ test("viewer controls use stable item callbacks", () => {
 test("viewer search and filter controls expose explicit accessible labels", () => {
   const filterRowSource = readViewerSource("ViewerFilterRow.tsx");
   const searchSource = readViewerSource("ViewerSearchBar.tsx");
+  const columnPickerSource = readViewerSource("ViewerFilterColumnPicker.tsx");
 
   assert.match(searchSource, /htmlFor="viewer-search-query"/);
   assert.match(searchSource, /Search all rows/);
   assert.match(filterRowSource, /viewer-filter-column-label-/);
-  assert.match(filterRowSource, /aria-labelledby=\{columnLabelId\}/);
+  assert.match(filterRowSource, /labelledBy=\{columnLabelId\}/);
+  assert.match(columnPickerSource, /aria-labelledby=\{labelledBy\}/);
+  assert.match(columnPickerSource, /aria-label="Search filter columns"/);
+  assert.match(columnPickerSource, /role="combobox"/);
+  assert.match(columnPickerSource, /aria-controls=\{listId\}/);
+  assert.match(columnPickerSource, /aria-activedescendant=\{activeOptionId\}/);
+  assert.match(columnPickerSource, /id=\{listId\} role="listbox"/);
   assert.match(filterRowSource, /viewer-filter-operator-label-/);
   assert.match(filterRowSource, /aria-labelledby=\{operatorLabelId\}/);
   assert.match(filterRowSource, /htmlFor=\{valueInputId\}/);
@@ -99,7 +106,9 @@ test("viewer page state avoids object-wide dependencies for active filter chips"
   const source = readViewerSource("useViewerPageState.ts");
 
   assert.match(source, /const handleClearSearchFilter = useCallback\(/);
-  assert.match(source, /\[data\.activeColumnFilters, data\.removeFilter, data\.search, handleClearSearchFilter\]/);
+  assert.match(source, /const handleRemoveActiveFilter = useCallback\(/);
+  assert.match(source, /resolveViewerFilterRowIndex\(data\.columnFilters, filter\)/);
+  assert.match(source, /\[data\.activeColumnFilters, data\.search, data\.numericSort, handleClearSearchFilter, handleRemoveActiveFilter, handleClearNumericSort\]/);
   assert.doesNotMatch(source, /\[data, exportState\]/);
   assert.doesNotMatch(source, /buildViewerActiveFilterChips\(\{[\s\S]*?\}\),\s*\[data\]/);
   assert.match(source, /readViewerColumnPreference/);

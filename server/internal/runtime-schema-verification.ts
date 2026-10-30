@@ -43,6 +43,7 @@ export const RUNTIME_REQUIRED_SCHEMA_TABLES = [
   "system_settings",
   "user_activity",
   "users",
+  "viewer_filter_presets",
 ] as const;
 
 type RuntimeSchemaVerificationExecutor = {

@@ -147,6 +147,10 @@ export async function installFixture(page: Page, baseURL: string | undefined, op
         createdByLogin: "guidance.admin", collectionStaffNickname: fields.collectionStaffNickname, createdAt: now, updatedAt: now,
       } });
     }
+    // Viewer presets load only when its Filters panel opens. Existing Viewer
+    // scenarios start with no private presets; feature-specific fixtures can
+    // override this narrowly scoped GET route with their own owner/file state.
+    if (request.method() === "GET" && /^\/api\/imports\/[^/]+\/viewer-presets$/.test(url.pathname)) return respond(route, { presets: [] });
     if (["POST /api/telemetry/client-errors", "POST /api/telemetry/web-vitals"].includes(endpoint)) return respond(route, { ok: true });
     fixture.unexpected.push(endpoint);
     return respond(route, { ok: false, message: "Unexpected synthetic request" }, 404);

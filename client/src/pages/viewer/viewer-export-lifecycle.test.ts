@@ -19,7 +19,7 @@ test("viewer export state cancels and resets active exports", () => {
   );
   assert.match(
     source,
-    /useEffect\(\(\) => cancelActiveExport, \[cancelActiveExport, importId, debouncedSearch, debouncedColumnFilters\]\);/,
+    /useEffect\(\(\) => cancelActiveExport, \[cancelActiveExport, importId, debouncedSearch, debouncedColumnFilters, numericSort\]\);/,
   );
 });
 

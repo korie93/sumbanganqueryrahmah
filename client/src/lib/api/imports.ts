@@ -15,6 +15,10 @@ import {
   singleImportAnalysisResponseSchema,
 } from "@shared/api-contracts";
 import type { ImportComparisonCategory } from "@shared/common/import-comparison-contract";
+import type { ImportDataColumnFilter } from "@shared/common/import-data-filters";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
+
+export type { ImportDataColumnFilter } from "@shared/common/import-data-filters";
 
 const IMPORT_UPLOAD_TIMEOUT_MS = 5 * 60_000 + 30_000;
 
@@ -47,14 +51,9 @@ export type ImportColumnMappingEntry = {
   target: string | null;
 };
 
-export type ImportDataColumnFilter = {
-  column: string;
-  operator: "contains" | "equals" | "startsWith" | "endsWith" | "notEquals";
-  value: string;
-};
-
 type ImportDataRequestOptions = ImportRequestOptions & {
   columnFilters?: ImportDataColumnFilter[] | undefined;
+  numericSort?: ImportDataNumericSort | undefined;
 };
 
 type ImportComparisonRequestOptions = ImportRequestOptions & {
@@ -361,6 +360,9 @@ export async function getImportData(
   }
   if (Array.isArray(options?.columnFilters) && options.columnFilters.length > 0) {
     params.set("columnFilters", JSON.stringify(options.columnFilters));
+  }
+  if (options?.numericSort) {
+    params.set("numericSort", JSON.stringify(options.numericSort));
   }
 
   const response = await apiRequest(

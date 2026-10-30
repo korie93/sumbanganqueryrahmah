@@ -14,6 +14,8 @@ import type {
   SearchImportRowsInput,
 } from "./imports-service-types";
 import { encodeImportDataPageCursor, parseImportDataPageCursor } from "./imports-service-parsers";
+import { isImportDataNumericSort } from "../../shared/common/import-data-sort";
+import { isDateImportFilterOperator } from "../../shared/common/import-data-filters";
 import { enrichSavedDataRow } from "../lib/saved-row-location-enrichment";
 import {
   buildImportCustomerComparisonPage,
@@ -158,6 +160,9 @@ export class ImportsServiceReadOperations {
   }
 
   async getImportDataPage(params: ImportDataPageInput): Promise<ImportDataPageResult> {
+    if (params.numericSort !== undefined && !isImportDataNumericSort(params.numericSort)) {
+      throw new Error("Invalid viewer numeric sort.");
+    }
     const maxLimit = Math.min(params.isDbProtected ? 120 : 500, params.viewerRowsPerPage);
     const limit = Math.max(10, Math.min(params.requestedLimit, maxLimit));
     const parsedCursor = parseImportDataPageCursor(params.cursor);
@@ -168,6 +173,16 @@ export class ImportsServiceReadOperations {
     const effectivePage = parsedCursor?.page ?? params.page;
     const offset = parsedCursor ? 0 : (params.page - 1) * limit;
     const search = String(params.search || "").trim();
+    const dateFilters = (params.columnFilters ?? []).filter(filter => isDateImportFilterOperator(filter.operator));
+    const knownHeaders = params.numericSort || dateFilters.length > 0
+      ? await this.importsRepository.getImportColumnNames(params.importId)
+      : null;
+    if (params.numericSort && !knownHeaders?.includes(params.numericSort.column)) {
+      throw new Error("Invalid viewer numeric sort.");
+    }
+    if (dateFilters.some(filter => !knownHeaders?.includes(filter.column))) {
+      throw new Error("Invalid viewer column filters.");
+    }
     const [result, headers] = await Promise.all([
       this.storage.searchDataRows({
         importId: params.importId,
@@ -176,8 +191,9 @@ export class ImportsServiceReadOperations {
         offset,
         columnFilters: params.columnFilters ?? [],
         cursor: parsedCursor?.lastRowId ?? null,
+        ...(params.numericSort ? { numericSort: params.numericSort } : {}),
       }),
-      this.importsRepository.getImportColumnNames(params.importId),
+      knownHeaders ?? this.importsRepository.getImportColumnNames(params.importId),
       this.importsRepository.markImportOpened(params.importId),
     ]);
 

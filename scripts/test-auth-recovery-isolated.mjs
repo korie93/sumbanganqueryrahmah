@@ -24,6 +24,9 @@ const testFiles = dashboard
       "server/repositories/tests/auth-session-admission-postgres.integration.test.ts",
       "server/repositories/tests/ai-conversation-owner-postgres.integration.test.ts",
       "server/repositories/tests/viewer-import-lifecycle.postgres.test.ts",
+      "server/repositories/tests/viewer-numeric-filter.postgres.test.ts",
+      "server/repositories/tests/viewer-date-filter.postgres.test.ts",
+      "server/repositories/tests/viewer-filter-presets.postgres.test.ts",
     ];
 function run(command, args, env = cleanEnv) {
   return new Promise((resolve, reject) => {

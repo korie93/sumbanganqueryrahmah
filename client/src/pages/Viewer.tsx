@@ -28,6 +28,7 @@ const ViewerPageHeaderActions = lazy(() =>
 interface ViewerProps {
   onNavigate: (page: string) => void;
   importId?: string | undefined;
+  accountId?: string | undefined;
   userRole: string;
   viewerRowsPerPage?: number | undefined;
 }
@@ -35,6 +36,7 @@ interface ViewerProps {
 export default function Viewer({
   onNavigate,
   importId,
+  accountId,
   userRole,
   viewerRowsPerPage,
 }: ViewerProps) {
@@ -42,6 +44,7 @@ export default function Viewer({
   const viewer = useViewerPageState({
     onNavigate,
     importId,
+    accountId,
     userRole,
     viewerRowsPerPage,
   });
@@ -88,7 +91,7 @@ export default function Viewer({
                 filterTriggerRef={filterTriggerRef}
                 exportBusy={viewer.exportBusy}
                 filteredRowsCount={viewer.filteredRows.length}
-                filterCount={viewer.columnFilters.length}
+                filterCount={viewer.columnFilters.length + (viewer.numericSort ? 1 : 0)}
                 hasFilteredSubset={viewer.hasFilteredSubset}
                 headers={viewer.headers}
                 densityPreference={viewer.tableDensityPreference}
@@ -131,6 +134,10 @@ export default function Viewer({
           pageEnd={viewer.pageEnd}
           showFilters={viewer.showFilters}
           columnFilters={viewer.columnFilters}
+          numericSort={viewer.numericSort}
+          onNumericSortChange={viewer.handleNumericSortChange}
+          presetState={viewer.presetState}
+          onApplyPreset={viewer.applyFilterPreset}
           error={viewer.error}
           canRetry={viewer.canRetry}
           retrying={viewer.retrying}
@@ -141,7 +148,7 @@ export default function Viewer({
           minSearchLength={viewer.MIN_SEARCH_LENGTH}
           search={viewer.search}
           filteredRows={viewer.filteredRows}
-          showResultsSummary={viewer.columnFilters.length > 0 || viewer.isServerSearchActive}
+          showResultsSummary={viewer.columnFilters.length > 0 || viewer.isServerSearchActive || Boolean(viewer.numericSort)}
           activeFilters={viewer.activeFilterChips}
           searchInputRef={viewer.searchInputRef}
           debouncedSearch={viewer.debouncedSearch}

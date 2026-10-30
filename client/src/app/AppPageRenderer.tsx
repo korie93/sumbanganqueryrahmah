@@ -83,6 +83,7 @@ function AppPageRendererImpl({
           key={JSON.stringify([user.id ?? user.username, user.role])}
           onNavigate={onNavigate}
           importId={selectedImportId}
+          accountId={user.id}
           userRole={user.role}
           viewerRowsPerPage={runtimeConfig.viewerRowsPerPage}
         />

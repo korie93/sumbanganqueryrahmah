@@ -5,6 +5,9 @@ import type { ColumnFilter, DataRowWithId, ViewerFilterMutableField } from "@/pa
 import { ViewerContentDatasetSection } from "@/pages/viewer/ViewerContentDatasetSection";
 import { ViewerContentFiltersSection } from "@/pages/viewer/ViewerContentFiltersSection";
 import type { TableDensity } from "@/hooks/usePersistentTableDensity";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
+import type { ViewerFilterPreset } from "@shared/common/viewer-filter-presets";
+import type { ViewerFilterPresetState } from "@/pages/viewer/useViewerFilterPresets";
 
 type ViewerContentProps = {
   toolbarActions?: ReactNode;
@@ -21,6 +24,10 @@ type ViewerContentProps = {
   pageEnd: number;
   showFilters: boolean;
   columnFilters: ColumnFilter[];
+  numericSort?: ImportDataNumericSort | null | undefined;
+  onNumericSortChange?: ((sort: ImportDataNumericSort | null) => void) | undefined;
+  presetState?: ViewerFilterPresetState | undefined;
+  onApplyPreset?: ((preset: ViewerFilterPreset) => boolean) | undefined;
   error: string;
   canRetry: boolean;
   retrying: boolean;
@@ -78,6 +85,10 @@ function ViewerContentImpl({
   pageEnd,
   showFilters,
   columnFilters,
+  numericSort,
+  onNumericSortChange,
+  presetState,
+  onApplyPreset,
   error,
   canRetry,
   retrying,
@@ -140,6 +151,10 @@ function ViewerContentImpl({
           showFilters={showFilters}
           headers={headers}
           columnFilters={columnFilters}
+          numericSort={numericSort}
+          onNumericSortChange={onNumericSortChange}
+          presetState={presetState}
+          onApplyPreset={onApplyPreset}
           onAddFilter={onAddFilter}
           onClearAllFilters={onClearAllFilters}
           onUpdateFilter={onUpdateFilter}

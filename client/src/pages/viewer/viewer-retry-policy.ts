@@ -1,6 +1,8 @@
 import { ApiCircuitOpenError } from "@/lib/api-client-retry";
 import { isReadDeadlineError } from "@/lib/read-deadline";
 import type { ColumnFilter } from "@/pages/viewer/types";
+import { isImportDataFilterActive, isImportFilterRangeOperator } from "@shared/common/import-data-filters";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
 
 const TRANSIENT_HTTP_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 const OFFLINE_MESSAGE = "You appear to be offline. Check your internet connection and try again.";
@@ -37,9 +39,13 @@ export function buildViewerQueryKey(
   search: string,
   filters: readonly ColumnFilter[],
   isCleared: boolean,
+  numericSort?: ImportDataNumericSort | null | undefined,
 ): string {
   const activeFilters = filters
-    .filter((filter) => filter.column.trim() !== "" && filter.value.trim() !== "")
-    .map(({ column, operator, value }) => [column, operator, value]);
-  return JSON.stringify([importId, pageSize, search.trim(), activeFilters, isCleared]);
+    .filter(isImportDataFilterActive)
+    .map(({ column, operator, value, valueTo }) => isImportFilterRangeOperator(operator)
+      ? [column, operator, value, valueTo]
+      : [column, operator, value]);
+  const query = [importId, pageSize, search.trim(), activeFilters, isCleared];
+  return JSON.stringify(numericSort ? [...query, [numericSort.column, numericSort.direction]] : query);
 }

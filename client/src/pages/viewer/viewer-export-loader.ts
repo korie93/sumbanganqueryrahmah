@@ -1,5 +1,6 @@
 import { normalizeViewerPageResult, type ViewerPageResponse } from "@/pages/viewer/page-utils";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
 
 type ResolveViewerImmediateExportRowsOptions = {
   rows: DataRowWithId[];
@@ -13,6 +14,7 @@ type LoadViewerPagedExportRowsOptions = {
   pageSize: number;
   search: string;
   columnFilters: ColumnFilter[];
+  numericSort?: ImportDataNumericSort | null | undefined;
   signal: AbortSignal;
   onProgress?: (receivedRows: number) => void;
   getPage: (params: {
@@ -21,6 +23,7 @@ type LoadViewerPagedExportRowsOptions = {
     signal: AbortSignal;
     search: string;
     columnFilters: ColumnFilter[];
+    numericSort?: ImportDataNumericSort | undefined;
   }) => Promise<ViewerPageResponse>;
 };
 
@@ -50,6 +53,7 @@ export async function loadViewerPagedExportRows({
   pageSize,
   search,
   columnFilters,
+  numericSort,
   signal,
   onProgress,
   getPage,
@@ -69,6 +73,7 @@ export async function loadViewerPagedExportRows({
       signal,
       search,
       columnFilters,
+      ...(numericSort ? { numericSort } : {}),
     });
     if (signal.aborted) throw createAbortError();
     const normalizedPage = normalizeViewerPageResult(response ?? {}, pageToLoad, pageSize);

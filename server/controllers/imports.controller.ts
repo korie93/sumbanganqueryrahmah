@@ -22,6 +22,14 @@ import { parseImportUploadFile } from "../services/import-upload-parser";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { safeJsonParse } from "../lib/safe-json";
 import { importComparisonCategorySchema } from "../../shared/common/import-comparison-contract";
+import { isImportDataNumericSort, type ImportDataNumericSort } from "../../shared/common/import-data-sort";
+import {
+  getImportFilterValidationIssue,
+  IMPORT_DATA_FILTER_OPERATORS,
+  isDateImportFilterOperator,
+  isImportFilterRangeOperator,
+  isNumericImportFilterOperator,
+} from "../../shared/common/import-data-filters";
 import {
   ImportComparisonBusyError,
   ImportComparisonLimitError,
@@ -44,8 +52,24 @@ export type ImportsController = ReturnType<typeof createImportsController>;
 
 const viewerColumnFilterSchema = z.object({
   column: z.string().trim().min(1).superRefine(maxUtf16Length(120)),
-  operator: z.enum(["contains", "equals", "startsWith", "endsWith", "notEquals"]),
-  value: z.string().trim().min(1).superRefine(maxUtf16Length(500)),
+  operator: z.enum(IMPORT_DATA_FILTER_OPERATORS),
+  value: z.string().min(1).superRefine(maxUtf16Length(500)),
+  valueTo: z.string().superRefine(maxUtf16Length(500)).optional(),
+}).superRefine((filter, context) => {
+  const issue = getImportFilterValidationIssue(filter);
+  if (issue || !filter.value.trim()) {
+    context.addIssue({ code: "custom", message: issue ?? "A filter value is required." });
+  }
+}).transform((filter): ImportDataColumnFilter => {
+  const typed = isNumericImportFilterOperator(filter.operator) || isDateImportFilterOperator(filter.operator);
+  return {
+    column: filter.column,
+    operator: filter.operator,
+    value: typed ? filter.value.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "") : filter.value.trim(),
+    ...(isImportFilterRangeOperator(filter.operator)
+      ? { valueTo: (filter.valueTo ?? "").replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "") }
+      : {}),
+  };
 });
 
 const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
@@ -85,7 +109,7 @@ function parseViewerColumnFiltersQuery(value: unknown): ImportDataColumnFilter[]
   const parseResult = safeJsonParse<unknown>(normalized, "viewer_column_filters", {
     maxArrayLength: 10,
     maxDepth: 3,
-    maxObjectKeys: 4,
+    maxObjectKeys: 5,
     maxRawBytes: VIEWER_COLUMN_FILTERS_JSON_MAX_BYTES,
     maxStringLength: 500,
     maxTotalBytes: VIEWER_COLUMN_FILTERS_JSON_MAX_BYTES,
@@ -100,6 +124,19 @@ function parseViewerColumnFiltersQuery(value: unknown): ImportDataColumnFilter[]
   }
 
   return result.data;
+}
+
+function parseViewerNumericSortQuery(value: unknown): ImportDataNumericSort | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value) throw badRequest("Invalid viewer numeric sort.");
+  const parsed = safeJsonParse<unknown>(value, "viewer_numeric_sort", {
+    maxArrayLength: 0, maxDepth: 2, maxObjectKeys: 2,
+    maxRawBytes: 1_024, maxStringLength: 120, maxTotalBytes: 1_024,
+  });
+  if (!parsed.success || !isImportDataNumericSort(parsed.data)) {
+    throw badRequest("Invalid viewer numeric sort.");
+  }
+  return parsed.data;
 }
 
 function parseSavedOptionalRowCount(value: unknown, label: string): number | null {
@@ -466,6 +503,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     );
     const search = String(req.query.search || "").trim();
     const columnFilters = parseViewerColumnFiltersQuery(req.query.columnFilters);
+    const numericSort = parseViewerNumericSortQuery(req.query.numericSort);
 
     try {
       const result = await importsService.getImportDataPage({
@@ -477,12 +515,19 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         isDbProtected: isDbProtected(),
         search,
         columnFilters,
+        ...(numericSort ? { numericSort } : {}),
       });
 
       return res.json(result);
     } catch (error) {
       if (error instanceof Error && /invalid import data cursor/i.test(error.message)) {
         throw badRequest("Invalid import data cursor.");
+      }
+      if (error instanceof Error && error.message === "Invalid viewer numeric sort.") {
+        throw badRequest("Invalid viewer numeric sort.");
+      }
+      if (error instanceof Error && error.message === "Invalid viewer column filters.") {
+        throw badRequest("Invalid viewer column filters.");
       }
       throw error;
     }

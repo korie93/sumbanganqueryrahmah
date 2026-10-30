@@ -5,6 +5,7 @@ import {
   resolveViewerImmediateExportRows,
 } from "@/pages/viewer/viewer-export-loader";
 import type { ViewerPageResponse } from "@/pages/viewer/page-utils";
+import type { ColumnFilter } from "@/pages/viewer/types";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -108,6 +109,27 @@ test("loadViewerPagedExportRows walks every cursor-linked page", async () => {
       { id: 2, name: "C" },
     ],
   );
+});
+
+test("paged export forwards the same numeric range on every cursor request", async () => {
+  const filters: ColumnFilter[] = [{ column: "Amount", operator: "between", value: "0", valueTo: "1,000.50" }];
+  const seen: Array<{ page: number; cursor?: string | undefined; columnFilters: ColumnFilter[] }> = [];
+  const rows = await loadViewerPagedExportRows({
+    pageSize: 1,
+    search: "",
+    columnFilters: filters,
+    signal: new AbortController().signal,
+    getPage: async ({ page, cursor, columnFilters }) => {
+      seen.push({ page, cursor, columnFilters });
+      return { rows: [{ jsonDataJsonb: { Amount: page === 1 ? "0" : "1,000.50" } }],
+        page, pageSize: 1, nextCursor: page === 1 ? "range-page-two" : null };
+    },
+  });
+  assert.deepEqual(seen, [
+    { page: 1, cursor: undefined, columnFilters: filters },
+    { page: 2, cursor: "range-page-two", columnFilters: filters },
+  ]);
+  assert.deepEqual(rows.map(row => row.Amount), ["0", "1,000.50"]);
 });
 
 test("export progress advances only after each held page has actually delivered rows", async () => {

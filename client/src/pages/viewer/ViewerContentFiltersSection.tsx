@@ -7,6 +7,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { ColumnFilter, ViewerFilterMutableField } from "@/pages/viewer/types";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
+import type { ViewerFilterPreset } from "@shared/common/viewer-filter-presets";
+import type { ViewerFilterPresetState } from "@/pages/viewer/useViewerFilterPresets";
 import { ViewerFiltersPanelFallback } from "@/pages/viewer/ViewerContentFallbacks";
 
 const ViewerFiltersPanel = lazy(() =>
@@ -21,6 +24,10 @@ type ViewerContentFiltersSectionProps = {
   showFilters: boolean;
   headers: string[];
   columnFilters: ColumnFilter[];
+  numericSort?: ImportDataNumericSort | null | undefined;
+  onNumericSortChange?: ((sort: ImportDataNumericSort | null) => void) | undefined;
+  presetState?: ViewerFilterPresetState | undefined;
+  onApplyPreset?: ((preset: ViewerFilterPreset) => boolean) | undefined;
   onAddFilter: () => void;
   onClearAllFilters: () => void;
   onUpdateFilter: (index: number, field: ViewerFilterMutableField, value: string) => void;
@@ -34,6 +41,10 @@ export function ViewerContentFiltersSection({
   showFilters,
   headers,
   columnFilters,
+  numericSort,
+  onNumericSortChange,
+  presetState,
+  onApplyPreset,
   onAddFilter,
   onClearAllFilters,
   onUpdateFilter,
@@ -50,6 +61,10 @@ export function ViewerContentFiltersSection({
         showHeading={!isMobile}
         headers={headers}
         columnFilters={columnFilters}
+        numericSort={numericSort}
+        onNumericSortChange={onNumericSortChange}
+        presetState={presetState}
+        onApplyPreset={onApplyPreset}
         onAddFilter={onAddFilter}
         onClearAllFilters={onClearAllFilters}
         onUpdateFilter={onUpdateFilter}

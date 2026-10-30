@@ -111,3 +111,16 @@ test("Viewer query keys preserve filter values and serialize delimiter-like inpu
   assert.deepEqual(JSON.parse(key), ["import-a", 25, "Alice", [["Customer", "contains", value]], false]);
   assert.notEqual(key, buildViewerQueryKey("import-a", 25, value, [FILTER], false));
 });
+
+test("numeric query identity includes only complete ranges and their effective upper bounds", () => {
+  const range: ColumnFilter = { id: "first", column: "Amount", operator: "between", value: "0", valueTo: "100" };
+  const key = buildViewerQueryKey("import-a", 25, "", [range], false);
+  assert.notEqual(key, buildViewerQueryKey("import-a", 25, "", [{ ...range, valueTo: "200" }], false));
+  assert.equal(key, buildViewerQueryKey("import-a", 25, "", [{ ...range, id: "recreated" }], false));
+  const emptyKey = buildViewerQueryKey("import-a", 25, "", [], false);
+  for (const incomplete of [{ ...range, valueTo: "" }, { ...range, valueTo: "-1" }, { ...range, value: "x" }]) {
+    assert.equal(buildViewerQueryKey("import-a", 25, "", [incomplete], false), emptyKey);
+  }
+  const single: ColumnFilter = { column: "Amount", operator: "greaterThan", value: "0" };
+  assert.equal(buildViewerQueryKey("import-a", 25, "", [single], false), buildViewerQueryKey("import-a", 25, "", [{ ...single, valueTo: "irrelevant" }], false));
+});

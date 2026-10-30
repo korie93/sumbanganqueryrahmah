@@ -1,0 +1,28 @@
+# Viewer filter-column search — continuation handoff
+
+User selected recommendation 3: add search inside the Viewer filter-column chooser. Goal created on 29 October 2026. **Status: implementation and focused local QA complete. Changes remain uncommitted.**
+
+Base remains `de45961f6693add3f601f6f9df0c67388c0b969a` on `main`. Preserve all uncommitted numeric-filter and numeric-sort work. Their handoffs and successful proofs are in `CODEX_CONTINUATION_HANDOFF_VIEWER_NUMERIC_FILTERS.md` and `CODEX_CONTINUATION_HANDOFF_VIEWER_NUMERIC_SORT.md`. No commit, push or deployment is authorized yet.
+
+Scope: replace only the filter row's column selector with a compact, locally searchable chooser; retain the trigger test ID and accessible label. Search matches header names without case sensitivity, preserves exact selected header values and shows a clear empty result. Typing/searching must not modify filters or request API data. Close/selection/reopen resets the temporary search. Support keyboard, screen-reader labels, focus restoration, nested mobile Sheet Escape behavior and long names at 320px+. Numeric order column controls and shared Select components are outside this change.
+
+Implementation: `ViewerFilterRow.tsx` delegates only its column chooser to `ViewerFilterColumnPicker.tsx`. The picker uses existing Radix Popover and Input components with an owned editable combobox/listbox. React renders the visible options, keyboard highlight and active-descendant ID together. `viewer-filter-column-search.ts` provides literal local matching and bounded arrow/Home/End navigation. No dependency, common Select, backend or API changes were made. Header labels are plain React text; the current header is described on the trigger.
+
+Execution boundary persists: no repository/npm/test/build/browser execution on Windows. Target code runs only in WSL `SQR-Audit` with existing bwrap/cgroup isolation: read-only source/toolchain, empty allowlisted environment, synthetic data, isolated loopback, no external network/install, 1 CPU, 768 MiB/no swap, 128 tasks, 180 s wall/120 s aggregate CPU, 256 MiB scratch, bounded outputs. Run heavy QA sequentially under the 1.5 GiB VM cap. Native Node 24, Vite/Rolldown, TypeScript and Chromium are already available; never substitute a compiler/browser.
+
+Reusable controls: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/viewer-numeric-sort-20261029`. Final previous source `/opt/sqr-audit/source-viewer-numeric-sort-03`, manifest `f543f0a9da5a016ba7d6063e6fbe6eb23c63fab618a28837ab4a9b759e259126`. New evidence goes under `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/viewer-filter-column-search-20261029`; create new immutable snapshots/controls and preserve previous failures/proofs.
+
+Final source snapshot: `/opt/sqr-audit/source-viewer-filter-column-search-05`, manifest SHA-256 `82224e198c31da7c07e38e3cd2355bc10d0e2d59da00f3d6648df85557109847`. Evidence: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/viewer-filter-column-search-20261029/05/FINAL_VALIDATION.json`. All current build, lint, client type and browser receipts use this snapshot. Only this handoff is edited afterward.
+
+Validation:
+
+- 212 client/shared/API unit checks passed across 40 files, including five new matching, keyboard-navigation and SSR/ARIA cases; no failures or skips.
+- Eleven native Chromium/Playwright cases passed on the final snapshot: the two new desktop/mobile column-search cases plus nine numeric-filter, numeric-sort, pagination/export/retry regressions. New cases verify local/no-API searching, exact quoted/HTML-like header values, preserved Between bounds, empty Enter safety, same-column no-refetch, synthetic IME confirmation, search reset, active-descendant IDs, keyboard/focus, nested Escape and 320px dark layout.
+- Scoped axe scans pass with no serious/critical picker violations in populated and empty desktop states and the populated mobile state. No full application accessibility audit is claimed.
+- Final lint, strict TypeScript on 38 changed client/shared roots, actual Vite/Rolldown production frontend build, bundle budgets and production source-map gate passed. Full repository CI/typecheck/visual snapshots are not claimed.
+- Prior successful backend/API units (80), disposable PostgreSQL cases (2) and server strict types are carried through verified byte-identical backend/shared/API/dependency inputs. They were not rerun for this frontend-only feature.
+- Earlier failed cmdk active-descendant cases are retained. Its local library and sandbox bytes were verified identical; its scheduled DOM lookup could leave a stale/missing active ID. The final native combobox passes the original strict assertions without DOM patches or weaker tests. A later lint failure was fixed by native button options with `tabIndex=-1`, keeping keyboard focus on the combobox input. The existing nonfatal PostCSS `from` warning remains.
+
+Final closure records exact source/working-file hashes and requirement evidence, checks that no target processes/cgroups/scratch mounts remain, and terminates WSL. No production data, production probes, dependency installs, commit, push or deployment were used. Browser screenshots/traces/videos are disabled; assertions exercised the actual built frontend with fictional records. IME confirmation is covered by synthetic browser key events, with no claim about OS-specific IME products.
+
+Next action, only on user request: review the combined uncommitted numeric-filter, numeric-sort and filter-column-search diff, commit and push, then inspect resulting CI. Preserve all current work and use `git status` before continuing. This handoff and the retained evidence let another account/session resume the task.

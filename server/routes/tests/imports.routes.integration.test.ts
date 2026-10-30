@@ -13,6 +13,8 @@ import {
   singleImportAnalysisResponseSchema,
 } from "../../../shared/api-contracts";
 import { ERROR_CODES } from "../../../shared/error-codes";
+import { compareImportFilterNumbers, matchesImportDateFilter, matchesImportNumericFilter, normalizeImportFilterNumber } from "../../../shared/common/import-data-filters";
+import type { ImportDataNumericSort } from "../../../shared/common/import-data-sort";
 import { runtimeConfig } from "../../config/runtime";
 import { createImportsController } from "../../controllers/imports.controller";
 import { errorHandler } from "../../middleware/error-handler";
@@ -87,7 +89,7 @@ function createAnalysisPayload(importRecord: { id: string; name: string; filenam
 
 function applyImportColumnFilters(
   rows: DataRow[],
-  filters?: Array<{ column: string; operator: string; value: string }>,
+  filters?: Array<{ column: string; operator: string; value: string; valueTo?: string }>,
 ) {
   const safeFilters = Array.isArray(filters) ? filters : [];
   if (safeFilters.length === 0) {
@@ -101,6 +103,20 @@ function applyImportColumnFilters(
       const filterValue = String(filter.value ?? "").toLowerCase();
 
       switch (filter.operator) {
+        case "dateBefore":
+        case "dateAfter":
+        case "dateBetween":
+          return matchesImportDateFilter(record[filter.column], {
+            column: filter.column, operator: filter.operator, value: filter.value,
+            ...(filter.valueTo !== undefined ? { valueTo: filter.valueTo } : {}),
+          });
+        case "greaterThan":
+        case "lessThan":
+        case "between":
+          return matchesImportNumericFilter(record[filter.column], {
+            column: filter.column, operator: filter.operator, value: filter.value,
+            ...(filter.valueTo !== undefined ? { valueTo: filter.valueTo } : {}),
+          });
         case "contains":
           return cellValue.includes(filterValue);
         case "equals":
@@ -405,17 +421,31 @@ function createImportsRouteHarness(options?: {
       search?: string | null;
       limit: number;
       offset: number;
-      columnFilters?: Array<{ column: string; operator: string; value: string }>;
+      columnFilters?: Array<{ column: string; operator: string; value: string; valueTo?: string }>;
       cursor?: string | null;
+      numericSort?: ImportDataNumericSort | undefined;
     }) => {
       searchCalls.push(params);
-      const rows = applyImportColumnFilters(
+      let rows = applyImportColumnFilters(
         dataRowsByImport.get(params.importId) ?? [],
         params.columnFilters,
       );
+      if (params.numericSort) {
+        const { column, direction } = params.numericSort;
+        rows = [...rows].sort((a, b) => {
+          const left = normalizeImportFilterNumber((a.jsonDataJsonb as Record<string, unknown>)[column]);
+          const right = normalizeImportFilterNumber((b.jsonDataJsonb as Record<string, unknown>)[column]);
+          const valueOrder = left === null ? (right === null ? 0 : 1)
+            : right === null ? -1 : (compareImportFilterNumbers(left, right) ?? 0) * (direction === "desc" ? -1 : 1);
+          return valueOrder || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+        });
+      }
       const cursor = String(params.cursor || "").trim();
+      const anchorIndex = params.numericSort && cursor ? rows.findIndex(row => row.id === cursor) : -1;
       const pageRows = cursor
-        ? rows.filter((row) => String(row.id) > cursor).slice(0, params.limit + 1)
+        ? (params.numericSort
+          ? (anchorIndex >= 0 ? rows.slice(anchorIndex + 1) : [])
+          : rows.filter((row) => String(row.id) > cursor)).slice(0, params.limit + 1)
         : rows.slice(params.offset, params.offset + params.limit + 1);
       const hasMore = pageRows.length > params.limit;
       const items = hasMore ? pageRows.slice(0, params.limit) : pageRows;
@@ -1599,6 +1629,145 @@ test("GET /api/imports/:id/data applies dataset-wide column filters", async () =
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("GET /api/imports/:id/data accepts numeric filters and preserves both Between bounds", async () => {
+  const { app, searchCalls } = createImportsRouteHarness({
+    seedImportRows: ["2", "10", "100"].map((Amount, index) => ({
+      id: `numeric-row-${index}`, importId: "import-1", jsonDataJsonb: { Amount },
+    })),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const [filter, expected] of [
+      [{ column: "Amount", operator: "greaterThan", value: "10" }, ["100"]],
+      [{ column: "Amount", operator: "lessThan", value: "10" }, ["2"]],
+      [{ column: "Amount", operator: "between", value: "2", valueTo: "10" }, ["2", "10"]],
+    ] as const) {
+      const filters = encodeURIComponent(JSON.stringify([{ id: "ui-only-filter", ...filter }]));
+      const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&pageSize=20&columnFilters=${filters}`);
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.total, expected.length);
+      assert.deepEqual(payload.rows.map((row: { jsonDataJsonb: { Amount: string } }) => row.jsonDataJsonb.Amount), [...expected]);
+      assert.deepEqual(searchCalls[searchCalls.length - 1]?.columnFilters, [filter]);
+    }
+  } finally { await stopTestServer(server); }
+});
+
+test("GET /api/imports/:id/data rejects invalid numeric filters before searching storage", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const filter of [
+      { operator: "between", value: "1" }, { operator: "between", value: "2", valueTo: "1" },
+      { operator: "between", value: "1", valueTo: "not a number" },
+      ...["", " ", "1e3", "Infinity", "1);DROP TABLE data_rows;--", "12,34", "9".repeat(257), "\u00a01"].map(value => ({ operator: "greaterThan", value })),
+    ]) {
+      const filters = encodeURIComponent(JSON.stringify([{ column: "Amount", ...filter }]));
+      const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&columnFilters=${filters}`);
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), expectApiError("Invalid viewer column filters.", ERROR_CODES.REQUEST_BODY_INVALID));
+    }
+    assert.deepEqual(searchCalls, []);
+  } finally { await stopTestServer(server); }
+});
+
+test("GET /api/imports/:id/data validates date filters and preserves canonical inclusive bounds", async () => {
+  const values = ["2024-02-28", "29/2/2024", "20240301", "2024-02-30", null];
+  const { app, searchCalls } = createImportsRouteHarness({ seedImportRows: values.map((Date, index) => ({
+    id: `date-${index}`, importId: "import-1", jsonDataJsonb: { Date },
+  })) });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const [filter, expected] of [
+      [{ column: "Date", operator: "dateBefore", value: "2024-03-01" }, values.slice(0, 2)],
+      [{ column: "Date", operator: "dateAfter", value: "2024-02-29" }, ["20240301"]],
+      [{ column: "Date", operator: "dateBetween", value: "2024-02-29", valueTo: "2024-02-29" }, ["29/2/2024"]],
+    ] as const) {
+      const encoded = encodeURIComponent(JSON.stringify([{ id: "ui-row", ...filter }]));
+      const response = await fetch(`${baseUrl}/api/imports/import-1/data?columnFilters=${encoded}`);
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.total, expected.length);
+      assert.deepEqual(payload.rows.map((row: { jsonDataJsonb: { Date: unknown } }) => row.jsonDataJsonb.Date), [...expected]);
+      assert.deepEqual(searchCalls[searchCalls.length - 1]?.columnFilters, [filter]);
+    }
+  } finally { await stopTestServer(server); }
+});
+
+test("GET /api/imports/:id/data rejects malformed date filters before storage reads", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const filter of [
+      { operator: "dateBetween", value: "2024-02-29" },
+      { operator: "dateBetween", value: "2024-03-01", valueTo: "2024-02-29" },
+      { operator: "dateBetween", value: "2024-02-29", valueTo: "2024-02-30" },
+      ...["", " ", "2026-02-29", "1900-02-29", "0000-01-01", "2024-13-01", "29/2/2024", "20240229",
+        "2024-02-29\n", "2024-02-29T00:00:00Z", "x' OR true;--", "9".repeat(33)].map(value => ({ operator: "dateBefore", value })),
+    ]) {
+      const encoded = encodeURIComponent(JSON.stringify([{ column: "Date", ...filter }]));
+      const response = await fetch(`${baseUrl}/api/imports/import-1/data?columnFilters=${encoded}`);
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), expectApiError("Invalid viewer column filters.", ERROR_CODES.REQUEST_BODY_INVALID));
+    }
+    const unknown = encodeURIComponent(JSON.stringify([{ column: "Missing Date", operator: "dateBefore", value: "2024-02-29" }]));
+    const response = await fetch(`${baseUrl}/api/imports/import-1/data?columnFilters=${unknown}`);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), expectApiError("Invalid viewer column filters.", ERROR_CODES.REQUEST_BODY_INVALID));
+    assert.deepEqual(searchCalls, []);
+  } finally { await stopTestServer(server); }
+});
+
+test("GET /api/imports/:id/data preserves numeric sorting across pages, with dirty cells last", async () => {
+  const values = ["100", "2", "10", "-5", "0", "2.00", "1,000", "0.1", "9", "11", "3", "", "N/A"];
+  const { app, searchCalls } = createImportsRouteHarness({
+    seedImportRows: values.map((Amount, index) => ({ id: `sort-${String(index).padStart(2, "0")}`,
+      importId: "import-1", jsonDataJsonb: { Amount } })),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const direction of ["asc", "desc"] as const) {
+      const numericSort = { column: "Amount", direction };
+      const query = `numericSort=${encodeURIComponent(JSON.stringify(numericSort))}&pageSize=10`;
+      const firstResponse = await fetch(`${baseUrl}/api/imports/import-1/data?${query}`);
+      assert.equal(firstResponse.status, 200);
+      const first = await firstResponse.json();
+      assert.equal(first.total, values.length);
+      assert.equal(first.rows.length, 10);
+      assert.ok(first.nextCursor);
+      const secondResponse = await fetch(`${baseUrl}/api/imports/import-1/data?${query}&cursor=${encodeURIComponent(first.nextCursor)}`);
+      assert.equal(secondResponse.status, 200);
+      const second = await secondResponse.json();
+      const ordered = [...first.rows, ...second.rows].map((row: { jsonDataJsonb: { Amount: string } }) => row.jsonDataJsonb.Amount);
+      assert.deepEqual(ordered, direction === "asc"
+        ? ["-5", "0", "0.1", "2", "2.00", "3", "9", "10", "11", "100", "1,000", "", "N/A"]
+        : ["1,000", "100", "11", "10", "9", "3", "2", "2.00", "0.1", "0", "-5", "", "N/A"]);
+      assert.equal(second.total, values.length);
+      assert.equal(second.nextCursor, null);
+      assert.deepEqual(searchCalls[searchCalls.length - 1]?.numericSort, numericSort);
+    }
+  } finally { await stopTestServer(server); }
+});
+
+test("GET /api/imports/:id/data rejects malformed or unknown numeric sorting before row reads", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const value of ["", "not-json", "null", "[]", "{}",
+      ...[{ column: "age", direction: "ASC" }, { column: "age", direction: "asc; SELECT" },
+        { column: "", direction: "asc" }, { column: "age", direction: "asc", extra: "bad" },
+        { column: "A".repeat(121), direction: "asc" }, { column: "Missing", direction: "asc" }].map(value => JSON.stringify(value)),
+    ]) {
+      const response = await fetch(`${baseUrl}/api/imports/import-1/data?numericSort=${encodeURIComponent(value)}`);
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), expectApiError("Invalid viewer numeric sort.", ERROR_CODES.REQUEST_BODY_INVALID));
+    }
+    const arrayQuery = await fetch(`${baseUrl}/api/imports/import-1/data?numericSort=asc&numericSort=desc`);
+    assert.equal(arrayQuery.status, 400);
+    assert.deepEqual(searchCalls, []);
+  } finally { await stopTestServer(server); }
 });
 
 test("GET /api/imports/:id/data returns cursor tokens for large datasets", async () => {

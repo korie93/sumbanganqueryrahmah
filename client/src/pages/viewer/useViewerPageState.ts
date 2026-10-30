@@ -18,7 +18,8 @@ import {
   restoreViewerColumnResetUndo,
   type ViewerColumnResetUndoSnapshot,
 } from "@/pages/viewer/viewer-column-reset-undo";
-import { filterViewerRows } from "@/pages/viewer/utils";
+import { filterViewerServerPageRows } from "@/pages/viewer/utils";
+import { useViewerFilterPresets } from "@/pages/viewer/useViewerFilterPresets";
 import {
   buildViewerHeadersSignature,
   moveViewerColumn,
@@ -31,6 +32,7 @@ import {
   getViewerSelectAllFilteredRowIds,
   getViewerVisibleHeaders,
   pruneViewerSelectedRowIds,
+  resolveViewerFilterRowIndex,
   toggleViewerColumnSelection,
   toggleViewerRowSelection,
 } from "@/pages/viewer/viewer-state-utils";
@@ -38,6 +40,7 @@ import {
 type ViewerPageStateOptions = {
   onNavigate: (page: string) => void;
   importId?: string | undefined;
+  accountId?: string | undefined;
   userRole: string;
   viewerRowsPerPage?: number | undefined;
 };
@@ -45,6 +48,7 @@ type ViewerPageStateOptions = {
 export function useViewerPageState({
   onNavigate,
   importId,
+  accountId,
   userRole,
   viewerRowsPerPage,
 }: ViewerPageStateOptions) {
@@ -89,6 +93,7 @@ export function useViewerPageState({
     rowsPerPage,
     onSelectionReset: clearSelectionState,
   });
+  const presetState = useViewerFilterPresets({ accountId, importId, enabled: showFilters && data.headers.length > 0 });
 
   const columnPreferenceKey = useMemo(
     () => `${importId || "default"}::${buildViewerHeadersSignature(data.headers)}`,
@@ -193,7 +198,7 @@ export function useViewerPageState({
     data.debouncedSearch.length > 0 && data.debouncedSearch.length < data.minSearchLength;
   const isServerSearchActive = data.debouncedSearch.length >= data.minSearchLength;
   const filteredRows = useMemo(
-    () => filterViewerRows(data.rows, data.activeColumnFilters),
+    () => filterViewerServerPageRows(data.rows, data.activeColumnFilters),
     [data.activeColumnFilters, data.rows],
   );
   const hasFilteredSubset =
@@ -323,6 +328,7 @@ export function useViewerPageState({
     totalRows: data.totalRows,
     debouncedSearch: data.debouncedSearch,
     debouncedColumnFilters: data.debouncedColumnFilters,
+    numericSort: data.numericSort,
   });
 
   const pageSizeDisabled = data.loading || data.loadingMore || exportState.exportBusy;
@@ -344,15 +350,28 @@ export function useViewerPageState({
     data.handleSearchChange("");
   }, [data.handleSearchChange]);
 
+  const handleRemoveActiveFilter = useCallback((index: number) => {
+    const filter = data.activeColumnFilters[index];
+    if (!filter) return;
+    const rowIndex = resolveViewerFilterRowIndex(data.columnFilters, filter);
+    if (rowIndex >= 0) data.removeFilter(rowIndex);
+  }, [data.activeColumnFilters, data.columnFilters, data.removeFilter]);
+
+  const handleClearNumericSort = useCallback(() => {
+    data.handleNumericSortChange(null);
+  }, [data.handleNumericSortChange]);
+
   const activeFilterChips = useMemo(
     () =>
       buildViewerActiveFilterChips({
         search: data.search,
         activeColumnFilters: data.activeColumnFilters,
         onClearSearch: handleClearSearchFilter,
-        onRemoveFilter: data.removeFilter,
+        onRemoveFilter: handleRemoveActiveFilter,
+        numericSort: data.numericSort,
+        onClearNumericSort: handleClearNumericSort,
       }),
-    [data.activeColumnFilters, data.removeFilter, data.search, handleClearSearchFilter],
+    [data.activeColumnFilters, data.search, data.numericSort, handleClearSearchFilter, handleRemoveActiveFilter, handleClearNumericSort],
   );
 
   return {
@@ -375,6 +394,10 @@ export function useViewerPageState({
     setShowColumnSelector,
     showFilters,
     columnFilters: data.columnFilters,
+    numericSort: data.numericSort,
+    handleNumericSortChange: data.handleNumericSortChange,
+    presetState,
+    applyFilterPreset: data.applyFilterPreset,
     exportingExcel: exportState.exportingExcel,
     exportingPdf: exportState.exportingPdf,
     exportBusy: exportState.exportBusy,

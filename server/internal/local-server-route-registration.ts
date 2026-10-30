@@ -26,6 +26,9 @@ import { registerAiRoutes } from "../routes/ai.routes";
 import { registerAuthRoutes } from "../routes/auth.routes";
 import { registerCollectionRoutes } from "../routes/collection.routes";
 import { registerImportRoutes } from "../routes/imports.routes";
+import { registerViewerFilterPresetRoutes } from "../routes/viewer-filter-presets.routes";
+import { ViewerFilterPresetsRepository } from "../repositories/viewer-filter-presets.repository";
+import { ViewerFilterPresetsService } from "../services/viewer-filter-presets.service";
 import { registerOperationsRoutes } from "../routes/operations.routes";
 import { registerSearchRoutes } from "../routes/search.routes";
 import { registerSettingsRoutes } from "../routes/settings.routes";
@@ -271,6 +274,11 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     importsUploadRateLimiter,
     multipartMaxFileSizeBytes: importUploadLimitBytes,
     multipartPerUserQuotaBytes: environmentRuntimeConfig.runtime.importPerUserActiveUploadBytes,
+  });
+
+  registerViewerFilterPresetRoutes(app, {
+    service: new ViewerFilterPresetsService(new ViewerFilterPresetsRepository(), importsRepository),
+    authenticateToken, requireRole, requireTabAccess, rateLimiter: searchRateLimiter,
   });
 
   registerSearchRoutes(app, {

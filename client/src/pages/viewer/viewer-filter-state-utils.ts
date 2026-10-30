@@ -1,4 +1,5 @@
 import type { ColumnFilter, ViewerFilterMutableField } from "@/pages/viewer/types";
+import { isDateImportFilterOperator, isImportFilterRangeOperator } from "@shared/common/import-data-filters";
 
 let viewerFilterSequence = 0;
 
@@ -28,9 +29,18 @@ export function updateViewerFilterAt(
   field: ViewerFilterMutableField,
   value: string,
 ) {
-  return ensureViewerFilterIds(previous).map((filter, filterIndex) =>
-    filterIndex === index ? { ...filter, [field]: value } : filter,
-  );
+  return ensureViewerFilterIds(previous).map((filter, filterIndex) => {
+    if (filterIndex !== index) return filter;
+    const next = { ...filter, [field]: value };
+    if (field === "operator") {
+      // Changing date/number/text families must never reinterpret an old value.
+      if (isDateImportFilterOperator(filter.operator) !== isDateImportFilterOperator(value)) {
+        next.value = "";
+        delete next.valueTo;
+      } else if (!isImportFilterRangeOperator(value)) delete next.valueTo;
+    }
+    return next;
+  });
 }
 
 export function removeViewerFilterAt(previous: ColumnFilter[], index: number) {

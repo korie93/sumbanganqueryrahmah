@@ -8,6 +8,7 @@ import { logger } from "../../lib/logger";
 import { PostgresAuthAccountStorage } from "./postgres-auth-account-storage";
 import { STORAGE_DEBUG_LOGS } from "./postgres-storage-core";
 import type { SearchDataRow, SearchGlobalDataRow } from "../../repositories/search.repository";
+import type { ImportDataNumericSort } from "../../../shared/common/import-data-sort";
 import type {
   CollectionSavedSourceFilePage,
   CollectionSettlementProjection,
@@ -136,8 +137,9 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     search?: string | null;
     limit: number;
     offset: number;
-    columnFilters?: Array<{ column: string; operator: string; value: string }>;
+    columnFilters?: Array<{ column: string; operator: string; value: string; valueTo?: string | undefined }>;
     cursor?: string | null;
+    numericSort?: ImportDataNumericSort | undefined;
   }): Promise<{ rows: SearchDataRow[]; total: number; nextCursorRowId: string | null }> {
     const trimmedSearch = params.search && params.search.trim() ? params.search.trim() : null;
 

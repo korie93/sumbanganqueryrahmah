@@ -11,6 +11,7 @@ import {
   passwordResetRequests,
   userActivity,
   users,
+  viewerFilterPresets,
   type InsertAuditLog,
 } from "../../shared/schema-postgres";
 
@@ -36,6 +37,7 @@ export async function deleteManagedUserAccount(
 
     await tx.delete(accountActivationTokens).where(eq(accountActivationTokens.userId, target.id));
     await tx.delete(passwordResetRequests).where(eq(passwordResetRequests.userId, target.id));
+    await tx.delete(viewerFilterPresets).where(eq(viewerFilterPresets.ownerUserId, target.id));
 
     await tx.delete(collectionNicknameSessions).where(sql`${collectionNicknameSessions.activityId} IN (
       SELECT id FROM public.user_activity WHERE user_id = ${target.id}

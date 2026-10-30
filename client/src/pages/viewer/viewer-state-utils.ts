@@ -1,4 +1,6 @@
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
+import { isImportDataFilterActive, isImportFilterRangeOperator } from "@shared/common/import-data-filters";
 
 export type ViewerStatePatch = {
   rows?: DataRowWithId[];
@@ -6,6 +8,8 @@ export type ViewerStatePatch = {
   headersLocked?: boolean;
   selectedColumns?: Set<string>;
   columnFilters?: ColumnFilter[];
+  debouncedColumnFilters?: ColumnFilter[];
+  numericSort?: ImportDataNumericSort | null;
   search?: string;
   importName?: string;
   emptyHint?: string;
@@ -20,10 +24,7 @@ export type ViewerStatePatch = {
 };
 
 export function getViewerActiveColumnFilters(columnFilters: ColumnFilter[]) {
-  return columnFilters.filter((filter) => {
-    const normalizedValue = filter.value.trim();
-    return filter.column.trim() !== "" && normalizedValue !== "";
-  });
+  return columnFilters.filter(isImportDataFilterActive);
 }
 
 export function reconcileViewerColumnFilters(previous: ColumnFilter[], next: ColumnFilter[]): ColumnFilter[] {
@@ -34,9 +35,17 @@ export function reconcileViewerColumnFilters(previous: ColumnFilter[], next: Col
     return candidate !== undefined
       && filter.column === candidate.column
       && filter.operator === candidate.operator
-      && filter.value === candidate.value;
+      && filter.value === candidate.value
+      && (!isImportFilterRangeOperator(filter.operator) || filter.valueTo === candidate.valueTo);
   });
   return unchanged ? previous : next;
+}
+
+/** Resolves an active chip back to its editable row, including preceding incomplete filters. */
+export function resolveViewerFilterRowIndex(columnFilters: ColumnFilter[], filter: ColumnFilter) {
+  return columnFilters.findIndex((candidate) => filter.id
+    ? candidate.id === filter.id
+    : candidate === filter);
 }
 
 export function createViewerPaginationResetState(rowsPerPage: number): ViewerStatePatch {
@@ -58,6 +67,9 @@ export function createViewerImportResetState(
     headers: [],
     headersLocked: false,
     selectedColumns: new Set<string>(),
+    columnFilters: [],
+    debouncedColumnFilters: [],
+    numericSort: null,
     importName,
     emptyHint: "",
     isCleared: false,
@@ -72,6 +84,8 @@ export function createViewerClearedState(rowsPerPage: number): ViewerStatePatch 
     headersLocked: false,
     selectedColumns: new Set<string>(),
     columnFilters: [],
+    debouncedColumnFilters: [],
+    numericSort: null,
     search: "",
     importName: "Data Viewer",
     emptyHint: "Open file in Saved tab first to view.",

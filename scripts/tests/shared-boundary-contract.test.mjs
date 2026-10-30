@@ -13,6 +13,7 @@ const SERVER_ONLY_SHARED_MODULES = new Set([
   "schema-postgres-collection",
   "schema-postgres-core",
   "schema-postgres-settings",
+  "schema-postgres-viewer",
 ]);
 
 const COMMON_SHARED_MODULES = new Set([

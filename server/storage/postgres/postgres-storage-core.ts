@@ -282,7 +282,7 @@ export class PostgresStorageCore {
   }
 
   protected async ensureImportsTable() {
-    await this.verifyProductionTablesOrBootstrap(["imports"], () => this.coreSchemaBootstrap.ensureImportsTable());
+    await this.verifyProductionTablesOrBootstrap(["imports", "viewer_filter_presets"], () => this.coreSchemaBootstrap.ensureImportsTable());
   }
 
   protected async ensureDataRowsTable() {

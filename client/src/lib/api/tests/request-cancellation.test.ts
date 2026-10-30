@@ -403,7 +403,10 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
       cursor: "cursor-1",
       columnFilters: [
         { column: "name", operator: "contains", value: "ali" },
+        { column: "amount", operator: "between", value: "0", valueTo: "1,000.50" },
+        { column: "Calling Date", operator: "dateBetween", value: "2026-10-01", valueTo: "2026-10-29" },
       ],
+      numericSort: { column: "amount", direction: "desc" },
     });
     controller.abort();
 
@@ -422,8 +425,11 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
   assert.equal(params.get("pageSize"), "50");
   assert.equal(params.get("search"), "alice");
   assert.equal(params.get("cursor"), "cursor-1");
+  assert.deepEqual(JSON.parse(String(params.get("numericSort"))), { column: "amount", direction: "desc" });
   assert.deepEqual(JSON.parse(String(params.get("columnFilters") || "[]")), [
     { column: "name", operator: "contains", value: "ali" },
+    { column: "amount", operator: "between", value: "0", valueTo: "1,000.50" },
+    { column: "Calling Date", operator: "dateBetween", value: "2026-10-01", valueTo: "2026-10-29" },
   ]);
 });
 

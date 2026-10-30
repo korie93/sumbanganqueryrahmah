@@ -171,3 +171,17 @@ test("buildViewerActiveFilterChips includes search and filter chips with working
   assert.equal(clearedSearch, true);
   assert.equal(removedFilterIndex, 0);
 });
+
+test("numeric active chips state the complete inclusive range and comparison", () => {
+  const chips = buildViewerActiveFilterChips({
+    search: "",
+    activeColumnFilters: [
+      { column: "Amount", operator: "between", value: "0", valueTo: "1,000.50" },
+      { column: "Amount", operator: "greaterThan", value: "100" },
+      { column: "Amount", operator: "lessThan", value: "200" },
+    ],
+    onClearSearch: () => undefined,
+    onRemoveFilter: () => undefined,
+  });
+  assert.deepEqual(chips.map(({ label }) => label), ["Amount is between 0 and 1,000.50", "Amount is greater than 100", "Amount is less than 200"]);
+});

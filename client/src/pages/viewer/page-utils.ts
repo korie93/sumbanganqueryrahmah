@@ -1,6 +1,8 @@
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 import { extractHeadersFromRows } from "@/pages/viewer/utils";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
+import { isImportFilterRangeOperator } from "@shared/common/import-data-filters";
 import {
   normalizeApiPaginationMeta,
   type ApiPaginationMeta,
@@ -12,6 +14,12 @@ export const VIEWER_FILTER_OPERATOR_LABELS: Record<ColumnFilter["operator"], str
   startsWith: "starts with",
   endsWith: "ends with",
   notEquals: "is not",
+  greaterThan: "is greater than",
+  lessThan: "is less than",
+  between: "is between",
+  dateBefore: "is before date",
+  dateAfter: "is after date",
+  dateBetween: "is between dates",
 };
 
 type ViewerApiRow = {
@@ -109,6 +117,8 @@ interface BuildViewerActiveFilterChipsOptions {
   activeColumnFilters: ColumnFilter[];
   onClearSearch: () => void;
   onRemoveFilter: (index: number) => void;
+  numericSort?: ImportDataNumericSort | null | undefined;
+  onClearNumericSort?: (() => void) | undefined;
 }
 
 export function buildViewerActiveFilterChips({
@@ -116,6 +126,8 @@ export function buildViewerActiveFilterChips({
   activeColumnFilters,
   onClearSearch,
   onRemoveFilter,
+  numericSort,
+  onClearNumericSort,
 }: BuildViewerActiveFilterChipsOptions): ActiveFilterChip[] {
   const items: ActiveFilterChip[] = [];
   const trimmedSearch = search.trim();
@@ -131,10 +143,18 @@ export function buildViewerActiveFilterChips({
   activeColumnFilters.forEach((filter, index) => {
     items.push({
       id: filter.id ?? `viewer-filter-${index}`,
-      label: `${filter.column} ${VIEWER_FILTER_OPERATOR_LABELS[filter.operator]} ${filter.value}`,
+      label: `${filter.column} ${VIEWER_FILTER_OPERATOR_LABELS[filter.operator]} ${filter.value}${isImportFilterRangeOperator(filter.operator) ? ` and ${filter.valueTo ?? ""}` : ""}`,
       onRemove: () => onRemoveFilter(index),
     });
   });
+
+  if (numericSort) {
+    items.push({
+      id: "viewer-number-order",
+      label: `${numericSort.column}: ${numericSort.direction === "asc" ? "smallest first" : "largest first"}`,
+      onRemove: onClearNumericSort,
+    });
+  }
 
   return items;
 }

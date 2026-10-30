@@ -15,6 +15,9 @@ import {
   resolveViewerImportName,
 } from "@/pages/viewer/page-utils";
 import type { ColumnFilter, DataRowWithId, ViewerFilterMutableField } from "@/pages/viewer/types";
+import type { ImportDataNumericSort } from "@shared/common/import-data-sort";
+import type { ViewerFilterPreset } from "@shared/common/viewer-filter-presets";
+import { buildViewerPresetPayload } from "@/pages/viewer/viewer-preset-utils";
 import {
   createViewerClearedState,
   createViewerImportResetState,
@@ -30,6 +33,7 @@ const VIEWER_SEARCH_DEBOUNCE_MS = 300;
 type ViewerReadRequest = {
   key: string; importId: string; page: number; cursor: string | null;
   pageSize: number; search: string; columnFilters: ColumnFilter[];
+  numericSort: ImportDataNumericSort | null;
 };
 
 type UseViewerDataStateOptions = {
@@ -51,6 +55,7 @@ export function useViewerDataState({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
+  const [numericSort, setNumericSort] = useState<ImportDataNumericSort | null>(null);
   const [error, setError] = useState("");
   const [importName, setImportName] = useState("Data Viewer");
   const [search, setSearch] = useState(initialSearch);
@@ -65,8 +70,8 @@ export function useViewerDataState({
   const [failedRequest, setFailedRequest] = useState<ViewerReadRequest | null>(null);
   const [retrying, setRetrying] = useState(false);
 
-  const contextKey = buildViewerQueryKey(importId, rowsPerPage, search, columnFilters, isCleared);
-  const requestKey = buildViewerQueryKey(importId, rowsPerPage, debouncedSearch, debouncedColumnFilters, isCleared);
+  const contextKey = buildViewerQueryKey(importId, rowsPerPage, search, columnFilters, isCleared, numericSort);
+  const requestKey = buildViewerQueryKey(importId, rowsPerPage, debouncedSearch, debouncedColumnFilters, isCleared, numericSort);
   const queryReady = !isCleared && Boolean(importId) && contextKey === requestKey
     && (search.trim().length === 0 || search.trim().length >= VIEWER_MIN_SEARCH_LENGTH);
 
@@ -144,6 +149,8 @@ export function useViewerDataState({
       headersLockedRef.current = patch.headersLocked;
     }
     if (patch.columnFilters !== undefined) setColumnFilters(ensureViewerFilterIds(patch.columnFilters));
+    if (patch.debouncedColumnFilters !== undefined) setDebouncedColumnFilters(ensureViewerFilterIds(patch.debouncedColumnFilters));
+    if (patch.numericSort !== undefined) setNumericSort(patch.numericSort);
     if (patch.search !== undefined) setSearch(patch.search);
     if (patch.importName !== undefined) setImportName(patch.importName);
     if (patch.emptyHint !== undefined) setEmptyHint(patch.emptyHint);
@@ -173,6 +180,7 @@ export function useViewerDataState({
       key: requestKey, importId: id, page: targetPage, cursor: requestCursor,
       pageSize: rowsPerPage, search: debouncedSearch,
       columnFilters: debouncedColumnFilters.map((filter) => ({ ...filter })),
+      numericSort: numericSort ? { ...numericSort } : null,
     };
     if (read.key !== currentQueryRef.current.key || read.importId !== id) return;
 
@@ -198,6 +206,7 @@ export function useViewerDataState({
         signal,
         cursor: requestCursor || undefined,
         columnFilters: read.columnFilters,
+        numericSort: read.numericSort ?? undefined,
       }), controller.signal);
       if (!isActiveViewerFetchRequest(controller, requestId)) {
         return;
@@ -253,6 +262,7 @@ export function useViewerDataState({
     cancelActiveFetch,
     debouncedColumnFilters,
     debouncedSearch,
+    numericSort,
     isActiveViewerFetchRequest,
     rowsPerPage,
     requestKey,
@@ -297,7 +307,7 @@ export function useViewerDataState({
 
   useEffect(() => {
     onSelectionReset();
-  }, [columnFilters, onSelectionReset]);
+  }, [columnFilters, numericSort, onSelectionReset]);
 
   const activeColumnFilters = useMemo(
     () => getViewerActiveColumnFilters(columnFilters),
@@ -373,6 +383,7 @@ export function useViewerDataState({
 
   const clearAllFilters = useCallback(() => {
     setColumnFilters([]);
+    setNumericSort(null);
     setSearch("");
     setCurrentPage(1);
   }, []);
@@ -385,6 +396,7 @@ export function useViewerDataState({
     setRetrying(false);
     loadedQueryKeyRef.current = null;
     activeRequestIdRef.current += 1;
+    setNumericSort(null);
     onSelectionReset();
     applyViewerStatePatch(createViewerClearedState(rowsPerPage));
   }, [applyViewerStatePatch, cancelActiveFetch, onSelectionReset, rowsPerPage]);
@@ -394,10 +406,52 @@ export function useViewerDataState({
     setCurrentPage(1);
   }, []);
 
+  const handleNumericSortChange = useCallback((next: ImportDataNumericSort | null) => {
+    if (next && (!headers.includes(next.column) || !["asc", "desc"].includes(next.direction))) return;
+    if (numericSort?.column === next?.column && numericSort?.direction === next?.direction) return;
+    setNumericSort(next ? { ...next } : null);
+    setCurrentPage(1);
+    onSelectionReset();
+  }, [headers, numericSort, onSelectionReset]);
+
+  const applyFilterPreset = useCallback((preset: ViewerFilterPreset) => {
+    const result = buildViewerPresetPayload(preset.name, preset.columnFilters, preset.numericSort, headers);
+    if (!importId || !result.ok) return false;
+    // One explicit operation replaces the whole query. No request may observe
+    // a new sort with old filters, or retain page-two selection/retry state.
+    const filters = ensureViewerFilterIds(result.payload.columnFilters.map(filter => ({ ...filter })));
+    const sort = result.payload.numericSort ? { ...result.payload.numericSort } : null;
+    cancelActiveFetch();
+    activeRequestIdRef.current += 1;
+    failedRequestRef.current = null;
+    loadedQueryKeyRef.current = null;
+    currentQueryRef.current = { key: buildViewerQueryKey(importId, rowsPerPage, search, filters, false, sort), ready: false };
+    setFailedRequest(null);
+    setRetrying(false);
+    setError("");
+    setRows([]);
+    setTotalRows(0);
+    setColumnFilters(filters);
+    setDebouncedColumnFilters(filters);
+    setNumericSort(sort);
+    setIsCleared(false);
+    setCurrentPage(1);
+    setCurrentPageSize(rowsPerPage);
+    setNextCursor(null);
+    pageCursorHistoryRef.current = [null];
+    setLoading(true);
+    setLoadingMore(false);
+    onSelectionReset();
+    return true;
+  }, [cancelActiveFetch, headers, importId, onSelectionReset, rowsPerPage, search]);
+
   return {
     rows,
     headers,
     columnFilters,
+    numericSort,
+    handleNumericSortChange,
+    applyFilterPreset,
     activeColumnFilters,
     error,
     canRetry: queryReady && failedRequest?.key === contextKey && !loading && !loadingMore,

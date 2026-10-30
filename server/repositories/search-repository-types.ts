@@ -8,6 +8,7 @@ export type SearchColumnFilter = {
   column: string;
   operator: string;
   value: string;
+  valueTo?: string | undefined;
 };
 
 export type SearchGlobalDataRow = {

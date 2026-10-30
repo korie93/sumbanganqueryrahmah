@@ -35,3 +35,16 @@ test("updateViewerFilterAt and removeViewerFilterAt preserve immutable edits", (
     { id: "viewer-filter-2", column: "amount", operator: "equals", value: "10" },
   ]);
 });
+
+test("editing a range upper bound is immutable and leaving Between discards its hidden upper bound", () => {
+  const previous = [{ id: "range", column: "Amount", operator: "between", value: "0", valueTo: "10" }] as const;
+  const updated = updateViewerFilterAt([...previous], 0, "valueTo", "20");
+  assert.equal(updated[0]?.valueTo, "20");
+  assert.equal(previous[0].valueTo, "10");
+  const single = updateViewerFilterAt(updated, 0, "operator", "greaterThan");
+  assert.equal(single[0]?.operator, "greaterThan");
+  assert.equal(single[0]?.value, "0");
+  assert.equal(Object.prototype.hasOwnProperty.call(single[0]!, "valueTo"), false);
+  const rangeAgain = updateViewerFilterAt(single, 0, "operator", "between");
+  assert.equal(rangeAgain[0]?.valueTo, undefined);
+});

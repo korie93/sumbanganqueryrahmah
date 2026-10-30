@@ -249,6 +249,49 @@ test("getImportDataPage rejects malformed cursors before querying storage", asyn
   assert.equal(searchCalls, 0);
 });
 
+test("getImportDataPage preserves numeric sort through cursor reads and rejects unavailable columns", async () => {
+  const requests: Array<Parameters<ImportsServiceStorage["searchDataRows"]>[0]> = [];
+  let opened = 0;
+  const operations = createReadOperations({
+    storage: { searchDataRows: async (params) => {
+      requests.push(params);
+      return { rows: [], total: 21, nextCursorRowId: null };
+    } },
+    repository: {
+      getImportColumnNames: async () => ["Amount"],
+      markImportOpened: async () => { opened += 1; },
+    },
+  });
+  const input = { importId: "import-1", page: 2, requestedLimit: 10, viewerRowsPerPage: 20,
+    isDbProtected: false, numericSort: { column: "Amount", direction: "desc" as const },
+    cursor: encodeImportDataPageCursor({ lastRowId: "row-10", page: 2 }) };
+  const page = await operations.getImportDataPage(input);
+  assert.equal(page.total, 21);
+  assert.deepEqual(requests[0]?.numericSort, input.numericSort);
+  assert.equal(requests[0]?.cursor, "row-10");
+  assert.equal(requests[0]?.offset, 0);
+  assert.equal(opened, 1);
+  await assert.rejects(() => operations.getImportDataPage({ ...input,
+    numericSort: { column: "Missing", direction: "asc" } }), /Invalid viewer numeric sort/);
+  await assert.rejects(() => operations.getImportDataPage({ ...input,
+    numericSort: { column: "Amount", direction: "asc; SELECT" } as never }), /Invalid viewer numeric sort/);
+  assert.equal(requests.length, 1);
+  assert.equal(opened, 1);
+});
+
+test("getImportDataPage rejects unavailable date columns without reading row data", async () => {
+  let calls = 0;
+  const operations = createReadOperations({ storage: { searchDataRows: async () => {
+    calls += 1;
+    return { rows: [], total: 0, nextCursorRowId: null };
+  } }, repository: { getImportColumnNames: async () => ["Date"] } });
+  await assert.rejects(() => operations.getImportDataPage({ importId: "import-1", page: 1,
+    requestedLimit: 10, viewerRowsPerPage: 20, isDbProtected: false,
+    columnFilters: [{ column: "Missing", operator: "dateBefore", value: "2024-02-29" }],
+  }), /Invalid viewer column filters/);
+  assert.equal(calls, 0);
+});
+
 test("getImportSummary returns row and column metadata without loading data rows", async () => {
   let fullRowLoads = 0;
   const operations = createReadOperations({

@@ -1,4 +1,6 @@
 import type { DataRow, Import, InsertDataRow } from "../../shared/schema-postgres";
+import type { ImportDataColumnFilter as SharedImportDataColumnFilter } from "../../shared/common/import-data-filters";
+import type { ImportDataNumericSort } from "../../shared/common/import-data-sort";
 import type {
   ImportListOffsetPage,
   ImportListView,
@@ -31,11 +33,7 @@ type ImportsStorage = Pick<
   | "updateImportName"
 >;
 
-export type ImportDataColumnFilter = {
-  column: string;
-  operator: "contains" | "equals" | "startsWith" | "endsWith" | "notEquals";
-  value: string;
-};
+export type ImportDataColumnFilter = SharedImportDataColumnFilter;
 
 export type ImportDataPageCursor = {
   lastRowId: string;
@@ -73,6 +71,7 @@ export type ImportDataPageInput = {
   isDbProtected: boolean;
   search?: string | null | undefined;
   columnFilters?: ImportDataColumnFilter[] | undefined;
+  numericSort?: ImportDataNumericSort | undefined;
 };
 
 export type CompareImportsInput = {

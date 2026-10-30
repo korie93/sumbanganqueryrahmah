@@ -1,8 +1,7 @@
-export interface ColumnFilter {
+import type { ImportDataColumnFilter } from "@shared/common/import-data-filters";
+
+export interface ColumnFilter extends ImportDataColumnFilter {
   id?: string;
-  column: string;
-  operator: "contains" | "equals" | "startsWith" | "endsWith" | "notEquals";
-  value: string;
 }
 
 export type ViewerFilterMutableField = Exclude<keyof ColumnFilter, "id">;

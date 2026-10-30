@@ -1,5 +1,9 @@
 import { buildCsvContent, downloadCsv } from "@/lib/csv";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import {
+  isDateImportFilterOperator, isNumericImportFilterOperator,
+  matchesImportDateFilter, matchesImportNumericFilter,
+} from "@shared/common/import-data-filters";
 
 export function extractHeadersFromRows(rows: DataRowWithId[]) {
   const headerSet = new Set<string>();
@@ -22,6 +26,12 @@ export function filterViewerRows(rows: DataRowWithId[], columnFilters: ColumnFil
 
   return rows.filter((row) =>
     columnFilters.every((filter) => {
+      if (isNumericImportFilterOperator(filter.operator)) {
+        return matchesImportNumericFilter(row[filter.column], filter);
+      }
+      if (isDateImportFilterOperator(filter.operator)) {
+        return matchesImportDateFilter(row[filter.column], filter);
+      }
       const cellValue = String(row[filter.column] ?? "").toLowerCase();
       const filterValue = filter.value.toLowerCase();
 
@@ -41,6 +51,15 @@ export function filterViewerRows(rows: DataRowWithId[], columnFilters: ColumnFil
       }
     }),
   );
+}
+
+/** Typed date/number page membership is authoritative on PostgreSQL. */
+export function filterViewerServerPageRows(rows: DataRowWithId[], columnFilters: ColumnFilter[]) {
+  // A JSON number above MAX_SAFE_INTEGER can be rounded during JSON parsing.
+  // Reapplying numeric predicates here would remove matching server records.
+  // Calendar-date membership is likewise resolved before server pagination.
+  return filterViewerRows(rows, columnFilters.filter(filter => !isNumericImportFilterOperator(filter.operator)
+    && !isDateImportFilterOperator(filter.operator)));
 }
 
 export function downloadViewerRowsAsCsv(headers: string[], rows: DataRowWithId[], filename: string) {

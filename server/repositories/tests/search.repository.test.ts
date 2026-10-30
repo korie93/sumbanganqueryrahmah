@@ -673,10 +673,12 @@ test("SearchRepository.searchDataRows still allows deep traversal via cursor pag
       total: 45,
       nextCursorRowId: null,
     });
-    assert.equal(queries.length, 1);
+    assert.equal(queries.length, 2);
     assert.match(queries[0] || "", /COUNT\(\*\)\s+OVER\(\)::int AS total/i);
     assert.match(queries[0] || "", /\bLIMIT\b/i);
     assert.doesNotMatch(queries[0] || "", /\bOFFSET\b/i);
+    assert.match(queries[1] || "", /COUNT\(\*\)::int AS total/i);
+    assert.doesNotMatch(queries[1] || "", /dr\.id >/);
   } finally {
     restore();
   }
@@ -747,6 +749,155 @@ test("SearchRepository.searchDataRows ignores column filters that are not real c
     (dbRead as unknown as {
       execute: typeof dbRead.execute;
     }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.searchDataRows retains numeric upper bounds and predicates through cursor paging", async () => {
+  const repository = new SearchRepository();
+  const queries: unknown[] = [];
+  const originalPrimary = db.execute;
+  const originalRead = dbRead.execute;
+  const capture = async (query: unknown) => {
+    queries.push(query);
+    if (/jsonb_object_keys/i.test(collectSqlText(query))) return { rows: [{ column_name: "Amount" }] };
+    if (/COUNT\(\*\)::int AS total/i.test(collectSqlText(query))) return { rows: [{ total: 30 }] };
+    return { rows: [
+      { id: "row-02", importId: "import-1", jsonDataJsonb: { Amount: "11" }, total: 3 },
+      { id: "row-03", importId: "import-1", jsonDataJsonb: { Amount: "12" }, total: 3 },
+      { id: "row-04", importId: "import-1", jsonDataJsonb: { Amount: "13" }, total: 3 },
+    ] };
+  };
+  (db as unknown as { execute: typeof db.execute }).execute = capture as typeof db.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = capture as typeof dbRead.execute;
+  try {
+    const result = await repository.searchDataRows({
+      importId: "import-1", limit: 2, offset: 50_001, cursor: "row-01",
+      columnFilters: [{ column: "Amount", operator: "between", value: "10.00", valueTo: "20.000" }],
+    });
+    assert.equal(result.rows.length, 2);
+    assert.equal(result.total, 30);
+    assert.equal(result.nextCursorRowId, "row-03");
+    assert.equal(queries.length, 3);
+    const text = collectSqlText(queries[1]);
+    const bound = collectBoundValues(queries[1]);
+    assert.match(text, /CASE\s+WHEN length\(/);
+    assert.match(text, /END BETWEEN/);
+    assert.match(text, /active_import\.is_deleted = false/);
+    assert.match(text, /COUNT\(\*\) OVER\(\)::int AS total/);
+    assert.doesNotMatch(text, /\bOFFSET\b/);
+    for (const value of ["import-1", "Amount", "10", "20", "row-01"]) assert.ok(bound.includes(value), value);
+    const totalText = collectSqlText(queries[2]);
+    const totalBound = collectBoundValues(queries[2]);
+    assert.match(totalText, /END BETWEEN/);
+    assert.match(totalText, /active_import\.is_deleted = false/);
+    for (const value of ["import-1", "Amount", "10", "20"]) assert.ok(totalBound.includes(value), value);
+    assert.ok(!totalBound.includes("row-01"), "The exact filtered total includes rows before the cursor");
+  } finally {
+    (db as unknown as { execute: typeof db.execute }).execute = originalPrimary;
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalRead;
+  }
+});
+
+test("SearchRepository retains calendar range predicates in sorted cursor anchors and full totals", async () => {
+  const repository = new SearchRepository(), queries: SQL[] = [];
+  const originalPrimary = db.execute, originalRead = dbRead.execute;
+  const capture = async (query: SQL) => {
+    queries.push(query);
+    const text = collectSqlText(query);
+    if (/jsonb_object_keys/i.test(text)) return { rows: [{ column_name: "Date" }, { column_name: "Amount" }] };
+    if (/COUNT\(\*\)::int AS total/i.test(text)) return { rows: [{ total: 24 }] };
+    return { rows: [{ id: "row-next", importId: "import-1", jsonDataJsonb: { Date: "2024-02-29", Amount: "20" }, total: 1 }] };
+  };
+  (db as unknown as { execute: typeof db.execute }).execute = capture as typeof db.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = capture as typeof dbRead.execute;
+  try {
+    const result = await repository.searchDataRows({ importId: "import-1", limit: 10, offset: 0, cursor: "row-anchor",
+      search: "match", columnFilters: [{ column: "Date", operator: "dateBetween", value: "2024-02-20", valueTo: "2024-03-10" }],
+      numericSort: { column: "Amount", direction: "asc" } });
+    assert.equal(result.total, 24);
+    const rows = dialectForSort(queries[1]!), total = dialectForSort(queries[2]!);
+    assert.match(rows.sql, /WITH viewer_sort_anchor/);
+    assert.equal(rows.params.filter(value => value === 20240220).length, 2);
+    assert.equal(rows.params.filter(value => value === 20240310).length, 2);
+    assert.ok(rows.params.includes("row-anchor"));
+    assert.ok(total.params.includes(20240220));
+    assert.ok(total.params.includes(20240310));
+    assert.ok(!total.params.includes("row-anchor"));
+    assert.match(total.sql, /active_import.is_deleted = false/);
+  } finally {
+    (db as unknown as { execute: typeof db.execute }).execute = originalPrimary;
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalRead;
+  }
+});
+
+test("SearchRepository numeric sort scopes exact cursor anchors and full totals to the authorized query", async () => {
+  const repository = new SearchRepository();
+  const queries: SQL[] = [];
+  const originalPrimary = db.execute;
+  const originalRead = dbRead.execute;
+  const capture = async (query: SQL) => {
+    queries.push(query);
+    const text = collectSqlText(query);
+    if (/jsonb_object_keys/i.test(text)) return { rows: [{ column_name: "Amount" }] };
+    if (/COUNT\(\*\)::int AS total/i.test(text)) return { rows: [{ total: 30 }] };
+    return { rows: [
+      { id: "row-c", importId: "import-1", jsonDataJsonb: { Amount: "10" }, total: 3 },
+      { id: "row-a", importId: "import-1", jsonDataJsonb: { Amount: "2" }, total: 3 },
+      { id: "row-d", importId: "import-1", jsonDataJsonb: { Amount: null }, total: 3 },
+    ] };
+  };
+  (db as unknown as { execute: typeof db.execute }).execute = capture as typeof db.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = capture as typeof dbRead.execute;
+  try {
+    const result = await repository.searchDataRows({
+      importId: "import-1", limit: 2, offset: MAX_SEARCH_OFFSET + 1, cursor: "row-b",
+      search: "match", columnFilters: [{ column: "Amount", operator: "greaterThan", value: "-1" }],
+      numericSort: { column: "Amount", direction: "desc" },
+    });
+    assert.equal(result.total, 30);
+    assert.equal(result.nextCursorRowId, "row-a");
+    const query = dialectForSort(queries[1]!);
+    assert.match(query.sql, /WITH viewer_sort_anchor AS/);
+    assert.match(query.sql, /CROSS JOIN viewer_sort_anchor/);
+    assert.match(query.sql, /END DESC NULLS LAST, dr.id ASC/);
+    assert.match(query.sql, /END < viewer_sort_anchor.value/);
+    assert.equal((query.sql.match(/active_import.is_deleted = false/g) ?? []).length, 2);
+    assert.equal(query.params.filter(p => p === "import-1").length, 2);
+    assert.equal(query.params.filter(p => p === "%match%").length, 2);
+    assert.doesNotMatch(query.sql, /\bOFFSET\b/);
+    const total = dialectForSort(queries[2]!);
+    assert.ok(!total.params.includes("row-b"));
+    assert.doesNotMatch(total.sql, /viewer_sort_anchor/);
+  } finally {
+    (db as unknown as { execute: typeof db.execute }).execute = originalPrimary;
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalRead;
+  }
+});
+
+function dialectForSort(query: SQL) {
+  return new PgDialect().sqlToQuery(query);
+}
+
+test("SearchRepository rejects malformed or unavailable numeric sort instead of silently falling back", async () => {
+  const repository = new SearchRepository();
+  const originalPrimary = db.execute;
+  const originalRead = dbRead.execute;
+  const capture = async (query: SQL) => /jsonb_object_keys/i.test(collectSqlText(query))
+    ? { rows: [{ column_name: "Amount" }] }
+    : assert.fail("Invalid sort must not query row data");
+  (db as unknown as { execute: typeof db.execute }).execute = capture as typeof db.execute;
+  (dbRead as unknown as { execute: typeof dbRead.execute }).execute = capture as typeof dbRead.execute;
+  try {
+    for (const numericSort of [
+      { column: "Missing", direction: "asc" }, { column: "Amount", direction: "desc; SELECT" },
+    ]) {
+      assert.deepEqual(await repository.searchDataRows({ importId: "import-1", limit: 20, offset: 0,
+        numericSort: numericSort as { column: string; direction: "asc" } }),
+      { rows: [], total: 0, nextCursorRowId: null });
+    }
+  } finally {
+    (db as unknown as { execute: typeof db.execute }).execute = originalPrimary;
+    (dbRead as unknown as { execute: typeof dbRead.execute }).execute = originalRead;
   }
 });
 
