@@ -150,12 +150,11 @@ async function verifyViewerPerformance({ page, baseUrl, artifactsDir, theme, man
     assert.equal(firstPage.total, 181);
     assert.equal(firstPage.rows.length, 150);
     await page.getByRole("checkbox", { name: "Select row 1", exact: true }).waitFor();
-    // An independent real-React probe of the byte-identical base-HEAD hook
-    // proves two startup calls: mount, then its existing 300ms empty-filter
-    // debounce. Settle that behavior before measuring new scroll/idle calls.
+    // A no-op import reset or empty-filter debounce must not restart the read.
+    // Observe past the debounce before measuring new scroll/idle calls.
     await page.waitForTimeout(650);
-    const startupRequests = 2;
-    assert.equal(requests.length, startupRequests, "Preserve the independently verified baseline two-request startup");
+    const startupRequests = 1;
+    assert.equal(requests.length, startupRequests, "Opening Viewer issues exactly one startup data request");
     assert.deepEqual(requests, Array.from({ length: startupRequests }, () => ({ page: 1, pageSize: 150, hasSearch: false, hasCursor: false })));
     const measureRows = () => page.evaluate(() => {
       const boxes = [...document.querySelectorAll('[role="checkbox"]')].filter((node) => /^Select row \d+$/.test(node.getAttribute("aria-label") || ""));
@@ -248,7 +247,7 @@ async function verifyViewerPerformance({ page, baseUrl, artifactsDir, theme, man
     await capture("searched");
     manifest.performance.push({ theme, width: 1440, passed: true, totalRows: 181, loadedRows: 150,
       initialMountedRows: initial.mountedRows, scrolledMountedRows: scrolled.mountedRows,
-      startupRequests, startupBehavior: "Unchanged base-HEAD mount plus 300ms empty-filter debounce; independently reproduced",
+      startupRequests, startupBehavior: "One startup read; no-op import reset and empty-filter debounce do not refetch",
       idleObservationMs: 30_000, idleDataRequests: 0, scrollDataRequests: 0, dataRequests: requests,
       cursorRowsPreserved: true, paginationMetadataCorrect: secondPage.total === 181, searchResults: 1 });
     console.log(`[frontend-redesign-import] PASS scoped 1440px ${theme}: 181 exact real rows, virtualization, bounded page/search requests and no polling for 30s; existing cursor-total metadata issue recorded separately`);

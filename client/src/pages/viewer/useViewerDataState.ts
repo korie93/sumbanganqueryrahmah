@@ -149,7 +149,10 @@ export function useViewerDataState({
       headersLockedRef.current = patch.headersLocked;
     }
     if (patch.columnFilters !== undefined) setColumnFilters(ensureViewerFilterIds(patch.columnFilters));
-    if (patch.debouncedColumnFilters !== undefined) setDebouncedColumnFilters(ensureViewerFilterIds(patch.debouncedColumnFilters));
+    if (patch.debouncedColumnFilters !== undefined) {
+      const filters = ensureViewerFilterIds(patch.debouncedColumnFilters);
+      setDebouncedColumnFilters((previous) => reconcileViewerColumnFilters(previous, filters));
+    }
     if (patch.numericSort !== undefined) setNumericSort(patch.numericSort);
     if (patch.search !== undefined) setSearch(patch.search);
     if (patch.importName !== undefined) setImportName(patch.importName);

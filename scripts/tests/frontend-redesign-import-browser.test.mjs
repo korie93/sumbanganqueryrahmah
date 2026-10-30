@@ -113,7 +113,7 @@ test("Viewer perf observes loaded data and DOM virtualization without modifying 
   assert.match(source, /secondPage\.rows\.length, 31/);
   assert.match(source, /requests\[startupRequests\]\.hasCursor, true/);
   assert.match(source, /requests\.length, startupRequests \+ 2/);
-  assert.match(source, /const startupRequests = 2/);
+  assert.match(source, /const startupRequests = 1/);
   assert.match(source, /page\.waitForTimeout\(650\)/);
   assert.match(source, /idleDataRequests: 0, scrollDataRequests: 0/);
   assert.match(source, /page\.waitForTimeout\(10_500\)/);
@@ -136,7 +136,7 @@ test("Viewer cursor-total defect stays explicit and separate from scoped perform
   assert.match(source, /getByRole\("navigation", \{ name: "Dataset pagination", exact: true \}\)/);
 });
 
-test("base HEAD Viewer hook independently reproduces the unchanged two-request startup debounce", { skip: process.env.SQR_REDESIGN_BASELINE_HOOK_PROBE !== "1" }, async () => {
+test("base HEAD Viewer hook keeps one startup read after the empty-filter debounce", { skip: process.env.SQR_REDESIGN_BASELINE_HOOK_PROBE !== "1" }, async () => {
   const root = fileURLToPath(new URL("../../", import.meta.url));
   const hookPath = "client/src/pages/viewer/useViewerDataState.ts";
   const headHook = execFileSync("git", ["show", `HEAD:${hookPath}`], { cwd: root, encoding: "utf8", windowsHide: true });
@@ -175,9 +175,9 @@ test("base HEAD Viewer hook independently reproduces the unchanged two-request s
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
     await page.waitForFunction(() => window.__viewerHookRequests?.length === 1);
     await page.waitForTimeout(650);
-    assert.deepEqual(await page.evaluate(() => window.__viewerHookRequests), [{ page: 1, pageSize: 150 }, { page: 1, pageSize: 150 }]);
+    assert.deepEqual(await page.evaluate(() => window.__viewerHookRequests), [{ page: 1, pageSize: 150 }]);
     await page.waitForTimeout(650);
-    assert.equal(await page.evaluate(() => window.__viewerHookRequests.length), 2, "The two baseline startup calls do not become polling");
+    assert.equal(await page.evaluate(() => window.__viewerHookRequests.length), 1, "The startup read is not repeated by a no-op debounce or idle polling");
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
