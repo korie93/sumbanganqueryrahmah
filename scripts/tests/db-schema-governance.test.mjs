@@ -3,14 +3,28 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { schemaGovernanceManifest } from "../db-schema-governance.manifest.mjs";
 import {
   classifySourceType,
   discoverForeignKeyDeleteActionViolations,
+  discoverSchemaTables,
   extractTableNames,
   formatForeignKeyDeleteActionReport,
   formatSchemaGovernanceReport,
   validateSchemaGovernance,
 } from "../lib/db-schema-governance.mjs";
+
+test("repository tables have declared governance and explicit foreign-key delete policies", () => {
+  const cwd = process.cwd();
+  const discoveredTables = discoverSchemaTables({ cwd });
+  const validation = validateSchemaGovernance({
+    discoveredTables,
+    manifest: schemaGovernanceManifest,
+  });
+
+  assert.deepEqual(validation.failures, []);
+  assert.deepEqual(discoverForeignKeyDeleteActionViolations({ cwd }), []);
+});
 
 test("extractTableNames discovers pgTable, create table, and alter table definitions", () => {
   const sourceText = `

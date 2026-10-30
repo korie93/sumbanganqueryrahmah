@@ -258,5 +258,9 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "legacy-sql", "runtime-ddl"],
       "User accounts now have a reviewed Drizzle migration while runtime bootstrap remains additive for legacy password-hash remediation and backward-compatible normalization.",
     ),
+    viewer_filter_presets: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Account-private Viewer filter presets have a reviewed Drizzle schema and migration 0065; explicit local bootstrap creates the equivalent table after users and imports exist.",
+    ),
   },
 };
