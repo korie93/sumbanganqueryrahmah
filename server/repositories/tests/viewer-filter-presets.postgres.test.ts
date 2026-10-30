@@ -15,9 +15,10 @@ test("Viewer private presets enforce atomic owner-file quotas, IDOR isolation, l
   runtime.stopPgPoolBackgroundTasks();
   const { pool, db } = runtime;
   try {
-    await pool.query(`CREATE TABLE IF NOT EXISTS users (
-      id text PRIMARY KEY, username text NOT NULL UNIQUE, status text NOT NULL DEFAULT 'active', is_banned boolean DEFAULT false
-    ); CREATE TABLE IF NOT EXISTS imports (
+    // Exercise the same hardened user schema when run alone or after auth tests.
+    const { ensureUsersBootstrapSchema } = await import("../../internal/users-bootstrap/schema");
+    await ensureUsersBootstrapSchema(db);
+    await pool.query(`CREATE TABLE IF NOT EXISTS imports (
       id text PRIMARY KEY, name text NOT NULL, filename text NOT NULL, content_hash_sha256 text, source_size_bytes bigint,
       created_at timestamptz NOT NULL DEFAULT now(), last_opened_at timestamptz, is_deleted boolean NOT NULL DEFAULT false, created_by text
     ); CREATE TABLE IF NOT EXISTS data_rows (
@@ -31,7 +32,9 @@ test("Viewer private presets enforce atomic owner-file quotas, IDOR isolation, l
     const { ViewerFilterPresetsService } = await import("../../services/viewer-filter-presets.service");
     const { ImportsRepository } = await import("../imports.repository");
     const repository = new ViewerFilterPresetsRepository(), service = new ViewerFilterPresetsService(repository, new ImportsRepository());
-    for (const id of ["preset-owner-a", "preset-owner-b", "preset-race-owner"]) await pool.query("INSERT INTO users(id,username) VALUES($1,$1)", [id]);
+    for (const id of ["preset-owner-a", "preset-owner-b", "preset-race-owner"]) {
+      await pool.query("INSERT INTO users(id,username,password_hash,role,status) VALUES($1,$1,'fixture-not-an-authentication-hash','user','active')", [id]);
+    }
     for (const id of ["preset-file-a", "preset-file-b"]) {
       await pool.query("INSERT INTO imports(id,name,filename) VALUES($1,$1,'preset.csv')", [id]);
       await pool.query("INSERT INTO data_rows(id,import_id,json_data) VALUES($1,$2,$3::jsonb)", [`${id}-row`, id, JSON.stringify({ Date: "2024-02-29", Amount: "1,000.50", Name: "Fictional" })]);
