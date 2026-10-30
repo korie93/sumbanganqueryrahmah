@@ -179,6 +179,9 @@ test("Viewer detail search: desktop keyboard matches literal header names and re
   await expect(results(dialog).locator("dt")).toHaveText(headers);
   await search(dialog).fill("Account");
   await dialog.getByRole("button", { name: "Close details", exact: true }).click();
+  // Finish Radix's deferred focus restoration before keyboard-opening another row.
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("button-viewer-row-details-0")).toBeFocused();
   dialog = await openDetails(page, { index: 1, keyboard: true });
   await expect(search(dialog)).toHaveValue("");
   await expect(results(dialog).locator("dt")).toHaveText(headers);

@@ -237,6 +237,9 @@ test("Viewer hide empty: header search distinguishes hidden matches and resets o
   await hideEmpty(dialog).click();
   await expectMatches(dialog, ["False value", "Padded value"], 2);
   await dialog.getByRole("button", { name: "Close details", exact: true }).click();
+  // Finish Radix's deferred focus restoration before keyboard-opening another row.
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("button-viewer-row-details-0")).toBeFocused();
   dialog = await openDetails(page, { index: 1, keyboard: true });
   await expect(hideEmpty(dialog)).not.toBeChecked();
   await expect(search(dialog)).toHaveValue("");

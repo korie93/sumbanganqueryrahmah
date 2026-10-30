@@ -2,6 +2,14 @@
 
 Updated: 30 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
+## CI follow-up — 30 October 2026
+
+Landing implementation was published as `a2567fb4b90e091f66ada26f8ba4c0a35936be87`. [CI run 41069123341](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41069123341) passed build-and-test, coverage, full TypeScript, client tests, script tests and the built landing checks. All 19 new landing browser cases passed. The visual step finished with 765 passing cases and one failure in Viewer's hide-empty alternate-record keyboard test; subsequent smoke/accessibility/PageSpeed steps did not run. The earlier CI limitations below describe the original local QA, not failures in these now-confirmed CI checks.
+
+The pending fix adds a close-completion barrier in `tests/visual/viewer-hide-empty.spec.ts` and the equivalent `viewer-detail-search.spec.ts`: wait for the old dialog to be hidden and for focus to return to its original row before keyboard-opening the next row. Radix defers its close autofocus; otherwise it can move focus between the test's `focus()` and global Enter. All original exact title, focus, reset, copy, accessibility and no-refetch assertions remain intact. No production code, snapshots, timeouts, retries or workflow settings changed. Independent source/diff review passed.
+
+Local verification of this fix: all six native Playwright cases across the two spec files passed, followed by three additional repeats of the CI-failing handoff case. The original baseline passed locally once, so this is accurately recorded as a CI-observed intermittent race supported by source analysis, rather than a locally reproduced baseline failure. The same verified frontend build was reused after checking that application inputs were identical; tests ran only in the isolated synthetic-loopback sandbox. Evidence: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-viewer-dialog-focus-20261030/`, including `CI_FAILURE_EVIDENCE.json`, `source-after-setup.json` and the three `*-verified.json` post-fix receipts. These follow-up changes remain uncommitted; the full CI must run again on their published revision.
+
 ## Delivered behavior
 
 The anonymous normal-profile `/` now renders the supplied landing: compact sticky header, Search/Analyse/Monitor hero, supplied radar, Import→Search→Analyse→Monitor workflow, About, five capability/security panels, Get started and footer. All four Log in links retain `/login` and the existing navigation callback. Registered/authenticated users retain the existing protected application flow.
