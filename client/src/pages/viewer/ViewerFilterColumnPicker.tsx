@@ -3,6 +3,7 @@ import { Check, ChevronDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getAriaExpandedProps, getAriaSelectedProps } from "@/lib/aria-state-props";
 import { findViewerFilterColumns, moveViewerFilterColumnIndex } from "@/pages/viewer/viewer-filter-column-search";
 
 type ViewerFilterColumnPickerProps = {
@@ -107,7 +108,7 @@ function ViewerFilterColumnPickerImpl({
             name={`viewerFilterColumnSearch${index + 1}`}
             role="combobox"
             aria-label="Search filter columns"
-            aria-expanded={open}
+            {...getAriaExpandedProps(open)}
             aria-autocomplete="list"
             aria-controls={listId}
             aria-activedescendant={activeOptionId}
@@ -129,7 +130,7 @@ function ViewerFilterColumnPickerImpl({
                 id={`${listId}-${originalIndex}`}
                 ref={originalIndex === activeOption?.index ? activeOptionRef : undefined}
                 role="option"
-                aria-selected={originalIndex === activeOption?.index}
+                {...getAriaSelectedProps(originalIndex === activeOption?.index)}
                 data-selected={originalIndex === activeOption?.index}
                 onMouseDown={(event) => event.preventDefault()}
                 onPointerMove={(event) => { if (event.pointerType === "mouse") setActiveIndex(optionIndex); }}

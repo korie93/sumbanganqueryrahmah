@@ -3,6 +3,7 @@ import { Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import {
   VIEWER_FILTER_PRESET_MAX_PER_IMPORT, VIEWER_FILTER_PRESET_NAME_MAX_LENGTH,
   viewerFilterPresetNameSchema, type ViewerFilterPreset,
@@ -126,7 +127,7 @@ function ViewerFilterPresetControlImpl({ headers, columnFilters, numericSort, st
             <div className="space-y-1">
               <Label htmlFor="viewer-preset-name" className="text-xs">Preset name</Label>
               <Input id="viewer-preset-name" name="viewerPresetName" ref={inputRef} value={name} maxLength={VIEWER_FILTER_PRESET_NAME_MAX_LENGTH} autoComplete="off" disabled={state.pending}
-                onChange={event => { setName(event.target.value); setLocalError(""); }} aria-invalid={Boolean(localError) || undefined} aria-describedby={error ? "viewer-preset-error" : undefined} data-testid="input-viewer-preset-name" />
+                onChange={event => { setName(event.target.value); setLocalError(""); }} {...getAriaInvalidProps(Boolean(localError))} aria-describedby={error ? "viewer-preset-error" : undefined} data-testid="input-viewer-preset-name" />
             </div>
           )}
           <div className="flex flex-wrap gap-2">

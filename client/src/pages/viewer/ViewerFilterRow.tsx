@@ -2,6 +2,7 @@ import { memo, useCallback, type ChangeEvent } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import {
   Select,
   SelectContent,
@@ -114,7 +115,7 @@ function ViewerFilterRowImpl({
             placeholder={date ? undefined : between ? "Minimum" : numeric ? "Number..." : "Value..."}
             autoComplete="off"
             aria-describedby={numeric || date ? helpId : undefined}
-            aria-invalid={showError || undefined}
+            {...getAriaInvalidProps(showError)}
             className="min-w-0"
             data-testid={`input-filter-value-${index}`}
           />
@@ -136,7 +137,7 @@ function ViewerFilterRowImpl({
               placeholder={date ? undefined : "Maximum"}
               autoComplete="off"
               aria-describedby={helpId}
-              aria-invalid={showError || undefined}
+              {...getAriaInvalidProps(showError)}
               className="min-w-0"
               data-testid={`input-filter-value-to-${index}`}
             />
