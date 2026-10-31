@@ -99,11 +99,12 @@ export default defineConfig({
                 return "validation";
               }
 
-              // These tiny helpers already sit on the public entry's critical path.
+              // These helpers already sit on the public entry's critical path.
               // Keep an exact allowlist: one request instead of a queue of tiny
               // chunks, without pulling private pages or the whole icon library in.
               if (
-                /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props)\.ts$/.test(normalizedId)
+                /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props|auth-session|lazy-with-preload)\.ts$/.test(normalizedId)
+                || /\/client\/src\/app\/maintenance-client-policy\.ts$/.test(normalizedId)
                 || /\/shared\/brand-assets\.ts$/.test(normalizedId)
                 || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert|arrow-right|check))\.js$/.test(normalizedId)
               ) {

@@ -254,7 +254,7 @@ test("landing graph hints reject missing, external, traversal and wrong-kind nes
   assert.throws(() => handler("", { bundle: { landing, child, style: { ...style, type: "chunk" } } }), /local build asset paths for stylesheets/);
 });
 
-test("public runtime consolidates only the existing small shared entry dependencies", async () => {
+test("public runtime consolidates only the existing shared entry dependencies", async () => {
   const config = await importViteConfigFresh();
   const chunk = config.build.rollupOptions.output.codeSplitting.groups[0].name;
   for (const name of ["browser-storage", "secure-id", "web-vitals", "client-error-telemetry", "safe-url", "aria-state-props"]) {
@@ -273,6 +273,19 @@ test("public runtime consolidates only the existing small shared entry dependenc
     assert.equal(chunk(`C:\\repo\\${id.replace(/\//g, "\\")}`), "ui");
   }
   assert.equal(chunk("/repo/client/src/lib/utils/safe-json.ts"), undefined);
+});
+
+test("public startup helpers share one chunk without absorbing API clients, tests or protected routes", async () => {
+  const config = await importViteConfigFresh();
+  const chunk = config.build.rollupOptions.output.codeSplitting.groups[0].name;
+  for (const id of ["client/src/lib/auth-session.ts", "client/src/lib/lazy-with-preload.ts", "client/src/app/maintenance-client-policy.ts"]) {
+    assert.equal(chunk(`/repo/${id}`), "public-runtime");
+    assert.equal(chunk(`C:\\repo\\${id.replace(/\//g, "\\")}`), "public-runtime");
+  }
+  for (const id of ["client/src/lib/auth-session.test.ts", "client/src/lib/auth-session-api.ts", "client/src/lib/api-client.ts", "client/src/lib/api/auth-session-api.ts", "client/src/app/maintenance-client-policy.test.ts", "client/src/app/useAppShellAuthBootstrap.ts", "client/src/app/AuthenticatedAppEntry.tsx"]) {
+    assert.equal(chunk(`/repo/${id}`), undefined);
+    assert.equal(chunk(`C:\\repo\\${id.replace(/\//g, "\\")}`), undefined);
+  }
 });
 
 test("shared branding stays independent of lazy auth without absorbing framework dependencies", async () => {

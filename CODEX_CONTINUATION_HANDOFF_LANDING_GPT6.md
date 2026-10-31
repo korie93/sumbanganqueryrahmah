@@ -2,7 +2,51 @@
 
 Updated: 31 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
-## Current CI follow-up — landing dependency isolation and static hints, 31 October 2026
+## Current CI follow-up — login startup request overhead, 31 October 2026
+
+On published `66a0ab81`, [CI run 41199726748](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41199726748)
+reports Home 86 (passes) and Login 84 (fails Performance >=85). Login SEO 69 is
+intentionally excluded; keep `noindex,nofollow,noarchive`. The pending narrow
+build change consolidates only the already-eager auth-session, lazy-with-preload
+and maintenance-client-policy helpers into the existing public runtime. Their
+source/behavior, API clients, protected routes, CSS, images, animation, hardware
+policy, thresholds and retries remain unchanged. Initial HTML JS requests fall
+9 → 5 and gzip bytes 107175 → 96090; all 107 non-JS assets (excluding regenerated
+`index.html`) are byte-identical.
+
+143 focused tests, changed-file lint, strict changed-root TypeScript (2 roots,
+339 resolved files), production frontend build, bundle/sourcemap gates and 16
+native browser cases pass. These cover original login form/artwork/noindex,
+native cache reuse, light/dark layouts, SPA login/Home navigation and six
+constrained-device profiles with full motion. Cold compiled root/login loads
+also test module initialization after regrouping. Full repository typecheck
+and the entire hosted visual suite are not claimed locally.
+
+**Strict performance still fails locally.** Actual wrapper/runner + cached
+Lighthouse13 CLI + official Chrome156 were tested before/after in the same
+bounded, isolated synthetic-loopback setup. Before: Home score/TBT incomplete
+(`NO_TTI_CPU_IDLE_PERIOD`), Login 39. After: Home 54, Login 40, both below 85.
+Login FCP/LCP improve in this sample, but TBT rises 943 → 1128ms. Memory pressure
+is recorded on both runs, so neither hosted score equivalence nor repeatable
+performance gains for all device classes can be certified. Do not conceal the
+TBT increase or count an incomplete report as a pass. No threshold was loosened.
+
+Full analysis, exact metrics and remaining work:
+[Login PageSpeed investigation](docs/performance/pagespeed-login-2026-10-31.md).
+Evidence directory:
+`C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-login-pagespeed-20261031/`.
+Executable/test manifest:
+`a8a160ec563f1990b422096911c31b64dea9730b3cc5d08a147df44a37e5e7e9`.
+Documentation-only edits follow that snapshot. `FINAL_VALIDATION.json` retains
+successful QA receipts, all strict attempts and explicit incomplete/failed
+score status. The user has authorized commit and push of this follow-up.
+Next: verify exact-source
+hosted Home/Login reports, then act only on a measured remaining bottleneck.
+`PUBLICATION_PREPARED.json` and `PUBLICATION_VERIFIED.json` in the evidence
+directory record the exact commit, file hashes and remote verification.
+Deployment is not included; production remains `4d06b29e`.
+
+## Previous CI follow-up — landing dependency isolation and static hints, 31 October 2026
 
 [CI run 41189822803](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41189822803)
 on `f42ca55c5bdff56d389ebb3c3b3187fc337a4cf8` passed build-and-test, dependency

@@ -4,6 +4,7 @@ import { expect, test, type BrowserContext } from "@playwright/test";
 
 test.describe.configure({ retries: 0 });
 const strictPolicy = "default-src 'self'; script-src 'self'; require-trusted-types-for 'script'; style-src-elem 'self'; style-src-attr 'none'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+const separateEntryHelpers = /^GET \/assets\/(?:auth-session|lazy-with-preload|maintenance-client-policy)-[A-Za-z0-9_-]+\.js$/;
 
 // A real loopback server preserves the browser's native preload cache. Playwright
 // request interception disables that cache and cannot prove one wire transfer.
@@ -35,7 +36,7 @@ async function startupServer(baseURL: string | undefined) {
     if (request.method === "POST" && url.pathname === "/api/telemetry/web-vitals") {
       request.resume(); return json(response, { ok: true });
     }
-    const staticPath = url.pathname === "/" || /^\/boot-shell\.(?:js|css)$/.test(url.pathname)
+    const staticPath = ["/", "/login"].includes(url.pathname) || /^\/boot-shell\.(?:js|css)$/.test(url.pathname)
       || /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|png|webp|svg|woff2?)$/.test(url.pathname)
       || /^\/landing-next\/[A-Za-z0-9_-]+\.svg$/.test(url.pathname)
       || /^\/brand\/[A-Za-z0-9_-]+\.(?:svg|png|ico)$/.test(url.pathname)
@@ -77,12 +78,12 @@ async function startupServer(baseURL: string | undefined) {
       // synthetic test server; no production caching policy is modified.
       headers["Cache-Control"] = "public, max-age=0";
       headers.ETag = `"${createHash("sha256").update(body).digest("hex")}"`;
-    } else if (/^\/assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/i.test(url.pathname)) {
+    } else if (/^\/assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8,}\.(?:js|css|webp)$/i.test(url.pathname)) {
       // Match isImmutableFrontendAsset in Express static even when the upstream
       // fixture defaults to no-store, so preload reuse remains a native test.
       headers["Cache-Control"] = "public, max-age=31536000, immutable";
     } else headers["Cache-Control"] = original.headers.get("cache-control") ?? "no-store";
-    if (request.method === "GET" && /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css)$/.test(url.pathname)) {
+    if (request.method === "GET" && /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|webp)$/.test(url.pathname)) {
       response.once("finish", () => { completedAssets.add(url.pathname); });
     }
     response.writeHead(original.status, headers); response.end(body);
@@ -163,6 +164,8 @@ for (const reducedMotion of [false, true]) {
       await expect.poll(() => radar.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
       expect(fixture.requests.filter(request => /^GET \/assets\/(?:ui|public-auth-runtime)-[A-Za-z0-9_-]+\.(?:js|css)$/.test(request)),
         "Shared landing icons must not fetch the auth presentation or UI graph").toEqual([]);
+      expect(fixture.requests.filter(request => separateEntryHelpers.test(request)),
+        "Already eager entry helpers must not add separate startup requests").toEqual([]);
       expect(radarTransfers()).toEqual([`GET ${expectedRadar}`]);
       const entries = await page.evaluate(() => performance.getEntriesByType("resource")
         .filter(entry => /^\/landing-next\/radar-/.test(new URL(entry.name).pathname)).map(entry => new URL(entry.name).pathname));
@@ -175,3 +178,51 @@ for (const reducedMotion of [false, true]) {
     }
   });
 }
+
+test("Login startup completes public hints before app execution and retains the original form and artwork", async ({ browser, baseURL }) => {
+  const fixture = await startupServer(baseURL);
+  let context: BrowserContext | undefined;
+  try {
+    context = await browser.newContext({ baseURL: fixture.origin, viewport: { width: 390, height: 844 },
+      colorScheme: "light", reducedMotion: "no-preference", serviceWorkers: "block" });
+    const page = await context.newPage(), errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto("/login", { waitUntil: "commit" });
+    await expect.poll(() => page.locator('meta[name="sqr-login-style"]').count()).toBeGreaterThan(0);
+    const hints = await page.locator('meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"]')
+      .evaluateAll(elements => elements.map(element => element.getAttribute("content") ?? ""));
+    const illustration = await page.locator('meta[name="sqr-login-image"]').getAttribute("content");
+    expect(illustration).toMatch(/^\/assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/);
+    for (const asset of hints) {
+      expect(asset).toMatch(/^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|webp)$/);
+      await expect.poll(() => fixture.completedAssets.has(asset), `${asset} completes before the login entry executes`).toBe(true);
+    }
+    await expect(page.getByTestId("input-username")).toHaveCount(0);
+    const beforeApp = new Set(fixture.completedAssets);
+    fixture.releaseScripts();
+    await expect(page.getByTestId("input-username")).toBeVisible();
+    await expect(page.getByTestId("input-password")).toBeVisible();
+    await expect(page.getByTestId("button-login")).toBeEnabled();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,nofollow,noarchive");
+    await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
+    const art = page.locator(".auth-v17-art");
+    await expect(art).toBeVisible();
+    expect(await art.evaluate(element => getComputedStyle(element, "::before").backgroundImage)).toContain(illustration);
+    const logo = page.locator('.auth-v17-brand img[src="/brand/sqr-full-logo-light.svg"]');
+    await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+    const appliedStyles = await page.locator('link[rel="stylesheet"][href]')
+      .evaluateAll(elements => elements.map(element => new URL((element as HTMLLinkElement).href).pathname)
+        .filter(path => /^\/assets\/[A-Za-z0-9_-]+\.css$/.test(path)));
+    expect(appliedStyles.length).toBeGreaterThan(0);
+    for (const asset of appliedStyles) expect(beforeApp.has(asset), `${asset} was ready before login mounted`).toBe(true);
+    expect(fixture.requests.filter(request => request === `GET ${illustration}`)).toEqual([`GET ${illustration}`]);
+    expect(fixture.requests.filter(request => separateEntryHelpers.test(request))).toEqual([]);
+    expect(fixture.requests.filter(request => /^GET \/assets\/(?:AuthenticatedApp|authenticated-|Collection|Viewer|Settings|query-|charts-|excel-|pdf-)/.test(request))).toEqual([]);
+    expect(fixture.requests.filter(request => / \/landing-next\//.test(request))).toEqual([]);
+    expect(fixture.unexpected).toEqual([]); expect(fixture.failures).toEqual([]); expect(errors).toEqual([]);
+  } finally {
+    fixture.releaseScripts();
+    try { await context?.close(); }
+    finally { await fixture.close(); }
+  }
+});
