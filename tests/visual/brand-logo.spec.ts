@@ -220,7 +220,12 @@ for (const theme of ["light", "dark"] as const) {
     const errors: string[] = [];
     const notFoundUrl = new URL("/not-a-brand-page", baseURL!).href;
     await page.emulateMedia({ colorScheme: theme });
-    await page.addInitScript((value) => localStorage.setItem("theme", value), theme);
+    await page.addInitScript((value) => {
+      localStorage.setItem("theme", value);
+      // The mocked healthy backend defines this online brand scenario, including
+      // isolated loopback runners whose native connectivity signal is offline.
+      Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    }, theme);
     await page.context().routeWebSocket("**/*", (socket) => socket.close());
     await page.context().route("**/*", (route) => {
       const request = route.request(), url = new URL(request.url());
@@ -254,14 +259,14 @@ for (const theme of ["light", "dark"] as const) {
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
-      const brand = page.getByTestId("landing-brand-title");
-      await expect(brand).toHaveAccessibleName("SQR — home");
-      await loadedLogo(brand.locator("img"), "/brand/sqr-full-logo-light.svg", 665 / 310);
-      if (width === 1440) {
-        await loadedLogo(page.locator(".preview-brand-icon img"), "/brand/sqr-q-mark-light.png", 1);
-      }
+      const brand = page.getByRole("banner").getByRole("link", { name: "SQR", exact: true });
+      await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", theme);
+      await expect(brand).toHaveAttribute("href", "#top");
+      await loadedLogo(brand.locator("img"), "/brand/sidebar-q-static.png", 1);
       await metadata(page);
-      await page.locator('.nav-actions a[href="/login"]').click();
+      const login = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Log in", exact: true });
+      await expect(login).toHaveAttribute("href", "/login");
+      await login.click();
       await expect(page.getByTestId("input-username")).toBeVisible();
       await loadedLogo(page.locator(".auth-v17-brand img"), "/brand/sqr-full-logo-light.svg", 665 / 310);
       await metadata(page);

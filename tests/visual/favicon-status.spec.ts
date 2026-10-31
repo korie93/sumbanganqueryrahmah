@@ -14,6 +14,14 @@ async function fixture(page: Page, baseURL: string, holdInitialProbe = false) {
   let releaseInitialProbe!: () => void;
   const initialProbe = new Promise<void>(resolve => { releaseInitialProbe = resolve; });
   const unexpected: string[] = [];
+  await page.addInitScript(() => {
+    // Connectivity belongs to this event-controlled scenario, independent of
+    // the isolated runner's native signal. Real offline routing stays enabled.
+    let online = true;
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => online });
+    window.addEventListener("offline", () => { online = false; });
+    window.addEventListener("online", () => { online = true; });
+  });
   await page.clock.install();
   // This scenario tests lifecycle ownership, not machine speed during app startup.
   // Keep a deliberately held response from reaching the real 5-second timeout on CI.
@@ -135,8 +143,11 @@ test("favicon status grey PNG works offline under application CSP and survives S
   });
   const f = await fixture(page, baseURL!);
   await page.getByRole("button", { name: "Laman utama", exact: true }).click();
-  await expect(page.getByTestId("landing-brand-title")).toBeVisible();
-  await page.locator('.nav-actions a[href="/login"]').click();
+  const brand = page.getByRole("banner").getByRole("link", { name: "SQR", exact: true });
+  await expect(brand).toBeVisible();
+  const login = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Log in", exact: true });
+  await expect(login).toHaveAttribute("href", "/login");
+  await login.click();
   await expect(page.getByTestId("input-username")).toBeVisible();
   const before = f.probes();
   await page.context().setOffline(true);
@@ -148,7 +159,7 @@ test("favicon status grey PNG works offline under application CSP and survives S
   });
   expect(decoded).toEqual([32, 32]);
   await page.getByRole("button", { name: "Laman utama", exact: true }).click();
-  await expect(page.getByTestId("landing-brand-title")).toBeVisible();
+  await expect(brand).toBeVisible();
   await checkLinks(page, "offline");
   await page.clock.fastForward(40_100);
   expect(f.probes()).toBe(before);

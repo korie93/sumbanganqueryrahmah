@@ -711,7 +711,7 @@
 .sqr-landing-next .hero h1 a:hover,.sqr-landing-next .hero h1 a:focus-visible { transform:translateX(6px); text-shadow:0 0 38px rgba(91,140,255,.5); }
 .sqr-landing-next .hero-tag,.sqr-landing-next .hero h1,.sqr-landing-next .hero .lead,.sqr-landing-next .hero .actions,.sqr-landing-next .assure { opacity:1; animation:none; }
 .sqr-landing-next .fig { appearance:none; padding:0; color:inherit; font:inherit; }
-.sqr-landing-next .instrument-image { display:block; width:58%; height:auto; overflow:visible; }
+.sqr-landing-next .instrument-image { display:block; width:58%; height:auto; aspect-ratio:1; overflow:visible; }
 .sqr-landing-next .radar-artwork { display:block; height:auto; aspect-ratio:1; }
 .sqr-landing-next .rail a:focus-visible span { opacity:1; transform:none; }
 .sqr-landing-next .theme-btn { flex-shrink:0; }

@@ -2,7 +2,69 @@
 
 Updated: 31 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
-## Current follow-up — universal landing, 31 October 2026
+## Current CI follow-up — landing image sizing and brand fixtures, 31 October 2026
+
+[CI run 41170744884](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41170744884)
+on `20b210da104efb5f210ab3abeed1e8c75478d655` passed build-and-test, dependency
+audit and coverage. [CodeQL run 41170744816](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41170744816)
+passed separately on the same SHA. The CI visual stage passed 770 cases and failed six:
+two public-brand cases and one offline favicon/SPA case still selected V21
+elements; three lazy-image cases reported `LazyLoadImageIssue` at 1440/390/320px.
+
+The locally verified fix updates brand/favicon fixtures to the actual banner SQR
+link, transparent Q and Main > Log in navigation. All decoding, metadata,
+auth-logo, offline recovery and CSP assertions remain. The only runtime change
+adds `aspect-ratio:1` to `.sqr-landing-next .instrument-image`, which already has
+percentage width and auto height. Chromium's sizing check requires an explicit
+CSS ratio in that combination; the HTML-derived `auto 120 / 120` is insufficient
+even when observed geometry is stable. Do not describe this as confirmed CLS.
+No animations, SVG files, image loading policy, dependencies, snapshots, retries
+or thresholds are changed.
+
+Synthetic connectivity is now explicit: the public-brand scenario starts online,
+and the favicon fixture updates `navigator.onLine` from online/offline events
+before application handlers run. Actual `context.setOffline`, offline PNG decode,
+polling suppression, SPA round-trip, reconnect and reload assertions are retained.
+
+The image regression now holds all five original instrument SVG responses,
+checks positive square reserved dimensions before decoding, then compares every
+image's size afterward. The zero-browser-issues assertion stays intact. Against
+the unchanged previous build, the same enhanced fixture fails on computed
+`auto 120 / 120` versus required `1 / 1`. The patched real frontend build passed
+all three image cases. Final source passed 62 focused contracts, changed-file lint, strict
+changed-root TypeScript (4 roots, 314 resolved files), bundle and sourcemap gates.
+In total, 23 selected native browser cases passed: 3 image, 2 public-brand,
+5 favicon, 5 responsive layout, 6 constrained-device animation and 2 accessibility
+cases. No serious/critical axe violations were reported in either theme. The
+expanded image regression covers all five lazy assets at 1440/390/320px.
+The user authorized commit/push of this follow-up on 31 October 2026. No
+deployment is included; production remains at `4d06b29e`. Publication receipts
+are retained as `PUBLICATION_PREPARED.json` and `PUBLICATION_VERIFIED.json` in the
+evidence directory below. The complete GitHub visual suite still needs to run
+against the published fix; these are focused local checks, not a new CI pass.
+
+Evidence directory:
+`C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-universal-landing-20261031/`.
+It contains the full bounded CI job log, failure summary, source inventories,
+before-fix regression and passing checks. Target code runs only in the existing
+WSL bwrap/cgroup sandbox with synthetic loopback fixtures and no external network.
+No large CI artifact was downloaded; no dependency installs or production probes
+are required. Disk pressure was addressed by lossless text compression and
+removing verified duplicate agent-only release transports from older deployments;
+server releases/backups, customer files and source contents are retained.
+
+Source/evidence lineage: production frontend build and image checks use manifest
+`d9d9c5d2df783e05bb2c1dcbef7aa0a5a0b50f282673eb119c4ec6fc1cd0391d`.
+Remaining browser cases use fixture-only manifest
+`763cd063ca768ab0315b7670f496ae619ee8384a8b5c1ea5a8e95927631f6c06`.
+Final tests/lint/types use manifest
+`1c5f60f1d0d91d633c7f9953da6a47260c7fe73e6f93d41b430de85400c501f9`:
+only a redundant new source assertion was removed; the existing contract file is
+identical to HEAD. Production frontend inputs are identical across these three
+manifests; this final handoff update is documentation-only. `FINAL_VALIDATION.json`
+records exact receipts and current source hashes.
+
+## Universal landing implementation — 31 October 2026
 
 Production was successfully deployed to `4d06b29e7b5ec26d66a6f6a9701af7bc42795cbe`
 on 31 October. CI, CodeQL and Release Verification passed that exact SHA;

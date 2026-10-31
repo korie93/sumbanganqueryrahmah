@@ -6,7 +6,11 @@ import type { AxeResults, RunOptions } from "axe-core";
 // Exercise the actual built page and its original artwork through synthetic
 // public APIs only, including devices with persisted low performance settings.
 test.use({ serviceWorkers: "block" });
-const lazyArtworkPath = "/landing-next/search-dark-static.svg";
+const lazyArtworkPaths = [
+  "/landing-next/search-dark-static.svg", "/landing-next/analyse-light-static.svg",
+  "/landing-next/import-dark-static.svg", "/landing-next/monitor-light-static.svg",
+  "/landing-next/security-dark-static.svg",
+];
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 const strictScriptPolicy = "script-src 'self'; require-trusted-types-for 'script'";
 
@@ -25,7 +29,7 @@ async function installPublicFixture(page: Page, baseURL: string | undefined) {
   const unexpected: string[] = [];
   const pending = new Set<Promise<void>>();
   let releaseArtwork!: () => void;
-  let heldArtworkRequests = 0;
+  const heldArtworkRequests = new Set<string>();
   const artworkGate = new Promise<void>((resolve) => { releaseArtwork = resolve; });
   await page.context().routeWebSocket("**/*", (socket) => socket.close());
   const handleRoute = async (route: Route) => {
@@ -60,8 +64,8 @@ async function installPublicFixture(page: Page, baseURL: string | undefined) {
         .filter(Boolean).join(", ");
       return route.fulfill({ response, headers });
     }
-    if (url.pathname === lazyArtworkPath) {
-      heldArtworkRequests++;
+    if (lazyArtworkPaths.includes(url.pathname)) {
+      heldArtworkRequests.add(url.pathname);
       await artworkGate;
     }
     return route.continue();
@@ -72,7 +76,7 @@ async function installPublicFixture(page: Page, baseURL: string | undefined) {
     return request;
   });
   return {
-    unexpected, releaseArtwork, heldArtworkRequests: () => heldArtworkRequests,
+    unexpected, releaseArtwork, heldArtworkRequests: () => [...heldArtworkRequests],
     async finish() {
       releaseArtwork();
       // Preserve interception until every fetch/fulfill callback has completed.
@@ -120,15 +124,29 @@ for (const width of [1440, 390, 320]) {
       await expect(headerLogo).toHaveAttribute("src", "/brand/sidebar-q-static.png");
       await expect(headerLogo).toHaveAttribute("width", "30");
       await expect(headerLogo).toHaveAttribute("height", "30");
-      await expect(artwork).toHaveAttribute("src", lazyArtworkPath);
+      await expect(artwork).toHaveAttribute("src", lazyArtworkPaths[0]!);
       await expect(artwork).toHaveAttribute("width", "120");
       await expect(artwork).toHaveAttribute("height", "120");
       await expect(artwork).toHaveAttribute("loading", "lazy");
       await expect(artwork).toHaveAttribute("alt", "");
       await expect(artwork).toHaveAttribute("aria-hidden", "true");
 
+      const beforeImages = [];
+      for (const asset of lazyArtworkPaths) {
+        const image = page.locator(`.sqr-landing-next img[src="${asset}"]`);
+        await image.scrollIntoViewIfNeeded();
+        await expect.poll(() => fixture.heldArtworkRequests()).toContain(asset);
+        await expect(image).toHaveAttribute("width", "120");
+        await expect(image).toHaveAttribute("height", "120");
+        await expect(image).toHaveCSS("aspect-ratio", "1 / 1");
+        const geometry = await imageGeometry(image);
+        expect(geometry.naturalWidth, `Reserve ${asset} before loading`).toBe(0);
+        expect(geometry.width).toBeGreaterThan(0);
+        expect(geometry.height).toBeGreaterThan(0);
+        expect(geometry.width / geometry.height).toBeCloseTo(1, 2);
+        beforeImages.push({ asset, width: geometry.width, height: geometry.height });
+      }
       await replay.scrollIntoViewIfNeeded();
-      await expect.poll(fixture.heldArtworkRequests).toBeGreaterThan(0);
       const before = await imageGeometry(artwork);
       expect(before.naturalWidth, "Measure before the held original SVG loads").toBe(0);
       expect(before.naturalHeight).toBe(0);
@@ -138,6 +156,15 @@ for (const width of [1440, 390, 320]) {
       await expect(replay).toHaveCSS("aspect-ratio", "1 / 1");
 
       fixture.releaseArtwork();
+      const afterImages = [];
+      for (const beforeImage of beforeImages) {
+        const image = page.locator(`.sqr-landing-next img[src="${beforeImage.asset}"]`);
+        await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
+        const geometry = await imageGeometry(image);
+        expect(Math.abs(geometry.width - beforeImage.width), `${beforeImage.asset} width after decoding`).toBeLessThanOrEqual(1);
+        expect(Math.abs(geometry.height - beforeImage.height), `${beforeImage.asset} height after decoding`).toBeLessThanOrEqual(1);
+        afterImages.push({ asset: beforeImage.asset, width: geometry.width, height: geometry.height });
+      }
       await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
       await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       const after = await imageGeometry(artwork);
@@ -170,7 +197,7 @@ for (const width of [1440, 390, 320]) {
       expect(fixture.unexpected).toEqual([]);
       expect(pageErrors).toEqual([]);
       await testInfo.attach("landing-image-layout.json", {
-        body: JSON.stringify({ width, before, after, browserIssues, violations }, null, 2), contentType: "application/json",
+        body: JSON.stringify({ width, before, after, beforeImages, afterImages, browserIssues, violations }, null, 2), contentType: "application/json",
       });
     } finally {
       try { await fixture.finish(); }
