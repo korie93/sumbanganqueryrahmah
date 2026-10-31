@@ -1,31 +1,42 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIResponse, type Page, type Route } from "@playwright/test";
 import type { AxeResults } from "axe-core";
 
 // Real compiled routes and original same-origin artwork, fictional public HTTP only.
 test.use({ serviceWorkers: "block" });
 test.describe.configure({ retries: 0 });
 test.afterEach(async ({ page }) => {
-  // Finish local CSP-response interception before Playwright closes the page.
-  await page.unrouteAll({ behavior: "wait" });
+  await finishFixture(page);
 });
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 const themeKey = "sqr-landing-next-theme";
 const strictPolicy = "script-src 'self'; require-trusted-types-for 'script'; style-src-elem 'self'; style-src-attr 'none'";
 type Theme = "light" | "dark";
 type StorageFailure = "denied-getter" | "denied-read" | "quota-write";
-type Fixture = { unexpected: string[]; errors: string[]; cspErrors: string[]; assets: string[] };
+type Fixture = { unexpected: string[]; errors: string[]; cspErrors: string[]; assets: string[]; pending: Set<Promise<void>> };
+const pendingRoutes = new WeakMap<Page, Set<Promise<void>>>();
+
+async function finishFixture(page: Page) {
+  const pending = pendingRoutes.get(page);
+  // Keep interception registered until every response callback finishes. Removing
+  // routes first lets Playwright auto-continue another callback's pending fetch.
+  while (pending?.size) await Promise.all(pending);
+  await page.unrouteAll({ behavior: "wait" });
+  pendingRoutes.delete(page);
+}
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
   theme?: Theme; lowSpec?: boolean; observer?: boolean; reducedMotion?: boolean; storageFailure?: StorageFailure;
+  beforeCspFulfill?: (pathname: string, response: APIResponse) => Promise<void>;
 } = {}): Promise<Fixture> {
   expect(baseURL).toBeTruthy();
   const origin = new URL(baseURL!).origin;
   expect(new URL(origin).protocol).toBe("http:");
   expect(new URL(origin).hostname).toBe("127.0.0.1");
   expect(new URL(origin).port).not.toBe("");
-  const fixture: Fixture = { unexpected: [], errors: [], cspErrors: [], assets: [] };
+  const fixture: Fixture = { unexpected: [], errors: [], cspErrors: [], assets: [], pending: new Set() };
+  pendingRoutes.set(page, fixture.pending);
   page.on("pageerror", error => fixture.errors.push(error.message));
   page.on("console", message => {
     if (message.type() === "error" && /content security policy|trustedtype|trusted type|violates.*directive/i.test(message.text())) fixture.cspErrors.push(message.text());
@@ -58,7 +69,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   }, { low: options.lowSpec === true, observer: options.observer !== false,
     storageFailure: options.storageFailure, landingThemeKey: themeKey });
   await page.context().routeWebSocket("**/*", socket => socket.close());
-  await page.route("**/*", async route => {
+  const handleRoute = async (route: Route) => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== origin) { fixture.unexpected.push("off-origin request"); return route.abort(); }
     if (["script", "stylesheet", "image"].includes(request.resourceType())) fixture.assets.push(url.pathname);
@@ -70,10 +81,16 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (url.pathname.startsWith("/api/") || !["GET", "HEAD"].includes(request.method())) { fixture.unexpected.push(`${request.method()} ${url.pathname}`); return route.abort(); }
     if ((request.isNavigationRequest() && request.resourceType() === "document") || url.pathname.startsWith("/landing-next/")) {
       const response = await route.fetch(), headers = response.headers();
+      if (options.beforeCspFulfill) await options.beforeCspFulfill(url.pathname, response);
       headers["content-security-policy"] = [headers["content-security-policy"], strictPolicy].filter(Boolean).join(", ");
       return route.fulfill({ response, headers });
     }
     return route.continue();
+  };
+  await page.route("**/*", route => {
+    const pending = handleRoute(route).finally(() => { fixture.pending.delete(pending); });
+    fixture.pending.add(pending);
+    return pending;
   });
   return fixture;
 }
@@ -84,7 +101,8 @@ async function openLanding(page: Page, theme: Theme) {
   await expect(page.locator(".sqr-landing-next h1")).toHaveText("Search.Analyse.Monitor.");
   await page.evaluate(() => document.fonts.ready);
 }
-function checkFixture(fixture: Fixture) {
+async function checkFixture(fixture: Fixture) {
+  while (fixture.pending.size) await Promise.all(fixture.pending);
   expect(fixture.unexpected).toEqual([]); expect(fixture.errors).toEqual([]); expect(fixture.cspErrors).toEqual([]);
 }
 async function checkLayout(page: Page, width: number) {
@@ -112,7 +130,7 @@ for (const theme of ["light", "dark"] as const) {
   test(`Landing next desktop ${theme} at 1366 and 1440 preserves composition under strict CSP`, async ({ page, baseURL }) => {
     const fixture = await installFixture(page, baseURL, { theme });
     for (const width of [1366, 1440]) { await page.setViewportSize({ width, height: 900 }); await openLanding(page, theme); await checkLayout(page, width); }
-    checkFixture(fixture);
+    await checkFixture(fixture);
   });
 }
 
@@ -122,7 +140,7 @@ test("Landing next tablet768 supports both themes without overflow", async ({ pa
   await openLanding(page, "light"); await checkLayout(page, 768);
   await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
   await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark"); await checkLayout(page, 768);
-  checkFixture(fixture);
+  await checkFixture(fixture);
 });
 
 for (const theme of ["light", "dark"] as const) {
@@ -133,7 +151,7 @@ for (const theme of ["light", "dark"] as const) {
       await openLanding(page, theme); await checkLayout(page, width);
       await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
     }
-    checkFixture(fixture);
+    await checkFixture(fixture);
   });
 }
 
@@ -150,7 +168,7 @@ test("Landing next theme follows OS until explicit choice and never mutates the 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
   expect(await page.evaluate(() => localStorage.getItem("perf_mode"))).toBe("high");
-  checkFixture(fixture);
+  await checkFixture(fixture);
 });
 
 for (const [storageFailure, width] of [["denied-getter", 320], ["denied-read", 390], ["quota-write", 1440]] as const) {
@@ -169,7 +187,7 @@ for (const [storageFailure, width] of [["denied-getter", 320], ["denied-read", 3
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "light");
     await checkLayout(page, width);
-    checkFixture(fixture);
+    await checkFixture(fixture);
   });
 }
 
@@ -200,7 +218,7 @@ test("Landing next mobile menu supports keyboard Escape anchors desktop reflow a
   }
   await toggle.click();
   await expect(menu.getByRole("link", { name: "Security", exact: true })).toBeInViewport();
-  checkFixture(fixture);
+  await checkFixture(fixture);
 });
 
 test("Landing next motion follows visibility and reduced preference and cleans pointer enhancements on exit", async ({ page, baseURL }) => {
@@ -237,7 +255,7 @@ test("Landing next motion follows visibility and reduced preference and cleans p
     element.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 50, clientY: 50 }));
     return element.style.getPropertyValue("--tx");
   })).toBe("");
-  await detached!.dispose(); checkFixture(fixture);
+  await detached!.dispose(); await checkFixture(fixture);
 });
 
 for (const [label, selectors] of [
@@ -257,7 +275,7 @@ for (const [label, selectors] of [
       await page.getByRole("button", { name: "Laman utama", exact: true }).click();
       await expect(page).toHaveURL(/\/$/); await expect(page.locator(".sqr-landing-next h1")).toHaveText("Search.Analyse.Monitor.");
     }
-    checkFixture(fixture);
+    await checkFixture(fixture);
   });
 }
 
@@ -268,7 +286,7 @@ test("Landing next missing observers leaves all sections readable and anchor nav
     const heading = page.locator(`#${id} h2`); await heading.scrollIntoViewIfNeeded(); await expect(heading).toBeVisible(); await expect(heading).toHaveCSS("opacity", "1");
   }
   await page.locator(".sqr-landing-next .hero h1 a[href='#search']").click(); await expect(page.locator("#search")).toBeFocused();
-  checkFixture(fixture);
+  await checkFixture(fixture);
 });
 
 test("Landing next reduced motion uses static supplied artwork and keeps replay controls safe", async ({ page, baseURL }) => {
@@ -282,7 +300,7 @@ test("Landing next reduced motion uses static supplied artwork and keeps replay 
     await expect.poll(() => replay.locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
   }
   expect(fixture.assets.filter(asset => /\/landing-next\/.*-(?:animated|boost)\.svg$/.test(asset))).toEqual([]);
-  checkFixture(fixture);
+  await checkFixture(fixture);
 });
 
 test("Landing next every supplied image variant decodes as a real SVG", async ({ page, baseURL }) => {
@@ -300,7 +318,7 @@ test("Landing next every supplied image variant decodes as a real SVG", async ({
     }
     return results;
   }, names);
-  expect(decoded.filter(result => !result.decoded)).toEqual([]); expect(decoded).toHaveLength(32); checkFixture(fixture);
+  expect(decoded.filter(result => !result.decoded)).toEqual([]); expect(decoded).toHaveLength(32); await checkFixture(fixture);
 });
 
 test("Landing next section anchors focus their target and update the accessible current index", async ({ page, baseURL }) => {
@@ -310,7 +328,7 @@ test("Landing next section anchors focus their target and update the accessible 
   await expect(page.locator("#search")).toBeFocused(); await expect(page).toHaveURL(/#search$/); await expect(search).toHaveAttribute("aria-current", "location");
   await index.getByRole("link", { name: "Get started", exact: true }).click(); await expect(page.locator("#start")).toBeFocused();
   await page.getByRole("button", { name: "Back to top", exact: true }).click(); await expect(page).toHaveURL(/#top$/); await expect(page.locator("#top")).toBeFocused();
-  checkFixture(fixture);
+  await checkFixture(fixture);
 });
 
 test("Landing next direct section URL survives lazy mount and refresh", async ({ page, baseURL }) => {
@@ -320,7 +338,63 @@ test("Landing next direct section URL survives lazy mount and refresh", async ({
   await expect(page.locator("#security h2")).toBeInViewport();
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator("#security h2")).toBeInViewport();
-  checkFixture(fixture);
+  await checkFixture(fixture);
+});
+
+test("Landing next cleanup drains overlapping CSP responses before removing interception", async ({ page, baseURL }) => {
+  const paths = ["/landing-next/radar-static.svg", "/landing-next/search-dark-static.svg"];
+  const gates = new Map(paths.map(path => {
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    return [path, { held, release }] as const;
+  }));
+  const originals = new Map<string, APIResponse>();
+  const fixture = await installFixture(page, baseURL, { beforeCspFulfill: async (path, response) => {
+    const gate = gates.get(path);
+    if (!gate) return;
+    originals.set(path, response);
+    await gate.held;
+  } });
+  await page.goto("/robots.txt", { waitUntil: "domcontentloaded" });
+  await checkFixture(fixture);
+  const responses = paths.map(path => page.waitForResponse(response => new URL(response.url()).pathname === path));
+  const decoded = page.evaluate(async urls => Promise.all(urls.map(async url => {
+    const image = new Image(); image.src = url;
+    await image.decode();
+    return image.naturalWidth > 0 && image.naturalHeight > 0;
+  })), paths);
+  const completedRequests = Promise.allSettled([...responses, decoded]);
+  let cleanup: Promise<void> | undefined;
+  try {
+    await expect.poll(() => originals.size).toBe(paths.length);
+    cleanup = finishFixture(page);
+    gates.get(paths[0])!.release();
+    await expect.poll(() => fixture.pending.size).toBe(1);
+    // A public interception update flushes any premature removal after the first
+    // callback finishes, while the second real response is still held.
+    await page.unroute("/__landing-next-unused-route-barrier__");
+    gates.get(paths[1])!.release();
+    await cleanup;
+    for (const [index, response] of (await Promise.all(responses)).entries()) {
+      const original = originals.get(paths[index])!;
+      expect(original.status()).toBe(200);
+      expect(response.status()).toBe(original.status());
+      expect(await response.body()).toEqual(await original.body());
+      const headers = original.headers();
+      const semanticHeaders = Object.fromEntries(["content-type", "cache-control", "etag", "x-content-type-options"]
+        .filter(name => headers[name] !== undefined).map(name => [name, headers[name]]));
+      expect(response.headers()).toMatchObject({
+        ...semanticHeaders,
+        "content-security-policy": [headers["content-security-policy"], strictPolicy].filter(Boolean).join(", "),
+      });
+    }
+    expect(await decoded).toEqual([true, true]);
+    await checkFixture(fixture);
+  } finally {
+    for (const gate of gates.values()) gate.release();
+    try { await cleanup; }
+    finally { await completedRequests; }
+  }
 });
 
 test("Landing next touch controls work on a compact phone without magnetic movement", async ({ browser, baseURL }) => {
@@ -345,11 +419,10 @@ test("Landing next touch controls work on a compact phone without magnetic movem
     await expect(phone.getByTestId("input-username")).toBeVisible();
     await phone.getByRole("button", { name: "Laman utama", exact: true }).tap();
     await expect(phone.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
-    await phone.unrouteAll({ behavior: "wait" });
-    checkFixture(fixture);
+    await checkFixture(fixture);
   } finally {
-    await phone.unrouteAll({ behavior: "wait" });
-    await context.close();
+    try { await finishFixture(phone); }
+    finally { await context.close(); }
   }
 });
 
@@ -366,7 +439,7 @@ test("Landing next low-spec boundary keeps the original page and never requests 
   await expect(page.getByTestId("input-username")).toBeVisible();
   await page.getByRole("button", { name: "Laman utama", exact: true }).click();
   await expect(page.locator(".sqr-landing")).toHaveClass(/low-spec/); expect(normalAssets()).toEqual([]);
-  checkFixture(fixture);
+  await checkFixture(fixture);
 });
 
 for (const theme of ["light", "dark"] as const) {
@@ -380,6 +453,6 @@ for (const theme of ["light", "dark"] as const) {
       });
       return result.violations.filter(item => item.impact === "serious" || item.impact === "critical").map(item => ({ id: item.id, targets: item.nodes.map(node => node.target) }));
     });
-    expect(violations).toEqual([]); checkFixture(fixture);
+    expect(violations).toEqual([]); await checkFixture(fixture);
   });
 }
