@@ -124,7 +124,7 @@ test("Monthly text reflow actually doubles root text without bypassing productio
 test("landing accessibility auditing preserves strict script CSP on static and application previews", () => {
   assert.match(landingImageSource, /await\s+page\.evaluate\(axeSource\)/);
   assert.match(landingImageSource, /await\s+page\.locator\("html\.app-ready"\)\.waitFor\(\{\s*state:\s*"attached"\s*\}\)/);
-  assert.match(landingImageSource, /page\.locator\("\.sqr-landing"\)\.getByRole\("heading"/);
+  assert.match(landingImageSource, /page\.locator\("\.sqr-landing-next"\)\.getByRole\("heading"/);
   assert.doesNotMatch(landingImageSource, /\baddScriptTag\s*\(|\bbypassCSP\s*:|unsafe-inline|unsafe-eval/);
   const fixture = sourceSection(landingImageSource,
     /async\s+function\s+installPublicFixture\b/, /async\s+function\s+imageGeometry\b/);

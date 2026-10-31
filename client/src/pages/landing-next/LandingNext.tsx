@@ -7,7 +7,7 @@ import "./landing-next.css";
 
 type Theme = "light" | "dark";
 type CapabilityId = "search" | "analyse" | "import" | "monitor" | "security";
-type LandingNextProps = { onLoginClick: () => void; paused: boolean };
+type LandingNextProps = { onLoginClick: () => void };
 const NavigationContext = createContext<{
   root: RefObject<HTMLDivElement>; onLoginClick: () => void; paused: boolean; closeMenu: () => void;
 } | null>(null);
@@ -105,9 +105,9 @@ function SuppliedArtwork({ name, theme = "dark", paused, boosted = false, replay
     alt="" aria-hidden="true" decoding="async" loading={name === "radar" ? "eager" : "lazy"} />;
 }
 
-export default function LandingNext({ onLoginClick, paused }: LandingNextProps) {
+export default function LandingNext({ onLoginClick }: LandingNextProps) {
   const root = useRef<HTMLDivElement>(null);
-  const motion = useLandingNextMotion(root, paused);
+  const motion = useLandingNextMotion(root);
   const isPaused = motion.motionPaused;
   const navigationLinks = () => (
     <>

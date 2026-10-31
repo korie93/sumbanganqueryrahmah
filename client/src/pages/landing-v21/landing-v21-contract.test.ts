@@ -8,12 +8,12 @@ import ts from "typescript";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const stylesheet = postcss.parse(readFileSync(path.join(directory, "landing-v21.css"), "utf8"));
-const sourceFiles = [
-  path.resolve(directory, "../Landing.tsx"),
-  ...readdirSync(directory)
-    .filter(name => /\.tsx?$/.test(name) && !name.endsWith(".test.ts"))
-    .map(name => path.join(directory, name)),
-].map(filename => ts.createSourceFile(filename, readFileSync(filename, "utf8"), ts.ScriptTarget.Latest, true));
+// Retained legacy modules have their own contracts; the universal entry is covered
+// by landing-next-contract.test.ts and must not import this subtree.
+const sourceFiles = readdirSync(directory)
+  .filter(name => /\.tsx?$/.test(name) && !name.endsWith(".test.ts"))
+  .map(name => path.join(directory, name))
+  .map(filename => ts.createSourceFile(filename, readFileSync(filename, "utf8"), ts.ScriptTarget.Latest, true));
 
 function descendants(node: ts.Node): ts.Node[] {
   const nodes: ts.Node[] = [];
@@ -59,7 +59,7 @@ test("every landing CSS rule stays beneath its page namespace", () => {
       assert.doesNotMatch(selector, /^\.sqr-landing(?:[.#][\w-]+|\[[^\]]+\])*\s*[+~]/, selector);
     }
   });
-  assert.ok(rules > 0, "The production landing stylesheet must be inspected");
+  assert.ok(rules > 0, "The retained legacy landing stylesheet must be inspected");
 });
 
 test("hero reading content never waits for an entrance animation", () => {
@@ -108,7 +108,7 @@ test("landing CSS has no external imports, assets or document-wide registrations
   });
 });
 
-test("landing components do not import application auth, API clients or additional runtimes", () => {
+test("legacy landing components do not import application auth, API clients or additional runtimes", () => {
   const approvedShared = new Set(["react", "@/lib/aria-state-props", "@/lib/low-spec-mode", "@/components/BrandLogo"]);
   for (const source of sourceFiles) {
     for (const node of descendants(source)) {
@@ -123,13 +123,7 @@ test("landing components do not import application auth, API clients or addition
         }
       }
       if (ts.isCallExpression(node)) {
-        if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-          const target = node.arguments[0];
-          assert.ok(source.fileName === path.resolve(directory, "../Landing.tsx")
-            && node.arguments.length === 1 && target && ts.isStringLiteral(target)
-            && target.text === "@/pages/landing-next/LandingNext",
-          "Only the normal-profile landing entry may be loaded lazily; auth, API and other runtimes remain forbidden");
-        }
+        assert.notEqual(node.expression.kind, ts.SyntaxKind.ImportKeyword, "Legacy previews must not load additional runtimes");
         assert.ok(!["fetch", "sendBeacon", "require"].includes(methodName(node.expression) ?? ""), `${source.fileName}: public preview must not load live data`);
       }
       if (ts.isNewExpression(node)) {

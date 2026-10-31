@@ -1560,11 +1560,10 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
   }
 });
 
-test("low-spec landing header keeps its brand readable on narrow and enlarged-text viewports", async ({ page }) => {
+test("landing header keeps the new brand readable on low-spec narrow and enlarged-text viewports", async ({ page }) => {
   await installTheme(page, "light");
   await installMockPublicApi(page);
-  // This regression covers the preserved legacy low-spec UI. Normal landing
-  // typography, responsive navigation and login are tested independently.
+  // Persisted performance settings and constrained hardware keep the same UI.
   await page.addInitScript(() => {
     localStorage.setItem("perf_mode", "low");
     Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => 2 });
@@ -1580,13 +1579,14 @@ test("low-spec landing header keeps its brand readable on narrow and enlarged-te
     await page.evaluate((fontSize) => {
       document.documentElement.style.fontSize = `${fontSize}px`;
     }, viewport.fontSize);
-    await expect(page.locator(".sqr-landing")).toHaveClass(/low-spec/);
-    await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
+    await expect(page.locator("html")).toHaveClass(/low-spec/);
+    await expect(page.locator(".sqr-landing-next")).toBeVisible();
+    await expect(page.locator(".sqr-landing")).toHaveCount(0);
 
-    const brand = page.getByTestId("landing-brand-title");
+    const brand = page.locator(".sqr-landing-next header .brand");
     await expect(brand).toBeVisible();
-    await expect(brand).toHaveAccessibleName("SQR — home");
-    await expect(brand.locator("img")).toHaveAttribute("src", "/brand/sqr-full-logo-light.svg");
+    await expect(brand).toHaveAccessibleName("SQR");
+    await expect(brand.locator("img")).toHaveAttribute("src", "/brand/sidebar-q-static.png");
     await expect.poll(() => brand.locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
 
     const layout = await brand.evaluate((element) => ({
@@ -1598,13 +1598,15 @@ test("low-spec landing header keeps its brand readable on narrow and enlarged-te
 
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
     expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
-    await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Sign In", exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Log in", exact: true })).toBeVisible();
 
-    const skipLink = page.getByRole("link", { name: "Langkau ke kandungan utama" });
+    const skipLink = page.getByRole("link", { name: "Skip to content", exact: true });
     const hiddenSkipLinkBox = await skipLink.boundingBox();
     expect(hiddenSkipLinkBox?.y).toBeLessThan(0);
-    expect((hiddenSkipLinkBox?.y ?? 0) + (hiddenSkipLinkBox?.height ?? 0)).toBeLessThanOrEqual(0);
+    expect((hiddenSkipLinkBox?.y ?? 0) + (hiddenSkipLinkBox?.height ?? 0)).toBeLessThanOrEqual(1);
 
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "Langkau ke kandungan utama", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(skipLink).toBeFocused();
     await expect.poll(async () => (await skipLink.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);

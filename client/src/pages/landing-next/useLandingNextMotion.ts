@@ -11,7 +11,7 @@ function preferredTheme(): LandingTheme {
 }
 
 /** Landing-owned enhancement only: no auth requests, shared theme writes or idle frame loop. */
-export function useLandingNextMotion(root: RefObject<HTMLDivElement>, paused: boolean) {
+export function useLandingNextMotion(root: RefObject<HTMLDivElement>) {
   const [theme, setTheme] = useState<LandingTheme>(preferredTheme);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("top");
@@ -19,9 +19,12 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>, paused: bo
   const [replayVersion, setReplayVersion] = useState(0);
   const [coordinateLabel, setCoordinateLabel] = useState("SQR // 2026");
   const [hidden, setHidden] = useState(() => typeof document !== "undefined" && document.hidden);
+  const [reducedMotion, setReducedMotion] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const replayTimer = useRef<number | null>(null);
   const manualTheme = useRef(false);
-  const motionPaused = paused || hidden;
+  const motionPaused = reducedMotion || hidden;
 
   const toggleTheme = useCallback(() => {
     manualTheme.current = true;
@@ -36,12 +39,16 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>, paused: bo
   useEffect(() => {
     manualTheme.current = ["light", "dark"].includes(safeGetStorageItem(getBrowserLocalStorage(), THEME_KEY) ?? "");
     const preference = window.matchMedia("(prefers-color-scheme: dark)");
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updateTheme = () => { if (!manualTheme.current) setTheme(preference.matches ? "dark" : "light"); };
     const updateVisibility = () => setHidden(document.hidden);
+    const updateMotion = () => setReducedMotion(motionPreference.matches);
     preference.addEventListener("change", updateTheme);
+    motionPreference.addEventListener("change", updateMotion);
     document.addEventListener("visibilitychange", updateVisibility);
     return () => {
       preference.removeEventListener("change", updateTheme);
+      motionPreference.removeEventListener("change", updateMotion);
       document.removeEventListener("visibilitychange", updateVisibility);
     };
   }, []);
@@ -191,7 +198,7 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>, paused: bo
       for (const section of sections) if (section.getBoundingClientRect().top <= window.innerHeight * 0.5) current = section.id;
       if (y < 120) current = "top";
       setActiveSection(previous => previous === current ? previous : current);
-      if (paused || !hero) return;
+      if (motionPaused || !hero) return;
       const height = Math.max(1, hero.offsetHeight);
       mark?.style.setProperty("--p", Math.min(y, height) * 0.22 + "px");
       mark?.style.setProperty("--o", String(1 - Math.min(y, height) / height * 0.75));
@@ -206,7 +213,7 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>, paused: bo
       }
     };
     const schedule = () => { if (frame === null) frame = window.requestAnimationFrame(paint); };
-    const move = (event: PointerEvent) => { if (paused || !finePointer.matches) return; pointer = { x: event.clientX, y: event.clientY }; schedule(); };
+    const move = (event: PointerEvent) => { if (motionPaused || !finePointer.matches) return; pointer = { x: event.clientX, y: event.clientY }; schedule(); };
     const leave = () => {
       pointer = null; setCoordinateLabel("SQR // 2026");
       for (const name of ["--rx", "--ry"]) mark?.style.removeProperty(name);
@@ -221,7 +228,7 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>, paused: bo
       hero?.removeEventListener("pointermove", move); hero?.removeEventListener("pointerleave", leave);
       if (frame !== null) window.cancelAnimationFrame(frame);
     };
-  }, [hidden, paused, root]);
+  }, [hidden, motionPaused, root]);
 
   return { theme, toggleTheme, menuOpen, setMenuOpen, activeSection, replay, boostedFigure, replayVersion, coordinateLabel, motionPaused };
 }

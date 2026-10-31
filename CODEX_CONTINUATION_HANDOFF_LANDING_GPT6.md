@@ -2,6 +2,75 @@
 
 Updated: 31 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
+## Current follow-up — universal landing, 31 October 2026
+
+Production was successfully deployed to `4d06b29e7b5ec26d66a6f6a9701af7bc42795cbe`
+on 31 October. CI, CodeQL and Release Verification passed that exact SHA;
+deployment and verified full PostgreSQL backup evidence are outside the repo at
+`C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/deploy-20261031/DEPLOYMENT_RESULT.json`.
+
+The user then reported the old landing on desktop but the new one on their
+phone. Source inspection confirmed the route still selected the V21 page for
+low-spec signals, including reported memory/cores at or below four. The user
+explicitly superseded the earlier low-spec preservation requirement: **use the
+new landing on every device and do not reduce its animations for low specs**.
+This latest instruction takes precedence over historical preservation notes and
+the original ZIP. Explicit OS/browser `prefers-reduced-motion`, hidden-page and
+offscreen pauses remain accessibility/lifecycle controls, not hardware downgrades.
+
+Implementation complete locally: `Landing.tsx` always lazily mounts `LandingNext`;
+the new motion hook owns its reduced-motion subscription and does not read
+hardware, network or `perf_mode`. Shared animation CSS excludes only the public
+landing from low-spec animation/transition suppression. Other application device
+policy, stored preferences, boot shell, auth and protected routes remain intact.
+Legacy modules remain unmounted. Tests that previously required the old branch
+now assert universal layout, animation and navigation behavior.
+
+Current local QA/evidence directory:
+`C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/landing-universal-20261031/`.
+Run target code only in the existing reviewed WSL/bwrap/cgroup sandbox; no host
+repository execution, production identities, customer data or dependency installs.
+Local QA complete: 112 focused tests, full client/changed-MJS lint, strict changed-root
+TypeScript (9 roots, 323 resolved files), real production frontend build (507
+files), bundle/sourcemap guards and 32 native browser cases passed. Browser
+coverage includes all six device/performance/network profiles, responsive
+light/dark layouts, actual CSS/SVG animation and transition states, live reduced
+motion, hidden/offscreen cleanup, keyboard/menu/anchors/login/Home, denied
+storage, all 32 SVG variants, lazy-image geometry and axe checks. The header
+fixture was corrected to assert the existing global Malay skip link before the
+landing's English skip link; its final browser/lint/type checks passed (1 root,
+288 resolved files). Only test code changed after the production build.
+
+The package-invoked `scripts/landing-v21-built-browser.mjs` retains its entrypoint
+and 20 functional checks for the universal page. It now captures viewport
+overviews and all nine sections individually at 320/1440px instead of a single
+large full-page canvas. A context init script now seeds only its own loopback
+origin, avoiding storage access in the initial `about:blank`; the final assertion
+still rejects every unexpected page/API/asset/CSP error. Its final canonical
+rerun passed all 20 checks, including every viewport/section capture, with zero
+unexpected page/API/asset/CSP errors. Earlier failing attempts remain retained as
+diagnostics; none count as passing evidence. Final full client/changed-MJS lint
+also passed after the fixture correction. The sandbox uses the same bounded
+native Chromium launch flags as the focused browser suite; it does not replace
+Chromium or stub the app/compiler. Artifact source SHA for the final test overlay:
+`72e20be4a7241963c1f939ea17a32249f436a49a279cc861fb5b96d64e8ef9ae`.
+Application/build inputs remain identical to source manifest
+`782933a2a06ecb568f7a95b24889c3f3ff446a741b0e07c3b3200fbc7f4f416c`.
+Independent source and test review found no actionable issue. Final source hashes,
+passing receipts, build-input identity and sandbox cleanup are recorded in
+`FINAL_VALIDATION.json` in the evidence directory above. Only this handoff changed
+after the final snapshot. The user authorized commit/push on 31 October 2026;
+the 13 reviewed paths will be published together, with final commit/remote/blob
+verification recorded in the external `PUBLICATION_VERIFIED.json`. For these
+Git invocations only, a reviewed empty hook directory preserves the sandbox-only
+execution boundary; no Git configuration is changed. Sandbox lint/tests plus
+staged-content secret/hygiene and Conventional Commit checks are retained as
+publication evidence. No deployment is included; production still runs
+`4d06b29e`. Full clean-install
+CI/Release Verification remains required after publication. Physical hardware
+frame-rate measurements and the whole-project TypeScript graph were not rerun;
+the device-profile checks are native browser tests with synthetic reported signals.
+
 ## CI follow-up — dependency audit, 31 October 2026
 
 [CI run 41156100909](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41156100909)

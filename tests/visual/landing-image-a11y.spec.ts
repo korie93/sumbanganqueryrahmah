@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import type { AxeResults, RunOptions } from "axe-core";
 
-// Exercise the actual built public page without an application server, user
-// session, external service or production data. Do not replace its artwork.
+// Exercise the actual built page and its original artwork through synthetic
+// public APIs only, including devices with persisted low performance settings.
 test.use({ serviceWorkers: "block" });
-const fullLogoPath = "/brand/sqr-full-logo-light.svg";
+const lazyArtworkPath = "/landing-next/search-dark-static.svg";
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 const strictScriptPolicy = "script-src 'self'; require-trusted-types-for 'script'";
 
@@ -16,19 +16,19 @@ async function installPublicFixture(page: Page, baseURL: string | undefined) {
   expect(new URL(origin).hostname).toBe("127.0.0.1");
   expect(new URL(origin).protocol).toBe("http:");
   expect(new URL(origin).port).not.toBe("");
-  // Preserve this existing artwork/layout contract for the unchanged low-spec
-  // landing. The normal-profile redesign has its own browser coverage.
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
   await page.addInitScript(() => {
     localStorage.setItem("perf_mode", "low");
     Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => 2 });
     Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => 2 });
   });
   const unexpected: string[] = [];
-  let releaseLogo!: () => void;
-  let heldLogoRequests = 0;
-  const logoGate = new Promise<void>((resolve) => { releaseLogo = resolve; });
+  const pending = new Set<Promise<void>>();
+  let releaseArtwork!: () => void;
+  let heldArtworkRequests = 0;
+  const artworkGate = new Promise<void>((resolve) => { releaseArtwork = resolve; });
   await page.context().routeWebSocket("**/*", (socket) => socket.close());
-  await page.route("**/*", async (route) => {
+  const handleRoute = async (route: Route) => {
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== origin) {
       unexpected.push("off-origin request");
@@ -56,21 +56,30 @@ async function installPublicFixture(page: Page, baseURL: string | undefined) {
     if (request.isNavigationRequest() && request.resourceType() === "document") {
       const response = await route.fetch();
       const headers = response.headers();
-      // Match CI's script restrictions even with the isolated static server.
-      // Append rather than replace any policy supplied by the real app server.
       headers["content-security-policy"] = [headers["content-security-policy"], strictScriptPolicy]
         .filter(Boolean).join(", ");
       return route.fulfill({ response, headers });
     }
-    if (url.pathname === fullLogoPath) {
-      heldLogoRequests++;
-      // The eager header shares this URL. Waiting only for DOMContentLoaded
-      // below lets us measure the lazy footer before either image can decode.
-      await logoGate;
+    if (url.pathname === lazyArtworkPath) {
+      heldArtworkRequests++;
+      await artworkGate;
     }
     return route.continue();
+  };
+  await page.route("**/*", route => {
+    const request = handleRoute(route).finally(() => { pending.delete(request); });
+    pending.add(request);
+    return request;
   });
-  return { unexpected, releaseLogo, heldLogoRequests: () => heldLogoRequests };
+  return {
+    unexpected, releaseArtwork, heldArtworkRequests: () => heldArtworkRequests,
+    async finish() {
+      releaseArtwork();
+      // Preserve interception until every fetch/fulfill callback has completed.
+      while (pending.size) await Promise.all(pending);
+      await page.unrouteAll({ behavior: "wait" });
+    },
+  };
 }
 
 async function imageGeometry(image: Locator) {
@@ -84,8 +93,8 @@ async function imageGeometry(image: Locator) {
   });
 }
 
-for (const width of [1440, 390]) {
-  test(`Landing footer reserves its lazy logo and exposes a named strengths group at ${width}px`, async ({ page, baseURL }, testInfo) => {
+for (const width of [1440, 390, 320]) {
+  test(`Landing reserves lazy instrument artwork and exposes accessible assurances at ${width}px`, async ({ page, baseURL }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     const fixture = await installPublicFixture(page, baseURL);
     const browserIssues: unknown[] = [];
@@ -93,92 +102,79 @@ for (const width of [1440, 390]) {
     page.on("pageerror", (error) => pageErrors.push(error.message));
     const cdp = await page.context().newCDPSession(page);
     cdp.on("Audits.issueAdded", ({ issue }) => {
-      // Installed Chrome may expose issue codes newer than bundled CDP typings.
       if (String(issue.code) === "LazyLoadImageIssue") browserIssues.push(issue.details);
     });
     try {
-      // Enable before navigation: DevTools reports this issue during the first
-      // layout, not necessarily after a later DOM inspection of the image.
       await cdp.send("Audits.enable");
       const navigation = await page.goto("/", { waitUntil: "domcontentloaded" });
       expect(await navigation?.headerValue("content-security-policy")).toContain(strictScriptPolicy);
       await page.locator("html.app-ready").waitFor({ state: "attached" });
-      await expect(page.locator(".sqr-landing")).toHaveClass(/low-spec/);
-      await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
-      await expect(page.locator(".sqr-landing").getByRole("heading", { name: /Operational data, structured/ })).toBeVisible();
-      await expect.poll(fixture.heldLogoRequests).toBeGreaterThan(0);
+      await expect(page.locator("html")).toHaveClass(/low-spec/);
+      await expect(page.locator(".sqr-landing-next").getByRole("heading", { level: 1 })).toHaveText("Search.Analyse.Monitor.");
+      await expect(page.locator(".sqr-landing")).toHaveCount(0);
       await page.evaluate(() => document.fonts.ready);
 
-      const headerLogo = page.getByTestId("landing-brand-title").locator("img");
-      const footerLogo = page.locator(".footer-brand .landing-brand-image");
-      const previewIcon = page.locator(".preview-brand-icon img");
-      await expect(headerLogo).toHaveAttribute("src", fullLogoPath);
-      await expect(headerLogo).toHaveAttribute("width", "665");
-      await expect(headerLogo).toHaveAttribute("height", "310");
-      await expect(headerLogo).toHaveAttribute("loading", "eager");
-      await expect(footerLogo).toHaveAttribute("src", fullLogoPath);
-      await expect(footerLogo).toHaveAttribute("width", "665");
-      await expect(footerLogo).toHaveAttribute("height", "310");
-      await expect(footerLogo).toHaveAttribute("loading", "lazy");
+      const headerLogo = page.locator(".sqr-landing-next header .brand img");
+      const replay = page.getByRole("button", { name: "Replay Search instrument animation", exact: true });
+      const artwork = replay.locator("img");
+      await expect(headerLogo).toHaveAttribute("src", "/brand/sidebar-q-static.png");
+      await expect(headerLogo).toHaveAttribute("width", "30");
+      await expect(headerLogo).toHaveAttribute("height", "30");
+      await expect(artwork).toHaveAttribute("src", lazyArtworkPath);
+      await expect(artwork).toHaveAttribute("width", "120");
+      await expect(artwork).toHaveAttribute("height", "120");
+      await expect(artwork).toHaveAttribute("loading", "lazy");
+      await expect(artwork).toHaveAttribute("alt", "");
+      await expect(artwork).toHaveAttribute("aria-hidden", "true");
 
-      await footerLogo.scrollIntoViewIfNeeded();
-      const before = await imageGeometry(footerLogo);
-      expect(before.naturalWidth, "Measure before the held original SVG has loaded").toBe(0);
+      await replay.scrollIntoViewIfNeeded();
+      await expect.poll(fixture.heldArtworkRequests).toBeGreaterThan(0);
+      const before = await imageGeometry(artwork);
+      expect(before.naturalWidth, "Measure before the held original SVG loads").toBe(0);
       expect(before.naturalHeight).toBe(0);
       expect(before.width).toBeGreaterThan(0);
-      expect(before.height).toBe(64);
-      expect(before.width / before.height).toBeCloseTo(665 / 310, 2);
-      expect(before.aspectRatio, "An explicit CSS ratio avoids Chromium's lazy-image issue").toBe("665 / 310");
+      expect(before.height).toBeGreaterThan(0);
+      expect(before.width / before.height).toBeCloseTo(1, 2);
+      await expect(replay).toHaveCSS("aspect-ratio", "1 / 1");
 
-      fixture.releaseLogo();
-      await expect.poll(() => footerLogo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
-      await page.waitForLoadState("load");
+      fixture.releaseArtwork();
+      await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
       await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-      const after = await imageGeometry(footerLogo);
-      expect(after.naturalWidth).toBe(665);
-      expect(after.naturalHeight).toBe(310);
+      const after = await imageGeometry(artwork);
+      expect(after.naturalWidth).toBeGreaterThan(0);
+      expect(after.naturalHeight).toBeGreaterThan(0);
+      expect(after.naturalWidth / after.naturalHeight).toBeCloseTo(1, 2);
       for (const dimension of ["x", "y", "width", "height"] as const) {
-        expect(Math.abs(after[dimension] - before[dimension]), `Footer ${dimension} remains stable after image load`).toBeLessThanOrEqual(1);
+        expect(Math.abs(after[dimension] - before[dimension]), `Artwork ${dimension} stays stable after decoding`).toBeLessThanOrEqual(1);
       }
+      expect((await imageGeometry(headerLogo)).width).toBe(30);
+      const assurances = page.locator(".sqr-landing-next .assure");
+      await expect(assurances).toHaveRole("list");
+      await expect(assurances.getByRole("listitem")).toHaveText(["Internal platform", "Registered users only", "Ongoing security audits"]);
+      const specifications = page.getByRole("list", { name: "Search specifications", exact: true });
+      await expect(specifications.getByRole("listitem")).toHaveCount(3);
 
-      // The footer-specific correction must not stretch the square Q preview
-      // or change the existing eager/lazy artwork-loading decisions.
-      await expect(previewIcon).toHaveAttribute("src", "/brand/sqr-q-mark-light.png");
-      await expect(previewIcon).toHaveAttribute("width", "128");
-      await expect(previewIcon).toHaveAttribute("height", "128");
-      await expect(previewIcon).toHaveAttribute("loading", "lazy");
-      expect((await imageGeometry(previewIcon)).aspectRatio).not.toBe("665 / 310");
-      expect((await imageGeometry(headerLogo)).aspectRatio).not.toBe("665 / 310");
-
-      const strengths = page.getByRole("group", { name: "Platform strengths", exact: true });
-      await expect(strengths).toHaveCount(1);
-      await expect(strengths).toHaveClass("hero-proof");
-      await expect(strengths).toHaveAttribute("role", "group");
-      // Run the audit through the automation context, not a DOM script sink.
+      // The automation context executes axe without an inline DOM script sink.
       await page.evaluate(axeSource);
-      const violations = await strengths.evaluate(async (element) => {
+      const violations = await page.locator(".sqr-landing-next").evaluate(async (element) => {
         const axe = (window as typeof window & {
           axe: { run: (root: Element, options: RunOptions) => Promise<AxeResults> };
         }).axe;
         const result = await axe.run(element, {
-          runOnly: { type: "rule", values: ["aria-prohibited-attr"] },
-          resultTypes: ["violations"],
+          runOnly: { type: "rule", values: ["aria-prohibited-attr"] }, resultTypes: ["violations"],
         });
         return result.violations.map(({ id, nodes }) => ({ id, targets: nodes.map(({ target }) => target) }));
       });
       expect(violations).toEqual([]);
-      expect(browserIssues, "No LazyLoadImageIssue is emitted during initial or decoded-image layout").toEqual([]);
+      expect(browserIssues, "No LazyLoadImageIssue during initial or decoded-image layout").toEqual([]);
       expect(fixture.unexpected).toEqual([]);
       expect(pageErrors).toEqual([]);
       await testInfo.attach("landing-image-layout.json", {
-        body: JSON.stringify({ width, before, after, browserIssues, violations }, null, 2),
-        contentType: "application/json",
+        body: JSON.stringify({ width, before, after, browserIssues, violations }, null, 2), contentType: "application/json",
       });
     } finally {
-      // Never leave the shared eager/lazy SVG request hanging after an assertion
-      // failure or block the context teardown on an unreleased fixture promise.
-      fixture.releaseLogo();
-      await cdp.detach();
+      try { await fixture.finish(); }
+      finally { await cdp.detach(); }
     }
   });
 }

@@ -14,6 +14,10 @@ const themeKey = "sqr-landing-next-theme";
 const strictPolicy = "script-src 'self'; require-trusted-types-for 'script'; style-src-elem 'self'; style-src-attr 'none'";
 type Theme = "light" | "dark";
 type StorageFailure = "denied-getter" | "denied-read" | "quota-write";
+type DeviceProfile = {
+  performanceMode?: "low" | "high" | "auto"; cores?: number; memory?: number;
+  saveData?: boolean; effectiveType?: string;
+};
 type Fixture = { unexpected: string[]; errors: string[]; cspErrors: string[]; assets: string[]; pending: Set<Promise<void>> };
 const pendingRoutes = new WeakMap<Page, Set<Promise<void>>>();
 
@@ -27,7 +31,7 @@ async function finishFixture(page: Page) {
 }
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
-  theme?: Theme; lowSpec?: boolean; observer?: boolean; reducedMotion?: boolean; storageFailure?: StorageFailure;
+  theme?: Theme; profile?: DeviceProfile; observer?: boolean; reducedMotion?: boolean; storageFailure?: StorageFailure;
   beforeCspFulfill?: (pathname: string, response: APIResponse) => Promise<void>;
 } = {}): Promise<Fixture> {
   expect(baseURL).toBeTruthy();
@@ -42,11 +46,16 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (message.type() === "error" && /content security policy|trustedtype|trusted type|violates.*directive/i.test(message.text())) fixture.cspErrors.push(message.text());
   });
   await page.emulateMedia({ colorScheme: options.theme ?? "light", reducedMotion: options.reducedMotion === false ? "no-preference" : "reduce" });
-  await page.addInitScript(({ low, observer, storageFailure, landingThemeKey }) => {
-    localStorage.setItem("perf_mode", low ? "low" : "high");
+  await page.addInitScript(({ profile, observer, storageFailure, landingThemeKey }) => {
+    if (profile.performanceMode === "auto") localStorage.removeItem("perf_mode");
+    else localStorage.setItem("perf_mode", profile.performanceMode ?? "high");
     localStorage.setItem("theme", "light");
-    Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => low ? 2 : 8 });
-    Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => low ? 2 : 8 });
+    Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => profile.cores ?? 8 });
+    Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => profile.memory ?? 8 });
+    Object.defineProperty(navigator, "connection", { configurable: true, value: {
+      saveData: profile.saveData ?? false, effectiveType: profile.effectiveType ?? "4g",
+      addEventListener() {}, removeEventListener() {},
+    } });
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
     if (!observer) Object.defineProperty(window, "IntersectionObserver", { configurable: true, value: undefined });
     if (storageFailure === "denied-getter") {
@@ -66,7 +75,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
         return originalSet.call(this, key, value);
       };
     }
-  }, { low: options.lowSpec === true, observer: options.observer !== false,
+  }, { profile: options.profile ?? {}, observer: options.observer !== false,
     storageFailure: options.storageFailure, landingThemeKey: themeKey });
   await page.context().routeWebSocket("**/*", socket => socket.close());
   const handleRoute = async (route: Route) => {
@@ -248,6 +257,10 @@ test("Landing next motion follows visibility and reduced preference and cleans p
   await expect(figure.locator("img")).toHaveAttribute("src", /-static\.svg$/);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await expect(figure.locator("img")).toHaveAttribute("src", /-animated\.svg$/);
+  await page.locator(".sqr-landing-next footer").scrollIntoViewIfNeeded();
+  await expect(figure.locator("img")).toHaveAttribute("src", /-static\.svg$/);
+  await figure.scrollIntoViewIfNeeded();
+  await expect(figure.locator("img")).toHaveAttribute("src", /-animated\.svg$/);
   const detached = await figure.elementHandle(); expect(detached).not.toBeNull();
   await page.locator(".sqr-landing-next header .login").click();
   await expect(page.getByTestId("input-username")).toBeVisible();
@@ -426,21 +439,50 @@ test("Landing next touch controls work on a compact phone without magnetic movem
   }
 });
 
-test("Landing next low-spec boundary keeps the original page and never requests normal assets", async ({ page, baseURL }) => {
-  const fixture = await installFixture(page, baseURL, { lowSpec: true, theme: "dark" });
-  await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(".sqr-landing")).toHaveClass(/low-spec/); await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
-  await expect(page.locator(".sqr-landing h1")).toHaveText("Operational data, structuredfor faster decisions.");
-  await expect(page.getByRole("navigation", { name: "Primary navigation", exact: true }).getByRole("link", { name: "Sign In", exact: true })).toBeVisible();
-  await expect(page.locator(".sqr-landing")).toHaveCSS("color-scheme", "light");
-  const normalAssets = () => fixture.assets.filter(asset => /(?:LandingNext|useLandingNextMotion|landing-next)/i.test(asset));
-  expect(normalAssets()).toEqual([]);
-  await page.getByRole("navigation", { name: "Primary navigation", exact: true }).getByRole("link", { name: "Sign In", exact: true }).click();
-  await expect(page.getByTestId("input-username")).toBeVisible();
-  await page.getByRole("button", { name: "Laman utama", exact: true }).click();
-  await expect(page.locator(".sqr-landing")).toHaveClass(/low-spec/); expect(normalAssets()).toEqual([]);
-  await checkFixture(fixture);
-});
+for (const [label, profile] of [
+  ["persisted low performance preference", { performanceMode: "low" }],
+  ["two CPU cores and two GB of memory", { performanceMode: "auto", cores: 2, memory: 2 }],
+  ["four CPU cores and four GB of memory", { performanceMode: "auto", cores: 4, memory: 4 }],
+  ["saveData on a 2g connection", { performanceMode: "auto", saveData: true, effectiveType: "2g" }],
+  ["a 2g connection without saveData", { performanceMode: "auto", effectiveType: "2g" }],
+  ["all constrained-device signals", { performanceMode: "low", cores: 2, memory: 2, saveData: true, effectiveType: "2g" }],
+] satisfies Array<[string, DeviceProfile]>) {
+  test(`Landing next ${label} preserves the full landing and motion`, async ({ page, baseURL }) => {
+    const fixture = await installFixture(page, baseURL, { profile, theme: "dark", reducedMotion: false });
+    const width = profile.cores === 4 || (profile.performanceMode === "low" && profile.cores === undefined) ? 1440 : 390;
+    await page.setViewportSize({ width, height: 900 }); await openLanding(page, "dark");
+    await checkLayout(page, width);
+    await expect(page.locator(".sqr-landing")).toHaveCount(0);
+    await expect(page.locator(".sqr-landing-next")).not.toHaveClass(/motion-paused/);
+    await expect(page.locator(".radar-artwork")).toHaveAttribute("src", "/landing-next/radar-animated.svg");
+    if (profile.performanceMode === "low" || (profile.cores ?? 8) <= 2 || (profile.memory ?? 8) <= 2 || profile.saveData) {
+      await expect(page.locator("html")).toHaveClass(/low-spec/);
+    }
+    await expect(page.locator(".sqr-landing-next .hero-tag i")).toHaveCSS("animation-name", "sqr-landing-next-blink");
+    await expect(page.locator(".sqr-landing-next .hero-tag i")).toHaveCSS("animation-duration", "2.2s");
+    await expect(page.locator(".sqr-landing-next .hero-tag i")).toHaveCSS("animation-play-state", "running");
+    const replay = page.getByRole("button", { name: "Replay Search instrument animation", exact: true });
+    await replay.scrollIntoViewIfNeeded();
+    expect(await replay.evaluate(element => getComputedStyle(element).transitionDuration.split(",").some(duration => Number.parseFloat(duration) > 0))).toBe(true);
+    await expect(replay.locator("img")).toHaveAttribute("src", "/landing-next/search-dark-animated.svg");
+    await expect.poll(() => replay.locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+    await replay.click(); await expect(replay.locator("img")).toHaveAttribute("src", "/landing-next/search-dark-boost.svg");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(page.locator(".sqr-landing-next")).toHaveClass(/motion-paused/);
+    await expect(page.locator(".sqr-landing-next .hero-tag i")).toHaveCSS("animation-name", "none");
+    await expect(replay.locator("img")).toHaveAttribute("src", "/landing-next/search-dark-static.svg");
+    await expect(replay).not.toHaveClass(/boost/);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await expect(replay.locator("img")).toHaveAttribute("src", "/landing-next/search-dark-animated.svg");
+    await page.locator(".sqr-landing-next header .login").click();
+    await expect(page.getByTestId("input-username")).toBeVisible();
+    await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
+    await expect(page.locator(".radar-artwork")).toHaveAttribute("src", "/landing-next/radar-animated.svg");
+    expect(await page.evaluate(() => localStorage.getItem("perf_mode"))).toBe(profile.performanceMode === "auto" ? null : profile.performanceMode ?? "high");
+    await checkFixture(fixture);
+  });
+}
 
 for (const theme of ["light", "dark"] as const) {
   test(`Landing next ${theme} accessibility has no serious or critical violations`, async ({ page, baseURL }) => {

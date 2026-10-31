@@ -93,17 +93,17 @@
    LOW SPEC MODE (2GB RAM / older CPU friendly)
 =========================================================== */
 
-/* The supplied empty-state story has one lightweight transform/opacity timeline
- * on every hardware tier. Its own reduced-motion rule still disables it. */
-.low-spec *:not(.sqr-empty, .sqr-empty *),
-.low-spec *:not(.sqr-empty, .sqr-empty *)::before,
-.low-spec *:not(.sqr-empty, .sqr-empty *)::after {
+/* The public landing and supplied empty-state story animate on every hardware
+ * tier. Their own reduced-motion rules still honor accessibility preferences. */
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *),
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *)::before,
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *)::after {
   animation: none !important;
 }
 
-.low-spec *,
-.low-spec *::before,
-.low-spec *::after {
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *),
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *)::before,
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *)::after {
   transition: none !important;
 }
 

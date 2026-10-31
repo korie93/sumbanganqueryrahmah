@@ -14,21 +14,45 @@ const component = source("client/src/pages/landing-next/LandingNext.tsx");
 const motion = source("client/src/pages/landing-next/useLandingNextMotion.ts");
 const entry = source("client/src/pages/Landing.tsx");
 const stylesheet = postcss.parse(source("client/src/pages/landing-next/landing-next.css"));
+const sharedAnimations = postcss.parse(source("client/src/styles/tokens/_animations.css"));
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-test("normal landing remains lazy behind the existing low-spec decision and keeps legacy markup", () => {
+function descendants(node: ts.Node): ts.Node[] {
+  const nodes: ts.Node[] = [];
+  const visit = (child: ts.Node) => { nodes.push(child); ts.forEachChild(child, visit); };
+  ts.forEachChild(node, visit);
+  return nodes;
+}
+
+test("every device receives the same lazy landing without a device or performance branch", () => {
+  const file = ts.createSourceFile("Landing.tsx", entry, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const imports = file.statements.filter(ts.isImportDeclaration);
+  assert.deepEqual(imports.map(node => ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : ""), ["react"]);
   assert.match(entry, /const LandingNext = lazy\(\(\) => import\("@\/pages\/landing-next\/LandingNext"\)\)/);
-  assert.match(entry, /const motion = useLandingMotion\(\)/);
-  const normalStart = entry.indexOf("if (!motion.lowSpec)");
-  const legacyStart = entry.indexOf("  return (\n    <LandingNavigationContext");
-  assert.ok(normalStart > 0 && legacyStart > normalStart);
-  assert.match(entry.slice(normalStart, legacyStart), /<LandingNext\s+onLoginClick=\{onLoginClick\}\s+paused=\{motion\.paused\}/);
-  assert.equal(sha256(entry.slice(legacyStart)), "d98ba35c6860014d565b5e00972deea9340111b3867a4ade387311c6b08587cf",
-    "The original low-spec landing return remains byte-identical to 44f3c4d3 after newline normalization");
+  assert.doesNotMatch(entry, /landing-v21|useLandingMotion|useLandingSections/);
+  const landing = file.statements.find((node): node is ts.FunctionDeclaration => ts.isFunctionDeclaration(node) && node.name?.text === "Landing");
+  assert.ok(landing?.body);
+  assert.equal(landing.body.statements.length, 1, "The entry only returns the shared landing, with no profile detection or alternate branch");
+  const returned = landing.body.statements[0];
+  assert.ok(returned && ts.isReturnStatement(returned) && returned.expression);
+  let content = returned.expression;
+  while (ts.isParenthesizedExpression(content)) content = content.expression;
+  assert.ok(ts.isJsxElement(content));
+  assert.equal(content.openingElement.tagName.getText(file), "Suspense");
+  const children = content.children.filter(node => !ts.isJsxText(node) || node.text.trim());
+  assert.equal(children.length, 1);
+  const page = children[0];
+  assert.ok(page && ts.isJsxSelfClosingElement(page));
+  assert.equal(page.tagName.getText(file), "LandingNext");
+  assert.deepEqual(page.attributes.properties.map(attribute => ts.isJsxAttribute(attribute) ? attribute.name.getText(file) : "spread"), ["onLoginClick"],
+    "The universal page does not receive a device-derived pause override");
+  assert.match(entry, /aria-busy="true"/);
+  assert.match(entry, /role="status"/);
+  assert.match(entry, /href="\/login"/);
 });
 
-test("landing rollout preserves low-spec detection, legacy UI, routes and shared shell source", () => {
-  // These are preservation assertions for this rollout, not copied runtime logic.
+test("the universal landing preserves shared device policy, legacy modules, routes and shell source", () => {
+  // The public landing opts out locally; application-wide device policy stays intact.
   const protectedFiles = new Map([
     ["client/src/lib/low-spec-mode.ts", "9a77bca9208adcdd9dc58863ec2b4463d765e0fa0fe175aff8da052453638d80"],
     ["client/src/main.tsx", "41ffea7bb4bbd7bc8d9fd2494051c3d38b6ef5829b95583e725f9999a9ddaf2c"],
@@ -50,6 +74,73 @@ test("landing rollout preserves low-spec detection, legacy UI, routes and shared
     ["client/src/pages/landing-v21/useLandingMotion.ts", "f7133dcc94a1ede40131030684b78cd16ef4e6854be92ec5533d37368037b186"],
   ]);
   for (const [name, hash] of protectedFiles) assert.equal(sha256(source(name)), hash, name);
+});
+
+test("landing motion depends only on explicit reduced motion and visibility, never device performance", () => {
+  for (const text of [entry, component, motion]) {
+    assert.doesNotMatch(text, /detectLowSpecMode|\blowSpec\b|\blow-spec\b|\bperf_mode\b|\bhardwareConcurrency\b|\bdeviceMemory\b|\bsaveData\b|\beffectiveType\b/);
+  }
+  const file = ts.createSourceFile("useLandingNextMotion.ts", motion, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const nodes = descendants(file);
+  const hook = file.statements.find((node): node is ts.FunctionDeclaration => ts.isFunctionDeclaration(node) && node.name?.text === "useLandingNextMotion");
+  assert.ok(hook);
+  assert.equal(hook.parameters.length, 1, "The hook owns its motion preference instead of accepting a shared pause override");
+  assert.match(component, /useLandingNextMotion\(root\)/);
+  const states = nodes.filter((node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node)
+    && ts.isArrayBindingPattern(node.name) && Boolean(node.initializer));
+  const reduced = states.find(node => descendants(node.initializer!).some(child => ts.isStringLiteral(child) && child.text === "(prefers-reduced-motion: reduce)"));
+  const hidden = states.find(node => descendants(node.initializer!).some(child => ts.isPropertyAccessExpression(child) && child.getText(file) === "document.hidden"));
+  assert.ok(reduced && ts.isArrayBindingPattern(reduced.name));
+  assert.ok(hidden && ts.isArrayBindingPattern(hidden.name));
+  const paused = nodes.find((node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node) && node.name.getText(file) === "motionPaused");
+  assert.ok(paused?.initializer && ts.isBinaryExpression(paused.initializer));
+  assert.equal(paused.initializer.operatorToken.kind, ts.SyntaxKind.BarBarToken);
+  assert.deepEqual([paused.initializer.left.getText(file), paused.initializer.right.getText(file)].sort(),
+    [reduced.name.elements[0]!.getText(file), hidden.name.elements[0]!.getText(file)].sort());
+
+  const preference = nodes.find((node): node is ts.VariableDeclaration => ts.isVariableDeclaration(node)
+    && Boolean(node.initializer && ts.isCallExpression(node.initializer)
+      && ts.isPropertyAccessExpression(node.initializer.expression) && node.initializer.expression.name.text === "matchMedia"
+      && node.initializer.arguments.some(argument => ts.isStringLiteral(argument) && argument.text === "(prefers-reduced-motion: reduce)")));
+  assert.ok(preference, "Reduced motion remains subscribed after the first render");
+  const target = preference.name.getText(file);
+  const listener = nodes.find((node): node is ts.CallExpression => ts.isCallExpression(node)
+    && ts.isPropertyAccessExpression(node.expression) && node.expression.expression.getText(file) === target
+    && node.expression.name.text === "addEventListener");
+  assert.ok(listener);
+  assert.equal(listener.arguments[0]?.getText(file), '"change"');
+  const callback = listener.arguments[1]?.getText(file);
+  assert.ok(callback);
+  assert.ok(nodes.some(node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.expression.getText(file) === target && node.expression.name.text === "removeEventListener"
+    && node.arguments[0]?.getText(file) === '"change"' && node.arguments[1]?.getText(file) === callback));
+  const setter = reduced.name.elements[1]?.getText(file);
+  assert.ok(setter && nodes.some(node => ts.isCallExpression(node) && node.expression.getText(file) === setter
+    && node.arguments[0]?.getText(file) === `${target}.matches`));
+  assert.match(component, /paused \|\| !visible \? "static"/);
+  assert.match(component, /setVisible\(Boolean\(entry\?\.isIntersecting\)\)/);
+});
+
+test("shared low-spec motion rules exempt only the landing while preserving application policy", () => {
+  const expected = new Map([
+    ["animation", ".low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *)"],
+    ["transition", ".low-spec *:not(.sqr-landing-next, .sqr-landing-next *)"],
+  ]);
+  for (const [property, selector] of expected) {
+    const rules: postcss.Rule[] = [];
+    sharedAnimations.walkRules(rule => {
+      if (rule.selectors.some(value => value.startsWith(".low-spec "))) {
+        rule.walkDecls(property, declaration => {
+          rules.push(rule);
+          assert.equal(declaration.value, "none");
+          assert.equal(declaration.important, true);
+        });
+      }
+    });
+    assert.equal(rules.length, 1, `${property}: retain one application-wide low-spec rule`);
+    assert.deepEqual(rules[0]!.selectors, [selector, `${selector}::before`, `${selector}::after`],
+      `${property}: the landing exception must not broaden to unrelated application surfaces`);
+  }
 });
 
 test("every new landing CSS selector and keyframe stays in its own namespace", () => {
@@ -78,7 +169,7 @@ test("every new landing CSS selector and keyframe stays in its own namespace", (
 
 test("public landing is semantic React with local artwork and no protected service dependencies", () => {
   const approved = new Set(["react", "lucide-react", "@shared/brand-assets", "@/lib/aria-state-props", "./useLandingNextMotion", "./landing-next.css"]);
-  for (const [name, text] of [["LandingNext.tsx", component], ["useLandingNextMotion.ts", motion]]) {
+  for (const [name, text] of [["Landing.tsx", entry], ["LandingNext.tsx", component], ["useLandingNextMotion.ts", motion]]) {
     const file = ts.createSourceFile(name!, text!, ts.ScriptTarget.Latest, true, name!.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
     const inspect = (node: ts.Node) => {
       if (ts.isImportDeclaration(node)) {
@@ -88,7 +179,11 @@ test("public landing is semantic React with local artwork and no protected servi
         ), node.getText(file));
       }
       if (ts.isCallExpression(node)) {
-        assert.notEqual(node.expression.kind, ts.SyntaxKind.ImportKeyword, "No runtime API or auth loading");
+        if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+          assert.ok(name === "Landing.tsx" && node.arguments.length === 1
+            && node.arguments[0] && ts.isStringLiteral(node.arguments[0])
+            && node.arguments[0].text === "@/pages/landing-next/LandingNext", "Only the universal public landing may load lazily");
+        }
         const method = ts.isIdentifier(node.expression) ? node.expression.text : ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text : "";
         assert.ok(!["fetch", "sendBeacon", "require", "eval", "setInterval"].includes(method), method);
       }
@@ -120,7 +215,6 @@ test("landing theme and motion belong to the local route and clean up on departu
   assert.match(motion, /const THEME_KEY = "sqr-landing-next-theme"/);
   assert.doesNotMatch(motion, /(?:setItem|removeItem)\(\s*["'](?:theme|perf_mode|user|role|username)["']/);
   assert.doesNotMatch(motion, /document\.documentElement\.(?:classList|dataset|style)/);
-  assert.match(motion, /const motionPaused = paused \|\| hidden/);
   assert.match(motion, /if \(!element \|\| hidden\) return/);
   assert.match(motion, /if \(typeof IntersectionObserver !== "function"\)/);
   assert.match(motion, /return \(\) => observer\.disconnect\(\)/);

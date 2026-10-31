@@ -86,17 +86,14 @@ test("public auth retains neutral dark-mode surfaces independently of landing", 
   assert.match(tokenSource, /--login-card-border-gradient:\s*none;/);
 });
 
-test("V21 landing integrates modular React views without changing authentication", () => {
+test("the universal public landing keeps accessible content and existing login navigation", () => {
   const landing = readPageSource("Landing.tsx");
-  const preview = readPageSource("landing-v21/ProductPreview.tsx");
-  const links = readPageSource("landing-v21/LandingLink.tsx");
-  assert.match(landing, /<ProductPreview/);
-  assert.match(landing, /<TestimonialCarousel/);
-  assert.match(landing, /id="main-content" tabIndex=\{-1\}/);
-  assert.match(preview, /role="tablist"/);
-  assert.match(preview, /role="tabpanel"/);
-  assert.match(preview, /window.clearInterval/);
-  assert.ok(links.includes('href === "/login"'));
-  assert.match(links, /onLoginClick\(\)/);
-  assert.doesNotMatch(landing + preview, /dangerouslySetInnerHTML|fetch\(/);
+  const content = readPageSource("landing-next/LandingNext.tsx");
+  assert.match(landing, /<LandingNext onLoginClick=\{onLoginClick\}/);
+  assert.match(landing, /aria-busy="true"/);
+  assert.match(content, /<main id="main-content" tabIndex=\{-1\}/);
+  assert.match(content, /href="#main-content">Skip to content/);
+  assert.ok(content.includes('href === "/login"'));
+  assert.match(content, /navigation\.onLoginClick\(\)/);
+  assert.doesNotMatch(landing + content, /dangerouslySetInnerHTML|fetch\(/);
 });
