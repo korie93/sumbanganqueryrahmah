@@ -2,6 +2,61 @@
 
 Updated: 31 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
+## CI follow-up — dependency audit, 31 October 2026
+
+[CI run 41156100909](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41156100909)
+on published `89d0b4db95cfdfe66a2379cdfa77333a2ce89472` stopped at Audit dependencies.
+The new minimatch advisory propagated through development-tool chains. A fresh
+official npm bulk response also flagged glob. Fixed with exact overrides
+`minimatch` 11.0.1 (GHSA-g3hv-75wg-m249) and `glob` 14.0.2
+(GHSA-3g3m-2fjr-6pw4). Only four lock entries change: those two, required
+`path-scurry` 3.0.0 and new `@isaacs/nonrecursive-glob-match` 1.0.1, all dev-only.
+Glob 14 also supports minimatch 11's Matcher objects during coverage discovery.
+The existing legacy React ESLint callable adapter is retained. Audit thresholds,
+exceptions, retries, lifecycle-script allowlist and runtime application code are
+unchanged. Both override runbooks and the helper rationale are updated.
+
+New `scripts/tests/dependency-minimatch-regressions.test.mjs` and
+`scripts/tests/dependency-glob-regressions.test.mjs` run via existing
+`test:scripts`. They cover ESM/CommonJS, ordinary glob matching, bounded
+optimization preprocessing, async/sync coverage discovery, test-exclude and
+first-directory-read cancellation. Fixtures are tiny; no exhaustion payloads,
+timing assertions, production data or external runtime network were used.
+
+Local verification passed 183 audit/compatibility tests; full client,
+server/shared and changed-tooling ESLint; the actual c8 tool running 91 tests
+(90.44% statement/line coverage for the audit helper only); and real npm audit
+through the unchanged project gate against isolated-loopback replay of the
+fresh, unmodified official registry response. The final registry response has
+zero advisory packages. Offline npm lock-only resolution succeeded with no
+installation or graph change; the sole normalization was pre-existing Zod
+funding metadata changing from a URL string to `{url}`. It was compared as
+equivalent in the external harness; the unrelated repository entry is preserved.
+
+All execution used WSL `SQR-Audit` bwrap/cgroups: no external network, empty
+allowlisted environment, readonly source/dependencies/toolchain, scratch-only
+writes, 1 CPU, 768 MiB/no swap, 128 tasks, 180 s wall/120 s aggregate CPU and
+256 MiB scratch. Official patched tarballs matched registry SHA-512 integrity.
+Missing sandbox coverage-tool files were copied from existing local packages at
+the exact locked versions and mounted readonly; nothing was installed and no
+package lifecycle script ran. Independent source review found no actionable issue.
+
+Evidence: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/minimatch-ci-20261031/`:
+`registry-evidence.json`, before/after official audit responses, verified package
+data, `setup-v2.json`, source inventories and passing sandbox receipts. Tested
+source manifest SHA256: `3b7586e83b4d2d24468768d61c4bc7d757cc3443732d6ca268899d6c6262d4ac`.
+Only this handoff and the validation paragraph in Dependency Notes changed after
+the tested snapshot. The user authorized commit/push on 31 October 2026. The
+eight reviewed paths will be published together; final commit, remote and exact
+blob verification are recorded in the external `PUBLICATION_VERIFIED.json`.
+Host-side repository hooks are replaced only for these Git invocations with a
+reviewed empty hook directory, preserving the sandbox-only execution boundary.
+Sandbox lint/tests, staged-content hygiene/secret checks and Conventional Commit
+validation provide the corresponding publication checks; Git configuration is
+not changed. No deployment is included.
+Full clean-install CI, build/typecheck/browser and Release Verification still
+require the published revision; do not claim those jobs are green locally.
+
 ## CI follow-up — intercepted response teardown, 31 October 2026
 
 [CI run 41148647718](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41148647718) on `748636b1f76f0c1991ee158e43362be58b9adfb7` passed build-and-test and coverage. Its visual stage had 768 passing cases and one failure in the direct-fragment/refresh landing case: `route.fulfill: Route is already handled!`. Installed Playwright 1.60 clears page route registrations before `unrouteAll({ behavior: "wait" })` finishes waiting. A completed callback can then remove server interception while other callbacks are still fetching artwork, causing those routes to be continued before their later fulfilment.
@@ -12,7 +67,7 @@ A deterministic browser regression holds two real SVG responses, starts cleanup,
 
 Local validation passed all 23 landing browser cases (the original 22 plus this regression), 27 focused source/contract tests and strict changed-root TypeScript (1 root, 289 resolved files). Coverage includes light/dark responsive layouts, direct fragment refresh, keyboard/touch, OS/persisted/denied storage, animation cleanup, all 32 SVG variants, login/Home return, low-spec asset isolation and axe checks. All passing fixtures report zero unexpected/protected requests and no page/CSP errors. The verified frontend from the storage fix was reused only after proving all application inputs are identical. Independent source review passed.
 
-Evidence: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-landing-route-lifecycle-20261031/`, including `CI_FAILURE_EVIDENCE.json`, `source-input.json` (records the precise counterfactual), `setup.json`, before/after browser receipts and `FINAL_VALIDATION.json`. Tested source manifest SHA256: `7f874da8756ddda8ecb150e93b7cc6950e6ef5444f50ca234e998c18f5b6228b`. Only this handoff was updated after the snapshot. The fix is uncommitted and has not been pushed or deployed; full CI/Release Verification still requires the published revision.
+Evidence: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-landing-route-lifecycle-20261031/`, including `CI_FAILURE_EVIDENCE.json`, `source-input.json` (records the precise counterfactual), `setup.json`, before/after browser receipts and `FINAL_VALIDATION.json`. Tested source manifest SHA256: `7f874da8756ddda8ecb150e93b7cc6950e6ef5444f50ca234e998c18f5b6228b`. Only this handoff was updated after the snapshot. Published as `89d0b4db95cfdfe66a2379cdfa77333a2ce89472`; subsequent CI stopped earlier at the dependency audit documented above. This is not a deployment or full CI/Release Verification pass.
 
 ## Release verification follow-up — 31 October 2026
 

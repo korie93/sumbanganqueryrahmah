@@ -147,7 +147,8 @@ Current overrides:
 | `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. |
 | `ip-address` | Pins patched IP address parsing helpers for `express-rate-limit` until the upstream dependency advances. |
 | `js-yaml` | Pins patched YAML parsing for ESLint transitive config loading until `@eslint/eslintrc` resolves the patched range by default. |
-| `minimatch` | Pins patched minimatch 10 while legacy React ESLint plugins still request minimatch 3; the checked-in ESLint adapter preserves their callable API. |
+| `minimatch` | Pins patched minimatch 11 with bounded glob preprocessing; the checked-in ESLint adapter preserves the callable API expected by legacy React plugins. |
+| `glob` | Pins patched glob 14 so cancellation stops traversal and coverage discovery supports minimatch 11 until upstream consumers update. |
 
 When removing an override, remove its entry from this table and from the audit
 helper in the same dependency-only PR.

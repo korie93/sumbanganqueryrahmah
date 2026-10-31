@@ -238,7 +238,11 @@ const documentedOverrideReasons = new Map([
   ],
   [
     "minimatch",
-    "Pins the patched minimatch 10 line while legacy React ESLint plugins still request the vulnerable minimatch 3 range.",
+    "Pins patched minimatch 11 for bounded glob preprocessing across ESLint and coverage tooling; the checked-in adapter preserves legacy React ESLint plugins' callable API.",
+  ],
+  [
+    "glob",
+    "Pins patched glob 14 so canceled walks stop filesystem traversal until test-exclude requests the fixed release directly.",
   ],
 ]);
 

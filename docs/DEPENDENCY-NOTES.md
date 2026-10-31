@@ -8,6 +8,44 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-10-31 glob and minimatch tooling security updates
+
+[CI run 41156100909](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41156100909)
+on `89d0b4db` failed dependency audit after the advisory database changed.
+The affected development-tool chains include ESLint, TypeScript ESLint and c8.
+The fix pins `minimatch` 11.0.1 for bounded optimization preprocessing
+([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249))
+and `glob` 14.0.2 for cancellation that stops filesystem traversal
+([GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)).
+The latter was also present in a fresh official registry query.
+
+Only four lock entries change: those two packages, required `path-scurry` 3.0.0,
+and new `@isaacs/nonrecursive-glob-match` 1.0.1. Existing `brace-expansion`,
+`minipass` and `lru-cache` already satisfy the patched dependencies. These
+packages support the project's Node 24 runtime. Glob 14 is also needed to
+interpret minimatch 11's Matcher objects correctly during coverage discovery;
+the legacy React ESLint callable adapter remains in place.
+
+The two new dependency regression files run through existing `test:scripts`.
+They exercise both ESM and CommonJS, normal lint patterns, capped preprocessing,
+test-exclude file discovery and first-directory-read cancellation on a tiny
+temporary fixture. They use neither exhaustion workloads nor timing assertions.
+No audit threshold, exception, retry, runtime dependency or lifecycle-script
+allowlist is relaxed. Official tarball SHA-512 integrity was verified before
+read-only sandbox use; no dependency installation or package scripts ran.
+
+Local validation passed 183 focused audit/compatibility tests, full client and
+server/shared lint, and lint for the changed tooling files. An actual c8 run
+passed 91 tests and reported 90.44% statement/line coverage for the audited
+helper; this is scoped helper coverage, not whole-project coverage. The real
+project audit gate and npm audit passed against isolated-loopback replay of a
+fresh, unmodified official registry bulk response for the final graph, with zero
+advisory packages. Offline npm lock-only resolution passed without installing
+modules: npm only normalized the existing Zod funding URL representation, with
+no dependency-graph changes. That unrelated lock metadata remains unchanged.
+Full clean-install CI/build/typecheck/browser/release verification remains
+required after publication. Runtime application code and UI were not changed.
+
 ## 2026-10-24 browser validation under strict CSP
 
 [CI run 40103466286](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/40103466286)
@@ -482,14 +520,15 @@ Operational notes:
 | `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. | Dev-server exposure and vulnerable nested esbuild advisory class. | `drizzle-kit` and Vite dependencies no longer pull an affected esbuild range. |
 | `ip-address` | Pins patched IP address parsing helpers for `express-rate-limit` until the upstream dependency advances. | Rate-limit client identity parsing hardening. | `express-rate-limit` resolves a patched `ip-address` transitively without an override. |
 | `js-yaml` | Pins patched YAML parsing for ESLint transitive config loading until `@eslint/eslintrc` resolves the patched range by default. | Quadratic-complexity YAML merge-key DoS advisory class in older transitive parser versions. | ESLint resolves patched `js-yaml` transitively and `npm run audit:dependencies` stays clean without the override. |
-| `minimatch` | Pins patched minimatch 10 while legacy React ESLint plugins still request minimatch 3; `scripts/lib/eslint-plugin-minimatch-compat.mjs` preserves their callable API. | Brace-expansion memory-exhaustion DoS through vulnerable glob expansion. | Both React ESLint plugins support the minimatch 10 object API or remove their minimatch dependency. |
+| `minimatch` | Pins patched minimatch 11; `scripts/lib/eslint-plugin-minimatch-compat.mjs` preserves legacy React plugins' callable API. | Glob preprocessing amplification, GHSA-g3hv-75wg-m249. | All consumers resolve a patched release and legacy plugins support its object API or remove their dependency. |
+| `glob` | Pins patched glob 14 with cancellation and minimatch 11 compatibility. | AbortSignal traversal bypass, GHSA-3g3m-2fjr-6pw4. | c8 and test-exclude resolve glob 14.0.2 or newer without the override. |
 
 Quarterly review checklist:
 
 ```bash
 npm run audit:dependencies
 npm outdated
-npm ls @babel/core gaxios qs lodash rollup esbuild ip-address minimatch
+npm ls @babel/core gaxios qs lodash rollup esbuild ip-address minimatch glob
 ```
 
 ## Install Script Allowlist

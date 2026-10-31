@@ -273,7 +273,8 @@
     "esbuild": "^0.28.1",
     "ip-address": "^10.7.4",
     "js-yaml": "^4.3.2",
-    "minimatch": "10.2.5"
+    "minimatch": "11.0.1",
+    "glob": "14.0.2"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,
