@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   BROWSER_STORAGE_SAFETY_RULES,
   collectBrowserStorageSafetyMatches,
   formatBrowserStorageSafetyReport,
 } from "../lib/browser-storage-safety.mjs";
+
+test("actual client source satisfies the release browser storage safety gate", () => {
+  const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+  const result = collectBrowserStorageSafetyMatches({ repoRoot });
+
+  assert.deepEqual(result.matches, [], formatBrowserStorageSafetyReport(result));
+});
 
 test("browser storage safety reports success when direct localStorage access is absent", () => {
   const result = {

@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
 
 type LandingTheme = "light" | "dark";
 const THEME_KEY = "sqr-landing-next-theme";
 
 function preferredTheme(): LandingTheme {
-  try {
-    const saved = window.localStorage.getItem(THEME_KEY);
-    if (saved === "light" || saved === "dark") return saved;
-  } catch { /* The landing remains usable when storage is unavailable. */ }
+  const saved = safeGetStorageItem(getBrowserLocalStorage(), THEME_KEY);
+  if (saved === "light" || saved === "dark") return saved;
   return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -31,11 +30,11 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>, paused: bo
 
   useEffect(() => {
     if (!manualTheme.current) return;
-    try { window.localStorage.setItem(THEME_KEY, theme); } catch { /* Optional persistence. */ }
+    safeSetStorageItem(getBrowserLocalStorage(), THEME_KEY, theme);
   }, [theme]);
 
   useEffect(() => {
-    try { manualTheme.current = ["light", "dark"].includes(window.localStorage.getItem(THEME_KEY) ?? ""); } catch { /* Use OS preference. */ }
+    manualTheme.current = ["light", "dark"].includes(safeGetStorageItem(getBrowserLocalStorage(), THEME_KEY) ?? "");
     const preference = window.matchMedia("(prefers-color-scheme: dark)");
     const updateTheme = () => { if (!manualTheme.current) setTheme(preference.matches ? "dark" : "light"); };
     const updateVisibility = () => setHidden(document.hidden);

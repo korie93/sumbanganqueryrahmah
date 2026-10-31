@@ -82,7 +82,10 @@ test("public landing is semantic React with local artwork and no protected servi
     const file = ts.createSourceFile(name!, text!, ts.ScriptTarget.Latest, true, name!.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
     const inspect = (node: ts.Node) => {
       if (ts.isImportDeclaration(node)) {
-        assert.ok(ts.isStringLiteral(node.moduleSpecifier) && approved.has(node.moduleSpecifier.text), node.getText(file));
+        assert.ok(ts.isStringLiteral(node.moduleSpecifier) && (
+          approved.has(node.moduleSpecifier.text)
+          || (name === "useLandingNextMotion.ts" && node.moduleSpecifier.text === "@/lib/browser-storage")
+        ), node.getText(file));
       }
       if (ts.isCallExpression(node)) {
         assert.notEqual(node.expression.kind, ts.SyntaxKind.ImportKeyword, "No runtime API or auth loading");

@@ -14,10 +14,11 @@ const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/
 const themeKey = "sqr-landing-next-theme";
 const strictPolicy = "script-src 'self'; require-trusted-types-for 'script'; style-src-elem 'self'; style-src-attr 'none'";
 type Theme = "light" | "dark";
+type StorageFailure = "denied-getter" | "denied-read" | "quota-write";
 type Fixture = { unexpected: string[]; errors: string[]; cspErrors: string[]; assets: string[] };
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
-  theme?: Theme; lowSpec?: boolean; observer?: boolean; reducedMotion?: boolean;
+  theme?: Theme; lowSpec?: boolean; observer?: boolean; reducedMotion?: boolean; storageFailure?: StorageFailure;
 } = {}): Promise<Fixture> {
   expect(baseURL).toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -30,14 +31,32 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (message.type() === "error" && /content security policy|trustedtype|trusted type|violates.*directive/i.test(message.text())) fixture.cspErrors.push(message.text());
   });
   await page.emulateMedia({ colorScheme: options.theme ?? "light", reducedMotion: options.reducedMotion === false ? "no-preference" : "reduce" });
-  await page.addInitScript(({ low, observer }) => {
+  await page.addInitScript(({ low, observer, storageFailure, landingThemeKey }) => {
     localStorage.setItem("perf_mode", low ? "low" : "high");
     localStorage.setItem("theme", "light");
     Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => low ? 2 : 8 });
     Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => low ? 2 : 8 });
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
     if (!observer) Object.defineProperty(window, "IntersectionObserver", { configurable: true, value: undefined });
-  }, { low: options.lowSpec === true, observer: options.observer !== false });
+    if (storageFailure === "denied-getter") {
+      Object.defineProperty(window, "localStorage", { configurable: true, get() {
+        throw new DOMException("Synthetic storage access denied", "SecurityError");
+      } });
+    } else if (storageFailure === "denied-read") {
+      const originalGet = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (this: Storage, key: string) {
+        if (key === landingThemeKey) throw new DOMException("Synthetic storage read denied", "SecurityError");
+        return originalGet.call(this, key);
+      };
+    } else if (storageFailure === "quota-write") {
+      const originalSet = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
+        if (key === landingThemeKey) throw new DOMException("Synthetic storage quota reached", "QuotaExceededError");
+        return originalSet.call(this, key, value);
+      };
+    }
+  }, { low: options.lowSpec === true, observer: options.observer !== false,
+    storageFailure: options.storageFailure, landingThemeKey: themeKey });
   await page.context().routeWebSocket("**/*", socket => socket.close());
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url());
@@ -133,6 +152,26 @@ test("Landing next theme follows OS until explicit choice and never mutates the 
   expect(await page.evaluate(() => localStorage.getItem("perf_mode"))).toBe("high");
   checkFixture(fixture);
 });
+
+for (const [storageFailure, width] of [["denied-getter", 320], ["denied-read", 390], ["quota-write", 1440]] as const) {
+  test(`Landing next ${storageFailure} preserves usable theme controls and OS fallback`, async ({ page, baseURL }) => {
+    const fixture = await installFixture(page, baseURL, { theme: "dark", storageFailure });
+    await page.setViewportSize({ width, height: 900 });
+    await openLanding(page, "dark");
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "light");
+    await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
+    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
+    // With unreadable/unwritable preferences, a fresh page falls back to the OS.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "light");
+    await checkLayout(page, width);
+    checkFixture(fixture);
+  });
+}
 
 test("Landing next mobile menu supports keyboard Escape anchors desktop reflow and enlarged text", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL);
