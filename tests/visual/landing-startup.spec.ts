@@ -15,6 +15,7 @@ async function startupServer(baseURL: string | undefined) {
   expect(upstream.port).not.toBe("");
   const requests: string[] = [], unexpected: string[] = [], failures: string[] = [];
   const pending = new Set<Promise<void>>();
+  const completedAssets = new Set<string>();
   let releaseScripts!: () => void, transferred = 0;
   const scriptGate = new Promise<void>(resolve => { releaseScripts = resolve; });
   const json = (response: ServerResponse, value: unknown, status = 200) => {
@@ -76,7 +77,14 @@ async function startupServer(baseURL: string | undefined) {
       // synthetic test server; no production caching policy is modified.
       headers["Cache-Control"] = "public, max-age=0";
       headers.ETag = `"${createHash("sha256").update(body).digest("hex")}"`;
+    } else if (/^\/assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8,}\.(?:js|css)$/i.test(url.pathname)) {
+      // Match isImmutableFrontendAsset in Express static even when the upstream
+      // fixture defaults to no-store, so preload reuse remains a native test.
+      headers["Cache-Control"] = "public, max-age=31536000, immutable";
     } else headers["Cache-Control"] = original.headers.get("cache-control") ?? "no-store";
+    if (request.method === "GET" && /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css)$/.test(url.pathname)) {
+      response.once("finish", () => { completedAssets.add(url.pathname); });
+    }
     response.writeHead(original.status, headers); response.end(body);
   };
   const server = createServer((request, response) => {
@@ -91,7 +99,7 @@ async function startupServer(baseURL: string | undefined) {
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Expected isolated TCP address");
   return {
-    origin: `http://127.0.0.1:${address.port}`, requests, unexpected, failures, releaseScripts,
+    origin: `http://127.0.0.1:${address.port}`, requests, unexpected, failures, completedAssets, releaseScripts,
     async close() {
       releaseScripts();
       while (pending.size) await Promise.all(pending);
@@ -117,10 +125,11 @@ for (const reducedMotion of [false, true]) {
       await page.goto("/", { waitUntil: "commit" });
       await expect.poll(() => page.locator('meta[name="sqr-landing-style"]').count()).toBeGreaterThan(0);
       const hints = await page.locator('meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]')
-        .evaluateAll(elements => elements.map(element => element.getAttribute("content")));
+        .evaluateAll(elements => elements.map(element => element.getAttribute("content") ?? ""));
       for (const asset of hints) {
         expect(asset).toMatch(/^\/assets\/[A-Za-z0-9_-]+\.(?:js|css)$/);
         await expect.poll(() => fixture.requests).toContain(`GET ${asset}`);
+        await expect.poll(() => fixture.completedAssets.has(asset), `${asset} completes before app execution`).toBe(true);
       }
       await expect.poll(radarTransfers).toEqual([`GET ${expectedRadar}`]);
       const preload = page.locator(`link[rel="preload"][as="image"][href="${expectedRadar}"]`);
@@ -128,12 +137,32 @@ for (const reducedMotion of [false, true]) {
       await expect(preload).toHaveAttribute("fetchpriority", "high");
       await expect(preload).not.toHaveAttribute("crossorigin");
       await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
+      const initialStyles = await page.locator('link[rel="stylesheet"][href]')
+        .evaluateAll(elements => elements.map(element => new URL((element as HTMLLinkElement).href).pathname)
+          .filter(path => /^\/assets\/[A-Za-z0-9_-]+\.css$/.test(path)));
+      for (const asset of initialStyles) {
+        await expect.poll(() => fixture.completedAssets.has(asset), `${asset} is ready before releasing the entry`).toBe(true);
+      }
+      const beforeApp = new Set(fixture.completedAssets);
       fixture.releaseScripts();
       await expect(page.locator(".sqr-landing-next h1")).toHaveText("Search.Analyse.Monitor.");
+      // Read the styles actually applied by the mounted page, independently of
+      // advertised hints. Missing transitive CSS must not arrive after startup.
+      const appliedStyles = await page.locator('link[rel="stylesheet"][href]')
+        .evaluateAll(elements => elements.map(element => new URL((element as HTMLLinkElement).href).pathname)
+          .filter(path => /^\/assets\/[A-Za-z0-9_-]+\.css$/.test(path)));
+      expect(appliedStyles.length).toBeGreaterThan(0);
+      for (const asset of new Set(appliedStyles)) {
+        expect(beforeApp.has(asset), `${asset} is ready before app execution`).toBe(true);
+        expect(fixture.requests.filter(request => request === `GET ${asset}`), `${asset} reuses one native preload transfer`)
+          .toEqual([`GET ${asset}`]);
+      }
       const radar = page.locator(".radar-artwork");
       await expect(radar).toHaveAttribute("src", expectedRadar);
       await expect(radar).toHaveAttribute("fetchpriority", "high");
       await expect.poll(() => radar.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+      expect(fixture.requests.filter(request => /^GET \/assets\/(?:ui|public-auth-runtime)-[A-Za-z0-9_-]+\.(?:js|css)$/.test(request)),
+        "Shared landing icons must not fetch the auth presentation or UI graph").toEqual([]);
       expect(radarTransfers()).toEqual([`GET ${expectedRadar}`]);
       const entries = await page.evaluate(() => performance.getEntriesByType("resource")
         .filter(entry => /^\/landing-next\/radar-/.test(new URL(entry.name).pathname)).map(entry => new URL(entry.name).pathname));

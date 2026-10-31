@@ -105,7 +105,7 @@ export default defineConfig({
               if (
                 /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props)\.ts$/.test(normalizedId)
                 || /\/shared\/brand-assets\.ts$/.test(normalizedId)
-                || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert))\.js$/.test(normalizedId)
+                || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert|arrow-right|check))\.js$/.test(normalizedId)
               ) {
                 return "public-runtime";
               }
@@ -144,7 +144,7 @@ export default defineConfig({
               return /\/client\/src\/lib\/(?:interaction-media|fingerprint|i18n|auth-flow-feedback|api-errors)\.ts$/.test(normalizedId)
                 || /\/client\/src\/pages\/auth-field-utils\.ts$/.test(normalizedId)
                 || /\/client\/src\/components\/(?:auth\/AuthV17Layout|PublicAuthControls|ExpandableMessage)\.tsx$/.test(normalizedId)
-                || /\/node_modules\/lucide-react\/dist\/esm\/icons\/(?:arrow-left|arrow-right|check|eye|eye-off|key-round|shield-check|user-round|wifi-off)\.js$/.test(normalizedId);
+                || /\/node_modules\/lucide-react\/dist\/esm\/icons\/(?:arrow-left|eye|eye-off|key-round|shield-check|user-round|wifi-off)\.js$/.test(normalizedId);
             },
           }],
         },

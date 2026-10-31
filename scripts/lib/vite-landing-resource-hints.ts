@@ -9,18 +9,36 @@ export function landingResourceHints(): Plugin {
     transformIndexHtml: {
       order: "post",
       handler(html, context) {
-        const landing = Object.values(context.bundle ?? {}).find(chunk =>
+        const emitted = Object.values(context.bundle ?? {});
+        const byFileName = new Map(emitted.map(output => [output.fileName, output]));
+        const landing = emitted.find(chunk =>
           chunk.type === "chunk"
           && chunk.facadeModuleId
           && normalizePath(chunk.facadeModuleId).endsWith("/client/src/pages/Landing.tsx"));
         if (!landing || landing.type !== "chunk") {
           throw new Error("Landing resource hints require the emitted landing page chunk.");
         }
-        const metadata = (landing as typeof landing & { viteMetadata?: ChunkMetadata }).viteMetadata;
-        // Include shared static dependencies not already discovered by HTML.
-        // Otherwise a tiny late-discovered helper can still delay the whole page.
-        const scripts = [...new Set([landing.fileName, ...landing.imports])].filter(fileName =>
-          !html.includes(`href="/${fileName}"`) && !html.includes(`src="/${fileName}"`));
+        const scripts = new Set<string>();
+        const styles = new Set<string>();
+        const visit = (fileName: string) => {
+          if (scripts.has(fileName)) return;
+          const chunk = byFileName.get(fileName);
+          if (!/^assets\/[A-Za-z0-9_-]+\.js$/.test(fileName) || chunk?.type !== "chunk") {
+            throw new Error("Landing resource hints require emitted local build asset paths for scripts.");
+          }
+          scripts.add(fileName);
+          const metadata = (chunk as typeof chunk & { viteMetadata?: ChunkMetadata }).viteMetadata;
+          for (const style of metadata?.importedCss ?? []) {
+            if (!/^assets\/[A-Za-z0-9_-]+\.css$/.test(style) || byFileName.get(style)?.type !== "asset") {
+              throw new Error("Landing resource hints require emitted local build asset paths for stylesheets.");
+            }
+            styles.add(style);
+          }
+          // Dynamic imports include other public/private routes. Only the
+          // landing's required static closure belongs on this startup path.
+          for (const dependency of chunk.imports) visit(dependency);
+        };
+        visit(landing.fileName);
         // Inert metadata only: the boot shell selects the exact anonymous root
         // route before creating these preference-aware image preloads.
         const hints: HtmlTagDescriptor[] = [
@@ -28,12 +46,10 @@ export function landingResourceHints(): Plugin {
           { tag: "meta", attrs: { name: "sqr-landing-image", content: "/landing-next/radar-static.svg", media: "(prefers-reduced-motion: reduce)" }, injectTo: "head" },
         ];
         for (const [name, fileName] of [
-          ...scripts.map(fileName => ["sqr-landing-script", fileName]),
-          ...Array.from(metadata?.importedCss ?? [], fileName => ["sqr-landing-style", fileName]),
+          ...Array.from(scripts, fileName => ["sqr-landing-script", fileName]),
+          ...Array.from(styles, fileName => ["sqr-landing-style", fileName]),
         ]) {
-          if (!/^assets\/[A-Za-z0-9_-]+\.(?:js|css)$/.test(fileName)) {
-            throw new Error("Landing resource hints require local build asset paths.");
-          }
+          if (html.includes(`href="/${fileName}"`) || html.includes(`src="/${fileName}"`)) continue;
           hints.push({ tag: "meta", attrs: { name, content: `/${fileName}` }, injectTo: "head" });
         }
         return hints;

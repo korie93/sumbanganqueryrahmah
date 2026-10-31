@@ -171,6 +171,7 @@ test("landing resource hints publish only inert build-owned landing URLs", async
   };
   const bundle = {
     landing,
+    style: { type: "asset", fileName: "assets/Landing-def456.css" },
     unrelated: { type: "chunk", facadeModuleId: "/repo/client/src/pages/Login.tsx", fileName: "assets/Login-auth.js" },
   };
   assert.deepEqual(handler("", { bundle }), [
@@ -180,7 +181,11 @@ test("landing resource hints publish only inert build-owned landing URLs", async
     { tag: "meta", attrs: { name: "sqr-landing-style", content: "/assets/Landing-def456.css" }, injectTo: "head" },
   ]);
   const withImports = { ...landing, imports: ["assets/framework-shared.js", "assets/aria-state-props-helper.js"] };
-  const hints = handler('<link rel="modulepreload" href="/assets/framework-shared.js">', { bundle: { landing: withImports } });
+  const hints = handler('<link rel="modulepreload" href="/assets/framework-shared.js">', { bundle: {
+    ...bundle, landing: withImports,
+    framework: { type: "chunk", fileName: "assets/framework-shared.js", imports: [] },
+    aria: { type: "chunk", fileName: "assets/aria-state-props-helper.js", imports: [] },
+  } });
   assert.deepEqual(hints.filter(tag => tag.attrs.name === "sqr-landing-script").map(tag => tag.attrs.content),
     ["/assets/Landing-abc123.js", "/assets/aria-state-props-helper.js"]);
   assert.deepEqual(hints.filter(tag => tag.attrs.name === "sqr-landing-image").map(tag => tag.attrs), [
@@ -193,13 +198,69 @@ test("landing resource hints publish only inert build-owned landing URLs", async
   }
 });
 
+test("landing resource hints discover the complete static script and stylesheet graph once without following dynamic routes", async () => {
+  const config = await importViteConfigFresh();
+  const handler = config.plugins.find(plugin => plugin.name === "sqr-landing-resource-hints").transformIndexHtml.handler;
+  const chunk = (fileName, imports, css = [], dynamicImports = []) => ({
+    type: "chunk", fileName, imports, dynamicImports, viteMetadata: { importedCss: new Set(css) },
+  });
+  const landing = { ...chunk("assets/Landing-page.js", ["assets/public-auth-shared.js", "assets/ui-shared.js"], ["assets/Landing-page.css"], ["assets/Private-lazy.js"]),
+    facadeModuleId: path.resolve("client/src/pages/Landing.tsx") };
+  const bundle = {
+    landing,
+    auth: chunk("assets/public-auth-shared.js", ["assets/ui-shared.js", "assets/framework-shared.js"], ["assets/Auth-layout.css", "assets/Shared-theme.css"]),
+    ui: chunk("assets/ui-shared.js", ["assets/framework-shared.js", landing.fileName], ["assets/Shared-theme.css"]),
+    framework: chunk("assets/framework-shared.js", []),
+    // The dynamic route has an invalid dependency: following it would fail
+    // closed rather than quietly fetching the private route's resources.
+    private: { type: "chunk", fileName: "assets/Private-lazy.js", imports: ["https://outside.invalid/private.js"] },
+    ...Object.fromEntries(["Landing-page", "Auth-layout", "Shared-theme"].map(name => [name, { type: "asset", fileName: `assets/${name}.css` }])),
+  };
+  const hints = handler("", { bundle });
+  assert.deepEqual(hints.filter(tag => tag.attrs.name === "sqr-landing-script").map(tag => tag.attrs.content), [
+    "/assets/Landing-page.js", "/assets/public-auth-shared.js", "/assets/ui-shared.js", "/assets/framework-shared.js",
+  ]);
+  assert.deepEqual(hints.filter(tag => tag.attrs.name === "sqr-landing-style").map(tag => tag.attrs.content), [
+    "/assets/Landing-page.css", "/assets/Auth-layout.css", "/assets/Shared-theme.css",
+  ]);
+  const existing = '<script type="module" src="/assets/framework-shared.js"></script><link rel="modulepreload" href="/assets/ui-shared.js"><link rel="stylesheet" href="/assets/Shared-theme.css">';
+  const filtered = handler(existing, { bundle });
+  assert.deepEqual(filtered.filter(tag => tag.attrs.name === "sqr-landing-script").map(tag => tag.attrs.content), [
+    "/assets/Landing-page.js", "/assets/public-auth-shared.js",
+  ]);
+  assert.deepEqual(filtered.filter(tag => tag.attrs.name === "sqr-landing-style").map(tag => tag.attrs.content), [
+    "/assets/Landing-page.css", "/assets/Auth-layout.css",
+  ]);
+  assert.ok(filtered.every(tag => !String(tag.attrs.content).includes("Private")));
+});
+
+test("landing graph hints reject missing, external, traversal and wrong-kind nested dependencies", async () => {
+  const config = await importViteConfigFresh();
+  const handler = config.plugins.find(plugin => plugin.name === "sqr-landing-resource-hints").transformIndexHtml.handler;
+  const landing = { type: "chunk", fileName: "assets/Landing-page.js", facadeModuleId: path.resolve("client/src/pages/Landing.tsx"), imports: ["assets/Shared-child.js"] };
+  const child = { type: "chunk", fileName: "assets/Shared-child.js", imports: [], viteMetadata: { importedCss: new Set(["assets/Shared-child.css"]) } };
+  const style = { type: "asset", fileName: "assets/Shared-child.css" };
+  assert.throws(() => handler("", { bundle: { landing } }), /local build asset paths for scripts/);
+  assert.throws(() => handler("", { bundle: { landing, child: { ...child, type: "asset" }, style } }), /local build asset paths for scripts/);
+  for (const dependency of ["https://outside.invalid/child.js", "../private.js", "assets/nested/child.js", "assets/child.js?query=1"]) {
+    const nested = { ...child, imports: [dependency], viteMetadata: undefined };
+    assert.throws(() => handler("", { bundle: { landing, child: nested } }), /local build asset paths for scripts/);
+  }
+  for (const fileName of ["https://outside.invalid/child.css", "assets/../private.css", "assets/nested/child.css", "assets/child.js"]) {
+    const nested = { ...child, viteMetadata: { importedCss: new Set([fileName]) } };
+    assert.throws(() => handler("", { bundle: { landing, child: nested, style: { type: "asset", fileName } } }), /local build asset paths for stylesheets/);
+  }
+  assert.throws(() => handler("", { bundle: { landing, child } }), /local build asset paths for stylesheets/);
+  assert.throws(() => handler("", { bundle: { landing, child, style: { ...style, type: "chunk" } } }), /local build asset paths for stylesheets/);
+});
+
 test("public runtime consolidates only the existing small shared entry dependencies", async () => {
   const config = await importViteConfigFresh();
   const chunk = config.build.rollupOptions.output.codeSplitting.groups[0].name;
   for (const name of ["browser-storage", "secure-id", "web-vitals", "client-error-telemetry", "safe-url", "aria-state-props"]) {
     assert.equal(chunk(`/repo/client/src/lib/${name}.ts`), "public-runtime");
   }
-  for (const name of ["createLucideIcon", "Icon", "defaultAttributes", "shared/src/utils", "icons/house", "icons/refresh-cw", "icons/rotate-ccw", "icons/triangle-alert"]) {
+  for (const name of ["createLucideIcon", "Icon", "defaultAttributes", "shared/src/utils", "icons/house", "icons/refresh-cw", "icons/rotate-ccw", "icons/triangle-alert", "icons/arrow-right", "icons/check"]) {
     assert.equal(chunk(`/repo/node_modules/lucide-react/dist/esm/${name}.js`), "public-runtime");
   }
   for (const id of ["client/src/pages/Search.tsx", "client/src/pages/Settings.tsx", "client/src/app/AuthenticatedAppEntry.tsx", "client/src/lib/api/client.ts", "node_modules/lucide-react/dist/esm/icons/database.js", "node_modules/web-vitals/dist/web-vitals.js"]) {
@@ -284,8 +345,15 @@ test("public auth runtime consolidates only login's existing helpers, shared pre
     assert.equal(chunk(`/repo/${id}`), "public-auth-runtime");
     assert.equal(chunk(`C:\\repo\\${id.replace(/\//g, "\\")}`), "public-auth-runtime");
   }
-  for (const name of ["arrow-left", "arrow-right", "check", "eye", "eye-off", "key-round", "shield-check", "user-round", "wifi-off"]) {
+  for (const name of ["arrow-left", "eye", "eye-off", "key-round", "shield-check", "user-round", "wifi-off"]) {
     assert.equal(chunk(`/repo/node_modules/lucide-react/dist/esm/icons/${name}.js`), "public-auth-runtime");
+    assert.equal(chunk(`C:\\repo\\node_modules\\lucide-react\\dist\\esm\\icons\\${name}.js`), "public-auth-runtime");
+  }
+  for (const name of ["arrow-right", "check"]) {
+    for (const id of [`/repo/node_modules/lucide-react/dist/esm/icons/${name}.js`, `C:\\repo\\node_modules\\lucide-react\\dist\\esm\\icons\\${name}.js`]) {
+      assert.equal(groups[0].name(id), "public-runtime", "Icons shared by landing and login retain the existing public icon factory");
+      assert.equal(chunk(id), undefined, "Two shared icons must not pull the auth presentation graph into landing");
+    }
   }
   for (const id of ["client/src/lib/api-client.ts", "client/src/lib/api/auth.ts", "client/src/lib/utils.ts", "client/src/components/auth/AuthPasswordFields.tsx", "client/src/components/PublicAuthControls.test.tsx", "client/src/pages/Login.tsx", "client/src/app/AuthenticatedAppEntry.tsx", "node_modules/wouter/src/index.js", "node_modules/lucide-react/dist/esm/icons/database.js"]) {
     assert.equal(chunk(`/repo/${id}`), undefined, `Do not merge ${id} into the auth helpers`);

@@ -2,7 +2,101 @@
 
 Updated: 31 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
-## Current CI follow-up — early landing resources and radar discovery, 31 October 2026
+## Current CI follow-up — landing dependency isolation and static hints, 31 October 2026
+
+[CI run 41189822803](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41189822803)
+on `f42ca55c5bdff56d389ebb3c3b3187fc337a4cf8` passed build-and-test, dependency
+audit, coverage and all **778 visual cases**. Separate
+[CodeQL run 41189822809](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41189822809)
+passed. The home mobile PageSpeed score improved from 76 to 83 but still misses
+85. Login performance 85 passes; its noindex SEO exclusion remains intentional.
+
+The new hosted report confirms radar discovery/priority/eager checks now pass.
+LCP is 3,894.567ms: TTFB 6ms, load delay 1,377ms, load duration 1,348ms and render
+delay 1,164ms. The radar finishes at 2,730ms, but nested UI JavaScript and auth
+runtime CSS are not requested until approximately 2,928ms, finishing at
+3,700/3,652ms. The landing hint plugin advertised immediate imports and its own
+CSS only; it omitted those transitive static dependencies.
+
+The prepared fix has two parts:
+
+- `scripts/lib/vite-landing-resource-hints.ts` traverses the complete emitted
+  static import graph, collects reachable CSS, handles cycles/duplicates,
+  validates emitted local paths and skips resources already present in HTML.
+  It never follows dynamic imports. Unit cases cover nested CSS, duplicate
+  edges, cycles, missing/unsafe/wrong-kind assets and private dynamic routes.
+- `vite.config.ts` moves only Lucide `arrow-right` and `check` from the lazy
+  auth group to the existing shared public group. Those two icons were pulling
+  the auth layout, UI helpers and auth CSS into Landing's static graph. The real
+  final build confirms Landing no longer depends on auth/UI/validation chunks;
+  Login retains its auth runtime, styles and original illustration. The main
+  entry's existing validation dependency remains legitimate and is not banned
+  by the browser regression. No application validation/auth logic is changed.
+
+Final source QA passed: **112 focused tests**, changed-file lint, strict
+changed-root TypeScript (**3 roots, 339 resolved files**), production frontend
+build, bundle/sourcemap gates and **9 selected native browser cases**: 2 startup,
+5 responsive light/dark layouts and 2 real login-form/Home navigation cases.
+The startup fixture holds only the app entry, checks independently applied CSS
+against server responses flushed before entry release, proves one native wire
+transfer per stylesheet/radar, and rejects auth/UI requests on Landing. It uses
+native caching and no Playwright request interception. Full/reduced motion both
+pass. The synthetic server mirrors production caching without changing it.
+
+The final build contains 506 files. Unlike the intermediate hints-only build,
+the final icon ownership change legitimately changes JS chunk content/names and
+their importers. Do **not** reuse the intermediate assertion that only HTML
+changed or that the final landing should preload UI/auth CSS. Landing CSS,
+supplied SVG animation definitions, hardware policy, boot/session guards,
+navigation, dependencies, CI thresholds and retries remain unchanged.
+
+Evidence directory:
+`C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-pagespeed-20261031-round2/`.
+Final executable/test source manifest:
+`7ab33a42d4fbf2ebbb43aeeb987f73e87930bf024eca3a4d680f36f0dd4b4194`.
+The directory holds the SHA-256-verified hosted PageSpeed archive/reports,
+individual bounded sandbox receipts, expected before-fix failure and build
+comparison. An initial local unit run lacked six unchanged Monthly PNG fixtures
+because an older visual overlay intentionally omitted binaries. Restoring those
+read-only fixtures after verifying their current inventory hashes made all 112
+tests pass; no baseline bytes or assertions were altered.
+`FINAL_VALIDATION.json` records final hashes/receipts and supersedes the retained
+`FINAL_VALIDATION_HINTS_ONLY.json`.
+
+**PageSpeed performance is still not verified passing.** The user authorized
+official Google Chrome for Testing 156.0.8078.80. Its 201,329,937-byte Linux ZIP
+was verified against Google's MD5 header and retained SHA-256
+`b711c720f774be355197f32edf37e0651418ba036d92446ee2da19ac017540a7`.
+It executes only in the existing no-external-network, read-only-toolchain WSL
+bwrap/cgroup boundary with synthetic APIs/data (2 CPU, 1GiB, 256 tasks, 180s).
+No npm dependencies were installed. The initial 128-task Chrome process-cap
+failure is retained separately; it is not a performance result.
+
+Complete Chrome156/Lighthouse13.0.3 checks retain all failures, not just the best
+score: old published build 49, hints-only intermediate 44, final icon split 39,
+and a final diagnostic on the same build 53. All fail the unchanged 85 threshold;
+accessibility/best-practices/SEO are 100 and CLS is 0. The final diagnostic matches
+CI's `channel: cli`, CPU slowdown 4 and mobile devtools settings: LCP 4,843ms,
+TBT 1,195ms, benchmark index 1,856 (hosted CI: 2,059). It reports a 723ms task
+containing module evaluation, but no function/script attribution sufficient for
+another application change. It also records 271 `memory.high` events, so local
+memory pressure must not be dismissed merely because no OOM occurred. Local
+scores cannot establish an equivalent hosted-CI regression or a performance win.
+Do not lower thresholds, disable animation, retry until green or call CI fixed.
+
+Next: after authorized publication, run hosted CI on this exact change and
+inspect the complete home/login reports. If home remains below 85, use that
+report's measured remaining critical path and CPU attribution for a narrow fix.
+The source/harness manifests, compact trace summary, all score failures and
+individual successful QA receipts are retained for continuation. Full repository
+typecheck and all 778 visual cases were not rerun locally for this follow-up.
+The user authorized commit and push of this follow-up on 31 October 2026.
+`PUBLICATION_PREPARED.json` and `PUBLICATION_VERIFIED.json` in the evidence
+directory record the exact commit, blob hashes and remote verification. Hosted
+PageSpeed verification remains required. Deployment is not included; production
+remains `4d06b29e`.
+
+## Previous CI follow-up — early landing resources and radar discovery, 31 October 2026
 
 [CI run 41176789822](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41176789822)
 on published `9ab5c97de3f4ce3e039f431c0cc162e26aaa8646` passed build-and-test,
