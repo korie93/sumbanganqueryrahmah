@@ -87,7 +87,9 @@ function SuppliedArtwork({ name, theme = "dark", paused, boosted = false, replay
   name: CapabilityId | "radar"; theme?: Theme; paused: boolean; boosted?: boolean; replayVersion?: number; className: string;
 }) {
   const ref = useRef<HTMLImageElement>(null);
-  const [visible, setVisible] = useState(false);
+  // The hero radar is above the fold; do not fetch a static intermediary before
+  // its first observer callback. The observer still pauses artwork offscreen.
+  const [visible, setVisible] = useState(name === "radar");
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
@@ -102,7 +104,8 @@ function SuppliedArtwork({ name, theme = "dark", paused, boosted = false, replay
   const asset = name === "radar" ? `radar-${state}` : `${name}-${theme}-${state}`;
   const dimension = name === "radar" ? 400 : 120;
   return <img key={boosted ? replayVersion : 0} ref={ref} className={className} src={`/landing-next/${asset}.svg`} width={dimension} height={dimension}
-    alt="" aria-hidden="true" decoding="async" loading={name === "radar" ? "eager" : "lazy"} />;
+    alt="" aria-hidden="true" decoding="async" loading={name === "radar" ? "eager" : "lazy"}
+    fetchPriority={name === "radar" ? "high" : "auto"} />;
 }
 
 export default function LandingNext({ onLoginClick }: LandingNextProps) {

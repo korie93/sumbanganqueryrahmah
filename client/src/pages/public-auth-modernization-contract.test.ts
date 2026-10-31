@@ -89,8 +89,10 @@ test("public auth retains neutral dark-mode surfaces independently of landing", 
 test("the universal public landing keeps accessible content and existing login navigation", () => {
   const landing = readPageSource("Landing.tsx");
   const content = readPageSource("landing-next/LandingNext.tsx");
+  const fallback = readPageSource("LandingRouteFallback.tsx");
   assert.match(landing, /<LandingNext onLoginClick=\{onLoginClick\}/);
-  assert.match(landing, /aria-busy="true"/);
+  assert.match(fallback, /aria-busy="true"/);
+  assert.match(fallback, /href="\/login"/);
   assert.match(content, /<main id="main-content" tabIndex=\{-1\}/);
   assert.match(content, /href="#main-content">Skip to content/);
   assert.ok(content.includes('href === "/login"'));

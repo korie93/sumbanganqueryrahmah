@@ -44,12 +44,16 @@ type BootOptions = {
   blockedCookie?: boolean;
   blockedStorage?: boolean;
   blockedStorageRead?: boolean;
-  hints?: Array<{ name: string; content: string }>;
+  hints?: Array<{ name: string; content: string; media?: string }>;
 };
 
 const validHints = [
   { name: "sqr-landing-script", content: "/assets/Landing-fixture.js" },
   { name: "sqr-landing-style", content: "/assets/Landing-fixture.css" },
+];
+const radarHints = [
+  { name: "sqr-landing-image", content: "/landing-next/radar-animated.svg", media: "(prefers-reduced-motion: no-preference)" },
+  { name: "sqr-landing-image", content: "/landing-next/radar-static.svg", media: "(prefers-reduced-motion: reduce)" },
 ];
 
 function runBootShell(pathname: string, options: BootOptions = {}) {
@@ -104,10 +108,10 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
       querySelectorAll(selector: string) {
         const expected = pathname === "/login"
           ? 'meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"]'
-          : 'meta[name="sqr-landing-script"], meta[name="sqr-landing-style"]';
+          : 'meta[name="sqr-landing-script"], meta[name="sqr-landing-style"], meta[name="sqr-landing-image"]';
         assert.equal(selector, expected);
         return (options.hints ?? []).filter(hint => selector.includes(`meta[name="${hint.name}"]`)).map(hint => ({
-          getAttribute(name: string) { return name === "name" ? hint.name : name === "content" ? hint.content : null; },
+          getAttribute(name: string) { return name === "name" ? hint.name : name === "content" ? hint.content : name === "media" ? hint.media ?? null : null; },
         }));
       },
       createElement(name: string) {
@@ -152,7 +156,7 @@ test("async boot applies shell copy immediately when document parsing has finish
 
 test("late async boot leaves metadata, shell and preloads untouched once React owns the root", () => {
   for (const pathname of ["/", "/login"]) {
-    const result = runBootShell(pathname, { rootHasChildren: true, hints: validHints });
+    const result = runBootShell(pathname, { rootHasChildren: true, hints: [...validHints, ...radarHints] });
     assert.equal(result.documentElement.lang, "en", "Existing app metadata must remain unchanged");
     assert.equal(result.attributes.size, 0);
     assert.equal(result.links.length, 0);
@@ -194,7 +198,7 @@ test("anonymous root preloads build-provided landing resources without applying 
 
 test("landing preloads never run on auth, protected, maintenance or unknown routes", () => {
   for (const pathname of ["/login", "/LOGIN", "/forgot-password", "/activate-account", "/reset-password", "/change-password", "/maintenance", "/banned", "/general-search", "/dashboard", "/settings", "/collection/save", "/unknown", "//"]) {
-    assert.equal(runBootShell(pathname, { hints: validHints }).links.length, 0, pathname);
+    assert.equal(runBootShell(pathname, { hints: [...validHints, ...radarHints] }).links.length, 0, pathname);
   }
 });
 
@@ -206,7 +210,7 @@ test("session or maintenance hints leave existing authentication routing in char
     { banned: "1" },
     { maintenance: true },
   ]) {
-    const result = runBootShell("/", { ...options, hints: validHints });
+    const result = runBootShell("/", { ...options, hints: [...validHints, ...radarHints] });
     assert.equal(result.links.length, 0, JSON.stringify(options));
     assert.equal(result.attributes.get("data-boot-shell"), "landing", "Optimization must not change shell selection");
   }
@@ -215,7 +219,7 @@ test("session or maintenance hints leave existing authentication routing in char
 
 test("denied cookie or storage access skips optional preloading and still paints the boot shell", () => {
   for (const options of [{ blockedCookie: true }, { blockedStorage: true }, { blockedStorageRead: true }]) {
-    const result = runBootShell("/", { ...options, hints: validHints });
+    const result = runBootShell("/", { ...options, hints: [...validHints, ...radarHints] });
     assert.equal(result.links.length, 0);
     assert.ok(result.elements.get("boot-shell-title")?.textContent, "A failed optimization must not block the boot copy");
   }
@@ -236,6 +240,35 @@ test("preload metadata accepts only emitted same-origin assets with matching ext
   ]) assert.equal(runBootShell("/", { hints: [hint] }).links.length, 0, hint.content);
 });
 
+test("anonymous root publishes one matching radar preload per motion preference before DOM readiness", () => {
+  const result = runBootShell("/", { hints: [...radarHints, ...validHints], readyState: "loading" });
+  const images = result.links.filter(link => link.as === "image");
+  assert.equal(images.length, 2, "Media conditions leave the matching request to the browser");
+  for (const [preference, expected] of [["no-preference", "animated"], ["reduce", "static"]]) {
+    const matching = images.filter(link => link.media === `(prefers-reduced-motion: ${preference})`);
+    assert.equal(matching.length, 1);
+    assert.deepEqual({ ...matching[0] }, {
+      href: `/landing-next/radar-${expected}.svg`, media: `(prefers-reduced-motion: ${preference})`,
+      fetchPriority: "high", rel: "preload", as: "image",
+    }, "The ordinary img and preload share no-CORS mode for request reuse");
+  }
+  assert.equal(result.readyCallbacks.length, 1);
+  result.finishParsing();
+  assert.equal(result.links.filter(link => link.as === "image").length, 2, "Parsing completion must not create duplicate preloads");
+});
+
+test("radar preload rejects foreign assets and missing, inverted or arbitrary media conditions", () => {
+  for (const hint of [
+    { name: "sqr-landing-image", content: "https://outside.invalid/radar-animated.svg", media: radarHints[0]!.media },
+    { name: "sqr-landing-image", content: "//outside.invalid/radar-static.svg", media: radarHints[1]!.media },
+    { name: "sqr-landing-image", content: "/landing-next/../radar-animated.svg", media: radarHints[0]!.media },
+    { name: "sqr-landing-image", content: "/landing-next/radar-animated.svg?query=1", media: radarHints[0]!.media },
+    { name: "sqr-landing-image", content: "/landing-next/search-dark-animated.svg", media: radarHints[0]!.media },
+    { ...radarHints[0]!, media: "all" }, { ...radarHints[0]!, media: radarHints[1]!.media },
+    { ...radarHints[1]!, media: radarHints[0]!.media }, { name: "sqr-landing-image", content: radarHints[0]!.content },
+  ]) assert.equal(runBootShell("/", { hints: [hint] }).links.length, 0, JSON.stringify(hint));
+});
+
 const validLoginHints = [
   { name: "sqr-login-image", content: "/assets/sqr-illustration-fixture.webp" },
   { name: "sqr-login-script", content: "/assets/Login-fixture.js" },
@@ -244,7 +277,7 @@ const validLoginHints = [
 ];
 
 test("anonymous exact login preloads its scripts, styles and LCP image without applying CSS", () => {
-  const result = runBootShell("/login", { hints: [...validHints, ...validLoginHints] });
+  const result = runBootShell("/login", { hints: [...validHints, ...radarHints, ...validLoginHints] });
   assert.equal(result.links.length, 4);
   assert.deepEqual({ ...result.links[0] }, {
     href: validLoginHints[0].content, rel: "preload", as: "image", fetchPriority: "high",

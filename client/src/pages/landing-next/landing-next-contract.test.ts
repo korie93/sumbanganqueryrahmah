@@ -24,11 +24,11 @@ function descendants(node: ts.Node): ts.Node[] {
   return nodes;
 }
 
-test("every device receives the same lazy landing without a device or performance branch", () => {
+test("every device receives one public page behind the shared lazy route without a device or performance branch", () => {
   const file = ts.createSourceFile("Landing.tsx", entry, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const imports = file.statements.filter(ts.isImportDeclaration);
-  assert.deepEqual(imports.map(node => ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : ""), ["react"]);
-  assert.match(entry, /const LandingNext = lazy\(\(\) => import\("@\/pages\/landing-next\/LandingNext"\)\)/);
+  assert.deepEqual(imports.map(node => ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : ""), ["@/pages/landing-next/LandingNext"]);
+  assert.match(source("client/src/app/lazy-pages.tsx"), /export const LandingPage = lazyWithPreload\(\(\) => import\("@\/pages\/Landing"\)\)/);
   assert.doesNotMatch(entry, /landing-v21|useLandingMotion|useLandingSections/);
   const landing = file.statements.find((node): node is ts.FunctionDeclaration => ts.isFunctionDeclaration(node) && node.name?.text === "Landing");
   assert.ok(landing?.body);
@@ -37,18 +37,10 @@ test("every device receives the same lazy landing without a device or performanc
   assert.ok(returned && ts.isReturnStatement(returned) && returned.expression);
   let content = returned.expression;
   while (ts.isParenthesizedExpression(content)) content = content.expression;
-  assert.ok(ts.isJsxElement(content));
-  assert.equal(content.openingElement.tagName.getText(file), "Suspense");
-  const children = content.children.filter(node => !ts.isJsxText(node) || node.text.trim());
-  assert.equal(children.length, 1);
-  const page = children[0];
-  assert.ok(page && ts.isJsxSelfClosingElement(page));
-  assert.equal(page.tagName.getText(file), "LandingNext");
-  assert.deepEqual(page.attributes.properties.map(attribute => ts.isJsxAttribute(attribute) ? attribute.name.getText(file) : "spread"), ["onLoginClick"],
+  assert.ok(ts.isJsxSelfClosingElement(content));
+  assert.equal(content.tagName.getText(file), "LandingNext");
+  assert.deepEqual(content.attributes.properties.map(attribute => ts.isJsxAttribute(attribute) ? attribute.name.getText(file) : "spread"), ["onLoginClick"],
     "The universal page does not receive a device-derived pause override");
-  assert.match(entry, /aria-busy="true"/);
-  assert.match(entry, /role="status"/);
-  assert.match(entry, /href="\/login"/);
 });
 
 test("the universal landing preserves shared device policy, legacy modules, routes and shell source", () => {
@@ -58,7 +50,7 @@ test("the universal landing preserves shared device policy, legacy modules, rout
     ["client/src/main.tsx", "41ffea7bb4bbd7bc8d9fd2494051c3d38b6ef5829b95583e725f9999a9ddaf2c"],
     ["client/src/pages/LandingRouteFallback.tsx", "48b2407d32b7e4deebf35fa55e2e2787bcf3c411b963e6d97c726c88191851f9"],
     ["client/src/pages/LandingRouteFallback.css", "bf1cd144114407d23207e5e9c97c3790786773f536da93ce33816d632f36ef45"],
-    ["client/public/boot-shell.js", "02cc93aab5145115e32c9cf8a31b870b3e97868c72eccdaec1b439fe0b1eaa8d"],
+    ["client/public/boot-shell.js", "dc1e7d73040cf3ca1da70342e4af8256c1b46db94a3b2629b96b98606116f258"],
     ["client/public/boot-shell.css", "7c3ed38ef85cb1253bb0b767d431d631c1d7ebc0c53b786216f752d1c5ae2da1"],
     ["client/src/app/lazy-pages.tsx", "09af4a5b0ccee8a2acfd701e7c493198fb2b9ad8d5426d1d308f4ceac13f32b9"],
     ["client/src/app/routing.ts", "734810c0d91476cd4c92b47adef3fdecfdd29734287bb6992f7748d1ed90a2de"],
@@ -176,13 +168,12 @@ test("public landing is semantic React with local artwork and no protected servi
         assert.ok(ts.isStringLiteral(node.moduleSpecifier) && (
           approved.has(node.moduleSpecifier.text)
           || (name === "useLandingNextMotion.ts" && node.moduleSpecifier.text === "@/lib/browser-storage")
+          || (name === "Landing.tsx" && node.moduleSpecifier.text === "@/pages/landing-next/LandingNext")
         ), node.getText(file));
       }
       if (ts.isCallExpression(node)) {
         if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-          assert.ok(name === "Landing.tsx" && node.arguments.length === 1
-            && node.arguments[0] && ts.isStringLiteral(node.arguments[0])
-            && node.arguments[0].text === "@/pages/landing-next/LandingNext", "Only the universal public landing may load lazily");
+          assert.fail("The public landing must not introduce another lazy dependency waterfall");
         }
         const method = ts.isIdentifier(node.expression) ? node.expression.text : ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text : "";
         assert.ok(!["fetch", "sendBeacon", "require", "eval", "setInterval"].includes(method), method);

@@ -1,15 +1,8 @@
-import { lazy, Suspense } from "react";
+import LandingNext from "@/pages/landing-next/LandingNext";
 
-// Every device receives the same public landing and its route-owned motion.
-const LandingNext = lazy(() => import("@/pages/landing-next/LandingNext"));
+// The route registry owns lazy loading. Keep its complete public page in one
+// dependency graph so build hints can discover the landing's scripts and CSS.
 
 export default function Landing({ onLoginClick }: { onLoginClick: () => void }) {
-  return (
-    <Suspense fallback={<main id="main-content" className="grid min-h-screen place-content-center gap-4 bg-black p-6 text-center text-white" tabIndex={-1} aria-busy="true"><p role="status">Loading SQR…</p><a className="underline" href="/login" onClick={event => {
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault(); onLoginClick();
-      }}>Log in</a></main>}>
-      <LandingNext onLoginClick={onLoginClick} />
-    </Suspense>
-  );
+  return <LandingNext onLoginClick={onLoginClick} />;
 }

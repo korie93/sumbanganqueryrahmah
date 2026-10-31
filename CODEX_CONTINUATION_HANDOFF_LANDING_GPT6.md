@@ -2,7 +2,75 @@
 
 Updated: 31 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
-## Current CI follow-up — landing image sizing and brand fixtures, 31 October 2026
+## Current CI follow-up — early landing resources and radar discovery, 31 October 2026
+
+[CI run 41176789822](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41176789822)
+on published `9ab5c97de3f4ce3e039f431c0cc162e26aaa8646` passed build-and-test,
+dependency audit, coverage, UI smoke and **all 776 visual cases**. Separate
+[CodeQL run 41176789834](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41176789834)
+passed. The failure is `Run PageSpeed Lighthouse budgets`: home mobile performance
+76 is below 85. Login performance 85 passes; login SEO 69 is intentionally excluded
+for the noindex route. Preserve noindex, score gates, retries and all animations.
+
+The retained home report identifies `.radar-artwork` as LCP, with 4,300ms resource
+load delay and only 42ms render delay. Its request was neither initially
+discoverable nor explicitly high priority. `Landing.tsx` introduced a second lazy
+import after the existing lazy route: wrapper JS completed at 2,833ms, page CSS at
+4,239ms, then static/animated radar requests began at 4,305/4,409ms.
+
+The pending fix keeps the outer lazy route and its existing accessible fallback,
+imports the universal page directly within that route, initializes the above-fold
+radar to the correct motion variant and gives it high priority. Build-owned inert
+radar metadata feeds the existing exact-root boot hint guard. Media conditions
+select animated or reduced-motion artwork; only the two exact local SVG paths
+and their matching media conditions are accepted. Existing session, banned,
+maintenance, denied-storage and non-landing route guards remain. Images preserve
+no-CORS mode so the preload can be reused. The only boot change concerns optional
+resource hints; authentication, shared hardware policy and navigation stay intact.
+
+Final source passed 110 focused tests (including Vite hint generation, native boot
+VM decisions, PageSpeed gate handling and route isolation), changed-file lint,
+strict changed-root TypeScript (7 roots, 347 resolved files), production frontend
+build, bundle and sourcemap checks. All 23 selected native browser cases passed:
+2 startup, 5 responsive layout, 6 constrained-device motion, 5 lifecycle/reduced
+motion/anchors/touch, 3 lazy-image geometry and 2 accessibility cases.
+`tests/visual/landing-startup.spec.ts` is a new, currently untracked file
+that must be included in any commit. Its two passing native cases use a bounded
+synthetic loopback server, hold only the app entry script, and verify early radar
+discovery plus exactly one actual transfer and resource timing entry for each
+motion preference. HTTP interception is deliberately absent: Playwright routing
+disables caching and cannot establish preload reuse. Existing landing visual
+tests remain unchanged.
+
+Full local Lighthouse score verification is **not passed**. Existing cached
+Lighthouse 13.0.3 was copied as read-only tooling without installation or download.
+Chromium 148 in the isolated sandbox reports `NO_TTI_CPU_IDLE_PERIOD`, so TBT and
+the weighted performance score are missing on both old and new builds. One- and
+two-CPU checks retain this limitation; do not convert the missing result into a
+pass or compare raw timing as a certified score improvement. The latest diagnostic
+does confirm both discovery checks now pass, one animated radar request begins
+at 1,711ms, and CLS is zero. Its accessibility/best-practices/SEO scores are 100.
+Hosted CI uses Chrome 156, and must establish performance >=85 after publication.
+No CI workflow, score threshold, retry, snapshot, dependency, SVG animation
+definition or production cache policy was weakened or changed.
+
+Evidence:
+`C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-landing-followup-20261031/`.
+The directory contains the SHA-256-verified 2.2MB CI PageSpeed archive, selected
+JSON reports, bounded job log, source inventories, immutable local tool manifest
+and individual sandbox receipts. Final production frontend inputs use manifest
+`96f1a51353d3d463c6d637cf00db4507651ff9650b120caf903a582526603b07`;
+final native fixture/lint/types use
+`b69202f68c5ed5009e278e5227f1e9ccd99802ac69a10e558e08b5a9a0ff26ff`.
+Only test files differ between them; this handoff is documentation-only.
+`FINAL_VALIDATION.json` reconciles all ten passing check receipts and current
+source hashes, and explicitly records the incomplete Lighthouse performance gate.
+The user authorized commit/push of the PageSpeed follow-up on 31 October 2026.
+No deployment is included; production remains `4d06b29e`. Publication receipts
+`PUBLICATION_PREPARED.json` and `PUBLICATION_VERIFIED.json` are retained beside
+`FINAL_VALIDATION.json`. Hosted PageSpeed verification remains required.
+
+## Previous CI follow-up — landing image sizing and brand fixtures, 31 October 2026
 
 [CI run 41170744884](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41170744884)
 on `20b210da104efb5f210ab3abeed1e8c75478d655` passed build-and-test, dependency

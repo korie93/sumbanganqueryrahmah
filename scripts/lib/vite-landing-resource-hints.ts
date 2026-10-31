@@ -21,7 +21,12 @@ export function landingResourceHints(): Plugin {
         // Otherwise a tiny late-discovered helper can still delay the whole page.
         const scripts = [...new Set([landing.fileName, ...landing.imports])].filter(fileName =>
           !html.includes(`href="/${fileName}"`) && !html.includes(`src="/${fileName}"`));
-        const hints: HtmlTagDescriptor[] = [];
+        // Inert metadata only: the boot shell selects the exact anonymous root
+        // route before creating these preference-aware image preloads.
+        const hints: HtmlTagDescriptor[] = [
+          { tag: "meta", attrs: { name: "sqr-landing-image", content: "/landing-next/radar-animated.svg", media: "(prefers-reduced-motion: no-preference)" }, injectTo: "head" },
+          { tag: "meta", attrs: { name: "sqr-landing-image", content: "/landing-next/radar-static.svg", media: "(prefers-reduced-motion: reduce)" }, injectTo: "head" },
+        ];
         for (const [name, fileName] of [
           ...scripts.map(fileName => ["sqr-landing-script", fileName]),
           ...Array.from(metadata?.importedCss ?? [], fileName => ["sqr-landing-style", fileName]),

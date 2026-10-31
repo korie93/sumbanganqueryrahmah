@@ -66,24 +66,32 @@
         || document.querySelector('meta[name="sqr-maintenance"][content="active"]')) return;
       const prefix = "sqr-" + resource;
       const selector = 'meta[name="' + prefix + '-script"], meta[name="' + prefix + '-style"]'
-        + (resource === "login" ? ', meta[name="sqr-login-image"]' : "");
+        + ', meta[name="' + prefix + '-image"]';
       document.querySelectorAll(selector).forEach(meta => {
         const name = meta.getAttribute("name");
         const isScript = name === prefix + "-script";
         const isStyle = name === prefix + "-style";
-        const isImage = resource === "login" && name === "sqr-login-image";
+        const isImage = name === prefix + "-image";
         if (!isScript && !isStyle && !isImage) return;
         const href = meta.getAttribute("content") || "";
         const allowed = isScript ? /^\/assets\/[A-Za-z0-9_-]+\.js$/
           : isStyle ? /^\/assets\/[A-Za-z0-9_-]+\.css$/
-            : /^\/assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/;
+            : resource === "landing" ? /^\/landing-next\/radar-(?:animated|static)\.svg$/
+              : /^\/assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/;
         if (!allowed.test(href)) return;
+        const media = isImage && resource === "landing" ? meta.getAttribute("media") : null;
+        if (isImage && resource === "landing") {
+          const expectedMedia = href === "/landing-next/radar-static.svg"
+            ? "(prefers-reduced-motion: reduce)" : "(prefers-reduced-motion: no-preference)";
+          if (media !== expectedMedia) return;
+        }
         const link = document.createElement("link");
         link.href = href;
         link.fetchPriority = "high";
+        if (media) link.media = media;
         // Match Vite's anonymous-CORS module and stylesheet requests, so the
         // eventual lazy import reuses these responses instead of fetching twice.
-        // CSS background images use no-CORS requests; do not change that mode.
+        // CSS background and ordinary image requests use no-CORS; preserve reuse.
         if (!isImage) link.crossOrigin = "anonymous";
         if (isScript) {
           link.rel = "modulepreload";

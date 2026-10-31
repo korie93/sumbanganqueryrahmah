@@ -174,6 +174,8 @@ test("landing resource hints publish only inert build-owned landing URLs", async
     unrelated: { type: "chunk", facadeModuleId: "/repo/client/src/pages/Login.tsx", fileName: "assets/Login-auth.js" },
   };
   assert.deepEqual(handler("", { bundle }), [
+    { tag: "meta", attrs: { name: "sqr-landing-image", content: "/landing-next/radar-animated.svg", media: "(prefers-reduced-motion: no-preference)" }, injectTo: "head" },
+    { tag: "meta", attrs: { name: "sqr-landing-image", content: "/landing-next/radar-static.svg", media: "(prefers-reduced-motion: reduce)" }, injectTo: "head" },
     { tag: "meta", attrs: { name: "sqr-landing-script", content: "/assets/Landing-abc123.js" }, injectTo: "head" },
     { tag: "meta", attrs: { name: "sqr-landing-style", content: "/assets/Landing-def456.css" }, injectTo: "head" },
   ]);
@@ -181,6 +183,10 @@ test("landing resource hints publish only inert build-owned landing URLs", async
   const hints = handler('<link rel="modulepreload" href="/assets/framework-shared.js">', { bundle: { landing: withImports } });
   assert.deepEqual(hints.filter(tag => tag.attrs.name === "sqr-landing-script").map(tag => tag.attrs.content),
     ["/assets/Landing-abc123.js", "/assets/aria-state-props-helper.js"]);
+  assert.deepEqual(hints.filter(tag => tag.attrs.name === "sqr-landing-image").map(tag => tag.attrs), [
+    { name: "sqr-landing-image", content: "/landing-next/radar-animated.svg", media: "(prefers-reduced-motion: no-preference)" },
+    { name: "sqr-landing-image", content: "/landing-next/radar-static.svg", media: "(prefers-reduced-motion: reduce)" },
+  ]);
   assert.throws(() => handler("", { bundle: {} }), /require the emitted landing page chunk/);
   for (const fileName of ["https://example.com/landing.js", "../outside.js", "assets/nested/landing.js"]) {
     assert.throws(() => handler("", { bundle: { landing: { ...landing, fileName } } }), /local build asset paths/);
