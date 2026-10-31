@@ -1,7 +1,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { authV17Viewports, authV17FixtureIdentity, createAuthV17Fixture } from "../lib/auth-v17-browser-fixture.mjs";
+import { authV17Viewports, authV17FixtureIdentity, createAuthV17Fixture, assertAuthV17StartupScriptBudget } from "../lib/auth-v17-browser-fixture.mjs";
+
+test("V17 startup budget counts the complete graph regardless of shared-script ownership", () => {
+  const entry = ["index", "rolldown-runtime", "framework", "public-runtime", "AppRouteErrorBoundary"]
+    .map((name) => `/assets/${name}-fixture.js`);
+  const login = ["Login", "public-auth-runtime", "ui", "lock-keyhole", "auth", "validation", "api-client"]
+    .map((name) => `/assets/${name}-fixture.js`);
+  const shared = "/assets/validation-fixture.js";
+  const initialOwner = assertAuthV17StartupScriptBudget([...entry, shared], login.filter((file) => file !== shared));
+  const routeOwner = assertAuthV17StartupScriptBudget(entry, login);
+  assert.equal(routeOwner.size, 12);
+  assert.deepEqual([...initialOwner].sort(), [...routeOwner].sort());
+  assert.equal(assertAuthV17StartupScriptBudget([...entry, ...login], login).size, 12,
+    "Async boot modulepreloads and HTML must not double-count the same request.");
+  assert.throws(() => assertAuthV17StartupScriptBudget(entry, [...login, "/assets/extra-helper-fixture.js"]), /within 12 script requests/);
+  assert.throws(() => assertAuthV17StartupScriptBudget(
+    [...entry, "/assets/auth-session-fixture.js", "/assets/lazy-with-preload-fixture.js", "/assets/maintenance-client-policy-fixture.js", shared],
+    login.filter((file) => file !== shared),
+  ), /within 12 script requests/, "The older 9-entry + 6-hint queue must not pass the new total budget.");
+});
+
+test("V17 startup budget rejects unsafe or missing graph inputs", () => {
+  const entry = ["/assets/index-fixture.js"], login = ["/assets/Login-fixture.js"];
+  for (const asset of [null, "https://outside.invalid/assets/helper.js", "//outside.invalid/helper.js", "/assets/../helper.js", "/assets/helper.js?query=1", "/assets/helper.css"]) {
+    assert.throws(() => assertAuthV17StartupScriptBudget([...entry, asset], login));
+    assert.throws(() => assertAuthV17StartupScriptBudget(entry, [...login, asset]));
+  }
+  assert.throws(() => assertAuthV17StartupScriptBudget([], login));
+  assert.throws(() => assertAuthV17StartupScriptBudget(entry, []));
+});
 
 function routeStub(url, method = "GET", body = null) {
   const result = {};

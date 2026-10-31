@@ -2,7 +2,61 @@
 
 Updated: 31 October 2026 (Asia/Singapore). User requested implementation from `C:/Users/Administrator/Downloads/SQR_Landing_Page_Codex_GPT6.zip`, with a goal and continuation support. Implementation base commit: `44f3c4d3fc408096e4bd04b6b660af850788efbf`. Local QA completed before publication; the user subsequently authorized committing and pushing this work on 30 October 2026. **Deployment still requires a separate user request.**
 
-## Current CI follow-up — login startup request overhead, 31 October 2026
+## Current CI follow-up — V17 complete startup graph budget, 31 October 2026
+
+[CI run 41210358341](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41210358341)
+on published `dc0d49e7` passes build/test and coverage, but stops at
+`Verify V17 authentication states and responsive views` (`test:auth:v17`).
+CodeQL passes separately. Lighthouse and the later smoke stages are not reached;
+this run supplies no new PageSpeed score.
+
+The exact failure is `scripts.length <= 6` in the cold Login hint check. That
+counts route hints only: shared validation moved from initial HTML into Login's
+hints when startup helpers were consolidated. Entry scripts fell 9 → 5 while
+Login hints grew 6 → 7; the complete required graph fell 15 → 12. The older
+relative limit therefore reports a regression despite the smaller total graph.
+
+The pending test-only fix adds `assertAuthV17StartupScriptBudget` to the existing
+V17 fixture. It validates raw local JS asset paths and budgets the deduplicated
+union of initial module scripts/modulepreloads and Login hints at **12**. Unit
+cases prove ownership relocation and deduplication do not change the result,
+and that 13-script, older 15-script, missing and unsafe-path graphs fail. All
+existing lazy-auth, private-chunk, hint uniqueness, stylesheet, priority, CORS,
+image reuse and runtime assertions remain. Lighthouse thresholds/retries and all
+application, backend, UI, CSS, images and animation are unchanged.
+
+Local verification reuses the exact previously validated 503-file frontend
+build because no production/build input changed. The published V17 runner
+reproduces the exact CI failure on that build. The corrected actual V17 runner
+passes **38 checks** with official Chrome156, including 20 BM/EN login viewports,
+all MFA viewports, keyboard/field behavior, duplicate submission, server-driven
+error/lock/CAPTCHA states, recovery/reset and strict CSP/Trusted Types. The
+fixture's **8 unit tests** also pass. These are synthetic loopback frontend
+checks, not real backend authentication or physical-device certification.
+
+The isolated namespace has no physical network interface. An external,
+loopback-only test driver supplies `navigator.onLine` transitions around the
+real Playwright `context.setOffline` call so the unchanged V17 offline/online
+assertions can execute. It does not alter application code, HTTP fixtures,
+assertions or network isolation, and does not certify physical NIC recovery.
+An initial read-only documentation mount error and the unadapted loopback
+online-restoration failure are retained as fixture limitations, not passing
+checks. Screenshots remain only in capped scratch and are not promoted.
+
+Evidence:
+`C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ci-startup-followup-20261031/`.
+Executable/test source manifest:
+`f5bb6acb70748089bd4f15a150b043edcff46e7c4cca41e9fc6cb3ee5314feca`.
+`FINAL_VALIDATION.json` records current hashes, lint/unit/full V17 receipts,
+the expected before-fix failure, fixture adaptation and unchanged production
+inputs. This handoff edit is documentation-only after that snapshot. The user
+has authorized commit and push of this follow-up. `PUBLICATION_PREPARED.json`
+and `PUBLICATION_VERIFIED.json` in the evidence directory record the exact
+commit, file hashes and remote verification. Next: verify the exact-source CI
+run through all later stages, including the still-unverified hosted PageSpeed
+gate. Deployment is not included; production remains `4d06b29e`.
+
+## Previous CI follow-up — login startup request overhead, 31 October 2026
 
 On published `66a0ab81`, [CI run 41199726748](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41199726748)
 reports Home 86 (passes) and Login 84 (fails Performance >=85). Login SEO 69 is

@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { chromium, expect } from "@playwright/test";
 import { startVisualBuiltServer } from "./test-visual-built.mjs";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
-import { authV17Viewports, authV17FixtureIdentity, createAuthV17Fixture } from "./lib/auth-v17-browser-fixture.mjs";
+import { authV17Viewports, authV17FixtureIdentity, createAuthV17Fixture, assertAuthV17StartupScriptBudget } from "./lib/auth-v17-browser-fixture.mjs";
 
 // Actual emitted React/Vite application and CSS; HTTP responses are explicit
 // synthetic TEST FIXTURES. No real authentication, email, server, .env or DB.
@@ -213,7 +213,9 @@ async function verifyLoginResourceHints() {
     assert.equal(new Set(hints.map((hint) => hint.href)).size, hints.length, "Login resource hints are deduplicated.");
     assert.ok(hints.every((hint) => !privateAssetPattern.test(hint.href)), "Hints include only public Login dependencies, not authenticated or heavy feature chunks.");
     assert.equal(scripts.filter((hint) => /^\/assets\/public-auth-runtime-/.test(hint.href)).length, 1, "Login helpers stay in a lazy, route-hinted chunk, not the shared HTML entry.");
-    assert.ok(scripts.length <= 6, "Login's shared helpers/controls must not regress into a long queue of tiny requests.");
+    const entryScripts = await page.locator('script[type="module"][src], link[rel="modulepreload"][href]')
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute("src") ?? element.getAttribute("href")));
+    assertAuthV17StartupScriptBudget(entryScripts, scripts.map((hint) => hint.href));
     assert.ok(styles.length <= 2, "The shared auth controls/layout must not split into separate stylesheet requests.");
 
     await expect.poll(() => heldRequests.length).toBe(1);

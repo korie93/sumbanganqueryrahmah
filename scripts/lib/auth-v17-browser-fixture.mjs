@@ -14,6 +14,21 @@ export const authV17FixtureIdentity = Object.freeze({
   username: "v17.ui.fixture", password: "BrowserFixture1!", token: "v17-reset-ui-fixture",
 });
 
+export function assertAuthV17StartupScriptBudget(entryScripts, loginScripts) {
+  assert.ok(Array.isArray(entryScripts) && entryScripts.length > 0);
+  assert.ok(Array.isArray(loginScripts) && loginScripts.length > 0);
+  const scripts = new Set([...entryScripts, ...loginScripts]);
+  for (const script of scripts) {
+    assert.equal(typeof script, "string");
+    assert.match(script, /^\/assets\/[A-Za-z0-9_-]+\.js$/, "Startup scripts must be exact local build assets.");
+  }
+  // Count the whole required graph: moving a shared dependency from initial
+  // HTML into Login's hints must not appear to add a network request. The
+  // consolidated build needs 12 unique scripts; the prior layout needed 15.
+  assert.ok(scripts.size <= 12, "The complete entry + Login startup graph must stay within 12 script requests.");
+  return scripts;
+}
+
 export function createAuthV17Fixture(origin) {
   const parsed = new URL(origin);
   assert.equal(parsed.protocol, "http:");
