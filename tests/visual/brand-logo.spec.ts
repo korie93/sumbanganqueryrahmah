@@ -268,7 +268,8 @@ for (const theme of ["light", "dark"] as const) {
       await expect(login).toHaveAttribute("href", "/login");
       await login.click();
       await expect(page.getByTestId("input-username")).toBeVisible();
-      await loadedLogo(page.locator(".auth-v17-brand img"), "/brand/sqr-full-logo-light.svg", 665 / 310);
+      await expect(page.locator(".auth-v17-login")).toHaveAttribute("data-theme", theme);
+      await loadedLogo(page.locator(".auth-v17-brand img"), `/brand/sqr-full-logo-${theme}.svg`, 665 / 310);
       await metadata(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`login-${theme}-${width}.png`), fullPage: true });

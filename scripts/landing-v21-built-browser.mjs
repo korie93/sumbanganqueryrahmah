@@ -40,7 +40,9 @@ async function installFixture(context, profile = {}) {
     if (location.origin !== origin) return;
     if (performanceMode === "auto") localStorage.removeItem("perf_mode");
     else localStorage.setItem("perf_mode", performanceMode ?? "low");
-    localStorage.setItem("theme", "light");
+    // Each context starts empty. Preserve real choices on later documents so
+    // reload and login roundtrips exercise the app's shared theme preference.
+    if (localStorage.getItem("theme") === null) localStorage.setItem("theme", "light");
     Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => cores ?? 8 });
     Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => memory ?? 8 });
     Object.defineProperty(navigator, "connection", { configurable: true, value: {
@@ -102,6 +104,13 @@ async function openLanding(candidate, theme = "light") {
   await expect(candidate.locator(".sqr-landing-next h1")).toHaveText("Search.Analyse.Monitor.");
   await expect(candidate.locator(".sqr-landing")).toHaveCount(0);
   await candidate.evaluate(() => document.fonts.ready);
+}
+
+async function expectSharedTheme(candidate, theme, surface) {
+  await expect(candidate.locator(surface)).toHaveAttribute("data-theme", theme);
+  await expect(candidate.locator("html")).toHaveAttribute("data-theme", theme);
+  assert.equal(await candidate.evaluate(() => localStorage.getItem("theme")), theme);
+  assert.equal(await candidate.evaluate(() => document.documentElement.classList.contains("dark")), theme === "dark");
 }
 
 async function checkLayout(candidate, width) {
@@ -175,7 +184,16 @@ try {
     assert.deepEqual(fixture.assets.filter(landingOnly), [], "Direct login keeps the public landing out of its request graph");
     assert.deepEqual(await page.locator('link[rel="modulepreload"], link[rel="preload"]').evaluateAll(elements => elements.map(element => new URL(element.href).pathname).filter(asset => /^\/assets\/Landing(?:Next)?-/.test(asset))), []);
     const inputStyle = element => { const style = getComputedStyle(element); return { height: style.height, fontSize: style.fontSize, color: style.color, background: style.backgroundColor, border: style.borderRadius }; };
-    const loginBefore = await page.getByTestId("input-username").evaluate(inputStyle);
+    await expectSharedTheme(page, "light", ".auth-v17-login");
+    const loginBefore = { light: await page.getByTestId("input-username").evaluate(inputStyle) };
+    // Capture both direct-login palettes before loading any landing CSS. The
+    // isolation check must compare the same selected theme, including colors.
+    await page.evaluate(() => localStorage.setItem("theme", "dark"));
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expectSharedTheme(page, "dark", ".auth-v17-login");
+    loginBefore.dark = await page.getByTestId("input-username").evaluate(inputStyle);
+    assert.deepEqual(fixture.assets.filter(landingOnly), [], "Direct dark login also keeps landing resources lazy");
+    await page.evaluate(() => localStorage.setItem("theme", "light"));
     pass("direct login keeps landing code and artwork lazy");
 
     await openLanding(page);
@@ -248,10 +266,9 @@ try {
     await checkAccessibility(page);
     await page.locator(".sqr-landing-next header").scrollIntoViewIfNeeded();
     await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
-    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
-    assert.equal(await page.evaluate(() => localStorage.getItem("theme")), "light");
+    await expectSharedTheme(page, "dark", ".sqr-landing-next");
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
+    await expectSharedTheme(page, "dark", ".sqr-landing-next");
     await checkAccessibility(page);
     await checkMotion(page);
     pass("both themes and constrained-device CSS/SVG motion, live reduced motion, visibility and offscreen pausing");
@@ -265,11 +282,22 @@ try {
       await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
       await expect(page.locator("html")).toHaveAttribute("lang", "ms");
       await expect(page.locator("#sqr-application-schema")).toHaveCount(0);
-      assert.deepEqual(await page.getByTestId("input-username").evaluate(inputStyle), loginBefore, "No landing CSS leakage into login");
+      await expectSharedTheme(page, "dark", ".auth-v17-login");
+      assert.deepEqual(await page.getByTestId("input-username").evaluate(inputStyle), loginBefore.dark, "No landing CSS leakage into dark login");
       await page.getByRole("button", { name: "Laman utama", exact: true }).click();
-      await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
+      await expectSharedTheme(page, "dark", ".sqr-landing-next");
       await expect(page.locator("#sqr-application-schema")).toHaveCount(1);
     }
+    await page.locator(".sqr-landing-next header").scrollIntoViewIfNeeded();
+    await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
+    await expectSharedTheme(page, "light", ".sqr-landing-next");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expectSharedTheme(page, "light", ".sqr-landing-next");
+    await page.locator(".sqr-landing-next header .login").click();
+    await expectSharedTheme(page, "light", ".auth-v17-login");
+    assert.deepEqual(await page.getByTestId("input-username").evaluate(inputStyle), loginBefore.light, "No landing CSS leakage into light login");
+    await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+    await expectSharedTheme(page, "light", ".sqr-landing-next");
     pass("all login links, real form, Home return, theme persistence, language/schema cleanup and CSS isolation under strict CSP");
   } finally {
     try { await fixture.finish(); } finally { await context.close(); }
@@ -309,11 +337,12 @@ try {
     await page.emulateMedia({ reducedMotion: "reduce" }); await expect(replay.locator("img")).toHaveAttribute("src", /-static\.svg$/);
     await page.locator(".sqr-landing-next header").scrollIntoViewIfNeeded();
     await page.getByRole("button", { name: "Toggle color theme", exact: true }).tap();
-    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
+    await expectSharedTheme(page, "dark", ".sqr-landing-next");
     await checkAccessibility(page);
     await page.locator(".sqr-landing-next header .login").tap(); await expect(page.getByTestId("input-username")).toBeVisible();
+    await expectSharedTheme(page, "dark", ".auth-v17-login");
     await page.getByRole("button", { name: "Laman utama", exact: true }).tap();
-    await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
+    await expectSharedTheme(page, "dark", ".sqr-landing-next");
     pass("320px touch menu, animated replay, live motion preference, theme, login and accessibility");
   } finally {
     try { await touchFixture.finish(); } finally { await touchContext.close(); }
