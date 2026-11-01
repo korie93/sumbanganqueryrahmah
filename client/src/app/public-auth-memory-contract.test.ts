@@ -46,7 +46,8 @@ test("forgot password route uses lightweight auth chrome without eager recovery 
 
   assert.doesNotMatch(appSource, /ForgotPasswordPage\.preload\s*\(/);
   assert.match(forgotPasswordSource, /<AuthV17Layout/);
-  assert.match(publicAuthCss, /\.auth-v17-art::before\s*\{[^}]*sqr-illustration\.webp/);
+  assert.match(publicAuthCss, /\.auth-v17\s*\{[^}]*--auth-illustration:\s*url\("\.\.\/\.\.\/assets\/auth-v17\/sqr-illustration\.webp"\)/);
+  assert.match(publicAuthCss, /\.auth-v17-art::before\s*\{[^}]*background:\s*var\(--auth-illustration\)/);
   // Neither standard nor minimal auth chrome should allocate a filtered backdrop.
   assert.doesNotMatch(publicAuthCss, /backdrop-filter:\s*(?:blur|saturate)\(/);
   assert.doesNotMatch(publicAuthCss, /animation:[^;]*infinite|will-change:\s*(?:transform|opacity)/);

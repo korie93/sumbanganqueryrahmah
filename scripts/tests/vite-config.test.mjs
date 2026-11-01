@@ -288,6 +288,27 @@ test("public startup helpers share one chunk without absorbing API clients, test
   }
 });
 
+test("entry theme ownership cannot pull lazy auth presentation into the landing startup", async () => {
+  const config = await importViteConfigFresh();
+  const groups = config.build.rollupOptions.output.codeSplitting.groups;
+  const shared = groups[0];
+  const framework = groups.find(group => group.name === "framework");
+  const auth = groups.find(group => group.name === "public-auth-runtime");
+  assert.ok(shared.priority > (auth.priority ?? 0));
+  for (const id of ["/repo/client/src/components/useTheme.ts", "C:\\repo\\client\\src\\components\\useTheme.ts"]) {
+    assert.equal(shared.name(id), "public-runtime");
+    assert.equal(auth.test(id), false);
+    assert.equal(framework.test(id), false);
+  }
+  for (const id of ["client/src/components/useTheme.test.ts", "client/src/components/useTheme.tsx", "client/src/components/useTheme-api.ts", "client/src/components/auth/useTheme.ts", "client/src/components/auth/AuthV17Layout.tsx"]) {
+    assert.equal(shared.name(`/repo/${id}`), undefined);
+    assert.equal(shared.name(`C:\\repo\\${id.replace(/\//g, "\\")}`), undefined);
+  }
+  assert.equal(auth.test("/repo/client/src/components/auth/AuthV17Layout.tsx"), true);
+  assert.equal(shared.name("/repo/client/src/components/BrandLogo.tsx"), "ui");
+  assert.equal(shared.name("/repo/node_modules/react/index.js"), "framework");
+});
+
 test("shared branding stays independent of lazy auth without absorbing framework dependencies", async () => {
   const config = await importViteConfigFresh();
   const groups = config.build.rollupOptions.output.codeSplitting.groups;
@@ -321,7 +342,7 @@ function loginHintFixture() {
   };
   const layout = chunk("assets/AuthV17Layout-abc123.js", ["assets/i18n-abc123.js", "assets/framework-abc123.js"], {
     importedCss: new Set(["assets/AuthV17Layout-abc123.css"]),
-    importedAssets: new Set(["assets/sqr-illustration-abc123.webp"]),
+    importedAssets: new Set(["assets/sqr-illustration-abc123.webp", "assets/sqr-illustration-dark-def456.webp"]),
   });
   const main = {
     ...chunk("assets/index-main.js", ["assets/framework-abc123.js"], {
@@ -335,12 +356,16 @@ function loginHintFixture() {
     type: "asset", fileName: "assets/sqr-illustration-abc123.webp",
     originalFileNames: ["src/assets/auth-v17/sqr-illustration.webp"],
   };
-  const assets = [login, layout, main, framework, translations, illustration,
+  const darkIllustration = {
+    type: "asset", fileName: "assets/sqr-illustration-dark-def456.webp",
+    originalFileNames: ["src/assets/auth-v17/sqr-illustration-dark.webp"],
+  };
+  const assets = [login, layout, main, framework, translations, illustration, darkIllustration,
     ...["assets/Login-abc123.css", "assets/AuthV17Layout-abc123.css", "assets/index-main.css"]
       .map(fileName => ({ type: "asset", fileName, originalFileNames: [] })),
     chunk("assets/Recovery-private.js"), chunk("assets/AuthenticatedAppEntry-private.js"), chunk("assets/Landing-private.js"),
   ];
-  return { login, layout, main, illustration, bundle: Object.fromEntries(assets.map(asset => [asset.fileName, asset])) };
+  return { login, layout, main, illustration, darkIllustration, bundle: Object.fromEntries(assets.map(asset => [asset.fileName, asset])) };
 }
 
 test("public auth runtime consolidates only login's existing helpers, shared presentation and icons", async () => {
@@ -385,6 +410,7 @@ test("login resource hints include only emitted static dependencies, CSS and the
   const hints = plugin.transformIndexHtml.handler(html, { bundle: fixture.bundle });
   assert.deepEqual(hints.map(hint => [hint.attrs.name, hint.attrs.content]), [
     ["sqr-login-image", "/assets/sqr-illustration-abc123.webp"],
+    ["sqr-login-image", "/assets/sqr-illustration-dark-def456.webp"],
     ["sqr-login-script", "/assets/Login-abc123.js"],
     ["sqr-login-script", "/assets/AuthV17Layout-abc123.js"],
     ["sqr-login-script", "/assets/i18n-abc123.js"],
@@ -394,8 +420,9 @@ test("login resource hints include only emitted static dependencies, CSS and the
   assert.ok(hints.every(hint => hint.tag === "meta" && hint.injectTo === "head"));
   assert.equal(new Set(hints.map(hint => hint.attrs.content)).size, hints.length);
   assert.ok(hints.every(hint => !hint.attrs.content.includes("private")));
+  assert.deepEqual(hints.filter(hint => hint.attrs.name === "sqr-login-image").map(hint => hint.attrs["data-theme"]), ["light", "dark"]);
   const withImage = plugin.transformIndexHtml.handler(html + '<link rel="preload" as="image" href="/assets/sqr-illustration-abc123.webp">', { bundle: fixture.bundle });
-  assert.equal(withImage.some(hint => hint.attrs.name === "sqr-login-image"), false);
+  assert.deepEqual(withImage.filter(hint => hint.attrs.name === "sqr-login-image").map(hint => hint.attrs["data-theme"]), ["dark"]);
 });
 
 test("login resource hints reject missing or nonlocal static graph resources", async () => {
@@ -423,6 +450,11 @@ test("login image hint is verified against source identity and static-graph asse
     fixture => { fixture.layout.viteMetadata.importedAssets.clear(); },
     fixture => { fixture.illustration.fileName = "https://outside.invalid/sqr-illustration-abc123.webp"; },
     fixture => { fixture.bundle["assets/sqr-illustration-duplicate.webp"] = { ...fixture.illustration, fileName: "assets/sqr-illustration-duplicate.webp" }; },
+    fixture => { delete fixture.bundle[fixture.darkIllustration.fileName]; },
+    fixture => { fixture.darkIllustration.originalFileNames = ["src/assets/another/sqr-illustration-dark.webp"]; },
+    fixture => { fixture.layout.viteMetadata.importedAssets.delete(fixture.darkIllustration.fileName); },
+    fixture => { fixture.darkIllustration.fileName = "https://outside.invalid/sqr-illustration-dark-def456.webp"; },
+    fixture => { fixture.bundle["assets/sqr-illustration-dark-duplicate.webp"] = { ...fixture.darkIllustration, fileName: "assets/sqr-illustration-dark-duplicate.webp" }; },
   ]) {
     const fixture = loginHintFixture();
     mutate(fixture);
@@ -430,5 +462,6 @@ test("login image hint is verified against source identity and static-graph asse
   }
   const absolute = loginHintFixture();
   absolute.illustration.originalFileNames = [path.resolve("client/src/assets/auth-v17/sqr-illustration.webp")];
-  assert.ok(handler("", { bundle: absolute.bundle }).some(hint => hint.attrs.name === "sqr-login-image"));
+  absolute.darkIllustration.originalFileNames = [path.resolve("client/src/assets/auth-v17/sqr-illustration-dark.webp")];
+  assert.equal(handler("", { bundle: absolute.bundle }).filter(hint => hint.attrs.name === "sqr-login-image").length, 2);
 });

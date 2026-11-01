@@ -92,7 +92,9 @@ test("the universal public landing keeps accessible content and existing login n
   const fallback = readPageSource("LandingRouteFallback.tsx");
   assert.match(landing, /<LandingNext onLoginClick=\{onLoginClick\}/);
   assert.match(fallback, /aria-busy="true"/);
-  assert.match(fallback, /href="\/login"/);
+  assert.match(fallback, /Loading SQR/);
+  assert.match(fallback, /SQR_BRAND_ASSETS\.transparentIcon/);
+  assert.doesNotMatch(fallback, /Operational data, structured|Sign In/);
   assert.match(content, /<main id="main-content" tabIndex=\{-1\}/);
   assert.match(content, /href="#main-content">Skip to content/);
   assert.ok(content.includes('href === "/login"'));

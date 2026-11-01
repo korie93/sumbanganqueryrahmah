@@ -5,6 +5,7 @@ import { useAuthLocale } from "./useAuthLocale";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
 import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import { BrandLogo } from "@/components/BrandLogo";
+import { useTheme } from "@/components/useTheme";
 import "./AuthV17Layout.css";
 
 type Props = {
@@ -27,6 +28,8 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
   showBackButton = true, backLabel, onBackClick, className = "", controlledAccess = false }: Props) {
   const [, navigate] = useLocation();
   const { locale, setLocale, t } = useAuthLocale();
+  const { theme } = useTheme();
+  const surfaceTheme = className.split(/\s+/).includes("auth-v17-login") ? theme : "light";
   const [offline, setOffline] = useState(false);
   const [health, setHealth] = useState<"ready" | "unavailable" | null>(null);
   useEffect(() => {
@@ -56,12 +59,12 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
   }, []);
 
   return (
-    <main id="main-content" tabIndex={-1} lang={locale} className={`auth-v17 ${className}`}>
+    <main id="main-content" tabIndex={-1} lang={locale} data-theme={surfaceTheme} className={`auth-v17 ${className}`}>
       <section className="auth-v17-brand-panel" aria-label={t("auth.v17.platform")}>
         <div className="auth-v17-curve" aria-hidden="true" />
         <div className="auth-v17-top">
           <div className="auth-v17-brand">
-            <BrandLogo variant="full" theme="light" priority className="auth-v17-logo" />
+            <BrandLogo variant="full" theme={surfaceTheme} priority className="auth-v17-logo" />
             <small>{t("auth.v17.platform")}</small>
           </div>
           {health && !offline ? <span className={`auth-v17-status${health === "ready" ? "" : " auth-v17-status--warn"}`} role="status">

@@ -8,9 +8,15 @@ import { detectLowSpecMode } from "./lib/low-spec-mode";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import { startFaviconStatus } from "./app/favicon-status";
 import offlineFavicon from "./assets/favicon-status/offline-32.png?inline";
+import { applyTheme, resolveInitialTheme } from "./components/useTheme";
+import { migrateLandingThemePreference } from "./lib/landing-theme-migration";
 import "./styles/tokens/index.css";
 import "./public-shell.css";
 import "./styles/theme/index.css";
+
+// Resolve the same preference before the first React render on every route.
+migrateLandingThemePreference();
+applyTheme(resolveInitialTheme(), { persist: false });
 
 installGlobalUnhandledRejectionHandler({
   productionReporter: (_message, reason) => {

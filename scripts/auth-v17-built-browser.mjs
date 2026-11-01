@@ -96,7 +96,7 @@ async function captureReference() {
 async function verifyAsyncBootScheduling() {
   // Hold the initial stylesheet: deferred scripts cannot execute past this
   // barrier, but async boot must already start discovering login resources.
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "light", serviceWorkers: "block" });
   const fixture = createAuthV17Fixture(server.origin);
   let releaseCss;
   const cssGate = new Promise((resolve) => { releaseCss = resolve; });
@@ -114,10 +114,13 @@ async function verifyAsyncBootScheduling() {
   try {
     await page.goto(`${server.origin}/login`, { waitUntil: "commit" });
     await expect.poll(() => held.length).toBe(1);
-    const hint = page.locator('meta[name="sqr-login-image"]');
+    await expect(page.locator('meta[name="sqr-login-image"]')).toHaveCount(2);
+    const hint = page.locator('meta[name="sqr-login-image"][data-theme="light"]');
     await expect(hint).toHaveCount(1);
     const artwork = await hint.getAttribute("content");
     await expect(page.locator(`link[rel="preload"][as="image"][href="${artwork}"]`)).toHaveCount(1);
+    const darkArtwork = await page.locator('meta[name="sqr-login-image"][data-theme="dark"]').getAttribute("content");
+    await expect(page.locator(`link[rel="preload"][as="image"][href="${darkArtwork}"]`)).toHaveCount(0);
     await expect.poll(() => finished.has(artwork)).toBe(true);
     await expect(page.getByTestId("input-username")).toHaveCount(0);
     assert.equal(await page.locator('script[src="/boot-shell.js"]').evaluate((element) => element.async), true);
@@ -176,7 +179,7 @@ async function verifyAsyncBootScheduling() {
 async function verifyLoginResourceHints() {
   // A cold, isolated context proves the artwork is discovered from the built
   // resource hints, not from a cached stylesheet or an already-mounted login.
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", serviceWorkers: "block" });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "light", reducedMotion: "reduce", serviceWorkers: "block" });
   const fixture = createAuthV17Fixture(server.origin);
   const requests = [];
   const finished = new Set();
@@ -202,8 +205,10 @@ async function verifyLoginResourceHints() {
     // Do not wait for load: the intentionally held Login chunk must not execute
     // until its image and stylesheet preloads have already completed.
     await page.goto(`${server.origin}/login`, { waitUntil: "commit" });
-    await expect(page.locator('meta[name="sqr-login-image"]')).toHaveCount(1);
-    const hints = await page.locator('meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"]').evaluateAll((elements) => elements.map((element) => ({ name: element.getAttribute("name"), href: element.getAttribute("content") })));
+    await expect(page.locator('meta[name="sqr-login-image"]')).toHaveCount(2);
+    const darkImage = await page.locator('meta[name="sqr-login-image"][data-theme="dark"]').getAttribute("content");
+    assert.match(darkImage, /^\/assets\/sqr-illustration-dark-[A-Za-z0-9_-]+\.webp$/);
+    const hints = await page.locator('meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"][data-theme="light"]').evaluateAll((elements) => elements.map((element) => ({ name: element.getAttribute("name"), href: element.getAttribute("content") })));
     const scripts = hints.filter((hint) => hint.name === "sqr-login-script");
     const styles = hints.filter((hint) => hint.name === "sqr-login-style");
     const image = hints.find((hint) => hint.name === "sqr-login-image");
@@ -246,6 +251,7 @@ async function verifyLoginResourceHints() {
     const background = await page.locator(".auth-v17-art").evaluate((element) => getComputedStyle(element, "::before").backgroundImage);
     assert.ok(background.includes(image.href), "The early image is the exact background used by the mounted V17 login.");
     assert.equal(requests.filter((href) => href === image.href).length, 1, "Mounting Login reuses the image preload without a duplicate CORS fetch.");
+    assert.deepEqual(requests.filter((href) => href === darkImage), [], "Light login never downloads the dark-only illustration.");
     assert.deepEqual(requests.filter((href) => privateAssetPattern.test(href)), [], "Anonymous login does not fetch authenticated shells or heavy private features.");
     assert.deepEqual(fixture.state.unexpected, [], "Resource hints stay within the isolated public API boundary.");
     assert.deepEqual(errors, [], "Preloading must not introduce module or runtime errors.");

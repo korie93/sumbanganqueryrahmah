@@ -170,7 +170,7 @@ for (const profile of [
       await page.addInitScript(({ mode, cores, memory }) => {
         if (mode === "low") localStorage.setItem("perf_mode", "low");
         else localStorage.removeItem("perf_mode");
-        localStorage.setItem("sqr-landing-next-theme", "dark");
+        localStorage.setItem("theme", "dark");
         Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => cores });
         Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => memory });
         // The isolated loopback fixture is healthy even when its namespace has no external NIC.

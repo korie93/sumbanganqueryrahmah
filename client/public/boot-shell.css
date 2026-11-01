@@ -72,39 +72,47 @@ html.app-ready .public-auth-boot-shell {
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell {
-  --boot-shell-text: #101828;
-  --boot-shell-muted: #4c5b6b;
-  --boot-shell-highlight: #1e3a5f;
-  align-items: flex-start;
-  background: #ffffff;
+  --boot-shell-text: #f4f4f5;
+  --boot-shell-muted: #a6a9b1;
+  align-items: center;
+  background: #000;
+  color-scheme: dark;
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell__panel {
-  width: min(100%, 1276px);
-  margin-top: 20px;
-  border-radius: 32px;
-  border-color: #dde4ec;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.045);
+  width: min(100%, 320px);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell__content {
-  min-height: 260px;
-  align-content: center;
-  padding: 32px;
+  justify-items: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+  visibility: hidden;
+}
+
+html[data-boot-shell="landing"][data-landing-boot-ready="true"] .public-auth-boot-shell__content {
+  visibility: visible;
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell__title {
-  max-width: 780px;
-  font-size: clamp(2rem, 6.6vw, 3.4rem);
-  line-height: 1.08;
+  max-width: 100%;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
   letter-spacing: 0;
 }
 
+html[data-boot-shell="landing"] .public-auth-boot-shell__eyebrow,
 html[data-boot-shell="landing"] .public-auth-boot-shell__copy {
-  max-width: 620px;
+  display: none;
 }
 
 html[data-boot-shell="landing"] .public-auth-boot-shell__fields {
@@ -206,17 +214,4 @@ html[data-boot-shell="landing"] .public-auth-boot-shell__fields {
     padding: 24px 20px;
   }
 
-  html[data-boot-shell="landing"] .public-auth-boot-shell__panel {
-    margin-top: 0;
-    border-radius: 24px;
-  }
-
-  html[data-boot-shell="landing"] .public-auth-boot-shell__content {
-    min-height: 280px;
-    padding: 28px 22px;
-  }
-
-  html[data-boot-shell="landing"] .public-auth-boot-shell__title {
-    font-size: clamp(1.8rem, 7.5vw, 2.4rem);
-  }
 }

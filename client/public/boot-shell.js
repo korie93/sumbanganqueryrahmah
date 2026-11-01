@@ -6,9 +6,9 @@
   const publicShellCopy = {
     "/": {
       mode: "landing",
-      eyebrow: "SQR Operations Platform",
-      title: "Operational data, structured for faster decisions.",
-      copy: "SQR consolidates search, analysis, monitoring and access control into a single operational workspace designed for clarity, speed and governance.",
+      eyebrow: "",
+      title: "Loading SQR…",
+      copy: "",
     },
     "/login": {
       mode: "public-auth",
@@ -64,6 +64,19 @@
         || window.sessionStorage.getItem("user")
         || window.sessionStorage.getItem("banned") === "1"
         || document.querySelector('meta[name="sqr-maintenance"][content="active"]')) return;
+      // Match the app's canonical preference and legacy migration without
+      // writing storage or applying a theme before the app owns the page.
+      const resolveLoginTheme = function () {
+        try {
+          const current = window.localStorage.getItem("theme");
+          if (current === "light" || current === "dark") return current;
+          const legacy = window.localStorage.getItem("sqr-landing-next-theme");
+          if (legacy === "light" || legacy === "dark") return legacy;
+        } catch { /* Storage denial falls back to the system preference. */ }
+        return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark" : "light";
+      };
+      const loginTheme = resource === "login" ? resolveLoginTheme() : null;
       const prefix = "sqr-" + resource;
       const selector = 'meta[name="' + prefix + '-script"], meta[name="' + prefix + '-style"]'
         + ', meta[name="' + prefix + '-image"]';
@@ -79,6 +92,12 @@
             : resource === "landing" ? /^\/landing-next\/radar-(?:animated|static)\.svg$/
               : /^\/assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/;
         if (!allowed.test(href)) return;
+        if (isImage && resource === "login") {
+          const imageTheme = meta.getAttribute("data-theme");
+          if (imageTheme !== loginTheme || (imageTheme !== "light" && imageTheme !== "dark")) return;
+          const darkImage = /^\/assets\/sqr-illustration-dark-[A-Za-z0-9_-]+\.webp$/.test(href);
+          if ((imageTheme === "dark") !== darkImage) return;
+        }
         const media = isImage && resource === "landing" ? meta.getAttribute("media") : null;
         if (isImage && resource === "landing") {
           const expectedMedia = href === "/landing-next/radar-static.svg"
@@ -112,18 +131,28 @@
     const title = document.getElementById("boot-shell-title");
     const copy = document.getElementById("boot-shell-copy");
 
-    if (eyebrow && shell.eyebrow) {
+    if (eyebrow && typeof shell.eyebrow === "string") {
       eyebrow.textContent = shell.eyebrow;
     }
-    if (title && shell.title) {
+    if (title && typeof shell.title === "string") {
       title.textContent = shell.title;
     }
-    if (copy && shell.copy) {
+    if (copy && typeof shell.copy === "string") {
       copy.textContent = shell.copy;
+    }
+    if (shell.mode === "landing" && title) {
+      const brand = document.querySelector("#boot-shell .public-auth-boot-shell__brand");
+      if (brand) {
+        brand.setAttribute("src", "/brand/sidebar-q-static.png");
+        document.documentElement.setAttribute("data-landing-boot-ready", "true");
+      }
     }
   };
 
+  // The shared HTML contains auth copy. Replace it before the first root-route
+  // paint when its nodes are already parsed; keep the existing parsing fallback.
   if (document.readyState === "loading") {
+    if (shell.mode === "landing") applyShellCopy();
     document.addEventListener("DOMContentLoaded", applyShellCopy, { once: true });
     return;
   }

@@ -105,6 +105,9 @@ export default defineConfig({
               if (
                 /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props|auth-session|lazy-with-preload)\.ts$/.test(normalizedId)
                 || /\/client\/src\/app\/maintenance-client-policy\.ts$/.test(normalizedId)
+                // The entry resolves theme before React mounts. Keep this pure
+                // hook out of lazy AuthV17Layout's dependency ownership.
+                || /\/client\/src\/components\/useTheme\.ts$/.test(normalizedId)
                 || /\/shared\/brand-assets\.ts$/.test(normalizedId)
                 || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert|arrow-right|check))\.js$/.test(normalizedId)
               ) {

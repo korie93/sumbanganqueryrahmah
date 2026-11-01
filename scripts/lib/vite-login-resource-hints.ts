@@ -41,21 +41,25 @@ export function loginResourceHints(): Plugin {
         };
         visit(login.fileName);
 
-        const illustrations = emitted.filter(output => output.type === "asset"
-          && (output.originalFileNames ?? []).some(original => {
-            const normalized = normalizePath(original);
-            return normalized === "src/assets/auth-v17/sqr-illustration.webp"
-              || normalized.endsWith("/client/src/assets/auth-v17/sqr-illustration.webp");
-          }));
-        const illustration = illustrations.length === 1 ? illustrations[0] : undefined;
-        if (!illustration || !/^assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/.test(illustration.fileName)
-          || !referencedAssets.has(illustration.fileName)) {
-          throw new Error("Login resource hints require the exact emitted V17 illustration used by login.");
-        }
-
         const hints: HtmlTagDescriptor[] = [];
+        for (const [theme, stem] of [["light", "sqr-illustration"], ["dark", "sqr-illustration-dark"]] as const) {
+          const sourcePath = `src/assets/auth-v17/${stem}.webp`;
+          const illustrations = emitted.filter(output => output.type === "asset"
+            && (output.originalFileNames ?? []).some(original => {
+              const normalized = normalizePath(original);
+              return normalized === sourcePath || normalized.endsWith(`/client/${sourcePath}`);
+            }));
+          const illustration = illustrations.length === 1 ? illustrations[0] : undefined;
+          if (!illustration || !new RegExp(`^assets/${stem}-[A-Za-z0-9_-]+\\.webp$`).test(illustration.fileName)
+            || !referencedAssets.has(illustration.fileName)) {
+            throw new Error(`Login resource hints require the exact emitted V17 illustration used by login (${theme}).`);
+          }
+          if (!html.includes(`href="/${illustration.fileName}"`) && !html.includes(`src="/${illustration.fileName}"`)) {
+            hints.push({ tag: "meta", attrs: { name: "sqr-login-image", content: `/${illustration.fileName}`,
+              "data-theme": theme }, injectTo: "head" });
+          }
+        }
         for (const [name, fileName] of [
-          ["sqr-login-image", illustration.fileName],
           ...Array.from(scripts, fileName => ["sqr-login-script", fileName]),
           ...Array.from(styles, fileName => ["sqr-login-style", fileName]),
         ]) {

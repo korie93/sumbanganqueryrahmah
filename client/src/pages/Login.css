@@ -19,3 +19,9 @@
 .auth-v17 .login-submit-spinner { width: 16px; height: 16px; border: 2px solid #ffffff66; border-top-color: #fff; border-radius: 50%; animation: auth-v17-spin .7s linear infinite; }
 @keyframes auth-v17-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .auth-v17 .login-submit-spinner { animation: none; } }
+.auth-v17-login[data-theme="dark"] .login-field-icon,
+.auth-v17-login[data-theme="dark"] .login-password-toggle { color: #a9b7c8; }
+.auth-v17-login[data-theme="dark"] .login-control:focus-within .login-field-icon { color: var(--auth-blue); }
+.auth-v17-login[data-theme="dark"] .login-password-toggle:hover { background: #252b33; color: var(--auth-text); }
+.auth-v17-login[data-theme="dark"] .login-caps-lock { color: #f3ca81; }
+.auth-v17-login[data-theme="dark"] .login-locked-alert { border-color: #ad8350; background: #302718; color: #f3ca81; }

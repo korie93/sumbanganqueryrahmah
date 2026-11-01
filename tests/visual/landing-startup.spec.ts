@@ -189,10 +189,12 @@ test("Login startup completes public hints before app execution and retains the 
     page.on("pageerror", error => errors.push(error.message));
     await page.goto("/login", { waitUntil: "commit" });
     await expect.poll(() => page.locator('meta[name="sqr-login-style"]').count()).toBeGreaterThan(0);
-    const hints = await page.locator('meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"]')
+    const hints = await page.locator('meta[name="sqr-login-script"], meta[name="sqr-login-style"], meta[name="sqr-login-image"][data-theme="light"]')
       .evaluateAll(elements => elements.map(element => element.getAttribute("content") ?? ""));
-    const illustration = await page.locator('meta[name="sqr-login-image"]').getAttribute("content");
+    const illustration = await page.locator('meta[name="sqr-login-image"][data-theme="light"]').getAttribute("content");
+    const darkIllustration = await page.locator('meta[name="sqr-login-image"][data-theme="dark"]').getAttribute("content");
     expect(illustration).toMatch(/^\/assets\/sqr-illustration-[A-Za-z0-9_-]+\.webp$/);
+    expect(darkIllustration).toMatch(/^\/assets\/sqr-illustration-dark-[A-Za-z0-9_-]+\.webp$/);
     for (const asset of hints) {
       expect(asset).toMatch(/^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|webp)$/);
       await expect.poll(() => fixture.completedAssets.has(asset), `${asset} completes before the login entry executes`).toBe(true);
@@ -216,6 +218,7 @@ test("Login startup completes public hints before app execution and retains the 
     expect(appliedStyles.length).toBeGreaterThan(0);
     for (const asset of appliedStyles) expect(beforeApp.has(asset), `${asset} was ready before login mounted`).toBe(true);
     expect(fixture.requests.filter(request => request === `GET ${illustration}`)).toEqual([`GET ${illustration}`]);
+    expect(fixture.requests.filter(request => request === `GET ${darkIllustration}`)).toEqual([]);
     expect(fixture.requests.filter(request => separateEntryHelpers.test(request))).toEqual([]);
     expect(fixture.requests.filter(request => /^GET \/assets\/(?:AuthenticatedApp|authenticated-|Collection|Viewer|Settings|query-|charts-|excel-|pdf-)/.test(request))).toEqual([]);
     expect(fixture.requests.filter(request => / \/landing-next\//.test(request))).toEqual([]);

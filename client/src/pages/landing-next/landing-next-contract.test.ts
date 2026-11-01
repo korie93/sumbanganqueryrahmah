@@ -46,12 +46,8 @@ test("every device receives one public page behind the shared lazy route without
 test("the universal landing preserves shared device policy, legacy modules, routes and shell source", () => {
   // The public landing opts out locally; application-wide device policy stays intact.
   const protectedFiles = new Map([
+    ["client/src/components/useTheme.ts", "1da25c86ec8ad0a6b0927e0a0df787ea92b007b300d74088d6e6ceea5dd2424a"],
     ["client/src/lib/low-spec-mode.ts", "9a77bca9208adcdd9dc58863ec2b4463d765e0fa0fe175aff8da052453638d80"],
-    ["client/src/main.tsx", "41ffea7bb4bbd7bc8d9fd2494051c3d38b6ef5829b95583e725f9999a9ddaf2c"],
-    ["client/src/pages/LandingRouteFallback.tsx", "48b2407d32b7e4deebf35fa55e2e2787bcf3c411b963e6d97c726c88191851f9"],
-    ["client/src/pages/LandingRouteFallback.css", "bf1cd144114407d23207e5e9c97c3790786773f536da93ce33816d632f36ef45"],
-    ["client/public/boot-shell.js", "dc1e7d73040cf3ca1da70342e4af8256c1b46db94a3b2629b96b98606116f258"],
-    ["client/public/boot-shell.css", "7c3ed38ef85cb1253bb0b767d431d631c1d7ebc0c53b786216f752d1c5ae2da1"],
     ["client/src/app/lazy-pages.tsx", "09af4a5b0ccee8a2acfd701e7c493198fb2b9ad8d5426d1d308f4ceac13f32b9"],
     ["client/src/app/routing.ts", "734810c0d91476cd4c92b47adef3fdecfdd29734287bb6992f7748d1ed90a2de"],
     ["client/src/app/document-metadata.ts", "4068ea9e356fca87f858fac7afae91d20430e86e217fc2fa66f33e62395cc0c6"],
@@ -167,7 +163,7 @@ test("public landing is semantic React with local artwork and no protected servi
       if (ts.isImportDeclaration(node)) {
         assert.ok(ts.isStringLiteral(node.moduleSpecifier) && (
           approved.has(node.moduleSpecifier.text)
-          || (name === "useLandingNextMotion.ts" && node.moduleSpecifier.text === "@/lib/browser-storage")
+          || (name === "useLandingNextMotion.ts" && ["@/lib/browser-storage", "@/components/useTheme"].includes(node.moduleSpecifier.text))
           || (name === "Landing.tsx" && node.moduleSpecifier.text === "@/pages/landing-next/LandingNext")
         ), node.getText(file));
       }
@@ -202,8 +198,10 @@ test("public landing is semantic React with local artwork and no protected servi
   assert.match(component, /width=\{dimension\} height=\{dimension\}/);
 });
 
-test("landing theme and motion belong to the local route and clean up on departure", () => {
-  assert.match(motion, /const THEME_KEY = "sqr-landing-next-theme"/);
+test("landing publishes the shared theme while keeping its motion lifecycle local", () => {
+  assert.match(motion, /resolveInitialTheme/);
+  assert.match(motion, /applyTheme\(next\)/);
+  assert.doesNotMatch(motion, /sqr-landing-next-theme/);
   assert.doesNotMatch(motion, /(?:setItem|removeItem)\(\s*["'](?:theme|perf_mode|user|role|username)["']/);
   assert.doesNotMatch(motion, /document\.documentElement\.(?:classList|dataset|style)/);
   assert.match(motion, /if \(!element \|\| hidden\) return/);
@@ -217,6 +215,17 @@ test("landing theme and motion belong to the local route and clean up on departu
   const paints = [...motion.matchAll(/const paint = \(\) => \{([\s\S]*?)\n {4}\};/g)];
   assert.ok(paints.length > 0);
   for (const [, body] of paints) assert.doesNotMatch(body!, /requestAnimationFrame/, "RAF is demand-driven, never a self-scheduling idle loop");
+});
+
+test("startup resolves the existing theme before React and removes the legacy landing placeholders", () => {
+  const startup = source("client/src/main.tsx");
+  assert.ok(startup.indexOf("migrateLandingThemePreference();") < startup.indexOf("createRoot(rootElement)"));
+  assert.ok(startup.indexOf("applyTheme(resolveInitialTheme(), { persist: false });") < startup.indexOf("createRoot(rootElement)"));
+  assert.match(startup, /if \(detectLowSpecMode\(\)\)/);
+  for (const file of ["client/public/boot-shell.js", "client/src/pages/LandingRouteFallback.tsx"]) {
+    assert.doesNotMatch(source(file), /Operational data, structured|SQR consolidates search/);
+    assert.match(source(file), /Loading SQR/);
+  }
 });
 
 test("supplied SVG artwork variants stay same-origin, script-free and complete", () => {

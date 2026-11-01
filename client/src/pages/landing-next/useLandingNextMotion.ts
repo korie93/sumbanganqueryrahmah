@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
+import { applyTheme, resolveInitialTheme, subscribeSystemThemeChange, type AppTheme } from "@/components/useTheme";
+import { getBrowserLocalStorage, safeGetStorageItem } from "@/lib/browser-storage";
 
-type LandingTheme = "light" | "dark";
-const THEME_KEY = "sqr-landing-next-theme";
+const hasSavedTheme = () => ["light", "dark"].includes(safeGetStorageItem(getBrowserLocalStorage(), "theme") ?? "");
 
-function preferredTheme(): LandingTheme {
-  const saved = safeGetStorageItem(getBrowserLocalStorage(), THEME_KEY);
-  if (saved === "light" || saved === "dark") return saved;
-  return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-/** Landing-owned enhancement only: no auth requests, shared theme writes or idle frame loop. */
+/** Share the existing theme control; keep motion and navigation owned by this route. */
 export function useLandingNextMotion(root: RefObject<HTMLDivElement>) {
-  const [theme, setTheme] = useState<LandingTheme>(preferredTheme);
+  const [theme, setTheme] = useState<AppTheme>(resolveInitialTheme);
+  const [initialExplicitPreference] = useState(hasSavedTheme);
+  const currentTheme = useRef(theme);
+  const manualTheme = useRef(initialExplicitPreference);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("top");
   const [boostedFigure, setBoostedFigure] = useState<string | null>(null);
@@ -23,31 +20,53 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>) {
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const replayTimer = useRef<number | null>(null);
-  const manualTheme = useRef(false);
   const motionPaused = reducedMotion || hidden;
 
   const toggleTheme = useCallback(() => {
+    const next = currentTheme.current === "dark" ? "light" : "dark";
     manualTheme.current = true;
-    setTheme(previous => previous === "dark" ? "light" : "dark");
+    currentTheme.current = next;
+    setTheme(next);
+    // Publish before navigation, using the existing workspace theme mechanism.
+    applyTheme(next);
   }, []);
 
   useEffect(() => {
-    if (!manualTheme.current) return;
-    safeSetStorageItem(getBrowserLocalStorage(), THEME_KEY, theme);
-  }, [theme]);
+    const syncTheme = (next: AppTheme, publish = false) => {
+      currentTheme.current = next;
+      setTheme(next);
+      if (publish) applyTheme(next, { persist: false });
+    };
+    const preference = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateSystemTheme = () => {
+      if (!manualTheme.current) syncTheme(preference.matches ? "dark" : "light", true);
+    };
+    const updateStoredTheme = (event: StorageEvent) => {
+      if (event.key !== "theme") return;
+      manualTheme.current = hasSavedTheme();
+      syncTheme(resolveInitialTheme(), true);
+    };
+    const updateAppTheme = (event: Event) => {
+      const next = (event as CustomEvent<{ theme?: unknown }>).detail?.theme;
+      if (next === "dark" || next === "light") syncTheme(next);
+    };
+    const stopSystemTheme = subscribeSystemThemeChange(preference, updateSystemTheme);
+    window.addEventListener("storage", updateStoredTheme);
+    window.addEventListener("app-theme-change", updateAppTheme);
+    return () => {
+      stopSystemTheme();
+      window.removeEventListener("storage", updateStoredTheme);
+      window.removeEventListener("app-theme-change", updateAppTheme);
+    };
+  }, []);
 
   useEffect(() => {
-    manualTheme.current = ["light", "dark"].includes(safeGetStorageItem(getBrowserLocalStorage(), THEME_KEY) ?? "");
-    const preference = window.matchMedia("(prefers-color-scheme: dark)");
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updateTheme = () => { if (!manualTheme.current) setTheme(preference.matches ? "dark" : "light"); };
     const updateVisibility = () => setHidden(document.hidden);
     const updateMotion = () => setReducedMotion(motionPreference.matches);
-    preference.addEventListener("change", updateTheme);
     motionPreference.addEventListener("change", updateMotion);
     document.addEventListener("visibilitychange", updateVisibility);
     return () => {
-      preference.removeEventListener("change", updateTheme);
       motionPreference.removeEventListener("change", updateMotion);
       document.removeEventListener("visibilitychange", updateVisibility);
     };

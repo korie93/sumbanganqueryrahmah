@@ -6,6 +6,7 @@
   --auth-line: #d9e1ea;
   --art-x: 50%;
   --art-y: 100%;
+  --auth-illustration: url("../../assets/auth-v17/sqr-illustration.webp");
   --dm-input-bg: #fff;
   --dm-input-border: #cbd6e1;
   --dm-input-text: #0f1d2e;
@@ -63,7 +64,7 @@
 .auth-v17-art { position: relative; flex: 1; min-height: 360px; margin: -6px -8px -18px -44px; overflow: hidden; }
 .auth-v17-art::before {
   content: ""; position: absolute; inset: -3% -2% -2%;
-  background: url("../../assets/auth-v17/sqr-illustration.webp") var(--art-x) var(--art-y)/min(100%, 920px) auto no-repeat;
+  background: var(--auth-illustration) var(--art-x) var(--art-y)/min(100%, 920px) auto no-repeat;
   mix-blend-mode: multiply; opacity: .98;
   mask-image: radial-gradient(ellipse 76% 72% at 49% 57%, #000 50%, #000000f5 67%, #0000008f 82%, transparent 100%);
 }
@@ -188,4 +189,107 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .auth-v17 *, .auth-v17 *::before, .auth-v17 *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Login follows the selected app theme; recovery and activation keep their light shell. */
+.auth-v17-login[data-theme="dark"] {
+  --auth-illustration: url("../../assets/auth-v17/sqr-illustration-dark.webp");
+  --auth-blue: #8fc7f6;
+  --auth-text: #f5f5f5;
+  --auth-muted: #adb7c5;
+  --auth-line: #3b424c;
+  --auth-input-ring: #8fc7f638;
+  --dm-bg: #111;
+  --dm-surface: #1b1b1b;
+  --dm-surface-elevated: #232323;
+  --dm-input-bg: #181818;
+  --dm-input-border: #657384;
+  --dm-input-text: #f5f5f5;
+  --dm-input-placeholder: #9eabba;
+  --dm-text-primary: #f5f5f5;
+  --dm-text-muted: #adb7c5;
+  --dm-border: #3b424c;
+  --dm-border-soft: #353b43;
+  --public-auth-text-soft: #adb7c5;
+  --background: 0 0% 7%;
+  --foreground: 0 0% 96%;
+  --border: 215 13% 27%;
+  --muted: 215 10% 17%;
+  --muted-foreground: 215 17% 73%;
+  --ring: 207 85% 76%;
+  --disabled: 0 0% 15%;
+  --disabled-foreground: 215 15% 72%;
+  --disabled-border: 215 10% 32%;
+  background: var(--dm-bg);
+  color-scheme: dark;
+}
+.auth-v17-login[data-theme="dark"] :focus-visible { outline-color: var(--auth-blue); }
+.auth-v17-login[data-theme="dark"] .auth-v17-brand-panel {
+  background: radial-gradient(56% 40% at 16% 9%, #62a6e20d, transparent 72%),
+    radial-gradient(45% 40% at 74% 76%, #7abbef08, transparent 74%),
+    #010109;
+}
+.auth-v17-login[data-theme="dark"] .auth-v17-brand-panel::before {
+  background: linear-gradient(#8fc7f60a 1px, transparent 1px) 0 0/46px 46px,
+    linear-gradient(90deg, #8fc7f60a 1px, transparent 1px) 0 0/46px 46px;
+}
+.auth-v17-login[data-theme="dark"] .auth-v17-brand small { color: #adb7c5; }
+.auth-v17-login[data-theme="dark"] .auth-v17-status { border-color: #3b424c; background: #20242acc; color: #c2ccd9; }
+.auth-v17-login[data-theme="dark"] .auth-v17-status i,
+.auth-v17-login[data-theme="dark"] .auth-v17-secure i { background: #69c391; box-shadow: 0 0 0 4px #69c3911c; }
+.auth-v17-login[data-theme="dark"] .auth-v17-status--warn i { background: #f3ca81; box-shadow: 0 0 0 4px #f3ca811c; }
+.auth-v17-login[data-theme="dark"] .auth-v17-intro { color: #e3edf8; }
+.auth-v17-login[data-theme="dark"] .auth-v17-art::before {
+  /* Use the supplied night illustration in the identical frame, with its original colors. */
+  mix-blend-mode: normal;
+  filter: none;
+  opacity: 1;
+  /* Blend the image boundary into the dark panel without changing its dimensions. */
+  mask-image: radial-gradient(ellipse 76% 72% at 49% 57%, #000 50%, #000000f5 67%, #0000008f 82%, transparent 100%),
+    linear-gradient(to bottom, transparent, #000 16%, #000 88%, transparent);
+  mask-composite: intersect;
+}
+.auth-v17-login[data-theme="dark"] .auth-v17-curve {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath fill='%23111' d='M101 0H62C30 22 30 40 58 50C86 60 86 78 62 100H101Z'/%3E%3C/svg%3E");
+}
+.auth-v17-login[data-theme="dark"] .auth-v17-side { background: var(--dm-bg); }
+.auth-v17-login[data-theme="dark"] .auth-v17-topline,
+.auth-v17-login[data-theme="dark"] .auth-v17-assure { border-color: var(--auth-line); }
+.auth-v17-login[data-theme="dark"] .auth-v17-back { color: #adb7c5; }
+.auth-v17-login[data-theme="dark"] .auth-v17-back:hover { color: var(--auth-blue); }
+.auth-v17-login[data-theme="dark"] .auth-v17-secure,
+.auth-v17-login[data-theme="dark"] .auth-v17-lang { border-color: #3b424c; background: #1b1f25; color: #c2ccd9; }
+.auth-v17-login[data-theme="dark"] .auth-v17-lang button { color: #bdc9d6; }
+.auth-v17-login[data-theme="dark"] .auth-v17-lang button[aria-pressed="true"] { background: #303945; color: #e3f1ff; box-shadow: 0 1px 3px #0005; }
+.auth-v17-login[data-theme="dark"] .auth-v17-icon { background: #1d3042; }
+.auth-v17-login[data-theme="dark"] .public-auth-input { background: var(--dm-input-bg); color: var(--auth-text); border-color: var(--dm-input-border); }
+.auth-v17-login[data-theme="dark"] .public-auth-input::placeholder { color: var(--dm-input-placeholder); }
+.auth-v17-login[data-theme="dark"] .public-auth-input:hover { --dm-input-border: #8595a7; border-color: var(--dm-input-border); }
+.auth-v17-login[data-theme="dark"] .public-auth-input:focus { --dm-input-border: var(--auth-blue); border-color: var(--dm-input-border); box-shadow: 0 0 0 4px var(--auth-input-ring); }
+.auth-v17-login[data-theme="dark"] .public-auth-input:focus-visible { outline: 2px solid var(--auth-blue); outline-offset: 2px; }
+.auth-v17-login[data-theme="dark"] .public-auth-input[data-validation-state="success"] { --dm-input-border: #91deb0; --auth-input-ring: #91deb02e; border-color: var(--dm-input-border); }
+.auth-v17-login[data-theme="dark"] .public-auth-input[aria-invalid="true"] { --dm-input-border: #e79188; --auth-input-ring: #e791882e; border-color: var(--dm-input-border); box-shadow: 0 0 0 4px var(--auth-input-ring); }
+.auth-v17-login[data-theme="dark"] .public-auth-button-primary { background: #286a9f; color: #fff; }
+.auth-v17-login[data-theme="dark"] .public-auth-button-primary:hover { background: #2d76af; }
+.auth-v17-login[data-theme="dark"] .public-auth-button-ghost { background: #181818; border-color: #657384; }
+.auth-v17-login[data-theme="dark"] .public-auth-button-ghost:hover { background: #252b33; color: var(--auth-text); }
+.auth-v17-login[data-theme="dark"] .auth-v17-content .public-auth-status-card--error { background: #351c1b; border-color: #b56862; color: #ffb4ab; }
+.auth-v17-login[data-theme="dark"] .auth-v17-content .public-auth-status-card--success { background: #14271c; border-color: #417451; color: #91deb0; }
+.auth-v17-login[data-theme="dark"] .auth-v17-content .public-auth-status-card--info,
+.auth-v17-login[data-theme="dark"] .auth-v17-content .public-auth-note { background: #1b1f25; color: #bdc9d6; }
+.auth-v17-login[data-theme="dark"] .auth-v17-offline { background: #302718; border-color: #ad8350; color: #f3ca81; }
+.auth-v17-login[data-theme="dark"] .auth-v17-content .public-auth-field-error { color: #ffb4ab; }
+.auth-v17-login[data-theme="dark"] .auth-v17-assure svg { color: #91deb0; }
+.auth-v17-login[data-theme="dark"] .auth-v17-otp { background: #1b1f25; border-color: #3b424c; }
+.auth-v17-login[data-theme="dark"] .auth-v17-otp:focus-within { outline: 2px solid var(--auth-blue); outline-offset: 3px; }
+.auth-v17-login[data-theme="dark"] .auth-v17-otp__slot { background: #181818; border-color: #657384; color: var(--auth-text); }
+.auth-v17-login[data-theme="dark"] .auth-v17-otp__slot[data-active="true"] { border-color: var(--auth-blue); box-shadow: 0 0 0 3px #8fc7f638; }
+.auth-v17-login[data-theme="dark"] .auth-v17-otp[data-invalid="true"] .auth-v17-otp__slot { border-color: #e79188; }
+.auth-v17-login[data-theme="dark"] .auth-v17-otp__input:disabled { opacity: 0 !important; }
+.auth-v17-login[data-theme="dark"] input:-webkit-autofill { -webkit-text-fill-color: var(--auth-text); box-shadow: 0 0 0 1000px var(--dm-input-bg) inset; caret-color: var(--auth-text); }
+.auth-v17-login[data-theme="dark"] input:-webkit-autofill:focus { box-shadow: 0 0 0 1000px var(--dm-input-bg) inset, 0 0 0 4px var(--auth-input-ring); }
+@media (max-width: 699px) {
+  .auth-v17-login[data-theme="dark"] .auth-v17-brand-panel {
+    background: linear-gradient(to bottom, transparent 72%, #111), radial-gradient(75% 80% at 20% 15%, #62a6e20d, transparent 70%), #010109;
+  }
 }

@@ -10,7 +10,7 @@ test.afterEach(async ({ page }) => {
   await finishFixture(page);
 });
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
-const themeKey = "sqr-landing-next-theme";
+const themeKey = "theme";
 const strictPolicy = "script-src 'self'; require-trusted-types-for 'script'; style-src-elem 'self'; style-src-attr 'none'";
 type Theme = "light" | "dark";
 type StorageFailure = "denied-getter" | "denied-read" | "quota-write";
@@ -49,7 +49,11 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   await page.addInitScript(({ profile, observer, storageFailure, landingThemeKey }) => {
     if (profile.performanceMode === "auto") localStorage.removeItem("perf_mode");
     else localStorage.setItem("perf_mode", profile.performanceMode ?? "high");
-    localStorage.setItem("theme", "light");
+    if (!sessionStorage.getItem("sqr:landing-theme-fixture-ready")) {
+      localStorage.removeItem("theme");
+      localStorage.removeItem("sqr-landing-next-theme");
+      sessionStorage.setItem("sqr:landing-theme-fixture-ready", "1");
+    }
     Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => profile.cores ?? 8 });
     Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => profile.memory ?? 8 });
     Object.defineProperty(navigator, "connection", { configurable: true, value: {
@@ -164,7 +168,7 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("Landing next theme follows OS until explicit choice and never mutates the app theme", async ({ page, baseURL }) => {
+test("Landing next theme follows OS until explicit choice and publishes the app theme", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL, { theme: "dark" });
   await openLanding(page, "dark");
   await page.emulateMedia({ colorScheme: "light" });
@@ -172,7 +176,10 @@ test("Landing next theme follows OS until explicit choice and never mutates the 
   await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
   await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
   expect(await page.evaluate(key => localStorage.getItem(key), themeKey)).toBe("dark");
-  expect(await page.evaluate(() => localStorage.getItem("theme"))).toBe("light");
+  expect(await page.evaluate(() => localStorage.getItem("theme"))).toBe("dark");
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator(".sqr-landing-next main")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  await expect(page.locator(".sqr-landing-next .panel.light").first()).toHaveCSS("background-color", "rgb(14, 15, 18)");
   await page.emulateMedia({ colorScheme: "light" });
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
