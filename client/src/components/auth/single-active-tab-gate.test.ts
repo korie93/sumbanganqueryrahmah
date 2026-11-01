@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import test from "node:test";
+import postcss from "postcss";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -93,6 +94,75 @@ test("gate styling is scoped, responsive and disables motion rather than shorten
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none !important; transition: none !important/);
   assert.doesNotMatch(css, /sqr-tab-float|animation-duration:\s*\.01ms/);
   assert.equal((css.match(/animation: [^;]+infinite/g) ?? []).length, 1, "only transient checking uses a spinner");
+});
+
+test("the shared dark main rule preserves readable light checking and blocked gate surfaces", () => {
+  function declarations(styles: string, selector: string) {
+    const values = new Map<string, { value: string; important: boolean }>();
+    postcss.parse(styles).walkRules(selector, (rule) => {
+      if (rule.parent?.type !== "root") return;
+      rule.walkDecls((entry) => {
+        if (entry.parent === rule) values.set(entry.prop, { value: entry.value, important: Boolean(entry.important) });
+      });
+    });
+    return values;
+  }
+  function resolve(value: string, variables: Record<string, string>, seen = new Set<string>()): string {
+    return value.replace(/var\((--[\w-]+)\)/g, (_match, name: string) => {
+      assert.ok(variables[name] !== undefined && !seen.has(name), `Resolvable gate token ${name}`);
+      return resolve(variables[name], variables, new Set([...seen, name]));
+    });
+  }
+  function inherit(variables: Record<string, string>, values: ReturnType<typeof declarations>) {
+    const cascade = { ...variables };
+    for (const [name, entry] of values) if (name.startsWith("--")) cascade[name] = entry.value;
+    return Object.fromEntries(Object.entries(cascade).map(([name, value]) => [name, resolve(value, cascade)]));
+  }
+  function contrast(first: string, second: string) {
+    const luminance = (hex: string) => {
+      assert.match(hex, /^#(?:[\da-f]{3}|[\da-f]{6})$/i);
+      const full = hex.length === 4 ? hex.slice(1).split("").map((part) => part.repeat(2)).join("") : hex.slice(1);
+      return [0.2126, 0.7152, 0.0722].reduce((total, weight, index) => {
+        const channel = Number.parseInt(full.slice(index * 2, index * 2 + 2), 16) / 255;
+        return total + weight * (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+      }, 0);
+    };
+    const [low, high] = [luminance(first), luminance(second)].sort((left, right) => left - right);
+    return (high + 0.05) / (low + 0.05);
+  }
+
+  const darkBase = readFileSync(new URL("../../styles/theme/dark.base.css", import.meta.url), "utf8");
+  const darkTokens = declarations(readFileSync(new URL("../../styles/tokens/colors/_semantic.css", import.meta.url), "utf8"), ".dark");
+  const mainRules: string[] = [];
+  postcss.parse(darkBase).walkRules((rule) => {
+    if (/^\.dark\s+:where\(/.test(rule.selector) && /\bmain\s*(?:,|\))/.test(rule.selector)) mainRules.push(rule.selector);
+  });
+  assert.equal(mainRules.length, 1, "Exercise the actual shared dark main rule rather than a fixture stylesheet");
+  const main = declarations(darkBase, mainRules[0]);
+  const mainBackground = main.get("background-color");
+  const mainText = main.get("color");
+  assert.ok(mainBackground && mainText, "The actual shared rule supplies main background and text");
+  assert.equal(mainBackground.important, true, "Shared dark backgrounds remain enforced for the workspace");
+  const dark = Object.fromEntries(["--dm-bg", "--dm-text-primary"].map((name) => {
+    const entry = darkTokens.get(name);
+    assert.ok(entry, `Actual dark ancestor defines ${name}`);
+    return [name, entry.value];
+  }));
+  const page = inherit(dark, declarations(css, ".sqr-tab-page"));
+  const surface = inherit(page, declarations(css, ".sqr-tab-page .sqr-tab-surface"));
+  const checkingBackground = resolve(mainBackground.value, page);
+  const blockedBackground = resolve(mainBackground.value, surface);
+  assert.equal(checkingBackground, page["--sqt-bg"], "A checking main keeps the gate's light page background under html.dark");
+  assert.equal(blockedBackground, "#fff", "A blocked main keeps its white surface under html.dark");
+  for (const variables of [page, surface]) {
+    assert.equal(resolve(mainText.value, variables), variables["--sqt-text"], "The global main text uses the local light palette");
+  }
+  for (const selector of [".sqr-tab-eyebrow", ".sqr-tab-copy h1", ".sqr-tab-copy h1 span", ".sqr-tab-lede", ".sqr-tab-message p", ".sqr-tab-footnote"]) {
+    const color = declarations(css, `.sqr-tab-page ${selector}`).get("color");
+    assert.ok(color, `${selector} retains an explicit readable color`);
+    assert.ok(contrast(resolve(color.value, surface), blockedBackground) >= 4.5, `${selector} meets normal-text contrast on its actual dark-ancestor surface`);
+  }
+  assert.ok(contrast(page["--sqt-muted"], checkingBackground) >= 4.5, "Checking status text remains readable under html.dark");
 });
 
 test("benefit strip contains only the two operational messages with balanced columns", () => {

@@ -1,5 +1,8 @@
 /* Adapted from SQR_Single_Active_Tab_FINAL. Every rule is scoped to this gate. */
 .sqr-tab-page { --sqt-bg: #f7f9fb; --sqt-text: #172a3b; --sqt-muted: #5e6f7d; --sqt-blue: #2a5d85; --sqt-blue-dark: #1d476b; --sqt-gold: #d4ae66; --sqt-line: #e4eaef; min-height: 100vh; min-height: 100dvh; min-width: 0; box-sizing: border-box; background: radial-gradient(circle at 92% -20%, rgb(209 228 243 / 40%), transparent 45%), radial-gradient(circle at -12% 103%, rgb(228 216 196 / 19%), transparent 38%), var(--sqt-bg); color: var(--sqt-text); color-scheme: light; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; overflow-wrap: anywhere; }
+/* Shared dark main rules consume these tokens; the gate retains its light palette. */
+.sqr-tab-page { --dm-bg: var(--sqt-bg); --dm-text-primary: var(--sqt-text); }
+.sqr-tab-page .sqr-tab-surface { --dm-bg: #fff; }
 .sqr-tab-page *, .sqr-tab-page *::before, .sqr-tab-page *::after { box-sizing: border-box; }
 .sqr-tab-page button { font: inherit; cursor: pointer; }
 .sqr-tab-page button:focus-visible, .sqr-tab-page main:focus-visible { outline: 3px solid #447da6; outline-offset: 4px; }
