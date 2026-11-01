@@ -113,9 +113,9 @@ test("landing motion depends only on explicit reduced motion and visibility, nev
   assert.match(component, /setVisible\(Boolean\(entry\?\.isIntersecting\)\)/);
 });
 
-test("shared low-spec motion rules exempt only the landing while preserving application policy", () => {
+test("shared low-spec motion rules retain only the approved local exceptions", () => {
   const expected = new Map([
-    ["animation", ".low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *)"],
+    ["animation", ".low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)"],
     ["transition", ".low-spec *:not(.sqr-landing-next, .sqr-landing-next *)"],
   ]);
   for (const [property, selector] of expected) {
@@ -131,7 +131,7 @@ test("shared low-spec motion rules exempt only the landing while preserving appl
     });
     assert.equal(rules.length, 1, `${property}: retain one application-wide low-spec rule`);
     assert.deepEqual(rules[0]!.selectors, [selector, `${selector}::before`, `${selector}::after`],
-      `${property}: the landing exception must not broaden to unrelated application surfaces`);
+      `${property}: local exceptions must not broaden to unrelated application surfaces`);
   }
 });
 

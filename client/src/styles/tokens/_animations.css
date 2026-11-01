@@ -93,11 +93,11 @@
    LOW SPEC MODE (2GB RAM / older CPU friendly)
 =========================================================== */
 
-/* The public landing and supplied empty-state story animate on every hardware
- * tier. Their own reduced-motion rules still honor accessibility preferences. */
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *),
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *)::before,
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *)::after {
+/* The landing, empty-state story and small sidebar Q animate on every hardware
+ * tier. Their own reduced-motion and visibility rules still control playback. */
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *),
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)::before,
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)::after {
   animation: none !important;
 }
 

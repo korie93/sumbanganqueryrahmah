@@ -44,6 +44,18 @@ async function cssAnimations(logo: Locator) {
     .map((animation) => ({ name: animation.animationName, state: animation.playState })));
 }
 
+async function expectQProgress(logo: Locator) {
+  const currentTime = () => logo.evaluate((element) => {
+    const animation = element.getAnimations({ subtree: true }).find((entry) =>
+      entry instanceof CSSAnimation && entry.animationName === "sidebar-q-dots",
+    );
+    return typeof animation?.currentTime === "number" ? animation.currentTime : -1;
+  });
+  const before = await currentTime();
+  expect(before, "The Q must own a real CSS animation, not only a playing attribute").toBeGreaterThanOrEqual(0);
+  await expect.poll(currentTime, { message: "The visible Q animation timeline must advance" }).toBeGreaterThan(before + 100);
+}
+
 async function unchangedFavicon(page: Page) {
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", onlineFavicon);
   await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("href", "/brand/favicon-online-v2.ico");
@@ -97,17 +109,24 @@ for (const role of ["admin", "user", "superuser"] as const) {
   });
 }
 
-test("desktop animated Q stops when reduced, expanded, offscreen or hidden and resumes without extra controls", async ({ page, baseURL }, testInfo) => {
+for (const performanceMode of ["high", "low"] as const) test(`desktop animated Q stops when reduced, expanded, offscreen or hidden and resumes without extra controls (${performanceMode} performance mode)`, async ({ page, baseURL }, testInfo) => {
+  // Use the real startup preference, before main.tsx detects device policy.
+  await page.addInitScript((mode) => localStorage.setItem("perf_mode", mode), performanceMode);
   const fixture = await installFixture(page, baseURL, { theme: "dark" });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await openSave(page);
+  for (const selector of ["html", "body"]) {
+    if (performanceMode === "low") await expect(page.locator(selector)).toHaveClass(/\blow-spec\b/);
+    else await expect(page.locator(selector)).not.toHaveClass(/\blow-spec\b/);
+  }
   await toggle(page).click();
   await decodedQ(page);
   await restingQ(page);
   const logo = artwork(page);
   await expect(logo).toHaveAttribute("data-motion", "playing");
   await expect.poll(async () => (await cssAnimations(logo)).filter((animation) => animation.state === "running").length).toBeGreaterThanOrEqual(5);
+  await expectQProgress(logo);
   await page.locator("aside.workspace-sidebar").screenshot({ path: testInfo.outputPath("sidebar-animated-q-resting-dark.png") });
 
   await toggle(page).hover();
@@ -116,6 +135,7 @@ test("desktop animated Q stops when reduced, expanded, offscreen or hidden and r
   await expect.poll(async () => (await cssAnimations(logo)).every((animation) => animation.state === "paused")).toBe(true);
   await restingQ(page);
   await expect.poll(async () => (await cssAnimations(logo)).some((animation) => animation.state === "running")).toBe(true);
+  await expectQProgress(logo);
   await toggle(page).focus();
   // Pressing Tab and Shift+Tab selects the button with genuine keyboard modality.
   await page.keyboard.press("Tab");
@@ -137,6 +157,7 @@ test("desktop animated Q stops when reduced, expanded, offscreen or hidden and r
   expect(await cssAnimations(logo)).toEqual([]);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await expect(logo).toHaveAttribute("data-motion", "playing");
+  await expectQProgress(logo);
 
   // Exercise the real IntersectionObserver by moving the control outside the
   // viewport via CSSOM; do not replace the browser's observer with a fake.
@@ -145,6 +166,7 @@ test("desktop animated Q stops when reduced, expanded, offscreen or hidden and r
   await expect.poll(async () => (await cssAnimations(logo)).every((animation) => animation.state === "paused")).toBe(true);
   await toggle(page).evaluate((button) => { button.style.removeProperty("transform"); });
   await expect(logo).toHaveAttribute("data-motion", "playing");
+  await expectQProgress(logo);
 
   // Headless tab focus is not a reliable visibility boundary. This explicitly
   // tests the document-visibility guard and its listener, not OS tab switching.
@@ -160,6 +182,7 @@ test("desktop animated Q stops when reduced, expanded, offscreen or hidden and r
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await expect(logo).toHaveAttribute("data-motion", "playing");
+  await expectQProgress(logo);
   await unchangedFavicon(page);
   await checkFixture(page, fixture);
 });
