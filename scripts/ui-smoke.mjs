@@ -840,6 +840,8 @@ const checkBillingPrincipalV9UiFlow = async (page, context, tracker) => {
     await page.getByLabel("D3 private target percentage").waitFor();
     assert(await page.getByLabel("D3 private target percentage").inputValue() === "25.0000", "A 30→32 must not overwrite private B 25%.");
     await page.getByRole("heading", { name: "System calendar", exact: true }).waitFor();
+    // The validity window can start in the previous month (or year).
+    await page.getByLabel("Month", { exact: true }).fill(asOf.slice(0, 7));
     await page.getByRole("button", { name: new RegExp("^" + asOf + ", 0 accounts") }).click();
     await dialog.getByRole("heading", { name: "Accounts closed · " + asOf, exact: true }).waitFor();
     await dialog.getByText("No ALL accounts closed on this date.", { exact: true }).waitFor();
