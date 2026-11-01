@@ -1,10 +1,146 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createJsonTestApp, startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { buildRobotsTxt, registerFrontendStatic } from "../frontend-static";
+import { LANDING_ARTWORK_STYLE_HASHES, withLandingArtworkStyleHash } from "../landing-artwork-csp";
+import { registerLocalHttpSecurityHeaders } from "../local-http-security";
+
+const artworkSourceDirectory = new URL("../../../client/public/landing-next/", import.meta.url);
+const strictArtworkPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; style-src-elem 'self'; style-src-attr 'none'; object-src 'none'";
+
+function cssHash(css: string) {
+  return `'sha256-${createHash("sha256").update(css).digest("base64")}'`;
+}
+
+test("landing artwork approvals match the XML-normalized CSS of exactly the 32 supplied SVGs", async () => {
+  const files = (await fs.readdir(artworkSourceDirectory)).filter((file) => file.endsWith(".svg")).sort();
+  const approvedFiles = Object.keys(LANDING_ARTWORK_STYLE_HASHES).sort();
+  assert.equal(files.length, 32);
+  assert.deepEqual(approvedFiles, files.map((file) => `landing-next/${file}`));
+  assert.equal(new Set(Object.values(LANDING_ARTWORK_STYLE_HASHES)).size, 8);
+  for (const file of files) {
+    const svg = (await fs.readFile(new URL(file, artworkSourceDirectory), "utf8")).replace(/\r\n?/g, "\n");
+    const styles = [...svg.matchAll(/<style><!\[CDATA\[([\s\S]*?)\]\]><\/style>/g)];
+    assert.equal([...svg.matchAll(/<style\b/g)].length, 1, file);
+    assert.equal(styles.length, 1, file);
+    assert.equal(LANDING_ARTWORK_STYLE_HASHES[`landing-next/${file}`], cssHash(styles[0][1]), file);
+  }
+});
+
+test("artwork CSP permits only the selected exact style and preserves every other directive", () => {
+  const maliciousHash = cssHash("body{display:none!important}");
+  for (const [relativePath, hash] of Object.entries(LANDING_ARTWORK_STYLE_HASHES)) {
+    const amended = withLandingArtworkStyleHash(strictArtworkPolicy, relativePath);
+    assert.ok(amended);
+    assert.equal(amended, strictArtworkPolicy.replace("style-src-elem 'self'", `style-src-elem 'self' ${hash}`));
+    assert.equal(withLandingArtworkStyleHash(amended, relativePath), amended, "Approval is idempotent");
+    assert.equal(amended.includes(maliciousHash), false);
+    for (const otherHash of Object.values(LANDING_ARTWORK_STYLE_HASHES)) {
+      assert.equal(amended.includes(otherHash), otherHash === hash, "An SVG does not approve another variant's CSS");
+    }
+    assert.doesNotMatch(amended, /unsafe-inline/);
+    assert.match(amended, /script-src 'self';/);
+    assert.match(amended, /style-src-attr 'none';/);
+  }
+});
+
+test("artwork CSP fails closed for unknown paths, absent directives, explicit denials and multiple policies", () => {
+  for (const relativePath of [
+    "index.html", "assets/app-ABC12345.js", "brand/radar-animated.svg", "uploads/radar-animated.svg",
+    "landing-next/unknown.svg", "landing-next/radar-animated.svg.bak", "landing-next/RADAR-animated.svg",
+    "/landing-next/radar-animated.svg", "landing-next/../landing-next/radar-animated.svg",
+    "landing-next\\radar-animated.svg", "landing-next/%72adar-animated.svg", "toString", "__proto__",
+  ]) assert.equal(withLandingArtworkStyleHash(strictArtworkPolicy, relativePath), strictArtworkPolicy, relativePath);
+  const relativePath = "landing-next/radar-animated.svg";
+  for (const policy of [
+    undefined, "", "default-src 'none'", "style-src 'self'", "style-src-elem 'none'",
+    "style-src-elem 'self' 'none'", "style-src-elem 'self'; style-src-elem 'self'",
+    `${strictArtworkPolicy}, style-src-elem 'none'`,
+  ]) assert.equal(withLandingArtworkStyleHash(policy, relativePath), policy);
+});
+
+test("actual static responses scope artwork style approvals to existing exact files only", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-artwork-csp-"));
+  const publicDir = path.join(tempRoot, "public");
+  await fs.mkdir(path.join(publicDir, "landing-next"), { recursive: true });
+  await fs.mkdir(path.join(publicDir, "assets"));
+  await fs.mkdir(path.join(publicDir, "uploads"));
+  await fs.mkdir(path.join(publicDir, "brand"));
+  await fs.writeFile(path.join(publicDir, "index.html"), "<!doctype html><html><body>Fixture</body></html>");
+  await fs.writeFile(path.join(publicDir, "assets/app-ABC12345.js"), "export {};");
+  for (const relativePath of Object.keys(LANDING_ARTWORK_STYLE_HASHES)) {
+    await fs.copyFile(new URL(path.basename(relativePath), artworkSourceDirectory), path.join(publicDir, relativePath));
+  }
+  for (const relativePath of ["landing-next/unknown.svg", "uploads/radar-animated.svg", "brand/radar-animated.svg"]) {
+    await fs.copyFile(new URL("radar-animated.svg", artworkSourceDirectory), path.join(publicDir, relativePath));
+  }
+  const app = createJsonTestApp();
+  registerLocalHttpSecurityHeaders(app);
+  app.get("/api/fixture", (_req, res) => res.json({ ok: true }));
+  app.use((req, res, next) => {
+    if (req.query.withoutPolicy === "1") res.removeHeader("Content-Security-Policy");
+    next();
+  });
+  registerFrontendStatic(app, { cwd: tempRoot, paths: ["public"] });
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const root = await fetch(`${baseUrl}/`);
+    const baseline = root.headers.get("content-security-policy");
+    assert.ok(baseline);
+    await root.text();
+    assert.match(baseline, /style-src-elem 'self'/);
+    for (const hash of Object.values(LANDING_ARTWORK_STYLE_HASHES)) assert.equal(baseline.includes(hash), false);
+    for (const [relativePath, hash] of Object.entries(LANDING_ARTWORK_STYLE_HASHES)) {
+      const response = await fetch(`${baseUrl}/${relativePath}`);
+      assert.equal(response.status, 200, relativePath);
+      assert.match(response.headers.get("content-type") || "", /image\/svg\+xml/);
+      assert.equal(response.headers.get("content-security-policy"), withLandingArtworkStyleHash(baseline, relativePath));
+      assert.ok(response.headers.get("content-security-policy")?.includes(hash));
+      assert.notEqual(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
+      await response.text();
+    }
+    const head = await fetch(`${baseUrl}/landing-next/radar-animated.svg`, { method: "HEAD" });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get("content-security-policy"), withLandingArtworkStyleHash(baseline, "landing-next/radar-animated.svg"));
+    assert.equal(await head.text(), "");
+    const etag = head.headers.get("etag");
+    assert.ok(etag);
+    const revalidated = await fetch(`${baseUrl}/landing-next/radar-animated.svg`, {
+      headers: { "If-None-Match": etag }, cache: "force-cache",
+    });
+    assert.equal(revalidated.status, 304);
+    assert.equal(revalidated.headers.get("content-security-policy"), head.headers.get("content-security-policy"));
+    assert.equal(await revalidated.text(), "");
+    for (const requestPath of ["/login", "/api/fixture", "/assets/app-ABC12345.js", "/landing-next/unknown.svg", "/uploads/radar-animated.svg", "/brand/radar-animated.svg"]) {
+      const response = await fetch(baseUrl + requestPath);
+      assert.equal(response.status, 200, requestPath);
+      assert.equal(response.headers.get("content-security-policy"), baseline, requestPath);
+      if (requestPath.startsWith("/assets/")) assert.equal(response.headers.get("cache-control"), "public, max-age=31536000, immutable");
+      await response.text();
+    }
+    const withoutPolicy = await fetch(`${baseUrl}/landing-next/radar-animated.svg?withoutPolicy=1`);
+    assert.equal(withoutPolicy.status, 200);
+    assert.equal(withoutPolicy.headers.get("content-security-policy"), null);
+    await withoutPolicy.text();
+    await fs.unlink(path.join(publicDir, "landing-next/radar-animated.svg"));
+    const missing = await fetch(`${baseUrl}/landing-next/radar-animated.svg`);
+    assert.equal(missing.status, 404);
+    const missingPolicy = missing.headers.get("content-security-policy") || "";
+    assert.ok(missingPolicy, "Missing artwork keeps a CSP, including Express's stricter default 404 policy");
+    for (const hash of Object.values(LANDING_ARTWORK_STYLE_HASHES)) {
+      assert.equal(missingPolicy.includes(hash), false, "Missing artwork does not gain an approval");
+    }
+    assert.doesNotMatch(missingPolicy, /unsafe-inline/);
+    await missing.text();
+  } finally {
+    await stopTestServer(server);
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
 
 const minimalRobotsPolicy = [
   "User-agent: *",

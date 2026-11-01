@@ -7,6 +7,7 @@ import { isPathInsideDirectory } from "../config/upload-paths";
 import { logger } from "../lib/logger";
 import { buildApiErrorResponse } from "../http/api-error-response";
 import { isKnownAppDocumentPath, isRequestNamespace } from "../../shared/app-document-routes";
+import { withLandingArtworkStyleHash } from "./landing-artwork-csp";
 
 const DEFAULT_FRONTEND_PATHS = [
   "dist-local/public",
@@ -165,6 +166,16 @@ export function registerFrontendStatic(
     app.use(express.static(foundPath, {
       index: false,
       setHeaders(res, servedPath) {
+        const policy = res.getHeader("Content-Security-Policy");
+        if (typeof policy === "string") {
+          const artworkPolicy = withLandingArtworkStyleHash(
+            policy,
+            normalizeStaticRelativePath(foundPath as string, servedPath),
+          );
+          if (typeof artworkPolicy === "string" && artworkPolicy !== policy) {
+            res.setHeader("Content-Security-Policy", artworkPolicy);
+          }
+        }
         if (!isImmutableFrontendAsset(foundPath as string, servedPath)) {
           return;
         }
