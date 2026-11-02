@@ -247,6 +247,7 @@ function AppContent() {
               <ResetPasswordPage
                 onBackToHome={() => handlePublicNavigate("home")}
                 onBackToLogin={() => handlePublicNavigate("login")}
+                onRequestNewLink={() => handlePublicNavigate("forgot-password")}
               />
             ),
           )}

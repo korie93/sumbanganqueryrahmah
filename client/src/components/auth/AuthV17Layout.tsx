@@ -21,11 +21,12 @@ type Props = {
   className?: string;
   visualMode?: "standard" | "minimal";
   controlledAccess?: boolean;
+  recoveryArtwork?: boolean;
 };
 
 /** Shared V17 presentation shell. Authentication state and API calls remain owned by each existing flow. */
 export function AuthV17Layout({ children, title, description, icon, contentBusy = false,
-  showBackButton = true, backLabel, onBackClick, className = "", controlledAccess = false }: Props) {
+  showBackButton = true, backLabel, onBackClick, className = "", controlledAccess = false, recoveryArtwork = false }: Props) {
   const [, navigate] = useLocation();
   const { locale, setLocale, t } = useAuthLocale();
   const { theme: surfaceTheme, isDark, toggleTheme } = useTheme();
@@ -61,7 +62,7 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
   }, []);
 
   return (
-    <main id="main-content" tabIndex={-1} lang={locale} data-theme={surfaceTheme} className={`auth-v17 ${className}`}>
+    <main id="main-content" tabIndex={-1} lang={locale} data-theme={surfaceTheme} className={`auth-v17 ${className}${recoveryArtwork ? " auth-v17-recovery-artwork" : ""}`}>
       <section className="auth-v17-brand-panel" aria-label={t("auth.v17.platform")}>
         <div className="auth-v17-curve" aria-hidden="true" />
         <div className="auth-v17-top">
@@ -74,7 +75,20 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
           </span> : null}
         </div>
         <p className="auth-v17-intro">{t("auth.v17.intro")}</p>
-        <div className="auth-v17-art" aria-hidden="true" />
+        <div className={`auth-v17-art${recoveryArtwork ? " auth-v17-art--recovery" : ""}`} aria-hidden="true">
+          {recoveryArtwork ? <img
+            key={surfaceTheme}
+            src={`/illustrations/reset-password-${surfaceTheme}.webp`}
+            width={640}
+            height={640}
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            decoding="async"
+            fetchPriority="low"
+            className="auth-v17-recovery-illustration"
+          /> : null}
+        </div>
       </section>
       <section className="auth-v17-side" aria-labelledby="auth-v17-title">
         <div className="auth-v17-wrap">

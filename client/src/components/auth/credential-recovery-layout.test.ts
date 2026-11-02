@@ -49,6 +49,44 @@ test("unvalidated recovery views never fabricate or reveal account metadata", ()
   assert.match(markup, /Hubungi pentadbir/);
 });
 
+test("stable reset layout keeps a single validated account summary below the heading and outside the form", () => {
+  const markup = renderToStaticMarkup(createElement(CredentialRecoveryLayout, {
+    account,
+    stableLayout: true,
+    children: createElement("form", null, createElement("input", { id: "fixture-reset", type: "password" })),
+    title: "Create your password",
+    description: "Enter your new password.",
+    intent: "reset",
+  }));
+  assert.match(markup, /credential-recovery--stable/);
+  assert.equal((markup.match(/operator.long-name/g) ?? []).length, 1);
+  assert.doesNotMatch(markup.match(/<aside[\s\S]*?<\/aside>/)?.[0] ?? "", /operator.long-name/);
+  const main = markup.match(/<section class="credential-recovery__main"[\s\S]*?<\/section>/)?.[0] ?? "";
+  assert.ok(main.indexOf("<h1") < main.indexOf("<dl"));
+  assert.ok(main.indexOf("<dl") < main.indexOf("<form"));
+  assert.doesNotMatch(main.match(/<form>[\s\S]*?<\/form>/)?.[0] ?? "", /operator.long-name|<dl/);
+});
+
+test("supplied reset artwork is decorative, sized and isolated from activation", () => {
+  const renderIllustration = (intent: "reset" | "activation", illustration = true) => renderToStaticMarkup(createElement(CredentialRecoveryLayout, {
+    intent,
+    illustration,
+    stableLayout: true,
+    title: "Recovery",
+    description: "Use the existing recovery form.",
+    children: createElement("form", null, createElement("input", { type: "password", name: "fixture-password" })),
+  }));
+  const reset = renderIllustration("reset");
+  assert.match(reset, /credential-recovery--illustrated/);
+  assert.match(reset, /<div class="credential-recovery__illustration" aria-hidden="true">/);
+  assert.match(reset, /<img[^>]*src="\/illustrations\/reset-password-light\.webp"[^>]*width="640" height="640" alt="" aria-hidden="true"/);
+  assert.equal((reset.match(/class="credential-recovery__illustration-image"/g) ?? []).length, 1);
+  assert.doesNotMatch(reset.match(/<form>[\s\S]*?<\/form>/)?.[0] ?? "", /illustration/);
+  for (const markup of [renderIllustration("activation"), renderIllustration("reset", false)]) {
+    assert.doesNotMatch(markup, /credential-recovery--illustrated|credential-recovery__illustration|reset-password-light\.webp/);
+  }
+});
+
 test("recovery theme and language controls have independent non-submit semantics", () => {
   const markup = render();
   assert.match(markup, /<button type="button" class="credential-recovery__theme"[^>]*aria-label="Tukar ke tema gelap"/);

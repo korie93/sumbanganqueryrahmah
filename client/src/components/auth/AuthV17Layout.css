@@ -137,6 +137,13 @@
 .auth-v17-assure svg { flex: none; color: #15803d; margin-top: 1px; }
 .auth-v17-assure strong { color: var(--auth-text); font-weight: 600; }
 .auth-v17-help { margin: 24px 0 0; text-align: center; color: var(--auth-muted); font-size: 13px; }
+/* The recovery request keeps its toolbar and title in place as the form gives
+   way to confirmation. Login retains its existing vertical composition. */
+.auth-v17-forgot #forgot-password-identifier { scroll-margin-block: 12px; }
+@media (min-width: 700px) {
+  .auth-v17-forgot .auth-v17-side { align-items: flex-start; padding-top: clamp(40px, 16vh, 160px); }
+  .auth-v17-forgot .auth-v17-wrap { transform: none; }
+}
 .auth-v17-otp { position: relative; padding: 12px; border: 1px solid #e0e7ef; border-radius: 12px; background: #f8fafc; }
 .auth-v17-otp__slots { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .auth-v17-otp__slot { display: grid; place-items: center; height: 52px; border: 1px solid #c5d0dc; border-radius: 9px; background: #fff; font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -299,4 +306,20 @@
   .auth-v17[data-theme="dark"] .auth-v17-brand-panel {
     background: linear-gradient(to bottom, transparent 72%, #111), radial-gradient(75% 80% at 20% 15%, #62a6e20d, transparent 70%), #010109;
   }
+}
+/* Forgot uses the supplied recovery scene; Login keeps its existing artwork. */
+.auth-v17.auth-v17-recovery-artwork { --auth-recovery-art-surface: #ffffff; }
+.auth-v17.auth-v17-recovery-artwork[data-theme="dark"] { --auth-recovery-art-surface: #050d19; }
+.auth-v17.auth-v17-recovery-artwork .auth-v17-brand-panel { background: var(--auth-recovery-art-surface); }
+.auth-v17.auth-v17-recovery-artwork .auth-v17-brand-panel::before,
+.auth-v17.auth-v17-recovery-artwork .auth-v17-art::before { content: none; }
+/* Use the existing full-width art track; the supplied scene has its own padding. */
+.auth-v17 .auth-v17-recovery-illustration { position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none; max-height: none; margin: auto; object-fit: contain; }
+@media (min-width: 1201px) and (min-height: 761px) {
+  /* The scene starts below an empty top margin in the supplied square asset. */
+  .auth-v17 .auth-v17-recovery-illustration { inset: auto 0 0; height: 115%; object-position: center bottom; }
+}
+@media (max-width: 699px) {
+  .auth-v17.auth-v17-recovery-artwork .auth-v17-art { inset: 8px 8px 8px auto; width: min(56vw, 260px, calc(100% - 152px)); min-height: 0; }
+  .auth-v17 .auth-v17-recovery-illustration { object-position: center bottom; }
 }

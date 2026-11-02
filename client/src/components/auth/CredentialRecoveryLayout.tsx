@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type Ref } from "react";
 import { ArrowLeft, LockKeyhole, Moon, Sun, WifiOff } from "lucide-react";
 import { SQR_BRAND_ASSETS, SQR_BRAND_DIMENSIONS } from "@shared/brand-assets";
 import { useTheme } from "@/components/useTheme";
@@ -13,9 +13,13 @@ type CredentialRecoveryLayoutProps = {
   account?: RecoveryAccount | null;
   children: ReactNode;
   contentBusy?: boolean;
+  contextDescription?: string;
   description: string;
+  headingRef?: Ref<HTMLHeadingElement>;
+  illustration?: boolean;
   intent: "activation" | "reset";
   onBackClick?: () => void;
+  stableLayout?: boolean;
   title: string;
 };
 
@@ -24,14 +28,20 @@ export function CredentialRecoveryLayout({
   account,
   children,
   contentBusy = false,
+  contextDescription,
   description,
+  headingRef,
+  illustration = false,
   intent,
   onBackClick,
+  stableLayout = false,
   title,
 }: CredentialRecoveryLayoutProps) {
   const { locale, setLocale, t } = useAuthLocale();
   const { isDark, toggleTheme } = useTheme();
   const english = locale === "en";
+  const showIllustration = illustration && intent === "reset";
+  const illustrationSrc = `/illustrations/reset-password-${isDark ? "dark" : "light"}.webp`;
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
@@ -45,8 +55,23 @@ export function CredentialRecoveryLayout({
     };
   }, []);
 
+  const accountSummary = account ? <dl className="public-auth-account-summary">
+    <div className="public-auth-account-summary__row credential-recovery__username">
+      <dt>{t("auth.v17Recovery.username")}</dt>
+      <dd>{account.username}</dd>
+    </div>
+    <div className="public-auth-account-summary__row">
+      <dt>{t("auth.v17Recovery.role")}</dt>
+      <dd>{account.role}</dd>
+    </div>
+    <div className="public-auth-account-summary__row">
+      <dt>{t("auth.v17Recovery.expires")}</dt>
+      <dd>{formatPublicAuthExpiry(account.expiresAt)} <span className="credential-recovery__timezone">(MYT)</span></dd>
+    </div>
+  </dl> : null;
+
   return (
-    <main id="main-content" tabIndex={-1} lang={locale} className="credential-recovery password-creation-layout">
+    <main id="main-content" tabIndex={-1} lang={locale} className={`credential-recovery password-creation-layout${stableLayout ? " credential-recovery--stable" : ""}${showIllustration ? " credential-recovery--illustrated" : ""}`}>
       <div className="credential-recovery__workspace">
         <aside className="credential-recovery__context" aria-labelledby="credential-recovery-context-title">
           <div className="credential-recovery__brand">
@@ -55,24 +80,25 @@ export function CredentialRecoveryLayout({
           </div>
           <div className="credential-recovery__context-copy">
             <h2 id="credential-recovery-context-title">{english ? "SQR account access" : "Akses akaun SQR"}</h2>
-            <p>{intent === "activation"
+            <p>{contextDescription ?? (intent === "activation"
               ? english ? "Create a password to complete your account activation." : "Cipta kata laluan untuk melengkapkan pengaktifan akaun anda."
-              : english ? "Set a new password to access your account." : "Tetapkan kata laluan baharu untuk akses ke akaun anda."}</p>
+              : english ? "Set a new password to access your account." : "Tetapkan kata laluan baharu untuk akses ke akaun anda.")}</p>
           </div>
-          {account ? <dl className="public-auth-account-summary">
-            <div className="public-auth-account-summary__row credential-recovery__username">
-              <dt>{t("auth.v17Recovery.username")}</dt>
-              <dd>{account.username}</dd>
-            </div>
-            <div className="public-auth-account-summary__row">
-              <dt>{t("auth.v17Recovery.role")}</dt>
-              <dd>{account.role}</dd>
-            </div>
-            <div className="public-auth-account-summary__row">
-              <dt>{t("auth.v17Recovery.expires")}</dt>
-              <dd>{formatPublicAuthExpiry(account.expiresAt)} <span className="credential-recovery__timezone">(MYT)</span></dd>
-            </div>
-          </dl> : null}
+          {showIllustration ? <div className="credential-recovery__illustration" aria-hidden="true">
+            <img
+              key={illustrationSrc}
+              src={illustrationSrc}
+              width={640}
+              height={640}
+              alt=""
+              aria-hidden="true"
+              loading="eager"
+              decoding="async"
+              fetchPriority="low"
+              className="credential-recovery__illustration-image"
+            />
+          </div> : null}
+          {!stableLayout ? accountSummary : null}
           <p className="credential-recovery__security"><LockKeyhole size={18} aria-hidden="true" focusable="false" /><span>{english
             ? "One-time link. Never share this link or your password."
             : "Pautan sekali guna. Jangan kongsi pautan atau kata laluan."}</span></p>
@@ -96,8 +122,9 @@ export function CredentialRecoveryLayout({
           </div>
           <div className="credential-recovery__form-wrap">
             {offline ? <p className="credential-recovery__offline" role="status"><WifiOff size={18} aria-hidden="true" focusable="false" /><span>{t("auth.v17.offline")}</span></p> : null}
-            <h1 id="credential-recovery-title">{title}</h1>
+            <h1 id="credential-recovery-title" ref={headingRef} tabIndex={-1}>{title}</h1>
             <p className="credential-recovery__description">{description}</p>
+            {stableLayout ? accountSummary : null}
             <div className="credential-recovery__content" aria-busy={contentBusy || undefined}>{children}</div>
             <p className="credential-recovery__help">{english ? "Need help? Contact your administrator." : "Perlukan bantuan? Hubungi pentadbir."}</p>
           </div>

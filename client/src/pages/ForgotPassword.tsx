@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, LifeBuoy } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
+import { PublicAuthRequestReference } from "@/components/auth/PublicAuthRequestReference";
 import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import { requestPasswordReset } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -12,6 +13,8 @@ import {
   validateIdentifierField,
 } from "@/pages/public-auth-form-utils";
 import { isPublicAuthAbortError } from "@/pages/public-auth-runtime-utils";
+import { beginPublicAuthActionFocus } from "@/pages/public-auth-action-focus";
+import { getPublicAuthRequestReference } from "@/pages/public-auth-request-reference";
 
 type ForgotPasswordPageProps = {
   onBackToHome?: () => void;
@@ -28,8 +31,14 @@ export default function ForgotPasswordPage({
   const [identifierError, setIdentifierError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [requestReference, setRequestReference] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [invalidFocusRequest, setInvalidFocusRequest] = useState<{ field: "identifier" } | null>(null);
   const mountedRef = useRef(true);
+  const identifierInputRef = useRef<HTMLInputElement | null>(null);
+  const successRef = useRef<HTMLDivElement | null>(null);
+  const actionFocusRef = useRef<ReturnType<typeof beginPublicAuthActionFocus> | null>(null);
+  const focusIdentifierAfterEditRef = useRef(false);
   const requestAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -37,10 +46,30 @@ export default function ForgotPasswordPage({
 
     return () => {
       mountedRef.current = false;
+      actionFocusRef.current?.cancel();
       requestAbortControllerRef.current?.abort();
       requestAbortControllerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (submitted) {
+      actionFocusRef.current?.complete(successRef.current);
+      actionFocusRef.current = null;
+    }
+    if (!submitted && focusIdentifierAfterEditRef.current) {
+      focusIdentifierAfterEditRef.current = false;
+      identifierInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [submitted]);
+
+  useEffect(() => {
+    if (!invalidFocusRequest || loading) return;
+    setInvalidFocusRequest(null);
+    if (submitted) return;
+    actionFocusRef.current?.complete(identifierInputRef.current, { revealIfNeeded: true });
+    actionFocusRef.current = null;
+  }, [invalidFocusRequest, loading, submitted]);
 
   const handleSubmit = async () => {
     if (loading || requestAbortControllerRef.current) {
@@ -48,12 +77,17 @@ export default function ForgotPasswordPage({
     }
 
     setError("");
+    setRequestReference(null);
     setIdentifierError("");
+    setInvalidFocusRequest(null);
+    actionFocusRef.current?.cancel();
+    actionFocusRef.current = beginPublicAuthActionFocus();
 
     try {
       const fieldErrors = validateIdentifierField(identifier);
       if (hasPublicAuthFieldErrors(fieldErrors)) {
         setIdentifierError(fieldErrors.identifier ?? "");
+        setInvalidFocusRequest({ field: "identifier" });
         return;
       }
 
@@ -67,10 +101,13 @@ export default function ForgotPasswordPage({
       }
       setSubmitted(true);
     } catch (submitError) {
+      actionFocusRef.current?.cancel();
+      actionFocusRef.current = null;
       if (isPublicAuthAbortError(submitError) || !mountedRef.current) {
         return;
       }
       setError(getApiErrorMessage(submitError, "Permintaan tetapan semula gagal dihantar."));
+      setRequestReference(getPublicAuthRequestReference(submitError));
     } finally {
       requestAbortControllerRef.current = null;
       if (mountedRef.current) {
@@ -96,17 +133,33 @@ export default function ForgotPasswordPage({
     <AuthV17Layout
       className="auth-v17-forgot"
       badge={t("auth.v17Recovery.forgotBadge")}
-      title={t("auth.v17Recovery.forgotTitle")}
-      description={t("auth.v17Recovery.forgotDescription")}
-      icon={<LifeBuoy className="h-7 w-7" aria-hidden="true" focusable="false" />}
+      title={t(submitted ? "auth.v17Recovery.forgotSubmittedTitle" : "auth.v17Recovery.forgotTitle")}
+      description={t(submitted ? "auth.v17Recovery.forgotSubmittedDescription" : "auth.v17Recovery.forgotDescription")}
       visualMode="minimal"
+      recoveryArtwork
       contentBusy={loading}
       {...layoutBackProps}
     >
       {submitted ? (
-        <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
-          {t("auth.v17Recovery.forgotSuccess")}
-        </div>
+        <>
+          <div ref={successRef} tabIndex={-1} className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
+            {t("auth.v17Recovery.forgotSuccess")}
+          </div>
+          <PublicAuthButton
+            type="button"
+            variant="ghost"
+            disabled={loading}
+            onClick={() => {
+              setIdentifierError("");
+              setError("");
+              setRequestReference(null);
+              focusIdentifierAfterEditRef.current = true;
+              setSubmitted(false);
+            }}
+          >
+            {t("auth.v17Recovery.useDifferentIdentifier")}
+          </PublicAuthButton>
+        </>
       ) : (
         <form noValidate className="auth-v17-form" onSubmit={(event) => {
           event.preventDefault();
@@ -117,6 +170,7 @@ export default function ForgotPasswordPage({
               {t("auth.v17Recovery.identifier")}
             </label>
             <PublicAuthInput
+              ref={identifierInputRef}
               id="forgot-password-identifier"
               name="identifier"
               value={identifier}
@@ -124,6 +178,7 @@ export default function ForgotPasswordPage({
                 setIdentifier(event.target.value);
                 setIdentifierError("");
                 setError("");
+                setRequestReference(null);
               }}
               onBlur={handleIdentifierBlur}
               placeholder={t("auth.v17Recovery.identifier")}
@@ -148,6 +203,7 @@ export default function ForgotPasswordPage({
               {localizeAuthFeedback(error, locale)}
             </div>
           ) : null}
+          <PublicAuthRequestReference requestId={requestReference} />
           <PublicAuthButton
             type="submit"
             disabled={loading}
