@@ -109,7 +109,7 @@ export default defineConfig({
                 // hook out of lazy AuthV17Layout's dependency ownership.
                 || /\/client\/src\/components\/useTheme\.ts$/.test(normalizedId)
                 || /\/shared\/brand-assets\.ts$/.test(normalizedId)
-                || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert|arrow-right|check))\.js$/.test(normalizedId)
+                || /\/node_modules\/lucide-react\/dist\/esm\/(?:createLucideIcon|Icon|defaultAttributes|shared\/src\/utils|icons\/(?:house|refresh-cw|rotate-ccw|triangle-alert|arrow-right|check|moon|sun))\.js$/.test(normalizedId)
               ) {
                 return "public-runtime";
               }

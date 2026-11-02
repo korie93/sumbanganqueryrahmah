@@ -387,10 +387,10 @@ test("public auth runtime consolidates only login's existing helpers, shared pre
     assert.equal(chunk(`/repo/node_modules/lucide-react/dist/esm/icons/${name}.js`), "public-auth-runtime");
     assert.equal(chunk(`C:\\repo\\node_modules\\lucide-react\\dist\\esm\\icons\\${name}.js`), "public-auth-runtime");
   }
-  for (const name of ["arrow-right", "check"]) {
+  for (const name of ["arrow-right", "check", "moon", "sun"]) {
     for (const id of [`/repo/node_modules/lucide-react/dist/esm/icons/${name}.js`, `C:\\repo\\node_modules\\lucide-react\\dist\\esm\\icons\\${name}.js`]) {
       assert.equal(groups[0].name(id), "public-runtime", "Icons shared by landing and login retain the existing public icon factory");
-      assert.equal(chunk(id), undefined, "Two shared icons must not pull the auth presentation graph into landing");
+      assert.equal(chunk(id), undefined, "Shared icons must not pull the auth presentation graph into landing");
     }
   }
   for (const id of ["client/src/lib/api-client.ts", "client/src/lib/api/auth.ts", "client/src/lib/utils.ts", "client/src/components/auth/AuthPasswordFields.tsx", "client/src/components/PublicAuthControls.test.tsx", "client/src/pages/Login.tsx", "client/src/app/AuthenticatedAppEntry.tsx", "node_modules/wouter/src/index.js", "node_modules/lucide-react/dist/esm/icons/database.js"]) {

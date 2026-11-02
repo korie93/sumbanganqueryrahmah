@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { chromium, expect } from "@playwright/test";
 import { startVisualBuiltServer } from "./test-visual-built.mjs";
 import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
+import { initializeBrowserThemeFixture } from "./lib/browser-theme-fixture.mjs";
 
 // Keep the established npm entry point while exercising the one public landing
 // now used by every device. Only a loopback static build and synthetic APIs run.
@@ -34,15 +35,13 @@ async function installFixture(context, profile = {}) {
       if (response.status() >= 400 && !pathname.startsWith("/api/")) failures.push(`Asset ${response.status()} ${pathname}`);
     });
   });
-  await context.addInitScript(({ performanceMode, cores, memory, saveData, effectiveType, origin }) => {
+  await context.addInitScript(initializeBrowserThemeFixture, {
+    origin: server.origin, mode: "preserve-choice", theme: "light", performanceMode: profile.performanceMode ?? "low",
+  });
+  await context.addInitScript(({ cores, memory, saveData, effectiveType, origin }) => {
     // Context scripts also run in the initial about:blank document, whose
     // storage is unavailable. Seed only this fixture's own loopback documents.
     if (location.origin !== origin) return;
-    if (performanceMode === "auto") localStorage.removeItem("perf_mode");
-    else localStorage.setItem("perf_mode", performanceMode ?? "low");
-    // Each context starts empty. Preserve real choices on later documents so
-    // reload and login roundtrips exercise the app's shared theme preference.
-    if (localStorage.getItem("theme") === null) localStorage.setItem("theme", "light");
     Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => cores ?? 8 });
     Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => memory ?? 8 });
     Object.defineProperty(navigator, "connection", { configurable: true, value: {

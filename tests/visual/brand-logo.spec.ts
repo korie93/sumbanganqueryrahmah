@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { installFixture, openSave, checkFixture } from "./helpers/save-collection-fixture";
+import { initializeBrowserThemeFixture, type BrowserThemeFixtureOptions } from "../../scripts/lib/browser-theme-fixture.mjs";
 
 test.use({ serviceWorkers: "block" });
 
@@ -220,12 +221,14 @@ for (const theme of ["light", "dark"] as const) {
     const errors: string[] = [];
     const notFoundUrl = new URL("/not-a-brand-page", baseURL!).href;
     await page.emulateMedia({ colorScheme: theme });
-    await page.addInitScript((value) => {
-      localStorage.setItem("theme", value);
+    await page.addInitScript<BrowserThemeFixtureOptions>(initializeBrowserThemeFixture, {
+      origin: new URL(baseURL!).origin, mode: "fixed", theme,
+    });
+    await page.addInitScript(() => {
       // The mocked healthy backend defines this online brand scenario, including
       // isolated loopback runners whose native connectivity signal is offline.
       Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
-    }, theme);
+    });
     await page.context().routeWebSocket("**/*", (socket) => socket.close());
     await page.context().route("**/*", (route) => {
       const request = route.request(), url = new URL(request.url());
@@ -278,7 +281,8 @@ for (const theme of ["light", "dark"] as const) {
       await metadata(page);
     }
     await page.goto("/forgot-password");
-    await loadedLogo(page.locator(".auth-v17-brand img"), "/brand/sqr-full-logo-light.svg", 665 / 310);
+    await expect(page.locator(".auth-v17-forgot")).toHaveAttribute("data-theme", theme);
+    await loadedLogo(page.locator(".auth-v17-brand img"), `/brand/sqr-full-logo-${theme}.svg`, 665 / 310);
     await metadata(page);
     const notFoundResponse = await page.goto(notFoundUrl);
     expect(notFoundResponse?.status()).toBe(404);

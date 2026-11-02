@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse, type Page, type Route } from "@playwright/test";
 import type { AxeResults } from "axe-core";
+import { initializeBrowserThemeFixture, type BrowserThemeFixtureOptions } from "../../scripts/lib/browser-theme-fixture.mjs";
 
 // Real compiled routes and original same-origin artwork, fictional public HTTP only.
 test.use({ serviceWorkers: "block" });
@@ -46,14 +47,12 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (message.type() === "error" && /content security policy|trustedtype|trusted type|violates.*directive/i.test(message.text())) fixture.cspErrors.push(message.text());
   });
   await page.emulateMedia({ colorScheme: options.theme ?? "light", reducedMotion: options.reducedMotion === false ? "no-preference" : "reduce" });
-  await page.addInitScript(({ profile, observer, storageFailure, landingThemeKey }) => {
-    if (profile.performanceMode === "auto") localStorage.removeItem("perf_mode");
-    else localStorage.setItem("perf_mode", profile.performanceMode ?? "high");
-    if (!sessionStorage.getItem("sqr:landing-theme-fixture-ready")) {
-      localStorage.removeItem("theme");
-      localStorage.removeItem("sqr-landing-next-theme");
-      sessionStorage.setItem("sqr:landing-theme-fixture-ready", "1");
-    }
+  await page.addInitScript<BrowserThemeFixtureOptions>(initializeBrowserThemeFixture, {
+    origin, mode: "system", performanceMode: options.profile?.performanceMode ?? "high",
+    ...(options.storageFailure ? { storageFailure: options.storageFailure } : {}),
+  });
+  await page.addInitScript(({ profile, observer, origin }) => {
+    if (location.origin !== origin) return;
     Object.defineProperty(navigator, "hardwareConcurrency", { configurable: true, get: () => profile.cores ?? 8 });
     Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => profile.memory ?? 8 });
     Object.defineProperty(navigator, "connection", { configurable: true, value: {
@@ -62,25 +61,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     } });
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
     if (!observer) Object.defineProperty(window, "IntersectionObserver", { configurable: true, value: undefined });
-    if (storageFailure === "denied-getter") {
-      Object.defineProperty(window, "localStorage", { configurable: true, get() {
-        throw new DOMException("Synthetic storage access denied", "SecurityError");
-      } });
-    } else if (storageFailure === "denied-read") {
-      const originalGet = Storage.prototype.getItem;
-      Storage.prototype.getItem = function (this: Storage, key: string) {
-        if (key === landingThemeKey) throw new DOMException("Synthetic storage read denied", "SecurityError");
-        return originalGet.call(this, key);
-      };
-    } else if (storageFailure === "quota-write") {
-      const originalSet = Storage.prototype.setItem;
-      Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
-        if (key === landingThemeKey) throw new DOMException("Synthetic storage quota reached", "QuotaExceededError");
-        return originalSet.call(this, key, value);
-      };
-    }
-  }, { profile: options.profile ?? {}, observer: options.observer !== false,
-    storageFailure: options.storageFailure, landingThemeKey: themeKey });
+  }, { profile: options.profile ?? {}, observer: options.observer !== false, origin });
   await page.context().routeWebSocket("**/*", socket => socket.close());
   const handleRoute = async (route: Route) => {
     const request = route.request(), url = new URL(request.url());

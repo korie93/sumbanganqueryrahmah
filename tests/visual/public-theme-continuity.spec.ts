@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
+import { initializeBrowserThemeFixture, type BrowserThemeFixtureOptions } from "../../scripts/lib/browser-theme-fixture.mjs";
 
 // Real compiled SQR routes, styles, controls and Web Locks. Every API is an
 // explicit fictional loopback response; no accounts or production data are used.
@@ -36,17 +37,13 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   });
   await page.clock.setFixedTime(new Date(fixedNow));
   await page.emulateMedia({ colorScheme: options.systemTheme ?? options.theme, reducedMotion: "reduce" });
-  await page.addInitScript(({ theme, legacyTheme }) => {
-    // Seed once, so a real logout/reload cannot accidentally reset the choice
-    // made later through the existing workspace button.
-    if (localStorage.getItem("theme-fixture-seeded") !== "1") {
-      localStorage.setItem("theme", theme);
-      if (legacyTheme) localStorage.setItem("sqr-landing-next-theme", legacyTheme);
-      localStorage.setItem("perf_mode", "high");
-      localStorage.setItem("theme-fixture-seeded", "1");
-    }
+  await page.addInitScript<BrowserThemeFixtureOptions>(initializeBrowserThemeFixture, {
+    origin, mode: "preserve-choice", theme: options.theme, performanceMode: "high",
+    ...(options.legacyTheme ? { legacyTheme: options.legacyTheme } : {}),
+  });
+  await page.addInitScript(() => {
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
-  }, { theme: options.theme, legacyTheme: options.legacyTheme });
+  });
   await page.context().routeWebSocket("**/*", socket => {
     if (!fixture.authenticated) fixture.unexpected.push("WebSocket before authentication");
     socket.close();

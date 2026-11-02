@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, WifiOff } from "lucide-react";
+import { ArrowLeft, Check, Moon, Sun, WifiOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuthLocale } from "./useAuthLocale";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
@@ -28,8 +28,10 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
   showBackButton = true, backLabel, onBackClick, className = "", controlledAccess = false }: Props) {
   const [, navigate] = useLocation();
   const { locale, setLocale, t } = useAuthLocale();
-  const { theme } = useTheme();
-  const surfaceTheme = className.split(/\s+/).includes("auth-v17-login") ? theme : "light";
+  const { theme: surfaceTheme, isDark, toggleTheme } = useTheme();
+  const themeLabel = locale === "en"
+    ? isDark ? "Switch to light mode" : "Switch to dark mode"
+    : isDark ? "Tukar ke tema cerah" : "Tukar ke tema gelap";
   const [offline, setOffline] = useState(false);
   const [health, setHealth] = useState<"ready" | "unavailable" | null>(null);
   useEffect(() => {
@@ -83,6 +85,9 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
             <div className="auth-v17-topright">
               {typeof location !== "undefined" && location.protocol === "https:" ?
                 <span className="auth-v17-secure"><i aria-hidden="true" />{t("auth.v17.secure")}</span> : null}
+              <button type="button" className="auth-v17-theme" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}>
+                {isDark ? <Sun size={19} aria-hidden="true" focusable="false" /> : <Moon size={19} aria-hidden="true" focusable="false" />}
+              </button>
               <div className="auth-v17-lang" role="group" aria-label="Bahasa / Language">
                 <button type="button" lang="ms" aria-label="Bahasa Melayu" {...getAriaPressedProps(locale === "ms")} onClick={() => setLocale("ms")}>BM</button>
                 <button type="button" lang="en" aria-label="English" {...getAriaPressedProps(locale === "en")} onClick={() => setLocale("en")}>EN</button>

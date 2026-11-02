@@ -94,6 +94,7 @@ export default function ForgotPasswordPage({
 
   return (
     <AuthV17Layout
+      className="auth-v17-forgot"
       badge={t("auth.v17Recovery.forgotBadge")}
       title={t("auth.v17Recovery.forgotTitle")}
       description={t("auth.v17Recovery.forgotDescription")}
